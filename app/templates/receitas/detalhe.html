@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}{{ receita.nome }} - Receitas da Padaria{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1>{{ receita.nome }}</h1>
+        <span class="badge bg-secondary fs-6">{{ receita.categoria | capitalize }}</span>
+        <span class="text-muted ms-2">Rendimento: {{ receita.rendimento_qtd | int }} {{ receita.rendimento_unidade }}</span>
+    </div>
+    <div>
+        <a href="{{ url_for('receitas.precificacao', id=receita.id) }}" class="btn btn-success">
+            <i class="bi bi-currency-dollar"></i> Precificação
+        </a>
+        <a href="{{ url_for('receitas.editar', id=receita.id) }}" class="btn btn-warning">
+            <i class="bi bi-pencil"></i> Editar
+        </a>
+        <a href="{{ url_for('receitas.listar') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Ingredientes</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Ingrediente</th>
+                                <th>Quantidade</th>
+                                <th>Unidade</th>
+                                <th>Preço Unit.</th>
+                                <th>Custo</th>
+                                {% if tem_base %}
+                                <th>% Padeiro</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ing in receita.ingredientes %}
+                            <tr {% if ing.eh_base %}class="table-info"{% endif %}>
+                                <td>
+                                    {{ ing.materia_prima.nome }}
+                                    {% if ing.eh_base %}
+                                        <span class="badge bg-info">Base</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ '%.3f' % ing.quantidade }}</td>
+                                <td>{{ ing.materia_prima.unidade }}</td>
+                                <td>{{ ing.materia_prima.preco | brl }}/{{ ing.materia_prima.unidade }}</td>
+                                <td class="fw-bold">{{ ing.custo | brl }}</td>
+                                {% if tem_base %}
+                                <td>
+                                    {% if ing.porcentagem_padeiro is not none %}
+                                        {{ ing.porcentagem_padeiro | pct }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="table-dark">
+                            <tr>
+                                <td colspan="4" class="text-end fw-bold">Custo Total dos Ingredientes:</td>
+                                <td class="fw-bold" colspan="{% if tem_base %}2{% else %}1{% endif %}">{{ receita.custo_total | brl }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {% if tem_base %}
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-percent"></i> Fórmula do Padeiro</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">A porcentagem do padeiro mostra cada ingrediente como proporção do ingrediente base (farinha = 100%).</p>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Ingrediente</th>
+                                <th>Porcentagem</th>
+                                <th>Barra</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ing in receita.ingredientes %}
+                            {% if ing.porcentagem_padeiro is not none %}
+                            <tr>
+                                <td>{{ ing.materia_prima.nome }}</td>
+                                <td class="fw-bold">{{ ing.porcentagem_padeiro | pct }}</td>
+                                <td style="width:50%">
+                                    <div class="progress">
+                                        <div class="progress-bar {% if ing.eh_base %}bg-info{% else %}bg-warning{% endif %}"
+                                             style="width: {{ [ing.porcentagem_padeiro, 100] | min }}%">
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-calculator"></i> Resumo de Custos</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr>
+                        <th>Custo dos Ingredientes:</th>
+                        <td class="text-end">{{ receita.custo_total | brl }}</td>
+                    </tr>
+                    {% if receita.custo_adicional_pct %}
+                    <tr>
+                        <th>Custos Adicionais ({{ receita.custo_adicional_pct | pct }}):</th>
+                        <td class="text-end">{{ (receita.custo_total * receita.custo_adicional_pct / 100) | brl }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if receita.custo_adicional_fixo %}
+                    <tr>
+                        <th>Custos Fixos:</th>
+                        <td class="text-end">{{ receita.custo_adicional_fixo | brl }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr class="border-top">
+                        <th>Custo Total:</th>
+                        <td class="text-end fw-bold">{{ receita.custo_total_com_adicionais | brl }}</td>
+                    </tr>
+                    <tr>
+                        <th>Custo por {{ receita.rendimento_unidade }}:</th>
+                        <td class="text-end fw-bold">{{ (receita.custo_total_com_adicionais / receita.rendimento_qtd) | brl }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        {% if receita.margem_lucro %}
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-currency-dollar"></i> Precificação</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr>
+                        <th>Margem de Lucro:</th>
+                        <td class="text-end">{{ receita.margem_lucro | pct }}</td>
+                    </tr>
+                    <tr class="border-top">
+                        <th>Preço de Venda Sugerido:</th>
+                        <td class="text-end fs-4 fw-bold text-success">{{ receita.preco_venda_sugerido | brl }}</td>
+                    </tr>
+                    <tr>
+                        <th>Lucro por {{ receita.rendimento_unidade }}:</th>
+                        <td class="text-end text-success">{{ receita.lucro_por_unidade | brl }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="card-body text-center">
+                <p class="text-muted">Precificação não configurada.</p>
+                <a href="{{ url_for('receitas.precificacao', id=receita.id) }}" class="btn btn-outline-success">
+                    Configurar Precificação
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="mt-3">
+    <form method="POST" action="{{ url_for('receitas.excluir', id=receita.id) }}" class="d-inline"
+          onsubmit="return confirm('Tem certeza que deseja excluir esta receita?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-trash"></i> Excluir Receita
+        </button>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Precificação - {{ receita.nome }}{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Precificação: {{ receita.nome }}</h1>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Definir Margem e Custos</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        {{ form.margem_lucro.label(class="form-label") }}
+                        <div class="input-group">
+                            {{ form.margem_lucro(class="form-control", step="0.01", min="0") }}
+                            <span class="input-group-text">%</span>
+                        </div>
+                        {% for error in form.margem_lucro.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.custo_adicional_pct.label(class="form-label") }}
+                        <div class="input-group">
+                            {{ form.custo_adicional_pct(class="form-control", step="0.01", min="0") }}
+                            <span class="input-group-text">%</span>
+                        </div>
+                        <small class="text-muted">Inclui mão-de-obra, energia, água, etc.</small>
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.custo_adicional_fixo.label(class="form-label") }}
+                        <div class="input-group">
+                            <span class="input-group-text">R$</span>
+                            {{ form.custo_adicional_fixo(class="form-control", step="0.01", min="0") }}
+                        </div>
+                        <small class="text-muted">Embalagem, transporte, etc.</small>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        {{ form.submit(class="btn btn-success") }}
+                        <a href="{{ url_for('receitas.detalhe', id=receita.id) }}" class="btn btn-secondary">Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Resumo Atual</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr>
+                        <th>Custo dos Ingredientes:</th>
+                        <td class="text-end">{{ receita.custo_total | brl }}</td>
+                    </tr>
+                    <tr>
+                        <th>Rendimento:</th>
+                        <td class="text-end">{{ receita.rendimento_qtd | int }} {{ receita.rendimento_unidade }}</td>
+                    </tr>
+                    <tr>
+                        <th>Custo por Unidade (ingredientes):</th>
+                        <td class="text-end">{{ receita.custo_por_unidade | brl }}</td>
+                    </tr>
+                    {% if receita.margem_lucro %}
+                    <tr class="border-top">
+                        <th>Custo com Adicionais:</th>
+                        <td class="text-end">{{ receita.custo_total_com_adicionais | brl }}</td>
+                    </tr>
+                    <tr>
+                        <th>Preço de Venda Sugerido:</th>
+                        <td class="text-end fs-4 fw-bold text-success">{{ receita.preco_venda_sugerido | brl }}</td>
+                    </tr>
+                    <tr>
+                        <th>Lucro por Unidade:</th>
+                        <td class="text-end text-success">{{ receita.lucro_por_unidade | brl }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
