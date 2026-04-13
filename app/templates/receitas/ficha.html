@@ -75,7 +75,12 @@
             <thead>
                 <tr>
                     <th style="width:25%">Ingrediente</th>
-                    <th style="width:10%">% Padeiro</th>
+                    <th style="width:10%">
+                        % Padeiro
+                        <button type="button" class="btn btn-sm btn-lock" id="btn-lock-pct" title="Destravar para editar receita">
+                            <i class="bi bi-lock-fill"></i>
+                        </button>
+                    </th>
                     <th style="width:10%">Qtd (g)</th>
                     <th style="width:12%">Custo/kg</th>
                     <th style="width:12%">Custo R$</th>
@@ -94,7 +99,7 @@
                     </td>
                     <td>
                         <input type="number" name="porcentagem[]" value="{{ ing.porcentagem }}"
-                               step="0.01" min="0" class="form-control form-control-sm input-blue text-end pct-input">
+                               step="0.01" min="0" class="form-control form-control-sm text-end pct-input pct-locked" readonly>
                     </td>
                     <td class="qtd-calc valor-calc text-end">-</td>
                     <td class="custo-kg-calc valor-mp text-end">-</td>
@@ -129,7 +134,7 @@
 
     <!-- Resumo automático -->
     <div class="resumo-box mb-3">
-        <h6 class="fw-bold mb-2"><i class="bi bi-calculator"></i> Resumo do Batch</h6>
+        <h6 class="fw-bold mb-2"><i class="bi bi-calculator"></i> Resumo da Fornada</h6>
         <div class="row text-center">
             <div class="col">
                 <div class="resumo-valor" id="resumo-peso">-</div>
@@ -176,7 +181,7 @@
         </td>
         <td>
             <input type="number" name="porcentagem[]" value=""
-                   step="0.01" min="0" class="form-control form-control-sm input-blue text-end pct-input">
+                   step="0.01" min="0" class="form-control form-control-sm text-end pct-input pct-locked" readonly>
         </td>
         <td class="qtd-calc valor-calc text-end">-</td>
         <td class="custo-kg-calc valor-mp text-end">-</td>

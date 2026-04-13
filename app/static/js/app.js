@@ -48,7 +48,43 @@ document.addEventListener('DOMContentLoaded', function () {
         if (btnAddIng && ingTemplate) {
             btnAddIng.addEventListener('click', function () {
                 var clone = ingTemplate.content.cloneNode(true);
+                // Respeitar estado do cadeado
+                var pctInput = clone.querySelector('.pct-input');
+                if (pctInput && !pctTravado) {
+                    pctInput.readOnly = false;
+                    pctInput.classList.remove('pct-locked');
+                    pctInput.classList.add('pct-unlocked');
+                }
                 fichaBody.appendChild(clone);
+            });
+        }
+
+        // Cadeado de % Padeiro
+        var pctTravado = true;
+        var btnLock = document.getElementById('btn-lock-pct');
+        if (btnLock) {
+            btnLock.addEventListener('click', function () {
+                pctTravado = !pctTravado;
+                var icon = btnLock.querySelector('i');
+                if (pctTravado) {
+                    icon.className = 'bi bi-lock-fill';
+                    btnLock.classList.remove('unlocked');
+                    btnLock.title = 'Destravar para editar receita';
+                } else {
+                    icon.className = 'bi bi-unlock-fill';
+                    btnLock.classList.add('unlocked');
+                    btnLock.title = 'Travar receita';
+                }
+                document.querySelectorAll('.pct-input').forEach(function (input) {
+                    input.readOnly = pctTravado;
+                    if (pctTravado) {
+                        input.classList.add('pct-locked');
+                        input.classList.remove('pct-unlocked');
+                    } else {
+                        input.classList.remove('pct-locked');
+                        input.classList.add('pct-unlocked');
+                    }
+                });
             });
         }
 

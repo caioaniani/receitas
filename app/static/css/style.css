@@ -188,6 +188,40 @@ body {
     box-shadow: 0 0 0 3px rgba(249, 168, 37, 0.3);
 }
 
+/* Cadeado na coluna % Padeiro */
+.btn-lock {
+    padding: 0 4px;
+    font-size: 11px;
+    color: #999;
+    border: none;
+    background: none;
+    vertical-align: middle;
+}
+
+.btn-lock:hover {
+    color: #fff;
+}
+
+.btn-lock.unlocked {
+    color: #ffc107;
+}
+
+/* % travada (padrão) */
+.pct-locked {
+    background-color: #f0f0f0 !important;
+    color: #555 !important;
+    cursor: default;
+    border-color: #ccc !important;
+}
+
+/* % destravada */
+.pct-unlocked {
+    color: var(--cor-azul) !important;
+    font-weight: 500;
+    background-color: #f8fbff !important;
+    border-color: #bbdefb !important;
+}
+
 /* Campo calculado (readonly no modo alternativo) */
 .calc-readonly {
     background-color: #f0f0f0 !important;
