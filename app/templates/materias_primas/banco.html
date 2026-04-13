@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Banco de Matérias-Primas{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-box-seam"></i> Banco de Matérias-Primas</h2>
+</div>
+
+<form method="POST" action="{{ url_for('materias_primas.salvar') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered tabela-mp" id="mp-table">
+            <thead>
+                <tr>
+                    <th style="width:50px">Cód</th>
+                    <th style="width:22%">Nome do Ingrediente</th>
+                    <th style="width:70px">Unid.</th>
+                    <th style="width:120px">Custo/kg (R$)</th>
+                    <th style="width:18%">Fornecedor</th>
+                    <th>Observações</th>
+                    <th style="width:50px"></th>
+                </tr>
+            </thead>
+            <tbody id="mp-body">
+                {% for mp in materias %}
+                <tr>
+                    <td class="text-muted text-center">{{ mp.id }}</td>
+                    <td>
+                        <input type="hidden" name="mp_id[]" value="{{ mp.id }}">
+                        <input type="text" name="nome[]" value="{{ mp.nome }}" class="form-control form-control-sm input-blue" required>
+                    </td>
+                    <td>
+                        <select name="unidade[]" class="form-select form-select-sm input-blue">
+                            <option value="g" {{ 'selected' if mp.unidade == 'g' }}>g</option>
+                            <option value="ml" {{ 'selected' if mp.unidade == 'ml' }}>ml</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="number" name="custo_por_kg[]" value="{{ '%.2f' % mp.custo_por_kg }}" step="0.01" min="0"
+                               class="form-control form-control-sm input-blue text-end" required>
+                    </td>
+                    <td>
+                        <input type="text" name="fornecedor[]" value="{{ mp.fornecedor or '' }}" class="form-control form-control-sm input-blue">
+                    </td>
+                    <td>
+                        <input type="text" name="observacoes[]" value="{{ mp.observacoes or '' }}" class="form-control form-control-sm input-blue">
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger btn-del-mp" data-id="{{ mp.id }}" title="Excluir">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex gap-2 mt-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-add-mp">
+            <i class="bi bi-plus-lg"></i> Adicionar Linha
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-check-lg"></i> Salvar Tudo
+        </button>
+    </div>
+</form>
+
+<!-- Template para nova linha -->
+<template id="mp-row-template">
+    <tr>
+        <td class="text-muted text-center">novo</td>
+        <td>
+            <input type="hidden" name="mp_id[]" value="">
+            <input type="text" name="nome[]" value="" class="form-control form-control-sm input-blue" required>
+        </td>
+        <td>
+            <select name="unidade[]" class="form-select form-select-sm input-blue">
+                <option value="g">g</option>
+                <option value="ml">ml</option>
+            </select>
+        </td>
+        <td>
+            <input type="number" name="custo_por_kg[]" value="0.00" step="0.01" min="0"
+                   class="form-control form-control-sm input-blue text-end" required>
+        </td>
+        <td>
+            <input type="text" name="fornecedor[]" value="" class="form-control form-control-sm input-blue">
+        </td>
+        <td>
+            <input type="text" name="observacoes[]" value="" class="form-control form-control-sm input-blue">
+        </td>
+        <td class="text-center">
+            <button type="button" class="btn btn-sm btn-outline-danger btn-del-new" title="Remover">
+                <i class="bi bi-trash"></i>
+            </button>
+        </td>
+    </tr>
+</template>
+{% endblock %}

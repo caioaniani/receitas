@@ -1,72 +1,286 @@
-/* Receitas da Padaria - Custom Styles */
+/* ═══════════════════════════════════════════
+   Padaria — Sistema de Fichas Técnicas
+   ═══════════════════════════════════════════ */
+
+:root {
+    --sidebar-width: 240px;
+    --cor-azul: #1565c0;
+    --cor-verde: #2e7d32;
+    --cor-preto: #212121;
+    --cor-amarelo: #fff9c4;
+    --cor-amarelo-borda: #f9a825;
+}
 
 body {
-    background-color: #f8f9fa;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
+    background-color: #f5f5f5;
+    font-size: 14px;
 }
 
-main {
-    flex: 1;
+/* ── Sidebar ── */
+.sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: var(--sidebar-width);
+    height: 100vh;
+    background: #1a1a2e;
+    color: #ccc;
+    overflow-y: auto;
+    padding: 0;
+    z-index: 100;
 }
 
-.navbar-brand {
-    font-weight: bold;
+.sidebar-header {
+    padding: 16px;
     font-size: 1.3rem;
+    font-weight: bold;
+    color: #fff;
+    background: #16213e;
+    text-align: center;
 }
 
-.card-dashboard {
-    transition: transform 0.2s, box-shadow 0.2s;
-    border: none;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+.sidebar-link {
+    display: block;
+    padding: 8px 16px;
+    color: #bbb;
+    text-decoration: none;
+    font-size: 13px;
+    transition: background 0.15s;
 }
 
-.card-dashboard:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+.sidebar-link:hover {
+    background: #16213e;
+    color: #fff;
 }
 
-.card {
-    border: none;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-}
-
-.card-header {
+.sidebar-link.active {
+    background: #0f3460;
+    color: #fff;
     font-weight: 600;
 }
 
-.table th {
-    font-size: 0.9rem;
+.sidebar-recipe {
+    padding-left: 28px;
+    font-size: 12px;
+}
+
+.sidebar-divider {
+    border-top: 1px solid #333;
+    margin: 8px 0;
+}
+
+.sidebar-section-title {
+    padding: 4px 16px;
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 1px;
+    color: #666;
 }
 
-.progress {
-    height: 20px;
-    border-radius: 10px;
+.sidebar-cat {
+    padding: 6px 16px 2px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #8ab4f8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
-/* Baker's percentage bar */
-.progress-bar.bg-info {
-    background-color: #0dcaf0 !important;
+.sidebar-action {
+    padding: 8px 16px;
 }
 
-.progress-bar.bg-warning {
-    background-color: #ffc107 !important;
+/* ── Main content ── */
+.main-content {
+    margin-left: var(--sidebar-width);
+    padding: 20px 24px;
+    min-height: 100vh;
 }
 
-/* Print styles */
+/* ── Legenda de cores (fixa no rodapé) ── */
+.legenda-cores {
+    position: fixed;
+    bottom: 0;
+    left: var(--sidebar-width);
+    right: 0;
+    background: #fff;
+    border-top: 1px solid #ddd;
+    padding: 6px 20px;
+    display: flex;
+    gap: 20px;
+    font-size: 11px;
+    color: #666;
+    z-index: 50;
+}
+
+.legenda-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.legenda-box {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 1px solid #ccc;
+    border-radius: 2px;
+}
+
+.bg-input-base { background: var(--cor-amarelo); border-color: var(--cor-amarelo-borda); }
+.bg-input-blue { background: #e3f2fd; border-color: var(--cor-azul); }
+.bg-calc { background: #f5f5f5; border-color: #999; }
+.bg-mp { background: #e8f5e9; border-color: var(--cor-verde); }
+
+/* ── Cores dos campos ── */
+
+/* Azul = campo de entrada manual */
+.input-blue {
+    color: var(--cor-azul) !important;
+    font-weight: 500;
+    background-color: #f8fbff !important;
+    border-color: #bbdefb !important;
+}
+
+.input-blue:focus {
+    background-color: #e3f2fd !important;
+    border-color: var(--cor-azul) !important;
+    box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.15);
+}
+
+/* Preto = valor calculado automaticamente */
+.valor-calc {
+    color: var(--cor-preto);
+    font-weight: 600;
+    background-color: #fafafa;
+    vertical-align: middle !important;
+    padding: 6px 8px !important;
+}
+
+/* Verde = valor buscado no banco de MP */
+.valor-mp {
+    color: var(--cor-verde);
+    font-weight: 500;
+    background-color: #f1f8e9;
+    vertical-align: middle !important;
+    padding: 6px 8px !important;
+}
+
+/* ── Peso base (fundo amarelo) ── */
+.peso-base-box {
+    background: var(--cor-amarelo);
+    border: 2px solid var(--cor-amarelo-borda);
+    border-radius: 8px;
+    padding: 12px 16px;
+    max-width: 350px;
+}
+
+.peso-base-input {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--cor-azul) !important;
+    text-align: center;
+    border: 2px solid var(--cor-amarelo-borda) !important;
+    background: #fff !important;
+}
+
+.peso-base-input:focus {
+    box-shadow: 0 0 0 3px rgba(249, 168, 37, 0.3);
+}
+
+/* ── Ficha header ── */
+.ficha-header {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 12px 16px;
+}
+
+/* ── Tabela da ficha ── */
+.tabela-ficha {
+    background: #fff;
+}
+
+.tabela-ficha thead th {
+    background: #37474f;
+    color: #fff;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px;
+    text-align: center;
+}
+
+.tabela-ficha tbody td {
+    vertical-align: middle;
+    padding: 2px 4px;
+}
+
+.ingrediente-row[data-base="1"] {
+    background-color: #fff8e1 !important;
+}
+
+/* ── Tabela de MP ── */
+.tabela-mp {
+    background: #fff;
+}
+
+.tabela-mp thead th {
+    background: #455a64;
+    color: #fff;
+    font-size: 11px;
+    text-transform: uppercase;
+    padding: 8px;
+}
+
+.tabela-mp tbody td {
+    vertical-align: middle;
+    padding: 2px 4px;
+}
+
+/* ── Resumo ── */
+.resumo-box {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.resumo-valor {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--cor-preto);
+}
+
+.resumo-label {
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%;
+        height: auto;
+        position: relative;
+    }
+    .main-content {
+        margin-left: 0;
+    }
+    .legenda-cores {
+        left: 0;
+    }
+}
+
+/* ── Espaço para legenda no rodapé ── */
+.main-content {
+    padding-bottom: 50px;
+}
+
+/* ── Print ── */
 @media print {
-    .navbar,
-    footer,
-    .btn,
-    .no-print {
-        display: none !important;
-    }
-
-    .card {
-        box-shadow: none;
-        border: 1px solid #dee2e6;
-    }
+    .sidebar, .legenda-cores, .btn, .btn-remove-ing, .btn-del-mp { display: none !important; }
+    .main-content { margin-left: 0; padding: 0; }
+    .input-blue { border: none !important; background: transparent !important; }
 }

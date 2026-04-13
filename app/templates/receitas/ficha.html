@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}{{ receita.nome }} - Ficha Técnica{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('receitas.salvar', id=receita.id) }}" id="ficha-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <!-- Cabeçalho da ficha -->
+    <div class="ficha-header mb-3">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label small text-muted">Nome do Produto</label>
+                <input type="text" name="nome" value="{{ receita.nome }}" class="form-control input-blue fw-bold">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted">Categoria</label>
+                <input type="text" name="categoria" value="{{ receita.categoria or '' }}" class="form-control form-control-sm input-blue">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted">Preço de Venda (R$)</label>
+                <input type="number" name="preco_venda" value="{{ '%.2f' % receita.preco_venda if receita.preco_venda else '' }}"
+                       step="0.01" min="0" class="form-control form-control-sm input-blue">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted">Rendimento</label>
+                <input type="number" name="rendimento_qtd" value="{{ receita.rendimento_qtd | int }}"
+                       step="1" min="1" class="form-control form-control-sm input-blue" id="rendimento-qtd">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted">Unidade Rend.</label>
+                <input type="text" name="rendimento_unidade" value="{{ receita.rendimento_unidade }}"
+                       class="form-control form-control-sm input-blue">
+            </div>
+        </div>
+    </div>
+
+    <!-- Peso base (destaque amarelo) -->
+    <div class="peso-base-box mb-3">
+        <label class="form-label fw-bold mb-1">
+            <i class="bi bi-bullseye"></i> Peso Base (g)
+        </label>
+        <input type="number" name="peso_base" value="{{ receita.peso_base | int }}"
+               step="1" min="1" class="form-control peso-base-input" id="peso-base">
+        <small class="text-muted">Peso do ingrediente base (100%) em gramas. Todos os outros ingredientes são calculados a partir deste valor.</small>
+    </div>
+
+    <!-- Tabela de ingredientes -->
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered tabela-ficha" id="ficha-table">
+            <thead>
+                <tr>
+                    <th style="width:25%">Ingrediente</th>
+                    <th style="width:10%">% Padeiro</th>
+                    <th style="width:10%">Qtd (g)</th>
+                    <th style="width:12%">Custo/kg</th>
+                    <th style="width:12%">Custo R$</th>
+                    <th>Nota</th>
+                    <th style="width:40px"></th>
+                </tr>
+            </thead>
+            <tbody id="ficha-body">
+                {% for ing in receita.ingredientes %}
+                <tr class="ingrediente-row" data-base="{{ '1' if ing.eh_base else '0' }}">
+                    <td>
+                        <input type="text" name="ingrediente_nome[]" value="{{ ing.ingrediente_nome }}"
+                               list="mp-list" class="form-control form-control-sm input-blue nome-input"
+                               autocomplete="off">
+                        <input type="hidden" name="eh_base[]" value="{{ '1' if ing.eh_base else '0' }}">
+                    </td>
+                    <td>
+                        <input type="number" name="porcentagem[]" value="{{ ing.porcentagem }}"
+                               step="0.01" min="0" class="form-control form-control-sm input-blue text-end pct-input">
+                    </td>
+                    <td class="qtd-calc valor-calc text-end">-</td>
+                    <td class="custo-kg-calc valor-mp text-end">-</td>
+                    <td class="custo-rs-calc valor-calc text-end fw-bold">-</td>
+                    <td>
+                        <input type="text" name="nota[]" value="{{ ing.nota or '' }}" class="form-control form-control-sm input-blue nota-input">
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger btn-remove-ing" title="Remover">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot id="ficha-foot">
+                <tr class="table-dark">
+                    <td class="fw-bold">TOTAL</td>
+                    <td class="text-end fw-bold" id="total-pct">-</td>
+                    <td class="text-end fw-bold" id="total-qtd">-</td>
+                    <td></td>
+                    <td class="text-end fw-bold" id="total-custo">-</td>
+                    <td colspan="2"></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <button type="button" class="btn btn-outline-secondary btn-sm mb-3" id="btn-add-ing">
+        <i class="bi bi-plus-lg"></i> Adicionar Ingrediente
+    </button>
+
+    <!-- Resumo automático -->
+    <div class="resumo-box mb-3">
+        <h6 class="fw-bold mb-2"><i class="bi bi-calculator"></i> Resumo do Batch</h6>
+        <div class="row text-center">
+            <div class="col">
+                <div class="resumo-valor" id="resumo-peso">-</div>
+                <div class="resumo-label">Peso Total</div>
+            </div>
+            <div class="col">
+                <div class="resumo-valor" id="resumo-custo">-</div>
+                <div class="resumo-label">Custo Total</div>
+            </div>
+            <div class="col">
+                <div class="resumo-valor" id="resumo-unidades">-</div>
+                <div class="resumo-label">Nº Unidades</div>
+            </div>
+            <div class="col">
+                <div class="resumo-valor" id="resumo-custo-un">-</div>
+                <div class="resumo-label">Custo/Unidade</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botões -->
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg"></i> Salvar Ficha
+        </button>
+        <form method="POST" action="{{ url_for('receitas.excluir', id=receita.id) }}" class="d-inline"
+              onsubmit="return confirm('Excluir {{ receita.nome }}?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-danger btn-sm">
+                <i class="bi bi-trash"></i> Excluir Produto
+            </button>
+        </form>
+    </div>
+</form>
+
+<!-- Template para nova linha de ingrediente -->
+<template id="ing-row-template">
+    <tr class="ingrediente-row" data-base="0">
+        <td>
+            <input type="text" name="ingrediente_nome[]" value=""
+                   list="mp-list" class="form-control form-control-sm input-blue nome-input"
+                   autocomplete="off">
+            <input type="hidden" name="eh_base[]" value="0">
+        </td>
+        <td>
+            <input type="number" name="porcentagem[]" value=""
+                   step="0.01" min="0" class="form-control form-control-sm input-blue text-end pct-input">
+        </td>
+        <td class="qtd-calc valor-calc text-end">-</td>
+        <td class="custo-kg-calc valor-mp text-end">-</td>
+        <td class="custo-rs-calc valor-calc text-end fw-bold">-</td>
+        <td>
+            <input type="text" name="nota[]" value="" class="form-control form-control-sm input-blue nota-input">
+        </td>
+        <td class="text-center">
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-ing" title="Remover">
+                <i class="bi bi-x"></i>
+            </button>
+        </td>
+    </tr>
+</template>
+{% endblock %}

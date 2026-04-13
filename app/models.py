@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from app.extensions import db
 
 
@@ -8,11 +6,19 @@ class MateriaPrima(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(100), nullable=False, unique=True)
-    unidade = db.Column(db.String(20), nullable=False)
-    preco = db.Column(db.Float, nullable=False)
+    unidade = db.Column(db.String(10), nullable=False, default='g')
+    custo_por_kg = db.Column(db.Float, nullable=False)
     fornecedor = db.Column(db.String(100))
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    observacoes = db.Column(db.String(200))
+
+    def to_dict(self):
+        return {
+            'nome': self.nome,
+            'unidade': self.unidade,
+            'custo_por_kg': self.custo_por_kg,
+            'fornecedor': self.fornecedor or '',
+            'observacoes': self.observacoes or '',
+        }
 
     def __repr__(self):
         return f'<MateriaPrima {self.nome}>'
@@ -23,60 +29,30 @@ class Receita(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(150), nullable=False)
-    categoria = db.Column(db.String(50), nullable=False)
+    categoria = db.Column(db.String(50))
+    preco_venda = db.Column(db.Float)
     rendimento_qtd = db.Column(db.Float, nullable=False)
     rendimento_unidade = db.Column(db.String(30), nullable=False)
-    margem_lucro = db.Column(db.Float)
-    custo_adicional_pct = db.Column(db.Float)
-    custo_adicional_fixo = db.Column(db.Float)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    peso_base = db.Column(db.Float, nullable=False)
 
     ingredientes = db.relationship(
         'ReceitaIngrediente',
         backref='receita',
         lazy=True,
-        cascade='all, delete-orphan'
+        cascade='all, delete-orphan',
+        order_by='ReceitaIngrediente.id'
     )
 
-    @property
-    def custo_total(self):
-        return sum(
-            ing.quantidade * ing.materia_prima.preco
-            for ing in self.ingredientes
-            if ing.materia_prima is not None
-        )
-
-    @property
-    def custo_por_unidade(self):
-        if self.rendimento_qtd and self.rendimento_qtd > 0:
-            return self.custo_total / self.rendimento_qtd
-        return 0.0
-
-    @property
-    def custo_total_com_adicionais(self):
-        base = self.custo_total
-        if self.custo_adicional_pct:
-            base += base * (self.custo_adicional_pct / 100.0)
-        if self.custo_adicional_fixo:
-            base += self.custo_adicional_fixo
-        return base
-
-    @property
-    def preco_venda_sugerido(self):
-        if not self.rendimento_qtd or self.rendimento_qtd <= 0:
-            return 0.0
-        custo_unit = self.custo_total_com_adicionais / self.rendimento_qtd
-        if self.margem_lucro:
-            return custo_unit * (1 + self.margem_lucro / 100.0)
-        return custo_unit
-
-    @property
-    def lucro_por_unidade(self):
-        if not self.rendimento_qtd or self.rendimento_qtd <= 0:
-            return 0.0
-        custo_unit = self.custo_total_com_adicionais / self.rendimento_qtd
-        return self.preco_venda_sugerido - custo_unit
+    def to_dict(self):
+        return {
+            'nome': self.nome,
+            'categoria': self.categoria or '',
+            'preco_venda': self.preco_venda,
+            'rendimento_qtd': self.rendimento_qtd,
+            'rendimento_unidade': self.rendimento_unidade,
+            'peso_base': self.peso_base,
+            'ingredientes': [ing.to_dict() for ing in self.ingredientes],
+        }
 
     def __repr__(self):
         return f'<Receita {self.nome}>'
@@ -87,26 +63,18 @@ class ReceitaIngrediente(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=False)
-    materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'), nullable=False)
-    quantidade = db.Column(db.Float, nullable=False)
+    ingrediente_nome = db.Column(db.String(100), nullable=False)
+    porcentagem = db.Column(db.Float, nullable=False)
     eh_base = db.Column(db.Boolean, default=False)
+    nota = db.Column(db.String(200))
 
-    materia_prima = db.relationship('MateriaPrima', lazy=True)
-
-    @property
-    def custo(self):
-        if self.materia_prima:
-            return self.quantidade * self.materia_prima.preco
-        return 0.0
-
-    @property
-    def porcentagem_padeiro(self):
-        if self.eh_base:
-            return 100.0
-        base_ing = next((i for i in self.receita.ingredientes if i.eh_base), None)
-        if base_ing and base_ing.quantidade > 0:
-            return (self.quantidade / base_ing.quantidade) * 100.0
-        return None
+    def to_dict(self):
+        return {
+            'ingrediente_nome': self.ingrediente_nome,
+            'porcentagem': self.porcentagem,
+            'eh_base': self.eh_base,
+            'nota': self.nota or '',
+        }
 
     def __repr__(self):
-        return f'<ReceitaIngrediente {self.materia_prima_id} x{self.quantidade}>'
+        return f'<ReceitaIngrediente {self.ingrediente_nome} {self.porcentagem}%>'

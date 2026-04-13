@@ -1,3 +1,5 @@
+import json
+
 from flask import Flask
 
 from app.extensions import db, csrf
@@ -11,35 +13,47 @@ def create_app(config_class=None):
     db.init_app(app)
     csrf.init_app(app)
 
-    # Filtros Jinja2
+    # ── Filtros Jinja2 ──
     @app.template_filter('brl')
     def brl_filter(value):
-        """Formata valor como moeda brasileira: R$ 1.234,56"""
         if value is None:
             return 'R$ 0,00'
         formatted = f'{value:,.2f}'
-        # Troca separadores para padrão brasileiro
         formatted = formatted.replace(',', 'X').replace('.', ',').replace('X', '.')
         return f'R$ {formatted}'
 
-    @app.template_filter('pct')
-    def pct_filter(value):
-        """Formata valor como porcentagem: 12,5%"""
-        if value is None:
-            return 'N/A'
-        formatted = f'{value:.1f}'.replace('.', ',')
-        return f'{formatted}%'
+    # ── Context processor: sidebar com todas as receitas ──
+    @app.context_processor
+    def inject_sidebar():
+        from app.models import Receita, MateriaPrima
+        receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+        categorias = {}
+        for r in receitas:
+            cat = r.categoria or 'Outros'
+            if cat not in categorias:
+                categorias[cat] = []
+            categorias[cat].append(r)
 
-    # Registrar blueprints
+        # MP data como JSON para autocomplete
+        mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+        mp_dict = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade} for mp in mps}
+        mp_json = json.dumps(mp_dict, ensure_ascii=False)
+        mp_nomes = [mp.nome for mp in mps]
+
+        return dict(
+            sidebar_categorias=categorias,
+            mp_json=mp_json,
+            mp_nomes=mp_nomes,
+        )
+
+    # ── Blueprints ──
     from app.blueprints.main import main_bp
     from app.blueprints.materias_primas import materias_primas_bp
     from app.blueprints.receitas import receitas_bp
-    from app.blueprints.relatorios import relatorios_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(materias_primas_bp, url_prefix='/materias-primas')
     app.register_blueprint(receitas_bp, url_prefix='/receitas')
-    app.register_blueprint(relatorios_bp, url_prefix='/relatorios')
 
     with app.app_context():
         db.create_all()
