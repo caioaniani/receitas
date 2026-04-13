@@ -23,9 +23,10 @@
                        step="0.01" min="0" class="form-control form-control-sm input-blue">
             </div>
             <div class="col-md-2">
-                <label class="form-label small text-muted">Rendimento</label>
-                <input type="number" name="rendimento_qtd" value="{{ receita.rendimento_qtd | int }}"
-                       step="1" min="1" class="form-control form-control-sm input-blue" id="rendimento-qtd">
+                <label class="form-label small text-muted">Peso por Unidade (g)</label>
+                <input type="number" name="peso_unitario" value="{{ receita.peso_unitario | int if receita.peso_unitario else '' }}"
+                       step="1" min="1" class="form-control form-control-sm input-blue" id="peso-unitario"
+                       placeholder="Ex: 130">
             </div>
             <div class="col-md-2">
                 <label class="form-label small text-muted">Unidade Rend.</label>
@@ -35,14 +36,37 @@
         </div>
     </div>
 
-    <!-- Peso base (destaque amarelo) -->
-    <div class="peso-base-box mb-3">
-        <label class="form-label fw-bold mb-1">
-            <i class="bi bi-bullseye"></i> Peso Base (g)
-        </label>
-        <input type="number" name="peso_base" value="{{ receita.peso_base | int }}"
-               step="1" min="1" class="form-control peso-base-input" id="peso-base">
-        <small class="text-muted">Peso do ingrediente base (100%) em gramas. Todos os outros ingredientes são calculados a partir deste valor.</small>
+    <!-- Seletor de modo + Peso base / Quantidade -->
+    <div class="row mb-3 g-3">
+        <div class="col-md-3">
+            <label class="form-label fw-bold small">
+                <i class="bi bi-toggles"></i> Lançar por:
+            </label>
+            <select class="form-select form-select-sm input-blue" id="modo-lancamento">
+                <option value="farinha">Peso da Farinha (g)</option>
+                <option value="quantidade">Quantidade de Produtos</option>
+            </select>
+        </div>
+
+        <div class="col-md-4" id="box-farinha">
+            <div class="peso-base-box">
+                <label class="form-label fw-bold mb-1">
+                    <i class="bi bi-bullseye"></i> Peso Base (g)
+                </label>
+                <input type="number" name="peso_base" value="{{ receita.peso_base | int }}"
+                       step="1" min="1" class="form-control peso-base-input" id="peso-base">
+            </div>
+        </div>
+
+        <div class="col-md-3" id="box-quantidade">
+            <div class="peso-base-box">
+                <label class="form-label fw-bold mb-1">
+                    <i class="bi bi-stack"></i> Quantidade
+                </label>
+                <input type="number" name="rendimento_qtd" value="{{ receita.rendimento_qtd | int }}"
+                       step="1" min="1" class="form-control peso-base-input" id="rendimento-qtd">
+            </div>
+        </div>
     </div>
 
     <!-- Tabela de ingredientes -->

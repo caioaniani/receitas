@@ -188,6 +188,15 @@ body {
     box-shadow: 0 0 0 3px rgba(249, 168, 37, 0.3);
 }
 
+/* Campo calculado (readonly no modo alternativo) */
+.calc-readonly {
+    background-color: #f0f0f0 !important;
+    color: var(--cor-preto) !important;
+    font-weight: 700 !important;
+    border-color: #999 !important;
+    cursor: default;
+}
+
 /* ── Ficha header ── */
 .ficha-header {
     background: #fff;

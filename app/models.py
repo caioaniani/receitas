@@ -34,6 +34,7 @@ class Receita(db.Model):
     rendimento_qtd = db.Column(db.Float, nullable=False)
     rendimento_unidade = db.Column(db.String(30), nullable=False)
     peso_base = db.Column(db.Float, nullable=False)
+    peso_unitario = db.Column(db.Float)
 
     ingredientes = db.relationship(
         'ReceitaIngrediente',
@@ -51,6 +52,7 @@ class Receita(db.Model):
             'rendimento_qtd': self.rendimento_qtd,
             'rendimento_unidade': self.rendimento_unidade,
             'peso_base': self.peso_base,
+            'peso_unitario': self.peso_unitario,
             'ingredientes': [ing.to_dict() for ing in self.ingredientes],
         }
 

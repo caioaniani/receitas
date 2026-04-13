@@ -23,6 +23,8 @@ def salvar(id):
     receita.rendimento_qtd = float(request.form.get('rendimento_qtd', '1').replace(',', '.'))
     receita.rendimento_unidade = request.form.get('rendimento_unidade', 'unidades').strip()
     receita.peso_base = float(request.form.get('peso_base', '1000').replace(',', '.'))
+    peso_un = request.form.get('peso_unitario', '').replace(',', '.').strip()
+    receita.peso_unitario = float(peso_un) if peso_un else None
 
     # Atualiza ingredientes
     ReceitaIngrediente.query.filter_by(receita_id=receita.id).delete()

@@ -59,9 +59,10 @@ def seed_database():
         ('Manteiga para Folhar', 27.94, False, ''),
     ]
 
-    def add_receita(nome, cat, rend_qtd, rend_un, peso_base, ingredientes):
+    def add_receita(nome, cat, rend_qtd, rend_un, peso_base, ingredientes, peso_unitario=None):
         r = Receita(nome=nome, categoria=cat, rendimento_qtd=rend_qtd,
-                    rendimento_unidade=rend_un, peso_base=peso_base)
+                    rendimento_unidade=rend_un, peso_base=peso_base,
+                    peso_unitario=peso_unitario)
         db.session.add(r)
         db.session.flush()
         for ing_nome, pct, base, nota in ingredientes:
@@ -71,18 +72,19 @@ def seed_database():
 
     # ── 1. Croissant Tradicional ──
     add_receita('Croissant Tradicional', 'Viennoiserie', 16, 'unidades', 1000,
-                croissant_base)
+                croissant_base, peso_unitario=130)
 
     # ── 2. Pain au Chocolat ──
     add_receita('Pain au Chocolat', 'Viennoiserie', 12, 'unidades', 1000,
-                croissant_base + [('Baton Calebaut', 36, False, '')])
+                croissant_base + [('Baton Calebaut', 36, False, '')],
+                peso_unitario=200)
 
     # ── 3. Croissant Nutella com Morango ──
     add_receita('Croissant Nutella com Morango', 'Viennoiserie', 16, 'unidades', 1000,
                 croissant_base + [
                     ('Nutella', 80, False, ''),
                     ('Morango fresco', 200, False, ''),
-                ])
+                ], peso_unitario=300)
 
     # ── 4. Croissant Almond ──
     add_receita('Croissant Almond', 'Viennoiserie', 16, 'unidades', 1000,
@@ -94,7 +96,7 @@ def seed_database():
                     ('FarinhaT45', 6.69, False, 'Creme de Amêndoas'),
                     ('Baunilha', 0.33, False, 'Creme de Amêndoas'),
                     ('Amendoas laminadas', 32, False, 'Cobertura'),
-                ])
+                ], peso_unitario=250)
 
     # ── 5. Sourdough Tradicional ──
     add_receita('Sourdough Tradicional', 'Pães', 4, 'pães', 1000, [
@@ -103,7 +105,7 @@ def seed_database():
         ('Levain', 25, False, ''),
         ('Sal', 2, False, ''),
         ('Fermento', 0.5, False, ''),
-    ])
+    ], peso_unitario=500)
 
     # ── 6. Sourdough Integral ──
     add_receita('Sourdough Integral', 'Pães', 4, 'pães', 1000, [
@@ -112,7 +114,7 @@ def seed_database():
         ('Levain', 25, False, ''),
         ('Sal', 2, False, ''),
         ('Fermento', 0.5, False, ''),
-    ])
+    ], peso_unitario=500)
 
     # ── 7. Sourdough 7 Grãos ──
     add_receita('Sourdough 7 Grãos', 'Pães', 4, 'pães', 1000, [
@@ -122,7 +124,7 @@ def seed_database():
         ('Sal', 2, False, ''),
         ('Fermento', 0.5, False, ''),
         ('7 Grãos', 10, False, ''),
-    ])
+    ], peso_unitario=530)
 
     # ── 8. Sourdough Nozes e Azeitonas ──
     add_receita('Sourdough Nozes e Azeitonas', 'Pães', 4, 'pães', 1000, [
@@ -132,7 +134,7 @@ def seed_database():
         ('Sal', 2, False, ''),
         ('Fermento', 0.5, False, ''),
         ('Nozes e Azeitonas', 25, False, ''),
-    ])
+    ], peso_unitario=520)
 
     # ── 9. Brioche ──
     add_receita('Brioche', 'Pães', 4, 'unidades', 1000, [
@@ -143,7 +145,7 @@ def seed_database():
         ('Fermento', 7, False, ''),
         ('Manteiga', 40, False, ''),
         ('Agua(1L)', 20, False, ''),
-    ])
+    ], peso_unitario=500)
 
     # ── 10. Pão Francês Fermentado ──
     add_receita('Pão Francês Fermentado', 'Pães', 20, 'unidades', 1000, [
@@ -152,7 +154,7 @@ def seed_database():
         ('Levain', 25, False, ''),
         ('Sal', 2, False, ''),
         ('Fermento', 0.5, False, ''),
-    ])
+    ], peso_unitario=100)
 
     # ── 11. Pão de Forma Integral ──
     add_receita('Pão de Forma Integral', 'Pães', 4, 'pães', 1000, [
@@ -161,7 +163,7 @@ def seed_database():
         ('Sal', 2, False, ''),
         ('Fermento', 3, False, ''),
         ('Agua(1L)', 75, False, ''),
-    ])
+    ], peso_unitario=500)
 
     # ── 12. Pão de Forma Integral com Grãos ──
     add_receita('Pão de Forma Integral com Grãos', 'Pães', 4, 'pães', 1000, [
@@ -171,7 +173,7 @@ def seed_database():
         ('Fermento', 3, False, ''),
         ('Agua(1L)', 75, False, ''),
         ('7 Grãos', 12, False, ''),
-    ])
+    ], peso_unitario=500)
 
     # ── 13. Cookie Calebaut ──
     add_receita('Cookie Calebaut', 'Cookies', 80, 'cookies', 280, [
@@ -183,7 +185,7 @@ def seed_database():
         ('Cacau', 21.43, False, ''),
         ('Bicarbonato', 7.14, False, ''),
         ('Chocolate Chips ao Leite', 285.71, False, ''),
-    ])
+    ], peso_unitario=45)
 
     # ── 14. Granola Artesanal ──
     add_receita('Granola Artesanal', 'Granola', 30, 'embalagens 500g', 4000, [
@@ -196,6 +198,6 @@ def seed_database():
         ('Chia', 25, False, ''),
         ('Mel', 12.5, False, ''),
         ('Óleo de Coco', 12.5, False, ''),
-    ])
+    ], peso_unitario=500)
 
     db.session.commit()

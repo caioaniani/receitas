@@ -68,6 +68,7 @@ def importar():
             rendimento_qtd=r_data['rendimento_qtd'],
             rendimento_unidade=r_data['rendimento_unidade'],
             peso_base=r_data['peso_base'],
+            peso_unitario=r_data.get('peso_unitario'),
         )
         db.session.add(receita)
         db.session.flush()

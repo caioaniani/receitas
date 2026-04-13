@@ -8,13 +8,25 @@ document.addEventListener('DOMContentLoaded', function () {
     const fichaBody = document.getElementById('ficha-body');
     const pesoBaseInput = document.getElementById('peso-base');
     const rendimentoInput = document.getElementById('rendimento-qtd');
+    const pesoUnitarioInput = document.getElementById('peso-unitario');
+    const modoSelect = document.getElementById('modo-lancamento');
     const ingTemplate = document.getElementById('ing-row-template');
     const btnAddIng = document.getElementById('btn-add-ing');
 
     if (fichaBody && pesoBaseInput) {
-        // Recalcular tudo quando peso base muda
+        // Eventos de input
         pesoBaseInput.addEventListener('input', recalcularTudo);
         rendimentoInput.addEventListener('input', recalcularTudo);
+        if (pesoUnitarioInput) pesoUnitarioInput.addEventListener('input', recalcularTudo);
+
+        // Trocar modo
+        if (modoSelect) {
+            modoSelect.addEventListener('change', function () {
+                aplicarModo();
+                recalcularTudo();
+            });
+            aplicarModo();
+        }
 
         // Delegação de eventos para inputs dinâmicos
         fichaBody.addEventListener('input', function (e) {
@@ -25,7 +37,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Remover ingrediente
         fichaBody.addEventListener('click', function (e) {
-            const btn = e.target.closest('.btn-remove-ing');
+            var btn = e.target.closest('.btn-remove-ing');
             if (btn) {
                 btn.closest('.ingrediente-row').remove();
                 recalcularTudo();
@@ -35,7 +47,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Adicionar ingrediente
         if (btnAddIng && ingTemplate) {
             btnAddIng.addEventListener('click', function () {
-                const clone = ingTemplate.content.cloneNode(true);
+                var clone = ingTemplate.content.cloneNode(true);
                 fichaBody.appendChild(clone);
             });
         }
@@ -44,34 +56,75 @@ document.addEventListener('DOMContentLoaded', function () {
         recalcularTudo();
     }
 
+    function aplicarModo() {
+        var modo = modoSelect ? modoSelect.value : 'farinha';
+        var boxFarinha = document.getElementById('box-farinha');
+        var boxQtd = document.getElementById('box-quantidade');
+
+        if (modo === 'farinha') {
+            // Farinha editável, quantidade calculada
+            pesoBaseInput.readOnly = false;
+            pesoBaseInput.classList.remove('calc-readonly');
+            rendimentoInput.readOnly = true;
+            rendimentoInput.classList.add('calc-readonly');
+            if (boxFarinha) boxFarinha.style.order = '1';
+            if (boxQtd) boxQtd.style.order = '2';
+        } else {
+            // Quantidade editável, farinha calculada
+            pesoBaseInput.readOnly = true;
+            pesoBaseInput.classList.add('calc-readonly');
+            rendimentoInput.readOnly = false;
+            rendimentoInput.classList.remove('calc-readonly');
+            if (boxFarinha) boxFarinha.style.order = '2';
+            if (boxQtd) boxQtd.style.order = '1';
+        }
+    }
+
     function recalcularTudo() {
-        const pesoBase = parseFloat(pesoBaseInput.value) || 0;
-        const rendimento = parseFloat(rendimentoInput.value) || 1;
-        let totalPct = 0;
-        let totalQtd = 0;
-        let totalCusto = 0;
+        var modo = modoSelect ? modoSelect.value : 'farinha';
+        var pesoUnit = pesoUnitarioInput ? (parseFloat(pesoUnitarioInput.value) || 0) : 0;
+
+        // Passo 1: Soma das porcentagens (não depende de peso_base)
+        var sumPct = 0;
+        document.querySelectorAll('.ingrediente-row').forEach(function (row) {
+            var pctInput = row.querySelector('.pct-input');
+            sumPct += parseFloat(pctInput ? pctInput.value : 0) || 0;
+        });
+
+        // Passo 2: Determinar peso_base e rendimento conforme o modo
+        var pesoBase, rendimento;
+
+        if (modo === 'quantidade' && pesoUnit > 0 && sumPct > 0) {
+            // Modo quantidade: rendimento é input, calcula peso_base
+            rendimento = parseFloat(rendimentoInput.value) || 0;
+            pesoBase = rendimento * pesoUnit * 100 / sumPct;
+            pesoBaseInput.value = Math.round(pesoBase);
+        } else {
+            // Modo farinha (padrão): peso_base é input
+            pesoBase = parseFloat(pesoBaseInput.value) || 0;
+            rendimento = parseFloat(rendimentoInput.value) || 1;
+        }
+
+        // Passo 3: Calcular ingredientes
+        var totalPct = 0;
+        var totalQtd = 0;
+        var totalCusto = 0;
 
         document.querySelectorAll('.ingrediente-row').forEach(function (row) {
-            const nomeInput = row.querySelector('.nome-input');
-            const pctInput = row.querySelector('.pct-input');
-            const qtdCell = row.querySelector('.qtd-calc');
-            const custoKgCell = row.querySelector('.custo-kg-calc');
-            const custoRsCell = row.querySelector('.custo-rs-calc');
+            var nomeInput = row.querySelector('.nome-input');
+            var pctInput = row.querySelector('.pct-input');
+            var qtdCell = row.querySelector('.qtd-calc');
+            var custoKgCell = row.querySelector('.custo-kg-calc');
+            var custoRsCell = row.querySelector('.custo-rs-calc');
 
-            const nome = nomeInput ? nomeInput.value.trim() : '';
-            const pct = parseFloat(pctInput ? pctInput.value : 0) || 0;
+            var nome = nomeInput ? nomeInput.value.trim() : '';
+            var pct = parseFloat(pctInput ? pctInput.value : 0) || 0;
 
-            // Qtd (g) = peso_base × % / 100
-            const qtd = pesoBase * pct / 100;
+            var qtd = pesoBase * pct / 100;
+            var mp = MP_DATA[nome];
+            var custoKg = mp ? mp.custo_por_kg : 0;
+            var custoRs = qtd / 1000 * custoKg;
 
-            // Custo/kg do banco de MP
-            const mp = MP_DATA[nome];
-            const custoKg = mp ? mp.custo_por_kg : 0;
-
-            // Custo R$ = qtd / 1000 × custo/kg
-            const custoRs = qtd / 1000 * custoKg;
-
-            // Atualizar células
             qtdCell.textContent = qtd > 0 ? formatNum(qtd, 1) : '-';
             custoKgCell.textContent = mp ? formatBRL(custoKg) : '-';
             custoKgCell.className = mp ? 'custo-kg-calc valor-mp text-end' : 'custo-kg-calc text-end text-muted';
@@ -81,6 +134,12 @@ document.addEventListener('DOMContentLoaded', function () {
             totalQtd += qtd;
             totalCusto += custoRs;
         });
+
+        // Passo 4: Se modo farinha e peso_unitario preenchido, calcular rendimento
+        if (modo === 'farinha' && pesoUnit > 0 && totalQtd > 0) {
+            rendimento = Math.floor(totalQtd / pesoUnit);
+            rendimentoInput.value = rendimento;
+        }
 
         // Totais na tabela
         var elPct = document.getElementById('total-pct');
@@ -103,29 +162,27 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     // ═══ BANCO DE MP ═══
-    const mpBody = document.getElementById('mp-body');
-    const mpTemplate = document.getElementById('mp-row-template');
-    const btnAddMp = document.getElementById('btn-add-mp');
+    var mpBody = document.getElementById('mp-body');
+    var mpTemplate = document.getElementById('mp-row-template');
+    var btnAddMp = document.getElementById('btn-add-mp');
 
     if (mpBody) {
-        // Adicionar linha
         if (btnAddMp && mpTemplate) {
             btnAddMp.addEventListener('click', function () {
-                const clone = mpTemplate.content.cloneNode(true);
+                var clone = mpTemplate.content.cloneNode(true);
                 mpBody.appendChild(clone);
             });
         }
 
-        // Excluir MP existente (via POST)
         mpBody.addEventListener('click', function (e) {
-            const btn = e.target.closest('.btn-del-mp');
+            var btn = e.target.closest('.btn-del-mp');
             if (btn) {
-                const mpId = btn.dataset.id;
+                var mpId = btn.dataset.id;
                 if (confirm('Excluir esta matéria-prima?')) {
-                    const form = document.createElement('form');
+                    var form = document.createElement('form');
                     form.method = 'POST';
                     form.action = '/materias-primas/excluir/' + mpId;
-                    const csrf = document.createElement('input');
+                    var csrf = document.createElement('input');
                     csrf.type = 'hidden';
                     csrf.name = 'csrf_token';
                     csrf.value = CSRF_TOKEN;
@@ -135,8 +192,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
 
-            // Remover linha nova (ainda não salva)
-            const btnNew = e.target.closest('.btn-del-new');
+            var btnNew = e.target.closest('.btn-del-new');
             if (btnNew) {
                 btnNew.closest('tr').remove();
             }
@@ -145,10 +201,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     // ═══ IMPORTAR JSON ═══
-    const importInput = document.getElementById('import-file');
+    var importInput = document.getElementById('import-file');
     if (importInput) {
         importInput.addEventListener('change', function () {
-            const file = this.files[0];
+            var file = this.files[0];
             if (!file) return;
 
             if (!confirm('Isso vai SUBSTITUIR todos os dados atuais pelo conteúdo do arquivo. Continuar?')) {
@@ -156,7 +212,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            const formData = new FormData();
+            var formData = new FormData();
             formData.append('file', file);
 
             fetch('/api/importar', {
