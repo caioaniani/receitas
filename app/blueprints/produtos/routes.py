@@ -49,6 +49,7 @@ def _calcular_custos_receitas():
             'preco_atacado': r.preco_venda or 0,
             'preco_loja': r.preco_loja or 0,
             'preco_site': r.preco_site or 0,
+            'vazia': len(r.ingredientes) == 0,
         })
 
     return custos, fabricados, mp_dict, mp_info

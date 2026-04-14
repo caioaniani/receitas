@@ -52,6 +52,7 @@
                class="sidebar-link sidebar-recipe" data-recipe
                {% if request.path == '/receitas/' ~ r.id|string %}style="background:#0f3460;color:#fff;font-weight:600"{% endif %}>
                 {{ r.nome }}
+                {% if not r.ingredientes %}<span class="badge bg-warning text-dark" style="font-size:8px; vertical-align:middle; margin-left:4px;" title="Ficha vazia — preencher ingredientes">VAZIA</span>{% endif %}
             </a>
             {% endfor %}
             {% endfor %}

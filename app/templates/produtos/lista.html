@@ -31,7 +31,10 @@
         <tbody>
             {% for f in fabricados %}
             <tr>
-                <td class="fw-bold">{{ f.nome }}</td>
+                <td class="fw-bold">
+                    {{ f.nome }}
+                    {% if f.vazia %}<span class="badge bg-warning text-dark" style="font-size:9px;">VAZIA</span>{% endif %}
+                </td>
                 <td><span class="badge bg-secondary">{{ f.categoria }}</span></td>
                 <td class="text-center">{% if f.peso_unitario %}{{ f.peso_unitario | int }}g{% else %}-{% endif %}</td>
                 <td class="text-center">{{ f.rendimento }} un</td>
