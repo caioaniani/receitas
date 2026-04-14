@@ -58,12 +58,25 @@
                    value="{{ '%.2f' % produto.preco_site if produto.preco_site else '' }}"
                    step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
         </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-bold" style="color:#e65100;">Custo Direto (R$/un)</label>
+            <input type="number" name="custo_direto" id="custo_direto"
+                   value="{{ '%.2f' % produto.custo_direto if produto.custo_direto else '' }}"
+                   step="0.01" min="0" class="form-control form-control-sm input-blue text-end"
+                   placeholder="Para itens simples">
+        </div>
     </div>
+
+    <p class="text-muted small mb-2">
+        <i class="bi bi-info-circle"></i>
+        <strong>Custo Direto:</strong> para itens simples (cafe, agua, suco) onde voce sabe o custo por unidade.
+        Se montar a composicao abaixo, o custo e calculado automaticamente e o direto e ignorado.
+    </p>
 
     <hr>
 
     <!-- Composição -->
-    <h6 class="fw-bold mb-2"><i class="bi bi-list-check"></i> Composicao da Cesta</h6>
+    <h6 class="fw-bold mb-2"><i class="bi bi-list-check"></i> Composicao</h6>
 
     <div class="table-responsive">
         <table class="table table-sm table-bordered bg-white" id="cesta-table">

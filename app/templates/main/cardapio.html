@@ -272,7 +272,7 @@
                 <span class="produto-detalhe">{{ p.descricao }}</span>
                 {% endif %}
                 <span class="produto-dots"></span>
-                <span class="produto-preco">R$ {{ '%.2f' % p.preco_venda | replace('.', ',') }}</span>
+                <span class="produto-preco">R$ {{ ('%.2f' % p.preco_venda) | replace('.', ',') }}</span>
             </div>
             {% endfor %}
         </div>

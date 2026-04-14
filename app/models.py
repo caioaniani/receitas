@@ -100,6 +100,7 @@ class Produto(db.Model):
     preco_atacado = db.Column(db.Float)
     preco_loja = db.Column(db.Float)
     preco_site = db.Column(db.Float)
+    custo_direto = db.Column(db.Float)  # custo por unidade para itens simples
     ativo = db.Column(db.Boolean, default=True)
 
     itens = db.relationship(
@@ -118,6 +119,7 @@ class Produto(db.Model):
             'preco_atacado': self.preco_atacado,
             'preco_loja': self.preco_loja,
             'preco_site': self.preco_site,
+            'custo_direto': self.custo_direto,
             'ativo': self.ativo,
             'itens': [item.to_dict() for item in self.itens],
         }

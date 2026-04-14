@@ -208,6 +208,7 @@ def importar():
             preco_atacado=p_data.get('preco_atacado'),
             preco_loja=p_data.get('preco_loja'),
             preco_site=p_data.get('preco_site'),
+            custo_direto=p_data.get('custo_direto'),
             ativo=p_data.get('ativo', True),
         )
         db.session.add(produto)

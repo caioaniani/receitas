@@ -63,8 +63,9 @@ def create_app(config_class=None):
     with app.app_context():
         db.create_all()
         _migrate(app)
-        from app.seed import seed_database
+        from app.seed import seed_database, seed_cardapio
         seed_database()
+        seed_cardapio()
 
     return app
 
@@ -85,5 +86,12 @@ def _migrate(app):
         cursor.execute("ALTER TABLE receita ADD COLUMN preco_site REAL")
     if 'custo_embalagem' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN custo_embalagem REAL DEFAULT 0")
+
+    # Migração tabela produto
+    cursor.execute("PRAGMA table_info(produto)")
+    cols_prod = [row[1] for row in cursor.fetchall()]
+    if cols_prod and 'custo_direto' not in cols_prod:
+        cursor.execute("ALTER TABLE produto ADD COLUMN custo_direto REAL")
+
     conn.commit()
     conn.close()

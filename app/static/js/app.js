@@ -431,6 +431,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 custoTotalCell.textContent = custoLinha > 0 ? formatBrl(custoLinha) : '-';
             });
 
+            // Se não tem composição, usar custo direto
+            if (custoTotal === 0) {
+                var custoDireto = parseFloat((document.getElementById('custo_direto') || {}).value) || 0;
+                custoTotal = custoDireto;
+            }
+
             document.getElementById('custo-total-cesta').textContent = formatBrl(custoTotal);
 
             // Resumo financeiro
@@ -494,7 +500,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         // Recalcular ao mudar precos
-        ['preco_atacado', 'preco_loja', 'preco_site'].forEach(function (id) {
+        ['preco_atacado', 'preco_loja', 'preco_site', 'custo_direto'].forEach(function (id) {
             var el = document.getElementById(id);
             if (el) el.addEventListener('input', recalcularCesta);
         });

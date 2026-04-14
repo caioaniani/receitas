@@ -53,14 +53,18 @@ def _calcular_custos_receitas():
 
 
 def _calcular_custo_cesta(produto, receita_custos, mp_dict):
-    """Calcula custo total de uma cesta a partir dos seus itens."""
-    custo = 0
-    for item in produto.itens:
-        if item.tipo == 'receita':
-            custo += (receita_custos.get(item.item_nome, 0)) * item.quantidade
-        else:
-            custo += (mp_dict.get(item.item_nome, 0)) * item.quantidade
-    return custo
+    """Calcula custo total de uma cesta/produto."""
+    if produto.itens:
+        custo = 0
+        for item in produto.itens:
+            if item.tipo == 'receita':
+                custo += (receita_custos.get(item.item_nome, 0)) * item.quantidade
+            else:
+                custo += (mp_dict.get(item.item_nome, 0)) * item.quantidade
+        return custo
+    elif produto.custo_direto:
+        return produto.custo_direto
+    return 0
 
 
 @produtos_bp.route('/')
@@ -138,6 +142,8 @@ def salvar_composicao(id):
     produto.preco_loja = float(lj) if lj else None
     st = request.form.get('preco_site', '').replace(',', '.').strip()
     produto.preco_site = float(st) if st else None
+    cd = request.form.get('custo_direto', '').replace(',', '.').strip()
+    produto.custo_direto = float(cd) if cd else None
 
     # Recriar itens
     ProdutoItem.query.filter_by(produto_id=produto.id).delete()
