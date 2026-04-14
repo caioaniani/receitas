@@ -16,7 +16,7 @@ class Usuario(UserMixin, db.Model):
     papel = db.Column(db.String(20), nullable=False, default='funcionario')  # 'admin' ou 'funcionario'
 
     def set_senha(self, senha):
-        self.senha_hash = generate_password_hash(senha)
+        self.senha_hash = generate_password_hash(senha, method='pbkdf2:sha256')
 
     def check_senha(self, senha):
         return check_password_hash(self.senha_hash, senha)
