@@ -50,10 +50,12 @@ def create_app(config_class=None):
     from app.blueprints.main import main_bp
     from app.blueprints.materias_primas import materias_primas_bp
     from app.blueprints.receitas import receitas_bp
+    from app.blueprints.produtos import produtos_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(materias_primas_bp, url_prefix='/materias-primas')
     app.register_blueprint(receitas_bp, url_prefix='/receitas')
+    app.register_blueprint(produtos_bp, url_prefix='/produtos')
 
     with app.app_context():
         db.create_all()
@@ -76,5 +78,7 @@ def _migrate(app):
         cursor.execute("ALTER TABLE receita ADD COLUMN perda_percentual REAL DEFAULT 0")
     if 'preco_loja' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN preco_loja REAL")
+    if 'preco_site' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN preco_site REAL")
     conn.commit()
     conn.close()

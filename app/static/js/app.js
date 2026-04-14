@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var perdaInput = document.getElementById('perda-percentual');
     var precoVendaInput = document.getElementById('preco-venda');
     var precoLojaInput = document.getElementById('preco-loja');
+    var precoSiteInput = document.getElementById('preco-site');
 
     if (fichaBody && pesoBaseInput) {
 
@@ -82,6 +83,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (perdaInput) perdaInput.addEventListener('input', recalcularTudo);
         if (precoVendaInput) precoVendaInput.addEventListener('input', recalcularTudo);
         if (precoLojaInput) precoLojaInput.addEventListener('input', recalcularTudo);
+        if (precoSiteInput) precoSiteInput.addEventListener('input', recalcularTudo);
 
         // Trocar modo
         if (modoSelect) {
@@ -283,11 +285,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if (rCustoUn) rCustoUn.textContent = rendimento > 0 ? formatBRL(custoUn) : '-';
 
         // Rentabilidade — função auxiliar
-        function calcRentabilidade(preco, prefixo) {
-            var el = document.getElementById('resumo-' + prefixo);
-            var elM = document.getElementById('resumo-margem' + (prefixo === 'preco-venda' ? '' : '-loja'));
-            var elL = document.getElementById('resumo-lucro-un' + (prefixo === 'preco-venda' ? '' : '-loja'));
-            var elT = document.getElementById('resumo-lucro-total' + (prefixo === 'preco-venda' ? '' : '-loja'));
+        function calcRent(preco, sufixo) {
+            var el = document.getElementById('resumo-preco-' + sufixo);
+            var elM = document.getElementById('resumo-margem-' + sufixo);
+            var elL = document.getElementById('resumo-lucro-un-' + sufixo);
+            var elT = document.getElementById('resumo-lucro-total-' + sufixo);
 
             if (el) el.textContent = preco > 0 ? formatBRL(preco) : '-';
 
@@ -317,8 +319,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
         var precoVenda = precoVendaInput ? (parseFloat(precoVendaInput.value) || 0) : 0;
         var precoLoja = precoLojaInput ? (parseFloat(precoLojaInput.value) || 0) : 0;
-        calcRentabilidade(precoVenda, 'preco-venda');
-        calcRentabilidade(precoLoja, 'preco-loja');
+        var precoSite = precoSiteInput ? (parseFloat(precoSiteInput.value) || 0) : 0;
+        calcRent(precoVenda, 'venda');
+        calcRent(precoLoja, 'loja');
+        calcRent(precoSite, 'site');
     }
 
 
@@ -343,6 +347,45 @@ document.addEventListener('DOMContentLoaded', function () {
                     var form = document.createElement('form');
                     form.method = 'POST';
                     form.action = '/materias-primas/excluir/' + mpId;
+                    var csrf = document.createElement('input');
+                    csrf.type = 'hidden';
+                    csrf.name = 'csrf_token';
+                    csrf.value = CSRF_TOKEN;
+                    form.appendChild(csrf);
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            }
+
+            var btnNew = e.target.closest('.btn-del-new');
+            if (btnNew) {
+                btnNew.closest('tr').remove();
+            }
+        });
+    }
+
+
+    // ═══ PRODUTOS/CESTAS ═══
+    var prodBody = document.getElementById('prod-body');
+    var prodTemplate = document.getElementById('prod-row-template');
+    var btnAddProd = document.getElementById('btn-add-prod');
+
+    if (prodBody) {
+        if (btnAddProd && prodTemplate) {
+            btnAddProd.addEventListener('click', function () {
+                var clone = prodTemplate.content.cloneNode(true);
+                prodBody.appendChild(clone);
+            });
+        }
+
+        prodBody.addEventListener('click', function (e) {
+            var btn = e.target.closest('.btn-del-prod');
+            if (btn) {
+                var prodId = btn.dataset.id;
+                if (confirm('Excluir este produto?')) {
+                    var form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '/produtos/excluir/' + prodId;
                     var csrf = document.createElement('input');
                     csrf.type = 'hidden';
                     csrf.name = 'csrf_token';

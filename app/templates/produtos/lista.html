@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Produtos e Cestas{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="fw-bold"><i class="bi bi-basket3"></i> Produtos e Cestas</h5>
+</div>
+
+<form method="POST" action="{{ url_for('produtos.salvar') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered bg-white" id="prod-table">
+            <thead>
+                <tr style="background:#37474f; color:#fff; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">
+                    <th style="width:22%">Nome</th>
+                    <th style="width:12%">Categoria</th>
+                    <th>Descricao</th>
+                    <th style="width:10%" class="text-end">Atacado (R$)</th>
+                    <th style="width:10%" class="text-end">Loja (R$)</th>
+                    <th style="width:10%" class="text-end">Site (R$)</th>
+                    <th style="width:40px"></th>
+                </tr>
+            </thead>
+            <tbody id="prod-body">
+                {% for p in produtos %}
+                <tr>
+                    <td>
+                        <input type="hidden" name="produto_id[]" value="{{ p.id }}">
+                        <input type="text" name="nome[]" value="{{ p.nome }}" class="form-control form-control-sm input-blue fw-bold" required>
+                    </td>
+                    <td>
+                        <input type="text" name="categoria[]" value="{{ p.categoria or '' }}" class="form-control form-control-sm input-blue">
+                    </td>
+                    <td>
+                        <input type="text" name="descricao[]" value="{{ p.descricao or '' }}" class="form-control form-control-sm input-blue">
+                    </td>
+                    <td>
+                        <input type="number" name="preco_atacado[]" value="{{ '%.2f' % p.preco_atacado if p.preco_atacado else '' }}"
+                               step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
+                    </td>
+                    <td>
+                        <input type="number" name="preco_loja[]" value="{{ '%.2f' % p.preco_loja if p.preco_loja else '' }}"
+                               step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
+                    </td>
+                    <td>
+                        <input type="number" name="preco_site[]" value="{{ '%.2f' % p.preco_site if p.preco_site else '' }}"
+                               step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger btn-del-prod" data-id="{{ p.id }}" title="Excluir">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex gap-2 mt-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-add-prod">
+            <i class="bi bi-plus-lg"></i> Adicionar Produto
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-check-lg"></i> Salvar Tudo
+        </button>
+    </div>
+</form>
+
+<template id="prod-row-template">
+    <tr>
+        <td>
+            <input type="hidden" name="produto_id[]" value="">
+            <input type="text" name="nome[]" value="" class="form-control form-control-sm input-blue fw-bold" required placeholder="Nome do produto/cesta">
+        </td>
+        <td>
+            <input type="text" name="categoria[]" value="Cestas" class="form-control form-control-sm input-blue">
+        </td>
+        <td>
+            <input type="text" name="descricao[]" value="" class="form-control form-control-sm input-blue" placeholder="Ex: 3 croissants + 2 paes...">
+        </td>
+        <td>
+            <input type="number" name="preco_atacado[]" value="" step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
+        </td>
+        <td>
+            <input type="number" name="preco_loja[]" value="" step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
+        </td>
+        <td>
+            <input type="number" name="preco_site[]" value="" step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
+        </td>
+        <td class="text-center">
+            <button type="button" class="btn btn-sm btn-outline-danger btn-del-new" title="Remover">
+                <i class="bi bi-trash"></i>
+            </button>
+        </td>
+    </tr>
+</template>
+{% endblock %}

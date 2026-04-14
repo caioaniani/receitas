@@ -28,6 +28,11 @@
                        step="0.01" min="0" class="form-control form-control-sm input-blue" id="preco-loja">
             </div>
             <div class="col">
+                <label class="form-label small text-muted">Preco Site (R$)</label>
+                <input type="number" name="preco_site" value="{{ '%.2f' % receita.preco_site if receita.preco_site else '' }}"
+                       step="0.01" min="0" class="form-control form-control-sm input-blue" id="preco-site">
+            </div>
+            <div class="col">
                 <label class="form-label small text-muted">Peso/Un (g)</label>
                 <input type="number" name="peso_unitario" value="{{ receita.peso_unitario | int if receita.peso_unitario else '' }}"
                        step="1" min="1" class="form-control form-control-sm input-blue" id="peso-unitario"
@@ -183,15 +188,15 @@
                 <div class="resumo-label">Atacado</div>
             </div>
             <div class="col">
-                <div class="resumo-valor" id="resumo-margem">-</div>
+                <div class="resumo-valor" id="resumo-margem-venda">-</div>
                 <div class="resumo-label">Margem %</div>
             </div>
             <div class="col">
-                <div class="resumo-valor" id="resumo-lucro-un">-</div>
+                <div class="resumo-valor" id="resumo-lucro-un-venda">-</div>
                 <div class="resumo-label">Lucro/Un</div>
             </div>
             <div class="col">
-                <div class="resumo-valor" id="resumo-lucro-total">-</div>
+                <div class="resumo-valor" id="resumo-lucro-total-venda">-</div>
                 <div class="resumo-label">Lucro Fornada</div>
             </div>
         </div>
@@ -211,6 +216,25 @@
             </div>
             <div class="col">
                 <div class="resumo-valor" id="resumo-lucro-total-loja">-</div>
+                <div class="resumo-label">Lucro Fornada</div>
+            </div>
+        </div>
+        <!-- Linha de rentabilidade SITE -->
+        <div class="row text-center mt-1">
+            <div class="col">
+                <div class="resumo-valor" id="resumo-preco-site">-</div>
+                <div class="resumo-label">Site</div>
+            </div>
+            <div class="col">
+                <div class="resumo-valor" id="resumo-margem-site">-</div>
+                <div class="resumo-label">Margem %</div>
+            </div>
+            <div class="col">
+                <div class="resumo-valor" id="resumo-lucro-un-site">-</div>
+                <div class="resumo-label">Lucro/Un</div>
+            </div>
+            <div class="col">
+                <div class="resumo-valor" id="resumo-lucro-total-site">-</div>
                 <div class="resumo-label">Lucro Fornada</div>
             </div>
         </div>

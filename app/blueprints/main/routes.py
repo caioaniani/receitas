@@ -4,7 +4,7 @@ from flask import redirect, url_for, jsonify, request, Response, render_template
 
 from app.blueprints.main import main_bp
 from app.extensions import db
-from app.models import MateriaPrima, Receita, ReceitaIngrediente
+from app.models import MateriaPrima, Receita, ReceitaIngrediente, Produto
 
 
 @main_bp.route('/')
@@ -48,6 +48,10 @@ def rentabilidade():
         lucro_lj = preco_lj - custo_un if preco_lj > 0 else None
         margem_lj = (lucro_lj / preco_lj * 100) if (preco_lj > 0 and lucro_lj is not None) else None
 
+        preco_st = r.preco_site or 0
+        lucro_st = preco_st - custo_un if preco_st > 0 else None
+        margem_st = (lucro_st / preco_st * 100) if (preco_st > 0 and lucro_st is not None) else None
+
         dados.append({
             'id': r.id,
             'nome': r.nome,
@@ -61,6 +65,9 @@ def rentabilidade():
             'preco_loja': preco_lj,
             'lucro_loja': lucro_lj,
             'margem_loja': margem_lj,
+            'preco_site': preco_st,
+            'lucro_site': lucro_st,
+            'margem_site': margem_st,
         })
 
     return render_template('main/rentabilidade.html', dados=dados)
@@ -70,10 +77,16 @@ def rentabilidade():
 def cardapio():
     tipo = request.args.get('tipo', 'atacado')
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.categoria, Produto.nome).all()
+
+    campo = {'atacado': 'preco_venda', 'loja': 'preco_loja', 'site': 'preco_site'}
+    attr = campo.get(tipo, 'preco_venda')
 
     categorias = {}
+
+    # Receitas fabricadas
     for r in receitas:
-        preco = r.preco_venda if tipo == 'atacado' else r.preco_loja
+        preco = getattr(r, attr, None) or (r.preco_venda if tipo == 'atacado' else None)
         if not preco or preco <= 0:
             continue
         cat = r.categoria or 'Outros'
@@ -82,7 +95,24 @@ def cardapio():
         categorias[cat].append({
             'nome': r.nome,
             'peso_unitario': r.peso_unitario,
-            'rendimento_unidade': r.rendimento_unidade,
+            'descricao': None,
+            'preco_venda': preco,
+        })
+
+    # Produtos cadastrados (cestas, kits, etc.)
+    campo_prod = {'atacado': 'preco_atacado', 'loja': 'preco_loja', 'site': 'preco_site'}
+    attr_prod = campo_prod.get(tipo, 'preco_atacado')
+    for p in produtos:
+        preco = getattr(p, attr_prod, None)
+        if not preco or preco <= 0:
+            continue
+        cat = p.categoria or 'Outros'
+        if cat not in categorias:
+            categorias[cat] = []
+        categorias[cat].append({
+            'nome': p.nome,
+            'peso_unitario': None,
+            'descricao': p.descricao,
             'preco_venda': preco,
         })
 
@@ -93,10 +123,12 @@ def cardapio():
 def exportar():
     mps = MateriaPrima.query.order_by(MateriaPrima.id).all()
     receitas = Receita.query.order_by(Receita.id).all()
+    produtos = Produto.query.order_by(Produto.id).all()
 
     data = {
         'materias_primas': [mp.to_dict() for mp in mps],
         'receitas': [r.to_dict() for r in receitas],
+        'produtos': [p.to_dict() for p in produtos],
     }
 
     json_str = json.dumps(data, ensure_ascii=False, indent=2)
@@ -122,6 +154,7 @@ def importar():
     ReceitaIngrediente.query.delete()
     Receita.query.delete()
     MateriaPrima.query.delete()
+    Produto.query.delete()
 
     # Recria matérias-primas
     for mp_data in data.get('materias_primas', []):
@@ -143,6 +176,7 @@ def importar():
             categoria=r_data.get('categoria') or None,
             preco_venda=r_data.get('preco_venda'),
             preco_loja=r_data.get('preco_loja'),
+            preco_site=r_data.get('preco_site'),
             rendimento_qtd=r_data['rendimento_qtd'],
             rendimento_unidade=r_data['rendimento_unidade'],
             peso_base=r_data['peso_base'],
@@ -161,6 +195,19 @@ def importar():
                 nota=ing_data.get('nota') or None,
             )
             db.session.add(ing)
+
+    # Recria produtos (cestas, kits, etc.)
+    for p_data in data.get('produtos', []):
+        produto = Produto(
+            nome=p_data['nome'],
+            categoria=p_data.get('categoria') or None,
+            descricao=p_data.get('descricao') or None,
+            preco_atacado=p_data.get('preco_atacado'),
+            preco_loja=p_data.get('preco_loja'),
+            preco_site=p_data.get('preco_site'),
+            ativo=p_data.get('ativo', True),
+        )
+        db.session.add(produto)
 
     db.session.commit()
     return jsonify(success=True)

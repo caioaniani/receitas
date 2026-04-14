@@ -32,6 +32,7 @@ class Receita(db.Model):
     categoria = db.Column(db.String(50))
     preco_venda = db.Column(db.Float)
     preco_loja = db.Column(db.Float)
+    preco_site = db.Column(db.Float)
     rendimento_qtd = db.Column(db.Float, nullable=False)
     rendimento_unidade = db.Column(db.String(30), nullable=False)
     peso_base = db.Column(db.Float, nullable=False)
@@ -52,6 +53,7 @@ class Receita(db.Model):
             'categoria': self.categoria or '',
             'preco_venda': self.preco_venda,
             'preco_loja': self.preco_loja,
+            'preco_site': self.preco_site,
             'rendimento_qtd': self.rendimento_qtd,
             'rendimento_unidade': self.rendimento_unidade,
             'peso_base': self.peso_base,
@@ -84,3 +86,30 @@ class ReceitaIngrediente(db.Model):
 
     def __repr__(self):
         return f'<ReceitaIngrediente {self.ingrediente_nome} {self.porcentagem}%>'
+
+
+class Produto(db.Model):
+    __tablename__ = 'produto'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(150), nullable=False)
+    categoria = db.Column(db.String(50))
+    descricao = db.Column(db.String(300))
+    preco_atacado = db.Column(db.Float)
+    preco_loja = db.Column(db.Float)
+    preco_site = db.Column(db.Float)
+    ativo = db.Column(db.Boolean, default=True)
+
+    def to_dict(self):
+        return {
+            'nome': self.nome,
+            'categoria': self.categoria or '',
+            'descricao': self.descricao or '',
+            'preco_atacado': self.preco_atacado,
+            'preco_loja': self.preco_loja,
+            'preco_site': self.preco_site,
+            'ativo': self.ativo,
+        }
+
+    def __repr__(self):
+        return f'<Produto {self.nome}>'

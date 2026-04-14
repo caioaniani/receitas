@@ -236,6 +236,8 @@
         <a href="{{ url_for('main.cardapio', tipo='atacado') }}" style="{{ 'font-weight:700; color:#fff' if tipo == 'atacado' else '' }}">Atacado</a>
         <span>|</span>
         <a href="{{ url_for('main.cardapio', tipo='loja') }}" style="{{ 'font-weight:700; color:#fff' if tipo == 'loja' else '' }}">Loja</a>
+        <span>|</span>
+        <a href="{{ url_for('main.cardapio', tipo='site') }}" style="{{ 'font-weight:700; color:#fff' if tipo == 'site' else '' }}">Site</a>
         <span style="flex:1"></span>
         <span style="color:#aaa; font-size:11px;">Edite os textos. Depois clique em Exportar PDF.</span>
         <button onclick="window.print()" style="background:#c9a96e; color:#fff; border:none; padding:6px 20px; border-radius:4px; cursor:pointer; font-weight:600;">
@@ -266,6 +268,8 @@
                 <span class="produto-nome">{{ p.nome }}</span>
                 {% if p.peso_unitario %}
                 <span class="produto-detalhe">{{ p.peso_unitario | int }}g</span>
+                {% elif p.descricao %}
+                <span class="produto-detalhe">{{ p.descricao }}</span>
                 {% endif %}
                 <span class="produto-dots"></span>
                 <span class="produto-preco">R$ {{ '%.2f' % p.preco_venda | replace('.', ',') }}</span>
