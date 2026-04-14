@@ -204,9 +204,8 @@ def seed_database():
 
 
 def seed_cardapio():
-    """Importa todos os itens do cardápio (só roda 1x)."""
-    if Produto.query.first() is not None:
-        return
+    """Importa todos os itens do cardápio (adiciona apenas o que falta)."""
+    existentes_prod = {p.nome for p in Produto.query.all()}
 
     # ── 1. Atualizar preco_loja das receitas existentes ──
     precos_loja = {
@@ -288,11 +287,15 @@ def seed_cardapio():
 
     # ── 4. Produtos — Cafés e Bebidas Quentes ──
     def add_prod(nome, cat, preco_loja, descricao=''):
+        if nome in existentes_prod:
+            return None
         p = Produto(nome=nome, categoria=cat, preco_loja=preco_loja, descricao=descricao)
         db.session.add(p)
         return p
 
     def add_prod_comp(nome, cat, preco_loja, itens, descricao=''):
+        if nome in existentes_prod:
+            return None
         p = Produto(nome=nome, categoria=cat, preco_loja=preco_loja, descricao=descricao)
         db.session.add(p)
         db.session.flush()
