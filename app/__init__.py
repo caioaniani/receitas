@@ -2,7 +2,7 @@ import json
 
 from flask import Flask
 
-from app.extensions import db, csrf
+from app.extensions import db, csrf, login_manager
 from config import Config
 
 
@@ -12,6 +12,12 @@ def create_app(config_class=None):
 
     db.init_app(app)
     csrf.init_app(app)
+    login_manager.init_app(app)
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        from app.models import Usuario
+        return Usuario.query.get(int(user_id))
 
     # ── Filtros Jinja2 ──
     @app.template_filter('brl')
@@ -25,8 +31,17 @@ def create_app(config_class=None):
     # ── Context processor: sidebar com todas as receitas ──
     @app.context_processor
     def inject_sidebar():
-        from app.models import Receita, MateriaPrima
+        from flask_login import current_user
+        from app.models import Receita, MateriaPrima, Usuario, Atribuicao
+
         receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+
+        # Funcionário: filtrar só fichas atribuídas
+        if current_user.is_authenticated and not current_user.is_admin():
+            ids_permitidos = {a.receita_id for a in
+                             Atribuicao.query.filter_by(usuario_id=current_user.id).all()}
+            receitas = [r for r in receitas if r.id in ids_permitidos]
+
         categorias = {}
         for r in receitas:
             cat = r.categoria or 'Outros'
@@ -40,13 +55,17 @@ def create_app(config_class=None):
         mp_json = json.dumps(mp_dict, ensure_ascii=False)
         mp_nomes = [mp.nome for mp in mps]
 
-        receita_nomes = [r.nome for r in receitas]
+        receita_nomes = [r.nome for r in Receita.query.order_by(Receita.nome).all()]
+
+        # Lista de funcionários (para o admin atribuir fichas)
+        funcionarios = Usuario.query.filter_by(papel='funcionario').order_by(Usuario.nome).all()
 
         return dict(
             sidebar_categorias=categorias,
             mp_json=mp_json,
             mp_nomes=mp_nomes,
             receita_nomes=receita_nomes,
+            funcionarios=funcionarios,
         )
 
     # ── Blueprints ──
@@ -54,11 +73,13 @@ def create_app(config_class=None):
     from app.blueprints.materias_primas import materias_primas_bp
     from app.blueprints.receitas import receitas_bp
     from app.blueprints.produtos import produtos_bp
+    from app.blueprints.auth import auth_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(materias_primas_bp, url_prefix='/materias-primas')
     app.register_blueprint(receitas_bp, url_prefix='/receitas')
     app.register_blueprint(produtos_bp, url_prefix='/produtos')
+    app.register_blueprint(auth_bp, url_prefix='/auth')
 
     with app.app_context():
         db.create_all()
@@ -67,8 +88,19 @@ def create_app(config_class=None):
         seed_database()
         seed_cardapio()
         seed_update_v2()
+        _criar_admin()
 
     return app
+
+
+def _criar_admin():
+    """Cria usuário admin padrão se não existir nenhum."""
+    from app.models import Usuario
+    if not Usuario.query.filter_by(papel='admin').first():
+        admin = Usuario(nome='Admin', login='admin', papel='admin')
+        admin.set_senha('admin')
+        db.session.add(admin)
+        db.session.commit()
 
 
 def _migrate(app):

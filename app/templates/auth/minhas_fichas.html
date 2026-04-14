@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Minhas Fichas{% endblock %}
+
+{% block content %}
+<h5 class="fw-bold mb-3"><i class="bi bi-clipboard-check"></i> Minhas Fichas</h5>
+
+{% set pendentes = atribuicoes | selectattr('status', 'equalto', 'pendente') | list %}
+{% set concluidas = atribuicoes | selectattr('status', 'equalto', 'concluida') | list %}
+
+{% if not atribuicoes %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i> Nenhuma ficha atribuida a voce ainda.
+</div>
+{% endif %}
+
+{% if pendentes %}
+<h6 class="fw-bold text-warning mb-2"><i class="bi bi-hourglass-split"></i> Pendentes ({{ pendentes | length }})</h6>
+<div class="table-responsive mb-4">
+    <table class="table table-sm table-bordered bg-white">
+        <thead style="background:#37474f; color:#fff; font-size:11px;">
+            <tr>
+                <th>Receita</th>
+                <th>Categoria</th>
+                <th>Data</th>
+                <th style="width:180px">Acoes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in pendentes %}
+            <tr>
+                <td class="fw-bold">
+                    <a href="{{ url_for('receitas.ficha', id=a.receita.id) }}">{{ a.receita.nome }}</a>
+                </td>
+                <td>{{ a.receita.categoria or '-' }}</td>
+                <td class="small text-muted">{{ a.data_atribuicao.strftime('%d/%m/%Y') }}</td>
+                <td>
+                    <a href="{{ url_for('receitas.ficha', id=a.receita.id) }}" class="btn btn-sm btn-primary">
+                        <i class="bi bi-pencil"></i> Preencher
+                    </a>
+                    <form method="POST" action="{{ url_for('auth.concluir', id=a.id) }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-success">
+                            <i class="bi bi-check-lg"></i> Concluir
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if concluidas %}
+<h6 class="fw-bold text-success mb-2"><i class="bi bi-check-circle"></i> Concluidas ({{ concluidas | length }})</h6>
+<div class="table-responsive">
+    <table class="table table-sm table-bordered bg-white">
+        <thead style="background:#2e7d32; color:#fff; font-size:11px;">
+            <tr>
+                <th>Receita</th>
+                <th>Categoria</th>
+                <th>Concluida em</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in concluidas %}
+            <tr>
+                <td>
+                    <a href="{{ url_for('receitas.ficha', id=a.receita.id) }}">{{ a.receita.nome }}</a>
+                </td>
+                <td>{{ a.receita.categoria or '-' }}</td>
+                <td class="small text-muted">{{ a.data_conclusao.strftime('%d/%m/%Y') if a.data_conclusao else '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

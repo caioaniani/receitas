@@ -1,6 +1,7 @@
 import json
 
 from flask import render_template, redirect, url_for, flash, request, jsonify
+from flask_login import login_required
 
 from app.blueprints.produtos import produtos_bp
 from app.extensions import db
@@ -128,6 +129,7 @@ def _calcular_custo_cesta(produto, receita_custos, mp_info):
 
 
 @produtos_bp.route('/')
+@login_required
 def lista():
     produtos = Produto.query.order_by(Produto.categoria, Produto.nome).all()
     receita_custos, fabricados, mp_dict, mp_info = _calcular_custos_receitas()
@@ -152,6 +154,7 @@ def lista():
 
 
 @produtos_bp.route('/novo', methods=['POST'])
+@login_required
 def novo():
     produto = Produto(nome='Nova Cesta', categoria='Cestas')
     db.session.add(produto)
@@ -160,6 +163,7 @@ def novo():
 
 
 @produtos_bp.route('/<int:id>')
+@login_required
 def detalhe(id):
     produto = Produto.query.get_or_404(id)
     receita_custos, _, mp_dict, mp_info = _calcular_custos_receitas()
@@ -198,6 +202,7 @@ def detalhe(id):
 
 
 @produtos_bp.route('/<int:id>/salvar', methods=['POST'])
+@login_required
 def salvar_composicao(id):
     produto = Produto.query.get_or_404(id)
 
@@ -245,6 +250,7 @@ def salvar_composicao(id):
 
 
 @produtos_bp.route('/api/nova-mp', methods=['POST'])
+@login_required
 def nova_mp():
     """Cria matéria-prima via AJAX (sem sair da página da cesta)."""
     nome = request.form.get('mp_nome', '').strip()
@@ -269,6 +275,7 @@ def nova_mp():
 
 
 @produtos_bp.route('/excluir/<int:id>', methods=['POST'])
+@login_required
 def excluir(id):
     produto = Produto.query.get_or_404(id)
     nome = produto.nome

@@ -1,6 +1,7 @@
 import json
 
 from flask import redirect, url_for, jsonify, request, Response, render_template
+from flask_login import login_required
 
 from app.blueprints.main import main_bp
 from app.extensions import db
@@ -8,11 +9,13 @@ from app.models import MateriaPrima, Receita, ReceitaIngrediente, Produto, Produ
 
 
 @main_bp.route('/')
+@login_required
 def index():
     return redirect(url_for('materias_primas.banco'))
 
 
 @main_bp.route('/rentabilidade')
+@login_required
 def rentabilidade():
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     mp_dict = {mp.nome: mp.custo_por_kg for mp in MateriaPrima.query.all()}
@@ -119,6 +122,7 @@ def rentabilidade():
 
 
 @main_bp.route('/cardapio')
+@login_required
 def cardapio():
     tipo = request.args.get('tipo', 'atacado')
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
@@ -165,6 +169,7 @@ def cardapio():
 
 
 @main_bp.route('/api/exportar')
+@login_required
 def exportar():
     mps = MateriaPrima.query.order_by(MateriaPrima.id).all()
     receitas = Receita.query.order_by(Receita.id).all()
@@ -185,6 +190,7 @@ def exportar():
 
 
 @main_bp.route('/api/importar', methods=['POST'])
+@login_required
 def importar():
     file = request.files.get('file')
     if not file:

@@ -1,15 +1,26 @@
 import json
 
-from flask import render_template, redirect, url_for, flash, request
+from flask import render_template, redirect, url_for, flash, request, abort
+from flask_login import login_required, current_user
 
 from app.blueprints.receitas import receitas_bp
 from app.extensions import db
-from app.models import MateriaPrima, Receita, ReceitaIngrediente
+from app.models import MateriaPrima, Receita, ReceitaIngrediente, Atribuicao
 
 
 @receitas_bp.route('/<int:id>')
+@login_required
 def ficha(id):
     receita = Receita.query.get_or_404(id)
+
+    # Funcionário só acessa fichas atribuídas
+    if not current_user.is_admin():
+        atribuida = Atribuicao.query.filter_by(
+            receita_id=id, usuario_id=current_user.id
+        ).first()
+        if not atribuida:
+            abort(403)
+
     mp_dict = {mp.nome: mp for mp in MateriaPrima.query.all()}
 
     # Custos e pesos das receitas (para sub-receitas)
@@ -83,6 +94,7 @@ def _calcular_custos_receitas_simples():
 
 
 @receitas_bp.route('/<int:id>/salvar', methods=['POST'])
+@login_required
 def salvar(id):
     receita = Receita.query.get_or_404(id)
 
@@ -135,6 +147,7 @@ def salvar(id):
 
 
 @receitas_bp.route('/nova', methods=['POST'])
+@login_required
 def nova():
     receita = Receita(
         nome='Novo Produto',
@@ -150,6 +163,7 @@ def nova():
 
 
 @receitas_bp.route('/<int:id>/duplicar', methods=['POST'])
+@login_required
 def duplicar(id):
     original = Receita.query.get_or_404(id)
     copia = Receita(
@@ -185,6 +199,7 @@ def duplicar(id):
 
 
 @receitas_bp.route('/<int:id>/excluir', methods=['POST'])
+@login_required
 def excluir(id):
     receita = Receita.query.get_or_404(id)
     nome = receita.nome

@@ -1,4 +1,48 @@
+from datetime import datetime
+
+from flask_login import UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
+
 from app.extensions import db
+
+
+class Usuario(UserMixin, db.Model):
+    __tablename__ = 'usuario'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False)
+    login = db.Column(db.String(50), nullable=False, unique=True)
+    senha_hash = db.Column(db.String(256), nullable=False)
+    papel = db.Column(db.String(20), nullable=False, default='funcionario')  # 'admin' ou 'funcionario'
+
+    def set_senha(self, senha):
+        self.senha_hash = generate_password_hash(senha)
+
+    def check_senha(self, senha):
+        return check_password_hash(self.senha_hash, senha)
+
+    def is_admin(self):
+        return self.papel == 'admin'
+
+    def __repr__(self):
+        return f'<Usuario {self.login}>'
+
+
+class Atribuicao(db.Model):
+    __tablename__ = 'atribuicao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    status = db.Column(db.String(20), default='pendente')  # 'pendente' ou 'concluida'
+    data_atribuicao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_conclusao = db.Column(db.DateTime)
+
+    receita = db.relationship('Receita', backref='atribuicoes')
+    usuario = db.relationship('Usuario', backref='atribuicoes')
+
+    def __repr__(self):
+        return f'<Atribuicao {self.receita_id} -> {self.usuario_id}>'
 
 
 class MateriaPrima(db.Model):
