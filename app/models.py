@@ -100,6 +100,14 @@ class Produto(db.Model):
     preco_site = db.Column(db.Float)
     ativo = db.Column(db.Boolean, default=True)
 
+    itens = db.relationship(
+        'ProdutoItem',
+        backref='produto',
+        lazy=True,
+        cascade='all, delete-orphan',
+        order_by='ProdutoItem.id'
+    )
+
     def to_dict(self):
         return {
             'nome': self.nome,
@@ -109,7 +117,28 @@ class Produto(db.Model):
             'preco_loja': self.preco_loja,
             'preco_site': self.preco_site,
             'ativo': self.ativo,
+            'itens': [item.to_dict() for item in self.itens],
         }
 
     def __repr__(self):
         return f'<Produto {self.nome}>'
+
+
+class ProdutoItem(db.Model):
+    __tablename__ = 'produto_item'
+
+    id = db.Column(db.Integer, primary_key=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=False)
+    tipo = db.Column(db.String(10), nullable=False)  # 'receita' ou 'mp'
+    item_nome = db.Column(db.String(150), nullable=False)
+    quantidade = db.Column(db.Float, nullable=False, default=1)
+
+    def to_dict(self):
+        return {
+            'tipo': self.tipo,
+            'item_nome': self.item_nome,
+            'quantidade': self.quantidade,
+        }
+
+    def __repr__(self):
+        return f'<ProdutoItem {self.item_nome} x{self.quantidade}>'

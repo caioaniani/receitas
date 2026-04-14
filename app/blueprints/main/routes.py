@@ -4,7 +4,7 @@ from flask import redirect, url_for, jsonify, request, Response, render_template
 
 from app.blueprints.main import main_bp
 from app.extensions import db
-from app.models import MateriaPrima, Receita, ReceitaIngrediente, Produto
+from app.models import MateriaPrima, Receita, ReceitaIngrediente, Produto, ProdutoItem
 
 
 @main_bp.route('/')
@@ -151,6 +151,7 @@ def importar():
         return jsonify(success=False, error='Arquivo JSON inválido')
 
     # Limpa tudo
+    ProdutoItem.query.delete()
     ReceitaIngrediente.query.delete()
     Receita.query.delete()
     MateriaPrima.query.delete()
@@ -208,6 +209,16 @@ def importar():
             ativo=p_data.get('ativo', True),
         )
         db.session.add(produto)
+        db.session.flush()
+
+        for item_data in p_data.get('itens', []):
+            item = ProdutoItem(
+                produto_id=produto.id,
+                tipo=item_data['tipo'],
+                item_nome=item_data['item_nome'],
+                quantidade=item_data['quantidade'],
+            )
+            db.session.add(item)
 
     db.session.commit()
     return jsonify(success=True)

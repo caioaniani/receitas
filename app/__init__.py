@@ -40,10 +40,13 @@ def create_app(config_class=None):
         mp_json = json.dumps(mp_dict, ensure_ascii=False)
         mp_nomes = [mp.nome for mp in mps]
 
+        receita_nomes = [r.nome for r in receitas]
+
         return dict(
             sidebar_categorias=categorias,
             mp_json=mp_json,
             mp_nomes=mp_nomes,
+            receita_nomes=receita_nomes,
         )
 
     # ── Blueprints ──

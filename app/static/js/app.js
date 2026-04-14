@@ -365,27 +365,145 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
 
-    // ═══ PRODUTOS/CESTAS ═══
-    var prodBody = document.getElementById('prod-body');
-    var prodTemplate = document.getElementById('prod-row-template');
-    var btnAddProd = document.getElementById('btn-add-prod');
+    // ═══ LISTA DE PRODUTOS (exclusão) ═══
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.btn-del-prod');
+        if (btn) {
+            var prodId = btn.dataset.id;
+            if (confirm('Excluir este produto?')) {
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/produtos/excluir/' + prodId;
+                var csrf = document.createElement('input');
+                csrf.type = 'hidden';
+                csrf.name = 'csrf_token';
+                csrf.value = CSRF_TOKEN;
+                form.appendChild(csrf);
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+    });
 
-    if (prodBody) {
-        if (btnAddProd && prodTemplate) {
-            btnAddProd.addEventListener('click', function () {
-                var clone = prodTemplate.content.cloneNode(true);
-                prodBody.appendChild(clone);
+
+    // ═══ DETALHE CESTA ═══
+    var cestaBody = document.getElementById('cesta-body');
+    var cestaTemplate = document.getElementById('item-row-template');
+    var btnAddItem = document.getElementById('btn-add-item');
+
+    if (cestaBody) {
+
+        function getCustoItem(tipo, nome) {
+            if (tipo === 'receita') {
+                return (typeof RECEITA_CUSTOS !== 'undefined' && RECEITA_CUSTOS[nome]) || 0;
+            } else {
+                var mp = MP_DATA[nome];
+                return mp ? mp.custo_por_kg : 0;
+            }
+        }
+
+        function formatBrl(val) {
+            return 'R$ ' + val.toFixed(2).replace('.', ',');
+        }
+
+        function recalcularCesta() {
+            var rows = cestaBody.querySelectorAll('tr');
+            var custoTotal = 0;
+
+            rows.forEach(function (row) {
+                var tipo = row.querySelector('.item-tipo');
+                var nome = row.querySelector('.item-nome');
+                var qtd = row.querySelector('.item-qtd');
+                var custoUnCell = row.querySelector('.item-custo-un');
+                var custoTotalCell = row.querySelector('.item-custo-total');
+
+                if (!tipo || !nome || !qtd) return;
+
+                var custoUn = getCustoItem(tipo.value, nome.value);
+                var quantidade = parseFloat(qtd.value) || 0;
+                var custoLinha = custoUn * quantidade;
+                custoTotal += custoLinha;
+
+                custoUnCell.textContent = custoUn > 0 ? formatBrl(custoUn) : '-';
+                custoTotalCell.textContent = custoLinha > 0 ? formatBrl(custoLinha) : '-';
+            });
+
+            document.getElementById('custo-total-cesta').textContent = formatBrl(custoTotal);
+
+            // Resumo financeiro
+            var canais = [
+                { input: 'preco_atacado', el: 'resumo-atacado' },
+                { input: 'preco_loja', el: 'resumo-loja' },
+                { input: 'preco_site', el: 'resumo-site' },
+            ];
+
+            canais.forEach(function (c) {
+                var preco = parseFloat(document.getElementById(c.input).value) || 0;
+                var el = document.getElementById(c.el);
+                if (preco > 0 && custoTotal > 0) {
+                    var lucro = preco - custoTotal;
+                    var margem = (lucro / preco * 100).toFixed(1);
+                    var cor = lucro >= 0 ? '#2e7d32' : '#c62828';
+                    el.innerHTML = formatBrl(preco) + ' &mdash; Lucro: <span style="color:' + cor + '">' + formatBrl(lucro) + '</span> (' + margem + '%)';
+                } else {
+                    el.textContent = '-';
+                }
             });
         }
 
-        prodBody.addEventListener('click', function (e) {
-            var btn = e.target.closest('.btn-del-prod');
+        // Adicionar item
+        if (btnAddItem && cestaTemplate) {
+            btnAddItem.addEventListener('click', function () {
+                var clone = cestaTemplate.content.cloneNode(true);
+                cestaBody.appendChild(clone);
+                recalcularCesta();
+            });
+        }
+
+        // Delegação de eventos na tabela
+        cestaBody.addEventListener('click', function (e) {
+            var btn = e.target.closest('.btn-remove-item');
             if (btn) {
-                var prodId = btn.dataset.id;
-                if (confirm('Excluir este produto?')) {
+                btn.closest('tr').remove();
+                recalcularCesta();
+            }
+        });
+
+        cestaBody.addEventListener('change', function (e) {
+            // Alternar datalist quando tipo muda
+            if (e.target.classList.contains('item-tipo')) {
+                var row = e.target.closest('tr');
+                var nomeInput = row.querySelector('.item-nome');
+                nomeInput.setAttribute('list', e.target.value === 'receita' ? 'receita-list' : 'mp-list');
+                nomeInput.value = '';
+                recalcularCesta();
+            }
+            // Recalcular ao mudar nome ou quantidade
+            if (e.target.classList.contains('item-nome') || e.target.classList.contains('item-qtd')) {
+                recalcularCesta();
+            }
+        });
+
+        cestaBody.addEventListener('input', function (e) {
+            if (e.target.classList.contains('item-nome') || e.target.classList.contains('item-qtd')) {
+                recalcularCesta();
+            }
+        });
+
+        // Recalcular ao mudar precos
+        ['preco_atacado', 'preco_loja', 'preco_site'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.addEventListener('input', recalcularCesta);
+        });
+
+        // Excluir cesta
+        var btnExcluir = document.getElementById('btn-excluir-cesta');
+        if (btnExcluir) {
+            btnExcluir.addEventListener('click', function () {
+                if (confirm('Excluir esta cesta? Isso nao pode ser desfeito.')) {
                     var form = document.createElement('form');
                     form.method = 'POST';
-                    form.action = '/produtos/excluir/' + prodId;
+                    form.action = '/produtos/excluir/' + window.location.pathname.split('/').pop();
                     var csrf = document.createElement('input');
                     csrf.type = 'hidden';
                     csrf.name = 'csrf_token';
@@ -394,13 +512,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     document.body.appendChild(form);
                     form.submit();
                 }
-            }
+            });
+        }
 
-            var btnNew = e.target.closest('.btn-del-new');
-            if (btnNew) {
-                btnNew.closest('tr').remove();
-            }
-        });
+        // Calcular ao carregar
+        recalcularCesta();
     }
 
 

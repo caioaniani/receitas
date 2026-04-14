@@ -22,9 +22,9 @@
                 <th class="text-center">Peso (g)</th>
                 <th class="text-center">Rend.</th>
                 <th class="text-end">Custo/Un</th>
-                <th class="text-end">Atacado (R$)</th>
-                <th class="text-end">Loja (R$)</th>
-                <th class="text-end">Site (R$)</th>
+                <th class="text-end">Atacado</th>
+                <th class="text-end">Loja</th>
+                <th class="text-end">Site</th>
                 <th style="width:40px"></th>
             </tr>
         </thead>
@@ -33,18 +33,12 @@
             <tr>
                 <td class="fw-bold">{{ f.nome }}</td>
                 <td><span class="badge bg-secondary">{{ f.categoria }}</span></td>
-                <td class="text-center">{{ f.peso_unitario | int if f.peso_unitario else '-' }}g</td>
+                <td class="text-center">{% if f.peso_unitario %}{{ f.peso_unitario | int }}g{% else %}-{% endif %}</td>
                 <td class="text-center">{{ f.rendimento }} un</td>
                 <td class="text-end" style="background:#fff8e1;">{{ f.custo_un | brl }}</td>
-                <td class="text-end {% if f.preco_atacado > 0 %}fw-bold{% endif %}">
-                    {% if f.preco_atacado > 0 %}{{ f.preco_atacado | brl }}{% else %}<span class="text-muted">-</span>{% endif %}
-                </td>
-                <td class="text-end {% if f.preco_loja > 0 %}fw-bold{% endif %}">
-                    {% if f.preco_loja > 0 %}{{ f.preco_loja | brl }}{% else %}<span class="text-muted">-</span>{% endif %}
-                </td>
-                <td class="text-end {% if f.preco_site > 0 %}fw-bold{% endif %}">
-                    {% if f.preco_site > 0 %}{{ f.preco_site | brl }}{% else %}<span class="text-muted">-</span>{% endif %}
-                </td>
+                <td class="text-end">{% if f.preco_atacado > 0 %}{{ f.preco_atacado | brl }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                <td class="text-end">{% if f.preco_loja > 0 %}{{ f.preco_loja | brl }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                <td class="text-end">{% if f.preco_site > 0 %}{{ f.preco_site | brl }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
                 <td class="text-center">
                     <a href="{{ url_for('receitas.ficha', id=f.id) }}" class="btn btn-sm btn-outline-secondary" title="Editar ficha">
                         <i class="bi bi-pencil"></i>
@@ -53,9 +47,7 @@
             </tr>
             {% endfor %}
             {% if not fabricados %}
-            <tr>
-                <td colspan="9" class="text-center text-muted py-3">Nenhuma ficha tecnica cadastrada.</td>
-            </tr>
+            <tr><td colspan="9" class="text-center text-muted py-3">Nenhuma ficha tecnica cadastrada.</td></tr>
             {% endif %}
         </tbody>
     </table>
@@ -63,105 +55,72 @@
 
 <p class="text-muted small mb-4">
     <i class="bi bi-info-circle"></i>
-    Os precos e custos dos produtos fabricados sao editados na <strong>ficha tecnica</strong> de cada receita. Clique no <i class="bi bi-pencil"></i> para abrir.
+    Precos e custos dos fabricados sao editados na <strong>ficha tecnica</strong>. Clique no <i class="bi bi-pencil"></i> para abrir.
 </p>
 
 <hr>
 
-<!-- ── Cestas / Kits (cadastro manual) ── -->
+<!-- ── Cestas / Kits ── -->
 <h6 class="fw-bold mt-3 mb-2" style="color:#1565c0;">
     <i class="bi bi-gift"></i> Cestas e Kits
-    <span class="fw-normal text-muted" style="font-size:11px;">(cadastro manual — produtos montados/compostos)</span>
+    <span class="fw-normal text-muted" style="font-size:11px;">(monte cestas a partir de receitas e materias-primas)</span>
 </h6>
 
-<form method="POST" action="{{ url_for('produtos.salvar') }}">
+<div class="table-responsive mb-3">
+    <table class="table table-sm table-bordered table-hover bg-white">
+        <thead>
+            <tr style="background:#1565c0; color:#fff; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">
+                <th>Nome</th>
+                <th class="text-center">Itens</th>
+                <th class="text-end">Custo</th>
+                <th class="text-end">Atacado</th>
+                <th class="text-end">Loja</th>
+                <th class="text-end">Site</th>
+                <th style="width:90px" class="text-center">Acoes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in cestas %}
+            <tr>
+                <td class="fw-bold">
+                    <a href="{{ url_for('produtos.detalhe', id=c.id) }}" class="text-decoration-none">
+                        {{ c.nome }}
+                    </a>
+                </td>
+                <td class="text-center">
+                    {% if c.num_itens > 0 %}
+                    <span class="badge bg-info">{{ c.num_itens }} {{ 'item' if c.num_itens == 1 else 'itens' }}</span>
+                    {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                <td class="text-end" style="background:#fff8e1;">
+                    {% if c.custo > 0 %}{{ c.custo | brl }}{% else %}<span class="text-muted">-</span>{% endif %}
+                </td>
+                <td class="text-end">{% if c.preco_atacado > 0 %}{{ c.preco_atacado | brl }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                <td class="text-end">{% if c.preco_loja > 0 %}{{ c.preco_loja | brl }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                <td class="text-end">{% if c.preco_site > 0 %}{{ c.preco_site | brl }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                <td class="text-center">
+                    <a href="{{ url_for('produtos.detalhe', id=c.id) }}" class="btn btn-sm btn-outline-primary" title="Editar">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                    <button type="button" class="btn btn-sm btn-outline-danger btn-del-prod" data-id="{{ c.id }}" title="Excluir">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not cestas %}
+            <tr><td colspan="7" class="text-center text-muted py-3">Nenhuma cesta cadastrada. Clique em "Adicionar" para criar.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<form method="POST" action="{{ url_for('produtos.novo') }}" class="mb-4">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-    <div class="table-responsive">
-        <table class="table table-sm table-bordered bg-white" id="prod-table">
-            <thead>
-                <tr style="background:#1565c0; color:#fff; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">
-                    <th style="width:22%">Nome</th>
-                    <th style="width:12%">Categoria</th>
-                    <th>Descricao</th>
-                    <th style="width:10%" class="text-end">Atacado (R$)</th>
-                    <th style="width:10%" class="text-end">Loja (R$)</th>
-                    <th style="width:10%" class="text-end">Site (R$)</th>
-                    <th style="width:40px"></th>
-                </tr>
-            </thead>
-            <tbody id="prod-body">
-                {% for p in produtos %}
-                <tr>
-                    <td>
-                        <input type="hidden" name="produto_id[]" value="{{ p.id }}">
-                        <input type="text" name="nome[]" value="{{ p.nome }}" class="form-control form-control-sm input-blue fw-bold" required>
-                    </td>
-                    <td>
-                        <input type="text" name="categoria[]" value="{{ p.categoria or '' }}" class="form-control form-control-sm input-blue">
-                    </td>
-                    <td>
-                        <input type="text" name="descricao[]" value="{{ p.descricao or '' }}" class="form-control form-control-sm input-blue">
-                    </td>
-                    <td>
-                        <input type="number" name="preco_atacado[]" value="{{ '%.2f' % p.preco_atacado if p.preco_atacado else '' }}"
-                               step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
-                    </td>
-                    <td>
-                        <input type="number" name="preco_loja[]" value="{{ '%.2f' % p.preco_loja if p.preco_loja else '' }}"
-                               step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
-                    </td>
-                    <td>
-                        <input type="number" name="preco_site[]" value="{{ '%.2f' % p.preco_site if p.preco_site else '' }}"
-                               step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
-                    </td>
-                    <td class="text-center">
-                        <button type="button" class="btn btn-sm btn-outline-danger btn-del-prod" data-id="{{ p.id }}" title="Excluir">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-
-    <div class="d-flex gap-2 mt-2">
-        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-add-prod">
-            <i class="bi bi-plus-lg"></i> Adicionar Cesta/Kit
-        </button>
-        <button type="submit" class="btn btn-primary btn-sm">
-            <i class="bi bi-check-lg"></i> Salvar Tudo
-        </button>
-    </div>
+    <button type="submit" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-plus-lg"></i> Adicionar Cesta/Kit
+    </button>
 </form>
-
-<template id="prod-row-template">
-    <tr>
-        <td>
-            <input type="hidden" name="produto_id[]" value="">
-            <input type="text" name="nome[]" value="" class="form-control form-control-sm input-blue fw-bold" required placeholder="Nome do produto/cesta">
-        </td>
-        <td>
-            <input type="text" name="categoria[]" value="Cestas" class="form-control form-control-sm input-blue">
-        </td>
-        <td>
-            <input type="text" name="descricao[]" value="" class="form-control form-control-sm input-blue" placeholder="Ex: 3 croissants + 2 paes...">
-        </td>
-        <td>
-            <input type="number" name="preco_atacado[]" value="" step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
-        </td>
-        <td>
-            <input type="number" name="preco_loja[]" value="" step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
-        </td>
-        <td>
-            <input type="number" name="preco_site[]" value="" step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
-        </td>
-        <td class="text-center">
-            <button type="button" class="btn btn-sm btn-outline-danger btn-del-new" title="Remover">
-                <i class="bi bi-trash"></i>
-            </button>
-        </td>
-    </tr>
-</template>
 {% endblock %}

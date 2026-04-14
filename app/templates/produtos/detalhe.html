@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}{{ produto.nome }}{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('produtos.salvar_composicao', id=produto.id) }}" id="cesta-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <!-- Cabeçalho -->
+    <div class="d-flex justify-content-between align-items-start mb-3">
+        <div>
+            <h5 class="fw-bold mb-1"><i class="bi bi-gift"></i> Cesta / Kit</h5>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('produtos.lista') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left"></i> Voltar
+            </a>
+            <button type="submit" class="btn btn-primary btn-sm">
+                <i class="bi bi-check-lg"></i> Salvar
+            </button>
+        </div>
+    </div>
+
+    <!-- Dados gerais -->
+    <div class="row g-2 mb-3">
+        <div class="col-md-4">
+            <label class="form-label small fw-bold">Nome</label>
+            <input type="text" name="nome" value="{{ produto.nome }}" class="form-control form-control-sm input-blue fw-bold" required>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-bold">Categoria</label>
+            <input type="text" name="categoria" value="{{ produto.categoria or 'Cestas' }}" class="form-control form-control-sm input-blue">
+        </div>
+        <div class="col-md-6">
+            <label class="form-label small fw-bold">Descricao</label>
+            <input type="text" name="descricao" value="{{ produto.descricao or '' }}" class="form-control form-control-sm input-blue"
+                   placeholder="Ex: Kit cafe da manha com paes artesanais">
+        </div>
+    </div>
+
+    <!-- Precos -->
+    <div class="row g-2 mb-4">
+        <div class="col-md-2">
+            <label class="form-label small fw-bold" style="color:#2e7d32;">Preco Atacado (R$)</label>
+            <input type="number" name="preco_atacado" id="preco_atacado"
+                   value="{{ '%.2f' % produto.preco_atacado if produto.preco_atacado else '' }}"
+                   step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-bold" style="color:#1565c0;">Preco Loja (R$)</label>
+            <input type="number" name="preco_loja" id="preco_loja"
+                   value="{{ '%.2f' % produto.preco_loja if produto.preco_loja else '' }}"
+                   step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-bold" style="color:#6a1b9a;">Preco Site (R$)</label>
+            <input type="number" name="preco_site" id="preco_site"
+                   value="{{ '%.2f' % produto.preco_site if produto.preco_site else '' }}"
+                   step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
+        </div>
+    </div>
+
+    <hr>
+
+    <!-- Composição -->
+    <h6 class="fw-bold mb-2"><i class="bi bi-list-check"></i> Composicao da Cesta</h6>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered bg-white" id="cesta-table">
+            <thead>
+                <tr style="background:#37474f; color:#fff; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">
+                    <th style="width:120px">Tipo</th>
+                    <th>Item</th>
+                    <th class="text-end" style="width:110px">Custo/Un</th>
+                    <th class="text-center" style="width:80px">Qtd</th>
+                    <th class="text-end" style="width:110px">Custo Total</th>
+                    <th style="width:40px"></th>
+                </tr>
+            </thead>
+            <tbody id="cesta-body">
+                {% for item in itens_data %}
+                <tr>
+                    <td>
+                        <select name="item_tipo[]" class="form-select form-select-sm item-tipo">
+                            <option value="receita" {{ 'selected' if item.tipo == 'receita' }}>Receita</option>
+                            <option value="mp" {{ 'selected' if item.tipo == 'mp' }}>Mat. Prima</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="text" name="item_nome[]" value="{{ item.item_nome }}"
+                               class="form-control form-control-sm input-blue item-nome fw-bold"
+                               list="{{ 'receita-list' if item.tipo == 'receita' else 'mp-list' }}" required>
+                    </td>
+                    <td class="text-end item-custo-un" style="background:#f5f5f5; vertical-align:middle; font-size:12px;">
+                        {{ item.custo_un | brl }}
+                    </td>
+                    <td>
+                        <input type="number" name="quantidade[]" value="{{ item.quantidade | int if item.quantidade == item.quantidade | int else item.quantidade }}"
+                               step="1" min="1" class="form-control form-control-sm input-blue text-center item-qtd" required>
+                    </td>
+                    <td class="text-end item-custo-total fw-bold" style="background:#fff8e1; vertical-align:middle; font-size:12px;">
+                        {{ (item.custo_un * item.quantidade) | brl }}
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger btn-remove-item" title="Remover">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr style="background:#e8eaf6;">
+                    <td colspan="4" class="text-end fw-bold" style="font-size:12px;">CUSTO TOTAL DA CESTA:</td>
+                    <td class="text-end fw-bold" id="custo-total-cesta" style="font-size:14px; color:#1a1a2e;">
+                        {{ custo_total | brl }}
+                    </td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <button type="button" class="btn btn-outline-secondary btn-sm mb-4" id="btn-add-item">
+        <i class="bi bi-plus-lg"></i> Adicionar Item
+    </button>
+
+    <!-- Resumo financeiro -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="border rounded p-2 text-center" style="background:#f1f8e9;">
+                <div class="small text-muted">Atacado</div>
+                <div class="fw-bold" id="resumo-atacado">-</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="border rounded p-2 text-center" style="background:#e3f2fd;">
+                <div class="small text-muted">Loja</div>
+                <div class="fw-bold" id="resumo-loja">-</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="border rounded p-2 text-center" style="background:#f3e5f5;">
+                <div class="small text-muted">Site</div>
+                <div class="fw-bold" id="resumo-site">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botões finais -->
+    <div class="d-flex justify-content-between">
+        <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-check-lg"></i> Salvar
+        </button>
+        <button type="button" class="btn btn-outline-danger btn-sm" id="btn-excluir-cesta">
+            <i class="bi bi-trash"></i> Excluir Cesta
+        </button>
+    </div>
+</form>
+
+<!-- Datalist de receitas -->
+<datalist id="receita-list">
+    {% for nome in receita_nomes %}
+    <option value="{{ nome }}">
+    {% endfor %}
+</datalist>
+
+<!-- Template para nova linha -->
+<template id="item-row-template">
+    <tr>
+        <td>
+            <select name="item_tipo[]" class="form-select form-select-sm item-tipo">
+                <option value="receita">Receita</option>
+                <option value="mp">Mat. Prima</option>
+            </select>
+        </td>
+        <td>
+            <input type="text" name="item_nome[]" value=""
+                   class="form-control form-control-sm input-blue item-nome fw-bold"
+                   list="receita-list" placeholder="Selecione o item..." required>
+        </td>
+        <td class="text-end item-custo-un" style="background:#f5f5f5; vertical-align:middle; font-size:12px;">
+            -
+        </td>
+        <td>
+            <input type="number" name="quantidade[]" value="1"
+                   step="1" min="1" class="form-control form-control-sm input-blue text-center item-qtd" required>
+        </td>
+        <td class="text-end item-custo-total fw-bold" style="background:#fff8e1; vertical-align:middle; font-size:12px;">
+            -
+        </td>
+        <td class="text-center">
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-item" title="Remover">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </td>
+    </tr>
+</template>
+
+<!-- Dados para JS -->
+<script>const RECEITA_CUSTOS = {{ receita_custos_json | safe }};</script>
+{% endblock %}
