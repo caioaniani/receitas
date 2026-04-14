@@ -102,6 +102,7 @@ def _calcular_custo_cesta(produto, receita_custos, mp_info):
     e custo_por_kg é dividido por 1000 para obter custo por grama.
     Para MPs com unidade 'un', quantidade é unidades e custo é direto.
     """
+    embalagem = produto.custo_embalagem or 0
     if produto.itens:
         custo = 0
         for item in produto.itens:
@@ -114,10 +115,10 @@ def _calcular_custo_cesta(produto, receita_custos, mp_info):
                     custo += (custo_kg / 1000) * item.quantidade
                 else:
                     custo += custo_kg * item.quantidade
-        return custo
+        return custo + embalagem
     elif produto.custo_direto:
-        return produto.custo_direto
-    return 0
+        return produto.custo_direto + embalagem
+    return embalagem
 
 
 @produtos_bp.route('/')
@@ -206,6 +207,8 @@ def salvar_composicao(id):
     produto.preco_site = float(st) if st else None
     cd = request.form.get('custo_direto', '').replace(',', '.').strip()
     produto.custo_direto = float(cd) if cd else None
+    emb = request.form.get('custo_embalagem', '').replace(',', '.').strip()
+    produto.custo_embalagem = float(emb) if emb else 0
 
     # Recriar itens
     ProdutoItem.query.filter_by(produto_id=produto.id).delete()

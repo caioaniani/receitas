@@ -490,6 +490,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 custoTotal = custoDireto;
             }
 
+            // Somar embalagem
+            var custoEmbalagem = parseFloat((document.getElementById('custo_embalagem') || {}).value) || 0;
+            custoTotal += custoEmbalagem;
+
             document.getElementById('custo-total-cesta').textContent = formatBrl(custoTotal);
 
             // Resumo financeiro
@@ -553,7 +557,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         // Recalcular ao mudar precos
-        ['preco_atacado', 'preco_loja', 'preco_site', 'custo_direto'].forEach(function (id) {
+        ['preco_atacado', 'preco_loja', 'preco_site', 'custo_direto', 'custo_embalagem'].forEach(function (id) {
             var el = document.getElementById(id);
             if (el) el.addEventListener('input', recalcularCesta);
         });

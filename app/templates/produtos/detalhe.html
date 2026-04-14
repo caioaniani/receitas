@@ -65,6 +65,13 @@
                    step="0.01" min="0" class="form-control form-control-sm input-blue text-end"
                    placeholder="Para itens simples">
         </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-bold" style="color:#795548;">Embalagem (R$/un)</label>
+            <input type="number" name="custo_embalagem" id="custo_embalagem"
+                   value="{{ '%.2f' % produto.custo_embalagem if produto.custo_embalagem else '' }}"
+                   step="0.01" min="0" class="form-control form-control-sm input-blue text-end"
+                   placeholder="0.00">
+        </div>
     </div>
 
     <p class="text-muted small mb-2">

@@ -99,6 +99,8 @@ def _migrate(app):
     cols_prod = [row[1] for row in cursor.fetchall()]
     if cols_prod and 'custo_direto' not in cols_prod:
         cursor.execute("ALTER TABLE produto ADD COLUMN custo_direto REAL")
+    if cols_prod and 'custo_embalagem' not in cols_prod:
+        cursor.execute("ALTER TABLE produto ADD COLUMN custo_embalagem REAL DEFAULT 0")
 
     conn.commit()
     conn.close()
