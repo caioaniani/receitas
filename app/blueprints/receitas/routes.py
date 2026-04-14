@@ -25,6 +25,8 @@ def salvar(id):
     receita.peso_base = float(request.form.get('peso_base', '1000').replace(',', '.'))
     peso_un = request.form.get('peso_unitario', '').replace(',', '.').strip()
     receita.peso_unitario = float(peso_un) if peso_un else None
+    perda = request.form.get('perda_percentual', '').replace(',', '.').strip()
+    receita.perda_percentual = float(perda) if perda else 0
 
     # Atualiza ingredientes
     ReceitaIngrediente.query.filter_by(receita_id=receita.id).delete()
@@ -66,6 +68,37 @@ def nova():
     db.session.commit()
     flash('Novo produto criado!', 'success')
     return redirect(url_for('receitas.ficha', id=receita.id))
+
+
+@receitas_bp.route('/<int:id>/duplicar', methods=['POST'])
+def duplicar(id):
+    original = Receita.query.get_or_404(id)
+    copia = Receita(
+        nome=f'Cópia de {original.nome}',
+        categoria=original.categoria,
+        preco_venda=original.preco_venda,
+        rendimento_qtd=original.rendimento_qtd,
+        rendimento_unidade=original.rendimento_unidade,
+        peso_base=original.peso_base,
+        peso_unitario=original.peso_unitario,
+        perda_percentual=original.perda_percentual,
+    )
+    db.session.add(copia)
+    db.session.flush()
+
+    for ing in original.ingredientes:
+        novo_ing = ReceitaIngrediente(
+            receita_id=copia.id,
+            ingrediente_nome=ing.ingrediente_nome,
+            porcentagem=ing.porcentagem,
+            eh_base=ing.eh_base,
+            nota=ing.nota,
+        )
+        db.session.add(novo_ing)
+
+    db.session.commit()
+    flash(f'Receita duplicada: "{copia.nome}"', 'success')
+    return redirect(url_for('receitas.ficha', id=copia.id))
 
 
 @receitas_bp.route('/<int:id>/excluir', methods=['POST'])

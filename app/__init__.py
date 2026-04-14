@@ -57,7 +57,22 @@ def create_app(config_class=None):
 
     with app.app_context():
         db.create_all()
+        _migrate(app)
         from app.seed import seed_database
         seed_database()
 
     return app
+
+
+def _migrate(app):
+    """Adiciona colunas novas sem perder dados existentes."""
+    import sqlite3
+    uri = app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')
+    conn = sqlite3.connect(uri)
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(receita)")
+    colunas = [row[1] for row in cursor.fetchall()]
+    if 'perda_percentual' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN perda_percentual REAL DEFAULT 0")
+        conn.commit()
+    conn.close()

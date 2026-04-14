@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Rentabilidade{% endblock %}
+
+{% block content %}
+<h5 class="fw-bold mb-3"><i class="bi bi-graph-up"></i> Painel de Rentabilidade</h5>
+
+<div class="table-responsive">
+    <table class="table table-sm table-bordered table-hover bg-white" id="tabela-rent">
+        <thead>
+            <tr style="background:#37474f; color:#fff; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">
+                <th style="cursor:pointer" onclick="ordenarTabela(0)">Produto <i class="bi bi-chevron-expand"></i></th>
+                <th style="cursor:pointer" onclick="ordenarTabela(1)">Categoria <i class="bi bi-chevron-expand"></i></th>
+                <th class="text-end" style="cursor:pointer" onclick="ordenarTabela(2)">Rend. <i class="bi bi-chevron-expand"></i></th>
+                <th class="text-end" style="cursor:pointer" onclick="ordenarTabela(3)">Custo Total <i class="bi bi-chevron-expand"></i></th>
+                <th class="text-end" style="cursor:pointer" onclick="ordenarTabela(4)">Custo/Un <i class="bi bi-chevron-expand"></i></th>
+                <th class="text-end" style="cursor:pointer" onclick="ordenarTabela(5)">Preco Venda <i class="bi bi-chevron-expand"></i></th>
+                <th class="text-end" style="cursor:pointer" onclick="ordenarTabela(6)">Lucro/Un <i class="bi bi-chevron-expand"></i></th>
+                <th class="text-end" style="cursor:pointer" onclick="ordenarTabela(7)">Margem % <i class="bi bi-chevron-expand"></i></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in dados %}
+            <tr>
+                <td>
+                    <a href="{{ url_for('receitas.ficha', id=d.id) }}" class="text-decoration-none fw-bold">
+                        {{ d.nome }}
+                    </a>
+                </td>
+                <td><span class="badge bg-secondary">{{ d.categoria }}</span></td>
+                <td class="text-end">{{ d.rendimento }}</td>
+                <td class="text-end">{{ d.custo_total | brl }}</td>
+                <td class="text-end fw-bold">{{ d.custo_un | brl }}</td>
+                <td class="text-end">
+                    {% if d.preco_venda > 0 %}
+                        {{ d.preco_venda | brl }}
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                <td class="text-end fw-bold {% if d.lucro_un is not none %}{{ 'text-success' if d.lucro_un >= 0 else 'text-danger' }}{% endif %}">
+                    {% if d.lucro_un is not none %}
+                        {{ d.lucro_un | brl }}
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                <td class="text-end fw-bold {% if d.margem is not none %}{{ 'text-success' if d.margem >= 50 else 'text-warning' if d.margem >= 20 else 'text-danger' }}{% endif %}">
+                    {% if d.margem is not none %}
+                        {{ '%.1f' % d.margem }}%
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<p class="text-muted small">
+    <i class="bi bi-info-circle"></i>
+    Clique no nome do produto para abrir a ficha. Clique nos cabecalhos para ordenar.
+    Preencha o "Preco de Venda" na ficha de cada produto para ver margem e lucro.
+</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var ordemAtual = {};
+function ordenarTabela(coluna) {
+    var tabela = document.getElementById('tabela-rent');
+    var tbody = tabela.querySelector('tbody');
+    var linhas = Array.from(tbody.querySelectorAll('tr'));
+
+    var asc = ordemAtual[coluna] !== 'asc';
+    ordemAtual[coluna] = asc ? 'asc' : 'desc';
+
+    linhas.sort(function (a, b) {
+        var cellA = a.cells[coluna].textContent.trim();
+        var cellB = b.cells[coluna].textContent.trim();
+
+        // Tentar como número
+        var numA = parseFloat(cellA.replace('R$', '').replace(/\./g, '').replace(',', '.').replace('%', ''));
+        var numB = parseFloat(cellB.replace('R$', '').replace(/\./g, '').replace(',', '.').replace('%', ''));
+
+        if (!isNaN(numA) && !isNaN(numB)) {
+            return asc ? numA - numB : numB - numA;
+        }
+
+        // Se não for número, comparar como texto
+        return asc ? cellA.localeCompare(cellB, 'pt-BR') : cellB.localeCompare(cellA, 'pt-BR');
+    });
+
+    linhas.forEach(function (linha) {
+        tbody.appendChild(linha);
+    });
+}
+</script>
+{% endblock %}

@@ -4,20 +4,82 @@
 
 document.addEventListener('DOMContentLoaded', function () {
 
+    // ═══ BUSCA NA SIDEBAR ═══
+    var sidebarBusca = document.getElementById('sidebar-busca');
+    if (sidebarBusca) {
+        sidebarBusca.addEventListener('input', function () {
+            var termo = this.value.toLowerCase().trim();
+            var receitas = document.querySelectorAll('[data-recipe]');
+            var cats = document.querySelectorAll('[data-cat]');
+
+            if (!termo) {
+                receitas.forEach(function (r) { r.style.display = ''; });
+                cats.forEach(function (c) { c.style.display = ''; });
+                return;
+            }
+
+            cats.forEach(function (c) { c.style.display = 'none'; });
+
+            receitas.forEach(function (r) {
+                var nome = r.textContent.toLowerCase().trim();
+                if (nome.indexOf(termo) !== -1) {
+                    r.style.display = '';
+                    var prev = r.previousElementSibling;
+                    while (prev) {
+                        if (prev.hasAttribute('data-cat')) {
+                            prev.style.display = '';
+                            break;
+                        }
+                        prev = prev.previousElementSibling;
+                    }
+                } else {
+                    r.style.display = 'none';
+                }
+            });
+        });
+    }
+
+
     // ═══ FICHA TÉCNICA ═══
-    const fichaBody = document.getElementById('ficha-body');
-    const pesoBaseInput = document.getElementById('peso-base');
-    const rendimentoInput = document.getElementById('rendimento-qtd');
-    const pesoUnitarioInput = document.getElementById('peso-unitario');
-    const modoSelect = document.getElementById('modo-lancamento');
-    const ingTemplate = document.getElementById('ing-row-template');
-    const btnAddIng = document.getElementById('btn-add-ing');
+    var fichaBody = document.getElementById('ficha-body');
+    var pesoBaseInput = document.getElementById('peso-base');
+    var rendimentoInput = document.getElementById('rendimento-qtd');
+    var pesoUnitarioInput = document.getElementById('peso-unitario');
+    var modoSelect = document.getElementById('modo-lancamento');
+    var ingTemplate = document.getElementById('ing-row-template');
+    var btnAddIng = document.getElementById('btn-add-ing');
+    var multiplicadorInput = document.getElementById('multiplicador');
+    var perdaInput = document.getElementById('perda-percentual');
+    var precoVendaInput = document.getElementById('preco-venda');
 
     if (fichaBody && pesoBaseInput) {
+
+        // ── Aviso de alterações não salvas ──
+        var fichaForm = document.getElementById('ficha-form');
+        var formAlterado = false;
+
+        fichaForm.addEventListener('input', function () {
+            formAlterado = true;
+        });
+
+        fichaForm.addEventListener('submit', function () {
+            formAlterado = false;
+        });
+
+        window.addEventListener('beforeunload', function (e) {
+            if (formAlterado) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+
         // Eventos de input
         pesoBaseInput.addEventListener('input', recalcularTudo);
         rendimentoInput.addEventListener('input', recalcularTudo);
         if (pesoUnitarioInput) pesoUnitarioInput.addEventListener('input', recalcularTudo);
+        if (multiplicadorInput) multiplicadorInput.addEventListener('input', recalcularTudo);
+        if (perdaInput) perdaInput.addEventListener('input', recalcularTudo);
+        if (precoVendaInput) precoVendaInput.addEventListener('input', recalcularTudo);
 
         // Trocar modo
         if (modoSelect) {
@@ -48,7 +110,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (btnAddIng && ingTemplate) {
             btnAddIng.addEventListener('click', function () {
                 var clone = ingTemplate.content.cloneNode(true);
-                // Respeitar estado do cadeado
                 var pctInput = clone.querySelector('.pct-input');
                 if (pctInput && !pctTravado) {
                     pctInput.readOnly = false;
@@ -98,7 +159,6 @@ document.addEventListener('DOMContentLoaded', function () {
         var boxQtd = document.getElementById('box-quantidade');
 
         if (modo === 'farinha') {
-            // Farinha editável, quantidade calculada
             pesoBaseInput.readOnly = false;
             pesoBaseInput.classList.remove('calc-readonly');
             rendimentoInput.readOnly = true;
@@ -106,7 +166,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (boxFarinha) boxFarinha.style.order = '1';
             if (boxQtd) boxQtd.style.order = '2';
         } else {
-            // Quantidade editável, farinha calculada
             pesoBaseInput.readOnly = true;
             pesoBaseInput.classList.add('calc-readonly');
             rendimentoInput.readOnly = false;
@@ -119,8 +178,13 @@ document.addEventListener('DOMContentLoaded', function () {
     function recalcularTudo() {
         var modo = modoSelect ? modoSelect.value : 'farinha';
         var pesoUnit = pesoUnitarioInput ? (parseFloat(pesoUnitarioInput.value) || 0) : 0;
+        var multiplicador = multiplicadorInput ? (parseInt(multiplicadorInput.value) || 1) : 1;
+        if (multiplicador < 1) multiplicador = 1;
+        var perda = perdaInput ? (parseFloat(perdaInput.value) || 0) : 0;
+        if (perda < 0) perda = 0;
+        if (perda > 50) perda = 50;
 
-        // Passo 1: Soma das porcentagens (não depende de peso_base)
+        // Passo 1: Soma das porcentagens
         var sumPct = 0;
         document.querySelectorAll('.ingrediente-row').forEach(function (row) {
             var pctInput = row.querySelector('.pct-input');
@@ -131,17 +195,15 @@ document.addEventListener('DOMContentLoaded', function () {
         var pesoBase, rendimento;
 
         if (modo === 'quantidade' && pesoUnit > 0 && sumPct > 0) {
-            // Modo quantidade: rendimento é input, calcula peso_base
             rendimento = parseFloat(rendimentoInput.value) || 0;
             pesoBase = rendimento * pesoUnit * 100 / sumPct;
             pesoBaseInput.value = Math.round(pesoBase);
         } else {
-            // Modo farinha (padrão): peso_base é input
             pesoBase = parseFloat(pesoBaseInput.value) || 0;
             rendimento = parseFloat(rendimentoInput.value) || 1;
         }
 
-        // Passo 3: Calcular ingredientes
+        // Passo 3: Calcular ingredientes (para 1 fornada)
         var totalPct = 0;
         var totalQtd = 0;
         var totalCusto = 0;
@@ -161,20 +223,33 @@ document.addEventListener('DOMContentLoaded', function () {
             var custoKg = mp ? mp.custo_por_kg : 0;
             var custoRs = qtd / 1000 * custoKg;
 
-            qtdCell.textContent = qtd > 0 ? formatNum(qtd, 1) : '-';
+            // Mostrar com multiplicador
+            var qtdExibir = qtd * multiplicador;
+            var custoExibir = custoRs * multiplicador;
+
+            qtdCell.textContent = qtdExibir > 0 ? formatNum(qtdExibir, 1) : '-';
             custoKgCell.textContent = mp ? formatBRL(custoKg) : '-';
             custoKgCell.className = mp ? 'custo-kg-calc valor-mp text-end' : 'custo-kg-calc text-end text-muted';
-            custoRsCell.textContent = custoRs > 0 ? formatBRL(custoRs) : '-';
+            custoRsCell.textContent = custoExibir > 0 ? formatBRL(custoExibir) : '-';
 
             totalPct += pct;
             totalQtd += qtd;
             totalCusto += custoRs;
         });
 
+        // Aplicar multiplicador aos totais
+        var totalQtdMult = totalQtd * multiplicador;
+        var totalCustoMult = totalCusto * multiplicador;
+
+        // Aplicar perda de rendimento ao peso
+        var pesoAposPerda = totalQtdMult * (1 - perda / 100);
+
         // Passo 4: Se modo farinha e peso_unitario preenchido, calcular rendimento
-        if (modo === 'farinha' && pesoUnit > 0 && totalQtd > 0) {
-            rendimento = Math.floor(totalQtd / pesoUnit);
+        if (modo === 'farinha' && pesoUnit > 0 && pesoAposPerda > 0) {
+            rendimento = Math.floor(pesoAposPerda / pesoUnit);
             rendimentoInput.value = rendimento;
+        } else {
+            rendimento = rendimento * multiplicador;
         }
 
         // Totais na tabela
@@ -182,18 +257,60 @@ document.addEventListener('DOMContentLoaded', function () {
         var elQtd = document.getElementById('total-qtd');
         var elCusto = document.getElementById('total-custo');
         if (elPct) elPct.textContent = formatNum(totalPct, 1) + '%';
-        if (elQtd) elQtd.textContent = formatNum(totalQtd, 0) + 'g';
-        if (elCusto) elCusto.textContent = formatBRL(totalCusto);
+        if (elQtd) elQtd.textContent = formatNum(totalQtdMult, 0) + 'g';
+        if (elCusto) elCusto.textContent = formatBRL(totalCustoMult);
 
         // Resumo
+        var custoUn = rendimento > 0 ? totalCustoMult / rendimento : 0;
+
         var rPeso = document.getElementById('resumo-peso');
         var rCusto = document.getElementById('resumo-custo');
         var rUn = document.getElementById('resumo-unidades');
         var rCustoUn = document.getElementById('resumo-custo-un');
-        if (rPeso) rPeso.textContent = formatNum(totalQtd, 0) + 'g';
-        if (rCusto) rCusto.textContent = formatBRL(totalCusto);
+        if (rPeso) {
+            if (perda > 0) {
+                rPeso.textContent = formatNum(pesoAposPerda, 0) + 'g';
+                rPeso.title = 'Massa: ' + formatNum(totalQtdMult, 0) + 'g - Perda ' + perda + '%';
+            } else {
+                rPeso.textContent = formatNum(totalQtdMult, 0) + 'g';
+                rPeso.title = '';
+            }
+        }
+        if (rCusto) rCusto.textContent = formatBRL(totalCustoMult);
         if (rUn) rUn.textContent = rendimento;
-        if (rCustoUn) rCustoUn.textContent = rendimento > 0 ? formatBRL(totalCusto / rendimento) : '-';
+        if (rCustoUn) rCustoUn.textContent = rendimento > 0 ? formatBRL(custoUn) : '-';
+
+        // Rentabilidade
+        var precoVenda = precoVendaInput ? (parseFloat(precoVendaInput.value) || 0) : 0;
+        var rPrecoVenda = document.getElementById('resumo-preco-venda');
+        var rMargem = document.getElementById('resumo-margem');
+        var rLucroUn = document.getElementById('resumo-lucro-un');
+        var rLucroTotal = document.getElementById('resumo-lucro-total');
+
+        if (rPrecoVenda) rPrecoVenda.textContent = precoVenda > 0 ? formatBRL(precoVenda) : '-';
+
+        if (precoVenda > 0 && custoUn > 0) {
+            var lucroUn = precoVenda - custoUn;
+            var margem = (lucroUn / precoVenda) * 100;
+            var lucroTotal = lucroUn * rendimento;
+
+            if (rMargem) {
+                rMargem.textContent = formatNum(margem, 1) + '%';
+                rMargem.className = margem >= 50 ? 'resumo-valor text-success' : margem >= 20 ? 'resumo-valor text-warning' : 'resumo-valor text-danger';
+            }
+            if (rLucroUn) {
+                rLucroUn.textContent = formatBRL(lucroUn);
+                rLucroUn.className = lucroUn >= 0 ? 'resumo-valor text-success' : 'resumo-valor text-danger';
+            }
+            if (rLucroTotal) {
+                rLucroTotal.textContent = formatBRL(lucroTotal);
+                rLucroTotal.className = lucroTotal >= 0 ? 'resumo-valor text-success' : 'resumo-valor text-danger';
+            }
+        } else {
+            if (rMargem) { rMargem.textContent = '-'; rMargem.className = 'resumo-valor'; }
+            if (rLucroUn) { rLucroUn.textContent = '-'; rLucroUn.className = 'resumo-valor'; }
+            if (rLucroTotal) { rLucroTotal.textContent = '-'; rLucroTotal.className = 'resumo-valor'; }
+        }
     }
 
 
@@ -214,7 +331,7 @@ document.addEventListener('DOMContentLoaded', function () {
             var btn = e.target.closest('.btn-del-mp');
             if (btn) {
                 var mpId = btn.dataset.id;
-                if (confirm('Excluir esta matéria-prima?')) {
+                if (confirm('Excluir esta materia-prima?')) {
                     var form = document.createElement('form');
                     form.method = 'POST';
                     form.action = '/materias-primas/excluir/' + mpId;
@@ -243,7 +360,7 @@ document.addEventListener('DOMContentLoaded', function () {
             var file = this.files[0];
             if (!file) return;
 
-            if (!confirm('Isso vai SUBSTITUIR todos os dados atuais pelo conteúdo do arquivo. Continuar?')) {
+            if (!confirm('Isso vai SUBSTITUIR todos os dados atuais pelo conteudo do arquivo. Continuar?')) {
                 this.value = '';
                 return;
             }
@@ -262,11 +379,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     alert('Dados importados com sucesso!');
                     window.location.href = '/';
                 } else {
-                    alert('Erro: ' + (data.error || 'Falha na importação'));
+                    alert('Erro: ' + (data.error || 'Falha na importacao'));
                 }
             })
             .catch(function () {
-                alert('Erro de conexão ao importar.');
+                alert('Erro de conexao ao importar.');
             });
 
             this.value = '';

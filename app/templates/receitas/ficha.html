@@ -9,7 +9,7 @@
     <!-- Cabeçalho da ficha -->
     <div class="ficha-header mb-3">
         <div class="row g-2 align-items-end">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label small text-muted">Nome do Produto</label>
                 <input type="text" name="nome" value="{{ receita.nome }}" class="form-control input-blue fw-bold">
             </div>
@@ -20,13 +20,19 @@
             <div class="col-md-2">
                 <label class="form-label small text-muted">Preço de Venda (R$)</label>
                 <input type="number" name="preco_venda" value="{{ '%.2f' % receita.preco_venda if receita.preco_venda else '' }}"
-                       step="0.01" min="0" class="form-control form-control-sm input-blue">
+                       step="0.01" min="0" class="form-control form-control-sm input-blue" id="preco-venda">
             </div>
             <div class="col-md-2">
                 <label class="form-label small text-muted">Peso por Unidade (g)</label>
                 <input type="number" name="peso_unitario" value="{{ receita.peso_unitario | int if receita.peso_unitario else '' }}"
                        step="1" min="1" class="form-control form-control-sm input-blue" id="peso-unitario"
                        placeholder="Ex: 130">
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small text-muted">Perda Forno %</label>
+                <input type="number" name="perda_percentual" value="{{ receita.perda_percentual | int if receita.perda_percentual else '' }}"
+                       step="1" min="0" max="50" class="form-control form-control-sm input-blue" id="perda-percentual"
+                       placeholder="0">
             </div>
             <div class="col-md-2">
                 <label class="form-label small text-muted">Unidade Rend.</label>
@@ -36,7 +42,7 @@
         </div>
     </div>
 
-    <!-- Seletor de modo + Peso base / Quantidade -->
+    <!-- Seletor de modo + Peso base / Quantidade + Multiplicador -->
     <div class="row mb-3 g-3">
         <div class="col-md-3">
             <label class="form-label fw-bold small">
@@ -48,7 +54,7 @@
             </select>
         </div>
 
-        <div class="col-md-4" id="box-farinha">
+        <div class="col-md-3" id="box-farinha">
             <div class="peso-base-box">
                 <label class="form-label fw-bold mb-1">
                     <i class="bi bi-bullseye"></i> Peso Base (g)
@@ -65,6 +71,17 @@
                 </label>
                 <input type="number" name="rendimento_qtd" value="{{ receita.rendimento_qtd | int }}"
                        step="1" min="1" class="form-control peso-base-input" id="rendimento-qtd">
+            </div>
+        </div>
+
+        <div class="col-md-2">
+            <div class="peso-base-box" style="background:#e3f2fd; border-color:var(--cor-azul);">
+                <label class="form-label fw-bold mb-1">
+                    <i class="bi bi-x-lg"></i> Fornadas
+                </label>
+                <input type="number" value="1" step="1" min="1" max="99"
+                       class="form-control peso-base-input" id="multiplicador"
+                       style="border-color:var(--cor-azul) !important;">
             </div>
         </div>
     </div>
@@ -146,20 +163,49 @@
             </div>
             <div class="col">
                 <div class="resumo-valor" id="resumo-unidades">-</div>
-                <div class="resumo-label">Nº Unidades</div>
+                <div class="resumo-label">N Unidades</div>
             </div>
             <div class="col">
                 <div class="resumo-valor" id="resumo-custo-un">-</div>
                 <div class="resumo-label">Custo/Unidade</div>
             </div>
         </div>
+        <!-- Linha de rentabilidade -->
+        <hr class="my-2">
+        <div class="row text-center">
+            <div class="col">
+                <div class="resumo-valor" id="resumo-preco-venda">-</div>
+                <div class="resumo-label">Preco Venda</div>
+            </div>
+            <div class="col">
+                <div class="resumo-valor" id="resumo-margem">-</div>
+                <div class="resumo-label">Margem %</div>
+            </div>
+            <div class="col">
+                <div class="resumo-valor" id="resumo-lucro-un">-</div>
+                <div class="resumo-label">Lucro/Unidade</div>
+            </div>
+            <div class="col">
+                <div class="resumo-valor" id="resumo-lucro-total">-</div>
+                <div class="resumo-label">Lucro Fornada</div>
+            </div>
+        </div>
     </div>
 
-    <!-- Botões -->
-    <div class="d-flex gap-2">
+    <!-- Botoes -->
+    <div class="d-flex gap-2 flex-wrap">
         <button type="submit" class="btn btn-primary">
             <i class="bi bi-check-lg"></i> Salvar Ficha
         </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+            <i class="bi bi-printer"></i> Imprimir
+        </button>
+        <form method="POST" action="{{ url_for('receitas.duplicar', id=receita.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-info btn-sm">
+                <i class="bi bi-copy"></i> Duplicar Receita
+            </button>
+        </form>
         <form method="POST" action="{{ url_for('receitas.excluir', id=receita.id) }}" class="d-inline"
               onsubmit="return confirm('Excluir {{ receita.nome }}?')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
