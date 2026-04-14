@@ -84,10 +84,14 @@ def create_app(config_class=None):
     with app.app_context():
         db.create_all()
         _migrate(app)
-        from app.seed import seed_database, seed_cardapio, seed_update_v2
-        seed_database()
-        seed_cardapio()
-        seed_update_v2()
+
+        # Seed só roda localmente (SQLite) — em produção os dados já existem
+        if app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite'):
+            from app.seed import seed_database, seed_cardapio, seed_update_v2
+            seed_database()
+            seed_cardapio()
+            seed_update_v2()
+
         _criar_admin()
 
     return app
