@@ -58,6 +58,27 @@ def rentabilidade():
     return render_template('main/rentabilidade.html', dados=dados)
 
 
+@main_bp.route('/cardapio')
+def cardapio():
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+
+    categorias = {}
+    for r in receitas:
+        if not r.preco_venda or r.preco_venda <= 0:
+            continue
+        cat = r.categoria or 'Outros'
+        if cat not in categorias:
+            categorias[cat] = []
+        categorias[cat].append({
+            'nome': r.nome,
+            'peso_unitario': r.peso_unitario,
+            'rendimento_unidade': r.rendimento_unidade,
+            'preco_venda': r.preco_venda,
+        })
+
+    return render_template('main/cardapio.html', categorias=categorias)
+
+
 @main_bp.route('/api/exportar')
 def exportar():
     mps = MateriaPrima.query.order_by(MateriaPrima.id).all()

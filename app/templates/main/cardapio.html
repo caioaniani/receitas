@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cardapio - Padaria Artesanal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@300;400;500;600&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            color: #2c2c2c;
+            background: #fff;
+            line-height: 1.5;
+        }
+
+        /* ── Barra de ferramentas (não aparece no PDF) ── */
+        .toolbar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            background: #1a1a2e;
+            color: #fff;
+            padding: 10px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            z-index: 100;
+            font-size: 13px;
+        }
+
+        .toolbar a { color: #8ab4f8; text-decoration: none; }
+        .toolbar a:hover { color: #fff; }
+
+        .toolbar-spacer { padding-top: 52px; }
+
+        /* ── Capa / Header ── */
+        .cardapio-header {
+            text-align: center;
+            padding: 60px 40px 40px;
+            border-bottom: 3px double #c9a96e;
+            margin-bottom: 10px;
+        }
+
+        .cardapio-header h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.8rem;
+            font-weight: 700;
+            color: #1a1a2e;
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+        }
+
+        .cardapio-header .subtitulo {
+            font-size: 1rem;
+            color: #888;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            font-weight: 300;
+        }
+
+        .cardapio-header .contato {
+            margin-top: 16px;
+            font-size: 0.85rem;
+            color: #999;
+        }
+
+        .cardapio-header .contato span {
+            margin: 0 12px;
+        }
+
+        /* ── Editáveis ── */
+        .editavel {
+            border: none;
+            background: transparent;
+            text-align: center;
+            font: inherit;
+            color: inherit;
+            width: 100%;
+            outline: none;
+        }
+
+        .editavel:focus {
+            background: #fffde7;
+            border-radius: 4px;
+        }
+
+        .editavel-nome {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.8rem;
+            font-weight: 700;
+            color: #1a1a2e;
+            letter-spacing: 2px;
+        }
+
+        .editavel-sub {
+            font-size: 1rem;
+            color: #888;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            font-weight: 300;
+        }
+
+        .editavel-contato {
+            font-size: 0.85rem;
+            color: #999;
+        }
+
+        /* ── Corpo do cardápio ── */
+        .cardapio-body {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 40px 40px;
+        }
+
+        /* ── Categoria ── */
+        .categoria-section {
+            margin-top: 36px;
+            page-break-inside: avoid;
+        }
+
+        .categoria-titulo {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1a1a2e;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #c9a96e;
+            margin-bottom: 16px;
+        }
+
+        /* ── Produto ── */
+        .produto-item {
+            display: flex;
+            align-items: baseline;
+            padding: 8px 0;
+            border-bottom: 1px dotted #ddd;
+        }
+
+        .produto-item:last-child {
+            border-bottom: none;
+        }
+
+        .produto-nome {
+            font-weight: 600;
+            font-size: 1rem;
+            color: #2c2c2c;
+            flex-shrink: 0;
+        }
+
+        .produto-detalhe {
+            font-size: 0.8rem;
+            color: #999;
+            margin-left: 8px;
+            flex-shrink: 0;
+        }
+
+        .produto-dots {
+            flex: 1;
+            border-bottom: 1px dotted #ccc;
+            margin: 0 8px;
+            min-width: 20px;
+            height: 1em;
+        }
+
+        .produto-preco {
+            font-weight: 600;
+            font-size: 1.05rem;
+            color: #1a1a2e;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        /* ── Rodapé ── */
+        .cardapio-footer {
+            text-align: center;
+            padding: 30px 40px;
+            border-top: 3px double #c9a96e;
+            margin-top: 40px;
+            color: #999;
+            font-size: 0.8rem;
+        }
+
+        .cardapio-footer .editavel-footer {
+            font-size: 0.8rem;
+            color: #999;
+        }
+
+        /* ── Aviso de preço ── */
+        .aviso-preco {
+            text-align: center;
+            margin-top: 20px;
+            padding: 12px;
+            background: #fff8e1;
+            border: 1px dashed #f9a825;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        /* ── Print ── */
+        @media print {
+            .toolbar, .toolbar-spacer, .aviso-preco { display: none !important; }
+
+            body { font-size: 12pt; }
+
+            .cardapio-header { padding-top: 40px; }
+
+            .editavel { border: none !important; background: transparent !important; }
+
+            .categoria-section { page-break-inside: avoid; }
+
+            @page {
+                margin: 15mm 20mm;
+                size: A4;
+            }
+        }
+
+        /* ── Screen ── */
+        @media screen {
+            .cardapio-body {
+                padding-bottom: 60px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Barra de ferramentas (não aparece no PDF) -->
+    <div class="toolbar">
+        <a href="{{ url_for('materias_primas.banco') }}"><i class="bi bi-arrow-left"></i> Voltar</a>
+        <span>|</span>
+        <strong>Cardapio para Clientes</strong>
+        <span style="flex:1"></span>
+        <span style="color:#aaa; font-size:11px;">Edite os textos clicando neles. Depois clique em Exportar PDF.</span>
+        <button onclick="window.print()" style="background:#c9a96e; color:#fff; border:none; padding:6px 20px; border-radius:4px; cursor:pointer; font-weight:600;">
+            <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+        </button>
+    </div>
+    <div class="toolbar-spacer"></div>
+
+    <!-- Header do cardápio -->
+    <div class="cardapio-header">
+        <input type="text" class="editavel editavel-nome" value="Padaria Artesanal">
+        <br>
+        <input type="text" class="editavel editavel-sub" value="Produtos Artesanais de Fermentacao Natural">
+        <div class="contato" style="margin-top:16px;">
+            <input type="text" class="editavel editavel-contato" value="Tel: (11) 9999-9999  |  @padaria  |  pedidos@padaria.com.br" style="width:80%;">
+        </div>
+    </div>
+
+    <!-- Corpo -->
+    <div class="cardapio-body">
+
+        {% for cat, produtos in categorias.items() %}
+        <div class="categoria-section">
+            <div class="categoria-titulo">{{ cat }}</div>
+
+            {% for p in produtos %}
+            <div class="produto-item">
+                <span class="produto-nome">{{ p.nome }}</span>
+                {% if p.peso_unitario %}
+                <span class="produto-detalhe">{{ p.peso_unitario | int }}g</span>
+                {% endif %}
+                <span class="produto-dots"></span>
+                <span class="produto-preco">R$ {{ '%.2f' % p.preco_venda | replace('.', ',') }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+
+        {% if not categorias %}
+        <div class="aviso-preco" style="margin-top:60px;">
+            <i class="bi bi-exclamation-triangle"></i>
+            <strong>Nenhum produto com preco de venda cadastrado.</strong><br>
+            Preencha o campo "Preco de Venda" nas fichas tecnicas para os produtos aparecerem aqui.
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Rodapé -->
+    <div class="cardapio-footer">
+        <input type="text" class="editavel editavel-footer" value="Precos para atacado. Pedido minimo: consulte. Entrega sob consulta." style="width:80%;">
+        <br>
+        <input type="text" class="editavel editavel-footer" value="Validade dos precos: Abril/2026" style="width:40%; margin-top:4px;">
+    </div>
+
+    {% if categorias %}
+    <div class="aviso-preco" style="max-width:800px; margin:0 auto 40px;">
+        <i class="bi bi-info-circle"></i>
+        <strong>Dica:</strong> Clique em qualquer texto (nome da padaria, telefone, rodape) para personalizar antes de exportar.
+        Para salvar como PDF: clique "Exportar PDF", na janela de impressao escolha <strong>"Salvar como PDF"</strong> como destino.
+    </div>
+    {% endif %}
+</body>
+</html>
