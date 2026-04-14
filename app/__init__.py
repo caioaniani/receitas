@@ -104,7 +104,9 @@ def _criar_admin():
 
 
 def _migrate(app):
-    """Adiciona colunas novas sem perder dados existentes."""
+    """Adiciona colunas novas sem perder dados existentes (só SQLite)."""
+    if not app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite'):
+        return  # PostgreSQL não precisa — db.create_all() já cria tudo
     import sqlite3
     uri = app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')
     conn = sqlite3.connect(uri)
