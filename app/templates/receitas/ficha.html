@@ -107,16 +107,17 @@
         <table class="table table-sm table-bordered tabela-ficha" id="ficha-table">
             <thead>
                 <tr>
-                    <th style="width:25%">Ingrediente</th>
+                    <th style="width:8%">Tipo</th>
+                    <th style="width:22%">Ingrediente</th>
                     <th style="width:10%">
-                        % Padeiro
+                        % / Qtd
                         <button type="button" class="btn btn-sm btn-lock" id="btn-lock-pct" title="Destravar para editar receita">
                             <i class="bi bi-lock-fill"></i>
                         </button>
                     </th>
                     <th style="width:10%">Qtd (g)</th>
-                    <th style="width:12%">Custo/kg</th>
-                    <th style="width:12%">Custo R$</th>
+                    <th style="width:10%">Custo/kg</th>
+                    <th style="width:10%">Custo R$</th>
                     <th>Nota</th>
                     <th style="width:40px"></th>
                 </tr>
@@ -124,7 +125,7 @@
             <tbody id="ficha-body">
                 {% if not receita.ingredientes %}
                 <tr>
-                    <td colspan="7" class="text-center py-3" style="background:#fff8e1;">
+                    <td colspan="8" class="text-center py-3" style="background:#fff8e1;">
                         <i class="bi bi-exclamation-triangle text-warning"></i>
                         <strong>Ficha vazia</strong> — destrave o cadeado <i class="bi bi-lock-fill"></i> e adicione os ingredientes.
                     </td>
@@ -133,8 +134,15 @@
                 {% for ing in receita.ingredientes %}
                 <tr class="ingrediente-row" data-base="{{ '1' if ing.eh_base else '0' }}">
                     <td>
+                        <select name="ingrediente_tipo[]" class="form-select form-select-sm ing-tipo" style="font-size:10px;">
+                            <option value="mp" {{ 'selected' if (ing.tipo or 'mp') == 'mp' }}>MP</option>
+                            <option value="receita" {{ 'selected' if ing.tipo == 'receita' }}>Receita</option>
+                        </select>
+                    </td>
+                    <td>
                         <input type="text" name="ingrediente_nome[]" value="{{ ing.ingrediente_nome }}"
-                               list="mp-list" class="form-control form-control-sm input-blue nome-input"
+                               list="{{ 'receita-list' if ing.tipo == 'receita' else 'mp-list' }}"
+                               class="form-control form-control-sm input-blue nome-input"
                                autocomplete="off">
                         <input type="hidden" name="eh_base[]" value="{{ '1' if ing.eh_base else '0' }}">
                     </td>
@@ -158,6 +166,7 @@
             </tbody>
             <tfoot id="ficha-foot">
                 <tr class="table-dark">
+                    <td></td>
                     <td class="fw-bold">TOTAL</td>
                     <td class="text-end fw-bold" id="total-pct">-</td>
                     <td class="text-end fw-bold" id="total-qtd">-</td>
@@ -282,6 +291,12 @@
 <template id="ing-row-template">
     <tr class="ingrediente-row" data-base="0">
         <td>
+            <select name="ingrediente_tipo[]" class="form-select form-select-sm ing-tipo" style="font-size:10px;">
+                <option value="mp">MP</option>
+                <option value="receita">Receita</option>
+            </select>
+        </td>
+        <td>
             <input type="text" name="ingrediente_nome[]" value=""
                    list="mp-list" class="form-control form-control-sm input-blue nome-input"
                    autocomplete="off">
@@ -304,4 +319,17 @@
         </td>
     </tr>
 </template>
+
+<!-- Datalist de receitas para sub-receitas -->
+<datalist id="receita-list">
+    {% for nome in receita_nomes %}
+    <option value="{{ nome }}">
+    {% endfor %}
+</datalist>
+
+<!-- Dados de custos de receitas para JS -->
+<script>
+const RECEITA_CUSTOS = {{ receita_custos_json | safe }};
+const RECEITA_PESOS = {{ receita_pesos_json | safe }};
+</script>
 {% endblock %}

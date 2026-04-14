@@ -8,7 +8,11 @@ from app.models import Produto, ProdutoItem, Receita, MateriaPrima
 
 
 def _calcular_custos_receitas():
-    """Calcula custo unitário de cada receita. Retorna (custos, fabricados, mp_dict, mp_info)."""
+    """Calcula custo unitário de cada receita. Retorna (custos, fabricados, mp_dict, mp_info).
+
+    Suporta sub-receitas: ingredientes com tipo='receita' usam o custo unitário
+    da receita referenciada × quantidade (porcentagem é usada como qtd de unidades).
+    """
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     mps = MateriaPrima.query.all()
     mp_dict = {mp.nome: mp.custo_por_kg for mp in mps}
@@ -17,35 +21,71 @@ def _calcular_custos_receitas():
     custos = {}
     fabricados = []
 
-    for r in receitas:
-        custo_total = 0
-        sum_pct = 0
-        for ing in r.ingredientes:
-            sum_pct += ing.porcentagem
-            qtd_g = r.peso_base * ing.porcentagem / 100
-            custo_kg = mp_dict.get(ing.ingrediente_nome, 0)
-            custo_total += qtd_g / 1000 * custo_kg
+    # Múltiplas passadas para resolver dependências entre receitas
+    remaining = list(receitas)
+    for _ in range(5):
+        still_remaining = []
+        for r in remaining:
+            can_calc = True
+            custo_total = 0
+            sum_pct = 0  # só MPs contribuem para peso
 
-        total_qtd = r.peso_base * sum_pct / 100
-        perda = r.perda_percentual or 0
-        peso_pos_perda = total_qtd * (1 - perda / 100)
+            for ing in r.ingredientes:
+                tipo = ing.tipo or 'mp'
+                if tipo == 'receita':
+                    if ing.ingrediente_nome not in custos:
+                        can_calc = False
+                        break
+                    custo_total += custos[ing.ingrediente_nome] * ing.porcentagem
+                else:
+                    sum_pct += ing.porcentagem
+                    qtd_g = r.peso_base * ing.porcentagem / 100
+                    custo_kg = mp_dict.get(ing.ingrediente_nome, 0)
+                    custo_total += qtd_g / 1000 * custo_kg
 
-        if r.peso_unitario and r.peso_unitario > 0 and peso_pos_perda > 0:
-            rendimento = int(peso_pos_perda / r.peso_unitario)
-        else:
-            rendimento = int(r.rendimento_qtd)
+            if not can_calc:
+                still_remaining.append(r)
+                continue
 
-        embalagem = r.custo_embalagem or 0
-        custo_un = (custo_total / rendimento + embalagem) if rendimento > 0 else 0
-        custos[r.nome] = custo_un
+            total_qtd = r.peso_base * sum_pct / 100
+            perda = r.perda_percentual or 0
+            peso_pos_perda = total_qtd * (1 - perda / 100)
 
+            if r.peso_unitario and r.peso_unitario > 0 and peso_pos_perda > 0:
+                rendimento = int(peso_pos_perda / r.peso_unitario)
+            else:
+                rendimento = int(r.rendimento_qtd)
+
+            embalagem = r.custo_embalagem or 0
+            custo_un = (custo_total / rendimento + embalagem) if rendimento > 0 else 0
+            custos[r.nome] = custo_un
+
+            fabricados.append({
+                'id': r.id,
+                'nome': r.nome,
+                'categoria': r.categoria or 'Outros',
+                'peso_unitario': r.peso_unitario,
+                'rendimento': rendimento,
+                'custo_un': custo_un,
+                'preco_atacado': r.preco_venda or 0,
+                'preco_loja': r.preco_loja or 0,
+                'preco_site': r.preco_site or 0,
+                'vazia': len(r.ingredientes) == 0,
+            })
+
+        remaining = still_remaining
+        if not remaining:
+            break
+
+    # Receitas que não puderam ser calculadas (dependência circular ou faltante)
+    for r in remaining:
+        custos[r.nome] = 0
         fabricados.append({
-            'id': r.id,
-            'nome': r.nome,
+            'id': r.id, 'nome': r.nome,
             'categoria': r.categoria or 'Outros',
             'peso_unitario': r.peso_unitario,
-            'rendimento': rendimento,
-            'custo_un': custo_un,
+            'rendimento': int(r.rendimento_qtd),
+            'custo_un': 0,
             'preco_atacado': r.preco_venda or 0,
             'preco_loja': r.preco_loja or 0,
             'preco_site': r.preco_site or 0,

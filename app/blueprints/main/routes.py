@@ -17,29 +17,66 @@ def rentabilidade():
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     mp_dict = {mp.nome: mp.custo_por_kg for mp in MateriaPrima.query.all()}
 
+    # Multi-pass para resolver sub-receitas
+    custos_receita = {}
+    remaining = list(receitas)
+    for _ in range(5):
+        still_remaining = []
+        for r in remaining:
+            can_calc = True
+            custo_total = 0
+            sum_pct = 0
+
+            for ing in r.ingredientes:
+                tipo = ing.tipo or 'mp'
+                if tipo == 'receita':
+                    if ing.ingrediente_nome not in custos_receita:
+                        can_calc = False
+                        break
+                    custo_total += custos_receita[ing.ingrediente_nome] * ing.porcentagem
+                else:
+                    sum_pct += ing.porcentagem
+                    qtd_g = r.peso_base * ing.porcentagem / 100
+                    custo_kg = mp_dict.get(ing.ingrediente_nome, 0)
+                    custo_total += qtd_g / 1000 * custo_kg
+
+            if not can_calc:
+                still_remaining.append(r)
+                continue
+
+            total_qtd = r.peso_base * sum_pct / 100
+            perda = r.perda_percentual or 0
+            peso_pos_perda = total_qtd * (1 - perda / 100)
+
+            if r.peso_unitario and r.peso_unitario > 0 and peso_pos_perda > 0:
+                rendimento = int(peso_pos_perda / r.peso_unitario)
+            else:
+                rendimento = int(r.rendimento_qtd)
+
+            embalagem = r.custo_embalagem or 0
+            custo_un = (custo_total / rendimento + embalagem) if rendimento > 0 else 0
+            custos_receita[r.nome] = custo_un
+
+        remaining = still_remaining
+        if not remaining:
+            break
+
+    # Agora gerar dados para o template
     dados = []
     for r in receitas:
-        # Calcular custo total da receita
-        custo_total = 0
-        sum_pct = 0
-        for ing in r.ingredientes:
-            sum_pct += ing.porcentagem
-            qtd_g = r.peso_base * ing.porcentagem / 100
-            custo_kg = mp_dict.get(ing.ingrediente_nome, 0)
-            custo_total += qtd_g / 1000 * custo_kg
+        custo_un = custos_receita.get(r.nome, 0)
 
-        # Calcular rendimento considerando perda
+        # Recalcular rendimento para exibir
+        sum_pct = sum(ing.porcentagem for ing in r.ingredientes if (ing.tipo or 'mp') == 'mp')
         total_qtd = r.peso_base * sum_pct / 100
         perda = r.perda_percentual or 0
         peso_pos_perda = total_qtd * (1 - perda / 100)
-
         if r.peso_unitario and r.peso_unitario > 0 and peso_pos_perda > 0:
             rendimento = int(peso_pos_perda / r.peso_unitario)
         else:
             rendimento = int(r.rendimento_qtd)
 
-        embalagem = r.custo_embalagem or 0
-        custo_un = (custo_total / rendimento + embalagem) if rendimento > 0 else 0
+        custo_total = custo_un * rendimento
 
         preco_at = r.preco_venda or 0
         lucro_at = preco_at - custo_un if preco_at > 0 else None
@@ -192,6 +229,7 @@ def importar():
         for ing_data in r_data.get('ingredientes', []):
             ing = ReceitaIngrediente(
                 receita_id=receita.id,
+                tipo=ing_data.get('tipo', 'mp'),
                 ingrediente_nome=ing_data['ingrediente_nome'],
                 porcentagem=ing_data['porcentagem'],
                 eh_base=ing_data.get('eh_base', False),

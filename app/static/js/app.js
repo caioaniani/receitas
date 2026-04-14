@@ -103,6 +103,17 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
+        // Trocar tipo de ingrediente (MP ↔ Receita): alternar datalist e recalcular
+        fichaBody.addEventListener('change', function (e) {
+            if (e.target.classList.contains('ing-tipo')) {
+                var row = e.target.closest('.ingrediente-row');
+                var nomeInput = row.querySelector('.nome-input');
+                nomeInput.setAttribute('list', e.target.value === 'receita' ? 'receita-list' : 'mp-list');
+                nomeInput.value = '';
+                recalcularTudo();
+            }
+        });
+
         // Remover ingrediente
         fichaBody.addEventListener('click', function (e) {
             var btn = e.target.closest('.btn-remove-ing');
@@ -190,11 +201,15 @@ document.addEventListener('DOMContentLoaded', function () {
         if (perda < 0) perda = 0;
         if (perda > 50) perda = 50;
 
-        // Passo 1: Soma das porcentagens
+        // Passo 1: Soma das porcentagens (só MPs contribuem para peso/% padeiro)
         var sumPct = 0;
         document.querySelectorAll('.ingrediente-row').forEach(function (row) {
-            var pctInput = row.querySelector('.pct-input');
-            sumPct += parseFloat(pctInput ? pctInput.value : 0) || 0;
+            var tipoSel = row.querySelector('.ing-tipo');
+            var tipo = tipoSel ? tipoSel.value : 'mp';
+            if (tipo === 'mp') {
+                var pctInput = row.querySelector('.pct-input');
+                sumPct += parseFloat(pctInput ? pctInput.value : 0) || 0;
+            }
         });
 
         // Passo 2: Determinar peso_base e rendimento conforme o modo
@@ -220,27 +235,51 @@ document.addEventListener('DOMContentLoaded', function () {
             var qtdCell = row.querySelector('.qtd-calc');
             var custoKgCell = row.querySelector('.custo-kg-calc');
             var custoRsCell = row.querySelector('.custo-rs-calc');
+            var tipoSel = row.querySelector('.ing-tipo');
 
             var nome = nomeInput ? nomeInput.value.trim() : '';
             var pct = parseFloat(pctInput ? pctInput.value : 0) || 0;
+            var tipo = tipoSel ? tipoSel.value : 'mp';
 
-            var qtd = pesoBase * pct / 100;
-            var mp = MP_DATA[nome];
-            var custoKg = mp ? mp.custo_por_kg : 0;
-            var custoRs = qtd / 1000 * custoKg;
+            var qtd, custoRs, custoKg;
 
-            // Mostrar com multiplicador
-            var qtdExibir = qtd * multiplicador;
-            var custoExibir = custoRs * multiplicador;
+            if (tipo === 'receita') {
+                // Sub-receita: porcentagem = quantidade de unidades
+                var custoUnitReceita = (typeof RECEITA_CUSTOS !== 'undefined' && RECEITA_CUSTOS[nome]) || 0;
+                var pesoUnitReceita = (typeof RECEITA_PESOS !== 'undefined' && RECEITA_PESOS[nome]) || 0;
+                qtd = pct * pesoUnitReceita;  // peso total = unidades × peso unitário
+                custoRs = custoUnitReceita * pct;
 
-            qtdCell.textContent = qtdExibir > 0 ? formatNum(qtdExibir, 1) : '-';
-            custoKgCell.textContent = mp ? formatBRL(custoKg) : '-';
-            custoKgCell.className = mp ? 'custo-kg-calc valor-mp text-end' : 'custo-kg-calc text-end text-muted';
-            custoRsCell.textContent = custoExibir > 0 ? formatBRL(custoExibir) : '-';
+                var qtdExibir = qtd * multiplicador;
+                var custoExibir = custoRs * multiplicador;
 
-            totalPct += pct;
-            totalQtd += qtd;
-            totalCusto += custoRs;
+                qtdCell.textContent = qtdExibir > 0 ? formatNum(qtdExibir, 1) + 'g' : pct > 0 ? pct + ' un' : '-';
+                custoKgCell.textContent = custoUnitReceita > 0 ? formatBRL(custoUnitReceita) + '/un' : '-';
+                custoKgCell.className = custoUnitReceita > 0 ? 'custo-kg-calc valor-mp text-end' : 'custo-kg-calc text-end text-muted';
+                custoRsCell.textContent = custoExibir > 0 ? formatBRL(custoExibir) : '-';
+
+                // Sub-receitas não contribuem para % padeiro, mas contribuem para peso e custo
+                totalQtd += qtd;
+                totalCusto += custoRs;
+            } else {
+                // MP normal: % padeiro
+                qtd = pesoBase * pct / 100;
+                var mp = MP_DATA[nome];
+                custoKg = mp ? mp.custo_por_kg : 0;
+                custoRs = qtd / 1000 * custoKg;
+
+                var qtdExibir = qtd * multiplicador;
+                var custoExibir = custoRs * multiplicador;
+
+                qtdCell.textContent = qtdExibir > 0 ? formatNum(qtdExibir, 1) : '-';
+                custoKgCell.textContent = mp ? formatBRL(custoKg) : '-';
+                custoKgCell.className = mp ? 'custo-kg-calc valor-mp text-end' : 'custo-kg-calc text-end text-muted';
+                custoRsCell.textContent = custoExibir > 0 ? formatBRL(custoExibir) : '-';
+
+                totalPct += pct;
+                totalQtd += qtd;
+                totalCusto += custoRs;
+            }
         });
 
         // Aplicar multiplicador aos totais

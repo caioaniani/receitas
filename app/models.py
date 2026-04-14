@@ -73,13 +73,15 @@ class ReceitaIngrediente(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=False)
+    tipo = db.Column(db.String(10), default='mp')  # 'mp' ou 'receita'
     ingrediente_nome = db.Column(db.String(100), nullable=False)
-    porcentagem = db.Column(db.Float, nullable=False)
+    porcentagem = db.Column(db.Float, nullable=False)  # % padeiro (mp) ou qtd unidades (receita)
     eh_base = db.Column(db.Boolean, default=False)
     nota = db.Column(db.String(200))
 
     def to_dict(self):
         return {
+            'tipo': self.tipo or 'mp',
             'ingrediente_nome': self.ingrediente_nome,
             'porcentagem': self.porcentagem,
             'eh_base': self.eh_base,

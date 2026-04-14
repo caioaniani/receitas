@@ -88,6 +88,12 @@ def _migrate(app):
     if 'custo_embalagem' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN custo_embalagem REAL DEFAULT 0")
 
+    # Migração tabela receita_ingrediente
+    cursor.execute("PRAGMA table_info(receita_ingrediente)")
+    cols_ing = [row[1] for row in cursor.fetchall()]
+    if cols_ing and 'tipo' not in cols_ing:
+        cursor.execute("ALTER TABLE receita_ingrediente ADD COLUMN tipo TEXT DEFAULT 'mp'")
+
     # Migração tabela produto
     cursor.execute("PRAGMA table_info(produto)")
     cols_prod = [row[1] for row in cursor.fetchall()]
