@@ -53,6 +53,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var precoVendaInput = document.getElementById('preco-venda');
     var precoLojaInput = document.getElementById('preco-loja');
     var precoSiteInput = document.getElementById('preco-site');
+    var custoEmbalagemInput = document.getElementById('custo-embalagem');
 
     if (fichaBody && pesoBaseInput) {
 
@@ -84,6 +85,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (precoVendaInput) precoVendaInput.addEventListener('input', recalcularTudo);
         if (precoLojaInput) precoLojaInput.addEventListener('input', recalcularTudo);
         if (precoSiteInput) precoSiteInput.addEventListener('input', recalcularTudo);
+        if (custoEmbalagemInput) custoEmbalagemInput.addEventListener('input', recalcularTudo);
 
         // Trocar modo
         if (modoSelect) {
@@ -264,8 +266,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (elQtd) elQtd.textContent = formatNum(totalQtdMult, 0) + 'g';
         if (elCusto) elCusto.textContent = formatBRL(totalCustoMult);
 
-        // Resumo
-        var custoUn = rendimento > 0 ? totalCustoMult / rendimento : 0;
+        // Resumo (custo producao + embalagem por unidade)
+        var custoEmbalagem = parseFloat((document.getElementById('custo-embalagem') || {}).value) || 0;
+        var custoUn = rendimento > 0 ? (totalCustoMult / rendimento) + custoEmbalagem : 0;
 
         var rPeso = document.getElementById('resumo-peso');
         var rCusto = document.getElementById('resumo-custo');

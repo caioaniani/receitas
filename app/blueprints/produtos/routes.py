@@ -33,7 +33,8 @@ def _calcular_custos_receitas():
         else:
             rendimento = int(r.rendimento_qtd)
 
-        custo_un = custo_total / rendimento if rendimento > 0 else 0
+        embalagem = r.custo_embalagem or 0
+        custo_un = (custo_total / rendimento + embalagem) if rendimento > 0 else 0
         custos[r.nome] = custo_un
 
         fabricados.append({

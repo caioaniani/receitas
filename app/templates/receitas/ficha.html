@@ -45,6 +45,12 @@
                        placeholder="0">
             </div>
             <div class="col">
+                <label class="form-label small text-muted">Embalag. (R$/un)</label>
+                <input type="number" name="custo_embalagem" value="{{ '%.2f' % receita.custo_embalagem if receita.custo_embalagem else '' }}"
+                       step="0.01" min="0" class="form-control form-control-sm input-blue" id="custo-embalagem"
+                       placeholder="0.00">
+            </div>
+            <div class="col">
                 <label class="form-label small text-muted">Un. Rend.</label>
                 <input type="text" name="rendimento_unidade" value="{{ receita.rendimento_unidade }}"
                        class="form-control form-control-sm input-blue">

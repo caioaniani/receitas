@@ -38,7 +38,8 @@ def rentabilidade():
         else:
             rendimento = int(r.rendimento_qtd)
 
-        custo_un = custo_total / rendimento if rendimento > 0 else 0
+        embalagem = r.custo_embalagem or 0
+        custo_un = (custo_total / rendimento + embalagem) if rendimento > 0 else 0
 
         preco_at = r.preco_venda or 0
         lucro_at = preco_at - custo_un if preco_at > 0 else None
@@ -183,6 +184,7 @@ def importar():
             peso_base=r_data['peso_base'],
             peso_unitario=r_data.get('peso_unitario'),
             perda_percentual=r_data.get('perda_percentual', 0),
+            custo_embalagem=r_data.get('custo_embalagem', 0),
         )
         db.session.add(receita)
         db.session.flush()

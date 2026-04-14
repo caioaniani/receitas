@@ -31,6 +31,8 @@ def salvar(id):
     receita.peso_unitario = float(peso_un) if peso_un else None
     perda = request.form.get('perda_percentual', '').replace(',', '.').strip()
     receita.perda_percentual = float(perda) if perda else 0
+    emb = request.form.get('custo_embalagem', '').replace(',', '.').strip()
+    receita.custo_embalagem = float(emb) if emb else 0
 
     # Atualiza ingredientes
     ReceitaIngrediente.query.filter_by(receita_id=receita.id).delete()
@@ -88,6 +90,7 @@ def duplicar(id):
         peso_base=original.peso_base,
         peso_unitario=original.peso_unitario,
         perda_percentual=original.perda_percentual,
+        custo_embalagem=original.custo_embalagem,
     )
     db.session.add(copia)
     db.session.flush()

@@ -38,6 +38,7 @@ class Receita(db.Model):
     peso_base = db.Column(db.Float, nullable=False)
     peso_unitario = db.Column(db.Float)
     perda_percentual = db.Column(db.Float, default=0)
+    custo_embalagem = db.Column(db.Float, default=0)
 
     ingredientes = db.relationship(
         'ReceitaIngrediente',
@@ -59,6 +60,7 @@ class Receita(db.Model):
             'peso_base': self.peso_base,
             'peso_unitario': self.peso_unitario,
             'perda_percentual': self.perda_percentual or 0,
+            'custo_embalagem': self.custo_embalagem or 0,
             'ingredientes': [ing.to_dict() for ing in self.ingredientes],
         }
 
