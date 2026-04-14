@@ -121,9 +121,14 @@
         </table>
     </div>
 
-    <button type="button" class="btn btn-outline-secondary btn-sm mb-4" id="btn-add-item">
-        <i class="bi bi-plus-lg"></i> Adicionar Item
-    </button>
+    <div class="d-flex gap-2 mb-4">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-add-item">
+            <i class="bi bi-plus-lg"></i> Adicionar Item
+        </button>
+        <button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#modal-nova-mp">
+            <i class="bi bi-plus-circle"></i> Cadastrar Nova Mat. Prima
+        </button>
+    </div>
 
     <!-- Resumo financeiro -->
     <div class="row g-3 mb-4">
@@ -196,6 +201,36 @@
         </td>
     </tr>
 </template>
+
+<!-- Modal: Cadastrar Nova Matéria-Prima -->
+<div class="modal fade" id="modal-nova-mp" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header py-2" style="background:#2e7d32; color:#fff;">
+                <h6 class="modal-title"><i class="bi bi-plus-circle"></i> Nova Materia-Prima</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Nome</label>
+                    <input type="text" id="nova-mp-nome" class="form-control form-control-sm" placeholder="Ex: Base Redonda">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Custo por Unidade (R$)</label>
+                    <input type="number" id="nova-mp-custo" class="form-control form-control-sm text-end" step="0.01" min="0" placeholder="6.54">
+                </div>
+                <div id="nova-mp-erro" class="text-danger small" style="display:none;"></div>
+                <div id="nova-mp-ok" class="text-success small" style="display:none;"></div>
+            </div>
+            <div class="modal-footer py-1">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-sm btn-success" id="btn-salvar-nova-mp">
+                    <i class="bi bi-check-lg"></i> Cadastrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Dados para JS -->
 <script>const RECEITA_CUSTOS = {{ receita_custos_json | safe }};</script>
