@@ -201,7 +201,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (perda < 0) perda = 0;
         if (perda > 50) perda = 50;
 
-        // Passo 1: Soma das porcentagens (só MPs contribuem para peso/% padeiro)
+        // Passo 1: Soma das porcentagens (só MP % contribuem para peso/% padeiro)
         var sumPct = 0;
         document.querySelectorAll('.ingrediente-row').forEach(function (row) {
             var tipoSel = row.querySelector('.ing-tipo');
@@ -259,6 +259,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 custoRsCell.textContent = custoExibir > 0 ? formatBRL(custoExibir) : '-';
 
                 // Sub-receitas não contribuem para % padeiro, mas contribuem para peso e custo
+                totalQtd += qtd;
+                totalCusto += custoRs;
+            } else if (tipo === 'mp_direto') {
+                // MP com quantidade em gramas direto (não usa % padeiro)
+                qtd = pct;  // pct é na verdade gramas
+                var mp = MP_DATA[nome];
+                custoKg = mp ? mp.custo_por_kg : 0;
+                custoRs = qtd / 1000 * custoKg;
+
+                var qtdExibir = qtd * multiplicador;
+                var custoExibir = custoRs * multiplicador;
+
+                qtdCell.textContent = qtdExibir > 0 ? formatNum(qtdExibir, 1) : '-';
+                custoKgCell.textContent = mp ? formatBRL(custoKg) : '-';
+                custoKgCell.className = mp ? 'custo-kg-calc valor-mp text-end' : 'custo-kg-calc text-end text-muted';
+                custoRsCell.textContent = custoExibir > 0 ? formatBRL(custoExibir) : '-';
+
+                // MP direto não contribui para % padeiro, mas contribui para peso e custo
                 totalQtd += qtd;
                 totalCusto += custoRs;
             } else {

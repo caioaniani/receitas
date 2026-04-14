@@ -135,7 +135,8 @@
                 <tr class="ingrediente-row" data-base="{{ '1' if ing.eh_base else '0' }}">
                     <td>
                         <select name="ingrediente_tipo[]" class="form-select form-select-sm ing-tipo" style="font-size:10px;">
-                            <option value="mp" {{ 'selected' if (ing.tipo or 'mp') == 'mp' }}>MP</option>
+                            <option value="mp" {{ 'selected' if (ing.tipo or 'mp') == 'mp' }}>MP (%)</option>
+                            <option value="mp_direto" {{ 'selected' if ing.tipo == 'mp_direto' }}>MP (g)</option>
                             <option value="receita" {{ 'selected' if ing.tipo == 'receita' }}>Receita</option>
                         </select>
                     </td>
@@ -292,7 +293,8 @@
     <tr class="ingrediente-row" data-base="0">
         <td>
             <select name="ingrediente_tipo[]" class="form-select form-select-sm ing-tipo" style="font-size:10px;">
-                <option value="mp">MP</option>
+                <option value="mp">MP (%)</option>
+                <option value="mp_direto">MP (g)</option>
                 <option value="receita">Receita</option>
             </select>
         </td>

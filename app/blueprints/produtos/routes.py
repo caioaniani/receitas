@@ -28,7 +28,8 @@ def _calcular_custos_receitas():
         for r in remaining:
             can_calc = True
             custo_total = 0
-            sum_pct = 0  # só MPs contribuem para peso
+            sum_pct = 0  # só MP (%) contribuem para peso
+            qtd_direto = 0  # gramas de ingredientes com quantidade fixa
 
             for ing in r.ingredientes:
                 tipo = ing.tipo or 'mp'
@@ -37,6 +38,11 @@ def _calcular_custos_receitas():
                         can_calc = False
                         break
                     custo_total += custos[ing.ingrediente_nome] * ing.porcentagem
+                elif tipo == 'mp_direto':
+                    qtd_g = ing.porcentagem
+                    custo_kg = mp_dict.get(ing.ingrediente_nome, 0)
+                    custo_total += qtd_g / 1000 * custo_kg
+                    qtd_direto += qtd_g
                 else:
                     sum_pct += ing.porcentagem
                     qtd_g = r.peso_base * ing.porcentagem / 100
@@ -47,7 +53,7 @@ def _calcular_custos_receitas():
                 still_remaining.append(r)
                 continue
 
-            total_qtd = r.peso_base * sum_pct / 100
+            total_qtd = r.peso_base * sum_pct / 100 + qtd_direto
             perda = r.perda_percentual or 0
             peso_pos_perda = total_qtd * (1 - perda / 100)
 
