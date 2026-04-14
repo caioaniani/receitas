@@ -229,35 +229,55 @@ def seed_cardapio():
             r.preco_loja = precos_loja[r.nome]
     db.session.flush()
 
-    # ── 2. Novas matérias-primas (custo 0 para o user preencher) ──
+    # ── 2. Novas matérias-primas com custos reais ──
     novas_mps = [
-        ('Queijo Prato', 'g', 0),
-        ('Queijo Branco', 'g', 0),
-        ('Presunto', 'g', 0),
-        ('Peito de Peru', 'g', 0),
-        ('Requeijão', 'g', 0),
-        ('Café em Grão', 'g', 0),
-        ('Leite Vegetal', 'ml', 0),
-        ('Chá Twinings (sachê)', 'un', 0),
-        ('Toddy/Padre', 'g', 0),
-        ('Laranja', 'g', 0),
-        ('Abacaxi', 'g', 0),
-        ('Açaí (polpa)', 'g', 0),
-        ('Iogurte', 'g', 0),
+        # Frios e proteínas
+        ('Queijo Prato', 'g', 33.50),
+        ('Queijo Branco', 'g', 28.00),
+        ('Presunto', 'g', 27.09),
+        ('Peito de Peru', 'g', 58.89),
+        ('Requeijão', 'g', 39.75),          # R$15.90/400g
+        ('Calabresa', 'g', 23.00),
+        ('Lagarto Cozido', 'g', 49.90),
+        ('Muçarela de Búfala', 'g', 50.31),
+        ('Parmesão', 'g', 39.78),
+        ('Gorgonzola', 'g', 61.60),
+        # Frutas e vegetais
+        ('Laranja', 'un', 0.61),            # R$55/18kg ~90un
+        ('Abacaxi', 'g', 4.33),             # R$6.50/un ~1.5kg
+        ('Açaí (polpa)', 'g', 15.10),       # R$151/10L
         ('Banana', 'g', 0),
-        ('Folhas/Alface', 'g', 0),
-        ('Tomate Cereja', 'g', 0),
-        ('Muçarela de Búfala', 'g', 0),
+        ('Tomate Cereja', 'g', 10.00),      # R$3.00/bandeja ~300g
+        ('Couve', 'g', 17.50),              # R$3.50/maço ~200g
+        ('Gengibre', 'g', 75.00),           # R$15/pct ~200g
+        ('Hortelã', 'g', 160.00),           # R$8/maço ~50g
+        ('Folhas/Alface', 'g', 25.00),      # R$5/maço ~200g
+        ('Nozes', 'g', 50.96),
+        # Laticínios e outros
+        ('Iogurte', 'g', 0),
+        ('Leite Vegetal', 'ml', 18.37),
+        ('Leite Condensado', 'g', 24.71),   # R$64.24/2.6kg
+        ('Leite em Pó', 'g', 44.34),
         ('Molho Pesto', 'g', 0),
-        ('Lagarto Cozido', 'g', 0),
-        ('Amendoim', 'g', 0),
-        ('Água Mineral 300ml', 'un', 0),
-        ('Coca-Cola', 'un', 0),
-        ('Guaraná', 'un', 0),
-        ('Água de Coco', 'un', 0),
-        ('Proteína Whey 28g', 'un', 0),
-        ('Proteína Syntha 30g', 'un', 0),
-        ('Leite em Pó', 'g', 0),
+        ('Molho Branco', 'g', 0),
+        ('Canela', 'g', 19.30),             # R$9.65/500g
+        ('Farinha de Amendoim', 'g', 0),
+        ('Girassol', 'g', 13.65),
+        ('Chocolate 823 Callebaut', 'g', 147.62),  # R$310/2.1kg
+        ('Chocolate do Frade', 'g', 73.06),
+        ('Toddy', 'g', 26.06),             # R$46.90/1.8kg
+        ('Gelo', 'g', 1.40),               # R$7/5kg
+        # Doses/unitários
+        ('Dose Espresso', 'un', 1.54),
+        ('Dose Café Coado', 'un', 4.35),
+        ('Chá Twinings (sachê)', 'un', 1.90),  # R$18.99/~10un
+        ('Pão de Queijo (congelado)', 'g', 25.90),  # R$51.80/2kg
+        ('Água Mineral 300ml', 'un', 2.95),
+        ('Coca-Cola', 'un', 2.85),
+        ('Guaraná', 'un', 3.61),
+        ('Água de Coco', 'un', 5.00),
+        ('Proteína Whey 28g', 'un', 12.00),
+        ('Proteína Syntha 30g', 'un', 12.00),
         ('Coco (fruta)', 'un', 0),
     ]
     existentes = {mp.nome for mp in MateriaPrima.query.all()}
@@ -285,11 +305,12 @@ def seed_cardapio():
             ))
     db.session.flush()
 
-    # ── 4. Produtos — Cafés e Bebidas Quentes ──
-    def add_prod(nome, cat, preco_loja, descricao=''):
+    # ── 4. Produtos do cardápio ──
+    def add_prod(nome, cat, preco_loja, descricao='', custo_direto=None):
         if nome in existentes_prod:
             return None
-        p = Produto(nome=nome, categoria=cat, preco_loja=preco_loja, descricao=descricao)
+        p = Produto(nome=nome, categoria=cat, preco_loja=preco_loja,
+                    descricao=descricao, custo_direto=custo_direto)
         db.session.add(p)
         return p
 
@@ -304,151 +325,362 @@ def seed_cardapio():
                 produto_id=p.id, tipo=tipo, item_nome=item_nome, quantidade=qtd))
         return p
 
-    # Cafés e Bebidas Quentes
-    add_prod('Café Espresso', 'Cafés e Bebidas Quentes', 12.00)
-    add_prod('Café Espresso com Leite PQ', 'Cafés e Bebidas Quentes', 13.00)
-    add_prod('Café Espresso Leite Médio', 'Cafés e Bebidas Quentes', 13.00)
-    add_prod('Café Espresso Leite Vegetal', 'Cafés e Bebidas Quentes', 23.00)
-    add_prod('Café Espresso Duplo', 'Cafés e Bebidas Quentes', 19.00)
-    add_prod('Café Especial Coado', 'Cafés e Bebidas Quentes', 15.00)
-    add_prod('Café Especial Coado com Leite', 'Cafés e Bebidas Quentes', 16.00)
-    add_prod('Cappuccino com Chocolate Belga', 'Cafés e Bebidas Quentes', 27.00)
-    add_prod('Chá Twinings', 'Cafés e Bebidas Quentes', 8.00, 'Erva-Doce, Camomila ou Verde')
-    add_prod('Chocolate Quente', 'Cafés e Bebidas Quentes', 15.00, 'Padre ou Toddy')
-    add_prod('Chá de Amendoim', 'Cafés e Bebidas Quentes', 19.00)
-    add_prod('Copo de Leite', 'Cafés e Bebidas Quentes', 9.00)
-    add_prod('Copo de Leite Vegetal', 'Cafés e Bebidas Quentes', 18.00)
+    # ── Cafés e Bebidas Quentes (custo_direto dos insumos) ──
+    add_prod('Café Espresso', 'Cafés e Bebidas Quentes', 12.00, custo_direto=1.54)
+    add_prod('Café Espresso com Leite PQ', 'Cafés e Bebidas Quentes', 13.00, custo_direto=1.94)
+    add_prod('Café Espresso Leite Médio', 'Cafés e Bebidas Quentes', 13.00, custo_direto=2.14)
+    add_prod('Café Espresso Leite Vegetal', 'Cafés e Bebidas Quentes', 23.00, custo_direto=2.74)
+    add_prod('Café Espresso Duplo', 'Cafés e Bebidas Quentes', 19.00, custo_direto=2.31)
+    add_prod('Café Especial Coado', 'Cafés e Bebidas Quentes', 15.00, custo_direto=4.35)
+    add_prod('Café Especial Coado com Leite', 'Cafés e Bebidas Quentes', 16.00, custo_direto=5.55)
+    add_prod('Cappuccino com Chocolate Belga', 'Cafés e Bebidas Quentes', 27.00, custo_direto=9.61)
+    add_prod('Chá Twinings', 'Cafés e Bebidas Quentes', 8.00, 'Erva-Doce, Camomila ou Verde', custo_direto=1.90)
+    add_prod('Chocolate Quente', 'Cafés e Bebidas Quentes', 15.00, 'Padre ou Toddy', custo_direto=2.42)
+    add_prod('Chá de Amendoim', 'Cafés e Bebidas Quentes', 19.00, custo_direto=3.52)
+    add_prod('Copo de Leite', 'Cafés e Bebidas Quentes', 9.00, custo_direto=1.80)
+    add_prod('Copo de Leite Vegetal', 'Cafés e Bebidas Quentes', 18.00, custo_direto=4.20)
 
-    # Bebidas
-    add_prod('Suco de Laranja Natural', 'Bebidas', 18.00)
-    add_prod('Suco de Laranja 1 Litro', 'Bebidas', 48.00)
-    add_prod('Suco Verde', 'Bebidas', 28.00, 'Laranja, Abacaxi, Couve e Gengibre')
-    add_prod('Suco de Abacaxi com Hortelã', 'Bebidas', 28.00)
-    add_prod('Água Sem Gás 300ml', 'Bebidas', 9.00)
-    add_prod('Água São Lourenço com Gás 300ml', 'Bebidas', 9.00)
-    add_prod('Coca Zero ou Normal', 'Bebidas', 10.00)
-    add_prod('Guaraná Zero ou Normal', 'Bebidas', 10.00)
-    add_prod('Chocolate Frio', 'Bebidas', 18.00, 'Toddy ou Padre')
-    add_prod('Água de Coco (no Coco)', 'Bebidas', 18.00)
-    add_prod('Suco de Açaí', 'Bebidas', 19.00)
+    # ── Bebidas ──
+    add_prod('Suco de Laranja Natural', 'Bebidas', 18.00, custo_direto=3.44)
+    add_prod('Suco de Laranja 1 Litro', 'Bebidas', 48.00, custo_direto=11.69)
+    add_prod('Suco Verde', 'Bebidas', 28.00, 'Laranja, Abacaxi, Couve e Gengibre', custo_direto=6.17)
+    add_prod('Suco de Abacaxi com Hortelã', 'Bebidas', 28.00, custo_direto=2.65)
+    add_prod('Água Sem Gás 300ml', 'Bebidas', 9.00, custo_direto=2.95)
+    add_prod('Água São Lourenço com Gás 300ml', 'Bebidas', 9.00, custo_direto=3.15)
+    add_prod('Coca Zero ou Normal', 'Bebidas', 10.00, custo_direto=2.85)
+    add_prod('Guaraná Zero ou Normal', 'Bebidas', 10.00, custo_direto=3.61)
+    add_prod('Chocolate Frio', 'Bebidas', 18.00, 'Toddy ou Padre', custo_direto=4.67)
+    add_prod('Água de Coco (no Coco)', 'Bebidas', 18.00, custo_direto=5.00)
+    add_prod('Suco de Açaí', 'Bebidas', 19.00, custo_direto=3.84)
     add_prod('Açaí com Banana Batido', 'Bebidas', 25.00)
-    add_prod('Suco de Açaí com Laranja', 'Bebidas', 23.00)
-    add_prod('Adicional Proteína Whey 28g', 'Bebidas', 29.00)
+    add_prod('Suco de Açaí com Laranja', 'Bebidas', 23.00, custo_direto=7.21)
+    add_prod('Adicional Proteína Whey 28g', 'Bebidas', 29.00, custo_direto=12.00)
 
-    # Cafés Gelados
-    add_prod('Coconut Cream Coffee', 'Cafés Gelados', 23.00)
-    add_prod('Café Latte Gelado', 'Cafés Gelados', 19.00)
-    add_prod('Café com Leite Proteico', 'Cafés Gelados', None)
-    add_prod('Adicional Proteína Syntha 30g', 'Cafés Gelados', 42.00)
+    # ── Cafés Gelados ──
+    add_prod('Coconut Cream Coffee', 'Cafés Gelados', 23.00, custo_direto=6.05)
+    add_prod('Café Latte Gelado', 'Cafés Gelados', 19.00, custo_direto=3.26)
+    add_prod('Café com Leite Proteico', 'Cafés Gelados', None, custo_direto=14.44)
+    add_prod('Adicional Proteína Syntha 30g', 'Cafés Gelados', 42.00, custo_direto=12.00)
 
-    # Bowls
-    add_prod('Salada de Frutas', 'Bowls', 31.00)
-    add_prod('Salada de Frutas com Granola', 'Bowls', 40.00)
-    add_prod('Granola Iogurte e Mel', 'Bowls', 46.00)
-    add_prod('Iogurte com Granola', 'Bowls', 36.00)
-    add_prod('Mini Pote de Mel', 'Bowls', 9.00)
-    add_prod('Açaí na Tigela', 'Bowls', 45.00)
+    # ── Bowls ──
+    add_prod('Salada de Frutas', 'Bowls', 31.00, custo_direto=6.50)
+    add_prod('Salada de Frutas com Granola', 'Bowls', 40.00, custo_direto=8.60)
+    add_prod('Granola Iogurte e Mel', 'Bowls', 46.00, custo_direto=8.85)
+    add_prod('Iogurte com Granola', 'Bowls', 36.00, custo_direto=11.90)
+    add_prod('Mini Pote de Mel', 'Bowls', 9.00, custo_direto=5.00)
+    add_prod('Açaí na Tigela', 'Bowls', 45.00, custo_direto=7.55)
     add_prod('Adicional de Banana', 'Bowls', 6.00)
-    add_prod('Adicional de Morangos', 'Bowls', 19.00)
-    add_prod('Leite em Pó (adicional)', 'Bowls', 8.00)
+    add_prod('Adicional de Morangos', 'Bowls', 19.00, custo_direto=2.50)
+    add_prod('Leite em Pó (adicional)', 'Bowls', 8.00, custo_direto=2.25)
 
-    # Saladas Orgânicas
+    # ── Saladas Orgânicas ──
     add_prod('Salada Mix de Folhas com Pesto', 'Saladas Orgânicas', 43.00,
-             'Mix de Folhas, Tomate Cereja, Muçarela de Búfala, Nozes, Molho Pesto')
+             'Mix de Folhas, Tomate Cereja, Muçarela de Búfala, Nozes, Molho Pesto',
+             custo_direto=10.91)
     add_prod('Salada com Lagarto e Sourdough', 'Saladas Orgânicas', 52.00,
-             'Lagarto Cozido Desfiado + 2 Fatias de Sourdough Tradicional')
+             'Lagarto Cozido Desfiado + 2 Fatias de Sourdough Tradicional',
+             custo_direto=19.24)
 
     db.session.flush()
 
-    # ── 5. Lanches (com composição) ──
+    # ── 5. Lanches (composição com quantidades reais em gramas) ──
+    # Nota: para MPs em 'g', quantidade = gramas. Custo = (custo_por_kg/1000) * qtd_g
     add_prod_comp('Queijo Quente no Sourdough/Francês', 'Lanches', 27.00, [
-        ('receita', 'Sourdough Tradicional', 0.15),
-        ('mp', 'Queijo Prato', 2),
-    ], 'Queijo Prato ou Branco')
+        ('receita', 'Pão Francês Fermentado', 1),
+        ('mp', 'Queijo Prato', 60),
+        ('mp', 'Queijo Branco', 60),
+    ], 'Queijo Prato + Queijo Branco')
 
     add_prod_comp('Queijo Quente no Brioche/Croissant', 'Lanches', 30.00, [
-        ('receita', 'Brioche', 0.25),
-        ('mp', 'Queijo Prato', 2),
-    ], 'Queijo Prato ou Branco')
+        ('receita', 'Croissant Tradicional', 1),
+        ('mp', 'Queijo Prato', 60),
+        ('mp', 'Queijo Branco', 60),
+    ], 'Queijo Prato + Queijo Branco')
 
     add_prod_comp('Misto no Sourdough/Francês', 'Lanches', 27.00, [
-        ('receita', 'Sourdough Tradicional', 0.15),
-        ('mp', 'Queijo Prato', 2),
-        ('mp', 'Presunto', 2),
-    ], 'Com Queijo Prato ou Branco')
+        ('receita', 'Pão Francês Fermentado', 1),
+        ('mp', 'Presunto', 40),
+        ('mp', 'Queijo Prato', 40),
+    ])
 
     add_prod_comp('Misto no Brioche/Croissant', 'Lanches', 30.00, [
-        ('receita', 'Brioche', 0.25),
-        ('mp', 'Queijo Prato', 2),
-        ('mp', 'Presunto', 2),
-    ], 'Com Queijo Prato ou Branco')
+        ('receita', 'Croissant Tradicional', 1),
+        ('mp', 'Presunto', 40),
+        ('mp', 'Queijo Prato', 40),
+    ])
 
     add_prod_comp('Peito de Peru no Sourdough/Francês', 'Lanches', 35.00, [
-        ('receita', 'Sourdough Tradicional', 0.15),
-        ('mp', 'Queijo Prato', 2),
-        ('mp', 'Peito de Peru', 2),
+        ('receita', 'Pão Francês Fermentado', 1),
+        ('mp', 'Peito de Peru', 40),
+        ('mp', 'Queijo Prato', 40),
     ])
 
     add_prod_comp('Peito de Peru no Brioche/Croissant', 'Lanches', 39.00, [
-        ('receita', 'Brioche', 0.25),
-        ('mp', 'Queijo Prato', 2),
-        ('mp', 'Peito de Peru', 2),
+        ('receita', 'Croissant Tradicional', 1),
+        ('mp', 'Peito de Peru', 40),
+        ('mp', 'Queijo Prato', 40),
     ])
 
-    add_prod('Queijo Branco no Prato (2 Fatias)', 'Lanches', 16.00)
-    add_prod('Cone de Pão de Queijo (10un)', 'Lanches', 14.00)
+    add_prod('Queijo Branco no Prato (2 Fatias)', 'Lanches', 16.00, custo_direto=3.36)
 
-    # ── 6. Pães na Chapa (com composição) ──
+    add_prod_comp('Cone de Pão de Queijo (10un)', 'Lanches', 14.00, [
+        ('mp', 'Pão de Queijo (congelado)', 200),  # ~200g para 10un
+    ])
+
+    # ── 6. Pães na Chapa (composição com quantidades em gramas) ──
     add_prod_comp('Sourdough com Manteiga (2 fatias)', 'Pães na Chapa', 11.00, [
-        ('receita', 'Sourdough Tradicional', 0.15),
-        ('mp', 'Manteiga', 1),
+        ('receita', 'Sourdough Tradicional', 0.2),  # ~2 fatias = 1/5 do pão
+        ('mp', 'Manteiga', 20),                      # 20g manteiga
     ])
 
     add_prod_comp('Sourdough com Manteiga e Requeijão', 'Pães na Chapa', 16.00, [
-        ('receita', 'Sourdough Tradicional', 0.15),
-        ('mp', 'Manteiga', 1),
-        ('mp', 'Requeijão', 1),
+        ('receita', 'Sourdough Tradicional', 0.2),
+        ('mp', 'Manteiga', 20),
+        ('mp', 'Requeijão', 50),
     ])
 
     add_prod_comp('Brioche na Chapa (3 fatias)', 'Pães na Chapa', 16.00, [
         ('receita', 'Brioche', 0.25),
-        ('mp', 'Manteiga', 1),
+        ('mp', 'Manteiga', 20),
     ])
 
     add_prod_comp('Brioche com Manteiga e Requeijão', 'Pães na Chapa', 17.00, [
         ('receita', 'Brioche', 0.25),
-        ('mp', 'Manteiga', 1),
-        ('mp', 'Requeijão', 1),
+        ('mp', 'Manteiga', 20),
+        ('mp', 'Requeijão', 50),
     ])
 
     add_prod_comp('Pão Francês com Manteiga (2 fatias)', 'Pães na Chapa', 11.00, [
         ('receita', 'Pão Francês Fermentado', 2),
-        ('mp', 'Manteiga', 1),
+        ('mp', 'Manteiga', 20),
     ])
 
     add_prod_comp('Pão Francês com Manteiga e Requeijão', 'Pães na Chapa', 16.00, [
         ('receita', 'Pão Francês Fermentado', 2),
-        ('mp', 'Manteiga', 1),
-        ('mp', 'Requeijão', 1),
+        ('mp', 'Manteiga', 20),
+        ('mp', 'Requeijão', 50),
     ])
 
     add_prod_comp('Croissant Francês na Chapa', 'Pães na Chapa', 19.00, [
         ('receita', 'Croissant Tradicional', 1),
-        ('mp', 'Manteiga', 1),
+        ('mp', 'Manteiga', 20),
     ])
 
     add_prod_comp('Croissant Francês com Manteiga e Requeijão', 'Pães na Chapa', 21.00, [
         ('receita', 'Croissant Tradicional', 1),
-        ('mp', 'Manteiga', 1),
-        ('mp', 'Requeijão', 1),
+        ('mp', 'Manteiga', 20),
+        ('mp', 'Requeijão', 50),
     ])
 
-    add_prod('Tablet 10g Manteiga President', 'Pães na Chapa', 4.00)
-    add_prod('Adicional de Requeijão', 'Pães na Chapa', 6.00)
+    add_prod('Tablet 10g Manteiga President', 'Pães na Chapa', 4.00, custo_direto=1.00)
+    add_prod('Adicional de Requeijão', 'Pães na Chapa', 6.00, custo_direto=1.00)
 
     add_prod_comp('Ovos Orgânicos Mexidos (3 ovos)', 'Pães na Chapa', 17.00, [
-        ('mp', 'Ovos', 3),
-        ('mp', 'Manteiga', 1),
+        ('mp', 'Ovos', 180),     # 3 ovos ~180g
+        ('mp', 'Manteiga', 10),  # para cozinhar
     ])
+
+    # ── 7. Pão de Queijo ──
+    add_prod_comp('Cone de Pão de Queijo (5un)', 'Lanches', 7.00, [
+        ('mp', 'Pão de Queijo (congelado)', 100),  # ~100g para 5un
+    ])
+
+    db.session.commit()
+
+
+def seed_update_v2():
+    """Atualiza custos e composições com dados reais (para bancos que já rodaram o seed antigo)."""
+    # Marca: se 'Dose Espresso' já existe, este update já foi aplicado
+    if MateriaPrima.query.filter_by(nome='Dose Espresso').first() is not None:
+        return
+
+    # ── 1. Atualizar custos de MPs que estavam em 0 ──
+    custos_reais = {
+        'Queijo Prato': ('g', 33.50),
+        'Queijo Branco': ('g', 28.00),
+        'Presunto': ('g', 27.09),
+        'Peito de Peru': ('g', 58.89),
+        'Requeijão': ('g', 39.75),
+        'Leite Vegetal': ('ml', 18.37),
+        'Chá Twinings (sachê)': ('un', 1.90),
+        'Abacaxi': ('g', 4.33),
+        'Açaí (polpa)': ('g', 15.10),
+        'Tomate Cereja': ('g', 10.00),
+        'Folhas/Alface': ('g', 25.00),
+        'Muçarela de Búfala': ('g', 50.31),
+        'Lagarto Cozido': ('g', 49.90),
+        'Leite em Pó': ('g', 44.34),
+        'Água Mineral 300ml': ('un', 2.95),
+        'Coca-Cola': ('un', 2.85),
+        'Guaraná': ('un', 3.61),
+        'Água de Coco': ('un', 5.00),
+        'Proteína Whey 28g': ('un', 12.00),
+        'Proteína Syntha 30g': ('un', 12.00),
+    }
+    for mp in MateriaPrima.query.all():
+        if mp.nome in custos_reais and mp.custo_por_kg == 0:
+            unidade, custo = custos_reais[mp.nome]
+            mp.custo_por_kg = custo
+            mp.unidade = unidade
+
+    # Laranja: mudar de 'g' para 'un'
+    laranja = MateriaPrima.query.filter_by(nome='Laranja').first()
+    if laranja and laranja.custo_por_kg == 0:
+        laranja.unidade = 'un'
+        laranja.custo_por_kg = 0.61
+
+    # Toddy/Padre → renomear para Toddy se existir com custo 0
+    toddy_mp = MateriaPrima.query.filter_by(nome='Toddy/Padre').first()
+    if toddy_mp and toddy_mp.custo_por_kg == 0:
+        toddy_mp.nome = 'Toddy'
+        toddy_mp.custo_por_kg = 26.06
+
+    db.session.flush()
+
+    # ── 2. Adicionar MPs novas ──
+    existentes = {mp.nome for mp in MateriaPrima.query.all()}
+    novas = [
+        ('Dose Espresso', 'un', 1.54),
+        ('Dose Café Coado', 'un', 4.35),
+        ('Calabresa', 'g', 23.00),
+        ('Canela', 'g', 19.30),
+        ('Leite Condensado', 'g', 24.71),
+        ('Farinha de Amendoim', 'g', 0),
+        ('Gorgonzola', 'g', 61.60),
+        ('Parmesão', 'g', 39.78),
+        ('Pão de Queijo (congelado)', 'g', 25.90),
+        ('Chocolate 823 Callebaut', 'g', 147.62),
+        ('Chocolate do Frade', 'g', 73.06),
+        ('Nozes', 'g', 50.96),
+        ('Molho Branco', 'g', 0),
+        ('Girassol', 'g', 13.65),
+        ('Couve', 'g', 17.50),
+        ('Gengibre', 'g', 75.00),
+        ('Hortelã', 'g', 160.00),
+        ('Gelo', 'g', 1.40),
+        ('Toddy', 'g', 26.06),
+    ]
+    for nome, unidade, custo in novas:
+        if nome not in existentes:
+            db.session.add(MateriaPrima(nome=nome, unidade=unidade, custo_por_kg=custo))
+    db.session.flush()
+
+    # ── 3. Atualizar composições existentes com quantidades reais ──
+    composicoes = {
+        'Queijo Quente no Sourdough/Francês': [
+            ('receita', 'Pão Francês Fermentado', 1),
+            ('mp', 'Queijo Prato', 60), ('mp', 'Queijo Branco', 60),
+        ],
+        'Queijo Quente no Brioche/Croissant': [
+            ('receita', 'Croissant Tradicional', 1),
+            ('mp', 'Queijo Prato', 60), ('mp', 'Queijo Branco', 60),
+        ],
+        'Misto no Sourdough/Francês': [
+            ('receita', 'Pão Francês Fermentado', 1),
+            ('mp', 'Presunto', 40), ('mp', 'Queijo Prato', 40),
+        ],
+        'Misto no Brioche/Croissant': [
+            ('receita', 'Croissant Tradicional', 1),
+            ('mp', 'Presunto', 40), ('mp', 'Queijo Prato', 40),
+        ],
+        'Peito de Peru no Sourdough/Francês': [
+            ('receita', 'Pão Francês Fermentado', 1),
+            ('mp', 'Peito de Peru', 40), ('mp', 'Queijo Prato', 40),
+        ],
+        'Peito de Peru no Brioche/Croissant': [
+            ('receita', 'Croissant Tradicional', 1),
+            ('mp', 'Peito de Peru', 40), ('mp', 'Queijo Prato', 40),
+        ],
+        'Sourdough com Manteiga (2 fatias)': [
+            ('receita', 'Sourdough Tradicional', 0.2), ('mp', 'Manteiga', 20),
+        ],
+        'Sourdough com Manteiga e Requeijão': [
+            ('receita', 'Sourdough Tradicional', 0.2),
+            ('mp', 'Manteiga', 20), ('mp', 'Requeijão', 50),
+        ],
+        'Brioche na Chapa (3 fatias)': [
+            ('receita', 'Brioche', 0.25), ('mp', 'Manteiga', 20),
+        ],
+        'Brioche com Manteiga e Requeijão': [
+            ('receita', 'Brioche', 0.25),
+            ('mp', 'Manteiga', 20), ('mp', 'Requeijão', 50),
+        ],
+        'Pão Francês com Manteiga (2 fatias)': [
+            ('receita', 'Pão Francês Fermentado', 2), ('mp', 'Manteiga', 20),
+        ],
+        'Pão Francês com Manteiga e Requeijão': [
+            ('receita', 'Pão Francês Fermentado', 2),
+            ('mp', 'Manteiga', 20), ('mp', 'Requeijão', 50),
+        ],
+        'Croissant Francês na Chapa': [
+            ('receita', 'Croissant Tradicional', 1), ('mp', 'Manteiga', 20),
+        ],
+        'Croissant Francês com Manteiga e Requeijão': [
+            ('receita', 'Croissant Tradicional', 1),
+            ('mp', 'Manteiga', 20), ('mp', 'Requeijão', 50),
+        ],
+        'Ovos Orgânicos Mexidos (3 ovos)': [
+            ('mp', 'Ovos', 180), ('mp', 'Manteiga', 10),
+        ],
+    }
+
+    for nome, itens in composicoes.items():
+        p = Produto.query.filter_by(nome=nome).first()
+        if not p:
+            continue
+        ProdutoItem.query.filter_by(produto_id=p.id).delete()
+        for tipo, item_nome, qtd in itens:
+            db.session.add(ProdutoItem(
+                produto_id=p.id, tipo=tipo, item_nome=item_nome, quantidade=qtd))
+
+    # ── 4. Setar custo_direto nos produtos simples ──
+    custos_diretos = {
+        'Café Espresso': 1.54,
+        'Café Espresso com Leite PQ': 1.94,
+        'Café Espresso Leite Médio': 2.14,
+        'Café Espresso Leite Vegetal': 2.74,
+        'Café Espresso Duplo': 2.31,
+        'Café Especial Coado': 4.35,
+        'Café Especial Coado com Leite': 5.55,
+        'Cappuccino com Chocolate Belga': 9.61,
+        'Chá Twinings': 1.90,
+        'Chocolate Quente': 2.42,
+        'Chá de Amendoim': 3.52,
+        'Copo de Leite': 1.80,
+        'Copo de Leite Vegetal': 4.20,
+        'Suco de Laranja Natural': 3.44,
+        'Suco de Laranja 1 Litro': 11.69,
+        'Suco Verde': 6.17,
+        'Suco de Abacaxi com Hortelã': 2.65,
+        'Água Sem Gás 300ml': 2.95,
+        'Água São Lourenço com Gás 300ml': 3.15,
+        'Coca Zero ou Normal': 2.85,
+        'Guaraná Zero ou Normal': 3.61,
+        'Chocolate Frio': 4.67,
+        'Água de Coco (no Coco)': 5.00,
+        'Suco de Açaí': 3.84,
+        'Suco de Açaí com Laranja': 7.21,
+        'Adicional Proteína Whey 28g': 12.00,
+        'Coconut Cream Coffee': 6.05,
+        'Café Latte Gelado': 3.26,
+        'Café com Leite Proteico': 14.44,
+        'Adicional Proteína Syntha 30g': 12.00,
+        'Salada de Frutas': 6.50,
+        'Salada de Frutas com Granola': 8.60,
+        'Granola Iogurte e Mel': 8.85,
+        'Iogurte com Granola': 11.90,
+        'Mini Pote de Mel': 5.00,
+        'Açaí na Tigela': 7.55,
+        'Adicional de Morangos': 2.50,
+        'Leite em Pó (adicional)': 2.25,
+        'Queijo Branco no Prato (2 Fatias)': 3.36,
+        'Tablet 10g Manteiga President': 1.00,
+        'Adicional de Requeijão': 1.00,
+        'Salada Mix de Folhas com Pesto': 10.91,
+        'Salada com Lagarto e Sourdough': 19.24,
+    }
+    for p in Produto.query.all():
+        if p.nome in custos_diretos and not p.custo_direto:
+            p.custo_direto = custos_diretos[p.nome]
 
     db.session.commit()

@@ -401,7 +401,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 return (typeof RECEITA_CUSTOS !== 'undefined' && RECEITA_CUSTOS[nome]) || 0;
             } else {
                 var mp = MP_DATA[nome];
-                return mp ? mp.custo_por_kg : 0;
+                if (!mp) return 0;
+                if (mp.unidade === 'g' || mp.unidade === 'ml') {
+                    return mp.custo_por_kg / 1000;
+                }
+                return mp.custo_por_kg;
             }
         }
 
@@ -427,7 +431,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 var custoLinha = custoUn * quantidade;
                 custoTotal += custoLinha;
 
-                custoUnCell.textContent = custoUn > 0 ? formatBrl(custoUn) : '-';
+                // Mostrar custo/kg para itens em gramas, custo/un para unitários
+                if (tipo.value === 'mp') {
+                    var mpData = MP_DATA[nome.value];
+                    if (mpData && (mpData.unidade === 'g' || mpData.unidade === 'ml')) {
+                        custoUnCell.textContent = mpData.custo_por_kg > 0 ? formatBrl(mpData.custo_por_kg) + '/kg' : '-';
+                    } else {
+                        custoUnCell.textContent = custoUn > 0 ? formatBrl(custoUn) : '-';
+                    }
+                } else {
+                    custoUnCell.textContent = custoUn > 0 ? formatBrl(custoUn) : '-';
+                }
                 custoTotalCell.textContent = custoLinha > 0 ? formatBrl(custoLinha) : '-';
             });
 

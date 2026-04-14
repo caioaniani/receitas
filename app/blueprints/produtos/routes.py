@@ -8,9 +8,11 @@ from app.models import Produto, ProdutoItem, Receita, MateriaPrima
 
 
 def _calcular_custos_receitas():
-    """Calcula custo unitário de cada receita. Retorna dict {nome: custo_un} e lista fabricados."""
+    """Calcula custo unitário de cada receita. Retorna (custos, fabricados, mp_dict, mp_info)."""
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
-    mp_dict = {mp.nome: mp.custo_por_kg for mp in MateriaPrima.query.all()}
+    mps = MateriaPrima.query.all()
+    mp_dict = {mp.nome: mp.custo_por_kg for mp in mps}
+    mp_info = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade} for mp in mps}
 
     custos = {}
     fabricados = []
@@ -49,18 +51,28 @@ def _calcular_custos_receitas():
             'preco_site': r.preco_site or 0,
         })
 
-    return custos, fabricados, mp_dict
+    return custos, fabricados, mp_dict, mp_info
 
 
-def _calcular_custo_cesta(produto, receita_custos, mp_dict):
-    """Calcula custo total de uma cesta/produto."""
+def _calcular_custo_cesta(produto, receita_custos, mp_info):
+    """Calcula custo total de uma cesta/produto.
+
+    Para MPs com unidade 'g' ou 'ml', quantidade está em gramas/ml
+    e custo_por_kg é dividido por 1000 para obter custo por grama.
+    Para MPs com unidade 'un', quantidade é unidades e custo é direto.
+    """
     if produto.itens:
         custo = 0
         for item in produto.itens:
             if item.tipo == 'receita':
                 custo += (receita_custos.get(item.item_nome, 0)) * item.quantidade
             else:
-                custo += (mp_dict.get(item.item_nome, 0)) * item.quantidade
+                info = mp_info.get(item.item_nome, {})
+                custo_kg = info.get('custo_por_kg', 0)
+                if info.get('unidade') in ('g', 'ml'):
+                    custo += (custo_kg / 1000) * item.quantidade
+                else:
+                    custo += custo_kg * item.quantidade
         return custo
     elif produto.custo_direto:
         return produto.custo_direto
@@ -70,12 +82,12 @@ def _calcular_custo_cesta(produto, receita_custos, mp_dict):
 @produtos_bp.route('/')
 def lista():
     produtos = Produto.query.order_by(Produto.categoria, Produto.nome).all()
-    receita_custos, fabricados, mp_dict = _calcular_custos_receitas()
+    receita_custos, fabricados, mp_dict, mp_info = _calcular_custos_receitas()
 
     # Calcular custo de cada cesta
     cestas = []
     for p in produtos:
-        custo = _calcular_custo_cesta(p, receita_custos, mp_dict)
+        custo = _calcular_custo_cesta(p, receita_custos, mp_info)
         cestas.append({
             'id': p.id,
             'nome': p.nome,
@@ -102,20 +114,29 @@ def novo():
 @produtos_bp.route('/<int:id>')
 def detalhe(id):
     produto = Produto.query.get_or_404(id)
-    receita_custos, _, mp_dict = _calcular_custos_receitas()
+    receita_custos, _, mp_dict, mp_info = _calcular_custos_receitas()
 
     # Custo de cada item para exibir no template
     itens_data = []
     for item in produto.itens:
         if item.tipo == 'receita':
             custo_un = receita_custos.get(item.item_nome, 0)
+            unidade = 'un'
         else:
-            custo_un = mp_dict.get(item.item_nome, 0)
+            info = mp_info.get(item.item_nome, {})
+            custo_kg = info.get('custo_por_kg', 0)
+            unidade = info.get('unidade', 'un')
+            if unidade in ('g', 'ml'):
+                custo_un = custo_kg / 1000
+            else:
+                custo_un = custo_kg
         itens_data.append({
             'tipo': item.tipo,
             'item_nome': item.item_nome,
             'quantidade': item.quantidade,
             'custo_un': custo_un,
+            'unidade': unidade,
+            'custo_por_kg': info.get('custo_por_kg', 0) if item.tipo == 'mp' else None,
         })
 
     custo_total = sum(i['custo_un'] * i['quantidade'] for i in itens_data)
