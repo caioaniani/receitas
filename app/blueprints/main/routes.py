@@ -39,9 +39,14 @@ def rentabilidade():
             rendimento = int(r.rendimento_qtd)
 
         custo_un = custo_total / rendimento if rendimento > 0 else 0
-        preco = r.preco_venda or 0
-        lucro_un = preco - custo_un if preco > 0 else None
-        margem = (lucro_un / preco * 100) if (preco > 0 and lucro_un is not None) else None
+
+        preco_at = r.preco_venda or 0
+        lucro_at = preco_at - custo_un if preco_at > 0 else None
+        margem_at = (lucro_at / preco_at * 100) if (preco_at > 0 and lucro_at is not None) else None
+
+        preco_lj = r.preco_loja or 0
+        lucro_lj = preco_lj - custo_un if preco_lj > 0 else None
+        margem_lj = (lucro_lj / preco_lj * 100) if (preco_lj > 0 and lucro_lj is not None) else None
 
         dados.append({
             'id': r.id,
@@ -50,9 +55,12 @@ def rentabilidade():
             'rendimento': rendimento,
             'custo_total': custo_total,
             'custo_un': custo_un,
-            'preco_venda': preco,
-            'lucro_un': lucro_un,
-            'margem': margem,
+            'preco_atacado': preco_at,
+            'lucro_atacado': lucro_at,
+            'margem_atacado': margem_at,
+            'preco_loja': preco_lj,
+            'lucro_loja': lucro_lj,
+            'margem_loja': margem_lj,
         })
 
     return render_template('main/rentabilidade.html', dados=dados)
@@ -60,11 +68,13 @@ def rentabilidade():
 
 @main_bp.route('/cardapio')
 def cardapio():
+    tipo = request.args.get('tipo', 'atacado')
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
 
     categorias = {}
     for r in receitas:
-        if not r.preco_venda or r.preco_venda <= 0:
+        preco = r.preco_venda if tipo == 'atacado' else r.preco_loja
+        if not preco or preco <= 0:
             continue
         cat = r.categoria or 'Outros'
         if cat not in categorias:
@@ -73,10 +83,10 @@ def cardapio():
             'nome': r.nome,
             'peso_unitario': r.peso_unitario,
             'rendimento_unidade': r.rendimento_unidade,
-            'preco_venda': r.preco_venda,
+            'preco_venda': preco,
         })
 
-    return render_template('main/cardapio.html', categorias=categorias)
+    return render_template('main/cardapio.html', categorias=categorias, tipo=tipo)
 
 
 @main_bp.route('/api/exportar')
@@ -132,6 +142,7 @@ def importar():
             nome=r_data['nome'],
             categoria=r_data.get('categoria') or None,
             preco_venda=r_data.get('preco_venda'),
+            preco_loja=r_data.get('preco_loja'),
             rendimento_qtd=r_data['rendimento_qtd'],
             rendimento_unidade=r_data['rendimento_unidade'],
             peso_base=r_data['peso_base'],

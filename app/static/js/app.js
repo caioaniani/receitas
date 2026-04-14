@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var multiplicadorInput = document.getElementById('multiplicador');
     var perdaInput = document.getElementById('perda-percentual');
     var precoVendaInput = document.getElementById('preco-venda');
+    var precoLojaInput = document.getElementById('preco-loja');
 
     if (fichaBody && pesoBaseInput) {
 
@@ -80,6 +81,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (multiplicadorInput) multiplicadorInput.addEventListener('input', recalcularTudo);
         if (perdaInput) perdaInput.addEventListener('input', recalcularTudo);
         if (precoVendaInput) precoVendaInput.addEventListener('input', recalcularTudo);
+        if (precoLojaInput) precoLojaInput.addEventListener('input', recalcularTudo);
 
         // Trocar modo
         if (modoSelect) {
@@ -280,37 +282,43 @@ document.addEventListener('DOMContentLoaded', function () {
         if (rUn) rUn.textContent = rendimento;
         if (rCustoUn) rCustoUn.textContent = rendimento > 0 ? formatBRL(custoUn) : '-';
 
-        // Rentabilidade
-        var precoVenda = precoVendaInput ? (parseFloat(precoVendaInput.value) || 0) : 0;
-        var rPrecoVenda = document.getElementById('resumo-preco-venda');
-        var rMargem = document.getElementById('resumo-margem');
-        var rLucroUn = document.getElementById('resumo-lucro-un');
-        var rLucroTotal = document.getElementById('resumo-lucro-total');
+        // Rentabilidade — função auxiliar
+        function calcRentabilidade(preco, prefixo) {
+            var el = document.getElementById('resumo-' + prefixo);
+            var elM = document.getElementById('resumo-margem' + (prefixo === 'preco-venda' ? '' : '-loja'));
+            var elL = document.getElementById('resumo-lucro-un' + (prefixo === 'preco-venda' ? '' : '-loja'));
+            var elT = document.getElementById('resumo-lucro-total' + (prefixo === 'preco-venda' ? '' : '-loja'));
 
-        if (rPrecoVenda) rPrecoVenda.textContent = precoVenda > 0 ? formatBRL(precoVenda) : '-';
+            if (el) el.textContent = preco > 0 ? formatBRL(preco) : '-';
 
-        if (precoVenda > 0 && custoUn > 0) {
-            var lucroUn = precoVenda - custoUn;
-            var margem = (lucroUn / precoVenda) * 100;
-            var lucroTotal = lucroUn * rendimento;
+            if (preco > 0 && custoUn > 0) {
+                var lucro = preco - custoUn;
+                var marg = (lucro / preco) * 100;
+                var lucroT = lucro * rendimento;
 
-            if (rMargem) {
-                rMargem.textContent = formatNum(margem, 1) + '%';
-                rMargem.className = margem >= 50 ? 'resumo-valor text-success' : margem >= 20 ? 'resumo-valor text-warning' : 'resumo-valor text-danger';
+                if (elM) {
+                    elM.textContent = formatNum(marg, 1) + '%';
+                    elM.className = marg >= 50 ? 'resumo-valor text-success' : marg >= 20 ? 'resumo-valor text-warning' : 'resumo-valor text-danger';
+                }
+                if (elL) {
+                    elL.textContent = formatBRL(lucro);
+                    elL.className = lucro >= 0 ? 'resumo-valor text-success' : 'resumo-valor text-danger';
+                }
+                if (elT) {
+                    elT.textContent = formatBRL(lucroT);
+                    elT.className = lucroT >= 0 ? 'resumo-valor text-success' : 'resumo-valor text-danger';
+                }
+            } else {
+                if (elM) { elM.textContent = '-'; elM.className = 'resumo-valor'; }
+                if (elL) { elL.textContent = '-'; elL.className = 'resumo-valor'; }
+                if (elT) { elT.textContent = '-'; elT.className = 'resumo-valor'; }
             }
-            if (rLucroUn) {
-                rLucroUn.textContent = formatBRL(lucroUn);
-                rLucroUn.className = lucroUn >= 0 ? 'resumo-valor text-success' : 'resumo-valor text-danger';
-            }
-            if (rLucroTotal) {
-                rLucroTotal.textContent = formatBRL(lucroTotal);
-                rLucroTotal.className = lucroTotal >= 0 ? 'resumo-valor text-success' : 'resumo-valor text-danger';
-            }
-        } else {
-            if (rMargem) { rMargem.textContent = '-'; rMargem.className = 'resumo-valor'; }
-            if (rLucroUn) { rLucroUn.textContent = '-'; rLucroUn.className = 'resumo-valor'; }
-            if (rLucroTotal) { rLucroTotal.textContent = '-'; rLucroTotal.className = 'resumo-valor'; }
         }
+
+        var precoVenda = precoVendaInput ? (parseFloat(precoVendaInput.value) || 0) : 0;
+        var precoLoja = precoLojaInput ? (parseFloat(precoLojaInput.value) || 0) : 0;
+        calcRentabilidade(precoVenda, 'preco-venda');
+        calcRentabilidade(precoLoja, 'preco-loja');
     }
 
 

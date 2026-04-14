@@ -20,6 +20,8 @@ def salvar(id):
     receita.categoria = request.form.get('categoria', '').strip() or None
     preco = request.form.get('preco_venda', '').replace(',', '.').strip()
     receita.preco_venda = float(preco) if preco else None
+    preco_loja = request.form.get('preco_loja', '').replace(',', '.').strip()
+    receita.preco_loja = float(preco_loja) if preco_loja else None
     receita.rendimento_qtd = float(request.form.get('rendimento_qtd', '1').replace(',', '.'))
     receita.rendimento_unidade = request.form.get('rendimento_unidade', 'unidades').strip()
     receita.peso_base = float(request.form.get('peso_base', '1000').replace(',', '.'))
@@ -77,6 +79,7 @@ def duplicar(id):
         nome=f'Cópia de {original.nome}',
         categoria=original.categoria,
         preco_venda=original.preco_venda,
+        preco_loja=original.preco_loja,
         rendimento_qtd=original.rendimento_qtd,
         rendimento_unidade=original.rendimento_unidade,
         peso_base=original.peso_base,

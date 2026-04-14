@@ -74,5 +74,7 @@ def _migrate(app):
     colunas = [row[1] for row in cursor.fetchall()]
     if 'perda_percentual' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN perda_percentual REAL DEFAULT 0")
-        conn.commit()
+    if 'preco_loja' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN preco_loja REAL")
+    conn.commit()
     conn.close()

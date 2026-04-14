@@ -31,6 +31,7 @@ class Receita(db.Model):
     nome = db.Column(db.String(150), nullable=False)
     categoria = db.Column(db.String(50))
     preco_venda = db.Column(db.Float)
+    preco_loja = db.Column(db.Float)
     rendimento_qtd = db.Column(db.Float, nullable=False)
     rendimento_unidade = db.Column(db.String(30), nullable=False)
     peso_base = db.Column(db.Float, nullable=False)
@@ -50,6 +51,7 @@ class Receita(db.Model):
             'nome': self.nome,
             'categoria': self.categoria or '',
             'preco_venda': self.preco_venda,
+            'preco_loja': self.preco_loja,
             'rendimento_qtd': self.rendimento_qtd,
             'rendimento_unidade': self.rendimento_unidade,
             'peso_base': self.peso_base,

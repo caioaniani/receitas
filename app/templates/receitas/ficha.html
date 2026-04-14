@@ -17,25 +17,30 @@
                 <label class="form-label small text-muted">Categoria</label>
                 <input type="text" name="categoria" value="{{ receita.categoria or '' }}" class="form-control form-control-sm input-blue">
             </div>
-            <div class="col-md-2">
-                <label class="form-label small text-muted">Preço de Venda (R$)</label>
+            <div class="col">
+                <label class="form-label small text-muted">Preco Atacado (R$)</label>
                 <input type="number" name="preco_venda" value="{{ '%.2f' % receita.preco_venda if receita.preco_venda else '' }}"
                        step="0.01" min="0" class="form-control form-control-sm input-blue" id="preco-venda">
             </div>
-            <div class="col-md-2">
-                <label class="form-label small text-muted">Peso por Unidade (g)</label>
+            <div class="col">
+                <label class="form-label small text-muted">Preco Loja (R$)</label>
+                <input type="number" name="preco_loja" value="{{ '%.2f' % receita.preco_loja if receita.preco_loja else '' }}"
+                       step="0.01" min="0" class="form-control form-control-sm input-blue" id="preco-loja">
+            </div>
+            <div class="col">
+                <label class="form-label small text-muted">Peso/Un (g)</label>
                 <input type="number" name="peso_unitario" value="{{ receita.peso_unitario | int if receita.peso_unitario else '' }}"
                        step="1" min="1" class="form-control form-control-sm input-blue" id="peso-unitario"
                        placeholder="Ex: 130">
             </div>
-            <div class="col-md-1">
+            <div class="col">
                 <label class="form-label small text-muted">Perda Forno %</label>
                 <input type="number" name="perda_percentual" value="{{ receita.perda_percentual | int if receita.perda_percentual else '' }}"
                        step="1" min="0" max="50" class="form-control form-control-sm input-blue" id="perda-percentual"
                        placeholder="0">
             </div>
-            <div class="col-md-2">
-                <label class="form-label small text-muted">Unidade Rend.</label>
+            <div class="col">
+                <label class="form-label small text-muted">Un. Rend.</label>
                 <input type="text" name="rendimento_unidade" value="{{ receita.rendimento_unidade }}"
                        class="form-control form-control-sm input-blue">
             </div>
@@ -170,12 +175,12 @@
                 <div class="resumo-label">Custo/Unidade</div>
             </div>
         </div>
-        <!-- Linha de rentabilidade -->
+        <!-- Linha de rentabilidade ATACADO -->
         <hr class="my-2">
         <div class="row text-center">
             <div class="col">
                 <div class="resumo-valor" id="resumo-preco-venda">-</div>
-                <div class="resumo-label">Preco Venda</div>
+                <div class="resumo-label">Atacado</div>
             </div>
             <div class="col">
                 <div class="resumo-valor" id="resumo-margem">-</div>
@@ -183,10 +188,29 @@
             </div>
             <div class="col">
                 <div class="resumo-valor" id="resumo-lucro-un">-</div>
-                <div class="resumo-label">Lucro/Unidade</div>
+                <div class="resumo-label">Lucro/Un</div>
             </div>
             <div class="col">
                 <div class="resumo-valor" id="resumo-lucro-total">-</div>
+                <div class="resumo-label">Lucro Fornada</div>
+            </div>
+        </div>
+        <!-- Linha de rentabilidade LOJA -->
+        <div class="row text-center mt-1">
+            <div class="col">
+                <div class="resumo-valor" id="resumo-preco-loja">-</div>
+                <div class="resumo-label">Loja</div>
+            </div>
+            <div class="col">
+                <div class="resumo-valor" id="resumo-margem-loja">-</div>
+                <div class="resumo-label">Margem %</div>
+            </div>
+            <div class="col">
+                <div class="resumo-valor" id="resumo-lucro-un-loja">-</div>
+                <div class="resumo-label">Lucro/Un</div>
+            </div>
+            <div class="col">
+                <div class="resumo-valor" id="resumo-lucro-total-loja">-</div>
                 <div class="resumo-label">Lucro Fornada</div>
             </div>
         </div>

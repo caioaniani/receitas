@@ -25,7 +25,7 @@
             <i class="bi bi-graph-up"></i> Rentabilidade
         </a>
 
-        <a href="{{ url_for('main.cardapio') }}"
+        <a href="{{ url_for('main.cardapio', tipo='atacado') }}"
            class="sidebar-link {% if request.path == '/cardapio' %}active{% endif %}">
             <i class="bi bi-file-earmark-pdf"></i> Cardapio PDF
         </a>

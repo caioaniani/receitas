@@ -9,14 +9,19 @@
     <table class="table table-sm table-bordered table-hover bg-white" id="tabela-rent">
         <thead>
             <tr style="background:#37474f; color:#fff; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">
-                <th style="cursor:pointer" onclick="ordenarTabela(0)">Produto <i class="bi bi-chevron-expand"></i></th>
-                <th style="cursor:pointer" onclick="ordenarTabela(1)">Categoria <i class="bi bi-chevron-expand"></i></th>
-                <th class="text-end" style="cursor:pointer" onclick="ordenarTabela(2)">Rend. <i class="bi bi-chevron-expand"></i></th>
-                <th class="text-end" style="cursor:pointer" onclick="ordenarTabela(3)">Custo Total <i class="bi bi-chevron-expand"></i></th>
-                <th class="text-end" style="cursor:pointer" onclick="ordenarTabela(4)">Custo/Un <i class="bi bi-chevron-expand"></i></th>
-                <th class="text-end" style="cursor:pointer" onclick="ordenarTabela(5)">Preco Venda <i class="bi bi-chevron-expand"></i></th>
-                <th class="text-end" style="cursor:pointer" onclick="ordenarTabela(6)">Lucro/Un <i class="bi bi-chevron-expand"></i></th>
-                <th class="text-end" style="cursor:pointer" onclick="ordenarTabela(7)">Margem % <i class="bi bi-chevron-expand"></i></th>
+                <th rowspan="2" style="cursor:pointer; vertical-align:middle" onclick="ordenarTabela(0)">Produto <i class="bi bi-chevron-expand"></i></th>
+                <th rowspan="2" style="cursor:pointer; vertical-align:middle" onclick="ordenarTabela(1)">Cat. <i class="bi bi-chevron-expand"></i></th>
+                <th rowspan="2" class="text-end" style="cursor:pointer; vertical-align:middle" onclick="ordenarTabela(2)">Custo/Un <i class="bi bi-chevron-expand"></i></th>
+                <th colspan="3" class="text-center" style="background:#2e7d32; border-bottom:1px solid #fff;">Atacado</th>
+                <th colspan="3" class="text-center" style="background:#1565c0; border-bottom:1px solid #fff;">Loja</th>
+            </tr>
+            <tr style="background:#37474f; color:#fff; font-size:10px; text-transform:uppercase;">
+                <th class="text-end" style="cursor:pointer; background:#388e3c;" onclick="ordenarTabela(3)">Preco</th>
+                <th class="text-end" style="cursor:pointer; background:#388e3c;" onclick="ordenarTabela(4)">Lucro</th>
+                <th class="text-end" style="cursor:pointer; background:#388e3c;" onclick="ordenarTabela(5)">Margem</th>
+                <th class="text-end" style="cursor:pointer; background:#1976d2;" onclick="ordenarTabela(6)">Preco</th>
+                <th class="text-end" style="cursor:pointer; background:#1976d2;" onclick="ordenarTabela(7)">Lucro</th>
+                <th class="text-end" style="cursor:pointer; background:#1976d2;" onclick="ordenarTabela(8)">Margem</th>
             </tr>
         </thead>
         <tbody>
@@ -28,29 +33,28 @@
                     </a>
                 </td>
                 <td><span class="badge bg-secondary">{{ d.categoria }}</span></td>
-                <td class="text-end">{{ d.rendimento }}</td>
-                <td class="text-end">{{ d.custo_total | brl }}</td>
                 <td class="text-end fw-bold">{{ d.custo_un | brl }}</td>
-                <td class="text-end">
-                    {% if d.preco_venda > 0 %}
-                        {{ d.preco_venda | brl }}
-                    {% else %}
-                        <span class="text-muted">-</span>
-                    {% endif %}
+
+                <!-- Atacado -->
+                <td class="text-end" style="background:#f1f8e9;">
+                    {% if d.preco_atacado > 0 %}{{ d.preco_atacado | brl }}{% else %}<span class="text-muted">-</span>{% endif %}
                 </td>
-                <td class="text-end fw-bold {% if d.lucro_un is not none %}{{ 'text-success' if d.lucro_un >= 0 else 'text-danger' }}{% endif %}">
-                    {% if d.lucro_un is not none %}
-                        {{ d.lucro_un | brl }}
-                    {% else %}
-                        <span class="text-muted">-</span>
-                    {% endif %}
+                <td class="text-end fw-bold {% if d.lucro_atacado is not none %}{{ 'text-success' if d.lucro_atacado >= 0 else 'text-danger' }}{% endif %}" style="background:#f1f8e9;">
+                    {% if d.lucro_atacado is not none %}{{ d.lucro_atacado | brl }}{% else %}<span class="text-muted">-</span>{% endif %}
                 </td>
-                <td class="text-end fw-bold {% if d.margem is not none %}{{ 'text-success' if d.margem >= 50 else 'text-warning' if d.margem >= 20 else 'text-danger' }}{% endif %}">
-                    {% if d.margem is not none %}
-                        {{ '%.1f' % d.margem }}%
-                    {% else %}
-                        <span class="text-muted">-</span>
-                    {% endif %}
+                <td class="text-end fw-bold {% if d.margem_atacado is not none %}{{ 'text-success' if d.margem_atacado >= 50 else 'text-warning' if d.margem_atacado >= 20 else 'text-danger' }}{% endif %}" style="background:#f1f8e9;">
+                    {% if d.margem_atacado is not none %}{{ '%.1f' % d.margem_atacado }}%{% else %}<span class="text-muted">-</span>{% endif %}
+                </td>
+
+                <!-- Loja -->
+                <td class="text-end" style="background:#e3f2fd;">
+                    {% if d.preco_loja > 0 %}{{ d.preco_loja | brl }}{% else %}<span class="text-muted">-</span>{% endif %}
+                </td>
+                <td class="text-end fw-bold {% if d.lucro_loja is not none %}{{ 'text-success' if d.lucro_loja >= 0 else 'text-danger' }}{% endif %}" style="background:#e3f2fd;">
+                    {% if d.lucro_loja is not none %}{{ d.lucro_loja | brl }}{% else %}<span class="text-muted">-</span>{% endif %}
+                </td>
+                <td class="text-end fw-bold {% if d.margem_loja is not none %}{{ 'text-success' if d.margem_loja >= 50 else 'text-warning' if d.margem_loja >= 20 else 'text-danger' }}{% endif %}" style="background:#e3f2fd;">
+                    {% if d.margem_loja is not none %}{{ '%.1f' % d.margem_loja }}%{% else %}<span class="text-muted">-</span>{% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -61,7 +65,7 @@
 <p class="text-muted small">
     <i class="bi bi-info-circle"></i>
     Clique no nome do produto para abrir a ficha. Clique nos cabecalhos para ordenar.
-    Preencha o "Preco de Venda" na ficha de cada produto para ver margem e lucro.
+    Preencha "Preco Atacado" e "Preco Loja" nas fichas para ver margem e lucro.
 </p>
 {% endblock %}
 
@@ -80,7 +84,6 @@ function ordenarTabela(coluna) {
         var cellA = a.cells[coluna].textContent.trim();
         var cellB = b.cells[coluna].textContent.trim();
 
-        // Tentar como número
         var numA = parseFloat(cellA.replace('R$', '').replace(/\./g, '').replace(',', '.').replace('%', ''));
         var numB = parseFloat(cellB.replace('R$', '').replace(/\./g, '').replace(',', '.').replace('%', ''));
 
@@ -88,7 +91,6 @@ function ordenarTabela(coluna) {
             return asc ? numA - numB : numB - numA;
         }
 
-        // Se não for número, comparar como texto
         return asc ? cellA.localeCompare(cellB, 'pt-BR') : cellB.localeCompare(cellA, 'pt-BR');
     });
 
