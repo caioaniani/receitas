@@ -84,6 +84,7 @@ class Receita(db.Model):
     perda_percentual = db.Column(db.Float, default=0)
     custo_embalagem = db.Column(db.Float, default=0)
     modo_preparo = db.Column(db.Text)
+    observacao = db.Column(db.Text)
 
     ingredientes = db.relationship(
         'ReceitaIngrediente',
@@ -107,6 +108,7 @@ class Receita(db.Model):
             'perda_percentual': self.perda_percentual or 0,
             'custo_embalagem': self.custo_embalagem or 0,
             'modo_preparo': self.modo_preparo or '',
+            'observacao': self.observacao or '',
             'ingredientes': [ing.to_dict() for ing in self.ingredientes],
         }
 
@@ -151,6 +153,7 @@ class Produto(db.Model):
     custo_direto = db.Column(db.Float)  # custo por unidade para itens simples
     custo_embalagem = db.Column(db.Float, default=0)  # custo embalagem por unidade (R$)
     modo_preparo = db.Column(db.Text)
+    observacao = db.Column(db.Text)
     ativo = db.Column(db.Boolean, default=True)
 
     itens = db.relationship(
@@ -172,6 +175,7 @@ class Produto(db.Model):
             'custo_direto': self.custo_direto,
             'custo_embalagem': self.custo_embalagem or 0,
             'modo_preparo': self.modo_preparo or '',
+            'observacao': self.observacao or '',
             'ativo': self.ativo,
             'itens': [item.to_dict() for item in self.itens],
         }

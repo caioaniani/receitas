@@ -183,6 +183,7 @@ def importar():
                 perda_percentual=r_data.get('perda_percentual', 0),
                 custo_embalagem=r_data.get('custo_embalagem', 0),
                 modo_preparo=r_data.get('modo_preparo') or None,
+                observacao=r_data.get('observacao') or None,
             )
             db.session.add(receita)
             db.session.flush()
@@ -210,6 +211,7 @@ def importar():
                 custo_direto=p_data.get('custo_direto'),
                 custo_embalagem=p_data.get('custo_embalagem', 0),
                 modo_preparo=p_data.get('modo_preparo') or None,
+                observacao=p_data.get('observacao') or None,
                 ativo=p_data.get('ativo', True),
             )
             db.session.add(produto)
@@ -230,3 +232,16 @@ def importar():
     except Exception as e:
         db.session.rollback()
         return jsonify(success=False, error=f'Erro ao importar: {str(e)}')
+
+
+@main_bp.route('/todo')
+@login_required
+@admin_required
+def todo():
+    receitas = Receita.query.filter(
+        Receita.observacao.isnot(None), Receita.observacao != ''
+    ).order_by(Receita.nome).all()
+    produtos = Produto.query.filter(
+        Produto.observacao.isnot(None), Produto.observacao != ''
+    ).order_by(Produto.nome).all()
+    return render_template('main/todo.html', receitas=receitas, produtos=produtos)

@@ -183,6 +183,14 @@
                   placeholder="Descreva o passo a passo do preparo...">{{ produto.modo_preparo or '' }}</textarea>
     </div>
 
+    <!-- Observações / Pendências -->
+    <div class="mb-4">
+        <label class="form-label fw-bold"><i class="bi bi-exclamation-triangle text-warning"></i> Observações / Pendências</label>
+        <textarea name="observacao" class="form-control" rows="3"
+                  style="border-color: #ff9800; background: #fff8e1;"
+                  placeholder="Anote o que precisa ser atualizado neste produto...">{{ produto.observacao or '' }}</textarea>
+    </div>
+
     <!-- Botões finais -->
     <div class="d-flex justify-content-between">
         <button type="submit" class="btn btn-primary btn-sm">

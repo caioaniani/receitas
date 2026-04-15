@@ -276,6 +276,14 @@
                   placeholder="Descreva o passo a passo do preparo...">{{ receita.modo_preparo or '' }}</textarea>
     </div>
 
+    <!-- Observações / Pendências -->
+    <div class="mb-3">
+        <label class="form-label fw-bold"><i class="bi bi-exclamation-triangle text-warning"></i> Observações / Pendências</label>
+        <textarea name="observacao" class="form-control" rows="3"
+                  style="border-color: #ff9800; background: #fff8e1;"
+                  placeholder="Anote o que precisa ser atualizado nesta receita...">{{ receita.observacao or '' }}</textarea>
+    </div>
+
     <!-- Botoes -->
     <div class="d-flex gap-2 flex-wrap">
         <button type="submit" class="btn btn-primary">

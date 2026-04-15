@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}TO-DO — Padaria{% endblock %}
+
+{% block content %}
+<h4 class="mb-3"><i class="bi bi-check2-square"></i> TO-DO — Pendências</h4>
+
+<p class="text-muted mb-4">
+    Itens com observações preenchidas nas receitas e produtos.
+    <strong>{{ receitas|length + produtos|length }}</strong> pendência(s) no total.
+</p>
+
+{% if not receitas and not produtos %}
+<div class="alert alert-success">
+    <i class="bi bi-check-circle"></i> Nenhuma pendência registrada. Tudo em dia!
+</div>
+{% endif %}
+
+{% if receitas %}
+<h5 class="mb-3"><i class="bi bi-journal-text"></i> Receitas <span class="badge bg-warning text-dark">{{ receitas|length }}</span></h5>
+<div class="row g-3 mb-4">
+    {% for r in receitas %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card border-warning h-100">
+            <div class="card-body">
+                <h6 class="card-title mb-1">
+                    <a href="{{ url_for('receitas.ficha', id=r.id) }}" class="text-decoration-none">
+                        {{ r.nome }}
+                    </a>
+                </h6>
+                {% if r.categoria %}
+                <small class="text-muted">{{ r.categoria }}</small>
+                {% endif %}
+                <p class="card-text mt-2 mb-0" style="white-space: pre-line; font-size: 13px;">{{ r.observacao }}</p>
+            </div>
+            <div class="card-footer bg-transparent border-warning">
+                <a href="{{ url_for('receitas.ficha', id=r.id) }}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-pencil"></i> Editar Receita
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if produtos %}
+<h5 class="mb-3"><i class="bi bi-basket3"></i> Produtos <span class="badge bg-warning text-dark">{{ produtos|length }}</span></h5>
+<div class="row g-3 mb-4">
+    {% for p in produtos %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card border-warning h-100">
+            <div class="card-body">
+                <h6 class="card-title mb-1">
+                    <a href="{{ url_for('produtos.detalhe', id=p.id) }}" class="text-decoration-none">
+                        {{ p.nome }}
+                    </a>
+                </h6>
+                {% if p.categoria %}
+                <small class="text-muted">{{ p.categoria }}</small>
+                {% endif %}
+                <p class="card-text mt-2 mb-0" style="white-space: pre-line; font-size: 13px;">{{ p.observacao }}</p>
+            </div>
+            <div class="card-footer bg-transparent border-warning">
+                <a href="{{ url_for('produtos.detalhe', id=p.id) }}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-pencil"></i> Editar Produto
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

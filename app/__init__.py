@@ -147,6 +147,7 @@ def _migrate_postgres(app):
             'preco_site': 'ALTER TABLE receita ADD COLUMN preco_site REAL',
             'custo_embalagem': 'ALTER TABLE receita ADD COLUMN custo_embalagem REAL DEFAULT 0',
             'modo_preparo': 'ALTER TABLE receita ADD COLUMN modo_preparo TEXT',
+            'observacao': 'ALTER TABLE receita ADD COLUMN observacao TEXT',
         }
         for col, sql in migrações_receita.items():
             if col not in colunas:
@@ -172,6 +173,7 @@ def _migrate_postgres(app):
                 'custo_direto': 'ALTER TABLE produto ADD COLUMN custo_direto REAL',
                 'custo_embalagem': 'ALTER TABLE produto ADD COLUMN custo_embalagem REAL DEFAULT 0',
                 'modo_preparo': 'ALTER TABLE produto ADD COLUMN modo_preparo TEXT',
+                'observacao': 'ALTER TABLE produto ADD COLUMN observacao TEXT',
             }
             for col, sql in migrações_produto.items():
                 if col not in cols_prod:
@@ -216,6 +218,12 @@ def _migrate_sqlite(app):
     # Migração receita.modo_preparo
     if 'modo_preparo' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN modo_preparo TEXT")
+    if 'observacao' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN observacao TEXT")
+
+    # Migração produto.observacao
+    if cols_prod and 'observacao' not in cols_prod:
+        cursor.execute("ALTER TABLE produto ADD COLUMN observacao TEXT")
 
     conn.commit()
     conn.close()

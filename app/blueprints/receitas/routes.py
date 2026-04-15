@@ -58,6 +58,7 @@ def salvar(id):
     receita.perda_percentual = parse_float_br(request.form.get('perda_percentual', ''), default=0)
     receita.custo_embalagem = parse_float_br(request.form.get('custo_embalagem', ''), default=0)
     receita.modo_preparo = request.form.get('modo_preparo', '').strip() or None
+    receita.observacao = request.form.get('observacao', '').strip() or None
 
     # Atualiza ingredientes
     ReceitaIngrediente.query.filter_by(receita_id=receita.id).delete()

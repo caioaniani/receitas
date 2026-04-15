@@ -105,6 +105,7 @@ def salvar_composicao(id):
     produto.custo_direto = parse_float_br(request.form.get('custo_direto', ''))
     produto.custo_embalagem = parse_float_br(request.form.get('custo_embalagem', ''), default=0)
     produto.modo_preparo = request.form.get('modo_preparo', '').strip() or None
+    produto.observacao = request.form.get('observacao', '').strip() or None
 
     # Recriar itens
     ProdutoItem.query.filter_by(produto_id=produto.id).delete()
