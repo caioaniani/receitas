@@ -32,6 +32,7 @@ def lista():
             'preco_atacado': p.preco_atacado or 0,
             'preco_loja': p.preco_loja or 0,
             'preco_site': p.preco_site or 0,
+            'observacao': p.observacao or '',
         })
 
     return render_template('produtos/lista.html', fabricados=fabricados, cestas=cestas)

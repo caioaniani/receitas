@@ -159,4 +159,5 @@ def _fabricado_dict(r, custo_un, rendimento):
         'preco_loja': r.preco_loja or 0,
         'preco_site': r.preco_site or 0,
         'vazia': len(r.ingredientes) == 0,
+        'observacao': r.observacao or '',
     }

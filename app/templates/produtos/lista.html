@@ -33,6 +33,7 @@
             <tr>
                 <td class="fw-bold">
                     {{ f.nome }}
+                    {% if f.observacao %}<span class="badge bg-danger" style="font-size:8px;" title="{{ f.observacao }}">TO-DO</span>{% endif %}
                     {% if f.vazia %}<span class="badge bg-warning text-dark" style="font-size:9px;">VAZIA</span>{% endif %}
                 </td>
                 <td><span class="badge bg-secondary">{{ f.categoria }}</span></td>
@@ -89,6 +90,7 @@
                     <a href="{{ url_for('produtos.detalhe', id=c.id) }}" class="text-decoration-none">
                         {{ c.nome }}
                     </a>
+                    {% if c.observacao %}<span class="badge bg-danger" style="font-size:8px;" title="{{ c.observacao }}">TO-DO</span>{% endif %}
                 </td>
                 <td class="text-center">
                     {% if c.num_itens > 0 %}
