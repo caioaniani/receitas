@@ -139,6 +139,12 @@ def _migrate(app):
         cursor.execute("ALTER TABLE produto ADD COLUMN custo_direto REAL")
     if cols_prod and 'custo_embalagem' not in cols_prod:
         cursor.execute("ALTER TABLE produto ADD COLUMN custo_embalagem REAL DEFAULT 0")
+    if cols_prod and 'modo_preparo' not in cols_prod:
+        cursor.execute("ALTER TABLE produto ADD COLUMN modo_preparo TEXT")
+
+    # Migração receita.modo_preparo
+    if 'modo_preparo' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN modo_preparo TEXT")
 
     conn.commit()
     conn.close()

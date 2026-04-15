@@ -269,6 +269,13 @@
         </div>
     </div>
 
+    <!-- Modo de Preparo -->
+    <div class="mb-3">
+        <label class="form-label fw-bold"><i class="bi bi-journal-text"></i> Modo de Preparo</label>
+        <textarea name="modo_preparo" class="form-control input-blue" rows="5"
+                  placeholder="Descreva o passo a passo do preparo...">{{ receita.modo_preparo or '' }}</textarea>
+    </div>
+
     <!-- Botoes -->
     <div class="d-flex gap-2 flex-wrap">
         <button type="submit" class="btn btn-primary">

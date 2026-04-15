@@ -176,6 +176,13 @@
         </div>
     </div>
 
+    <!-- Modo de Preparo -->
+    <div class="mb-4">
+        <label class="form-label fw-bold"><i class="bi bi-journal-text"></i> Modo de Preparo</label>
+        <textarea name="modo_preparo" class="form-control input-blue" rows="5"
+                  placeholder="Descreva o passo a passo do preparo...">{{ produto.modo_preparo or '' }}</textarea>
+    </div>
+
     <!-- Botões finais -->
     <div class="d-flex justify-content-between">
         <button type="submit" class="btn btn-primary btn-sm">

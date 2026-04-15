@@ -235,6 +235,7 @@ def importar():
             peso_unitario=r_data.get('peso_unitario'),
             perda_percentual=r_data.get('perda_percentual', 0),
             custo_embalagem=r_data.get('custo_embalagem', 0),
+            modo_preparo=r_data.get('modo_preparo') or None,
         )
         db.session.add(receita)
         db.session.flush()
@@ -261,6 +262,7 @@ def importar():
             preco_site=p_data.get('preco_site'),
             custo_direto=p_data.get('custo_direto'),
             custo_embalagem=p_data.get('custo_embalagem', 0),
+            modo_preparo=p_data.get('modo_preparo') or None,
             ativo=p_data.get('ativo', True),
         )
         db.session.add(produto)

@@ -220,6 +220,7 @@ def salvar_composicao(id):
     produto.custo_direto = float(cd) if cd else None
     emb = request.form.get('custo_embalagem', '').replace(',', '.').strip()
     produto.custo_embalagem = float(emb) if emb else 0
+    produto.modo_preparo = request.form.get('modo_preparo', '').strip() or None
 
     # Recriar itens
     ProdutoItem.query.filter_by(produto_id=produto.id).delete()
