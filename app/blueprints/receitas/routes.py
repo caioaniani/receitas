@@ -4,8 +4,11 @@ from flask import render_template, redirect, url_for, flash, request, abort, jso
 from flask_login import login_required, current_user
 
 from app.blueprints.receitas import receitas_bp
+from app.decorators import admin_required
 from app.extensions import db
 from app.models import MateriaPrima, Receita, ReceitaIngrediente, Atribuicao
+from app.services.custos import calcular_custos_receitas
+from app.utils import parse_float_br
 
 
 @receitas_bp.route('/<int:id>')
@@ -23,74 +26,11 @@ def ficha(id):
 
     mp_dict = {mp.nome: mp for mp in MateriaPrima.query.all()}
 
-    # Custos e pesos das receitas (para sub-receitas)
-    receita_custos, receita_pesos = _calcular_custos_receitas_simples()
+    resultado = calcular_custos_receitas()
 
     return render_template('receitas/ficha.html', receita=receita, mp_dict=mp_dict,
-                           receita_custos_json=json.dumps(receita_custos, ensure_ascii=False),
-                           receita_pesos_json=json.dumps(receita_pesos, ensure_ascii=False))
-
-
-def _calcular_custos_receitas_simples():
-    """Calcula custo unitário e peso unitário de cada receita (para uso como sub-receita)."""
-    receitas = Receita.query.all()
-    mp_dict = {mp.nome: mp.custo_por_kg for mp in MateriaPrima.query.all()}
-
-    custos = {}
-    pesos = {}
-
-    # Múltiplas passadas para resolver dependências entre receitas
-    remaining = list(receitas)
-    for _ in range(5):
-        still_remaining = []
-        for r in remaining:
-            can_calc = True
-            custo_total = 0
-            sum_pct = 0
-
-            qtd_direto = 0  # gramas de ingredientes com quantidade fixa
-            for ing in r.ingredientes:
-                tipo = ing.tipo or 'mp'
-                if tipo == 'receita':
-                    if ing.ingrediente_nome not in custos:
-                        can_calc = False
-                        break
-                    custo_total += custos[ing.ingrediente_nome] * ing.porcentagem
-                elif tipo == 'mp_direto':
-                    # Quantidade em gramas direto (não %)
-                    qtd_g = ing.porcentagem
-                    custo_kg = mp_dict.get(ing.ingrediente_nome, 0)
-                    custo_total += qtd_g / 1000 * custo_kg
-                    qtd_direto += qtd_g
-                else:
-                    sum_pct += ing.porcentagem
-                    qtd_g = r.peso_base * ing.porcentagem / 100
-                    custo_kg = mp_dict.get(ing.ingrediente_nome, 0)
-                    custo_total += qtd_g / 1000 * custo_kg
-
-            if not can_calc:
-                still_remaining.append(r)
-                continue
-
-            total_qtd = r.peso_base * sum_pct / 100 + qtd_direto
-            perda = r.perda_percentual or 0
-            peso_pos_perda = total_qtd * (1 - perda / 100)
-
-            if r.peso_unitario and r.peso_unitario > 0 and peso_pos_perda > 0:
-                rendimento = int(peso_pos_perda / r.peso_unitario)
-            else:
-                rendimento = int(r.rendimento_qtd)
-
-            embalagem = r.custo_embalagem or 0
-            custo_un = (custo_total / rendimento + embalagem) if rendimento > 0 else 0
-            custos[r.nome] = custo_un
-            pesos[r.nome] = r.peso_unitario or 0
-
-        remaining = still_remaining
-        if not remaining:
-            break
-
-    return custos, pesos
+                           receita_custos_json=json.dumps(resultado['custos'], ensure_ascii=False),
+                           receita_pesos_json=json.dumps(resultado['pesos'], ensure_ascii=False))
 
 
 @receitas_bp.route('/<int:id>/salvar', methods=['POST'])
@@ -98,23 +38,25 @@ def _calcular_custos_receitas_simples():
 def salvar(id):
     receita = Receita.query.get_or_404(id)
 
+    # Funcionário só pode salvar fichas atribuídas
+    if not current_user.is_admin():
+        atribuida = Atribuicao.query.filter_by(
+            receita_id=id, usuario_id=current_user.id
+        ).first()
+        if not atribuida:
+            abort(403)
+
     receita.nome = request.form.get('nome', receita.nome).strip()
     receita.categoria = request.form.get('categoria', '').strip() or None
-    preco = request.form.get('preco_venda', '').replace(',', '.').strip()
-    receita.preco_venda = float(preco) if preco else None
-    preco_loja = request.form.get('preco_loja', '').replace(',', '.').strip()
-    receita.preco_loja = float(preco_loja) if preco_loja else None
-    preco_site = request.form.get('preco_site', '').replace(',', '.').strip()
-    receita.preco_site = float(preco_site) if preco_site else None
-    receita.rendimento_qtd = float(request.form.get('rendimento_qtd', '1').replace(',', '.'))
+    receita.preco_venda = parse_float_br(request.form.get('preco_venda', ''))
+    receita.preco_loja = parse_float_br(request.form.get('preco_loja', ''))
+    receita.preco_site = parse_float_br(request.form.get('preco_site', ''))
+    receita.rendimento_qtd = parse_float_br(request.form.get('rendimento_qtd', ''), default=1)
     receita.rendimento_unidade = request.form.get('rendimento_unidade', 'unidades').strip()
-    receita.peso_base = float(request.form.get('peso_base', '1000').replace(',', '.'))
-    peso_un = request.form.get('peso_unitario', '').replace(',', '.').strip()
-    receita.peso_unitario = float(peso_un) if peso_un else None
-    perda = request.form.get('perda_percentual', '').replace(',', '.').strip()
-    receita.perda_percentual = float(perda) if perda else 0
-    emb = request.form.get('custo_embalagem', '').replace(',', '.').strip()
-    receita.custo_embalagem = float(emb) if emb else 0
+    receita.peso_base = parse_float_br(request.form.get('peso_base', ''), default=1000)
+    receita.peso_unitario = parse_float_br(request.form.get('peso_unitario', ''))
+    receita.perda_percentual = parse_float_br(request.form.get('perda_percentual', ''), default=0)
+    receita.custo_embalagem = parse_float_br(request.form.get('custo_embalagem', ''), default=0)
     receita.modo_preparo = request.form.get('modo_preparo', '').strip() or None
 
     # Atualiza ingredientes
@@ -149,6 +91,7 @@ def salvar(id):
 
 @receitas_bp.route('/nova', methods=['POST'])
 @login_required
+@admin_required
 def nova():
     receita = Receita(
         nome='Novo Produto',
@@ -165,6 +108,7 @@ def nova():
 
 @receitas_bp.route('/<int:id>/duplicar', methods=['POST'])
 @login_required
+@admin_required
 def duplicar(id):
     original = Receita.query.get_or_404(id)
     copia = Receita(
@@ -202,6 +146,7 @@ def duplicar(id):
 
 @receitas_bp.route('/<int:id>/excluir', methods=['POST'])
 @login_required
+@admin_required
 def excluir(id):
     receita = Receita.query.get_or_404(id)
     nome = receita.nome
@@ -213,6 +158,7 @@ def excluir(id):
 
 @receitas_bp.route('/api/nova-mp', methods=['POST'])
 @login_required
+@admin_required
 def nova_mp():
     """Cria matéria-prima via AJAX (sem sair da ficha técnica)."""
     nome = request.form.get('mp_nome', '').strip()

@@ -146,9 +146,14 @@
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     {% block scripts %}{% endblock %}
 
-    <!-- Datalist global para autocomplete de ingredientes -->
+    <!-- Datalists globais para autocomplete -->
     <datalist id="mp-list">
         {% for nome in mp_nomes %}
+        <option value="{{ nome }}">
+        {% endfor %}
+    </datalist>
+    <datalist id="receita-list">
+        {% for nome in receita_nomes %}
         <option value="{{ nome }}">
         {% endfor %}
     </datalist>

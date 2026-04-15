@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required, current_user
 
@@ -19,6 +21,9 @@ def login():
         if usuario and usuario.check_senha(senha):
             login_user(usuario)
             next_page = request.args.get('next')
+            # Bloqueia redirect para URLs externas
+            if next_page and urlparse(next_page).netloc:
+                next_page = None
             if usuario.is_admin():
                 return redirect(next_page or url_for('main.index'))
             else:

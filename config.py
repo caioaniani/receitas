@@ -12,6 +12,13 @@ if DATABASE_URL.startswith('postgres://'):
 
 
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'chave-secreta-padaria-2024')
+    _secret = os.environ.get('SECRET_KEY')
+    if not _secret:
+        if DATABASE_URL.startswith('sqlite'):
+            import secrets
+            _secret = secrets.token_hex(32)
+        else:
+            raise RuntimeError('SECRET_KEY deve ser definida em produção')
+    SECRET_KEY = _secret
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False

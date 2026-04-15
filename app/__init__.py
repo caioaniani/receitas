@@ -34,16 +34,26 @@ def create_app(config_class=None):
         from flask_login import current_user
         from app.models import Receita, MateriaPrima, Usuario, Atribuicao
 
+        # Sem queries para usuários não autenticados (ex: página de login)
+        if not current_user.is_authenticated:
+            return dict(
+                sidebar_categorias={}, mp_json='{}', mp_nomes=[],
+                receita_nomes=[], funcionarios=[],
+            )
+
+        # Uma única query de receitas (reusada para sidebar e nomes)
         receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
 
         # Funcionário: filtrar só fichas atribuídas
-        if current_user.is_authenticated and not current_user.is_admin():
+        if not current_user.is_admin():
             ids_permitidos = {a.receita_id for a in
                              Atribuicao.query.filter_by(usuario_id=current_user.id).all()}
-            receitas = [r for r in receitas if r.id in ids_permitidos]
+            receitas_sidebar = [r for r in receitas if r.id in ids_permitidos]
+        else:
+            receitas_sidebar = receitas
 
         categorias = {}
-        for r in receitas:
+        for r in receitas_sidebar:
             cat = r.categoria or 'Outros'
             if cat not in categorias:
                 categorias[cat] = []
@@ -55,10 +65,13 @@ def create_app(config_class=None):
         mp_json = json.dumps(mp_dict, ensure_ascii=False)
         mp_nomes = [mp.nome for mp in mps]
 
-        receita_nomes = [r.nome for r in Receita.query.order_by(Receita.nome).all()]
+        receita_nomes = [r.nome for r in receitas]
 
-        # Lista de funcionários (para o admin atribuir fichas)
-        funcionarios = Usuario.query.filter_by(papel='funcionario').order_by(Usuario.nome).all()
+        # Lista de funcionários só para admin
+        funcionarios = (
+            Usuario.query.filter_by(papel='funcionario').order_by(Usuario.nome).all()
+            if current_user.is_admin() else []
+        )
 
         return dict(
             sidebar_categorias=categorias,

@@ -4,8 +4,10 @@ from flask import redirect, url_for, jsonify, request, Response, render_template
 from flask_login import login_required
 
 from app.blueprints.main import main_bp
+from app.decorators import admin_required
 from app.extensions import db
 from app.models import MateriaPrima, Receita, ReceitaIngrediente, Produto, ProdutoItem
+from app.services.custos import calcular_custos_receitas, calcular_rendimento
 
 
 @main_bp.route('/')
@@ -17,75 +19,14 @@ def index():
 @main_bp.route('/rentabilidade')
 @login_required
 def rentabilidade():
+    resultado = calcular_custos_receitas()
+    custos_receita = resultado['custos']
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
-    mp_dict = {mp.nome: mp.custo_por_kg for mp in MateriaPrima.query.all()}
 
-    # Multi-pass para resolver sub-receitas
-    custos_receita = {}
-    remaining = list(receitas)
-    for _ in range(5):
-        still_remaining = []
-        for r in remaining:
-            can_calc = True
-            custo_total = 0
-            sum_pct = 0
-            qtd_direto = 0
-
-            for ing in r.ingredientes:
-                tipo = ing.tipo or 'mp'
-                if tipo == 'receita':
-                    if ing.ingrediente_nome not in custos_receita:
-                        can_calc = False
-                        break
-                    custo_total += custos_receita[ing.ingrediente_nome] * ing.porcentagem
-                elif tipo == 'mp_direto':
-                    qtd_g = ing.porcentagem
-                    custo_kg = mp_dict.get(ing.ingrediente_nome, 0)
-                    custo_total += qtd_g / 1000 * custo_kg
-                    qtd_direto += qtd_g
-                else:
-                    sum_pct += ing.porcentagem
-                    qtd_g = r.peso_base * ing.porcentagem / 100
-                    custo_kg = mp_dict.get(ing.ingrediente_nome, 0)
-                    custo_total += qtd_g / 1000 * custo_kg
-
-            if not can_calc:
-                still_remaining.append(r)
-                continue
-
-            total_qtd = r.peso_base * sum_pct / 100 + qtd_direto
-            perda = r.perda_percentual or 0
-            peso_pos_perda = total_qtd * (1 - perda / 100)
-
-            if r.peso_unitario and r.peso_unitario > 0 and peso_pos_perda > 0:
-                rendimento = int(peso_pos_perda / r.peso_unitario)
-            else:
-                rendimento = int(r.rendimento_qtd)
-
-            embalagem = r.custo_embalagem or 0
-            custo_un = (custo_total / rendimento + embalagem) if rendimento > 0 else 0
-            custos_receita[r.nome] = custo_un
-
-        remaining = still_remaining
-        if not remaining:
-            break
-
-    # Agora gerar dados para o template
     dados = []
     for r in receitas:
         custo_un = custos_receita.get(r.nome, 0)
-
-        # Recalcular rendimento para exibir
-        sum_pct = sum(ing.porcentagem for ing in r.ingredientes if (ing.tipo or 'mp') == 'mp')
-        qtd_dir = sum(ing.porcentagem for ing in r.ingredientes if ing.tipo == 'mp_direto')
-        total_qtd = r.peso_base * sum_pct / 100 + qtd_dir
-        perda = r.perda_percentual or 0
-        peso_pos_perda = total_qtd * (1 - perda / 100)
-        if r.peso_unitario and r.peso_unitario > 0 and peso_pos_perda > 0:
-            rendimento = int(peso_pos_perda / r.peso_unitario)
-        else:
-            rendimento = int(r.rendimento_qtd)
-
+        rendimento = calcular_rendimento(r)
         custo_total = custo_un * rendimento
 
         preco_at = r.preco_venda or 0
@@ -191,6 +132,7 @@ def exportar():
 
 @main_bp.route('/api/importar', methods=['POST'])
 @login_required
+@admin_required
 def importar():
     file = request.files.get('file')
     if not file:
@@ -201,81 +143,90 @@ def importar():
     except (json.JSONDecodeError, UnicodeDecodeError):
         return jsonify(success=False, error='Arquivo JSON inválido')
 
-    # Limpa tudo
-    ProdutoItem.query.delete()
-    ReceitaIngrediente.query.delete()
-    Receita.query.delete()
-    MateriaPrima.query.delete()
-    Produto.query.delete()
+    # Validar estrutura antes de apagar qualquer coisa
+    if 'materias_primas' not in data or 'receitas' not in data:
+        return jsonify(success=False, error='Arquivo nao tem a estrutura esperada')
 
-    # Recria matérias-primas
-    for mp_data in data.get('materias_primas', []):
-        mp = MateriaPrima(
-            nome=mp_data['nome'],
-            unidade=mp_data.get('unidade', 'g'),
-            custo_por_kg=mp_data['custo_por_kg'],
-            fornecedor=mp_data.get('fornecedor') or None,
-            observacoes=mp_data.get('observacoes') or None,
-        )
-        db.session.add(mp)
+    try:
+        # Limpa tudo
+        ProdutoItem.query.delete()
+        ReceitaIngrediente.query.delete()
+        Receita.query.delete()
+        MateriaPrima.query.delete()
+        Produto.query.delete()
 
-    db.session.flush()
+        # Recria matérias-primas
+        for mp_data in data.get('materias_primas', []):
+            mp = MateriaPrima(
+                nome=mp_data['nome'],
+                unidade=mp_data.get('unidade', 'g'),
+                custo_por_kg=mp_data['custo_por_kg'],
+                fornecedor=mp_data.get('fornecedor') or None,
+                observacoes=mp_data.get('observacoes') or None,
+            )
+            db.session.add(mp)
 
-    # Recria receitas
-    for r_data in data.get('receitas', []):
-        receita = Receita(
-            nome=r_data['nome'],
-            categoria=r_data.get('categoria') or None,
-            preco_venda=r_data.get('preco_venda'),
-            preco_loja=r_data.get('preco_loja'),
-            preco_site=r_data.get('preco_site'),
-            rendimento_qtd=r_data['rendimento_qtd'],
-            rendimento_unidade=r_data['rendimento_unidade'],
-            peso_base=r_data['peso_base'],
-            peso_unitario=r_data.get('peso_unitario'),
-            perda_percentual=r_data.get('perda_percentual', 0),
-            custo_embalagem=r_data.get('custo_embalagem', 0),
-            modo_preparo=r_data.get('modo_preparo') or None,
-        )
-        db.session.add(receita)
         db.session.flush()
 
-        for ing_data in r_data.get('ingredientes', []):
-            ing = ReceitaIngrediente(
-                receita_id=receita.id,
-                tipo=ing_data.get('tipo', 'mp'),
-                ingrediente_nome=ing_data['ingrediente_nome'],
-                porcentagem=ing_data['porcentagem'],
-                eh_base=ing_data.get('eh_base', False),
-                nota=ing_data.get('nota') or None,
+        # Recria receitas
+        for r_data in data.get('receitas', []):
+            receita = Receita(
+                nome=r_data['nome'],
+                categoria=r_data.get('categoria') or None,
+                preco_venda=r_data.get('preco_venda'),
+                preco_loja=r_data.get('preco_loja'),
+                preco_site=r_data.get('preco_site'),
+                rendimento_qtd=r_data['rendimento_qtd'],
+                rendimento_unidade=r_data['rendimento_unidade'],
+                peso_base=r_data['peso_base'],
+                peso_unitario=r_data.get('peso_unitario'),
+                perda_percentual=r_data.get('perda_percentual', 0),
+                custo_embalagem=r_data.get('custo_embalagem', 0),
+                modo_preparo=r_data.get('modo_preparo') or None,
             )
-            db.session.add(ing)
+            db.session.add(receita)
+            db.session.flush()
 
-    # Recria produtos (cestas, kits, etc.)
-    for p_data in data.get('produtos', []):
-        produto = Produto(
-            nome=p_data['nome'],
-            categoria=p_data.get('categoria') or None,
-            descricao=p_data.get('descricao') or None,
-            preco_atacado=p_data.get('preco_atacado'),
-            preco_loja=p_data.get('preco_loja'),
-            preco_site=p_data.get('preco_site'),
-            custo_direto=p_data.get('custo_direto'),
-            custo_embalagem=p_data.get('custo_embalagem', 0),
-            modo_preparo=p_data.get('modo_preparo') or None,
-            ativo=p_data.get('ativo', True),
-        )
-        db.session.add(produto)
-        db.session.flush()
+            for ing_data in r_data.get('ingredientes', []):
+                ing = ReceitaIngrediente(
+                    receita_id=receita.id,
+                    tipo=ing_data.get('tipo', 'mp'),
+                    ingrediente_nome=ing_data['ingrediente_nome'],
+                    porcentagem=ing_data['porcentagem'],
+                    eh_base=ing_data.get('eh_base', False),
+                    nota=ing_data.get('nota') or None,
+                )
+                db.session.add(ing)
 
-        for item_data in p_data.get('itens', []):
-            item = ProdutoItem(
-                produto_id=produto.id,
-                tipo=item_data['tipo'],
-                item_nome=item_data['item_nome'],
-                quantidade=item_data['quantidade'],
+        # Recria produtos (cestas, kits, etc.)
+        for p_data in data.get('produtos', []):
+            produto = Produto(
+                nome=p_data['nome'],
+                categoria=p_data.get('categoria') or None,
+                descricao=p_data.get('descricao') or None,
+                preco_atacado=p_data.get('preco_atacado'),
+                preco_loja=p_data.get('preco_loja'),
+                preco_site=p_data.get('preco_site'),
+                custo_direto=p_data.get('custo_direto'),
+                custo_embalagem=p_data.get('custo_embalagem', 0),
+                modo_preparo=p_data.get('modo_preparo') or None,
+                ativo=p_data.get('ativo', True),
             )
-            db.session.add(item)
+            db.session.add(produto)
+            db.session.flush()
 
-    db.session.commit()
-    return jsonify(success=True)
+            for item_data in p_data.get('itens', []):
+                item = ProdutoItem(
+                    produto_id=produto.id,
+                    tipo=item_data['tipo'],
+                    item_nome=item_data['item_nome'],
+                    quantidade=item_data['quantidade'],
+                )
+                db.session.add(item)
+
+        db.session.commit()
+        return jsonify(success=True)
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=f'Erro ao importar: {str(e)}')

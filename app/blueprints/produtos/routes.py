@@ -4,140 +4,24 @@ from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required
 
 from app.blueprints.produtos import produtos_bp
+from app.decorators import admin_required
 from app.extensions import db
 from app.models import Produto, ProdutoItem, Receita, MateriaPrima
-
-
-def _calcular_custos_receitas():
-    """Calcula custo unitário de cada receita. Retorna (custos, fabricados, mp_dict, mp_info).
-
-    Suporta sub-receitas: ingredientes com tipo='receita' usam o custo unitário
-    da receita referenciada × quantidade (porcentagem é usada como qtd de unidades).
-    """
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
-    mps = MateriaPrima.query.all()
-    mp_dict = {mp.nome: mp.custo_por_kg for mp in mps}
-    mp_info = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade} for mp in mps}
-
-    custos = {}
-    fabricados = []
-
-    # Múltiplas passadas para resolver dependências entre receitas
-    remaining = list(receitas)
-    for _ in range(5):
-        still_remaining = []
-        for r in remaining:
-            can_calc = True
-            custo_total = 0
-            sum_pct = 0  # só MP (%) contribuem para peso
-            qtd_direto = 0  # gramas de ingredientes com quantidade fixa
-
-            for ing in r.ingredientes:
-                tipo = ing.tipo or 'mp'
-                if tipo == 'receita':
-                    if ing.ingrediente_nome not in custos:
-                        can_calc = False
-                        break
-                    custo_total += custos[ing.ingrediente_nome] * ing.porcentagem
-                elif tipo == 'mp_direto':
-                    qtd_g = ing.porcentagem
-                    custo_kg = mp_dict.get(ing.ingrediente_nome, 0)
-                    custo_total += qtd_g / 1000 * custo_kg
-                    qtd_direto += qtd_g
-                else:
-                    sum_pct += ing.porcentagem
-                    qtd_g = r.peso_base * ing.porcentagem / 100
-                    custo_kg = mp_dict.get(ing.ingrediente_nome, 0)
-                    custo_total += qtd_g / 1000 * custo_kg
-
-            if not can_calc:
-                still_remaining.append(r)
-                continue
-
-            total_qtd = r.peso_base * sum_pct / 100 + qtd_direto
-            perda = r.perda_percentual or 0
-            peso_pos_perda = total_qtd * (1 - perda / 100)
-
-            if r.peso_unitario and r.peso_unitario > 0 and peso_pos_perda > 0:
-                rendimento = int(peso_pos_perda / r.peso_unitario)
-            else:
-                rendimento = int(r.rendimento_qtd)
-
-            embalagem = r.custo_embalagem or 0
-            custo_un = (custo_total / rendimento + embalagem) if rendimento > 0 else 0
-            custos[r.nome] = custo_un
-
-            fabricados.append({
-                'id': r.id,
-                'nome': r.nome,
-                'categoria': r.categoria or 'Outros',
-                'peso_unitario': r.peso_unitario,
-                'rendimento': rendimento,
-                'custo_un': custo_un,
-                'preco_atacado': r.preco_venda or 0,
-                'preco_loja': r.preco_loja or 0,
-                'preco_site': r.preco_site or 0,
-                'vazia': len(r.ingredientes) == 0,
-            })
-
-        remaining = still_remaining
-        if not remaining:
-            break
-
-    # Receitas que não puderam ser calculadas (dependência circular ou faltante)
-    for r in remaining:
-        custos[r.nome] = 0
-        fabricados.append({
-            'id': r.id, 'nome': r.nome,
-            'categoria': r.categoria or 'Outros',
-            'peso_unitario': r.peso_unitario,
-            'rendimento': int(r.rendimento_qtd),
-            'custo_un': 0,
-            'preco_atacado': r.preco_venda or 0,
-            'preco_loja': r.preco_loja or 0,
-            'preco_site': r.preco_site or 0,
-            'vazia': len(r.ingredientes) == 0,
-        })
-
-    return custos, fabricados, mp_dict, mp_info
-
-
-def _calcular_custo_cesta(produto, receita_custos, mp_info):
-    """Calcula custo total de uma cesta/produto.
-
-    Para MPs com unidade 'g' ou 'ml', quantidade está em gramas/ml
-    e custo_por_kg é dividido por 1000 para obter custo por grama.
-    Para MPs com unidade 'un', quantidade é unidades e custo é direto.
-    """
-    embalagem = produto.custo_embalagem or 0
-    if produto.itens:
-        custo = 0
-        for item in produto.itens:
-            if item.tipo == 'receita':
-                custo += (receita_custos.get(item.item_nome, 0)) * item.quantidade
-            else:
-                info = mp_info.get(item.item_nome, {})
-                custo_kg = info.get('custo_por_kg', 0)
-                if info.get('unidade') in ('g', 'ml'):
-                    custo += (custo_kg / 1000) * item.quantidade
-                else:
-                    custo += custo_kg * item.quantidade
-        return custo + embalagem
-    elif produto.custo_direto:
-        return produto.custo_direto + embalagem
-    return embalagem
+from app.services.custos import calcular_custos_receitas, calcular_custo_produto
+from app.utils import parse_float_br
 
 
 @produtos_bp.route('/')
 @login_required
 def lista():
     produtos = Produto.query.order_by(Produto.categoria, Produto.nome).all()
-    receita_custos, fabricados, mp_dict, mp_info = _calcular_custos_receitas()
+    resultado = calcular_custos_receitas()
+    fabricados = resultado['fabricados']
 
     # Calcular custo de cada cesta
     cestas = []
     for p in produtos:
-        custo = _calcular_custo_cesta(p, receita_custos, mp_info)
+        custo = calcular_custo_produto(p, resultado['custos'], resultado['mp_info'])
         cestas.append({
             'id': p.id,
             'nome': p.nome,
@@ -155,6 +39,7 @@ def lista():
 
 @produtos_bp.route('/novo', methods=['POST'])
 @login_required
+@admin_required
 def novo():
     produto = Produto(nome='Nova Cesta', categoria='Cestas')
     db.session.add(produto)
@@ -166,7 +51,9 @@ def novo():
 @login_required
 def detalhe(id):
     produto = Produto.query.get_or_404(id)
-    receita_custos, _, mp_dict, mp_info = _calcular_custos_receitas()
+    resultado = calcular_custos_receitas()
+    receita_custos = resultado['custos']
+    mp_info = resultado['mp_info']
 
     # Custo de cada item para exibir no template
     itens_data = []
@@ -174,6 +61,7 @@ def detalhe(id):
         if item.tipo == 'receita':
             custo_un = receita_custos.get(item.item_nome, 0)
             unidade = 'un'
+            info = {}
         else:
             info = mp_info.get(item.item_nome, {})
             custo_kg = info.get('custo_por_kg', 0)
@@ -203,6 +91,7 @@ def detalhe(id):
 
 @produtos_bp.route('/<int:id>/salvar', methods=['POST'])
 @login_required
+@admin_required
 def salvar_composicao(id):
     produto = Produto.query.get_or_404(id)
 
@@ -210,16 +99,11 @@ def salvar_composicao(id):
     produto.categoria = request.form.get('categoria', '').strip() or None
     produto.descricao = request.form.get('descricao', '').strip() or None
 
-    at = request.form.get('preco_atacado', '').replace(',', '.').strip()
-    produto.preco_atacado = float(at) if at else None
-    lj = request.form.get('preco_loja', '').replace(',', '.').strip()
-    produto.preco_loja = float(lj) if lj else None
-    st = request.form.get('preco_site', '').replace(',', '.').strip()
-    produto.preco_site = float(st) if st else None
-    cd = request.form.get('custo_direto', '').replace(',', '.').strip()
-    produto.custo_direto = float(cd) if cd else None
-    emb = request.form.get('custo_embalagem', '').replace(',', '.').strip()
-    produto.custo_embalagem = float(emb) if emb else 0
+    produto.preco_atacado = parse_float_br(request.form.get('preco_atacado', ''))
+    produto.preco_loja = parse_float_br(request.form.get('preco_loja', ''))
+    produto.preco_site = parse_float_br(request.form.get('preco_site', ''))
+    produto.custo_direto = parse_float_br(request.form.get('custo_direto', ''))
+    produto.custo_embalagem = parse_float_br(request.form.get('custo_embalagem', ''), default=0)
     produto.modo_preparo = request.form.get('modo_preparo', '').strip() or None
 
     # Recriar itens
@@ -252,6 +136,7 @@ def salvar_composicao(id):
 
 @produtos_bp.route('/api/nova-mp', methods=['POST'])
 @login_required
+@admin_required
 def nova_mp():
     """Cria matéria-prima via AJAX (sem sair da página da cesta)."""
     nome = request.form.get('mp_nome', '').strip()
@@ -277,6 +162,7 @@ def nova_mp():
 
 @produtos_bp.route('/excluir/<int:id>', methods=['POST'])
 @login_required
+@admin_required
 def excluir(id):
     produto = Produto.query.get_or_404(id)
     nome = produto.nome
