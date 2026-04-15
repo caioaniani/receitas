@@ -4,6 +4,29 @@
 
 document.addEventListener('DOMContentLoaded', function () {
 
+    // ═══ MENU MOBILE (HAMBURGER) ═══
+    var btnToggle = document.getElementById('btn-sidebar-toggle');
+    var sidebar = document.getElementById('sidebar');
+    var overlay = document.getElementById('sidebar-overlay');
+
+    if (btnToggle && sidebar && overlay) {
+        btnToggle.addEventListener('click', function () {
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('active');
+        });
+        overlay.addEventListener('click', function () {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
+        });
+        // Fechar sidebar ao clicar em um link (navegação mobile)
+        sidebar.querySelectorAll('a.sidebar-link').forEach(function (link) {
+            link.addEventListener('click', function () {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('active');
+            });
+        });
+    }
+
     // ═══ BUSCA NA SIDEBAR ═══
     var sidebarBusca = document.getElementById('sidebar-busca');
     if (sidebarBusca) {

@@ -9,6 +9,22 @@
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
 </head>
 <body>
+    <!-- Mobile header -->
+    <div class="mobile-header d-md-none">
+        <button class="btn btn-sm" id="btn-sidebar-toggle" aria-label="Menu">
+            <i class="bi bi-list" style="font-size:1.5rem; color:#fff;"></i>
+        </button>
+        <span class="fw-bold"><i class="bi bi-shop"></i> Padaria</span>
+        {% if current_user.is_authenticated %}
+        <small class="ms-auto me-2" style="color:#8899aa;">
+            <i class="bi bi-person-circle"></i> {{ current_user.nome }}
+        </small>
+        {% endif %}
+    </div>
+
+    <!-- Overlay para fechar sidebar no mobile -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
     <!-- Sidebar -->
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">

@@ -301,19 +301,33 @@ body {
     text-transform: uppercase;
 }
 
-/* ── Responsive ── */
-@media (max-width: 768px) {
-    .sidebar {
-        width: 100%;
-        height: auto;
-        position: relative;
-    }
-    .main-content {
-        margin-left: 0;
-    }
-    .legenda-cores {
-        left: 0;
-    }
+/* ── Mobile header (hamburger) ── */
+.mobile-header {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
+    background: #1a1a2e;
+    color: #fff;
+    align-items: center;
+    padding: 0 12px;
+    z-index: 200;
+    gap: 8px;
+}
+
+/* ── Overlay ── */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 99;
+}
+
+.sidebar-overlay.active {
+    display: block;
 }
 
 /* ── Espaço para legenda no rodapé ── */
@@ -321,9 +335,123 @@ body {
     padding-bottom: 50px;
 }
 
+/* ── Responsive: Mobile ── */
+@media (max-width: 767.98px) {
+    .mobile-header {
+        display: flex;
+    }
+
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        z-index: 150;
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
+    }
+
+    .main-content {
+        margin-left: 0;
+        padding: 12px;
+        padding-top: 60px;  /* espaço para mobile header */
+        padding-bottom: 20px;
+    }
+
+    .legenda-cores {
+        display: none;
+    }
+
+    /* Ficha header: empilhar campos */
+    .ficha-header .row {
+        gap: 8px;
+    }
+
+    .ficha-header .col-md-3,
+    .ficha-header .col-md-2,
+    .ficha-header .col {
+        flex: 0 0 48%;
+        max-width: 48%;
+    }
+
+    /* Peso base / Quantidade boxes */
+    .peso-base-box {
+        max-width: 100%;
+    }
+
+    .peso-base-input {
+        font-size: 1.2rem;
+    }
+
+    /* Resumo: 2 colunas no mobile */
+    .resumo-box .row .col {
+        flex: 0 0 50%;
+        max-width: 50%;
+        margin-bottom: 8px;
+    }
+
+    .resumo-valor {
+        font-size: 1rem;
+    }
+
+    /* Tabelas: scroll horizontal */
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .tabela-ficha,
+    .tabela-mp {
+        min-width: 600px;
+    }
+
+    /* Botões maiores para toque */
+    .btn-sm {
+        min-height: 36px;
+        min-width: 36px;
+        font-size: 13px;
+    }
+
+    .btn-remove-ing,
+    .btn-remove-item {
+        min-width: 32px;
+        min-height: 32px;
+    }
+
+    /* Tipo selector menor */
+    .ing-tipo {
+        font-size: 10px !important;
+        padding: 2px 4px;
+    }
+
+    /* Produto detalhe: campos empilhados */
+    .row.g-2 > [class*="col-md-"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* Modo preparo textarea menor */
+    textarea[name="modo_preparo"] {
+        rows: 3;
+    }
+}
+
+/* ── Responsive: Tablet (768-1024) ── */
+@media (min-width: 768px) and (max-width: 1024px) {
+    :root {
+        --sidebar-width: 200px;
+    }
+
+    .ficha-header .col {
+        flex: 0 0 33%;
+        max-width: 33%;
+    }
+}
+
 /* ── Print ── */
 @media print {
-    .sidebar, .legenda-cores, .btn, .btn-remove-ing, .btn-del-mp { display: none !important; }
+    .sidebar, .legenda-cores, .btn, .btn-remove-ing, .btn-del-mp,
+    .mobile-header, .sidebar-overlay { display: none !important; }
     .main-content { margin-left: 0; padding: 0; }
     .input-blue { border: none !important; background: transparent !important; }
 }
