@@ -121,9 +121,67 @@ def _criar_admin():
 
 
 def _migrate(app):
-    """Adiciona colunas novas sem perder dados existentes (só SQLite)."""
-    if not app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite'):
-        return  # PostgreSQL não precisa — db.create_all() já cria tudo
+    """Adiciona colunas novas sem perder dados existentes."""
+    uri = app.config['SQLALCHEMY_DATABASE_URI']
+
+    if uri.startswith('sqlite'):
+        _migrate_sqlite(app)
+    elif 'postgresql' in uri:
+        _migrate_postgres(app)
+
+
+def _migrate_postgres(app):
+    """Adiciona colunas novas no PostgreSQL."""
+    from sqlalchemy import text
+    with db.engine.connect() as conn:
+        # Verificar e adicionar colunas faltantes em receita
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'receita'"
+        ))
+        colunas = {row[0] for row in result}
+
+        migrações_receita = {
+            'perda_percentual': 'ALTER TABLE receita ADD COLUMN perda_percentual REAL DEFAULT 0',
+            'preco_loja': 'ALTER TABLE receita ADD COLUMN preco_loja REAL',
+            'preco_site': 'ALTER TABLE receita ADD COLUMN preco_site REAL',
+            'custo_embalagem': 'ALTER TABLE receita ADD COLUMN custo_embalagem REAL DEFAULT 0',
+            'modo_preparo': 'ALTER TABLE receita ADD COLUMN modo_preparo TEXT',
+        }
+        for col, sql in migrações_receita.items():
+            if col not in colunas:
+                conn.execute(text(sql))
+
+        # receita_ingrediente
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'receita_ingrediente'"
+        ))
+        cols_ing = {row[0] for row in result}
+        if cols_ing and 'tipo' not in cols_ing:
+            conn.execute(text("ALTER TABLE receita_ingrediente ADD COLUMN tipo TEXT DEFAULT 'mp'"))
+
+        # produto
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'produto'"
+        ))
+        cols_prod = {row[0] for row in result}
+        if cols_prod:
+            migrações_produto = {
+                'custo_direto': 'ALTER TABLE produto ADD COLUMN custo_direto REAL',
+                'custo_embalagem': 'ALTER TABLE produto ADD COLUMN custo_embalagem REAL DEFAULT 0',
+                'modo_preparo': 'ALTER TABLE produto ADD COLUMN modo_preparo TEXT',
+            }
+            for col, sql in migrações_produto.items():
+                if col not in cols_prod:
+                    conn.execute(text(sql))
+
+        conn.commit()
+
+
+def _migrate_sqlite(app):
+    """Adiciona colunas novas no SQLite."""
     import sqlite3
     uri = app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')
     conn = sqlite3.connect(uri)
