@@ -105,6 +105,10 @@ def create_app(config_class=None):
             seed_cardapio()
             seed_update_v2()
 
+        # Produtos do site — roda em todos os ambientes (SQLite + PostgreSQL)
+        from app.seed import seed_site_products
+        seed_site_products()
+
         _criar_admin()
 
     return app

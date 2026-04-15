@@ -684,3 +684,246 @@ def seed_update_v2():
             p.custo_direto = custos_diretos[p.nome]
 
     db.session.commit()
+
+
+def seed_site_products():
+    """Adiciona produtos do site com preco_site e composição das cestas.
+    Roda em TODOS os ambientes (SQLite local + PostgreSQL produção).
+    """
+    # Idempotência: se Family Box já existe, já rodou
+    if Produto.query.filter_by(nome='Family Box').first():
+        return
+
+    # ── 1. Renomear Granola Artesanal → Granola Artesanal 1Kg ──
+    granola = Receita.query.filter_by(nome='Granola Artesanal').first()
+    if granola:
+        granola.nome = 'Granola Artesanal 1Kg'
+        # Atualizar referências em composições
+        for pi in ProdutoItem.query.filter_by(item_nome='Granola Artesanal', tipo='receita').all():
+            pi.item_nome = 'Granola Artesanal 1Kg'
+        for ri in ReceitaIngrediente.query.filter_by(ingrediente_nome='Granola Artesanal', tipo='receita').all():
+            ri.ingrediente_nome = 'Granola Artesanal 1Kg'
+    db.session.flush()
+
+    # ── 2. Atualizar preco_site nas receitas existentes ──
+    precos_site_receitas = {
+        'Croissant Tradicional': 22.50,
+        'Pain au Chocolat': 27.50,
+        'Croissant Nutella com Morango': 32.50,
+        'Croissant Almond': 32.50,
+        'Croissant Nutella': 30.50,
+        'Cinnamon Roll': 26.00,
+        'Sourdough Tradicional': 33.50,
+        'Sourdough Integral': 32.50,
+        'Sourdough 7 Grãos': 39.00,
+        'Sourdough Nozes e Azeitonas': 39.00,
+        'Brioche': 45.00,
+        'Pão Francês Fermentado': 3.50,
+        'Cookie Calebaut': 13.00,
+    }
+    for r in Receita.query.all():
+        if r.nome in precos_site_receitas:
+            r.preco_site = precos_site_receitas[r.nome]
+    db.session.flush()
+
+    # ── 3. Novas matérias-primas (itens de cesta / embalagem) ──
+    existentes_mp = {mp.nome for mp in MateriaPrima.query.all()}
+    novas_mps = [
+        # Itens unitários para composição de cestas
+        ('Sachê Café Orfeu', 'un', 0),
+        ('Geleia Artesanal de Morango', 'un', 0),
+        ('Pote de Mel 40g', 'un', 0),
+        ('Mini Manteiga President', 'un', 0),
+        ('Suco de Uva Villa Piva 300ml', 'un', 0),
+        ('Suco de Tangerina Villa Piva 300ml', 'un', 0),
+        ('Arranjo de Flor', 'un', 0),
+        # Porções para cestas
+        ('Salada de Frutas 600g', 'un', 0),
+        ('Salada de Frutas 100g', 'un', 0),
+        ('Iogurte Artesanal 600ml', 'un', 0),
+        ('Iogurte Artesanal 200ml', 'un', 0),
+        ('Granola Artesanal 500g', 'un', 0),
+        ('Granola Artesanal 100g', 'un', 0),
+        # Embalagens
+        ('Caixa MDF', 'un', 0),
+        ('Caixa Madeira MDF', 'un', 0),
+        ('Base Coração MDF', 'un', 0),
+        ('Base Redonda MDF', 'un', 0),
+        ('Base Quadrada MDF', 'un', 0),
+        ('Lancheira', 'un', 0),
+        ('Bandeja com Suporte', 'un', 0),
+        # Frios (por kg, para porções em gramas nas cestas)
+        ('Mussarela', 'g', 0),
+    ]
+    for nome, unidade, custo in novas_mps:
+        if nome not in existentes_mp:
+            db.session.add(MateriaPrima(nome=nome, unidade=unidade, custo_por_kg=custo))
+    db.session.flush()
+
+    # ── 4. Produtos avulsos vendidos no site ──
+    existentes_prod = {p.nome for p in Produto.query.all()}
+
+    def add_prod_site(nome, cat, preco_site, descricao=''):
+        if nome in existentes_prod:
+            return
+        db.session.add(Produto(nome=nome, categoria=cat, preco_site=preco_site, descricao=descricao))
+        existentes_prod.add(nome)
+
+    add_prod_site('Granola Artesanal 500g', 'Acompanhamentos', 49.00, 'Granola artesanal sem açúcar adicionado')
+    add_prod_site('Granola Artesanal 100g', 'Acompanhamentos', 19.00)
+    add_prod_site('Iogurte Artesanal 600ml', 'Acompanhamentos', 33.50, 'Iogurte natural artesanal cremoso — tamanho família')
+    add_prod_site('Iogurte Artesanal 200ml', 'Acompanhamentos', 20.00)
+    add_prod_site('Arranjo de Flor', 'Acompanhamentos', 32.00, 'Disponível de acordo com estoque')
+    add_prod_site('Suco de Tangerina Villa Piva 300ml', 'Acompanhamentos', 27.00, '100% Natural')
+    add_prod_site('Suco de Uva Villa Piva 300ml', 'Acompanhamentos', 27.00, 'Tinto Integral 100% Natural')
+    add_prod_site('Peito de Peru 100g', 'Acompanhamentos', 21.00, 'Fatiado, porção de 100g')
+    add_prod_site('Geleia de Morango Artesanal', 'Acompanhamentos', 18.00, 'Feita com frutas selecionadas')
+    add_prod_site('Salada de Frutas 100g', 'Acompanhamentos', 17.50, 'Frutas frescas em pote de 100g')
+    add_prod_site('Mussarela 100g', 'Acompanhamentos', 17.00, 'Fatiada, porção de 100g')
+    add_prod_site('Mel 40g', 'Acompanhamentos', 11.00, 'Mel puro em pote de 40g')
+    add_prod_site('3 Mini Manteigas President', 'Acompanhamentos', 8.00, 'Porções individuais de manteiga President')
+    add_prod_site('Sachê Café Orfeu', 'Acompanhamentos', 8.00, 'Sachê individual de café premium Orfeu')
+
+    db.session.flush()
+
+    # ── 5. Cestas com composição ──
+    def add_cesta(nome, preco_site, itens, descricao='', categoria='Cestas'):
+        if nome in existentes_prod:
+            return
+        p = Produto(nome=nome, categoria=categoria, preco_site=preco_site, descricao=descricao)
+        db.session.add(p)
+        db.session.flush()
+        for tipo, item_nome, qtd in itens:
+            db.session.add(ProdutoItem(
+                produto_id=p.id, tipo=tipo, item_nome=item_nome, quantidade=qtd))
+        existentes_prod.add(nome)
+
+    add_cesta('Family Box', 437.00, [
+        ('mp', 'Sachê Café Orfeu', 2),
+        ('mp', 'Mussarela', 100),
+        ('mp', 'Peito de Peru', 100),
+        ('receita', 'Cookie Calebaut', 2),
+        ('mp', 'Geleia Artesanal de Morango', 1),
+        ('mp', 'Pote de Mel 40g', 2),
+        ('mp', 'Mini Manteiga President', 3),
+        ('receita', 'Pain au Chocolat', 2),
+        ('receita', 'Croissant Tradicional', 2),
+        ('receita', 'Sourdough 7 Grãos', 1),
+        ('receita', 'Sourdough Tradicional', 1),
+        ('receita', 'Croissant Nutella com Morango', 1),
+        ('receita', 'Croissant Almond', 1),
+        ('receita', 'Brioche', 1),
+        ('mp', 'Salada de Frutas 600g', 1),
+        ('mp', 'Iogurte Artesanal 600ml', 1),
+        ('mp', 'Granola Artesanal 500g', 1),
+        ('mp', 'Arranjo de Flor', 1),
+    ], 'A mais completa! Seleção generosa para toda a família.')
+
+    add_cesta('Bandeja de Café da Manhã', 401.00, [
+        ('mp', 'Suco de Uva Villa Piva 300ml', 1),
+        ('mp', 'Salada de Frutas 100g', 2),
+        ('mp', 'Iogurte Artesanal 200ml', 1),
+        ('mp', 'Granola Artesanal 100g', 1),
+        ('mp', 'Mini Manteiga President', 2),
+        ('mp', 'Pote de Mel 40g', 1),
+        ('mp', 'Peito de Peru', 50),
+        ('mp', 'Mussarela', 50),
+        ('receita', 'Sourdough Tradicional', 1),
+        ('receita', 'Croissant Tradicional', 1),
+        ('receita', 'Pain au Chocolat', 1),
+        ('receita', 'Croissant Nutella', 1),
+        ('mp', 'Arranjo de Flor', 1),
+        ('mp', 'Bandeja com Suporte', 1),
+    ], 'Bandeja completa com suporte para apoio na cama.')
+
+    add_cesta('Caixa Especial', 368.00, [
+        ('mp', 'Caixa Madeira MDF', 1),
+        ('receita', 'Croissant Tradicional', 2),
+        ('receita', 'Pain au Chocolat', 2),
+        ('receita', 'Croissant Almond', 2),
+        ('receita', 'Croissant Nutella', 2),
+        ('receita', 'Croissant Nutella com Morango', 2),
+        ('mp', 'Granola Artesanal 100g', 2),
+        ('mp', 'Iogurte Artesanal 200ml', 2),
+        ('receita', 'Sourdough Nozes e Azeitonas', 1),
+        ('receita', 'Sourdough Tradicional', 1),
+        ('receita', 'Sourdough 7 Grãos', 1),
+    ], 'Para ocasiões memoráveis! Produtos artesanais selecionados.')
+
+    add_cesta('Cesta Monamour', 313.00, [
+        ('mp', 'Base Coração MDF', 1),
+        ('mp', 'Arranjo de Flor', 1),
+        ('receita', 'Sourdough Nozes e Azeitonas', 1),
+        ('receita', 'Croissant Almond', 1),
+        ('receita', 'Croissant Tradicional', 1),
+        ('receita', 'Pain au Chocolat', 1),
+        ('receita', 'Cookie Calebaut', 2),
+        ('mp', 'Iogurte Artesanal 200ml', 1),
+        ('mp', 'Pote de Mel 40g', 1),
+        ('mp', 'Geleia Artesanal de Morango', 1),
+        ('mp', 'Granola Artesanal 100g', 1),
+        ('mp', 'Salada de Frutas 100g', 1),
+        ('mp', 'Suco de Uva Villa Piva 300ml', 1),
+    ], 'Para momentos românticos! Cesta especial para dois.')
+
+    add_cesta('Sweet Coffee', 236.00, [
+        ('receita', 'Brioche', 1),
+        ('receita', 'Croissant Tradicional', 1),
+        ('receita', 'Croissant Nutella com Morango', 1),
+        ('mp', 'Salada de Frutas 100g', 1),
+        ('mp', 'Granola Artesanal 100g', 1),
+        ('receita', 'Cookie Calebaut', 2),
+        ('mp', 'Suco de Uva Villa Piva 300ml', 1),
+        ('mp', 'Caixa MDF', 1),
+    ], 'Para amantes de doces! Café aromático e delícias açucaradas.')
+
+    add_cesta('Bonjour', 215.00, [
+        ('receita', 'Sourdough 7 Grãos', 1),
+        ('receita', 'Croissant Tradicional', 1),
+        ('receita', 'Pain au Chocolat', 1),
+        ('receita', 'Croissant Almond', 1),
+        ('mp', 'Salada de Frutas 100g', 1),
+        ('mp', 'Granola Artesanal 100g', 1),
+        ('mp', 'Pote de Mel 40g', 1),
+        ('mp', 'Caixa MDF', 1),
+    ], 'Mimo francês! Cesta para 1 pessoa.')
+
+    add_cesta('Abraço em Forma de Pães', 169.00, [
+        ('mp', 'Base Redonda MDF', 1),
+        ('receita', 'Sourdough Tradicional', 1),
+        ('receita', 'Sourdough Nozes e Azeitonas', 1),
+        ('receita', 'Croissant Tradicional', 2),
+        ('receita', 'Pain au Chocolat', 2),
+    ], 'Um presente caloroso para abraçar de longe quem você ama.')
+
+    add_cesta('Box Mimo', 166.00, [
+        ('receita', 'Sourdough Tradicional', 1),
+        ('receita', 'Croissant Tradicional', 1),
+        ('receita', 'Pain au Chocolat', 1),
+        ('mp', 'Suco de Uva Villa Piva 300ml', 1),
+        ('mp', 'Iogurte Artesanal 200ml', 1),
+        ('mp', 'Granola Artesanal 100g', 1),
+        ('mp', 'Caixa MDF', 1),
+    ], 'Café da manhã para 1 pessoa, tamanho ideal para presentear.')
+
+    add_cesta('Lancheira Especial', 57.00, [
+        ('mp', 'Lancheira', 1),
+        ('receita', 'Croissant Tradicional', 1),
+        ('receita', 'Croissant Nutella', 1),
+        ('receita', 'Cookie Calebaut', 1),
+    ], 'Perfeita para mandar um mimo para alguém especial.')
+
+    # ── 6. Cestas Personalizadas (só a base) ──
+    add_cesta('Personalizada Base Coração', 97.00, [
+        ('mp', 'Base Coração MDF', 1),
+    ], 'Base em formato de coração na cor vermelha. Personalize com seus produtos.', 'Cestas Personalizadas')
+
+    add_cesta('Personalizada Base Quadrada', 87.00, [
+        ('mp', 'Base Quadrada MDF', 1),
+    ], 'Formato clássico e sofisticado. Ideal para presentes corporativos.', 'Cestas Personalizadas')
+
+    add_cesta('Personalizada Base Redonda', 72.00, [
+        ('mp', 'Base Redonda MDF', 1),
+    ], 'Tradicional e versátil. A opção mais popular!', 'Cestas Personalizadas')
+
+    db.session.commit()
