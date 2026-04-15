@@ -16,8 +16,8 @@
                 <tr>
                     <th style="width:50px">Cód</th>
                     <th style="width:22%">Nome do Ingrediente</th>
-                    <th style="width:70px">Unid.</th>
-                    <th style="width:120px">Custo/kg (R$)</th>
+                    <th style="width:80px">Unid.</th>
+                    <th style="width:120px">Custo (R$)</th>
                     <th style="width:18%">Fornecedor</th>
                     <th>Observações</th>
                     <th style="width:50px"></th>
@@ -32,14 +32,18 @@
                         <input type="text" name="nome[]" value="{{ mp.nome }}" class="form-control form-control-sm input-blue" required>
                     </td>
                     <td>
-                        <select name="unidade[]" class="form-select form-select-sm input-blue">
+                        <select name="unidade[]" class="form-select form-select-sm input-blue mp-unidade-select">
                             <option value="g" {{ 'selected' if mp.unidade == 'g' }}>g</option>
                             <option value="ml" {{ 'selected' if mp.unidade == 'ml' }}>ml</option>
+                            <option value="un" {{ 'selected' if mp.unidade == 'un' }}>un</option>
                         </select>
                     </td>
                     <td>
-                        <input type="number" name="custo_por_kg[]" value="{{ '%.2f' % mp.custo_por_kg }}" step="0.01" min="0"
-                               class="form-control form-control-sm input-blue text-end" required>
+                        <div class="input-group input-group-sm">
+                            <input type="number" name="custo_por_kg[]" value="{{ '%.2f' % mp.custo_por_kg }}" step="0.01" min="0"
+                                   class="form-control form-control-sm input-blue text-end" required>
+                            <span class="input-group-text mp-custo-label" style="font-size:10px;">{{ '/un' if mp.unidade == 'un' else '/kg' }}</span>
+                        </div>
                     </td>
                     <td>
                         <input type="text" name="fornecedor[]" value="{{ mp.fornecedor or '' }}" class="form-control form-control-sm input-blue">
@@ -77,14 +81,18 @@
             <input type="text" name="nome[]" value="" class="form-control form-control-sm input-blue" required>
         </td>
         <td>
-            <select name="unidade[]" class="form-select form-select-sm input-blue">
+            <select name="unidade[]" class="form-select form-select-sm input-blue mp-unidade-select">
                 <option value="g">g</option>
                 <option value="ml">ml</option>
+                <option value="un">un</option>
             </select>
         </td>
         <td>
-            <input type="number" name="custo_por_kg[]" value="0.00" step="0.01" min="0"
-                   class="form-control form-control-sm input-blue text-end" required>
+            <div class="input-group input-group-sm">
+                <input type="number" name="custo_por_kg[]" value="0.00" step="0.01" min="0"
+                       class="form-control form-control-sm input-blue text-end" required>
+                <span class="input-group-text mp-custo-label" style="font-size:10px;">/kg</span>
+            </div>
         </td>
         <td>
             <input type="text" name="fornecedor[]" value="" class="form-control form-control-sm input-blue">
@@ -99,4 +107,19 @@
         </td>
     </tr>
 </template>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Atualiza label /kg ou /un quando muda a unidade
+document.getElementById('mp-table').addEventListener('change', function(e) {
+    if (e.target.classList.contains('mp-unidade-select')) {
+        var label = e.target.closest('tr').querySelector('.mp-custo-label');
+        if (label) {
+            label.textContent = e.target.value === 'un' ? '/un' : '/kg';
+        }
+    }
+});
+</script>
 {% endblock %}
