@@ -166,6 +166,59 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
 
+        // Modal: cadastrar nova MP sem sair da ficha
+        var btnSalvarMPFicha = document.getElementById('btn-salvar-nova-mp-ficha');
+        if (btnSalvarMPFicha) {
+            btnSalvarMPFicha.addEventListener('click', function () {
+                var nome = document.getElementById('nova-mp-nome').value.trim();
+                var custo = document.getElementById('nova-mp-custo').value.trim();
+                var erroEl = document.getElementById('nova-mp-erro');
+                var okEl = document.getElementById('nova-mp-ok');
+
+                erroEl.style.display = 'none';
+                okEl.style.display = 'none';
+
+                if (!nome || !custo) {
+                    erroEl.textContent = 'Preencha nome e custo.';
+                    erroEl.style.display = 'block';
+                    return;
+                }
+
+                var formData = new FormData();
+                formData.append('mp_nome', nome);
+                formData.append('mp_custo', custo);
+                formData.append('csrf_token', CSRF_TOKEN);
+
+                fetch('/receitas/api/nova-mp', { method: 'POST', body: formData })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data.success) {
+                            MP_DATA[data.nome] = { custo_por_kg: data.custo, unidade: 'g' };
+
+                            var mpList = document.getElementById('mp-list');
+                            var opt = document.createElement('option');
+                            opt.value = data.nome;
+                            mpList.appendChild(opt);
+
+                            okEl.textContent = '"' + data.nome + '" cadastrado! Ja pode usar na ficha.';
+                            okEl.style.display = 'block';
+
+                            document.getElementById('nova-mp-nome').value = '';
+                            document.getElementById('nova-mp-custo').value = '';
+
+                            recalcularTudo();
+                        } else {
+                            erroEl.textContent = data.error;
+                            erroEl.style.display = 'block';
+                        }
+                    })
+                    .catch(function () {
+                        erroEl.textContent = 'Erro ao salvar. Tente novamente.';
+                        erroEl.style.display = 'block';
+                    });
+            });
+        }
+
         // Calcular ao carregar
         recalcularTudo();
     }

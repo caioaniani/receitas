@@ -1,6 +1,6 @@
 import json
 
-from flask import render_template, redirect, url_for, flash, request, abort
+from flask import render_template, redirect, url_for, flash, request, abort, jsonify
 from flask_login import login_required, current_user
 
 from app.blueprints.receitas import receitas_bp
@@ -207,3 +207,28 @@ def excluir(id):
     db.session.commit()
     flash(f'"{nome}" excluído com sucesso!', 'success')
     return redirect(url_for('materias_primas.banco'))
+
+
+@receitas_bp.route('/api/nova-mp', methods=['POST'])
+@login_required
+def nova_mp():
+    """Cria matéria-prima via AJAX (sem sair da ficha técnica)."""
+    nome = request.form.get('mp_nome', '').strip()
+    custo = request.form.get('mp_custo', '').replace(',', '.').strip()
+
+    if not nome or not custo:
+        return jsonify(success=False, error='Preencha nome e custo.')
+
+    if MateriaPrima.query.filter_by(nome=nome).first():
+        return jsonify(success=False, error=f'"{nome}" ja existe no banco de MP.')
+
+    try:
+        custo_float = float(custo)
+    except ValueError:
+        return jsonify(success=False, error='Custo invalido.')
+
+    mp = MateriaPrima(nome=nome, unidade='g', custo_por_kg=custo_float)
+    db.session.add(mp)
+    db.session.commit()
+
+    return jsonify(success=True, nome=nome, custo=custo_float)
