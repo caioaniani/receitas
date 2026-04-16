@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Lojas{% endblock %}
+
+{% block content %}
+<h5 class="fw-bold mb-3"><i class="bi bi-shop"></i> Lojas</h5>
+
+<form method="POST" action="{{ url_for('rh.salvar_lojas') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered bg-white" id="lojas-table">
+            <thead>
+                <tr style="background:#1565c0; color:#fff; font-size:11px; text-transform:uppercase;">
+                    <th style="width:50px">Cód</th>
+                    <th>Nome</th>
+                    <th>Endereço</th>
+                    <th style="width:150px">Telefone</th>
+                    <th style="width:80px" class="text-center">Funcs.</th>
+                    <th style="width:50px"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for l in lojas %}
+                <tr>
+                    <td class="text-muted text-center">{{ l.id }}</td>
+                    <td>
+                        <input type="hidden" name="loja_id[]" value="{{ l.id }}">
+                        <input type="text" name="loja_nome[]" value="{{ l.nome }}" class="form-control form-control-sm input-blue" required>
+                    </td>
+                    <td>
+                        <input type="text" name="loja_endereco[]" value="{{ l.endereco or '' }}" class="form-control form-control-sm input-blue">
+                    </td>
+                    <td>
+                        <input type="text" name="loja_telefone[]" value="{{ l.telefone or '' }}" class="form-control form-control-sm input-blue">
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-info">{{ l.funcionarios | length }}</span>
+                    </td>
+                    <td class="text-center">
+                        {% if l.funcionarios | length == 0 %}
+                        <form method="POST" action="{{ url_for('rh.excluir_loja', id=l.id) }}" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger"
+                                    onclick="return confirm('Excluir loja {{ l.nome }}?')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex gap-2 mt-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-add-loja">
+            <i class="bi bi-plus-lg"></i> Nova Loja
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-check-lg"></i> Salvar
+        </button>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('btn-add-loja').addEventListener('click', function() {
+    var tbody = document.querySelector('#lojas-table tbody');
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td class="text-muted text-center">novo</td>' +
+        '<td><input type="hidden" name="loja_id[]" value="">' +
+        '<input type="text" name="loja_nome[]" value="" class="form-control form-control-sm input-blue" required></td>' +
+        '<td><input type="text" name="loja_endereco[]" value="" class="form-control form-control-sm input-blue"></td>' +
+        '<td><input type="text" name="loja_telefone[]" value="" class="form-control form-control-sm input-blue"></td>' +
+        '<td class="text-center">-</td>' +
+        '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest(\'tr\').remove()"><i class="bi bi-trash"></i></button></td>';
+    tbody.appendChild(tr);
+});
+</script>
+{% endblock %}

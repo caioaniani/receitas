@@ -1,5 +1,7 @@
+from datetime import date
+
 from app.extensions import db
-from app.models import MateriaPrima, Receita, ReceitaIngrediente, Produto, ProdutoItem
+from app.models import MateriaPrima, Receita, ReceitaIngrediente, Produto, ProdutoItem, Loja, Funcionario
 
 
 def seed_database():
@@ -925,5 +927,86 @@ def seed_site_products():
     add_cesta('Personalizada Base Redonda', 72.00, [
         ('mp', 'Base Redonda MDF', 1),
     ], 'Tradicional e versátil. A opção mais popular!', 'Cestas Personalizadas')
+
+    db.session.commit()
+
+
+def seed_rh():
+    """Cria lojas e importa 42 funcionários. Roda em TODOS os ambientes."""
+    if Loja.query.first():
+        return
+
+    lojas = [
+        Loja(nome='Industria'),
+        Loja(nome='Loja Ribeiro do Vale'),
+        Loja(nome='Loja Anesio Pinto Rosa'),
+        Loja(nome='Loja Nebraska'),
+    ]
+    db.session.add_all(lojas)
+    db.session.flush()
+
+    loja_industria = Loja.query.filter_by(nome='Industria').first()
+
+    funcionarios_data = [
+        ('ALESSANDRA MARIA DA SILVA MARIANO', '000.000.001-01', 'ATENDENTE', 2130.40, date(2025, 7, 22), 0, 0, 10.80, 26, 22.00),
+        ('AMANDA DE SOUZA MIGUEL', '000.000.002-02', 'ATENDENTE', 2130.40, date(2026, 1, 12), 0, 0, 18.80, 26, 22.00),
+        ('BRUNO CALIXTO FILETO DE SOUZA', '000.000.003-03', 'ATENDENTE', 2130.40, date(2025, 12, 18), 0, 0, 10.80, 26, 22.00),
+        ('CARMEM KARINI LEITE', '000.000.004-04', 'AUXILIAR ADMINISTRATIVO', 2210.98, date(2025, 10, 16), 0, 0, 20.10, 22, 22.00),
+        ('DAKSON ALEXANDRE MORATO SOARES DE LIMA', '000.000.005-05', 'GERENTE DE RH', 4716.55, date(2024, 10, 19), 1886.62, 0, 18.80, 26, 22.00),
+        ('DAVI JONATAS MORATO DOS SANTOS', '000.000.006-06', 'PADEIRO', 3204.52, date(2022, 3, 3), 0, 0, 10.80, 25, 22.00),
+        ('JOAO PEDRO FERNANDES DA SILVA', '000.000.007-07', 'GERENTE', 2879.19, date(2022, 10, 11), 1151.68, 0, 10.80, 26, 22.00),
+        ('JOSE FRANCISCO MARQUES', '000.000.008-08', 'AUXILIAR DE LIMPEZA', 2130.40, date(2026, 1, 8), 0, 0, 18.80, 25, 22.00),
+        ('JULIA DE SOUZA MIGUEL', '000.000.009-09', 'ATENDENTE', 2130.40, date(2026, 1, 6), 0, 0, 18.80, 26, 22.00),
+        ('KAIO FERREIRA DOS REIS', '000.000.010-10', 'AJUDANTE DE PADEIRO', 2257.84, date(2023, 12, 18), 0, 0, 10.80, 26, 22.00),
+        ('KELVIN ROCHA ARAUJO', '000.000.011-11', 'ATENDENTE CHEFE', 2257.84, date(2023, 1, 14), 0, 0, 10.80, 26, 22.00),
+        ('KETLIN BRAGA DA ANUNCIACAO', '000.000.012-12', 'ATENDENTE', 2130.40, date(2026, 2, 13), 0, 0, 18.80, 26, 22.00),
+        ('LIDIANE DOS SANTOS PILOTO', '000.000.013-13', 'ATENDENTE', 2130.40, date(2026, 2, 13), 0, 0, 18.80, 26, 22.00),
+        ('LUAN COSTA DE ARAUJO', '000.000.014-14', 'ATENDENTE', 2130.40, date(2025, 9, 29), 0, 0, 18.80, 26, 22.00),
+        ('MARCIA DE SOUZA GONCALVES', '000.000.015-15', 'AUXILIAR DE RH', 2221.96, date(2025, 9, 1), 0, 0, 27.00, 22, 22.00),
+        ('MARIA ALANE SOARES DE LIMA', '000.000.016-16', 'GERENTE GERAL', 5299.50, date(2021, 11, 5), 0, 0, 18.80, 26, 23.69),
+        ('MATHEUS DOS SANTOS ARAUJO', '000.000.017-17', 'ATENDENTE', 2130.40, date(2025, 8, 18), 0, 0, 18.80, 26, 22.00),
+        ('MICAELA RODRIGUES MARINHO DOS SANTOS', '000.000.018-18', 'ATENDENTE', 2130.40, date(2025, 10, 13), 0, 0, 18.80, 26, 22.00),
+        ('RAFAEL JONATAS MORATO DOS SANTOS', '000.000.019-19', 'GERENTE', 2879.19, date(2022, 12, 23), 0, 0, 10.80, 26, 22.00),
+        ('SIMONE CORDEIRO ALVES', '000.000.020-20', 'ATENDENTE CHEFE', 2257.84, date(2023, 1, 1), 0, 0, 10.80, 26, 22.00),
+        ('SIMONE FERNANDES', '000.000.021-21', 'INSPETOR(A) DE QUALIDADE', 2130.40, date(2021, 11, 19), 0, 600.00, 10.80, 26, 22.00),
+        ('VILSON SILVA SANTANA', '000.000.022-22', 'PADEIRO', 3084.00, date(2025, 7, 17), 0, 0, 21.40, 26, 22.00),
+        ('WILLIAM DE MOURA', '000.000.023-23', 'MOTORISTA', 3561.00, date(2021, 9, 14), 0, 0, 0, 26, 22.00),
+        ('AMANDA SILVA DE OLIVEIRA', '000.000.024-24', 'ATENDENTE', 2130.40, date(2023, 4, 5), 0, 600.00, 10.80, 26, 22.00),
+        ('BRUNA KELLY ROSENO DE SOUZA', '000.000.025-25', 'ATENDENTE 2', 2330.40, date(2023, 12, 21), 0, 0, 10.80, 26, 22.00),
+        ('CAMILA ALVES DA SILVA', '000.000.026-26', 'ATENDENTE', 2130.40, date(2024, 7, 16), 0, 400.00, 18.80, 26, 22.00),
+        ('DAIANE CARLA OLIVEIRA DE SOUZA', '000.000.027-27', 'ATENDENTE', 2130.40, date(2026, 1, 21), 0, 0, 10.80, 26, 22.00),
+        ('DEIVID FAGUNDES DOS SANTOS', '000.000.028-28', 'ATENDENTE', 2330.40, date(2025, 2, 19), 0, 0, 10.80, 26, 22.00),
+        ('HELIO BRANDAO SANTOS', '000.000.029-29', 'MOTOBOY', 9.68, date(2023, 7, 13), 0, 0, 0, 26, 22.00),
+        ('ISABELA FONTES ARAUJO', '000.000.030-30', 'ATENDENTE', 2130.40, date(2025, 6, 10), 0, 0, 10.80, 26, 22.00),
+        ('JIMMY RIBEIRO CASTRO', '000.000.031-31', 'ATENDENTE', 2130.40, date(2025, 6, 24), 0, 0, 18.80, 26, 22.00),
+        ('KAWANNY DAS NERES FERREIRA', '000.000.032-32', 'ATENDENTE', 2130.40, date(2026, 1, 21), 0, 0, 18.80, 26, 22.00),
+        ('LARISSA SANTOS DA SILVA', '000.000.033-33', 'ATENDENTE CHEFE', 2257.84, date(2023, 7, 12), 0, 0, 10.80, 26, 22.00),
+        ('LUCAS DOS SANTOS', '000.000.034-34', 'ATENDENTE 2', 2330.40, date(2025, 4, 3), 0, 0, 10.80, 26, 22.00),
+        ('MARILZA APARECIDA FRAGA', '000.000.035-35', 'ATENDENTE', 2130.40, date(2025, 1, 7), 0, 0, 10.80, 26, 22.00),
+        ('MARINA SANTOS SILVA', '000.000.036-36', 'ATENDENTE 2', 2330.40, date(2025, 5, 6), 0, 0, 12.80, 26, 22.00),
+        ('NAYARA JAMILE SANTOS', '000.000.037-37', 'ATENDENTE', 2130.00, date(2025, 12, 2), 0, 0, 18.80, 26, 22.00),
+        ('QUEREM RAPUQUE DE OLIVEIRA GONCALVES', '000.000.038-38', 'ATENDENTE', 2130.00, date(2025, 12, 22), 0, 0, 18.80, 26, 22.00),
+        ('SABRINA MELO BARAUNA', '000.000.039-39', 'ATENDENTE CHEFE', 2257.84, date(2023, 6, 3), 0, 0, 10.80, 26, 22.00),
+        ('THIAGO BATISTA DA SILVA', '000.000.040-40', 'ATENDENTE 2', 2330.40, date(2025, 5, 3), 0, 0, 18.80, 26, 22.00),
+        ('THIERRY KAUE FERREIRA DE JESUS BARROS', '000.000.041-41', 'ATENDENTE', 2130.40, date(2025, 4, 25), 0, 0, 10.80, 25, 22.00),
+        ('VITORIA THALITA DE JESUS', '000.000.042-42', 'ATENDENTE', 2130.40, date(2026, 2, 25), 0, 0, 18.80, 26, 22.00),
+        ('WILDINA DE SOUZA OLIVEIRA', '000.000.043-43', 'ATENDENTE 2', 2330.40, date(2025, 5, 16), 0, 0, 10.80, 26, 22.00),
+    ]
+
+    for nome, cpf, funcao, salario, admissao, cargo_conf, premiacao, vt_dia, dias, vr_dia in funcionarios_data:
+        func = Funcionario(
+            nome=nome,
+            cpf=cpf,
+            funcao=funcao,
+            salario_base=salario,
+            data_admissao=admissao,
+            cargo_confianca=cargo_conf,
+            premiacao=premiacao,
+            vt_dia=vt_dia,
+            dias_trabalhados=dias,
+            vr_dia=vr_dia,
+        )
+        func.lojas.append(loja_industria)
+        db.session.add(func)
 
     db.session.commit()

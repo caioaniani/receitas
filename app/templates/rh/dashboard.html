@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}RH - Dashboard{% endblock %}
+
+{% block content %}
+<h5 class="fw-bold mb-3"><i class="bi bi-people-fill"></i> Dashboard RH</h5>
+
+<!-- Resumo Geral -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body text-center">
+                <div style="font-size:2rem; color:#1565c0;"><i class="bi bi-people"></i></div>
+                <div class="fs-3 fw-bold">{{ total_funcionarios }}</div>
+                <div class="text-muted small">Funcionários Ativos</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body text-center">
+                <div style="font-size:2rem; color:#2e7d32;"><i class="bi bi-cash-stack"></i></div>
+                <div class="fs-3 fw-bold">{{ total_salarios | brl }}</div>
+                <div class="text-muted small">Total Salários Base</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body text-center">
+                <div style="font-size:2rem; color:#e65100;"><i class="bi bi-wallet2"></i></div>
+                <div class="fs-3 fw-bold">{{ total_custo | brl }}</div>
+                <div class="text-muted small">Custo Total Mensal</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Custo por Loja -->
+<h6 class="fw-bold mt-4 mb-2"><i class="bi bi-shop"></i> Custo por Loja</h6>
+<div class="row g-3 mb-4">
+    {% for nome_loja, dados in custo_por_loja.items() %}
+    <div class="col-md-3 col-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <div class="fw-bold" style="font-size:13px;">{{ nome_loja }}</div>
+                <div class="text-muted small">{{ dados.qtd }} funcionário{{ 's' if dados.qtd != 1 }}</div>
+                <div class="fw-bold" style="color:#1565c0;">{{ dados.custo | brl }}</div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    {% if not custo_por_loja %}
+    <div class="col-12">
+        <p class="text-muted small">Nenhuma loja cadastrada. <a href="{{ url_for('rh.lojas') }}">Cadastrar lojas</a>.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Aniversários de Admissão -->
+{% if aniversariantes %}
+<h6 class="fw-bold mt-4 mb-2"><i class="bi bi-calendar-event"></i> Aniversários de Admissão este Mês</h6>
+<div class="table-responsive">
+    <table class="table table-sm table-bordered bg-white">
+        <thead>
+            <tr style="background:#1565c0; color:#fff; font-size:11px; text-transform:uppercase;">
+                <th>Nome</th>
+                <th>Função</th>
+                <th class="text-center">Admissão</th>
+                <th class="text-center">Tempo</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in aniversariantes %}
+            <tr>
+                <td><a href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}" class="text-decoration-none">{{ f.nome }}</a></td>
+                <td>{{ f.funcao or '-' }}</td>
+                <td class="text-center">{{ f.data_admissao.strftime('%d/%m/%Y') if f.data_admissao else '-' }}</td>
+                <td class="text-center">-</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Links Rápidos -->
+<div class="d-flex gap-2 mt-4">
+    <a href="{{ url_for('rh.funcionarios') }}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-people"></i> Ver Funcionários
+    </a>
+    <a href="{{ url_for('rh.folha') }}" class="btn btn-outline-success btn-sm">
+        <i class="bi bi-file-earmark-text"></i> Folha de Pagamento
+    </a>
+    <a href="{{ url_for('rh.lojas') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-shop"></i> Gerenciar Lojas
+    </a>
+</div>
+{% endblock %}

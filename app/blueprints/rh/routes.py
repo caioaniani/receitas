@@ -1,0 +1,328 @@
+from datetime import datetime
+
+from flask import render_template, redirect, url_for, flash, request
+from flask_login import login_required, current_user
+
+from app.blueprints.rh import rh_bp
+from app.decorators import admin_required
+from app.extensions import db
+from app.models import Funcionario, Loja, FolhaPagamento, Feedback, funcionario_loja
+from app.utils import parse_float_br
+
+
+@rh_bp.route('/')
+@login_required
+@admin_required
+def dashboard():
+    funcionarios = Funcionario.query.filter_by(ativo=True).all()
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+
+    total_salarios = sum(f.salario_base for f in funcionarios)
+    total_custo = sum(f.custo_total() for f in funcionarios)
+    total_funcionarios = len(funcionarios)
+
+    custo_por_loja = {}
+    for loja in lojas:
+        funcs_loja = [f for f in funcionarios if loja in f.lojas]
+        custo_por_loja[loja.nome] = {
+            'qtd': len(funcs_loja),
+            'custo': sum(f.custo_total() for f in funcs_loja),
+        }
+
+    hoje = datetime.now()
+    aniversariantes = [
+        f for f in funcionarios
+        if f.data_admissao and f.data_admissao.month == hoje.month
+    ]
+
+    return render_template('rh/dashboard.html',
+                           total_funcionarios=total_funcionarios,
+                           total_salarios=total_salarios,
+                           total_custo=total_custo,
+                           custo_por_loja=custo_por_loja,
+                           aniversariantes=aniversariantes,
+                           lojas=lojas)
+
+
+@rh_bp.route('/funcionarios')
+@login_required
+@admin_required
+def funcionarios():
+    loja_id = request.args.get('loja', type=int)
+    apenas_ativos = request.args.get('ativos', '1') == '1'
+
+    query = Funcionario.query
+    if apenas_ativos:
+        query = query.filter_by(ativo=True)
+    if loja_id:
+        query = query.filter(Funcionario.lojas.any(Loja.id == loja_id))
+
+    lista = query.order_by(Funcionario.nome).all()
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+
+    return render_template('rh/funcionarios.html',
+                           funcionarios=lista,
+                           lojas=lojas,
+                           loja_id=loja_id,
+                           apenas_ativos=apenas_ativos)
+
+
+@rh_bp.route('/funcionarios/novo', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def novo_funcionario():
+    if request.method == 'POST':
+        func = Funcionario(
+            nome=request.form.get('nome', '').strip(),
+            cpf=request.form.get('cpf', '').strip(),
+            funcao=request.form.get('funcao', '').strip() or None,
+            salario_base=parse_float_br(request.form.get('salario_base', ''), default=0),
+            cargo_confianca=parse_float_br(request.form.get('cargo_confianca', ''), default=0),
+            premiacao=parse_float_br(request.form.get('premiacao', ''), default=0),
+            vt_dia=parse_float_br(request.form.get('vt_dia', ''), default=0),
+            vr_dia=parse_float_br(request.form.get('vr_dia', ''), default=22),
+            dias_trabalhados=int(request.form.get('dias_trabalhados', '26') or 26),
+            hora_extra_pct=parse_float_br(request.form.get('hora_extra_pct', ''), default=55),
+            telefone=request.form.get('telefone', '').strip() or None,
+            email=request.form.get('email', '').strip() or None,
+            observacao=request.form.get('observacao', '').strip() or None,
+        )
+        data_str = request.form.get('data_admissao', '').strip()
+        if data_str:
+            try:
+                func.data_admissao = datetime.strptime(data_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        loja_ids = request.form.getlist('lojas[]')
+        for lid in loja_ids:
+            loja = Loja.query.get(int(lid))
+            if loja:
+                func.lojas.append(loja)
+
+        db.session.add(func)
+        db.session.commit()
+        flash(f'Funcionário "{func.nome}" cadastrado!', 'success')
+        return redirect(url_for('rh.detalhe_funcionario', id=func.id))
+
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    return render_template('rh/funcionario_form.html', func=None, lojas=lojas)
+
+
+@rh_bp.route('/funcionarios/<int:id>')
+@login_required
+@admin_required
+def detalhe_funcionario(id):
+    func = Funcionario.query.get_or_404(id)
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    feedbacks = Feedback.query.filter_by(funcionario_id=id).order_by(Feedback.data.desc()).all()
+    folhas = FolhaPagamento.query.filter_by(funcionario_id=id).order_by(
+        FolhaPagamento.ano.desc(), FolhaPagamento.mes.desc()
+    ).limit(12).all()
+
+    return render_template('rh/funcionario_detalhe.html',
+                           func=func, lojas=lojas, feedbacks=feedbacks, folhas=folhas)
+
+
+@rh_bp.route('/funcionarios/<int:id>/salvar', methods=['POST'])
+@login_required
+@admin_required
+def salvar_funcionario(id):
+    func = Funcionario.query.get_or_404(id)
+
+    func.nome = request.form.get('nome', '').strip() or func.nome
+    func.cpf = request.form.get('cpf', '').strip() or func.cpf
+    func.funcao = request.form.get('funcao', '').strip() or None
+    func.salario_base = parse_float_br(request.form.get('salario_base', ''), default=0)
+    func.cargo_confianca = parse_float_br(request.form.get('cargo_confianca', ''), default=0)
+    func.premiacao = parse_float_br(request.form.get('premiacao', ''), default=0)
+    func.vt_dia = parse_float_br(request.form.get('vt_dia', ''), default=0)
+    func.vr_dia = parse_float_br(request.form.get('vr_dia', ''), default=22)
+    func.dias_trabalhados = int(request.form.get('dias_trabalhados', '26') or 26)
+    func.hora_extra_pct = parse_float_br(request.form.get('hora_extra_pct', ''), default=55)
+    func.telefone = request.form.get('telefone', '').strip() or None
+    func.email = request.form.get('email', '').strip() or None
+    func.observacao = request.form.get('observacao', '').strip() or None
+    func.ativo = 'ativo' in request.form
+
+    data_adm = request.form.get('data_admissao', '').strip()
+    if data_adm:
+        try:
+            func.data_admissao = datetime.strptime(data_adm, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+
+    data_dem = request.form.get('data_demissao', '').strip()
+    if data_dem:
+        try:
+            func.data_demissao = datetime.strptime(data_dem, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    else:
+        func.data_demissao = None
+
+    func.lojas.clear()
+    loja_ids = request.form.getlist('lojas[]')
+    for lid in loja_ids:
+        loja = Loja.query.get(int(lid))
+        if loja:
+            func.lojas.append(loja)
+
+    db.session.commit()
+    flash(f'"{func.nome}" atualizado!', 'success')
+    return redirect(url_for('rh.detalhe_funcionario', id=func.id))
+
+
+@rh_bp.route('/funcionarios/<int:id>/feedback', methods=['POST'])
+@login_required
+@admin_required
+def add_feedback(id):
+    func = Funcionario.query.get_or_404(id)
+    texto = request.form.get('texto', '').strip()
+    tipo = request.form.get('tipo', 'neutro')
+
+    if not texto:
+        flash('Texto do feedback é obrigatório.', 'warning')
+        return redirect(url_for('rh.detalhe_funcionario', id=id))
+
+    fb = Feedback(
+        funcionario_id=id,
+        autor_id=current_user.id,
+        tipo=tipo,
+        texto=texto,
+    )
+    db.session.add(fb)
+    db.session.commit()
+    flash('Feedback registrado!', 'success')
+    return redirect(url_for('rh.detalhe_funcionario', id=id))
+
+
+@rh_bp.route('/funcionarios/<int:id>/feedback/<int:fb_id>/excluir', methods=['POST'])
+@login_required
+@admin_required
+def excluir_feedback(id, fb_id):
+    fb = Feedback.query.get_or_404(fb_id)
+    db.session.delete(fb)
+    db.session.commit()
+    flash('Feedback removido.', 'success')
+    return redirect(url_for('rh.detalhe_funcionario', id=id))
+
+
+@rh_bp.route('/lojas')
+@login_required
+@admin_required
+def lojas():
+    lista = Loja.query.order_by(Loja.nome).all()
+    return render_template('rh/lojas.html', lojas=lista)
+
+
+@rh_bp.route('/lojas/salvar', methods=['POST'])
+@login_required
+@admin_required
+def salvar_lojas():
+    ids = request.form.getlist('loja_id[]')
+    nomes = request.form.getlist('loja_nome[]')
+    enderecos = request.form.getlist('loja_endereco[]')
+    telefones = request.form.getlist('loja_telefone[]')
+
+    for i in range(len(nomes)):
+        nome = nomes[i].strip()
+        if not nome:
+            continue
+        endereco = enderecos[i].strip() if i < len(enderecos) else ''
+        telefone = telefones[i].strip() if i < len(telefones) else ''
+        lid = ids[i].strip() if i < len(ids) else ''
+
+        if lid:
+            loja = Loja.query.get(int(lid))
+            if loja:
+                loja.nome = nome
+                loja.endereco = endereco or None
+                loja.telefone = telefone or None
+        else:
+            db.session.add(Loja(
+                nome=nome,
+                endereco=endereco or None,
+                telefone=telefone or None,
+            ))
+
+    db.session.commit()
+    flash('Lojas salvas!', 'success')
+    return redirect(url_for('rh.lojas'))
+
+
+@rh_bp.route('/lojas/excluir/<int:id>', methods=['POST'])
+@login_required
+@admin_required
+def excluir_loja(id):
+    loja = Loja.query.get_or_404(id)
+    nome = loja.nome
+    db.session.delete(loja)
+    db.session.commit()
+    flash(f'Loja "{nome}" excluída!', 'success')
+    return redirect(url_for('rh.lojas'))
+
+
+@rh_bp.route('/folha')
+@login_required
+@admin_required
+def folha():
+    mes = request.args.get('mes', type=int, default=datetime.now().month)
+    ano = request.args.get('ano', type=int, default=datetime.now().year)
+
+    folhas = FolhaPagamento.query.filter_by(mes=mes, ano=ano).all()
+    funcionarios_ativos = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
+
+    return render_template('rh/folha.html',
+                           folhas=folhas,
+                           funcionarios=funcionarios_ativos,
+                           mes=mes, ano=ano)
+
+
+@rh_bp.route('/folha/gerar', methods=['POST'])
+@login_required
+@admin_required
+def gerar_folha():
+    mes = int(request.form.get('mes', datetime.now().month))
+    ano = int(request.form.get('ano', datetime.now().year))
+
+    existente = FolhaPagamento.query.filter_by(mes=mes, ano=ano).first()
+    if existente:
+        flash(f'Folha de {mes:02d}/{ano} já existe!', 'warning')
+        return redirect(url_for('rh.folha', mes=mes, ano=ano))
+
+    funcionarios = Funcionario.query.filter_by(ativo=True).all()
+    for f in funcionarios:
+        folha = FolhaPagamento(
+            funcionario_id=f.id,
+            mes=mes,
+            ano=ano,
+            salario_base=f.salario_base,
+            cargo_confianca=f.cargo_confianca or 0,
+            horas_extras=0,
+            premiacao=f.premiacao or 0,
+            vt_dia=f.vt_dia or 0,
+            vr_dia=f.vr_dia or 0,
+            dias_trabalhados=f.dias_trabalhados or 26,
+            descontos=0,
+        )
+        db.session.add(folha)
+
+    db.session.commit()
+    flash(f'Folha de {mes:02d}/{ano} gerada com {len(funcionarios)} funcionários!', 'success')
+    return redirect(url_for('rh.folha', mes=mes, ano=ano))
+
+
+@rh_bp.route('/folha/<int:folha_id>/salvar', methods=['POST'])
+@login_required
+@admin_required
+def salvar_folha_item(folha_id):
+    f = FolhaPagamento.query.get_or_404(folha_id)
+    f.dias_trabalhados = int(request.form.get('dias_trabalhados', '26') or 26)
+    f.horas_extras = parse_float_br(request.form.get('horas_extras', ''), default=0)
+    f.premiacao = parse_float_br(request.form.get('premiacao', ''), default=0)
+    f.descontos = parse_float_br(request.form.get('descontos', ''), default=0)
+    f.observacao = request.form.get('observacao', '').strip() or None
+    db.session.commit()
+    flash('Folha atualizada!', 'success')
+    return redirect(url_for('rh.folha', mes=f.mes, ano=f.ano))

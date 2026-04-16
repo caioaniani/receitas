@@ -87,12 +87,14 @@ def create_app(config_class=None):
     from app.blueprints.receitas import receitas_bp
     from app.blueprints.produtos import produtos_bp
     from app.blueprints.auth import auth_bp
+    from app.blueprints.rh import rh_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(materias_primas_bp, url_prefix='/materias-primas')
     app.register_blueprint(receitas_bp, url_prefix='/receitas')
     app.register_blueprint(produtos_bp, url_prefix='/produtos')
     app.register_blueprint(auth_bp, url_prefix='/auth')
+    app.register_blueprint(rh_bp, url_prefix='/rh')
 
     with app.app_context():
         db.create_all()
@@ -108,6 +110,10 @@ def create_app(config_class=None):
         # Produtos do site — roda em todos os ambientes (SQLite + PostgreSQL)
         from app.seed import seed_site_products
         seed_site_products()
+
+        # RH: lojas + funcionários — roda em todos os ambientes
+        from app.seed import seed_rh
+        seed_rh()
 
         _criar_admin()
 

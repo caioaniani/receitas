@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}Folha de Pagamento{% endblock %}
+
+{% block content %}
+<h5 class="fw-bold mb-3"><i class="bi bi-file-earmark-text"></i> Folha de Pagamento</h5>
+
+<!-- Seletor de mês/ano -->
+<div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
+    <form method="GET" class="d-flex gap-2 align-items-center">
+        <select name="mes" class="form-select form-select-sm" style="width:auto;">
+            {% for m in range(1, 13) %}
+            <option value="{{ m }}" {{ 'selected' if m == mes }}>{{ '%02d' % m }}</option>
+            {% endfor %}
+        </select>
+        <select name="ano" class="form-select form-select-sm" style="width:auto;">
+            {% for a in range(2024, 2028) %}
+            <option value="{{ a }}" {{ 'selected' if a == ano }}>{{ a }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-search"></i> Ver
+        </button>
+    </form>
+
+    {% if not folhas %}
+    <form method="POST" action="{{ url_for('rh.gerar_folha') }}" class="ms-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="mes" value="{{ mes }}">
+        <input type="hidden" name="ano" value="{{ ano }}">
+        <button type="submit" class="btn btn-sm btn-success"
+                onclick="return confirm('Gerar folha de {{ '%02d' % mes }}/{{ ano }} para {{ funcionarios | length }} funcionários?')">
+            <i class="bi bi-plus-lg"></i> Gerar Folha {{ '%02d' % mes }}/{{ ano }}
+        </button>
+    </form>
+    {% endif %}
+</div>
+
+{% if folhas %}
+<div class="table-responsive">
+    <table class="table table-sm table-bordered table-hover bg-white">
+        <thead>
+            <tr style="background:#2e7d32; color:#fff; font-size:10px; text-transform:uppercase; letter-spacing:0.5px;">
+                <th>Funcionário</th>
+                <th>Função</th>
+                <th class="text-end">Salário</th>
+                <th class="text-end">Confiança</th>
+                <th class="text-end">H. Extras</th>
+                <th class="text-end">Premiação</th>
+                <th class="text-center">Dias</th>
+                <th class="text-end">VT</th>
+                <th class="text-end">VR</th>
+                <th class="text-end text-danger">Descontos</th>
+                <th class="text-end fw-bold">Total</th>
+                <th style="width:40px"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set ns = namespace(total_geral=0) %}
+            {% for fl in folhas %}
+            {% set ns.total_geral = ns.total_geral + fl.total_liquido() %}
+            <tr>
+                <td class="fw-bold" style="font-size:12px;">{{ fl.funcionario.nome }}</td>
+                <td><span class="badge bg-secondary" style="font-size:9px;">{{ fl.funcionario.funcao or '-' }}</span></td>
+                <td class="text-end">{{ fl.salario_base | brl }}</td>
+                <td class="text-end">{% if fl.cargo_confianca > 0 %}{{ fl.cargo_confianca | brl }}{% else %}-{% endif %}</td>
+                <td class="text-end">{% if fl.horas_extras > 0 %}{{ fl.horas_extras | brl }}{% else %}-{% endif %}</td>
+                <td class="text-end">{% if fl.premiacao > 0 %}{{ fl.premiacao | brl }}{% else %}-{% endif %}</td>
+                <td class="text-center">{{ fl.dias_trabalhados }}</td>
+                <td class="text-end">{{ fl.total_vt() | brl }}</td>
+                <td class="text-end">{{ fl.total_vr() | brl }}</td>
+                <td class="text-end text-danger">{% if fl.descontos > 0 %}{{ fl.descontos | brl }}{% else %}-{% endif %}</td>
+                <td class="text-end fw-bold" style="background:#fff8e1;">{{ fl.total_liquido() | brl }}</td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-outline-secondary btn-edit-folha"
+                            data-id="{{ fl.id }}"
+                            data-dias="{{ fl.dias_trabalhados }}"
+                            data-extras="{{ fl.horas_extras }}"
+                            data-premiacao="{{ fl.premiacao }}"
+                            data-descontos="{{ fl.descontos }}"
+                            data-obs="{{ fl.observacao or '' }}"
+                            title="Editar">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr style="background:#f5f5f5; font-weight:bold;">
+                <td colspan="10" class="text-end">TOTAL GERAL:</td>
+                <td class="text-end" style="background:#fff8e1;">{{ ns.total_geral | brl }}</td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+<p class="text-muted small">{{ folhas | length }} funcionário{{ 's' if folhas | length != 1 }} na folha de {{ '%02d' % mes }}/{{ ano }}.</p>
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="bi bi-file-earmark-x" style="font-size:3rem;"></i>
+    <p class="mt-2">Nenhuma folha gerada para {{ '%02d' % mes }}/{{ ano }}.</p>
+    <p class="small">Clique em "Gerar Folha" para criar a folha do mês com os dados atuais dos funcionários.</p>
+</div>
+{% endif %}
+
+<!-- Modal Editar Folha -->
+<div class="modal fade" id="modalFolha" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="form-folha">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h6 class="modal-title">Editar Folha</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Dias Trabalhados</label>
+                        <input type="number" name="dias_trabalhados" id="fl-dias" class="form-control form-control-sm">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Horas Extras (R$)</label>
+                        <input type="text" name="horas_extras" id="fl-extras" class="form-control form-control-sm">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Premiação (R$)</label>
+                        <input type="text" name="premiacao" id="fl-premiacao" class="form-control form-control-sm">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Descontos (R$)</label>
+                        <input type="text" name="descontos" id="fl-descontos" class="form-control form-control-sm">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Observação</label>
+                        <input type="text" name="observacao" id="fl-obs" class="form-control form-control-sm">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.btn-edit-folha').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var id = this.dataset.id;
+        document.getElementById('form-folha').action = '/rh/folha/' + id + '/salvar';
+        document.getElementById('fl-dias').value = this.dataset.dias;
+        document.getElementById('fl-extras').value = this.dataset.extras;
+        document.getElementById('fl-premiacao').value = this.dataset.premiacao;
+        document.getElementById('fl-descontos').value = this.dataset.descontos;
+        document.getElementById('fl-obs').value = this.dataset.obs;
+        new bootstrap.Modal(document.getElementById('modalFolha')).show();
+    });
+});
+</script>
+{% endblock %}

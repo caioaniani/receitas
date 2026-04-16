@@ -75,6 +75,26 @@
            class="sidebar-link {% if request.path == '/auth/usuarios' %}active{% endif %}">
             <i class="bi bi-people"></i> Usuarios
         </a>
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">RH</div>
+
+        <a href="{{ url_for('rh.dashboard') }}"
+           class="sidebar-link {% if request.path == '/rh/' %}active{% endif %}">
+            <i class="bi bi-speedometer2"></i> Dashboard RH
+        </a>
+        <a href="{{ url_for('rh.funcionarios') }}"
+           class="sidebar-link {% if '/rh/funcionarios' in request.path %}active{% endif %}">
+            <i class="bi bi-person-badge"></i> Funcionários
+        </a>
+        <a href="{{ url_for('rh.folha') }}"
+           class="sidebar-link {% if '/rh/folha' in request.path %}active{% endif %}">
+            <i class="bi bi-file-earmark-text"></i> Folha Pagamento
+        </a>
+        <a href="{{ url_for('rh.lojas') }}"
+           class="sidebar-link {% if request.path == '/rh/lojas' %}active{% endif %}">
+            <i class="bi bi-shop-window"></i> Lojas
+        </a>
         {% elif current_user.is_authenticated %}
         <a href="{{ url_for('auth.minhas_fichas') }}"
            class="sidebar-link {% if request.path == '/auth/minhas-fichas' %}active{% endif %}">

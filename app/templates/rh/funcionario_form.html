@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar' if func else 'Novo' }} Funcionário{% endblock %}
+
+{% block content %}
+<h5 class="fw-bold mb-3">
+    <i class="bi bi-person-plus"></i>
+    {{ 'Editar Funcionário' if func else 'Novo Funcionário' }}
+</h5>
+
+<form method="POST" action="{{ url_for('rh.novo_funcionario') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label fw-bold">Nome Completo *</label>
+            <input type="text" name="nome" class="form-control" required value="{{ func.nome if func else '' }}">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold">CPF *</label>
+            <input type="text" name="cpf" class="form-control" required value="{{ func.cpf if func else '' }}"
+                   placeholder="000.000.000-00">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Função</label>
+            <input type="text" name="funcao" class="form-control" value="{{ func.funcao if func else '' }}">
+        </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Salário Base</label>
+            <input type="text" name="salario_base" class="form-control"
+                   value="{{ '%.2f' % func.salario_base if func else '' }}">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Cargo de Confiança</label>
+            <input type="text" name="cargo_confianca" class="form-control"
+                   value="{{ '%.2f' % func.cargo_confianca if func and func.cargo_confianca else '' }}">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Premiação</label>
+            <input type="text" name="premiacao" class="form-control"
+                   value="{{ '%.2f' % func.premiacao if func and func.premiacao else '' }}">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Hora Extra %</label>
+            <input type="text" name="hora_extra_pct" class="form-control"
+                   value="{{ '%.0f' % func.hora_extra_pct if func else '55' }}">
+        </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-2">
+            <label class="form-label fw-bold">VT/dia</label>
+            <input type="text" name="vt_dia" class="form-control"
+                   value="{{ '%.2f' % func.vt_dia if func and func.vt_dia else '' }}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label fw-bold">VR/dia</label>
+            <input type="text" name="vr_dia" class="form-control"
+                   value="{{ '%.2f' % func.vr_dia if func else '22.00' }}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label fw-bold">Dias Trab.</label>
+            <input type="number" name="dias_trabalhados" class="form-control"
+                   value="{{ func.dias_trabalhados if func else 26 }}">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Data Admissão</label>
+            <input type="date" name="data_admissao" class="form-control"
+                   value="{{ func.data_admissao.strftime('%Y-%m-%d') if func and func.data_admissao else '' }}">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Lojas</label>
+            {% for l in lojas %}
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="lojas[]" value="{{ l.id }}" id="loja-{{ l.id }}">
+                <label class="form-check-label small" for="loja-{{ l.id }}">{{ l.nome }}</label>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Telefone</label>
+            <input type="text" name="telefone" class="form-control" value="{{ func.telefone if func else '' }}">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Email</label>
+            <input type="email" name="email" class="form-control" value="{{ func.email if func else '' }}">
+        </div>
+        <div class="col-md-6">
+            <label class="form-label fw-bold">Observação</label>
+            <input type="text" name="observacao" class="form-control" value="{{ func.observacao if func else '' }}">
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check-lg"></i> Salvar</button>
+        <a href="{{ url_for('rh.funcionarios') }}" class="btn btn-outline-secondary btn-sm">Cancelar</a>
+    </div>
+</form>
+{% endblock %}

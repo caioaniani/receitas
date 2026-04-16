@@ -184,6 +184,124 @@ class Produto(db.Model):
         return f'<Produto {self.nome}>'
 
 
+class Loja(db.Model):
+    __tablename__ = 'loja'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(150), nullable=False, unique=True)
+    endereco = db.Column(db.String(300))
+    telefone = db.Column(db.String(30))
+    ativa = db.Column(db.Boolean, default=True)
+
+    def __repr__(self):
+        return f'<Loja {self.nome}>'
+
+
+funcionario_loja = db.Table('funcionario_loja',
+    db.Column('funcionario_id', db.Integer, db.ForeignKey('funcionario.id'), primary_key=True),
+    db.Column('loja_id', db.Integer, db.ForeignKey('loja.id'), primary_key=True),
+    db.Column('loja_principal', db.Boolean, default=False),
+)
+
+
+class Funcionario(db.Model):
+    __tablename__ = 'funcionario'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(200), nullable=False)
+    cpf = db.Column(db.String(14), unique=True, nullable=False)
+    funcao = db.Column(db.String(100))
+    salario_base = db.Column(db.Float, default=0)
+    data_admissao = db.Column(db.Date)
+    data_demissao = db.Column(db.Date)
+    ativo = db.Column(db.Boolean, default=True)
+    cargo_confianca = db.Column(db.Float, default=0)
+    hora_extra_pct = db.Column(db.Float, default=55)
+    premiacao = db.Column(db.Float, default=0)
+    vt_dia = db.Column(db.Float, default=0)
+    vr_dia = db.Column(db.Float, default=22.00)
+    dias_trabalhados = db.Column(db.Integer, default=26)
+    telefone = db.Column(db.String(30))
+    email = db.Column(db.String(150))
+    observacao = db.Column(db.Text)
+
+    lojas = db.relationship('Loja', secondary=funcionario_loja, backref='funcionarios')
+
+    def total_vt(self):
+        return self.vt_dia * self.dias_trabalhados if self.vt_dia else 0
+
+    def total_vr(self):
+        return self.vr_dia * self.dias_trabalhados if self.vr_dia else 0
+
+    def custo_total(self):
+        return (
+            self.salario_base +
+            (self.cargo_confianca or 0) +
+            (self.premiacao or 0) +
+            self.total_vt() +
+            self.total_vr()
+        )
+
+    def __repr__(self):
+        return f'<Funcionario {self.nome}>'
+
+
+class FolhaPagamento(db.Model):
+    __tablename__ = 'folha_pagamento'
+
+    id = db.Column(db.Integer, primary_key=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey('funcionario.id'), nullable=False)
+    mes = db.Column(db.Integer, nullable=False)
+    ano = db.Column(db.Integer, nullable=False)
+    salario_base = db.Column(db.Float, default=0)
+    cargo_confianca = db.Column(db.Float, default=0)
+    horas_extras = db.Column(db.Float, default=0)
+    premiacao = db.Column(db.Float, default=0)
+    vt_dia = db.Column(db.Float, default=0)
+    vr_dia = db.Column(db.Float, default=0)
+    dias_trabalhados = db.Column(db.Integer, default=26)
+    descontos = db.Column(db.Float, default=0)
+    observacao = db.Column(db.Text)
+
+    funcionario = db.relationship('Funcionario', backref='folhas')
+
+    def total_vt(self):
+        return self.vt_dia * self.dias_trabalhados
+
+    def total_vr(self):
+        return self.vr_dia * self.dias_trabalhados
+
+    def total_bruto(self):
+        return (
+            self.salario_base +
+            (self.cargo_confianca or 0) +
+            (self.horas_extras or 0) +
+            (self.premiacao or 0) +
+            self.total_vt() +
+            self.total_vr()
+        )
+
+    def total_liquido(self):
+        return self.total_bruto() - (self.descontos or 0)
+
+
+class Feedback(db.Model):
+    __tablename__ = 'feedback'
+
+    id = db.Column(db.Integer, primary_key=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey('funcionario.id'), nullable=False)
+    autor_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    data = db.Column(db.DateTime, default=datetime.utcnow)
+    tipo = db.Column(db.String(20), default='neutro')
+    texto = db.Column(db.Text, nullable=False)
+
+    funcionario = db.relationship('Funcionario', backref='feedbacks')
+    autor = db.relationship('Usuario', backref='feedbacks_dados')
+
+    def __repr__(self):
+        return f'<Feedback {self.funcionario_id} por {self.autor_id}>'
+
+
 class ProdutoItem(db.Model):
     __tablename__ = 'produto_item'
 
