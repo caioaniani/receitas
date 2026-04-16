@@ -71,6 +71,11 @@
                    value="{{ func.dias_trabalhados }}">
         </div>
         <div class="col-md-2">
+            <label class="form-label fw-bold">Nascimento</label>
+            <input type="date" name="data_nascimento" class="form-control input-blue"
+                   value="{{ func.data_nascimento.strftime('%Y-%m-%d') if func.data_nascimento else '' }}">
+        </div>
+        <div class="col-md-2">
             <label class="form-label fw-bold">Admissão</label>
             <input type="date" name="data_admissao" class="form-control input-blue"
                    value="{{ func.data_admissao.strftime('%Y-%m-%d') if func.data_admissao else '' }}">
@@ -80,11 +85,11 @@
             <input type="date" name="data_demissao" class="form-control input-blue"
                    value="{{ func.data_demissao.strftime('%Y-%m-%d') if func.data_demissao else '' }}">
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <label class="form-label fw-bold">Telefone</label>
             <input type="text" name="telefone" class="form-control input-blue" value="{{ func.telefone or '' }}">
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <label class="form-label fw-bold">Email</label>
             <input type="email" name="email" class="form-control input-blue" value="{{ func.email or '' }}">
         </div>

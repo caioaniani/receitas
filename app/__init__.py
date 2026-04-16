@@ -201,6 +201,7 @@ def _migrate_postgres(app):
                 'funcao_operacional': 'ALTER TABLE funcionario ADD COLUMN funcao_operacional VARCHAR(100)',
                 'periodo': 'ALTER TABLE funcionario ADD COLUMN periodo VARCHAR(20)',
                 'cadastro_pendente': 'ALTER TABLE funcionario ADD COLUMN cadastro_pendente BOOLEAN DEFAULT FALSE',
+                'data_nascimento': 'ALTER TABLE funcionario ADD COLUMN data_nascimento DATE',
             }
             for col, sql in migrações_func.items():
                 if col not in cols_func:
@@ -261,6 +262,8 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE funcionario ADD COLUMN periodo VARCHAR(20)")
     if cols_func and 'cadastro_pendente' not in cols_func:
         cursor.execute("ALTER TABLE funcionario ADD COLUMN cadastro_pendente BOOLEAN DEFAULT 0")
+    if cols_func and 'data_nascimento' not in cols_func:
+        cursor.execute("ALTER TABLE funcionario ADD COLUMN data_nascimento DATE")
 
     conn.commit()
     conn.close()

@@ -1,12 +1,12 @@
 from datetime import datetime
 
-from flask import render_template, redirect, url_for, flash, request
+from flask import render_template, redirect, url_for, flash, request, Response, abort
 from flask_login import login_required, current_user
 
 from app.blueprints.rh import rh_bp
 from app.decorators import admin_required
 from app.extensions import db
-from app.models import Funcionario, Loja, FolhaPagamento, Feedback, Posicao, funcionario_loja
+from app.models import Funcionario, Loja, FolhaPagamento, Feedback, Posicao, Atestado, funcionario_loja
 from app.utils import parse_float_br
 
 
@@ -32,8 +32,18 @@ def dashboard():
     hoje = datetime.now()
     aniversariantes = [
         f for f in funcionarios
+        if f.data_nascimento and f.data_nascimento.month == hoje.month
+    ]
+    aniversarios_casa = [
+        f for f in funcionarios
         if f.data_admissao and f.data_admissao.month == hoje.month
     ]
+
+    atestados_recentes = (
+        Atestado.query
+        .order_by(Atestado.data.desc(), Atestado.criado_em.desc())
+        .limit(10).all()
+    )
 
     return render_template('rh/dashboard.html',
                            total_funcionarios=total_funcionarios,
@@ -41,6 +51,9 @@ def dashboard():
                            total_custo=total_custo,
                            custo_por_loja=custo_por_loja,
                            aniversariantes=aniversariantes,
+                           aniversarios_casa=aniversarios_casa,
+                           atestados_recentes=atestados_recentes,
+                           funcionarios_ativos=sorted(funcionarios, key=lambda f: f.nome),
                            lojas=lojas)
 
 
@@ -91,6 +104,13 @@ def novo_funcionario():
         if data_str:
             try:
                 func.data_admissao = datetime.strptime(data_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        nasc_str = request.form.get('data_nascimento', '').strip()
+        if nasc_str:
+            try:
+                func.data_nascimento = datetime.strptime(nasc_str, '%Y-%m-%d').date()
             except ValueError:
                 pass
 
@@ -160,6 +180,15 @@ def salvar_funcionario(id):
             pass
     else:
         func.data_demissao = None
+
+    nasc_str = request.form.get('data_nascimento', '').strip()
+    if nasc_str:
+        try:
+            func.data_nascimento = datetime.strptime(nasc_str, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    else:
+        func.data_nascimento = None
 
     func.lojas.clear()
     loja_ids = request.form.getlist('lojas[]')
@@ -424,3 +453,114 @@ def excluir_posicao(pos_id):
     db.session.commit()
     flash('Posição removida.', 'success')
     return redirect(url_for('rh.escala'))
+
+
+@rh_bp.route('/folha/<int:folha_id>/excluir', methods=['POST'])
+@login_required
+@admin_required
+def excluir_folha_item(folha_id):
+    f = FolhaPagamento.query.get_or_404(folha_id)
+    mes, ano = f.mes, f.ano
+    nome = f.funcionario.nome
+    db.session.delete(f)
+    db.session.commit()
+    flash(f'Folha de {nome} ({mes:02d}/{ano}) removida.', 'success')
+    return redirect(url_for('rh.folha', mes=mes, ano=ano))
+
+
+@rh_bp.route('/folha/excluir-mes', methods=['POST'])
+@login_required
+@admin_required
+def excluir_folha_mes():
+    mes = int(request.form.get('mes', 0))
+    ano = int(request.form.get('ano', 0))
+    qtd = FolhaPagamento.query.filter_by(mes=mes, ano=ano).delete()
+    db.session.commit()
+    flash(f'Folha de {mes:02d}/{ano} excluída ({qtd} registros).', 'success')
+    return redirect(url_for('rh.folha', mes=mes, ano=ano))
+
+
+@rh_bp.route('/atestado/novo', methods=['POST'])
+@login_required
+@admin_required
+def novo_atestado():
+    func_id = request.form.get('funcionario_id', '').strip()
+    data_str = request.form.get('data', '').strip()
+    motivo = request.form.get('motivo', '').strip()
+    arquivo = request.files.get('arquivo')
+
+    if not func_id or not data_str:
+        flash('Funcionário e data são obrigatórios.', 'warning')
+        return redirect(url_for('rh.dashboard'))
+
+    try:
+        data = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        flash('Data inválida.', 'warning')
+        return redirect(url_for('rh.dashboard'))
+
+    atestado = Atestado(
+        funcionario_id=int(func_id),
+        data=data,
+        motivo=motivo or None,
+        criado_por=current_user.id,
+    )
+
+    if arquivo and arquivo.filename:
+        atestado.arquivo = arquivo.read()
+        atestado.arquivo_nome = arquivo.filename
+        atestado.arquivo_mimetype = arquivo.mimetype or 'application/octet-stream'
+
+    db.session.add(atestado)
+    db.session.commit()
+    flash('Atestado registrado!', 'success')
+    return redirect(url_for('rh.dashboard'))
+
+
+@rh_bp.route('/atestado/<int:id>/arquivo')
+@login_required
+@admin_required
+def ver_atestado(id):
+    at = Atestado.query.get_or_404(id)
+    if not at.arquivo:
+        abort(404)
+    return Response(
+        at.arquivo,
+        mimetype=at.arquivo_mimetype or 'application/octet-stream',
+        headers={'Content-Disposition': f'inline; filename="{at.arquivo_nome or "atestado"}"'}
+    )
+
+
+@rh_bp.route('/atestado/<int:id>/excluir', methods=['POST'])
+@login_required
+@admin_required
+def excluir_atestado(id):
+    at = Atestado.query.get_or_404(id)
+    db.session.delete(at)
+    db.session.commit()
+    flash('Atestado removido.', 'success')
+    return redirect(url_for('rh.dashboard'))
+
+
+@rh_bp.route('/feedback/novo', methods=['POST'])
+@login_required
+@admin_required
+def novo_feedback_dashboard():
+    func_id = request.form.get('funcionario_id', '').strip()
+    texto = request.form.get('texto', '').strip()
+    tipo = request.form.get('tipo', 'neutro')
+
+    if not func_id or not texto:
+        flash('Funcionário e texto do feedback são obrigatórios.', 'warning')
+        return redirect(url_for('rh.dashboard'))
+
+    fb = Feedback(
+        funcionario_id=int(func_id),
+        autor_id=current_user.id,
+        tipo=tipo,
+        texto=texto,
+    )
+    db.session.add(fb)
+    db.session.commit()
+    flash('Feedback registrado!', 'success')
+    return redirect(url_for('rh.dashboard'))

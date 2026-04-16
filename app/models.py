@@ -227,6 +227,7 @@ class Funcionario(db.Model):
     funcao_operacional = db.Column(db.String(100))
     periodo = db.Column(db.String(20))
     cadastro_pendente = db.Column(db.Boolean, default=False)
+    data_nascimento = db.Column(db.Date)
 
     lojas = db.relationship('Loja', secondary=funcionario_loja, backref='funcionarios')
 
@@ -322,6 +323,26 @@ class Feedback(db.Model):
 
     def __repr__(self):
         return f'<Feedback {self.funcionario_id} por {self.autor_id}>'
+
+
+class Atestado(db.Model):
+    __tablename__ = 'atestado'
+
+    id = db.Column(db.Integer, primary_key=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey('funcionario.id'), nullable=False)
+    data = db.Column(db.Date, nullable=False)
+    motivo = db.Column(db.String(300))
+    arquivo = db.Column(db.LargeBinary)
+    arquivo_nome = db.Column(db.String(255))
+    arquivo_mimetype = db.Column(db.String(100))
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    funcionario = db.relationship('Funcionario', backref='atestados')
+    autor = db.relationship('Usuario', backref='atestados_criados')
+
+    def __repr__(self):
+        return f'<Atestado {self.funcionario_id} em {self.data}>'
 
 
 class ProdutoItem(db.Model):

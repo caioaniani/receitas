@@ -67,6 +67,11 @@
                    value="{{ func.dias_trabalhados if func else 26 }}">
         </div>
         <div class="col-md-3">
+            <label class="form-label fw-bold">Data Nascimento</label>
+            <input type="date" name="data_nascimento" class="form-control"
+                   value="{{ func.data_nascimento.strftime('%Y-%m-%d') if func and func.data_nascimento else '' }}">
+        </div>
+        <div class="col-md-3">
             <label class="form-label fw-bold">Data Admissão</label>
             <input type="date" name="data_admissao" class="form-control"
                    value="{{ func.data_admissao.strftime('%Y-%m-%d') if func and func.data_admissao else '' }}">
