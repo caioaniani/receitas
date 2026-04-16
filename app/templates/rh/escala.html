@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Escala Operacional{% endblock %}
+
+{% block content %}
+<h5 class="fw-bold mb-3"><i class="bi bi-diagram-3"></i> Escala Operacional</h5>
+
+<!-- Alertas: funcionários sem loja ou cadastro pendente -->
+{% if sem_loja or pendentes %}
+<div class="alert alert-warning mb-3">
+    <h6 class="fw-bold mb-2"><i class="bi bi-exclamation-triangle"></i> Pendências</h6>
+    {% if sem_loja %}
+    <div class="mb-2">
+        <strong>Sem loja atribuída ({{ sem_loja | length }}):</strong>
+        {% for f in sem_loja %}
+        <a href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}" class="badge bg-warning text-dark me-1" style="font-size:10px;">
+            {{ f.nome }}
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% if pendentes %}
+    <div>
+        <strong>Cadastro pendente ({{ pendentes | length }}):</strong>
+        {% for f in pendentes %}
+        <a href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}" class="badge bg-danger me-1" style="font-size:10px;">
+            {{ f.nome }}
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Grid de escala por loja -->
+{% for loja_nome, periodos in grid.items() %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-header fw-bold" style="background:#1565c0; color:#fff;">
+        <i class="bi bi-shop"></i> {{ loja_nome }}
+    </div>
+    <div class="card-body p-0">
+        <div class="row g-0">
+            {% for periodo in ['Manhã', 'Tarde'] %}
+            <div class="col-md-6 {% if periodo == 'Manhã' %}border-end{% endif %}">
+                <div class="p-2 fw-bold" style="background:{% if periodo == 'Manhã' %}#fff3e0{% else %}#e8eaf6{% endif %}; font-size:12px;">
+                    <i class="bi bi-{% if periodo == 'Manhã' %}sun{% else %}moon{% endif %}"></i> {{ periodo }}
+                </div>
+                <table class="table table-sm mb-0" style="font-size:12px;">
+                    <tbody>
+                        {% for pos in periodos[periodo] %}
+                        <tr>
+                            <td style="width:40%; font-weight:600;">{{ pos.nome_posicao }}</td>
+                            <td>
+                                {% if pos.funcionario %}
+                                <a href="{{ url_for('rh.detalhe_funcionario', id=pos.funcionario.id) }}" class="text-decoration-none">
+                                    {{ pos.funcionario.nome }}
+                                </a>
+                                {% if pos.status == 'girando_folga' %}
+                                <span class="badge bg-warning text-dark" style="font-size:8px;">Girando Folga</span>
+                                {% elif pos.status == 'aviso_previo' %}
+                                <span class="badge bg-danger" style="font-size:8px;">Aviso Prévio</span>
+                                {% elif pos.status == 'afastado' %}
+                                <span class="badge bg-secondary" style="font-size:8px;">Afastado</span>
+                                {% endif %}
+                                {% if pos.observacao %}
+                                <i class="bi bi-info-circle text-muted" title="{{ pos.observacao }}"></i>
+                                {% endif %}
+                                {% else %}
+                                <span class="text-danger fw-bold">VAGO</span>
+                                {% endif %}
+                            </td>
+                            <td style="width:40px;" class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-secondary btn-edit-pos"
+                                        data-id="{{ pos.id }}"
+                                        data-nome="{{ pos.nome_posicao }}"
+                                        data-loja="{{ loja_nome }}"
+                                        data-periodo="{{ periodo }}"
+                                        data-func="{{ pos.funcionario_id or '' }}"
+                                        data-status="{{ pos.status }}"
+                                        data-obs="{{ pos.observacao or '' }}"
+                                        title="Editar">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% if not periodos[periodo] %}
+                        <tr><td colspan="3" class="text-muted text-center py-2">Sem posições cadastradas</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Adicionar nova posição -->
+<div class="card mt-3">
+    <div class="card-body">
+        <h6 class="fw-bold mb-2"><i class="bi bi-plus-lg"></i> Nova Posição</h6>
+        <form method="POST" action="{{ url_for('rh.nova_posicao') }}" class="row g-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-md-3">
+                <select name="loja_id" class="form-select form-select-sm" required>
+                    <option value="">Loja...</option>
+                    {% for l in lojas %}
+                    <option value="{{ l.id }}">{{ l.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="periodo" class="form-select form-select-sm">
+                    <option value="Manhã">Manhã</option>
+                    <option value="Tarde">Tarde</option>
+                </select>
+            </div>
+            <div class="col-md-5">
+                <input type="text" name="nome_posicao" class="form-control form-control-sm"
+                       placeholder="Nome da posição (ex: Caixa 3)" required>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-outline-primary btn-sm w-100">Adicionar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Editar Posição -->
+<div class="modal fade" id="modalPos" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="form-pos">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h6 class="modal-title">Atribuir Posição</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2 small text-muted">
+                        <strong id="pos-label"></strong>
+                    </p>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Funcionário</label>
+                        <select name="funcionario_id" id="pos-func" class="form-select form-select-sm">
+                            <option value="">— Vago —</option>
+                            {% for f in todos_func %}
+                            <option value="{{ f.id }}">{{ f.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Status</label>
+                        <select name="status" id="pos-status" class="form-select form-select-sm">
+                            <option value="ativo">Ativo</option>
+                            <option value="girando_folga">Girando Folga</option>
+                            <option value="aviso_previo">Aviso Prévio</option>
+                            <option value="afastado">Afastado</option>
+                            <option value="vago">Vago</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Observação</label>
+                        <input type="text" name="observacao" id="pos-obs" class="form-control form-control-sm">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-danger btn-sm me-auto" id="btn-del-pos">
+                        <i class="bi bi-trash"></i> Excluir Posição
+                    </button>
+                    <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.btn-edit-pos').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var id = this.dataset.id;
+        document.getElementById('form-pos').action = '/rh/escala/' + id + '/atribuir';
+        document.getElementById('pos-label').textContent =
+            this.dataset.loja + ' — ' + this.dataset.periodo + ' — ' + this.dataset.nome;
+        document.getElementById('pos-func').value = this.dataset.func;
+        document.getElementById('pos-status').value = this.dataset.status;
+        document.getElementById('pos-obs').value = this.dataset.obs;
+
+        document.getElementById('btn-del-pos').onclick = function() {
+            if (confirm('Excluir a posição ' + btn.dataset.nome + '?')) {
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/rh/escala/posicao/' + id + '/excluir';
+                form.innerHTML = '<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">';
+                document.body.appendChild(form);
+                form.submit();
+            }
+        };
+
+        new bootstrap.Modal(document.getElementById('modalPos')).show();
+    });
+});
+</script>
+{% endblock %}

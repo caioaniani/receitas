@@ -6,7 +6,7 @@ from flask_login import login_required, current_user
 from app.blueprints.rh import rh_bp
 from app.decorators import admin_required
 from app.extensions import db
-from app.models import Funcionario, Loja, FolhaPagamento, Feedback, funcionario_loja
+from app.models import Funcionario, Loja, FolhaPagamento, Feedback, Posicao, funcionario_loja
 from app.utils import parse_float_br
 
 
@@ -326,3 +326,101 @@ def salvar_folha_item(folha_id):
     db.session.commit()
     flash('Folha atualizada!', 'success')
     return redirect(url_for('rh.folha', mes=f.mes, ano=f.ano))
+
+
+@rh_bp.route('/escala')
+@login_required
+@admin_required
+def escala():
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    posicoes = Posicao.query.order_by(Posicao.loja_id, Posicao.periodo, Posicao.ordem).all()
+
+    # Agrupar: {loja_nome: {periodo: [posicoes]}}
+    grid = {}
+    for pos in posicoes:
+        lnome = pos.loja.nome
+        if lnome not in grid:
+            grid[lnome] = {'Manhã': [], 'Tarde': []}
+        grid[lnome][pos.periodo].append(pos)
+
+    # Funcionários sem loja (precisam alocação)
+    sem_loja = Funcionario.query.filter(
+        Funcionario.ativo == True,
+        ~Funcionario.lojas.any()
+    ).order_by(Funcionario.nome).all()
+
+    pendentes = Funcionario.query.filter_by(
+        ativo=True, cadastro_pendente=True
+    ).order_by(Funcionario.nome).all()
+
+    # Lista de todos os funcionários ativos para atribuir
+    todos_func = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
+
+    return render_template('rh/escala.html',
+                           grid=grid,
+                           lojas=lojas,
+                           sem_loja=sem_loja,
+                           pendentes=pendentes,
+                           todos_func=todos_func)
+
+
+@rh_bp.route('/escala/<int:pos_id>/atribuir', methods=['POST'])
+@login_required
+@admin_required
+def atribuir_posicao(pos_id):
+    pos = Posicao.query.get_or_404(pos_id)
+    func_id = request.form.get('funcionario_id', '').strip()
+    status = request.form.get('status', 'ativo')
+    obs = request.form.get('observacao', '').strip()
+
+    if func_id:
+        pos.funcionario_id = int(func_id)
+    else:
+        pos.funcionario_id = None
+        status = 'vago'
+
+    pos.status = status
+    pos.observacao = obs or None
+    db.session.commit()
+    flash(f'Posição "{pos.nome_posicao}" atualizada!', 'success')
+    return redirect(url_for('rh.escala'))
+
+
+@rh_bp.route('/escala/posicao/nova', methods=['POST'])
+@login_required
+@admin_required
+def nova_posicao():
+    loja_id = int(request.form.get('loja_id'))
+    periodo = request.form.get('periodo', 'Manhã')
+    nome_pos = request.form.get('nome_posicao', '').strip()
+
+    if not nome_pos:
+        flash('Nome da posição é obrigatório.', 'warning')
+        return redirect(url_for('rh.escala'))
+
+    max_ordem = db.session.query(db.func.max(Posicao.ordem)).filter_by(
+        loja_id=loja_id, periodo=periodo
+    ).scalar() or 0
+
+    pos = Posicao(
+        loja_id=loja_id,
+        periodo=periodo,
+        nome_posicao=nome_pos,
+        ordem=max_ordem + 1,
+        status='vago',
+    )
+    db.session.add(pos)
+    db.session.commit()
+    flash(f'Posição "{nome_pos}" criada!', 'success')
+    return redirect(url_for('rh.escala'))
+
+
+@rh_bp.route('/escala/posicao/<int:pos_id>/excluir', methods=['POST'])
+@login_required
+@admin_required
+def excluir_posicao(pos_id):
+    pos = Posicao.query.get_or_404(pos_id)
+    db.session.delete(pos)
+    db.session.commit()
+    flash('Posição removida.', 'success')
+    return redirect(url_for('rh.escala'))

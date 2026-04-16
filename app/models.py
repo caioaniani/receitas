@@ -224,6 +224,9 @@ class Funcionario(db.Model):
     telefone = db.Column(db.String(30))
     email = db.Column(db.String(150))
     observacao = db.Column(db.Text)
+    funcao_operacional = db.Column(db.String(100))
+    periodo = db.Column(db.String(20))
+    cadastro_pendente = db.Column(db.Boolean, default=False)
 
     lojas = db.relationship('Loja', secondary=funcionario_loja, backref='funcionarios')
 
@@ -283,6 +286,25 @@ class FolhaPagamento(db.Model):
 
     def total_liquido(self):
         return self.total_bruto() - (self.descontos or 0)
+
+
+class Posicao(db.Model):
+    __tablename__ = 'posicao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
+    periodo = db.Column(db.String(20), nullable=False)
+    nome_posicao = db.Column(db.String(100), nullable=False)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey('funcionario.id'), nullable=True)
+    status = db.Column(db.String(30), default='ativo')
+    observacao = db.Column(db.String(300))
+    ordem = db.Column(db.Integer, default=0)
+
+    loja = db.relationship('Loja', backref='posicoes')
+    funcionario = db.relationship('Funcionario', backref='posicoes')
+
+    def __repr__(self):
+        return f'<Posicao {self.nome_posicao} @ {self.loja_id}>'
 
 
 class Feedback(db.Model):

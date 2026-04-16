@@ -1,7 +1,7 @@
 from datetime import date
 
 from app.extensions import db
-from app.models import MateriaPrima, Receita, ReceitaIngrediente, Produto, ProdutoItem, Loja, Funcionario
+from app.models import MateriaPrima, Receita, ReceitaIngrediente, Produto, ProdutoItem, Loja, Funcionario, Posicao
 
 
 def seed_database():
@@ -1008,5 +1008,274 @@ def seed_rh():
         )
         func.lojas.append(loja_industria)
         db.session.add(func)
+
+    db.session.commit()
+
+
+def seed_rh_escala():
+    """Atribui lojas corretas, função operacional, período e posições de escala.
+    Idempotente: só roda se não houver posições cadastradas.
+    """
+    if Posicao.query.first():
+        return
+
+    loja_ribeiro = Loja.query.filter_by(nome='Loja Ribeiro do Vale').first()
+    loja_anesio = Loja.query.filter_by(nome='Loja Anesio Pinto Rosa').first()
+    loja_nebraska = Loja.query.filter_by(nome='Loja Nebraska').first()
+    loja_industria = Loja.query.filter_by(nome='Industria').first()
+
+    if not all([loja_ribeiro, loja_anesio, loja_nebraska, loja_industria]):
+        return
+
+    # Mapeamento: nome_funcionario → (loja, funcao_operacional, periodo, observacao)
+    atribuicoes = {
+        # ── Loja Ribeiro do Vale — Manhã ──
+        'ISABELA FONTES ARAUJO': (loja_ribeiro, 'Caixa 1', 'Manhã', ''),
+        'THIERRY KAUE FERREIRA DE JESUS BARROS': (loja_ribeiro, 'Caixa 2', 'Manhã', ''),
+        'LIDIANE DOS SANTOS PILOTO': (loja_ribeiro, 'Café', 'Manhã', ''),
+        'LUAN COSTA DE ARAUJO': (loja_ribeiro, 'Chapa 2', 'Manhã', ''),
+        'DAKSON ALEXANDRE MORATO SOARES DE LIMA': (loja_ribeiro, 'Finalização', 'Manhã', ''),
+        'KETLIN BRAGA DA ANUNCIACAO': (loja_ribeiro, 'Mesa 1', 'Manhã', ''),
+        'MICAELA RODRIGUES MARINHO DOS SANTOS': (loja_ribeiro, 'Mesa 2', 'Manhã', ''),
+        'JOAO PEDRO FERNANDES DA SILVA': (loja_ribeiro, 'Suco 1', 'Manhã', 'Iniciou 09/03. Também faz Finalização Tarde em Loja Nebraska'),
+        'QUEREM RAPUQUE DE OLIVEIRA GONCALVES': (loja_ribeiro, 'Suco 2', 'Manhã', ''),
+        'SABRINA MELO BARAUNA': (loja_ribeiro, 'Viajem', 'Manhã', 'Atendente Chefe'),
+        # ── Loja Ribeiro do Vale — Tarde ──
+        'LARISSA SANTOS DA SILVA': (loja_ribeiro, 'Finalização', 'Tarde', 'Atendente Chefe'),
+        'THIAGO BATISTA DA SILVA': (loja_ribeiro, 'Chapa', 'Tarde', 'Girando folga do João Pedro (Nebraska)'),
+        'KAWANNY DAS NERES FERREIRA': (loja_ribeiro, 'Mesa', 'Tarde', ''),
+        'DAIANE CARLA OLIVEIRA DE SOUZA': (loja_ribeiro, 'Cozinha', 'Tarde', ''),
+        'KELVIN ROCHA ARAUJO': (loja_ribeiro, 'Viajem', 'Tarde', 'Atendente Chefe - Girando folgas'),
+        # ── Loja Anesio Pinto Rosa — Manhã ──
+        'AMANDA SILVA DE OLIVEIRA': (loja_anesio, 'Caixa', 'Manhã', ''),
+        'SIMONE CORDEIRO ALVES': (loja_anesio, 'Finalização', 'Manhã', 'Atendente Chefe'),
+        'MATHEUS DOS SANTOS ARAUJO': (loja_anesio, 'Chapa', 'Manhã', ''),
+        'BRUNA KELLY ROSENO DE SOUZA': (loja_anesio, 'Café', 'Manhã', ''),
+        'SIMONE FERNANDES': (loja_anesio, 'Suco', 'Manhã', ''),
+        'DEIVID FAGUNDES DOS SANTOS': (loja_anesio, 'Mesa', 'Manhã', ''),
+        # ── Loja Anesio Pinto Rosa — Tarde ──
+        'WILDINA DE SOUZA OLIVEIRA': (loja_anesio, 'Finalização', 'Tarde', ''),
+        'AMANDA DE SOUZA MIGUEL': (loja_anesio, 'Café', 'Tarde', ''),
+        # ── Loja Nebraska — Manhã ──
+        'LUCAS DOS SANTOS': (loja_nebraska, 'Caixa 1', 'Manhã', ''),
+        'ALESSANDRA MARIA DA SILVA MARIANO': (loja_nebraska, 'Café', 'Manhã', 'Em aviso prévio'),
+        'BRUNO CALIXTO FILETO DE SOUZA': (loja_nebraska, 'Chapa 1', 'Manhã', ''),
+        'RAFAEL JONATAS MORATO DOS SANTOS': (loja_nebraska, 'Finalização', 'Manhã', ''),
+        # ── Loja Nebraska — Tarde ──
+        'MARINA SANTOS SILVA': (loja_nebraska, 'Suco', 'Tarde', ''),
+        # ── Industria — Manhã ──
+        'VILSON SILVA SANTANA': (loja_industria, 'Padeiro', 'Manhã', ''),
+        'DAVI JONATAS MORATO DOS SANTOS': (loja_industria, 'Padeiro', 'Manhã', ''),
+        'KAIO FERREIRA DOS REIS': (loja_industria, 'Ajudante de Padeiro', 'Manhã', ''),
+        'CAMILA ALVES DA SILVA': (loja_industria, 'Auxiliar de Produção', 'Manhã', ''),
+        # ── Industria — Tarde ──
+        'MARILZA APARECIDA FRAGA': (loja_industria, 'Auxiliar de Produção', 'Tarde', ''),
+    }
+
+    # Aplicar atribuições
+    for nome, (loja, fo, periodo, obs_extra) in atribuicoes.items():
+        func = Funcionario.query.filter_by(nome=nome).first()
+        if not func:
+            continue
+        func.lojas.clear()
+        func.lojas.append(loja)
+        func.funcao_operacional = fo
+        func.periodo = periodo
+        if obs_extra:
+            existing = func.observacao or ''
+            func.observacao = (existing + ' | ' + obs_extra).strip(' |') if existing else obs_extra
+
+    # João Pedro também trabalha tarde em Nebraska (adicionar 2ª loja)
+    joao = Funcionario.query.filter_by(nome='JOAO PEDRO FERNANDES DA SILVA').first()
+    if joao and loja_nebraska not in joao.lojas:
+        joao.lojas.append(loja_nebraska)
+
+    # Funcionários sem função operacional identificada — marcar cadastro_pendente
+    # para aparecerem na lista "precisa alocação"
+    sem_alocacao = [
+        'CARMEM KARINI LEITE',           # Aux Administrativo
+        'JOSE FRANCISCO MARQUES',         # Aux Limpeza
+        'JULIA DE SOUZA MIGUEL',          # Atendente sem escala
+        'MARCIA DE SOUZA GONCALVES',      # Aux RH
+        'MARIA ALANE SOARES DE LIMA',     # Gerente Geral
+        'WILLIAM DE MOURA',               # Motorista
+        'HELIO BRANDAO SANTOS',           # Motoboy
+        'JIMMY RIBEIRO CASTRO',           # Atendente sem escala
+        'NAYARA JAMILE SANTOS',           # Atendente sem escala
+        'VITORIA THALITA DE JESUS',       # Atendente sem escala
+    ]
+    for nome in sem_alocacao:
+        func = Funcionario.query.filter_by(nome=nome).first()
+        if func:
+            # Remove de todas as lojas e marca como pendente de alocação
+            func.lojas.clear()
+            func.cadastro_pendente = True
+            if not func.observacao:
+                func.observacao = 'PENDENTE: definir loja e função operacional'
+
+    # Cadastrar Ariane (cadastro pendente)
+    if not Funcionario.query.filter_by(nome='ARIANE').first():
+        ariane = Funcionario(
+            nome='ARIANE',
+            cpf='PENDENTE-ARIANE',
+            funcao='ATENDENTE',
+            funcao_operacional='Café',
+            periodo='Tarde',
+            salario_base=0,
+            vt_dia=0,
+            vr_dia=22.00,
+            dias_trabalhados=26,
+            cadastro_pendente=True,
+            observacao='CADASTRO PENDENTE: completar CPF, salário, admissão e dados pessoais',
+        )
+        ariane.lojas.append(loja_ribeiro)
+        db.session.add(ariane)
+
+    db.session.flush()
+
+    # Criar posições padrão de escala (uma linha por slot)
+    posicoes_padrao = [
+        # Loja Ribeiro do Vale — Manhã
+        (loja_ribeiro, 'Manhã', 'Caixa 1', 1),
+        (loja_ribeiro, 'Manhã', 'Caixa 2', 2),
+        (loja_ribeiro, 'Manhã', 'Café', 3),
+        (loja_ribeiro, 'Manhã', 'Chapa 1', 4),
+        (loja_ribeiro, 'Manhã', 'Chapa 2', 5),
+        (loja_ribeiro, 'Manhã', 'Finalização', 6),
+        (loja_ribeiro, 'Manhã', 'Mesa 1', 7),
+        (loja_ribeiro, 'Manhã', 'Mesa 2', 8),
+        (loja_ribeiro, 'Manhã', 'Suco 1', 9),
+        (loja_ribeiro, 'Manhã', 'Suco 2', 10),
+        (loja_ribeiro, 'Manhã', 'Suco 3', 11),
+        (loja_ribeiro, 'Manhã', 'Viajem', 12),
+        # Loja Ribeiro do Vale — Tarde
+        (loja_ribeiro, 'Tarde', 'Caixa', 1),
+        (loja_ribeiro, 'Tarde', 'Finalização', 2),
+        (loja_ribeiro, 'Tarde', 'Chapa', 3),
+        (loja_ribeiro, 'Tarde', 'Café', 4),
+        (loja_ribeiro, 'Tarde', 'Suco', 5),
+        (loja_ribeiro, 'Tarde', 'Mesa', 6),
+        (loja_ribeiro, 'Tarde', 'Cozinha', 7),
+        (loja_ribeiro, 'Tarde', 'Viajem', 8),
+        # Loja Anesio Pinto Rosa — Manhã
+        (loja_anesio, 'Manhã', 'Caixa', 1),
+        (loja_anesio, 'Manhã', 'Finalização', 2),
+        (loja_anesio, 'Manhã', 'Chapa', 3),
+        (loja_anesio, 'Manhã', 'Café', 4),
+        (loja_anesio, 'Manhã', 'Suco', 5),
+        (loja_anesio, 'Manhã', 'Mesa', 6),
+        # Loja Anesio Pinto Rosa — Tarde
+        (loja_anesio, 'Tarde', 'Caixa', 1),
+        (loja_anesio, 'Tarde', 'Finalização', 2),
+        (loja_anesio, 'Tarde', 'Chapa', 3),
+        (loja_anesio, 'Tarde', 'Café', 4),
+        (loja_anesio, 'Tarde', 'Suco', 5),
+        (loja_anesio, 'Tarde', 'Mesa', 6),
+        # Loja Nebraska — Manhã
+        (loja_nebraska, 'Manhã', 'Caixa 1', 1),
+        (loja_nebraska, 'Manhã', 'Caixa 2', 2),
+        (loja_nebraska, 'Manhã', 'Café', 3),
+        (loja_nebraska, 'Manhã', 'Chapa 1', 4),
+        (loja_nebraska, 'Manhã', 'Chapa 2', 5),
+        (loja_nebraska, 'Manhã', 'Finalização', 6),
+        (loja_nebraska, 'Manhã', 'Mesa 1', 7),
+        (loja_nebraska, 'Manhã', 'Mesa 2', 8),
+        (loja_nebraska, 'Manhã', 'Suco 1', 9),
+        (loja_nebraska, 'Manhã', 'Suco 2', 10),
+        (loja_nebraska, 'Manhã', 'Suco 3', 11),
+        (loja_nebraska, 'Manhã', 'Viajem', 12),
+        # Loja Nebraska — Tarde
+        (loja_nebraska, 'Tarde', 'Caixa', 1),
+        (loja_nebraska, 'Tarde', 'Finalização', 2),
+        (loja_nebraska, 'Tarde', 'Chapa', 3),
+        (loja_nebraska, 'Tarde', 'Café', 4),
+        (loja_nebraska, 'Tarde', 'Suco', 5),
+        (loja_nebraska, 'Tarde', 'Mesa', 6),
+        (loja_nebraska, 'Tarde', 'Viajem', 7),
+        # Industria — Manhã
+        (loja_industria, 'Manhã', 'Padeiro 1', 1),
+        (loja_industria, 'Manhã', 'Padeiro 2', 2),
+        (loja_industria, 'Manhã', 'Ajudante de Padeiro', 3),
+        (loja_industria, 'Manhã', 'Auxiliar de Produção', 4),
+        # Industria — Tarde
+        (loja_industria, 'Tarde', 'Auxiliar de Produção', 1),
+    ]
+
+    posicoes_criadas = {}
+    for loja, periodo, nome_pos, ordem in posicoes_padrao:
+        pos = Posicao(
+            loja_id=loja.id,
+            periodo=periodo,
+            nome_posicao=nome_pos,
+            ordem=ordem,
+            status='vago',
+        )
+        db.session.add(pos)
+        posicoes_criadas[(loja.id, periodo, nome_pos)] = pos
+
+    db.session.flush()
+
+    # Associar funcionários às posições
+    def find_pos(loja, periodo, nome):
+        return posicoes_criadas.get((loja.id, periodo, nome))
+
+    # Loja Ribeiro do Vale - Manhã
+    atribuicoes_pos = [
+        ('ISABELA FONTES ARAUJO', loja_ribeiro, 'Manhã', 'Caixa 1', 'ativo'),
+        ('THIERRY KAUE FERREIRA DE JESUS BARROS', loja_ribeiro, 'Manhã', 'Caixa 2', 'ativo'),
+        ('LIDIANE DOS SANTOS PILOTO', loja_ribeiro, 'Manhã', 'Café', 'ativo'),
+        ('LUAN COSTA DE ARAUJO', loja_ribeiro, 'Manhã', 'Chapa 2', 'ativo'),
+        ('DAKSON ALEXANDRE MORATO SOARES DE LIMA', loja_ribeiro, 'Manhã', 'Finalização', 'ativo'),
+        ('KETLIN BRAGA DA ANUNCIACAO', loja_ribeiro, 'Manhã', 'Mesa 1', 'ativo'),
+        ('MICAELA RODRIGUES MARINHO DOS SANTOS', loja_ribeiro, 'Manhã', 'Mesa 2', 'ativo'),
+        ('JOAO PEDRO FERNANDES DA SILVA', loja_ribeiro, 'Manhã', 'Suco 1', 'ativo'),
+        ('QUEREM RAPUQUE DE OLIVEIRA GONCALVES', loja_ribeiro, 'Manhã', 'Suco 2', 'ativo'),
+        ('SABRINA MELO BARAUNA', loja_ribeiro, 'Manhã', 'Viajem', 'ativo'),
+        # Loja Ribeiro do Vale - Tarde
+        ('LARISSA SANTOS DA SILVA', loja_ribeiro, 'Tarde', 'Finalização', 'ativo'),
+        ('THIAGO BATISTA DA SILVA', loja_ribeiro, 'Tarde', 'Chapa', 'girando_folga'),
+        ('KAWANNY DAS NERES FERREIRA', loja_ribeiro, 'Tarde', 'Mesa', 'ativo'),
+        ('DAIANE CARLA OLIVEIRA DE SOUZA', loja_ribeiro, 'Tarde', 'Cozinha', 'ativo'),
+        ('KELVIN ROCHA ARAUJO', loja_ribeiro, 'Tarde', 'Viajem', 'girando_folga'),
+        # Loja Anesio Pinto Rosa - Manhã
+        ('AMANDA SILVA DE OLIVEIRA', loja_anesio, 'Manhã', 'Caixa', 'ativo'),
+        ('SIMONE CORDEIRO ALVES', loja_anesio, 'Manhã', 'Finalização', 'ativo'),
+        ('MATHEUS DOS SANTOS ARAUJO', loja_anesio, 'Manhã', 'Chapa', 'ativo'),
+        ('BRUNA KELLY ROSENO DE SOUZA', loja_anesio, 'Manhã', 'Café', 'ativo'),
+        ('SIMONE FERNANDES', loja_anesio, 'Manhã', 'Suco', 'ativo'),
+        ('DEIVID FAGUNDES DOS SANTOS', loja_anesio, 'Manhã', 'Mesa', 'ativo'),
+        # Loja Anesio Pinto Rosa - Tarde
+        ('WILDINA DE SOUZA OLIVEIRA', loja_anesio, 'Tarde', 'Finalização', 'ativo'),
+        ('AMANDA DE SOUZA MIGUEL', loja_anesio, 'Tarde', 'Café', 'ativo'),
+        # Loja Nebraska - Manhã
+        ('LUCAS DOS SANTOS', loja_nebraska, 'Manhã', 'Caixa 1', 'ativo'),
+        ('ALESSANDRA MARIA DA SILVA MARIANO', loja_nebraska, 'Manhã', 'Café', 'aviso_previo'),
+        ('BRUNO CALIXTO FILETO DE SOUZA', loja_nebraska, 'Manhã', 'Chapa 1', 'ativo'),
+        ('RAFAEL JONATAS MORATO DOS SANTOS', loja_nebraska, 'Manhã', 'Finalização', 'ativo'),
+        # Loja Nebraska - Tarde
+        ('JOAO PEDRO FERNANDES DA SILVA', loja_nebraska, 'Tarde', 'Finalização', 'ativo'),
+        ('MARINA SANTOS SILVA', loja_nebraska, 'Tarde', 'Suco', 'ativo'),
+        # Industria - Manhã
+        ('VILSON SILVA SANTANA', loja_industria, 'Manhã', 'Padeiro 1', 'ativo'),
+        ('DAVI JONATAS MORATO DOS SANTOS', loja_industria, 'Manhã', 'Padeiro 2', 'ativo'),
+        ('KAIO FERREIRA DOS REIS', loja_industria, 'Manhã', 'Ajudante de Padeiro', 'ativo'),
+        ('CAMILA ALVES DA SILVA', loja_industria, 'Manhã', 'Auxiliar de Produção', 'ativo'),
+        # Industria - Tarde
+        ('MARILZA APARECIDA FRAGA', loja_industria, 'Tarde', 'Auxiliar de Produção', 'ativo'),
+    ]
+
+    for nome_func, loja, periodo, nome_pos, status in atribuicoes_pos:
+        func = Funcionario.query.filter_by(nome=nome_func).first()
+        pos = find_pos(loja, periodo, nome_pos)
+        if func and pos:
+            pos.funcionario_id = func.id
+            pos.status = status
+
+    # Ariane também (Café Tarde Ribeiro)
+    ariane = Funcionario.query.filter_by(nome='ARIANE').first()
+    pos_ariane = find_pos(loja_ribeiro, 'Tarde', 'Café')
+    if ariane and pos_ariane:
+        pos_ariane.funcionario_id = ariane.id
+        pos_ariane.status = 'ativo'
 
     db.session.commit()

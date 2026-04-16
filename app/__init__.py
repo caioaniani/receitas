@@ -112,8 +112,9 @@ def create_app(config_class=None):
         seed_site_products()
 
         # RH: lojas + funcionários — roda em todos os ambientes
-        from app.seed import seed_rh
+        from app.seed import seed_rh, seed_rh_escala
         seed_rh()
+        seed_rh_escala()
 
         _criar_admin()
 
@@ -189,6 +190,22 @@ def _migrate_postgres(app):
                 if col not in cols_prod:
                     conn.execute(text(sql))
 
+        # funcionario
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'funcionario'"
+        ))
+        cols_func = {row[0] for row in result}
+        if cols_func:
+            migrações_func = {
+                'funcao_operacional': 'ALTER TABLE funcionario ADD COLUMN funcao_operacional VARCHAR(100)',
+                'periodo': 'ALTER TABLE funcionario ADD COLUMN periodo VARCHAR(20)',
+                'cadastro_pendente': 'ALTER TABLE funcionario ADD COLUMN cadastro_pendente BOOLEAN DEFAULT FALSE',
+            }
+            for col, sql in migrações_func.items():
+                if col not in cols_func:
+                    conn.execute(text(sql))
+
         conn.commit()
 
 
@@ -234,6 +251,16 @@ def _migrate_sqlite(app):
     # Migração produto.observacao
     if cols_prod and 'observacao' not in cols_prod:
         cursor.execute("ALTER TABLE produto ADD COLUMN observacao TEXT")
+
+    # Migração funcionario
+    cursor.execute("PRAGMA table_info(funcionario)")
+    cols_func = [row[1] for row in cursor.fetchall()]
+    if cols_func and 'funcao_operacional' not in cols_func:
+        cursor.execute("ALTER TABLE funcionario ADD COLUMN funcao_operacional VARCHAR(100)")
+    if cols_func and 'periodo' not in cols_func:
+        cursor.execute("ALTER TABLE funcionario ADD COLUMN periodo VARCHAR(20)")
+    if cols_func and 'cadastro_pendente' not in cols_func:
+        cursor.execute("ALTER TABLE funcionario ADD COLUMN cadastro_pendente BOOLEAN DEFAULT 0")
 
     conn.commit()
     conn.close()
