@@ -1117,7 +1117,7 @@ def seed_rh_escala():
     if not Funcionario.query.filter_by(nome='ARIANE').first():
         ariane = Funcionario(
             nome='ARIANE',
-            cpf='PENDENTE-ARIANE',
+            cpf='PEND-ARIANE',
             funcao='ATENDENTE',
             funcao_operacional='Café',
             periodo='Tarde',
