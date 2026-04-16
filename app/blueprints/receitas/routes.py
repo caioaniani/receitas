@@ -16,9 +16,13 @@ from app.utils import parse_float_br
 def ficha(id):
     receita = Receita.query.get_or_404(id)
 
-    # Funcionário vai para tela do padeiro (read-only)
+    # Funcionário só acessa fichas atribuídas
     if not current_user.is_admin():
-        return redirect(url_for('receitas.padeiro', id=id))
+        atribuida = Atribuicao.query.filter_by(
+            receita_id=id, usuario_id=current_user.id
+        ).first()
+        if not atribuida:
+            abort(403)
 
     mp_dict = {mp.nome: mp for mp in MateriaPrima.query.all()}
 
@@ -29,16 +33,21 @@ def ficha(id):
                            receita_pesos_json=json.dumps(resultado['pesos'], ensure_ascii=False))
 
 
+@receitas_bp.route('/padeiro')
+@login_required
+def padeiro_lista():
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    categorias = {}
+    for r in receitas:
+        cat = r.categoria or 'Outros'
+        categorias.setdefault(cat, []).append(r)
+    return render_template('receitas/padeiro_lista.html', categorias=categorias)
+
+
 @receitas_bp.route('/<int:id>/padeiro')
 @login_required
 def padeiro(id):
     receita = Receita.query.get_or_404(id)
-    if not current_user.is_admin():
-        atribuida = Atribuicao.query.filter_by(
-            receita_id=id, usuario_id=current_user.id
-        ).first()
-        if not atribuida:
-            abort(403)
     resultado = calcular_custos_receitas()
     return render_template('receitas/padeiro.html', receita=receita,
                            receita_custos_json=json.dumps(resultado['custos'], ensure_ascii=False),

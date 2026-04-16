@@ -30,13 +30,13 @@
             {% for a in pendentes %}
             <tr>
                 <td class="fw-bold">
-                    <a href="{{ url_for('receitas.padeiro', id=a.receita.id) }}">{{ a.receita.nome }}</a>
+                    <a href="{{ url_for('receitas.ficha', id=a.receita.id) }}">{{ a.receita.nome }}</a>
                 </td>
                 <td>{{ a.receita.categoria or '-' }}</td>
                 <td class="small text-muted">{{ a.data_atribuicao.strftime('%d/%m/%Y') }}</td>
                 <td>
-                    <a href="{{ url_for('receitas.padeiro', id=a.receita.id) }}" class="btn btn-sm btn-primary">
-                        <i class="bi bi-eye"></i> Abrir
+                    <a href="{{ url_for('receitas.ficha', id=a.receita.id) }}" class="btn btn-sm btn-primary">
+                        <i class="bi bi-pencil"></i> Preencher
                     </a>
                     <form method="POST" action="{{ url_for('auth.concluir', id=a.id) }}" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -67,7 +67,7 @@
             {% for a in concluidas %}
             <tr>
                 <td>
-                    <a href="{{ url_for('receitas.padeiro', id=a.receita.id) }}">{{ a.receita.nome }}</a>
+                    <a href="{{ url_for('receitas.ficha', id=a.receita.id) }}">{{ a.receita.nome }}</a>
                 </td>
                 <td>{{ a.receita.categoria or '-' }}</td>
                 <td class="small text-muted">{{ a.data_conclusao.strftime('%d/%m/%Y') if a.data_conclusao else '-' }}</td>

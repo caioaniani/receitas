@@ -109,6 +109,11 @@
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Fichas Tecnicas</div>
 
+        <a href="{{ url_for('receitas.padeiro_lista') }}"
+           class="sidebar-link {% if request.path == '/receitas/padeiro' %}active{% endif %}">
+            <i class="bi bi-calculator"></i> Modo Padeiro
+        </a>
+
         <!-- Busca de receitas -->
         <div class="px-2 pb-1">
             <input type="text" id="sidebar-busca" class="form-control form-control-sm"
@@ -119,7 +124,7 @@
             {% for categoria, receitas in sidebar_categorias.items() %}
             <div class="sidebar-cat" data-cat>{{ categoria }}</div>
             {% for r in receitas %}
-            <a href="{{ url_for('receitas.padeiro' if not current_user.is_admin() else 'receitas.ficha', id=r.id) }}"
+            <a href="{{ url_for('receitas.ficha', id=r.id) }}"
                class="sidebar-link sidebar-recipe" data-recipe
                {% if request.path == '/receitas/' ~ r.id|string %}style="background:#0f3460;color:#fff;font-weight:600"{% endif %}>
                 {{ r.nome }}
