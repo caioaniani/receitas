@@ -84,20 +84,22 @@ document.addEventListener('DOMContentLoaded', function () {
         var fichaForm = document.getElementById('ficha-form');
         var formAlterado = false;
 
-        fichaForm.addEventListener('input', function () {
-            formAlterado = true;
-        });
+        if (fichaForm) {
+            fichaForm.addEventListener('input', function () {
+                formAlterado = true;
+            });
 
-        fichaForm.addEventListener('submit', function () {
-            formAlterado = false;
-        });
+            fichaForm.addEventListener('submit', function () {
+                formAlterado = false;
+            });
 
-        window.addEventListener('beforeunload', function (e) {
-            if (formAlterado) {
-                e.preventDefault();
-                e.returnValue = '';
-            }
-        });
+            window.addEventListener('beforeunload', function (e) {
+                if (formAlterado) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
+            });
+        }
 
         // Eventos de input
         pesoBaseInput.addEventListener('input', recalcularTudo);

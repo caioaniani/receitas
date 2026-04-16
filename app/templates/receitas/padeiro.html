@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}{{ receita.nome }} - Produção{% endblock %}
+
+{% block content %}
+<!-- Cabeçalho read-only -->
+<div class="ficha-header mb-3">
+    <div class="row g-2 align-items-center">
+        <div class="col-md-4">
+            <div class="fw-bold fs-5">{{ receita.nome }}</div>
+            <span class="badge bg-secondary">{{ receita.categoria or 'Sem categoria' }}</span>
+        </div>
+        <div class="col-md-2">
+            <div class="small text-muted">Rendimento</div>
+            <div class="fw-bold">{{ receita.rendimento_unidade }}</div>
+        </div>
+        {% if receita.peso_unitario %}
+        <div class="col-md-2">
+            <div class="small text-muted">Peso/Unidade</div>
+            <div class="fw-bold">{{ receita.peso_unitario | int }}g</div>
+        </div>
+        {% endif %}
+        {% if receita.perda_percentual %}
+        <div class="col-md-2">
+            <div class="small text-muted">Perda Forno</div>
+            <div class="fw-bold">{{ receita.perda_percentual | int }}%</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Hidden inputs que o JS precisa ler -->
+<input type="hidden" id="peso-unitario" value="{{ receita.peso_unitario or '' }}">
+<input type="hidden" id="perda-percentual" value="{{ receita.perda_percentual or 0 }}">
+
+<!-- Seletor de modo + Peso base / Quantidade + Multiplicador -->
+<div class="row mb-3 g-3">
+    <div class="col-md-3">
+        <label class="form-label fw-bold small">
+            <i class="bi bi-toggles"></i> Lançar por:
+        </label>
+        <select class="form-select form-select-sm input-blue" id="modo-lancamento">
+            <option value="farinha">Peso da Farinha (g)</option>
+            <option value="quantidade">Quantidade de Produtos</option>
+        </select>
+    </div>
+
+    <div class="col-md-3" id="box-farinha">
+        <div class="peso-base-box">
+            <label class="form-label fw-bold mb-1">
+                <i class="bi bi-bullseye"></i> Peso Base (g)
+            </label>
+            <input type="number" value="{{ receita.peso_base | int }}"
+                   step="1" min="1" class="form-control peso-base-input" id="peso-base">
+        </div>
+    </div>
+
+    <div class="col-md-3" id="box-quantidade">
+        <div class="peso-base-box">
+            <label class="form-label fw-bold mb-1">
+                <i class="bi bi-stack"></i> Quantidade
+            </label>
+            <input type="number" value="{{ receita.rendimento_qtd | int }}"
+                   step="1" min="1" class="form-control peso-base-input" id="rendimento-qtd">
+        </div>
+    </div>
+
+    <div class="col-md-2">
+        <div class="peso-base-box" style="background:#e3f2fd; border-color:var(--cor-azul);">
+            <label class="form-label fw-bold mb-1">
+                <i class="bi bi-x-lg"></i> Fornadas
+            </label>
+            <input type="number" value="1" step="1" min="1" max="99"
+                   class="form-control peso-base-input" id="multiplicador"
+                   style="border-color:var(--cor-azul) !important;">
+        </div>
+    </div>
+</div>
+
+<!-- Tabela de ingredientes (read-only) -->
+<div class="table-responsive">
+    <table class="table table-sm table-bordered tabela-ficha" id="ficha-table">
+        <thead>
+            <tr>
+                <th style="width:10%">Tipo</th>
+                <th style="width:30%">Ingrediente</th>
+                <th style="width:12%">% / Qtd</th>
+                <th style="width:15%">Qtd (g)</th>
+            </tr>
+        </thead>
+        <tbody id="ficha-body">
+            {% if not receita.ingredientes %}
+            <tr>
+                <td colspan="4" class="text-center py-3" style="background:#fff8e1;">
+                    <i class="bi bi-exclamation-triangle text-warning"></i>
+                    <strong>Ficha vazia</strong>
+                </td>
+            </tr>
+            {% endif %}
+            {% for ing in receita.ingredientes %}
+            <tr class="ingrediente-row" data-base="{{ '1' if ing.eh_base else '0' }}">
+                <td>
+                    <input type="hidden" class="ing-tipo" value="{{ ing.tipo or 'mp' }}">
+                    {% if (ing.tipo or 'mp') == 'mp' %}
+                    <span class="badge bg-success" style="font-size:10px;">MP (%)</span>
+                    {% elif ing.tipo == 'mp_direto' %}
+                    <span class="badge bg-info" style="font-size:10px;">MP (g)</span>
+                    {% else %}
+                    <span class="badge bg-warning text-dark" style="font-size:10px;">Receita</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <input type="hidden" class="nome-input" value="{{ ing.ingrediente_nome }}">
+                    <strong>{{ ing.ingrediente_nome }}</strong>
+                </td>
+                <td class="text-end">
+                    <input type="hidden" class="pct-input" value="{{ ing.porcentagem }}">
+                    {{ ing.porcentagem }}
+                </td>
+                <td class="qtd-calc valor-calc text-end fw-bold">-</td>
+                <td class="custo-kg-calc" style="display:none;">-</td>
+                <td class="custo-rs-calc" style="display:none;">-</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="table-dark">
+                <td></td>
+                <td class="fw-bold">TOTAL</td>
+                <td class="text-end fw-bold" id="total-pct">-</td>
+                <td class="text-end fw-bold" id="total-qtd">-</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+<!-- Resumo (sem custos) -->
+<div class="resumo-box mb-3">
+    <h6 class="fw-bold mb-2"><i class="bi bi-calculator"></i> Resumo da Fornada</h6>
+    <div class="row text-center">
+        <div class="col">
+            <div class="resumo-valor" id="resumo-peso">-</div>
+            <div class="resumo-label">Peso Total</div>
+        </div>
+        <div class="col">
+            <div class="resumo-valor" id="resumo-unidades">-</div>
+            <div class="resumo-label">N Unidades</div>
+        </div>
+    </div>
+</div>
+
+<!-- Modo de Preparo (read-only) -->
+{% if receita.modo_preparo %}
+<div class="mb-3">
+    <h6 class="fw-bold"><i class="bi bi-journal-text"></i> Modo de Preparo</h6>
+    <div class="card border-0 shadow-sm">
+        <div class="card-body" style="white-space:pre-wrap;">{{ receita.modo_preparo }}</div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Botão imprimir -->
+<div class="d-flex gap-2 flex-wrap">
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+        <i class="bi bi-printer"></i> Imprimir
+    </button>
+</div>
+
+<!-- Dados de custos de receitas para JS (sub-receitas) -->
+<script>
+const RECEITA_CUSTOS = {{ receita_custos_json | safe }};
+const RECEITA_PESOS = {{ receita_pesos_json | safe }};
+</script>
+{% endblock %}
