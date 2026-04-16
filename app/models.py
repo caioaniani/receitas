@@ -252,6 +252,9 @@ class Funcionario(db.Model):
 
 class FolhaPagamento(db.Model):
     __tablename__ = 'folha_pagamento'
+    __table_args__ = (
+        db.UniqueConstraint('funcionario_id', 'mes', 'ano', name='uq_folha_func_mes_ano'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     funcionario_id = db.Column(db.Integer, db.ForeignKey('funcionario.id'), nullable=False)
@@ -291,6 +294,9 @@ class FolhaPagamento(db.Model):
 
 class Posicao(db.Model):
     __tablename__ = 'posicao'
+    __table_args__ = (
+        db.UniqueConstraint('loja_id', 'periodo', 'nome_posicao', name='uq_posicao_loja_periodo_nome'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)

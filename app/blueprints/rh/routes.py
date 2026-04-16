@@ -1,13 +1,17 @@
 from datetime import datetime
+from urllib.parse import quote
 
 from flask import render_template, redirect, url_for, flash, request, Response, abort
 from flask_login import login_required, current_user
+from werkzeug.utils import secure_filename
 
 from app.blueprints.rh import rh_bp
 from app.decorators import admin_required
 from app.extensions import db
 from app.models import Funcionario, Loja, FolhaPagamento, Feedback, Posicao, Atestado, funcionario_loja
 from app.utils import parse_float_br
+
+ALLOWED_MIMETYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'}
 
 
 @rh_bp.route('/')
@@ -151,7 +155,13 @@ def salvar_funcionario(id):
     func = Funcionario.query.get_or_404(id)
 
     func.nome = request.form.get('nome', '').strip() or func.nome
-    func.cpf = request.form.get('cpf', '').strip() or func.cpf
+    novo_cpf = request.form.get('cpf', '').strip()
+    if novo_cpf and novo_cpf != func.cpf:
+        existente = Funcionario.query.filter(Funcionario.cpf == novo_cpf, Funcionario.id != func.id).first()
+        if existente:
+            flash(f'CPF já cadastrado para "{existente.nome}".', 'warning')
+            return redirect(url_for('rh.detalhe_funcionario', id=func.id))
+    func.cpf = novo_cpf or func.cpf
     func.funcao = request.form.get('funcao', '').strip() or None
     func.salario_base = parse_float_br(request.form.get('salario_base', ''), default=0)
     func.cargo_confianca = parse_float_br(request.form.get('cargo_confianca', ''), default=0)
@@ -285,6 +295,12 @@ def salvar_lojas():
 @admin_required
 def excluir_loja(id):
     loja = Loja.query.get_or_404(id)
+    if loja.funcionarios:
+        flash(f'Loja "{loja.nome}" tem {len(loja.funcionarios)} funcionário(s). Remova-os primeiro.', 'warning')
+        return redirect(url_for('rh.lojas'))
+    if Posicao.query.filter_by(loja_id=id).count():
+        flash(f'Loja "{loja.nome}" tem posições na escala. Remova-as primeiro.', 'warning')
+        return redirect(url_for('rh.lojas'))
     nome = loja.nome
     db.session.delete(loja)
     db.session.commit()
@@ -427,6 +443,11 @@ def nova_posicao():
         flash('Nome da posição é obrigatório.', 'warning')
         return redirect(url_for('rh.escala'))
 
+    existente = Posicao.query.filter_by(loja_id=loja_id, periodo=periodo, nome_posicao=nome_pos).first()
+    if existente:
+        flash(f'Posição "{nome_pos}" já existe nesta loja/período.', 'warning')
+        return redirect(url_for('rh.escala'))
+
     max_ordem = db.session.query(db.func.max(Posicao.ordem)).filter_by(
         loja_id=loja_id, periodo=periodo
     ).scalar() or 0
@@ -507,9 +528,12 @@ def novo_atestado():
     )
 
     if arquivo and arquivo.filename:
+        if arquivo.mimetype not in ALLOWED_MIMETYPES:
+            flash('Tipo de arquivo não permitido. Use imagem (JPG, PNG) ou PDF.', 'warning')
+            return redirect(url_for('rh.dashboard'))
         atestado.arquivo = arquivo.read()
-        atestado.arquivo_nome = arquivo.filename
-        atestado.arquivo_mimetype = arquivo.mimetype or 'application/octet-stream'
+        atestado.arquivo_nome = secure_filename(arquivo.filename) or 'atestado'
+        atestado.arquivo_mimetype = arquivo.mimetype
 
     db.session.add(atestado)
     db.session.commit()
@@ -524,10 +548,11 @@ def ver_atestado(id):
     at = Atestado.query.get_or_404(id)
     if not at.arquivo:
         abort(404)
+    filename = quote(at.arquivo_nome or 'atestado')
     return Response(
         at.arquivo,
         mimetype=at.arquivo_mimetype or 'application/octet-stream',
-        headers={'Content-Disposition': f'inline; filename="{at.arquivo_nome or "atestado"}"'}
+        headers={'Content-Disposition': f"inline; filename*=UTF-8''{filename}"}
     )
 
 

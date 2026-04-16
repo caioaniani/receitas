@@ -71,7 +71,9 @@
                    value="{{ func.dias_trabalhados }}">
         </div>
         <div class="col-md-2">
-            <label class="form-label fw-bold">Nascimento</label>
+            <label class="form-label fw-bold">Nascimento
+                {% if func.data_nascimento %}<small class="text-muted">({{ ((now().date() - func.data_nascimento).days // 365) }} anos)</small>{% endif %}
+            </label>
             <input type="date" name="data_nascimento" class="form-control input-blue"
                    value="{{ func.data_nascimento.strftime('%Y-%m-%d') if func.data_nascimento else '' }}">
         </div>

@@ -204,10 +204,18 @@
 </div>
 
 <!-- Atestados Recentes -->
-<h6 class="fw-bold mt-4 mb-2"><i class="bi bi-file-medical"></i> Atestados Recentes</h6>
+<div class="d-flex justify-content-between align-items-center mt-4 mb-2">
+    <h6 class="fw-bold mb-0"><i class="bi bi-file-medical"></i> Atestados Recentes</h6>
+    <select id="filtro-atestado" class="form-select form-select-sm" style="width:auto;" onchange="filtrarAtestados()">
+        <option value="">Todos</option>
+        {% for f in funcionarios_ativos %}
+        <option value="{{ f.nome }}">{{ f.nome }}</option>
+        {% endfor %}
+    </select>
+</div>
 {% if atestados_recentes %}
 <div class="table-responsive">
-    <table class="table table-sm table-bordered bg-white">
+    <table class="table table-sm table-bordered bg-white" id="tabela-atestados">
         <thead>
             <tr style="background:#e65100; color:#fff; font-size:11px; text-transform:uppercase;">
                 <th>Funcionário</th>
@@ -219,7 +227,7 @@
         </thead>
         <tbody>
             {% for at in atestados_recentes %}
-            <tr>
+            <tr data-func="{{ at.funcionario.nome }}">
                 <td>
                     <a href="{{ url_for('rh.detalhe_funcionario', id=at.funcionario.id) }}" class="text-decoration-none">
                         {{ at.funcionario.nome }}
@@ -269,4 +277,20 @@
         <i class="bi bi-shop"></i> Gerenciar Lojas
     </a>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filtrarAtestados() {
+    var filtro = document.getElementById('filtro-atestado').value;
+    var rows = document.querySelectorAll('#tabela-atestados tbody tr');
+    rows.forEach(function(row) {
+        if (!filtro || row.dataset.func === filtro) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+</script>
 {% endblock %}

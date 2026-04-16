@@ -1,6 +1,8 @@
 import json
+import os
+from datetime import datetime
 
-from flask import Flask
+from flask import Flask, Response
 
 from app.extensions import db, csrf, login_manager
 from config import Config
@@ -9,6 +11,9 @@ from config import Config
 def create_app(config_class=None):
     app = Flask(__name__)
     app.config.from_object(config_class or Config)
+
+    if not os.environ.get('SECRET_KEY'):
+        print('⚠️  SECRET_KEY não definida. Sessões expiram a cada restart. Defina no Railway.')
 
     db.init_app(app)
     csrf.init_app(app)
@@ -27,6 +32,10 @@ def create_app(config_class=None):
         formatted = f'{value:,.2f}'
         formatted = formatted.replace(',', 'X').replace('.', ',').replace('X', '.')
         return f'R$ {formatted}'
+
+    @app.context_processor
+    def inject_now():
+        return {'now': datetime.now}
 
     # ── Context processor: sidebar com todas as receitas ──
     @app.context_processor
@@ -81,6 +90,15 @@ def create_app(config_class=None):
             funcionarios=funcionarios,
         )
 
+    @app.route('/robots.txt')
+    def robots_txt():
+        return Response("User-agent: *\nDisallow: /\n", mimetype='text/plain')
+
+    @app.after_request
+    def add_noindex(response):
+        response.headers['X-Robots-Tag'] = 'noindex, nofollow'
+        return response
+
     # ── Blueprints ──
     from app.blueprints.main import main_bp
     from app.blueprints.materias_primas import materias_primas_bp
@@ -125,10 +143,13 @@ def _criar_admin():
     """Cria usuário admin padrão se não existir nenhum."""
     from app.models import Usuario
     if not Usuario.query.filter_by(papel='admin').first():
+        senha = os.environ.get('ADMIN_PASSWORD', 'admin')
         admin = Usuario(nome='Admin', login='admin', papel='admin')
-        admin.set_senha('admin')
+        admin.set_senha(senha)
         db.session.add(admin)
         db.session.commit()
+        if senha == 'admin':
+            print('⚠️  Admin criado com senha padrão. Defina ADMIN_PASSWORD no Railway.')
 
 
 def _migrate(app):
