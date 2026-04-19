@@ -24,6 +24,10 @@
     </div>
 </div>
 
+<div id="hint-editar" class="alert alert-info py-2 small mb-2" style="display:none;">
+    <i class="bi bi-info-circle"></i> Arraste na planta para desenhar uma área retangular. Solte para definir a posição.
+</div>
+
 <!-- Upload planta -->
 <div id="box-upload" {% if loja.planta_imagem %}style="display:none;"{% endif %} class="mb-3">
     <div class="card border-dashed" style="border:2px dashed #ccc;">
@@ -56,6 +60,8 @@
                 <span>Envie uma planta para começar</span>
             </div>
             {% endif %}
+            <div id="draw-box" style="display:none; position:absolute; border:2px dashed #1565c0;
+                 background:rgba(21,101,192,0.15); pointer-events:none; z-index:50;"></div>
         </div>
 
         {% if loja.planta_imagem %}
@@ -89,59 +95,70 @@
 </div>
 
 <style>
-.slot-pin {
+.slot-area {
     position: absolute;
-    transform: translate(-50%, -50%);
-    min-width: 60px;
-    text-align: center;
-    cursor: default;
+    background: rgba(255,255,255,0.75);
+    border: 2px solid #1565c0;
+    border-radius: 4px;
     z-index: 10;
-    transition: box-shadow 0.15s;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: box-shadow 0.15s, background 0.15s;
+    cursor: pointer;
 }
-.slot-pin .slot-label {
+.slot-area .slot-label {
     background: rgba(21, 101, 192, 0.9);
     color: #fff;
     font-size: 10px;
     font-weight: 700;
-    padding: 2px 6px;
-    border-radius: 4px 4px 0 0;
+    padding: 2px 4px;
     white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    flex: 0 0 auto;
 }
-.slot-pin .slot-body {
-    background: rgba(255,255,255,0.95);
-    border: 2px solid #1565c0;
-    border-top: none;
-    border-radius: 0 0 4px 4px;
-    min-height: 24px;
+.slot-area .slot-body {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: 2px 4px;
     font-size: 10px;
     font-weight: 600;
     color: #333;
+    text-align: center;
+    line-height: 1.1;
+    word-break: break-word;
 }
-.slot-pin .slot-body.empty {
-    color: #aaa;
-    font-style: italic;
+.slot-area.empty {
+    background: rgba(255,255,255,0.5);
     border-style: dashed;
 }
-.slot-pin.drag-over .slot-body {
-    background: #e3f2fd;
-    border-color: #0d47a1;
-    box-shadow: 0 0 8px rgba(13,71,161,0.4);
+.slot-area.empty .slot-body {
+    color: #888;
+    font-style: italic;
 }
-.slot-pin .btn-del-slot {
+.slot-area.drag-over {
+    background: rgba(227, 242, 253, 0.9);
+    border-color: #0d47a1;
+    box-shadow: 0 0 10px rgba(13,71,161,0.5);
+}
+.slot-area .btn-del-slot {
     display: none;
     position: absolute;
     top: -8px;
     right: -8px;
-    width: 18px;
-    height: 18px;
-    font-size: 10px;
+    width: 20px;
+    height: 20px;
+    font-size: 11px;
     line-height: 1;
     padding: 0;
     border-radius: 50%;
     z-index: 20;
 }
-.editing .slot-pin .btn-del-slot { display: block; }
+.editing .slot-area .btn-del-slot { display: block; }
+.editing #mapa-container { cursor: crosshair; }
 .func-card.dragging { opacity: 0.4; }
 .func-card.selected { background: #e3f2fd; border: 2px solid #1565c0 !important; }
 .func-card.allocated { opacity: 0.5; }
@@ -156,6 +173,8 @@
     var selPeriodo = document.getElementById('sel-periodo');
     var chkEditar = document.getElementById('chk-editar');
     var buscaFunc = document.getElementById('busca-func');
+    var hintEditar = document.getElementById('hint-editar');
+    var drawBox = document.getElementById('draw-box');
     var selectedFunc = null;
     var editMode = false;
     var slots = [];
@@ -184,23 +203,25 @@
     }
 
     function renderSlots() {
-        container.querySelectorAll('.slot-pin').forEach(function(el) { el.remove(); });
-        slots.forEach(function(s) { criarPinDOM(s); });
+        container.querySelectorAll('.slot-area').forEach(function(el) { el.remove(); });
+        slots.forEach(function(s) { criarAreaDOM(s); });
     }
 
-    function criarPinDOM(s) {
-        var pin = document.createElement('div');
-        pin.className = 'slot-pin';
-        pin.dataset.slotId = s.id;
-        pin.style.left = s.pos_x + '%';
-        pin.style.top = s.pos_y + '%';
+    function criarAreaDOM(s) {
+        var area = document.createElement('div');
+        area.className = 'slot-area' + (s.funcionario_nome ? '' : ' empty');
+        area.dataset.slotId = s.id;
+        area.style.left = s.pos_x + '%';
+        area.style.top = s.pos_y + '%';
+        area.style.width = (s.largura || 15) + '%';
+        area.style.height = (s.altura || 8) + '%';
 
         var label = document.createElement('div');
         label.className = 'slot-label';
         label.textContent = s.nome;
 
         var body = document.createElement('div');
-        body.className = 'slot-body' + (s.funcionario_nome ? '' : ' empty');
+        body.className = 'slot-body';
         body.textContent = s.funcionario_nome || 'vazio';
 
         var btnDel = document.createElement('button');
@@ -216,28 +237,29 @@
             }).then(function() { carregarSlots(); });
         };
 
-        pin.appendChild(btnDel);
-        pin.appendChild(label);
-        pin.appendChild(body);
+        area.appendChild(btnDel);
+        area.appendChild(label);
+        area.appendChild(body);
 
         // Drag over (desktop)
-        pin.addEventListener('dragover', function(e) {
+        area.addEventListener('dragover', function(e) {
             e.preventDefault();
-            pin.classList.add('drag-over');
+            area.classList.add('drag-over');
         });
-        pin.addEventListener('dragleave', function() {
-            pin.classList.remove('drag-over');
+        area.addEventListener('dragleave', function() {
+            area.classList.remove('drag-over');
         });
-        pin.addEventListener('drop', function(e) {
+        area.addEventListener('drop', function(e) {
             e.preventDefault();
-            pin.classList.remove('drag-over');
+            area.classList.remove('drag-over');
             var funcId = e.dataTransfer.getData('text/plain');
             if (funcId) alocar(s.id, parseInt(funcId));
         });
 
         // Tap to assign (mobile + desktop)
-        pin.addEventListener('click', function() {
+        area.addEventListener('click', function(e) {
             if (editMode) return;
+            if (e.target.closest('.btn-del-slot')) return;
             if (selectedFunc) {
                 alocar(s.id, selectedFunc);
                 selectedFunc = null;
@@ -251,7 +273,7 @@
             }
         });
 
-        container.appendChild(pin);
+        container.appendChild(area);
     }
 
     // ── Alocar funcionário ──
@@ -316,25 +338,78 @@
         });
     });
 
-    // ── Editar mapa (add slots) ──
+    // ── Editar mapa (desenhar área arrastando) ──
     chkEditar.addEventListener('change', function() {
         editMode = this.checked;
         if (editMode) {
             container.classList.add('editing');
-            container.style.cursor = 'crosshair';
+            hintEditar.style.display = '';
         } else {
             container.classList.remove('editing');
-            container.style.cursor = '';
+            hintEditar.style.display = 'none';
         }
     });
 
-    container.addEventListener('click', function(e) {
-        if (!editMode) return;
-        if (e.target.closest('.slot-pin')) return;
+    var drawing = false;
+    var drawStartX = 0, drawStartY = 0;
 
+    function pointerPos(ev) {
         var rect = container.getBoundingClientRect();
-        var x = ((e.clientX - rect.left) / rect.width * 100).toFixed(1);
-        var y = ((e.clientY - rect.top) / rect.height * 100).toFixed(1);
+        var clientX = ev.clientX !== undefined ? ev.clientX :
+                      (ev.touches && ev.touches[0] ? ev.touches[0].clientX :
+                       (ev.changedTouches && ev.changedTouches[0] ? ev.changedTouches[0].clientX : 0));
+        var clientY = ev.clientY !== undefined ? ev.clientY :
+                      (ev.touches && ev.touches[0] ? ev.touches[0].clientY :
+                       (ev.changedTouches && ev.changedTouches[0] ? ev.changedTouches[0].clientY : 0));
+        return {
+            x: (clientX - rect.left) / rect.width * 100,
+            y: (clientY - rect.top) / rect.height * 100,
+            rect: rect
+        };
+    }
+
+    function beginDraw(ev) {
+        if (!editMode) return;
+        if (ev.target && ev.target.closest('.slot-area')) return;
+        ev.preventDefault();
+        var p = pointerPos(ev);
+        drawing = true;
+        drawStartX = p.x;
+        drawStartY = p.y;
+        drawBox.style.display = 'block';
+        drawBox.style.left = p.x + '%';
+        drawBox.style.top = p.y + '%';
+        drawBox.style.width = '0%';
+        drawBox.style.height = '0%';
+    }
+
+    function moveDraw(ev) {
+        if (!drawing) return;
+        ev.preventDefault();
+        var p = pointerPos(ev);
+        var x = Math.min(drawStartX, p.x);
+        var y = Math.min(drawStartY, p.y);
+        var w = Math.abs(p.x - drawStartX);
+        var h = Math.abs(p.y - drawStartY);
+        drawBox.style.left = x + '%';
+        drawBox.style.top = y + '%';
+        drawBox.style.width = w + '%';
+        drawBox.style.height = h + '%';
+    }
+
+    function endDraw(ev) {
+        if (!drawing) return;
+        drawing = false;
+        var p = pointerPos(ev);
+        drawBox.style.display = 'none';
+
+        var x = Math.min(drawStartX, p.x);
+        var y = Math.min(drawStartY, p.y);
+        var w = Math.abs(p.x - drawStartX);
+        var h = Math.abs(p.y - drawStartY);
+
+        // Áreas muito pequenas (clique acidental) — ignorar
+        if (w < 2 || h < 2) return;
 
         var nome = prompt('Nome da posição (ex: Caixa, Forno, Balcão):');
         if (!nome || !nome.trim()) return;
@@ -348,16 +423,32 @@
             body: JSON.stringify({
                 loja_id: LOJA_ID,
                 nome: nome.trim(),
-                pos_x: parseFloat(x),
-                pos_y: parseFloat(y)
+                pos_x: parseFloat(x.toFixed(2)),
+                pos_y: parseFloat(y.toFixed(2)),
+                largura: parseFloat(w.toFixed(2)),
+                altura: parseFloat(h.toFixed(2))
             })
         }).then(function() { carregarSlots(); });
-    });
+    }
+
+    container.addEventListener('mousedown', beginDraw);
+    container.addEventListener('mousemove', moveDraw);
+    document.addEventListener('mouseup', endDraw);
+
+    container.addEventListener('touchstart', function(ev) {
+        if (!editMode) return;
+        beginDraw(ev);
+    }, {passive: false});
+    container.addEventListener('touchmove', function(ev) {
+        if (!drawing) return;
+        moveDraw(ev);
+    }, {passive: false});
+    container.addEventListener('touchend', endDraw);
 
     // ── Trocar período ──
     selPeriodo.addEventListener('change', function() { carregarSlots(); });
 
-    // ── Mobile touch drag ──
+    // ── Mobile touch drag de funcionários ──
     var touchClone = null;
     var touchFuncId = null;
 
@@ -391,9 +482,9 @@
 
             var touch = e.changedTouches[0];
             var el = document.elementFromPoint(touch.clientX, touch.clientY);
-            var pin = el ? el.closest('.slot-pin') : null;
-            if (pin && touchFuncId) {
-                alocar(parseInt(pin.dataset.slotId), parseInt(touchFuncId));
+            var area = el ? el.closest('.slot-area') : null;
+            if (area && touchFuncId) {
+                alocar(parseInt(area.dataset.slotId), parseInt(touchFuncId));
             }
             touchFuncId = null;
         });

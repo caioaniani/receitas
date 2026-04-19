@@ -240,6 +240,18 @@ def _migrate_postgres(app):
             if 'planta_mimetype' not in cols_loja:
                 conn.execute(text("ALTER TABLE loja ADD COLUMN planta_mimetype VARCHAR(100)"))
 
+        # slot_mapa
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'slot_mapa'"
+        ))
+        cols_slot = {row[0] for row in result}
+        if cols_slot:
+            if 'largura' not in cols_slot:
+                conn.execute(text("ALTER TABLE slot_mapa ADD COLUMN largura REAL DEFAULT 15"))
+            if 'altura' not in cols_slot:
+                conn.execute(text("ALTER TABLE slot_mapa ADD COLUMN altura REAL DEFAULT 8"))
+
         conn.commit()
 
 
@@ -305,6 +317,14 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE loja ADD COLUMN planta_imagem BLOB")
     if cols_loja and 'planta_mimetype' not in cols_loja:
         cursor.execute("ALTER TABLE loja ADD COLUMN planta_mimetype VARCHAR(100)")
+
+    # Migração slot_mapa
+    cursor.execute("PRAGMA table_info(slot_mapa)")
+    cols_slot = [row[1] for row in cursor.fetchall()]
+    if cols_slot and 'largura' not in cols_slot:
+        cursor.execute("ALTER TABLE slot_mapa ADD COLUMN largura REAL DEFAULT 15")
+    if cols_slot and 'altura' not in cols_slot:
+        cursor.execute("ALTER TABLE slot_mapa ADD COLUMN altura REAL DEFAULT 8")
 
     conn.commit()
     conn.close()

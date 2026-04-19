@@ -666,6 +666,8 @@ def api_slots(loja_id):
             'nome': s.nome,
             'pos_x': s.pos_x,
             'pos_y': s.pos_y,
+            'largura': s.largura or 15,
+            'altura': s.altura or 8,
             'funcionario_id': pos.funcionario_id if pos else None,
             'funcionario_nome': pos.funcionario.nome if pos and pos.funcionario else None,
         })
@@ -682,6 +684,8 @@ def api_criar_slot():
         nome=data['nome'],
         pos_x=data['pos_x'],
         pos_y=data['pos_y'],
+        largura=data.get('largura', 15),
+        altura=data.get('altura', 8),
     )
     db.session.add(slot)
     db.session.commit()

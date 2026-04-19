@@ -324,6 +324,8 @@ class SlotMapa(db.Model):
     nome = db.Column(db.String(100), nullable=False)
     pos_x = db.Column(db.Float, nullable=False)
     pos_y = db.Column(db.Float, nullable=False)
+    largura = db.Column(db.Float, default=15)
+    altura = db.Column(db.Float, default=8)
 
     loja = db.relationship('Loja', backref='slots')
 
