@@ -8,7 +8,8 @@ from werkzeug.utils import secure_filename
 from app.blueprints.rh import rh_bp
 from app.decorators import admin_required
 from app.extensions import db
-from app.models import Funcionario, Loja, FolhaPagamento, Feedback, Posicao, Atestado, funcionario_loja
+from flask import jsonify
+from app.models import Funcionario, Loja, FolhaPagamento, Feedback, Posicao, Atestado, SlotMapa, funcionario_loja
 from app.utils import parse_float_br
 
 ALLOWED_MIMETYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'}
@@ -589,3 +590,136 @@ def novo_feedback_dashboard():
     db.session.commit()
     flash('Feedback registrado!', 'success')
     return redirect(url_for('rh.dashboard'))
+
+
+# ── Mapa da Loja ──
+
+@rh_bp.route('/mapa')
+@login_required
+@admin_required
+def mapa_index():
+    loja = Loja.query.filter_by(ativa=True).order_by(Loja.nome).first()
+    if loja:
+        return redirect(url_for('rh.mapa', loja_id=loja.id))
+    flash('Cadastre uma loja primeiro.', 'warning')
+    return redirect(url_for('rh.lojas'))
+
+
+@rh_bp.route('/mapa/<int:loja_id>')
+@login_required
+@admin_required
+def mapa(loja_id):
+    loja = Loja.query.get_or_404(loja_id)
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    funcionarios_ativos = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
+    return render_template('rh/mapa.html', loja=loja, lojas=lojas,
+                           funcionarios_ativos=funcionarios_ativos)
+
+
+@rh_bp.route('/mapa/<int:loja_id>/planta', methods=['POST'])
+@login_required
+@admin_required
+def upload_planta(loja_id):
+    loja = Loja.query.get_or_404(loja_id)
+    arquivo = request.files.get('planta')
+    if not arquivo or not arquivo.filename:
+        flash('Selecione uma imagem.', 'warning')
+        return redirect(url_for('rh.mapa', loja_id=loja_id))
+
+    mimetype = arquivo.content_type or ''
+    if mimetype not in {'image/jpeg', 'image/png', 'image/webp'}:
+        flash('Formato inválido. Use JPG, PNG ou WebP.', 'danger')
+        return redirect(url_for('rh.mapa', loja_id=loja_id))
+
+    loja.planta_imagem = arquivo.read()
+    loja.planta_mimetype = mimetype
+    db.session.commit()
+    flash('Planta atualizada!', 'success')
+    return redirect(url_for('rh.mapa', loja_id=loja_id))
+
+
+@rh_bp.route('/mapa/<int:loja_id>/planta.img')
+@login_required
+def ver_planta(loja_id):
+    loja = Loja.query.get_or_404(loja_id)
+    if not loja.planta_imagem:
+        abort(404)
+    return Response(loja.planta_imagem, mimetype=loja.planta_mimetype,
+                    headers={'Cache-Control': 'max-age=3600'})
+
+
+@rh_bp.route('/mapa/api/slots/<int:loja_id>')
+@login_required
+@admin_required
+def api_slots(loja_id):
+    periodo = request.args.get('periodo', 'manha')
+    slots = SlotMapa.query.filter_by(loja_id=loja_id).all()
+
+    posicoes = {p.nome_posicao: p for p in
+                Posicao.query.filter_by(loja_id=loja_id, periodo=periodo).all()}
+
+    resultado = []
+    for s in slots:
+        pos = posicoes.get(s.nome)
+        resultado.append({
+            'id': s.id,
+            'nome': s.nome,
+            'pos_x': s.pos_x,
+            'pos_y': s.pos_y,
+            'funcionario_id': pos.funcionario_id if pos else None,
+            'funcionario_nome': pos.funcionario.nome if pos and pos.funcionario else None,
+        })
+    return jsonify(resultado)
+
+
+@rh_bp.route('/mapa/api/slot', methods=['POST'])
+@login_required
+@admin_required
+def api_criar_slot():
+    data = request.get_json()
+    slot = SlotMapa(
+        loja_id=data['loja_id'],
+        nome=data['nome'],
+        pos_x=data['pos_x'],
+        pos_y=data['pos_y'],
+    )
+    db.session.add(slot)
+    db.session.commit()
+    return jsonify({'id': slot.id, 'nome': slot.nome})
+
+
+@rh_bp.route('/mapa/api/slot/<int:slot_id>', methods=['DELETE'])
+@login_required
+@admin_required
+def api_excluir_slot(slot_id):
+    slot = SlotMapa.query.get_or_404(slot_id)
+    Posicao.query.filter_by(loja_id=slot.loja_id, nome_posicao=slot.nome).delete()
+    db.session.delete(slot)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@rh_bp.route('/mapa/api/alocar', methods=['POST'])
+@login_required
+@admin_required
+def api_alocar():
+    data = request.get_json()
+    slot = SlotMapa.query.get_or_404(data['slot_id'])
+    periodo = data['periodo']
+    func_id = data.get('funcionario_id')
+
+    pos = Posicao.query.filter_by(
+        loja_id=slot.loja_id, periodo=periodo, nome_posicao=slot.nome
+    ).first()
+
+    if func_id:
+        if not pos:
+            pos = Posicao(loja_id=slot.loja_id, periodo=periodo, nome_posicao=slot.nome)
+            db.session.add(pos)
+        pos.funcionario_id = int(func_id)
+    else:
+        if pos:
+            db.session.delete(pos)
+
+    db.session.commit()
+    return jsonify({'ok': True})

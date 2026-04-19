@@ -228,6 +228,18 @@ def _migrate_postgres(app):
                 if col not in cols_func:
                     conn.execute(text(sql))
 
+        # loja
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'loja'"
+        ))
+        cols_loja = {row[0] for row in result}
+        if cols_loja:
+            if 'planta_imagem' not in cols_loja:
+                conn.execute(text("ALTER TABLE loja ADD COLUMN planta_imagem BYTEA"))
+            if 'planta_mimetype' not in cols_loja:
+                conn.execute(text("ALTER TABLE loja ADD COLUMN planta_mimetype VARCHAR(100)"))
+
         conn.commit()
 
 
@@ -285,6 +297,14 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE funcionario ADD COLUMN cadastro_pendente BOOLEAN DEFAULT 0")
     if cols_func and 'data_nascimento' not in cols_func:
         cursor.execute("ALTER TABLE funcionario ADD COLUMN data_nascimento DATE")
+
+    # Migração loja
+    cursor.execute("PRAGMA table_info(loja)")
+    cols_loja = [row[1] for row in cursor.fetchall()]
+    if cols_loja and 'planta_imagem' not in cols_loja:
+        cursor.execute("ALTER TABLE loja ADD COLUMN planta_imagem BLOB")
+    if cols_loja and 'planta_mimetype' not in cols_loja:
+        cursor.execute("ALTER TABLE loja ADD COLUMN planta_mimetype VARCHAR(100)")
 
     conn.commit()
     conn.close()

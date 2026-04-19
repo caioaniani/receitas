@@ -192,6 +192,8 @@ class Loja(db.Model):
     endereco = db.Column(db.String(300))
     telefone = db.Column(db.String(30))
     ativa = db.Column(db.Boolean, default=True)
+    planta_imagem = db.Column(db.LargeBinary)
+    planta_mimetype = db.Column(db.String(100))
 
     def __repr__(self):
         return f'<Loja {self.nome}>'
@@ -312,6 +314,21 @@ class Posicao(db.Model):
 
     def __repr__(self):
         return f'<Posicao {self.nome_posicao} @ {self.loja_id}>'
+
+
+class SlotMapa(db.Model):
+    __tablename__ = 'slot_mapa'
+
+    id = db.Column(db.Integer, primary_key=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
+    nome = db.Column(db.String(100), nullable=False)
+    pos_x = db.Column(db.Float, nullable=False)
+    pos_y = db.Column(db.Float, nullable=False)
+
+    loja = db.relationship('Loja', backref='slots')
+
+    def __repr__(self):
+        return f'<SlotMapa {self.nome} @ {self.loja_id}>'
 
 
 class Feedback(db.Model):

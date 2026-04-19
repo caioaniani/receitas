@@ -96,8 +96,12 @@
             <i class="bi bi-shop-window"></i> Lojas
         </a>
         <a href="{{ url_for('rh.escala') }}"
-           class="sidebar-link {% if '/rh/escala' in request.path %}active{% endif %}">
+           class="sidebar-link {% if '/rh/escala' in request.path and '/mapa' not in request.path %}active{% endif %}">
             <i class="bi bi-diagram-3"></i> Escala Operacional
+        </a>
+        <a href="{{ url_for('rh.mapa_index') }}"
+           class="sidebar-link {% if '/rh/mapa' in request.path %}active{% endif %}">
+            <i class="bi bi-map"></i> Mapa das Lojas
         </a>
         {% elif current_user.is_authenticated %}
         <a href="{{ url_for('auth.minhas_fichas') }}"

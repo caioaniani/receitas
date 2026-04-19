@@ -1,0 +1,406 @@
+{% extends "base.html" %}
+
+{% block title %}Mapa - {{ loja.nome }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="fw-bold mb-0"><i class="bi bi-map"></i> Mapa — {{ loja.nome }}</h5>
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        <select id="sel-loja" class="form-select form-select-sm" style="width:auto;"
+                onchange="location.href='/rh/mapa/'+this.value">
+            {% for l in lojas %}
+            <option value="{{ l.id }}" {{ 'selected' if l.id == loja.id }}>{{ l.nome }}</option>
+            {% endfor %}
+        </select>
+        <select id="sel-periodo" class="form-select form-select-sm" style="width:auto;">
+            <option value="manha">Manhã</option>
+            <option value="tarde">Tarde</option>
+            <option value="noite">Noite</option>
+        </select>
+        <div class="form-check form-switch ms-2">
+            <input class="form-check-input" type="checkbox" id="chk-editar">
+            <label class="form-check-label small" for="chk-editar">Editar Mapa</label>
+        </div>
+    </div>
+</div>
+
+<!-- Upload planta -->
+<div id="box-upload" {% if loja.planta_imagem %}style="display:none;"{% endif %} class="mb-3">
+    <div class="card border-dashed" style="border:2px dashed #ccc;">
+        <div class="card-body text-center py-4">
+            <i class="bi bi-image" style="font-size:3rem; color:#aaa;"></i>
+            <p class="text-muted mt-2 mb-2">Faça upload da planta da loja (JPG, PNG ou WebP)</p>
+            <form method="POST" action="{{ url_for('rh.upload_planta', loja_id=loja.id) }}" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="file" name="planta" accept="image/*" class="form-control form-control-sm d-inline-block"
+                       style="width:auto;" required>
+                <button type="submit" class="btn btn-primary btn-sm ms-2">
+                    <i class="bi bi-upload"></i> Enviar
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Container do mapa -->
+<div class="row g-3">
+    <div class="col-md-9">
+        <div id="mapa-container" class="position-relative border rounded shadow-sm bg-white"
+             style="min-height:500px; overflow:hidden; touch-action:none;">
+            {% if loja.planta_imagem %}
+            <img src="{{ url_for('rh.ver_planta', loja_id=loja.id) }}" id="planta-img"
+                 class="w-100" style="display:block; user-select:none; pointer-events:none;">
+            {% else %}
+            <div class="d-flex align-items-center justify-content-center h-100 text-muted"
+                 style="min-height:500px;">
+                <span>Envie uma planta para começar</span>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if loja.planta_imagem %}
+        <div class="mt-2 d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('box-upload').style.display='block'">
+                <i class="bi bi-arrow-repeat"></i> Trocar Planta
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Sidebar de funcionários -->
+    <div class="col-md-3">
+        <h6 class="fw-bold mb-2"><i class="bi bi-people"></i> Funcionários</h6>
+        <input type="text" id="busca-func" class="form-control form-control-sm mb-2" placeholder="Buscar...">
+        <div id="func-list" style="max-height:500px; overflow-y:auto;">
+            {% for f in funcionarios_ativos %}
+            <div class="func-card card border-0 shadow-sm mb-1" data-id="{{ f.id }}" data-nome="{{ f.nome }}"
+                 draggable="true" style="cursor:grab; user-select:none;">
+                <div class="card-body py-1 px-2 d-flex align-items-center gap-1">
+                    <i class="bi bi-grip-vertical text-muted"></i>
+                    <span class="small fw-bold">{{ f.nome }}</span>
+                    {% if f.funcao_operacional %}
+                    <span class="badge bg-secondary ms-auto" style="font-size:8px;">{{ f.funcao_operacional }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<style>
+.slot-pin {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    min-width: 60px;
+    text-align: center;
+    cursor: default;
+    z-index: 10;
+    transition: box-shadow 0.15s;
+}
+.slot-pin .slot-label {
+    background: rgba(21, 101, 192, 0.9);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px 4px 0 0;
+    white-space: nowrap;
+}
+.slot-pin .slot-body {
+    background: rgba(255,255,255,0.95);
+    border: 2px solid #1565c0;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    min-height: 24px;
+    padding: 2px 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #333;
+}
+.slot-pin .slot-body.empty {
+    color: #aaa;
+    font-style: italic;
+    border-style: dashed;
+}
+.slot-pin.drag-over .slot-body {
+    background: #e3f2fd;
+    border-color: #0d47a1;
+    box-shadow: 0 0 8px rgba(13,71,161,0.4);
+}
+.slot-pin .btn-del-slot {
+    display: none;
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 18px;
+    height: 18px;
+    font-size: 10px;
+    line-height: 1;
+    padding: 0;
+    border-radius: 50%;
+    z-index: 20;
+}
+.editing .slot-pin .btn-del-slot { display: block; }
+.func-card.dragging { opacity: 0.4; }
+.func-card.selected { background: #e3f2fd; border: 2px solid #1565c0 !important; }
+.func-card.allocated { opacity: 0.5; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var LOJA_ID = {{ loja.id }};
+    var container = document.getElementById('mapa-container');
+    var selPeriodo = document.getElementById('sel-periodo');
+    var chkEditar = document.getElementById('chk-editar');
+    var buscaFunc = document.getElementById('busca-func');
+    var selectedFunc = null;
+    var editMode = false;
+    var slots = [];
+    var allocatedFuncs = new Set();
+
+    {% if not loja.planta_imagem %}return;{% endif %}
+
+    function csrfToken() { return CSRF_TOKEN; }
+
+    // ── Carregar slots ──
+    function carregarSlots() {
+        var periodo = selPeriodo.value;
+        fetch('/rh/mapa/api/slots/' + LOJA_ID + '?periodo=' + periodo, {
+            headers: {'X-CSRFToken': csrfToken()}
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            slots = data;
+            allocatedFuncs = new Set();
+            data.forEach(function(s) {
+                if (s.funcionario_id) allocatedFuncs.add(s.funcionario_id);
+            });
+            renderSlots();
+            atualizarFuncCards();
+        });
+    }
+
+    function renderSlots() {
+        container.querySelectorAll('.slot-pin').forEach(function(el) { el.remove(); });
+        slots.forEach(function(s) { criarPinDOM(s); });
+    }
+
+    function criarPinDOM(s) {
+        var pin = document.createElement('div');
+        pin.className = 'slot-pin';
+        pin.dataset.slotId = s.id;
+        pin.style.left = s.pos_x + '%';
+        pin.style.top = s.pos_y + '%';
+
+        var label = document.createElement('div');
+        label.className = 'slot-label';
+        label.textContent = s.nome;
+
+        var body = document.createElement('div');
+        body.className = 'slot-body' + (s.funcionario_nome ? '' : ' empty');
+        body.textContent = s.funcionario_nome || 'vazio';
+
+        var btnDel = document.createElement('button');
+        btnDel.className = 'btn btn-danger btn-del-slot';
+        btnDel.innerHTML = '&times;';
+        btnDel.title = 'Remover slot';
+        btnDel.onclick = function(e) {
+            e.stopPropagation();
+            if (!confirm('Remover posição "' + s.nome + '"?')) return;
+            fetch('/rh/mapa/api/slot/' + s.id, {
+                method: 'DELETE',
+                headers: {'X-CSRFToken': csrfToken()}
+            }).then(function() { carregarSlots(); });
+        };
+
+        pin.appendChild(btnDel);
+        pin.appendChild(label);
+        pin.appendChild(body);
+
+        // Drag over (desktop)
+        pin.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            pin.classList.add('drag-over');
+        });
+        pin.addEventListener('dragleave', function() {
+            pin.classList.remove('drag-over');
+        });
+        pin.addEventListener('drop', function(e) {
+            e.preventDefault();
+            pin.classList.remove('drag-over');
+            var funcId = e.dataTransfer.getData('text/plain');
+            if (funcId) alocar(s.id, parseInt(funcId));
+        });
+
+        // Tap to assign (mobile + desktop)
+        pin.addEventListener('click', function() {
+            if (editMode) return;
+            if (selectedFunc) {
+                alocar(s.id, selectedFunc);
+                selectedFunc = null;
+                document.querySelectorAll('.func-card.selected').forEach(function(c) {
+                    c.classList.remove('selected');
+                });
+            } else if (s.funcionario_id) {
+                if (confirm('Remover ' + s.funcionario_nome + ' desta posição?')) {
+                    alocar(s.id, null);
+                }
+            }
+        });
+
+        container.appendChild(pin);
+    }
+
+    // ── Alocar funcionário ──
+    function alocar(slotId, funcId) {
+        fetch('/rh/mapa/api/alocar', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken()
+            },
+            body: JSON.stringify({
+                slot_id: slotId,
+                periodo: selPeriodo.value,
+                funcionario_id: funcId
+            })
+        }).then(function() { carregarSlots(); });
+    }
+
+    // ── Funcionários sidebar ──
+    function atualizarFuncCards() {
+        document.querySelectorAll('.func-card').forEach(function(card) {
+            var id = parseInt(card.dataset.id);
+            if (allocatedFuncs.has(id)) {
+                card.classList.add('allocated');
+            } else {
+                card.classList.remove('allocated');
+            }
+        });
+    }
+
+    document.querySelectorAll('.func-card').forEach(function(card) {
+        // Desktop drag
+        card.addEventListener('dragstart', function(e) {
+            e.dataTransfer.setData('text/plain', card.dataset.id);
+            card.classList.add('dragging');
+        });
+        card.addEventListener('dragend', function() {
+            card.classList.remove('dragging');
+        });
+
+        // Tap to select (mobile)
+        card.addEventListener('click', function() {
+            var id = parseInt(card.dataset.id);
+            if (selectedFunc === id) {
+                selectedFunc = null;
+                card.classList.remove('selected');
+            } else {
+                document.querySelectorAll('.func-card.selected').forEach(function(c) {
+                    c.classList.remove('selected');
+                });
+                selectedFunc = id;
+                card.classList.add('selected');
+            }
+        });
+    });
+
+    // Busca funcionário
+    buscaFunc.addEventListener('input', function() {
+        var termo = this.value.toLowerCase().trim();
+        document.querySelectorAll('.func-card').forEach(function(card) {
+            card.style.display = card.dataset.nome.toLowerCase().indexOf(termo) !== -1 ? '' : 'none';
+        });
+    });
+
+    // ── Editar mapa (add slots) ──
+    chkEditar.addEventListener('change', function() {
+        editMode = this.checked;
+        if (editMode) {
+            container.classList.add('editing');
+            container.style.cursor = 'crosshair';
+        } else {
+            container.classList.remove('editing');
+            container.style.cursor = '';
+        }
+    });
+
+    container.addEventListener('click', function(e) {
+        if (!editMode) return;
+        if (e.target.closest('.slot-pin')) return;
+
+        var rect = container.getBoundingClientRect();
+        var x = ((e.clientX - rect.left) / rect.width * 100).toFixed(1);
+        var y = ((e.clientY - rect.top) / rect.height * 100).toFixed(1);
+
+        var nome = prompt('Nome da posição (ex: Caixa, Forno, Balcão):');
+        if (!nome || !nome.trim()) return;
+
+        fetch('/rh/mapa/api/slot', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken()
+            },
+            body: JSON.stringify({
+                loja_id: LOJA_ID,
+                nome: nome.trim(),
+                pos_x: parseFloat(x),
+                pos_y: parseFloat(y)
+            })
+        }).then(function() { carregarSlots(); });
+    });
+
+    // ── Trocar período ──
+    selPeriodo.addEventListener('change', function() { carregarSlots(); });
+
+    // ── Mobile touch drag ──
+    var touchClone = null;
+    var touchFuncId = null;
+
+    document.querySelectorAll('.func-card').forEach(function(card) {
+        card.addEventListener('touchstart', function(e) {
+            touchFuncId = card.dataset.id;
+            var touch = e.touches[0];
+            touchClone = card.cloneNode(true);
+            touchClone.style.position = 'fixed';
+            touchClone.style.zIndex = '9999';
+            touchClone.style.opacity = '0.8';
+            touchClone.style.width = card.offsetWidth + 'px';
+            touchClone.style.pointerEvents = 'none';
+            touchClone.style.left = (touch.clientX - 30) + 'px';
+            touchClone.style.top = (touch.clientY - 15) + 'px';
+            document.body.appendChild(touchClone);
+        }, {passive: true});
+
+        card.addEventListener('touchmove', function(e) {
+            if (!touchClone) return;
+            e.preventDefault();
+            var touch = e.touches[0];
+            touchClone.style.left = (touch.clientX - 30) + 'px';
+            touchClone.style.top = (touch.clientY - 15) + 'px';
+        });
+
+        card.addEventListener('touchend', function(e) {
+            if (!touchClone) return;
+            touchClone.remove();
+            touchClone = null;
+
+            var touch = e.changedTouches[0];
+            var el = document.elementFromPoint(touch.clientX, touch.clientY);
+            var pin = el ? el.closest('.slot-pin') : null;
+            if (pin && touchFuncId) {
+                alocar(parseInt(pin.dataset.slotId), parseInt(touchFuncId));
+            }
+            touchFuncId = null;
+        });
+    });
+
+    // ── Init ──
+    carregarSlots();
+})();
+</script>
+{% endblock %}
