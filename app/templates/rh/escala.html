@@ -40,14 +40,14 @@
     </div>
     <div class="card-body p-0">
         <div class="row g-0">
-            {% for periodo in ['Manhã', 'Tarde'] %}
-            <div class="col-md-6 {% if periodo == 'Manhã' %}border-end{% endif %}">
-                <div class="p-2 fw-bold" style="background:{% if periodo == 'Manhã' %}#fff3e0{% else %}#e8eaf6{% endif %}; font-size:12px;">
-                    <i class="bi bi-{% if periodo == 'Manhã' %}sun{% else %}moon{% endif %}"></i> {{ periodo }}
+            {% for periodo, posicoes_list in periodos.items() %}
+            <div class="col-md-6 {% if not loop.last %}border-end{% endif %}">
+                <div class="p-2 fw-bold" style="background:{% if periodo in ['Manhã', 'manha'] %}#fff3e0{% elif periodo in ['Noite', 'noite'] %}#e0e0e0{% else %}#e8eaf6{% endif %}; font-size:12px;">
+                    <i class="bi bi-{% if periodo in ['Manhã', 'manha'] %}sun{% elif periodo in ['Noite', 'noite'] %}moon-stars{% else %}moon{% endif %}"></i> {{ periodo|capitalize }}
                 </div>
                 <table class="table table-sm mb-0" style="font-size:12px;">
                     <tbody>
-                        {% for pos in periodos[periodo] %}
+                        {% for pos in posicoes_list %}
                         <tr>
                             <td style="width:40%; font-weight:600;">{{ pos.nome_posicao }}</td>
                             <td>
@@ -84,7 +84,7 @@
                             </td>
                         </tr>
                         {% endfor %}
-                        {% if not periodos[periodo] %}
+                        {% if not posicoes_list %}
                         <tr><td colspan="3" class="text-muted text-center py-2">Sem posições cadastradas</td></tr>
                         {% endif %}
                     </tbody>
@@ -112,8 +112,9 @@
             </div>
             <div class="col-md-2">
                 <select name="periodo" class="form-select form-select-sm">
-                    <option value="Manhã">Manhã</option>
-                    <option value="Tarde">Tarde</option>
+                    <option value="manha">Manhã</option>
+                    <option value="tarde">Tarde</option>
+                    <option value="noite">Noite</option>
                 </select>
             </div>
             <div class="col-md-5">

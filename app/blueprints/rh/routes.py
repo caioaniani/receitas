@@ -387,8 +387,8 @@ def escala():
     for pos in posicoes:
         lnome = pos.loja.nome
         if lnome not in grid:
-            grid[lnome] = {'Manhã': [], 'Tarde': []}
-        grid[lnome][pos.periodo].append(pos)
+            grid[lnome] = {}
+        grid[lnome].setdefault(pos.periodo, []).append(pos)
 
     # Funcionários sem loja (precisam alocação)
     sem_loja = Funcionario.query.filter(
