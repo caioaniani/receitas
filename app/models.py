@@ -64,6 +64,8 @@ class MateriaPrima(db.Model):
             'observacoes': self.observacoes or '',
         }
 
+    estoque_atual = db.Column(db.Float, default=0)
+
     def __repr__(self):
         return f'<MateriaPrima {self.nome}>'
 
@@ -388,3 +390,67 @@ class ProdutoItem(db.Model):
 
     def __repr__(self):
         return f'<ProdutoItem {self.item_nome} x{self.quantidade}>'
+
+
+class MovimentacaoEstoque(db.Model):
+    __tablename__ = 'movimentacao_estoque'
+
+    id = db.Column(db.Integer, primary_key=True)
+    materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'), nullable=False)
+    tipo = db.Column(db.String(10), nullable=False)  # 'entrada' ou 'saida'
+    quantidade = db.Column(db.Float, nullable=False)
+    preco_unitario = db.Column(db.Float)
+    data = db.Column(db.DateTime, default=datetime.utcnow)
+    referencia = db.Column(db.String(200))
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    materia_prima = db.relationship('MateriaPrima', backref='movimentacoes')
+    usuario = db.relationship('Usuario', backref='movimentacoes_estoque')
+
+    def __repr__(self):
+        return f'<Movimentacao {self.tipo} {self.quantidade} MP={self.materia_prima_id}>'
+
+
+class AlertaEstoque(db.Model):
+    __tablename__ = 'alerta_estoque'
+
+    id = db.Column(db.Integer, primary_key=True)
+    materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'), nullable=False, unique=True)
+    estoque_minimo = db.Column(db.Float, nullable=False)
+
+    materia_prima = db.relationship('MateriaPrima', backref='alerta_estoque', uselist=False)
+
+    def __repr__(self):
+        return f'<AlertaEstoque MP={self.materia_prima_id} min={self.estoque_minimo}>'
+
+
+class PlanejamentoProducao(db.Model):
+    __tablename__ = 'planejamento_producao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    data = db.Column(db.Date, nullable=False)
+    nome = db.Column(db.String(100))
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    status = db.Column(db.String(20), default='rascunho')
+
+    itens = db.relationship('PlanejamentoItem', backref='planejamento',
+                            cascade='all, delete-orphan', lazy=True)
+    autor = db.relationship('Usuario', backref='planejamentos')
+
+    def __repr__(self):
+        return f'<Planejamento {self.nome} em {self.data}>'
+
+
+class PlanejamentoItem(db.Model):
+    __tablename__ = 'planejamento_item'
+
+    id = db.Column(db.Integer, primary_key=True)
+    planejamento_id = db.Column(db.Integer, db.ForeignKey('planejamento_producao.id'), nullable=False)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=False)
+    multiplicador = db.Column(db.Integer, default=1)
+
+    receita = db.relationship('Receita')
+
+    def __repr__(self):
+        return f'<PlanejamentoItem receita={self.receita_id} x{self.multiplicador}>'

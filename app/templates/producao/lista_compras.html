@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Lista de Compras — {{ plano.nome }}{% endblock %}
+
+{% block content %}
+<style>
+@media print {
+    .sidebar, .mobile-header, .legenda-cores, .no-print { display: none !important; }
+    .main-content { margin: 0; padding: 10px; }
+}
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3 no-print">
+    <h5 class="fw-bold mb-0"><i class="bi bi-cart"></i> Lista de Compras</h5>
+    <div class="d-flex gap-2">
+        <button onclick="window.print()" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-printer"></i> Imprimir
+        </button>
+        <a href="{{ url_for('producao.detalhe', id=plano.id) }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+
+<div class="mb-2">
+    <strong>{{ plano.nome }}</strong> — {{ plano.data.strftime('%d/%m/%Y') }}
+</div>
+
+<table class="table table-sm table-bordered">
+    <thead>
+        <tr>
+            <th>Matéria-Prima</th>
+            <th class="text-end">Qtd (g)</th>
+            <th class="text-end">Qtd (kg)</th>
+            <th class="text-center" style="width:60px;">OK</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for nome, dados in lista_compras %}
+        <tr>
+            <td>{{ nome }}</td>
+            <td class="text-end">{{ "%.0f"|format(dados.quantidade) }}</td>
+            <td class="text-end">{{ "%.2f"|format(dados.quantidade / 1000) }}</td>
+            <td class="text-center"><input type="checkbox"></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr class="fw-bold">
+            <td>Total Estimado</td>
+            <td colspan="2" class="text-end">R$ {{ "%.2f"|format(custo_total) }}</td>
+            <td></td>
+        </tr>
+    </tfoot>
+</table>
+{% endblock %}

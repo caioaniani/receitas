@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}Estoque de Matérias-Primas{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="fw-bold mb-0"><i class="bi bi-boxes"></i> Controle de Estoque</h5>
+    <div class="d-flex gap-2">
+        <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modal-entrada">
+            <i class="bi bi-plus-circle"></i> Entrada
+        </button>
+        <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modal-saida">
+            <i class="bi bi-dash-circle"></i> Saída
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modal-alertas">
+            <i class="bi bi-bell"></i> Alertas
+        </button>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>Matéria-Prima</th>
+                <th>Unidade</th>
+                <th class="text-end">Custo/{{ 'kg' }}</th>
+                <th class="text-end">Estoque Atual</th>
+                <th class="text-end">Mínimo</th>
+                <th class="text-center">Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for mp in materias %}
+            {% set minimo = alertas.get(mp.id) %}
+            {% set estoque = mp.estoque_atual or 0 %}
+            {% set abaixo = minimo and estoque < minimo %}
+            <tr class="{{ 'table-danger' if abaixo else '' }}">
+                <td class="fw-bold">{{ mp.nome }}</td>
+                <td>{{ mp.unidade }}</td>
+                <td class="text-end">R$ {{ "%.2f"|format(mp.custo_por_kg) }}</td>
+                <td class="text-end">{{ "%.1f"|format(estoque) }}</td>
+                <td class="text-end">{{ "%.1f"|format(minimo) if minimo else '—' }}</td>
+                <td class="text-center">
+                    {% if abaixo %}
+                    <span class="badge bg-danger"><i class="bi bi-exclamation-triangle"></i> Baixo</span>
+                    {% elif minimo %}
+                    <span class="badge bg-success"><i class="bi bi-check"></i> OK</span>
+                    {% else %}
+                    <span class="badge bg-secondary">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('materias_primas.estoque_historico', mp_id=mp.id) }}"
+                       class="btn btn-outline-primary btn-sm py-0 px-1" title="Histórico">
+                        <i class="bi bi-clock-history"></i>
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal Entrada -->
+<div class="modal fade" id="modal-entrada" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('materias_primas.estoque_entrada') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h6 class="modal-title"><i class="bi bi-plus-circle"></i> Registrar Entrada</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Matéria-Prima</label>
+                        <select name="mp_id" class="form-select" required>
+                            <option value="">Selecione...</option>
+                            {% for mp in materias %}
+                            <option value="{{ mp.id }}">{{ mp.nome }} ({{ mp.unidade }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label">Quantidade</label>
+                            <input type="text" name="quantidade" class="form-control" required placeholder="0,0">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Preço/unidade (R$)</label>
+                            <input type="text" name="preco_unitario" class="form-control" placeholder="Opcional">
+                        </div>
+                    </div>
+                    <div class="mb-3 mt-2">
+                        <label class="form-label">Referência</label>
+                        <input type="text" name="referencia" class="form-control" placeholder="Ex: Compra Fornecedor X">
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="atualizar_custo" value="1" id="chk-atualizar">
+                        <label class="form-check-label small" for="chk-atualizar">
+                            Atualizar custo/kg com este preço
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-success"><i class="bi bi-check-lg"></i> Registrar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Saída -->
+<div class="modal fade" id="modal-saida" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('materias_primas.estoque_saida') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h6 class="modal-title"><i class="bi bi-dash-circle"></i> Registrar Saída</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Matéria-Prima</label>
+                        <select name="mp_id" class="form-select" required>
+                            <option value="">Selecione...</option>
+                            {% for mp in materias %}
+                            <option value="{{ mp.id }}">{{ mp.nome }} (estoque: {{ "%.1f"|format(mp.estoque_atual or 0) }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Quantidade</label>
+                        <input type="text" name="quantidade" class="form-control" required placeholder="0,0">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Referência</label>
+                        <input type="text" name="referencia" class="form-control" placeholder="Ex: Produção Pão Francês">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-warning"><i class="bi bi-check-lg"></i> Registrar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Alertas -->
+<div class="modal fade" id="modal-alertas" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <form method="POST" action="{{ url_for('materias_primas.estoque_alertas') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title"><i class="bi bi-bell"></i> Definir Estoque Mínimo</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" style="max-height:400px; overflow-y:auto;">
+                    <table class="table table-sm">
+                        <thead><tr><th>MP</th><th>Unid.</th><th style="width:120px;">Mínimo</th></tr></thead>
+                        <tbody>
+                            {% for mp in materias %}
+                            <tr>
+                                <td>{{ mp.nome }}</td>
+                                <td>{{ mp.unidade }}</td>
+                                <td>
+                                    <input type="hidden" name="mp_id[]" value="{{ mp.id }}">
+                                    <input type="text" name="estoque_minimo[]" class="form-control form-control-sm"
+                                           value="{{ "%.1f"|format(alertas.get(mp.id, 0)) if alertas.get(mp.id) else '' }}"
+                                           placeholder="0">
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Salvar Alertas</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -136,6 +136,7 @@ def create_app(config_class=None):
     from app.blueprints.produtos import produtos_bp
     from app.blueprints.auth import auth_bp
     from app.blueprints.rh import rh_bp
+    from app.blueprints.producao import producao_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(materias_primas_bp, url_prefix='/materias-primas')
@@ -143,6 +144,7 @@ def create_app(config_class=None):
     app.register_blueprint(produtos_bp, url_prefix='/produtos')
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(rh_bp, url_prefix='/rh')
+    app.register_blueprint(producao_bp, url_prefix='/producao')
 
     with app.app_context():
         db.create_all()
@@ -282,6 +284,15 @@ def _migrate_postgres(app):
             if 'altura' not in cols_slot:
                 conn.execute(text("ALTER TABLE slot_mapa ADD COLUMN altura REAL DEFAULT 8"))
 
+        # materia_prima.estoque_atual
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'materia_prima'"
+        ))
+        cols_mp = {row[0] for row in result}
+        if cols_mp and 'estoque_atual' not in cols_mp:
+            conn.execute(text("ALTER TABLE materia_prima ADD COLUMN estoque_atual REAL DEFAULT 0"))
+
         conn.commit()
 
 
@@ -355,6 +366,12 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE slot_mapa ADD COLUMN largura REAL DEFAULT 15")
     if cols_slot and 'altura' not in cols_slot:
         cursor.execute("ALTER TABLE slot_mapa ADD COLUMN altura REAL DEFAULT 8")
+
+    # Migração materia_prima.estoque_atual
+    cursor.execute("PRAGMA table_info(materia_prima)")
+    cols_mp = [row[1] for row in cursor.fetchall()]
+    if cols_mp and 'estoque_atual' not in cols_mp:
+        cursor.execute("ALTER TABLE materia_prima ADD COLUMN estoque_atual REAL DEFAULT 0")
 
     conn.commit()
     conn.close()

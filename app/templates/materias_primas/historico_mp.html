@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Histórico — {{ mp.nome }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="fw-bold mb-0"><i class="bi bi-clock-history"></i> {{ mp.nome }}</h5>
+    <a href="{{ url_for('materias_primas.estoque') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center">
+            <div class="card-body py-2">
+                <div class="small text-muted">Estoque Atual</div>
+                <div class="fw-bold fs-5">{{ "%.1f"|format(mp.estoque_atual or 0) }} {{ mp.unidade }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center">
+            <div class="card-body py-2">
+                <div class="small text-muted">Custo Atual</div>
+                <div class="fw-bold fs-5">R$ {{ "%.2f"|format(mp.custo_por_kg) }}/{{ mp.unidade }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body py-2">
+                <canvas id="chart-precos" height="80"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>Data</th>
+                <th>Tipo</th>
+                <th class="text-end">Quantidade</th>
+                <th class="text-end">Preço Unit.</th>
+                <th>Referência</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in movimentacoes %}
+            <tr>
+                <td>{{ m.data.strftime('%d/%m/%Y %H:%M') }}</td>
+                <td>
+                    {% if m.tipo == 'entrada' %}
+                    <span class="badge bg-success">Entrada</span>
+                    {% else %}
+                    <span class="badge bg-warning text-dark">Saída</span>
+                    {% endif %}
+                </td>
+                <td class="text-end">{{ "%.1f"|format(m.quantidade) }}</td>
+                <td class="text-end">{{ ("R$ %.2f"|format(m.preco_unitario)) if m.preco_unitario else '—' }}</td>
+                <td class="small text-muted">{{ m.referencia or '—' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-center text-muted">Nenhuma movimentação registrada</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    var entradas = [
+        {% for m in movimentacoes|reverse if m.tipo == 'entrada' and m.preco_unitario %}
+        {x: "{{ m.data.strftime('%d/%m') }}", y: {{ m.preco_unitario }}},
+        {% endfor %}
+    ];
+    if (entradas.length < 2) {
+        document.getElementById('chart-precos').parentElement.innerHTML =
+            '<p class="text-muted small text-center mb-0 py-2">Gráfico disponível após 2+ entradas com preço</p>';
+        return;
+    }
+    new Chart(document.getElementById('chart-precos'), {
+        type: 'line',
+        data: {
+            labels: entradas.map(function(e) { return e.x; }),
+            datasets: [{
+                label: 'Preço (R$/' + '{{ mp.unidade }}' + ')',
+                data: entradas.map(function(e) { return e.y; }),
+                borderColor: '#1565c0',
+                backgroundColor: 'rgba(21,101,192,0.1)',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {legend: {display: false}},
+            scales: {y: {beginAtZero: false}}
+        }
+    });
+})();
+</script>
+{% endblock %}

@@ -46,9 +46,19 @@
             <i class="bi bi-box-seam"></i> Banco de MP
         </a>
 
+        <a href="{{ url_for('materias_primas.estoque') }}"
+           class="sidebar-link {% if '/materias-primas/estoque' in request.path %}active{% endif %}">
+            <i class="bi bi-boxes"></i> Estoque MP
+        </a>
+
         <a href="{{ url_for('produtos.lista') }}"
            class="sidebar-link {% if request.path.startswith('/produtos') %}active{% endif %}">
             <i class="bi bi-basket3"></i> Produtos / Cestas
+        </a>
+
+        <a href="{{ url_for('producao.lista') }}"
+           class="sidebar-link {% if request.path.startswith('/producao') %}active{% endif %}">
+            <i class="bi bi-calendar-check"></i> Produção
         </a>
 
         <a href="{{ url_for('main.rentabilidade') }}"

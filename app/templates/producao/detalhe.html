@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Plano — {{ plano.nome }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+        <h5 class="fw-bold mb-0"><i class="bi bi-calendar-check"></i> {{ plano.nome }}</h5>
+        <small class="text-muted">{{ plano.data.strftime('%d/%m/%Y') }} —
+            {% if plano.status == 'executado' %}<span class="badge bg-success">Executado</span>
+            {% elif plano.status == 'confirmado' %}<span class="badge bg-primary">Confirmado</span>
+            {% else %}<span class="badge bg-secondary">Rascunho</span>{% endif %}
+        </small>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('producao.lista_compras', id=plano.id) }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-printer"></i> Lista de Compras
+        </a>
+        {% if plano.status != 'executado' %}
+        <form method="POST" action="{{ url_for('producao.baixar_estoque', id=plano.id) }}" class="d-inline"
+              onsubmit="return confirm('Baixar estoque de todas as MPs conforme este plano?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-warning btn-sm"><i class="bi bi-box-arrow-down"></i> Baixar Estoque</button>
+        </form>
+        {% endif %}
+        <a href="{{ url_for('producao.lista') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+
+<h6 class="fw-bold mb-2">Receitas no plano</h6>
+<div class="table-responsive mb-4">
+    <table class="table table-sm align-middle">
+        <thead class="table-light">
+            <tr><th>Receita</th><th class="text-center">Fornadas</th></tr>
+        </thead>
+        <tbody>
+            {% for item in plano.itens %}
+            <tr>
+                <td>{{ item.receita.nome if item.receita else '(excluída)' }}</td>
+                <td class="text-center">{{ item.multiplicador }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<h6 class="fw-bold mb-2"><i class="bi bi-cart"></i> Lista de Compras Consolidada</h6>
+<div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>Matéria-Prima</th>
+                <th class="text-end">Necessário (g)</th>
+                <th class="text-end">Estoque</th>
+                <th class="text-end">Déficit</th>
+                <th class="text-end">Custo Est.</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for nome, dados in lista_compras %}
+            <tr class="{{ 'table-warning' if dados.deficit > 0 else '' }}">
+                <td class="fw-bold">{{ nome }}</td>
+                <td class="text-end">{{ "%.0f"|format(dados.quantidade) }}</td>
+                <td class="text-end">{{ "%.0f"|format(dados.estoque_atual) }}</td>
+                <td class="text-end">
+                    {% if dados.deficit > 0 %}
+                    <span class="text-danger fw-bold">{{ "%.0f"|format(dados.deficit) }}</span>
+                    {% else %}—{% endif %}
+                </td>
+                <td class="text-end">R$ {{ "%.2f"|format(dados.custo_estimado) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="fw-bold">
+                <td colspan="4" class="text-end">Total Estimado:</td>
+                <td class="text-end">R$ {{ "%.2f"|format(custo_total) }}</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+{% if plano.status != 'executado' %}
+<div class="mt-3">
+    <form method="POST" action="{{ url_for('producao.excluir', id=plano.id) }}" class="d-inline"
+          onsubmit="return confirm('Excluir este plano?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i> Excluir Plano</button>
+    </form>
+</div>
+{% endif %}
+{% endblock %}

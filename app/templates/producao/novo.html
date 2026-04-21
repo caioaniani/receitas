@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Novo Plano de Produção{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="fw-bold mb-0"><i class="bi bi-plus-circle"></i> Novo Plano de Produção</h5>
+    <a href="{{ url_for('producao.lista') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<form method="POST" action="{{ url_for('producao.novo') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <label class="form-label">Data da Produção</label>
+            <input type="date" name="data" class="form-control" value="{{ hoje }}" required>
+        </div>
+        <div class="col-md-8">
+            <label class="form-label">Nome (opcional)</label>
+            <input type="text" name="nome" class="form-control" placeholder="Ex: Segunda - Pães e Doces">
+        </div>
+    </div>
+
+    <h6 class="fw-bold mt-3 mb-2"><i class="bi bi-list-check"></i> Receitas a Produzir</h6>
+
+    <div id="itens-container">
+        <div class="row g-2 mb-2 item-row">
+            <div class="col-md-8">
+                <select name="receita_id[]" class="form-select form-select-sm">
+                    <option value="">Selecione uma receita...</option>
+                    {% for r in receitas %}
+                    <option value="{{ r.id }}">{{ r.categoria or 'Outros' }} — {{ r.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <input type="number" name="multiplicador[]" class="form-control form-control-sm"
+                       value="1" min="1" placeholder="Fornadas">
+            </div>
+            <div class="col-md-2">
+                <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="this.closest('.item-row').remove()">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <button type="button" class="btn btn-outline-primary btn-sm mb-3" id="btn-add-item">
+        <i class="bi bi-plus-lg"></i> Adicionar Receita
+    </button>
+
+    <div class="border-top pt-3">
+        <button type="submit" class="btn btn-success">
+            <i class="bi bi-check-lg"></i> Criar Plano
+        </button>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('btn-add-item').addEventListener('click', function() {
+    var container = document.getElementById('itens-container');
+    var first = container.querySelector('.item-row');
+    var clone = first.cloneNode(true);
+    clone.querySelector('select').value = '';
+    clone.querySelector('input[type="number"]').value = '1';
+    container.appendChild(clone);
+});
+</script>
+{% endblock %}
