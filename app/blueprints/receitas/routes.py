@@ -107,6 +107,8 @@ def salvar(id):
         db.session.add(ing)
 
     db.session.commit()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(success=True)
     flash('Ficha salva com sucesso!', 'success')
     return redirect(url_for('receitas.ficha', id=receita.id))
 

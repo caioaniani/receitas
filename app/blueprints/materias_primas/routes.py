@@ -54,6 +54,8 @@ def salvar():
             db.session.add(mp)
 
     db.session.commit()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(success=True)
     flash('Banco de matérias-primas salvo com sucesso!', 'success')
     return redirect(url_for('materias_primas.banco'))
 

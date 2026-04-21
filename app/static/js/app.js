@@ -783,4 +783,89 @@ document.addEventListener('DOMContentLoaded', function () {
     function formatNum(value, decimals) {
         return value.toFixed(decimals).replace('.', ',');
     }
+
+
+    // ═══ UX: LOADING STATES ═══
+    document.addEventListener('submit', function(e) {
+        var btn = e.target.querySelector('[type="submit"]');
+        if (btn && !btn.dataset.noLoading) {
+            btn.disabled = true;
+            btn.dataset.originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvando...';
+            setTimeout(function() {
+                btn.disabled = false;
+                btn.innerHTML = btn.dataset.originalText;
+            }, 10000);
+        }
+    });
+
+
+    // ═══ UX: CTRL+S PARA SALVAR ═══
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            var form = document.querySelector('form[data-autosave], form.main-form, form[action*="salvar"]');
+            if (form) {
+                form.requestSubmit ? form.requestSubmit() : form.submit();
+            }
+        }
+    });
+
+
+    // ═══ UX: AUTO-SAVE DEBOUNCED ═══
+    (function() {
+        var forms = document.querySelectorAll('form[data-autosave]');
+        if (!forms.length) return;
+
+        forms.forEach(function(form) {
+            var timer = null;
+            var indicator = document.createElement('span');
+            indicator.className = 'ms-2 small';
+            indicator.style.display = 'none';
+            var submitBtn = form.querySelector('[type="submit"]');
+            if (submitBtn) submitBtn.parentElement.appendChild(indicator);
+
+            function showStatus(text, color) {
+                indicator.textContent = text;
+                indicator.style.color = color;
+                indicator.style.display = '';
+                setTimeout(function() { indicator.style.display = 'none'; }, 3000);
+            }
+
+            function doAutoSave() {
+                var formData = new FormData(form);
+                indicator.textContent = 'Salvando...';
+                indicator.style.color = '#666';
+                indicator.style.display = '';
+
+                fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': CSRF_TOKEN}
+                }).then(function(r) {
+                    if (r.ok) showStatus('Salvo', '#28a745');
+                    else showStatus('Erro ao salvar', '#dc3545');
+                }).catch(function() {
+                    showStatus('Erro de conexão', '#dc3545');
+                });
+            }
+
+            form.addEventListener('input', function() {
+                clearTimeout(timer);
+                timer = setTimeout(doAutoSave, 3000);
+            });
+        });
+    })();
+
+
+    // ═══ UX: VALIDAÇÃO CLIENT-SIDE ═══
+    document.querySelectorAll('form[data-validate]').forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            if (!form.checkValidity()) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        });
+    });
 });
