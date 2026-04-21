@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from flask import render_template, redirect, url_for, flash, request, abort
 from flask_login import login_required, current_user
@@ -45,6 +45,8 @@ def novo():
         flash('Vincule sua conta a uma loja para criar pedidos.', 'warning')
         return redirect(url_for('pedidos.lista'))
 
+    amanha = date.today() + timedelta(days=1)
+
     if request.method == 'POST':
         sel_loja = int(request.form.get('loja_id', 0)) if current_user.is_admin() else loja_id
         data_str = request.form.get('data_entrega', '')
@@ -53,7 +55,14 @@ def novo():
         try:
             data_entrega = datetime.strptime(data_str, '%Y-%m-%d').date()
         except ValueError:
-            data_entrega = date.today()
+            data_entrega = amanha
+
+        if data_entrega < amanha:
+            flash('A data de entrega deve ser a partir de amanha.', 'warning')
+            lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+            produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+            return render_template('pedidos/novo.html', lojas=lojas,
+                                   produtos=produtos, amanha=amanha, loja_id=loja_id)
 
         pedido = PedidoLoja(
             loja_id=sel_loja,
@@ -64,7 +73,6 @@ def novo():
         db.session.add(pedido)
         db.session.flush()
 
-        tipos = request.form.getlist('item_tipo[]')
         ids = request.form.getlist('item_id[]')
         qtds = request.form.getlist('item_qtd[]')
         notas = request.form.getlist('item_obs[]')
@@ -74,8 +82,7 @@ def novo():
                 continue
             item = PedidoItem(
                 pedido_id=pedido.id,
-                receita_id=int(ids[i]) if tipos[i] == 'receita' else None,
-                produto_id=int(ids[i]) if tipos[i] == 'produto' else None,
+                produto_id=int(ids[i]),
                 quantidade=int(qtds[i]),
                 observacao=notas[i].strip() if i < len(notas) else None,
             )
@@ -86,10 +93,9 @@ def novo():
         return redirect(url_for('pedidos.detalhe', id=pedido.id))
 
     lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-    return render_template('pedidos/novo.html', lojas=lojas, receitas=receitas,
-                           produtos=produtos, hoje=date.today(), loja_id=loja_id)
+    return render_template('pedidos/novo.html', lojas=lojas,
+                           produtos=produtos, amanha=amanha, loja_id=loja_id)
 
 
 @pedidos_bp.route('/<int:id>')
