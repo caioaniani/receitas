@@ -229,9 +229,9 @@ def importar():
         db.session.commit()
         return jsonify(success=True)
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify(success=False, error=f'Erro ao importar: {str(e)}')
+        return jsonify(success=False, error='Erro ao importar dados. Verifique o formato do arquivo.')
 
 
 @main_bp.route('/todo')

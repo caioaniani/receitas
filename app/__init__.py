@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import Flask, Response
 
-from app.extensions import db, csrf, login_manager
+from app.extensions import db, csrf, login_manager, limiter
 from config import Config
 
 
@@ -18,6 +18,7 @@ def create_app(config_class=None):
     db.init_app(app)
     csrf.init_app(app)
     login_manager.init_app(app)
+    limiter.init_app(app)
 
     @login_manager.user_loader
     def load_user(user_id):
@@ -50,13 +51,19 @@ def create_app(config_class=None):
                 receita_nomes=[], funcionarios=[],
             )
 
-        # Uma única query de receitas (reusada para sidebar e nomes)
-        receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+        # Receitas com eager load de ingredientes (evita N+1 na sidebar)
+        receitas = Receita.query.options(
+            db.joinedload(Receita.ingredientes)
+        ).order_by(Receita.categoria, Receita.nome).all()
 
-        # Funcionário: filtrar só fichas atribuídas
+        # Funcionário: filtrar só fichas atribuídas via subquery
         if not current_user.is_admin():
-            ids_permitidos = {a.receita_id for a in
-                             Atribuicao.query.filter_by(usuario_id=current_user.id).all()}
+            ids_permitidos = set(
+                db.session.query(Atribuicao.receita_id)
+                .filter_by(usuario_id=current_user.id)
+                .all()
+            )
+            ids_permitidos = {r[0] for r in ids_permitidos}
             receitas_sidebar = [r for r in receitas if r.id in ids_permitidos]
         else:
             receitas_sidebar = receitas
@@ -95,9 +102,32 @@ def create_app(config_class=None):
         return Response("User-agent: *\nDisallow: /\n", mimetype='text/plain')
 
     @app.after_request
-    def add_noindex(response):
+    def add_security_headers(response):
         response.headers['X-Robots-Tag'] = 'noindex, nofollow'
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+            "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+            "font-src 'self' https://cdn.jsdelivr.net; "
+            "img-src 'self' data:;"
+        )
         return response
+
+    # ── Error handlers ──
+    @app.errorhandler(403)
+    def forbidden(e):
+        return render_template('errors/403.html'), 403
+
+    @app.errorhandler(404)
+    def not_found(e):
+        return render_template('errors/404.html'), 404
+
+    @app.errorhandler(500)
+    def internal_error(e):
+        return render_template('errors/500.html'), 500
 
     # ── Blueprints ──
     from app.blueprints.main import main_bp
