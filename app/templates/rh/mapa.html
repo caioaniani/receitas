@@ -69,6 +69,13 @@
             <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('box-upload').style.display='block'">
                 <i class="bi bi-arrow-repeat"></i> Trocar Planta
             </button>
+            <form method="POST" action="{{ url_for('rh.excluir_planta', loja_id=loja.id) }}"
+                  onsubmit="return confirm('Excluir planta e todas as posições? Esta ação não pode ser desfeita.')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline-danger btn-sm">
+                    <i class="bi bi-trash"></i> Excluir Planta
+                </button>
+            </form>
         </div>
         {% endif %}
     </div>

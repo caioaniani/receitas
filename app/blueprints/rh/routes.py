@@ -651,6 +651,23 @@ def upload_planta(loja_id):
     return redirect(url_for('rh.mapa', loja_id=loja_id))
 
 
+@rh_bp.route('/mapa/<int:loja_id>/planta/excluir', methods=['POST'])
+@login_required
+@admin_required
+def excluir_planta(loja_id):
+    loja = Loja.query.get_or_404(loja_id)
+    Posicao.query.filter(
+        Posicao.nome_posicao.in_([s.nome for s in loja.slots]),
+        Posicao.loja_id == loja_id,
+    ).delete(synchronize_session=False)
+    SlotMapa.query.filter_by(loja_id=loja_id).delete()
+    loja.planta_imagem = None
+    loja.planta_mimetype = None
+    db.session.commit()
+    flash('Planta e posições removidas.', 'success')
+    return redirect(url_for('rh.mapa', loja_id=loja_id))
+
+
 @rh_bp.route('/mapa/<int:loja_id>/planta.img')
 @login_required
 def ver_planta(loja_id):
