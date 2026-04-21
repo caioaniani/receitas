@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Férias e Folgas{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="fw-bold mb-0"><i class="bi bi-calendar-heart"></i> Férias e Folgas</h5>
+    <div class="d-flex gap-2 align-items-center">
+        <a href="{{ url_for('rh.ferias', mes=mes-1 if mes > 1 else 12, ano=ano if mes > 1 else ano-1) }}"
+           class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-left"></i></a>
+        <span class="fw-bold">{{ '%02d/%d'|format(mes, ano) }}</span>
+        <a href="{{ url_for('rh.ferias', mes=mes+1 if mes < 12 else 1, ano=ano if mes < 12 else ano+1) }}"
+           class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-right"></i></a>
+        <button class="btn btn-primary btn-sm ms-2" data-bs-toggle="modal" data-bs-target="#modal-nova">
+            <i class="bi bi-plus-lg"></i> Agendar
+        </button>
+    </div>
+</div>
+
+{% if registros %}
+<div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>Funcionário</th>
+                <th>Tipo</th>
+                <th>Início</th>
+                <th>Fim</th>
+                <th>Dias</th>
+                <th>Obs</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in registros %}
+            <tr>
+                <td class="fw-bold">{{ r.funcionario.nome }}</td>
+                <td>
+                    {% if r.tipo == 'ferias' %}<span class="badge bg-danger">Férias</span>
+                    {% elif r.tipo == 'folga' %}<span class="badge bg-warning text-dark">Folga</span>
+                    {% else %}<span class="badge bg-info">Licença</span>{% endif %}
+                </td>
+                <td>{{ r.data_inicio.strftime('%d/%m') }}</td>
+                <td>{{ r.data_fim.strftime('%d/%m') }}</td>
+                <td>{{ (r.data_fim - r.data_inicio).days + 1 }}</td>
+                <td class="small text-muted">{{ r.observacao or '—' }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('rh.ferias_excluir', id=r.id) }}" class="d-inline"
+                          onsubmit="return confirm('Remover?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-outline-danger btn-sm py-0 px-1"><i class="bi bi-trash"></i></button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center text-muted py-4">
+    <i class="bi bi-calendar-x" style="font-size:2rem;"></i>
+    <p class="mt-2">Nenhum registro de férias/folgas neste mês</p>
+</div>
+{% endif %}
+
+<!-- Modal Nova -->
+<div class="modal fade" id="modal-nova" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('rh.ferias_nova') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title"><i class="bi bi-calendar-plus"></i> Agendar Férias/Folga</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Funcionário</label>
+                        <select name="funcionario_id" class="form-select" required>
+                            {% for f in funcionarios %}
+                            <option value="{{ f.id }}">{{ f.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo</label>
+                        <select name="tipo" class="form-select">
+                            <option value="ferias">Férias</option>
+                            <option value="folga">Folga</option>
+                            <option value="licenca">Licença</option>
+                        </select>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label">Início</label>
+                            <input type="date" name="data_inicio" class="form-control" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Fim</label>
+                            <input type="date" name="data_fim" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="mb-3 mt-2">
+                        <label class="form-label">Observação</label>
+                        <input type="text" name="observacao" class="form-control" placeholder="Opcional">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Salvar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

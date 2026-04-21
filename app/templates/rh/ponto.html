@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Ponto — {{ dia.strftime('%d/%m/%Y') }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="fw-bold mb-0"><i class="bi bi-clock"></i> Registro de Ponto</h5>
+    <div class="d-flex gap-2 align-items-center">
+        <input type="date" id="sel-dia" class="form-control form-control-sm" style="width:auto;"
+               value="{{ dia.strftime('%Y-%m-%d') }}"
+               onchange="location.href='/rh/ponto?dia='+this.value">
+        <a href="{{ url_for('rh.ponto_resumo') }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-table"></i> Resumo Mensal
+        </a>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>Funcionário</th>
+                <th class="text-center">Entrada</th>
+                <th class="text-center">Saída</th>
+                <th class="text-center">Entrada 2</th>
+                <th class="text-center">Saída 2</th>
+                <th class="text-center">Horas</th>
+                <th class="text-center">Extras</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in funcionarios %}
+            {% set reg = reg_map.get(f.id) %}
+            <form method="POST" action="{{ url_for('rh.ponto_registrar') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="funcionario_id" value="{{ f.id }}">
+                <input type="hidden" name="dia" value="{{ dia.strftime('%Y-%m-%d') }}">
+                <tr>
+                    <td class="fw-bold small">{{ f.nome }}</td>
+                    <td class="text-center">
+                        <input type="time" name="entrada" class="form-control form-control-sm d-inline-block" style="width:90px;"
+                               value="{{ reg.entrada.strftime('%H:%M') if reg and reg.entrada else '' }}">
+                    </td>
+                    <td class="text-center">
+                        <input type="time" name="saida" class="form-control form-control-sm d-inline-block" style="width:90px;"
+                               value="{{ reg.saida.strftime('%H:%M') if reg and reg.saida else '' }}">
+                    </td>
+                    <td class="text-center">
+                        <input type="time" name="entrada2" class="form-control form-control-sm d-inline-block" style="width:90px;"
+                               value="{{ reg.entrada2.strftime('%H:%M') if reg and reg.entrada2 else '' }}">
+                    </td>
+                    <td class="text-center">
+                        <input type="time" name="saida2" class="form-control form-control-sm d-inline-block" style="width:90px;"
+                               value="{{ reg.saida2.strftime('%H:%M') if reg and reg.saida2 else '' }}">
+                    </td>
+                    <td class="text-center small">
+                        {{ "%.1f"|format(reg.horas_trabalhadas) if reg and reg.horas_trabalhadas else '—' }}
+                    </td>
+                    <td class="text-center small">
+                        {% if reg and reg.horas_extras %}
+                        <span class="badge bg-warning text-dark">+{{ "%.1f"|format(reg.horas_extras) }}h</span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        <button type="submit" class="btn btn-outline-primary btn-sm py-0 px-1" title="Salvar">
+                            <i class="bi bi-check-lg"></i>
+                        </button>
+                    </td>
+                </tr>
+            </form>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

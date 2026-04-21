@@ -454,3 +454,48 @@ class PlanejamentoItem(db.Model):
 
     def __repr__(self):
         return f'<PlanejamentoItem receita={self.receita_id} x{self.multiplicador}>'
+
+
+class Ferias(db.Model):
+    __tablename__ = 'ferias'
+
+    id = db.Column(db.Integer, primary_key=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey('funcionario.id'), nullable=False)
+    data_inicio = db.Column(db.Date, nullable=False)
+    data_fim = db.Column(db.Date, nullable=False)
+    tipo = db.Column(db.String(20), default='ferias')
+    status = db.Column(db.String(20), default='agendada')
+    observacao = db.Column(db.Text)
+    criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    funcionario = db.relationship('Funcionario', backref='ferias')
+    autor = db.relationship('Usuario', backref='ferias_criadas')
+
+    def __repr__(self):
+        return f'<Ferias {self.funcionario_id} {self.data_inicio}~{self.data_fim}>'
+
+
+class RegistroPonto(db.Model):
+    __tablename__ = 'registro_ponto'
+
+    id = db.Column(db.Integer, primary_key=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey('funcionario.id'), nullable=False)
+    data = db.Column(db.Date, nullable=False)
+    entrada = db.Column(db.Time)
+    saida = db.Column(db.Time)
+    entrada2 = db.Column(db.Time)
+    saida2 = db.Column(db.Time)
+    horas_trabalhadas = db.Column(db.Float)
+    horas_extras = db.Column(db.Float, default=0)
+    observacao = db.Column(db.Text)
+    editado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    __table_args__ = (
+        db.UniqueConstraint('funcionario_id', 'data', name='uq_ponto_func_data'),
+    )
+
+    funcionario = db.relationship('Funcionario', backref='registros_ponto')
+
+    def __repr__(self):
+        return f'<Ponto {self.funcionario_id} {self.data}>'

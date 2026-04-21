@@ -118,6 +118,14 @@
            class="sidebar-link {% if '/rh/mapa' in request.path %}active{% endif %}">
             <i class="bi bi-map"></i> Mapa das Lojas
         </a>
+        <a href="{{ url_for('rh.ponto') }}"
+           class="sidebar-link {% if '/rh/ponto' in request.path %}active{% endif %}">
+            <i class="bi bi-clock"></i> Ponto
+        </a>
+        <a href="{{ url_for('rh.ferias') }}"
+           class="sidebar-link {% if '/rh/ferias' in request.path %}active{% endif %}">
+            <i class="bi bi-calendar-heart"></i> Férias/Folgas
+        </a>
         {% elif current_user.is_authenticated %}
         <a href="{{ url_for('auth.minhas_fichas') }}"
            class="sidebar-link {% if request.path == '/auth/minhas-fichas' %}active{% endif %}">

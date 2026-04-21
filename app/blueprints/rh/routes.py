@@ -9,7 +9,8 @@ from app.blueprints.rh import rh_bp
 from app.decorators import admin_required
 from app.extensions import db
 from flask import jsonify
-from app.models import Funcionario, Loja, FolhaPagamento, Feedback, Posicao, Atestado, SlotMapa, funcionario_loja
+from app.models import (Funcionario, Loja, FolhaPagamento, Feedback, Posicao,
+                        Atestado, SlotMapa, funcionario_loja, Ferias, RegistroPonto)
 from app.utils import parse_float_br
 
 ALLOWED_MIMETYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'}
@@ -739,3 +740,166 @@ def api_alocar():
 
     db.session.commit()
     return jsonify({'ok': True})
+
+
+# ── Férias e Folgas ──
+
+@rh_bp.route('/ferias')
+@login_required
+@admin_required
+def ferias():
+    from datetime import date
+    hoje = date.today()
+    mes = int(request.args.get('mes', hoje.month))
+    ano = int(request.args.get('ano', hoje.year))
+
+    registros = Ferias.query.filter(
+        Ferias.data_fim >= datetime(ano, mes, 1).date(),
+    ).order_by(Ferias.data_inicio).all()
+
+    # Filtra por sobreposição com o mês
+    import calendar
+    ultimo_dia = calendar.monthrange(ano, mes)[1]
+    inicio_mes = datetime(ano, mes, 1).date()
+    fim_mes = datetime(ano, mes, ultimo_dia).date()
+    registros = [r for r in registros if r.data_inicio <= fim_mes and r.data_fim >= inicio_mes]
+
+    funcionarios = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
+    return render_template('rh/ferias.html', registros=registros,
+                           funcionarios=funcionarios, mes=mes, ano=ano)
+
+
+@rh_bp.route('/ferias/nova', methods=['POST'])
+@login_required
+@admin_required
+def ferias_nova():
+    func_id = int(request.form['funcionario_id'])
+    data_inicio = datetime.strptime(request.form['data_inicio'], '%Y-%m-%d').date()
+    data_fim = datetime.strptime(request.form['data_fim'], '%Y-%m-%d').date()
+    tipo = request.form.get('tipo', 'ferias')
+    obs = request.form.get('observacao', '').strip()
+
+    f = Ferias(
+        funcionario_id=func_id,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        tipo=tipo,
+        observacao=obs or None,
+        criado_por=current_user.id,
+    )
+    db.session.add(f)
+    db.session.commit()
+    flash('Registro de férias/folga criado.', 'success')
+    return redirect(url_for('rh.ferias'))
+
+
+@rh_bp.route('/ferias/<int:id>/excluir', methods=['POST'])
+@login_required
+@admin_required
+def ferias_excluir(id):
+    f = Ferias.query.get_or_404(id)
+    db.session.delete(f)
+    db.session.commit()
+    flash('Registro removido.', 'success')
+    return redirect(url_for('rh.ferias'))
+
+
+# ── Ponto Simplificado ──
+
+@rh_bp.route('/ponto')
+@login_required
+@admin_required
+def ponto():
+    from datetime import date
+    hoje = date.today()
+    dia = request.args.get('dia', hoje.strftime('%Y-%m-%d'))
+
+    try:
+        dia_date = datetime.strptime(dia, '%Y-%m-%d').date()
+    except ValueError:
+        dia_date = hoje
+
+    registros = RegistroPonto.query.filter_by(data=dia_date).all()
+    reg_map = {r.funcionario_id: r for r in registros}
+    funcionarios = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
+
+    return render_template('rh/ponto.html', funcionarios=funcionarios,
+                           reg_map=reg_map, dia=dia_date)
+
+
+@rh_bp.route('/ponto/registrar', methods=['POST'])
+@login_required
+@admin_required
+def ponto_registrar():
+    func_id = int(request.form['funcionario_id'])
+    dia_str = request.form['dia']
+    dia_date = datetime.strptime(dia_str, '%Y-%m-%d').date()
+
+    entrada = request.form.get('entrada', '').strip()
+    saida = request.form.get('saida', '').strip()
+    entrada2 = request.form.get('entrada2', '').strip()
+    saida2 = request.form.get('saida2', '').strip()
+
+    reg = RegistroPonto.query.filter_by(funcionario_id=func_id, data=dia_date).first()
+    if not reg:
+        reg = RegistroPonto(funcionario_id=func_id, data=dia_date)
+        db.session.add(reg)
+
+    def parse_time(s):
+        if not s:
+            return None
+        try:
+            return datetime.strptime(s, '%H:%M').time()
+        except ValueError:
+            return None
+
+    reg.entrada = parse_time(entrada)
+    reg.saida = parse_time(saida)
+    reg.entrada2 = parse_time(entrada2)
+    reg.saida2 = parse_time(saida2)
+    reg.editado_por = current_user.id
+
+    total_min = 0
+    if reg.entrada and reg.saida:
+        t1 = reg.entrada.hour * 60 + reg.entrada.minute
+        t2 = reg.saida.hour * 60 + reg.saida.minute
+        total_min += max(0, t2 - t1)
+    if reg.entrada2 and reg.saida2:
+        t3 = reg.entrada2.hour * 60 + reg.entrada2.minute
+        t4 = reg.saida2.hour * 60 + reg.saida2.minute
+        total_min += max(0, t4 - t3)
+
+    reg.horas_trabalhadas = total_min / 60.0
+    reg.horas_extras = max(0, reg.horas_trabalhadas - 8)
+
+    db.session.commit()
+    flash(f'Ponto registrado.', 'success')
+    return redirect(url_for('rh.ponto', dia=dia_str))
+
+
+@rh_bp.route('/ponto/resumo')
+@login_required
+@admin_required
+def ponto_resumo():
+    from datetime import date
+    hoje = date.today()
+    mes = int(request.args.get('mes', hoje.month))
+    ano = int(request.args.get('ano', hoje.year))
+
+    registros = RegistroPonto.query.filter(
+        db.extract('month', RegistroPonto.data) == mes,
+        db.extract('year', RegistroPonto.data) == ano,
+    ).all()
+
+    funcionarios = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
+
+    resumo = {}
+    for f in funcionarios:
+        resumo[f.id] = {'nome': f.nome, 'funcao': f.funcao, 'horas': 0, 'extras': 0, 'dias': 0}
+    for r in registros:
+        if r.funcionario_id in resumo:
+            resumo[r.funcionario_id]['horas'] += r.horas_trabalhadas or 0
+            resumo[r.funcionario_id]['extras'] += r.horas_extras or 0
+            resumo[r.funcionario_id]['dias'] += 1
+
+    return render_template('rh/ponto_resumo.html', resumo=resumo.values(), mes=mes, ano=ano)
