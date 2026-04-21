@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Pedidos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="fw-bold mb-0"><i class="bi bi-cart3"></i> Pedidos</h5>
+    <a href="{{ url_for('pedidos.novo') }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-lg"></i> Novo Pedido
+    </a>
+</div>
+
+{% if current_user.is_admin() %}
+<form method="GET" class="mb-3 d-flex align-items-center gap-2">
+    <select name="loja" class="form-select form-select-sm" style="max-width:250px;" onchange="this.form.submit()">
+        <option value="">Todas as lojas</option>
+        {% for l in lojas %}
+        <option value="{{ l.id }}" {% if filtro_loja == l.id|string %}selected{% endif %}>{{ l.nome }}</option>
+        {% endfor %}
+    </select>
+</form>
+{% endif %}
+
+<div class="table-responsive">
+    <table class="table table-sm table-bordered table-hover bg-white">
+        <thead>
+            <tr style="background:#37474f; color:#fff; font-size:11px; text-transform:uppercase;">
+                <th style="width:50px">#</th>
+                <th>Loja</th>
+                <th>Data Entrega</th>
+                <th class="text-center">Itens</th>
+                <th class="text-center">Status</th>
+                <th>Criado em</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in pedidos %}
+            <tr style="cursor:pointer" onclick="window.location='{{ url_for('pedidos.detalhe', id=p.id) }}'">
+                <td class="text-muted">{{ p.id }}</td>
+                <td>{{ p.loja.nome }}</td>
+                <td>{{ p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '-' }}</td>
+                <td class="text-center">{{ p.itens|length }}</td>
+                <td class="text-center">
+                    {% if p.status == 'pendente' %}
+                    <span class="badge rounded-pill bg-warning text-dark">Pendente</span>
+                    {% elif p.status == 'confirmado' %}
+                    <span class="badge rounded-pill bg-info text-dark">Confirmado</span>
+                    {% elif p.status == 'entregue' %}
+                    <span class="badge rounded-pill bg-success">Entregue</span>
+                    {% elif p.status == 'cancelado' %}
+                    <span class="badge rounded-pill bg-secondary">Cancelado</span>
+                    {% else %}
+                    <span class="badge rounded-pill bg-light text-dark">{{ p.status }}</span>
+                    {% endif %}
+                </td>
+                <td class="text-muted" style="font-size:12px;">{{ p.criado_em.strftime('%d/%m %H:%M') if p.criado_em else '-' }}</td>
+            </tr>
+            {% endfor %}
+            {% if not pedidos %}
+            <tr><td colspan="6" class="text-center text-muted py-3">Nenhum pedido encontrado.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

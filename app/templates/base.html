@@ -95,6 +95,30 @@
         </a>
 
         <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">Lojas</div>
+
+        <a href="{{ url_for('pedidos.lista') }}"
+           class="sidebar-link {% if request.path == '/pedidos/' or request.path == '/pedidos' %}active{% endif %}">
+            <i class="bi bi-cart3"></i> Pedidos
+        </a>
+        <a href="{{ url_for('pedidos.estoque_loja') }}"
+           class="sidebar-link {% if '/pedidos/estoque-loja' in request.path %}active{% endif %}">
+            <i class="bi bi-box-seam"></i> Estoque Loja
+        </a>
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">Producao</div>
+
+        <a href="{{ url_for('pedidos.congelados') }}"
+           class="sidebar-link {% if '/pedidos/congelados' in request.path %}active{% endif %}">
+            <i class="bi bi-snow2"></i> Congelados
+        </a>
+        <a href="{{ url_for('pedidos.separacao') }}"
+           class="sidebar-link {% if '/pedidos/separacao' in request.path %}active{% endif %}">
+            <i class="bi bi-clipboard-data"></i> Separacao do Dia
+        </a>
+
+        <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">RH</div>
 
         <a href="{{ url_for('rh.dashboard') }}"
@@ -130,6 +154,20 @@
             <i class="bi bi-calendar-heart"></i> Férias/Folgas
         </a>
         {% elif current_user.is_authenticated %}
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">Lojas</div>
+
+        <a href="{{ url_for('pedidos.lista') }}"
+           class="sidebar-link {% if request.path == '/pedidos/' or request.path == '/pedidos' %}active{% endif %}">
+            <i class="bi bi-cart3"></i> Pedidos
+        </a>
+        <a href="{{ url_for('pedidos.estoque_loja') }}"
+           class="sidebar-link {% if '/pedidos/estoque-loja' in request.path %}active{% endif %}">
+            <i class="bi bi-box-seam"></i> Estoque Loja
+        </a>
+
+        <div class="sidebar-divider"></div>
+
         <a href="{{ url_for('auth.minhas_fichas') }}"
            class="sidebar-link {% if request.path == '/auth/minhas-fichas' %}active{% endif %}">
             <i class="bi bi-clipboard-check"></i> Minhas Fichas

@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}Novo Pedido{% endblock %}
+
+{% block content %}
+<h5 class="fw-bold mb-3"><i class="bi bi-cart-plus"></i> Novo Pedido</h5>
+
+<form method="POST" id="form-pedido">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="row g-3 mb-3">
+        {% if current_user.is_admin() %}
+        <div class="col-md-4">
+            <label class="form-label fw-semibold">Loja</label>
+            <select name="loja_id" class="form-select form-select-sm" required>
+                <option value="">Selecione...</option>
+                {% for l in lojas %}
+                <option value="{{ l.id }}">{{ l.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">Data de Entrega</label>
+            <input type="date" name="data_entrega" class="form-control form-control-sm" value="{{ hoje }}" required>
+        </div>
+        <div class="col-md-5">
+            <label class="form-label fw-semibold">Observacao</label>
+            <input type="text" name="observacao" class="form-control form-control-sm" placeholder="Opcional...">
+        </div>
+    </div>
+
+    <h6 class="fw-bold mb-2">Itens do Pedido</h6>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered bg-white" id="itens-table">
+            <thead>
+                <tr style="background:#37474f; color:#fff; font-size:11px; text-transform:uppercase;">
+                    <th style="width:120px">Tipo</th>
+                    <th>Item</th>
+                    <th style="width:100px">Qtd</th>
+                    <th>Obs</th>
+                    <th style="width:40px"></th>
+                </tr>
+            </thead>
+            <tbody id="itens-body">
+                <tr class="item-row">
+                    <td>
+                        <select name="item_tipo[]" class="form-select form-select-sm tipo-sel">
+                            <option value="receita">Receita</option>
+                            <option value="produto">Produto</option>
+                        </select>
+                    </td>
+                    <td>
+                        <select name="item_id[]" class="form-select form-select-sm item-sel">
+                            <option value="">Selecione...</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1">
+                    </td>
+                    <td>
+                        <input type="text" name="item_obs[]" class="form-control form-control-sm" placeholder="">
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger btn-remove-item" onclick="this.closest('tr').remove()">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-add-item">
+            <i class="bi bi-plus-lg"></i> Adicionar Item
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-check-lg"></i> Criar Pedido
+        </button>
+        <a href="{{ url_for('pedidos.lista') }}" class="btn btn-outline-secondary btn-sm">Cancelar</a>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var receitas = [
+    {% for r in receitas %}
+    {id: {{ r.id }}, nome: "{{ r.nome|e }}", cat: "{{ r.categoria|e }}"},
+    {% endfor %}
+];
+var produtos = [
+    {% for p in produtos %}
+    {id: {{ p.id }}, nome: "{{ p.nome|e }}"},
+    {% endfor %}
+];
+
+function populateItemSelect(row) {
+    var tipo = row.querySelector('.tipo-sel').value;
+    var sel = row.querySelector('.item-sel');
+    sel.innerHTML = '<option value="">Selecione...</option>';
+    var list = tipo === 'receita' ? receitas : produtos;
+    list.forEach(function(item) {
+        var opt = document.createElement('option');
+        opt.value = item.id;
+        opt.textContent = item.cat ? item.cat + ' — ' + item.nome : item.nome;
+        sel.appendChild(opt);
+    });
+}
+
+document.querySelectorAll('.item-row').forEach(function(row) {
+    populateItemSelect(row);
+    row.querySelector('.tipo-sel').addEventListener('change', function() {
+        populateItemSelect(row);
+    });
+});
+
+document.getElementById('btn-add-item').addEventListener('click', function() {
+    var tbody = document.getElementById('itens-body');
+    var tr = document.createElement('tr');
+    tr.className = 'item-row';
+    tr.innerHTML =
+        '<td><select name="item_tipo[]" class="form-select form-select-sm tipo-sel">' +
+        '<option value="receita">Receita</option><option value="produto">Produto</option></select></td>' +
+        '<td><select name="item_id[]" class="form-select form-select-sm item-sel"><option value="">Selecione...</option></select></td>' +
+        '<td><input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1"></td>' +
+        '<td><input type="text" name="item_obs[]" class="form-control form-control-sm" placeholder=""></td>' +
+        '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-item" onclick="this.closest(\'tr\').remove()"><i class="bi bi-x"></i></button></td>';
+    tbody.appendChild(tr);
+    populateItemSelect(tr);
+    tr.querySelector('.tipo-sel').addEventListener('change', function() {
+        populateItemSelect(tr);
+    });
+});
+</script>
+{% endblock %}

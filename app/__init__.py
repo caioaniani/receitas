@@ -138,6 +138,7 @@ def create_app(config_class=None):
     from app.blueprints.rh import rh_bp
     from app.blueprints.producao import producao_bp
     from app.blueprints.relatorios import relatorios_bp
+    from app.blueprints.pedidos import pedidos_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(materias_primas_bp, url_prefix='/materias-primas')
@@ -147,6 +148,7 @@ def create_app(config_class=None):
     app.register_blueprint(rh_bp, url_prefix='/rh')
     app.register_blueprint(producao_bp, url_prefix='/producao')
     app.register_blueprint(relatorios_bp, url_prefix='/relatorios')
+    app.register_blueprint(pedidos_bp)
 
     with app.app_context():
         db.create_all()
@@ -286,6 +288,15 @@ def _migrate_postgres(app):
             if 'altura' not in cols_slot:
                 conn.execute(text("ALTER TABLE slot_mapa ADD COLUMN altura REAL DEFAULT 8"))
 
+        # usuario.loja_id
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'usuario'"
+        ))
+        cols_user = {row[0] for row in result}
+        if cols_user and 'loja_id' not in cols_user:
+            conn.execute(text("ALTER TABLE usuario ADD COLUMN loja_id INTEGER REFERENCES loja(id)"))
+
         # posicao.origem
         result = conn.execute(text(
             "SELECT column_name FROM information_schema.columns "
@@ -382,6 +393,12 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE slot_mapa ADD COLUMN largura REAL DEFAULT 15")
     if cols_slot and 'altura' not in cols_slot:
         cursor.execute("ALTER TABLE slot_mapa ADD COLUMN altura REAL DEFAULT 8")
+
+    # Migração usuario.loja_id
+    cursor.execute("PRAGMA table_info(usuario)")
+    cols_user = [row[1] for row in cursor.fetchall()]
+    if cols_user and 'loja_id' not in cols_user:
+        cursor.execute("ALTER TABLE usuario ADD COLUMN loja_id INTEGER REFERENCES loja(id)")
 
     # Migração posicao.origem
     cursor.execute("PRAGMA table_info(posicao)")

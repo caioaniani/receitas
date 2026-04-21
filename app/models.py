@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -13,7 +13,10 @@ class Usuario(UserMixin, db.Model):
     nome = db.Column(db.String(100), nullable=False)
     login = db.Column(db.String(50), nullable=False, unique=True)
     senha_hash = db.Column(db.String(256), nullable=False)
-    papel = db.Column(db.String(20), nullable=False, default='funcionario')  # 'admin' ou 'funcionario'
+    papel = db.Column(db.String(20), nullable=False, default='funcionario')
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=True)
+
+    loja = db.relationship('Loja', backref='usuarios')
 
     def set_senha(self, senha):
         self.senha_hash = generate_password_hash(senha, method='pbkdf2:sha256')
@@ -500,3 +503,116 @@ class RegistroPonto(db.Model):
 
     def __repr__(self):
         return f'<Ponto {self.funcionario_id} {self.data}>'
+
+
+# ── Estoque de Congelados (Produção) ──
+
+class EstoqueProducao(db.Model):
+    __tablename__ = 'estoque_producao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
+    quantidade = db.Column(db.Integer, default=0)
+
+    receita = db.relationship('Receita')
+    produto = db.relationship('Produto')
+    movimentacoes = db.relationship('MovEstoqueProducao', backref='estoque', cascade='all, delete-orphan')
+
+    @property
+    def nome_item(self):
+        if self.receita:
+            return self.receita.nome
+        if self.produto:
+            return self.produto.nome
+        return '?'
+
+
+class MovEstoqueProducao(db.Model):
+    __tablename__ = 'mov_estoque_producao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    estoque_producao_id = db.Column(db.Integer, db.ForeignKey('estoque_producao.id'), nullable=False)
+    tipo = db.Column(db.String(20), nullable=False)
+    quantidade = db.Column(db.Integer, nullable=False)
+    data = db.Column(db.DateTime, default=datetime.utcnow)
+    referencia = db.Column(db.String(200))
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+
+# ── Pedidos de Loja ──
+
+class PedidoLoja(db.Model):
+    __tablename__ = 'pedido_loja'
+
+    id = db.Column(db.Integer, primary_key=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
+    data_pedido = db.Column(db.Date, default=date.today)
+    data_entrega = db.Column(db.Date)
+    status = db.Column(db.String(20), default='pendente')
+    observacao = db.Column(db.Text)
+    criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    loja = db.relationship('Loja', backref='pedidos')
+    criador = db.relationship('Usuario')
+    itens = db.relationship('PedidoItem', backref='pedido', cascade='all, delete-orphan')
+
+
+class PedidoItem(db.Model):
+    __tablename__ = 'pedido_item'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_id = db.Column(db.Integer, db.ForeignKey('pedido_loja.id'), nullable=False)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
+    quantidade = db.Column(db.Integer, nullable=False)
+    observacao = db.Column(db.String(200))
+
+    receita = db.relationship('Receita')
+    produto = db.relationship('Produto')
+
+    @property
+    def nome_item(self):
+        if self.receita:
+            return self.receita.nome
+        if self.produto:
+            return self.produto.nome
+        return '?'
+
+
+# ── Estoque de Loja ──
+
+class EstoqueLoja(db.Model):
+    __tablename__ = 'estoque_loja'
+
+    id = db.Column(db.Integer, primary_key=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
+    quantidade = db.Column(db.Integer, default=0)
+
+    loja = db.relationship('Loja')
+    receita = db.relationship('Receita')
+    produto = db.relationship('Produto')
+    movimentacoes = db.relationship('MovEstoqueLoja', backref='estoque', cascade='all, delete-orphan')
+
+    @property
+    def nome_item(self):
+        if self.receita:
+            return self.receita.nome
+        if self.produto:
+            return self.produto.nome
+        return '?'
+
+
+class MovEstoqueLoja(db.Model):
+    __tablename__ = 'mov_estoque_loja'
+
+    id = db.Column(db.Integer, primary_key=True)
+    estoque_loja_id = db.Column(db.Integer, db.ForeignKey('estoque_loja.id'), nullable=False)
+    tipo = db.Column(db.String(20), nullable=False)
+    quantidade = db.Column(db.Integer, nullable=False)
+    data = db.Column(db.DateTime, default=datetime.utcnow)
+    referencia = db.Column(db.String(200))
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))

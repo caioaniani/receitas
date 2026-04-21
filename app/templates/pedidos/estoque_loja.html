@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Estoque da Loja{% endblock %}
+
+{% block content %}
+<h5 class="fw-bold mb-3"><i class="bi bi-box-seam"></i> Estoque da Loja</h5>
+
+{% if current_user.is_admin() %}
+<form method="GET" class="mb-3 d-flex align-items-center gap-2">
+    <select name="loja" class="form-select form-select-sm" style="max-width:250px;" onchange="this.form.submit()">
+        <option value="">Selecione uma loja...</option>
+        {% for l in lojas %}
+        <option value="{{ l.id }}" {% if sel_loja == l.id %}selected{% endif %}>{{ l.nome }}</option>
+        {% endfor %}
+    </select>
+</form>
+{% endif %}
+
+{% if loja %}
+<p class="text-muted mb-2">Estoque atual de <strong>{{ loja.nome }}</strong></p>
+
+{% if itens %}
+<form method="POST" action="{{ url_for('pedidos.estoque_loja_registrar') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if current_user.is_admin() %}
+    <input type="hidden" name="loja_id" value="{{ loja.id }}">
+    {% endif %}
+
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered table-hover bg-white">
+            <thead>
+                <tr style="background:#37474f; color:#fff; font-size:11px; text-transform:uppercase;">
+                    <th>Item</th>
+                    <th class="text-center" style="width:100px">Em Estoque</th>
+                    <th class="text-center" style="width:80px">Qtd</th>
+                    <th class="text-center" style="width:120px">Tipo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for el in itens %}
+                <tr>
+                    <td class="fw-semibold">{{ el.nome_item }}</td>
+                    <td class="text-center fw-bold">{{ el.quantidade }}</td>
+                    <td>
+                        <input type="hidden" name="estoque_id[]" value="{{ el.id }}">
+                        <input type="number" name="qtd[]" class="form-control form-control-sm input-blue text-center" min="0" value="0">
+                    </td>
+                    <td>
+                        <select name="tipo[]" class="form-select form-select-sm">
+                            <option value="venda">Venda</option>
+                            <option value="sobra">Sobra</option>
+                            <option value="perda">Perda</option>
+                        </select>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-sm">
+        <i class="bi bi-check-lg"></i> Registrar
+    </button>
+</form>
+{% else %}
+<div class="alert alert-info">Nenhum item no estoque desta loja. O estoque e alimentado quando pedidos sao entregues.</div>
+{% endif %}
+
+{% elif not current_user.is_admin() %}
+<div class="alert alert-warning">Sua conta nao esta vinculada a uma loja.</div>
+{% else %}
+<div class="alert alert-info">Selecione uma loja para ver o estoque.</div>
+{% endif %}
+{% endblock %}

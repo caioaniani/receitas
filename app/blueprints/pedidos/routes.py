@@ -1,0 +1,321 @@
+from collections import defaultdict
+from datetime import date, datetime
+
+from flask import render_template, redirect, url_for, flash, request, abort
+from flask_login import login_required, current_user
+
+from app.blueprints.pedidos import pedidos_bp
+from app.decorators import admin_required
+from app.extensions import db
+from app.models import (
+    Loja, Receita, Produto, PedidoLoja, PedidoItem,
+    EstoqueProducao, MovEstoqueProducao,
+    EstoqueLoja, MovEstoqueLoja,
+)
+
+
+def _loja_do_usuario():
+    if current_user.is_admin():
+        return None
+    return current_user.loja_id
+
+
+@pedidos_bp.route('/')
+@login_required
+def lista():
+    loja_id = _loja_do_usuario()
+    query = PedidoLoja.query.order_by(PedidoLoja.criado_em.desc())
+    if loja_id:
+        query = query.filter_by(loja_id=loja_id)
+    else:
+        filtro = request.args.get('loja')
+        if filtro:
+            query = query.filter_by(loja_id=int(filtro))
+    pedidos = query.limit(100).all()
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    return render_template('pedidos/lista.html', pedidos=pedidos, lojas=lojas,
+                           filtro_loja=request.args.get('loja', ''))
+
+
+@pedidos_bp.route('/novo', methods=['GET', 'POST'])
+@login_required
+def novo():
+    loja_id = _loja_do_usuario()
+    if not current_user.is_admin() and not loja_id:
+        flash('Vincule sua conta a uma loja para criar pedidos.', 'warning')
+        return redirect(url_for('pedidos.lista'))
+
+    if request.method == 'POST':
+        sel_loja = int(request.form.get('loja_id', 0)) if current_user.is_admin() else loja_id
+        data_str = request.form.get('data_entrega', '')
+        obs = request.form.get('observacao', '').strip()
+
+        try:
+            data_entrega = datetime.strptime(data_str, '%Y-%m-%d').date()
+        except ValueError:
+            data_entrega = date.today()
+
+        pedido = PedidoLoja(
+            loja_id=sel_loja,
+            data_entrega=data_entrega,
+            observacao=obs or None,
+            criado_por=current_user.id,
+        )
+        db.session.add(pedido)
+        db.session.flush()
+
+        tipos = request.form.getlist('item_tipo[]')
+        ids = request.form.getlist('item_id[]')
+        qtds = request.form.getlist('item_qtd[]')
+        notas = request.form.getlist('item_obs[]')
+
+        for i in range(len(ids)):
+            if not ids[i] or not qtds[i]:
+                continue
+            item = PedidoItem(
+                pedido_id=pedido.id,
+                receita_id=int(ids[i]) if tipos[i] == 'receita' else None,
+                produto_id=int(ids[i]) if tipos[i] == 'produto' else None,
+                quantidade=int(qtds[i]),
+                observacao=notas[i].strip() if i < len(notas) else None,
+            )
+            db.session.add(item)
+
+        db.session.commit()
+        flash('Pedido criado!', 'success')
+        return redirect(url_for('pedidos.detalhe', id=pedido.id))
+
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+    return render_template('pedidos/novo.html', lojas=lojas, receitas=receitas,
+                           produtos=produtos, hoje=date.today(), loja_id=loja_id)
+
+
+@pedidos_bp.route('/<int:id>')
+@login_required
+def detalhe(id):
+    pedido = PedidoLoja.query.get_or_404(id)
+    loja_id = _loja_do_usuario()
+    if loja_id and pedido.loja_id != loja_id:
+        abort(403)
+    return render_template('pedidos/detalhe.html', pedido=pedido)
+
+
+@pedidos_bp.route('/<int:id>/confirmar', methods=['POST'])
+@login_required
+@admin_required
+def confirmar(id):
+    pedido = PedidoLoja.query.get_or_404(id)
+    pedido.status = 'confirmado'
+    db.session.commit()
+    flash('Pedido confirmado.', 'success')
+    return redirect(url_for('pedidos.detalhe', id=id))
+
+
+@pedidos_bp.route('/<int:id>/entregar', methods=['POST'])
+@login_required
+@admin_required
+def entregar(id):
+    pedido = PedidoLoja.query.get_or_404(id)
+
+    for item in pedido.itens:
+        ep = EstoqueProducao.query.filter_by(
+            receita_id=item.receita_id, produto_id=item.produto_id
+        ).first()
+        if ep:
+            ep.quantidade = max(0, ep.quantidade - item.quantidade)
+            db.session.add(MovEstoqueProducao(
+                estoque_producao_id=ep.id, tipo='saida_pedido',
+                quantidade=item.quantidade,
+                referencia=f'Pedido #{pedido.id} → {pedido.loja.nome}',
+                usuario_id=current_user.id,
+            ))
+
+        el = EstoqueLoja.query.filter_by(
+            loja_id=pedido.loja_id, receita_id=item.receita_id, produto_id=item.produto_id
+        ).first()
+        if not el:
+            el = EstoqueLoja(loja_id=pedido.loja_id, receita_id=item.receita_id,
+                             produto_id=item.produto_id)
+            db.session.add(el)
+            db.session.flush()
+        el.quantidade += item.quantidade
+        db.session.add(MovEstoqueLoja(
+            estoque_loja_id=el.id, tipo='entrada_pedido',
+            quantidade=item.quantidade,
+            referencia=f'Pedido #{pedido.id}',
+            usuario_id=current_user.id,
+        ))
+
+    pedido.status = 'entregue'
+    db.session.commit()
+    flash('Pedido entregue! Estoque da loja e congelados atualizados.', 'success')
+    return redirect(url_for('pedidos.detalhe', id=id))
+
+
+@pedidos_bp.route('/<int:id>/cancelar', methods=['POST'])
+@login_required
+def cancelar(id):
+    pedido = PedidoLoja.query.get_or_404(id)
+    loja_id = _loja_do_usuario()
+    if loja_id and pedido.loja_id != loja_id:
+        abort(403)
+    if pedido.status not in ('pendente', 'confirmado'):
+        flash('Só é possível cancelar pedidos pendentes ou confirmados.', 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
+    pedido.status = 'cancelado'
+    db.session.commit()
+    flash('Pedido cancelado.', 'success')
+    return redirect(url_for('pedidos.lista'))
+
+
+@pedidos_bp.route('/<int:id>/excluir', methods=['POST'])
+@login_required
+@admin_required
+def excluir(id):
+    pedido = PedidoLoja.query.get_or_404(id)
+    db.session.delete(pedido)
+    db.session.commit()
+    flash('Pedido excluído.', 'success')
+    return redirect(url_for('pedidos.lista'))
+
+
+# ── Painel de Separação ──
+
+@pedidos_bp.route('/separacao')
+@login_required
+@admin_required
+def separacao():
+    pedidos = PedidoLoja.query.filter(
+        PedidoLoja.status.in_(['pendente', 'confirmado'])
+    ).order_by(PedidoLoja.data_entrega).all()
+
+    por_data = defaultdict(lambda: defaultdict(lambda: {'total': 0, 'lojas': defaultdict(int)}))
+    for p in pedidos:
+        chave_data = p.data_entrega or p.data_pedido
+        for item in p.itens:
+            nome = item.nome_item
+            por_data[chave_data][nome]['total'] += item.quantidade
+            por_data[chave_data][nome]['lojas'][p.loja.nome] += item.quantidade
+
+    congelados = {ep.nome_item: ep.quantidade for ep in EstoqueProducao.query.all()}
+
+    return render_template('pedidos/separacao.html',
+                           por_data=dict(por_data), congelados=congelados)
+
+
+# ── Estoque de Congelados ──
+
+@pedidos_bp.route('/congelados')
+@login_required
+@admin_required
+def congelados():
+    itens = EstoqueProducao.query.all()
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+    return render_template('pedidos/congelados.html', itens=itens,
+                           receitas=receitas, produtos=produtos)
+
+
+@pedidos_bp.route('/congelados/entrada', methods=['POST'])
+@login_required
+@admin_required
+def congelados_entrada():
+    tipo = request.form.get('tipo', 'receita')
+    item_id = int(request.form['item_id'])
+    qtd = int(request.form['quantidade'])
+
+    ep = EstoqueProducao.query.filter_by(
+        receita_id=item_id if tipo == 'receita' else None,
+        produto_id=item_id if tipo == 'produto' else None,
+    ).first()
+    if not ep:
+        ep = EstoqueProducao(
+            receita_id=item_id if tipo == 'receita' else None,
+            produto_id=item_id if tipo == 'produto' else None,
+        )
+        db.session.add(ep)
+        db.session.flush()
+
+    ep.quantidade += qtd
+    db.session.add(MovEstoqueProducao(
+        estoque_producao_id=ep.id, tipo='producao',
+        quantidade=qtd, referencia='Entrada de produção',
+        usuario_id=current_user.id,
+    ))
+    db.session.commit()
+    flash(f'Entrada de {qtd} unidades registrada.', 'success')
+    return redirect(url_for('pedidos.congelados'))
+
+
+@pedidos_bp.route('/congelados/ajuste', methods=['POST'])
+@login_required
+@admin_required
+def congelados_ajuste():
+    ep_id = int(request.form['estoque_id'])
+    qtd = int(request.form['quantidade'])
+    tipo = request.form.get('tipo_ajuste', 'ajuste')
+
+    ep = EstoqueProducao.query.get_or_404(ep_id)
+    ep.quantidade = max(0, ep.quantidade - qtd)
+    db.session.add(MovEstoqueProducao(
+        estoque_producao_id=ep.id, tipo=tipo,
+        quantidade=qtd, referencia=request.form.get('referencia', '').strip() or None,
+        usuario_id=current_user.id,
+    ))
+    db.session.commit()
+    flash(f'Ajuste de {qtd} unidades registrado.', 'success')
+    return redirect(url_for('pedidos.congelados'))
+
+
+# ── Estoque de Loja ──
+
+@pedidos_bp.route('/estoque-loja')
+@login_required
+def estoque_loja():
+    loja_id = _loja_do_usuario()
+    if current_user.is_admin():
+        sel = request.args.get('loja')
+        loja_id = int(sel) if sel else None
+
+    loja = Loja.query.get(loja_id) if loja_id else None
+    itens = EstoqueLoja.query.filter_by(loja_id=loja_id).all() if loja_id else []
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    return render_template('pedidos/estoque_loja.html', loja=loja, itens=itens,
+                           lojas=lojas, sel_loja=loja_id)
+
+
+@pedidos_bp.route('/estoque-loja/registrar', methods=['POST'])
+@login_required
+def estoque_loja_registrar():
+    loja_id = _loja_do_usuario()
+    if current_user.is_admin():
+        loja_id = int(request.form.get('loja_id', 0))
+
+    if not loja_id:
+        flash('Selecione uma loja.', 'warning')
+        return redirect(url_for('pedidos.estoque_loja'))
+
+    ids = request.form.getlist('estoque_id[]')
+    qtds = request.form.getlist('qtd[]')
+    tipos = request.form.getlist('tipo[]')
+
+    for i, eid in enumerate(ids):
+        if not qtds[i] or int(qtds[i]) <= 0:
+            continue
+        el = EstoqueLoja.query.get(int(eid))
+        if not el or el.loja_id != loja_id:
+            continue
+        qtd = int(qtds[i])
+        tipo = tipos[i] if i < len(tipos) else 'venda'
+        el.quantidade = max(0, el.quantidade - qtd)
+        db.session.add(MovEstoqueLoja(
+            estoque_loja_id=el.id, tipo=tipo, quantidade=qtd,
+            referencia=f'{tipo.capitalize()} registrada',
+            usuario_id=current_user.id,
+        ))
+
+    db.session.commit()
+    flash('Estoque atualizado.', 'success')
+    return redirect(url_for('pedidos.estoque_loja', loja=loja_id))

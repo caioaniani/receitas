@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Pedido #{{ pedido.id }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="fw-bold mb-0"><i class="bi bi-cart3"></i> Pedido #{{ pedido.id }}</h5>
+    <a href="{{ url_for('pedidos.lista') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <small class="text-muted d-block">Loja</small>
+                <strong>{{ pedido.loja.nome }}</strong>
+            </div>
+            <div class="col-md-2">
+                <small class="text-muted d-block">Data Entrega</small>
+                <strong>{{ pedido.data_entrega.strftime('%d/%m/%Y') if pedido.data_entrega else '-' }}</strong>
+            </div>
+            <div class="col-md-2">
+                <small class="text-muted d-block">Status</small>
+                {% if pedido.status == 'pendente' %}
+                <span class="badge rounded-pill bg-warning text-dark">Pendente</span>
+                {% elif pedido.status == 'confirmado' %}
+                <span class="badge rounded-pill bg-info text-dark">Confirmado</span>
+                {% elif pedido.status == 'entregue' %}
+                <span class="badge rounded-pill bg-success">Entregue</span>
+                {% elif pedido.status == 'cancelado' %}
+                <span class="badge rounded-pill bg-secondary">Cancelado</span>
+                {% endif %}
+            </div>
+            <div class="col-md-2">
+                <small class="text-muted d-block">Criado em</small>
+                <span>{{ pedido.criado_em.strftime('%d/%m/%Y %H:%M') if pedido.criado_em else '-' }}</span>
+            </div>
+            <div class="col-md-3">
+                <small class="text-muted d-block">Criado por</small>
+                <span>{{ pedido.criador.nome if pedido.criador else '-' }}</span>
+            </div>
+        </div>
+        {% if pedido.observacao %}
+        <div class="mt-2">
+            <small class="text-muted d-block">Observacao</small>
+            <span>{{ pedido.observacao }}</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<h6 class="fw-bold mb-2">Itens</h6>
+<div class="table-responsive">
+    <table class="table table-sm table-bordered bg-white">
+        <thead>
+            <tr style="background:#37474f; color:#fff; font-size:11px; text-transform:uppercase;">
+                <th>Item</th>
+                <th style="width:80px" class="text-center">Tipo</th>
+                <th style="width:100px" class="text-center">Quantidade</th>
+                <th>Obs</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in pedido.itens %}
+            <tr>
+                <td>{{ item.nome_item }}</td>
+                <td class="text-center">
+                    {% if item.receita_id %}
+                    <span class="badge bg-primary" style="font-size:10px;">Receita</span>
+                    {% else %}
+                    <span class="badge bg-secondary" style="font-size:10px;">Produto</span>
+                    {% endif %}
+                </td>
+                <td class="text-center fw-bold">{{ item.quantidade }}</td>
+                <td class="text-muted">{{ item.observacao or '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="d-flex gap-2 mt-3">
+    {% if current_user.is_admin() %}
+        {% if pedido.status == 'pendente' %}
+        <form method="POST" action="{{ url_for('pedidos.confirmar', id=pedido.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-info btn-sm">
+                <i class="bi bi-check-circle"></i> Confirmar
+            </button>
+        </form>
+        {% endif %}
+
+        {% if pedido.status in ('pendente', 'confirmado') %}
+        <form method="POST" action="{{ url_for('pedidos.entregar', id=pedido.id) }}"
+              onsubmit="return confirm('Confirma entrega? O estoque de congelados sera descontado.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-success btn-sm">
+                <i class="bi bi-truck"></i> Entregar
+            </button>
+        </form>
+        {% endif %}
+    {% endif %}
+
+    {% if pedido.status in ('pendente', 'confirmado') %}
+    <form method="POST" action="{{ url_for('pedidos.cancelar', id=pedido.id) }}"
+          onsubmit="return confirm('Cancelar este pedido?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-warning btn-sm">
+            <i class="bi bi-x-circle"></i> Cancelar
+        </button>
+    </form>
+    {% endif %}
+
+    {% if current_user.is_admin() %}
+    <form method="POST" action="{{ url_for('pedidos.excluir', id=pedido.id) }}"
+          onsubmit="return confirm('Excluir permanentemente este pedido?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-trash"></i> Excluir
+        </button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

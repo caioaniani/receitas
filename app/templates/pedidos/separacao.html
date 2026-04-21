@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Separacao do Dia{% endblock %}
+
+{% block content %}
+<h5 class="fw-bold mb-3"><i class="bi bi-clipboard-data"></i> Painel de Separacao</h5>
+
+{% if not por_data %}
+<div class="alert alert-info">Nenhum pedido pendente ou confirmado no momento.</div>
+{% endif %}
+
+{% for data, itens in por_data|dictsort %}
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <strong><i class="bi bi-calendar-event"></i> {{ data.strftime('%d/%m/%Y (%A)') if data else 'Sem data' }}</strong>
+        <span class="badge bg-primary">{{ itens|length }} itens</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0">
+                <thead>
+                    <tr style="background:#455a64; color:#fff; font-size:11px; text-transform:uppercase;">
+                        <th>Produto</th>
+                        <th class="text-center" style="width:90px">Total</th>
+                        <th class="text-center" style="width:90px">Congelado</th>
+                        <th class="text-center" style="width:80px">Saldo</th>
+                        <th>Detalhe por Loja</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for nome, info in itens|dictsort %}
+                    {% set cong = congelados.get(nome, 0) %}
+                    {% set saldo = cong - info.total %}
+                    <tr>
+                        <td class="fw-semibold">{{ nome }}</td>
+                        <td class="text-center fw-bold">{{ info.total }}</td>
+                        <td class="text-center">{{ cong }}</td>
+                        <td class="text-center fw-bold {% if saldo < 0 %}text-danger{% else %}text-success{% endif %}">
+                            {{ saldo }}
+                        </td>
+                        <td>
+                            {% for loja_nome, qtd in info.lojas|dictsort %}
+                            <span class="badge bg-light text-dark me-1" style="font-size:11px;">
+                                {{ loja_nome }}: <strong>{{ qtd }}</strong>
+                            </span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
