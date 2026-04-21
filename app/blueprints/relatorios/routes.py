@@ -1,26 +1,86 @@
-from flask import render_template
+import csv
+import io
+
+from flask import render_template, Response
 from flask_login import login_required
 
 from app.blueprints.relatorios import relatorios_bp
 from app.decorators import admin_required
 from app.extensions import db
 from app.models import MateriaPrima, Receita, ReceitaIngrediente
+from app.services.custos import calcular_custos_receitas
 
 
 @relatorios_bp.route('/custos')
 @login_required
 @admin_required
 def custos():
-    # Placeholder — será reescrito na Fase 2.2 com o serviço de custos
-    receitas = Receita.query.order_by(Receita.nome).all()
-    return render_template('relatorios/custos.html', receitas=receitas)
+    resultado = calcular_custos_receitas()
+    custos_map = resultado.get('custos', {})
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+
+    dados = []
+    for r in receitas:
+        custo_unit = custos_map.get(r.nome, 0)
+        preco_atac = r.preco_venda or 0
+        preco_loja = r.preco_loja or 0
+        preco_site = r.preco_site or 0
+
+        margem_atac = ((preco_atac - custo_unit) / preco_atac * 100) if preco_atac else 0
+        margem_loja = ((preco_loja - custo_unit) / preco_loja * 100) if preco_loja else 0
+        margem_site = ((preco_site - custo_unit) / preco_site * 100) if preco_site else 0
+
+        dados.append({
+            'nome': r.nome,
+            'categoria': r.categoria or 'Outros',
+            'custo_unit': custo_unit,
+            'preco_atac': preco_atac,
+            'preco_loja': preco_loja,
+            'preco_site': preco_site,
+            'margem_atac': margem_atac,
+            'margem_loja': margem_loja,
+            'margem_site': margem_site,
+        })
+
+    return render_template('relatorios/custos.html', dados=dados)
+
+
+@relatorios_bp.route('/custos/csv')
+@login_required
+@admin_required
+def custos_csv():
+    resultado = calcular_custos_receitas()
+    custos_map = resultado.get('custos', {})
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Categoria', 'Receita', 'Custo Unit (R$)', 'Preço Atacado', 'Margem Atac %',
+                     'Preço Loja', 'Margem Loja %', 'Preço Site', 'Margem Site %'])
+
+    for r in receitas:
+        custo = custos_map.get(r.nome, 0)
+        pa = r.preco_venda or 0
+        pl = r.preco_loja or 0
+        ps = r.preco_site or 0
+        ma = ((pa - custo) / pa * 100) if pa else 0
+        ml = ((pl - custo) / pl * 100) if pl else 0
+        ms = ((ps - custo) / ps * 100) if ps else 0
+        writer.writerow([r.categoria or 'Outros', r.nome,
+                         f'{custo:.2f}', f'{pa:.2f}', f'{ma:.1f}',
+                         f'{pl:.2f}', f'{ml:.1f}', f'{ps:.2f}', f'{ms:.1f}'])
+
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=relatorio_custos.csv'}
+    )
 
 
 @relatorios_bp.route('/ingredientes')
 @login_required
 @admin_required
 def ingredientes():
-    # Join por nome (ingrediente_nome é string, não FK)
     materias = (
         db.session.query(
             MateriaPrima,

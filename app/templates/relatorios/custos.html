@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Relatório de Custos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="fw-bold mb-0"><i class="bi bi-file-earmark-bar-graph"></i> Relatório de Custos</h5>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('relatorios.custos_csv') }}" class="btn btn-outline-success btn-sm">
+            <i class="bi bi-filetype-csv"></i> Exportar CSV
+        </a>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2">
+        <canvas id="chart-custos" height="100"></canvas>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-sm table-hover align-middle" id="tbl-custos">
+        <thead class="table-light">
+            <tr>
+                <th>Categoria</th>
+                <th>Receita</th>
+                <th class="text-end">Custo Unit.</th>
+                <th class="text-end">Atacado</th>
+                <th class="text-end">Margem</th>
+                <th class="text-end">Loja</th>
+                <th class="text-end">Margem</th>
+                <th class="text-end">Site</th>
+                <th class="text-end">Margem</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in dados %}
+            <tr>
+                <td class="small text-muted">{{ d.categoria }}</td>
+                <td class="fw-bold">{{ d.nome }}</td>
+                <td class="text-end">R$ {{ "%.2f"|format(d.custo_unit) }}</td>
+                <td class="text-end">{{ ("R$ %.2f"|format(d.preco_atac)) if d.preco_atac else '—' }}</td>
+                <td class="text-end">
+                    {% if d.preco_atac %}
+                    <span class="badge {{ 'bg-success' if d.margem_atac >= 40 else 'bg-warning text-dark' if d.margem_atac >= 20 else 'bg-danger' }}">
+                        {{ "%.0f"|format(d.margem_atac) }}%
+                    </span>
+                    {% else %}—{% endif %}
+                </td>
+                <td class="text-end">{{ ("R$ %.2f"|format(d.preco_loja)) if d.preco_loja else '—' }}</td>
+                <td class="text-end">
+                    {% if d.preco_loja %}
+                    <span class="badge {{ 'bg-success' if d.margem_loja >= 40 else 'bg-warning text-dark' if d.margem_loja >= 20 else 'bg-danger' }}">
+                        {{ "%.0f"|format(d.margem_loja) }}%
+                    </span>
+                    {% else %}—{% endif %}
+                </td>
+                <td class="text-end">{{ ("R$ %.2f"|format(d.preco_site)) if d.preco_site else '—' }}</td>
+                <td class="text-end">
+                    {% if d.preco_site %}
+                    <span class="badge {{ 'bg-success' if d.margem_site >= 40 else 'bg-warning text-dark' if d.margem_site >= 20 else 'bg-danger' }}">
+                        {{ "%.0f"|format(d.margem_site) }}%
+                    </span>
+                    {% else %}—{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    var dados = [
+        {% for d in dados[:20] if d.preco_atac %}
+        {nome: "{{ d.nome[:20] }}", custo: {{ d.custo_unit }}, preco: {{ d.preco_atac }}},
+        {% endfor %}
+    ];
+    if (!dados.length) return;
+    new Chart(document.getElementById('chart-custos'), {
+        type: 'bar',
+        data: {
+            labels: dados.map(function(d) { return d.nome; }),
+            datasets: [
+                {label: 'Custo', data: dados.map(function(d) { return d.custo; }), backgroundColor: '#ef5350'},
+                {label: 'Preço', data: dados.map(function(d) { return d.preco; }), backgroundColor: '#66bb6a'}
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {legend: {position: 'top'}},
+            scales: {x: {ticks: {maxRotation: 45}}}
+        }
+    });
+})();
+</script>
+{% endblock %}

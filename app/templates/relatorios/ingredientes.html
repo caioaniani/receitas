@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Uso de Ingredientes{% endblock %}
+
+{% block content %}
+<h5 class="fw-bold mb-3"><i class="bi bi-pie-chart"></i> Uso de Ingredientes nas Receitas</h5>
+
+<div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>Matéria-Prima</th>
+                <th>Unid.</th>
+                <th class="text-end">Custo/kg</th>
+                <th class="text-center">Usada em</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for mp, uso in materias %}
+            <tr>
+                <td class="fw-bold">{{ mp.nome }}</td>
+                <td>{{ mp.unidade }}</td>
+                <td class="text-end">R$ {{ "%.2f"|format(mp.custo_por_kg) }}</td>
+                <td class="text-center">
+                    <span class="badge bg-primary">{{ uso }} receita{{ 's' if uso != 1 }}</span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

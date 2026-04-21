@@ -477,6 +477,18 @@ def excluir_posicao(pos_id):
     return redirect(url_for('rh.escala'))
 
 
+@rh_bp.route('/folha/<int:folha_id>/pdf')
+@login_required
+@admin_required
+def holerite_pdf(folha_id):
+    from app.services.pdf import gerar_holerite
+    folha = FolhaPagamento.query.get_or_404(folha_id)
+    pdf_bytes = gerar_holerite(folha)
+    nome_arq = f'holerite_{folha.funcionario.nome.replace(" ", "_")}_{folha.mes:02d}_{folha.ano}.pdf'
+    return Response(pdf_bytes, mimetype='application/pdf',
+                    headers={'Content-Disposition': f'inline; filename="{nome_arq}"'})
+
+
 @rh_bp.route('/folha/<int:folha_id>/excluir', methods=['POST'])
 @login_required
 @admin_required

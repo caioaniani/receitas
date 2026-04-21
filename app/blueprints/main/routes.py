@@ -1,19 +1,58 @@
 import json
+from datetime import date
 
 from flask import redirect, url_for, jsonify, request, Response, render_template
-from flask_login import login_required
+from flask_login import login_required, current_user
 
 from app.blueprints.main import main_bp
 from app.decorators import admin_required
 from app.extensions import db
-from app.models import MateriaPrima, Receita, ReceitaIngrediente, Produto, ProdutoItem
+from app.models import (MateriaPrima, Receita, ReceitaIngrediente, Produto, ProdutoItem,
+                        Funcionario, Atribuicao, AlertaEstoque, PlanejamentoProducao)
 from app.services.custos import calcular_custos_receitas, calcular_rendimento
 
 
 @main_bp.route('/')
 @login_required
 def index():
-    return redirect(url_for('materias_primas.banco'))
+    if not current_user.is_admin():
+        return redirect(url_for('auth.minhas_fichas'))
+
+    resultado = calcular_custos_receitas()
+    custos_map = resultado.get('custos', {})
+    receitas = Receita.query.all()
+
+    custo_mp_total = sum(custos_map.values())
+    receita_estimada = sum((r.preco_venda or 0) for r in receitas if r.preco_venda)
+
+    funcionarios_ativos = Funcionario.query.filter_by(ativo=True).all()
+    custo_mao_obra = sum(f.custo_total() for f in funcionarios_ativos)
+
+    margem_geral = 0
+    if receita_estimada > 0:
+        margem_geral = (receita_estimada - custo_mp_total) / receita_estimada * 100
+
+    alertas_estoque = db.session.query(AlertaEstoque).join(MateriaPrima).filter(
+        MateriaPrima.estoque_atual < AlertaEstoque.estoque_minimo
+    ).count()
+
+    producoes_pendentes = PlanejamentoProducao.query.filter_by(status='rascunho').count()
+    atribuicoes_pendentes = Atribuicao.query.filter_by(status='pendente').count()
+
+    hoje = date.today()
+    aniversariantes = [f for f in funcionarios_ativos
+                       if f.data_nascimento and f.data_nascimento.month == hoje.month]
+
+    return render_template('main/dashboard.html',
+                           custo_mp_total=custo_mp_total,
+                           receita_estimada=receita_estimada,
+                           custo_mao_obra=custo_mao_obra,
+                           margem_geral=margem_geral,
+                           alertas_estoque=alertas_estoque,
+                           producoes_pendentes=producoes_pendentes,
+                           atribuicoes_pendentes=atribuicoes_pendentes,
+                           aniversariantes=aniversariantes,
+                           total_funcionarios=len(funcionarios_ativos))
 
 
 @main_bp.route('/rentabilidade')

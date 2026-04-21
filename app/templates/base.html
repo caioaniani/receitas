@@ -66,6 +66,11 @@
             <i class="bi bi-graph-up"></i> Rentabilidade
         </a>
 
+        <a href="{{ url_for('relatorios.custos') }}"
+           class="sidebar-link {% if request.path.startswith('/relatorios') %}active{% endif %}">
+            <i class="bi bi-file-earmark-bar-graph"></i> Relatórios
+        </a>
+
         <a href="{{ url_for('main.todo') }}"
            class="sidebar-link {% if request.path == '/todo' %}active{% endif %}">
             <i class="bi bi-check2-square"></i> TO-DO

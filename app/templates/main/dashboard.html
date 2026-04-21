@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Padaria{% endblock %}
+
+{% block content %}
+<h5 class="fw-bold mb-3"><i class="bi bi-speedometer2"></i> Painel Gerencial</h5>
+
+<!-- KPIs -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center py-3">
+                <div class="small text-muted">Receita Estimada</div>
+                <div class="fw-bold fs-5 text-success">R$ {{ "%.0f"|format(receita_estimada) }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center py-3">
+                <div class="small text-muted">Custo MP Total</div>
+                <div class="fw-bold fs-5 text-danger">R$ {{ "%.0f"|format(custo_mp_total) }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center py-3">
+                <div class="small text-muted">Mao de Obra</div>
+                <div class="fw-bold fs-5 text-warning">R$ {{ "%.0f"|format(custo_mao_obra) }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center py-3">
+                <div class="small text-muted">Margem Geral</div>
+                <div class="fw-bold fs-5 {{ 'text-success' if margem_geral >= 30 else 'text-warning' if margem_geral >= 15 else 'text-danger' }}">
+                    {{ "%.0f"|format(margem_geral) }}%
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alertas e tarefas -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white fw-bold"><i class="bi bi-exclamation-triangle"></i> Alertas</div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    {% if alertas_estoque > 0 %}
+                    <li class="mb-2">
+                        <a href="{{ url_for('materias_primas.estoque') }}" class="text-danger text-decoration-none">
+                            <i class="bi bi-boxes"></i> <strong>{{ alertas_estoque }}</strong> MP{{ 's' if alertas_estoque > 1 }} abaixo do estoque minimo
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if producoes_pendentes > 0 %}
+                    <li class="mb-2">
+                        <a href="{{ url_for('producao.lista') }}" class="text-warning text-decoration-none">
+                            <i class="bi bi-calendar-check"></i> <strong>{{ producoes_pendentes }}</strong> plano{{ 's' if producoes_pendentes > 1 }} de producao pendente{{ 's' if producoes_pendentes > 1 }}
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if atribuicoes_pendentes > 0 %}
+                    <li class="mb-2">
+                        <a href="{{ url_for('auth.painel') }}" class="text-primary text-decoration-none">
+                            <i class="bi bi-clipboard-check"></i> <strong>{{ atribuicoes_pendentes }}</strong> ficha{{ 's' if atribuicoes_pendentes > 1 }} pendente{{ 's' if atribuicoes_pendentes > 1 }} de preenchimento
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if not alertas_estoque and not producoes_pendentes and not atribuicoes_pendentes %}
+                    <li class="text-muted"><i class="bi bi-check-circle text-success"></i> Nenhum alerta no momento</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white fw-bold"><i class="bi bi-people"></i> Equipe</div>
+            <div class="card-body">
+                <div class="mb-2"><strong>{{ total_funcionarios }}</strong> funcionarios ativos</div>
+                {% if aniversariantes %}
+                <div class="small text-muted mb-1">Aniversariantes do mes:</div>
+                {% for f in aniversariantes %}
+                <span class="badge bg-info text-dark me-1">
+                    {{ f.nome.split()[0] }} ({{ f.data_nascimento.strftime('%d/%m') }})
+                </span>
+                {% endfor %}
+                {% else %}
+                <div class="small text-muted">Sem aniversariantes este mes</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Acesso rápido -->
+<div class="row g-3">
+    <div class="col-6 col-md-3">
+        <a href="{{ url_for('producao.novo') }}" class="card border-0 shadow-sm text-decoration-none text-dark h-100">
+            <div class="card-body text-center py-3">
+                <i class="bi bi-plus-circle fs-3 text-primary"></i>
+                <div class="small mt-1">Novo Plano</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
+        <a href="{{ url_for('materias_primas.estoque') }}" class="card border-0 shadow-sm text-decoration-none text-dark h-100">
+            <div class="card-body text-center py-3">
+                <i class="bi bi-boxes fs-3 text-success"></i>
+                <div class="small mt-1">Estoque</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
+        <a href="{{ url_for('relatorios.custos') }}" class="card border-0 shadow-sm text-decoration-none text-dark h-100">
+            <div class="card-body text-center py-3">
+                <i class="bi bi-file-earmark-bar-graph fs-3 text-danger"></i>
+                <div class="small mt-1">Custos</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
+        <a href="{{ url_for('rh.dashboard') }}" class="card border-0 shadow-sm text-decoration-none text-dark h-100">
+            <div class="card-body text-center py-3">
+                <i class="bi bi-person-badge fs-3 text-warning"></i>
+                <div class="small mt-1">RH</div>
+            </div>
+        </a>
+    </div>
+</div>
+{% endblock %}
