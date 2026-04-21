@@ -310,6 +310,7 @@ class Posicao(db.Model):
     status = db.Column(db.String(30), default='ativo')
     observacao = db.Column(db.String(300))
     ordem = db.Column(db.Integer, default=0)
+    origem = db.Column(db.String(10), default='manual')
 
     loja = db.relationship('Loja', backref='posicoes')
     funcionario = db.relationship('Funcionario', backref='posicoes')

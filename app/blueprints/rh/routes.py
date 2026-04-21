@@ -379,10 +379,14 @@ def salvar_folha_item(folha_id):
 @login_required
 @admin_required
 def escala():
+    modo = request.args.get('modo', 'tabela')
     lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
-    posicoes = Posicao.query.order_by(Posicao.loja_id, Posicao.periodo, Posicao.ordem).all()
 
-    # Agrupar: {loja_nome: {periodo: [posicoes]}}
+    # Modo tabela: somente posições manuais
+    posicoes = Posicao.query.filter(
+        Posicao.origem != 'mapa'
+    ).order_by(Posicao.loja_id, Posicao.periodo, Posicao.ordem).all()
+
     grid = {}
     for pos in posicoes:
         lnome = pos.loja.nome
@@ -390,7 +394,6 @@ def escala():
             grid[lnome] = {}
         grid[lnome].setdefault(pos.periodo, []).append(pos)
 
-    # Funcionários sem loja (precisam alocação)
     sem_loja = Funcionario.query.filter(
         Funcionario.ativo == True,
         ~Funcionario.lojas.any()
@@ -400,12 +403,16 @@ def escala():
         ativo=True, cadastro_pendente=True
     ).order_by(Funcionario.nome).all()
 
-    # Lista de todos os funcionários ativos para atribuir
     todos_func = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
 
+    # Lojas com planta para modo mapa
+    lojas_com_planta = [l for l in lojas if l.planta_imagem]
+
     return render_template('rh/escala.html',
+                           modo=modo,
                            grid=grid,
                            lojas=lojas,
+                           lojas_com_planta=lojas_com_planta,
                            sem_loja=sem_loja,
                            pendentes=pendentes,
                            todos_func=todos_func)
@@ -748,7 +755,7 @@ def api_alocar():
 
     if func_id:
         if not pos:
-            pos = Posicao(loja_id=slot.loja_id, periodo=periodo, nome_posicao=slot.nome)
+            pos = Posicao(loja_id=slot.loja_id, periodo=periodo, nome_posicao=slot.nome, origem='mapa')
             db.session.add(pos)
         pos.funcionario_id = int(func_id)
     else:

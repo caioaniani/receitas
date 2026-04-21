@@ -286,6 +286,20 @@ def _migrate_postgres(app):
             if 'altura' not in cols_slot:
                 conn.execute(text("ALTER TABLE slot_mapa ADD COLUMN altura REAL DEFAULT 8"))
 
+        # posicao.origem
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'posicao'"
+        ))
+        cols_pos = {row[0] for row in result}
+        if cols_pos and 'origem' not in cols_pos:
+            conn.execute(text("ALTER TABLE posicao ADD COLUMN origem VARCHAR(10) DEFAULT 'manual'"))
+            conn.execute(text(
+                "UPDATE posicao SET origem = 'mapa' WHERE EXISTS ("
+                "  SELECT 1 FROM slot_mapa WHERE slot_mapa.loja_id = posicao.loja_id "
+                "  AND slot_mapa.nome = posicao.nome_posicao)"
+            ))
+
         # materia_prima.estoque_atual
         result = conn.execute(text(
             "SELECT column_name FROM information_schema.columns "
@@ -368,6 +382,17 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE slot_mapa ADD COLUMN largura REAL DEFAULT 15")
     if cols_slot and 'altura' not in cols_slot:
         cursor.execute("ALTER TABLE slot_mapa ADD COLUMN altura REAL DEFAULT 8")
+
+    # Migração posicao.origem
+    cursor.execute("PRAGMA table_info(posicao)")
+    cols_pos = [row[1] for row in cursor.fetchall()]
+    if cols_pos and 'origem' not in cols_pos:
+        cursor.execute("ALTER TABLE posicao ADD COLUMN origem VARCHAR(10) DEFAULT 'manual'")
+        cursor.execute(
+            "UPDATE posicao SET origem = 'mapa' WHERE EXISTS ("
+            "  SELECT 1 FROM slot_mapa WHERE slot_mapa.loja_id = posicao.loja_id "
+            "  AND slot_mapa.nome = posicao.nome_posicao)"
+        )
 
     # Migração materia_prima.estoque_atual
     cursor.execute("PRAGMA table_info(materia_prima)")

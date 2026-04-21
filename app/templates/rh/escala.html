@@ -3,7 +3,19 @@
 {% block title %}Escala Operacional{% endblock %}
 
 {% block content %}
-<h5 class="fw-bold mb-3"><i class="bi bi-diagram-3"></i> Escala Operacional</h5>
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="fw-bold mb-0"><i class="bi bi-diagram-3"></i> Escala Operacional</h5>
+    <div class="btn-group btn-group-sm">
+        <a href="{{ url_for('rh.escala', modo='tabela') }}"
+           class="btn {% if modo == 'tabela' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+            <i class="bi bi-table"></i> Tabela
+        </a>
+        <a href="{{ url_for('rh.escala', modo='mapa') }}"
+           class="btn {% if modo == 'mapa' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+            <i class="bi bi-map"></i> Mapa
+        </a>
+    </div>
+</div>
 
 <!-- Alertas: funcionários sem loja ou cadastro pendente -->
 {% if sem_loja or pendentes %}
@@ -32,7 +44,50 @@
 </div>
 {% endif %}
 
-<!-- Grid de escala por loja -->
+{% if modo == 'mapa' %}
+<!-- ═══════════════════════════════════════ -->
+<!-- MODO MAPA                              -->
+<!-- ═══════════════════════════════════════ -->
+
+<div class="d-flex gap-2 align-items-center mb-3">
+    <label class="small fw-bold mb-0">Período:</label>
+    <select id="sel-periodo-mapa" class="form-select form-select-sm" style="width:auto;">
+        <option value="manha">Manhã</option>
+        <option value="tarde">Tarde</option>
+        <option value="noite">Noite</option>
+    </select>
+</div>
+
+{% if not lojas_com_planta %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i> Nenhuma loja possui planta cadastrada.
+    Acesse <a href="{{ url_for('rh.mapa_index') }}">Mapa das Lojas</a> para fazer upload.
+</div>
+{% endif %}
+
+{% for loja in lojas_com_planta %}
+<div class="card mb-4 shadow-sm escala-mapa-card" data-loja-id="{{ loja.id }}">
+    <div class="card-header fw-bold d-flex justify-content-between align-items-center"
+         style="background:#1565c0; color:#fff;">
+        <span><i class="bi bi-shop"></i> {{ loja.nome }}</span>
+        <a href="{{ url_for('rh.mapa', loja_id=loja.id) }}" class="btn btn-sm btn-outline-light">
+            <i class="bi bi-pencil-square"></i> Editar Mapa
+        </a>
+    </div>
+    <div class="card-body p-2">
+        <div class="position-relative border rounded bg-white" style="overflow:hidden;">
+            <img src="{{ url_for('rh.ver_planta', loja_id=loja.id) }}"
+                 class="w-100" style="display:block; user-select:none; pointer-events:none;">
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% else %}
+<!-- ═══════════════════════════════════════ -->
+<!-- MODO TABELA                            -->
+<!-- ═══════════════════════════════════════ -->
+
 {% for loja_nome, periodos in grid.items() %}
 <div class="card mb-4 shadow-sm">
     <div class="card-header fw-bold" style="background:#1565c0; color:#fff;">
@@ -95,6 +150,12 @@
     </div>
 </div>
 {% endfor %}
+
+{% if not grid %}
+<div class="text-muted text-center py-4">
+    <i class="bi bi-info-circle"></i> Nenhuma posição cadastrada no modo tabela.
+</div>
+{% endif %}
 
 <!-- Adicionar nova posição -->
 <div class="card mt-3">
@@ -176,10 +237,59 @@
         </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
+{% if modo == 'mapa' %}
+(function() {
+    var selPeriodo = document.getElementById('sel-periodo-mapa');
+    var cards = document.querySelectorAll('.escala-mapa-card');
+
+    function csrfToken() { return CSRF_TOKEN; }
+
+    function carregarTodosMaps() {
+        var periodo = selPeriodo.value;
+        cards.forEach(function(card) {
+            var lojaId = card.dataset.lojaId;
+            var container = card.querySelector('.position-relative');
+
+            container.querySelectorAll('.slot-area').forEach(function(el) { el.remove(); });
+
+            fetch('/rh/mapa/api/slots/' + lojaId + '?periodo=' + periodo, {
+                headers: {'X-CSRFToken': csrfToken()}
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(slots) {
+                slots.forEach(function(s) {
+                    var area = document.createElement('div');
+                    area.className = 'slot-area' + (s.funcionario_nome ? '' : ' empty');
+                    area.style.left = s.pos_x + '%';
+                    area.style.top = s.pos_y + '%';
+                    area.style.width = (s.largura || 15) + '%';
+                    area.style.height = (s.altura || 8) + '%';
+
+                    var label = document.createElement('div');
+                    label.className = 'slot-label';
+                    label.textContent = s.nome;
+
+                    var body = document.createElement('div');
+                    body.className = 'slot-body';
+                    body.textContent = s.funcionario_nome || 'vazio';
+
+                    area.appendChild(label);
+                    area.appendChild(body);
+                    container.appendChild(area);
+                });
+            });
+        });
+    }
+
+    selPeriodo.addEventListener('change', carregarTodosMaps);
+    carregarTodosMaps();
+})();
+{% else %}
 document.querySelectorAll('.btn-edit-pos').forEach(function(btn) {
     btn.addEventListener('click', function() {
         var id = this.dataset.id;
@@ -204,5 +314,51 @@ document.querySelectorAll('.btn-edit-pos').forEach(function(btn) {
         new bootstrap.Modal(document.getElementById('modalPos')).show();
     });
 });
+{% endif %}
 </script>
+
+<style>
+.slot-area {
+    position: absolute;
+    background: rgba(255,255,255,0.75);
+    border: 2px solid #1565c0;
+    border-radius: 4px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.slot-area .slot-label {
+    background: rgba(21, 101, 192, 0.9);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 4px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    flex: 0 0 auto;
+}
+.slot-area .slot-body {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #333;
+    text-align: center;
+    line-height: 1.1;
+    word-break: break-word;
+}
+.slot-area.empty {
+    background: rgba(255,255,255,0.5);
+    border-style: dashed;
+}
+.slot-area.empty .slot-body {
+    color: #888;
+    font-style: italic;
+}
+</style>
 {% endblock %}
