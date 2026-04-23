@@ -558,6 +558,20 @@ class PedidoLoja(db.Model):
     criador = db.relationship('Usuario')
     itens = db.relationship('PedidoItem', backref='pedido', cascade='all, delete-orphan')
 
+    @property
+    def tem_divergencia(self):
+        return any(
+            i.quantidade_recebida is not None and i.quantidade_recebida != i.quantidade
+            for i in self.itens
+        )
+
+    @property
+    def itens_divergentes(self):
+        return [
+            i for i in self.itens
+            if i.quantidade_recebida is not None and i.quantidade_recebida != i.quantidade
+        ]
+
 
 class PedidoItem(db.Model):
     __tablename__ = 'pedido_item'

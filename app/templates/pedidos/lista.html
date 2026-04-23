@@ -56,6 +56,11 @@
                     {% else %}
                     <span class="badge rounded-pill bg-light text-dark">{{ p.status }}</span>
                     {% endif %}
+                    {% if p.tem_divergencia %}
+                    <span class="badge rounded-pill bg-danger" title="Quantidade recebida diferente da pedida">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Divergencia
+                    </span>
+                    {% endif %}
                 </td>
                 <td class="text-muted" style="font-size:12px;">{{ p.criado_em.strftime('%d/%m %H:%M') if p.criado_em else '-' }}</td>
             </tr>

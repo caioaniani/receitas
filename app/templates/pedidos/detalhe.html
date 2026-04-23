@@ -10,6 +10,23 @@
     </a>
 </div>
 
+{% if pedido.tem_divergencia %}
+<div class="alert alert-danger d-flex align-items-start gap-2 mb-3">
+    <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+    <div>
+        <strong>Divergencia no recebimento</strong><br>
+        <span style="font-size:13px;">A quantidade recebida pela loja foi diferente da separada pela industria. Detalhes:</span>
+        <ul class="mb-0 mt-1" style="font-size:13px;">
+            {% for i in pedido.itens_divergentes %}
+            <li><strong>{{ i.nome_item }}</strong>: pedido <strong>{{ i.quantidade }}</strong>, recebido <strong>{{ i.quantidade_recebida }}</strong>
+                <span class="text-muted">({{ 'faltou' if i.quantidade_recebida < i.quantidade else 'sobrou' }} {{ (i.quantidade - i.quantidade_recebida)|abs }})</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endif %}
+
 <div class="card mb-3">
     <div class="card-body">
         <div class="row g-3">
@@ -35,6 +52,11 @@
                 <span class="badge rounded-pill bg-success">Entregue</span>
                 {% elif pedido.status == 'cancelado' %}
                 <span class="badge rounded-pill bg-secondary">Cancelado</span>
+                {% endif %}
+                {% if pedido.tem_divergencia %}
+                <span class="badge rounded-pill bg-danger ms-1" title="Ver detalhes no topo">
+                    <i class="bi bi-exclamation-triangle-fill"></i> Divergencia
+                </span>
                 {% endif %}
             </div>
             <div class="col-md-2">
