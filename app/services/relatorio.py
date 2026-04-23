@@ -1,0 +1,177 @@
+"""Geracao de relatorio de pedidos em XLSX e PDF."""
+
+import io
+
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+
+from app.services.pdf import PadariaPDF
+
+
+def _money(v):
+    return f'R$ {v:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+
+
+def gerar_xlsx_pedidos(loja_nome, de, ate, pedidos, totais, por_item):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Pedidos'
+
+    header_font = Font(bold=True, color='FFFFFF')
+    header_fill = PatternFill(start_color='37474F', end_color='37474F', fill_type='solid')
+    bold = Font(bold=True)
+    thin = Side(border_style='thin', color='B0B0B0')
+    border = Border(top=thin, bottom=thin, left=thin, right=thin)
+
+    ws['A1'] = f'Relatorio de Pedidos - {loja_nome}'
+    ws['A1'].font = Font(bold=True, size=14)
+    ws.merge_cells('A1:H1')
+    ws['A2'] = f'Periodo: {de.strftime("%d/%m/%Y")} a {ate.strftime("%d/%m/%Y")}'
+    ws.merge_cells('A2:H2')
+
+    ws['A4'] = 'Pedidos entregues'
+    ws['B4'] = totais['qtd_pedidos']
+    ws['D4'] = 'Valor total'
+    ws['E4'] = _money(totais['valor_total'])
+    ws['G4'] = 'Divergencias'
+    ws['H4'] = totais['divergencias']
+    for c in ('A4', 'D4', 'G4'):
+        ws[c].font = bold
+
+    ws.append([])
+    ws.append(['Resumo por item'])
+    ws[ws.max_row][0].font = bold
+    head_row = ['Item', 'Qtd pedida', 'Qtd recebida', 'Valor']
+    ws.append(head_row)
+    for cell in ws[ws.max_row]:
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+        cell.alignment = Alignment(horizontal='center')
+    for nome, d in por_item:
+        ws.append([nome, d['quantidade'], d['recebido'], _money(d['valor'])])
+        for cell in ws[ws.max_row]:
+            cell.border = border
+
+    ws.append([])
+    ws.append(['Detalhamento por pedido'])
+    ws[ws.max_row][0].font = bold
+    head_row2 = ['Data', 'Pedido', 'Item', 'Qtd pedida', 'Qtd recebida', 'Preco unit.', 'Subtotal', 'Divergente', 'Fotos']
+    ws.append(head_row2)
+    for cell in ws[ws.max_row]:
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+        cell.alignment = Alignment(horizontal='center')
+
+    for p_info in pedidos:
+        p = p_info['p']
+        n_fotos = len(p.fotos)
+        for l in p_info['linhas']:
+            ws.append([
+                p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '',
+                f'#{p.id}',
+                l['nome'],
+                l['quantidade'],
+                l['recebido'],
+                _money(l['preco']),
+                _money(l['subtotal']),
+                'SIM' if l['divergente'] else '',
+                n_fotos if n_fotos else '',
+            ])
+            for cell in ws[ws.max_row]:
+                cell.border = border
+
+    ws.append([])
+    ws.append(['', '', '', '', '', 'TOTAL', _money(totais['valor_total'])])
+    for cell in ws[ws.max_row]:
+        cell.font = bold
+
+    for col_idx, width in enumerate([12, 10, 38, 12, 14, 14, 14, 12, 8], start=1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = width
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
+def gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item):
+    pdf = PadariaPDF(orientation='P', unit='mm', format='A4')
+    pdf.add_page()
+
+    pdf.set_font('Helvetica', 'B', 12)
+    pdf.cell(0, 7, f'Relatorio de Pedidos - {loja_nome}', align='C', new_x='LMARGIN', new_y='NEXT')
+    pdf.set_font('Helvetica', '', 9)
+    pdf.cell(0, 5, f'Periodo: {de.strftime("%d/%m/%Y")} a {ate.strftime("%d/%m/%Y")}',
+             align='C', new_x='LMARGIN', new_y='NEXT')
+    pdf.ln(3)
+
+    pdf.set_font('Helvetica', 'B', 10)
+    pdf.cell(60, 6, f'Pedidos entregues: {totais["qtd_pedidos"]}', new_x='RIGHT')
+    pdf.cell(70, 6, f'Valor total: {_money(totais["valor_total"])}', new_x='RIGHT')
+    pdf.cell(60, 6, f'Divergencias: {totais["divergencias"]}', new_x='LMARGIN', new_y='NEXT')
+    pdf.ln(3)
+
+    # Resumo por item
+    pdf.set_font('Helvetica', 'B', 10)
+    pdf.cell(0, 6, 'Resumo por item', new_x='LMARGIN', new_y='NEXT')
+    pdf.set_fill_color(55, 71, 79)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font('Helvetica', 'B', 9)
+    pdf.cell(80, 6, 'Item', fill=True, border=1)
+    pdf.cell(30, 6, 'Qtd pedida', fill=True, border=1, align='C')
+    pdf.cell(30, 6, 'Qtd recebida', fill=True, border=1, align='C')
+    pdf.cell(40, 6, 'Valor', fill=True, border=1, align='R', new_x='LMARGIN', new_y='NEXT')
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font('Helvetica', '', 9)
+    for nome, d in por_item:
+        if pdf.get_y() > 270:
+            pdf.add_page()
+        pdf.cell(80, 5, nome[:42], border=1)
+        pdf.cell(30, 5, str(d['quantidade']), border=1, align='C')
+        pdf.cell(30, 5, str(d['recebido']), border=1, align='C')
+        pdf.cell(40, 5, _money(d['valor']), border=1, align='R', new_x='LMARGIN', new_y='NEXT')
+    pdf.ln(3)
+
+    # Detalhamento
+    pdf.set_font('Helvetica', 'B', 10)
+    pdf.cell(0, 6, 'Detalhamento por pedido', new_x='LMARGIN', new_y='NEXT')
+
+    for p_info in pedidos:
+        if pdf.get_y() > 255:
+            pdf.add_page()
+        p = p_info['p']
+        pdf.set_fill_color(235, 235, 235)
+        pdf.set_font('Helvetica', 'B', 9)
+        data_str = p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '-'
+        div_str = '  [DIVERGENCIA]' if p.tem_divergencia else ''
+        fotos_str = f'  ({len(p.fotos)} foto{"s" if len(p.fotos) != 1 else ""})' if p.fotos else ''
+        pdf.cell(0, 5, f'Pedido #{p.id}  -  {data_str}{div_str}{fotos_str}', fill=True, border=1,
+                 new_x='LMARGIN', new_y='NEXT')
+        pdf.set_font('Helvetica', '', 8)
+        for l in p_info['linhas']:
+            if pdf.get_y() > 275:
+                pdf.add_page()
+            pdf.cell(85, 4, l['nome'][:48], border='LR')
+            pdf.cell(20, 4, f'{l["recebido"]}x', border='LR', align='C')
+            pdf.cell(30, 4, _money(l['preco']), border='LR', align='R')
+            pdf.cell(35, 4, _money(l['subtotal']), border='LR', align='R', new_x='LMARGIN', new_y='NEXT')
+        pdf.set_font('Helvetica', 'B', 9)
+        pdf.cell(135, 5, 'Subtotal do pedido', border=1, align='R')
+        pdf.cell(35, 5, _money(p_info['subtotal']), border=1, align='R', new_x='LMARGIN', new_y='NEXT')
+        pdf.ln(2)
+
+    if pdf.get_y() > 260:
+        pdf.add_page()
+    pdf.ln(2)
+    pdf.set_font('Helvetica', 'B', 11)
+    pdf.cell(135, 7, 'TOTAL GERAL', border=1, align='R', fill=True)
+    pdf.cell(35, 7, _money(totais['valor_total']), border=1, align='R', fill=True,
+             new_x='LMARGIN', new_y='NEXT')
+
+    buf = io.BytesIO()
+    pdf.output(buf)
+    buf.seek(0)
+    return buf

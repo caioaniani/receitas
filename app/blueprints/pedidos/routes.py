@@ -1,9 +1,8 @@
-import csv
 import io
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
-from flask import render_template, redirect, url_for, flash, request, abort, send_file, Response
+from flask import render_template, redirect, url_for, flash, request, abort, send_file
 from flask_login import login_required, current_user
 
 from app.blueprints.pedidos import pedidos_bp
@@ -358,31 +357,24 @@ def relatorio():
             if p.tem_divergencia:
                 totais['divergencias'] += 1
 
-    if formato == 'csv' and loja_id:
-        buf = io.StringIO()
-        w = csv.writer(buf, delimiter=';')
-        w.writerow(['Data', 'Pedido', 'Item', 'Pedido (qtd)', 'Recebido (qtd)', 'Preco Unit.', 'Subtotal', 'Divergente', 'Fotos'])
-        for p_info in pedidos:
-            p = p_info['p']
-            n_fotos = len(p.fotos)
-            for l in p_info['linhas']:
-                w.writerow([
-                    p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '',
-                    f"#{p.id}", l['nome'], l['quantidade'], l['recebido'],
-                    f"{l['preco']:.2f}".replace('.', ','),
-                    f"{l['subtotal']:.2f}".replace('.', ','),
-                    'SIM' if l['divergente'] else '',
-                    n_fotos if n_fotos else '',
-                ])
-        w.writerow([])
-        w.writerow(['TOTAL', '', '', '', '', '', f"{totais['valor_total']:.2f}".replace('.', ','), '', ''])
-        loja_nome = next((l.nome for l in lojas if l.id == loja_id), 'loja')
-        return Response(
-            buf.getvalue(),
-            mimetype='text/csv; charset=utf-8',
-            headers={
-                'Content-Disposition': f'attachment; filename="pedidos_{loja_nome}_{de}_a_{ate}.csv"'
-            },
+    loja_nome = next((l.nome for l in lojas if l.id == loja_id), 'loja') if loja_id else 'loja'
+
+    if formato == 'xlsx' and loja_id:
+        from app.services.relatorio import gerar_xlsx_pedidos
+        buf = gerar_xlsx_pedidos(loja_nome, de, ate, pedidos, totais, por_item)
+        return send_file(
+            buf, as_attachment=True,
+            download_name=f'pedidos_{loja_nome}_{de}_a_{ate}.xlsx',
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+
+    if formato == 'pdf' and loja_id:
+        from app.services.relatorio import gerar_pdf_pedidos
+        buf = gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item)
+        return send_file(
+            buf, as_attachment=True,
+            download_name=f'pedidos_{loja_nome}_{de}_a_{ate}.pdf',
+            mimetype='application/pdf',
         )
 
     return render_template('pedidos/relatorio.html',

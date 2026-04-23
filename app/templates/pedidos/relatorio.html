@@ -35,10 +35,16 @@
     </div>
     <div class="col-md-3">
         {% if loja_id %}
-        <a href="{{ url_for('pedidos.relatorio', loja=loja_id, de=de, ate=ate, formato='csv') }}"
-           class="btn btn-success btn-sm w-100">
-            <i class="bi bi-filetype-csv"></i> Baixar CSV
-        </a>
+        <div class="btn-group btn-group-sm w-100">
+            <a href="{{ url_for('pedidos.relatorio', loja=loja_id, de=de, ate=ate, formato='pdf') }}"
+               class="btn btn-danger">
+                <i class="bi bi-filetype-pdf"></i> PDF
+            </a>
+            <a href="{{ url_for('pedidos.relatorio', loja=loja_id, de=de, ate=ate, formato='xlsx') }}"
+               class="btn btn-success">
+                <i class="bi bi-filetype-xlsx"></i> Excel
+            </a>
+        </div>
         {% endif %}
     </div>
 </form>
