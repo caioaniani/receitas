@@ -60,9 +60,9 @@ def novo():
         if data_entrega < amanha:
             flash('A data de entrega deve ser a partir de amanha.', 'warning')
             lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
-            produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+            receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
             return render_template('pedidos/novo.html', lojas=lojas,
-                                   produtos=produtos, amanha=amanha, loja_id=loja_id)
+                                   receitas=receitas, amanha=amanha, loja_id=loja_id)
 
         pedido = PedidoLoja(
             loja_id=sel_loja,
@@ -82,7 +82,7 @@ def novo():
                 continue
             item = PedidoItem(
                 pedido_id=pedido.id,
-                produto_id=int(ids[i]),
+                receita_id=int(ids[i]),
                 quantidade=int(qtds[i]),
                 observacao=notas[i].strip() if i < len(notas) else None,
             )
@@ -93,9 +93,9 @@ def novo():
         return redirect(url_for('pedidos.detalhe', id=pedido.id))
 
     lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
-    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     return render_template('pedidos/novo.html', lojas=lojas,
-                           produtos=produtos, amanha=amanha, loja_id=loja_id)
+                           receitas=receitas, amanha=amanha, loja_id=loja_id)
 
 
 @pedidos_bp.route('/<int:id>')

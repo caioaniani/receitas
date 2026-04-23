@@ -48,9 +48,16 @@
                     <td>
                         <select name="item_id[]" class="form-select form-select-sm item-sel" required>
                             <option value="">Selecione...</option>
-                            {% for p in produtos %}
-                            <option value="{{ p.id }}">{{ p.nome }}</option>
+                            {% set ns = namespace(cat_atual=None) %}
+                            {% for r in receitas %}
+                                {% if r.categoria != ns.cat_atual %}
+                                    {% if ns.cat_atual is not none %}</optgroup>{% endif %}
+                                    <optgroup label="{{ r.categoria or 'Outros' }}">
+                                    {% set ns.cat_atual = r.categoria %}
+                                {% endif %}
+                                <option value="{{ r.id }}">{{ r.nome }}</option>
                             {% endfor %}
+                            {% if ns.cat_atual is not none %}</optgroup>{% endif %}
                         </select>
                     </td>
                     <td>
@@ -83,14 +90,14 @@
 
 {% block scripts %}
 <script>
-var produtosOpts = document.querySelector('.item-row .item-sel').innerHTML;
+var itemOpts = document.querySelector('.item-row .item-sel').innerHTML;
 
 document.getElementById('btn-add-item').addEventListener('click', function() {
     var tbody = document.getElementById('itens-body');
     var tr = document.createElement('tr');
     tr.className = 'item-row';
     tr.innerHTML =
-        '<td><select name="item_id[]" class="form-select form-select-sm item-sel" required>' + produtosOpts + '</select></td>' +
+        '<td><select name="item_id[]" class="form-select form-select-sm item-sel" required>' + itemOpts + '</select></td>' +
         '<td><input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1"></td>' +
         '<td><input type="text" name="item_obs[]" class="form-control form-control-sm" placeholder=""></td>' +
         '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-item" onclick="this.closest(\'tr\').remove()"><i class="bi bi-x"></i></button></td>';
