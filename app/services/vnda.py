@@ -39,6 +39,24 @@ def _get(endpoint, params=None):
         return None
 
 
+def _is_entrega_expressa(order):
+    """Detecta pedidos com frete expresso (entrega em 1 hora)."""
+    candidatos = [
+        order.get('shipping_method_code', ''),
+        order.get('shipping_method', ''),
+        order.get('shipping_name', ''),
+        order.get('shipping_method_name', ''),
+    ]
+    extra = order.get('extra') or {}
+    for v in extra.values():
+        if isinstance(v, str):
+            candidatos.append(v)
+    for v in candidatos:
+        if isinstance(v, str) and 'hora' in v.lower():
+            return True
+    return False
+
+
 def _extrair_data_entrega(order):
     edd = order.get('expected_delivery_date')
     if edd:
@@ -53,12 +71,24 @@ def _extrair_data_entrega(order):
             return datetime.strptime(data_br.strip(), '%d/%m/%Y').date()
         except (ValueError, TypeError):
             pass
+    if _is_entrega_expressa(order):
+        created = order.get('created_at') or order.get('created_at_full')
+        if created:
+            try:
+                return datetime.fromisoformat(created.replace('Z', '+00:00')).date()
+            except (ValueError, TypeError):
+                pass
     return None
 
 
 def _extrair_periodo(order):
     extra = order.get('extra') or {}
-    return extra.get('Periodo', '')
+    periodo = extra.get('Periodo', '')
+    if periodo:
+        return periodo
+    if _is_entrega_expressa(order):
+        return 'Expresso (1h)'
+    return ''
 
 
 def _extrair_endereco(addr):
