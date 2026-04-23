@@ -42,6 +42,8 @@ def _get(endpoint, params=None):
 def _is_entrega_expressa(order):
     """Detecta pedidos com frete expresso (entrega em 1 hora)."""
     candidatos = [
+        order.get('delivery_type', ''),
+        order.get('shipping_label', ''),
         order.get('shipping_method_code', ''),
         order.get('shipping_method', ''),
         order.get('shipping_name', ''),
@@ -57,7 +59,21 @@ def _is_entrega_expressa(order):
     return False
 
 
+def _parse_iso_date(val):
+    if not val:
+        return None
+    try:
+        return datetime.fromisoformat(val.replace('Z', '+00:00')).date()
+    except (ValueError, TypeError):
+        return None
+
+
 def _extrair_data_entrega(order):
+    if _is_entrega_expressa(order):
+        for campo in ('received_at', 'confirmed_at', 'paid_at', 'created_at'):
+            d = _parse_iso_date(order.get(campo))
+            if d:
+                return d
     edd = order.get('expected_delivery_date')
     if edd:
         try:
@@ -71,13 +87,6 @@ def _extrair_data_entrega(order):
             return datetime.strptime(data_br.strip(), '%d/%m/%Y').date()
         except (ValueError, TypeError):
             pass
-    if _is_entrega_expressa(order):
-        created = order.get('created_at') or order.get('created_at_full')
-        if created:
-            try:
-                return datetime.fromisoformat(created.replace('Z', '+00:00')).date()
-            except (ValueError, TypeError):
-                pass
     return None
 
 
