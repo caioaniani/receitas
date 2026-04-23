@@ -40,6 +40,9 @@
                 <button class="btn btn-outline-info" data-filtro="separado">Separados <span class="badge bg-info" id="cnt-separado">0</span></button>
                 <button class="btn btn-outline-success" data-filtro="entregue">Entregues <span class="badge bg-success" id="cnt-entregue">0</span></button>
             </div>
+            <span class="badge bg-success fs-6" id="total-entregue" title="Soma dos pedidos entregues na data selecionada">
+                <i class="bi bi-cash-coin"></i> Total entregue: R$ <span id="total-entregue-valor">0,00</span>
+            </span>
             <div class="ms-auto" style="max-width:220px;">
                 <input type="text" id="busca-pedido" class="form-control form-control-sm" placeholder="Buscar cliente ou codigo...">
             </div>
@@ -209,6 +212,7 @@
         var dataStr = document.getElementById('data-entrega').value;
         var busca = (document.getElementById('busca-pedido').value || '').toLowerCase();
         var counts = {todos: 0, pendente: 0, separado: 0, entregue: 0};
+        var totalEntregue = 0;
 
         var html = '';
         for (var i = 0; i < pedidos.length; i++) {
@@ -216,6 +220,7 @@
             var status = getStatus(dataStr, p.code);
             counts.todos++;
             counts[status] = (counts[status] || 0) + 1;
+            if (status === 'entregue') totalEntregue += Number(p.total) || 0;
 
             if (filtroAtual !== 'todos' && status !== filtroAtual) continue;
             var buscaTexto = (p.destinatario + ' ' + p.comprador + ' ' + p.code).toLowerCase();
@@ -285,6 +290,7 @@
         document.getElementById('cnt-pendente').textContent = counts.pendente;
         document.getElementById('cnt-separado').textContent = counts.separado;
         document.getElementById('cnt-entregue').textContent = counts.entregue;
+        document.getElementById('total-entregue-valor').textContent = formatMoney(totalEntregue);
     }
 
     // ── Acoes ──
