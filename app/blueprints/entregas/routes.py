@@ -106,11 +106,14 @@ def api_debug():
     token = current_app.config.get('VNDA_API_TOKEN', '')
     host = current_app.config.get('VNDA_SHOP_HOST', 'www.padariaartesanalonline.com.br')
 
+    if token.lower().startswith('bearer '):
+        token = token[7:]
+
     info = {
         'token_configurado': bool(token),
         'token_inicio': token[:8] + '...' if len(token) > 8 else '(vazio)',
         'host': host,
-        'base_url': f'https://{host}/api/v2',
+        'base_url': 'https://api.vnda.com.br/api/v2',
     }
 
     if not token:
@@ -121,11 +124,12 @@ def api_debug():
         'Authorization': f'Bearer {token}',
         'X-Shop-Host': host,
         'Accept': 'application/json',
+        'User-Agent': 'OPaoPadaria/1.0',
     }
 
     try:
         resp = http_requests.get(
-            f'https://{host}/api/v2/orders',
+            'https://api.vnda.com.br/api/v2/orders',
             headers=headers,
             params={'per_page': 2},
             timeout=15,

@@ -13,17 +13,19 @@ _client_cache = {}
 
 def _headers():
     token = current_app.config.get('VNDA_API_TOKEN', '')
+    if token.lower().startswith('bearer '):
+        token = token[7:]
     host = current_app.config.get('VNDA_SHOP_HOST', 'www.padariaartesanalonline.com.br')
     return {
         'Authorization': f'Bearer {token}',
         'X-Shop-Host': host,
         'Accept': 'application/json',
+        'User-Agent': 'OPaoPadaria/1.0',
     }
 
 
 def _base_url():
-    host = current_app.config.get('VNDA_SHOP_HOST', 'www.padariaartesanalonline.com.br')
-    return f'https://{host}/api/v2'
+    return 'https://api.vnda.com.br/api/v2'
 
 
 def _get(endpoint, params=None):
