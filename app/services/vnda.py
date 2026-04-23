@@ -159,12 +159,15 @@ def _buscar_pedidos_janela(start_date, end_date):
 
 
 def buscar_pedidos_do_dia(target_date):
-    if not current_app.config.get('VNDA_API_TOKEN'):
-        return []
+    token = current_app.config.get('VNDA_API_TOKEN')
+    if not token:
+        return {'erro': 'Token Vnda nao configurado. Adicione VNDA_API_TOKEN nas variaveis de ambiente.', 'pedidos': []}
 
     start = target_date - timedelta(days=30)
     end = target_date + timedelta(days=5)
     todos = _buscar_pedidos_janela(start, end)
+
+    logger.info('Vnda: %d pedidos na janela, filtrando para %s', len(todos), target_date)
 
     pedidos = []
     for order in todos:
@@ -176,7 +179,7 @@ def buscar_pedidos_do_dia(target_date):
         pedidos.append(_normalizar_pedido(order, client_data))
 
     pedidos.sort(key=lambda p: p.get('periodo') or '')
-    return pedidos
+    return {'pedidos': pedidos, 'total_janela': len(todos)}
 
 
 def contar_pedidos_por_dia(year, month):

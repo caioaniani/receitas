@@ -189,7 +189,8 @@
                 pedidos = data.pedidos || [];
             }
             if (pedidos.length === 0 && !data.erro) {
-                msg.innerHTML = '<div class="alert alert-info">Nenhum pedido para esta data.</div>';
+                var extra = data.total_janela ? ' (' + data.total_janela + ' pedidos na janela, nenhum com entrega nesta data)' : '';
+                msg.innerHTML = '<div class="alert alert-info">Nenhum pedido para esta data.' + extra + '</div>';
             }
             renderPedidos();
         })
