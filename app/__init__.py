@@ -322,6 +322,15 @@ def _migrate_postgres(app):
         if cols_mp and 'estoque_atual' not in cols_mp:
             conn.execute(text("ALTER TABLE materia_prima ADD COLUMN estoque_atual REAL DEFAULT 0"))
 
+        # pedido_item.quantidade_recebida
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'pedido_item'"
+        ))
+        cols_pi = {row[0] for row in result}
+        if cols_pi and 'quantidade_recebida' not in cols_pi:
+            conn.execute(text("ALTER TABLE pedido_item ADD COLUMN quantidade_recebida INTEGER"))
+
         conn.commit()
 
 
@@ -418,6 +427,12 @@ def _migrate_sqlite(app):
     cols_mp = [row[1] for row in cursor.fetchall()]
     if cols_mp and 'estoque_atual' not in cols_mp:
         cursor.execute("ALTER TABLE materia_prima ADD COLUMN estoque_atual REAL DEFAULT 0")
+
+    # Migração pedido_item.quantidade_recebida
+    cursor.execute("PRAGMA table_info(pedido_item)")
+    cols_pi = [row[1] for row in cursor.fetchall()]
+    if cols_pi and 'quantidade_recebida' not in cols_pi:
+        cursor.execute("ALTER TABLE pedido_item ADD COLUMN quantidade_recebida INTEGER")
 
     conn.commit()
     conn.close()

@@ -119,11 +119,28 @@ def confirmar(id):
     return redirect(url_for('pedidos.detalhe', id=id))
 
 
-@pedidos_bp.route('/<int:id>/entregar', methods=['POST'])
+@pedidos_bp.route('/<int:id>/separar', methods=['POST'])
 @login_required
 @admin_required
-def entregar(id):
+def separar(id):
     pedido = PedidoLoja.query.get_or_404(id)
+    if pedido.status not in ('pendente', 'confirmado'):
+        flash('Pedido deve estar pendente ou confirmado para ser separado.', 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
+    pedido.status = 'separado'
+    db.session.commit()
+    flash('Pedido marcado como separado. Estoque ainda nao foi baixado.', 'success')
+    return redirect(url_for('pedidos.detalhe', id=id))
+
+
+@pedidos_bp.route('/<int:id>/enviar', methods=['POST'])
+@login_required
+@admin_required
+def enviar(id):
+    pedido = PedidoLoja.query.get_or_404(id)
+    if pedido.status != 'separado':
+        flash('Pedido precisa estar separado para sair pra entrega.', 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
 
     for item in pedido.itens:
         ep = EstoqueProducao.query.filter_by(
@@ -138,6 +155,41 @@ def entregar(id):
                 usuario_id=current_user.id,
             ))
 
+    pedido.status = 'em_transporte'
+    db.session.commit()
+    flash('Pedido em transporte. Estoque da industria baixado.', 'success')
+    return redirect(url_for('pedidos.detalhe', id=id))
+
+
+@pedidos_bp.route('/<int:id>/receber', methods=['POST'])
+@login_required
+def receber(id):
+    pedido = PedidoLoja.query.get_or_404(id)
+    loja_id = _loja_do_usuario()
+    if loja_id and pedido.loja_id != loja_id:
+        abort(403)
+    if pedido.status != 'em_transporte':
+        flash('Pedido precisa estar em transporte para ser recebido.', 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
+
+    recebidos = {}
+    for key, val in request.form.items():
+        if key.startswith('recebido_') and val.strip():
+            try:
+                recebidos[int(key[len('recebido_'):])] = max(0, int(val))
+            except ValueError:
+                continue
+
+    divergencias = []
+    for item in pedido.itens:
+        qtd_rec = recebidos.get(item.id, item.quantidade)
+        item.quantidade_recebida = qtd_rec
+        if qtd_rec != item.quantidade:
+            divergencias.append(f'{item.nome_item}: pedido {item.quantidade}, recebido {qtd_rec}')
+
+        if qtd_rec <= 0:
+            continue
+
         el = EstoqueLoja.query.filter_by(
             loja_id=pedido.loja_id, receita_id=item.receita_id, produto_id=item.produto_id
         ).first()
@@ -146,17 +198,23 @@ def entregar(id):
                              produto_id=item.produto_id)
             db.session.add(el)
             db.session.flush()
-        el.quantidade += item.quantidade
+        el.quantidade += qtd_rec
+        ref_div = ' (divergente)' if qtd_rec != item.quantidade else ''
         db.session.add(MovEstoqueLoja(
             estoque_loja_id=el.id, tipo='entrada_pedido',
-            quantidade=item.quantidade,
-            referencia=f'Pedido #{pedido.id}',
+            quantidade=qtd_rec,
+            referencia=f'Pedido #{pedido.id}{ref_div}',
             usuario_id=current_user.id,
         ))
 
     pedido.status = 'entregue'
+    if divergencias:
+        nota = 'Divergencias no recebimento: ' + '; '.join(divergencias)
+        pedido.observacao = (pedido.observacao + ' | ' if pedido.observacao else '') + nota
+        flash('Pedido recebido com divergencias. Detalhes salvos na observacao.', 'warning')
+    else:
+        flash('Pedido recebido integralmente. Estoque da loja atualizado.', 'success')
     db.session.commit()
-    flash('Pedido entregue! Estoque da loja e congelados atualizados.', 'success')
     return redirect(url_for('pedidos.detalhe', id=id))
 
 
@@ -167,8 +225,8 @@ def cancelar(id):
     loja_id = _loja_do_usuario()
     if loja_id and pedido.loja_id != loja_id:
         abort(403)
-    if pedido.status not in ('pendente', 'confirmado'):
-        flash('Só é possível cancelar pedidos pendentes ou confirmados.', 'warning')
+    if pedido.status not in ('pendente', 'confirmado', 'separado'):
+        flash('Só é possível cancelar pedidos pendentes, confirmados ou separados (antes do envio).', 'warning')
         return redirect(url_for('pedidos.detalhe', id=id))
     pedido.status = 'cancelado'
     db.session.commit()

@@ -567,6 +567,7 @@ class PedidoItem(db.Model):
     receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
     produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
     quantidade = db.Column(db.Integer, nullable=False)
+    quantidade_recebida = db.Column(db.Integer, nullable=True)
     observacao = db.Column(db.String(200))
 
     receita = db.relationship('Receita')
