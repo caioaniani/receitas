@@ -307,6 +307,7 @@ def relatorio():
     de_str = request.args.get('de', '')
     ate_str = request.args.get('ate', '')
     formato = request.args.get('formato', 'html')
+    incluir_fotos = request.args.get('fotos') == '1'
 
     try:
         de = datetime.strptime(de_str, '%Y-%m-%d').date()
@@ -370,10 +371,12 @@ def relatorio():
 
     if formato == 'pdf' and loja_id:
         from app.services.relatorio import gerar_pdf_pedidos
-        buf = gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item)
+        buf = gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item,
+                                incluir_fotos=incluir_fotos)
+        sufixo = '_com_fotos' if incluir_fotos else ''
         return send_file(
             buf, as_attachment=True,
-            download_name=f'pedidos_{loja_nome}_{de}_a_{ate}.pdf',
+            download_name=f'pedidos_{loja_nome}_{de}_a_{ate}{sufixo}.pdf',
             mimetype='application/pdf',
         )
 
@@ -381,6 +384,7 @@ def relatorio():
                            lojas=lojas, loja_id=loja_id,
                            de=de.isoformat(), ate=ate.isoformat(),
                            pedidos=pedidos, totais=totais,
+                           incluir_fotos=incluir_fotos,
                            por_item=sorted(por_item.items(), key=lambda x: x[0]))
 
 

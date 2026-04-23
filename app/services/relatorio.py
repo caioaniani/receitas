@@ -13,6 +13,32 @@ def _money(v):
     return f'R$ {v:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
 
 
+def _render_fotos(pdf, fotos, largura=45, altura=35, por_linha=4, margem=2):
+    """Renderiza miniaturas das fotos em grade dentro do PDF.
+
+    Quebra de pagina automatica quando o bloco nao cabe no restante.
+    """
+    pdf.set_font('Helvetica', 'I', 8)
+    pdf.cell(0, 4, f'Fotos do recebimento ({len(fotos)}):', new_x='LMARGIN', new_y='NEXT')
+
+    x0 = pdf.l_margin
+    y = pdf.get_y()
+    for i, foto in enumerate(fotos):
+        col = i % por_linha
+        if col == 0 and i > 0:
+            y += altura + margem
+        if y + altura > pdf.h - pdf.b_margin - 5:
+            pdf.add_page()
+            y = pdf.get_y()
+        x = x0 + col * (largura + margem)
+        try:
+            pdf.image(io.BytesIO(foto.imagem), x=x, y=y, w=largura, h=altura)
+        except Exception:
+            pdf.set_xy(x, y)
+            pdf.cell(largura, altura, '[foto invalida]', border=1, align='C')
+    pdf.set_y(y + altura + margem)
+
+
 def gerar_xlsx_pedidos(loja_nome, de, ate, pedidos, totais, por_item):
     wb = Workbook()
     ws = wb.active
@@ -97,7 +123,7 @@ def gerar_xlsx_pedidos(loja_nome, de, ate, pedidos, totais, por_item):
     return buf
 
 
-def gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item):
+def gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item, incluir_fotos=False):
     pdf = PadariaPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
 
@@ -161,6 +187,10 @@ def gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item):
         pdf.set_font('Helvetica', 'B', 9)
         pdf.cell(135, 5, 'Subtotal do pedido', border=1, align='R')
         pdf.cell(35, 5, _money(p_info['subtotal']), border=1, align='R', new_x='LMARGIN', new_y='NEXT')
+
+        if incluir_fotos and p.fotos:
+            _render_fotos(pdf, p.fotos)
+
         pdf.ln(2)
 
     if pdf.get_y() > 260:
