@@ -61,7 +61,35 @@ def _extrair_periodo(order):
     return extra.get('Periodo', '')
 
 
-def _normalizar_pedido(order, client_data=None):
+def _extrair_endereco(addr):
+    if not addr:
+        return '', '', ''
+    nome = ' '.join(p for p in [addr.get('first_name', ''), addr.get('last_name', '')] if p)
+    tel = addr.get('phone', '')
+    parts = [
+        addr.get('street', ''), addr.get('number', ''),
+        addr.get('complement', ''), addr.get('neighborhood', ''),
+        addr.get('city', ''), addr.get('state', ''),
+    ]
+    zip_code = addr.get('zip_code', addr.get('zip', ''))
+    if zip_code:
+        parts.append(zip_code)
+    end = ', '.join(p for p in parts if p)
+    return nome, tel, end
+
+
+def buscar_pedido_completo(code):
+    """Busca detalhes completos de um pedido (inclui shipping_address)."""
+    resp = _get(f'/orders/{code}')
+    if resp:
+        try:
+            return resp.json()
+        except ValueError:
+            pass
+    return None
+
+
+def _normalizar_pedido(order, client_data=None, order_detail=None):
     data_entrega = _extrair_data_entrega(order)
 
     itens = []
@@ -74,33 +102,33 @@ def _normalizar_pedido(order, client_data=None):
             'subtotal': item.get('subtotal', 0),
         })
 
-    nome_cliente = ''
-    telefone = ''
-    endereco = ''
+    comprador = ''
+    destinatario = ''
+    telefone_dest = ''
+    endereco_entrega = ''
 
     if client_data:
-        nome_cliente = client_data.get('name', '')
-        telefone = client_data.get('phone', '')
+        comprador = client_data.get('name', '')
+
+    if not comprador:
+        comprador = order.get('client_name', '')
+
+    detail = order_detail or order
+    shipping = detail.get('shipping_address') or {}
+    if shipping:
+        destinatario, telefone_dest, endereco_entrega = _extrair_endereco(shipping)
+
+    if not endereco_entrega and client_data:
         addr = client_data.get('recent_address') or {}
         if addr:
-            parts = [
-                addr.get('street', ''), addr.get('number', ''),
-                addr.get('complement', ''), addr.get('neighborhood', ''),
-                addr.get('city', ''), addr.get('state', ''),
-            ]
-            endereco = ', '.join(p for p in parts if p)
+            dest_name, dest_tel, endereco_entrega = _extrair_endereco(addr)
+            if not destinatario:
+                destinatario = dest_name
+            if not telefone_dest:
+                telefone_dest = dest_tel
 
-    if not nome_cliente:
-        nome_cliente = order.get('client_name', '')
-    if not endereco:
-        shipping = order.get('shipping_address') or {}
-        if shipping:
-            parts = [
-                shipping.get('street', ''), shipping.get('number', ''),
-                shipping.get('complement', ''), shipping.get('neighborhood', ''),
-                shipping.get('city', ''), shipping.get('state', ''),
-            ]
-            endereco = ', '.join(p for p in parts if p)
+    if not destinatario:
+        destinatario = comprador
 
     return {
         'code': order.get('code', ''),
@@ -108,9 +136,10 @@ def _normalizar_pedido(order, client_data=None):
         'data_entrega': data_entrega.isoformat() if data_entrega else None,
         'data_entrega_fmt': data_entrega.strftime('%d/%m/%Y') if data_entrega else '',
         'periodo': _extrair_periodo(order),
-        'cliente_nome': nome_cliente,
-        'cliente_telefone': telefone,
-        'endereco': endereco,
+        'comprador': comprador,
+        'destinatario': destinatario,
+        'telefone': telefone_dest,
+        'endereco': endereco_entrega,
         'itens': itens,
         'total': order.get('total', 0),
         'tem_customizacao': bool(order.get('customizations')),
@@ -200,7 +229,8 @@ def buscar_pedidos_do_dia(target_date):
             continue
         client_id = order.get('client_id')
         client_data = buscar_cliente(client_id)
-        pedidos.append(_normalizar_pedido(order, client_data))
+        order_detail = buscar_pedido_completo(order.get('code'))
+        pedidos.append(_normalizar_pedido(order, client_data, order_detail))
 
     pedidos.sort(key=lambda p: p.get('periodo') or '')
     return {'pedidos': pedidos, 'total_janela': len(todos)}

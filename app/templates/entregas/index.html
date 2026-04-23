@@ -218,7 +218,8 @@
             counts[status] = (counts[status] || 0) + 1;
 
             if (filtroAtual !== 'todos' && status !== filtroAtual) continue;
-            if (busca && p.cliente_nome.toLowerCase().indexOf(busca) === -1 && p.code.toLowerCase().indexOf(busca) === -1) continue;
+            var buscaTexto = (p.destinatario + ' ' + p.comprador + ' ' + p.code).toLowerCase();
+            if (busca && buscaTexto.indexOf(busca) === -1) continue;
 
             var statusBadge = '';
             if (status === 'pendente') statusBadge = '<span class="badge rounded-pill bg-warning text-dark">Pendente</span>';
@@ -234,12 +235,17 @@
             var cartinhaClass = (p.cartinha || p.tem_customizacao) ? 'has-text' : '';
             var cartinhaBadge = p.tem_customizacao ? ' <span class="badge bg-warning text-dark" style="font-size:10px;"><i class="bi bi-envelope-heart"></i> Cartinha</span>' : '';
 
+            var compradorLine = '';
+            if (p.comprador && p.comprador !== p.destinatario) {
+                compradorLine = '<div class="text-muted" style="font-size:11px;"><i class="bi bi-person"></i> Comprador: ' + escapeHtml(p.comprador) + '</div>';
+            }
+
             html += '<div class="card mb-2">' +
                 '<div class="card-body py-2 px-3">' +
                     '<div class="d-flex justify-content-between align-items-start">' +
                         '<div>' +
                             '<strong class="text-primary" style="font-size:13px;">[' + escapeHtml(p.code) + ']</strong> ' +
-                            '<span class="fw-semibold">' + escapeHtml(p.cliente_nome) + '</span>' +
+                            '<span class="fw-semibold"><i class="bi bi-person-fill"></i> ' + escapeHtml(p.destinatario) + '</span>' +
                             cartinhaBadge +
                         '</div>' +
                         '<div class="d-flex align-items-center gap-2">' +
@@ -247,9 +253,10 @@
                             statusBadge +
                         '</div>' +
                     '</div>' +
+                    compradorLine +
                     '<div class="text-muted" style="font-size:12px;">' +
                         (p.endereco ? '<i class="bi bi-geo-alt"></i> ' + escapeHtml(p.endereco) : '') +
-                        (p.cliente_telefone ? ' &nbsp;<i class="bi bi-telephone"></i> ' + escapeHtml(p.cliente_telefone) : '') +
+                        (p.telefone ? ' &nbsp;<i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) : '') +
                     '</div>' +
                     '<div class="mt-1" style="font-size:13px;">' + itensHtml + '</div>' +
                     '<div class="d-flex justify-content-between align-items-center mt-1">' +

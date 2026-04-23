@@ -151,6 +151,19 @@ def api_debug():
                     info['exemplo_extra'] = primeiro.get('extra', {})
                     info['exemplo_client_id'] = primeiro.get('client_id', '')
                     info['exemplo_items_count'] = len(primeiro.get('items') or [])
+
+                    detail_resp = http_requests.get(
+                        'https://api.vnda.com.br/api/v2/orders/' + str(primeiro.get('code', '')),
+                        headers=headers, timeout=15,
+                    )
+                    if detail_resp.status_code == 200:
+                        try:
+                            detail = detail_resp.json()
+                            info['detalhe_campos'] = list(detail.keys())
+                            info['detalhe_shipping_address'] = detail.get('shipping_address')
+                            info['detalhe_client_name'] = detail.get('client_name', '')
+                        except ValueError:
+                            info['detalhe_erro'] = 'resposta nao-json'
             elif isinstance(body, dict):
                 info['tipo_resposta'] = 'dict'
                 info['chaves'] = list(body.keys())
