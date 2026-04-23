@@ -621,6 +621,30 @@ class EstoqueLoja(db.Model):
         return '?'
 
 
+class PrecoLojaReceita(db.Model):
+    __tablename__ = 'preco_loja_receita'
+
+    id = db.Column(db.Integer, primary_key=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=False)
+    preco = db.Column(db.Float, nullable=False)
+
+    __table_args__ = (db.UniqueConstraint('loja_id', 'receita_id', name='uq_preco_loja_receita'),)
+
+
+class FotoRecebimento(db.Model):
+    __tablename__ = 'foto_recebimento'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_id = db.Column(db.Integer, db.ForeignKey('pedido_loja.id'), nullable=False)
+    imagem = db.Column(db.LargeBinary, nullable=False)
+    mimetype = db.Column(db.String(100))
+    enviada_em = db.Column(db.DateTime, default=datetime.utcnow)
+    enviada_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    pedido = db.relationship('PedidoLoja', backref=db.backref('fotos', cascade='all, delete-orphan'))
+
+
 class MovEstoqueLoja(db.Model):
     __tablename__ = 'mov_estoque_loja'
 

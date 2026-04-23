@@ -20,9 +20,14 @@
 <div class="d-flex justify-content-between align-items-center mb-2">
     <p class="text-muted mb-0">Estoque atual de <strong>{{ loja.nome }}</strong></p>
     {% if current_user.is_admin() %}
-    <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modal-ajuste">
-        <i class="bi bi-plus-slash-minus"></i> Entrada / Ajuste
-    </button>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('pedidos.precos_loja', loja_id=loja.id) }}" class="btn btn-outline-dark btn-sm">
+            <i class="bi bi-tag"></i> Precos
+        </a>
+        <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modal-ajuste">
+            <i class="bi bi-plus-slash-minus"></i> Entrada / Ajuste
+        </button>
+    </div>
     {% endif %}
 </div>
 

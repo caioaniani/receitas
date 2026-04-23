@@ -1,7 +1,9 @@
+import csv
+import io
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
-from flask import render_template, redirect, url_for, flash, request, abort
+from flask import render_template, redirect, url_for, flash, request, abort, send_file, Response
 from flask_login import login_required, current_user
 
 from app.blueprints.pedidos import pedidos_bp
@@ -11,7 +13,20 @@ from app.models import (
     Loja, Receita, Produto, PedidoLoja, PedidoItem,
     EstoqueProducao, MovEstoqueProducao,
     EstoqueLoja, MovEstoqueLoja,
+    PrecoLojaReceita, FotoRecebimento,
 )
+
+
+def _preco_para_loja(receita_id, loja_id):
+    """Preco customizado da loja para a receita, ou preco_loja padrao."""
+    if receita_id and loja_id:
+        custom = PrecoLojaReceita.query.filter_by(
+            loja_id=loja_id, receita_id=receita_id
+        ).first()
+        if custom:
+            return custom.preco
+    rec = Receita.query.get(receita_id) if receita_id else None
+    return (rec.preco_loja if rec and rec.preco_loja else 0) or 0
 
 
 def _loja_do_usuario():
@@ -211,11 +226,168 @@ def receber(id):
     if divergencias:
         nota = 'Divergencias no recebimento: ' + '; '.join(divergencias)
         pedido.observacao = (pedido.observacao + ' | ' if pedido.observacao else '') + nota
+
+    for f in request.files.getlist('fotos'):
+        if not f or not f.filename:
+            continue
+        content = f.read()
+        if not content:
+            continue
+        db.session.add(FotoRecebimento(
+            pedido_id=pedido.id,
+            imagem=content,
+            mimetype=f.mimetype or 'image/jpeg',
+            enviada_por=current_user.id,
+        ))
+
+    if divergencias:
         flash('Pedido recebido com divergencias. Detalhes salvos na observacao.', 'warning')
     else:
         flash('Pedido recebido integralmente. Estoque da loja atualizado.', 'success')
     db.session.commit()
     return redirect(url_for('pedidos.detalhe', id=id))
+
+
+@pedidos_bp.route('/foto/<int:foto_id>')
+@login_required
+def foto(foto_id):
+    f = FotoRecebimento.query.get_or_404(foto_id)
+    loja_id = _loja_do_usuario()
+    if loja_id and f.pedido.loja_id != loja_id:
+        abort(403)
+    return send_file(io.BytesIO(f.imagem), mimetype=f.mimetype or 'image/jpeg')
+
+
+@pedidos_bp.route('/lojas/<int:loja_id>/precos', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def precos_loja(loja_id):
+    loja = Loja.query.get_or_404(loja_id)
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+
+    if request.method == 'POST':
+        for r in receitas:
+            val = (request.form.get(f'preco_{r.id}', '') or '').strip().replace(',', '.')
+            existente = PrecoLojaReceita.query.filter_by(
+                loja_id=loja_id, receita_id=r.id
+            ).first()
+            if not val:
+                if existente:
+                    db.session.delete(existente)
+                continue
+            try:
+                preco = float(val)
+            except ValueError:
+                continue
+            if preco <= 0:
+                if existente:
+                    db.session.delete(existente)
+                continue
+            if existente:
+                existente.preco = preco
+            else:
+                db.session.add(PrecoLojaReceita(
+                    loja_id=loja_id, receita_id=r.id, preco=preco
+                ))
+        db.session.commit()
+        flash(f'Precos da loja {loja.nome} atualizados.', 'success')
+        return redirect(url_for('pedidos.precos_loja', loja_id=loja_id))
+
+    precos = {p.receita_id: p.preco for p in PrecoLojaReceita.query.filter_by(loja_id=loja_id).all()}
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    return render_template('pedidos/precos_loja.html', loja=loja, receitas=receitas,
+                           precos=precos, lojas=lojas)
+
+
+@pedidos_bp.route('/relatorio')
+@login_required
+@admin_required
+def relatorio():
+    hoje = date.today()
+    loja_id = request.args.get('loja', type=int)
+    de_str = request.args.get('de', '')
+    ate_str = request.args.get('ate', '')
+    formato = request.args.get('formato', 'html')
+
+    try:
+        de = datetime.strptime(de_str, '%Y-%m-%d').date()
+    except ValueError:
+        de = hoje.replace(day=1)
+    try:
+        ate = datetime.strptime(ate_str, '%Y-%m-%d').date()
+    except ValueError:
+        ate = hoje
+
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    pedidos = []
+    totais = {'qtd_pedidos': 0, 'valor_total': 0.0, 'divergencias': 0}
+    por_item = defaultdict(lambda: {'quantidade': 0, 'recebido': 0, 'valor': 0.0})
+
+    if loja_id:
+        query = PedidoLoja.query.filter(
+            PedidoLoja.loja_id == loja_id,
+            PedidoLoja.status == 'entregue',
+            PedidoLoja.data_entrega >= de,
+            PedidoLoja.data_entrega <= ate,
+        ).order_by(PedidoLoja.data_entrega)
+        pedidos_raw = query.all()
+
+        for p in pedidos_raw:
+            subtotal = 0.0
+            linhas = []
+            for it in p.itens:
+                preco = _preco_para_loja(it.receita_id, loja_id)
+                qtd_efetiva = it.quantidade_recebida if it.quantidade_recebida is not None else it.quantidade
+                valor_linha = preco * qtd_efetiva
+                subtotal += valor_linha
+                linhas.append({
+                    'nome': it.nome_item,
+                    'quantidade': it.quantidade,
+                    'recebido': qtd_efetiva,
+                    'preco': preco,
+                    'subtotal': valor_linha,
+                    'divergente': it.quantidade_recebida is not None and it.quantidade_recebida != it.quantidade,
+                })
+                por_item[it.nome_item]['quantidade'] += it.quantidade
+                por_item[it.nome_item]['recebido'] += qtd_efetiva
+                por_item[it.nome_item]['valor'] += valor_linha
+
+            pedidos.append({'p': p, 'linhas': linhas, 'subtotal': subtotal})
+            totais['qtd_pedidos'] += 1
+            totais['valor_total'] += subtotal
+            if p.tem_divergencia:
+                totais['divergencias'] += 1
+
+    if formato == 'csv' and loja_id:
+        buf = io.StringIO()
+        w = csv.writer(buf, delimiter=';')
+        w.writerow(['Data', 'Pedido', 'Item', 'Pedido (qtd)', 'Recebido (qtd)', 'Preco Unit.', 'Subtotal', 'Divergente'])
+        for p_info in pedidos:
+            p = p_info['p']
+            for l in p_info['linhas']:
+                w.writerow([
+                    p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '',
+                    f"#{p.id}", l['nome'], l['quantidade'], l['recebido'],
+                    f"{l['preco']:.2f}".replace('.', ','),
+                    f"{l['subtotal']:.2f}".replace('.', ','),
+                    'SIM' if l['divergente'] else '',
+                ])
+        w.writerow([])
+        w.writerow(['TOTAL', '', '', '', '', '', f"{totais['valor_total']:.2f}".replace('.', ','), ''])
+        loja_nome = next((l.nome for l in lojas if l.id == loja_id), 'loja')
+        return Response(
+            buf.getvalue(),
+            mimetype='text/csv; charset=utf-8',
+            headers={
+                'Content-Disposition': f'attachment; filename="pedidos_{loja_nome}_{de}_a_{ate}.csv"'
+            },
+        )
+
+    return render_template('pedidos/relatorio.html',
+                           lojas=lojas, loja_id=loja_id,
+                           de=de.isoformat(), ate=ate.isoformat(),
+                           pedidos=pedidos, totais=totais,
+                           por_item=sorted(por_item.items(), key=lambda x: x[0]))
 
 
 @pedidos_bp.route('/<int:id>/cancelar', methods=['POST'])

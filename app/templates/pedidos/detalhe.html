@@ -81,9 +81,10 @@
 
 {% if pedido.status == 'em_transporte' %}
 <div class="alert alert-info py-2" style="font-size:13px;">
-    <i class="bi bi-info-circle"></i> Informe a <strong>quantidade realmente recebida</strong> por item. Se nao mexer, o sistema assume que chegou tudo conforme pedido.
+    <i class="bi bi-info-circle"></i> Informe a <strong>quantidade realmente recebida</strong> por item. Se nao mexer, o sistema assume que chegou tudo conforme pedido. Tire foto(s) do pedido pra registro.
 </div>
 <form method="POST" action="{{ url_for('pedidos.receber', id=pedido.id) }}"
+      enctype="multipart/form-data"
       onsubmit="return confirm('Confirmar recebimento deste pedido?')">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 {% endif %}
@@ -156,6 +157,13 @@
     {% endif %}
 
     {% if pedido.status == 'em_transporte' %}
+    <div class="w-100 mb-2">
+        <label class="form-label fw-semibold" style="font-size:13px;">
+            <i class="bi bi-camera"></i> Foto(s) do pedido recebido
+        </label>
+        <input type="file" name="fotos" class="form-control form-control-sm" accept="image/*" capture="environment" multiple>
+        <small class="text-muted">No celular abre a camera direto. Pode enviar mais de uma.</small>
+    </div>
     <button type="submit" class="btn btn-success btn-sm">
         <i class="bi bi-check-all"></i> Confirmar Recebimento
     </button>
@@ -184,5 +192,18 @@
 
 {% if pedido.status == 'em_transporte' %}
 </form>
+{% endif %}
+
+{% if pedido.fotos|length > 0 %}
+<h6 class="fw-bold mt-4 mb-2"><i class="bi bi-images"></i> Fotos do Recebimento</h6>
+<div class="d-flex flex-wrap gap-2">
+    {% for f in pedido.fotos %}
+    <a href="{{ url_for('pedidos.foto', foto_id=f.id) }}" target="_blank" rel="noopener"
+       title="Enviada em {{ f.enviada_em.strftime('%d/%m/%Y %H:%M') if f.enviada_em else '' }}">
+        <img src="{{ url_for('pedidos.foto', foto_id=f.id) }}" alt="Foto do recebimento"
+             style="max-height:160px; max-width:200px; border:1px solid var(--border-color); border-radius:6px; object-fit:cover;">
+    </a>
+    {% endfor %}
+</div>
 {% endif %}
 {% endblock %}
