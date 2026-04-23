@@ -129,20 +129,17 @@ def api_debug_pedido(code):
                 info['erro'] = 'resposta nao-json'
                 return jsonify(info)
 
-            info['code'] = str(order.get('code', ''))
-            info['status'] = str(order.get('status', ''))
-            info['expected_delivery_date'] = str(order.get('expected_delivery_date', ''))
-            info['extra'] = str(order.get('extra', ''))[:500]
-            info['client_id'] = str(order.get('client_id', ''))
+            skip_keys = {'items'}
+            for k, v in order.items():
+                if k in skip_keys:
+                    continue
+                if isinstance(v, dict):
+                    info[k] = {sk: str(sv) for sk, sv in v.items() if sv is not None}
+                elif isinstance(v, list):
+                    info[k] = str(v)[:300]
+                else:
+                    info[k] = v
             info['items_count'] = len(order.get('items') or [])
-            info['total'] = str(order.get('total', ''))
-            info['all_keys'] = list(order.keys())
-
-            shipping = order.get('shipping_address')
-            if shipping and isinstance(shipping, dict):
-                info['shipping_address'] = {k: str(v) for k, v in shipping.items() if v is not None}
-            else:
-                info['shipping_address'] = str(shipping)
 
             from app.services.vnda import _extrair_data_entrega, _extrair_periodo
             de = _extrair_data_entrega(order)
