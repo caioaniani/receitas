@@ -130,6 +130,20 @@
                 {% endfor %}
             </tbody>
         </table>
+        {% if info.p.fotos|length > 0 %}
+        <div class="mt-2 d-flex flex-wrap gap-1">
+            <small class="text-muted w-100" style="font-size:11px;">
+                <i class="bi bi-camera"></i> Fotos do recebimento ({{ info.p.fotos|length }}):
+            </small>
+            {% for f in info.p.fotos %}
+            <a href="{{ url_for('pedidos.foto', foto_id=f.id) }}" target="_blank" rel="noopener"
+               title="Enviada em {{ f.enviada_em.strftime('%d/%m/%Y %H:%M') if f.enviada_em else '' }}">
+                <img src="{{ url_for('pedidos.foto', foto_id=f.id) }}" alt="Foto"
+                     style="height:80px; max-width:110px; border:1px solid var(--border-color); border-radius:4px; object-fit:cover;">
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
     </div>
 </div>
 {% else %}

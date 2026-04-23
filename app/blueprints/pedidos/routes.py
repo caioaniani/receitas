@@ -361,9 +361,10 @@ def relatorio():
     if formato == 'csv' and loja_id:
         buf = io.StringIO()
         w = csv.writer(buf, delimiter=';')
-        w.writerow(['Data', 'Pedido', 'Item', 'Pedido (qtd)', 'Recebido (qtd)', 'Preco Unit.', 'Subtotal', 'Divergente'])
+        w.writerow(['Data', 'Pedido', 'Item', 'Pedido (qtd)', 'Recebido (qtd)', 'Preco Unit.', 'Subtotal', 'Divergente', 'Fotos'])
         for p_info in pedidos:
             p = p_info['p']
+            n_fotos = len(p.fotos)
             for l in p_info['linhas']:
                 w.writerow([
                     p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '',
@@ -371,9 +372,10 @@ def relatorio():
                     f"{l['preco']:.2f}".replace('.', ','),
                     f"{l['subtotal']:.2f}".replace('.', ','),
                     'SIM' if l['divergente'] else '',
+                    n_fotos if n_fotos else '',
                 ])
         w.writerow([])
-        w.writerow(['TOTAL', '', '', '', '', '', f"{totais['valor_total']:.2f}".replace('.', ','), ''])
+        w.writerow(['TOTAL', '', '', '', '', '', f"{totais['valor_total']:.2f}".replace('.', ','), '', ''])
         loja_nome = next((l.nome for l in lojas if l.id == loja_id), 'loja')
         return Response(
             buf.getvalue(),
