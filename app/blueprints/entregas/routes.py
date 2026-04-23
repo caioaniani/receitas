@@ -98,6 +98,61 @@ def get_cartinha(code):
     )
 
 
+@entregas_bp.route('/api/debug/pedido/<code>')
+@login_required
+@entrega_access_required
+def api_debug_pedido(code):
+    """Diagnostico de um pedido especifico."""
+    token = current_app.config.get('VNDA_API_TOKEN', '')
+    host = current_app.config.get('VNDA_SHOP_HOST', 'www.padariaartesanalonline.com.br')
+    if token.lower().startswith('bearer '):
+        token = token[7:]
+
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'X-Shop-Host': host,
+        'Accept': 'application/json',
+        'User-Agent': 'OPaoPadaria/1.0',
+    }
+
+    info = {}
+    try:
+        resp = http_requests.get(
+            f'https://api.vnda.com.br/api/v2/orders/{code}',
+            headers=headers, timeout=15,
+        )
+        info['status_code'] = resp.status_code
+        if resp.status_code == 200:
+            try:
+                order = resp.json()
+                info['code'] = order.get('code')
+                info['status'] = order.get('status')
+                info['expected_delivery_date'] = order.get('expected_delivery_date')
+                info['extra'] = order.get('extra')
+                info['shipping_address'] = order.get('shipping_address')
+                info['client_id'] = order.get('client_id')
+                info['client_name'] = order.get('client_name')
+                info['items_count'] = len(order.get('items') or [])
+                info['total'] = order.get('total')
+
+                from app.services.vnda import _extrair_data_entrega, _extrair_periodo
+                de = _extrair_data_entrega(order)
+                info['data_entrega_extraida'] = de.isoformat() if de else None
+                info['periodo_extraido'] = _extrair_periodo(order)
+
+                today = date.today()
+                info['hoje'] = today.isoformat()
+                info['entrega_e_hoje'] = (de == today) if de else False
+            except ValueError:
+                info['erro'] = 'resposta nao-json'
+        else:
+            info['body'] = resp.text[:500]
+    except http_requests.RequestException as e:
+        info['erro_conexao'] = str(e)
+
+    return jsonify(info)
+
+
 @entregas_bp.route('/api/debug')
 @login_required
 @entrega_access_required
