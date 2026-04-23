@@ -139,6 +139,7 @@ def create_app(config_class=None):
     from app.blueprints.producao import producao_bp
     from app.blueprints.relatorios import relatorios_bp
     from app.blueprints.pedidos import pedidos_bp
+    from app.blueprints.entregas import entregas_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(materias_primas_bp, url_prefix='/materias-primas')
@@ -149,6 +150,7 @@ def create_app(config_class=None):
     app.register_blueprint(producao_bp, url_prefix='/producao')
     app.register_blueprint(relatorios_bp, url_prefix='/relatorios')
     app.register_blueprint(pedidos_bp)
+    app.register_blueprint(entregas_bp, url_prefix='/entregas')
 
     with app.app_context():
         db.create_all()

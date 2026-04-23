@@ -119,6 +119,14 @@
         </a>
 
         <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">Site</div>
+
+        <a href="{{ url_for('entregas.index') }}"
+           class="sidebar-link {% if request.path.startswith('/entregas') %}active{% endif %}">
+            <i class="bi bi-truck"></i> Entregas Site
+        </a>
+
+        <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">RH</div>
 
         <a href="{{ url_for('rh.dashboard') }}"
@@ -165,6 +173,16 @@
            class="sidebar-link {% if '/pedidos/estoque-loja' in request.path %}active{% endif %}">
             <i class="bi bi-box-seam"></i> Estoque Loja
         </a>
+
+        {% if current_user.loja_id %}
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">Site</div>
+
+        <a href="{{ url_for('entregas.index') }}"
+           class="sidebar-link {% if request.path.startswith('/entregas') %}active{% endif %}">
+            <i class="bi bi-truck"></i> Entregas Site
+        </a>
+        {% endif %}
 
         <div class="sidebar-divider"></div>
 

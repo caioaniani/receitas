@@ -616,3 +616,17 @@ class MovEstoqueLoja(db.Model):
     data = db.Column(db.DateTime, default=datetime.utcnow)
     referencia = db.Column(db.String(200))
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+
+# ── Cartinha de Entrega (Vnda) ──
+
+class CartinhaEntrega(db.Model):
+    __tablename__ = 'cartinha_entrega'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_code = db.Column(db.String(50), nullable=False, unique=True)
+    texto = db.Column(db.Text)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    autor = db.relationship('Usuario', backref='cartinhas')
