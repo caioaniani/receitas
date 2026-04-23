@@ -33,7 +33,7 @@ def _get(endpoint, params=None):
     try:
         resp = requests.get(url, headers=_headers(), params=params, timeout=15)
         resp.raise_for_status()
-        return resp.json()
+        return resp
     except requests.RequestException as e:
         logger.error('Erro API Vnda %s: %s', endpoint, e)
         return None
@@ -123,17 +123,22 @@ def buscar_cliente(client_id):
         return None
     if client_id in _client_cache:
         return _client_cache[client_id]
-    data = _get(f'/clients/{client_id}')
-    if data:
-        _client_cache[client_id] = data
-    return data
+    resp = _get(f'/clients/{client_id}')
+    if resp:
+        try:
+            data = resp.json()
+            _client_cache[client_id] = data
+            return data
+        except ValueError:
+            pass
+    return None
 
 
 def _buscar_pedidos_janela(start_date, end_date):
     """Busca todos os pedidos numa janela de datas (com paginacao)."""
     todos = []
     page = 1
-    per_page = 50
+    per_page = 100
     while True:
         params = {
             'per_page': per_page,
@@ -141,23 +146,38 @@ def _buscar_pedidos_janela(start_date, end_date):
             'start': start_date.isoformat(),
             'finish': end_date.isoformat(),
         }
-        data = _get('/orders', params=params)
-        if not data:
+        resp = _get('/orders', params=params)
+        if not resp:
             break
+        try:
+            data = resp.json()
+        except ValueError:
+            break
+
         if isinstance(data, list):
             todos.extend(data)
             if len(data) < per_page:
                 break
-        elif isinstance(data, dict) and 'results' in data:
-            todos.extend(data['results'])
-            if len(data['results']) < per_page:
-                break
         else:
             break
+
+        pagination = resp.headers.get('X-Pagination', '')
+        if pagination:
+            import json as _json
+            try:
+                pag = _json.loads(pagination)
+                if not pag.get('next_page'):
+                    break
+            except ValueError:
+                pass
+
         page += 1
-        if page > 20:
+        if page > 50:
             break
     return todos
+
+
+_STATUS_IGNORAR = {'canceled', 'cancelled'}
 
 
 def buscar_pedidos_do_dia(target_date):
@@ -165,14 +185,16 @@ def buscar_pedidos_do_dia(target_date):
     if not token:
         return {'erro': 'Token Vnda nao configurado. Adicione VNDA_API_TOKEN nas variaveis de ambiente.', 'pedidos': []}
 
-    start = target_date - timedelta(days=30)
-    end = target_date + timedelta(days=5)
+    start = target_date - timedelta(days=14)
+    end = target_date + timedelta(days=3)
     todos = _buscar_pedidos_janela(start, end)
 
     logger.info('Vnda: %d pedidos na janela, filtrando para %s', len(todos), target_date)
 
     pedidos = []
     for order in todos:
+        if (order.get('status') or '').lower() in _STATUS_IGNORAR:
+            continue
         de = _extrair_data_entrega(order)
         if de != target_date:
             continue
@@ -200,6 +222,8 @@ def contar_pedidos_por_dia(year, month):
 
     contagem = {}
     for order in todos:
+        if (order.get('status') or '').lower() in _STATUS_IGNORAR:
+            continue
         de = _extrair_data_entrega(order)
         if de and first <= de <= last:
             key = de.isoformat()
