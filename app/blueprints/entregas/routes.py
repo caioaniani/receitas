@@ -125,30 +125,37 @@ def api_debug_pedido(code):
         if resp.status_code == 200:
             try:
                 order = resp.json()
-                info['code'] = order.get('code')
-                info['status'] = order.get('status')
-                info['expected_delivery_date'] = order.get('expected_delivery_date')
-                info['extra'] = order.get('extra')
-                info['shipping_address'] = order.get('shipping_address')
-                info['client_id'] = order.get('client_id')
-                info['client_name'] = order.get('client_name')
-                info['items_count'] = len(order.get('items') or [])
-                info['total'] = order.get('total')
-
-                from app.services.vnda import _extrair_data_entrega, _extrair_periodo
-                de = _extrair_data_entrega(order)
-                info['data_entrega_extraida'] = de.isoformat() if de else None
-                info['periodo_extraido'] = _extrair_periodo(order)
-
-                today = date.today()
-                info['hoje'] = today.isoformat()
-                info['entrega_e_hoje'] = (de == today) if de else False
             except ValueError:
                 info['erro'] = 'resposta nao-json'
+                return jsonify(info)
+
+            info['code'] = str(order.get('code', ''))
+            info['status'] = str(order.get('status', ''))
+            info['expected_delivery_date'] = str(order.get('expected_delivery_date', ''))
+            info['extra'] = str(order.get('extra', ''))[:500]
+            info['client_id'] = str(order.get('client_id', ''))
+            info['items_count'] = len(order.get('items') or [])
+            info['total'] = str(order.get('total', ''))
+            info['all_keys'] = list(order.keys())
+
+            shipping = order.get('shipping_address')
+            if shipping and isinstance(shipping, dict):
+                info['shipping_address'] = {k: str(v) for k, v in shipping.items() if v is not None}
+            else:
+                info['shipping_address'] = str(shipping)
+
+            from app.services.vnda import _extrair_data_entrega, _extrair_periodo
+            de = _extrair_data_entrega(order)
+            info['data_entrega_extraida'] = de.isoformat() if de else None
+            info['periodo_extraido'] = _extrair_periodo(order)
+            info['hoje'] = date.today().isoformat()
+            info['entrega_e_hoje'] = (de == date.today()) if de else False
         else:
             info['body'] = resp.text[:500]
     except http_requests.RequestException as e:
         info['erro_conexao'] = str(e)
+    except Exception as e:
+        info['erro_geral'] = str(e)
 
     return jsonify(info)
 
