@@ -17,7 +17,14 @@
 {% endif %}
 
 {% if loja %}
-<p class="text-muted mb-2">Estoque atual de <strong>{{ loja.nome }}</strong></p>
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <p class="text-muted mb-0">Estoque atual de <strong>{{ loja.nome }}</strong></p>
+    {% if current_user.is_admin() %}
+    <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modal-ajuste">
+        <i class="bi bi-plus-slash-minus"></i> Entrada / Ajuste
+    </button>
+    {% endif %}
+</div>
 
 {% if itens %}
 <form method="POST" action="{{ url_for('pedidos.estoque_loja_registrar') }}">
@@ -70,5 +77,63 @@
 <div class="alert alert-warning">Sua conta nao esta vinculada a uma loja.</div>
 {% else %}
 <div class="alert alert-info">Selecione uma loja para ver o estoque.</div>
+{% endif %}
+
+{% if loja and current_user.is_admin() %}
+<div class="modal fade" id="modal-ajuste" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('pedidos.estoque_loja_ajuste') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="loja_id" value="{{ loja.id }}">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h6 class="modal-title"><i class="bi bi-plus-slash-minus"></i> Entrada / Ajuste de Estoque</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Item</label>
+                        <select name="receita_id" class="form-select form-select-sm" required>
+                            <option value="">Selecione...</option>
+                            {% set ns = namespace(cat_atual=None) %}
+                            {% for r in receitas %}
+                                {% if r.categoria != ns.cat_atual %}
+                                    {% if ns.cat_atual is not none %}</optgroup>{% endif %}
+                                    <optgroup label="{{ r.categoria or 'Outros' }}">
+                                    {% set ns.cat_atual = r.categoria %}
+                                {% endif %}
+                                <option value="{{ r.id }}">{{ r.nome }}</option>
+                            {% endfor %}
+                            {% if ns.cat_atual is not none %}</optgroup>{% endif %}
+                        </select>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Operacao</label>
+                            <select name="operacao" class="form-select form-select-sm">
+                                <option value="entrada">Entrada (+)</option>
+                                <option value="ajuste_negativo">Ajuste negativo (-)</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Quantidade</label>
+                            <input type="number" name="quantidade" class="form-control form-control-sm" min="1" value="1" required>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <label class="form-label fw-semibold">Motivo</label>
+                        <input type="text" name="motivo" class="form-control form-control-sm" required
+                               placeholder="Ex: inventario 22/04, transferencia entre lojas, devolucao...">
+                        <small class="text-muted">Obrigatorio. Fica no historico de movimentacoes.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success btn-sm">Registrar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
 {% endif %}
 {% endblock %}

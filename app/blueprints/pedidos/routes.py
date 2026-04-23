@@ -288,8 +288,10 @@ def estoque_loja():
     loja = Loja.query.get(loja_id) if loja_id else None
     itens = EstoqueLoja.query.filter_by(loja_id=loja_id).all() if loja_id else []
     lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all() \
+        if current_user.is_admin() else []
     return render_template('pedidos/estoque_loja.html', loja=loja, itens=itens,
-                           lojas=lojas, sel_loja=loja_id)
+                           lojas=lojas, sel_loja=loja_id, receitas=receitas)
 
 
 @pedidos_bp.route('/estoque-loja/registrar', methods=['POST'])
@@ -324,4 +326,45 @@ def estoque_loja_registrar():
 
     db.session.commit()
     flash('Estoque atualizado.', 'success')
+    return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
+
+
+@pedidos_bp.route('/estoque-loja/ajuste', methods=['POST'])
+@login_required
+@admin_required
+def estoque_loja_ajuste():
+    loja_id = int(request.form.get('loja_id', 0))
+    receita_id = int(request.form.get('receita_id', 0))
+    qtd = int(request.form.get('quantidade', 0))
+    operacao = request.form.get('operacao', 'entrada')
+    motivo = request.form.get('motivo', '').strip()
+
+    if not loja_id or not receita_id or qtd <= 0 or not motivo:
+        flash('Loja, item, quantidade (>0) e motivo sao obrigatorios.', 'warning')
+        return redirect(url_for('pedidos.estoque_loja', loja=loja_id or None))
+
+    el = EstoqueLoja.query.filter_by(loja_id=loja_id, receita_id=receita_id).first()
+    if not el:
+        if operacao != 'entrada':
+            flash('Item inexistente no estoque — so e possivel fazer entrada.', 'warning')
+            return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
+        el = EstoqueLoja(loja_id=loja_id, receita_id=receita_id)
+        db.session.add(el)
+        db.session.flush()
+
+    if operacao == 'entrada':
+        el.quantidade += qtd
+        tipo_mov = 'entrada_manual'
+        sinal = '+'
+    else:
+        el.quantidade = max(0, el.quantidade - qtd)
+        tipo_mov = 'ajuste_negativo'
+        sinal = '-'
+
+    db.session.add(MovEstoqueLoja(
+        estoque_loja_id=el.id, tipo=tipo_mov, quantidade=qtd,
+        referencia=motivo, usuario_id=current_user.id,
+    ))
+    db.session.commit()
+    flash(f'Ajuste de estoque registrado ({sinal}{qtd}).', 'success')
     return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
