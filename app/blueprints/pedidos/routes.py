@@ -9,11 +9,32 @@ from app.blueprints.pedidos import pedidos_bp
 from app.decorators import admin_required
 from app.extensions import db
 from app.models import (
-    Loja, Receita, Produto, PedidoLoja, PedidoItem,
+    Loja, Receita, Produto, MateriaPrima, MovimentacaoEstoque,
+    PedidoLoja, PedidoItem,
     EstoqueProducao, MovEstoqueProducao,
     EstoqueLoja, MovEstoqueLoja,
     PrecoLojaReceita, FotoRecebimento,
 )
+
+
+def _parse_item_id(value):
+    """Decodifica 'r_5'/'mp_5'/'5' em ('receita'|'mp', id). Legacy: int puro = receita."""
+    if not value:
+        return None, None
+    if value.startswith('r_'):
+        try:
+            return 'receita', int(value[2:])
+        except ValueError:
+            return None, None
+    if value.startswith('mp_'):
+        try:
+            return 'mp', int(value[3:])
+        except ValueError:
+            return None, None
+    try:
+        return 'receita', int(value)
+    except ValueError:
+        return None, None
 
 
 def _preco_para_loja(receita_id, loja_id):
@@ -75,8 +96,10 @@ def novo():
             flash('A data de entrega deve ser a partir de amanha.', 'warning')
             lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
             receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+            materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
             return render_template('pedidos/novo.html', lojas=lojas,
-                                   receitas=receitas, amanha=amanha, loja_id=loja_id)
+                                   receitas=receitas, materias=materias,
+                                   amanha=amanha, loja_id=loja_id)
 
         pedido = PedidoLoja(
             loja_id=sel_loja,
@@ -94,9 +117,13 @@ def novo():
         for i in range(len(ids)):
             if not ids[i] or not qtds[i]:
                 continue
+            tipo, item_id = _parse_item_id(ids[i])
+            if not tipo:
+                continue
             item = PedidoItem(
                 pedido_id=pedido.id,
-                receita_id=int(ids[i]),
+                receita_id=item_id if tipo == 'receita' else None,
+                materia_prima_id=item_id if tipo == 'mp' else None,
                 quantidade=int(qtds[i]),
                 observacao=notas[i].strip() if i < len(notas) else None,
             )
@@ -108,8 +135,10 @@ def novo():
 
     lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
     return render_template('pedidos/novo.html', lojas=lojas,
-                           receitas=receitas, amanha=amanha, loja_id=loja_id)
+                           receitas=receitas, materias=materias,
+                           amanha=amanha, loja_id=loja_id)
 
 
 @pedidos_bp.route('/<int:id>')
@@ -157,6 +186,18 @@ def enviar(id):
         return redirect(url_for('pedidos.detalhe', id=id))
 
     for item in pedido.itens:
+        if item.materia_prima_id:
+            mp = MateriaPrima.query.get(item.materia_prima_id)
+            if mp:
+                mp.estoque_atual = max(0, (mp.estoque_atual or 0) - item.quantidade)
+                db.session.add(MovimentacaoEstoque(
+                    materia_prima_id=mp.id, tipo='saida',
+                    quantidade=item.quantidade,
+                    referencia=f'Pedido #{pedido.id} → {pedido.loja.nome}',
+                    usuario_id=current_user.id,
+                ))
+            continue
+
         ep = EstoqueProducao.query.filter_by(
             receita_id=item.receita_id, produto_id=item.produto_id
         ).first()
@@ -205,11 +246,16 @@ def receber(id):
             continue
 
         el = EstoqueLoja.query.filter_by(
-            loja_id=pedido.loja_id, receita_id=item.receita_id, produto_id=item.produto_id
+            loja_id=pedido.loja_id,
+            receita_id=item.receita_id,
+            produto_id=item.produto_id,
+            materia_prima_id=item.materia_prima_id,
         ).first()
         if not el:
-            el = EstoqueLoja(loja_id=pedido.loja_id, receita_id=item.receita_id,
-                             produto_id=item.produto_id)
+            el = EstoqueLoja(loja_id=pedido.loja_id,
+                             receita_id=item.receita_id,
+                             produto_id=item.produto_id,
+                             materia_prima_id=item.materia_prima_id)
             db.session.add(el)
             db.session.flush()
         el.quantidade += qtd_rec
@@ -518,8 +564,11 @@ def estoque_loja():
     lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all() \
         if current_user.is_admin() else []
+    materias = MateriaPrima.query.order_by(MateriaPrima.nome).all() \
+        if current_user.is_admin() else []
     return render_template('pedidos/estoque_loja.html', loja=loja, itens=itens,
-                           lojas=lojas, sel_loja=loja_id, receitas=receitas)
+                           lojas=lojas, sel_loja=loja_id,
+                           receitas=receitas, materias=materias)
 
 
 @pedidos_bp.route('/estoque-loja/registrar', methods=['POST'])
@@ -562,21 +611,26 @@ def estoque_loja_registrar():
 @admin_required
 def estoque_loja_ajuste():
     loja_id = int(request.form.get('loja_id', 0))
-    receita_id = int(request.form.get('receita_id', 0))
+    tipo, item_id = _parse_item_id(request.form.get('item_id', ''))
     qtd = int(request.form.get('quantidade', 0))
     operacao = request.form.get('operacao', 'entrada')
     motivo = request.form.get('motivo', '').strip()
 
-    if not loja_id or not receita_id or qtd <= 0 or not motivo:
+    if not loja_id or not item_id or qtd <= 0 or not motivo:
         flash('Loja, item, quantidade (>0) e motivo sao obrigatorios.', 'warning')
         return redirect(url_for('pedidos.estoque_loja', loja=loja_id or None))
 
-    el = EstoqueLoja.query.filter_by(loja_id=loja_id, receita_id=receita_id).first()
+    filtro = {'loja_id': loja_id}
+    if tipo == 'receita':
+        filtro['receita_id'] = item_id
+    else:
+        filtro['materia_prima_id'] = item_id
+    el = EstoqueLoja.query.filter_by(**filtro).first()
     if not el:
         if operacao != 'entrada':
             flash('Item inexistente no estoque — so e possivel fazer entrada.', 'warning')
             return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
-        el = EstoqueLoja(loja_id=loja_id, receita_id=receita_id)
+        el = EstoqueLoja(**filtro)
         db.session.add(el)
         db.session.flush()
 

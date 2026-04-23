@@ -322,7 +322,7 @@ def _migrate_postgres(app):
         if cols_mp and 'estoque_atual' not in cols_mp:
             conn.execute(text("ALTER TABLE materia_prima ADD COLUMN estoque_atual REAL DEFAULT 0"))
 
-        # pedido_item.quantidade_recebida
+        # pedido_item.quantidade_recebida + materia_prima_id
         result = conn.execute(text(
             "SELECT column_name FROM information_schema.columns "
             "WHERE table_name = 'pedido_item'"
@@ -330,6 +330,17 @@ def _migrate_postgres(app):
         cols_pi = {row[0] for row in result}
         if cols_pi and 'quantidade_recebida' not in cols_pi:
             conn.execute(text("ALTER TABLE pedido_item ADD COLUMN quantidade_recebida INTEGER"))
+        if cols_pi and 'materia_prima_id' not in cols_pi:
+            conn.execute(text("ALTER TABLE pedido_item ADD COLUMN materia_prima_id INTEGER REFERENCES materia_prima(id)"))
+
+        # estoque_loja.materia_prima_id
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'estoque_loja'"
+        ))
+        cols_el = {row[0] for row in result}
+        if cols_el and 'materia_prima_id' not in cols_el:
+            conn.execute(text("ALTER TABLE estoque_loja ADD COLUMN materia_prima_id INTEGER REFERENCES materia_prima(id)"))
 
         conn.commit()
 
@@ -428,11 +439,19 @@ def _migrate_sqlite(app):
     if cols_mp and 'estoque_atual' not in cols_mp:
         cursor.execute("ALTER TABLE materia_prima ADD COLUMN estoque_atual REAL DEFAULT 0")
 
-    # Migração pedido_item.quantidade_recebida
+    # Migração pedido_item.quantidade_recebida + materia_prima_id
     cursor.execute("PRAGMA table_info(pedido_item)")
     cols_pi = [row[1] for row in cursor.fetchall()]
     if cols_pi and 'quantidade_recebida' not in cols_pi:
         cursor.execute("ALTER TABLE pedido_item ADD COLUMN quantidade_recebida INTEGER")
+    if cols_pi and 'materia_prima_id' not in cols_pi:
+        cursor.execute("ALTER TABLE pedido_item ADD COLUMN materia_prima_id INTEGER REFERENCES materia_prima(id)")
+
+    # Migração estoque_loja.materia_prima_id
+    cursor.execute("PRAGMA table_info(estoque_loja)")
+    cols_el = [row[1] for row in cursor.fetchall()]
+    if cols_el and 'materia_prima_id' not in cols_el:
+        cursor.execute("ALTER TABLE estoque_loja ADD COLUMN materia_prima_id INTEGER REFERENCES materia_prima(id)")
 
     conn.commit()
     conn.close()

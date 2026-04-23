@@ -580,12 +580,14 @@ class PedidoItem(db.Model):
     pedido_id = db.Column(db.Integer, db.ForeignKey('pedido_loja.id'), nullable=False)
     receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
     produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
+    materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'), nullable=True)
     quantidade = db.Column(db.Integer, nullable=False)
     quantidade_recebida = db.Column(db.Integer, nullable=True)
     observacao = db.Column(db.String(200))
 
     receita = db.relationship('Receita')
     produto = db.relationship('Produto')
+    materia_prima = db.relationship('MateriaPrima')
 
     @property
     def nome_item(self):
@@ -593,6 +595,8 @@ class PedidoItem(db.Model):
             return self.receita.nome
         if self.produto:
             return self.produto.nome
+        if self.materia_prima:
+            return self.materia_prima.nome + ' (MP)'
         return '?'
 
 
@@ -605,11 +609,13 @@ class EstoqueLoja(db.Model):
     loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
     receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
     produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
+    materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'), nullable=True)
     quantidade = db.Column(db.Integer, default=0)
 
     loja = db.relationship('Loja')
     receita = db.relationship('Receita')
     produto = db.relationship('Produto')
+    materia_prima = db.relationship('MateriaPrima')
     movimentacoes = db.relationship('MovEstoqueLoja', backref='estoque', cascade='all, delete-orphan')
 
     @property
@@ -618,6 +624,8 @@ class EstoqueLoja(db.Model):
             return self.receita.nome
         if self.produto:
             return self.produto.nome
+        if self.materia_prima:
+            return self.materia_prima.nome + ' (MP)'
         return '?'
 
 

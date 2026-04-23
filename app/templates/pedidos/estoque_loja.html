@@ -98,18 +98,25 @@
                 <div class="modal-body">
                     <div class="mb-2">
                         <label class="form-label fw-semibold">Item</label>
-                        <select name="receita_id" class="form-select form-select-sm" required>
+                        <select name="item_id" class="form-select form-select-sm" required>
                             <option value="">Selecione...</option>
                             {% set ns = namespace(cat_atual=None) %}
                             {% for r in receitas %}
                                 {% if r.categoria != ns.cat_atual %}
                                     {% if ns.cat_atual is not none %}</optgroup>{% endif %}
-                                    <optgroup label="{{ r.categoria or 'Outros' }}">
+                                    <optgroup label="Paes &mdash; {{ r.categoria or 'Outros' }}">
                                     {% set ns.cat_atual = r.categoria %}
                                 {% endif %}
-                                <option value="{{ r.id }}">{{ r.nome }}</option>
+                                <option value="r_{{ r.id }}">{{ r.nome }}</option>
                             {% endfor %}
                             {% if ns.cat_atual is not none %}</optgroup>{% endif %}
+                            {% if materias %}
+                            <optgroup label="Materias-primas">
+                                {% for mp in materias %}
+                                <option value="mp_{{ mp.id }}">{{ mp.nome }}{% if mp.unidade %} ({{ mp.unidade }}){% endif %}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
                         </select>
                     </div>
                     <div class="row g-2">
