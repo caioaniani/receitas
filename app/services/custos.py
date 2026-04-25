@@ -30,7 +30,7 @@ def calcular_custos_receitas():
     for _ in range(MAX_PASSES):
         still_remaining = []
         for r in remaining:
-            resultado = _calcular_receita(r, custos, mp_dict)
+            resultado = _calcular_receita(r, custos, mp_info)
             if resultado is None:
                 still_remaining.append(r)
                 continue
@@ -109,7 +109,26 @@ def calcular_rendimento(receita, custos_dict=None):
 
 # ── Funções internas ──
 
-def _calcular_receita(r, custos, mp_dict):
+def _custo_por_grama(info):
+    """Converte MP em 'R$ por grama' considerando como ela foi cadastrada.
+
+    - g/ml: custo_por_kg / 1000
+    - un + peso_unidade: custo_por_unidade / peso_unidade
+    - un sem peso_unidade: 0 (nao da pra converter)
+    """
+    if not info:
+        return 0
+    custo = info.get('custo_por_kg') or 0
+    unidade = info.get('unidade')
+    if unidade in ('g', 'ml'):
+        return custo / 1000
+    if unidade == 'un':
+        peso = info.get('peso_unidade') or 0
+        return custo / peso if peso > 0 else 0
+    return 0
+
+
+def _calcular_receita(r, custos, mp_info):
     """Calcula custo de uma receita. Retorna (custo_un, rendimento) ou None se dependência faltante."""
     custo_total = 0
     sum_pct = 0
@@ -123,14 +142,14 @@ def _calcular_receita(r, custos, mp_dict):
             custo_total += custos[ing.ingrediente_nome] * ing.porcentagem
         elif tipo == 'mp_direto':
             qtd_g = ing.porcentagem
-            custo_kg = mp_dict.get(ing.ingrediente_nome, 0)
-            custo_total += qtd_g / 1000 * custo_kg
+            info = mp_info.get(ing.ingrediente_nome, {})
+            custo_total += qtd_g * _custo_por_grama(info)
             qtd_direto += qtd_g
         else:
             sum_pct += ing.porcentagem
             qtd_g = r.peso_base * ing.porcentagem / 100
-            custo_kg = mp_dict.get(ing.ingrediente_nome, 0)
-            custo_total += qtd_g / 1000 * custo_kg
+            info = mp_info.get(ing.ingrediente_nome, {})
+            custo_total += qtd_g * _custo_por_grama(info)
 
     total_qtd = r.peso_base * sum_pct / 100 + qtd_direto
     perda = r.perda_percentual or 0

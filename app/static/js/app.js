@@ -270,6 +270,21 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function _custoPorGrama(mp) {
+        // Converte custo da MP em "R$ por grama" considerando como ela foi cadastrada.
+        // - g/ml: custo_por_kg / 1000
+        // - un com peso_unidade preenchido: custo_por_un / peso_unidade
+        // - un sem peso_unidade: 0 (nao da pra converter)
+        if (!mp) return 0;
+        if (mp.unidade === 'g' || mp.unidade === 'ml') {
+            return (mp.custo_por_kg || 0) / 1000;
+        }
+        if (mp.unidade === 'un' && mp.peso_unidade && mp.peso_unidade > 0) {
+            return (mp.custo_por_kg || 0) / mp.peso_unidade;
+        }
+        return 0;
+    }
+
     function recalcularTudo() {
         var modo = modoSelect ? modoSelect.value : 'farinha';
         var pesoUnit = pesoUnitarioInput ? (parseFloat(pesoUnitarioInput.value) || 0) : 0;
@@ -344,7 +359,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 qtd = pct;  // pct é na verdade gramas
                 var mp = MP_DATA[nome];
                 custoKg = mp ? mp.custo_por_kg : 0;
-                custoRs = qtd / 1000 * custoKg;
+                custoRs = qtd * _custoPorGrama(mp);
 
                 var qtdExibir = qtd * multiplicador;
                 var custoExibir = custoRs * multiplicador;
@@ -362,7 +377,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 qtd = pesoBase * pct / 100;
                 var mp = MP_DATA[nome];
                 custoKg = mp ? mp.custo_por_kg : 0;
-                custoRs = qtd / 1000 * custoKg;
+                custoRs = qtd * _custoPorGrama(mp);
 
                 var qtdExibir = qtd * multiplicador;
                 var custoExibir = custoRs * multiplicador;
