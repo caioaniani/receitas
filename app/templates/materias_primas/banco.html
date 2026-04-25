@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2><i class="bi bi-box-seam"></i> Banco de Matérias-Primas</h2>
+    <h1 class="page-title mb-0"><i class="bi bi-box-seam"></i> Banco de Matérias-Primas</h1>
 </div>
 
 <form method="POST" action="{{ url_for('materias_primas.salvar') }}">
@@ -74,7 +74,7 @@
             <i class="bi bi-plus-lg"></i> Adicionar Linha
         </button>
         <button type="submit" class="btn btn-primary btn-sm">
-            <i class="bi bi-check-lg"></i> Salvar Tudo
+            <i class="bi bi-check-lg"></i> Salvar
         </button>
     </div>
 </form>

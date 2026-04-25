@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="fw-bold mb-0"><i class="bi bi-tag"></i> Precos por Loja &mdash; {{ loja.nome }}</h5>
+    <h1 class="page-title mb-0"><i class="bi bi-tag"></i> Precos por Loja &mdash; {{ loja.nome }}</h1>
     <a href="{{ url_for('pedidos.lista') }}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left"></i> Voltar
     </a>
@@ -29,8 +29,8 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="table-responsive">
         <table class="table table-sm table-bordered bg-white">
-            <thead>
-                <tr style="background:#37474f; color:#fff; font-size:11px; text-transform:uppercase;">
+            <thead class="thead-padaria">
+                <tr>
                     <th>Categoria</th>
                     <th>Receita</th>
                     <th class="text-center" style="width:120px">Preco Padrao</th>
@@ -56,7 +56,7 @@
         </table>
     </div>
     <button type="submit" class="btn btn-primary btn-sm">
-        <i class="bi bi-save"></i> Salvar Precos
+        <i class="bi bi-save"></i> Salvar
     </button>
 </form>
 {% endblock %}

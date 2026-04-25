@@ -615,6 +615,34 @@ body {
     filter: invert(1);
 }
 
+/* Titulo de pagina padronizado (h1 estilizado como h5 fw-bold) */
+.page-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+.page-title > i {
+    margin-right: 0.4rem;
+}
+
+/* Header escuro padronizado para tabelas */
+.thead-padaria {
+    background: #37474f;
+}
+.thead-padaria > tr > th {
+    color: #fff;
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: 600;
+    border-color: #4a5a62;
+}
+[data-theme="dark"] .thead-padaria {
+    background: #0f3460;
+}
+[data-theme="dark"] .thead-padaria > tr > th {
+    border-color: #2a3a5c;
+}
+
 /* Status badges padronizados (pedidos da loja) */
 .status-badge {
     display: inline-block;

@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="fw-bold mb-0"><i class="bi bi-truck"></i> Entregas Site</h5>
+    <h1 class="page-title mb-0"><i class="bi bi-truck"></i> Entregas Site</h1>
     <button class="btn btn-outline-secondary btn-sm d-print-none" onclick="imprimirPedidos()">
         <i class="bi bi-printer"></i> Imprimir
     </button>
@@ -278,7 +278,7 @@
                     '</div>' +
                     '<div class="cartinha-area ' + cartinhaClass + ' mt-2 d-none" id="cartinha-' + p.code + '">' +
                         '<textarea class="form-control form-control-sm mb-1" rows="3" id="cartinha-txt-' + p.code + '" placeholder="Cole a cartinha do admin Vnda...">' + escapeHtml(p.cartinha || '') + '</textarea>' +
-                        '<button class="btn btn-sm btn-warning d-print-none" onclick="salvarCartinha(\'' + p.code + '\')"><i class="bi bi-save"></i> Salvar Cartinha</button>' +
+                        '<button class="btn btn-sm btn-warning d-print-none" onclick="salvarCartinha(\'' + p.code + '\')"><i class="bi bi-save"></i> Salvar</button>' +
                     '</div>' +
                 '</div>' +
             '</div>';
@@ -323,7 +323,7 @@
                     if (pedidos[i].code === code) pedidos[i].cartinha = texto;
                 }
                 var btn = document.querySelector('#cartinha-' + code + ' .btn');
-                if (btn) { btn.textContent = ' Salvo!'; setTimeout(function(){ btn.innerHTML = '<i class="bi bi-save"></i> Salvar Cartinha'; }, 1500); }
+                if (btn) { btn.textContent = ' Salvo!'; setTimeout(function(){ btn.innerHTML = '<i class="bi bi-save"></i> Salvar'; }, 1500); }
             }
         });
     };

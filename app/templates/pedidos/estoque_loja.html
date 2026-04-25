@@ -3,7 +3,7 @@
 {% block title %}Estoque da Loja{% endblock %}
 
 {% block content %}
-<h5 class="fw-bold mb-3"><i class="bi bi-box-seam"></i> Estoque da Loja</h5>
+<h1 class="page-title mb-3"><i class="bi bi-box-seam"></i> Estoque da Loja</h1>
 
 {% if current_user.is_admin() %}
 <form method="GET" class="mb-3 d-flex align-items-center gap-2">
@@ -40,8 +40,8 @@
 
     <div class="table-responsive">
         <table class="table table-sm table-bordered table-hover bg-white">
-            <thead>
-                <tr style="background:#37474f; color:#fff; font-size:11px; text-transform:uppercase;">
+            <thead class="thead-padaria">
+                <tr>
                     <th>Item</th>
                     <th class="text-center" style="width:100px">Em Estoque</th>
                     <th class="text-center" style="width:80px">Qtd</th>
