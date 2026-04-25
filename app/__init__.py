@@ -77,7 +77,8 @@ def create_app(config_class=None):
 
         # MP data como JSON para autocomplete
         mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
-        mp_dict = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade} for mp in mps}
+        mp_dict = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade,
+                              'peso_unidade': mp.peso_unidade} for mp in mps}
         mp_json = json.dumps(mp_dict, ensure_ascii=False)
         mp_nomes = [mp.nome for mp in mps]
 
@@ -321,6 +322,8 @@ def _migrate_postgres(app):
         cols_mp = {row[0] for row in result}
         if cols_mp and 'estoque_atual' not in cols_mp:
             conn.execute(text("ALTER TABLE materia_prima ADD COLUMN estoque_atual REAL DEFAULT 0"))
+        if cols_mp and 'peso_unidade' not in cols_mp:
+            conn.execute(text("ALTER TABLE materia_prima ADD COLUMN peso_unidade REAL"))
 
         # pedido_item.quantidade_recebida + materia_prima_id
         result = conn.execute(text(
@@ -433,11 +436,13 @@ def _migrate_sqlite(app):
             "  AND slot_mapa.nome = posicao.nome_posicao)"
         )
 
-    # Migração materia_prima.estoque_atual
+    # Migração materia_prima.estoque_atual + peso_unidade
     cursor.execute("PRAGMA table_info(materia_prima)")
     cols_mp = [row[1] for row in cursor.fetchall()]
     if cols_mp and 'estoque_atual' not in cols_mp:
         cursor.execute("ALTER TABLE materia_prima ADD COLUMN estoque_atual REAL DEFAULT 0")
+    if cols_mp and 'peso_unidade' not in cols_mp:
+        cursor.execute("ALTER TABLE materia_prima ADD COLUMN peso_unidade REAL")
 
     # Migração pedido_item.quantidade_recebida + materia_prima_id
     cursor.execute("PRAGMA table_info(pedido_item)")

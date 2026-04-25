@@ -19,7 +19,8 @@ def calcular_custos_receitas():
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     mps = MateriaPrima.query.all()
     mp_dict = {mp.nome: mp.custo_por_kg for mp in mps}
-    mp_info = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade} for mp in mps}
+    mp_info = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade,
+                          'peso_unidade': mp.peso_unidade} for mp in mps}
 
     custos = {}
     pesos = {}

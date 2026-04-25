@@ -18,6 +18,7 @@
                     <th style="width:22%">Nome do Ingrediente</th>
                     <th style="width:80px">Unid.</th>
                     <th style="width:120px">Custo (R$)</th>
+                    <th style="width:110px" title="Peso de cada unidade em gramas (opcional, so faz sentido se Unid = un)">Peso/un (g)</th>
                     <th style="width:18%">Fornecedor</th>
                     <th>Observações</th>
                     <th style="width:50px"></th>
@@ -44,6 +45,12 @@
                                    class="form-control form-control-sm input-blue text-end" required>
                             <span class="input-group-text mp-custo-label" style="font-size:10px;">{{ '/un' if mp.unidade == 'un' else '/kg' }}</span>
                         </div>
+                    </td>
+                    <td>
+                        <input type="number" name="peso_unidade[]" value="{{ '%.0f' % mp.peso_unidade if mp.peso_unidade else '' }}"
+                               step="any" min="0" placeholder="-"
+                               class="form-control form-control-sm input-blue text-end mp-peso-unidade"
+                               {% if mp.unidade != 'un' %}disabled{% endif %}>
                     </td>
                     <td>
                         <input type="text" name="fornecedor[]" value="{{ mp.fornecedor or '' }}" class="form-control form-control-sm input-blue">
@@ -95,6 +102,10 @@
             </div>
         </td>
         <td>
+            <input type="number" name="peso_unidade[]" value="" step="any" min="0" placeholder="-"
+                   class="form-control form-control-sm input-blue text-end mp-peso-unidade" disabled>
+        </td>
+        <td>
             <input type="text" name="fornecedor[]" value="" class="form-control form-control-sm input-blue">
         </td>
         <td>
@@ -112,12 +123,17 @@
 
 {% block scripts %}
 <script>
-// Atualiza label /kg ou /un quando muda a unidade
+// Atualiza label /kg ou /un + habilita peso/un quando unidade = un
 document.getElementById('mp-table').addEventListener('change', function(e) {
     if (e.target.classList.contains('mp-unidade-select')) {
-        var label = e.target.closest('tr').querySelector('.mp-custo-label');
-        if (label) {
-            label.textContent = e.target.value === 'un' ? '/un' : '/kg';
+        var row = e.target.closest('tr');
+        var ehUn = e.target.value === 'un';
+        var label = row.querySelector('.mp-custo-label');
+        if (label) label.textContent = ehUn ? '/un' : '/kg';
+        var peso = row.querySelector('.mp-peso-unidade');
+        if (peso) {
+            peso.disabled = !ehUn;
+            if (!ehUn) peso.value = '';
         }
     }
 });

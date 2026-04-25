@@ -55,6 +55,7 @@ class MateriaPrima(db.Model):
     nome = db.Column(db.String(100), nullable=False, unique=True)
     unidade = db.Column(db.String(10), nullable=False, default='g')
     custo_por_kg = db.Column(db.Float, nullable=False)
+    peso_unidade = db.Column(db.Float, nullable=True)
     fornecedor = db.Column(db.String(100))
     observacoes = db.Column(db.String(200))
 
@@ -63,6 +64,7 @@ class MateriaPrima(db.Model):
             'nome': self.nome,
             'unidade': self.unidade,
             'custo_por_kg': self.custo_por_kg,
+            'peso_unidade': self.peso_unidade,
             'fornecedor': self.fornecedor or '',
             'observacoes': self.observacoes or '',
         }
