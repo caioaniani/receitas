@@ -50,7 +50,7 @@
                         <input type="number" name="peso_unidade[]" value="{{ '%.0f' % mp.peso_unidade if mp.peso_unidade else '' }}"
                                step="any" min="0" placeholder="-"
                                class="form-control form-control-sm input-blue text-end mp-peso-unidade"
-                               {% if mp.unidade != 'un' %}disabled{% endif %}>
+                               {% if mp.unidade != 'un' %}readonly style="background:#eee;"{% endif %}>
                     </td>
                     <td>
                         <input type="text" name="fornecedor[]" value="{{ mp.fornecedor or '' }}" class="form-control form-control-sm input-blue">
@@ -103,7 +103,8 @@
         </td>
         <td>
             <input type="number" name="peso_unidade[]" value="" step="any" min="0" placeholder="-"
-                   class="form-control form-control-sm input-blue text-end mp-peso-unidade" disabled>
+                   class="form-control form-control-sm input-blue text-end mp-peso-unidade"
+                   readonly style="background:#eee;">
         </td>
         <td>
             <input type="text" name="fornecedor[]" value="" class="form-control form-control-sm input-blue">
@@ -132,7 +133,8 @@ document.getElementById('mp-table').addEventListener('change', function(e) {
         if (label) label.textContent = ehUn ? '/un' : '/kg';
         var peso = row.querySelector('.mp-peso-unidade');
         if (peso) {
-            peso.disabled = !ehUn;
+            peso.readOnly = !ehUn;
+            peso.style.background = ehUn ? '' : '#eee';
             if (!ehUn) peso.value = '';
         }
     }
