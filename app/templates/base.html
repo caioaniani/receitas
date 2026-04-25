@@ -44,7 +44,7 @@
         {% endif %}
 
         {% if current_user.is_authenticated and current_user.is_admin() %}
-        <a href="{{ url_for('main.dashboard') }}"
+        <a href="{{ url_for('main.index') }}"
            class="sidebar-link {% if request.path == '/' %}active{% endif %}">
             <i class="bi bi-speedometer2"></i> Painel
         </a>
