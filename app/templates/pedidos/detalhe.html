@@ -40,22 +40,14 @@
             </div>
             <div class="col-md-2">
                 <small class="text-muted d-block">Status</small>
-                {% if pedido.status == 'pendente' %}
-                <span class="badge rounded-pill bg-warning text-dark">Pendente</span>
-                {% elif pedido.status == 'confirmado' %}
-                <span class="badge rounded-pill bg-info text-dark">Confirmado</span>
-                {% elif pedido.status == 'separado' %}
-                <span class="badge rounded-pill bg-primary">Separado</span>
-                {% elif pedido.status == 'em_transporte' %}
-                <span class="badge rounded-pill" style="background:#6f42c1;color:#fff;">Em transporte</span>
-                {% elif pedido.status == 'entregue' %}
-                <span class="badge rounded-pill bg-success">Entregue</span>
-                {% elif pedido.status == 'cancelado' %}
-                <span class="badge rounded-pill bg-secondary">Cancelado</span>
-                {% endif %}
+                {% set s = pedido.status %}
+                <span class="status-badge status-{{ s.replace('_','-') }}">
+                    {{ {'pendente':'Pendente','confirmado':'Confirmado','separado':'Separado',
+                         'em_transporte':'Em transporte','entregue':'Entregue','cancelado':'Cancelado'}.get(s, s) }}
+                </span>
                 {% if pedido.tem_divergencia %}
-                <span class="badge rounded-pill bg-danger ms-1" title="Ver detalhes no topo">
-                    <i class="bi bi-exclamation-triangle-fill"></i> Divergencia
+                <span class="status-badge status-divergencia ms-1" title="Ver detalhes no topo">
+                    <i class="bi bi-exclamation-triangle-fill"></i> Divergência
                 </span>
                 {% endif %}
             </div>

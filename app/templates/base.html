@@ -44,54 +44,9 @@
         {% endif %}
 
         {% if current_user.is_authenticated and current_user.is_admin() %}
-        <a href="{{ url_for('materias_primas.banco') }}"
-           class="sidebar-link {% if request.path == '/materias-primas/' or request.path == '/materias-primas' %}active{% endif %}">
-            <i class="bi bi-box-seam"></i> Banco de MP
-        </a>
-
-        <a href="{{ url_for('materias_primas.estoque') }}"
-           class="sidebar-link {% if '/materias-primas/estoque' in request.path %}active{% endif %}">
-            <i class="bi bi-boxes"></i> Estoque MP
-        </a>
-
-        <a href="{{ url_for('produtos.lista') }}"
-           class="sidebar-link {% if request.path.startswith('/produtos') %}active{% endif %}">
-            <i class="bi bi-basket3"></i> Produtos / Cestas
-        </a>
-
-        <a href="{{ url_for('producao.lista') }}"
-           class="sidebar-link {% if request.path.startswith('/producao') %}active{% endif %}">
-            <i class="bi bi-calendar-check"></i> Produção
-        </a>
-
-        <a href="{{ url_for('main.rentabilidade') }}"
-           class="sidebar-link {% if request.path == '/rentabilidade' %}active{% endif %}">
-            <i class="bi bi-graph-up"></i> Rentabilidade
-        </a>
-
-        <a href="{{ url_for('relatorios.custos') }}"
-           class="sidebar-link {% if request.path.startswith('/relatorios') %}active{% endif %}">
-            <i class="bi bi-file-earmark-bar-graph"></i> Relatórios
-        </a>
-
-        <a href="{{ url_for('main.todo') }}"
-           class="sidebar-link {% if request.path == '/todo' %}active{% endif %}">
-            <i class="bi bi-check2-square"></i> TO-DO
-        </a>
-
-        <a href="{{ url_for('main.cardapio', tipo='atacado') }}"
-           class="sidebar-link {% if request.path == '/cardapio' %}active{% endif %}">
-            <i class="bi bi-file-earmark-pdf"></i> Cardapio PDF
-        </a>
-
-        <a href="{{ url_for('auth.painel') }}"
-           class="sidebar-link {% if request.path == '/auth/painel' %}active{% endif %}">
-            <i class="bi bi-kanban"></i> Atribuicoes
-        </a>
-
-        <a href="{{ url_for('auth.usuarios') }}"
-           class="sidebar-link {% if request.path == '/auth/usuarios' %}active{% endif %}">
-            <i class="bi bi-people"></i> Usuarios
+        <a href="{{ url_for('main.dashboard') }}"
+           class="sidebar-link {% if request.path == '/' %}active{% endif %}">
+            <i class="bi bi-speedometer2"></i> Painel
         </a>
 
         <div class="sidebar-divider"></div>
@@ -105,17 +60,49 @@
            class="sidebar-link {% if '/pedidos/estoque-loja' in request.path %}active{% endif %}">
             <i class="bi bi-box-seam"></i> Estoque Loja
         </a>
+        <a href="{{ url_for('pedidos.relatorio') }}"
+           class="sidebar-link {% if '/pedidos/relatorio' in request.path %}active{% endif %}">
+            <i class="bi bi-file-earmark-bar-graph"></i> Relatório de Pedidos
+        </a>
 
         <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Producao</div>
+        <div class="sidebar-section-title">Produção</div>
 
+        <a href="{{ url_for('producao.lista') }}"
+           class="sidebar-link {% if request.path.startswith('/producao') %}active{% endif %}">
+            <i class="bi bi-calendar-check"></i> Plano de Produção
+        </a>
         <a href="{{ url_for('pedidos.congelados') }}"
            class="sidebar-link {% if '/pedidos/congelados' in request.path %}active{% endif %}">
             <i class="bi bi-snow2"></i> Congelados
         </a>
         <a href="{{ url_for('pedidos.separacao') }}"
            class="sidebar-link {% if '/pedidos/separacao' in request.path %}active{% endif %}">
-            <i class="bi bi-clipboard-data"></i> Separacao do Dia
+            <i class="bi bi-clipboard-data"></i> Separação do Dia
+        </a>
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">Insumos</div>
+
+        <a href="{{ url_for('materias_primas.banco') }}"
+           class="sidebar-link {% if request.path == '/materias-primas/' or request.path == '/materias-primas' %}active{% endif %}">
+            <i class="bi bi-box-seam"></i> Banco de MP
+        </a>
+        <a href="{{ url_for('materias_primas.estoque') }}"
+           class="sidebar-link {% if '/materias-primas/estoque' in request.path %}active{% endif %}">
+            <i class="bi bi-boxes"></i> Estoque MP
+        </a>
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">Receitas & Produtos</div>
+
+        <a href="{{ url_for('produtos.lista') }}"
+           class="sidebar-link {% if request.path.startswith('/produtos') %}active{% endif %}">
+            <i class="bi bi-basket3"></i> Produtos / Cestas
+        </a>
+        <a href="{{ url_for('main.cardapio', tipo='atacado') }}"
+           class="sidebar-link {% if request.path == '/cardapio' %}active{% endif %}">
+            <i class="bi bi-file-earmark-pdf"></i> Cardápio PDF
         </a>
 
         <div class="sidebar-divider"></div>
@@ -131,7 +118,7 @@
 
         <a href="{{ url_for('rh.dashboard') }}"
            class="sidebar-link {% if request.path == '/rh/' %}active{% endif %}">
-            <i class="bi bi-speedometer2"></i> Dashboard RH
+            <i class="bi bi-speedometer2"></i> Painel RH
         </a>
         <a href="{{ url_for('rh.funcionarios') }}"
            class="sidebar-link {% if '/rh/funcionarios' in request.path %}active{% endif %}">
@@ -139,7 +126,7 @@
         </a>
         <a href="{{ url_for('rh.folha') }}"
            class="sidebar-link {% if '/rh/folha' in request.path %}active{% endif %}">
-            <i class="bi bi-file-earmark-text"></i> Folha Pagamento
+            <i class="bi bi-file-earmark-text"></i> Folha de Pagamento
         </a>
         <a href="{{ url_for('rh.lojas') }}"
            class="sidebar-link {% if request.path == '/rh/lojas' %}active{% endif %}">
@@ -159,7 +146,35 @@
         </a>
         <a href="{{ url_for('rh.ferias') }}"
            class="sidebar-link {% if '/rh/ferias' in request.path %}active{% endif %}">
-            <i class="bi bi-calendar-heart"></i> Férias/Folgas
+            <i class="bi bi-calendar-heart"></i> Férias / Folgas
+        </a>
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">Análise</div>
+
+        <a href="{{ url_for('main.rentabilidade') }}"
+           class="sidebar-link {% if request.path == '/rentabilidade' %}active{% endif %}">
+            <i class="bi bi-graph-up"></i> Rentabilidade
+        </a>
+        <a href="{{ url_for('relatorios.custos') }}"
+           class="sidebar-link {% if request.path.startswith('/relatorios') %}active{% endif %}">
+            <i class="bi bi-file-earmark-bar-graph"></i> Relatórios de Custos
+        </a>
+        <a href="{{ url_for('main.todo') }}"
+           class="sidebar-link {% if request.path == '/todo' %}active{% endif %}">
+            <i class="bi bi-check2-square"></i> TO-DO
+        </a>
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">Sistema</div>
+
+        <a href="{{ url_for('auth.painel') }}"
+           class="sidebar-link {% if request.path == '/auth/painel' %}active{% endif %}">
+            <i class="bi bi-kanban"></i> Atribuições
+        </a>
+        <a href="{{ url_for('auth.usuarios') }}"
+           class="sidebar-link {% if request.path == '/auth/usuarios' %}active{% endif %}">
+            <i class="bi bi-people"></i> Usuários
         </a>
         {% elif current_user.is_authenticated %}
         <div class="sidebar-divider"></div>
@@ -193,7 +208,7 @@
         {% endif %}
 
         <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Fichas Tecnicas</div>
+        <div class="sidebar-section-title">Fichas Técnicas</div>
 
         <a href="{{ url_for('receitas.padeiro_lista') }}"
            class="sidebar-link {% if request.path == '/receitas/padeiro' %}active{% endif %}">

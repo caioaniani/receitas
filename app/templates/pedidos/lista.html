@@ -48,24 +48,14 @@
                 <td>{{ p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '-' }}</td>
                 <td class="text-center">{{ p.itens|length }}</td>
                 <td class="text-center">
-                    {% if p.status == 'pendente' %}
-                    <span class="badge rounded-pill bg-warning text-dark">Pendente</span>
-                    {% elif p.status == 'confirmado' %}
-                    <span class="badge rounded-pill bg-info text-dark">Confirmado</span>
-                    {% elif p.status == 'separado' %}
-                    <span class="badge rounded-pill bg-primary">Separado</span>
-                    {% elif p.status == 'em_transporte' %}
-                    <span class="badge rounded-pill" style="background:#6f42c1;color:#fff;">Em transporte</span>
-                    {% elif p.status == 'entregue' %}
-                    <span class="badge rounded-pill bg-success">Entregue</span>
-                    {% elif p.status == 'cancelado' %}
-                    <span class="badge rounded-pill bg-secondary">Cancelado</span>
-                    {% else %}
-                    <span class="badge rounded-pill bg-light text-dark">{{ p.status }}</span>
-                    {% endif %}
+                    {% set s = p.status %}
+                    <span class="status-badge status-{{ s.replace('_','-') }}">
+                        {{ {'pendente':'Pendente','confirmado':'Confirmado','separado':'Separado',
+                             'em_transporte':'Em transporte','entregue':'Entregue','cancelado':'Cancelado'}.get(s, s) }}
+                    </span>
                     {% if p.tem_divergencia %}
-                    <span class="badge rounded-pill bg-danger" title="Quantidade recebida diferente da pedida">
-                        <i class="bi bi-exclamation-triangle-fill"></i> Divergencia
+                    <span class="status-badge status-divergencia" title="Quantidade recebida diferente da pedida">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Divergência
                     </span>
                     {% endif %}
                 </td>

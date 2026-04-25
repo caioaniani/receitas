@@ -177,7 +177,7 @@ def excluir(id):
     db.session.delete(receita)
     db.session.commit()
     flash(f'"{nome}" excluído com sucesso!', 'success')
-    return redirect(url_for('materias_primas.banco'))
+    return redirect(url_for('receitas.padeiro_lista'))
 
 
 @receitas_bp.route('/api/nova-mp', methods=['POST'])

@@ -615,6 +615,32 @@ body {
     filter: invert(1);
 }
 
+/* Status badges padronizados (pedidos da loja) */
+.status-badge {
+    display: inline-block;
+    padding: 0.25em 0.65em;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border-radius: 50rem;
+    line-height: 1;
+    white-space: nowrap;
+}
+.status-pendente      { background:#fff3cd; color:#856404; }
+.status-confirmado    { background:#cff4fc; color:#055160; }
+.status-separado      { background:#cfe2ff; color:#084298; }
+.status-em-transporte { background:#e0d4f7; color:#492f87; }
+.status-entregue      { background:#d1e7dd; color:#0a3622; }
+.status-cancelado     { background:#e2e3e5; color:#41464b; }
+.status-divergencia   { background:#f8d7da; color:#842029; }
+
+[data-theme="dark"] .status-pendente      { background:#3d3520; color:#ffd96a; }
+[data-theme="dark"] .status-confirmado    { background:#0e3a4a; color:#7adfff; }
+[data-theme="dark"] .status-separado      { background:#0e2a52; color:#7ea7ff; }
+[data-theme="dark"] .status-em-transporte { background:#2e1f54; color:#b596ff; }
+[data-theme="dark"] .status-entregue      { background:#0f3a26; color:#7be0a7; }
+[data-theme="dark"] .status-cancelado     { background:#3a3a3a; color:#bbbbbb; }
+[data-theme="dark"] .status-divergencia   { background:#4a1c22; color:#ff9aa3; }
+
 /* Dark mode toggle */
 .dark-mode-toggle {
     padding: 8px 16px;
