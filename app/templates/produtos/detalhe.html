@@ -1,20 +1,23 @@
 {% extends "base.html" %}
+{% import "_macros.html" as ui %}
 
 {% block title %}{{ produto.nome }}{% endblock %}
 
 {% block content %}
+{{ ui.breadcrumbs([
+    ('Produtos / Cestas', url_for('produtos.lista')),
+    (produto.nome, None),
+]) }}
 <form method="POST" action="{{ url_for('produtos.salvar_composicao', id=produto.id) }}" id="cesta-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <!-- Cabeçalho -->
     <div class="d-flex justify-content-between align-items-start mb-3">
         <div>
-            <h1 class="page-title mb-1"><i class="bi bi-gift"></i> Cesta / Kit</h1>
+            <h1 class="page-title mb-1"><i class="bi bi-gift"></i> {{ produto.nome }}</h1>
         </div>
         <div class="d-flex gap-2">
-            <a href="{{ url_for('produtos.lista') }}" class="btn btn-outline-secondary btn-sm">
-                <i class="bi bi-arrow-left"></i> Voltar
-            </a>
+            {{ ui.botao_voltar(url_for('produtos.lista')) }}
             <button type="submit" class="btn btn-primary btn-sm">
                 <i class="bi bi-check-lg"></i> Salvar
             </button>

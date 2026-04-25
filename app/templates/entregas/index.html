@@ -36,9 +36,9 @@
             <div class="vr d-none d-md-block"></div>
             <div class="btn-group btn-group-sm">
                 <button class="btn btn-outline-secondary active" data-filtro="todos">Todos <span class="badge bg-dark" id="cnt-todos">0</span></button>
-                <button class="btn btn-outline-warning" data-filtro="pendente">Pendentes <span class="badge bg-warning text-dark" id="cnt-pendente">0</span></button>
-                <button class="btn btn-outline-info" data-filtro="separado">Separados <span class="badge bg-info" id="cnt-separado">0</span></button>
-                <button class="btn btn-outline-success" data-filtro="entregue">Entregues <span class="badge bg-success" id="cnt-entregue">0</span></button>
+                <button class="btn btn-outline-warning" data-filtro="pendente">Pendentes <span class="status-badge status-pendente" id="cnt-pendente">0</span></button>
+                <button class="btn btn-outline-info" data-filtro="separado">Separados <span class="status-badge status-separado" id="cnt-separado">0</span></button>
+                <button class="btn btn-outline-success" data-filtro="entregue">Entregues <span class="status-badge status-entregue" id="cnt-entregue">0</span></button>
             </div>
             <span class="badge bg-success fs-6" id="total-dia" title="Soma de todos os pedidos da data selecionada">
                 <i class="bi bi-cash-coin"></i> Total do dia: R$ <span id="total-dia-valor">0,00</span>
@@ -227,9 +227,9 @@
             if (busca && buscaTexto.indexOf(busca) === -1) continue;
 
             var statusBadge = '';
-            if (status === 'pendente') statusBadge = '<span class="badge rounded-pill bg-warning text-dark">Pendente</span>';
-            else if (status === 'separado') statusBadge = '<span class="badge rounded-pill bg-info text-dark">Separado</span>';
-            else if (status === 'entregue') statusBadge = '<span class="badge rounded-pill bg-success">Entregue</span>';
+            if (status === 'pendente') statusBadge = '<span class="status-badge status-pendente">Pendente</span>';
+            else if (status === 'separado') statusBadge = '<span class="status-badge status-separado">Separado</span>';
+            else if (status === 'entregue') statusBadge = '<span class="status-badge status-entregue">Entregue</span>';
 
             var itensHtml = '';
             for (var j = 0; j < p.itens.length; j++) {

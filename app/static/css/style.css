@@ -518,6 +518,28 @@ body {
     color: var(--text-main);
     border-color: var(--border-color);
 }
+[data-theme="dark"] .card-header,
+[data-theme="dark"] .card-header.bg-white {
+    background-color: var(--bg-card) !important;
+    color: var(--text-main);
+    border-bottom-color: var(--border-color);
+}
+[data-theme="dark"] .table {
+    --bs-table-bg: var(--bg-card);
+    color: var(--text-main);
+}
+[data-theme="dark"] .breadcrumb {
+    --bs-breadcrumb-divider-color: var(--text-muted);
+}
+[data-theme="dark"] .breadcrumb-item.active {
+    color: var(--text-muted);
+}
+[data-theme="dark"] .modal-header {
+    border-bottom-color: var(--border-color);
+}
+[data-theme="dark"] .modal-footer {
+    border-top-color: var(--border-color);
+}
 
 [data-theme="dark"] .table {
     --bs-table-bg: var(--bg-card);
