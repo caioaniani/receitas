@@ -226,8 +226,31 @@ def _migrate(app):
 
 
 def _migrate_postgres(app):
-    """Adiciona colunas novas no PostgreSQL."""
+    """Adiciona colunas novas no PostgreSQL. Cada ALTER em commit isolado
+    para que falhas pontuais não abortem migrations seguintes."""
     from sqlalchemy import text
+    import logging
+    log = logging.getLogger(__name__)
+
+    def _try(stmt):
+        """Executa um DDL em sub-conexão isolada com commit imediato."""
+        try:
+            with db.engine.connect() as c:
+                c.execute(text(stmt))
+                c.commit()
+        except Exception as e:
+            log.warning('migrate skip (%s): %s', stmt[:60], e)
+
+    def _cols(table):
+        try:
+            with db.engine.connect() as c:
+                r = c.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = :t"), {'t': table})
+                return {row[0] for row in r}
+        except Exception:
+            return set()
+
     with db.engine.connect() as conn:
         # Verificar e adicionar colunas faltantes em receita
         result = conn.execute(text(
@@ -369,38 +392,24 @@ def _migrate_postgres(app):
         if cols_el and 'materia_prima_id' not in cols_el:
             conn.execute(text("ALTER TABLE estoque_loja ADD COLUMN materia_prima_id INTEGER REFERENCES materia_prima(id)"))
 
-        # usuario.is_owner
-        result = conn.execute(text(
-            "SELECT column_name FROM information_schema.columns WHERE table_name = 'usuario'"
-        ))
-        cols_user2 = {row[0] for row in result}
-        if cols_user2 and 'is_owner' not in cols_user2:
-            conn.execute(text("ALTER TABLE usuario ADD COLUMN is_owner BOOLEAN DEFAULT FALSE"))
-            # Define o admin mais antigo como owner
-            conn.execute(text(
-                "UPDATE usuario SET is_owner = TRUE WHERE id = "
-                "(SELECT id FROM usuario WHERE papel = 'admin' ORDER BY id LIMIT 1)"
-            ))
-
-        # projeto_area.cor
-        result = conn.execute(text(
-            "SELECT column_name FROM information_schema.columns WHERE table_name = 'projeto_area'"
-        ))
-        cols_pa = {row[0] for row in result}
-        if cols_pa and 'cor' not in cols_pa:
-            conn.execute(text("ALTER TABLE projeto_area ADD COLUMN cor VARCHAR(20)"))
-
-        # tarefa_projeto.observacao + recorrencia
-        result = conn.execute(text(
-            "SELECT column_name FROM information_schema.columns WHERE table_name = 'tarefa_projeto'"
-        ))
-        cols_tp = {row[0] for row in result}
-        if cols_tp and 'observacao' not in cols_tp:
-            conn.execute(text("ALTER TABLE tarefa_projeto ADD COLUMN observacao TEXT"))
-        if cols_tp and 'recorrencia' not in cols_tp:
-            conn.execute(text("ALTER TABLE tarefa_projeto ADD COLUMN recorrencia VARCHAR(20)"))
-
         conn.commit()
+
+    # Migrações resilientes (cada ALTER em sua própria transação)
+    cols_user2 = _cols('usuario')
+    if cols_user2 and 'is_owner' not in cols_user2:
+        _try("ALTER TABLE usuario ADD COLUMN is_owner BOOLEAN DEFAULT FALSE")
+        _try("UPDATE usuario SET is_owner = TRUE WHERE id = "
+             "(SELECT id FROM usuario WHERE papel = 'admin' ORDER BY id LIMIT 1)")
+
+    cols_pa = _cols('projeto_area')
+    if cols_pa and 'cor' not in cols_pa:
+        _try("ALTER TABLE projeto_area ADD COLUMN cor VARCHAR(20)")
+
+    cols_tp = _cols('tarefa_projeto')
+    if cols_tp and 'observacao' not in cols_tp:
+        _try("ALTER TABLE tarefa_projeto ADD COLUMN observacao TEXT")
+    if cols_tp and 'recorrencia' not in cols_tp:
+        _try("ALTER TABLE tarefa_projeto ADD COLUMN recorrencia VARCHAR(20)")
 
 
 def _migrate_sqlite(app):

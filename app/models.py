@@ -29,8 +29,12 @@ class Usuario(UserMixin, db.Model):
         return self.papel == 'admin'
 
     def is_dono(self):
-        """Owner: dono unico do sistema (ve areas pessoais Vida/Igreja)."""
-        return bool(self.is_owner)
+        """Owner: dono unico do sistema (ve areas pessoais Vida/Igreja).
+        Defensivo: se a coluna ainda nao existir, retorna False sem quebrar."""
+        try:
+            return bool(getattr(self, 'is_owner', False))
+        except Exception:
+            return False
 
     def __repr__(self):
         return f'<Usuario {self.login}>'

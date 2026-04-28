@@ -110,8 +110,13 @@ def painel():
         q = q.filter(Projeto.status == filtro_status)
     if so_foco:
         q = q.filter(Projeto.foco_12s.is_(True))
-    projetos = q.order_by(Projeto.foco_12s.desc(), ProjetoArea.ordem,
-                          Projeto.criado_em.desc()).all()
+    projetos = q.all()
+    # Foco 12s primeiro, depois por area.ordem, depois mais recentes
+    projetos.sort(key=lambda p: (
+        not p.foco_12s,
+        p.area.ordem if p.area else 999,
+        -(p.id or 0),
+    ))
 
     if busca:
         projetos = [p for p in projetos if busca in p.nome.lower()]
@@ -566,6 +571,21 @@ def weekly():
             'autor': r.autor.nome if r.autor else None,
         } for r in historico],
     )
+
+
+@projetos_bp.route('/_migrar', methods=['GET'])
+@login_required
+@admin_required
+def forcar_migrate():
+    """Endpoint de emergencia para forcar migrations das colunas novas."""
+    from flask import current_app
+    from app import _migrate
+    try:
+        _migrate(current_app)
+        flash('Migrations re-executadas. Recarregue a pagina.', 'success')
+    except Exception as e:
+        flash(f'Erro: {e}', 'danger')
+    return redirect(url_for('projetos.painel'))
 
 
 @projetos_bp.route('/weekly/salvar', methods=['POST'])
