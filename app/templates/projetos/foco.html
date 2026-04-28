@@ -17,7 +17,7 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     {{ ui.nav_views(view) }}
-    <small class="text-muted">Recomendado: 3-5 projetos em foco simultâneo. Hoje: <strong>{{ projetos|length }}</strong></small>
+    <small class="text-muted">Recomendado: 3-5 projetos em foco simultâneo. Hoje: <strong>{{ projetos|length }}</strong>{% if projetos|length > 5 %} <span class="text-danger">⚠ acima do recomendado</span>{% endif %}</small>
 </div>
 
 {% if not projetos %}
@@ -33,6 +33,7 @@
             <h6 class="fw-bold mb-0">
                 {{ ui.area_badge(p.area) }}
                 <span class="ms-2">{{ p.nome }}</span>
+                {% if p.responsavel %}<span class="badge bg-dark ms-1" style="font-size:10px;"><i class="bi bi-person"></i> {{ p.responsavel.nome.split()[0] }}</span>{% endif %}
             </h6>
             <small class="text-muted">{{ p.tarefas_ativas|length }} ativa{{ 's' if p.tarefas_ativas|length != 1 }}</small>
         </div>
@@ -45,22 +46,11 @@
             {% for chave, label in [('a_fazer','A fazer'), ('fazendo','Fazendo'), ('feito','Feito')] %}
             <div class="proj-coluna">
                 <div class="proj-coluna-header">{{ label }} ({{ cols[chave]|length }})</div>
-                {% for t in cols[chave] %}
-                <div class="proj-kanban-card {% if t.atrasada %}atrasada{% endif %}">
-                    <div class="d-flex align-items-start gap-2">
-                        {{ ui.tarefa_status_btn(t) }}
-                        <div style="flex:1;">
-                            <div class="fw-semibold">{{ t.nome }}</div>
-                            <div class="proj-meta">
-                                {% if t.esforco %}<span class="badge bg-info text-dark">{{ t.esforco }}</span>{% endif %}
-                                {% if t.prazo %}<span class="badge {% if t.atrasada %}bg-danger{% else %}bg-light text-dark{% endif %}">
-                                    <i class="bi bi-calendar3"></i> {{ t.prazo.strftime('%d/%m') }}
-                                </span>{% endif %}
-                            </div>
-                        </div>
-                    </div>
+                <div class="proj-coluna-cards" data-status="{{ chave }}">
+                    {% for t in cols[chave] %}
+                        {{ ui.card_tarefa_kanban(t, data_relativa) }}
+                    {% endfor %}
                 </div>
-                {% endfor %}
             </div>
             {% endfor %}
         </div>
@@ -73,5 +63,6 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script src="{{ url_for('static', filename='js/projetos.js') }}"></script>
 {% endblock %}

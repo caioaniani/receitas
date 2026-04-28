@@ -748,3 +748,19 @@ class TarefaProjeto(db.Model):
                 and self.status not in ("feito", "cancelado")
                 and self.prazo < date.today())
 
+
+
+class WeeklyReview(db.Model):
+    __tablename__ = "weekly_review"
+
+    id = db.Column(db.Integer, primary_key=True)
+    data = db.Column(db.Date, default=date.today, nullable=False)
+    reflexao = db.Column(db.Text)
+    fazendo_count = db.Column(db.Integer, default=0)
+    a_fazer_count = db.Column(db.Integer, default=0)
+    atrasadas_count = db.Column(db.Integer, default=0)
+    foco_count = db.Column(db.Integer, default=0)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por = db.Column(db.Integer, db.ForeignKey("usuario.id"))
+
+    autor = db.relationship("Usuario")

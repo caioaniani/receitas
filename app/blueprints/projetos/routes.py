@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from flask import render_template, request, jsonify, redirect, url_for, flash, abort
 from flask_login import login_required, current_user
@@ -6,7 +6,7 @@ from flask_login import login_required, current_user
 from app.blueprints.projetos import projetos_bp
 from app.decorators import admin_required
 from app.extensions import db
-from app.models import ProjetoArea, Projeto, TarefaProjeto, Usuario
+from app.models import (ProjetoArea, Projeto, TarefaProjeto, Usuario, WeeklyReview)
 
 
 WIP_LIMIT = 3
@@ -44,6 +44,28 @@ def _usuarios():
     return Usuario.query.order_by(Usuario.nome).all()
 
 
+def _data_relativa(prazo):
+    """Retorna string amigavel: 'Hoje', 'Amanha', 'Em 3 dias', 'Atrasada ha 2 dias'."""
+    if not prazo:
+        return ''
+    delta = (prazo - date.today()).days
+    if delta == 0:
+        return 'Hoje'
+    if delta == 1:
+        return 'Amanha'
+    if delta == -1:
+        return 'Atrasada ha 1 dia'
+    if delta < 0:
+        return f'Atrasada ha {abs(delta)} dias'
+    if delta < 7:
+        return f'Em {delta} dias'
+    if delta < 14:
+        return f'Em 1 semana'
+    if delta < 30:
+        return f'Em {delta // 7} semanas'
+    return prazo.strftime('%d/%m/%Y')
+
+
 # ── Views ──
 
 @projetos_bp.route('/')
@@ -55,6 +77,7 @@ def painel():
                            areas=areas,
                            contadores=_contadores(),
                            usuarios=_usuarios(),
+                           data_relativa=_data_relativa,
                            view='hier')
 
 
@@ -64,6 +87,7 @@ def painel():
 def kanban():
     filtro_area = request.args.get('area', type=int)
     so_foco = request.args.get('foco') == '1'
+    incluir_canceladas = request.args.get('canceladas') == '1'
 
     q = TarefaProjeto.query.join(Projeto).join(ProjetoArea)
     if filtro_area:
@@ -74,7 +98,10 @@ def kanban():
     tarefas = q.order_by(TarefaProjeto.prazo.is_(None), TarefaProjeto.prazo,
                          TarefaProjeto.ordem).all()
 
-    colunas = {'a_fazer': [], 'fazendo': [], 'feito': []}
+    if incluir_canceladas:
+        colunas = {'a_fazer': [], 'fazendo': [], 'feito': [], 'cancelado': []}
+    else:
+        colunas = {'a_fazer': [], 'fazendo': [], 'feito': []}
     for t in tarefas:
         if t.status in colunas:
             colunas[t.status].append(t)
@@ -84,8 +111,10 @@ def kanban():
                            areas=_areas_filtradas(),
                            filtro_area=filtro_area,
                            so_foco=so_foco,
+                           incluir_canceladas=incluir_canceladas,
                            contadores=_contadores(),
                            usuarios=_usuarios(),
+                           data_relativa=_data_relativa,
                            view='kanban')
 
 
@@ -98,7 +127,46 @@ def foco():
                            projetos=projetos,
                            contadores=_contadores(),
                            usuarios=_usuarios(),
+                           data_relativa=_data_relativa,
                            view='foco')
+
+
+@projetos_bp.route('/hoje')
+@login_required
+@admin_required
+def hoje():
+    hoje_d = date.today()
+
+    fazendo = TarefaProjeto.query.filter_by(status='fazendo') \
+        .order_by(TarefaProjeto.prazo.is_(None), TarefaProjeto.prazo).all()
+
+    prazo_hoje = TarefaProjeto.query.filter(
+        TarefaProjeto.prazo == hoje_d,
+        TarefaProjeto.status == 'a_fazer',
+    ).all()
+
+    atrasadas = TarefaProjeto.query.filter(
+        TarefaProjeto.prazo.isnot(None),
+        TarefaProjeto.prazo < hoje_d,
+        ~TarefaProjeto.status.in_(['feito', 'cancelado']),
+    ).order_by(TarefaProjeto.prazo).all()
+
+    semana = TarefaProjeto.query.filter(
+        TarefaProjeto.prazo.isnot(None),
+        TarefaProjeto.prazo > hoje_d,
+        TarefaProjeto.prazo <= hoje_d + timedelta(days=7),
+        ~TarefaProjeto.status.in_(['feito', 'cancelado']),
+    ).order_by(TarefaProjeto.prazo).all()
+
+    return render_template('projetos/hoje.html',
+                           fazendo=fazendo,
+                           prazo_hoje=prazo_hoje,
+                           atrasadas=atrasadas,
+                           semana=semana,
+                           contadores=_contadores(),
+                           usuarios=_usuarios(),
+                           data_relativa=_data_relativa,
+                           view='hoje')
 
 
 # ── CRUD: Áreas ──
@@ -272,6 +340,33 @@ def tarefa_editar(tid):
     return jsonify(ok=True, contadores=_contadores())
 
 
+@projetos_bp.route('/tarefa/<int:tid>/mover', methods=['POST'])
+@login_required
+@admin_required
+def tarefa_mover(tid):
+    """Drag-and-drop: muda status (coluna kanban) e atualiza ordens das tarefas afetadas."""
+    t = TarefaProjeto.query.get_or_404(tid)
+    novo_status = request.form.get('status', '').strip()
+    if novo_status not in STATUS_TAREFA:
+        return jsonify(ok=False, erro='status invalido'), 400
+    if t.status != novo_status:
+        t.status = novo_status
+        t.feito_em = datetime.utcnow() if novo_status == 'feito' else None
+
+    # Reordena: a lista vem como ids[]=[...] na ordem desejada na coluna de destino
+    ids_ordem = request.form.getlist('ids[]')
+    for i, sid in enumerate(ids_ordem):
+        try:
+            tar = TarefaProjeto.query.get(int(sid))
+            if tar:
+                tar.ordem = i
+        except (TypeError, ValueError):
+            continue
+
+    db.session.commit()
+    return jsonify(ok=True, contadores=_contadores())
+
+
 @projetos_bp.route('/tarefa/<int:tid>/excluir', methods=['POST'])
 @login_required
 @admin_required
@@ -289,11 +384,11 @@ def tarefa_excluir(tid):
 @login_required
 @admin_required
 def weekly():
-    """Dados pra modal de Weekly Review (atrasadas, sem DRI, projetos ativos sem tarefa, etc)."""
-    hoje = date.today()
+    """Dados pra modal de Weekly Review."""
+    hoje_d = date.today()
     atrasadas = TarefaProjeto.query.filter(
         TarefaProjeto.prazo.isnot(None),
-        TarefaProjeto.prazo < hoje,
+        TarefaProjeto.prazo < hoje_d,
         ~TarefaProjeto.status.in_(['feito', 'cancelado']),
     ).all()
     projetos_ativos = Projeto.query.filter_by(status='ativo').all()
@@ -302,12 +397,46 @@ def weekly():
     foco = Projeto.query.filter_by(foco_12s=True).all()
     fazendo = TarefaProjeto.query.filter_by(status='fazendo').all()
 
+    historico = WeeklyReview.query.order_by(WeeklyReview.data.desc()).limit(8).all()
+
     return jsonify(
         contadores=_contadores(),
         atrasadas=[{'id': t.id, 'nome': t.nome, 'projeto': t.projeto.nome,
-                    'prazo': t.prazo.isoformat() if t.prazo else None} for t in atrasadas],
+                    'prazo': t.prazo.isoformat() if t.prazo else None,
+                    'relativa': _data_relativa(t.prazo)} for t in atrasadas],
         sem_dri=[{'id': p.id, 'nome': p.nome} for p in sem_dri],
         sem_tarefa=[{'id': p.id, 'nome': p.nome} for p in sem_tarefa],
         foco=[{'id': p.id, 'nome': p.nome} for p in foco],
         fazendo=[{'id': t.id, 'nome': t.nome, 'projeto': t.projeto.nome} for t in fazendo],
+        historico=[{
+            'id': r.id, 'data': r.data.isoformat(),
+            'reflexao': r.reflexao or '',
+            'snapshot': {
+                'fazendo': r.fazendo_count, 'a_fazer': r.a_fazer_count,
+                'atrasadas': r.atrasadas_count, 'foco': r.foco_count,
+            },
+            'autor': r.autor.nome if r.autor else None,
+        } for r in historico],
     )
+
+
+@projetos_bp.route('/weekly/salvar', methods=['POST'])
+@login_required
+@admin_required
+def weekly_salvar():
+    reflexao = request.form.get('reflexao', '').strip()
+    if not reflexao:
+        return jsonify(ok=False, erro='reflexao vazia'), 400
+    c = _contadores()
+    review = WeeklyReview(
+        data=date.today(),
+        reflexao=reflexao,
+        fazendo_count=c['fazendo'],
+        a_fazer_count=c['a_fazer'],
+        atrasadas_count=c['atrasadas'],
+        foco_count=c['foco_12s'],
+        criado_por=current_user.id,
+    )
+    db.session.add(review)
+    db.session.commit()
+    return jsonify(ok=True, id=review.id)

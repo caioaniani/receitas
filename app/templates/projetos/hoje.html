@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% import "projetos/_partials.html" as ui %}
+
+{% block title %}Projetos · Hoje{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-sun"></i> Hoje</h1>
+    <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modal-weekly">
+            <i class="bi bi-arrow-repeat"></i> Weekly Review
+        </button>
+    </div>
+</div>
+
+{{ ui.stats(contadores) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    {{ ui.nav_views(view) }}
+    <small class="text-muted">{{ data_relativa(none) or '' }}<strong>{{ ('Hoje · ' ~ contadores.fazendo) }} fazendo, {{ contadores.atrasadas }} atrasada{{ 's' if contadores.atrasadas != 1 }}</strong></small>
+</div>
+
+<div class="row g-3">
+    <!-- Atrasadas (urgente, primeira coluna) -->
+    <div class="col-lg-4">
+        <div class="card h-100" style="border-top: 3px solid #b54a3f;">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3" style="color:#b54a3f;">
+                    <i class="bi bi-exclamation-triangle-fill"></i> Atrasadas ({{ atrasadas|length }})
+                </h6>
+                {% if not atrasadas %}
+                <div class="text-muted small text-center py-3"><i class="bi bi-emoji-smile"></i> Nenhuma. Bom trabalho!</div>
+                {% endif %}
+                {% for t in atrasadas %}
+                <div class="proj-kanban-card atrasada {% if t.projeto.foco_12s %}foco{% endif %} mb-2" data-tarefa-id="{{ t.id }}">
+                    <div class="d-flex align-items-start gap-2">
+                        {{ ui.tarefa_status_btn(t) }}
+                        <div style="flex:1;">
+                            <div class="fw-semibold">{{ t.nome }}</div>
+                            <div class="proj-meta">
+                                {{ ui.area_badge(t.projeto.area) }}
+                                <span class="badge bg-light text-dark">{{ t.projeto.nome }}</span>
+                                <span class="badge bg-danger">{{ data_relativa(t.prazo) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Fazendo (foco do dia) -->
+    <div class="col-lg-4">
+        <div class="card h-100" style="border-top: 3px solid #084298;">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3" style="color:#084298;">
+                    <i class="bi bi-play-fill"></i> Fazendo ({{ fazendo|length }})
+                    {% if contadores.wip_estourado %}<span class="badge bg-danger ms-1">WIP +{{ fazendo|length - contadores.wip_limit }}</span>{% endif %}
+                </h6>
+                {% if not fazendo %}
+                <div class="text-muted small text-center py-3">Nada em andamento agora.<br>Mova alguma tarefa pra "Fazendo".</div>
+                {% endif %}
+                {% for t in fazendo %}
+                <div class="proj-kanban-card {% if t.atrasada %}atrasada{% endif %} {% if t.projeto.foco_12s %}foco{% endif %} mb-2" data-tarefa-id="{{ t.id }}">
+                    <div class="d-flex align-items-start gap-2">
+                        {{ ui.tarefa_status_btn(t) }}
+                        <div style="flex:1;">
+                            <div class="fw-semibold">{{ t.nome }}</div>
+                            <div class="proj-meta">
+                                {{ ui.area_badge(t.projeto.area) }}
+                                <span class="badge bg-light text-dark">{{ t.projeto.nome }}</span>
+                                {% if t.prazo %}<span class="badge {% if t.atrasada %}bg-danger{% else %}bg-light text-dark{% endif %}">{{ data_relativa(t.prazo) }}</span>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Prazo hoje + esta semana -->
+    <div class="col-lg-4">
+        <div class="card h-100" style="border-top: 3px solid #d4a435;">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3" style="color:#d4a435;">
+                    <i class="bi bi-calendar-event"></i> Para hoje ({{ prazo_hoje|length }})
+                </h6>
+                {% if not prazo_hoje %}
+                <div class="text-muted small text-center py-2">Nenhuma tarefa com prazo hoje.</div>
+                {% endif %}
+                {% for t in prazo_hoje %}
+                <div class="proj-kanban-card {% if t.projeto.foco_12s %}foco{% endif %} mb-2" data-tarefa-id="{{ t.id }}">
+                    <div class="d-flex align-items-start gap-2">
+                        {{ ui.tarefa_status_btn(t) }}
+                        <div style="flex:1;">
+                            <div class="fw-semibold">{{ t.nome }}</div>
+                            <div class="proj-meta">
+                                {{ ui.area_badge(t.projeto.area) }}
+                                <span class="badge bg-light text-dark">{{ t.projeto.nome }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+
+                <hr class="my-3">
+                <h6 class="fw-bold mb-2 text-muted">
+                    <i class="bi bi-calendar3"></i> Próximos 7 dias ({{ semana|length }})
+                </h6>
+                {% if not semana %}
+                <div class="text-muted small text-center py-2">Nada agendado nos próximos 7 dias.</div>
+                {% endif %}
+                {% for t in semana %}
+                <div class="proj-kanban-card {% if t.projeto.foco_12s %}foco{% endif %} mb-2" data-tarefa-id="{{ t.id }}">
+                    <div class="d-flex align-items-start gap-2">
+                        {{ ui.tarefa_status_btn(t) }}
+                        <div style="flex:1;">
+                            <div class="fw-semibold">{{ t.nome }}</div>
+                            <div class="proj-meta">
+                                {{ ui.area_badge(t.projeto.area) }}
+                                <span class="badge bg-light text-dark">{{ t.projeto.nome }}</span>
+                                <span class="badge bg-light text-dark">{{ data_relativa(t.prazo) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{{ ui.modal_weekly() }}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/projetos.js') }}"></script>
+{% endblock %}

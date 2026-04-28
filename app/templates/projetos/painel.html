@@ -7,7 +7,7 @@
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h1 class="page-title mb-0"><i class="bi bi-kanban"></i> Gestão de Projetos</h1>
     <div class="d-flex gap-2 flex-wrap">
-        <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modal-weekly" id="btn-weekly">
+        <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modal-weekly">
             <i class="bi bi-arrow-repeat"></i> Weekly Review
         </button>
         <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modal-nova-area">
@@ -23,13 +23,19 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     {{ ui.nav_views(view) }}
-    <div class="d-flex gap-2 align-items-center">
+    <div class="d-flex gap-2 align-items-center flex-wrap">
         <div class="btn-group btn-group-sm" id="filtro-tipo">
             <button type="button" class="btn btn-outline-secondary active" data-tipo="">Tudo</button>
             <button type="button" class="btn btn-outline-secondary" data-tipo="empresa">Empresa</button>
             <button type="button" class="btn btn-outline-secondary" data-tipo="igreja">Igreja</button>
             <button type="button" class="btn btn-outline-secondary" data-tipo="vida">Vida</button>
         </div>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-collapse-all" title="Recolher todos os projetos">
+            <i class="bi bi-arrows-collapse"></i>
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-expand-all" title="Expandir todos">
+            <i class="bi bi-arrows-expand"></i>
+        </button>
         <input type="text" id="busca-tarefa" class="form-control form-control-sm" placeholder="Buscar tarefa…" style="max-width:200px;">
     </div>
 </div>
@@ -61,8 +67,12 @@
     <div class="proj-card {% if p.foco_12s %}foco{% endif %}" data-projeto-id="{{ p.id }}">
         <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
             <div style="flex:1; min-width:200px;">
+                <button type="button" class="btn btn-sm btn-link p-0 me-1 proj-toggle" data-projeto-id="{{ p.id }}" title="Recolher/expandir">
+                    <i class="bi bi-chevron-down"></i>
+                </button>
                 <strong>{{ p.nome }}</strong>
                 {% if p.tem_atrasada %}<span class="status-badge status-divergencia ms-1"><i class="bi bi-exclamation-triangle-fill"></i> Atrasada</span>{% endif %}
+                {% if p.responsavel %}<span class="badge bg-dark ms-1" style="font-size:10px;"><i class="bi bi-person"></i> {{ p.responsavel.nome.split()[0] }}</span>{% endif %}
                 <div class="text-muted small">{{ p.tarefas_ativas|length }} tarefa{{ 's' if p.tarefas_ativas|length != 1 }} ativa{{ 's' if p.tarefas_ativas|length != 1 }}</div>
             </div>
             <div class="d-flex gap-1 align-items-center flex-wrap">
@@ -81,6 +91,7 @@
                     <option value="media" {% if p.prioridade == 'media' %}selected{% endif %}>Média</option>
                     <option value="baixa" {% if p.prioridade == 'baixa' %}selected{% endif %}>Baixa</option>
                 </select>
+                {{ ui.dri_select(p, 'projeto', usuarios, 'dri-projeto') }}
                 <button type="button" class="btn btn-sm btn-outline-primary btn-add-tarefa" data-projeto-id="{{ p.id }}" data-projeto-nome="{{ p.nome }}" title="Nova tarefa">
                     <i class="bi bi-plus-lg"></i>
                 </button>
@@ -92,8 +103,15 @@
             </div>
         </div>
 
-        {% if p.tarefas %}
-        <div class="mt-2">
+        <div class="proj-tarefas-wrap mt-2" data-projeto-tarefas="{{ p.id }}">
+            <!-- Quick add -->
+            <form method="POST" action="{{ url_for('projetos.tarefa_nova') }}" class="d-flex gap-1 mb-1">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="projeto_id" value="{{ p.id }}">
+                <input type="text" name="nome" class="form-control form-control-sm" placeholder="+ Adicionar tarefa rápida…" style="font-size:12px;" required>
+                <button type="submit" class="btn btn-sm btn-primary" title="Adicionar"><i class="bi bi-plus"></i></button>
+            </form>
+
             {% for t in p.tarefas %}
             <div class="proj-tarefa {% if t.atrasada %}atrasada{% endif %}" data-tarefa-id="{{ t.id }}" data-nome="{{ t.nome|lower }}">
                 {{ ui.tarefa_status_btn(t) }}
@@ -101,6 +119,12 @@
                     {{ t.nome }}
                     {% if t.tipo %}<span class="badge bg-light text-dark ms-1" style="font-size:9px;">{{ t.tipo|replace('_',' ') }}</span>{% endif %}
                     {% if t.esforco %}<span class="badge bg-secondary ms-1" style="font-size:9px;">{{ t.esforco }}</span>{% endif %}
+                    {% if t.responsavel %}<span class="badge bg-dark ms-1" style="font-size:9px;"><i class="bi bi-person"></i> {{ t.responsavel.nome.split()[0] }}</span>{% endif %}
+                    {% if t.prazo %}
+                    <span class="text-muted ms-1" style="font-size:11px;" title="{{ t.prazo.strftime('%d/%m/%Y') }}">
+                        · {{ data_relativa(t.prazo) }}
+                    </span>
+                    {% endif %}
                 </span>
                 <input type="date" class="form-control form-control-sm tarefa-prazo"
                        data-tarefa-id="{{ t.id }}"
@@ -114,7 +138,6 @@
             </div>
             {% endfor %}
         </div>
-        {% endif %}
     </div>
     {% endfor %}
 
@@ -124,13 +147,14 @@
 </div>
 {% endfor %}
 
-{{ ui.modal_nova_tarefa() }}
-{{ ui.modal_novo_projeto(areas) }}
+{{ ui.modal_nova_tarefa(usuarios) }}
+{{ ui.modal_novo_projeto(areas, usuarios) }}
 {{ ui.modal_nova_area() }}
 {{ ui.modal_weekly() }}
 
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script src="{{ url_for('static', filename='js/projetos.js') }}"></script>
 {% endblock %}

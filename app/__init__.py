@@ -90,12 +90,30 @@ def create_app(config_class=None):
             if current_user.is_admin() else []
         )
 
+        # Contadores de Projetos para badge na sidebar (admin)
+        proj_atrasadas = 0
+        proj_fazendo = 0
+        if current_user.is_admin():
+            try:
+                from app.models import TarefaProjeto
+                from datetime import date as _date
+                proj_atrasadas = TarefaProjeto.query.filter(
+                    TarefaProjeto.prazo.isnot(None),
+                    TarefaProjeto.prazo < _date.today(),
+                    ~TarefaProjeto.status.in_(['feito', 'cancelado']),
+                ).count()
+                proj_fazendo = TarefaProjeto.query.filter_by(status='fazendo').count()
+            except Exception:
+                pass
+
         return dict(
             sidebar_categorias=categorias,
             mp_json=mp_json,
             mp_nomes=mp_nomes,
             receita_nomes=receita_nomes,
             funcionarios=funcionarios,
+            proj_atrasadas=proj_atrasadas,
+            proj_fazendo=proj_fazendo,
         )
 
     @app.route('/robots.txt')

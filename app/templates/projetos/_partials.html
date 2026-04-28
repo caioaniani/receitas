@@ -24,6 +24,10 @@
 
 {% macro nav_views(view) %}
 <div class="btn-group btn-group-sm">
+    <a href="{{ url_for('projetos.hoje') }}"
+       class="btn {% if view == 'hoje' %}btn-success{% else %}btn-outline-success{% endif %}">
+        <i class="bi bi-sun"></i> Hoje
+    </a>
     <a href="{{ url_for('projetos.painel') }}"
        class="btn {% if view == 'hier' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
         <i class="bi bi-list-ul"></i> Hierárquica
@@ -48,7 +52,7 @@
 {% macro tarefa_status_btn(t) %}
 <button type="button" class="proj-tarefa-status {{ t.status }}"
         data-tarefa-id="{{ t.id }}"
-        title="Clique para mudar status (a fazer → fazendo → feito)">
+        title="Clique para mudar status">
     {% if t.status == 'a_fazer' %}○
     {% elif t.status == 'fazendo' %}▶
     {% elif t.status == 'feito' %}✓
@@ -58,7 +62,22 @@
 {% endmacro %}
 
 
-{% macro modal_nova_tarefa() %}
+{% macro dri_select(entidade, tipo, usuarios, classes='') %}
+{# entidade pode ser projeto ou tarefa; tipo = 'projeto' | 'tarefa' #}
+<select class="form-select form-select-sm proj-dri {{ classes }}"
+        data-tipo="{{ tipo }}" data-id="{{ entidade.id }}"
+        title="Responsável (DRI)" style="font-size:11px;">
+    <option value="">— sem DRI —</option>
+    {% for u in usuarios %}
+    <option value="{{ u.id }}" {% if entidade.responsavel_id == u.id %}selected{% endif %}>
+        {{ u.nome }}
+    </option>
+    {% endfor %}
+</select>
+{% endmacro %}
+
+
+{% macro modal_nova_tarefa(usuarios) %}
 <div class="modal fade" id="modal-nova-tarefa" tabindex="-1">
     <div class="modal-dialog">
         <form method="POST" action="{{ url_for('projetos.tarefa_nova') }}">
@@ -102,6 +121,15 @@
                             <input type="date" name="prazo" class="form-control form-control-sm">
                         </div>
                     </div>
+                    <div class="mt-2">
+                        <label class="form-label small fw-bold">Responsável (DRI)</label>
+                        <select name="responsavel_id" class="form-select form-select-sm">
+                            <option value="">— sem DRI —</option>
+                            {% for u in usuarios %}
+                            <option value="{{ u.id }}">{{ u.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
@@ -114,7 +142,7 @@
 {% endmacro %}
 
 
-{% macro modal_novo_projeto(areas) %}
+{% macro modal_novo_projeto(areas, usuarios) %}
 <div class="modal fade" id="modal-novo-projeto" tabindex="-1">
     <div class="modal-dialog">
         <form method="POST" action="{{ url_for('projetos.projeto_novo') }}">
@@ -162,6 +190,15 @@
                                 <label class="form-check-label small" for="modal-projeto-foco">⭐ Foco 12s</label>
                             </div>
                         </div>
+                    </div>
+                    <div class="mt-2">
+                        <label class="form-label small fw-bold">Responsável (DRI)</label>
+                        <select name="responsavel_id" class="form-select form-select-sm">
+                            <option value="">— sem DRI —</option>
+                            {% for u in usuarios %}
+                            <option value="{{ u.id }}">{{ u.nome }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -223,6 +260,33 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro card_tarefa_kanban(t, data_relativa) %}
+<div class="proj-kanban-card {% if t.atrasada %}atrasada{% endif %} {% if t.projeto.foco_12s %}foco{% endif %}"
+     data-tarefa-id="{{ t.id }}">
+    <div class="d-flex align-items-start gap-2">
+        {{ tarefa_status_btn(t) }}
+        <div style="flex:1;">
+            <div class="fw-semibold">{{ t.nome }}</div>
+            <div class="proj-meta">
+                {{ area_badge(t.projeto.area) }}
+                <span class="badge bg-light text-dark">{{ t.projeto.nome }}</span>
+                {% if t.tipo %}<span class="badge bg-secondary">{{ t.tipo|replace('_',' ') }}</span>{% endif %}
+                {% if t.esforco %}<span class="badge bg-info text-dark">{{ t.esforco }}</span>{% endif %}
+                {% if t.responsavel %}<span class="badge bg-dark"><i class="bi bi-person"></i> {{ t.responsavel.nome.split()[0] }}</span>{% endif %}
+                {% if t.prazo %}
+                <span class="badge {% if t.atrasada %}bg-danger{% else %}bg-light text-dark{% endif %}"
+                      title="{{ t.prazo.strftime('%d/%m/%Y') }}">
+                    <i class="bi bi-calendar3"></i> {{ data_relativa(t.prazo) }}
+                </span>
+                {% endif %}
+                {% if t.projeto.foco_12s %}<span class="badge" style="background:#d4a435;color:#fff;">⭐</span>{% endif %}
             </div>
         </div>
     </div>

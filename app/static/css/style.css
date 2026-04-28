@@ -680,6 +680,21 @@ body {
 }
 .proj-meta .badge { font-size: 10px; padding: 2px 6px; }
 
+.proj-coluna-cards { min-height: 80px; }
+.proj-card-ghost {
+    opacity: 0.4;
+    background: #fff3cd !important;
+}
+[data-theme="dark"] .proj-card-ghost { background: #3d3520 !important; }
+
+.proj-kanban.com-canceladas { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 768px) {
+    .proj-kanban.com-canceladas { grid-template-columns: 1fr; }
+}
+
+.proj-toggle { color: var(--text-muted); font-size: 14px; }
+.proj-toggle:hover { color: var(--text-main); }
+
 [data-theme="dark"] .table {
     --bs-table-bg: var(--bg-card);
     --bs-table-color: var(--text-main);
