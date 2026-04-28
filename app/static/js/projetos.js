@@ -290,4 +290,110 @@
         d.textContent = s == null ? '' : s;
         return d.innerHTML;
     }
+
+    // ── Recorrência (select inline) ──
+    document.body.addEventListener('change', function (e) {
+        var sel = e.target.closest('.proj-edit-tarefa');
+        if (!sel) return;
+        var tid = sel.dataset.tarefaId;
+        var campo = sel.dataset.campo;
+        postEdicao('/projetos/tarefa/' + tid + '/editar', campo, sel.value);
+    });
+
+    // ── Comentário (modal) ──
+    document.body.addEventListener('click', function (e) {
+        var btn = e.target.closest('.btn-comentario');
+        if (!btn) return;
+        document.getElementById('comentario-tipo').value = btn.dataset.tipo;
+        document.getElementById('comentario-id').value = btn.dataset.id;
+        document.getElementById('comentario-titulo').textContent = (btn.dataset.tipo === 'projeto' ? 'Projeto: ' : 'Tarefa: ') + btn.dataset.nome;
+        document.getElementById('comentario-texto').value = btn.dataset.texto || '';
+        var modalEl = document.getElementById('modal-comentario');
+        if (modalEl) new bootstrap.Modal(modalEl).show();
+    });
+    var btnSalvarCom = document.getElementById('btn-salvar-comentario');
+    if (btnSalvarCom) {
+        btnSalvarCom.addEventListener('click', function () {
+            var tipo = document.getElementById('comentario-tipo').value;
+            var id = document.getElementById('comentario-id').value;
+            var texto = document.getElementById('comentario-texto').value;
+            var url = (tipo === 'projeto')
+                ? '/projetos/projeto/' + id + '/editar'
+                : '/projetos/tarefa/' + id + '/editar';
+            postEdicao(url, 'observacao', texto).then(function (r) {
+                if (r.ok) {
+                    bootstrap.Modal.getInstance(document.getElementById('modal-comentario')).hide();
+                    // Atualiza icone do botao (cheio se tem texto)
+                    document.querySelectorAll('.btn-comentario[data-tipo="' + tipo + '"][data-id="' + id + '"]').forEach(function(b){
+                        b.dataset.texto = texto;
+                        var icon = b.querySelector('i');
+                        if (icon) {
+                            icon.classList.toggle('bi-chat-text-fill', !!texto.trim());
+                            icon.classList.toggle('bi-chat-text', !texto.trim());
+                        }
+                    });
+                }
+            });
+        });
+    }
+
+    // ── Atalhos de teclado ──
+    var seqTimeout = null;
+    var seq = '';
+    document.addEventListener('keydown', function (e) {
+        if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+        var key = e.key.toLowerCase();
+
+        // Sequencias g+letra
+        if (seq === 'g') {
+            seq = '';
+            clearTimeout(seqTimeout);
+            var rotas = {
+                'h': '/projetos/hoje',
+                'p': '/projetos/',
+                'k': '/projetos/kanban',
+                'f': '/projetos/foco',
+                'c': '/projetos/calendario',
+                'r': '/projetos/relatorio',
+                't': '/projetos/templates',
+            };
+            if (rotas[key]) { e.preventDefault(); location.href = rotas[key]; return; }
+        }
+        if (key === 'g') {
+            seq = 'g';
+            clearTimeout(seqTimeout);
+            seqTimeout = setTimeout(function () { seq = ''; }, 1500);
+            return;
+        }
+
+        // /  -> foca a busca
+        if (key === '/') {
+            var busca = document.getElementById('busca-tarefa');
+            if (busca) { e.preventDefault(); busca.focus(); return; }
+        }
+
+        // n  -> nova tarefa (no primeiro projeto disponivel)
+        if (key === 'n') {
+            var primeiroProj = document.querySelector('.proj-card[data-projeto-id]');
+            if (primeiroProj) {
+                e.preventDefault();
+                var pid = primeiroProj.dataset.projetoId;
+                var nome = primeiroProj.querySelector('strong').textContent;
+                var modal = document.getElementById('modal-nova-tarefa');
+                if (modal) {
+                    document.getElementById('modal-tarefa-projeto-id').value = pid;
+                    document.getElementById('modal-tarefa-projeto-nome').value = nome;
+                    new bootstrap.Modal(modal).show();
+                }
+            }
+        }
+
+        // ?  -> mostra ajuda de atalhos
+        if (key === '?' || (e.shiftKey && key === '/')) {
+            e.preventDefault();
+            alert('Atalhos:\n\n/  → busca\nn  → nova tarefa\n\ng h  → Hoje\ng p  → Painel\ng k  → Kanban\ng f  → Foco 12s\ng c  → Calendário\ng r  → Relatório\ng t  → Templates');
+        }
+    });
 })();

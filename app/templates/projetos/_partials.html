@@ -23,7 +23,7 @@
 
 
 {% macro nav_views(view) %}
-<div class="btn-group btn-group-sm">
+<div class="btn-group btn-group-sm flex-wrap">
     <a href="{{ url_for('projetos.hoje') }}"
        class="btn {% if view == 'hoje' %}btn-success{% else %}btn-outline-success{% endif %}">
         <i class="bi bi-sun"></i> Hoje
@@ -38,14 +38,30 @@
     </a>
     <a href="{{ url_for('projetos.foco') }}"
        class="btn {% if view == 'foco' %}btn-warning{% else %}btn-outline-warning{% endif %}">
-        <i class="bi bi-star-fill"></i> Foco 12s
+        <i class="bi bi-star-fill"></i> Foco
+    </a>
+    <a href="{{ url_for('projetos.calendario') }}"
+       class="btn {% if view == 'calendario' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        <i class="bi bi-calendar3"></i> Calendário
+    </a>
+    <a href="{{ url_for('projetos.relatorio') }}"
+       class="btn {% if view == 'relatorio' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        <i class="bi bi-graph-up"></i> Relatório
+    </a>
+    <a href="{{ url_for('projetos.templates_lista') }}"
+       class="btn {% if view == 'templates' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        <i class="bi bi-bookmark-star"></i> Templates
     </a>
 </div>
 {% endmacro %}
 
 
 {% macro area_badge(area) %}
+{% if area.cor %}
+<span class="badge" style="font-size:10px;background:{{ area.cor }};color:#fff;">{{ area.nome }}</span>
+{% else %}
 <span class="badge proj-area-{{ area.tipo }}" style="font-size:10px;">{{ area.nome }}</span>
+{% endif %}
 {% endmacro %}
 
 
@@ -231,14 +247,100 @@
                         <label class="form-label small fw-bold">Tipo</label>
                         <select name="tipo" class="form-select form-select-sm">
                             <option value="empresa">Empresa</option>
-                            <option value="igreja">Igreja</option>
-                            <option value="vida">Vida</option>
+                            {% if current_user.is_dono() %}
+                            <option value="igreja">Igreja (privada)</option>
+                            <option value="vida">Vida (privada)</option>
+                            {% endif %}
                         </select>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-primary btn-sm">Criar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro modal_comentario() %}
+<div class="modal fade" id="modal-comentario" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info">
+                <h6 class="modal-title"><i class="bi bi-chat-text"></i> <span id="comentario-titulo">Comentário</span></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="comentario-tipo">
+                <input type="hidden" id="comentario-id">
+                <textarea id="comentario-texto" class="form-control" rows="6" placeholder="Notas, contexto, próximos passos…"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-salvar-comentario">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro modal_novo_de_template(areas, templates_disponiveis, usuarios) %}
+<div class="modal fade" id="modal-novo-de-template" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('projetos.projeto_novo_de_template') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h6 class="modal-title"><i class="bi bi-bookmark-star"></i> Novo Projeto a partir de Template</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    {% if not templates_disponiveis %}
+                    <div class="alert alert-warning small mb-2">
+                        Nenhum template ainda. <a href="{{ url_for('projetos.templates_lista') }}">Crie um aqui</a>.
+                    </div>
+                    {% endif %}
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Template</label>
+                        <select name="template_id" class="form-select form-select-sm" required>
+                            <option value="">Selecione…</option>
+                            {% for t in templates_disponiveis %}
+                            <option value="{{ t.id }}" data-area="{{ t.area_id_padrao or '' }}">{{ t.nome }} ({{ t.tarefas|length }} tarefa{{ 's' if t.tarefas|length != 1 }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Nome do projeto</label>
+                        <input type="text" name="nome" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Área</label>
+                        <select name="area_id" class="form-select form-select-sm" required id="modal-tpl-area">
+                            {% for a in areas %}
+                            <option value="{{ a.id }}">{{ a.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Responsável (DRI)</label>
+                        <select name="responsavel_id" class="form-select form-select-sm">
+                            <option value="">— sem DRI —</option>
+                            {% for u in usuarios %}
+                            <option value="{{ u.id }}">{{ u.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="alert alert-info small mb-0">
+                        <i class="bi bi-info-circle"></i> As tarefas do template serão criadas com prazos calculados a partir de hoje.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm" {% if not templates_disponiveis %}disabled{% endif %}>Criar</button>
                 </div>
             </div>
         </form>

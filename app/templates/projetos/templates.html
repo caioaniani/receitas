@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% import "projetos/_partials.html" as ui %}
+
+{% block title %}Projetos · Templates{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-bookmark-star"></i> Templates de Projeto</h1>
+    <a href="{{ url_for('projetos.painel') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+{{ ui.stats(contadores) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    {{ ui.nav_views(view) }}
+    <small class="text-muted">Templates economizam tempo: ao criar um projeto novo, escolhe o template e as tarefas vêm prontas com prazos calculados.</small>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header bg-white fw-bold"><i class="bi bi-plus-circle"></i> Novo Template</div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('projetos.template_novo') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Nome</label>
+                        <input type="text" name="nome" class="form-control form-control-sm" placeholder="Ex: Implementação ERP" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Área padrão (opcional)</label>
+                        <select name="area_id_padrao" class="form-select form-select-sm">
+                            <option value="">— sem área padrão —</option>
+                            {% for a in areas %}
+                            <option value="{{ a.id }}">{{ a.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Descrição</label>
+                        <textarea name="descricao" class="form-control form-control-sm" rows="2"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">Criar Template</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header bg-white fw-bold">Templates existentes ({{ templates|length }})</div>
+            <div class="card-body">
+                {% if not templates %}
+                <div class="text-muted">Nenhum template ainda. Crie um ao lado.</div>
+                {% endif %}
+                {% for t in templates %}
+                <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+                    <div>
+                        <strong>{{ t.nome }}</strong>
+                        {% if t.area_padrao %}<span class="badge bg-light text-dark ms-1">{{ t.area_padrao.nome }}</span>{% endif %}
+                        <div class="small text-muted">{{ t.tarefas|length }} tarefa{{ 's' if t.tarefas|length != 1 }}{% if t.descricao %} · {{ t.descricao }}{% endif %}</div>
+                    </div>
+                    <div class="d-flex gap-1">
+                        <a href="{{ url_for('projetos.template_editar', tid=t.id) }}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-pencil"></i> Editar
+                        </a>
+                        <form method="POST" action="{{ url_for('projetos.template_excluir', tid=t.id) }}" onsubmit="return confirm('Excluir template?')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

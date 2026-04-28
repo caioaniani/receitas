@@ -695,6 +695,75 @@ body {
 .proj-toggle { color: var(--text-muted); font-size: 14px; }
 .proj-toggle:hover { color: var(--text-main); }
 
+/* Calendario */
+.cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+.cal-header {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 4px;
+}
+.cal-day {
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 4px;
+    min-height: 90px;
+    background: var(--bg-card);
+}
+.cal-day-empty {
+    border-color: transparent;
+    background: transparent;
+}
+.cal-day-num {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 2px 4px;
+}
+.cal-day-hoje {
+    border-color: #d4a435;
+    background: #fff8e6;
+}
+[data-theme="dark"] .cal-day-hoje {
+    background: #2d2818;
+    border-color: #d4a435;
+}
+.cal-day-hoje .cal-day-num {
+    color: #d4a435;
+    font-weight: 700;
+}
+.cal-tarefa {
+    font-size: 10px;
+    padding: 2px 4px;
+    margin-bottom: 2px;
+    border-radius: 3px;
+    background: #e7eef5;
+    border-left: 2px solid #084298;
+    color: #084298;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+[data-theme="dark"] .cal-tarefa {
+    background: #1a2c44; color: #b8d3e0; border-left-color: #4a89dc;
+}
+.cal-tarefa.atrasada {
+    background: #fdebe7; color: #842029; border-left-color: #b54a3f;
+}
+[data-theme="dark"] .cal-tarefa.atrasada {
+    background: #4a1c22; color: #ff9aa3;
+}
+.cal-tarefa.foco {
+    border-left-color: #d4a435;
+}
+.cal-tarefa-status { display: inline-block; min-width: 12px; }
+
 [data-theme="dark"] .table {
     --bs-table-bg: var(--bg-card);
     --bs-table-color: var(--text-main);

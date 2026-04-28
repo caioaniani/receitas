@@ -13,6 +13,9 @@
         <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modal-nova-area">
             <i class="bi bi-collection"></i> Área
         </button>
+        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modal-novo-de-template">
+            <i class="bi bi-bookmark-star"></i> de Template
+        </button>
         <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modal-novo-projeto">
             <i class="bi bi-folder-plus"></i> Projeto
         </button>
@@ -92,6 +95,9 @@
                     <option value="baixa" {% if p.prioridade == 'baixa' %}selected{% endif %}>Baixa</option>
                 </select>
                 {{ ui.dri_select(p, 'projeto', usuarios, 'dri-projeto') }}
+                <button type="button" class="btn btn-sm btn-outline-info btn-comentario" data-tipo="projeto" data-id="{{ p.id }}" data-nome="{{ p.nome }}" data-texto="{{ p.observacao or '' }}" title="Comentário / nota">
+                    <i class="bi bi-{{ 'chat-text-fill' if p.observacao else 'chat-text' }}"></i>
+                </button>
                 <button type="button" class="btn btn-sm btn-outline-primary btn-add-tarefa" data-projeto-id="{{ p.id }}" data-projeto-nome="{{ p.nome }}" title="Nova tarefa">
                     <i class="bi bi-plus-lg"></i>
                 </button>
@@ -130,6 +136,15 @@
                        data-tarefa-id="{{ t.id }}"
                        value="{{ t.prazo.isoformat() if t.prazo else '' }}"
                        style="width:140px;font-size:11px;">
+                <select class="form-select form-select-sm proj-edit-tarefa" data-tarefa-id="{{ t.id }}" data-campo="recorrencia" style="width:110px;font-size:11px;" title="Recorrência">
+                    <option value="">Sem recorr.</option>
+                    {% for r in ('diaria','semanal','quinzenal','mensal','trimestral') %}
+                    <option value="{{ r }}" {% if t.recorrencia == r %}selected{% endif %}>{{ r|capitalize }}</option>
+                    {% endfor %}
+                </select>
+                <button type="button" class="btn btn-sm btn-link p-0 btn-comentario" data-tipo="tarefa" data-id="{{ t.id }}" data-nome="{{ t.nome }}" data-texto="{{ t.observacao or '' }}" title="Comentário">
+                    <i class="bi bi-{{ 'chat-text-fill' if t.observacao else 'chat-text' }}"></i>
+                </button>
                 <form method="POST" action="{{ url_for('projetos.tarefa_excluir', tid=t.id) }}" class="d-inline"
                       onsubmit="return confirm('Excluir tarefa?')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -150,6 +165,8 @@
 {{ ui.modal_nova_tarefa(usuarios) }}
 {{ ui.modal_novo_projeto(areas, usuarios) }}
 {{ ui.modal_nova_area() }}
+{{ ui.modal_novo_de_template(areas, templates_disponiveis, usuarios) }}
+{{ ui.modal_comentario() }}
 {{ ui.modal_weekly() }}
 
 {% endblock %}

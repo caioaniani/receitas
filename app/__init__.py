@@ -207,7 +207,7 @@ def _criar_admin():
     from app.models import Usuario
     if not Usuario.query.filter_by(papel='admin').first():
         senha = os.environ.get('ADMIN_PASSWORD', 'admin')
-        admin = Usuario(nome='Admin', login='admin', papel='admin')
+        admin = Usuario(nome='Admin', login='admin', papel='admin', is_owner=True)
         admin.set_senha(senha)
         db.session.add(admin)
         db.session.commit()
@@ -369,6 +369,37 @@ def _migrate_postgres(app):
         if cols_el and 'materia_prima_id' not in cols_el:
             conn.execute(text("ALTER TABLE estoque_loja ADD COLUMN materia_prima_id INTEGER REFERENCES materia_prima(id)"))
 
+        # usuario.is_owner
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'usuario'"
+        ))
+        cols_user2 = {row[0] for row in result}
+        if cols_user2 and 'is_owner' not in cols_user2:
+            conn.execute(text("ALTER TABLE usuario ADD COLUMN is_owner BOOLEAN DEFAULT FALSE"))
+            # Define o admin mais antigo como owner
+            conn.execute(text(
+                "UPDATE usuario SET is_owner = TRUE WHERE id = "
+                "(SELECT id FROM usuario WHERE papel = 'admin' ORDER BY id LIMIT 1)"
+            ))
+
+        # projeto_area.cor
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'projeto_area'"
+        ))
+        cols_pa = {row[0] for row in result}
+        if cols_pa and 'cor' not in cols_pa:
+            conn.execute(text("ALTER TABLE projeto_area ADD COLUMN cor VARCHAR(20)"))
+
+        # tarefa_projeto.observacao + recorrencia
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'tarefa_projeto'"
+        ))
+        cols_tp = {row[0] for row in result}
+        if cols_tp and 'observacao' not in cols_tp:
+            conn.execute(text("ALTER TABLE tarefa_projeto ADD COLUMN observacao TEXT"))
+        if cols_tp and 'recorrencia' not in cols_tp:
+            conn.execute(text("ALTER TABLE tarefa_projeto ADD COLUMN recorrencia VARCHAR(20)"))
+
         conn.commit()
 
 
@@ -481,6 +512,30 @@ def _migrate_sqlite(app):
     cols_el = [row[1] for row in cursor.fetchall()]
     if cols_el and 'materia_prima_id' not in cols_el:
         cursor.execute("ALTER TABLE estoque_loja ADD COLUMN materia_prima_id INTEGER REFERENCES materia_prima(id)")
+
+    # Migração usuario.is_owner
+    cursor.execute("PRAGMA table_info(usuario)")
+    cols_user2 = [row[1] for row in cursor.fetchall()]
+    if cols_user2 and 'is_owner' not in cols_user2:
+        cursor.execute("ALTER TABLE usuario ADD COLUMN is_owner BOOLEAN DEFAULT 0")
+        cursor.execute(
+            "UPDATE usuario SET is_owner = 1 WHERE id = "
+            "(SELECT id FROM usuario WHERE papel = 'admin' ORDER BY id LIMIT 1)"
+        )
+
+    # Migração projeto_area.cor
+    cursor.execute("PRAGMA table_info(projeto_area)")
+    cols_pa = [row[1] for row in cursor.fetchall()]
+    if cols_pa and 'cor' not in cols_pa:
+        cursor.execute("ALTER TABLE projeto_area ADD COLUMN cor VARCHAR(20)")
+
+    # Migração tarefa_projeto.observacao + recorrencia
+    cursor.execute("PRAGMA table_info(tarefa_projeto)")
+    cols_tp = [row[1] for row in cursor.fetchall()]
+    if cols_tp and 'observacao' not in cols_tp:
+        cursor.execute("ALTER TABLE tarefa_projeto ADD COLUMN observacao TEXT")
+    if cols_tp and 'recorrencia' not in cols_tp:
+        cursor.execute("ALTER TABLE tarefa_projeto ADD COLUMN recorrencia VARCHAR(20)")
 
     conn.commit()
     conn.close()

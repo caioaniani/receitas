@@ -15,6 +15,7 @@ class Usuario(UserMixin, db.Model):
     senha_hash = db.Column(db.String(256), nullable=False)
     papel = db.Column(db.String(20), nullable=False, default='funcionario')
     loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=True)
+    is_owner = db.Column(db.Boolean, default=False)
 
     loja = db.relationship('Loja', backref='usuarios')
 
@@ -26,6 +27,10 @@ class Usuario(UserMixin, db.Model):
 
     def is_admin(self):
         return self.papel == 'admin'
+
+    def is_dono(self):
+        """Owner: dono unico do sistema (ve areas pessoais Vida/Igreja)."""
+        return bool(self.is_owner)
 
     def __repr__(self):
         return f'<Usuario {self.login}>'
@@ -689,6 +694,7 @@ class ProjetoArea(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(100), nullable=False, unique=True)
     tipo = db.Column(db.String(20), nullable=False, default="empresa")  # empresa/igreja/vida
+    cor = db.Column(db.String(20))  # ex: '#5b8def' — opcional, sobrescreve cor padrao do tipo
     ativa = db.Column(db.Boolean, default=True)
     ordem = db.Column(db.Integer, default=0)
 
@@ -736,6 +742,8 @@ class TarefaProjeto(db.Model):
     esforco = db.Column(db.String(2))
     prazo = db.Column(db.Date, nullable=True)
     responsavel_id = db.Column(db.Integer, db.ForeignKey("usuario.id"), nullable=True)
+    observacao = db.Column(db.Text)
+    recorrencia = db.Column(db.String(20))  # diaria/semanal/quinzenal/mensal/trimestral
     ordem = db.Column(db.Integer, default=0)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     feito_em = db.Column(db.DateTime, nullable=True)
@@ -764,3 +772,32 @@ class WeeklyReview(db.Model):
     criado_por = db.Column(db.Integer, db.ForeignKey("usuario.id"))
 
     autor = db.relationship("Usuario")
+
+
+# ── Templates de Projeto ──
+
+class ProjetoTemplate(db.Model):
+    __tablename__ = "projeto_template"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(150), nullable=False)
+    area_id_padrao = db.Column(db.Integer, db.ForeignKey("projeto_area.id"), nullable=True)
+    descricao = db.Column(db.Text)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    area_padrao = db.relationship("ProjetoArea")
+    tarefas = db.relationship("TarefaTemplate", backref="template",
+                               cascade="all, delete-orphan",
+                               order_by="TarefaTemplate.ordem")
+
+
+class TarefaTemplate(db.Model):
+    __tablename__ = "tarefa_template"
+
+    id = db.Column(db.Integer, primary_key=True)
+    template_id = db.Column(db.Integer, db.ForeignKey("projeto_template.id"), nullable=False)
+    nome = db.Column(db.String(300), nullable=False)
+    tipo = db.Column(db.String(20))
+    esforco = db.Column(db.String(2))
+    dias_prazo = db.Column(db.Integer)  # dias a partir da criacao do projeto
+    ordem = db.Column(db.Integer, default=0)
