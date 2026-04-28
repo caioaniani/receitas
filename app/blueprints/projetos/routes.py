@@ -94,68 +94,85 @@ def _data_relativa(prazo):
 @admin_required
 def painel():
     """Dashboard: cards de projetos."""
-    from app.models import ProjetoTemplate
+    import traceback
+    from flask import current_app
+    try:
+        from app.models import ProjetoTemplate
 
-    filtro_area = request.args.get('area', type=int)
-    filtro_status = request.args.get('status', '')
-    so_foco = request.args.get('foco') == '1'
-    busca = (request.args.get('q', '') or '').strip().lower()
+        filtro_area = request.args.get('area', type=int)
+        filtro_status = request.args.get('status', '')
+        so_foco = request.args.get('foco') == '1'
+        busca = (request.args.get('q', '') or '').strip().lower()
 
-    q = Projeto.query.join(ProjetoArea)
-    if not current_user.is_dono():
-        q = q.filter(ProjetoArea.tipo == 'empresa')
-    if filtro_area:
-        q = q.filter(Projeto.area_id == filtro_area)
-    if filtro_status and filtro_status in STATUS_PROJETO:
-        q = q.filter(Projeto.status == filtro_status)
-    if so_foco:
-        q = q.filter(Projeto.foco_12s.is_(True))
-    projetos = q.all()
-    # Foco 12s primeiro, depois por area.ordem, depois mais recentes
-    projetos.sort(key=lambda p: (
-        not p.foco_12s,
-        p.area.ordem if p.area else 999,
-        -(p.id or 0),
-    ))
+        q = Projeto.query.join(ProjetoArea)
+        if not current_user.is_dono():
+            q = q.filter(ProjetoArea.tipo == 'empresa')
+        if filtro_area:
+            q = q.filter(Projeto.area_id == filtro_area)
+        if filtro_status and filtro_status in STATUS_PROJETO:
+            q = q.filter(Projeto.status == filtro_status)
+        if so_foco:
+            q = q.filter(Projeto.foco_12s.is_(True))
+        projetos = q.all()
+        projetos.sort(key=lambda p: (
+            not p.foco_12s,
+            (p.area.ordem if p.area else 999),
+            -(p.id or 0),
+        ))
 
-    if busca:
-        projetos = [p for p in projetos if busca in p.nome.lower()]
+        if busca:
+            projetos = [p for p in projetos if busca in p.nome.lower()]
 
-    # Métricas por projeto
-    hoje_d = date.today()
-    cards = []
-    for p in projetos:
-        total = len(p.tarefas)
-        feitas = sum(1 for t in p.tarefas if t.status == 'feito')
-        fazendo_ = sum(1 for t in p.tarefas if t.status == 'fazendo')
-        a_fazer_ = sum(1 for t in p.tarefas if t.status == 'a_fazer')
-        atras = sum(1 for t in p.tarefas if t.atrasada)
-        prazos = [t.prazo for t in p.tarefas
-                  if t.prazo and t.status not in ('feito', 'cancelado')]
-        prox_prazo = min(prazos) if prazos else None
-        pct = round(100 * feitas / total) if total else 0
-        cards.append({
-            'p': p,
-            'total': total, 'feitas': feitas,
-            'fazendo': fazendo_, 'a_fazer': a_fazer_,
-            'atrasadas': atras, 'prox_prazo': prox_prazo,
-            'pct': pct,
-        })
+        hoje_d = date.today()
+        cards = []
+        for p in projetos:
+            tarefas_list = list(p.tarefas)
+            total = len(tarefas_list)
+            feitas = sum(1 for t in tarefas_list if t.status == 'feito')
+            fazendo_ = sum(1 for t in tarefas_list if t.status == 'fazendo')
+            a_fazer_ = sum(1 for t in tarefas_list if t.status == 'a_fazer')
+            atras = sum(1 for t in tarefas_list if t.atrasada)
+            prazos = [t.prazo for t in tarefas_list
+                      if t.prazo and t.status not in ('feito', 'cancelado')]
+            prox_prazo = min(prazos) if prazos else None
+            pct = round(100 * feitas / total) if total else 0
+            cards.append({
+                'p': p,
+                'total': total, 'feitas': feitas,
+                'fazendo': fazendo_, 'a_fazer': a_fazer_,
+                'atrasadas': atras, 'prox_prazo': prox_prazo,
+                'pct': pct,
+            })
 
-    areas = _areas_filtradas()
-    templates_disponiveis = ProjetoTemplate.query.order_by(ProjetoTemplate.nome).all()
+        areas = _areas_filtradas()
+        try:
+            templates_disponiveis = ProjetoTemplate.query.order_by(ProjetoTemplate.nome).all()
+        except Exception:
+            templates_disponiveis = []
 
-    return render_template('projetos/dashboard.html',
-                           cards=cards,
-                           areas=areas,
-                           contadores=_contadores(),
-                           usuarios=_usuarios(),
-                           templates_disponiveis=templates_disponiveis,
-                           filtro_area=filtro_area, filtro_status=filtro_status,
-                           so_foco=so_foco, busca=busca,
-                           hoje_today=hoje_d,
-                           data_relativa=_data_relativa,
-                           view='dashboard')
+        return render_template('projetos/dashboard.html',
+                               cards=cards,
+                               areas=areas,
+                               contadores=_contadores(),
+                               usuarios=_usuarios(),
+                               templates_disponiveis=templates_disponiveis,
+                               filtro_area=filtro_area, filtro_status=filtro_status,
+                               so_foco=so_foco, busca=busca,
+                               hoje_today=hoje_d,
+                               data_relativa=_data_relativa,
+                               view='dashboard')
+    except Exception as e:
+        current_app.logger.error('Erro no dashboard de projetos: %s\n%s', e, traceback.format_exc())
+        # Mostra o erro real no navegador para diagnostico
+        return (
+            '<h1>Erro no Dashboard de Projetos</h1>'
+            f'<p><strong>{type(e).__name__}:</strong> {e}</p>'
+            f'<pre style="background:#f5f5f5;padding:12px;border-radius:6px;overflow:auto;">{traceback.format_exc()}</pre>'
+            '<p><a href="/projetos/_migrar">Forçar migração</a> · '
+            '<a href="/projetos/lista">Visão lista</a> · '
+            '<a href="/">Voltar</a></p>',
+            500
+        )
 
 
 @projetos_bp.route('/lista')
@@ -578,14 +595,23 @@ def weekly():
 @admin_required
 def forcar_migrate():
     """Endpoint de emergencia para forcar migrations das colunas novas."""
+    import traceback
     from flask import current_app
     from app import _migrate
     try:
         _migrate(current_app)
-        flash('Migrations re-executadas. Recarregue a pagina.', 'success')
+        return (
+            '<h1>Migrações executadas</h1>'
+            '<p>Sem erros. <a href="/projetos/">Voltar pro dashboard</a></p>',
+            200
+        )
     except Exception as e:
-        flash(f'Erro: {e}', 'danger')
-    return redirect(url_for('projetos.painel'))
+        return (
+            '<h1>Erro ao migrar</h1>'
+            f'<pre>{traceback.format_exc()}</pre>'
+            '<p><a href="/">Início</a></p>',
+            500
+        )
 
 
 @projetos_bp.route('/weekly/salvar', methods=['POST'])
