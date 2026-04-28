@@ -1,0 +1,230 @@
+{# Macros e blocos compartilhados pelas views de projetos #}
+
+{% macro stats(c) %}
+<div class="proj-stats">
+    <div class="proj-stat {% if c.wip_estourado %}alerta{% endif %}">
+        <div class="proj-stat-label">Fazendo (WIP {{ c.wip_limit }})</div>
+        <div class="proj-stat-valor">{{ c.fazendo }}</div>
+    </div>
+    <div class="proj-stat">
+        <div class="proj-stat-label">A fazer</div>
+        <div class="proj-stat-valor">{{ c.a_fazer }}</div>
+    </div>
+    <div class="proj-stat" style="{% if c.atrasadas %}border-color:#b54a3f;{% endif %}">
+        <div class="proj-stat-label">Atrasadas</div>
+        <div class="proj-stat-valor" {% if c.atrasadas %}style="color:#b54a3f"{% endif %}>{{ c.atrasadas }}</div>
+    </div>
+    <div class="proj-stat" style="border-color:#d4a435;">
+        <div class="proj-stat-label">Foco 12s</div>
+        <div class="proj-stat-valor" style="color:#d4a435">{{ c.foco_12s }}</div>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro nav_views(view) %}
+<div class="btn-group btn-group-sm">
+    <a href="{{ url_for('projetos.painel') }}"
+       class="btn {% if view == 'hier' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        <i class="bi bi-list-ul"></i> Hierárquica
+    </a>
+    <a href="{{ url_for('projetos.kanban') }}"
+       class="btn {% if view == 'kanban' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        <i class="bi bi-kanban"></i> Kanban
+    </a>
+    <a href="{{ url_for('projetos.foco') }}"
+       class="btn {% if view == 'foco' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+        <i class="bi bi-star-fill"></i> Foco 12s
+    </a>
+</div>
+{% endmacro %}
+
+
+{% macro area_badge(area) %}
+<span class="badge proj-area-{{ area.tipo }}" style="font-size:10px;">{{ area.nome }}</span>
+{% endmacro %}
+
+
+{% macro tarefa_status_btn(t) %}
+<button type="button" class="proj-tarefa-status {{ t.status }}"
+        data-tarefa-id="{{ t.id }}"
+        title="Clique para mudar status (a fazer → fazendo → feito)">
+    {% if t.status == 'a_fazer' %}○
+    {% elif t.status == 'fazendo' %}▶
+    {% elif t.status == 'feito' %}✓
+    {% elif t.status == 'cancelado' %}✕
+    {% endif %}
+</button>
+{% endmacro %}
+
+
+{% macro modal_nova_tarefa() %}
+<div class="modal fade" id="modal-nova-tarefa" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('projetos.tarefa_nova') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="projeto_id" id="modal-tarefa-projeto-id">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h6 class="modal-title"><i class="bi bi-plus-circle"></i> Nova Tarefa</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Projeto</label>
+                        <input type="text" class="form-control form-control-sm" id="modal-tarefa-projeto-nome" disabled>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Nome</label>
+                        <input type="text" name="nome" class="form-control form-control-sm" required autofocus>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <label class="form-label small fw-bold">Tipo</label>
+                            <select name="tipo" class="form-select form-select-sm">
+                                <option value="">—</option>
+                                <option value="acao">Ação</option>
+                                <option value="rotina">Rotina</option>
+                                <option value="follow_up">Follow-up</option>
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small fw-bold">Esforço</label>
+                            <select name="esforco" class="form-select form-select-sm">
+                                <option value="">—</option>
+                                <option value="P">P</option>
+                                <option value="M">M</option>
+                                <option value="G">G</option>
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small fw-bold">Prazo</label>
+                            <input type="date" name="prazo" class="form-control form-control-sm">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Criar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro modal_novo_projeto(areas) %}
+<div class="modal fade" id="modal-novo-projeto" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('projetos.projeto_novo') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h6 class="modal-title"><i class="bi bi-folder-plus"></i> Novo Projeto</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Área</label>
+                        <select name="area_id" class="form-select form-select-sm" required id="modal-projeto-area">
+                            {% for a in areas %}
+                            <option value="{{ a.id }}">{{ a.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Nome</label>
+                        <input type="text" name="nome" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <label class="form-label small fw-bold">Status</label>
+                            <select name="status" class="form-select form-select-sm">
+                                <option value="planejado">Planejado</option>
+                                <option value="ativo">Ativo</option>
+                                <option value="em_espera">Em espera</option>
+                                <option value="concluido">Concluído</option>
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small fw-bold">Prioridade</label>
+                            <select name="prioridade" class="form-select form-select-sm">
+                                <option value="">—</option>
+                                <option value="alta">Alta</option>
+                                <option value="media">Média</option>
+                                <option value="baixa">Baixa</option>
+                            </select>
+                        </div>
+                        <div class="col-4 d-flex align-items-end">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="foco_12s" value="1" id="modal-projeto-foco">
+                                <label class="form-check-label small" for="modal-projeto-foco">⭐ Foco 12s</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Criar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro modal_nova_area() %}
+<div class="modal fade" id="modal-nova-area" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <form method="POST" action="{{ url_for('projetos.area_nova') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h6 class="modal-title"><i class="bi bi-collection"></i> Nova Área</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Nome</label>
+                        <input type="text" name="nome" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Tipo</label>
+                        <select name="tipo" class="form-select form-select-sm">
+                            <option value="empresa">Empresa</option>
+                            <option value="igreja">Igreja</option>
+                            <option value="vida">Vida</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Criar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro modal_weekly() %}
+<div class="modal fade" id="modal-weekly" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h6 class="modal-title"><i class="bi bi-arrow-repeat"></i> Weekly Review (~30 min)</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="weekly-body">
+                <p class="text-muted small">Carregando…</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}

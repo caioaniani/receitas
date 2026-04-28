@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% import "projetos/_partials.html" as ui %}
+
+{% block title %}Projetos · Foco 12s{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0" style="color:#d4a435;"><i class="bi bi-star-fill"></i> Foco 12s</h1>
+    <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modal-weekly">
+            <i class="bi bi-arrow-repeat"></i> Weekly Review
+        </button>
+    </div>
+</div>
+
+{{ ui.stats(contadores) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    {{ ui.nav_views(view) }}
+    <small class="text-muted">Recomendado: 3-5 projetos em foco simultâneo. Hoje: <strong>{{ projetos|length }}</strong></small>
+</div>
+
+{% if not projetos %}
+<div class="alert alert-warning">
+    Nenhum projeto em foco. Marque a estrela ⭐ em projetos da visão hierárquica para defini-los como foco do trimestre.
+</div>
+{% endif %}
+
+{% for p in projetos %}
+<div class="card mb-3" style="border-left:4px solid #d4a435;">
+    <div class="card-body py-2 px-3">
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
+            <h6 class="fw-bold mb-0">
+                {{ ui.area_badge(p.area) }}
+                <span class="ms-2">{{ p.nome }}</span>
+            </h6>
+            <small class="text-muted">{{ p.tarefas_ativas|length }} ativa{{ 's' if p.tarefas_ativas|length != 1 }}</small>
+        </div>
+
+        <div class="proj-kanban">
+            {% set cols = {'a_fazer':[], 'fazendo':[], 'feito':[]} %}
+            {% for t in p.tarefas %}
+                {% if t.status in cols %}{{ cols[t.status].append(t) or '' }}{% endif %}
+            {% endfor %}
+            {% for chave, label in [('a_fazer','A fazer'), ('fazendo','Fazendo'), ('feito','Feito')] %}
+            <div class="proj-coluna">
+                <div class="proj-coluna-header">{{ label }} ({{ cols[chave]|length }})</div>
+                {% for t in cols[chave] %}
+                <div class="proj-kanban-card {% if t.atrasada %}atrasada{% endif %}">
+                    <div class="d-flex align-items-start gap-2">
+                        {{ ui.tarefa_status_btn(t) }}
+                        <div style="flex:1;">
+                            <div class="fw-semibold">{{ t.nome }}</div>
+                            <div class="proj-meta">
+                                {% if t.esforco %}<span class="badge bg-info text-dark">{{ t.esforco }}</span>{% endif %}
+                                {% if t.prazo %}<span class="badge {% if t.atrasada %}bg-danger{% else %}bg-light text-dark{% endif %}">
+                                    <i class="bi bi-calendar3"></i> {{ t.prazo.strftime('%d/%m') }}
+                                </span>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{{ ui.modal_weekly() }}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/projetos.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% import "projetos/_partials.html" as ui %}
+
+{% block title %}Projetos · Kanban{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-kanban"></i> Kanban</h1>
+    <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modal-weekly">
+            <i class="bi bi-arrow-repeat"></i> Weekly Review
+        </button>
+    </div>
+</div>
+
+{{ ui.stats(contadores) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    {{ ui.nav_views(view) }}
+    <form method="GET" class="d-flex gap-2 align-items-center">
+        <select name="area" class="form-select form-select-sm" onchange="this.form.submit()" style="max-width:180px;">
+            <option value="">Todas as áreas</option>
+            {% for a in areas %}
+            <option value="{{ a.id }}" {% if filtro_area == a.id %}selected{% endif %}>{{ a.nome }}</option>
+            {% endfor %}
+        </select>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="foco" value="1" id="chk-foco" {% if so_foco %}checked{% endif %} onchange="this.form.submit()">
+            <label class="form-check-label small" for="chk-foco">⭐ Só Foco 12s</label>
+        </div>
+    </form>
+</div>
+
+<div class="proj-kanban">
+    {% for chave, label in [('a_fazer','A fazer'), ('fazendo','Fazendo'), ('feito','Feito')] %}
+    <div class="proj-coluna">
+        <div class="proj-coluna-header {% if chave == 'fazendo' and contadores.wip_estourado %}alerta{% endif %}">
+            {{ label }} ({{ colunas[chave]|length }})
+            {% if chave == 'fazendo' %}
+                <span class="text-muted" style="font-weight:400;">· WIP {{ contadores.wip_limit }}</span>
+                {% if contadores.wip_estourado %}<i class="bi bi-exclamation-triangle-fill" title="Acima do WIP limit!"></i>{% endif %}
+            {% endif %}
+        </div>
+        {% for t in colunas[chave] %}
+        <div class="proj-kanban-card {% if t.atrasada %}atrasada{% endif %} {% if t.projeto.foco_12s %}foco{% endif %}">
+            <div class="d-flex align-items-start gap-2">
+                {{ ui.tarefa_status_btn(t) }}
+                <div style="flex:1;">
+                    <div class="fw-semibold">{{ t.nome }}</div>
+                    <div class="proj-meta">
+                        {{ ui.area_badge(t.projeto.area) }}
+                        <span class="badge bg-light text-dark">{{ t.projeto.nome }}</span>
+                        {% if t.tipo %}<span class="badge bg-secondary">{{ t.tipo|replace('_',' ') }}</span>{% endif %}
+                        {% if t.esforco %}<span class="badge bg-info text-dark">{{ t.esforco }}</span>{% endif %}
+                        {% if t.prazo %}
+                        <span class="badge {% if t.atrasada %}bg-danger{% else %}bg-light text-dark{% endif %}">
+                            <i class="bi bi-calendar3"></i> {{ t.prazo.strftime('%d/%m') }}
+                        </span>
+                        {% endif %}
+                        {% if t.projeto.foco_12s %}<span class="badge" style="background:#d4a435;color:#fff;">⭐</span>{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% if not colunas[chave] %}
+        <div class="text-muted text-center small mt-3">Vazio</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+
+{{ ui.modal_weekly() }}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/projetos.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% import "projetos/_partials.html" as ui %}
+
+{% block title %}Projetos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-kanban"></i> Gestão de Projetos</h1>
+    <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modal-weekly" id="btn-weekly">
+            <i class="bi bi-arrow-repeat"></i> Weekly Review
+        </button>
+        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modal-nova-area">
+            <i class="bi bi-collection"></i> Área
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modal-novo-projeto">
+            <i class="bi bi-folder-plus"></i> Projeto
+        </button>
+    </div>
+</div>
+
+{{ ui.stats(contadores) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    {{ ui.nav_views(view) }}
+    <div class="d-flex gap-2 align-items-center">
+        <div class="btn-group btn-group-sm" id="filtro-tipo">
+            <button type="button" class="btn btn-outline-secondary active" data-tipo="">Tudo</button>
+            <button type="button" class="btn btn-outline-secondary" data-tipo="empresa">Empresa</button>
+            <button type="button" class="btn btn-outline-secondary" data-tipo="igreja">Igreja</button>
+            <button type="button" class="btn btn-outline-secondary" data-tipo="vida">Vida</button>
+        </div>
+        <input type="text" id="busca-tarefa" class="form-control form-control-sm" placeholder="Buscar tarefa…" style="max-width:200px;">
+    </div>
+</div>
+
+{% set foco_projetos = areas | map(attribute='projetos') | sum(start=[]) | selectattr('foco_12s') | list %}
+{% if foco_projetos %}
+<div class="card mb-3" style="border-left:4px solid #d4a435;">
+    <div class="card-body py-2">
+        <h6 class="fw-bold mb-2" style="color:#d4a435;"><i class="bi bi-star-fill"></i> Foco 12s ({{ foco_projetos|length }})</h6>
+        <div class="d-flex flex-wrap gap-1">
+            {% for p in foco_projetos %}
+            <span class="badge proj-area-{{ p.area.tipo }}">{{ p.area.nome }} · {{ p.nome }}</span>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% for area in areas %}
+<div class="proj-area-block mb-3" data-area-tipo="{{ area.tipo }}">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="fw-bold mb-0">
+            {{ ui.area_badge(area) }}
+            <span class="ms-2">{{ area.projetos|length }} projeto{{ 's' if area.projetos|length != 1 }}</span>
+        </h6>
+    </div>
+
+    {% for p in area.projetos %}
+    <div class="proj-card {% if p.foco_12s %}foco{% endif %}" data-projeto-id="{{ p.id }}">
+        <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+            <div style="flex:1; min-width:200px;">
+                <strong>{{ p.nome }}</strong>
+                {% if p.tem_atrasada %}<span class="status-badge status-divergencia ms-1"><i class="bi bi-exclamation-triangle-fill"></i> Atrasada</span>{% endif %}
+                <div class="text-muted small">{{ p.tarefas_ativas|length }} tarefa{{ 's' if p.tarefas_ativas|length != 1 }} ativa{{ 's' if p.tarefas_ativas|length != 1 }}</div>
+            </div>
+            <div class="d-flex gap-1 align-items-center flex-wrap">
+                <button type="button" class="btn btn-sm btn-link p-0 proj-foco-toggle proj-foco-star {% if not p.foco_12s %}inactive{% endif %}"
+                        data-projeto-id="{{ p.id }}" title="Foco 12s">
+                    <i class="bi bi-{{ 'star-fill' if p.foco_12s else 'star' }}"></i>
+                </button>
+                <select class="form-select form-select-sm proj-edit" data-projeto-id="{{ p.id }}" data-campo="status" style="width:120px;font-size:11px;">
+                    {% for s in ('planejado','ativo','em_espera','concluido') %}
+                    <option value="{{ s }}" {% if p.status == s %}selected{% endif %}>{{ {'planejado':'Planejado','ativo':'Ativo','em_espera':'Em espera','concluido':'Concluído'}[s] }}</option>
+                    {% endfor %}
+                </select>
+                <select class="form-select form-select-sm proj-edit" data-projeto-id="{{ p.id }}" data-campo="prioridade" style="width:100px;font-size:11px;">
+                    <option value="" {% if not p.prioridade %}selected{% endif %}>Prioridade</option>
+                    <option value="alta" {% if p.prioridade == 'alta' %}selected{% endif %}>Alta</option>
+                    <option value="media" {% if p.prioridade == 'media' %}selected{% endif %}>Média</option>
+                    <option value="baixa" {% if p.prioridade == 'baixa' %}selected{% endif %}>Baixa</option>
+                </select>
+                <button type="button" class="btn btn-sm btn-outline-primary btn-add-tarefa" data-projeto-id="{{ p.id }}" data-projeto-nome="{{ p.nome }}" title="Nova tarefa">
+                    <i class="bi bi-plus-lg"></i>
+                </button>
+                <form method="POST" action="{{ url_for('projetos.projeto_excluir', pid=p.id) }}" class="d-inline"
+                      onsubmit="return confirm('Excluir projeto \'{{ p.nome }}\'? Tarefas tambem serao removidas.')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-danger" title="Excluir projeto"><i class="bi bi-trash"></i></button>
+                </form>
+            </div>
+        </div>
+
+        {% if p.tarefas %}
+        <div class="mt-2">
+            {% for t in p.tarefas %}
+            <div class="proj-tarefa {% if t.atrasada %}atrasada{% endif %}" data-tarefa-id="{{ t.id }}" data-nome="{{ t.nome|lower }}">
+                {{ ui.tarefa_status_btn(t) }}
+                <span style="flex:1;">
+                    {{ t.nome }}
+                    {% if t.tipo %}<span class="badge bg-light text-dark ms-1" style="font-size:9px;">{{ t.tipo|replace('_',' ') }}</span>{% endif %}
+                    {% if t.esforco %}<span class="badge bg-secondary ms-1" style="font-size:9px;">{{ t.esforco }}</span>{% endif %}
+                </span>
+                <input type="date" class="form-control form-control-sm tarefa-prazo"
+                       data-tarefa-id="{{ t.id }}"
+                       value="{{ t.prazo.isoformat() if t.prazo else '' }}"
+                       style="width:140px;font-size:11px;">
+                <form method="POST" action="{{ url_for('projetos.tarefa_excluir', tid=t.id) }}" class="d-inline"
+                      onsubmit="return confirm('Excluir tarefa?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-link text-danger p-0" title="Remover"><i class="bi bi-x-lg"></i></button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    {% if not area.projetos %}
+    <div class="text-muted small">Sem projetos.</div>
+    {% endif %}
+</div>
+{% endfor %}
+
+{{ ui.modal_nova_tarefa() }}
+{{ ui.modal_novo_projeto(areas) }}
+{{ ui.modal_nova_area() }}
+{{ ui.modal_weekly() }}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/projetos.js') }}"></script>
+{% endblock %}

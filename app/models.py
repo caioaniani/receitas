@@ -679,3 +679,72 @@ class CartinhaEntrega(db.Model):
     atualizado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
     autor = db.relationship('Usuario', backref='cartinhas')
+
+
+# ── Gestao de Projetos (PARA + 12 Week Year) ──
+
+class ProjetoArea(db.Model):
+    __tablename__ = "projeto_area"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False, unique=True)
+    tipo = db.Column(db.String(20), nullable=False, default="empresa")  # empresa/igreja/vida
+    ativa = db.Column(db.Boolean, default=True)
+    ordem = db.Column(db.Integer, default=0)
+
+    projetos = db.relationship("Projeto", backref="area",
+                                cascade="all, delete-orphan",
+                                order_by="Projeto.criado_em.desc()")
+
+
+class Projeto(db.Model):
+    __tablename__ = "projeto"
+
+    id = db.Column(db.Integer, primary_key=True)
+    area_id = db.Column(db.Integer, db.ForeignKey("projeto_area.id"), nullable=False)
+    nome = db.Column(db.String(200), nullable=False)
+    status = db.Column(db.String(20), default="planejado")
+    prioridade = db.Column(db.String(10))
+    foco_12s = db.Column(db.Boolean, default=False)
+    responsavel_id = db.Column(db.Integer, db.ForeignKey("usuario.id"), nullable=True)
+    observacao = db.Column(db.Text)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    responsavel = db.relationship("Usuario")
+    tarefas = db.relationship("TarefaProjeto", backref="projeto",
+                               cascade="all, delete-orphan",
+                               order_by="TarefaProjeto.ordem, TarefaProjeto.id")
+
+    @property
+    def tarefas_ativas(self):
+        return [t for t in self.tarefas if t.status not in ("feito", "cancelado")]
+
+    @property
+    def tem_atrasada(self):
+        return any(t.atrasada for t in self.tarefas)
+
+
+class TarefaProjeto(db.Model):
+    __tablename__ = "tarefa_projeto"
+
+    id = db.Column(db.Integer, primary_key=True)
+    projeto_id = db.Column(db.Integer, db.ForeignKey("projeto.id"), nullable=False)
+    nome = db.Column(db.String(300), nullable=False)
+    status = db.Column(db.String(20), default="a_fazer")
+    tipo = db.Column(db.String(20))
+    esforco = db.Column(db.String(2))
+    prazo = db.Column(db.Date, nullable=True)
+    responsavel_id = db.Column(db.Integer, db.ForeignKey("usuario.id"), nullable=True)
+    ordem = db.Column(db.Integer, default=0)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    feito_em = db.Column(db.DateTime, nullable=True)
+
+    responsavel = db.relationship("Usuario")
+
+    @property
+    def atrasada(self):
+        return (self.prazo is not None
+                and self.status not in ("feito", "cancelado")
+                and self.prazo < date.today())
+

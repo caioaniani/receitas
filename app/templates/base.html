@@ -48,6 +48,10 @@
            class="sidebar-link {% if request.path == '/' %}active{% endif %}">
             <i class="bi bi-speedometer2"></i> Painel
         </a>
+        <a href="{{ url_for('projetos.painel') }}"
+           class="sidebar-link {% if request.path.startswith('/projetos') %}active{% endif %}">
+            <i class="bi bi-kanban"></i> Projetos
+        </a>
 
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Lojas</div>

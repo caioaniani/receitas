@@ -541,6 +541,145 @@ body {
     border-top-color: var(--border-color);
 }
 
+/* ── Gestao de Projetos (PARA + 12s) ── */
+.proj-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.proj-stat {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 12px;
+    text-align: center;
+}
+.proj-stat.alerta {
+    background: #fdebe7;
+    border-color: #b54a3f;
+    color: #842029;
+}
+[data-theme="dark"] .proj-stat.alerta {
+    background: #4a1c22;
+    border-color: #b54a3f;
+    color: #ff9aa3;
+}
+.proj-stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+}
+.proj-stat-valor {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
+}
+.proj-area-empresa { background: #d9e6ed; color: #2d5969; }
+.proj-area-igreja  { background: #f6e0c8; color: #8a5a25; }
+.proj-area-vida    { background: #d8ebd8; color: #345b3a; }
+[data-theme="dark"] .proj-area-empresa { background: #173042; color: #b8d3e0; }
+[data-theme="dark"] .proj-area-igreja  { background: #3d2d1c; color: #e0bd8e; }
+[data-theme="dark"] .proj-area-vida    { background: #1d3a23; color: #b8dbb8; }
+
+.proj-foco-star { color: #d4a435; cursor: pointer; }
+.proj-foco-star.inactive { color: #ccc; }
+[data-theme="dark"] .proj-foco-star.inactive { color: #555; }
+
+.proj-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+}
+.proj-card.foco {
+    border-left: 4px solid #d4a435;
+}
+.proj-tarefa {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-top: 1px dashed var(--border-color);
+    font-size: 13px;
+}
+.proj-tarefa:first-child { border-top: 0; }
+.proj-tarefa.atrasada { color: #b54a3f; }
+[data-theme="dark"] .proj-tarefa.atrasada { color: #ff9aa3; }
+.proj-tarefa-status {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border-color);
+    background: transparent;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+.proj-tarefa-status.fazendo { background: #cfe2ff; border-color: #084298; color: #084298; }
+.proj-tarefa-status.feito   { background: #d1e7dd; border-color: #0a3622; color: #0a3622; }
+.proj-tarefa-status.cancelado { background: #e2e3e5; border-color: #41464b; color: #41464b; }
+[data-theme="dark"] .proj-tarefa-status.fazendo { background: #0e2a52; color: #7ea7ff; border-color: #2a3a5c; }
+[data-theme="dark"] .proj-tarefa-status.feito   { background: #0f3a26; color: #7be0a7; border-color: #2a3a5c; }
+[data-theme="dark"] .proj-tarefa-status.cancelado { background: #3a3a3a; color: #bbbbbb; border-color: #2a3a5c; }
+
+.proj-kanban {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+@media (max-width: 768px) {
+    .proj-kanban { grid-template-columns: 1fr; }
+}
+.proj-coluna {
+    background: var(--bg-body);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px;
+    min-height: 200px;
+}
+.proj-coluna-header {
+    font-size: 12px;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--text-muted);
+    padding: 4px 6px 8px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 8px;
+}
+.proj-coluna-header.alerta {
+    color: #b54a3f;
+}
+.proj-kanban-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+.proj-kanban-card:hover { transform: translateY(-1px); }
+.proj-kanban-card.atrasada {
+    border-left: 3px solid #b54a3f;
+}
+.proj-kanban-card.foco {
+    border-right: 3px solid #d4a435;
+}
+.proj-kanban-card .proj-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+    font-size: 10px;
+}
+.proj-meta .badge { font-size: 10px; padding: 2px 6px; }
+
 [data-theme="dark"] .table {
     --bs-table-bg: var(--bg-card);
     --bs-table-color: var(--text-main);

@@ -141,6 +141,7 @@ def create_app(config_class=None):
     from app.blueprints.relatorios import relatorios_bp
     from app.blueprints.pedidos import pedidos_bp
     from app.blueprints.entregas import entregas_bp
+    from app.blueprints.projetos import projetos_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(materias_primas_bp, url_prefix='/materias-primas')
@@ -152,6 +153,7 @@ def create_app(config_class=None):
     app.register_blueprint(relatorios_bp, url_prefix='/relatorios')
     app.register_blueprint(pedidos_bp)
     app.register_blueprint(entregas_bp, url_prefix='/entregas')
+    app.register_blueprint(projetos_bp)
 
     with app.app_context():
         db.create_all()
@@ -172,6 +174,10 @@ def create_app(config_class=None):
         from app.seed import seed_rh, seed_rh_escala
         seed_rh()
         seed_rh_escala()
+
+        # Gestão de Projetos — seed inicial em todos os ambientes
+        from app.seed import seed_projetos
+        seed_projetos()
 
         _criar_admin()
 
