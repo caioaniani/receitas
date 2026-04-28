@@ -93,6 +93,71 @@ def _data_relativa(prazo):
 @login_required
 @admin_required
 def painel():
+    """Dashboard: cards de projetos."""
+    from app.models import ProjetoTemplate
+
+    filtro_area = request.args.get('area', type=int)
+    filtro_status = request.args.get('status', '')
+    so_foco = request.args.get('foco') == '1'
+    busca = (request.args.get('q', '') or '').strip().lower()
+
+    q = Projeto.query.join(ProjetoArea)
+    if not current_user.is_dono():
+        q = q.filter(ProjetoArea.tipo == 'empresa')
+    if filtro_area:
+        q = q.filter(Projeto.area_id == filtro_area)
+    if filtro_status and filtro_status in STATUS_PROJETO:
+        q = q.filter(Projeto.status == filtro_status)
+    if so_foco:
+        q = q.filter(Projeto.foco_12s.is_(True))
+    projetos = q.order_by(Projeto.foco_12s.desc(), ProjetoArea.ordem,
+                          Projeto.criado_em.desc()).all()
+
+    if busca:
+        projetos = [p for p in projetos if busca in p.nome.lower()]
+
+    # Métricas por projeto
+    hoje_d = date.today()
+    cards = []
+    for p in projetos:
+        total = len(p.tarefas)
+        feitas = sum(1 for t in p.tarefas if t.status == 'feito')
+        fazendo_ = sum(1 for t in p.tarefas if t.status == 'fazendo')
+        a_fazer_ = sum(1 for t in p.tarefas if t.status == 'a_fazer')
+        atras = sum(1 for t in p.tarefas if t.atrasada)
+        prazos = [t.prazo for t in p.tarefas
+                  if t.prazo and t.status not in ('feito', 'cancelado')]
+        prox_prazo = min(prazos) if prazos else None
+        pct = round(100 * feitas / total) if total else 0
+        cards.append({
+            'p': p,
+            'total': total, 'feitas': feitas,
+            'fazendo': fazendo_, 'a_fazer': a_fazer_,
+            'atrasadas': atras, 'prox_prazo': prox_prazo,
+            'pct': pct,
+        })
+
+    areas = _areas_filtradas()
+    templates_disponiveis = ProjetoTemplate.query.order_by(ProjetoTemplate.nome).all()
+
+    return render_template('projetos/dashboard.html',
+                           cards=cards,
+                           areas=areas,
+                           contadores=_contadores(),
+                           usuarios=_usuarios(),
+                           templates_disponiveis=templates_disponiveis,
+                           filtro_area=filtro_area, filtro_status=filtro_status,
+                           so_foco=so_foco, busca=busca,
+                           hoje_today=hoje_d,
+                           data_relativa=_data_relativa,
+                           view='dashboard')
+
+
+@projetos_bp.route('/lista')
+@login_required
+@admin_required
+def hierarquia():
+    """Visão hierárquica densa: Área › Projeto › Tarefas (todos expandidos)."""
     from app.models import ProjetoTemplate
     areas = _areas_filtradas()
     templates_disponiveis = ProjetoTemplate.query.order_by(ProjetoTemplate.nome).all()
@@ -103,6 +168,34 @@ def painel():
                            templates_disponiveis=templates_disponiveis,
                            data_relativa=_data_relativa,
                            view='hier')
+
+
+@projetos_bp.route('/p/<int:pid>')
+@login_required
+@admin_required
+def projeto_detalhe(pid):
+    """Página dedicada de um projeto com mini-kanban."""
+    p = Projeto.query.get_or_404(pid)
+    if not _projeto_visivel(p):
+        abort(403)
+
+    cols = {'a_fazer': [], 'fazendo': [], 'feito': [], 'cancelado': []}
+    for t in sorted(p.tarefas, key=lambda x: (x.prazo is None, x.prazo, x.ordem)):
+        if t.status in cols:
+            cols[t.status].append(t)
+
+    total = len(p.tarefas)
+    feitas = sum(1 for t in p.tarefas if t.status == 'feito')
+    pct = round(100 * feitas / total) if total else 0
+
+    return render_template('projetos/projeto_detalhe.html',
+                           p=p, cols=cols, pct=pct,
+                           total=total, feitas=feitas,
+                           areas=_areas_filtradas(),
+                           contadores=_contadores(),
+                           usuarios=_usuarios(),
+                           data_relativa=_data_relativa,
+                           view='dashboard')
 
 
 @projetos_bp.route('/kanban')

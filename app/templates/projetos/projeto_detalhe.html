@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% import "projetos/_partials.html" as ui %}
+
+{% block title %}{{ p.nome }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <a href="{{ url_for('projetos.painel') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Dashboard
+    </a>
+    <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-sm btn-outline-info btn-comentario"
+                data-tipo="projeto" data-id="{{ p.id }}" data-nome="{{ p.nome }}" data-texto="{{ p.observacao or '' }}">
+            <i class="bi bi-{{ 'chat-text-fill' if p.observacao else 'chat-text' }}"></i> Comentário
+        </button>
+        <button type="button" class="btn btn-sm btn-primary btn-add-tarefa"
+                data-projeto-id="{{ p.id }}" data-projeto-nome="{{ p.nome }}">
+            <i class="bi bi-plus-lg"></i> Nova Tarefa
+        </button>
+        <form method="POST" action="{{ url_for('projetos.projeto_excluir', pid=p.id) }}"
+              onsubmit="return confirm('Excluir projeto e todas as suas tarefas?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+        </form>
+    </div>
+</div>
+
+<!-- Hero do projeto -->
+<div class="card mb-3 {% if p.foco_12s %}border-warning{% endif %}" style="{% if p.foco_12s %}border-left: 5px solid #d4a435;{% endif %}">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div style="flex:1; min-width:280px;">
+                <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                    {{ ui.area_badge(p.area) }}
+                    <button type="button" class="btn btn-sm btn-link p-0 proj-foco-toggle proj-foco-star {% if not p.foco_12s %}inactive{% endif %}"
+                            data-projeto-id="{{ p.id }}" title="Foco 12s">
+                        <i class="bi bi-{{ 'star-fill' if p.foco_12s else 'star' }}"></i>
+                    </button>
+                </div>
+                <h2 class="mb-2" style="font-size:1.5rem;">{{ p.nome }}</h2>
+                {% if p.observacao %}
+                <div class="text-muted" style="font-size:13px; white-space:pre-wrap;">{{ p.observacao }}</div>
+                {% endif %}
+            </div>
+            <div style="min-width:280px;">
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold mb-0">Status</label>
+                        <select class="form-select form-select-sm proj-edit" data-projeto-id="{{ p.id }}" data-campo="status">
+                            {% for s in ('planejado','ativo','em_espera','concluido') %}
+                            <option value="{{ s }}" {% if p.status == s %}selected{% endif %}>{{ {'planejado':'Planejado','ativo':'Ativo','em_espera':'Em espera','concluido':'Concluído'}[s] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold mb-0">Prioridade</label>
+                        <select class="form-select form-select-sm proj-edit" data-projeto-id="{{ p.id }}" data-campo="prioridade">
+                            <option value="" {% if not p.prioridade %}selected{% endif %}>—</option>
+                            <option value="alta" {% if p.prioridade == 'alta' %}selected{% endif %}>Alta</option>
+                            <option value="media" {% if p.prioridade == 'media' %}selected{% endif %}>Média</option>
+                            <option value="baixa" {% if p.prioridade == 'baixa' %}selected{% endif %}>Baixa</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold mb-0">DRI</label>
+                        {{ ui.dri_select(p, 'projeto', usuarios) }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <hr class="my-3">
+
+        <div class="row g-2 text-center">
+            <div class="col">
+                <small class="text-muted d-block">Total</small>
+                <strong style="font-size:1.3rem;">{{ total }}</strong>
+            </div>
+            <div class="col">
+                <small class="text-muted d-block">A fazer</small>
+                <strong style="font-size:1.3rem;">{{ cols.a_fazer|length }}</strong>
+            </div>
+            <div class="col">
+                <small class="text-muted d-block">Fazendo</small>
+                <strong style="font-size:1.3rem;color:#084298;">{{ cols.fazendo|length }}</strong>
+            </div>
+            <div class="col">
+                <small class="text-muted d-block">Feito</small>
+                <strong style="font-size:1.3rem;color:#0a3622;">{{ feitas }}</strong>
+            </div>
+            <div class="col">
+                <small class="text-muted d-block">Conclusão</small>
+                <strong style="font-size:1.3rem;">{{ pct }}%</strong>
+            </div>
+        </div>
+        <div class="progress mt-2" style="height:8px;">
+            <div class="progress-bar bg-success" style="width:{{ pct }}%"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick add bar -->
+<form method="POST" action="{{ url_for('projetos.tarefa_nova') }}" class="d-flex gap-2 mb-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="projeto_id" value="{{ p.id }}">
+    <input type="text" name="nome" class="form-control form-control-sm" placeholder="+ Nova tarefa rápida (Enter pra salvar)…" required>
+    <input type="date" name="prazo" class="form-control form-control-sm" style="max-width:160px;" title="Prazo (opcional)">
+    <button type="submit" class="btn btn-primary btn-sm">Adicionar</button>
+</form>
+
+<!-- Mini-kanban -->
+<div class="proj-kanban">
+    {% for chave, label in [('a_fazer','A fazer'), ('fazendo','Fazendo'), ('feito','Feito')] %}
+    <div class="proj-coluna">
+        <div class="proj-coluna-header">{{ label }} ({{ cols[chave]|length }})</div>
+        <div class="proj-coluna-cards" data-status="{{ chave }}">
+            {% for t in cols[chave] %}
+            <div class="proj-kanban-card {% if t.atrasada %}atrasada{% endif %}" data-tarefa-id="{{ t.id }}">
+                <div class="d-flex align-items-start gap-2">
+                    {{ ui.tarefa_status_btn(t) }}
+                    <div style="flex:1;">
+                        <div class="fw-semibold">{{ t.nome }}</div>
+                        <div class="proj-meta">
+                            {% if t.tipo %}<span class="badge bg-secondary">{{ t.tipo|replace('_',' ') }}</span>{% endif %}
+                            {% if t.esforco %}<span class="badge bg-info text-dark">{{ t.esforco }}</span>{% endif %}
+                            {% if t.responsavel %}<span class="badge bg-dark"><i class="bi bi-person"></i> {{ t.responsavel.nome.split()[0] }}</span>{% endif %}
+                            {% if t.prazo %}
+                            <span class="badge {% if t.atrasada %}bg-danger{% else %}bg-light text-dark{% endif %}"
+                                  title="{{ t.prazo.strftime('%d/%m/%Y') }}">
+                                <i class="bi bi-calendar3"></i> {{ data_relativa(t.prazo) }}
+                            </span>
+                            {% endif %}
+                            {% if t.recorrencia %}<span class="badge bg-light text-dark"><i class="bi bi-arrow-repeat"></i> {{ t.recorrencia }}</span>{% endif %}
+                            {% if t.observacao %}<span class="badge bg-light text-dark"><i class="bi bi-chat-text-fill"></i></span>{% endif %}
+                        </div>
+                    </div>
+                    <div class="d-flex flex-column gap-1">
+                        <button type="button" class="btn btn-link p-0 btn-comentario" data-tipo="tarefa" data-id="{{ t.id }}" data-nome="{{ t.nome }}" data-texto="{{ t.observacao or '' }}" title="Comentário">
+                            <i class="bi bi-{{ 'chat-text-fill' if t.observacao else 'chat-text' }}" style="font-size:11px;"></i>
+                        </button>
+                        <form method="POST" action="{{ url_for('projetos.tarefa_excluir', tid=t.id) }}" onsubmit="return confirm('Excluir tarefa?')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn btn-link text-danger p-0" title="Excluir"><i class="bi bi-x-lg" style="font-size:11px;"></i></button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            {% if not cols[chave] %}
+            <div class="text-muted small text-center py-2">Vazio</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if cols.cancelado %}
+<div class="card mt-3">
+    <div class="card-body py-2">
+        <details>
+            <summary class="text-muted small">{{ cols.cancelado|length }} tarefa{{ 's' if cols.cancelado|length != 1 }} cancelada{{ 's' if cols.cancelado|length != 1 }}</summary>
+            <ul class="mb-0 mt-2 small">
+                {% for t in cols.cancelado %}
+                <li class="text-decoration-line-through text-muted">{{ t.nome }}</li>
+                {% endfor %}
+            </ul>
+        </details>
+    </div>
+</div>
+{% endif %}
+
+{{ ui.modal_nova_tarefa(usuarios) }}
+{{ ui.modal_comentario() }}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script src="{{ url_for('static', filename='js/projetos.js') }}"></script>
+{% endblock %}

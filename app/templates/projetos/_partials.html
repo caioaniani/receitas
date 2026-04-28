@@ -24,13 +24,13 @@
 
 {% macro nav_views(view) %}
 <div class="btn-group btn-group-sm flex-wrap">
+    <a href="{{ url_for('projetos.painel') }}"
+       class="btn {% if view == 'dashboard' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        <i class="bi bi-grid"></i> Dashboard
+    </a>
     <a href="{{ url_for('projetos.hoje') }}"
        class="btn {% if view == 'hoje' %}btn-success{% else %}btn-outline-success{% endif %}">
         <i class="bi bi-sun"></i> Hoje
-    </a>
-    <a href="{{ url_for('projetos.painel') }}"
-       class="btn {% if view == 'hier' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-        <i class="bi bi-list-ul"></i> Hierárquica
     </a>
     <a href="{{ url_for('projetos.kanban') }}"
        class="btn {% if view == 'kanban' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
