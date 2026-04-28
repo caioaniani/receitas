@@ -93,9 +93,10 @@ def _data_relativa(prazo):
 @login_required
 @admin_required
 def painel():
-    """Dashboard: cards de projetos."""
+    """Dashboard: cards de projetos agrupados por area, ordenados por urgencia."""
     import traceback
     from flask import current_app
+    from collections import defaultdict
     try:
         from app.models import ProjetoTemplate
 
@@ -114,17 +115,30 @@ def painel():
         if so_foco:
             q = q.filter(Projeto.foco_12s.is_(True))
         projetos = q.all()
-        projetos.sort(key=lambda p: (
-            not p.foco_12s,
-            (p.area.ordem if p.area else 999),
-            -(p.id or 0),
-        ))
-
         if busca:
             projetos = [p for p in projetos if busca in p.nome.lower()]
 
         hoje_d = date.today()
-        cards = []
+
+        def _urgencia(p, atras):
+            # Menor = mais urgente
+            if p.status == 'concluido':
+                return 9
+            if p.status == 'em_espera':
+                return 7
+            if atras > 0:
+                return 0
+            if p.foco_12s and p.status == 'ativo':
+                return 1
+            if p.status == 'ativo':
+                return 2
+            if p.foco_12s:
+                return 3
+            return 5  # planejado
+
+        cards_por_area = defaultdict(list)
+        contagens_area = defaultdict(lambda: {'total': 0, 'ativos': 0, 'atrasados': 0, 'foco': 0})
+
         for p in projetos:
             tarefas_list = list(p.tarefas)
             total = len(tarefas_list)
@@ -136,23 +150,45 @@ def painel():
                       if t.prazo and t.status not in ('feito', 'cancelado')]
             prox_prazo = min(prazos) if prazos else None
             pct = round(100 * feitas / total) if total else 0
-            cards.append({
+
+            card = {
                 'p': p,
                 'total': total, 'feitas': feitas,
                 'fazendo': fazendo_, 'a_fazer': a_fazer_,
                 'atrasadas': atras, 'prox_prazo': prox_prazo,
                 'pct': pct,
-            })
+                'urgencia': _urgencia(p, atras),
+            }
+            cards_por_area[p.area_id].append(card)
+
+            ca = contagens_area[p.area_id]
+            ca['total'] += 1
+            if p.status == 'ativo':
+                ca['ativos'] += 1
+            if atras:
+                ca['atrasados'] += 1
+            if p.foco_12s:
+                ca['foco'] += 1
+
+        # Ordena cards dentro de cada area por urgencia
+        for aid in cards_por_area:
+            cards_por_area[aid].sort(key=lambda c: (c['urgencia'], -(c['p'].id or 0)))
 
         areas = _areas_filtradas()
+        # Filtra areas que tem cards (depois dos filtros)
+        areas_com_cards = [a for a in areas if cards_por_area.get(a.id)]
+
         try:
             templates_disponiveis = ProjetoTemplate.query.order_by(ProjetoTemplate.nome).all()
         except Exception:
             templates_disponiveis = []
 
         return render_template('projetos/dashboard.html',
-                               cards=cards,
                                areas=areas,
+                               areas_com_cards=areas_com_cards,
+                               cards_por_area=cards_por_area,
+                               contagens_area=contagens_area,
+                               total_filtrados=sum(len(v) for v in cards_por_area.values()),
                                contadores=_contadores(),
                                usuarios=_usuarios(),
                                templates_disponiveis=templates_disponiveis,
@@ -163,7 +199,6 @@ def painel():
                                view='dashboard')
     except Exception as e:
         current_app.logger.error('Erro no dashboard de projetos: %s\n%s', e, traceback.format_exc())
-        # Mostra o erro real no navegador para diagnostico
         return (
             '<h1>Erro no Dashboard de Projetos</h1>'
             f'<p><strong>{type(e).__name__}:</strong> {e}</p>'

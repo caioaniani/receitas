@@ -22,12 +22,23 @@
     </div>
 </div>
 
+{% if contadores.wip_estourado %}
+<div class="alert alert-danger d-flex justify-content-between align-items-center py-2 mb-3" style="font-size:13px;">
+    <div>
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <strong>WIP estourado:</strong> {{ contadores.fazendo }} tarefas em "Fazendo" — limite recomendado é {{ contadores.wip_limit }}.
+        Revise prioridades antes de pegar coisa nova.
+    </div>
+    <a href="{{ url_for('projetos.kanban') }}" class="btn btn-sm btn-light">Ver no Kanban</a>
+</div>
+{% endif %}
+
 {{ ui.stats(contadores) }}
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     {{ ui.nav_views(view) }}
     <a href="{{ url_for('projetos.hierarquia') }}" class="text-muted small text-decoration-none">
-        <i class="bi bi-list-ul"></i> Visão lista (todos os projetos expandidos)
+        <i class="bi bi-list-ul"></i> Visão lista
     </a>
 </div>
 
@@ -66,71 +77,100 @@
     </div>
 </form>
 
-{% if not cards %}
+{% if not areas_com_cards %}
 <div class="alert alert-info">
-    Nenhum projeto encontrado com esses filtros. Crie um novo no botão acima ou
-    <a href="{{ url_for('projetos.painel') }}">limpe os filtros</a>.
+    Nenhum projeto encontrado com esses filtros.
+    <a href="{{ url_for('projetos.painel') }}">Limpar filtros</a>.
 </div>
 {% endif %}
 
-<div class="proj-dashboard-grid">
-    {% for c in cards %}
-    {% set p = c.p %}
-    <a href="{{ url_for('projetos.projeto_detalhe', pid=p.id) }}" class="proj-dashboard-card {% if p.foco_12s %}foco{% endif %} {% if p.status == 'concluido' %}concluido{% endif %}"
-       title="Abrir projeto">
-        <div class="proj-dashboard-header">
-            <div class="d-flex align-items-center gap-1 flex-wrap">
-                {% if p.foco_12s %}<i class="bi bi-star-fill" style="color:#d4a435;"></i>{% endif %}
-                {{ ui.area_badge(p.area) }}
-            </div>
-            <span class="status-badge status-{% if p.status == 'em_espera' %}cancelado{% elif p.status == 'concluido' %}entregue{% elif p.status == 'ativo' %}separado{% else %}pendente{% endif %}">
-                {{ {'planejado':'Planejado','ativo':'Ativo','em_espera':'Em espera','concluido':'Concluído'}.get(p.status, p.status) }}
+{% for area in areas_com_cards %}
+{% set ca = contagens_area[area.id] %}
+{% set _cor = area.cor or {'empresa':'#5b8def','igreja':'#c97f3f','vida':'#5a9a5e'}.get(area.tipo, '#888') %}
+<div class="proj-area-section mb-4">
+    <div class="proj-area-header" style="border-left:4px solid {{ _cor }};">
+        <div class="d-flex align-items-baseline gap-2 flex-wrap">
+            <h5 class="mb-0" style="color:{{ _cor }};">{{ area.nome }}</h5>
+            <span class="text-muted small">
+                {{ ca.total }} projeto{{ 's' if ca.total != 1 }}
+                {% if ca.ativos %} · <strong>{{ ca.ativos }}</strong> ativo{{ 's' if ca.ativos != 1 }}{% endif %}
+                {% if ca.foco %} · <strong style="color:#d4a435;">⭐ {{ ca.foco }}</strong>{% endif %}
+                {% if ca.atrasados %} · <strong class="text-danger">⚠ {{ ca.atrasados }} com atrasada{{ 's' if ca.atrasados != 1 }}</strong>{% endif %}
             </span>
         </div>
+    </div>
 
-        <h5 class="proj-dashboard-titulo">{{ p.nome }}</h5>
+    <div class="proj-dashboard-grid">
+        {% for c in cards_por_area[area.id] %}
+        {% set p = c.p %}
+        <a href="{{ url_for('projetos.projeto_detalhe', pid=p.id) }}"
+           class="proj-dashboard-card {% if p.foco_12s %}foco{% endif %} {% if p.status == 'concluido' %}concluido{% endif %} {% if c.atrasadas %}com-atraso{% endif %} {% if c.total == 0 %}vazio{% endif %}">
 
-        {% if p.observacao %}
-        <div class="proj-dashboard-obs"><i class="bi bi-chat-text"></i> {{ p.observacao|truncate(80, true) }}</div>
-        {% endif %}
-
-        <div class="proj-dashboard-progresso">
-            <div class="d-flex justify-content-between align-items-center mb-1">
-                <small class="text-muted">{{ c.feitas }} de {{ c.total }} concluída{{ 's' if c.total != 1 }}</small>
-                <strong>{{ c.pct }}%</strong>
+            <div class="proj-dashboard-header">
+                <div class="d-flex align-items-center gap-1 flex-wrap" style="font-size:11px;">
+                    {% if p.foco_12s %}<i class="bi bi-star-fill" style="color:#d4a435;"></i>{% endif %}
+                    {% if p.status != 'planejado' %}
+                    <span class="status-badge status-{% if p.status == 'em_espera' %}cancelado{% elif p.status == 'concluido' %}entregue{% elif p.status == 'ativo' %}separado{% endif %}">
+                        {{ {'ativo':'Ativo','em_espera':'Em espera','concluido':'Concluído'}.get(p.status, p.status) }}
+                    </span>
+                    {% endif %}
+                    {% if c.atrasadas %}<span class="status-badge status-divergencia"><i class="bi bi-exclamation-triangle-fill"></i> {{ c.atrasadas }}</span>{% endif %}
+                </div>
             </div>
-            <div class="progress" style="height:6px;">
-                <div class="progress-bar bg-success" style="width:{{ c.pct }}%"></div>
-            </div>
-        </div>
 
-        <div class="proj-dashboard-stats">
-            <div title="A fazer"><i class="bi bi-circle"></i> {{ c.a_fazer }}</div>
-            <div title="Fazendo" class="text-primary"><i class="bi bi-play-fill"></i> {{ c.fazendo }}</div>
-            <div title="Atrasadas" class="{% if c.atrasadas %}text-danger fw-bold{% else %}text-muted{% endif %}">
-                <i class="bi bi-exclamation-triangle"></i> {{ c.atrasadas }}
-            </div>
-        </div>
+            <h5 class="proj-dashboard-titulo">{{ p.nome }}</h5>
 
-        <div class="proj-dashboard-footer">
-            {% if p.responsavel %}
-            <small class="text-muted"><i class="bi bi-person"></i> {{ p.responsavel.nome.split()[0] }}</small>
+            {% if p.observacao %}
+            <div class="proj-dashboard-obs"><i class="bi bi-chat-text"></i> {{ p.observacao|truncate(70, true) }}</div>
+            {% endif %}
+
+            {% if c.total > 0 %}
+            <div class="proj-dashboard-progresso">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <small class="text-muted">{{ c.feitas }} de {{ c.total }} concluída{{ 's' if c.total != 1 }}</small>
+                    <strong>{{ c.pct }}%</strong>
+                </div>
+                <div class="progress" style="height:6px;">
+                    <div class="progress-bar bg-success" style="width:{{ c.pct }}%"></div>
+                </div>
+            </div>
+
+            <div class="proj-dashboard-stats">
+                <div title="A fazer"><i class="bi bi-circle"></i> {{ c.a_fazer }}</div>
+                <div title="Fazendo" class="text-primary"><i class="bi bi-play-fill"></i> {{ c.fazendo }}</div>
+                {% if c.atrasadas %}
+                <div title="Atrasadas" class="text-danger fw-bold">
+                    <i class="bi bi-exclamation-triangle"></i> {{ c.atrasadas }}
+                </div>
+                {% endif %}
+            </div>
             {% else %}
-            <small class="text-muted fst-italic">Sem DRI</small>
+            <div class="proj-dashboard-empty">
+                <i class="bi bi-plus-circle"></i> Sem tarefas — clique para adicionar
+            </div>
             {% endif %}
-            {% if c.prox_prazo %}
-            <small class="{% if c.prox_prazo < hoje_today %}text-danger{% else %}text-muted{% endif %}">
-                <i class="bi bi-calendar3"></i> {{ data_relativa(c.prox_prazo) }}
-            </small>
-            {% endif %}
-        </div>
 
-        {% if p.prioridade %}
-        <span class="proj-prioridade prio-{{ p.prioridade }}" title="Prioridade {{ p.prioridade }}"></span>
-        {% endif %}
-    </a>
-    {% endfor %}
+            <div class="proj-dashboard-footer">
+                {% if p.responsavel %}
+                <small class="text-muted"><i class="bi bi-person"></i> {{ p.responsavel.nome.split()[0] }}</small>
+                {% else %}
+                <small class="proj-sem-dri"><i class="bi bi-person-plus"></i> atribuir DRI</small>
+                {% endif %}
+                {% if c.prox_prazo %}
+                <small class="{% if c.prox_prazo < hoje_today %}text-danger{% else %}text-muted{% endif %}">
+                    <i class="bi bi-calendar3"></i> {{ data_relativa(c.prox_prazo) }}
+                </small>
+                {% endif %}
+            </div>
+
+            {% if p.prioridade %}
+            <span class="proj-prioridade prio-{{ p.prioridade }}" title="Prioridade {{ p.prioridade }}"></span>
+            {% endif %}
+        </a>
+        {% endfor %}
+    </div>
 </div>
+{% endfor %}
 
 {{ ui.modal_novo_projeto(areas, usuarios) }}
 {{ ui.modal_nova_area(current_user) }}
