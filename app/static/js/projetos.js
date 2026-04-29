@@ -23,35 +23,86 @@
         btn.textContent = simbolos[novoStatus] || '?';
     }
 
-    // Status circle das tarefas
+    function moverCardEntreColunas(card, novoStatus) {
+        // Move o card entre colunas do kanban se houver matching coluna
+        var col = document.querySelector('.proj-coluna-cards[data-status="' + novoStatus + '"]');
+        if (!col) return;
+        col.appendChild(card);
+        // Atualiza data-tarefa pra refletir status novo
+        try {
+            var d = JSON.parse(card.dataset.tarefa || '{}');
+            d.status = novoStatus;
+            card.dataset.tarefa = JSON.stringify(d);
+        } catch (e) {}
+    }
+
+    function atualizarContadores() {
+        // Recalcula contadores dos headers das colunas do kanban
+        document.querySelectorAll('.proj-coluna-cards').forEach(function (col) {
+            var n = col.querySelectorAll('[data-tarefa-id]').length;
+            var header = col.parentElement.querySelector('.proj-coluna-header');
+            if (header) {
+                var label = header.textContent.split('(')[0].trim();
+                // Mantem qualquer sufixo como "WIP 3"
+                var sufixo = '';
+                var m = header.textContent.match(/(·.*)$/);
+                if (m) sufixo = ' ' + m[1];
+                header.firstChild.textContent = label + ' (' + n + ')';
+            }
+        });
+    }
+
+    // Status circle das tarefas — OPTIMISTIC: aplica visual antes da resposta
     document.body.addEventListener('click', function (e) {
         var btn = e.target.closest('.proj-tarefa-status');
         if (!btn) return;
         var tid = btn.dataset.tarefaId;
+        var card = btn.closest('[data-tarefa-id]');
         var atual = ['a_fazer','fazendo','feito','cancelado']
             .find(function(c){ return btn.classList.contains(c); }) || 'a_fazer';
         var prox = STATUS_CICLO[atual];
-        postEdicao('/projetos/tarefa/' + tid + '/editar', 'status', prox).then(function(r){
-            if (r.ok) {
-                aplicarStatusVisual(btn, prox);
-                if (document.querySelector('.proj-kanban') || document.querySelector('.col-lg-4')) {
-                    setTimeout(function(){ location.reload(); }, 200);
-                }
+
+        // 1) Optimistic: aplica visual IMEDIATAMENTE
+        aplicarStatusVisual(btn, prox);
+        // Se está num kanban, move card para a coluna nova (sem reload)
+        if (card && card.classList.contains('proj-kanban-card')) {
+            moverCardEntreColunas(card, prox);
+            atualizarContadores();
+        }
+
+        // 2) Sincroniza em background
+        postEdicao('/projetos/tarefa/' + tid + '/editar', 'status', prox).then(function (r) {
+            if (!r.ok) {
+                // Reverte se falhou
+                aplicarStatusVisual(btn, atual);
+                alert('Não foi possível atualizar a tarefa. Recarregue.');
             }
+        }).catch(function () {
+            aplicarStatusVisual(btn, atual);
         });
     });
 
-    // Foco 12s star toggle
+    // Foco 12s star toggle — OPTIMISTIC
     document.body.addEventListener('click', function (e) {
         var btn = e.target.closest('.proj-foco-toggle');
         if (!btn) return;
         var pid = btn.dataset.projetoId;
         var ativo = !btn.classList.contains('inactive');
         var novo = ativo ? '0' : '1';
-        postEdicao('/projetos/projeto/' + pid + '/editar', 'foco_12s', novo).then(function(r){
-            if (r.ok) {
+
+        // 1) Visual imediato
+        btn.classList.toggle('inactive');
+        var icon = btn.querySelector('i');
+        if (icon) {
+            icon.classList.toggle('bi-star-fill');
+            icon.classList.toggle('bi-star');
+        }
+
+        // 2) Sync em background
+        postEdicao('/projetos/projeto/' + pid + '/editar', 'foco_12s', novo).then(function (r) {
+            if (!r.ok) {
+                // Reverte
                 btn.classList.toggle('inactive');
-                var icon = btn.querySelector('i');
                 if (icon) {
                     icon.classList.toggle('bi-star-fill');
                     icon.classList.toggle('bi-star');
@@ -343,6 +394,43 @@
         abrirEdicaoTarefaCard(card);
     });
 
+    function atualizarCardTarefa(tid, dadosNovos) {
+        // Encontra todos os cards/linhas dessa tarefa no DOM e atualiza
+        var nodes = document.querySelectorAll('[data-tarefa-id="' + tid + '"]');
+        nodes.forEach(function (card) {
+            // Atualiza dataset.tarefa
+            try {
+                var dAtual = JSON.parse(card.dataset.tarefa || '{}');
+                Object.assign(dAtual, dadosNovos);
+                card.dataset.tarefa = JSON.stringify(dAtual);
+            } catch (e) {}
+
+            // Atualiza nome visivel
+            var nomeEl = card.querySelector('.tarefa-nome-editavel');
+            if (nomeEl && dadosNovos.nome) {
+                // Preserva os badges, troca só o text node inicial
+                var primeiro = nomeEl.firstChild;
+                if (primeiro && primeiro.nodeType === 3) {
+                    primeiro.nodeValue = dadosNovos.nome + ' ';
+                } else {
+                    nomeEl.textContent = dadosNovos.nome;
+                }
+            }
+
+            // Atualiza status circle
+            if (dadosNovos.status) {
+                var circle = card.querySelector('.proj-tarefa-status');
+                if (circle) aplicarStatusVisual(circle, dadosNovos.status);
+
+                // Se está em kanban, move pra coluna nova
+                if (card.classList.contains('proj-kanban-card')) {
+                    moverCardEntreColunas(card, dadosNovos.status);
+                }
+            }
+        });
+        atualizarContadores();
+    }
+
     // Submit do form de edição
     var formEditar = document.getElementById('form-editar-tarefa');
     if (formEditar) {
@@ -351,29 +439,49 @@
             var tid = document.getElementById('edt-id').value;
             var fd = new FormData(formEditar);
             fd.append('csrf_token', CSRF_TOKEN);
+
+            // Optimistic: fecha modal e atualiza DOM imediatamente
+            var dadosNovos = {
+                nome: document.getElementById('edt-nome').value,
+                status: document.getElementById('edt-status').value,
+                tipo: document.getElementById('edt-tipo').value,
+                esforco: document.getElementById('edt-esforco').value,
+                prazo: document.getElementById('edt-prazo').value,
+                recorrencia: document.getElementById('edt-recorrencia').value,
+                responsavel_id: document.getElementById('edt-responsavel').value,
+                observacao: document.getElementById('edt-observacao').value,
+            };
+            bootstrap.Modal.getInstance(document.getElementById('modal-editar-tarefa')).hide();
+            atualizarCardTarefa(tid, dadosNovos);
+
+            // Sync em background
             fetch('/projetos/tarefa/' + tid + '/atualizar', {
                 method: 'POST', body: fd,
             }).then(function (r) { return r.json(); }).then(function (r) {
-                if (r.ok) {
-                    bootstrap.Modal.getInstance(document.getElementById('modal-editar-tarefa')).hide();
-                    location.reload();
-                } else {
-                    alert('Erro: ' + (r.erro || 'desconhecido'));
+                if (!r.ok) {
+                    alert('Erro: ' + (r.erro || 'desconhecido') + '. Recarregue.');
                 }
             });
         });
     }
 
-    // Excluir do modal de edição
+    // Excluir do modal de edição — optimistic
     var btnExcluirEdt = document.getElementById('edt-excluir');
     if (btnExcluirEdt) {
         btnExcluirEdt.addEventListener('click', function () {
             if (!confirm('Excluir esta tarefa?')) return;
             var tid = document.getElementById('edt-id').value;
+
+            // Remove visualmente antes da resposta
+            bootstrap.Modal.getInstance(document.getElementById('modal-editar-tarefa')).hide();
+            document.querySelectorAll('[data-tarefa-id="' + tid + '"]').forEach(function (n) {
+                n.remove();
+            });
+            atualizarContadores();
+
             var fd = new FormData();
             fd.append('csrf_token', CSRF_TOKEN);
-            fetch('/projetos/tarefa/' + tid + '/excluir', { method: 'POST', body: fd })
-                .then(function () { location.reload(); });
+            fetch('/projetos/tarefa/' + tid + '/excluir', { method: 'POST', body: fd });
         });
     }
 
