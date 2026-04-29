@@ -38,6 +38,19 @@ def create_app(config_class=None):
     def inject_now():
         return {'now': datetime.now}
 
+    @app.context_processor
+    def inject_static_version():
+        """Versionamento de arquivos estaticos para cache busting."""
+        import os
+        versions = {}
+        for rel in ('js/projetos.js', 'js/app.js', 'css/style.css'):
+            try:
+                p = os.path.join(app.static_folder, rel)
+                versions[rel] = str(int(os.path.getmtime(p)))
+            except OSError:
+                versions[rel] = '0'
+        return {'static_v': versions}
+
     # ── Context processor: sidebar com todas as receitas ──
     # Cache in-memory simples para a sidebar (queries pesadas que mudam pouco)
     import time as _time

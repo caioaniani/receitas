@@ -137,5 +137,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/projetos.js') }}"></script>
+<script src="{{ url_for('static', filename='js/projetos.js') }}?v={{ static_v['js/projetos.js'] }}"></script>
 {% endblock %}
