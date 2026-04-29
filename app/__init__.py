@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime
 
-from flask import Flask, Response
+from flask import Flask, Response, request
 
 from app.extensions import db, csrf, login_manager, limiter
 from config import Config
@@ -120,6 +120,11 @@ def create_app(config_class=None):
     def robots_txt():
         return Response("User-agent: *\nDisallow: /\n", mimetype='text/plain')
 
+    @app.route('/health')
+    def health():
+        """Endpoint leve para uptime checkers (pinga aqui pra evitar cold start)."""
+        return 'ok', 200
+
     @app.after_request
     def add_security_headers(response):
         response.headers['X-Robots-Tag'] = 'noindex, nofollow'
@@ -133,6 +138,9 @@ def create_app(config_class=None):
             "font-src 'self' https://cdn.jsdelivr.net; "
             "img-src 'self' data:;"
         )
+        # Cache agressivo para assets estaticos (CSS/JS/fonts/imagens)
+        if request.path.startswith('/static/'):
+            response.headers['Cache-Control'] = 'public, max-age=86400, stale-while-revalidate=604800'
         return response
 
     # ── Error handlers ──
