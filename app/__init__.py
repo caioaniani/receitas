@@ -486,6 +486,10 @@ def _migrate_postgres(app):
     cols_func_res = _cols('funcionario')
     if cols_func_res and 'horas_extras' not in cols_func_res:
         _try("ALTER TABLE funcionario ADD COLUMN horas_extras REAL DEFAULT 0")
+    if cols_func_res and 'tem_cargo_confianca' not in cols_func_res:
+        _try("ALTER TABLE funcionario ADD COLUMN tem_cargo_confianca BOOLEAN DEFAULT FALSE")
+        # Liga a flag para quem ja tinha cargo_confianca > 0 (preserva comportamento)
+        _try("UPDATE funcionario SET tem_cargo_confianca = TRUE WHERE cargo_confianca > 0")
 
 
 def _migrate_sqlite(app):
@@ -544,6 +548,9 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE funcionario ADD COLUMN data_nascimento DATE")
     if cols_func and 'horas_extras' not in cols_func:
         cursor.execute("ALTER TABLE funcionario ADD COLUMN horas_extras REAL DEFAULT 0")
+    if cols_func and 'tem_cargo_confianca' not in cols_func:
+        cursor.execute("ALTER TABLE funcionario ADD COLUMN tem_cargo_confianca BOOLEAN DEFAULT 0")
+        cursor.execute("UPDATE funcionario SET tem_cargo_confianca = 1 WHERE cargo_confianca > 0")
 
     # Migração loja
     cursor.execute("PRAGMA table_info(loja)")

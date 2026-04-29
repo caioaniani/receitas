@@ -97,7 +97,7 @@ def novo_funcionario():
             cpf=request.form.get('cpf', '').strip(),
             funcao=request.form.get('funcao', '').strip() or None,
             salario_base=parse_float_br(request.form.get('salario_base', ''), default=0),
-            cargo_confianca=parse_float_br(request.form.get('cargo_confianca', ''), default=0),
+            tem_cargo_confianca='tem_cargo_confianca' in request.form,
             premiacao=parse_float_br(request.form.get('premiacao', ''), default=0),
             vt_dia=parse_float_br(request.form.get('vt_dia', ''), default=0),
             vr_dia=parse_float_br(request.form.get('vr_dia', ''), default=22),
@@ -168,7 +168,7 @@ def salvar_funcionario(id):
     func.cpf = novo_cpf or func.cpf
     func.funcao = request.form.get('funcao', '').strip() or None
     func.salario_base = parse_float_br(request.form.get('salario_base', ''), default=0)
-    func.cargo_confianca = parse_float_br(request.form.get('cargo_confianca', ''), default=0)
+    func.tem_cargo_confianca = 'tem_cargo_confianca' in request.form
     func.premiacao = parse_float_br(request.form.get('premiacao', ''), default=0)
     func.vt_dia = parse_float_br(request.form.get('vt_dia', ''), default=0)
     func.vr_dia = parse_float_br(request.form.get('vr_dia', ''), default=22)
@@ -348,7 +348,7 @@ def gerar_folha():
             mes=mes,
             ano=ano,
             salario_base=f.salario_base,
-            cargo_confianca=f.cargo_confianca or 0,
+            cargo_confianca=f.valor_cargo_confianca(),
             horas_extras=0,
             premiacao=f.premiacao or 0,
             vt_dia=f.vt_dia or 0,

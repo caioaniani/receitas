@@ -42,8 +42,16 @@
         </div>
         <div class="col-md-2">
             <label class="form-label fw-bold">Cargo Confiança</label>
-            <input type="text" name="cargo_confianca" class="form-control input-blue"
-                   value="{{ '%.2f' % func.cargo_confianca if func.cargo_confianca else '' }}">
+            <div class="form-control input-blue d-flex align-items-center" style="gap:8px;">
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" name="tem_cargo_confianca" value="1" id="chk-cc"
+                           {% if func.tem_cargo_confianca %}checked{% endif %}>
+                    <label class="form-check-label small" for="chk-cc">40% do salário</label>
+                </div>
+                {% if func.tem_cargo_confianca %}
+                <small class="text-muted ms-auto">{{ func.valor_cargo_confianca() | brl }}</small>
+                {% endif %}
+            </div>
         </div>
         <div class="col-md-2">
             <label class="form-label fw-bold">Premiação</label>
@@ -137,6 +145,10 @@
                 <div class="col">
                     <div class="small text-muted">Salário Base</div>
                     <div class="fw-bold">{{ func.salario_base | brl }}</div>
+                </div>
+                <div class="col">
+                    <div class="small text-muted">Cargo Conf.{% if func.tem_cargo_confianca %} <span class="text-muted">(40%)</span>{% endif %}</div>
+                    <div class="fw-bold">{{ func.valor_cargo_confianca() | brl }}</div>
                 </div>
                 <div class="col">
                     <div class="small text-muted">Total VT</div>

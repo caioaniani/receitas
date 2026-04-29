@@ -234,6 +234,7 @@ class Funcionario(db.Model):
     data_demissao = db.Column(db.Date)
     ativo = db.Column(db.Boolean, default=True)
     cargo_confianca = db.Column(db.Float, default=0)
+    tem_cargo_confianca = db.Column(db.Boolean, default=False)
     hora_extra_pct = db.Column(db.Float, default=55)
     horas_extras = db.Column(db.Float, default=0)
     premiacao = db.Column(db.Float, default=0)
@@ -256,6 +257,15 @@ class Funcionario(db.Model):
     def total_vr(self):
         return self.vr_dia * self.dias_trabalhados if self.vr_dia else 0
 
+    def valor_cargo_confianca(self):
+        """Cargo de confianca = 40% do salario base (se ativo)."""
+        try:
+            if not getattr(self, 'tem_cargo_confianca', False):
+                return 0
+        except Exception:
+            return 0
+        return (self.salario_base or 0) * 0.40
+
     def total_horas_extras(self):
         """Valor mensal das horas extras: (salario / 220h) * (1 + pct/100) * qtd_horas."""
         try:
@@ -271,7 +281,7 @@ class Funcionario(db.Model):
     def custo_total(self):
         return (
             self.salario_base +
-            (self.cargo_confianca or 0) +
+            self.valor_cargo_confianca() +
             (self.premiacao or 0) +
             self.total_horas_extras() +
             self.total_vt() +
