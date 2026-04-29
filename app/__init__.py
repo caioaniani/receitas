@@ -1,11 +1,14 @@
 import json
+import logging
 import os
 from datetime import datetime
 
-from flask import Flask, Response
+from flask import Flask, Response, render_template
 
 from app.extensions import db, csrf, login_manager, limiter
 from config import Config
+
+logger = logging.getLogger(__name__)
 
 
 def create_app(config_class=None):
@@ -13,7 +16,12 @@ def create_app(config_class=None):
     app.config.from_object(config_class or Config)
 
     if not os.environ.get('SECRET_KEY'):
-        print('⚠️  SECRET_KEY não definida. Sessões expiram a cada restart. Defina no Railway.')
+        is_production = 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI']
+        msg = 'SECRET_KEY não definida — sessões expiram a cada restart. Defina no Railway.'
+        if is_production:
+            logger.warning(msg)
+        else:
+            logger.info(msg)
 
     db.init_app(app)
     csrf.init_app(app)

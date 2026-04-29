@@ -74,12 +74,9 @@ def _extrair_data_entrega(order):
             d = _parse_iso_date(order.get(campo))
             if d:
                 return d
-    edd = order.get('expected_delivery_date')
-    if edd:
-        try:
-            return datetime.fromisoformat(edd.replace('Z', '+00:00')).date()
-        except (ValueError, TypeError):
-            pass
+    d = _parse_iso_date(order.get('expected_delivery_date'))
+    if d:
+        return d
     extra = order.get('extra') or {}
     data_br = extra.get('DataDeEntrega', '')
     if data_br:

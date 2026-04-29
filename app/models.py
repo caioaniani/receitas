@@ -57,6 +57,7 @@ class MateriaPrima(db.Model):
     custo_por_kg = db.Column(db.Float, nullable=False)
     fornecedor = db.Column(db.String(100))
     observacoes = db.Column(db.String(200))
+    estoque_atual = db.Column(db.Float, default=0)
 
     def to_dict(self):
         return {
@@ -66,8 +67,6 @@ class MateriaPrima(db.Model):
             'fornecedor': self.fornecedor or '',
             'observacoes': self.observacoes or '',
         }
-
-    estoque_atual = db.Column(db.Float, default=0)
 
     def __repr__(self):
         return f'<MateriaPrima {self.nome}>'
