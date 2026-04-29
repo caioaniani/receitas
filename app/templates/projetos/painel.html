@@ -106,7 +106,7 @@
             </form>
 
             {% for t in p.tarefas %}
-            <div class="proj-tarefa {% if t.atrasada %}atrasada{% endif %}" data-tarefa-id="{{ t.id }}" data-nome="{{ t.nome|lower }}">
+            <div class="proj-tarefa {% if t.atrasada %}atrasada{% endif %}" {{ ui.tarefa_data_attr(t) }} data-nome="{{ t.nome|lower }}">
                 {{ ui.tarefa_status_btn(t) }}
                 <span style="flex:1;" class="tarefa-nome-editavel" title="Clique para editar" style="cursor:pointer;">
                     {{ t.nome }}
@@ -120,10 +120,10 @@
                     {% endif %}
                 </span>
                 <input type="date" class="form-control form-control-sm tarefa-prazo"
-                       data-tarefa-id="{{ t.id }}"
+                       {{ ui.tarefa_data_attr(t) }}
                        value="{{ t.prazo.isoformat() if t.prazo else '' }}"
                        style="width:140px;font-size:11px;">
-                <select class="form-select form-select-sm proj-edit-tarefa" data-tarefa-id="{{ t.id }}" data-campo="recorrencia" style="width:110px;font-size:11px;" title="Recorrência">
+                <select class="form-select form-select-sm proj-edit-tarefa" {{ ui.tarefa_data_attr(t) }} data-campo="recorrencia" style="width:110px;font-size:11px;" title="Recorrência">
                     <option value="">Sem recorr.</option>
                     {% for r in ('diaria','semanal','quinzenal','mensal','trimestral') %}
                     <option value="{{ r }}" {% if t.recorrencia == r %}selected{% endif %}>{{ r|capitalize }}</option>

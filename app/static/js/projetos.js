@@ -292,24 +292,44 @@
     }
 
     // ── Edição de tarefa via modal ──
-    function abrirEdicaoTarefa(tid) {
+    function preencherEAbrirModalEdicao(d) {
+        document.getElementById('edt-id').value = d.id;
+        document.getElementById('edt-nome').value = d.nome || '';
+        document.getElementById('edt-status').value = d.status || 'a_fazer';
+        document.getElementById('edt-tipo').value = d.tipo || '';
+        document.getElementById('edt-esforco').value = d.esforco || '';
+        document.getElementById('edt-prazo').value = d.prazo || '';
+        document.getElementById('edt-recorrencia').value = d.recorrencia || '';
+        document.getElementById('edt-responsavel').value = d.responsavel_id || '';
+        document.getElementById('edt-observacao').value = d.observacao || '';
+        var pr = document.getElementById('edt-projeto');
+        if (pr) pr.textContent = d.projeto_nome || '';
+        var modalEl = document.getElementById('modal-editar-tarefa');
+        if (modalEl) new bootstrap.Modal(modalEl).show();
+    }
+
+    function abrirEdicaoTarefaCard(card) {
+        // 1) Tenta dados embutidos no DOM (sem rede - instantaneo)
+        if (card.dataset.tarefa) {
+            try {
+                preencherEAbrirModalEdicao(JSON.parse(card.dataset.tarefa));
+                return;
+            } catch (e) { /* fallback */ }
+        }
+        // 2) Fallback: fetch — abre modal com spinner enquanto busca
+        var tid = card.dataset.tarefaId;
+        if (!tid) return;
+        var modalEl = document.getElementById('modal-editar-tarefa');
+        if (modalEl) {
+            // Limpa campos pra evitar dado fantasma do anterior
+            ['edt-id','edt-nome','edt-prazo','edt-observacao'].forEach(function(id){
+                var el = document.getElementById(id); if (el) el.value = '';
+            });
+            new bootstrap.Modal(modalEl).show();
+        }
         fetch('/projetos/tarefa/' + tid + '/dados')
             .then(function (r) { return r.json(); })
-            .then(function (d) {
-                document.getElementById('edt-id').value = d.id;
-                document.getElementById('edt-nome').value = d.nome || '';
-                document.getElementById('edt-status').value = d.status || 'a_fazer';
-                document.getElementById('edt-tipo').value = d.tipo || '';
-                document.getElementById('edt-esforco').value = d.esforco || '';
-                document.getElementById('edt-prazo').value = d.prazo || '';
-                document.getElementById('edt-recorrencia').value = d.recorrencia || '';
-                document.getElementById('edt-responsavel').value = d.responsavel_id || '';
-                document.getElementById('edt-observacao').value = d.observacao || '';
-                var pr = document.getElementById('edt-projeto');
-                if (pr) pr.textContent = d.projeto_nome || '';
-                var modalEl = document.getElementById('modal-editar-tarefa');
-                if (modalEl) new bootstrap.Modal(modalEl).show();
-            });
+            .then(preencherEAbrirModalEdicao);
     }
 
     // Click em qualquer nome de tarefa marcado com .tarefa-nome-editavel
@@ -320,7 +340,7 @@
         if (!card) return;
         e.preventDefault();
         e.stopPropagation();
-        abrirEdicaoTarefa(card.dataset.tarefaId);
+        abrirEdicaoTarefaCard(card);
     });
 
     // Submit do form de edição

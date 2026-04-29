@@ -115,7 +115,7 @@
         <div class="proj-coluna-header">{{ label }} ({{ cols[chave]|length }})</div>
         <div class="proj-coluna-cards" data-status="{{ chave }}">
             {% for t in cols[chave] %}
-            <div class="proj-kanban-card {% if t.atrasada %}atrasada{% endif %}" data-tarefa-id="{{ t.id }}">
+            <div class="proj-kanban-card {% if t.atrasada %}atrasada{% endif %}" {{ ui.tarefa_data_attr(t) }}>
                 <div class="d-flex align-items-start gap-2">
                     {{ ui.tarefa_status_btn(t) }}
                     <div style="flex:1;">

@@ -28,7 +28,7 @@
                 <div class="text-muted small text-center py-3"><i class="bi bi-emoji-smile"></i> Nenhuma. Bom trabalho!</div>
                 {% endif %}
                 {% for t in atrasadas %}
-                <div class="proj-kanban-card atrasada {% if t.projeto.foco_12s %}foco{% endif %} mb-2" data-tarefa-id="{{ t.id }}">
+                <div class="proj-kanban-card atrasada {% if t.projeto.foco_12s %}foco{% endif %} mb-2" {{ ui.tarefa_data_attr(t) }}>
                     <div class="d-flex align-items-start gap-2">
                         {{ ui.tarefa_status_btn(t) }}
                         <div style="flex:1;">
@@ -58,7 +58,7 @@
                 <div class="text-muted small text-center py-3">Nada em andamento agora.<br>Mova alguma tarefa pra "Fazendo".</div>
                 {% endif %}
                 {% for t in fazendo %}
-                <div class="proj-kanban-card {% if t.atrasada %}atrasada{% endif %} {% if t.projeto.foco_12s %}foco{% endif %} mb-2" data-tarefa-id="{{ t.id }}">
+                <div class="proj-kanban-card {% if t.atrasada %}atrasada{% endif %} {% if t.projeto.foco_12s %}foco{% endif %} mb-2" {{ ui.tarefa_data_attr(t) }}>
                     <div class="d-flex align-items-start gap-2">
                         {{ ui.tarefa_status_btn(t) }}
                         <div style="flex:1;">
@@ -87,7 +87,7 @@
                 <div class="text-muted small text-center py-2">Nenhuma tarefa com prazo hoje.</div>
                 {% endif %}
                 {% for t in prazo_hoje %}
-                <div class="proj-kanban-card {% if t.projeto.foco_12s %}foco{% endif %} mb-2" data-tarefa-id="{{ t.id }}">
+                <div class="proj-kanban-card {% if t.projeto.foco_12s %}foco{% endif %} mb-2" {{ ui.tarefa_data_attr(t) }}>
                     <div class="d-flex align-items-start gap-2">
                         {{ ui.tarefa_status_btn(t) }}
                         <div style="flex:1;">
@@ -109,7 +109,7 @@
                 <div class="text-muted small text-center py-2">Nada agendado nos próximos 7 dias.</div>
                 {% endif %}
                 {% for t in semana %}
-                <div class="proj-kanban-card {% if t.projeto.foco_12s %}foco{% endif %} mb-2" data-tarefa-id="{{ t.id }}">
+                <div class="proj-kanban-card {% if t.projeto.foco_12s %}foco{% endif %} mb-2" {{ ui.tarefa_data_attr(t) }}>
                     <div class="d-flex align-items-start gap-2">
                         {{ ui.tarefa_status_btn(t) }}
                         <div style="flex:1;">

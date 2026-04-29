@@ -6,6 +6,8 @@ from flask_login import login_required, current_user
 from app.blueprints.projetos import projetos_bp
 from app.decorators import admin_required
 from app.extensions import db
+from sqlalchemy.orm import joinedload, selectinload
+
 from app.models import (ProjetoArea, Projeto, TarefaProjeto, Usuario, WeeklyReview)
 
 
@@ -119,7 +121,11 @@ def painel():
         so_foco = request.args.get('foco') == '1'
         busca = (request.args.get('q', '') or '').strip().lower()
 
-        q = Projeto.query.join(ProjetoArea)
+        q = Projeto.query.join(ProjetoArea).options(
+            joinedload(Projeto.area),
+            joinedload(Projeto.responsavel),
+            selectinload(Projeto.tarefas),
+        )
         if not current_user.is_dono():
             q = q.filter(ProjetoArea.tipo == 'empresa')
         if filtro_area:
@@ -277,7 +283,10 @@ def kanban():
     so_foco = request.args.get('foco') == '1'
     incluir_canceladas = request.args.get('canceladas') == '1'
 
-    q = TarefaProjeto.query.join(Projeto).join(ProjetoArea)
+    q = TarefaProjeto.query.join(Projeto).join(ProjetoArea).options(
+        joinedload(TarefaProjeto.projeto).joinedload(Projeto.area),
+        joinedload(TarefaProjeto.responsavel),
+    )
     if not current_user.is_dono():
         q = q.filter(ProjetoArea.tipo == 'empresa')
     if filtro_area:
@@ -329,7 +338,10 @@ def foco():
 def hoje():
     hoje_d = date.today()
 
-    base = TarefaProjeto.query.join(Projeto).join(ProjetoArea)
+    base = TarefaProjeto.query.join(Projeto).join(ProjetoArea).options(
+        joinedload(TarefaProjeto.projeto).joinedload(Projeto.area),
+        joinedload(TarefaProjeto.responsavel),
+    )
     if not current_user.is_dono():
         base = base.filter(ProjetoArea.tipo == 'empresa')
 

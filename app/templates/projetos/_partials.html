@@ -98,6 +98,21 @@
 {% endmacro %}
 
 
+{# Atributo data-tarefa com todos os campos pra abrir o modal de edicao sem fetch #}
+{% macro tarefa_data_attr(t) %}
+data-tarefa-id="{{ t.id }}"
+data-tarefa='{{ {
+    "id": t.id, "nome": t.nome, "status": t.status,
+    "tipo": t.tipo or "", "esforco": t.esforco or "",
+    "prazo": t.prazo.isoformat() if t.prazo else "",
+    "recorrencia": t.recorrencia or "",
+    "responsavel_id": t.responsavel_id or "",
+    "observacao": t.observacao or "",
+    "projeto_nome": t.projeto.nome
+}|tojson }}'
+{% endmacro %}
+
+
 {% macro tarefa_status_btn(t) %}
 <button type="button" class="proj-tarefa-status {{ t.status }}"
         data-tarefa-id="{{ t.id }}"
@@ -496,7 +511,7 @@
 
 {% macro card_tarefa_kanban(t, data_relativa) %}
 <div class="proj-kanban-card {% if t.atrasada %}atrasada{% endif %} {% if t.projeto.foco_12s %}foco{% endif %}"
-     data-tarefa-id="{{ t.id }}">
+     {{ tarefa_data_attr(t) }}>
     <div class="d-flex align-items-start gap-2">
         {{ tarefa_status_btn(t) }}
         <div style="flex:1;">
