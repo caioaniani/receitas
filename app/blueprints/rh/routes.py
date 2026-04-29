@@ -3,6 +3,7 @@ from urllib.parse import quote
 
 from flask import render_template, redirect, url_for, flash, request, Response, abort
 from flask_login import login_required, current_user
+from sqlalchemy.orm import defer
 from werkzeug.utils import secure_filename
 
 from app.blueprints.rh import rh_bp
@@ -21,7 +22,7 @@ ALLOWED_MIMETYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'appl
 @admin_required
 def dashboard():
     funcionarios = Funcionario.query.filter_by(ativo=True).all()
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
 
     total_salarios = sum(f.salario_base for f in funcionarios)
     total_custo = sum(f.custo_total() for f in funcionarios)
@@ -77,7 +78,7 @@ def funcionarios():
         query = query.filter(Funcionario.lojas.any(Loja.id == loja_id))
 
     lista = query.order_by(Funcionario.nome).all()
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
 
     return render_template('rh/funcionarios.html',
                            funcionarios=lista,
@@ -131,7 +132,7 @@ def novo_funcionario():
         flash(f'Funcionário "{func.nome}" cadastrado!', 'success')
         return redirect(url_for('rh.detalhe_funcionario', id=func.id))
 
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
     return render_template('rh/funcionario_form.html', func=None, lojas=lojas)
 
 
@@ -140,7 +141,7 @@ def novo_funcionario():
 @admin_required
 def detalhe_funcionario(id):
     func = Funcionario.query.get_or_404(id)
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
     feedbacks = Feedback.query.filter_by(funcionario_id=id).order_by(Feedback.data.desc()).all()
     folhas = FolhaPagamento.query.filter_by(funcionario_id=id).order_by(
         FolhaPagamento.ano.desc(), FolhaPagamento.mes.desc()
@@ -253,7 +254,7 @@ def excluir_feedback(id, fb_id):
 @login_required
 @admin_required
 def lojas():
-    lista = Loja.query.order_by(Loja.nome).all()
+    lista = Loja.query.options(defer(Loja.planta_imagem)).order_by(Loja.nome).all()
     return render_template('rh/lojas.html', lojas=lista)
 
 
@@ -380,7 +381,7 @@ def salvar_folha_item(folha_id):
 @admin_required
 def escala():
     modo = request.args.get('modo', 'tabela')
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
 
     # Modo tabela: somente posições manuais
     posicoes = Posicao.query.filter(
@@ -618,7 +619,7 @@ def novo_feedback_dashboard():
 @login_required
 @admin_required
 def mapa_index():
-    loja = Loja.query.filter_by(ativa=True).order_by(Loja.nome).first()
+    loja = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).first()
     if loja:
         return redirect(url_for('rh.mapa', loja_id=loja.id))
     flash('Cadastre uma loja primeiro.', 'warning')
@@ -630,7 +631,7 @@ def mapa_index():
 @admin_required
 def mapa(loja_id):
     loja = Loja.query.get_or_404(loja_id)
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
     funcionarios_ativos = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
     return render_template('rh/mapa.html', loja=loja, lojas=lojas,
                            funcionarios_ativos=funcionarios_ativos)

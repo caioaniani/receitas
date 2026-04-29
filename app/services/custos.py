@@ -1,5 +1,7 @@
 """Serviço unificado de cálculo de custos de receitas e produtos."""
 
+from sqlalchemy.orm import selectinload
+
 from app.models import Receita, MateriaPrima, Produto
 
 MAX_PASSES = 5  # máximo de passadas para resolver sub-receitas
@@ -16,7 +18,9 @@ def calcular_custos_receitas():
         mp_info:    {nome_mp: {custo_por_kg, unidade}}
         circulares: [nomes de receitas com dependência circular]
     """
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    receitas = Receita.query.options(
+        selectinload(Receita.ingredientes)
+    ).order_by(Receita.categoria, Receita.nome).all()
     mps = MateriaPrima.query.all()
     mp_dict = {mp.nome: mp.custo_por_kg for mp in mps}
     mp_info = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade,

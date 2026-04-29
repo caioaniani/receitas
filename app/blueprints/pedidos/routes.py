@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 
 from flask import render_template, redirect, url_for, flash, request, abort, send_file
 from flask_login import login_required, current_user
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.blueprints.pedidos import pedidos_bp
 from app.decorators import admin_required
@@ -59,7 +60,10 @@ def _loja_do_usuario():
 @login_required
 def lista():
     loja_id = _loja_do_usuario()
-    query = PedidoLoja.query.order_by(PedidoLoja.criado_em.desc())
+    query = PedidoLoja.query.options(
+        joinedload(PedidoLoja.loja),
+        selectinload(PedidoLoja.itens),
+    ).order_by(PedidoLoja.criado_em.desc())
     if loja_id:
         query = query.filter_by(loja_id=loja_id)
     else:
