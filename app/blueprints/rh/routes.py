@@ -103,6 +103,7 @@ def novo_funcionario():
             vr_dia=parse_float_br(request.form.get('vr_dia', ''), default=22),
             dias_trabalhados=int(request.form.get('dias_trabalhados', '26') or 26),
             hora_extra_pct=parse_float_br(request.form.get('hora_extra_pct', ''), default=55),
+            horas_extras=parse_float_br(request.form.get('horas_extras', ''), default=0),
             telefone=request.form.get('telefone', '').strip() or None,
             email=request.form.get('email', '').strip() or None,
             observacao=request.form.get('observacao', '').strip() or None,
@@ -173,6 +174,7 @@ def salvar_funcionario(id):
     func.vr_dia = parse_float_br(request.form.get('vr_dia', ''), default=22)
     func.dias_trabalhados = int(request.form.get('dias_trabalhados', '26') or 26)
     func.hora_extra_pct = parse_float_br(request.form.get('hora_extra_pct', ''), default=55)
+    func.horas_extras = parse_float_br(request.form.get('horas_extras', ''), default=0)
     func.telefone = request.form.get('telefone', '').strip() or None
     func.email = request.form.get('email', '').strip() or None
     func.observacao = request.form.get('observacao', '').strip() or None

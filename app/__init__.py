@@ -380,6 +380,7 @@ def _migrate_postgres(app):
                 'periodo': 'ALTER TABLE funcionario ADD COLUMN periodo VARCHAR(20)',
                 'cadastro_pendente': 'ALTER TABLE funcionario ADD COLUMN cadastro_pendente BOOLEAN DEFAULT FALSE',
                 'data_nascimento': 'ALTER TABLE funcionario ADD COLUMN data_nascimento DATE',
+                'horas_extras': 'ALTER TABLE funcionario ADD COLUMN horas_extras REAL DEFAULT 0',
             }
             for col, sql in migrações_func.items():
                 if col not in cols_func:
@@ -537,6 +538,8 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE funcionario ADD COLUMN cadastro_pendente BOOLEAN DEFAULT 0")
     if cols_func and 'data_nascimento' not in cols_func:
         cursor.execute("ALTER TABLE funcionario ADD COLUMN data_nascimento DATE")
+    if cols_func and 'horas_extras' not in cols_func:
+        cursor.execute("ALTER TABLE funcionario ADD COLUMN horas_extras REAL DEFAULT 0")
 
     # Migração loja
     cursor.execute("PRAGMA table_info(loja)")

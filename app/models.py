@@ -235,6 +235,7 @@ class Funcionario(db.Model):
     ativo = db.Column(db.Boolean, default=True)
     cargo_confianca = db.Column(db.Float, default=0)
     hora_extra_pct = db.Column(db.Float, default=55)
+    horas_extras = db.Column(db.Float, default=0)
     premiacao = db.Column(db.Float, default=0)
     vt_dia = db.Column(db.Float, default=0)
     vr_dia = db.Column(db.Float, default=22.00)
@@ -255,11 +256,21 @@ class Funcionario(db.Model):
     def total_vr(self):
         return self.vr_dia * self.dias_trabalhados if self.vr_dia else 0
 
+    def total_horas_extras(self):
+        """Valor mensal das horas extras: (salario / 220h) * (1 + pct/100) * qtd_horas."""
+        qtd = self.horas_extras or 0
+        if not qtd or not self.salario_base:
+            return 0
+        valor_hora = self.salario_base / 220.0
+        adicional = 1 + (self.hora_extra_pct or 0) / 100
+        return valor_hora * adicional * qtd
+
     def custo_total(self):
         return (
             self.salario_base +
             (self.cargo_confianca or 0) +
             (self.premiacao or 0) +
+            self.total_horas_extras() +
             self.total_vt() +
             self.total_vr()
         )

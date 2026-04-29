@@ -56,6 +56,12 @@
                    value="{{ '%.0f' % func.hora_extra_pct }}">
         </div>
         <div class="col-md-2">
+            <label class="form-label fw-bold">Horas Extras (h)</label>
+            <input type="text" name="horas_extras" class="form-control input-blue"
+                   value="{{ '%.0f' % func.horas_extras if func.horas_extras else '' }}"
+                   placeholder="0">
+        </div>
+        <div class="col-md-2">
             <label class="form-label fw-bold">VT/dia</label>
             <input type="text" name="vt_dia" class="form-control input-blue"
                    value="{{ '%.2f' % func.vt_dia if func.vt_dia else '' }}">
@@ -139,6 +145,12 @@
                 <div class="col">
                     <div class="small text-muted">Total VR</div>
                     <div class="fw-bold">{{ func.total_vr() | brl }}</div>
+                </div>
+                <div class="col">
+                    <div class="small text-muted">Total HE
+                        {% if func.horas_extras %}<span class="text-muted">({{ '%.0f'|format(func.horas_extras) }}h)</span>{% endif %}
+                    </div>
+                    <div class="fw-bold">{{ func.total_horas_extras() | brl }}</div>
                 </div>
                 <div class="col">
                     <div class="small text-muted">Custo Total</div>
