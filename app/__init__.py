@@ -58,6 +58,19 @@ def create_app(config_class=None):
     # Expoe pra outros modulos invalidarem (ex: ao salvar receita/MP/projeto)
     app.invalidate_sidebar_cache = _invalidate_sidebar_cache
 
+    # ── Auto-invalidação: limpa o cache quando algum modelo cacheado muda ──
+    from sqlalchemy import event as _sa_event
+    from app.models import Receita, MateriaPrima, Usuario, TarefaProjeto
+    _MODELOS_CACHEADOS = (Receita, MateriaPrima, Usuario, TarefaProjeto)
+
+    @_sa_event.listens_for(db.session, 'before_commit')
+    def _invalidate_on_change(session):
+        alvo = _MODELOS_CACHEADOS
+        if any(isinstance(o, alvo) for o in session.new) \
+                or any(isinstance(o, alvo) for o in session.dirty) \
+                or any(isinstance(o, alvo) for o in session.deleted):
+            _SIDEBAR_CACHE.clear()
+
     @app.context_processor
     def inject_sidebar():
         from flask_login import current_user
