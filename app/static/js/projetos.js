@@ -342,6 +342,27 @@
         return d.innerHTML;
     }
 
+    // ── Pre-fetch ao hover em links de projeto/views ──
+    // Chrome/Safari fazem cache automatico se a resposta tiver Cache-Control;
+    // mesmo sem isso, a request fica "no aire" e quando o user clicar o
+    // browser geralmente reaproveita.
+    var prefetched = new Set();
+    function prefetchURL(url) {
+        if (!url || prefetched.has(url)) return;
+        prefetched.add(url);
+        fetch(url, { credentials: 'same-origin', method: 'GET' }).catch(function () {});
+    }
+    document.body.addEventListener('mouseover', function (e) {
+        var link = e.target.closest('a[href]');
+        if (!link) return;
+        var href = link.getAttribute('href') || '';
+        // Apenas links internos do modulo de projetos / detalhes
+        if (!href.startsWith('/projetos/') && href !== '/projetos') return;
+        // Ignora links que abrem em nova aba
+        if (link.target === '_blank') return;
+        prefetchURL(link.href);
+    }, true);
+
     // ── Edição de tarefa via modal ──
     function preencherEAbrirModalEdicao(d) {
         document.getElementById('edt-id').value = d.id;
