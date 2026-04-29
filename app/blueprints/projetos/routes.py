@@ -236,7 +236,18 @@ def painel():
 def hierarquia():
     """Visão hierárquica densa: Área › Projeto › Tarefas (todos expandidos)."""
     from app.models import ProjetoTemplate
-    areas = _areas_filtradas()
+    # Eager-load: areas com projetos, projetos com tarefas, etc.
+    q = ProjetoArea.query.options(
+        selectinload(ProjetoArea.projetos)
+            .options(
+                joinedload(Projeto.responsavel),
+                selectinload(Projeto.tarefas).joinedload(TarefaProjeto.responsavel),
+            ),
+    ).filter_by(ativa=True)
+    if not current_user.is_dono():
+        q = q.filter(ProjetoArea.tipo == 'empresa')
+    areas = q.order_by(ProjetoArea.ordem, ProjetoArea.nome).all()
+
     templates_disponiveis = ProjetoTemplate.query.order_by(ProjetoTemplate.nome).all()
     return render_template('projetos/painel.html',
                            areas=areas,
@@ -252,7 +263,11 @@ def hierarquia():
 @admin_required
 def projeto_detalhe(pid):
     """Página dedicada de um projeto com mini-kanban."""
-    p = Projeto.query.get_or_404(pid)
+    p = Projeto.query.options(
+        joinedload(Projeto.area),
+        joinedload(Projeto.responsavel),
+        selectinload(Projeto.tarefas).joinedload(TarefaProjeto.responsavel),
+    ).filter_by(id=pid).first_or_404()
     if not _projeto_visivel(p):
         abort(403)
 
