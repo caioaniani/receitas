@@ -483,6 +483,10 @@ def _migrate_postgres(app):
     if cols_tp and 'recorrencia' not in cols_tp:
         _try("ALTER TABLE tarefa_projeto ADD COLUMN recorrencia VARCHAR(20)")
 
+    cols_func_res = _cols('funcionario')
+    if cols_func_res and 'horas_extras' not in cols_func_res:
+        _try("ALTER TABLE funcionario ADD COLUMN horas_extras REAL DEFAULT 0")
+
 
 def _migrate_sqlite(app):
     """Adiciona colunas novas no SQLite."""

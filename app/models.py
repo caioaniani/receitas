@@ -258,7 +258,10 @@ class Funcionario(db.Model):
 
     def total_horas_extras(self):
         """Valor mensal das horas extras: (salario / 220h) * (1 + pct/100) * qtd_horas."""
-        qtd = self.horas_extras or 0
+        try:
+            qtd = self.horas_extras or 0
+        except Exception:
+            return 0
         if not qtd or not self.salario_base:
             return 0
         valor_hora = self.salario_base / 220.0
