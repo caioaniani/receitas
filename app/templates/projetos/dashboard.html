@@ -6,20 +6,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h1 class="page-title mb-0"><i class="bi bi-kanban"></i> Projetos</h1>
-    <div class="d-flex gap-2 flex-wrap">
-        <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modal-weekly">
-            <i class="bi bi-arrow-repeat"></i> Weekly Review
-        </button>
-        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modal-nova-area">
-            <i class="bi bi-collection"></i> Área
-        </button>
-        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modal-novo-de-template">
-            <i class="bi bi-bookmark-star"></i> de Template
-        </button>
-        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modal-novo-projeto">
-            <i class="bi bi-folder-plus"></i> Projeto
-        </button>
-    </div>
+    {{ ui.botoes_acao() }}
 </div>
 
 {% if contadores.wip_estourado %}
@@ -64,14 +51,11 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-2">
+            <div class="col-md-3">
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" name="foco" value="1" id="chk-foco" {% if so_foco %}checked{% endif %} onchange="this.form.submit()">
                     <label class="form-check-label small" for="chk-foco">⭐ Só Foco 12s</label>
                 </div>
-            </div>
-            <div class="col-md-1">
-                <button type="submit" class="btn btn-primary btn-sm w-100">Ir</button>
             </div>
         </div>
     </div>

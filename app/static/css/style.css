@@ -764,6 +764,38 @@ body {
 }
 .cal-tarefa-status { display: inline-block; min-width: 12px; }
 
+/* Nav tabs do modulo Projetos */
+.proj-nav-tabs {
+    gap: 4px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 6px;
+}
+.proj-nav-tabs .nav-link {
+    color: var(--text-muted);
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.proj-nav-tabs .nav-link:hover {
+    color: var(--text-main);
+    background: var(--table-hover);
+}
+.proj-nav-tabs .nav-link.active {
+    background: var(--accent, #4f46e5);
+    color: #fff;
+    font-weight: 600;
+}
+.proj-nav-tabs .nav-link.active:hover {
+    background: var(--accent, #4f46e5);
+    color: #fff;
+}
+.proj-nav-tabs .nav-link i {
+    margin-right: 4px;
+    font-size: 12px;
+}
+
 /* Dashboard de projetos */
 .proj-area-section { margin-bottom: 20px; }
 .proj-area-header {

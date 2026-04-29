@@ -65,6 +65,20 @@ def _usuarios():
     return Usuario.query.order_by(Usuario.nome).all()
 
 
+def _contexto_acao():
+    """Dados que o macro botoes_acao() precisa (modais novo projeto/area/template)."""
+    from app.models import ProjetoTemplate
+    try:
+        templates_disponiveis = ProjetoTemplate.query.order_by(ProjetoTemplate.nome).all()
+    except Exception:
+        templates_disponiveis = []
+    return {
+        'areas': _areas_filtradas(),
+        'usuarios': _usuarios(),
+        'templates_disponiveis': templates_disponiveis,
+    }
+
+
 def _data_relativa(prazo):
     """Retorna string amigavel: 'Hoje', 'Amanha', 'Em 3 dias', 'Atrasada ha 2 dias'."""
     if not prazo:
@@ -284,14 +298,13 @@ def kanban():
 
     return render_template('projetos/kanban.html',
                            colunas=colunas,
-                           areas=_areas_filtradas(),
                            filtro_area=filtro_area,
                            so_foco=so_foco,
                            incluir_canceladas=incluir_canceladas,
                            contadores=_contadores(),
-                           usuarios=_usuarios(),
                            data_relativa=_data_relativa,
-                           view='kanban')
+                           view='kanban',
+                           **_contexto_acao())
 
 
 @projetos_bp.route('/foco')
@@ -305,9 +318,9 @@ def foco():
     return render_template('projetos/foco.html',
                            projetos=projetos,
                            contadores=_contadores(),
-                           usuarios=_usuarios(),
                            data_relativa=_data_relativa,
-                           view='foco')
+                           view='foco',
+                           **_contexto_acao())
 
 
 @projetos_bp.route('/hoje')
@@ -347,9 +360,9 @@ def hoje():
                            atrasadas=atrasadas,
                            semana=semana,
                            contadores=_contadores(),
-                           usuarios=_usuarios(),
                            data_relativa=_data_relativa,
-                           view='hoje')
+                           view='hoje',
+                           **_contexto_acao())
 
 
 # ── CRUD: Áreas ──
@@ -777,9 +790,9 @@ def templates_lista():
     templates = ProjetoTemplate.query.order_by(ProjetoTemplate.nome).all()
     return render_template('projetos/templates.html',
                            templates=templates,
-                           areas=_areas_filtradas(),
                            contadores=_contadores(),
-                           view='templates')
+                           view='templates',
+                           **_contexto_acao())
 
 
 @projetos_bp.route('/templates/novo', methods=['POST'])
@@ -963,7 +976,8 @@ def calendario():
                            por_dia=por_dia,
                            hoje=date.today(),
                            contadores=_contadores(),
-                           view='calendario')
+                           view='calendario',
+                           **_contexto_acao())
 
 
 # ── Relatorio de produtividade ──
@@ -1026,7 +1040,8 @@ def relatorio():
                            total_tarefas=total_tarefas,
                            pct_geral=pct_geral,
                            contadores=_contadores(),
-                           view='relatorio')
+                           view='relatorio',
+                           **_contexto_acao())
 
 
 # ── Edicao de cor de area ──

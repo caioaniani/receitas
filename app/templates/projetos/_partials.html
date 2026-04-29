@@ -23,35 +23,68 @@
 
 
 {% macro nav_views(view) %}
-<div class="btn-group btn-group-sm flex-wrap">
-    <a href="{{ url_for('projetos.painel') }}"
-       class="btn {% if view == 'dashboard' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-        <i class="bi bi-grid"></i> Dashboard
-    </a>
-    <a href="{{ url_for('projetos.hoje') }}"
-       class="btn {% if view == 'hoje' %}btn-success{% else %}btn-outline-success{% endif %}">
-        <i class="bi bi-sun"></i> Hoje
-    </a>
-    <a href="{{ url_for('projetos.kanban') }}"
-       class="btn {% if view == 'kanban' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-        <i class="bi bi-kanban"></i> Kanban
-    </a>
-    <a href="{{ url_for('projetos.foco') }}"
-       class="btn {% if view == 'foco' %}btn-warning{% else %}btn-outline-warning{% endif %}">
-        <i class="bi bi-star-fill"></i> Foco
-    </a>
-    <a href="{{ url_for('projetos.calendario') }}"
-       class="btn {% if view == 'calendario' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-        <i class="bi bi-calendar3"></i> Calendário
-    </a>
-    <a href="{{ url_for('projetos.relatorio') }}"
-       class="btn {% if view == 'relatorio' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-        <i class="bi bi-graph-up"></i> Relatório
-    </a>
-    <a href="{{ url_for('projetos.templates_lista') }}"
-       class="btn {% if view == 'templates' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-        <i class="bi bi-bookmark-star"></i> Templates
-    </a>
+<ul class="nav nav-pills proj-nav-tabs flex-wrap">
+    <li class="nav-item">
+        <a href="{{ url_for('projetos.painel') }}" class="nav-link {% if view == 'dashboard' %}active{% endif %}">
+            <i class="bi bi-grid"></i> Dashboard
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('projetos.hoje') }}" class="nav-link {% if view == 'hoje' %}active{% endif %}">
+            <i class="bi bi-sun"></i> Hoje
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('projetos.kanban') }}" class="nav-link {% if view == 'kanban' %}active{% endif %}">
+            <i class="bi bi-kanban"></i> Kanban
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('projetos.foco') }}" class="nav-link {% if view == 'foco' %}active{% endif %}">
+            <i class="bi bi-star-fill"></i> Foco
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('projetos.calendario') }}" class="nav-link {% if view == 'calendario' %}active{% endif %}">
+            <i class="bi bi-calendar3"></i> Calendário
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('projetos.relatorio') }}" class="nav-link {% if view == 'relatorio' %}active{% endif %}">
+            <i class="bi bi-graph-up"></i> Relatório
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('projetos.templates_lista') }}" class="nav-link {% if view == 'templates' %}active{% endif %}">
+            <i class="bi bi-bookmark-star"></i> Templates
+        </a>
+    </li>
+</ul>
+{% endmacro %}
+
+
+{% macro botoes_acao() %}
+<div class="d-flex gap-2 flex-wrap align-items-center">
+    <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modal-weekly">
+        <i class="bi bi-arrow-repeat"></i> Weekly Review
+    </button>
+    <div class="dropdown">
+        <button class="btn btn-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-plus-lg"></i> Novo
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#modal-novo-projeto">
+                <i class="bi bi-folder-plus"></i> Projeto
+            </button></li>
+            <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#modal-novo-de-template">
+                <i class="bi bi-bookmark-star"></i> Projeto a partir de Template
+            </button></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#modal-nova-area">
+                <i class="bi bi-collection"></i> Área
+            </button></li>
+        </ul>
+    </div>
 </div>
 {% endmacro %}
 
