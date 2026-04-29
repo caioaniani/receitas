@@ -400,7 +400,7 @@ data-tarefa='{{ {
 {% macro modal_editar_tarefa(usuarios) %}
 <div class="modal fade" id="modal-editar-tarefa" tabindex="-1">
     <div class="modal-dialog">
-        <form id="form-editar-tarefa">
+        <form id="form-editar-tarefa" data-no-intercept="1">
             <input type="hidden" id="edt-id">
             <div class="modal-content">
                 <div class="modal-header bg-primary text-white">

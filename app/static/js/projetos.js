@@ -351,6 +351,57 @@
         return d.innerHTML;
     }
 
+    // ── Soft reload: troca só o conteudo do <main>, sem flash branco ──
+    function softReload() {
+        return fetch(location.href, { credentials: 'same-origin' })
+            .then(function (r) { return r.text(); })
+            .then(function (html) {
+                var doc = new DOMParser().parseFromString(html, 'text/html');
+                var novoMain = doc.querySelector('main, .main-content');
+                var atualMain = document.querySelector('main, .main-content');
+                if (novoMain && atualMain) {
+                    atualMain.innerHTML = novoMain.innerHTML;
+                }
+            });
+    }
+
+    // Intercepta submits de POST dentro de /projetos/ (exceto formularios marcados com data-no-intercept)
+    document.body.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!(form instanceof HTMLFormElement)) return;
+        if (form.method.toLowerCase() !== 'post') return;
+        if (form.dataset.noIntercept) return;
+        var action = form.getAttribute('action') || location.pathname;
+        // So intercepta forms internos do modulo de projetos
+        if (!action.startsWith('/projetos/')) return;
+        // Excluir projeto/area precisa redirecionar — deixa o browser cuidar
+        if (/\/(excluir|cancelar)\b/.test(action) && !form.classList.contains('proj-soft')) return;
+
+        e.preventDefault();
+        var fd = new FormData(form);
+        fetch(action, { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (r) {
+                // Se o servidor redirecionou (302 -> 200 final), faz soft reload
+                return softReload();
+            })
+            .then(function () {
+                // Reset campos do form se for de criação (modal ainda aberto)
+                if (form.closest('.modal.show')) {
+                    var modalEl = form.closest('.modal');
+                    bootstrap.Modal.getInstance(modalEl).hide();
+                }
+                // Limpa inputs de criação rápida
+                if (form.querySelector('input[name="nome"]')) {
+                    form.reset();
+                }
+            })
+            .catch(function () {
+                // Se falhar, deixa o browser submeter de novo do jeito tradicional
+                form.dataset.noIntercept = '1';
+                form.submit();
+            });
+    });
+
     // ── Pre-fetch ao hover em links de projeto/views ──
     // Chrome/Safari fazem cache automatico se a resposta tiver Cache-Control;
     // mesmo sem isso, a request fica "no aire" e quando o user clicar o
