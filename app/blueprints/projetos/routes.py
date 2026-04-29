@@ -33,11 +33,23 @@ def _contadores():
         ~TarefaProjeto.status.in_(['feito', 'cancelado']),
     ).count()
     foco_12s = base_p.filter(Projeto.foco_12s.is_(True)).count()
+
+    inbox_count = 0
+    inbox_area = ProjetoArea.query.filter_by(nome=INBOX_AREA_NOME).first()
+    if inbox_area:
+        inbox_proj = Projeto.query.filter_by(area_id=inbox_area.id, nome=INBOX_PROJETO_NOME).first()
+        if inbox_proj:
+            inbox_count = TarefaProjeto.query.filter(
+                TarefaProjeto.projeto_id == inbox_proj.id,
+                ~TarefaProjeto.status.in_(['feito', 'cancelado']),
+            ).count()
+
     return {
         'a_fazer': a_fazer,
         'fazendo': fazendo,
         'atrasadas': atrasadas,
         'foco_12s': foco_12s,
+        'inbox': inbox_count,
         'wip_limit': WIP_LIMIT,
         'wip_estourado': fazendo > WIP_LIMIT,
     }
@@ -78,6 +90,7 @@ def _contexto_acao():
         'areas': _areas_filtradas(),
         'usuarios': _usuarios(),
         'templates_disponiveis': templates_disponiveis,
+        'projetos_alvo': _projetos_para_select(),
     }
 
 
@@ -101,6 +114,36 @@ def _data_relativa(prazo):
     if delta < 30:
         return f'Em {delta // 7} semanas'
     return prazo.strftime('%d/%m/%Y')
+
+
+INBOX_AREA_NOME = 'Inbox'
+INBOX_PROJETO_NOME = 'Avulsas'
+
+
+def _get_inbox_projeto():
+    """Retorna o projeto 'Avulsas' (ou cria se nao existir).
+    Esse projeto aceita tarefas sem vinculo claro a um projeto real (estilo GTD inbox).
+    """
+    area = ProjetoArea.query.filter_by(nome=INBOX_AREA_NOME).first()
+    if not area:
+        area = ProjetoArea(nome=INBOX_AREA_NOME, tipo='empresa', cor='#6c757d', ordem=-10)
+        db.session.add(area)
+        db.session.flush()
+    proj = Projeto.query.filter_by(area_id=area.id, nome=INBOX_PROJETO_NOME).first()
+    if not proj:
+        proj = Projeto(area_id=area.id, nome=INBOX_PROJETO_NOME, status='ativo')
+        db.session.add(proj)
+        db.session.commit()
+    return proj
+
+
+def _projetos_para_select():
+    """Lista achatada de projetos visiveis, ordenada por area > nome. Pra dropdown de mover tarefa."""
+    q = Projeto.query.join(ProjetoArea).options(joinedload(Projeto.area))
+    if not current_user.is_dono():
+        q = q.filter(ProjetoArea.tipo == 'empresa')
+    return q.filter(Projeto.status != 'concluido') \
+            .order_by(ProjetoArea.ordem, ProjetoArea.nome, Projeto.nome).all()
 
 
 # ── Views ──
@@ -212,6 +255,7 @@ def painel():
                                contadores=_contadores(),
                                usuarios=_usuarios(),
                                templates_disponiveis=templates_disponiveis,
+                               projetos_alvo=_projetos_para_select(),
                                filtro_area=filtro_area, filtro_status=filtro_status,
                                so_foco=so_foco, busca=busca,
                                hoje_today=hoje_d,
@@ -254,6 +298,7 @@ def hierarquia():
                            contadores=_contadores(),
                            usuarios=_usuarios(),
                            templates_disponiveis=templates_disponiveis,
+                           projetos_alvo=_projetos_para_select(),
                            data_relativa=_data_relativa,
                            view='hier')
 
@@ -286,6 +331,7 @@ def projeto_detalhe(pid):
                            areas=_areas_filtradas(),
                            contadores=_contadores(),
                            usuarios=_usuarios(),
+                           projetos_alvo=_projetos_para_select(),
                            data_relativa=_data_relativa,
                            view='dashboard')
 
@@ -297,6 +343,7 @@ def kanban():
     filtro_area = request.args.get('area', type=int)
     so_foco = request.args.get('foco') == '1'
     incluir_canceladas = request.args.get('canceladas') == '1'
+    mostrar_antigas = request.args.get('antigas') == '1'
 
     q = TarefaProjeto.query.join(Projeto).join(ProjetoArea).options(
         joinedload(TarefaProjeto.projeto).joinedload(Projeto.area),
@@ -308,6 +355,18 @@ def kanban():
         q = q.filter(Projeto.area_id == filtro_area)
     if so_foco:
         q = q.filter(Projeto.foco_12s.is_(True))
+
+    # Por padrao, oculta tarefas concluidas/canceladas ha mais de 7 dias do kanban
+    # — evita poluicao da coluna Feito ao longo do tempo.
+    if not mostrar_antigas:
+        corte = datetime.utcnow() - timedelta(days=7)
+        q = q.filter(
+            db.or_(
+                ~TarefaProjeto.status.in_(['feito', 'cancelado']),
+                TarefaProjeto.feito_em.is_(None),
+                TarefaProjeto.feito_em >= corte,
+            )
+        )
 
     tarefas = q.order_by(TarefaProjeto.prazo.is_(None), TarefaProjeto.prazo,
                          TarefaProjeto.ordem).all()
@@ -325,6 +384,7 @@ def kanban():
                            filtro_area=filtro_area,
                            so_foco=so_foco,
                            incluir_canceladas=incluir_canceladas,
+                           mostrar_antigas=mostrar_antigas,
                            contadores=_contadores(),
                            data_relativa=_data_relativa,
                            view='kanban',
@@ -560,6 +620,64 @@ def projeto_excluir(pid):
 
 # ── CRUD: Tarefas ──
 
+@projetos_bp.route('/tarefa/quick', methods=['POST'])
+@login_required
+@admin_required
+def tarefa_quick():
+    """Cria tarefa rapida na Inbox (sem vinculo a projeto especifico)."""
+    nome = request.form.get('nome', '').strip()
+    if not nome:
+        return jsonify(ok=False, erro='nome obrigatorio'), 400
+
+    inbox = _get_inbox_projeto()
+
+    prazo = None
+    raw_prazo = request.form.get('prazo', '').strip()
+    if raw_prazo:
+        try:
+            prazo = datetime.strptime(raw_prazo, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+
+    t = TarefaProjeto(
+        projeto_id=inbox.id,
+        nome=nome,
+        status='a_fazer',
+        prazo=prazo,
+    )
+    db.session.add(t)
+    db.session.commit()
+
+    return jsonify(ok=True, id=t.id, contadores=_contadores())
+
+
+@projetos_bp.route('/inbox')
+@login_required
+@admin_required
+def inbox():
+    """Caixa de entrada: tarefas avulsas aguardando classificacao."""
+    inbox_proj = _get_inbox_projeto()
+    pendentes = TarefaProjeto.query.filter(
+        TarefaProjeto.projeto_id == inbox_proj.id,
+        ~TarefaProjeto.status.in_(['feito', 'cancelado']),
+    ).order_by(TarefaProjeto.criado_em.desc()).all()
+
+    feitas_recentes = TarefaProjeto.query.filter(
+        TarefaProjeto.projeto_id == inbox_proj.id,
+        TarefaProjeto.status.in_(['feito', 'cancelado']),
+        TarefaProjeto.feito_em.isnot(None),
+        TarefaProjeto.feito_em >= datetime.utcnow() - timedelta(days=14),
+    ).order_by(TarefaProjeto.feito_em.desc()).all()
+
+    return render_template('projetos/inbox.html',
+                           pendentes=pendentes,
+                           feitas_recentes=feitas_recentes,
+                           contadores=_contadores(),
+                           data_relativa=_data_relativa,
+                           view='inbox',
+                           **_contexto_acao())
+
+
 @projetos_bp.route('/tarefa/nova', methods=['POST'])
 @login_required
 @admin_required
@@ -710,6 +828,12 @@ def tarefa_atualizar(tid):
     t.recorrencia = request.form.get('recorrencia') or None
     t.observacao = request.form.get('observacao', '').strip() or None
     t.responsavel_id = request.form.get('responsavel_id', type=int) or None
+
+    novo_pid = request.form.get('projeto_id', type=int)
+    if novo_pid and novo_pid != t.projeto_id:
+        proj_alvo = Projeto.query.get(novo_pid)
+        if proj_alvo and _projeto_visivel(proj_alvo):
+            t.projeto_id = novo_pid
 
     raw_prazo = request.form.get('prazo', '').strip()
     if raw_prazo:

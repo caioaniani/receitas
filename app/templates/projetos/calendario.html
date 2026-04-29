@@ -14,7 +14,7 @@
 {{ ui.stats(contadores) }}
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    {{ ui.nav_views(view) }}
+    {{ ui.nav_views(view, contadores.inbox) }}
     <div class="d-flex align-items-center gap-2">
         <a href="{{ url_for('projetos.calendario', mes=mes-1, ano=ano) }}" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-chevron-left"></i>

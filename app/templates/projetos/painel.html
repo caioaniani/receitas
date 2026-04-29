@@ -12,7 +12,7 @@
 {{ ui.stats(contadores) }}
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    {{ ui.nav_views(view) }}
+    {{ ui.nav_views(view, contadores.inbox) }}
     <div class="d-flex gap-2 align-items-center flex-wrap">
         <div class="btn-group btn-group-sm" id="filtro-tipo">
             <button type="button" class="btn btn-outline-secondary active" data-tipo="">Tudo</button>
@@ -154,7 +154,7 @@
 {{ ui.modal_nova_area(current_user) }}
 {{ ui.modal_novo_de_template(areas, templates_disponiveis, usuarios) }}
 {{ ui.modal_comentario() }}
-{{ ui.modal_editar_tarefa(usuarios) }}
+{{ ui.modal_editar_tarefa(usuarios, projetos_alvo) }}
 {{ ui.modal_weekly() }}
 
 {% endblock %}

@@ -432,6 +432,8 @@
         document.getElementById('edt-recorrencia').value = d.recorrencia || '';
         document.getElementById('edt-responsavel').value = d.responsavel_id || '';
         document.getElementById('edt-observacao').value = d.observacao || '';
+        var pidSel = document.getElementById('edt-projeto-id');
+        if (pidSel && d.projeto_id) pidSel.value = d.projeto_id;
         var pr = document.getElementById('edt-projeto');
         if (pr) pr.textContent = d.projeto_nome || '';
         var modalEl = document.getElementById('modal-editar-tarefa');
@@ -610,6 +612,126 @@
         });
     }
 
+    // ── Quick-add: tarefa avulsa direto pra Inbox ──
+    var formQuick = document.getElementById('form-quick-add');
+    if (formQuick) {
+        formQuick.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var nomeInput = document.getElementById('quick-add-nome');
+            var prazoInput = document.getElementById('quick-add-prazo');
+            var nome = (nomeInput.value || '').trim();
+            if (!nome) { nomeInput.focus(); return; }
+
+            var fd = new FormData();
+            fd.append('csrf_token', CSRF_TOKEN);
+            fd.append('nome', nome);
+            if (prazoInput && prazoInput.value) fd.append('prazo', prazoInput.value);
+
+            // Optimistic: limpa input imediatamente
+            nomeInput.value = '';
+            if (prazoInput) prazoInput.value = '';
+            nomeInput.focus();
+
+            fetch('/projetos/tarefa/quick', {
+                method: 'POST', body: fd, credentials: 'same-origin'
+            }).then(function (r) { return r.json(); })
+              .then(function (r) {
+                  if (!r.ok) {
+                      alert('Erro ao salvar tarefa avulsa.');
+                      nomeInput.value = nome;
+                      return;
+                  }
+                  // Atualiza badge da Inbox no nav (incrementa em 1)
+                  var navInbox = document.querySelector('.proj-nav-tabs a[href="/projetos/inbox"] .badge');
+                  if (navInbox) {
+                      navInbox.textContent = (parseInt(navInbox.textContent, 10) || 0) + 1;
+                  } else {
+                      // Cria badge se não existia
+                      var navLink = document.querySelector('.proj-nav-tabs a[href="/projetos/inbox"]');
+                      if (navLink) {
+                          var b = document.createElement('span');
+                          b.className = 'badge bg-danger ms-1';
+                          b.style.fontSize = '10px';
+                          b.textContent = '1';
+                          navLink.appendChild(b);
+                      }
+                  }
+                  // Se está na Inbox, recarrega o conteudo
+                  if (location.pathname === '/projetos/inbox') {
+                      softReload();
+                  }
+                  // Toast leve de feedback
+                  mostrarToastQuick(nome);
+              }).catch(function () {
+                  alert('Falha de rede ao adicionar tarefa.');
+                  nomeInput.value = nome;
+              });
+        });
+    }
+
+    function mostrarToastQuick(nome) {
+        var t = document.getElementById('toast-quick');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'toast-quick';
+            t.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#5a9a5e;color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.2);z-index:9999;transition:opacity .3s;';
+            document.body.appendChild(t);
+        }
+        t.textContent = '✓ Adicionado à Inbox: ' + nome;
+        t.style.opacity = '1';
+        clearTimeout(t._tm);
+        t._tm = setTimeout(function () { t.style.opacity = '0'; }, 2500);
+    }
+
+    // ── Mover tarefa pra projeto via select rapido na Inbox ──
+    document.body.addEventListener('change', function (e) {
+        var sel = e.target.closest('.proj-mover-rapido');
+        if (!sel) return;
+        var tid = sel.dataset.tarefaId;
+        var novoPid = sel.value;
+        if (!tid || !novoPid) return;
+
+        var item = sel.closest('.proj-inbox-item');
+        var dadosTarefa = {};
+        if (item && item.dataset.tarefa) {
+            try { dadosTarefa = JSON.parse(item.dataset.tarefa); } catch (e) {}
+        }
+
+        // Optimistic: remove o item da lista
+        if (item) {
+            item.style.transition = 'opacity .2s';
+            item.style.opacity = '0';
+            setTimeout(function () { item.remove(); }, 200);
+        }
+
+        var fd = new FormData();
+        fd.append('csrf_token', CSRF_TOKEN);
+        fd.append('nome', dadosTarefa.nome || '');
+        fd.append('projeto_id', novoPid);
+        fd.append('status', dadosTarefa.status || 'a_fazer');
+        if (dadosTarefa.prazo) fd.append('prazo', dadosTarefa.prazo);
+        if (dadosTarefa.tipo) fd.append('tipo', dadosTarefa.tipo);
+        if (dadosTarefa.esforco) fd.append('esforco', dadosTarefa.esforco);
+        if (dadosTarefa.responsavel_id) fd.append('responsavel_id', dadosTarefa.responsavel_id);
+
+        fetch('/projetos/tarefa/' + tid + '/atualizar', {
+            method: 'POST', body: fd, credentials: 'same-origin'
+        }).then(function (r) { return r.json(); }).then(function (r) {
+            if (!r.ok) {
+                alert('Erro ao mover tarefa: ' + (r.erro || ''));
+                location.reload();
+                return;
+            }
+            // Decrementa badge da Inbox
+            var navInbox = document.querySelector('.proj-nav-tabs a[href="/projetos/inbox"] .badge');
+            if (navInbox) {
+                var n = (parseInt(navInbox.textContent, 10) || 1) - 1;
+                if (n <= 0) navInbox.remove();
+                else navInbox.textContent = n;
+            }
+        });
+    });
+
     // ── Atalhos de teclado ──
     var seqTimeout = null;
     var seq = '';
@@ -625,6 +747,7 @@
             clearTimeout(seqTimeout);
             var rotas = {
                 'h': '/projetos/hoje',
+                'i': '/projetos/inbox',
                 'p': '/projetos/',
                 'k': '/projetos/kanban',
                 'f': '/projetos/foco',
@@ -647,6 +770,19 @@
             if (busca) { e.preventDefault(); busca.focus(); return; }
         }
 
+        // i  -> foca no quick-add (se presente) ou abre Inbox
+        if (key === 'i') {
+            var qa = document.getElementById('quick-add-nome');
+            if (qa) {
+                e.preventDefault();
+                qa.focus();
+                return;
+            }
+            e.preventDefault();
+            location.href = '/projetos/inbox';
+            return;
+        }
+
         // n  -> nova tarefa (no primeiro projeto disponivel)
         if (key === 'n') {
             var primeiroProj = document.querySelector('.proj-card[data-projeto-id]');
@@ -666,7 +802,7 @@
         // ?  -> mostra ajuda de atalhos
         if (key === '?' || (e.shiftKey && key === '/')) {
             e.preventDefault();
-            alert('Atalhos:\n\n/  → busca\nn  → nova tarefa\n\ng h  → Hoje\ng p  → Painel\ng k  → Kanban\ng f  → Foco 12s\ng c  → Calendário\ng r  → Relatório\ng t  → Templates');
+            alert('Atalhos:\n\ni  → adicionar tarefa rapida (Inbox)\n/  → busca\nn  → nova tarefa\n\ng h  → Hoje\ng i  → Inbox\ng p  → Painel\ng k  → Kanban\ng f  → Foco 12s\ng c  → Calendário\ng r  → Relatório\ng t  → Templates');
         }
     });
 })();

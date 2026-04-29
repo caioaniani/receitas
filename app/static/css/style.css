@@ -1151,3 +1151,23 @@ body {
     .main-content { margin-left: 0; padding: 0; }
     .input-blue { border: none !important; background: transparent !important; }
 }
+
+/* ── Quick-add (tarefa avulsa direto pra Inbox) ── */
+#form-quick-add { border: 1px dashed #d4a435; background: #fffbf0; }
+[data-theme="dark"] #form-quick-add { background: #2a2410; border-color: #6e5b1f; }
+#quick-add-nome { font-size: 14px; }
+#quick-add-nome:focus { outline: none; }
+
+/* ── Inbox: itens avulsos ── */
+.proj-inbox-item { transition: background-color .15s; }
+.proj-inbox-item:hover { background-color: rgba(212, 164, 53, .06); }
+.proj-inbox-item:last-child { border-bottom: 0 !important; }
+[data-theme="dark"] .proj-inbox-item:hover { background-color: rgba(212, 164, 53, .12); }
+.proj-mover-rapido { border-color: #d4a435 !important; }
+.proj-mover-rapido:focus { box-shadow: 0 0 0 .15rem rgba(212, 164, 53, .25) !important; }
+
+/* Badge na nav-pill da Inbox — destaque mais forte */
+.proj-nav-tabs .nav-link .badge.bg-danger {
+    vertical-align: middle;
+    font-weight: 600;
+}
