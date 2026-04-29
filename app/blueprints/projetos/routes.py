@@ -572,6 +572,70 @@ def tarefa_mover(tid):
     return jsonify(ok=True, contadores=_contadores())
 
 
+@projetos_bp.route('/tarefa/<int:tid>/dados')
+@login_required
+@admin_required
+def tarefa_dados(tid):
+    """Retorna dados completos de uma tarefa (para o modal de edicao)."""
+    t = TarefaProjeto.query.get_or_404(tid)
+    if not _tarefa_visivel(t):
+        abort(403)
+    return jsonify({
+        'id': t.id,
+        'nome': t.nome,
+        'projeto_id': t.projeto_id,
+        'projeto_nome': t.projeto.nome,
+        'tipo': t.tipo or '',
+        'esforco': t.esforco or '',
+        'prazo': t.prazo.isoformat() if t.prazo else '',
+        'responsavel_id': t.responsavel_id or '',
+        'recorrencia': t.recorrencia or '',
+        'observacao': t.observacao or '',
+        'status': t.status,
+    })
+
+
+@projetos_bp.route('/tarefa/<int:tid>/atualizar', methods=['POST'])
+@login_required
+@admin_required
+def tarefa_atualizar(tid):
+    """Atualiza todos os campos de uma tarefa de uma vez."""
+    t = TarefaProjeto.query.get_or_404(tid)
+    if not _tarefa_visivel(t):
+        abort(403)
+
+    nome = request.form.get('nome', '').strip()
+    if not nome:
+        return jsonify(ok=False, erro='nome obrigatorio'), 400
+
+    t.nome = nome
+    t.tipo = request.form.get('tipo') or None
+    t.esforco = request.form.get('esforco') or None
+    t.recorrencia = request.form.get('recorrencia') or None
+    t.observacao = request.form.get('observacao', '').strip() or None
+    t.responsavel_id = request.form.get('responsavel_id', type=int) or None
+
+    raw_prazo = request.form.get('prazo', '').strip()
+    if raw_prazo:
+        try:
+            t.prazo = datetime.strptime(raw_prazo, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    else:
+        t.prazo = None
+
+    novo_status = request.form.get('status', '').strip()
+    if novo_status in STATUS_TAREFA:
+        antigo = t.status
+        t.status = novo_status
+        t.feito_em = datetime.utcnow() if novo_status == 'feito' else None
+        if novo_status == 'feito' and antigo != 'feito' and t.recorrencia:
+            _agendar_proxima(t)
+
+    db.session.commit()
+    return jsonify(ok=True, contadores=_contadores())
+
+
 @projetos_bp.route('/tarefa/<int:tid>/excluir', methods=['POST'])
 @login_required
 @admin_required

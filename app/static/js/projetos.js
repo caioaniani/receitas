@@ -291,6 +291,72 @@
         return d.innerHTML;
     }
 
+    // ── Edição de tarefa via modal ──
+    function abrirEdicaoTarefa(tid) {
+        fetch('/projetos/tarefa/' + tid + '/dados')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                document.getElementById('edt-id').value = d.id;
+                document.getElementById('edt-nome').value = d.nome || '';
+                document.getElementById('edt-status').value = d.status || 'a_fazer';
+                document.getElementById('edt-tipo').value = d.tipo || '';
+                document.getElementById('edt-esforco').value = d.esforco || '';
+                document.getElementById('edt-prazo').value = d.prazo || '';
+                document.getElementById('edt-recorrencia').value = d.recorrencia || '';
+                document.getElementById('edt-responsavel').value = d.responsavel_id || '';
+                document.getElementById('edt-observacao').value = d.observacao || '';
+                var pr = document.getElementById('edt-projeto');
+                if (pr) pr.textContent = d.projeto_nome || '';
+                var modalEl = document.getElementById('modal-editar-tarefa');
+                if (modalEl) new bootstrap.Modal(modalEl).show();
+            });
+    }
+
+    // Click em qualquer nome de tarefa marcado com .tarefa-nome-editavel
+    document.body.addEventListener('click', function (e) {
+        var alvo = e.target.closest('.tarefa-nome-editavel');
+        if (!alvo) return;
+        var card = alvo.closest('[data-tarefa-id]');
+        if (!card) return;
+        e.preventDefault();
+        e.stopPropagation();
+        abrirEdicaoTarefa(card.dataset.tarefaId);
+    });
+
+    // Submit do form de edição
+    var formEditar = document.getElementById('form-editar-tarefa');
+    if (formEditar) {
+        formEditar.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var tid = document.getElementById('edt-id').value;
+            var fd = new FormData(formEditar);
+            fd.append('csrf_token', CSRF_TOKEN);
+            fetch('/projetos/tarefa/' + tid + '/atualizar', {
+                method: 'POST', body: fd,
+            }).then(function (r) { return r.json(); }).then(function (r) {
+                if (r.ok) {
+                    bootstrap.Modal.getInstance(document.getElementById('modal-editar-tarefa')).hide();
+                    location.reload();
+                } else {
+                    alert('Erro: ' + (r.erro || 'desconhecido'));
+                }
+            });
+        });
+    }
+
+    // Excluir do modal de edição
+    var btnExcluirEdt = document.getElementById('edt-excluir');
+    if (btnExcluirEdt) {
+        btnExcluirEdt.addEventListener('click', function () {
+            if (!confirm('Excluir esta tarefa?')) return;
+            var tid = document.getElementById('edt-id').value;
+            var fd = new FormData();
+            fd.append('csrf_token', CSRF_TOKEN);
+            fetch('/projetos/tarefa/' + tid + '/excluir', { method: 'POST', body: fd })
+                .then(function () { location.reload(); });
+        });
+    }
+
     // ── Recorrência (select inline) ──
     document.body.addEventListener('change', function (e) {
         var sel = e.target.closest('.proj-edit-tarefa');

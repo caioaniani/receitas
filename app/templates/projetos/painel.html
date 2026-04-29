@@ -121,7 +121,7 @@
             {% for t in p.tarefas %}
             <div class="proj-tarefa {% if t.atrasada %}atrasada{% endif %}" data-tarefa-id="{{ t.id }}" data-nome="{{ t.nome|lower }}">
                 {{ ui.tarefa_status_btn(t) }}
-                <span style="flex:1;">
+                <span style="flex:1;" class="tarefa-nome-editavel" title="Clique para editar" style="cursor:pointer;">
                     {{ t.nome }}
                     {% if t.tipo %}<span class="badge bg-light text-dark ms-1" style="font-size:9px;">{{ t.tipo|replace('_',' ') }}</span>{% endif %}
                     {% if t.esforco %}<span class="badge bg-secondary ms-1" style="font-size:9px;">{{ t.esforco }}</span>{% endif %}
@@ -167,6 +167,7 @@
 {{ ui.modal_nova_area(current_user) }}
 {{ ui.modal_novo_de_template(areas, templates_disponiveis, usuarios) }}
 {{ ui.modal_comentario() }}
+{{ ui.modal_editar_tarefa(usuarios) }}
 {{ ui.modal_weekly() }}
 
 {% endblock %}

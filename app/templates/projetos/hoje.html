@@ -36,7 +36,7 @@
                     <div class="d-flex align-items-start gap-2">
                         {{ ui.tarefa_status_btn(t) }}
                         <div style="flex:1;">
-                            <div class="fw-semibold">{{ t.nome }}</div>
+                            <div class="fw-semibold tarefa-nome-editavel" title="Clique para editar" style="cursor:pointer;">{{ t.nome }}</div>
                             <div class="proj-meta">
                                 {{ ui.area_badge(t.projeto.area) }}
                                 <span class="badge bg-light text-dark">{{ t.projeto.nome }}</span>
@@ -66,7 +66,7 @@
                     <div class="d-flex align-items-start gap-2">
                         {{ ui.tarefa_status_btn(t) }}
                         <div style="flex:1;">
-                            <div class="fw-semibold">{{ t.nome }}</div>
+                            <div class="fw-semibold tarefa-nome-editavel" title="Clique para editar" style="cursor:pointer;">{{ t.nome }}</div>
                             <div class="proj-meta">
                                 {{ ui.area_badge(t.projeto.area) }}
                                 <span class="badge bg-light text-dark">{{ t.projeto.nome }}</span>
@@ -95,7 +95,7 @@
                     <div class="d-flex align-items-start gap-2">
                         {{ ui.tarefa_status_btn(t) }}
                         <div style="flex:1;">
-                            <div class="fw-semibold">{{ t.nome }}</div>
+                            <div class="fw-semibold tarefa-nome-editavel" title="Clique para editar" style="cursor:pointer;">{{ t.nome }}</div>
                             <div class="proj-meta">
                                 {{ ui.area_badge(t.projeto.area) }}
                                 <span class="badge bg-light text-dark">{{ t.projeto.nome }}</span>
@@ -117,7 +117,7 @@
                     <div class="d-flex align-items-start gap-2">
                         {{ ui.tarefa_status_btn(t) }}
                         <div style="flex:1;">
-                            <div class="fw-semibold">{{ t.nome }}</div>
+                            <div class="fw-semibold tarefa-nome-editavel" title="Clique para editar" style="cursor:pointer;">{{ t.nome }}</div>
                             <div class="proj-meta">
                                 {{ ui.area_badge(t.projeto.area) }}
                                 <span class="badge bg-light text-dark">{{ t.projeto.nome }}</span>
@@ -132,6 +132,7 @@
     </div>
 </div>
 
+{{ ui.modal_editar_tarefa(usuarios) }}
 {{ ui.modal_weekly() }}
 
 {% endblock %}
