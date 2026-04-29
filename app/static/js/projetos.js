@@ -220,9 +220,20 @@
                     var novoStatus = evt.to.dataset.status;
                     if (!tid || !novoStatus) return;
 
+                    // Optimistic: ja atualiza visual sem esperar resposta
+                    var circle = card.querySelector('.proj-tarefa-status');
+                    if (circle) aplicarStatusVisual(circle, novoStatus);
+                    // Atualiza data-tarefa do card pra refletir status novo
+                    try {
+                        var d = JSON.parse(card.dataset.tarefa || '{}');
+                        d.status = novoStatus;
+                        card.dataset.tarefa = JSON.stringify(d);
+                    } catch (e) {}
+                    atualizarContadores();
+
+                    // Sincroniza em background
                     var ids = Array.from(evt.to.querySelectorAll('[data-tarefa-id]'))
                         .map(function (el) { return el.dataset.tarefaId; });
-
                     var fd = new FormData();
                     fd.append('csrf_token', CSRF_TOKEN);
                     fd.append('status', novoStatus);
@@ -230,13 +241,11 @@
                     fetch('/projetos/tarefa/' + tid + '/mover', { method: 'POST', body: fd })
                         .then(function (r) { return r.json(); })
                         .then(function (r) {
-                            if (r.ok) {
-                                // Atualiza visual do circle
-                                var circle = card.querySelector('.proj-tarefa-status');
-                                if (circle) aplicarStatusVisual(circle, novoStatus);
-                                // Recarrega contadores
-                                setTimeout(function(){ location.reload(); }, 400);
+                            if (!r.ok) {
+                                alert('Não foi possível mover a tarefa. Recarregue.');
                             }
+                        }).catch(function () {
+                            alert('Erro de rede ao mover. Recarregue.');
                         });
                 },
             });
