@@ -38,16 +38,14 @@
 
     function atualizarContadores() {
         // Recalcula contadores dos headers das colunas do kanban
+        // Conta SO os cards diretos da coluna (.proj-kanban-card), nao
+        // qualquer descendente com data-tarefa-id (o status btn tambem tem).
         document.querySelectorAll('.proj-coluna-cards').forEach(function (col) {
-            var n = col.querySelectorAll('[data-tarefa-id]').length;
+            var n = col.querySelectorAll('.proj-kanban-card').length;
             var header = col.parentElement.querySelector('.proj-coluna-header');
-            if (header) {
-                var label = header.textContent.split('(')[0].trim();
-                // Mantem qualquer sufixo como "WIP 3"
-                var sufixo = '';
-                var m = header.textContent.match(/(·.*)$/);
-                if (m) sufixo = ' ' + m[1];
-                header.firstChild.textContent = label + ' (' + n + ')';
+            if (header && header.firstChild) {
+                var label = (header.firstChild.nodeValue || header.textContent).split('(')[0].trim();
+                header.firstChild.nodeValue = label + ' (' + n + ')';
             }
         });
     }
