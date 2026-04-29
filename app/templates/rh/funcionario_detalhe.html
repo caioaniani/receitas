@@ -30,15 +30,25 @@
             <input type="text" name="cpf" class="form-control input-blue" value="{{ func.cpf }}" required>
         </div>
         <div class="col-md-4">
-            <label class="form-label fw-bold">Função</label>
-            <input type="text" name="funcao" class="form-control input-blue" value="{{ func.funcao or '' }}">
+            <label class="form-label fw-bold">Cargo</label>
+            <select name="cargo_id" class="form-select input-blue">
+                <option value="">— sem cargo —</option>
+                {% for c in cargos_disponiveis %}
+                <option value="{{ c.id }}" {% if func.cargo_id == c.id %}selected{% endif %}>
+                    {{ c.nome }} (R$ {{ '%.2f'|format(c.salario_base)|replace('.', ',') }})
+                </option>
+                {% endfor %}
+            </select>
+            <small class="text-muted"><a href="{{ url_for('rh.cargos') }}">Gerenciar cargos →</a></small>
         </div>
     </div>
 
     <div class="row g-3 mt-1">
         <div class="col-md-2">
-            <label class="form-label fw-bold">Salário Base</label>
-            <input type="text" name="salario_base" class="form-control input-blue" value="{{ '%.2f' % func.salario_base }}">
+            <label class="form-label fw-bold">Salário Base
+                <small class="text-muted fw-normal">(do cargo)</small>
+            </label>
+            <input type="text" class="form-control" value="{{ '%.2f' % func.salario_efetivo() }}" disabled style="background:#f0f0f0;">
         </div>
         <div class="col-md-2">
             <label class="form-label fw-bold">Cargo Confiança</label>

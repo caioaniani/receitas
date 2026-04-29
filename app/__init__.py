@@ -491,6 +491,25 @@ def _migrate_postgres(app):
         # Liga a flag para quem ja tinha cargo_confianca > 0 (preserva comportamento)
         _try("UPDATE funcionario SET tem_cargo_confianca = TRUE WHERE cargo_confianca > 0")
 
+    # Cargo: cria a coluna FK + popula cargos a partir das funcoes existentes
+    if cols_func_res and 'cargo_id' not in cols_func_res:
+        _try("ALTER TABLE funcionario ADD COLUMN cargo_id INTEGER REFERENCES cargo(id)")
+        # Cria 1 cargo por funcao distinta com o salario MAIS COMUM (moda) de quem tem essa funcao
+        _try("""
+        INSERT INTO cargo (nome, salario_base, ativo)
+        SELECT funcao, MAX(salario_base), TRUE
+        FROM funcionario
+        WHERE funcao IS NOT NULL AND TRIM(funcao) <> ''
+        GROUP BY funcao
+        ON CONFLICT (nome) DO NOTHING
+        """)
+        # Liga cada funcionario ao cargo correspondente
+        _try("""
+        UPDATE funcionario SET cargo_id = (
+            SELECT id FROM cargo WHERE cargo.nome = funcionario.funcao
+        ) WHERE funcao IS NOT NULL AND TRIM(funcao) <> ''
+        """)
+
 
 def _migrate_sqlite(app):
     """Adiciona colunas novas no SQLite."""
@@ -551,6 +570,20 @@ def _migrate_sqlite(app):
     if cols_func and 'tem_cargo_confianca' not in cols_func:
         cursor.execute("ALTER TABLE funcionario ADD COLUMN tem_cargo_confianca BOOLEAN DEFAULT 0")
         cursor.execute("UPDATE funcionario SET tem_cargo_confianca = 1 WHERE cargo_confianca > 0")
+    if cols_func and 'cargo_id' not in cols_func:
+        cursor.execute("ALTER TABLE funcionario ADD COLUMN cargo_id INTEGER REFERENCES cargo(id)")
+        cursor.execute("""
+            INSERT OR IGNORE INTO cargo (nome, salario_base, ativo)
+            SELECT funcao, MAX(salario_base), 1
+            FROM funcionario
+            WHERE funcao IS NOT NULL AND TRIM(funcao) <> ''
+            GROUP BY funcao
+        """)
+        cursor.execute("""
+            UPDATE funcionario SET cargo_id = (
+                SELECT id FROM cargo WHERE cargo.nome = funcionario.funcao
+            ) WHERE funcao IS NOT NULL AND TRIM(funcao) <> ''
+        """)
 
     # Migração loja
     cursor.execute("PRAGMA table_info(loja)")

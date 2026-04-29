@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Cargos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-briefcase"></i> Cargos</h1>
+</div>
+
+<div class="alert alert-info py-2" style="font-size:13px;">
+    <i class="bi bi-info-circle"></i> Cada cargo define um <strong>salário base</strong>. Funcionários ligados ao cargo herdam automaticamente esse salário no cálculo de custo. Adicionais (cargo de confiança, premiação, horas extras, VT/VR) são individuais.
+</div>
+
+<form method="POST" action="{{ url_for('rh.salvar_cargos') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered bg-white">
+            <thead class="thead-padaria">
+                <tr>
+                    <th style="width:30%">Nome</th>
+                    <th style="width:140px">Salário Base</th>
+                    <th>Descrição</th>
+                    <th style="width:80px" class="text-center">Ativo</th>
+                    <th style="width:100px" class="text-center">Funcs</th>
+                    <th style="width:60px"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in cargos %}
+                <tr>
+                    <td>
+                        <input type="hidden" name="cargo_id[]" value="{{ c.id }}">
+                        <input type="text" name="cargo_nome[]" value="{{ c.nome }}" class="form-control form-control-sm input-blue" required>
+                    </td>
+                    <td>
+                        <input type="text" name="cargo_salario[]" value="{{ '%.2f' % c.salario_base if c.salario_base else '' }}" class="form-control form-control-sm input-blue text-end">
+                    </td>
+                    <td>
+                        <input type="text" name="cargo_descricao[]" value="{{ c.descricao or '' }}" class="form-control form-control-sm input-blue">
+                    </td>
+                    <td class="text-center">
+                        <input type="checkbox" name="cargo_ativo[]" value="{{ c.id }}" class="form-check-input" {% if c.ativo %}checked{% endif %}>
+                    </td>
+                    <td class="text-center text-muted">
+                        {{ c.funcionarios|length }}
+                    </td>
+                    <td class="text-center">
+                        {% if not c.funcionarios %}
+                        <button type="button" class="btn btn-sm btn-link text-danger p-0"
+                                onclick="if(confirm('Excluir cargo {{ c.nome }}?')) { document.getElementById('del-cargo-{{ c.id }}').submit(); }"
+                                title="Excluir">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+
+                <!-- Linha vazia para novo cargo -->
+                <tr style="background:#f9f9f9;">
+                    <td>
+                        <input type="hidden" name="cargo_id[]" value="">
+                        <input type="text" name="cargo_nome[]" value="" placeholder="+ Novo cargo" class="form-control form-control-sm input-blue">
+                    </td>
+                    <td>
+                        <input type="text" name="cargo_salario[]" value="" placeholder="0,00" class="form-control form-control-sm input-blue text-end">
+                    </td>
+                    <td>
+                        <input type="text" name="cargo_descricao[]" value="" placeholder="opcional" class="form-control form-control-sm input-blue">
+                    </td>
+                    <td class="text-center">
+                        <input type="checkbox" name="cargo_ativo[]" value="{{ cargos|length }}" class="form-check-input" checked>
+                    </td>
+                    <td class="text-center text-muted">—</td>
+                    <td></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-sm">
+        <i class="bi bi-check-lg"></i> Salvar
+    </button>
+</form>
+
+<!-- Forms ocultos para excluir -->
+{% for c in cargos %}
+{% if not c.funcionarios %}
+<form id="del-cargo-{{ c.id }}" method="POST" action="{{ url_for('rh.excluir_cargo', id=c.id) }}" class="d-none">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+{% endif %}
+{% endfor %}
+{% endblock %}

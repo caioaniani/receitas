@@ -222,6 +222,20 @@ funcionario_loja = db.Table('funcionario_loja',
 )
 
 
+class Cargo(db.Model):
+    __tablename__ = 'cargo'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False, unique=True)
+    salario_base = db.Column(db.Float, nullable=False, default=0)
+    descricao = db.Column(db.String(200))
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Cargo {self.nome} R$ {self.salario_base:.2f}>'
+
+
 class Funcionario(db.Model):
     __tablename__ = 'funcionario'
 
@@ -233,6 +247,7 @@ class Funcionario(db.Model):
     data_admissao = db.Column(db.Date)
     data_demissao = db.Column(db.Date)
     ativo = db.Column(db.Boolean, default=True)
+    cargo_id = db.Column(db.Integer, db.ForeignKey('cargo.id'), nullable=True)
     cargo_confianca = db.Column(db.Float, default=0)
     tem_cargo_confianca = db.Column(db.Boolean, default=False)
     hora_extra_pct = db.Column(db.Float, default=55)
@@ -250,6 +265,16 @@ class Funcionario(db.Model):
     data_nascimento = db.Column(db.Date)
 
     lojas = db.relationship('Loja', secondary=funcionario_loja, backref='funcionarios')
+    cargo = db.relationship('Cargo', backref='funcionarios')
+
+    def salario_efetivo(self):
+        """Salario base vem do Cargo. Fallback para o campo legado se cargo nao setado."""
+        try:
+            if self.cargo:
+                return self.cargo.salario_base or 0
+        except Exception:
+            pass
+        return self.salario_base or 0
 
     def total_vt(self):
         return self.vt_dia * self.dias_trabalhados if self.vt_dia else 0
@@ -258,13 +283,13 @@ class Funcionario(db.Model):
         return self.vr_dia * self.dias_trabalhados if self.vr_dia else 0
 
     def valor_cargo_confianca(self):
-        """Cargo de confianca = 40% do salario base (se ativo)."""
+        """Cargo de confianca = 40% do salario efetivo (se ativo)."""
         try:
             if not getattr(self, 'tem_cargo_confianca', False):
                 return 0
         except Exception:
             return 0
-        return (self.salario_base or 0) * 0.40
+        return self.salario_efetivo() * 0.40
 
     def total_horas_extras(self):
         """Valor mensal das horas extras: (salario / 220h) * (1 + pct/100) * qtd_horas."""
@@ -272,15 +297,16 @@ class Funcionario(db.Model):
             qtd = self.horas_extras or 0
         except Exception:
             return 0
-        if not qtd or not self.salario_base:
+        sal = self.salario_efetivo()
+        if not qtd or not sal:
             return 0
-        valor_hora = self.salario_base / 220.0
+        valor_hora = sal / 220.0
         adicional = 1 + (self.hora_extra_pct or 0) / 100
         return valor_hora * adicional * qtd
 
     def custo_total(self):
         return (
-            self.salario_base +
+            self.salario_efetivo() +
             self.valor_cargo_confianca() +
             (self.premiacao or 0) +
             self.total_horas_extras() +
