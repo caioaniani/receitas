@@ -347,6 +347,62 @@ def foco():
                            **_contexto_acao())
 
 
+@projetos_bp.route('/dia')
+@login_required
+@admin_required
+def dia():
+    """Tarefas de uma data especifica (similar a 'hoje' mas com seletor)."""
+    data_str = request.args.get('data', '')
+    try:
+        alvo = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        alvo = date.today()
+
+    base = TarefaProjeto.query.join(Projeto).join(ProjetoArea).options(
+        joinedload(TarefaProjeto.projeto).joinedload(Projeto.area),
+        joinedload(TarefaProjeto.responsavel),
+    )
+    if not current_user.is_dono():
+        base = base.filter(ProjetoArea.tipo == 'empresa')
+
+    # Tarefas com prazo nesse dia (todos os status)
+    do_dia = base.filter(TarefaProjeto.prazo == alvo).order_by(TarefaProjeto.status).all()
+
+    # Tarefas em fazendo (independe da data)
+    fazendo = base.filter(TarefaProjeto.status == 'fazendo') \
+        .order_by(TarefaProjeto.prazo.is_(None), TarefaProjeto.prazo).all()
+
+    # Atrasadas relativas a essa data
+    atrasadas = base.filter(
+        TarefaProjeto.prazo.isnot(None),
+        TarefaProjeto.prazo < alvo,
+        ~TarefaProjeto.status.in_(['feito', 'cancelado']),
+    ).order_by(TarefaProjeto.prazo).all()
+
+    # Próximos 7 dias após a data
+    semana = base.filter(
+        TarefaProjeto.prazo.isnot(None),
+        TarefaProjeto.prazo > alvo,
+        TarefaProjeto.prazo <= alvo + timedelta(days=7),
+        ~TarefaProjeto.status.in_(['feito', 'cancelado']),
+    ).order_by(TarefaProjeto.prazo).all()
+
+    return render_template('projetos/dia.html',
+                           alvo=alvo,
+                           alvo_iso=alvo.isoformat(),
+                           dia_anterior=(alvo - timedelta(days=1)).isoformat(),
+                           dia_proximo=(alvo + timedelta(days=1)).isoformat(),
+                           do_dia=do_dia,
+                           fazendo=fazendo,
+                           atrasadas=atrasadas,
+                           semana=semana,
+                           hoje=date.today(),
+                           contadores=_contadores(),
+                           data_relativa=_data_relativa,
+                           view='dia',
+                           **_contexto_acao())
+
+
 @projetos_bp.route('/hoje')
 @login_required
 @admin_required

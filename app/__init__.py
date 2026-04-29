@@ -39,6 +39,25 @@ def create_app(config_class=None):
         return {'now': datetime.now}
 
     # ── Context processor: sidebar com todas as receitas ──
+    # Cache in-memory simples para a sidebar (queries pesadas que mudam pouco)
+    import time as _time
+    _SIDEBAR_CACHE = {}
+
+    def _cache(key, ttl, factory):
+        now = _time.time()
+        item = _SIDEBAR_CACHE.get(key)
+        if item and item['expires'] > now:
+            return item['data']
+        data = factory()
+        _SIDEBAR_CACHE[key] = {'data': data, 'expires': now + ttl}
+        return data
+
+    def _invalidate_sidebar_cache():
+        _SIDEBAR_CACHE.clear()
+
+    # Expoe pra outros modulos invalidarem (ex: ao salvar receita/MP/projeto)
+    app.invalidate_sidebar_cache = _invalidate_sidebar_cache
+
     @app.context_processor
     def inject_sidebar():
         from flask_login import current_user
@@ -51,60 +70,78 @@ def create_app(config_class=None):
                 receita_nomes=[], funcionarios=[],
             )
 
-        # Receitas com eager load de ingredientes (evita N+1 na sidebar)
-        receitas = Receita.query.options(
-            db.joinedload(Receita.ingredientes)
-        ).order_by(Receita.categoria, Receita.nome).all()
+        # ── Receitas + categorias (cache 60s) ──
+        def _carrega_receitas_globais():
+            recs = Receita.query.options(
+                db.joinedload(Receita.ingredientes)
+            ).order_by(Receita.categoria, Receita.nome).all()
+            cats = {}
+            for r in recs:
+                cat = r.categoria or 'Outros'
+                cats.setdefault(cat, []).append(r)
+            return {
+                'receitas': recs,
+                'categorias': cats,
+                'nomes': [r.nome for r in recs],
+            }
+        rec_data = _cache('receitas', 60, _carrega_receitas_globais)
 
-        # Funcionário: filtrar só fichas atribuídas via subquery
+        # Para não-admin, filtra por atribuições (NÃO cacheado, é per-user)
         if not current_user.is_admin():
             ids_permitidos = set(
-                db.session.query(Atribuicao.receita_id)
-                .filter_by(usuario_id=current_user.id)
-                .all()
+                r[0] for r in db.session.query(Atribuicao.receita_id)
+                .filter_by(usuario_id=current_user.id).all()
             )
-            ids_permitidos = {r[0] for r in ids_permitidos}
-            receitas_sidebar = [r for r in receitas if r.id in ids_permitidos]
+            categorias = {}
+            for cat, lst in rec_data['categorias'].items():
+                filt = [r for r in lst if r.id in ids_permitidos]
+                if filt:
+                    categorias[cat] = filt
         else:
-            receitas_sidebar = receitas
+            categorias = rec_data['categorias']
 
-        categorias = {}
-        for r in receitas_sidebar:
-            cat = r.categoria or 'Outros'
-            if cat not in categorias:
-                categorias[cat] = []
-            categorias[cat].append(r)
+        receita_nomes = rec_data['nomes']
 
-        # MP data como JSON para autocomplete
-        mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
-        mp_dict = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade,
-                              'peso_unidade': mp.peso_unidade} for mp in mps}
-        mp_json = json.dumps(mp_dict, ensure_ascii=False)
-        mp_nomes = [mp.nome for mp in mps]
+        # ── MP data (cache 60s) ──
+        def _carrega_mp_data():
+            mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+            mp_dict = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade,
+                                  'peso_unidade': mp.peso_unidade} for mp in mps}
+            return {
+                'json': json.dumps(mp_dict, ensure_ascii=False),
+                'nomes': [mp.nome for mp in mps],
+            }
+        mp_data = _cache('mps', 60, _carrega_mp_data)
 
-        receita_nomes = [r.nome for r in receitas]
+        # ── Funcionários (cache 120s, só admin precisa) ──
+        if current_user.is_admin():
+            def _carrega_funcs():
+                return Usuario.query.filter_by(papel='funcionario').order_by(Usuario.nome).all()
+            funcionarios = _cache('funcionarios', 120, _carrega_funcs)
+        else:
+            funcionarios = []
 
-        # Lista de funcionários só para admin
-        funcionarios = (
-            Usuario.query.filter_by(papel='funcionario').order_by(Usuario.nome).all()
-            if current_user.is_admin() else []
-        )
-
-        # Contadores de Projetos para badge na sidebar (admin)
+        # ── Contadores de Projetos (cache 10s, atualiza rapido) ──
         proj_atrasadas = 0
         proj_fazendo = 0
         if current_user.is_admin():
             try:
-                from app.models import TarefaProjeto
-                from datetime import date as _date
-                proj_atrasadas = TarefaProjeto.query.filter(
-                    TarefaProjeto.prazo.isnot(None),
-                    TarefaProjeto.prazo < _date.today(),
-                    ~TarefaProjeto.status.in_(['feito', 'cancelado']),
-                ).count()
-                proj_fazendo = TarefaProjeto.query.filter_by(status='fazendo').count()
+                def _carrega_proj_count():
+                    from app.models import TarefaProjeto
+                    from datetime import date as _date
+                    a = TarefaProjeto.query.filter(
+                        TarefaProjeto.prazo.isnot(None),
+                        TarefaProjeto.prazo < _date.today(),
+                        ~TarefaProjeto.status.in_(['feito', 'cancelado']),
+                    ).count()
+                    f = TarefaProjeto.query.filter_by(status='fazendo').count()
+                    return (a, f)
+                proj_atrasadas, proj_fazendo = _cache('proj_count', 10, _carrega_proj_count)
             except Exception:
                 pass
+
+        mp_json = mp_data['json']
+        mp_nomes = mp_data['nomes']
 
         return dict(
             sidebar_categorias=categorias,

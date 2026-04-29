@@ -35,6 +35,11 @@
         </a>
     </li>
     <li class="nav-item">
+        <a href="{{ url_for('projetos.dia') }}" class="nav-link {% if view == 'dia' %}active{% endif %}">
+            <i class="bi bi-calendar-day"></i> Dia
+        </a>
+    </li>
+    <li class="nav-item">
         <a href="{{ url_for('projetos.kanban') }}" class="nav-link {% if view == 'kanban' %}active{% endif %}">
             <i class="bi bi-kanban"></i> Kanban
         </a>
