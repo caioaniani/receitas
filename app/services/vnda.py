@@ -74,17 +74,21 @@ def _extrair_data_entrega(order):
             d = _parse_iso_date(order.get(campo))
             if d:
                 return d
-    edd = order.get('expected_delivery_date')
-    if edd:
-        try:
-            return datetime.fromisoformat(edd.replace('Z', '+00:00')).date()
-        except (ValueError, TypeError):
-            pass
+    # extra.DataDeEntrega = data agendada que o cliente escolheu no checkout.
+    # Quando existe, e a fonte de verdade — tem prioridade sobre
+    # expected_delivery_date, que o VNDA preenche automaticamente baseado
+    # em delivery_days (frequentemente errado para encomendas agendadas).
     extra = order.get('extra') or {}
     data_br = extra.get('DataDeEntrega', '')
     if data_br:
         try:
             return datetime.strptime(data_br.strip(), '%d/%m/%Y').date()
+        except (ValueError, TypeError):
+            pass
+    edd = order.get('expected_delivery_date')
+    if edd:
+        try:
+            return datetime.fromisoformat(edd.replace('Z', '+00:00')).date()
         except (ValueError, TypeError):
             pass
     return None
