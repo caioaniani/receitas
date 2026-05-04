@@ -253,7 +253,9 @@ def buscar_pedidos_do_dia(target_date):
     if not token:
         return {'erro': 'Token Vnda nao configurado. Adicione VNDA_API_TOKEN nas variaveis de ambiente.', 'pedidos': []}
 
-    start = target_date - timedelta(days=14)
+    # Janela de criacao: pedidos VNDA podem ser feitos com bastante antecedencia
+    # (encomendas de bolos, datas comemorativas). 60 dias cobre o caso geral.
+    start = target_date - timedelta(days=60)
     end = target_date + timedelta(days=3)
     todos = _buscar_pedidos_janela(start, end)
 
@@ -285,7 +287,7 @@ def contar_pedidos_por_dia(year, month):
     else:
         last = date(year, month + 1, 1) - timedelta(days=1)
 
-    start = first - timedelta(days=30)
+    start = first - timedelta(days=60)
     end = last + timedelta(days=5)
     todos = _buscar_pedidos_janela(start, end)
 
