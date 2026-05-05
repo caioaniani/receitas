@@ -218,7 +218,7 @@ def api_debug_pedido(code):
         info['walk_erro'] = str(e)
 
     # 5) Endpoints adicionais (label/print/customizations/notes/extra)
-    for path in (f'/orders/{code}/customizations', f'/orders/{code}/notes', f'/orders/{code}/label', f'/orders/{code}/print', f'/orders/{code}/print_layout', f'/orders/{code}/extra'):
+    for path in (f'/orders/{code}/customizations', f'/orders/{code}/notes', f'/orders/{code}/label', f'/orders/{code}/print', f'/orders/{code}/print_layout', f'/orders/{code}/extra', f'/orders/{code}/items'):
         try:
             r = http_requests.get(
                 f'https://api.vnda.com.br/api/v2{path}',
@@ -226,10 +226,65 @@ def api_debug_pedido(code):
             )
             info[f'endpoint_{path}'] = {
                 'status': r.status_code,
-                'body': r.text[:2000] if r.status_code != 404 else None,
+                'body': r.text[:3000] if r.status_code != 404 else None,
             }
         except http_requests.RequestException:
             pass
+
+    # 6) Tentativas de buscar customizations por item_id
+    if 'order' in locals():
+        item_ids = [str(i.get('id')) for i in (order.get('items') or []) if i.get('id')]
+        cart_id = order.get('cart_id')
+        for item_id in item_ids:
+            for path in (f'/orders/{code}/items/{item_id}/customizations',
+                         f'/orders/{code}/items/{item_id}',
+                         f'/items/{item_id}/customizations',
+                         f'/items/{item_id}',
+                         f'/customizations/{item_id}',
+                         f'/cart_items/{item_id}/customizations'):
+                try:
+                    r = http_requests.get(
+                        f'https://api.vnda.com.br/api/v2{path}',
+                        headers=headers, timeout=8,
+                    )
+                    if r.status_code == 200:
+                        info[f'endpoint_{path}'] = {
+                            'status': r.status_code,
+                            'body': r.text[:3000],
+                        }
+                except http_requests.RequestException:
+                    pass
+        if cart_id:
+            for path in (f'/carts/{cart_id}', f'/carts/{cart_id}/items', f'/carts/{cart_id}/customizations'):
+                try:
+                    r = http_requests.get(
+                        f'https://api.vnda.com.br/api/v2{path}',
+                        headers=headers, timeout=8,
+                    )
+                    if r.status_code == 200:
+                        info[f'endpoint_{path}'] = {
+                            'status': r.status_code,
+                            'body': r.text[:3000],
+                        }
+                except http_requests.RequestException:
+                    pass
+
+    # 7) include=customizations
+    try:
+        r = http_requests.get(
+            f'https://api.vnda.com.br/api/v2/orders/{code}',
+            headers=headers, params={'include': 'customizations'}, timeout=10,
+        )
+        if r.status_code == 200:
+            try:
+                o = r.json()
+                info['include_customizations_chaves'] = sorted(o.keys())
+                info['include_customizations_items_extra'] = [i.get('extra') for i in (o.get('items') or [])]
+                info['include_customizations_customizations'] = o.get('customizations')
+            except ValueError:
+                pass
+    except http_requests.RequestException:
+        pass
 
     return jsonify(info)
 
