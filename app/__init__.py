@@ -510,6 +510,19 @@ def _migrate_postgres(app):
         ) WHERE funcao IS NOT NULL AND TRIM(funcao) <> ''
         """)
 
+        # ── Override de data de entrega de pedido VNDA (local) ──
+        _try("""
+        CREATE TABLE IF NOT EXISTS override_entrega (
+            id SERIAL PRIMARY KEY,
+            pedido_code VARCHAR(50) NOT NULL UNIQUE,
+            data_entrega DATE NOT NULL,
+            motivo TEXT,
+            atualizado_em TIMESTAMP DEFAULT NOW(),
+            atualizado_por INTEGER REFERENCES usuario(id)
+        )
+        """)
+        _try("CREATE INDEX IF NOT EXISTS idx_override_entrega_code ON override_entrega(pedido_code)")
+
 
 def _migrate_sqlite(app):
     """Adiciona colunas novas no SQLite."""

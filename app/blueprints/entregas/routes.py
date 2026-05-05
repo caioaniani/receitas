@@ -8,7 +8,7 @@ import requests as http_requests
 from app.blueprints.entregas import entregas_bp
 from app.decorators import entrega_access_required
 from app.extensions import db
-from app.models import CartinhaEntrega
+from app.models import CartinhaEntrega, OverrideEntrega
 from app.services import vnda
 
 
@@ -17,6 +17,11 @@ from app.services import vnda
 @entrega_access_required
 def index():
     return render_template('entregas/index.html', hoje=date.today().isoformat())
+
+
+def _carregar_overrides_data():
+    """Retorna dict {pedido_code: date} com todas as datas sobrescritas no ERP."""
+    return {o.pedido_code: o.data_entrega for o in OverrideEntrega.query.all()}
 
 
 @entregas_bp.route('/api/pedidos')
@@ -29,7 +34,8 @@ def api_pedidos():
     except ValueError:
         target = date.today()
 
-    resultado = vnda.buscar_pedidos_do_dia(target)
+    overrides = _carregar_overrides_data()
+    resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
 
     if 'erro' in resultado:
         resp = jsonify(pedidos=[], data=data_str, erro=resultado['erro'])
@@ -67,7 +73,8 @@ def api_calendario():
     except (ValueError, IndexError):
         year, month = date.today().year, date.today().month
 
-    dias = vnda.contar_pedidos_por_dia(year, month)
+    overrides = _carregar_overrides_data()
+    dias = vnda.contar_pedidos_por_dia(year, month, overrides=overrides)
     resp = jsonify(dias=dias)
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
     return resp
@@ -90,6 +97,46 @@ def salvar_cartinha(code):
     c.atualizado_por = current_user.id
     db.session.commit()
 
+    return jsonify(ok=True)
+
+
+@entregas_bp.route('/data/<code>', methods=['POST'])
+@login_required
+@entrega_access_required
+def salvar_data_override(code):
+    """Sobrescreve a data de entrega de um pedido (apenas no ERP, nao sincroniza com VNDA)."""
+    data = request.get_json(silent=True) or {}
+    data_str = (data.get('data') or '').strip()
+    motivo = (data.get('motivo') or '').strip() or None
+
+    try:
+        nova_data = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify(ok=False, erro='data invalida'), 400
+
+    o = OverrideEntrega.query.filter_by(pedido_code=code).first()
+    if not o:
+        o = OverrideEntrega(pedido_code=code)
+        db.session.add(o)
+
+    o.data_entrega = nova_data
+    o.motivo = motivo
+    o.atualizado_em = datetime.utcnow()
+    o.atualizado_por = current_user.id
+    db.session.commit()
+
+    return jsonify(ok=True, data=nova_data.isoformat())
+
+
+@entregas_bp.route('/data/<code>', methods=['DELETE'])
+@login_required
+@entrega_access_required
+def remover_data_override(code):
+    """Remove o override; pedido volta a usar a data original do VNDA."""
+    o = OverrideEntrega.query.filter_by(pedido_code=code).first()
+    if o:
+        db.session.delete(o)
+        db.session.commit()
     return jsonify(ok=True)
 
 

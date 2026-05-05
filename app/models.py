@@ -740,6 +740,20 @@ class CartinhaEntrega(db.Model):
     autor = db.relationship('Usuario', backref='cartinhas')
 
 
+class OverrideEntrega(db.Model):
+    """Sobrescreve a data de entrega de um pedido VNDA — local, nao sincroniza com o VNDA."""
+    __tablename__ = 'override_entrega'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_code = db.Column(db.String(50), nullable=False, unique=True, index=True)
+    data_entrega = db.Column(db.Date, nullable=False)
+    motivo = db.Column(db.Text)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    autor = db.relationship('Usuario', backref='overrides_entrega')
+
+
 # ── Gestao de Projetos (PARA + 12 Week Year) ──
 
 class ProjetoArea(db.Model):

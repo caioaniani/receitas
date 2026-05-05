@@ -378,10 +378,13 @@ def _buscar_pedidos_janela(start_date, end_date):
 _STATUS_IGNORAR = {'canceled', 'cancelled'}
 
 
-def buscar_pedidos_do_dia(target_date):
+def buscar_pedidos_do_dia(target_date, overrides=None):
+    """overrides: dict {pedido_code: data_entrega} para sobrescrever a data extraida."""
     token = current_app.config.get('VNDA_API_TOKEN')
     if not token:
         return {'erro': 'Token Vnda nao configurado. Adicione VNDA_API_TOKEN nas variaveis de ambiente.', 'pedidos': []}
+
+    overrides = overrides or {}
 
     # Janela de criacao: pedidos VNDA podem ser feitos com bastante antecedencia
     # (encomendas de bolos, datas comemorativas). 60 dias cobre o caso geral.
@@ -395,26 +398,41 @@ def buscar_pedidos_do_dia(target_date):
     for order in todos:
         if (order.get('status') or '').lower() in _STATUS_IGNORAR:
             continue
-        de = _extrair_data_entrega(order)
+        code = order.get('code')
+        de_original = _extrair_data_entrega(order)
+        de = overrides.get(code) or de_original
         if de != target_date:
             continue
         client_id = order.get('client_id')
         client_data = buscar_cliente(client_id)
-        shipping_data = buscar_shipping_address(order.get('code'))
+        shipping_data = buscar_shipping_address(code)
         # Busca customizations dos items que tem (otimizacao: skip items sem customizacao)
         items_customs = []
         for item in (order.get('items') or []):
             if item.get('has_customizations') and item.get('id'):
-                items_customs.append(buscar_customizations(order.get('code'), item['id']))
-        pedidos.append(_normalizar_pedido(order, client_data, shipping_data, items_customs))
+                items_customs.append(buscar_customizations(code, item['id']))
+        p = _normalizar_pedido(order, client_data, shipping_data, items_customs)
+        # Anota se a data foi sobrescrita
+        if code in overrides and de_original != overrides[code]:
+            p['data_entrega_original'] = de_original.isoformat() if de_original else None
+            p['data_entrega_original_fmt'] = de_original.strftime('%d/%m/%Y') if de_original else ''
+            p['data_entrega'] = de.isoformat()
+            p['data_entrega_fmt'] = de.strftime('%d/%m/%Y')
+            p['data_override'] = True
+        else:
+            p['data_override'] = False
+        pedidos.append(p)
 
     pedidos.sort(key=lambda p: p.get('periodo') or '')
     return {'pedidos': pedidos, 'total_janela': len(todos)}
 
 
-def contar_pedidos_por_dia(year, month):
+def contar_pedidos_por_dia(year, month, overrides=None):
+    """overrides: dict {pedido_code: data_entrega} para sobrescrever a data extraida."""
     if not current_app.config.get('VNDA_API_TOKEN'):
         return {}
+
+    overrides = overrides or {}
 
     first = date(year, month, 1)
     if month == 12:
@@ -430,7 +448,8 @@ def contar_pedidos_por_dia(year, month):
     for order in todos:
         if (order.get('status') or '').lower() in _STATUS_IGNORAR:
             continue
-        de = _extrair_data_entrega(order)
+        code = order.get('code')
+        de = overrides.get(code) or _extrair_data_entrega(order)
         if de and first <= de <= last:
             key = de.isoformat()
             contagem[key] = contagem.get(key, 0) + 1

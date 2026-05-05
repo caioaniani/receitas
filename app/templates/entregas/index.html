@@ -254,6 +254,7 @@
                             '</a> ' +
                             '<span class="fw-semibold"><i class="bi bi-person-fill"></i> ' + escapeHtml(p.destinatario) + '</span>' +
                             cartinhaBadge +
+                            (p.data_override ? ' <span class="badge bg-warning text-dark" title="Data alterada manualmente — original: ' + escapeHtml(p.data_entrega_original_fmt || '') + '" style="font-size:10px;"><i class="bi bi-pencil-square"></i> Data alterada</span>' : '') +
                         '</div>' +
                         '<div class="d-flex align-items-center gap-2">' +
                             (p.periodo ? '<span class="badge bg-light text-dark" style="font-size:11px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>' : '') +
@@ -272,6 +273,7 @@
                             (status !== 'separado' ? '<button class="btn btn-sm btn-outline-info" onclick="marcarStatus(\'' + p.code + '\',\'separado\')"><i class="bi bi-check"></i> Separar</button>' : '') +
                             (status !== 'entregue' ? '<button class="btn btn-sm btn-outline-success" onclick="marcarStatus(\'' + p.code + '\',\'entregue\')"><i class="bi bi-check-all"></i> Entregar</button>' : '') +
                             (status !== 'pendente' ? '<button class="btn btn-sm btn-outline-secondary" onclick="marcarStatus(\'' + p.code + '\',\'pendente\')"><i class="bi bi-arrow-counterclockwise"></i></button>' : '') +
+                            '<button class="btn btn-sm btn-outline-warning" onclick="editarData(\'' + p.code + '\',\'' + (p.data_entrega || '') + '\',' + (p.data_override ? 'true' : 'false') + ')" title="Mudar data de entrega"><i class="bi bi-calendar-event"></i></button>' +
                             (p.tem_customizacao ? '<button class="btn btn-sm btn-outline-warning" onclick="toggleCartinha(\'' + p.code + '\')"><i class="bi bi-envelope-heart"></i></button>' : '') +
                             '<a class="btn btn-sm btn-outline-dark" href="https://www.padariaartesanalonline.com.br/admin/pedido?id=' + encodeURIComponent(p.code) + '" target="_blank" rel="noopener" title="Abrir pedido no VNDA"><i class="bi bi-box-arrow-up-right"></i> VNDA</a>' +
                         '</div>' +
@@ -325,6 +327,53 @@
                 }
                 var btn = document.querySelector('#cartinha-' + code + ' .btn');
                 if (btn) { btn.textContent = ' Salvo!'; setTimeout(function(){ btn.innerHTML = '<i class="bi bi-save"></i> Salvar'; }, 1500); }
+            }
+        });
+    };
+
+    window.editarData = function(code, dataAtual, jaTemOverride) {
+        var msg = 'Nova data de entrega para o pedido ' + code + ' (formato AAAA-MM-DD).\n';
+        msg += 'Data atual: ' + dataAtual + '\n';
+        if (jaTemOverride) {
+            msg += '\nDeixe vazio e clique OK para REMOVER o override e voltar à data original do VNDA.';
+        }
+        var nova = prompt(msg, dataAtual);
+        if (nova === null) return;
+        nova = nova.trim();
+
+        if (nova === '' && jaTemOverride) {
+            if (!confirm('Remover o override e voltar à data original do VNDA?')) return;
+            fetch('/entregas/data/' + code, {
+                method: 'DELETE',
+                headers: {'X-CSRFToken': CSRF_TOKEN}
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d.ok) carregarPedidos();
+            });
+            return;
+        }
+
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(nova)) {
+            alert('Formato invalido. Use AAAA-MM-DD (ex: 2026-05-12).');
+            return;
+        }
+
+        fetch('/entregas/data/' + code, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': CSRF_TOKEN
+            },
+            body: JSON.stringify({data: nova})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.ok) {
+                alert('Data alterada para ' + nova + '. O pedido foi movido.');
+                carregarPedidos();
+            } else {
+                alert('Erro: ' + (d.erro || 'desconhecido'));
             }
         });
     };
