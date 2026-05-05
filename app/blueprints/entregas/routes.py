@@ -140,17 +140,15 @@ def api_debug_pedido(code):
             info['shipping_address_padrao'] = order.get('shipping_address')
             info['client_padrao'] = order.get('client')
 
-            skip_keys = {'items'}
             for k, v in order.items():
-                if k in skip_keys:
-                    continue
                 if isinstance(v, dict):
                     info[k] = {sk: str(sv) for sk, sv in v.items() if sv is not None}
                 elif isinstance(v, list):
-                    info[k] = str(v)[:300]
+                    info[k] = str(v)[:5000]
                 else:
                     info[k] = v
             info['items_count'] = len(order.get('items') or [])
+            info['items_full'] = order.get('items')
 
             from app.services.vnda import _extrair_data_entrega, _extrair_periodo
             de = _extrair_data_entrega(order)
@@ -202,8 +200,36 @@ def api_debug_pedido(code):
     try:
         full_text = _json.dumps(order, ensure_ascii=False) if 'order' in locals() else ''
         info['contains_ana_in_order'] = 'ana' in full_text.lower()
-    except Exception:
-        pass
+        # Caminhos onde a string 'ana' aparece (heuristic)
+        if 'ana' in full_text.lower():
+            paths = []
+            def _walk(obj, prefix):
+                if isinstance(obj, dict):
+                    for k, v in obj.items():
+                        _walk(v, f'{prefix}.{k}')
+                elif isinstance(obj, list):
+                    for i, v in enumerate(obj):
+                        _walk(v, f'{prefix}[{i}]')
+                elif isinstance(obj, str) and 'ana' in obj.lower():
+                    paths.append(f'{prefix} = {obj[:80]}')
+            _walk(order, 'order')
+            info['ana_paths'] = paths[:30]
+    except Exception as e:
+        info['walk_erro'] = str(e)
+
+    # 5) Endpoints adicionais (label/print/customizations/notes/extra)
+    for path in (f'/orders/{code}/customizations', f'/orders/{code}/notes', f'/orders/{code}/label', f'/orders/{code}/print', f'/orders/{code}/print_layout', f'/orders/{code}/extra'):
+        try:
+            r = http_requests.get(
+                f'https://api.vnda.com.br/api/v2{path}',
+                headers=headers, timeout=10,
+            )
+            info[f'endpoint_{path}'] = {
+                'status': r.status_code,
+                'body': r.text[:2000] if r.status_code != 404 else None,
+            }
+        except http_requests.RequestException:
+            pass
 
     return jsonify(info)
 
