@@ -331,7 +331,12 @@ def gerar_rotas(pedidos, n_drivers, origem, max_seconds=40):
             continue
         cache = GeocodeCache.query.filter_by(chave=chave).first()
         if cache and cache.lat is not None:
-            com_coords.append(dict(p, lat=cache.lat, lng=cache.lng))
+            # Sanity check: descarta coords antigas absurdas (> 500km da matriz)
+            if _haversine((cache.lat, cache.lng), origem) <= 500:
+                com_coords.append(dict(p, lat=cache.lat, lng=cache.lng))
+            else:
+                # Re-tenta geocoding (talvez fonte melhor agora)
+                pendentes.append((p, end, chave))
             continue
         if cache and cache.lat is None:
             # Ja tentamos antes e nao achamos. Nao re-bate.
@@ -357,6 +362,14 @@ def gerar_rotas(pedidos, n_drivers, origem, max_seconds=40):
                 incomplete = True
                 continue
             lat, lng, fonte = r
+            # Sanity check: coords > 500km da matriz sao quase certeza erro de geocoding
+            if lat is not None and lng is not None:
+                d_origem = _haversine((lat, lng), origem)
+                if d_origem > 500:
+                    logger.warning('Geocoding rejeitado (>500km da matriz): %r → (%s, %s) fonte=%s',
+                                   end[:80], lat, lng, fonte)
+                    lat, lng = None, None
+                    fonte = fonte + '_rejeitado'
             if not cache:
                 cache = GeocodeCache(chave=chave, fonte=fonte)
                 db.session.add(cache)
@@ -369,7 +382,11 @@ def gerar_rotas(pedidos, n_drivers, origem, max_seconds=40):
         for pedido, end, chave in pendentes:
             r = resultados.get(end)
             if r and r[0] is not None:
-                com_coords.append(dict(pedido, lat=r[0], lng=r[1]))
+                # Re-aplicar sanity check (caso tenha sido rejeitado acima)
+                if _haversine((r[0], r[1]), origem) <= 500:
+                    com_coords.append(dict(pedido, lat=r[0], lng=r[1]))
+                else:
+                    sem_coords.append(pedido)
             else:
                 sem_coords.append(pedido)
 
