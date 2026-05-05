@@ -121,6 +121,8 @@ def api_debug_pedido(code):
     }
 
     info = {}
+
+    # 1) Chamada padrao
     try:
         resp = http_requests.get(
             f'https://api.vnda.com.br/api/v2/orders/{code}',
@@ -133,6 +135,10 @@ def api_debug_pedido(code):
             except ValueError:
                 info['erro'] = 'resposta nao-json'
                 return jsonify(info)
+
+            info['todas_chaves_padrao'] = sorted(order.keys())
+            info['shipping_address_padrao'] = order.get('shipping_address')
+            info['client_padrao'] = order.get('client')
 
             skip_keys = {'items'}
             for k, v in order.items():
@@ -158,6 +164,38 @@ def api_debug_pedido(code):
         info['erro_conexao'] = str(e)
     except Exception as e:
         info['erro_geral'] = str(e)
+
+    # 2) Tentar variantes de include
+    for inc in ('shipping_address', 'address', 'shipping', 'client'):
+        try:
+            r = http_requests.get(
+                f'https://api.vnda.com.br/api/v2/orders/{code}',
+                headers=headers, params={'include': inc}, timeout=10,
+            )
+            if r.status_code == 200:
+                try:
+                    o = r.json()
+                    info[f'include_{inc}_chaves'] = sorted(o.keys())
+                    info[f'include_{inc}_shipping'] = o.get('shipping_address')
+                    info[f'include_{inc}_client'] = o.get('client')
+                except ValueError:
+                    pass
+        except http_requests.RequestException:
+            pass
+
+    # 3) Tentar endpoints relacionados
+    for path in (f'/orders/{code}/shipping_address', f'/orders/{code}/address', f'/orders/{code}/shipments', f'/orders/{code}/packages'):
+        try:
+            r = http_requests.get(
+                f'https://api.vnda.com.br/api/v2{path}',
+                headers=headers, timeout=10,
+            )
+            info[f'endpoint_{path}'] = {
+                'status': r.status_code,
+                'body': r.text[:400] if r.status_code != 404 else None,
+            }
+        except http_requests.RequestException:
+            pass
 
     return jsonify(info)
 
