@@ -121,6 +121,49 @@
     background: transparent;
 }
 </style>
+
+<!-- Modal: Alterar data de entrega -->
+<div class="modal fade" id="modal-alterar-data" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h6 class="modal-title"><i class="bi bi-calendar-event"></i> Alterar data de entrega</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="md-code">
+                <div class="alert alert-light border small mb-3 py-2" style="font-size:12px;">
+                    <i class="bi bi-info-circle"></i> Pedido <strong id="md-info-code">—</strong>.
+                    Data original do VNDA: <strong id="md-info-original">—</strong>.
+                    A mudança fica <strong>só no nosso ERP</strong> — o cliente não é notificado.
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Nova data de entrega</label>
+                    <input type="date" id="md-data" class="form-control form-control-sm">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Motivo <small class="text-muted fw-normal">(opcional, ajuda no histórico)</small></label>
+                    <textarea id="md-motivo" class="form-control form-control-sm" rows="2"
+                        placeholder="Ex: Cliente pediu pra adiar pq estará viajando."></textarea>
+                </div>
+
+                <div id="md-historico" class="d-none alert alert-secondary small mt-2 py-2" style="font-size:12px;"></div>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <button type="button" id="md-remover" class="btn btn-sm btn-outline-danger d-none">
+                    <i class="bi bi-arrow-counterclockwise"></i> Remover override (voltar à data do VNDA)
+                </button>
+                <div class="d-flex gap-2 ms-auto">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" id="md-salvar" class="btn btn-sm btn-warning">
+                        <i class="bi bi-check-lg"></i> Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -254,7 +297,7 @@
                             '</a> ' +
                             '<span class="fw-semibold"><i class="bi bi-person-fill"></i> ' + escapeHtml(p.destinatario) + '</span>' +
                             cartinhaBadge +
-                            (p.data_override ? ' <span class="badge bg-warning text-dark" title="Data alterada manualmente — original: ' + escapeHtml(p.data_entrega_original_fmt || '') + '" style="font-size:10px;"><i class="bi bi-pencil-square"></i> Data alterada</span>' : '') +
+                            (p.data_override ? ' <span class="badge bg-warning text-dark" title="Data alterada — original: ' + escapeHtml(p.data_entrega_original_fmt || '') + (p.override_motivo ? ' · Motivo: ' + escapeHtml(p.override_motivo) : '') + (p.override_autor ? ' · Por: ' + escapeHtml(p.override_autor) : '') + '" style="font-size:10px;"><i class="bi bi-pencil-square"></i> Data alterada</span>' : '') +
                         '</div>' +
                         '<div class="d-flex align-items-center gap-2">' +
                             (p.periodo ? '<span class="badge bg-light text-dark" style="font-size:11px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>' : '') +
@@ -332,16 +375,67 @@
     };
 
     window.editarData = function(code, dataAtual, jaTemOverride) {
-        var msg = 'Nova data de entrega para o pedido ' + code + ' (formato AAAA-MM-DD).\n';
-        msg += 'Data atual: ' + dataAtual + '\n';
-        if (jaTemOverride) {
-            msg += '\nDeixe vazio e clique OK para REMOVER o override e voltar à data original do VNDA.';
+        var pedido = null;
+        for (var i = 0; i < pedidos.length; i++) {
+            if (pedidos[i].code === code) { pedido = pedidos[i]; break; }
         }
-        var nova = prompt(msg, dataAtual);
-        if (nova === null) return;
-        nova = nova.trim();
+        if (!pedido) return;
 
-        if (nova === '' && jaTemOverride) {
+        document.getElementById('md-code').value = code;
+        document.getElementById('md-info-code').textContent = code;
+        document.getElementById('md-info-original').textContent =
+            pedido.data_entrega_original_fmt || pedido.data_entrega_fmt || '—';
+        document.getElementById('md-data').value = dataAtual || '';
+        document.getElementById('md-motivo').value = pedido.override_motivo || '';
+
+        var btnRemover = document.getElementById('md-remover');
+        var hist = document.getElementById('md-historico');
+        if (jaTemOverride) {
+            btnRemover.classList.remove('d-none');
+            var quando = pedido.override_em ? new Date(pedido.override_em).toLocaleString('pt-BR') : '—';
+            hist.classList.remove('d-none');
+            hist.innerHTML = '<i class="bi bi-clock-history"></i> Override criado por <strong>' +
+                escapeHtml(pedido.override_autor || '—') + '</strong> em ' + escapeHtml(quando) +
+                (pedido.override_motivo ? '<br><i class="bi bi-chat-text"></i> ' + escapeHtml(pedido.override_motivo) : '');
+        } else {
+            btnRemover.classList.add('d-none');
+            hist.classList.add('d-none');
+            hist.innerHTML = '';
+        }
+
+        var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-alterar-data'));
+        modal.show();
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var btnSalvar = document.getElementById('md-salvar');
+        var btnRemover = document.getElementById('md-remover');
+        if (!btnSalvar) return;
+
+        btnSalvar.addEventListener('click', function() {
+            var code = document.getElementById('md-code').value;
+            var nova = document.getElementById('md-data').value;
+            var motivo = document.getElementById('md-motivo').value.trim();
+            if (!nova) { alert('Selecione uma data.'); return; }
+
+            fetch('/entregas/data/' + code, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+                body: JSON.stringify({data: nova, motivo: motivo})
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d.ok) {
+                    bootstrap.Modal.getInstance(document.getElementById('modal-alterar-data')).hide();
+                    carregarPedidos();
+                } else {
+                    alert('Erro: ' + (d.erro || 'desconhecido'));
+                }
+            });
+        });
+
+        btnRemover.addEventListener('click', function() {
+            var code = document.getElementById('md-code').value;
             if (!confirm('Remover o override e voltar à data original do VNDA?')) return;
             fetch('/entregas/data/' + code, {
                 method: 'DELETE',
@@ -349,34 +443,13 @@
             })
             .then(function(r) { return r.json(); })
             .then(function(d) {
-                if (d.ok) carregarPedidos();
+                if (d.ok) {
+                    bootstrap.Modal.getInstance(document.getElementById('modal-alterar-data')).hide();
+                    carregarPedidos();
+                }
             });
-            return;
-        }
-
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(nova)) {
-            alert('Formato invalido. Use AAAA-MM-DD (ex: 2026-05-12).');
-            return;
-        }
-
-        fetch('/entregas/data/' + code, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': CSRF_TOKEN
-            },
-            body: JSON.stringify({data: nova})
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            if (d.ok) {
-                alert('Data alterada para ' + nova + '. O pedido foi movido.');
-                carregarPedidos();
-            } else {
-                alert('Erro: ' + (d.erro || 'desconhecido'));
-            }
         });
-    };
+    });
 
     window.imprimirPedidos = function() {
         window.print();

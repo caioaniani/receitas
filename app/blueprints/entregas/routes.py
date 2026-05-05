@@ -24,6 +24,19 @@ def _carregar_overrides_data():
     return {o.pedido_code: o.data_entrega for o in OverrideEntrega.query.all()}
 
 
+def _carregar_overrides_full():
+    """Como _carregar_overrides_data mas inclui motivo, autor e data de alteracao."""
+    out = {}
+    for o in OverrideEntrega.query.all():
+        out[o.pedido_code] = {
+            'data': o.data_entrega,
+            'motivo': o.motivo or '',
+            'autor': o.autor.nome if o.autor else '',
+            'em': o.atualizado_em.isoformat() if o.atualizado_em else None,
+        }
+    return out
+
+
 @entregas_bp.route('/api/pedidos')
 @login_required
 @entrega_access_required
@@ -34,8 +47,9 @@ def api_pedidos():
     except ValueError:
         target = date.today()
 
-    overrides = _carregar_overrides_data()
-    resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
+    overrides_full = _carregar_overrides_full()
+    overrides_data = {code: o['data'] for code, o in overrides_full.items()}
+    resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides_data)
 
     if 'erro' in resultado:
         resp = jsonify(pedidos=[], data=data_str, erro=resultado['erro'])
@@ -55,6 +69,14 @@ def api_pedidos():
             auto = p.get('cartinha_vnda', '')
             p['cartinha'] = manual or auto
             p['cartinha_origem'] = 'manual' if manual else ('vnda' if auto else None)
+
+            # Info adicional de override de data
+            if p.get('data_override'):
+                ov = overrides_full.get(p['code'])
+                if ov:
+                    p['override_motivo'] = ov['motivo']
+                    p['override_autor'] = ov['autor']
+                    p['override_em'] = ov['em']
 
         resp = jsonify(pedidos=pedidos, data=data_str, total_janela=total_janela)
 
