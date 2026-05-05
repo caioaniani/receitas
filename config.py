@@ -19,3 +19,6 @@ class Config:
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB upload (atestados)
     VNDA_API_TOKEN = os.environ.get('VNDA_API_TOKEN', '')
     VNDA_SHOP_HOST = os.environ.get('VNDA_SHOP_HOST', 'www.padariaartesanalonline.com.br')
+    # Coordenadas da loja matriz — origem das rotas de entrega
+    ROTA_ORIGEM_LAT = os.environ.get('ROTA_ORIGEM_LAT', '')
+    ROTA_ORIGEM_LNG = os.environ.get('ROTA_ORIGEM_LNG', '')
