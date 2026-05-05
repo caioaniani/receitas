@@ -107,18 +107,45 @@ def _extrair_periodo(order):
 def _extrair_endereco(addr):
     if not addr:
         return '', '', ''
-    nome = ' '.join(p for p in [addr.get('first_name', ''), addr.get('last_name', '')] if p)
+    # recipient_name = nome do destinatario real (pode ser != comprador).
+    # Disponivel em /orders/{code}/shipping_address. Tem prioridade.
+    nome = (addr.get('recipient_name') or '').strip()
+    if not nome:
+        nome = ' '.join(p for p in [addr.get('first_name', ''), addr.get('last_name', '')] if p)
     tel = addr.get('phone', '')
+    if not tel:
+        area = addr.get('first_phone_area', '')
+        phone = addr.get('first_phone', '')
+        if area or phone:
+            tel = f'({area}) {phone}' if area else phone
+    # Aceita ambos os schemas: street/number (cliente recent) e street_name/street_number (shipping_address)
     parts = [
-        addr.get('street', ''), addr.get('number', ''),
-        addr.get('complement', ''), addr.get('neighborhood', ''),
-        addr.get('city', ''), addr.get('state', ''),
+        addr.get('street') or addr.get('street_name', ''),
+        addr.get('number') or addr.get('street_number', ''),
+        addr.get('complement', ''),
+        addr.get('neighborhood', ''),
+        addr.get('city', ''),
+        addr.get('state', ''),
     ]
     zip_code = addr.get('zip_code', addr.get('zip', ''))
     if zip_code:
         parts.append(zip_code)
     end = ', '.join(p for p in parts if p)
     return nome, tel, end
+
+
+def buscar_shipping_address(code):
+    """Busca o endereco de entrega de um pedido (endpoint dedicado).
+    Diferente de /orders/{code}, este endpoint inclui recipient_name —
+    o nome real do destinatario, que pode ser diferente do comprador.
+    """
+    resp = _get(f'/orders/{code}/shipping_address')
+    if resp:
+        try:
+            return resp.json()
+        except ValueError:
+            pass
+    return None
 
 
 def buscar_pedido_completo(code):
@@ -132,7 +159,7 @@ def buscar_pedido_completo(code):
     return None
 
 
-def _normalizar_pedido(order, client_data=None, order_detail=None):
+def _normalizar_pedido(order, client_data=None, shipping_data=None):
     data_entrega = _extrair_data_entrega(order)
 
     itens = []
@@ -156,19 +183,27 @@ def _normalizar_pedido(order, client_data=None, order_detail=None):
     if not comprador:
         comprador = order.get('client_name', '')
 
-    detail = order_detail or order
-    shipping = detail.get('shipping_address') or {}
-    if shipping:
-        destinatario, telefone_dest, endereco_entrega = _extrair_endereco(shipping)
+    # Prioridade 1: /orders/{code}/shipping_address (recipient_name + endereco real)
+    if shipping_data:
+        destinatario, telefone_dest, endereco_entrega = _extrair_endereco(shipping_data)
 
+    # Prioridade 2: shipping_address embutido no order (formato antigo)
+    if not destinatario or not endereco_entrega:
+        shipping_inline = order.get('shipping_address') or {}
+        if shipping_inline:
+            d, t, e = _extrair_endereco(shipping_inline)
+            destinatario = destinatario or d
+            telefone_dest = telefone_dest or t
+            endereco_entrega = endereco_entrega or e
+
+    # Prioridade 3: recent_address do cliente (fallback final, pode trazer dados de pedido anterior)
     if not endereco_entrega and client_data:
         addr = client_data.get('recent_address') or {}
         if addr:
-            dest_name, dest_tel, endereco_entrega = _extrair_endereco(addr)
-            if not destinatario:
-                destinatario = dest_name
-            if not telefone_dest:
-                telefone_dest = dest_tel
+            d, t, e = _extrair_endereco(addr)
+            destinatario = destinatario or d
+            telefone_dest = telefone_dest or t
+            endereco_entrega = e
 
     if not destinatario:
         destinatario = comprador
@@ -274,8 +309,8 @@ def buscar_pedidos_do_dia(target_date):
             continue
         client_id = order.get('client_id')
         client_data = buscar_cliente(client_id)
-        order_detail = buscar_pedido_completo(order.get('code'))
-        pedidos.append(_normalizar_pedido(order, client_data, order_detail))
+        shipping_data = buscar_shipping_address(order.get('code'))
+        pedidos.append(_normalizar_pedido(order, client_data, shipping_data))
 
     pedidos.sort(key=lambda p: p.get('periodo') or '')
     return {'pedidos': pedidos, 'total_janela': len(todos)}
