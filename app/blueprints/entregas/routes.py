@@ -174,6 +174,7 @@ def api_rotas():
                 for p in geradas['sem_geocode']
             ],
             tempo_geo=geradas['tempo_geo'],
+            incomplete=geradas.get('incomplete', False),
             origem=geradas['origem'],
         )
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'

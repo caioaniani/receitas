@@ -662,6 +662,12 @@
                 rotasUltimoResultado = d;
                 atualizarPeriodosDisponiveis(d.periodos_disponiveis || [], janela);
                 renderRotas(d);
+                if (d.incomplete) {
+                    msg.innerHTML = '<div class="alert alert-info py-2 small">' +
+                        '<i class="bi bi-info-circle"></i> <strong>Geocoding parcial</strong>: alguns endereços novos ainda não foram localizados (limite de tempo). ' +
+                        'Clique em <strong>Gerar rotas</strong> de novo em alguns segundos pra completar — desta vez vai usar cache pros já feitos.' +
+                        '</div>';
+                }
             })
             .catch(function() {
                 loading.classList.add('d-none');

@@ -225,9 +225,13 @@ def _ordenar_nearest_neighbor(pontos, origem):
 
 # ── Geracao de rotas ──
 
-def gerar_rotas(pedidos, n_drivers, origem):
+def gerar_rotas(pedidos, n_drivers, origem, max_seconds=18):
     """pedidos: lista de dicts com 'code', 'endereco', 'destinatario', etc.
-    Retorna {'rotas': [{'driver': N, 'paradas': [...]}], 'sem_geocode': [...], 'tempo_geo': float}.
+    max_seconds: tempo maximo de geocoding (default 18s, antes do timeout do proxy).
+
+    Retorna {'rotas': [...], 'sem_geocode': [...], 'tempo_geo': float, 'incomplete': bool}.
+    Se incomplete=True, alguns enderecos nao foram geocodados nessa chamada (sem_geocode).
+    Proxima chamada usa cache e termina.
     """
     if n_drivers <= 0:
         n_drivers = 1
@@ -235,13 +239,34 @@ def gerar_rotas(pedidos, n_drivers, origem):
     inicio = time.time()
     com_coords = []
     sem_coords = []
+    incomplete = False
 
     for p in pedidos:
         end = p.get('endereco') or ''
-        coords = geocode(end) if end else None
+        if not end:
+            sem_coords.append(p)
+            continue
+
+        # Tenta cache primeiro (instantaneo)
+        chave = _normalizar_chave(end)
+        cache = GeocodeCache.query.filter_by(chave=chave).first() if chave else None
+        if cache and cache.lat is not None:
+            com_coords.append(dict(p, lat=cache.lat, lng=cache.lng))
+            continue
+        if cache and cache.lat is None:
+            # Ja tentamos antes e nao achamos. Nao re-bate.
+            sem_coords.append(p)
+            continue
+
+        # Cache miss — checa se ainda temos tempo
+        if (time.time() - inicio) >= max_seconds:
+            incomplete = True
+            sem_coords.append(p)
+            continue
+
+        coords = geocode(end)
         if coords:
-            p_copy = dict(p, lat=coords[0], lng=coords[1])
-            com_coords.append(p_copy)
+            com_coords.append(dict(p, lat=coords[0], lng=coords[1]))
         else:
             sem_coords.append(p)
 
@@ -252,6 +277,7 @@ def gerar_rotas(pedidos, n_drivers, origem):
             'rotas': [],
             'sem_geocode': sem_coords,
             'tempo_geo': tempo_geo,
+            'incomplete': incomplete,
             'origem': {'lat': origem[0], 'lng': origem[1]},
         }
 
@@ -271,7 +297,7 @@ def gerar_rotas(pedidos, n_drivers, origem):
         for pos, idx in enumerate(ordem):
             par = dict(membros[idx], ordem=pos + 1)
             paradas.append(par)
-        # Calcula distancia total da rota (origem -> p1 -> p2 -> ... -> origem)
+        # Distancia total: origem -> p1 -> p2 -> ... -> origem
         dist = 0.0
         atual = origem
         for par in paradas:
@@ -289,5 +315,6 @@ def gerar_rotas(pedidos, n_drivers, origem):
         'rotas': rotas,
         'sem_geocode': sem_coords,
         'tempo_geo': round(tempo_geo, 1),
+        'incomplete': incomplete,
         'origem': {'lat': origem[0], 'lng': origem[1]},
     }
