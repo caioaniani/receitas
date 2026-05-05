@@ -96,6 +96,9 @@
             <button class="btn btn-primary btn-sm" id="btn-gerar-rotas">
                 <i class="bi bi-arrow-clockwise"></i> Gerar rotas
             </button>
+            <button class="btn btn-outline-warning btn-sm" id="btn-retentar-rotas" title="Re-tenta os endereços que ficaram em 'sem geocoding'">
+                <i class="bi bi-arrow-counterclockwise"></i> Re-tentar não localizados
+            </button>
             <small class="text-muted ms-auto">Sai da matriz · ordem por proximidade · arraste pra reordenar</small>
         </div>
 
@@ -631,7 +634,7 @@
         rotasMarkersGroup = L.layerGroup().addTo(rotasMap);
     }
 
-    function gerarRotas() {
+    function gerarRotas(retentar) {
         var data = document.getElementById('rotas-data').value;
         var drivers = document.getElementById('rotas-drivers').value || '2';
         var janela = document.getElementById('rotas-janela').value || '';
@@ -649,7 +652,8 @@
 
         var url = '/entregas/api/rotas?data=' + encodeURIComponent(data) +
                   '&drivers=' + encodeURIComponent(drivers) +
-                  '&janela=' + encodeURIComponent(janela);
+                  '&janela=' + encodeURIComponent(janela) +
+                  (retentar ? '&retentar=1' : '');
 
         fetch(url, {credentials: 'same-origin'})
             .then(function(r) { return r.json(); })
@@ -801,7 +805,9 @@
 
     document.addEventListener('DOMContentLoaded', function() {
         var btn = document.getElementById('btn-gerar-rotas');
-        if (btn) btn.addEventListener('click', gerarRotas);
+        if (btn) btn.addEventListener('click', function() { gerarRotas(false); });
+        var btnRetentar = document.getElementById('btn-retentar-rotas');
+        if (btnRetentar) btnRetentar.addEventListener('click', function() { gerarRotas(true); });
         var tabBtn = document.getElementById('btn-tab-rotas');
         if (tabBtn) tabBtn.addEventListener('shown.bs.tab', function() {
             // Sincroniza data com a aba de pedidos

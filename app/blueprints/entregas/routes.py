@@ -143,6 +143,13 @@ def api_rotas():
 
         janela = (request.args.get('janela', '') or '').strip()
 
+        # Re-tentar geocoding pra enderecos que falharam antes
+        if request.args.get('retentar') == '1':
+            from app.models import GeocodeCache
+            n = GeocodeCache.query.filter(GeocodeCache.lat.is_(None)).delete()
+            db.session.commit()
+            current_app.logger.info('Limpou %d registros de geocode falhos', n)
+
         overrides = _carregar_overrides_data()
         resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
         if 'erro' in resultado:
