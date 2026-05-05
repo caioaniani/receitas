@@ -754,6 +754,19 @@ class OverrideEntrega(db.Model):
     autor = db.relationship('Usuario', backref='overrides_entrega')
 
 
+class GeocodeCache(db.Model):
+    """Cache de enderecos geocodificados (CEP -> lat/lng).
+    Evita re-bater o Nominatim (rate limit 1 req/s)."""
+    __tablename__ = 'geocode_cache'
+
+    id = db.Column(db.Integer, primary_key=True)
+    chave = db.Column(db.String(200), nullable=False, unique=True, index=True)
+    lat = db.Column(db.Float)
+    lng = db.Column(db.Float)
+    fonte = db.Column(db.String(20))  # 'nominatim', 'manual', etc.
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 # ── Gestao de Projetos (PARA + 12 Week Year) ──
 
 class ProjetoArea(db.Model):

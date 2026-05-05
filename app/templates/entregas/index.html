@@ -22,6 +22,11 @@
             <i class="bi bi-calendar3"></i> Calendario
         </button>
     </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-rotas" type="button" id="btn-tab-rotas">
+            <i class="bi bi-signpost-2"></i> Rotas
+        </button>
+    </li>
 </ul>
 
 <div class="tab-content">
@@ -69,6 +74,43 @@
             <button class="btn btn-outline-secondary btn-sm" onclick="calMesProximo()"><i class="bi bi-chevron-right"></i></button>
         </div>
         <div id="calendario-grid"></div>
+    </div>
+
+    <!-- Tab Rotas -->
+    <div class="tab-pane fade" id="tab-rotas">
+        <div class="d-flex flex-wrap gap-2 align-items-end mb-3 d-print-none">
+            <div>
+                <label class="form-label small fw-bold mb-1">Data</label>
+                <input type="date" id="rotas-data" class="form-control form-control-sm" style="max-width:180px;" value="{{ hoje }}">
+            </div>
+            <div>
+                <label class="form-label small fw-bold mb-1">Drivers</label>
+                <input type="number" id="rotas-drivers" class="form-control form-control-sm" min="1" max="20" value="2" style="max-width:90px;">
+            </div>
+            <div>
+                <label class="form-label small fw-bold mb-1">Janela (período)</label>
+                <select id="rotas-janela" class="form-select form-select-sm" style="max-width:260px;">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <button class="btn btn-primary btn-sm" id="btn-gerar-rotas">
+                <i class="bi bi-arrow-clockwise"></i> Gerar rotas
+            </button>
+            <small class="text-muted ms-auto">Sai da matriz · ordem por proximidade · arraste pra reordenar</small>
+        </div>
+
+        <div id="rotas-loading" class="text-center py-4 d-none">
+            <div class="spinner-border spinner-border-sm text-primary"></div>
+            <span class="ms-2 text-muted" id="rotas-loading-msg">Geocodificando endereços (pode levar alguns segundos)...</span>
+        </div>
+
+        <div id="rotas-msg" class="d-print-none"></div>
+
+        <div id="rotas-mapa" style="height: 360px; border-radius: 8px; margin-bottom: 16px; display:none;"></div>
+
+        <div id="rotas-container"></div>
+
+        <div id="rotas-sem-geocode" class="d-print-none mt-3"></div>
     </div>
 </div>
 
@@ -167,12 +209,19 @@
 {% endblock %}
 
 {% block scripts %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script>
 (function() {
     var STORAGE_KEY = 'entregas_status';
     var pedidos = [];
     var filtroAtual = 'todos';
     var calAno, calMes;
+    var rotasMap = null;
+    var rotasMarkersGroup = null;
+    var rotasUltimoResultado = null;
+    var ROTA_CORES = ['#e6194b','#3cb44b','#4363d8','#f58231','#911eb4','#46f0f0','#f032e6','#bcf60c','#fabebe','#008080','#9a6324','#800000','#aaffc3','#808000','#000075','#808080'];
 
     // ── localStorage status ──
 
@@ -567,6 +616,194 @@
         if (!val && val !== 0) return '0,00';
         return Number(val).toFixed(2).replace('.', ',');
     }
+
+    // ──────────────────────────────────────────
+    // ── Rotas ──
+    // ──────────────────────────────────────────
+
+    function inicializarMapa() {
+        if (rotasMap) return;
+        rotasMap = L.map('rotas-mapa').setView([-23.5505, -46.6333], 11);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap',
+            maxZoom: 19,
+        }).addTo(rotasMap);
+        rotasMarkersGroup = L.layerGroup().addTo(rotasMap);
+    }
+
+    function gerarRotas() {
+        var data = document.getElementById('rotas-data').value;
+        var drivers = document.getElementById('rotas-drivers').value || '2';
+        var janela = document.getElementById('rotas-janela').value || '';
+        var loading = document.getElementById('rotas-loading');
+        var msg = document.getElementById('rotas-msg');
+        var container = document.getElementById('rotas-container');
+        var sg = document.getElementById('rotas-sem-geocode');
+        var mapa = document.getElementById('rotas-mapa');
+
+        loading.classList.remove('d-none');
+        msg.innerHTML = '';
+        container.innerHTML = '';
+        sg.innerHTML = '';
+        mapa.style.display = 'none';
+
+        var url = '/entregas/api/rotas?data=' + encodeURIComponent(data) +
+                  '&drivers=' + encodeURIComponent(drivers) +
+                  '&janela=' + encodeURIComponent(janela);
+
+        fetch(url, {credentials: 'same-origin'})
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                loading.classList.add('d-none');
+                if (d.erro) {
+                    msg.innerHTML = '<div class="alert alert-warning py-2 small">' + escapeHtml(d.erro) + '</div>';
+                    return;
+                }
+                rotasUltimoResultado = d;
+                atualizarPeriodosDisponiveis(d.periodos_disponiveis || [], janela);
+                renderRotas(d);
+            })
+            .catch(function() {
+                loading.classList.add('d-none');
+                msg.innerHTML = '<div class="alert alert-danger py-2 small">Falha ao gerar rotas.</div>';
+            });
+    }
+
+    function atualizarPeriodosDisponiveis(periodos, atual) {
+        var sel = document.getElementById('rotas-janela');
+        // Preserva o valor atual; reconstroi opcoes
+        sel.innerHTML = '<option value="">Todas</option>';
+        for (var i = 0; i < periodos.length; i++) {
+            var opt = document.createElement('option');
+            opt.value = periodos[i];
+            opt.textContent = periodos[i];
+            if (periodos[i] === atual) opt.selected = true;
+            sel.appendChild(opt);
+        }
+    }
+
+    function renderRotas(d) {
+        var container = document.getElementById('rotas-container');
+        var sg = document.getElementById('rotas-sem-geocode');
+        var mapa = document.getElementById('rotas-mapa');
+
+        if (!d.rotas || d.rotas.length === 0) {
+            container.innerHTML = '<div class="alert alert-info py-2 small">Nenhum pedido com endereço geocodificável encontrado para esses filtros.</div>';
+            return;
+        }
+
+        // Render colunas (uma por driver)
+        var html = '<div class="row g-2">';
+        for (var i = 0; i < d.rotas.length; i++) {
+            var r = d.rotas[i];
+            var cor = ROTA_CORES[i % ROTA_CORES.length];
+            html += '<div class="col-md-6 col-lg-4">' +
+                    '<div class="card">' +
+                    '<div class="card-header py-2 d-flex justify-content-between align-items-center" style="border-left:4px solid ' + cor + ';">' +
+                        '<strong style="color:' + cor + ';">Driver ' + r.driver + '</strong>' +
+                        '<span class="text-muted small">' + r.qtd_paradas + ' paradas · ' + r.distancia_km + ' km</span>' +
+                    '</div>' +
+                    '<div class="card-body p-0">' +
+                        '<ol class="list-group list-group-numbered list-group-flush rotas-paradas" data-driver="' + r.driver + '">';
+            for (var j = 0; j < r.paradas.length; j++) {
+                var p = r.paradas[j];
+                html += '<li class="list-group-item d-flex justify-content-between align-items-start" style="cursor:grab;" data-code="' + p.code + '">' +
+                        '<div class="ms-1">' +
+                        '<div class="fw-semibold small">' + escapeHtml(p.destinatario || '—') + '</div>' +
+                        '<div class="text-muted" style="font-size:11px;">' + escapeHtml(p.endereco || '') + '</div>' +
+                        (p.periodo ? '<span class="badge bg-light text-dark" style="font-size:10px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>' : '') +
+                        '</div>' +
+                        '<small class="text-muted">[' + escapeHtml(p.code) + ']</small>' +
+                        '</li>';
+            }
+            html += '</ol></div></div></div>';
+        }
+        html += '</div>';
+        container.innerHTML = html;
+
+        // Sortable.js em cada coluna pra reordenar
+        document.querySelectorAll('.rotas-paradas').forEach(function(ol) {
+            new Sortable(ol, {
+                group: 'rotas',
+                animation: 150,
+                onEnd: function() {
+                    // Atualiza o estado em memoria (opcional — ainda nao persiste no banco)
+                    recalcularDistancia();
+                }
+            });
+        });
+
+        // Mapa
+        inicializarMapa();
+        mapa.style.display = 'block';
+        rotasMarkersGroup.clearLayers();
+        if (d.origem) {
+            L.marker([d.origem.lat, d.origem.lng], {
+                icon: L.divIcon({className: 'rota-origem-icon', html: '<div style="background:#000;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,0.3);">🏠</div>', iconSize: [26,26]})
+            }).addTo(rotasMarkersGroup).bindPopup('<strong>Loja matriz</strong>');
+        }
+
+        var bounds = [];
+        if (d.origem) bounds.push([d.origem.lat, d.origem.lng]);
+
+        for (var i2 = 0; i2 < d.rotas.length; i2++) {
+            var r2 = d.rotas[i2];
+            var cor2 = ROTA_CORES[i2 % ROTA_CORES.length];
+            var coords = [];
+            if (d.origem) coords.push([d.origem.lat, d.origem.lng]);
+            for (var j2 = 0; j2 < r2.paradas.length; j2++) {
+                var p2 = r2.paradas[j2];
+                coords.push([p2.lat, p2.lng]);
+                bounds.push([p2.lat, p2.lng]);
+                L.marker([p2.lat, p2.lng], {
+                    icon: L.divIcon({className: 'rota-marker', html: '<div style="background:' + cor2 + ';color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);font-weight:bold;">' + p2.ordem + '</div>', iconSize: [24,24]})
+                }).addTo(rotasMarkersGroup).bindPopup('<strong>Driver ' + r2.driver + ' · #' + p2.ordem + '</strong><br>' + escapeHtml(p2.destinatario || '') + '<br><small>' + escapeHtml(p2.endereco || '') + '</small>');
+            }
+            if (d.origem) coords.push([d.origem.lat, d.origem.lng]);
+            L.polyline(coords, {color: cor2, weight: 2, opacity: 0.6, dashArray: '4,6'}).addTo(rotasMarkersGroup);
+        }
+
+        if (bounds.length > 0) {
+            rotasMap.fitBounds(bounds, {padding: [40, 40]});
+        }
+        // Force re-flow do leaflet (caso a aba estivesse hidden)
+        setTimeout(function() { if (rotasMap) rotasMap.invalidateSize(); }, 200);
+
+        // Pedidos sem geocoding
+        if (d.sem_geocode && d.sem_geocode.length > 0) {
+            var s = '<div class="alert alert-warning py-2"><strong><i class="bi bi-geo-alt-fill"></i> ' + d.sem_geocode.length + ' pedido(s) sem coordenadas:</strong><ul class="mb-0 small">';
+            for (var k = 0; k < d.sem_geocode.length; k++) {
+                var x = d.sem_geocode[k];
+                s += '<li>[' + escapeHtml(x.code) + '] ' + escapeHtml(x.destinatario || '—') + ' — ' + escapeHtml(x.endereco || '(sem endereço)') + '</li>';
+            }
+            s += '</ul></div>';
+            sg.innerHTML = s;
+        }
+    }
+
+    function recalcularDistancia() {
+        // TODO: recalcular soma de km da rota apos drag-n-drop. Por ora, so atualiza a contagem.
+        document.querySelectorAll('.rotas-paradas').forEach(function(ol) {
+            var card = ol.closest('.card');
+            var qtd = ol.children.length;
+            var hdr = card.querySelector('.card-header span');
+            if (hdr) {
+                hdr.textContent = qtd + ' paradas';
+            }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var btn = document.getElementById('btn-gerar-rotas');
+        if (btn) btn.addEventListener('click', gerarRotas);
+        var tabBtn = document.getElementById('btn-tab-rotas');
+        if (tabBtn) tabBtn.addEventListener('shown.bs.tab', function() {
+            // Sincroniza data com a aba de pedidos
+            var dataPedidos = document.getElementById('data-entrega').value;
+            if (dataPedidos) document.getElementById('rotas-data').value = dataPedidos;
+            if (rotasMap) setTimeout(function() { rotasMap.invalidateSize(); }, 100);
+        });
+    });
 
     // ── Init ──
     limparAntigos();

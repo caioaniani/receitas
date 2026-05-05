@@ -523,6 +523,19 @@ def _migrate_postgres(app):
         """)
         _try("CREATE INDEX IF NOT EXISTS idx_override_entrega_code ON override_entrega(pedido_code)")
 
+        # ── Cache de geocoding (CEP/endereco -> lat/lng) ──
+        _try("""
+        CREATE TABLE IF NOT EXISTS geocode_cache (
+            id SERIAL PRIMARY KEY,
+            chave VARCHAR(200) NOT NULL UNIQUE,
+            lat DOUBLE PRECISION,
+            lng DOUBLE PRECISION,
+            fonte VARCHAR(20),
+            criado_em TIMESTAMP DEFAULT NOW()
+        )
+        """)
+        _try("CREATE INDEX IF NOT EXISTS idx_geocode_cache_chave ON geocode_cache(chave)")
+
 
 def _migrate_sqlite(app):
     """Adiciona colunas novas no SQLite."""
