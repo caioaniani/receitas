@@ -46,9 +46,9 @@ def api_pedidos():
         # Cartinha manual (editada pelo usuario) tem prioridade sobre a do VNDA
         for p in pedidos:
             manual = cartinhas_manuais.get(p['code'], '')
-            vnda = p.get('cartinha_vnda', '')
-            p['cartinha'] = manual or vnda
-            p['cartinha_origem'] = 'manual' if manual else ('vnda' if vnda else None)
+            auto = p.get('cartinha_vnda', '')
+            p['cartinha'] = manual or auto
+            p['cartinha_origem'] = 'manual' if manual else ('vnda' if auto else None)
 
         resp = jsonify(pedidos=pedidos, data=data_str, total_janela=total_janela)
 
