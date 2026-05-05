@@ -767,6 +767,35 @@ class GeocodeCache(db.Model):
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class Driver(db.Model):
+    """Motorista/motoboy cadastrado. Pedidos sao atribuidos a um Driver."""
+    __tablename__ = 'driver_entrega'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(80), nullable=False, unique=True)
+    cor = db.Column(db.String(20))  # opcional: hex pra UI
+    telefone = db.Column(db.String(30))
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    atribuicoes = db.relationship('AtribuicaoEntrega', backref='driver', lazy='dynamic')
+
+
+class AtribuicaoEntrega(db.Model):
+    """Vincula um pedido VNDA a um Driver. Pedido tem no maximo 1 driver por vez."""
+    __tablename__ = 'atribuicao_entrega'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_code = db.Column(db.String(50), nullable=False, unique=True, index=True)
+    driver_id = db.Column(db.Integer, db.ForeignKey('driver_entrega.id'))
+    data_entrega = db.Column(db.Date, index=True)
+    ordem = db.Column(db.Integer, default=0)  # ordem dentro da rota do driver
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    atualizado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    autor = db.relationship('Usuario')
+
+
 # ── Gestao de Projetos (PARA + 12 Week Year) ──
 
 class ProjetoArea(db.Model):

@@ -8,7 +8,7 @@ import requests as http_requests
 from app.blueprints.entregas import entregas_bp
 from app.decorators import entrega_access_required
 from app.extensions import db
-from app.models import CartinhaEntrega, OverrideEntrega
+from app.models import CartinhaEntrega, OverrideEntrega, Driver, AtribuicaoEntrega
 from app.services import vnda, rotas as rotas_svc
 
 
@@ -78,6 +78,21 @@ def api_pedidos():
                     p['override_autor'] = ov['autor']
                     p['override_em'] = ov['em']
 
+        # Carrega driver atribuido (se houver)
+        atribuicoes = {}
+        if codes:
+            for a in AtribuicaoEntrega.query.filter(AtribuicaoEntrega.pedido_code.in_(codes)).all():
+                if a.driver_id:
+                    drv = Driver.query.get(a.driver_id)
+                    if drv:
+                        atribuicoes[a.pedido_code] = {
+                            'id': drv.id, 'nome': drv.nome, 'cor': drv.cor,
+                        }
+        for p in pedidos:
+            drv = atribuicoes.get(p['code'])
+            if drv:
+                p['driver'] = drv
+
         resp = jsonify(pedidos=pedidos, data=data_str, total_janela=total_janela)
 
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
@@ -100,6 +115,174 @@ def api_calendario():
     resp = jsonify(dias=dias)
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
     return resp
+
+
+# ── Drivers de entrega ──
+
+@entregas_bp.route('/api/drivers', methods=['GET'])
+@login_required
+@entrega_access_required
+def listar_drivers():
+    incluir_inativos = request.args.get('inativos') == '1'
+    q = Driver.query
+    if not incluir_inativos:
+        q = q.filter_by(ativo=True)
+    drivers = q.order_by(Driver.nome).all()
+    return jsonify(drivers=[
+        {'id': d.id, 'nome': d.nome, 'cor': d.cor, 'telefone': d.telefone, 'ativo': d.ativo}
+        for d in drivers
+    ])
+
+
+@entregas_bp.route('/api/drivers', methods=['POST'])
+@login_required
+@entrega_access_required
+def criar_driver():
+    data = request.get_json(silent=True) or {}
+    nome = (data.get('nome') or '').strip()
+    if not nome:
+        return jsonify(ok=False, erro='nome obrigatorio'), 400
+    if Driver.query.filter_by(nome=nome).first():
+        return jsonify(ok=False, erro='ja existe driver com esse nome'), 400
+    d = Driver(
+        nome=nome,
+        cor=(data.get('cor') or '').strip() or None,
+        telefone=(data.get('telefone') or '').strip() or None,
+        ativo=True,
+    )
+    db.session.add(d)
+    db.session.commit()
+    return jsonify(ok=True, id=d.id, nome=d.nome)
+
+
+@entregas_bp.route('/api/drivers/<int:did>', methods=['POST'])
+@login_required
+@entrega_access_required
+def atualizar_driver(did):
+    d = Driver.query.get_or_404(did)
+    data = request.get_json(silent=True) or {}
+    if 'nome' in data:
+        nome = (data['nome'] or '').strip()
+        if not nome:
+            return jsonify(ok=False, erro='nome obrigatorio'), 400
+        # Se mudou e ja existe outro com esse nome, rejeita
+        outro = Driver.query.filter(Driver.nome == nome, Driver.id != did).first()
+        if outro:
+            return jsonify(ok=False, erro='ja existe driver com esse nome'), 400
+        d.nome = nome
+    if 'cor' in data:
+        d.cor = (data['cor'] or '').strip() or None
+    if 'telefone' in data:
+        d.telefone = (data['telefone'] or '').strip() or None
+    if 'ativo' in data:
+        d.ativo = bool(data['ativo'])
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@entregas_bp.route('/api/drivers/<int:did>', methods=['DELETE'])
+@login_required
+@entrega_access_required
+def remover_driver(did):
+    d = Driver.query.get_or_404(did)
+    # Soft-delete: apenas desativa. Mantem historico de atribuicoes.
+    d.ativo = False
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+# ── Atribuicao pedido <-> driver ──
+
+@entregas_bp.route('/api/atribuicao/<code>', methods=['POST'])
+@login_required
+@entrega_access_required
+def atribuir_pedido(code):
+    """Atribui um pedido a um driver (ou troca de driver). data_entrega opcional."""
+    data = request.get_json(silent=True) or {}
+    driver_id = data.get('driver_id')
+    if driver_id is not None:
+        try:
+            driver_id = int(driver_id)
+        except (TypeError, ValueError):
+            return jsonify(ok=False, erro='driver_id invalido'), 400
+        if not Driver.query.get(driver_id):
+            return jsonify(ok=False, erro='driver nao encontrado'), 404
+
+    a = AtribuicaoEntrega.query.filter_by(pedido_code=code).first()
+    if not a:
+        a = AtribuicaoEntrega(pedido_code=code)
+        db.session.add(a)
+    a.driver_id = driver_id
+    if 'data_entrega' in data and data['data_entrega']:
+        try:
+            a.data_entrega = datetime.strptime(data['data_entrega'], '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    if 'ordem' in data:
+        try:
+            a.ordem = int(data['ordem'])
+        except (TypeError, ValueError):
+            pass
+    a.atualizado_por = current_user.id
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@entregas_bp.route('/api/atribuicao/<code>', methods=['DELETE'])
+@login_required
+@entrega_access_required
+def remover_atribuicao(code):
+    """Remove atribuicao do pedido (volta a ficar sem driver)."""
+    a = AtribuicaoEntrega.query.filter_by(pedido_code=code).first()
+    if a:
+        db.session.delete(a)
+        db.session.commit()
+    return jsonify(ok=True)
+
+
+@entregas_bp.route('/api/atribuicao/lote', methods=['POST'])
+@login_required
+@entrega_access_required
+def atribuir_lote():
+    """Atribui em lote: [{code, driver_id, ordem, data_entrega}...]."""
+    data = request.get_json(silent=True) or {}
+    items = data.get('items') or []
+    if not isinstance(items, list):
+        return jsonify(ok=False, erro='items deve ser lista'), 400
+
+    drivers_validos = {d.id for d in Driver.query.all()}
+    salvos = 0
+    for item in items:
+        code = (item.get('code') or '').strip()
+        if not code:
+            continue
+        driver_id = item.get('driver_id')
+        if driver_id is not None:
+            try:
+                driver_id = int(driver_id)
+            except (TypeError, ValueError):
+                continue
+            if driver_id not in drivers_validos:
+                continue
+        a = AtribuicaoEntrega.query.filter_by(pedido_code=code).first()
+        if not a:
+            a = AtribuicaoEntrega(pedido_code=code)
+            db.session.add(a)
+        a.driver_id = driver_id
+        if item.get('data_entrega'):
+            try:
+                a.data_entrega = datetime.strptime(item['data_entrega'], '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        if 'ordem' in item:
+            try:
+                a.ordem = int(item['ordem'])
+            except (TypeError, ValueError):
+                pass
+        a.atualizado_por = current_user.id
+        salvos += 1
+    db.session.commit()
+    return jsonify(ok=True, salvos=salvos)
 
 
 @entregas_bp.route('/cartinha/<code>', methods=['POST'])
@@ -126,20 +309,28 @@ def salvar_cartinha(code):
 @login_required
 @entrega_access_required
 def api_rotas():
-    """Agrupa pedidos por CEP e divide entre N drivers. Links abrem no Google Maps."""
+    """Distribui pedidos entre drivers nominais (cadastrados em /api/drivers).
+    Pedidos com atribuicao salva (AtribuicaoEntrega) preservam o driver."""
     data_str = request.args.get('data', date.today().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
         target = date.today()
 
-    try:
-        n_drivers = int(request.args.get('drivers', '2'))
-    except ValueError:
-        n_drivers = 2
-    n_drivers = max(1, min(n_drivers, 20))
-
     janela = (request.args.get('janela', '') or '').strip()
+
+    # Drivers ativos cadastrados; opcionalmente filtra pelos selecionados (?drivers=1,2,3)
+    sel = (request.args.get('drivers') or '').strip()
+    q = Driver.query.filter_by(ativo=True)
+    if sel:
+        try:
+            ids = [int(x) for x in sel.split(',') if x.strip()]
+            q = q.filter(Driver.id.in_(ids))
+        except ValueError:
+            pass
+    drivers_db = q.order_by(Driver.nome).all()
+    drivers_struct = [{'id': d.id, 'nome': d.nome, 'cor': d.cor, 'telefone': d.telefone}
+                      for d in drivers_db]
 
     overrides = _carregar_overrides_data()
     resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
@@ -153,18 +344,44 @@ def api_rotas():
     if janela:
         pedidos = [p for p in pedidos if (p.get('periodo') or '') == janela]
 
-    geradas = rotas_svc.gerar_rotas(pedidos, n_drivers)
+    # Carrega atribuicoes existentes pros pedidos do dia
+    codes = [p['code'] for p in pedidos if p.get('code')]
+    atribuicoes = {}
+    if codes:
+        for a in AtribuicaoEntrega.query.filter(AtribuicaoEntrega.pedido_code.in_(codes)).all():
+            atribuicoes[a.pedido_code] = {'driver_id': a.driver_id, 'ordem': a.ordem or 0}
+
+    if not drivers_struct:
+        # Sem drivers cadastrados — retorna lista crua pra UI mostrar mensagem
+        resp = jsonify(
+            data=data_str,
+            janela=janela,
+            periodos_disponiveis=sorted({p.get('periodo') or '' for p in resultado.get('pedidos', []) if p.get('periodo')}),
+            drivers_disponiveis=[],
+            rotas=[],
+            sem_atribuir=[
+                {'code': p['code'], 'destinatario': p.get('destinatario', ''),
+                 'endereco': p.get('endereco', ''), 'periodo': p.get('periodo', '')}
+                for p in pedidos
+            ],
+            origem_endereco=rotas_svc.origem_endereco(current_app),
+            sem_cep=[],
+        )
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        return resp
+
+    geradas = rotas_svc.gerar_rotas(pedidos, drivers_struct, atribuicoes=atribuicoes)
     periodos = sorted({p.get('periodo') or '' for p in resultado.get('pedidos', []) if p.get('periodo')})
 
     resp = jsonify(
         data=data_str,
-        drivers=n_drivers,
         janela=janela,
         periodos_disponiveis=periodos,
+        drivers_disponiveis=drivers_struct,
         rotas=geradas['rotas'],
         sem_cep=[
             {'code': p['code'], 'destinatario': p.get('destinatario', ''),
-             'endereco': p.get('endereco', '')}
+             'endereco': p.get('endereco', ''), 'periodo': p.get('periodo', '')}
             for p in geradas['sem_cep']
         ],
         origem_endereco=rotas_svc.origem_endereco(current_app),

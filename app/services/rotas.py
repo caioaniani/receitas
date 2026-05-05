@@ -1,15 +1,14 @@
-"""Geracao de rotas de entrega — agrupamento simples por CEP.
+"""Geracao de rotas de entrega — agrupamento simples por CEP + drivers nominais.
 
 Estrategia:
 1. Pega pedidos do dia.
-2. Ordena por CEP (proximidade geografica em SP).
-3. Divide em N partes iguais entre os drivers.
-4. UI gera links do Google Maps com waypoints — Google faz o geocoding
-   e a otimizacao da ordem (ate 10 paradas por link).
+2. Pedidos com atribuicao salva (Driver X) ja vao pra coluna do driver, na ordem salva.
+3. Pedidos sem atribuicao sao agrupados por CEP e distribuidos entre drivers ativos
+   (chunks consecutivos pra manter proximidade).
+4. UI gera links do Google Maps com waypoints.
 
-Esse modulo deliberadamente NAO faz geocoding nosso. Aprendemos que APIs
-gratuitas (Nominatim, BrasilAPI, AwesomeAPI) sao instaveis em producao,
-e Google Maps Platform e cara/burocratica. Delegamos pro app do Maps.
+Esse modulo deliberadamente NAO faz geocoding. Aprendemos que APIs gratuitas
+sao instaveis e Google Maps Platform e cara.
 """
 
 import logging
@@ -40,43 +39,81 @@ def origem_endereco(app=None):
     return (app.config.get('ROTA_ORIGEM_ENDERECO') or '').strip()
 
 
-def gerar_rotas(pedidos, n_drivers):
-    """Agrupa pedidos por CEP e divide entre N drivers.
-    Sem geocoding: o link do Google Maps faz isso.
+def gerar_rotas(pedidos, drivers, atribuicoes=None):
+    """Distribui pedidos entre drivers nominais.
 
-    Retorna {'rotas': [{'driver': N, 'paradas': [...], 'qtd_paradas': N}], 'sem_cep': [...]}.
+    drivers: lista de dicts {id, nome, cor}.
+    atribuicoes: dict {pedido_code: {'driver_id': int|None, 'ordem': int}}.
+
+    Pedidos com atribuicao salva ficam com seu driver original, na ordem salva.
+    Pedidos sem atribuicao sao distribuidos entre drivers ativos por proximidade
+    de CEP (chunks consecutivos).
+
+    Retorna {'rotas': [{'driver': {...}, 'paradas': [...], 'qtd_paradas': N}], 'sem_cep': [...]}.
     """
-    n = max(1, n_drivers)
+    atribuicoes = atribuicoes or {}
+    if not drivers:
+        return {'rotas': [], 'sem_cep': []}
 
-    com_cep = []
+    drivers_por_id = {d['id']: d for d in drivers}
+
+    # 1. Separa pedidos pre-atribuidos vs novos
+    pre_atribuidos = {}  # driver_id -> [(ordem, pedido)]
+    nao_atribuidos = []
     sem_cep = []
+
     for p in pedidos:
+        code = p.get('code')
+        atrib = atribuicoes.get(code)
+        if atrib and atrib.get('driver_id') in drivers_por_id:
+            did = atrib['driver_id']
+            ordem = atrib.get('ordem', 0)
+            pre_atribuidos.setdefault(did, []).append((ordem, p))
+        else:
+            nao_atribuidos.append(p)
+
+    # 2. Pra os nao atribuidos: agrupa por CEP + distribui em chunks consecutivos
+    com_cep = []
+    for p in nao_atribuidos:
         cep = _extrair_cep(p.get('endereco') or '')
         if cep:
             com_cep.append((cep, p))
         else:
             sem_cep.append(p)
-
-    # Ordena por CEP (em SP, CEPs proximos = bairros proximos)
     com_cep.sort(key=lambda x: x[0])
-    pedidos_ordenados = [p for _, p in com_cep]
 
-    rotas = []
-    total = len(pedidos_ordenados)
-    if total == 0:
-        return {'rotas': [], 'sem_cep': sem_cep}
+    pedidos_para_distribuir = [p for _, p in com_cep]
+    n = len(drivers)
+    total = len(pedidos_para_distribuir)
+    chunk_size = math.ceil(total / n) if total else 0
 
-    n = min(n, total)
-    chunk_size = math.ceil(total / n)
-    for d in range(n):
-        start = d * chunk_size
+    distribuidos = {d['id']: [] for d in drivers}
+    for i in range(n):
+        if not chunk_size:
+            break
+        start = i * chunk_size
         end = min(start + chunk_size, total)
-        paradas_chunk = pedidos_ordenados[start:end]
-        if not paradas_chunk:
+        if start >= total:
+            break
+        chunk = pedidos_para_distribuir[start:end]
+        distribuidos[drivers[i]['id']] = chunk
+
+    # 3. Monta rotas finais: pre-atribuidos primeiro (ordem salva) + distribuidos
+    rotas = []
+    for d in drivers:
+        did = d['id']
+        # Pre-atribuidos: ordena por ordem salva
+        atrib_list = sorted(pre_atribuidos.get(did, []), key=lambda x: x[0])
+        paradas_atrib = [p for _, p in atrib_list]
+        # Distribuidos: ja ordenado por CEP
+        paradas_novos = distribuidos.get(did, [])
+
+        todas = paradas_atrib + paradas_novos
+        if not todas:
             continue
-        paradas = [dict(p, ordem=i + 1) for i, p in enumerate(paradas_chunk)]
+        paradas = [dict(p, ordem=idx + 1) for idx, p in enumerate(todas)]
         rotas.append({
-            'driver': d + 1,
+            'driver': {'id': d['id'], 'nome': d['nome'], 'cor': d.get('cor')},
             'paradas': paradas,
             'qtd_paradas': len(paradas),
         })

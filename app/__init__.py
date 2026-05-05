@@ -538,6 +538,31 @@ def _migrate_postgres(app):
         # Aumenta coluna fonte caso ja exista com VARCHAR(20)
         _try("ALTER TABLE geocode_cache ALTER COLUMN fonte TYPE VARCHAR(50)")
 
+        # ── Drivers de entrega + atribuicoes pedido<->driver ──
+        _try("""
+        CREATE TABLE IF NOT EXISTS driver_entrega (
+            id SERIAL PRIMARY KEY,
+            nome VARCHAR(80) NOT NULL UNIQUE,
+            cor VARCHAR(20),
+            telefone VARCHAR(30),
+            ativo BOOLEAN DEFAULT TRUE,
+            criado_em TIMESTAMP DEFAULT NOW()
+        )
+        """)
+        _try("""
+        CREATE TABLE IF NOT EXISTS atribuicao_entrega (
+            id SERIAL PRIMARY KEY,
+            pedido_code VARCHAR(50) NOT NULL UNIQUE,
+            driver_id INTEGER REFERENCES driver_entrega(id) ON DELETE SET NULL,
+            data_entrega DATE,
+            ordem INTEGER DEFAULT 0,
+            atualizado_em TIMESTAMP DEFAULT NOW(),
+            atualizado_por INTEGER REFERENCES usuario(id)
+        )
+        """)
+        _try("CREATE INDEX IF NOT EXISTS idx_atribuicao_pedido ON atribuicao_entrega(pedido_code)")
+        _try("CREATE INDEX IF NOT EXISTS idx_atribuicao_data ON atribuicao_entrega(data_entrega)")
+
 
 def _migrate_sqlite(app):
     """Adiciona colunas novas no SQLite."""

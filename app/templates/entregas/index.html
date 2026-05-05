@@ -84,10 +84,6 @@
                 <input type="date" id="rotas-data" class="form-control form-control-sm" style="max-width:180px;" value="{{ hoje }}">
             </div>
             <div>
-                <label class="form-label small fw-bold mb-1">Drivers</label>
-                <input type="number" id="rotas-drivers" class="form-control form-control-sm" min="1" max="20" value="2" style="max-width:90px;">
-            </div>
-            <div>
                 <label class="form-label small fw-bold mb-1">Janela (período)</label>
                 <select id="rotas-janela" class="form-select form-select-sm" style="max-width:260px;">
                     <option value="">Todas</option>
@@ -96,7 +92,10 @@
             <button class="btn btn-primary btn-sm" id="btn-gerar-rotas">
                 <i class="bi bi-arrow-clockwise"></i> Gerar rotas
             </button>
-            <small class="text-muted ms-auto">Agrupa por CEP · clique no botão Maps pra navegar (Google otimiza)</small>
+            <button class="btn btn-outline-secondary btn-sm" id="btn-gerenciar-drivers" data-bs-toggle="modal" data-bs-target="#modal-drivers">
+                <i class="bi bi-people"></i> Drivers
+            </button>
+            <small class="text-muted ms-auto">Cadastre os drivers · arraste pra atribuir · salva automaticamente</small>
         </div>
 
         <div id="rotas-loading" class="text-center py-4 d-none">
@@ -200,6 +199,45 @@
                         <i class="bi bi-check-lg"></i> Salvar
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: gerenciar drivers -->
+<div class="modal fade" id="modal-drivers" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h6 class="modal-title"><i class="bi bi-people"></i> Drivers cadastrados</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2 mb-3 align-items-end">
+                    <div class="col-md-5">
+                        <label class="form-label small fw-bold mb-1">Nome do novo driver</label>
+                        <input type="text" id="drv-nome" class="form-control form-control-sm" placeholder="Ex: João">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold mb-1">Telefone</label>
+                        <input type="text" id="drv-telefone" class="form-control form-control-sm" placeholder="(11) 99999-9999">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold mb-1">Cor</label>
+                        <input type="color" id="drv-cor" class="form-control form-control-color form-control-sm" value="#3cb44b">
+                    </div>
+                    <div class="col-md-1">
+                        <button type="button" class="btn btn-primary btn-sm w-100" id="btn-criar-driver">+</button>
+                    </div>
+                </div>
+                <div id="drv-msg" class="small"></div>
+                <hr>
+                <div id="drv-lista">
+                    <div class="text-muted small">Carregando…</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
     </div>
@@ -342,6 +380,7 @@
                             '<span class="fw-semibold"><i class="bi bi-person-fill"></i> ' + escapeHtml(p.destinatario) + '</span>' +
                             cartinhaBadge +
                             (p.data_override ? ' <span class="badge bg-warning text-dark" title="Data alterada — original: ' + escapeHtml(p.data_entrega_original_fmt || '') + (p.override_motivo ? ' · Motivo: ' + escapeHtml(p.override_motivo) : '') + (p.override_autor ? ' · Por: ' + escapeHtml(p.override_autor) : '') + '" style="font-size:10px;"><i class="bi bi-pencil-square"></i> Data alterada</span>' : '') +
+                            (p.driver ? ' <span class="badge text-white" style="font-size:10px;background:' + (p.driver.cor || '#3cb44b') + ';" title="Driver atribuído"><i class="bi bi-person-badge"></i> ' + escapeHtml(p.driver.nome) + '</span>' : '') +
                         '</div>' +
                         '<div class="d-flex align-items-center gap-2">' +
                             (p.periodo ? '<span class="badge bg-light text-dark" style="font-size:11px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>' : '') +
@@ -613,12 +652,11 @@
     }
 
     // ──────────────────────────────────────────
-    // ── Rotas (agrupa por CEP, links Google Maps) ──
+    // ── Rotas (drivers nominais + Google Maps) ──
     // ──────────────────────────────────────────
 
     function gerarRotas() {
         var data = document.getElementById('rotas-data').value;
-        var drivers = document.getElementById('rotas-drivers').value || '2';
         var janela = document.getElementById('rotas-janela').value || '';
         var loading = document.getElementById('rotas-loading');
         var msg = document.getElementById('rotas-msg');
@@ -631,7 +669,6 @@
         sc.innerHTML = '';
 
         var url = '/entregas/api/rotas?data=' + encodeURIComponent(data) +
-                  '&drivers=' + encodeURIComponent(drivers) +
                   '&janela=' + encodeURIComponent(janela);
 
         fetch(url, {credentials: 'same-origin'})
@@ -644,6 +681,12 @@
                 }
                 rotasUltimoResultado = d;
                 atualizarPeriodosDisponiveis(d.periodos_disponiveis || [], janela);
+                if (!d.drivers_disponiveis || d.drivers_disponiveis.length === 0) {
+                    msg.innerHTML = '<div class="alert alert-info py-2 small">' +
+                        '<i class="bi bi-info-circle"></i> Nenhum driver cadastrado. Clique em <strong>Drivers</strong> pra adicionar.' +
+                        '</div>';
+                    return;
+                }
                 renderRotas(d);
             })
             .catch(function() {
@@ -704,51 +747,35 @@
         var sc = document.getElementById('rotas-sem-cep');
         var matriz = (d.origem_endereco || '').trim();
 
-        if (!d.rotas || d.rotas.length === 0) {
-            container.innerHTML = '<div class="alert alert-info py-2 small">Nenhum pedido com CEP encontrado para esses filtros.</div>';
-            return;
-        }
-
         if (!matriz) {
             var msg = document.getElementById('rotas-msg');
             msg.innerHTML = '<div class="alert alert-warning py-2 small mb-3">' +
                 '<i class="bi bi-exclamation-triangle"></i> <strong>ROTA_ORIGEM_ENDERECO não configurado.</strong> ' +
-                'O link do Maps vai sair da primeira parada em vez da matriz. ' +
-                'Configure a variável de ambiente no Railway com o endereço completo da loja matriz.' +
+                'O link do Maps vai sair da primeira parada em vez da matriz.' +
                 '</div>';
+        }
+
+        if (!d.rotas || d.rotas.length === 0) {
+            container.innerHTML = '<div class="alert alert-info py-2 small">Nenhum pedido para esses filtros.</div>';
+            return;
         }
 
         var html = '<div class="row g-2">';
         for (var i = 0; i < d.rotas.length; i++) {
             var r = d.rotas[i];
-            var cor = ROTA_CORES[i % ROTA_CORES.length];
-            var links = gerarLinksMaps(matriz, r.paradas);
-
-            var btnsMaps = '';
-            if (links.length === 1) {
-                btnsMaps = '<a href="' + links[0].url + '" target="_blank" rel="noopener" class="btn btn-sm btn-success">' +
-                           '<i class="bi bi-geo-alt-fill"></i> Abrir no Google Maps</a>';
-            } else if (links.length > 1) {
-                btnsMaps = '<div class="dropdown">' +
-                    '<button class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown">' +
-                    '<i class="bi bi-geo-alt-fill"></i> Maps (' + links.length + ' partes)</button>' +
-                    '<ul class="dropdown-menu">';
-                for (var li = 0; li < links.length; li++) {
-                    btnsMaps += '<li><a class="dropdown-item" href="' + links[li].url + '" target="_blank" rel="noopener">' +
-                               'Parte ' + (li + 1) + ' (paradas ' + links[li].de + '–' + links[li].ate + ')</a></li>';
-                }
-                btnsMaps += '</ul></div>';
-            }
+            var drv = r.driver;
+            var cor = drv.cor || ROTA_CORES[i % ROTA_CORES.length];
 
             html += '<div class="col-md-6 col-lg-4 mb-2">' +
                     '<div class="card">' +
                     '<div class="card-header py-2 d-flex justify-content-between align-items-center" style="border-left:4px solid ' + cor + ';">' +
-                        '<strong style="color:' + cor + ';">Driver ' + r.driver + '</strong>' +
-                        '<span class="text-muted small">' + r.qtd_paradas + ' paradas</span>' +
+                        '<strong style="color:' + cor + ';"><i class="bi bi-person-badge"></i> ' + escapeHtml(drv.nome) + '</strong>' +
+                        '<span class="text-muted small qtd-paradas">' + r.qtd_paradas + ' paradas</span>' +
                     '</div>' +
-                    '<div class="card-body py-2 px-3 border-bottom">' + btnsMaps + '</div>' +
+                    '<div class="card-body py-2 px-3 border-bottom maps-area" data-cor="' + cor + '"></div>' +
                     '<div class="card-body p-0">' +
-                        '<ol class="list-group list-group-numbered list-group-flush rotas-paradas" data-driver="' + r.driver + '">';
+                        '<ol class="list-group list-group-numbered list-group-flush rotas-paradas" ' +
+                          'data-driver-id="' + drv.id + '" data-driver-nome="' + escapeHtml(drv.nome) + '">';
             for (var j = 0; j < r.paradas.length; j++) {
                 var p = r.paradas[j];
                 html += '<li class="list-group-item d-flex justify-content-between align-items-start" style="cursor:grab;" data-code="' + p.code + '" data-endereco="' + escapeHtml(p.endereco || '') + '">' +
@@ -765,67 +792,149 @@
         html += '</div>';
         container.innerHTML = html;
 
-        // Sortable: drag entre/dentro de drivers. Após mover, regerar links.
+        // Inicializa cada coluna: gera links Maps e ativa Sortable
         document.querySelectorAll('.rotas-paradas').forEach(function(ol) {
+            atualizarMapsDaColuna(ol);
             new Sortable(ol, {
                 group: 'rotas',
                 animation: 150,
-                onEnd: function() {
-                    atualizarRotaMovida();
+                onEnd: function(evt) {
+                    // Re-renderiza Maps das colunas afetadas
+                    if (evt.from) atualizarMapsDaColuna(evt.from);
+                    if (evt.to && evt.to !== evt.from) atualizarMapsDaColuna(evt.to);
+                    persistirAtribuicoes();
                 }
             });
         });
 
         // Pedidos sem CEP
         if (d.sem_cep && d.sem_cep.length > 0) {
-            var s = '<div class="alert alert-warning py-2"><strong><i class="bi bi-geo-alt-fill"></i> ' + d.sem_cep.length + ' pedido(s) sem CEP no endereço:</strong><ul class="mb-0 small">';
+            var s = '<div class="alert alert-warning py-2"><strong><i class="bi bi-geo-alt-fill"></i> ' + d.sem_cep.length + ' pedido(s) sem CEP — não distribuídos automaticamente:</strong><ul class="mb-0 small">';
             for (var k = 0; k < d.sem_cep.length; k++) {
                 var x = d.sem_cep[k];
                 s += '<li>[' + escapeHtml(x.code) + '] ' + escapeHtml(x.destinatario || '—') + ' — ' + escapeHtml(x.endereco || '(sem endereço)') + '</li>';
             }
-            s += '</ul><small class="text-muted d-block mt-1">Inclua manualmente em alguma rota arrastando o pedido depois de gerar.</small></div>';
+            s += '</ul></div>';
             sc.innerHTML = s;
         }
     }
 
-    // Apos drag, reconstroi links Maps + contagem da rota afetada.
-    function atualizarRotaMovida() {
+    function atualizarMapsDaColuna(ol) {
+        var card = ol.closest('.card');
+        var paradas = [];
+        ol.querySelectorAll('li').forEach(function(li) {
+            paradas.push({
+                code: li.dataset.code,
+                endereco: li.dataset.endereco || '',
+            });
+        });
+        var hdr = card.querySelector('.qtd-paradas');
+        if (hdr) hdr.textContent = paradas.length + ' paradas';
+
         var matriz = (rotasUltimoResultado && rotasUltimoResultado.origem_endereco) || '';
+        var btnArea = card.querySelector('.maps-area');
+        if (!btnArea) return;
+        var links = gerarLinksMaps(matriz, paradas);
+        if (links.length === 0) {
+            btnArea.innerHTML = '<small class="text-muted">Sem paradas</small>';
+        } else if (links.length === 1) {
+            btnArea.innerHTML = '<a href="' + links[0].url + '" target="_blank" rel="noopener" class="btn btn-sm btn-success">' +
+                                '<i class="bi bi-geo-alt-fill"></i> Abrir no Google Maps</a>';
+        } else {
+            var bm = '<div class="dropdown">' +
+                '<button class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown">' +
+                '<i class="bi bi-geo-alt-fill"></i> Maps (' + links.length + ' partes)</button>' +
+                '<ul class="dropdown-menu">';
+            for (var li2 = 0; li2 < links.length; li2++) {
+                bm += '<li><a class="dropdown-item" href="' + links[li2].url + '" target="_blank" rel="noopener">' +
+                      'Parte ' + (li2 + 1) + ' (paradas ' + links[li2].de + '–' + links[li2].ate + ')</a></li>';
+            }
+            bm += '</ul></div>';
+            btnArea.innerHTML = bm;
+        }
+    }
+
+    function persistirAtribuicoes() {
+        var data = (rotasUltimoResultado && rotasUltimoResultado.data) || '';
+        var items = [];
         document.querySelectorAll('.rotas-paradas').forEach(function(ol) {
-            var card = ol.closest('.card');
-            var paradas = [];
-            ol.querySelectorAll('li').forEach(function(li) {
-                paradas.push({
+            var driverId = parseInt(ol.dataset.driverId, 10);
+            ol.querySelectorAll('li').forEach(function(li, idx) {
+                items.push({
                     code: li.dataset.code,
-                    endereco: li.dataset.endereco || '',
+                    driver_id: driverId,
+                    ordem: idx,
+                    data_entrega: data,
                 });
             });
-            // Atualiza contagem
-            var hdr = card.querySelector('.card-header span');
-            if (hdr) hdr.textContent = paradas.length + ' paradas';
-
-            // Regera botao(es) de Maps
-            var btnArea = card.querySelector('.card-body.border-bottom');
-            if (!btnArea) return;
-            var links = gerarLinksMaps(matriz, paradas);
-            if (links.length === 0) {
-                btnArea.innerHTML = '<small class="text-muted">Sem paradas</small>';
-            } else if (links.length === 1) {
-                btnArea.innerHTML = '<a href="' + links[0].url + '" target="_blank" rel="noopener" class="btn btn-sm btn-success">' +
-                                    '<i class="bi bi-geo-alt-fill"></i> Abrir no Google Maps</a>';
-            } else {
-                var bm = '<div class="dropdown">' +
-                    '<button class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown">' +
-                    '<i class="bi bi-geo-alt-fill"></i> Maps (' + links.length + ' partes)</button>' +
-                    '<ul class="dropdown-menu">';
-                for (var li2 = 0; li2 < links.length; li2++) {
-                    bm += '<li><a class="dropdown-item" href="' + links[li2].url + '" target="_blank" rel="noopener">' +
-                          'Parte ' + (li2 + 1) + ' (paradas ' + links[li2].de + '–' + links[li2].ate + ')</a></li>';
-                }
-                bm += '</ul></div>';
-                btnArea.innerHTML = bm;
-            }
         });
+        if (items.length === 0) return;
+        fetch('/entregas/api/atribuicao/lote', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+            body: JSON.stringify({items: items}),
+        }).then(function(r) { return r.json(); })
+          .then(function(d) {
+              if (!d.ok) {
+                  console.error('Erro ao salvar atribuicoes:', d.erro);
+              }
+          });
+    }
+
+    // ── Modal: gerenciar drivers ──
+    function carregarDrivers() {
+        var lista = document.getElementById('drv-lista');
+        if (!lista) return;
+        lista.innerHTML = '<div class="text-muted small">Carregando…</div>';
+        fetch('/entregas/api/drivers?inativos=1', {credentials: 'same-origin'})
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (!d.drivers || d.drivers.length === 0) {
+                    lista.innerHTML = '<div class="text-muted small text-center py-3">Nenhum driver cadastrado ainda.</div>';
+                    return;
+                }
+                var html = '<div class="table-responsive"><table class="table table-sm"><thead><tr>' +
+                    '<th>Cor</th><th>Nome</th><th>Telefone</th><th>Ativo</th><th></th>' +
+                    '</tr></thead><tbody>';
+                for (var i = 0; i < d.drivers.length; i++) {
+                    var dr = d.drivers[i];
+                    html += '<tr data-id="' + dr.id + '">' +
+                        '<td><input type="color" class="form-control form-control-color form-control-sm drv-cor-edit" value="' + (dr.cor || '#666666') + '" style="width:36px;height:24px;"></td>' +
+                        '<td><input type="text" class="form-control form-control-sm drv-nome-edit" value="' + escapeHtml(dr.nome) + '"></td>' +
+                        '<td><input type="text" class="form-control form-control-sm drv-tel-edit" value="' + escapeHtml(dr.telefone || '') + '"></td>' +
+                        '<td class="text-center"><input type="checkbox" class="form-check-input drv-ativo-edit" ' + (dr.ativo ? 'checked' : '') + '></td>' +
+                        '<td class="text-end">' +
+                        '<button class="btn btn-sm btn-outline-primary me-1 btn-drv-salvar"><i class="bi bi-check"></i></button>' +
+                        '<button class="btn btn-sm btn-outline-danger btn-drv-desativar" title="Desativar"><i class="bi bi-trash"></i></button>' +
+                        '</td>' +
+                        '</tr>';
+                }
+                html += '</tbody></table></div>';
+                lista.innerHTML = html;
+            });
+    }
+
+    function criarDriver() {
+        var nome = (document.getElementById('drv-nome').value || '').trim();
+        var tel = (document.getElementById('drv-telefone').value || '').trim();
+        var cor = document.getElementById('drv-cor').value;
+        var msg = document.getElementById('drv-msg');
+        msg.innerHTML = '';
+        if (!nome) { msg.innerHTML = '<div class="text-danger">Informe o nome.</div>'; return; }
+        fetch('/entregas/api/drivers', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+            body: JSON.stringify({nome: nome, telefone: tel, cor: cor})
+        }).then(function(r) { return r.json(); })
+          .then(function(d) {
+              if (d.ok) {
+                  document.getElementById('drv-nome').value = '';
+                  document.getElementById('drv-telefone').value = '';
+                  carregarDrivers();
+              } else {
+                  msg.innerHTML = '<div class="text-danger">' + escapeHtml(d.erro || 'Erro ao criar') + '</div>';
+              }
+          });
     }
 
     document.addEventListener('DOMContentLoaded', function() {
@@ -833,10 +942,52 @@
         if (btn) btn.addEventListener('click', gerarRotas);
         var tabBtn = document.getElementById('btn-tab-rotas');
         if (tabBtn) tabBtn.addEventListener('shown.bs.tab', function() {
-            // Sincroniza data com a aba de pedidos
             var dataPedidos = document.getElementById('data-entrega').value;
             if (dataPedidos) document.getElementById('rotas-data').value = dataPedidos;
         });
+
+        // Modal de drivers
+        var btnCriar = document.getElementById('btn-criar-driver');
+        if (btnCriar) btnCriar.addEventListener('click', criarDriver);
+
+        var modalDrv = document.getElementById('modal-drivers');
+        if (modalDrv) {
+            modalDrv.addEventListener('show.bs.modal', carregarDrivers);
+            // Salvar/desativar
+            modalDrv.addEventListener('click', function(e) {
+                var row = e.target.closest('tr[data-id]');
+                if (!row) return;
+                var id = row.dataset.id;
+                if (e.target.closest('.btn-drv-salvar')) {
+                    var dados = {
+                        nome: row.querySelector('.drv-nome-edit').value,
+                        telefone: row.querySelector('.drv-tel-edit').value,
+                        cor: row.querySelector('.drv-cor-edit').value,
+                        ativo: row.querySelector('.drv-ativo-edit').checked,
+                    };
+                    fetch('/entregas/api/drivers/' + id, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+                        body: JSON.stringify(dados),
+                    }).then(function(r) { return r.json(); })
+                      .then(function(d) {
+                          if (d.ok) {
+                              row.style.background = '#d4edda';
+                              setTimeout(function() { row.style.background = ''; }, 1000);
+                          } else {
+                              alert('Erro: ' + (d.erro || 'desconhecido'));
+                          }
+                      });
+                } else if (e.target.closest('.btn-drv-desativar')) {
+                    if (!confirm('Desativar esse driver? (Histórico fica preservado)')) return;
+                    fetch('/entregas/api/drivers/' + id, {
+                        method: 'DELETE',
+                        headers: {'X-CSRFToken': CSRF_TOKEN},
+                    }).then(function(r) { return r.json(); })
+                      .then(function() { carregarDrivers(); });
+                }
+            });
+        }
     });
 
     // ── Init ──
