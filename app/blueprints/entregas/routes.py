@@ -192,10 +192,18 @@ def api_debug_pedido(code):
             )
             info[f'endpoint_{path}'] = {
                 'status': r.status_code,
-                'body': r.text[:400] if r.status_code != 404 else None,
+                'body': r.text[:4000] if r.status_code != 404 else None,
             }
         except http_requests.RequestException:
             pass
+
+    # 4) Procurar 'ana' (case insensitive) em todo o JSON do pedido
+    import json as _json
+    try:
+        full_text = _json.dumps(order, ensure_ascii=False) if 'order' in locals() else ''
+        info['contains_ana_in_order'] = 'ana' in full_text.lower()
+    except Exception:
+        pass
 
     return jsonify(info)
 
