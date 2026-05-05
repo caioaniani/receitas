@@ -1,15 +1,17 @@
 """Geracao de rotas de entrega: geocoding, clustering e ordenacao.
 
 Estrategia:
-1. Geocoda enderecos via Nominatim (OpenStreetMap), com cache em GeocodeCache.
-2. Agrupa pontos em N rotas usando k-means simples (sem deps externas).
-3. Em cada rota, ordena por nearest neighbor saindo da loja matriz.
+1. Geocoda enderecos: AwesomeAPI (gratuita, rapida, paralelizavel) com fallback Nominatim.
+2. Cache permanente em GeocodeCache pra evitar re-bater APIs.
+3. Agrupa pontos em N rotas usando k-means simples (sem deps externas).
+4. Em cada rota, ordena por nearest neighbor saindo da loja matriz.
 """
 
 import logging
 import math
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
@@ -65,6 +67,48 @@ def _extrair_cep(endereco):
 _last_nominatim_call = [0.0]
 
 
+def _consultar_brasilapi(cep):
+    """Geocoding via BrasilAPI v2: gratuita, sem rate limit estrito.
+    Retorna (lat, lng) ou None. So funciona com CEP brasileiro (8 digitos)."""
+    if not cep or len(cep) != 8 or not cep.isdigit():
+        return None
+    try:
+        r = requests.get(
+            f'https://brasilapi.com.br/api/cep/v2/{cep}',
+            headers={'User-Agent': 'OPaoPadariaERP/1.0'},
+            timeout=5,
+        )
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        loc = (data.get('location') or {}).get('coordinates') or {}
+        lat = loc.get('latitude')
+        lng = loc.get('longitude')
+        if lat and lng:
+            return float(lat), float(lng)
+    except (requests.RequestException, ValueError, KeyError, TypeError):
+        return None
+    return None
+
+
+def _consultar_awesomeapi(cep):
+    """Fallback: AwesomeAPI tambem retorna lat/lng do CEP."""
+    if not cep or len(cep) != 8 or not cep.isdigit():
+        return None
+    try:
+        r = requests.get(f'https://cep.awesomeapi.com.br/json/{cep}', timeout=5)
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        lat = data.get('lat')
+        lng = data.get('lng')
+        if lat and lng:
+            return float(lat), float(lng)
+    except (requests.RequestException, ValueError, KeyError, TypeError):
+        return None
+    return None
+
+
 def _consultar_nominatim(query):
     """Bate em Nominatim respeitando rate limit de 1 req/s."""
     diff = time.time() - _last_nominatim_call[0]
@@ -89,8 +133,33 @@ def _consultar_nominatim(query):
         return None
 
 
+def _geocode_sem_cache(endereco):
+    """Geocoda um endereco SEM tocar o banco. Pra uso em threads paralelas.
+    Retorna (lat, lng, fonte). Tenta APIs de CEP rapidas antes de Nominatim."""
+    cep = _extrair_cep(endereco)
+    # 1. BrasilAPI (CEP — gratuita, rapida, paralelizavel)
+    if cep:
+        coords = _consultar_brasilapi(cep)
+        if coords:
+            return coords[0], coords[1], 'brasilapi'
+        # 2. AwesomeAPI (CEP — fallback rapido)
+        coords = _consultar_awesomeapi(cep)
+        if coords:
+            return coords[0], coords[1], 'awesomeapi'
+    # 3. Nominatim — fallback (rate-limited, serial)
+    coords = _consultar_nominatim(endereco)
+    if coords:
+        return coords[0], coords[1], 'nominatim'
+    if cep:
+        coords = _consultar_nominatim(f'{cep[:5]}-{cep[5:]} Brasil')
+        if coords:
+            return coords[0], coords[1], 'nominatim_cep'
+    return None, None, 'falhou'
+
+
 def geocode(endereco):
-    """Retorna (lat, lng) do endereco. Usa cache se existir."""
+    """Retorna (lat, lng) do endereco. Usa cache se existir.
+    Para uso pontual; para batch grande use _geocode_paralelo."""
     if not endereco:
         return None
     chave = _normalizar_chave(endereco)
@@ -101,30 +170,16 @@ def geocode(endereco):
     if cache and cache.lat is not None:
         return cache.lat, cache.lng
 
-    # Tenta primeiro o endereco completo, depois fallback so CEP+Brasil
-    cep = _extrair_cep(endereco)
-    tentativas = [endereco]
-    if cep:
-        tentativas.append(f'{cep[:5]}-{cep[5:]} Brasil')
-
-    coords = None
-    for q in tentativas:
-        coords = _consultar_nominatim(q)
-        if coords:
-            break
+    lat, lng, fonte = _geocode_sem_cache(endereco)
 
     if not cache:
-        cache = GeocodeCache(chave=chave, fonte='nominatim')
+        cache = GeocodeCache(chave=chave, fonte=fonte)
         db.session.add(cache)
-
-    if coords:
-        cache.lat, cache.lng = coords
-    else:
-        # Marca como tentado (lat=None) pra nao re-bater toda vez
-        cache.lat, cache.lng = None, None
-
+    cache.lat = lat
+    cache.lng = lng
+    cache.fonte = fonte
     db.session.commit()
-    return coords
+    return (lat, lng) if lat is not None else None
 
 
 # ── Clustering (k-means simples) ──
@@ -225,13 +280,36 @@ def _ordenar_nearest_neighbor(pontos, origem):
 
 # ── Geracao de rotas ──
 
-def gerar_rotas(pedidos, n_drivers, origem, max_seconds=18):
+def _geocodar_em_lote(pendentes_enderecos, max_seconds=40, max_workers=8):
+    """Geocoda em paralelo via AwesomeAPI (CEP). ThreadPool.
+    Retorna dict {endereco: (lat, lng, fonte)}. Enderecos sem resultado vem com (None, None, fonte).
+    """
+    resultados = {}
+    if not pendentes_enderecos:
+        return resultados
+
+    inicio = time.time()
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_geocode_sem_cache, end): end for end in pendentes_enderecos}
+        try:
+            tempo_restante = max(1, max_seconds - (time.time() - inicio))
+            for future in as_completed(futures, timeout=tempo_restante):
+                end = futures[future]
+                try:
+                    lat, lng, fonte = future.result(timeout=10)
+                    resultados[end] = (lat, lng, fonte)
+                except Exception:
+                    resultados[end] = (None, None, 'erro')
+        except Exception:  # TimeoutError ou outro
+            pass
+    return resultados
+
+
+def gerar_rotas(pedidos, n_drivers, origem, max_seconds=40):
     """pedidos: lista de dicts com 'code', 'endereco', 'destinatario', etc.
-    max_seconds: tempo maximo de geocoding (default 18s, antes do timeout do proxy).
+    max_seconds: tempo maximo de geocoding (default 40s, abaixo do timeout do proxy).
 
     Retorna {'rotas': [...], 'sem_geocode': [...], 'tempo_geo': float, 'incomplete': bool}.
-    Se incomplete=True, alguns enderecos nao foram geocodados nessa chamada (sem_geocode).
-    Proxima chamada usa cache e termina.
     """
     if n_drivers <= 0:
         n_drivers = 1
@@ -239,17 +317,19 @@ def gerar_rotas(pedidos, n_drivers, origem, max_seconds=18):
     inicio = time.time()
     com_coords = []
     sem_coords = []
-    incomplete = False
 
+    # Etapa 1: separa cache hits dos pendentes
+    pendentes = []  # lista de (pedido, endereco, chave)
     for p in pedidos:
         end = p.get('endereco') or ''
         if not end:
             sem_coords.append(p)
             continue
-
-        # Tenta cache primeiro (instantaneo)
         chave = _normalizar_chave(end)
-        cache = GeocodeCache.query.filter_by(chave=chave).first() if chave else None
+        if not chave:
+            sem_coords.append(p)
+            continue
+        cache = GeocodeCache.query.filter_by(chave=chave).first()
         if cache and cache.lat is not None:
             com_coords.append(dict(p, lat=cache.lat, lng=cache.lng))
             continue
@@ -257,18 +337,41 @@ def gerar_rotas(pedidos, n_drivers, origem, max_seconds=18):
             # Ja tentamos antes e nao achamos. Nao re-bate.
             sem_coords.append(p)
             continue
+        pendentes.append((p, end, chave))
 
-        # Cache miss — checa se ainda temos tempo
-        if (time.time() - inicio) >= max_seconds:
-            incomplete = True
-            sem_coords.append(p)
-            continue
+    # Etapa 2: geocoda pendentes em paralelo (AwesomeAPI)
+    incomplete = False
+    if pendentes:
+        enderecos_unicos = list({e for _, e, _ in pendentes})
+        resultados = _geocodar_em_lote(enderecos_unicos, max_seconds=max_seconds, max_workers=8)
 
-        coords = geocode(end)
-        if coords:
-            com_coords.append(dict(p, lat=coords[0], lng=coords[1]))
-        else:
-            sem_coords.append(p)
+        # Persiste no cache em batch
+        for end in enderecos_unicos:
+            chave = _normalizar_chave(end)
+            if not chave:
+                continue
+            cache = GeocodeCache.query.filter_by(chave=chave).first()
+            r = resultados.get(end)
+            if r is None:
+                # Nao processado nesse lote — timeout
+                incomplete = True
+                continue
+            lat, lng, fonte = r
+            if not cache:
+                cache = GeocodeCache(chave=chave, fonte=fonte)
+                db.session.add(cache)
+            cache.lat = lat
+            cache.lng = lng
+            cache.fonte = fonte
+        db.session.commit()
+
+        # Distribui pelos pedidos pendentes
+        for pedido, end, chave in pendentes:
+            r = resultados.get(end)
+            if r and r[0] is not None:
+                com_coords.append(dict(pedido, lat=r[0], lng=r[1]))
+            else:
+                sem_coords.append(pedido)
 
     tempo_geo = time.time() - inicio
 
