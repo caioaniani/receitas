@@ -204,6 +204,35 @@ def buscar_shipping_address(code):
     return None
 
 
+def buscar_customizations(code, item_id):
+    """Customizacoes (cartinha, etc) de um item especifico do pedido."""
+    resp = _get(f'/orders/{code}/items/{item_id}/customizations')
+    if resp:
+        try:
+            data = resp.json()
+            if isinstance(data, list):
+                return data
+        except ValueError:
+            pass
+    return []
+
+
+def _extrair_cartinha(items_customizations):
+    """Concatena texto de customizations cujo group_name indica cartinha/recado."""
+    if not items_customizations:
+        return ''
+    keywords = ('cartinha', 'mensagem', 'recado', 'card')
+    textos = []
+    for item_customs in items_customizations:
+        for c in (item_customs or []):
+            group = (c.get('group_name') or '').strip().lower()
+            if any(k in group for k in keywords):
+                texto = (c.get('name') or '').strip()
+                if texto:
+                    textos.append(texto)
+    return ' · '.join(textos)
+
+
 def buscar_pedido_completo(code):
     """Busca detalhes completos de um pedido (inclui shipping_address)."""
     resp = _get(f'/orders/{code}')
@@ -215,7 +244,7 @@ def buscar_pedido_completo(code):
     return None
 
 
-def _normalizar_pedido(order, client_data=None, shipping_data=None):
+def _normalizar_pedido(order, client_data=None, shipping_data=None, items_customizations=None):
     data_entrega = _extrair_data_entrega(order)
 
     itens = []
@@ -227,6 +256,11 @@ def _normalizar_pedido(order, client_data=None, shipping_data=None):
             'preco_unitario': item.get('price', 0),
             'subtotal': item.get('subtotal', 0),
         })
+
+    cartinha_vnda = _extrair_cartinha(items_customizations or [])
+    tem_customizacao = bool(cartinha_vnda) or any(
+        item.get('has_customizations') for item in (order.get('items') or [])
+    )
 
     comprador = ''
     destinatario = ''
@@ -276,7 +310,8 @@ def _normalizar_pedido(order, client_data=None, shipping_data=None):
         'endereco': endereco_entrega,
         'itens': itens,
         'total': order.get('total', 0),
-        'tem_customizacao': bool(order.get('customizations')),
+        'tem_customizacao': tem_customizacao,
+        'cartinha_vnda': cartinha_vnda,
         'observacao': order.get('note', ''),
     }
 
@@ -366,7 +401,12 @@ def buscar_pedidos_do_dia(target_date):
         client_id = order.get('client_id')
         client_data = buscar_cliente(client_id)
         shipping_data = buscar_shipping_address(order.get('code'))
-        pedidos.append(_normalizar_pedido(order, client_data, shipping_data))
+        # Busca customizations dos items que tem (otimizacao: skip items sem customizacao)
+        items_customs = []
+        for item in (order.get('items') or []):
+            if item.get('has_customizations') and item.get('id'):
+                items_customs.append(buscar_customizations(order.get('code'), item['id']))
+        pedidos.append(_normalizar_pedido(order, client_data, shipping_data, items_customs))
 
     pedidos.sort(key=lambda p: p.get('periodo') or '')
     return {'pedidos': pedidos, 'total_janela': len(todos)}

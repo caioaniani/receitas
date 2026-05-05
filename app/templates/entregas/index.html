@@ -277,6 +277,7 @@
                         '</div>' +
                     '</div>' +
                     '<div class="cartinha-area ' + cartinhaClass + ' mt-2 d-none" id="cartinha-' + p.code + '">' +
+                        (p.cartinha_origem === 'vnda' ? '<small class="text-muted d-block mb-1"><i class="bi bi-magic"></i> Cartinha automática do VNDA — edite se quiser sobrescrever</small>' : '') +
                         '<textarea class="form-control form-control-sm mb-1" rows="3" id="cartinha-txt-' + p.code + '" placeholder="Cole a cartinha do admin Vnda...">' + escapeHtml(p.cartinha || '') + '</textarea>' +
                         '<button class="btn btn-sm btn-warning d-print-none" onclick="salvarCartinha(\'' + p.code + '\')"><i class="bi bi-save"></i> Salvar</button>' +
                     '</div>' +

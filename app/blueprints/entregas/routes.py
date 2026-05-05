@@ -38,13 +38,17 @@ def api_pedidos():
         total_janela = resultado.get('total_janela', 0)
 
         codes = [p['code'] for p in pedidos if p['code']]
-        cartinhas = {}
+        cartinhas_manuais = {}
         if codes:
             for c in CartinhaEntrega.query.filter(CartinhaEntrega.pedido_code.in_(codes)).all():
-                cartinhas[c.pedido_code] = c.texto or ''
+                cartinhas_manuais[c.pedido_code] = c.texto or ''
 
+        # Cartinha manual (editada pelo usuario) tem prioridade sobre a do VNDA
         for p in pedidos:
-            p['cartinha'] = cartinhas.get(p['code'], '')
+            manual = cartinhas_manuais.get(p['code'], '')
+            vnda = p.get('cartinha_vnda', '')
+            p['cartinha'] = manual or vnda
+            p['cartinha_origem'] = 'manual' if manual else ('vnda' if vnda else None)
 
         resp = jsonify(pedidos=pedidos, data=data_str, total_janela=total_janela)
 
