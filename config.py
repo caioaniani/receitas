@@ -22,3 +22,5 @@ class Config:
     # Coordenadas da loja matriz — origem das rotas de entrega
     ROTA_ORIGEM_LAT = os.environ.get('ROTA_ORIGEM_LAT', '')
     ROTA_ORIGEM_LNG = os.environ.get('ROTA_ORIGEM_LNG', '')
+    # Endereco textual da matriz — usado como origem dos links do Google Maps
+    ROTA_ORIGEM_ENDERECO = os.environ.get('ROTA_ORIGEM_ENDERECO', '')

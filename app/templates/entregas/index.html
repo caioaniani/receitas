@@ -96,24 +96,19 @@
             <button class="btn btn-primary btn-sm" id="btn-gerar-rotas">
                 <i class="bi bi-arrow-clockwise"></i> Gerar rotas
             </button>
-            <button class="btn btn-outline-warning btn-sm" id="btn-retentar-rotas" title="Re-tenta os endereços que ficaram em 'sem geocoding'">
-                <i class="bi bi-arrow-counterclockwise"></i> Re-tentar não localizados
-            </button>
-            <small class="text-muted ms-auto">Sai da matriz · ordem por proximidade · arraste pra reordenar</small>
+            <small class="text-muted ms-auto">Agrupa por CEP · clique no botão Maps pra navegar (Google otimiza)</small>
         </div>
 
         <div id="rotas-loading" class="text-center py-4 d-none">
             <div class="spinner-border spinner-border-sm text-primary"></div>
-            <span class="ms-2 text-muted" id="rotas-loading-msg">Geocodificando endereços (pode levar alguns segundos)...</span>
+            <span class="ms-2 text-muted">Carregando…</span>
         </div>
 
         <div id="rotas-msg" class="d-print-none"></div>
 
-        <div id="rotas-mapa" style="height: 360px; border-radius: 8px; margin-bottom: 16px; display:none;"></div>
-
         <div id="rotas-container"></div>
 
-        <div id="rotas-sem-geocode" class="d-print-none mt-3"></div>
+        <div id="rotas-sem-cep" class="d-print-none mt-3"></div>
     </div>
 </div>
 
@@ -212,8 +207,6 @@
 {% endblock %}
 
 {% block scripts %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script>
 (function() {
@@ -221,10 +214,9 @@
     var pedidos = [];
     var filtroAtual = 'todos';
     var calAno, calMes;
-    var rotasMap = null;
-    var rotasMarkersGroup = null;
     var rotasUltimoResultado = null;
     var ROTA_CORES = ['#e6194b','#3cb44b','#4363d8','#f58231','#911eb4','#46f0f0','#f032e6','#bcf60c','#fabebe','#008080','#9a6324','#800000','#aaffc3','#808000','#000075','#808080'];
+    var MAPS_MAX_PARADAS = 9;  // Google Maps deeplink: ate 9 waypoints + destino
 
     // ── localStorage status ──
 
@@ -621,39 +613,26 @@
     }
 
     // ──────────────────────────────────────────
-    // ── Rotas ──
+    // ── Rotas (agrupa por CEP, links Google Maps) ──
     // ──────────────────────────────────────────
 
-    function inicializarMapa() {
-        if (rotasMap) return;
-        rotasMap = L.map('rotas-mapa').setView([-23.5505, -46.6333], 11);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap',
-            maxZoom: 19,
-        }).addTo(rotasMap);
-        rotasMarkersGroup = L.layerGroup().addTo(rotasMap);
-    }
-
-    function gerarRotas(retentar) {
+    function gerarRotas() {
         var data = document.getElementById('rotas-data').value;
         var drivers = document.getElementById('rotas-drivers').value || '2';
         var janela = document.getElementById('rotas-janela').value || '';
         var loading = document.getElementById('rotas-loading');
         var msg = document.getElementById('rotas-msg');
         var container = document.getElementById('rotas-container');
-        var sg = document.getElementById('rotas-sem-geocode');
-        var mapa = document.getElementById('rotas-mapa');
+        var sc = document.getElementById('rotas-sem-cep');
 
         loading.classList.remove('d-none');
         msg.innerHTML = '';
         container.innerHTML = '';
-        sg.innerHTML = '';
-        mapa.style.display = 'none';
+        sc.innerHTML = '';
 
         var url = '/entregas/api/rotas?data=' + encodeURIComponent(data) +
                   '&drivers=' + encodeURIComponent(drivers) +
-                  '&janela=' + encodeURIComponent(janela) +
-                  (retentar ? '&retentar=1' : '');
+                  '&janela=' + encodeURIComponent(janela);
 
         fetch(url, {credentials: 'same-origin'})
             .then(function(r) { return r.json(); })
@@ -666,12 +645,6 @@
                 rotasUltimoResultado = d;
                 atualizarPeriodosDisponiveis(d.periodos_disponiveis || [], janela);
                 renderRotas(d);
-                if (d.incomplete) {
-                    msg.innerHTML = '<div class="alert alert-info py-2 small">' +
-                        '<i class="bi bi-info-circle"></i> <strong>Geocoding parcial</strong>: alguns endereços novos ainda não foram localizados (limite de tempo). ' +
-                        'Clique em <strong>Gerar rotas</strong> de novo em alguns segundos pra completar — desta vez vai usar cache pros já feitos.' +
-                        '</div>';
-                }
             })
             .catch(function() {
                 loading.classList.add('d-none');
@@ -681,7 +654,6 @@
 
     function atualizarPeriodosDisponiveis(periodos, atual) {
         var sel = document.getElementById('rotas-janela');
-        // Preserva o valor atual; reconstroi opcoes
         sel.innerHTML = '<option value="">Todas</option>';
         for (var i = 0; i < periodos.length; i++) {
             var opt = document.createElement('option');
@@ -692,33 +664,95 @@
         }
     }
 
+    // Constroi 1 ou mais URLs do Google Maps com waypoints (ate 9 paradas + destino).
+    // Origem: matriz (se configurada) ou primeira parada do lote.
+    function gerarLinksMaps(matriz, paradas) {
+        if (!paradas || !paradas.length) return [];
+        var links = [];
+        // Cada chunk: ate MAPS_MAX_PARADAS+1 paradas (matriz + 9 waypoints + destino seria 11, mas Google
+        // parece aceitar 10 efetivos. Vou cortar em 10 paradas por link, ultima vira destination, resto waypoints).
+        var chunkSize = 10;
+        for (var i = 0; i < paradas.length; i += chunkSize) {
+            var chunk = paradas.slice(i, i + chunkSize);
+            var origem = matriz || chunk[0].endereco;
+            var destino = chunk[chunk.length - 1].endereco;
+            var waypoints = chunk.slice(0, -1).map(function(p) {
+                return encodeURIComponent(p.endereco);
+            }).join('|');
+            // Se matriz nao definida, primeira ja foi origem — pula
+            if (!matriz) {
+                waypoints = chunk.slice(1, -1).map(function(p) {
+                    return encodeURIComponent(p.endereco);
+                }).join('|');
+            }
+            var url = 'https://www.google.com/maps/dir/?api=1' +
+                '&origin=' + encodeURIComponent(origem) +
+                '&destination=' + encodeURIComponent(destino) +
+                (waypoints ? '&waypoints=' + waypoints : '') +
+                '&travelmode=driving';
+            links.push({
+                url: url,
+                de: i + 1,
+                ate: Math.min(i + chunkSize, paradas.length),
+            });
+        }
+        return links;
+    }
+
     function renderRotas(d) {
         var container = document.getElementById('rotas-container');
-        var sg = document.getElementById('rotas-sem-geocode');
-        var mapa = document.getElementById('rotas-mapa');
+        var sc = document.getElementById('rotas-sem-cep');
+        var matriz = (d.origem_endereco || '').trim();
 
         if (!d.rotas || d.rotas.length === 0) {
-            container.innerHTML = '<div class="alert alert-info py-2 small">Nenhum pedido com endereço geocodificável encontrado para esses filtros.</div>';
+            container.innerHTML = '<div class="alert alert-info py-2 small">Nenhum pedido com CEP encontrado para esses filtros.</div>';
             return;
         }
 
-        // Render colunas (uma por driver)
+        if (!matriz) {
+            var msg = document.getElementById('rotas-msg');
+            msg.innerHTML = '<div class="alert alert-warning py-2 small mb-3">' +
+                '<i class="bi bi-exclamation-triangle"></i> <strong>ROTA_ORIGEM_ENDERECO não configurado.</strong> ' +
+                'O link do Maps vai sair da primeira parada em vez da matriz. ' +
+                'Configure a variável de ambiente no Railway com o endereço completo da loja matriz.' +
+                '</div>';
+        }
+
         var html = '<div class="row g-2">';
         for (var i = 0; i < d.rotas.length; i++) {
             var r = d.rotas[i];
             var cor = ROTA_CORES[i % ROTA_CORES.length];
-            html += '<div class="col-md-6 col-lg-4">' +
+            var links = gerarLinksMaps(matriz, r.paradas);
+
+            var btnsMaps = '';
+            if (links.length === 1) {
+                btnsMaps = '<a href="' + links[0].url + '" target="_blank" rel="noopener" class="btn btn-sm btn-success">' +
+                           '<i class="bi bi-geo-alt-fill"></i> Abrir no Google Maps</a>';
+            } else if (links.length > 1) {
+                btnsMaps = '<div class="dropdown">' +
+                    '<button class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown">' +
+                    '<i class="bi bi-geo-alt-fill"></i> Maps (' + links.length + ' partes)</button>' +
+                    '<ul class="dropdown-menu">';
+                for (var li = 0; li < links.length; li++) {
+                    btnsMaps += '<li><a class="dropdown-item" href="' + links[li].url + '" target="_blank" rel="noopener">' +
+                               'Parte ' + (li + 1) + ' (paradas ' + links[li].de + '–' + links[li].ate + ')</a></li>';
+                }
+                btnsMaps += '</ul></div>';
+            }
+
+            html += '<div class="col-md-6 col-lg-4 mb-2">' +
                     '<div class="card">' +
                     '<div class="card-header py-2 d-flex justify-content-between align-items-center" style="border-left:4px solid ' + cor + ';">' +
                         '<strong style="color:' + cor + ';">Driver ' + r.driver + '</strong>' +
-                        '<span class="text-muted small">' + r.qtd_paradas + ' paradas · ' + r.distancia_km + ' km</span>' +
+                        '<span class="text-muted small">' + r.qtd_paradas + ' paradas</span>' +
                     '</div>' +
+                    '<div class="card-body py-2 px-3 border-bottom">' + btnsMaps + '</div>' +
                     '<div class="card-body p-0">' +
                         '<ol class="list-group list-group-numbered list-group-flush rotas-paradas" data-driver="' + r.driver + '">';
             for (var j = 0; j < r.paradas.length; j++) {
                 var p = r.paradas[j];
-                html += '<li class="list-group-item d-flex justify-content-between align-items-start" style="cursor:grab;" data-code="' + p.code + '">' +
-                        '<div class="ms-1">' +
+                html += '<li class="list-group-item d-flex justify-content-between align-items-start" style="cursor:grab;" data-code="' + p.code + '" data-endereco="' + escapeHtml(p.endereco || '') + '">' +
+                        '<div class="ms-1" style="flex:1; min-width:0;">' +
                         '<div class="fw-semibold small">' + escapeHtml(p.destinatario || '—') + '</div>' +
                         '<div class="text-muted" style="font-size:11px;">' + escapeHtml(p.endereco || '') + '</div>' +
                         (p.periodo ? '<span class="badge bg-light text-dark" style="font-size:10px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>' : '') +
@@ -731,89 +765,77 @@
         html += '</div>';
         container.innerHTML = html;
 
-        // Sortable.js em cada coluna pra reordenar
+        // Sortable: drag entre/dentro de drivers. Após mover, regerar links.
         document.querySelectorAll('.rotas-paradas').forEach(function(ol) {
             new Sortable(ol, {
                 group: 'rotas',
                 animation: 150,
                 onEnd: function() {
-                    // Atualiza o estado em memoria (opcional — ainda nao persiste no banco)
-                    recalcularDistancia();
+                    atualizarRotaMovida();
                 }
             });
         });
 
-        // Mapa
-        inicializarMapa();
-        mapa.style.display = 'block';
-        rotasMarkersGroup.clearLayers();
-        if (d.origem) {
-            L.marker([d.origem.lat, d.origem.lng], {
-                icon: L.divIcon({className: 'rota-origem-icon', html: '<div style="background:#000;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,0.3);">🏠</div>', iconSize: [26,26]})
-            }).addTo(rotasMarkersGroup).bindPopup('<strong>Loja matriz</strong>');
-        }
-
-        var bounds = [];
-        if (d.origem) bounds.push([d.origem.lat, d.origem.lng]);
-
-        for (var i2 = 0; i2 < d.rotas.length; i2++) {
-            var r2 = d.rotas[i2];
-            var cor2 = ROTA_CORES[i2 % ROTA_CORES.length];
-            var coords = [];
-            if (d.origem) coords.push([d.origem.lat, d.origem.lng]);
-            for (var j2 = 0; j2 < r2.paradas.length; j2++) {
-                var p2 = r2.paradas[j2];
-                coords.push([p2.lat, p2.lng]);
-                bounds.push([p2.lat, p2.lng]);
-                L.marker([p2.lat, p2.lng], {
-                    icon: L.divIcon({className: 'rota-marker', html: '<div style="background:' + cor2 + ';color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);font-weight:bold;">' + p2.ordem + '</div>', iconSize: [24,24]})
-                }).addTo(rotasMarkersGroup).bindPopup('<strong>Driver ' + r2.driver + ' · #' + p2.ordem + '</strong><br>' + escapeHtml(p2.destinatario || '') + '<br><small>' + escapeHtml(p2.endereco || '') + '</small>');
-            }
-            if (d.origem) coords.push([d.origem.lat, d.origem.lng]);
-            L.polyline(coords, {color: cor2, weight: 2, opacity: 0.6, dashArray: '4,6'}).addTo(rotasMarkersGroup);
-        }
-
-        if (bounds.length > 0) {
-            rotasMap.fitBounds(bounds, {padding: [40, 40]});
-        }
-        // Force re-flow do leaflet (caso a aba estivesse hidden)
-        setTimeout(function() { if (rotasMap) rotasMap.invalidateSize(); }, 200);
-
-        // Pedidos sem geocoding
-        if (d.sem_geocode && d.sem_geocode.length > 0) {
-            var s = '<div class="alert alert-warning py-2"><strong><i class="bi bi-geo-alt-fill"></i> ' + d.sem_geocode.length + ' pedido(s) sem coordenadas:</strong><ul class="mb-0 small">';
-            for (var k = 0; k < d.sem_geocode.length; k++) {
-                var x = d.sem_geocode[k];
+        // Pedidos sem CEP
+        if (d.sem_cep && d.sem_cep.length > 0) {
+            var s = '<div class="alert alert-warning py-2"><strong><i class="bi bi-geo-alt-fill"></i> ' + d.sem_cep.length + ' pedido(s) sem CEP no endereço:</strong><ul class="mb-0 small">';
+            for (var k = 0; k < d.sem_cep.length; k++) {
+                var x = d.sem_cep[k];
                 s += '<li>[' + escapeHtml(x.code) + '] ' + escapeHtml(x.destinatario || '—') + ' — ' + escapeHtml(x.endereco || '(sem endereço)') + '</li>';
             }
-            s += '</ul></div>';
-            sg.innerHTML = s;
+            s += '</ul><small class="text-muted d-block mt-1">Inclua manualmente em alguma rota arrastando o pedido depois de gerar.</small></div>';
+            sc.innerHTML = s;
         }
     }
 
-    function recalcularDistancia() {
-        // TODO: recalcular soma de km da rota apos drag-n-drop. Por ora, so atualiza a contagem.
+    // Apos drag, reconstroi links Maps + contagem da rota afetada.
+    function atualizarRotaMovida() {
+        var matriz = (rotasUltimoResultado && rotasUltimoResultado.origem_endereco) || '';
         document.querySelectorAll('.rotas-paradas').forEach(function(ol) {
             var card = ol.closest('.card');
-            var qtd = ol.children.length;
+            var paradas = [];
+            ol.querySelectorAll('li').forEach(function(li) {
+                paradas.push({
+                    code: li.dataset.code,
+                    endereco: li.dataset.endereco || '',
+                });
+            });
+            // Atualiza contagem
             var hdr = card.querySelector('.card-header span');
-            if (hdr) {
-                hdr.textContent = qtd + ' paradas';
+            if (hdr) hdr.textContent = paradas.length + ' paradas';
+
+            // Regera botao(es) de Maps
+            var btnArea = card.querySelector('.card-body.border-bottom');
+            if (!btnArea) return;
+            var links = gerarLinksMaps(matriz, paradas);
+            if (links.length === 0) {
+                btnArea.innerHTML = '<small class="text-muted">Sem paradas</small>';
+            } else if (links.length === 1) {
+                btnArea.innerHTML = '<a href="' + links[0].url + '" target="_blank" rel="noopener" class="btn btn-sm btn-success">' +
+                                    '<i class="bi bi-geo-alt-fill"></i> Abrir no Google Maps</a>';
+            } else {
+                var bm = '<div class="dropdown">' +
+                    '<button class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown">' +
+                    '<i class="bi bi-geo-alt-fill"></i> Maps (' + links.length + ' partes)</button>' +
+                    '<ul class="dropdown-menu">';
+                for (var li2 = 0; li2 < links.length; li2++) {
+                    bm += '<li><a class="dropdown-item" href="' + links[li2].url + '" target="_blank" rel="noopener">' +
+                          'Parte ' + (li2 + 1) + ' (paradas ' + links[li2].de + '–' + links[li2].ate + ')</a></li>';
+                }
+                bm += '</ul></div>';
+                btnArea.innerHTML = bm;
             }
         });
     }
 
     document.addEventListener('DOMContentLoaded', function() {
         var btn = document.getElementById('btn-gerar-rotas');
-        if (btn) btn.addEventListener('click', function() { gerarRotas(false); });
-        var btnRetentar = document.getElementById('btn-retentar-rotas');
-        if (btnRetentar) btnRetentar.addEventListener('click', function() { gerarRotas(true); });
+        if (btn) btn.addEventListener('click', gerarRotas);
         var tabBtn = document.getElementById('btn-tab-rotas');
         if (tabBtn) tabBtn.addEventListener('shown.bs.tab', function() {
             // Sincroniza data com a aba de pedidos
             var dataPedidos = document.getElementById('data-entrega').value;
             if (dataPedidos) document.getElementById('rotas-data').value = dataPedidos;
-            if (rotasMap) setTimeout(function() { rotasMap.invalidateSize(); }, 100);
         });
     });
 

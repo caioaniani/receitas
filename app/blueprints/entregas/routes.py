@@ -126,73 +126,51 @@ def salvar_cartinha(code):
 @login_required
 @entrega_access_required
 def api_rotas():
-    """Gera rotas de entrega para um dia (k-means + nearest neighbor)."""
-    import traceback
+    """Agrupa pedidos por CEP e divide entre N drivers. Links abrem no Google Maps."""
+    data_str = request.args.get('data', date.today().isoformat())
     try:
-        data_str = request.args.get('data', date.today().isoformat())
-        try:
-            target = datetime.strptime(data_str, '%Y-%m-%d').date()
-        except ValueError:
-            target = date.today()
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        target = date.today()
 
-        try:
-            n_drivers = int(request.args.get('drivers', '2'))
-        except ValueError:
-            n_drivers = 2
-        n_drivers = max(1, min(n_drivers, 20))
+    try:
+        n_drivers = int(request.args.get('drivers', '2'))
+    except ValueError:
+        n_drivers = 2
+    n_drivers = max(1, min(n_drivers, 20))
 
-        janela = (request.args.get('janela', '') or '').strip()
+    janela = (request.args.get('janela', '') or '').strip()
 
-        # Re-tentar geocoding pra enderecos que falharam antes
-        if request.args.get('retentar') == '1':
-            from app.models import GeocodeCache
-            n = GeocodeCache.query.filter(GeocodeCache.lat.is_(None)).delete()
-            db.session.commit()
-            current_app.logger.info('Limpou %d registros de geocode falhos', n)
-
-        overrides = _carregar_overrides_data()
-        resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
-        if 'erro' in resultado:
-            resp = jsonify(rotas=[], erro=resultado['erro'])
-            resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
-            return resp
-
-        pedidos = resultado.get('pedidos', [])
-
-        # Filtra por janela (periodo) se informada
-        if janela:
-            pedidos = [p for p in pedidos if (p.get('periodo') or '') == janela]
-
-        origem = rotas_svc.origem_padrao(current_app)
-        geradas = rotas_svc.gerar_rotas(pedidos, n_drivers, origem)
-
-        # Disponiveis pra dropdown de janela
-        periodos = sorted({p.get('periodo') or '' for p in resultado.get('pedidos', []) if p.get('periodo')})
-
-        resp = jsonify(
-            data=data_str,
-            drivers=n_drivers,
-            janela=janela,
-            periodos_disponiveis=periodos,
-            rotas=geradas['rotas'],
-            sem_geocode=[
-                {'code': p['code'], 'destinatario': p.get('destinatario', ''),
-                 'endereco': p.get('endereco', '')}
-                for p in geradas['sem_geocode']
-            ],
-            tempo_geo=geradas['tempo_geo'],
-            incomplete=geradas.get('incomplete', False),
-            origem=geradas['origem'],
-        )
+    overrides = _carregar_overrides_data()
+    resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
+    if 'erro' in resultado:
+        resp = jsonify(rotas=[], erro=resultado['erro'])
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
         return resp
-    except Exception as e:
-        current_app.logger.error('Erro em api_rotas: %s\n%s', e, traceback.format_exc())
-        return jsonify(
-            rotas=[],
-            erro=f'{type(e).__name__}: {str(e)[:300]}',
-            traceback=traceback.format_exc()[-2000:],
-        ), 500
+
+    pedidos = resultado.get('pedidos', [])
+
+    if janela:
+        pedidos = [p for p in pedidos if (p.get('periodo') or '') == janela]
+
+    geradas = rotas_svc.gerar_rotas(pedidos, n_drivers)
+    periodos = sorted({p.get('periodo') or '' for p in resultado.get('pedidos', []) if p.get('periodo')})
+
+    resp = jsonify(
+        data=data_str,
+        drivers=n_drivers,
+        janela=janela,
+        periodos_disponiveis=periodos,
+        rotas=geradas['rotas'],
+        sem_cep=[
+            {'code': p['code'], 'destinatario': p.get('destinatario', ''),
+             'endereco': p.get('endereco', '')}
+            for p in geradas['sem_cep']
+        ],
+        origem_endereco=rotas_svc.origem_endereco(current_app),
+    )
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    return resp
 
 
 @entregas_bp.route('/data/<code>', methods=['POST'])
