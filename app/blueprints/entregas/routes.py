@@ -326,6 +326,79 @@ def salvar_cartinha(code):
     return jsonify(ok=True)
 
 
+@entregas_bp.route('/api/atribuidos')
+@login_required
+@entrega_access_required
+def api_atribuidos():
+    """Lista pedidos do dia agrupados por driver atribuido + secao 'sem driver'."""
+    data_str = request.args.get('data', date.today().isoformat())
+    try:
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        target = date.today()
+
+    overrides = _carregar_overrides_data()
+    resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
+    if 'erro' in resultado:
+        resp = jsonify(drivers=[], sem_driver=[], erro=resultado['erro'])
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        return resp
+
+    pedidos = resultado.get('pedidos', [])
+    codes = [p['code'] for p in pedidos if p.get('code')]
+
+    atribuicoes_por_code = {}
+    if codes:
+        for a in AtribuicaoEntrega.query.filter(AtribuicaoEntrega.pedido_code.in_(codes)).all():
+            atribuicoes_por_code[a.pedido_code] = {
+                'driver_id': a.driver_id,
+                'ordem': a.ordem or 0,
+            }
+
+    drivers_db = Driver.query.order_by(Driver.nome).all()
+    drivers_por_id = {d.id: d for d in drivers_db}
+
+    paradas_por_driver = {}
+    sem_driver = []
+
+    for p in pedidos:
+        atrib = atribuicoes_por_code.get(p['code'])
+        did = atrib['driver_id'] if atrib else None
+        if did and did in drivers_por_id:
+            ordem = atrib.get('ordem', 0)
+            paradas_por_driver.setdefault(did, []).append((ordem, p))
+        else:
+            sem_driver.append(p)
+
+    drivers_resp = []
+    for d in drivers_db:
+        if d.id not in paradas_por_driver:
+            continue
+        paradas_list = sorted(paradas_por_driver[d.id], key=lambda x: (x[0], x[1].get('periodo') or ''))
+        drivers_resp.append({
+            'id': d.id,
+            'nome': d.nome,
+            'cor': d.cor,
+            'telefone': d.telefone,
+            'ativo': d.ativo,
+            'paradas': [p for _, p in paradas_list],
+            'qtd': len(paradas_list),
+        })
+
+    return jsonify(
+        data=data_str,
+        drivers=drivers_resp,
+        sem_driver=sem_driver,
+        total_pedidos=len(pedidos),
+        total_atribuidos=sum(d['qtd'] for d in drivers_resp),
+        drivers_disponiveis=[
+            {'id': d.id, 'nome': d.nome, 'cor': d.cor}
+            for d in drivers_db if d.ativo
+        ],
+        origem_endereco=rotas_svc.origem_endereco(current_app),
+    )
+
+
 @entregas_bp.route('/api/rotas')
 @login_required
 @entrega_access_required

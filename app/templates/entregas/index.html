@@ -27,6 +27,11 @@
             <i class="bi bi-signpost-2"></i> Rotas
         </button>
     </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-atribuidos" type="button" id="btn-tab-atribuidos">
+            <i class="bi bi-person-check"></i> Atribuídos
+        </button>
+    </li>
 </ul>
 
 <div class="tab-content">
@@ -108,6 +113,30 @@
         <div id="rotas-container"></div>
 
         <div id="rotas-sem-cep" class="d-print-none mt-3"></div>
+    </div>
+
+    <!-- Tab Atribuidos -->
+    <div class="tab-pane fade" id="tab-atribuidos">
+        <div class="d-flex flex-wrap gap-2 align-items-end mb-3 d-print-none">
+            <div>
+                <label class="form-label small fw-bold mb-1">Data</label>
+                <input type="date" id="atrib-data" class="form-control form-control-sm" style="max-width:180px;" value="{{ hoje }}">
+            </div>
+            <button class="btn btn-primary btn-sm" id="btn-atrib-carregar">
+                <i class="bi bi-search"></i> Buscar
+            </button>
+            <span class="badge bg-light text-dark fs-6" id="atrib-resumo" style="display:none;">
+                <span id="atrib-total-atrib">0</span> de <span id="atrib-total">0</span> atribuídos
+            </span>
+        </div>
+
+        <div id="atrib-loading" class="text-center py-4 d-none">
+            <div class="spinner-border spinner-border-sm text-primary"></div>
+            <span class="ms-2 text-muted">Carregando…</span>
+        </div>
+
+        <div id="atrib-msg" class="d-print-none"></div>
+        <div id="atrib-container"></div>
     </div>
 </div>
 
@@ -937,6 +966,163 @@
           });
     }
 
+    // ──────────────────────────────────────────
+    // ── Atribuidos (visao por driver com lista de pedidos) ──
+    // ──────────────────────────────────────────
+
+    var atribUltimoResultado = null;
+
+    function carregarAtribuidos() {
+        var data = document.getElementById('atrib-data').value;
+        var loading = document.getElementById('atrib-loading');
+        var msg = document.getElementById('atrib-msg');
+        var container = document.getElementById('atrib-container');
+        var resumo = document.getElementById('atrib-resumo');
+
+        loading.classList.remove('d-none');
+        msg.innerHTML = '';
+        container.innerHTML = '';
+        resumo.style.display = 'none';
+
+        fetch('/entregas/api/atribuidos?data=' + encodeURIComponent(data), {credentials: 'same-origin'})
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                loading.classList.add('d-none');
+                if (d.erro) {
+                    msg.innerHTML = '<div class="alert alert-warning py-2 small">' + escapeHtml(d.erro) + '</div>';
+                    return;
+                }
+                atribUltimoResultado = d;
+                document.getElementById('atrib-total').textContent = d.total_pedidos || 0;
+                document.getElementById('atrib-total-atrib').textContent = d.total_atribuidos || 0;
+                resumo.style.display = '';
+                renderAtribuidos(d);
+            })
+            .catch(function() {
+                loading.classList.add('d-none');
+                msg.innerHTML = '<div class="alert alert-danger py-2 small">Falha ao carregar atribuídos.</div>';
+            });
+    }
+
+    function renderAtribuidos(d) {
+        var container = document.getElementById('atrib-container');
+        var msg = document.getElementById('atrib-msg');
+        var html = '';
+
+        if ((!d.drivers || d.drivers.length === 0) && (!d.sem_driver || d.sem_driver.length === 0)) {
+            container.innerHTML = '<div class="alert alert-info py-2 small">Nenhum pedido para essa data.</div>';
+            return;
+        }
+
+        if (!d.drivers_disponiveis || d.drivers_disponiveis.length === 0) {
+            msg.innerHTML = '<div class="alert alert-warning py-2 small">' +
+                '<i class="bi bi-exclamation-triangle"></i> Nenhum driver cadastrado. Vai na aba <strong>Rotas</strong> e clica em <strong>Drivers</strong> pra adicionar.' +
+                '</div>';
+        }
+
+        // Secoes por driver
+        for (var i = 0; i < d.drivers.length; i++) {
+            html += renderSecaoAtribuidos(d.drivers[i], d.drivers_disponiveis, false);
+        }
+
+        // Secao "Sem driver"
+        if (d.sem_driver && d.sem_driver.length > 0) {
+            var pseudoDriver = {
+                id: null,
+                nome: 'Sem atribuição',
+                cor: '#999',
+                paradas: d.sem_driver,
+                qtd: d.sem_driver.length,
+            };
+            html += renderSecaoAtribuidos(pseudoDriver, d.drivers_disponiveis, true);
+        }
+
+        container.innerHTML = html;
+    }
+
+    function renderSecaoAtribuidos(driver, driversDisp, isSemDriver) {
+        var cor = driver.cor || '#999';
+        var html = '<div class="card mb-3 atrib-secao">' +
+            '<div class="card-header py-2 d-flex justify-content-between align-items-center" style="border-left:4px solid ' + cor + ';">' +
+                '<div>' +
+                    '<strong style="color:' + cor + ';"><i class="bi bi-' + (isSemDriver ? 'exclamation-circle' : 'person-badge') + '"></i> ' + escapeHtml(driver.nome) + '</strong>' +
+                    '<span class="text-muted small ms-2">' + driver.qtd + ' pedido' + (driver.qtd !== 1 ? 's' : '') + '</span>' +
+                    (driver.telefone ? '<small class="text-muted ms-2"><i class="bi bi-telephone"></i> ' + escapeHtml(driver.telefone) + '</small>' : '') +
+                '</div>';
+
+        if (!isSemDriver) {
+            html += '<button class="btn btn-sm btn-outline-success d-print-none btn-copiar-lista" data-driver-id="' + driver.id + '">' +
+                    '<i class="bi bi-clipboard"></i> Copiar lista (WhatsApp)</button>';
+        }
+        html += '</div>';
+
+        html += '<div class="list-group list-group-flush">';
+        for (var j = 0; j < driver.paradas.length; j++) {
+            var p = driver.paradas[j];
+            html += '<div class="list-group-item">' +
+                '<div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">' +
+                    '<div style="flex:1; min-width:240px;">' +
+                        '<a href="https://www.padariaartesanalonline.com.br/admin/pedido?id=' + encodeURIComponent(p.code) + '" target="_blank" rel="noopener" class="text-decoration-none small fw-bold" style="color:var(--accent);">' +
+                            '[' + escapeHtml(p.code) + '] <i class="bi bi-box-arrow-up-right" style="font-size:10px;"></i>' +
+                        '</a> ' +
+                        '<span class="fw-semibold"><i class="bi bi-person-fill"></i> ' + escapeHtml(p.destinatario || '—') + '</span>' +
+                        (p.periodo ? ' <span class="badge bg-light text-dark" style="font-size:10px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>' : '') +
+                        '<div class="text-muted small mt-1"><i class="bi bi-geo-alt"></i> ' + escapeHtml(p.endereco || '') + '</div>' +
+                        (p.telefone ? '<div class="text-muted small"><i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) + '</div>' : '') +
+                    '</div>' +
+                    '<div class="d-print-none d-flex align-items-center gap-1">' +
+                        '<select class="form-select form-select-sm atrib-select-driver" data-code="' + escapeHtml(p.code) + '" data-driver-atual="' + (driver.id || '') + '" style="max-width:160px; font-size:12px;">' +
+                            '<option value="">— Sem driver —</option>';
+            for (var k = 0; k < (driversDisp || []).length; k++) {
+                var dd = driversDisp[k];
+                var sel = (driver.id && dd.id === driver.id) ? ' selected' : '';
+                html += '<option value="' + dd.id + '"' + sel + '>' + escapeHtml(dd.nome) + '</option>';
+            }
+            html += '</select>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        }
+        html += '</div></div>';
+        return html;
+    }
+
+    function copiarListaWhatsApp(driver, dataIso) {
+        // Formato do texto: nome do driver + data + lista de paradas
+        var dataFmt = dataIso ? dataIso.split('-').reverse().join('/') : '';
+        var lines = ['*Entregas ' + dataFmt + ' — ' + driver.nome + '*', ''];
+        for (var i = 0; i < driver.paradas.length; i++) {
+            var p = driver.paradas[i];
+            lines.push((i + 1) + '. *' + (p.destinatario || '—') + '*');
+            if (p.endereco) lines.push('   ' + p.endereco);
+            if (p.telefone) lines.push('   ☎ ' + p.telefone);
+            if (p.periodo) lines.push('   ⏱ ' + p.periodo);
+            lines.push('   #' + p.code);
+            lines.push('');
+        }
+        var texto = lines.join('\n');
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(texto).then(function() {
+                alert('Lista copiada! Cola no WhatsApp do ' + driver.nome + '.');
+            }, function() {
+                fallbackCopiar(texto);
+            });
+        } else {
+            fallbackCopiar(texto);
+        }
+    }
+
+    function fallbackCopiar(texto) {
+        var ta = document.createElement('textarea');
+        ta.value = texto;
+        ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); alert('Lista copiada!'); }
+        catch (e) { prompt('Copie manualmente:', texto); }
+        document.body.removeChild(ta);
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         var btn = document.getElementById('btn-gerar-rotas');
         if (btn) btn.addEventListener('click', gerarRotas);
@@ -945,6 +1131,65 @@
             var dataPedidos = document.getElementById('data-entrega').value;
             if (dataPedidos) document.getElementById('rotas-data').value = dataPedidos;
         });
+
+        // Aba Atribuidos
+        var btnAtrib = document.getElementById('btn-atrib-carregar');
+        if (btnAtrib) btnAtrib.addEventListener('click', carregarAtribuidos);
+        var tabAtrib = document.getElementById('btn-tab-atribuidos');
+        if (tabAtrib) tabAtrib.addEventListener('shown.bs.tab', function() {
+            var dataPedidos = document.getElementById('data-entrega').value;
+            if (dataPedidos) document.getElementById('atrib-data').value = dataPedidos;
+            carregarAtribuidos();
+        });
+
+        // Trocar driver inline (delegacao)
+        var atribContainer = document.getElementById('atrib-container');
+        if (atribContainer) {
+            atribContainer.addEventListener('change', function(e) {
+                var sel = e.target.closest('.atrib-select-driver');
+                if (!sel) return;
+                var code = sel.dataset.code;
+                var novoId = sel.value || null;
+                var dataAtual = (atribUltimoResultado && atribUltimoResultado.data) || '';
+                var url = '/entregas/api/atribuicao/' + encodeURIComponent(code);
+                var body = {data_entrega: dataAtual};
+                var fetchPromise;
+                if (!novoId) {
+                    // Remover atribuicao
+                    fetchPromise = fetch(url, {
+                        method: 'DELETE',
+                        headers: {'X-CSRFToken': CSRF_TOKEN},
+                    });
+                } else {
+                    body.driver_id = parseInt(novoId, 10);
+                    fetchPromise = fetch(url, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+                        body: JSON.stringify(body),
+                    });
+                }
+                fetchPromise.then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (d.ok) {
+                            // Recarrega tudo pra refletir
+                            carregarAtribuidos();
+                        } else {
+                            alert('Erro: ' + (d.erro || 'desconhecido'));
+                        }
+                    });
+            });
+            // Botao copiar lista
+            atribContainer.addEventListener('click', function(e) {
+                var btn = e.target.closest('.btn-copiar-lista');
+                if (!btn) return;
+                var did = parseInt(btn.dataset.driverId, 10);
+                if (!atribUltimoResultado) return;
+                var driver = (atribUltimoResultado.drivers || []).find(function(x) { return x.id === did; });
+                if (driver) {
+                    copiarListaWhatsApp(driver, atribUltimoResultado.data);
+                }
+            });
+        }
 
         // Modal de drivers
         var btnCriar = document.getElementById('btn-criar-driver');
