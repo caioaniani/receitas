@@ -32,21 +32,24 @@ def api_pedidos():
     resultado = vnda.buscar_pedidos_do_dia(target)
 
     if 'erro' in resultado:
-        return jsonify(pedidos=[], data=data_str, erro=resultado['erro'])
+        resp = jsonify(pedidos=[], data=data_str, erro=resultado['erro'])
+    else:
+        pedidos = resultado.get('pedidos', [])
+        total_janela = resultado.get('total_janela', 0)
 
-    pedidos = resultado.get('pedidos', [])
-    total_janela = resultado.get('total_janela', 0)
+        codes = [p['code'] for p in pedidos if p['code']]
+        cartinhas = {}
+        if codes:
+            for c in CartinhaEntrega.query.filter(CartinhaEntrega.pedido_code.in_(codes)).all():
+                cartinhas[c.pedido_code] = c.texto or ''
 
-    codes = [p['code'] for p in pedidos if p['code']]
-    cartinhas = {}
-    if codes:
-        for c in CartinhaEntrega.query.filter(CartinhaEntrega.pedido_code.in_(codes)).all():
-            cartinhas[c.pedido_code] = c.texto or ''
+        for p in pedidos:
+            p['cartinha'] = cartinhas.get(p['code'], '')
 
-    for p in pedidos:
-        p['cartinha'] = cartinhas.get(p['code'], '')
+        resp = jsonify(pedidos=pedidos, data=data_str, total_janela=total_janela)
 
-    return jsonify(pedidos=pedidos, data=data_str, total_janela=total_janela)
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    return resp
 
 
 @entregas_bp.route('/api/calendario')
@@ -61,7 +64,9 @@ def api_calendario():
         year, month = date.today().year, date.today().month
 
     dias = vnda.contar_pedidos_por_dia(year, month)
-    return jsonify(dias=dias)
+    resp = jsonify(dias=dias)
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    return resp
 
 
 @entregas_bp.route('/cartinha/<code>', methods=['POST'])
