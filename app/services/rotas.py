@@ -369,7 +369,9 @@ def gerar_rotas(pedidos, n_drivers, origem, max_seconds=40):
                     logger.warning('Geocoding rejeitado (>500km da matriz): %r → (%s, %s) fonte=%s',
                                    end[:80], lat, lng, fonte)
                     lat, lng = None, None
-                    fonte = fonte + '_rejeitado'
+                    fonte = (fonte + '_rej')[:50]
+            else:
+                fonte = (fonte or 'falhou')[:50]
             if not cache:
                 cache = GeocodeCache(chave=chave, fonte=fonte)
                 db.session.add(cache)

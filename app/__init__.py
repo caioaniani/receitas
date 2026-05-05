@@ -530,11 +530,13 @@ def _migrate_postgres(app):
             chave VARCHAR(200) NOT NULL UNIQUE,
             lat DOUBLE PRECISION,
             lng DOUBLE PRECISION,
-            fonte VARCHAR(20),
+            fonte VARCHAR(50),
             criado_em TIMESTAMP DEFAULT NOW()
         )
         """)
         _try("CREATE INDEX IF NOT EXISTS idx_geocode_cache_chave ON geocode_cache(chave)")
+        # Aumenta coluna fonte caso ja exista com VARCHAR(20)
+        _try("ALTER TABLE geocode_cache ALTER COLUMN fonte TYPE VARCHAR(50)")
 
 
 def _migrate_sqlite(app):

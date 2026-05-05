@@ -763,7 +763,7 @@ class GeocodeCache(db.Model):
     chave = db.Column(db.String(200), nullable=False, unique=True, index=True)
     lat = db.Column(db.Float)
     lng = db.Column(db.Float)
-    fonte = db.Column(db.String(20))  # 'nominatim', 'manual', etc.
+    fonte = db.Column(db.String(50))  # 'brasilapi', 'awesomeapi', 'nominatim', 'nominatim_cep_rejeitado', etc.
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
 
