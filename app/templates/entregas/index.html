@@ -979,12 +979,31 @@
                           }
                       });
                 } else if (e.target.closest('.btn-drv-desativar')) {
-                    if (!confirm('Desativar esse driver? (Histórico fica preservado)')) return;
+                    if (!confirm('Excluir esse driver?')) return;
                     fetch('/entregas/api/drivers/' + id, {
                         method: 'DELETE',
                         headers: {'X-CSRFToken': CSRF_TOKEN},
                     }).then(function(r) { return r.json(); })
-                      .then(function() { carregarDrivers(); });
+                      .then(function(d) {
+                          if (d.acao === 'excluido') {
+                              carregarDrivers();
+                          } else if (d.acao === 'desativado') {
+                              var msg = 'Esse driver tem ' + d.atribuicoes + ' pedido(s) no histórico. ' +
+                                        'Foi apenas DESATIVADO (não aparece mais nas rotas novas).\n\n' +
+                                        'Quer apagar o driver E o histórico de atribuições? (irreversível)';
+                              if (confirm(msg)) {
+                                  fetch('/entregas/api/drivers/' + id + '?force=1', {
+                                      method: 'DELETE',
+                                      headers: {'X-CSRFToken': CSRF_TOKEN},
+                                  }).then(function(r) { return r.json(); })
+                                    .then(function() { carregarDrivers(); });
+                              } else {
+                                  carregarDrivers();
+                              }
+                          } else {
+                              carregarDrivers();
+                          }
+                      });
                 }
             });
         }

@@ -184,11 +184,32 @@ def atualizar_driver(did):
 @login_required
 @entrega_access_required
 def remover_driver(did):
+    """Exclui o driver de vez se nao tem historico; senao apenas desativa.
+    Forca exclusao com ?force=1 (cuidado: apaga atribuicoes)."""
     d = Driver.query.get_or_404(did)
-    # Soft-delete: apenas desativa. Mantem historico de atribuicoes.
+    force = request.args.get('force') == '1'
+
+    n_atrib = AtribuicaoEntrega.query.filter_by(driver_id=did).count()
+
+    if n_atrib == 0:
+        # Sem historico — exclui de vez
+        nome = d.nome
+        db.session.delete(d)
+        db.session.commit()
+        return jsonify(ok=True, acao='excluido', nome=nome)
+
+    if force:
+        # Apaga as atribuicoes tambem (cuidado!)
+        AtribuicaoEntrega.query.filter_by(driver_id=did).delete()
+        nome = d.nome
+        db.session.delete(d)
+        db.session.commit()
+        return jsonify(ok=True, acao='excluido_com_historico', nome=nome, atribuicoes_apagadas=n_atrib)
+
+    # Tem historico mas sem force — apenas desativa
     d.ativo = False
     db.session.commit()
-    return jsonify(ok=True)
+    return jsonify(ok=True, acao='desativado', nome=d.nome, atribuicoes=n_atrib)
 
 
 # ── Atribuicao pedido <-> driver ──
