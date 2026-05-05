@@ -1,6 +1,7 @@
 """Servico de integracao com a API Vnda (e-commerce)."""
 
 import logging
+import re
 from datetime import datetime, date, timedelta
 
 import requests
@@ -68,16 +69,54 @@ def _parse_iso_date(val):
         return None
 
 
+def _segundo_domingo(year, month):
+    """Retorna o 2o domingo do mes (usado para Dia das Maes/Pais)."""
+    primeiro = date(year, month, 1)
+    delta = (6 - primeiro.weekday()) % 7  # weekday: 0=seg, 6=dom
+    return date(year, month, 1 + delta + 7)
+
+
+def _extrair_data_de_label(label, ref_year=None):
+    """Tenta extrair data de uma string livre de shipping_label.
+    Reconhece DD/MM/YYYY, DD/MM e keywords de eventos comemorativos
+    (Dia das Maes, Natal, etc)."""
+    if not label:
+        return None
+    label_lower = label.lower()
+    if not ref_year:
+        ref_year = date.today().year
+
+    # 1. DD/MM/YYYY explicito
+    m = re.search(r'(\d{1,2})/(\d{1,2})/(\d{4})', label)
+    if m:
+        try:
+            return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+        except ValueError:
+            pass
+
+    # 2. DD/MM (sem ano) — assume ref_year
+    m = re.search(r'(?:^|[^\d/])(\d{1,2})/(\d{1,2})(?![/\d])', label)
+    if m:
+        try:
+            return date(ref_year, int(m.group(2)), int(m.group(1)))
+        except ValueError:
+            pass
+
+    # 3. Keywords de feriados
+    if 'mãe' in label_lower or 'maes' in label_lower or 'mae' in label_lower:
+        return _segundo_domingo(ref_year, 5)
+    if 'pais' in label_lower:
+        return _segundo_domingo(ref_year, 8)
+    if 'natal' in label_lower:
+        return date(ref_year, 12, 25)
+    if 'namorad' in label_lower:
+        return date(ref_year, 6, 12)
+
+    return None
+
+
 def _extrair_data_entrega(order):
-    if _is_entrega_expressa(order):
-        for campo in ('received_at', 'confirmed_at', 'paid_at', 'created_at'):
-            d = _parse_iso_date(order.get(campo))
-            if d:
-                return d
-    # extra.DataDeEntrega = data agendada que o cliente escolheu no checkout.
-    # Quando existe, e a fonte de verdade — tem prioridade sobre
-    # expected_delivery_date, que o VNDA preenche automaticamente baseado
-    # em delivery_days (frequentemente errado para encomendas agendadas).
+    # 1. extra.DataDeEntrega — campo customizado do checkout (formato confiavel)
     extra = order.get('extra') or {}
     data_br = extra.get('DataDeEntrega', '')
     if data_br:
@@ -85,6 +124,23 @@ def _extrair_data_entrega(order):
             return datetime.strptime(data_br.strip(), '%d/%m/%Y').date()
         except (ValueError, TypeError):
             pass
+
+    # 2. shipping_label com data explicita ou keyword de feriado
+    # (formato novo de checkout que nao preenche extra.DataDeEntrega)
+    ref = _parse_iso_date(order.get('confirmed_at')) or _parse_iso_date(order.get('paid_at')) or date.today()
+    label_data = _extrair_data_de_label(order.get('shipping_label', ''), ref.year)
+    if label_data:
+        return label_data
+
+    # 3. Entrega expressa (1h): usa data de confirmacao
+    if _is_entrega_expressa(order):
+        for campo in ('received_at', 'confirmed_at', 'paid_at', 'created_at'):
+            d = _parse_iso_date(order.get(campo))
+            if d:
+                return d
+
+    # 4. expected_delivery_date — VNDA calcula automatico, frequentemente
+    # incorreto para encomendas agendadas (cai na data de confirmacao)
     edd = order.get('expected_delivery_date')
     if edd:
         try:
