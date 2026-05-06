@@ -118,6 +118,78 @@ def _kmeans(pontos, k, max_iter=20):
     return atribuicoes
 
 
+def _refinar_clusters(pontos, atribuicoes, n_drivers, max_raio_km=8.0, max_iter=50):
+    """Pos-processo de k-means que prioriza COMPACIDADE.
+
+    Move iterativamente o ponto mais distante do seu centroide pra outro cluster,
+    se isso reduzir o raio. Outliers extremos viram um driver dedicado se
+    estiverem todos juntos numa regiao isolada — caso contrario, vao pro cluster
+    mais proximo balanceando carga.
+
+    Score do destino = distancia_pro_centroide + contagem_atual * peso.
+    O peso (0.3) faz preferir clusters menos cheios em caso de empate.
+    """
+    if not pontos or len(pontos) < 2 or n_drivers < 2:
+        return atribuicoes
+
+    PESO_BALANCEAMENTO = 0.3
+
+    for _ in range(max_iter):
+        # Centroides atuais
+        centros = []
+        for d in range(n_drivers):
+            membros = [pontos[i] for i in range(len(pontos)) if atribuicoes[i] == d]
+            if membros:
+                centros.append((
+                    sum(p[0] for p in membros) / len(membros),
+                    sum(p[1] for p in membros) / len(membros),
+                ))
+            else:
+                centros.append(None)
+
+        # Acha o ponto MAIS distante do seu centroide
+        pior_dist = 0.0
+        pior_idx = -1
+        for i, p in enumerate(pontos):
+            cluster = atribuicoes[i]
+            if cluster < 0 or cluster >= n_drivers or centros[cluster] is None:
+                continue
+            d = _haversine(p, centros[cluster])
+            if d > pior_dist:
+                pior_dist = d
+                pior_idx = i
+
+        # Se ja esta dentro do raio aceitavel, terminou
+        if pior_dist <= max_raio_km or pior_idx < 0:
+            break
+
+        cluster_atual = atribuicoes[pior_idx]
+        contagens = [sum(1 for a in atribuicoes if a == d) for d in range(n_drivers)]
+
+        # Procura o melhor destino: minimiza dist + peso*contagem
+        melhor_alvo = -1
+        melhor_score = float('inf')
+        for d in range(n_drivers):
+            if d == cluster_atual or centros[d] is None:
+                continue
+            dist = _haversine(pontos[pior_idx], centros[d])
+            score = dist + contagens[d] * PESO_BALANCEAMENTO
+            if score < melhor_score:
+                melhor_score = score
+                melhor_alvo = d
+
+        if melhor_alvo == -1:
+            break
+
+        # Verifica se a mudanca melhora: dist no destino < dist atual
+        if _haversine(pontos[pior_idx], centros[melhor_alvo]) >= pior_dist - 0.5:
+            break
+
+        atribuicoes[pior_idx] = melhor_alvo
+
+    return atribuicoes
+
+
 def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None):
     """Distribui pedidos entre drivers nominais. Usa Google quando disponivel.
 
@@ -171,11 +243,13 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None):
                 # Sem geocode → cai pra agrupamento por CEP (pode entrar em algum cluster)
                 sem_cep.append(p)
 
-        # k-means real sobre lat/lng
+        # k-means real sobre lat/lng + refinamento (compacidade)
         if com_coords:
             n = min(len(drivers), len(com_coords))
             pts = [(p['lat'], p['lng']) for p in com_coords]
             clusters = _kmeans(pts, n)
+            # Pos-processo: move outliers pra reduzir raio dos clusters
+            clusters = _refinar_clusters(pts, clusters, n, max_raio_km=8.0)
             for i, p in enumerate(com_coords):
                 cluster_id = clusters[i]
                 if cluster_id < len(drivers):

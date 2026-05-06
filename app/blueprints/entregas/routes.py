@@ -727,6 +727,11 @@ def api_rotas():
     geradas = rotas_svc.gerar_rotas(pedidos, drivers_struct, atribuicoes=atribuicoes)
     periodos = sorted({p.get('periodo') or '' for p in resultado.get('pedidos', []) if p.get('periodo')})
 
+    origem_coords = rotas_svc.origem_latlng(current_app)
+    origem_payload = None
+    if origem_coords:
+        origem_payload = {'lat': origem_coords[0], 'lng': origem_coords[1]}
+
     resp = jsonify(
         data=data_str,
         janelas=janelas,
@@ -739,6 +744,7 @@ def api_rotas():
             for p in geradas['sem_cep']
         ],
         origem_endereco=rotas_svc.origem_endereco(current_app),
+        origem=origem_payload,
     )
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
     return resp
