@@ -624,7 +624,17 @@
 
     function renderMapa(d) {
         var mapaEl = document.getElementById('rotas-mapa');
-        if (!mapaEl || typeof L === 'undefined') return;
+        if (!mapaEl) return;
+        if (typeof L === 'undefined') {
+            mapaEl.style.display = '';
+            mapaEl.style.height = 'auto';
+            mapaEl.innerHTML = '<div class="alert alert-warning py-2 small mb-0">' +
+                '<i class="bi bi-exclamation-triangle"></i> ' +
+                '<strong>Leaflet não carregou.</strong> ' +
+                'Verifique sua conexão ou se algum bloqueador está ativo (unpkg.com).' +
+                '</div>';
+            return;
+        }
         // So mostra mapa se tem rotas com coords
         var temCoords = (d.rotas || []).some(function(r) {
             return r.paradas.some(function(p) { return p.lat != null && p.lng != null; });
@@ -634,6 +644,7 @@
             return;
         }
         mapaEl.style.display = '';
+        mapaEl.style.height = '380px';
         inicializarMapaLeaflet();
         rotasMapaLayers.clearLayers();
 
