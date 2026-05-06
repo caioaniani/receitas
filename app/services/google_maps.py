@@ -57,6 +57,12 @@ def _geocode_remoto(endereco):
         return None
 
 
+def _eh_fonte_confiavel(fonte):
+    """Considera so Google como fonte confiavel. Resultados antigos (Nominatim,
+    BrasilAPI, AwesomeAPI) eram instaveis — re-geocoda com Google."""
+    return (fonte or '').startswith('google')
+
+
 def geocode(endereco):
     """Retorna (lat, lng) com cache. None se falhou."""
     if not endereco:
@@ -65,11 +71,14 @@ def geocode(endereco):
     if not chave:
         return None
     cache = GeocodeCache.query.filter_by(chave=chave).first()
-    if cache and cache.lat is not None:
+
+    # Hit valido: cache do Google com coords
+    if cache and cache.lat is not None and _eh_fonte_confiavel(cache.fonte):
         return cache.lat, cache.lng
-    if cache and cache.lat is None:
-        # Marcado como falhou anteriormente — nao re-bate (use ?retentar pra limpar)
+    # Falha confirmada do Google: nao re-bate
+    if cache and cache.lat is None and cache.fonte == 'google_fail':
         return None
+    # Caso contrario (sem cache, ou cache de fonte antiga) — bate no Google
 
     coords = _geocode_remoto(endereco)
     if not cache:
@@ -92,6 +101,8 @@ def geocode_em_lote(enderecos, max_workers=8):
         return {}
 
     # Pre-popula com hits do cache (sem fazer request)
+    # So aceita cache hit confiavel (fonte=google). Cache de fonte antiga
+    # (Nominatim/BrasilAPI/AwesomeAPI) eh re-tentado.
     resultados = {}
     pendentes = []
     for end in enderecos:
@@ -100,9 +111,9 @@ def geocode_em_lote(enderecos, max_workers=8):
             continue
         chave = _normalizar_chave(end)
         cache = GeocodeCache.query.filter_by(chave=chave).first() if chave else None
-        if cache and cache.lat is not None:
+        if cache and cache.lat is not None and _eh_fonte_confiavel(cache.fonte):
             resultados[end] = (cache.lat, cache.lng)
-        elif cache and cache.lat is None:
+        elif cache and cache.lat is None and cache.fonte == 'google_fail':
             resultados[end] = None
         else:
             pendentes.append(end)
