@@ -28,10 +28,20 @@ def _normalizar_chave(endereco):
 
 # ── Geocoding ──
 
-def _geocode_remoto(endereco):
-    """Chama Geocoding API. Retorna (lat, lng) ou None."""
-    key = _api_key()
-    if not key or not endereco:
+def _geocode_remoto(endereco, key=None):
+    """Chama Geocoding API. Retorna (lat, lng) ou None.
+
+    `key` pode ser passada explicitamente quando esta em thread (sem app context).
+    Senao, le do current_app."""
+    if not endereco:
+        return None
+    if key is None:
+        try:
+            key = _api_key()
+        except RuntimeError:
+            # Fora de app context (thread sem contexto Flask) — chamador deve passar key
+            return None
+    if not key:
         return None
     try:
         r = requests.get(
@@ -64,34 +74,37 @@ def _eh_fonte_confiavel(fonte):
 
 
 def geocode(endereco):
-    """Retorna (lat, lng) com cache. None se falhou."""
+    """Retorna (lat, lng). Cacheia SO sucessos — falhas viram retry automatico
+    na proxima chamada. Custo extra de re-bater enderecos invalidos cronicos
+    (raro) e baixo e vale a robustez."""
     if not endereco:
         return None
     chave = _normalizar_chave(endereco)
     if not chave:
         return None
-    cache = GeocodeCache.query.filter_by(chave=chave).first()
 
-    # Hit valido: cache do Google com coords
+    # Hit valido (so confia em cache do Google com coords)
+    cache = GeocodeCache.query.filter_by(chave=chave).first()
     if cache and cache.lat is not None and _eh_fonte_confiavel(cache.fonte):
         return cache.lat, cache.lng
-    # Falha confirmada do Google: nao re-bate
-    if cache and cache.lat is None and cache.fonte == 'google_fail':
-        return None
-    # Caso contrario (sem cache, ou cache de fonte antiga) — bate no Google
 
+    # Bate no Google (ignora qualquer cache antigo — re-tenta)
     coords = _geocode_remoto(endereco)
-    if not cache:
-        cache = GeocodeCache(chave=chave, fonte='google')
-        db.session.add(cache)
     if coords:
+        if not cache:
+            cache = GeocodeCache(chave=chave, fonte='google')
+            db.session.add(cache)
         cache.lat, cache.lng = coords
         cache.fonte = 'google'
-    else:
-        cache.lat, cache.lng = None, None
-        cache.fonte = 'google_fail'
-    db.session.commit()
-    return coords
+        db.session.commit()
+        return coords
+
+    # Falhou: deleta cache antigo (de qualquer fonte) pra forcar re-tentar
+    # na proxima execucao. Nao persiste falha — UX simples, sem botoes manuais.
+    if cache:
+        db.session.delete(cache)
+        db.session.commit()
+    return None
 
 
 def geocode_em_lote(enderecos, max_workers=8):
@@ -100,9 +113,8 @@ def geocode_em_lote(enderecos, max_workers=8):
     if not enderecos:
         return {}
 
-    # Pre-popula com hits do cache (sem fazer request)
-    # So aceita cache hit confiavel (fonte=google). Cache de fonte antiga
-    # (Nominatim/BrasilAPI/AwesomeAPI) eh re-tentado.
+    # So confia em cache hit do Google com coords. Qualquer outra coisa
+    # (sem cache, fonte antiga, falha previa) → re-tenta no Google.
     resultados = {}
     pendentes = []
     for end in enderecos:
@@ -113,18 +125,23 @@ def geocode_em_lote(enderecos, max_workers=8):
         cache = GeocodeCache.query.filter_by(chave=chave).first() if chave else None
         if cache and cache.lat is not None and _eh_fonte_confiavel(cache.fonte):
             resultados[end] = (cache.lat, cache.lng)
-        elif cache and cache.lat is None and cache.fonte == 'google_fail':
-            resultados[end] = None
         else:
             pendentes.append(end)
 
     if not pendentes:
         return resultados
 
-    # Pra os pendentes, paraleliza
+    # Captura a API key NO main thread (current_app nao existe em threads novas).
+    key = _api_key()
+    if not key:
+        for end in pendentes:
+            resultados[end] = None
+        return resultados
+
+    # Pra os pendentes, paraleliza — passa key explicitamente
     novos = {}
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(_geocode_remoto, e): e for e in pendentes}
+        futures = {pool.submit(_geocode_remoto, e, key): e for e in pendentes}
         for f in as_completed(futures):
             e = futures[f]
             try:
@@ -132,21 +149,20 @@ def geocode_em_lote(enderecos, max_workers=8):
             except Exception:
                 novos[e] = None
 
-    # Persiste em batch
+    # Persiste sucessos. Falhas: deleta cache antigo (forca retry proxima vez).
     for e, coords in novos.items():
         chave = _normalizar_chave(e)
         if not chave:
             continue
         cache = GeocodeCache.query.filter_by(chave=chave).first()
-        if not cache:
-            cache = GeocodeCache(chave=chave, fonte='google')
-            db.session.add(cache)
         if coords:
+            if not cache:
+                cache = GeocodeCache(chave=chave, fonte='google')
+                db.session.add(cache)
             cache.lat, cache.lng = coords
             cache.fonte = 'google'
-        else:
-            cache.lat, cache.lng = None, None
-            cache.fonte = 'google_fail'
+        elif cache:
+            db.session.delete(cache)
         resultados[e] = coords
     db.session.commit()
     return resultados

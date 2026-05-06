@@ -537,6 +537,9 @@ def _migrate_postgres(app):
         _try("CREATE INDEX IF NOT EXISTS idx_geocode_cache_chave ON geocode_cache(chave)")
         # Aumenta coluna fonte caso ja exista com VARCHAR(20)
         _try("ALTER TABLE geocode_cache ALTER COLUMN fonte TYPE VARCHAR(50)")
+        # Limpa cache de falhas legacy (Nominatim/BrasilAPI/AwesomeAPI/google_fail).
+        # Endereco volta a ser geocodado na proxima execucao via Google.
+        _try("DELETE FROM geocode_cache WHERE lat IS NULL")
 
         # ── Drivers de entrega + atribuicoes pedido<->driver ──
         _try("""
