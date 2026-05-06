@@ -358,25 +358,41 @@ def api_produtos():
         if prod.nome:
             produtos_db[prod.nome.strip().lower()] = prod
 
-    # Vendidos (como veio do VNDA)
+    # Vendidos (como veio do VNDA) — chave por SKU+nome
     vendidos = {}
-    # Producao (cestas explodidas em componentes)
-    producao = {}
 
-    def _agg(d, sku, nome, qty, preco=0.0, componente_de=None):
+    def _agg_vendido(sku, nome, qty, preco):
         chave = (sku or nome or '').strip().lower()
         if not chave:
             return
-        a = d.get(chave)
+        a = vendidos.get(chave)
         if not a:
             a = {
                 'sku': sku, 'nome': nome, 'quantidade': 0,
                 'preco_unitario': preco, 'valor_total': 0.0,
-                'componente_de': set(),
+                'componente_de': [],
             }
-            d[chave] = a
+            vendidos[chave] = a
         a['quantidade'] += qty
         a['valor_total'] += qty * preco
+
+    # Producao — chave SO por nome (ignora SKU). Croissant de Family Box +
+    # Croissant comprado avulso somam na mesma linha.
+    producao = {}
+
+    def _agg_producao(nome, qty, componente_de=None):
+        chave = (nome or '').strip().lower()
+        if not chave:
+            return
+        a = producao.get(chave)
+        if not a:
+            a = {
+                'sku': '', 'nome': nome, 'quantidade': 0,
+                'preco_unitario': 0.0, 'valor_total': 0.0,
+                'componente_de': set(),
+            }
+            producao[chave] = a
+        a['quantidade'] += qty
         if componente_de:
             a['componente_de'].add(componente_de)
 
@@ -395,10 +411,10 @@ def api_produtos():
             except (TypeError, ValueError):
                 preco = 0.0
 
-            # Vendidos: sempre adiciona como veio
-            _agg(vendidos, sku, nome, qty, preco)
+            # Vendidos: sempre adiciona como veio do VNDA
+            _agg_vendido(sku, nome, qty, preco)
 
-            # Producao: se for cesta cadastrada, expande
+            # Producao: se for cesta cadastrada, soma componentes
             prod_cadastrado = produtos_db.get(nome.lower())
             if prod_cadastrado and prod_cadastrado.itens:
                 for comp in prod_cadastrado.itens:
@@ -409,19 +425,17 @@ def api_produtos():
                     total_qty = qty * cqty_unitario
                     if total_qty <= 0:
                         continue
-                    # Tenta achar SKU do componente no Produto cadastrado
-                    csku = ''
-                    cprod = produtos_db.get(cnome.lower())
-                    # Componente nao tem preco direto, deixa 0
-                    _agg(producao, csku, cnome, int(total_qty) if total_qty == int(total_qty) else total_qty, 0.0, componente_de=nome)
+                    total_qty = int(total_qty) if total_qty == int(total_qty) else total_qty
+                    _agg_producao(cnome, total_qty, componente_de=nome)
             else:
-                # Item simples — vai pra producao tambem
-                _agg(producao, sku, nome, qty, preco)
+                # Item simples — vai pra producao direto, sem origem
+                _agg_producao(nome, qty)
 
     def _serializa(d):
         out = []
         for v in d.values():
-            v['componente_de'] = sorted(v['componente_de'])
+            cd = v.get('componente_de')
+            v['componente_de'] = sorted(cd) if isinstance(cd, set) else (cd or [])
             out.append(v)
         return sorted(out, key=lambda x: (-x['quantidade'], x['nome']))
 
