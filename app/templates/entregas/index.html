@@ -800,7 +800,10 @@
                   janelas.map(function(j) { return '&janela=' + encodeURIComponent(j); }).join('');
 
         fetch(url, {credentials: 'same-origin'})
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function(d) {
                 loading.classList.add('d-none');
                 if (d.erro) {
@@ -815,11 +818,24 @@
                         '</div>';
                     return;
                 }
-                renderRotas(d);
+                try {
+                    renderRotas(d);
+                } catch (renderErr) {
+                    msg.innerHTML = '<div class="alert alert-danger py-2 small">' +
+                        '<strong>Erro ao renderizar rotas:</strong> ' +
+                        escapeHtml(renderErr.message || String(renderErr)) +
+                        '<br><small style="font-family:monospace;">' + escapeHtml((renderErr.stack || '').slice(0, 500)) + '</small>' +
+                        '</div>';
+                    if (window.console) console.error('Erro renderRotas:', renderErr);
+                }
             })
-            .catch(function() {
+            .catch(function(err) {
                 loading.classList.add('d-none');
-                msg.innerHTML = '<div class="alert alert-danger py-2 small">Falha ao gerar rotas.</div>';
+                msg.innerHTML = '<div class="alert alert-danger py-2 small">' +
+                    '<strong>Falha ao buscar rotas:</strong> ' +
+                    escapeHtml(err && err.message ? err.message : String(err)) +
+                    '</div>';
+                if (window.console) console.error('Erro fetch rotas:', err);
             });
     }
 
