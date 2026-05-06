@@ -261,6 +261,66 @@ def remover_atribuicao(code):
     return jsonify(ok=True)
 
 
+@entregas_bp.route('/api/debug/google')
+@login_required
+@entrega_access_required
+def api_debug_google():
+    """Diagnostico da integracao Google Maps."""
+    import requests as r
+    key = (current_app.config.get('GOOGLE_MAPS_API_KEY') or '').strip()
+    info = {
+        'key_configurada': bool(key),
+        'key_inicio': key[:10] + '...' if len(key) > 10 else '(vazio)',
+        'origem_endereco': (current_app.config.get('ROTA_ORIGEM_ENDERECO') or ''),
+    }
+    if not key:
+        info['erro'] = 'GOOGLE_MAPS_API_KEY nao configurada'
+        return jsonify(info)
+
+    # Testa geocoding com endereco conhecido
+    try:
+        resp = r.get(
+            'https://maps.googleapis.com/maps/api/geocode/json',
+            params={
+                'address': 'Avenida Paulista 1000, Sao Paulo, SP',
+                'key': key,
+                'components': 'country:BR',
+            },
+            timeout=10,
+        )
+        info['geocode_status_http'] = resp.status_code
+        try:
+            data = resp.json()
+            info['geocode_status_api'] = data.get('status')
+            info['geocode_error_message'] = data.get('error_message', '')
+            if data.get('status') == 'OK' and data.get('results'):
+                loc = data['results'][0]['geometry']['location']
+                info['geocode_resultado'] = f"{loc['lat']},{loc['lng']}"
+                info['geocode_endereco_formatado'] = data['results'][0].get('formatted_address')
+        except ValueError:
+            info['geocode_body'] = resp.text[:500]
+    except Exception as e:
+        info['geocode_erro_conexao'] = str(e)
+
+    # Conta cache
+    try:
+        from app.models import GeocodeCache
+        info['cache_total'] = GeocodeCache.query.count()
+        info['cache_google_ok'] = GeocodeCache.query.filter(
+            GeocodeCache.fonte == 'google',
+            GeocodeCache.lat.isnot(None),
+        ).count()
+        info['cache_google_fail'] = GeocodeCache.query.filter_by(fonte='google_fail').count()
+        info['cache_outras_fontes'] = GeocodeCache.query.filter(
+            ~GeocodeCache.fonte.in_(['google', 'google_fail']),
+            GeocodeCache.fonte.isnot(None),
+        ).count()
+    except Exception as e:
+        info['cache_erro'] = str(e)
+
+    return jsonify(info)
+
+
 @entregas_bp.route('/api/atribuicao/reset', methods=['POST'])
 @login_required
 @entrega_access_required
