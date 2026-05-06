@@ -16,7 +16,14 @@ from app.services import vnda, rotas as rotas_svc
 @login_required
 @entrega_access_required
 def index():
-    return render_template('entregas/index.html', hoje=date.today().isoformat())
+    resp = current_app.make_response(
+        render_template('entregas/index.html', hoje=date.today().isoformat())
+    )
+    # Evita cache do HTML (Safari teima muito com inline JS)
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
 
 
 def _carregar_overrides_data():
