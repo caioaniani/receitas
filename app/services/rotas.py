@@ -133,7 +133,7 @@ def _refinar_clusters(pontos, atribuicoes, n_drivers, max_raio_km=8.0, max_iter=
         return atribuicoes
 
     # Fase 1: reduzir outliers
-    PESO_BAL_FASE1 = 0.3
+    PESO_BAL_FASE1 = 0.05  # quase zero — quer compacidade, nao balancear carga
     for _ in range(max_iter):
         # Centroides atuais
         centros = []
@@ -187,8 +187,9 @@ def _refinar_clusters(pontos, atribuicoes, n_drivers, max_raio_km=8.0, max_iter=
 
         atribuicoes[pior_idx] = melhor_alvo
 
-    # Fase 2: balanceamento — se ha desbalanceamento severo (3x+), move pontos de borda
-    # do cluster mais cheio pro menos cheio, desde que destino fique proximo (<= max_raio_km).
+    # Fase 2: balanceamento — equaliza ate diferenca de no maximo 2 entre clusters,
+    # movendo pontos de borda do mais cheio pro menos cheio quando geograficamente faz sentido.
+    raio_aceitavel = max_raio_km * 1.6  # mais permissivo que Fase 1 (que cuida de outliers)
     for _ in range(max_iter):
         contagens = [sum(1 for a in atribuicoes if a == d) for d in range(n_drivers)]
         contagens_validas = [c for c in contagens if c > 0]
@@ -196,8 +197,7 @@ def _refinar_clusters(pontos, atribuicoes, n_drivers, max_raio_km=8.0, max_iter=
             break
         max_c = max(contagens_validas)
         min_c = min(contagens_validas)
-        if max_c <= max(min_c * 2, min_c + 3):
-            # Ja balanceado o suficiente
+        if max_c - min_c <= 2:
             break
 
         # Recalcula centroides
@@ -221,19 +221,29 @@ def _refinar_clusters(pontos, atribuicoes, n_drivers, max_raio_km=8.0, max_iter=
         if cluster_vazio == -1:
             break
 
-        # Pega ponto do cluster_cheio mais proximo do centroide do cluster_vazio
+        # Pega o ponto do cluster_cheio que mais "ganha" indo pro cluster_vazio:
+        # ou seja, aquele cuja distancia ao novo centroide e menor (ou nao muito maior)
+        # que ao centroide atual. Privilegia pontos de borda.
         melhor_idx = -1
-        melhor_dist = float('inf')
+        melhor_ganho = float('inf')  # menor (mais negativo) = melhor
         for i in range(len(pontos)):
             if atribuicoes[i] != cluster_cheio:
                 continue
-            d = _haversine(pontos[i], centros[cluster_vazio])
-            if d < melhor_dist and d <= max_raio_km:
-                melhor_dist = d
+            d_dest = _haversine(pontos[i], centros[cluster_vazio])
+            if d_dest > raio_aceitavel:
+                continue
+            d_orig = _haversine(pontos[i], centros[cluster_cheio]) if centros[cluster_cheio] else float('inf')
+            # ganho negativo = ja era mais proximo do destino. ganho pequeno positivo = ok mover.
+            ganho = d_dest - d_orig
+            if ganho < melhor_ganho:
+                melhor_ganho = ganho
                 melhor_idx = i
 
         if melhor_idx == -1:
             break  # Nao ha ponto razoavelmente proximo do cluster_vazio
+        # so move se realmente faz sentido — destino nao pode ser muito pior que origem
+        if melhor_ganho > 2.0:
+            break
         atribuicoes[melhor_idx] = cluster_vazio
 
     return atribuicoes
