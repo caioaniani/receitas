@@ -268,6 +268,35 @@ def remover_atribuicao(code):
     return jsonify(ok=True)
 
 
+@entregas_bp.route('/tiles/<int:z>/<int:x>/<int:y>.png')
+@login_required
+@entrega_access_required
+def tile_proxy(z, x, y):
+    """Proxy de tiles do OpenStreetMap. Necessario porque o ambiente
+    do usuario bloqueia CDNs externas (unpkg, jsdelivr, openstreetmap.org,
+    cartocdn). Servimos os tiles via nosso dominio.
+
+    Cache no proxy + browser pra reduzir trafego."""
+    import requests as r
+    from flask import Response, abort
+    if z < 0 or z > 19 or x < 0 or y < 0:
+        abort(400)
+    try:
+        resp = r.get(
+            f'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            headers={'User-Agent': 'OPaoPadariaERP/1.0 (rotas-de-entrega)'},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            abort(resp.status_code)
+        out = Response(resp.content, mimetype='image/png')
+        # Cacheia 1 dia no browser. OSM tiles raramente mudam.
+        out.headers['Cache-Control'] = 'public, max-age=86400'
+        return out
+    except r.RequestException:
+        abort(502)
+
+
 @entregas_bp.route('/api/google/limpar-falhas', methods=['POST'])
 @login_required
 @entrega_access_required

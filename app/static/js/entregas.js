@@ -615,11 +615,11 @@
         if (rotasMapaLeaflet) return;
         if (typeof L === 'undefined') return;
         rotasMapaLeaflet = L.map('rotas-mapa', {scrollWheelZoom: false}).setView([-23.5505, -46.6333], 11);
-        // Tile provider: Carto Positron (CDN diferente do tile.openstreetmap.org,
-        // que pode estar bloqueado por ad-blockers/firewalls corporativos).
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-            attribution: '© OpenStreetMap contributors © CARTO',
-            subdomains: 'abcd',
+        // Tiles via proxy do nosso proprio backend. CDNs externas (unpkg,
+        // openstreetmap.org direto, cartocdn) estao bloqueadas no ambiente
+        // do usuario.
+        L.tileLayer('/entregas/tiles/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap',
             maxZoom: 19,
         }).addTo(rotasMapaLeaflet);
         rotasMapaLayers = L.layerGroup().addTo(rotasMapaLeaflet);
