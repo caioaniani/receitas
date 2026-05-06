@@ -1199,45 +1199,6 @@
     document.addEventListener('DOMContentLoaded', function() {
         var btn = document.getElementById('btn-gerar-rotas');
         if (btn) btn.addEventListener('click', gerarRotas);
-        var btnRelimpar = document.getElementById('btn-relimpar-geo');
-        if (btnRelimpar) btnRelimpar.addEventListener('click', function() {
-            if (!confirm('Apagar entradas de geocoding que falharam e re-tentar com Google?\n\n' +
-                         'Use isso quando "Gerar rotas" volta vazia e voce sabe que tem pedidos no dia.')) return;
-            fetch('/entregas/api/google/limpar-falhas', {
-                method: 'POST',
-                headers: {'X-CSRFToken': CSRF_TOKEN},
-            }).then(function(r) { return r.json(); })
-              .then(function(d) {
-                  if (d.ok) {
-                      alert(d.removidas + ' entradas removidas. Clicando "Gerar rotas" agora pra re-geocodar.');
-                      gerarRotas();
-                  } else {
-                      alert('Erro: ' + (d.erro || 'desconhecido'));
-                  }
-              });
-        });
-
-        var btnReset = document.getElementById('btn-redistribuir');
-        if (btnReset) btnReset.addEventListener('click', function() {
-            var data = document.getElementById('rotas-data').value;
-            if (!data) { alert('Escolha uma data primeiro.'); return; }
-            var dataFmt = data.split('-').reverse().join('/');
-            if (!confirm('Apagar TODAS as atribuições do dia ' + dataFmt + ' e redistribuir por CEP?\n\n' +
-                         'Vai descartar as alterações manuais (drag-n-drop) que você fez para esse dia. ' +
-                         'Outros dias não são afetados.')) return;
-            fetch('/entregas/api/atribuicao/reset', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
-                body: JSON.stringify({data: data}),
-            }).then(function(r) { return r.json(); })
-              .then(function(d) {
-                  if (d.ok) {
-                      gerarRotas();
-                  } else {
-                      alert('Erro: ' + (d.erro || 'desconhecido'));
-                  }
-              });
-        });
         var tabBtn = document.getElementById('btn-tab-rotas');
         if (tabBtn) tabBtn.addEventListener('shown.bs.tab', function() {
             var dataPedidos = document.getElementById('data-entrega').value;

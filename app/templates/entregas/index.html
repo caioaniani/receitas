@@ -90,7 +90,6 @@
 
     <!-- Tab Rotas -->
     <div class="tab-pane fade" id="tab-rotas">
-        <!-- Linha 1: ação principal (esq) + config + dropdown avançado (dir) -->
         <div class="d-flex flex-wrap gap-2 align-items-end mb-2 d-print-none">
             <div>
                 <label class="form-label small fw-bold mb-1">Data</label>
@@ -100,34 +99,10 @@
                 <i class="bi bi-arrow-clockwise"></i> Gerar rotas
             </button>
 
-            <div class="ms-auto d-flex gap-2 align-items-end">
-                <button class="btn btn-outline-secondary btn-sm" id="btn-gerenciar-drivers"
-                        data-bs-toggle="modal" data-bs-target="#modal-drivers">
-                    <i class="bi bi-people"></i> Drivers
-                </button>
-                <div class="dropdown">
-                    <button class="btn btn-outline-secondary btn-sm" type="button"
-                            data-bs-toggle="dropdown" aria-expanded="false"
-                            title="Ações avançadas">
-                        <i class="bi bi-three-dots"></i>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li>
-                            <button type="button" class="dropdown-item" id="btn-relimpar-geo">
-                                <i class="bi bi-pin-map text-muted"></i> Re-geocodar endereços
-                                <small class="d-block text-muted ps-4">Limpa cache de geocoding com falha</small>
-                            </button>
-                        </li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <button type="button" class="dropdown-item text-danger" id="btn-redistribuir">
-                                <i class="bi bi-shuffle"></i> Redistribuir do zero
-                                <small class="d-block text-muted ps-4">Apaga atribuições do dia e refaz automático</small>
-                            </button>
-                        </li>
-                    </ul>
-                </div>
-            </div>
+            <button class="btn btn-outline-secondary btn-sm ms-auto" id="btn-gerenciar-drivers"
+                    data-bs-toggle="modal" data-bs-target="#modal-drivers">
+                <i class="bi bi-people"></i> Drivers
+            </button>
         </div>
 
         <!-- Linha 2: filtro de janelas (aparece após primeiro Gerar) -->
