@@ -261,6 +261,37 @@ def remover_atribuicao(code):
     return jsonify(ok=True)
 
 
+@entregas_bp.route('/api/atribuicao/reset', methods=['POST'])
+@login_required
+@entrega_access_required
+def resetar_atribuicoes_dia():
+    """Apaga atribuicoes de TODOS os pedidos do dia escolhido.
+    Pega os codes do VNDA (respeitando overrides de data) e remove suas
+    AtribuicaoEntrega. Usado pra "redistribuir do zero" sem afetar outras datas."""
+    data = request.get_json(silent=True) or {}
+    data_str = (data.get('data') or '').strip()
+    if not data_str:
+        return jsonify(ok=False, erro='data obrigatoria'), 400
+    try:
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify(ok=False, erro='data invalida'), 400
+
+    overrides = _carregar_overrides_data()
+    resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
+    if 'erro' in resultado:
+        return jsonify(ok=False, erro=resultado['erro']), 500
+
+    codes = [p['code'] for p in resultado.get('pedidos', []) if p.get('code')]
+    n = 0
+    if codes:
+        n = AtribuicaoEntrega.query.filter(
+            AtribuicaoEntrega.pedido_code.in_(codes)
+        ).delete(synchronize_session=False)
+        db.session.commit()
+    return jsonify(ok=True, removidas=n, total_pedidos=len(codes))
+
+
 @entregas_bp.route('/api/atribuicao/lote', methods=['POST'])
 @login_required
 @entrega_access_required
