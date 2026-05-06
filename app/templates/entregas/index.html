@@ -88,7 +88,8 @@
 
     <!-- Tab Rotas -->
     <div class="tab-pane fade" id="tab-rotas">
-        <div class="d-flex flex-wrap gap-2 align-items-end mb-3 d-print-none">
+        <!-- Linha 1: ação principal (esq) + config + dropdown avançado (dir) -->
+        <div class="d-flex flex-wrap gap-2 align-items-end mb-2 d-print-none">
             <div>
                 <label class="form-label small fw-bold mb-1">Data</label>
                 <input type="date" id="rotas-data" class="form-control form-control-sm" style="max-width:180px;" value="{{ hoje }}">
@@ -96,20 +97,48 @@
             <button class="btn btn-primary btn-sm" id="btn-gerar-rotas">
                 <i class="bi bi-arrow-clockwise"></i> Gerar rotas
             </button>
-            <button class="btn btn-outline-danger btn-sm" id="btn-redistribuir" title="Apaga atribuições do dia escolhido e refaz por CEP do zero">
-                <i class="bi bi-shuffle"></i> Redistribuir do zero
-            </button>
-            <button class="btn btn-outline-dark btn-sm" id="btn-relimpar-geo" title="Limpa cache de geocoding com falha — força re-tentar com Google">
-                <i class="bi bi-arrow-clockwise"></i> Re-geocodar
-            </button>
-            <button class="btn btn-outline-secondary btn-sm" id="btn-gerenciar-drivers" data-bs-toggle="modal" data-bs-target="#modal-drivers">
-                <i class="bi bi-people"></i> Drivers
-            </button>
+
+            <div class="ms-auto d-flex gap-2 align-items-end">
+                <button class="btn btn-outline-secondary btn-sm" id="btn-gerenciar-drivers"
+                        data-bs-toggle="modal" data-bs-target="#modal-drivers">
+                    <i class="bi bi-people"></i> Drivers
+                </button>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm" type="button"
+                            data-bs-toggle="dropdown" aria-expanded="false"
+                            title="Ações avançadas">
+                        <i class="bi bi-three-dots"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                            <button type="button" class="dropdown-item" id="btn-relimpar-geo">
+                                <i class="bi bi-pin-map text-muted"></i> Re-geocodar endereços
+                                <small class="d-block text-muted ps-4">Limpa cache de geocoding com falha</small>
+                            </button>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <button type="button" class="dropdown-item text-danger" id="btn-redistribuir">
+                                <i class="bi bi-shuffle"></i> Redistribuir do zero
+                                <small class="d-block text-muted ps-4">Apaga atribuições do dia e refaz automático</small>
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+            </div>
         </div>
-        <div class="d-flex flex-wrap gap-2 align-items-center mb-3 d-print-none" id="rotas-janelas-area" style="display:none !important;">
+
+        <!-- Linha 2: filtro de janelas (aparece após primeiro Gerar) -->
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-2 d-print-none"
+             id="rotas-janelas-area" style="display:none !important;">
             <small class="fw-bold text-muted me-1">Janelas:</small>
             <div id="rotas-janelas-cb" class="d-flex flex-wrap gap-2"></div>
-            <small class="text-muted ms-auto">Cadastre os drivers · arraste pra atribuir · salva automaticamente</small>
+        </div>
+
+        <!-- Linha 3: dica discreta -->
+        <div class="text-muted small mb-3 d-print-none" style="font-size:11px;">
+            <i class="bi bi-info-circle"></i>
+            Cadastre os drivers, arraste pedidos entre eles — atribuições são salvas automaticamente.
         </div>
 
         <div id="rotas-loading" class="text-center py-4 d-none">
