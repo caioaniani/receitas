@@ -218,9 +218,9 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None):
         km = None
         minutos = None
 
-        # So otimiza com Google se: tem chave, tem origem geocodada, todas tem lat/lng,
-        # e nao excede 25 paradas (limite Directions)
-        if tem_google and origem and len(todas) <= 25:
+        # Otimiza com Google se: tem chave + origem geocodada + paradas com coords.
+        # Se >25 paradas (limite Directions), divide em chunks de 25 e otimiza cada.
+        if tem_google and origem:
             # Garante que todas tem lat/lng
             paradas_com_coords = []
             for p in todas:
@@ -231,17 +231,46 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None):
                     if coords:
                         paradas_com_coords.append({**p, 'lat': coords[0], 'lng': coords[1]})
                     else:
-                        paradas_com_coords.append(p)  # sem coords — vai sem otimizar
+                        paradas_com_coords.append(p)
 
-            # So pede directions se TODAS tem lat/lng
+            # So otimiza se TODAS tem coords
             if all('lat' in p for p in paradas_com_coords):
+                MAX_WAYPOINTS = 25
                 latlngs = [(p['lat'], p['lng']) for p in paradas_com_coords]
-                resultado = google_maps.directions_otimizado(origem, latlngs, retorno_origem=True)
-                if resultado:
-                    nova_ordem = resultado['ordem']
-                    paradas_com_coords = [paradas_com_coords[i] for i in nova_ordem]
-                    km = resultado['km']
-                    minutos = resultado['minutos']
+
+                if len(latlngs) <= MAX_WAYPOINTS:
+                    # Caso simples: 1 chamada Directions
+                    resultado = google_maps.directions_otimizado(origem, latlngs, retorno_origem=True)
+                    if resultado:
+                        nova_ordem = resultado['ordem']
+                        paradas_com_coords = [paradas_com_coords[i] for i in nova_ordem]
+                        km = resultado['km']
+                        minutos = resultado['minutos']
+                else:
+                    # >25 paradas: divide em chunks, otimiza cada um, concatena.
+                    # Cada chunk inicia/termina na origem (volta pra matriz entre chunks).
+                    # Nao e o ideal, mas e o melhor com o limite do Directions API.
+                    nova_ordem_global = []
+                    km_total = 0.0
+                    min_total = 0
+                    chunks_ok = True
+                    for i in range(0, len(latlngs), MAX_WAYPOINTS):
+                        chunk = latlngs[i:i + MAX_WAYPOINTS]
+                        r = google_maps.directions_otimizado(origem, chunk, retorno_origem=True)
+                        if r:
+                            ordem_local = r['ordem']
+                            nova_ordem_global.extend(i + idx for idx in ordem_local)
+                            km_total += r['km']
+                            min_total += r['minutos']
+                        else:
+                            # Chunk falhou — mantem ordem original do chunk
+                            nova_ordem_global.extend(range(i, min(i + MAX_WAYPOINTS, len(latlngs))))
+                            chunks_ok = False
+                    paradas_com_coords = [paradas_com_coords[idx] for idx in nova_ordem_global]
+                    if chunks_ok:
+                        km = round(km_total, 1)
+                        minutos = min_total
+
                 todas = paradas_com_coords
 
         paradas = [{**p, 'ordem': idx + 1} for idx, p in enumerate(todas)]
