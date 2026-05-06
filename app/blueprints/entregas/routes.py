@@ -339,7 +339,7 @@ def api_produtos():
     except ValueError:
         target = date.today()
 
-    janela = (request.args.get('janela', '') or '').strip()
+    janelas = [j for j in request.args.getlist('janela') if j]
 
     overrides = _carregar_overrides_data()
     resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
@@ -349,8 +349,8 @@ def api_produtos():
         return resp
 
     pedidos = resultado.get('pedidos', [])
-    if janela:
-        pedidos = [p for p in pedidos if (p.get('periodo') or '') == janela]
+    if janelas:
+        pedidos = [p for p in pedidos if (p.get('periodo') or '') in janelas]
 
     # Carrega catalogo de Produtos cadastrados (pra expandir cestas)
     produtos_db = {}  # nome_lower -> Produto
@@ -431,7 +431,7 @@ def api_produtos():
 
     resp = jsonify(
         data=data_str,
-        janela=janela,
+        janelas=janelas,
         periodos_disponiveis=periodos,
         vendidos=vendidos_lista,
         producao=producao_lista,
@@ -531,7 +531,7 @@ def api_rotas():
     except ValueError:
         target = date.today()
 
-    janela = (request.args.get('janela', '') or '').strip()
+    janelas = [j for j in request.args.getlist('janela') if j]
 
     # Drivers ativos cadastrados; opcionalmente filtra pelos selecionados (?drivers=1,2,3)
     sel = (request.args.get('drivers') or '').strip()
@@ -555,8 +555,8 @@ def api_rotas():
 
     pedidos = resultado.get('pedidos', [])
 
-    if janela:
-        pedidos = [p for p in pedidos if (p.get('periodo') or '') == janela]
+    if janelas:
+        pedidos = [p for p in pedidos if (p.get('periodo') or '') in janelas]
 
     # Carrega atribuicoes existentes pros pedidos do dia
     codes = [p['code'] for p in pedidos if p.get('code')]
@@ -566,10 +566,9 @@ def api_rotas():
             atribuicoes[a.pedido_code] = {'driver_id': a.driver_id, 'ordem': a.ordem or 0}
 
     if not drivers_struct:
-        # Sem drivers cadastrados — retorna lista crua pra UI mostrar mensagem
         resp = jsonify(
             data=data_str,
-            janela=janela,
+            janelas=janelas,
             periodos_disponiveis=sorted({p.get('periodo') or '' for p in resultado.get('pedidos', []) if p.get('periodo')}),
             drivers_disponiveis=[],
             rotas=[],
@@ -589,7 +588,7 @@ def api_rotas():
 
     resp = jsonify(
         data=data_str,
-        janela=janela,
+        janelas=janelas,
         periodos_disponiveis=periodos,
         drivers_disponiveis=drivers_struct,
         rotas=geradas['rotas'],

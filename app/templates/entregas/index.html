@@ -93,18 +93,16 @@
                 <label class="form-label small fw-bold mb-1">Data</label>
                 <input type="date" id="rotas-data" class="form-control form-control-sm" style="max-width:180px;" value="{{ hoje }}">
             </div>
-            <div>
-                <label class="form-label small fw-bold mb-1">Janela (período)</label>
-                <select id="rotas-janela" class="form-select form-select-sm" style="max-width:260px;">
-                    <option value="">Todas</option>
-                </select>
-            </div>
             <button class="btn btn-primary btn-sm" id="btn-gerar-rotas">
                 <i class="bi bi-arrow-clockwise"></i> Gerar rotas
             </button>
             <button class="btn btn-outline-secondary btn-sm" id="btn-gerenciar-drivers" data-bs-toggle="modal" data-bs-target="#modal-drivers">
                 <i class="bi bi-people"></i> Drivers
             </button>
+        </div>
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-3 d-print-none" id="rotas-janelas-area" style="display:none !important;">
+            <small class="fw-bold text-muted me-1">Janelas:</small>
+            <div id="rotas-janelas-cb" class="d-flex flex-wrap gap-2"></div>
             <small class="text-muted ms-auto">Cadastre os drivers · arraste pra atribuir · salva automaticamente</small>
         </div>
 
@@ -151,18 +149,16 @@
                 <label class="form-label small fw-bold mb-1">Data</label>
                 <input type="date" id="prod-data" class="form-control form-control-sm" style="max-width:180px;" value="{{ hoje }}">
             </div>
-            <div>
-                <label class="form-label small fw-bold mb-1">Janela (período)</label>
-                <select id="prod-janela" class="form-select form-select-sm" style="max-width:260px;">
-                    <option value="">Todas</option>
-                </select>
-            </div>
             <button class="btn btn-primary btn-sm" id="btn-prod-carregar">
                 <i class="bi bi-search"></i> Buscar
             </button>
             <span class="ms-auto small text-muted" id="prod-resumo" style="display:none;">
                 <span id="prod-total-pedidos">0</span> pedidos
             </span>
+        </div>
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-3 d-print-none" id="prod-janelas-area" style="display:none !important;">
+            <small class="fw-bold text-muted me-1">Janelas:</small>
+            <div id="prod-janelas-cb" class="d-flex flex-wrap gap-2"></div>
         </div>
 
         <div id="prod-loading" class="text-center py-4 d-none">
@@ -719,9 +715,36 @@
     // ── Rotas (drivers nominais + Google Maps) ──
     // ──────────────────────────────────────────
 
+    function getJanelas(prefix) {
+        return Array.from(document.querySelectorAll('#' + prefix + '-janelas-cb input[type=checkbox]:checked'))
+            .map(function(cb) { return cb.value; });
+    }
+
+    function renderCheckboxesJanela(prefix, periodos, atuais) {
+        var area = document.getElementById(prefix + '-janelas-area');
+        var cont = document.getElementById(prefix + '-janelas-cb');
+        if (!area || !cont) return;
+        if (!periodos || periodos.length === 0) {
+            area.style.display = 'none';
+            cont.innerHTML = '';
+            return;
+        }
+        area.style = '';
+        var html = '';
+        for (var i = 0; i < periodos.length; i++) {
+            var per = periodos[i];
+            var checked = atuais.indexOf(per) !== -1 ? 'checked' : '';
+            html += '<label class="form-check form-check-inline mb-0">' +
+                '<input class="form-check-input cb-janela-' + prefix + '" type="checkbox" value="' + escapeHtml(per) + '" ' + checked + '>' +
+                '<span class="form-check-label small">' + escapeHtml(per) + '</span>' +
+            '</label>';
+        }
+        cont.innerHTML = html;
+    }
+
     function gerarRotas() {
         var data = document.getElementById('rotas-data').value;
-        var janela = document.getElementById('rotas-janela').value || '';
+        var janelas = getJanelas('rotas');
         var loading = document.getElementById('rotas-loading');
         var msg = document.getElementById('rotas-msg');
         var container = document.getElementById('rotas-container');
@@ -733,7 +756,7 @@
         sc.innerHTML = '';
 
         var url = '/entregas/api/rotas?data=' + encodeURIComponent(data) +
-                  '&janela=' + encodeURIComponent(janela);
+                  janelas.map(function(j) { return '&janela=' + encodeURIComponent(j); }).join('');
 
         fetch(url, {credentials: 'same-origin'})
             .then(function(r) { return r.json(); })
@@ -744,7 +767,7 @@
                     return;
                 }
                 rotasUltimoResultado = d;
-                atualizarPeriodosDisponiveis(d.periodos_disponiveis || [], janela);
+                renderCheckboxesJanela('rotas', d.periodos_disponiveis || [], d.janelas || []);
                 if (!d.drivers_disponiveis || d.drivers_disponiveis.length === 0) {
                     msg.innerHTML = '<div class="alert alert-info py-2 small">' +
                         '<i class="bi bi-info-circle"></i> Nenhum driver cadastrado. Clique em <strong>Drivers</strong> pra adicionar.' +
@@ -757,18 +780,6 @@
                 loading.classList.add('d-none');
                 msg.innerHTML = '<div class="alert alert-danger py-2 small">Falha ao gerar rotas.</div>';
             });
-    }
-
-    function atualizarPeriodosDisponiveis(periodos, atual) {
-        var sel = document.getElementById('rotas-janela');
-        sel.innerHTML = '<option value="">Todas</option>';
-        for (var i = 0; i < periodos.length; i++) {
-            var opt = document.createElement('option');
-            opt.value = periodos[i];
-            opt.textContent = periodos[i];
-            if (periodos[i] === atual) opt.selected = true;
-            sel.appendChild(opt);
-        }
     }
 
     // Constroi 1 ou mais URLs do Google Maps com waypoints (ate 9 paradas + destino).
@@ -1009,7 +1020,7 @@
 
     function carregarProdutos() {
         var data = document.getElementById('prod-data').value;
-        var janela = document.getElementById('prod-janela').value || '';
+        var janelas = getJanelas('prod');
         var loading = document.getElementById('prod-loading');
         var msg = document.getElementById('prod-msg');
         var container = document.getElementById('prod-container');
@@ -1021,7 +1032,7 @@
         resumo.style.display = 'none';
 
         var url = '/entregas/api/produtos?data=' + encodeURIComponent(data) +
-                  '&janela=' + encodeURIComponent(janela);
+                  janelas.map(function(j) { return '&janela=' + encodeURIComponent(j); }).join('');
 
         fetch(url, {credentials: 'same-origin'})
             .then(function(r) { return r.json(); })
@@ -1032,7 +1043,7 @@
                     return;
                 }
                 prodUltimoResultado = d;
-                atualizarPeriodosProdutos(d.periodos_disponiveis || [], janela);
+                renderCheckboxesJanela('prod', d.periodos_disponiveis || [], d.janelas || []);
                 document.getElementById('prod-total-pedidos').textContent = d.total_pedidos || 0;
                 resumo.style.display = '';
                 renderProdutos(d);
@@ -1041,18 +1052,6 @@
                 loading.classList.add('d-none');
                 msg.innerHTML = '<div class="alert alert-danger py-2 small">Falha ao carregar produtos.</div>';
             });
-    }
-
-    function atualizarPeriodosProdutos(periodos, atual) {
-        var sel = document.getElementById('prod-janela');
-        sel.innerHTML = '<option value="">Todas</option>';
-        for (var i = 0; i < periodos.length; i++) {
-            var opt = document.createElement('option');
-            opt.value = periodos[i];
-            opt.textContent = periodos[i];
-            if (periodos[i] === atual) opt.selected = true;
-            sel.appendChild(opt);
-        }
     }
 
     function tabelaProdutos(lista, opts) {
@@ -1337,6 +1336,15 @@
         if (tabBtn) tabBtn.addEventListener('shown.bs.tab', function() {
             var dataPedidos = document.getElementById('data-entrega').value;
             if (dataPedidos) document.getElementById('rotas-data').value = dataPedidos;
+        });
+        // Trocar checkbox de janela re-busca automatico
+        var rotasJanCb = document.getElementById('rotas-janelas-cb');
+        if (rotasJanCb) rotasJanCb.addEventListener('change', function(e) {
+            if (e.target.matches('input[type=checkbox]')) gerarRotas();
+        });
+        var prodJanCb = document.getElementById('prod-janelas-cb');
+        if (prodJanCb) prodJanCb.addEventListener('change', function(e) {
+            if (e.target.matches('input[type=checkbox]')) carregarProdutos();
         });
 
         // Aba Atribuidos
