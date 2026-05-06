@@ -40,13 +40,17 @@ def create_app(config_class=None):
 
     @app.context_processor
     def inject_static_version():
-        """Versionamento de arquivos estaticos para cache busting."""
+        """Versionamento de arquivos estaticos para cache busting.
+        Usa hash MD5 do conteudo (8 chars) — muda sempre que arquivo muda,
+        independente de mtime (Railway deploy nao preserva mtime original)."""
         import os
+        import hashlib
         versions = {}
         for rel in ('js/projetos.js', 'js/app.js', 'js/entregas.js', 'css/style.css'):
             try:
                 p = os.path.join(app.static_folder, rel)
-                versions[rel] = str(int(os.path.getmtime(p)))
+                with open(p, 'rb') as f:
+                    versions[rel] = hashlib.md5(f.read()).hexdigest()[:8]
             except OSError:
                 versions[rel] = '0'
         return {'static_v': versions}
