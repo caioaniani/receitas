@@ -43,7 +43,7 @@ def create_app(config_class=None):
         """Versionamento de arquivos estaticos para cache busting."""
         import os
         versions = {}
-        for rel in ('js/projetos.js', 'js/app.js', 'css/style.css'):
+        for rel in ('js/projetos.js', 'js/app.js', 'js/entregas.js', 'css/style.css'):
             try:
                 p = os.path.join(app.static_folder, rel)
                 versions[rel] = str(int(os.path.getmtime(p)))
