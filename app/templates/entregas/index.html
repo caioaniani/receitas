@@ -99,6 +99,9 @@
             <button class="btn btn-outline-danger btn-sm" id="btn-redistribuir" title="Apaga atribuições do dia escolhido e refaz por CEP do zero">
                 <i class="bi bi-shuffle"></i> Redistribuir do zero
             </button>
+            <button class="btn btn-outline-dark btn-sm" id="btn-relimpar-geo" title="Limpa cache de geocoding com falha — força re-tentar com Google">
+                <i class="bi bi-arrow-clockwise"></i> Re-geocodar
+            </button>
             <button class="btn btn-outline-secondary btn-sm" id="btn-gerenciar-drivers" data-bs-toggle="modal" data-bs-target="#modal-drivers">
                 <i class="bi bi-people"></i> Drivers
             </button>
@@ -1375,6 +1378,24 @@
     document.addEventListener('DOMContentLoaded', function() {
         var btn = document.getElementById('btn-gerar-rotas');
         if (btn) btn.addEventListener('click', gerarRotas);
+        var btnRelimpar = document.getElementById('btn-relimpar-geo');
+        if (btnRelimpar) btnRelimpar.addEventListener('click', function() {
+            if (!confirm('Apagar entradas de geocoding que falharam e re-tentar com Google?\n\n' +
+                         'Use isso quando "Gerar rotas" volta vazia e voce sabe que tem pedidos no dia.')) return;
+            fetch('/entregas/api/google/limpar-falhas', {
+                method: 'POST',
+                headers: {'X-CSRFToken': CSRF_TOKEN},
+            }).then(function(r) { return r.json(); })
+              .then(function(d) {
+                  if (d.ok) {
+                      alert(d.removidas + ' entradas removidas. Clicando "Gerar rotas" agora pra re-geocodar.');
+                      gerarRotas();
+                  } else {
+                      alert('Erro: ' + (d.erro || 'desconhecido'));
+                  }
+              });
+        });
+
         var btnReset = document.getElementById('btn-redistribuir');
         if (btnReset) btnReset.addEventListener('click', function() {
             var data = document.getElementById('rotas-data').value;
