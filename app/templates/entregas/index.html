@@ -1057,20 +1057,25 @@
     function tabelaProdutos(lista, opts) {
         opts = opts || {};
         var mostrarPreco = !!opts.preco;
+        var mostrarUnidade = !!opts.unidade;
         var html = '<div class="table-responsive"><table class="table table-sm table-hover mb-0">' +
             '<thead class="thead-padaria"><tr>' +
                 '<th style="width:80px;">SKU</th>' +
                 '<th>Produto</th>' +
-                '<th class="text-center" style="width:90px;">Qtd</th>' +
+                '<th class="text-center" style="width:120px;">Qtd</th>' +
                 (opts.componente_de ? '<th>Vem de</th>' : '') +
                 (mostrarPreco ? '<th class="text-end" style="width:120px;">Preço unit</th><th class="text-end" style="width:140px;">Total</th>' : '') +
             '</tr></thead><tbody>';
         for (var i = 0; i < lista.length; i++) {
             var p = lista[i];
+            var qtdHtml = '<strong>' + p.quantidade + '</strong>';
+            if (mostrarUnidade && p.unidade) {
+                qtdHtml += ' <small class="text-muted">' + escapeHtml(p.unidade) + '</small>';
+            }
             html += '<tr>' +
                 '<td><small class="text-muted">' + escapeHtml(p.sku || '—') + '</small></td>' +
                 '<td>' + escapeHtml(p.nome) + '</td>' +
-                '<td class="text-center"><strong>' + p.quantidade + '</strong></td>';
+                '<td class="text-center">' + qtdHtml + '</td>';
             if (opts.componente_de) {
                 var origem = (p.componente_de && p.componente_de.length) ?
                     p.componente_de.map(escapeHtml).join(', ') : '<span class="text-muted">—</span>';
@@ -1123,7 +1128,7 @@
                     '</button>' +
                 '</div>' +
             '</div>' +
-            tabelaProdutos(d.producao, {componente_de: true}) +
+            tabelaProdutos(d.producao, {componente_de: true, unidade: true}) +
             '</div>';
 
         container.innerHTML = html;
@@ -1146,7 +1151,8 @@
         var lines = [titulo, ''];
         for (var i = 0; i < lista.length; i++) {
             var p = lista[i];
-            var line = p.quantidade + 'x ' + p.nome + (p.sku ? ' (' + p.sku + ')' : '');
+            var qtd = p.quantidade + (tipo === 'producao' && p.unidade ? ' ' + p.unidade : 'x');
+            var line = qtd + ' ' + p.nome + (p.sku ? ' (' + p.sku + ')' : '');
             if (tipo === 'producao' && p.componente_de && p.componente_de.length > 0) {
                 line += '  [vem de: ' + p.componente_de.join(', ') + ']';
             }

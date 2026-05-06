@@ -8,7 +8,7 @@ import requests as http_requests
 from app.blueprints.entregas import entregas_bp
 from app.decorators import entrega_access_required
 from app.extensions import db
-from app.models import CartinhaEntrega, OverrideEntrega, Driver, AtribuicaoEntrega, Produto
+from app.models import CartinhaEntrega, OverrideEntrega, Driver, AtribuicaoEntrega, Produto, MateriaPrima
 from app.services import vnda, rotas as rotas_svc
 
 
@@ -358,6 +358,12 @@ def api_produtos():
         if prod.nome:
             produtos_db[prod.nome.strip().lower()] = prod
 
+    # Cache de MateriaPrima pra pegar unidade dos componentes 'mp'
+    mp_db = {}  # nome_lower -> MateriaPrima
+    for mp in MateriaPrima.query.all():
+        if mp.nome:
+            mp_db[mp.nome.strip().lower()] = mp
+
     # Vendidos (como veio do VNDA) — chave por SKU+nome
     vendidos = {}
 
@@ -380,18 +386,19 @@ def api_produtos():
     # Croissant comprado avulso somam na mesma linha.
     producao = {}
 
-    def _agg_producao(nome, qty, componente_de=None):
+    def _agg_producao(nome, qty, unidade='un', componente_de=None):
         chave = (nome or '').strip().lower()
         if not chave:
             return
         a = producao.get(chave)
         if not a:
             a = {
-                'sku': '', 'nome': nome, 'quantidade': 0,
+                'sku': '', 'nome': nome, 'unidade': unidade, 'quantidade': 0,
                 'preco_unitario': 0.0, 'valor_total': 0.0,
                 'componente_de': set(),
             }
             producao[chave] = a
+        # Se ja tem com unidade diferente, mantem a primeira (deveria ser sempre a mesma)
         a['quantidade'] += qty
         if componente_de:
             a['componente_de'].add(componente_de)
@@ -426,10 +433,16 @@ def api_produtos():
                     if total_qty <= 0:
                         continue
                     total_qty = int(total_qty) if total_qty == int(total_qty) else total_qty
-                    _agg_producao(cnome, total_qty, componente_de=nome)
+                    # Detecta unidade: 'mp' usa unidade da MateriaPrima; 'receita' = unidade
+                    if (comp.tipo or '').lower() == 'mp':
+                        mp = mp_db.get(cnome.lower())
+                        unidade = mp.unidade if mp else 'g'
+                    else:
+                        unidade = 'un'
+                    _agg_producao(cnome, total_qty, unidade=unidade, componente_de=nome)
             else:
                 # Item simples — vai pra producao direto, sem origem
-                _agg_producao(nome, qty)
+                _agg_producao(nome, qty, unidade='un')
 
     def _serializa(d):
         out = []
