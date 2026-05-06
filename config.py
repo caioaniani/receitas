@@ -24,3 +24,5 @@ class Config:
     ROTA_ORIGEM_LNG = os.environ.get('ROTA_ORIGEM_LNG', '')
     # Endereco textual da matriz — usado como origem dos links do Google Maps
     ROTA_ORIGEM_ENDERECO = os.environ.get('ROTA_ORIGEM_ENDERECO', '')
+    # Chave da API do Google Maps Platform (Geocoding + Directions)
+    GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', '')

@@ -844,11 +844,14 @@
             var drv = r.driver;
             var cor = drv.cor || ROTA_CORES[i % ROTA_CORES.length];
 
+            var detalhe = r.qtd_paradas + ' paradas';
+            if (r.km != null) detalhe += ' · ' + r.km + ' km';
+            if (r.minutos != null) detalhe += ' · ' + Math.floor(r.minutos / 60) + 'h' + (r.minutos % 60).toString().padStart(2, '0') + 'min';
             html += '<div class="col-md-6 col-lg-4 mb-2">' +
                     '<div class="card">' +
                     '<div class="card-header py-2 d-flex justify-content-between align-items-center" style="border-left:4px solid ' + cor + ';">' +
                         '<strong style="color:' + cor + ';"><i class="bi bi-person-badge"></i> ' + escapeHtml(drv.nome) + '</strong>' +
-                        '<span class="text-muted small qtd-paradas">' + r.qtd_paradas + ' paradas</span>' +
+                        '<span class="text-muted small qtd-paradas">' + detalhe + '</span>' +
                     '</div>' +
                     '<div class="card-body py-2 px-3 border-bottom maps-area" data-cor="' + cor + '"></div>' +
                     '<div class="card-body p-0">' +
