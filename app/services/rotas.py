@@ -119,21 +119,21 @@ def _kmeans(pontos, k, max_iter=20):
 
 
 def _refinar_clusters(pontos, atribuicoes, n_drivers, max_raio_km=8.0, max_iter=50):
-    """Pos-processo de k-means que prioriza COMPACIDADE.
+    """Pos-processo de k-means que prioriza COMPACIDADE com balanceamento leve.
 
     Move iterativamente o ponto mais distante do seu centroide pra outro cluster,
-    se isso reduzir o raio. Outliers extremos viram um driver dedicado se
-    estiverem todos juntos numa regiao isolada — caso contrario, vao pro cluster
-    mais proximo balanceando carga.
+    se isso reduzir o raio. Roda 2 fases:
 
-    Score do destino = distancia_pro_centroide + contagem_atual * peso.
-    O peso (0.3) faz preferir clusters menos cheios em caso de empate.
+    1. Outliers (raio > max_raio_km): move pra cluster mais proximo.
+    2. Balanceamento: se algum cluster tem 3x+ pedidos que outro, move ponto
+       de borda do mais cheio pra menos cheio (se o destino estiver razoavelmente
+       proximo).
     """
     if not pontos or len(pontos) < 2 or n_drivers < 2:
         return atribuicoes
 
-    PESO_BALANCEAMENTO = 0.3
-
+    # Fase 1: reduzir outliers
+    PESO_BAL_FASE1 = 0.3
     for _ in range(max_iter):
         # Centroides atuais
         centros = []
@@ -173,7 +173,7 @@ def _refinar_clusters(pontos, atribuicoes, n_drivers, max_raio_km=8.0, max_iter=
             if d == cluster_atual or centros[d] is None:
                 continue
             dist = _haversine(pontos[pior_idx], centros[d])
-            score = dist + contagens[d] * PESO_BALANCEAMENTO
+            score = dist + contagens[d] * PESO_BAL_FASE1
             if score < melhor_score:
                 melhor_score = score
                 melhor_alvo = d
@@ -186,6 +186,55 @@ def _refinar_clusters(pontos, atribuicoes, n_drivers, max_raio_km=8.0, max_iter=
             break
 
         atribuicoes[pior_idx] = melhor_alvo
+
+    # Fase 2: balanceamento — se ha desbalanceamento severo (3x+), move pontos de borda
+    # do cluster mais cheio pro menos cheio, desde que destino fique proximo (<= max_raio_km).
+    for _ in range(max_iter):
+        contagens = [sum(1 for a in atribuicoes if a == d) for d in range(n_drivers)]
+        contagens_validas = [c for c in contagens if c > 0]
+        if not contagens_validas:
+            break
+        max_c = max(contagens_validas)
+        min_c = min(contagens_validas)
+        if max_c <= max(min_c * 2, min_c + 3):
+            # Ja balanceado o suficiente
+            break
+
+        # Recalcula centroides
+        centros = []
+        for d in range(n_drivers):
+            membros = [pontos[i] for i in range(len(pontos)) if atribuicoes[i] == d]
+            if membros:
+                centros.append((
+                    sum(p[0] for p in membros) / len(membros),
+                    sum(p[1] for p in membros) / len(membros),
+                ))
+            else:
+                centros.append(None)
+
+        cluster_cheio = contagens.index(max_c)
+        cluster_vazio = -1
+        for d in range(n_drivers):
+            if contagens[d] == min_c and centros[d] is not None:
+                cluster_vazio = d
+                break
+        if cluster_vazio == -1:
+            break
+
+        # Pega ponto do cluster_cheio mais proximo do centroide do cluster_vazio
+        melhor_idx = -1
+        melhor_dist = float('inf')
+        for i in range(len(pontos)):
+            if atribuicoes[i] != cluster_cheio:
+                continue
+            d = _haversine(pontos[i], centros[cluster_vazio])
+            if d < melhor_dist and d <= max_raio_km:
+                melhor_dist = d
+                melhor_idx = i
+
+        if melhor_idx == -1:
+            break  # Nao ha ponto razoavelmente proximo do cluster_vazio
+        atribuicoes[melhor_idx] = cluster_vazio
 
     return atribuicoes
 
@@ -292,10 +341,9 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None):
         km = None
         minutos = None
 
-        # Otimiza com Google se: tem chave + origem geocodada + paradas com coords.
-        # Se >25 paradas (limite Directions), divide em chunks de 25 e otimiza cada.
-        if tem_google and origem:
-            # Garante que todas tem lat/lng
+        # Garante lat/lng pra todas as paradas (geocoda as que faltam).
+        # Crucial pro mapa visual — sem lat/lng, parada nao aparece no Leaflet.
+        if tem_google:
             paradas_com_coords = []
             for p in todas:
                 if 'lat' in p and 'lng' in p:
@@ -306,46 +354,39 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None):
                         paradas_com_coords.append({**p, 'lat': coords[0], 'lng': coords[1]})
                     else:
                         paradas_com_coords.append(p)
+            todas = paradas_com_coords
 
-            # So otimiza se TODAS tem coords
-            if all('lat' in p for p in paradas_com_coords):
-                MAX_WAYPOINTS = 25
-                latlngs = [(p['lat'], p['lng']) for p in paradas_com_coords]
+        # Otimiza ordem com Directions API se: origem geocodada + todas com coords
+        if tem_google and origem and all('lat' in p for p in todas):
+            MAX_WAYPOINTS = 25
+            latlngs = [(p['lat'], p['lng']) for p in todas]
 
-                if len(latlngs) <= MAX_WAYPOINTS:
-                    # Caso simples: 1 chamada Directions
-                    resultado = google_maps.directions_otimizado(origem, latlngs, retorno_origem=True)
-                    if resultado:
-                        nova_ordem = resultado['ordem']
-                        paradas_com_coords = [paradas_com_coords[i] for i in nova_ordem]
-                        km = resultado['km']
-                        minutos = resultado['minutos']
-                else:
-                    # >25 paradas: divide em chunks, otimiza cada um, concatena.
-                    # Cada chunk inicia/termina na origem (volta pra matriz entre chunks).
-                    # Nao e o ideal, mas e o melhor com o limite do Directions API.
-                    nova_ordem_global = []
-                    km_total = 0.0
-                    min_total = 0
-                    chunks_ok = True
-                    for i in range(0, len(latlngs), MAX_WAYPOINTS):
-                        chunk = latlngs[i:i + MAX_WAYPOINTS]
-                        r = google_maps.directions_otimizado(origem, chunk, retorno_origem=True)
-                        if r:
-                            ordem_local = r['ordem']
-                            nova_ordem_global.extend(i + idx for idx in ordem_local)
-                            km_total += r['km']
-                            min_total += r['minutos']
-                        else:
-                            # Chunk falhou — mantem ordem original do chunk
-                            nova_ordem_global.extend(range(i, min(i + MAX_WAYPOINTS, len(latlngs))))
-                            chunks_ok = False
-                    paradas_com_coords = [paradas_com_coords[idx] for idx in nova_ordem_global]
-                    if chunks_ok:
-                        km = round(km_total, 1)
-                        minutos = min_total
-
-                todas = paradas_com_coords
+            if len(latlngs) <= MAX_WAYPOINTS:
+                resultado = google_maps.directions_otimizado(origem, latlngs, retorno_origem=True)
+                if resultado:
+                    todas = [todas[i] for i in resultado['ordem']]
+                    km = resultado['km']
+                    minutos = resultado['minutos']
+            else:
+                # >25 paradas: chunks de 25, otimiza cada, concatena km/min
+                nova_ordem_global = []
+                km_total = 0.0
+                min_total = 0
+                chunks_ok = True
+                for i in range(0, len(latlngs), MAX_WAYPOINTS):
+                    chunk = latlngs[i:i + MAX_WAYPOINTS]
+                    r = google_maps.directions_otimizado(origem, chunk, retorno_origem=True)
+                    if r:
+                        nova_ordem_global.extend(i + idx for idx in r['ordem'])
+                        km_total += r['km']
+                        min_total += r['minutos']
+                    else:
+                        nova_ordem_global.extend(range(i, min(i + MAX_WAYPOINTS, len(latlngs))))
+                        chunks_ok = False
+                todas = [todas[idx] for idx in nova_ordem_global]
+                if chunks_ok:
+                    km = round(km_total, 1)
+                    minutos = min_total
 
         paradas = [{**p, 'ordem': idx + 1} for idx, p in enumerate(todas)]
         rotas.append({
