@@ -32,6 +32,11 @@
             <i class="bi bi-person-check"></i> Atribuídos
         </button>
     </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-produtos" type="button" id="btn-tab-produtos">
+            <i class="bi bi-box-seam"></i> Produtos
+        </button>
+    </li>
 </ul>
 
 <div class="tab-content">
@@ -137,6 +142,39 @@
 
         <div id="atrib-msg" class="d-print-none"></div>
         <div id="atrib-container"></div>
+    </div>
+
+    <!-- Tab Produtos -->
+    <div class="tab-pane fade" id="tab-produtos">
+        <div class="d-flex flex-wrap gap-2 align-items-end mb-3 d-print-none">
+            <div>
+                <label class="form-label small fw-bold mb-1">Data</label>
+                <input type="date" id="prod-data" class="form-control form-control-sm" style="max-width:180px;" value="{{ hoje }}">
+            </div>
+            <div>
+                <label class="form-label small fw-bold mb-1">Janela (período)</label>
+                <select id="prod-janela" class="form-select form-select-sm" style="max-width:260px;">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <button class="btn btn-primary btn-sm" id="btn-prod-carregar">
+                <i class="bi bi-search"></i> Buscar
+            </button>
+            <button class="btn btn-outline-success btn-sm" id="btn-prod-copiar" style="display:none;">
+                <i class="bi bi-clipboard"></i> Copiar lista
+            </button>
+            <span class="ms-auto small text-muted" id="prod-resumo" style="display:none;">
+                <span id="prod-total-skus">0</span> SKUs · <span id="prod-total-itens">0</span> itens · <span id="prod-total-pedidos">0</span> pedidos
+            </span>
+        </div>
+
+        <div id="prod-loading" class="text-center py-4 d-none">
+            <div class="spinner-border spinner-border-sm text-primary"></div>
+            <span class="ms-2 text-muted">Carregando…</span>
+        </div>
+
+        <div id="prod-msg" class="d-print-none"></div>
+        <div id="prod-container"></div>
     </div>
 </div>
 
@@ -967,8 +1005,136 @@
     }
 
     // ──────────────────────────────────────────
-    // ── Atribuidos (visao por driver com lista de pedidos) ──
+    // ── Produtos (resumo de quantidades por SKU) ──
     // ──────────────────────────────────────────
+
+    var prodUltimoResultado = null;
+
+    function carregarProdutos() {
+        var data = document.getElementById('prod-data').value;
+        var janela = document.getElementById('prod-janela').value || '';
+        var loading = document.getElementById('prod-loading');
+        var msg = document.getElementById('prod-msg');
+        var container = document.getElementById('prod-container');
+        var resumo = document.getElementById('prod-resumo');
+        var btnCopiar = document.getElementById('btn-prod-copiar');
+
+        loading.classList.remove('d-none');
+        msg.innerHTML = '';
+        container.innerHTML = '';
+        resumo.style.display = 'none';
+        btnCopiar.style.display = 'none';
+
+        var url = '/entregas/api/produtos?data=' + encodeURIComponent(data) +
+                  '&janela=' + encodeURIComponent(janela);
+
+        fetch(url, {credentials: 'same-origin'})
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                loading.classList.add('d-none');
+                if (d.erro) {
+                    msg.innerHTML = '<div class="alert alert-warning py-2 small">' + escapeHtml(d.erro) + '</div>';
+                    return;
+                }
+                prodUltimoResultado = d;
+                atualizarPeriodosProdutos(d.periodos_disponiveis || [], janela);
+                document.getElementById('prod-total-skus').textContent = d.total_skus || 0;
+                document.getElementById('prod-total-itens').textContent = d.total_itens || 0;
+                document.getElementById('prod-total-pedidos').textContent = d.total_pedidos || 0;
+                resumo.style.display = '';
+                renderProdutos(d);
+                if (d.produtos && d.produtos.length > 0) {
+                    btnCopiar.style.display = '';
+                }
+            })
+            .catch(function() {
+                loading.classList.add('d-none');
+                msg.innerHTML = '<div class="alert alert-danger py-2 small">Falha ao carregar produtos.</div>';
+            });
+    }
+
+    function atualizarPeriodosProdutos(periodos, atual) {
+        var sel = document.getElementById('prod-janela');
+        sel.innerHTML = '<option value="">Todas</option>';
+        for (var i = 0; i < periodos.length; i++) {
+            var opt = document.createElement('option');
+            opt.value = periodos[i];
+            opt.textContent = periodos[i];
+            if (periodos[i] === atual) opt.selected = true;
+            sel.appendChild(opt);
+        }
+    }
+
+    function renderProdutos(d) {
+        var container = document.getElementById('prod-container');
+        if (!d.produtos || d.produtos.length === 0) {
+            container.innerHTML = '<div class="alert alert-info py-2 small">Nenhum produto pra essa data e janela.</div>';
+            return;
+        }
+        var html = '<div class="card"><div class="table-responsive">' +
+            '<table class="table table-sm table-hover mb-0">' +
+            '<thead class="thead-padaria">' +
+            '<tr>' +
+                '<th style="width:80px;">SKU</th>' +
+                '<th>Produto</th>' +
+                '<th class="text-center" style="width:100px;">Qtd</th>' +
+                '<th class="text-end" style="width:120px;">Preço unit</th>' +
+                '<th class="text-end" style="width:140px;">Total</th>' +
+            '</tr></thead><tbody>';
+        for (var i = 0; i < d.produtos.length; i++) {
+            var p = d.produtos[i];
+            html += '<tr>' +
+                '<td><small class="text-muted">' + escapeHtml(p.sku || '—') + '</small></td>' +
+                '<td>' + escapeHtml(p.nome) + '</td>' +
+                '<td class="text-center"><strong>' + p.quantidade + '</strong></td>' +
+                '<td class="text-end small text-muted">R$ ' + formatMoney(p.preco_unitario) + '</td>' +
+                '<td class="text-end">R$ ' + formatMoney(p.valor_total) + '</td>' +
+                '</tr>';
+        }
+        html += '<tr style="background:#f5f5f5;">' +
+            '<td colspan="2" class="fw-bold">Total</td>' +
+            '<td class="text-center fw-bold">' + d.total_itens + '</td>' +
+            '<td></td>' +
+            '<td class="text-end fw-bold">R$ ' + formatMoney(d.valor_total) + '</td>' +
+            '</tr>';
+        html += '</tbody></table></div></div>';
+        container.innerHTML = html;
+    }
+
+    function copiarListaProdutos() {
+        if (!prodUltimoResultado || !prodUltimoResultado.produtos) return;
+        var d = prodUltimoResultado;
+        var dataFmt = d.data ? d.data.split('-').reverse().join('/') : '';
+        var titulo = '*Produção ' + dataFmt + (d.janela ? ' — ' + d.janela : '') + '*';
+        var lines = [titulo, ''];
+        for (var i = 0; i < d.produtos.length; i++) {
+            var p = d.produtos[i];
+            lines.push(p.quantidade + 'x ' + p.nome + (p.sku ? ' (' + p.sku + ')' : ''));
+        }
+        lines.push('');
+        lines.push('Total: ' + d.total_itens + ' itens em ' + d.total_pedidos + ' pedidos');
+        var texto = lines.join('\n');
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(texto).then(function() {
+                alert('Lista copiada!');
+            }, function() { fallbackCopiar(texto); });
+        } else {
+            fallbackCopiar(texto);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var btnProd = document.getElementById('btn-prod-carregar');
+        if (btnProd) btnProd.addEventListener('click', carregarProdutos);
+        var btnCopiar = document.getElementById('btn-prod-copiar');
+        if (btnCopiar) btnCopiar.addEventListener('click', copiarListaProdutos);
+        var tabProd = document.getElementById('btn-tab-produtos');
+        if (tabProd) tabProd.addEventListener('shown.bs.tab', function() {
+            var dataPedidos = document.getElementById('data-entrega').value;
+            if (dataPedidos) document.getElementById('prod-data').value = dataPedidos;
+            carregarProdutos();
+        });
+    });
 
     var atribUltimoResultado = null;
 

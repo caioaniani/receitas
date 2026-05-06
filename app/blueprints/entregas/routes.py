@@ -326,6 +326,79 @@ def salvar_cartinha(code):
     return jsonify(ok=True)
 
 
+@entregas_bp.route('/api/produtos')
+@login_required
+@entrega_access_required
+def api_produtos():
+    """Agrega itens dos pedidos do dia: quantidade total por SKU/produto."""
+    data_str = request.args.get('data', date.today().isoformat())
+    try:
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        target = date.today()
+
+    janela = (request.args.get('janela', '') or '').strip()
+
+    overrides = _carregar_overrides_data()
+    resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
+    if 'erro' in resultado:
+        resp = jsonify(produtos=[], erro=resultado['erro'])
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        return resp
+
+    pedidos = resultado.get('pedidos', [])
+    if janela:
+        pedidos = [p for p in pedidos if (p.get('periodo') or '') == janela]
+
+    # Agrega por (sku, nome). SKU vazio cai no nome.
+    produtos = {}  # chave -> {sku, nome, quantidade, preco_unit, valor_total}
+    for p in pedidos:
+        for item in (p.get('itens') or []):
+            sku = (item.get('sku') or '').strip()
+            nome = (item.get('nome') or '').strip()
+            if not nome and not sku:
+                continue
+            chave = sku or nome
+            qty = item.get('quantidade') or 0
+            try:
+                qty = int(qty)
+            except (TypeError, ValueError):
+                qty = 0
+            try:
+                preco = float(item.get('preco_unitario') or 0)
+            except (TypeError, ValueError):
+                preco = 0.0
+
+            agg = produtos.get(chave)
+            if not agg:
+                agg = {
+                    'sku': sku,
+                    'nome': nome or sku,
+                    'quantidade': 0,
+                    'preco_unitario': preco,
+                    'valor_total': 0.0,
+                }
+                produtos[chave] = agg
+            agg['quantidade'] += qty
+            agg['valor_total'] += qty * preco
+
+    lista = sorted(produtos.values(), key=lambda p: (-p['quantidade'], p['nome']))
+    periodos = sorted({p.get('periodo') or '' for p in resultado.get('pedidos', []) if p.get('periodo')})
+
+    resp = jsonify(
+        data=data_str,
+        janela=janela,
+        periodos_disponiveis=periodos,
+        produtos=lista,
+        total_pedidos=len(pedidos),
+        total_itens=sum(p['quantidade'] for p in lista),
+        total_skus=len(lista),
+        valor_total=round(sum(p['valor_total'] for p in lista), 2),
+    )
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    return resp
+
+
 @entregas_bp.route('/api/atribuidos')
 @login_required
 @entrega_access_required
