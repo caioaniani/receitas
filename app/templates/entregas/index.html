@@ -1120,12 +1120,29 @@
             tabelaProdutos(d.vendidos, {preco: true}) +
             '</div>';
 
-        // Producao (cestas explodidas)
+        // Producao (cestas explodidas) — totais separados por unidade
+        var totaisStr = '';
+        if (d.totais_producao_por_unidade) {
+            var partes = [];
+            // Ordem preferida: un primeiro, depois g, kg, ml, l, etc
+            var ordem = ['un', 'g', 'kg', 'ml', 'l'];
+            var unidades = Object.keys(d.totais_producao_por_unidade).sort(function(a, b) {
+                var ia = ordem.indexOf(a); if (ia === -1) ia = 99;
+                var ib = ordem.indexOf(b); if (ib === -1) ib = 99;
+                return ia - ib;
+            });
+            for (var ui = 0; ui < unidades.length; ui++) {
+                var u = unidades[ui];
+                partes.push(d.totais_producao_por_unidade[u] + ' ' + u);
+            }
+            totaisStr = partes.join(' · ');
+        }
+
         html += '<div class="card mb-3">' +
             '<div class="card-header py-2 d-flex justify-content-between align-items-center" style="background:#fff5e6;">' +
                 '<strong><i class="bi bi-tools"></i> A produzir <small class="text-muted fw-normal">(cestas explodidas)</small></strong>' +
                 '<div>' +
-                    '<small class="text-muted me-2">' + d.total_skus_producao + ' itens base · ' + d.total_itens_producao + ' unidades</small>' +
+                    '<small class="text-muted me-2">' + d.total_skus_producao + ' itens base · ' + escapeHtml(totaisStr) + '</small>' +
                     '<button class="btn btn-sm btn-outline-success btn-prod-copiar-producao d-print-none">' +
                         '<i class="bi bi-clipboard"></i> Copiar' +
                     '</button>' +
@@ -1162,8 +1179,22 @@
             lines.push(line);
         }
         lines.push('');
-        var totalItens = (tipo === 'producao') ? d.total_itens_producao : d.total_itens_vendidos;
-        lines.push('Total: ' + totalItens + ' unidades em ' + d.total_pedidos + ' pedidos');
+        if (tipo === 'producao' && d.totais_producao_por_unidade) {
+            var partes = [];
+            var ordem = ['un', 'g', 'kg', 'ml', 'l'];
+            var unidades = Object.keys(d.totais_producao_por_unidade).sort(function(a, b) {
+                var ia = ordem.indexOf(a); if (ia === -1) ia = 99;
+                var ib = ordem.indexOf(b); if (ib === -1) ib = 99;
+                return ia - ib;
+            });
+            for (var ui = 0; ui < unidades.length; ui++) {
+                var u = unidades[ui];
+                partes.push(d.totais_producao_por_unidade[u] + ' ' + u);
+            }
+            lines.push('Total: ' + partes.join(' · ') + ' em ' + d.total_pedidos + ' pedidos');
+        } else {
+            lines.push('Total: ' + (d.total_itens_vendidos || 0) + ' unidades em ' + d.total_pedidos + ' pedidos');
+        }
         var texto = lines.join('\n');
         if (navigator.clipboard) {
             navigator.clipboard.writeText(texto).then(function() {

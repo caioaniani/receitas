@@ -487,6 +487,12 @@ def api_produtos():
     producao_lista = _serializa(producao)
     periodos = sorted({p.get('periodo') or '' for p in resultado.get('pedidos', []) if p.get('periodo')})
 
+    # Soma producao agrupada por unidade (300 g + 12 un nao sao somaveis)
+    totais_por_unidade = {}
+    for p in producao_lista:
+        u = p.get('unidade') or 'un'
+        totais_por_unidade[u] = totais_por_unidade.get(u, 0) + p['quantidade']
+
     resp = jsonify(
         data=data_str,
         janelas=janelas,
@@ -495,9 +501,9 @@ def api_produtos():
         producao=producao_lista,
         total_pedidos=len(pedidos),
         total_itens_vendidos=sum(p['quantidade'] for p in vendidos_lista),
-        total_itens_producao=sum(p['quantidade'] for p in producao_lista),
         total_skus_vendidos=len(vendidos_lista),
         total_skus_producao=len(producao_lista),
+        totais_producao_por_unidade=totais_por_unidade,
         valor_total=round(sum(p['valor_total'] for p in vendidos_lista), 2),
     )
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
