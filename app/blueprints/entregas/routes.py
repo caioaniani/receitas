@@ -261,6 +261,23 @@ def remover_atribuicao(code):
     return jsonify(ok=True)
 
 
+@entregas_bp.route('/api/google/limpar-falhas', methods=['POST'])
+@login_required
+@entrega_access_required
+def api_google_limpar_falhas():
+    """Apaga registros do GeocodeCache com fonte=google_fail ou lat=NULL.
+    Forca re-geocoding na proxima chamada de rotas."""
+    from app.models import GeocodeCache
+    n = GeocodeCache.query.filter(
+        db.or_(
+            GeocodeCache.fonte == 'google_fail',
+            GeocodeCache.lat.is_(None),
+        )
+    ).delete(synchronize_session=False)
+    db.session.commit()
+    return jsonify(ok=True, removidas=n)
+
+
 @entregas_bp.route('/api/debug/google')
 @login_required
 @entrega_access_required
