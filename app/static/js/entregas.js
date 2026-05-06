@@ -463,6 +463,18 @@
                     return;
                 }
                 rotasUltimoResultado = d;
+                // DEBUG visivel: mostra o que o payload tem
+                var _dbg = 'rotas=' + (d.rotas || []).length + ' | drivers=' + (d.drivers_disponiveis || []).length;
+                if (d.rotas && d.rotas[0]) {
+                    var _r0 = d.rotas[0];
+                    _dbg += ' | r0.km=' + _r0.km + ' minutos=' + _r0.minutos;
+                    if (_r0.paradas && _r0.paradas[0]) {
+                        _dbg += ' | p0.lat=' + _r0.paradas[0].lat;
+                    }
+                }
+                _dbg += ' | origem=' + (d.origem ? d.origem.lat + ',' + d.origem.lng : 'NULL');
+                _dbg += ' | jsv=DEBUG';
+                msg.innerHTML = '<div class="alert alert-info py-1 small d-print-none" style="font-family:monospace;font-size:11px;">' + _dbg + '</div>';
                 renderCheckboxesJanela('rotas', d.periodos_disponiveis || [], d.janelas || []);
                 if (!d.drivers_disponiveis || d.drivers_disponiveis.length === 0) {
                     msg.innerHTML = '<div class="alert alert-info py-2 small">' +
