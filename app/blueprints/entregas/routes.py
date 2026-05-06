@@ -8,7 +8,7 @@ import requests as http_requests
 from app.blueprints.entregas import entregas_bp
 from app.decorators import entrega_access_required
 from app.extensions import db
-from app.models import CartinhaEntrega, OverrideEntrega, Driver, AtribuicaoEntrega
+from app.models import CartinhaEntrega, OverrideEntrega, Driver, AtribuicaoEntrega, Produto
 from app.services import vnda, rotas as rotas_svc
 
 
@@ -330,7 +330,9 @@ def salvar_cartinha(code):
 @login_required
 @entrega_access_required
 def api_produtos():
-    """Agrega itens dos pedidos do dia: quantidade total por SKU/produto."""
+    """Agrega itens dos pedidos do dia. Retorna duas listas:
+    - 'vendidos': como veio do VNDA (cestas como produto unico)
+    - 'producao': cestas explodidas em componentes (usa Produto+ProdutoItem do banco)"""
     data_str = request.args.get('data', date.today().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
@@ -342,7 +344,7 @@ def api_produtos():
     overrides = _carregar_overrides_data()
     resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
     if 'erro' in resultado:
-        resp = jsonify(produtos=[], erro=resultado['erro'])
+        resp = jsonify(vendidos=[], producao=[], erro=resultado['erro'])
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
         return resp
 
@@ -350,18 +352,42 @@ def api_produtos():
     if janela:
         pedidos = [p for p in pedidos if (p.get('periodo') or '') == janela]
 
-    # Agrega por (sku, nome). SKU vazio cai no nome.
-    produtos = {}  # chave -> {sku, nome, quantidade, preco_unit, valor_total}
+    # Carrega catalogo de Produtos cadastrados (pra expandir cestas)
+    produtos_db = {}  # nome_lower -> Produto
+    for prod in Produto.query.filter_by(ativo=True).all():
+        if prod.nome:
+            produtos_db[prod.nome.strip().lower()] = prod
+
+    # Vendidos (como veio do VNDA)
+    vendidos = {}
+    # Producao (cestas explodidas em componentes)
+    producao = {}
+
+    def _agg(d, sku, nome, qty, preco=0.0, componente_de=None):
+        chave = (sku or nome or '').strip().lower()
+        if not chave:
+            return
+        a = d.get(chave)
+        if not a:
+            a = {
+                'sku': sku, 'nome': nome, 'quantidade': 0,
+                'preco_unitario': preco, 'valor_total': 0.0,
+                'componente_de': set(),
+            }
+            d[chave] = a
+        a['quantidade'] += qty
+        a['valor_total'] += qty * preco
+        if componente_de:
+            a['componente_de'].add(componente_de)
+
     for p in pedidos:
         for item in (p.get('itens') or []):
             sku = (item.get('sku') or '').strip()
             nome = (item.get('nome') or '').strip()
             if not nome and not sku:
                 continue
-            chave = sku or nome
-            qty = item.get('quantidade') or 0
             try:
-                qty = int(qty)
+                qty = int(item.get('quantidade') or 0)
             except (TypeError, ValueError):
                 qty = 0
             try:
@@ -369,31 +395,52 @@ def api_produtos():
             except (TypeError, ValueError):
                 preco = 0.0
 
-            agg = produtos.get(chave)
-            if not agg:
-                agg = {
-                    'sku': sku,
-                    'nome': nome or sku,
-                    'quantidade': 0,
-                    'preco_unitario': preco,
-                    'valor_total': 0.0,
-                }
-                produtos[chave] = agg
-            agg['quantidade'] += qty
-            agg['valor_total'] += qty * preco
+            # Vendidos: sempre adiciona como veio
+            _agg(vendidos, sku, nome, qty, preco)
 
-    lista = sorted(produtos.values(), key=lambda p: (-p['quantidade'], p['nome']))
+            # Producao: se for cesta cadastrada, expande
+            prod_cadastrado = produtos_db.get(nome.lower())
+            if prod_cadastrado and prod_cadastrado.itens:
+                for comp in prod_cadastrado.itens:
+                    cnome = (comp.item_nome or '').strip()
+                    if not cnome:
+                        continue
+                    cqty_unitario = comp.quantidade or 1
+                    total_qty = qty * cqty_unitario
+                    if total_qty <= 0:
+                        continue
+                    # Tenta achar SKU do componente no Produto cadastrado
+                    csku = ''
+                    cprod = produtos_db.get(cnome.lower())
+                    # Componente nao tem preco direto, deixa 0
+                    _agg(producao, csku, cnome, int(total_qty) if total_qty == int(total_qty) else total_qty, 0.0, componente_de=nome)
+            else:
+                # Item simples — vai pra producao tambem
+                _agg(producao, sku, nome, qty, preco)
+
+    def _serializa(d):
+        out = []
+        for v in d.values():
+            v['componente_de'] = sorted(v['componente_de'])
+            out.append(v)
+        return sorted(out, key=lambda x: (-x['quantidade'], x['nome']))
+
+    vendidos_lista = _serializa(vendidos)
+    producao_lista = _serializa(producao)
     periodos = sorted({p.get('periodo') or '' for p in resultado.get('pedidos', []) if p.get('periodo')})
 
     resp = jsonify(
         data=data_str,
         janela=janela,
         periodos_disponiveis=periodos,
-        produtos=lista,
+        vendidos=vendidos_lista,
+        producao=producao_lista,
         total_pedidos=len(pedidos),
-        total_itens=sum(p['quantidade'] for p in lista),
-        total_skus=len(lista),
-        valor_total=round(sum(p['valor_total'] for p in lista), 2),
+        total_itens_vendidos=sum(p['quantidade'] for p in vendidos_lista),
+        total_itens_producao=sum(p['quantidade'] for p in producao_lista),
+        total_skus_vendidos=len(vendidos_lista),
+        total_skus_producao=len(producao_lista),
+        valor_total=round(sum(p['valor_total'] for p in vendidos_lista), 2),
     )
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
     return resp

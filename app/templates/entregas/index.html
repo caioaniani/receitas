@@ -160,11 +160,8 @@
             <button class="btn btn-primary btn-sm" id="btn-prod-carregar">
                 <i class="bi bi-search"></i> Buscar
             </button>
-            <button class="btn btn-outline-success btn-sm" id="btn-prod-copiar" style="display:none;">
-                <i class="bi bi-clipboard"></i> Copiar lista
-            </button>
             <span class="ms-auto small text-muted" id="prod-resumo" style="display:none;">
-                <span id="prod-total-skus">0</span> SKUs · <span id="prod-total-itens">0</span> itens · <span id="prod-total-pedidos">0</span> pedidos
+                <span id="prod-total-pedidos">0</span> pedidos
             </span>
         </div>
 
@@ -1017,13 +1014,11 @@
         var msg = document.getElementById('prod-msg');
         var container = document.getElementById('prod-container');
         var resumo = document.getElementById('prod-resumo');
-        var btnCopiar = document.getElementById('btn-prod-copiar');
 
         loading.classList.remove('d-none');
         msg.innerHTML = '';
         container.innerHTML = '';
         resumo.style.display = 'none';
-        btnCopiar.style.display = 'none';
 
         var url = '/entregas/api/produtos?data=' + encodeURIComponent(data) +
                   '&janela=' + encodeURIComponent(janela);
@@ -1038,14 +1033,9 @@
                 }
                 prodUltimoResultado = d;
                 atualizarPeriodosProdutos(d.periodos_disponiveis || [], janela);
-                document.getElementById('prod-total-skus').textContent = d.total_skus || 0;
-                document.getElementById('prod-total-itens').textContent = d.total_itens || 0;
                 document.getElementById('prod-total-pedidos').textContent = d.total_pedidos || 0;
                 resumo.style.display = '';
                 renderProdutos(d);
-                if (d.produtos && d.produtos.length > 0) {
-                    btnCopiar.style.display = '';
-                }
             })
             .catch(function() {
                 loading.classList.add('d-none');
@@ -1065,54 +1055,107 @@
         }
     }
 
-    function renderProdutos(d) {
-        var container = document.getElementById('prod-container');
-        if (!d.produtos || d.produtos.length === 0) {
-            container.innerHTML = '<div class="alert alert-info py-2 small">Nenhum produto pra essa data e janela.</div>';
-            return;
-        }
-        var html = '<div class="card"><div class="table-responsive">' +
-            '<table class="table table-sm table-hover mb-0">' +
-            '<thead class="thead-padaria">' +
-            '<tr>' +
+    function tabelaProdutos(lista, opts) {
+        opts = opts || {};
+        var mostrarPreco = !!opts.preco;
+        var html = '<div class="table-responsive"><table class="table table-sm table-hover mb-0">' +
+            '<thead class="thead-padaria"><tr>' +
                 '<th style="width:80px;">SKU</th>' +
                 '<th>Produto</th>' +
-                '<th class="text-center" style="width:100px;">Qtd</th>' +
-                '<th class="text-end" style="width:120px;">Preço unit</th>' +
-                '<th class="text-end" style="width:140px;">Total</th>' +
+                '<th class="text-center" style="width:90px;">Qtd</th>' +
+                (opts.componente_de ? '<th>Vem de</th>' : '') +
+                (mostrarPreco ? '<th class="text-end" style="width:120px;">Preço unit</th><th class="text-end" style="width:140px;">Total</th>' : '') +
             '</tr></thead><tbody>';
-        for (var i = 0; i < d.produtos.length; i++) {
-            var p = d.produtos[i];
+        for (var i = 0; i < lista.length; i++) {
+            var p = lista[i];
             html += '<tr>' +
                 '<td><small class="text-muted">' + escapeHtml(p.sku || '—') + '</small></td>' +
                 '<td>' + escapeHtml(p.nome) + '</td>' +
-                '<td class="text-center"><strong>' + p.quantidade + '</strong></td>' +
-                '<td class="text-end small text-muted">R$ ' + formatMoney(p.preco_unitario) + '</td>' +
-                '<td class="text-end">R$ ' + formatMoney(p.valor_total) + '</td>' +
-                '</tr>';
+                '<td class="text-center"><strong>' + p.quantidade + '</strong></td>';
+            if (opts.componente_de) {
+                var origem = (p.componente_de && p.componente_de.length) ?
+                    p.componente_de.map(escapeHtml).join(', ') : '<span class="text-muted">—</span>';
+                html += '<td><small class="text-muted">' + origem + '</small></td>';
+            }
+            if (mostrarPreco) {
+                html += '<td class="text-end small text-muted">R$ ' + formatMoney(p.preco_unitario) + '</td>' +
+                        '<td class="text-end">R$ ' + formatMoney(p.valor_total) + '</td>';
+            }
+            html += '</tr>';
         }
-        html += '<tr style="background:#f5f5f5;">' +
-            '<td colspan="2" class="fw-bold">Total</td>' +
-            '<td class="text-center fw-bold">' + d.total_itens + '</td>' +
-            '<td></td>' +
-            '<td class="text-end fw-bold">R$ ' + formatMoney(d.valor_total) + '</td>' +
-            '</tr>';
-        html += '</tbody></table></div></div>';
-        container.innerHTML = html;
+        html += '</tbody></table></div>';
+        return html;
     }
 
-    function copiarListaProdutos() {
-        if (!prodUltimoResultado || !prodUltimoResultado.produtos) return;
+    function renderProdutos(d) {
+        var container = document.getElementById('prod-container');
+        var nadaVendido = !d.vendidos || d.vendidos.length === 0;
+        var nadaProducao = !d.producao || d.producao.length === 0;
+
+        if (nadaVendido && nadaProducao) {
+            container.innerHTML = '<div class="alert alert-info py-2 small">Nenhum produto pra essa data e janela.</div>';
+            return;
+        }
+
+        var html = '';
+
+        // Vendido (como veio do VNDA)
+        html += '<div class="card mb-3">' +
+            '<div class="card-header py-2 d-flex justify-content-between align-items-center">' +
+                '<strong><i class="bi bi-cart-check"></i> Vendidos no dia</strong>' +
+                '<div>' +
+                    '<small class="text-muted me-2">' + d.total_skus_vendidos + ' SKUs · ' + d.total_itens_vendidos + ' itens · R$ ' + formatMoney(d.valor_total) + '</small>' +
+                    '<button class="btn btn-sm btn-outline-success btn-prod-copiar-vendidos d-print-none">' +
+                        '<i class="bi bi-clipboard"></i> Copiar' +
+                    '</button>' +
+                '</div>' +
+            '</div>' +
+            tabelaProdutos(d.vendidos, {preco: true}) +
+            '</div>';
+
+        // Producao (cestas explodidas)
+        html += '<div class="card mb-3">' +
+            '<div class="card-header py-2 d-flex justify-content-between align-items-center" style="background:#fff5e6;">' +
+                '<strong><i class="bi bi-tools"></i> A produzir <small class="text-muted fw-normal">(cestas explodidas)</small></strong>' +
+                '<div>' +
+                    '<small class="text-muted me-2">' + d.total_skus_producao + ' itens base · ' + d.total_itens_producao + ' unidades</small>' +
+                    '<button class="btn btn-sm btn-outline-success btn-prod-copiar-producao d-print-none">' +
+                        '<i class="bi bi-clipboard"></i> Copiar' +
+                    '</button>' +
+                '</div>' +
+            '</div>' +
+            tabelaProdutos(d.producao, {componente_de: true}) +
+            '</div>';
+
+        container.innerHTML = html;
+
+        // Bind copy buttons
+        var btnVend = container.querySelector('.btn-prod-copiar-vendidos');
+        if (btnVend) btnVend.addEventListener('click', function() { copiarListaProdutos('vendidos'); });
+        var btnProd = container.querySelector('.btn-prod-copiar-producao');
+        if (btnProd) btnProd.addEventListener('click', function() { copiarListaProdutos('producao'); });
+    }
+
+    function copiarListaProdutos(tipo) {
+        if (!prodUltimoResultado) return;
         var d = prodUltimoResultado;
+        var lista = (tipo === 'producao') ? d.producao : d.vendidos;
+        if (!lista || lista.length === 0) return;
         var dataFmt = d.data ? d.data.split('-').reverse().join('/') : '';
-        var titulo = '*Produção ' + dataFmt + (d.janela ? ' — ' + d.janela : '') + '*';
+        var titulo = '*' + (tipo === 'producao' ? 'Produção (itens base)' : 'Vendidos') +
+                     ' ' + dataFmt + (d.janela ? ' — ' + d.janela : '') + '*';
         var lines = [titulo, ''];
-        for (var i = 0; i < d.produtos.length; i++) {
-            var p = d.produtos[i];
-            lines.push(p.quantidade + 'x ' + p.nome + (p.sku ? ' (' + p.sku + ')' : ''));
+        for (var i = 0; i < lista.length; i++) {
+            var p = lista[i];
+            var line = p.quantidade + 'x ' + p.nome + (p.sku ? ' (' + p.sku + ')' : '');
+            if (tipo === 'producao' && p.componente_de && p.componente_de.length > 0) {
+                line += '  [vem de: ' + p.componente_de.join(', ') + ']';
+            }
+            lines.push(line);
         }
         lines.push('');
-        lines.push('Total: ' + d.total_itens + ' itens em ' + d.total_pedidos + ' pedidos');
+        var totalItens = (tipo === 'producao') ? d.total_itens_producao : d.total_itens_vendidos;
+        lines.push('Total: ' + totalItens + ' unidades em ' + d.total_pedidos + ' pedidos');
         var texto = lines.join('\n');
         if (navigator.clipboard) {
             navigator.clipboard.writeText(texto).then(function() {
@@ -1126,8 +1169,6 @@
     document.addEventListener('DOMContentLoaded', function() {
         var btnProd = document.getElementById('btn-prod-carregar');
         if (btnProd) btnProd.addEventListener('click', carregarProdutos);
-        var btnCopiar = document.getElementById('btn-prod-copiar');
-        if (btnCopiar) btnCopiar.addEventListener('click', copiarListaProdutos);
         var tabProd = document.getElementById('btn-tab-produtos');
         if (tabProd) tabProd.addEventListener('shown.bs.tab', function() {
             var dataPedidos = document.getElementById('data-entrega').value;
