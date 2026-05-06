@@ -463,18 +463,6 @@
                     return;
                 }
                 rotasUltimoResultado = d;
-                // DEBUG visivel: mostra o que o payload tem
-                var _dbg = 'rotas=' + (d.rotas || []).length + ' | drivers=' + (d.drivers_disponiveis || []).length;
-                if (d.rotas && d.rotas[0]) {
-                    var _r0 = d.rotas[0];
-                    _dbg += ' | r0.km=' + _r0.km + ' minutos=' + _r0.minutos;
-                    if (_r0.paradas && _r0.paradas[0]) {
-                        _dbg += ' | p0.lat=' + _r0.paradas[0].lat;
-                    }
-                }
-                _dbg += ' | origem=' + (d.origem ? d.origem.lat + ',' + d.origem.lng : 'NULL');
-                _dbg += ' | jsv=DEBUG';
-                msg.innerHTML = '<div class="alert alert-info py-1 small d-print-none" style="font-family:monospace;font-size:11px;">' + _dbg + '</div>';
                 renderCheckboxesJanela('rotas', d.periodos_disponiveis || [], d.janelas || []);
                 if (!d.drivers_disponiveis || d.drivers_disponiveis.length === 0) {
                     msg.innerHTML = '<div class="alert alert-info py-2 small">' +
@@ -591,16 +579,16 @@
         html += '</div>';
         container.innerHTML = html;
 
-        // Inicializa cada coluna: gera links Maps e ativa Sortable
+        // Inicializa cada coluna: gera links Maps (preserva detalhe km/min) e ativa Sortable
         document.querySelectorAll('.rotas-paradas').forEach(function(ol) {
-            atualizarMapsDaColuna(ol);
+            atualizarMapsDaColuna(ol, false);
             new Sortable(ol, {
                 group: 'rotas',
                 animation: 150,
                 onEnd: function(evt) {
-                    // Re-renderiza Maps das colunas afetadas
-                    if (evt.from) atualizarMapsDaColuna(evt.from);
-                    if (evt.to && evt.to !== evt.from) atualizarMapsDaColuna(evt.to);
+                    // Apos drag: atualiza contagem (perde km/min — precisa Gerar de novo)
+                    if (evt.from) atualizarMapsDaColuna(evt.from, true);
+                    if (evt.to && evt.to !== evt.from) atualizarMapsDaColuna(evt.to, true);
                     persistirAtribuicoes();
                 }
             });
@@ -695,7 +683,7 @@
         }, 200);
     }
 
-    function atualizarMapsDaColuna(ol) {
+    function atualizarMapsDaColuna(ol, atualizarContagem) {
         var card = ol.closest('.card');
         var paradas = [];
         ol.querySelectorAll('li').forEach(function(li) {
@@ -704,8 +692,12 @@
                 endereco: li.dataset.endereco || '',
             });
         });
-        var hdr = card.querySelector('.qtd-paradas');
-        if (hdr) hdr.textContent = paradas.length + ' paradas';
+        // So atualiza contagem se foi pedido (apos drag) — preserva o "X paradas · Y km · Zmin"
+        // que renderRotas montou inicialmente.
+        if (atualizarContagem) {
+            var hdr = card.querySelector('.qtd-paradas');
+            if (hdr) hdr.textContent = paradas.length + ' paradas';
+        }
 
         var matriz = (rotasUltimoResultado && rotasUltimoResultado.origem_endereco) || '';
         var btnArea = card.querySelector('.maps-area');
