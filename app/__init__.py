@@ -518,100 +518,100 @@ def _migrate_postgres(app):
         ) WHERE funcao IS NOT NULL AND TRIM(funcao) <> ''
         """)
 
-        # ── Override de data de entrega de pedido VNDA (local) ──
-        _try("""
-        CREATE TABLE IF NOT EXISTS override_entrega (
-            id SERIAL PRIMARY KEY,
-            pedido_code VARCHAR(50) NOT NULL UNIQUE,
-            data_entrega DATE NOT NULL,
-            motivo TEXT,
-            atualizado_em TIMESTAMP DEFAULT NOW(),
-            atualizado_por INTEGER REFERENCES usuario(id)
-        )
-        """)
-        _try("CREATE INDEX IF NOT EXISTS idx_override_entrega_code ON override_entrega(pedido_code)")
+    # ── Override de data de entrega de pedido VNDA (local) ──
+    _try("""
+    CREATE TABLE IF NOT EXISTS override_entrega (
+        id SERIAL PRIMARY KEY,
+        pedido_code VARCHAR(50) NOT NULL UNIQUE,
+        data_entrega DATE NOT NULL,
+        motivo TEXT,
+        atualizado_em TIMESTAMP DEFAULT NOW(),
+        atualizado_por INTEGER REFERENCES usuario(id)
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_override_entrega_code ON override_entrega(pedido_code)")
 
-        # ── Cache de geocoding (CEP/endereco -> lat/lng) ──
-        _try("""
-        CREATE TABLE IF NOT EXISTS geocode_cache (
-            id SERIAL PRIMARY KEY,
-            chave VARCHAR(200) NOT NULL UNIQUE,
-            lat DOUBLE PRECISION,
-            lng DOUBLE PRECISION,
-            fonte VARCHAR(50),
-            criado_em TIMESTAMP DEFAULT NOW()
-        )
-        """)
-        _try("CREATE INDEX IF NOT EXISTS idx_geocode_cache_chave ON geocode_cache(chave)")
-        # Aumenta coluna fonte caso ja exista com VARCHAR(20)
-        _try("ALTER TABLE geocode_cache ALTER COLUMN fonte TYPE VARCHAR(50)")
-        # Limpa cache de falhas legacy (Nominatim/BrasilAPI/AwesomeAPI/google_fail).
-        # Endereco volta a ser geocodado na proxima execucao via Google.
-        _try("DELETE FROM geocode_cache WHERE lat IS NULL")
+    # ── Cache de geocoding (CEP/endereco -> lat/lng) ──
+    _try("""
+    CREATE TABLE IF NOT EXISTS geocode_cache (
+        id SERIAL PRIMARY KEY,
+        chave VARCHAR(200) NOT NULL UNIQUE,
+        lat DOUBLE PRECISION,
+        lng DOUBLE PRECISION,
+        fonte VARCHAR(50),
+        criado_em TIMESTAMP DEFAULT NOW()
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_geocode_cache_chave ON geocode_cache(chave)")
+    # Aumenta coluna fonte caso ja exista com VARCHAR(20)
+    _try("ALTER TABLE geocode_cache ALTER COLUMN fonte TYPE VARCHAR(50)")
+    # Limpa cache de falhas legacy (Nominatim/BrasilAPI/AwesomeAPI/google_fail).
+    # Endereco volta a ser geocodado na proxima execucao via Google.
+    _try("DELETE FROM geocode_cache WHERE lat IS NULL")
 
-        # ── Drivers de entrega + atribuicoes pedido<->driver ──
-        _try("""
-        CREATE TABLE IF NOT EXISTS driver_entrega (
-            id SERIAL PRIMARY KEY,
-            nome VARCHAR(80) NOT NULL UNIQUE,
-            cor VARCHAR(20),
-            telefone VARCHAR(30),
-            ativo BOOLEAN DEFAULT TRUE,
-            criado_em TIMESTAMP DEFAULT NOW()
-        )
-        """)
-        _try("""
-        CREATE TABLE IF NOT EXISTS atribuicao_entrega (
-            id SERIAL PRIMARY KEY,
-            pedido_code VARCHAR(50) NOT NULL UNIQUE,
-            driver_id INTEGER REFERENCES driver_entrega(id) ON DELETE SET NULL,
-            data_entrega DATE,
-            ordem INTEGER DEFAULT 0,
-            atualizado_em TIMESTAMP DEFAULT NOW(),
-            atualizado_por INTEGER REFERENCES usuario(id)
-        )
-        """)
-        _try("CREATE INDEX IF NOT EXISTS idx_atribuicao_pedido ON atribuicao_entrega(pedido_code)")
-        _try("CREATE INDEX IF NOT EXISTS idx_atribuicao_data ON atribuicao_entrega(data_entrega)")
+    # ── Drivers de entrega + atribuicoes pedido<->driver ──
+    _try("""
+    CREATE TABLE IF NOT EXISTS driver_entrega (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(80) NOT NULL UNIQUE,
+        cor VARCHAR(20),
+        telefone VARCHAR(30),
+        ativo BOOLEAN DEFAULT TRUE,
+        criado_em TIMESTAMP DEFAULT NOW()
+    )
+    """)
+    _try("""
+    CREATE TABLE IF NOT EXISTS atribuicao_entrega (
+        id SERIAL PRIMARY KEY,
+        pedido_code VARCHAR(50) NOT NULL UNIQUE,
+        driver_id INTEGER REFERENCES driver_entrega(id) ON DELETE SET NULL,
+        data_entrega DATE,
+        ordem INTEGER DEFAULT 0,
+        atualizado_em TIMESTAMP DEFAULT NOW(),
+        atualizado_por INTEGER REFERENCES usuario(id)
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_atribuicao_pedido ON atribuicao_entrega(pedido_code)")
+    _try("CREATE INDEX IF NOT EXISTS idx_atribuicao_data ON atribuicao_entrega(data_entrega)")
 
-        # ── Comprovante de entrega: token+pin no driver, status+geo+fotos na atribuicao ──
-        _try("ALTER TABLE driver_entrega ADD COLUMN token VARCHAR(32)")
-        _try("CREATE UNIQUE INDEX IF NOT EXISTS idx_driver_token ON driver_entrega(token)")
-        _try("ALTER TABLE driver_entrega ADD COLUMN pin VARCHAR(8)")
-        _try("ALTER TABLE atribuicao_entrega ADD COLUMN status VARCHAR(20) DEFAULT 'pendente'")
-        _try("ALTER TABLE atribuicao_entrega ADD COLUMN entregue_em TIMESTAMP")
-        _try("ALTER TABLE atribuicao_entrega ADD COLUMN nota VARCHAR(500)")
-        _try("ALTER TABLE atribuicao_entrega ADD COLUMN motivo_falha VARCHAR(50)")
-        _try("ALTER TABLE atribuicao_entrega ADD COLUMN geo_lat DOUBLE PRECISION")
-        _try("ALTER TABLE atribuicao_entrega ADD COLUMN geo_lng DOUBLE PRECISION")
-        _try("ALTER TABLE atribuicao_entrega ADD COLUMN proof_hash VARCHAR(32)")
-        _try("CREATE UNIQUE INDEX IF NOT EXISTS idx_atribuicao_proof_hash ON atribuicao_entrega(proof_hash)")
-        _try("""
-        CREATE TABLE IF NOT EXISTS entrega_foto (
-            id SERIAL PRIMARY KEY,
-            atribuicao_id INTEGER NOT NULL REFERENCES atribuicao_entrega(id) ON DELETE CASCADE,
-            url VARCHAR(500) NOT NULL,
-            storage_path VARCHAR(500),
-            tirada_em TIMESTAMP DEFAULT NOW(),
-            tamanho_bytes INTEGER
-        )
-        """)
-        _try("CREATE INDEX IF NOT EXISTS idx_entrega_foto_atribuicao ON entrega_foto(atribuicao_id)")
+    # ── Comprovante de entrega: token+pin no driver, status+geo+fotos na atribuicao ──
+    _try("ALTER TABLE driver_entrega ADD COLUMN token VARCHAR(32)")
+    _try("CREATE UNIQUE INDEX IF NOT EXISTS idx_driver_token ON driver_entrega(token)")
+    _try("ALTER TABLE driver_entrega ADD COLUMN pin VARCHAR(8)")
+    _try("ALTER TABLE atribuicao_entrega ADD COLUMN status VARCHAR(20) DEFAULT 'pendente'")
+    _try("ALTER TABLE atribuicao_entrega ADD COLUMN entregue_em TIMESTAMP")
+    _try("ALTER TABLE atribuicao_entrega ADD COLUMN nota VARCHAR(500)")
+    _try("ALTER TABLE atribuicao_entrega ADD COLUMN motivo_falha VARCHAR(50)")
+    _try("ALTER TABLE atribuicao_entrega ADD COLUMN geo_lat DOUBLE PRECISION")
+    _try("ALTER TABLE atribuicao_entrega ADD COLUMN geo_lng DOUBLE PRECISION")
+    _try("ALTER TABLE atribuicao_entrega ADD COLUMN proof_hash VARCHAR(32)")
+    _try("CREATE UNIQUE INDEX IF NOT EXISTS idx_atribuicao_proof_hash ON atribuicao_entrega(proof_hash)")
+    _try("""
+    CREATE TABLE IF NOT EXISTS entrega_foto (
+        id SERIAL PRIMARY KEY,
+        atribuicao_id INTEGER NOT NULL REFERENCES atribuicao_entrega(id) ON DELETE CASCADE,
+        url VARCHAR(500) NOT NULL,
+        storage_path VARCHAR(500),
+        tirada_em TIMESTAMP DEFAULT NOW(),
+        tamanho_bytes INTEGER
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_entrega_foto_atribuicao ON entrega_foto(atribuicao_id)")
 
-        # Backfill de tokens em drivers existentes (sem token)
-        try:
-            import secrets
-            from app.models import Driver
-            sem_token = Driver.query.filter(
-                (Driver.token == None) | (Driver.token == '')  # noqa: E711
-            ).all()
-            for drv in sem_token:
-                drv.token = secrets.token_urlsafe(16)
-            if sem_token:
-                db.session.commit()
-        except Exception as e:
-            app.logger.warning('backfill token driver falhou: %s', e)
-            db.session.rollback()
+    # Backfill de tokens em drivers existentes (sem token)
+    try:
+        import secrets
+        from app.models import Driver
+        sem_token = Driver.query.filter(
+            (Driver.token == None) | (Driver.token == '')  # noqa: E711
+        ).all()
+        for drv in sem_token:
+            drv.token = secrets.token_urlsafe(16)
+        if sem_token:
+            db.session.commit()
+    except Exception as e:
+        app.logger.warning('backfill token driver falhou: %s', e)
+        db.session.rollback()
 
 
 def _migrate_sqlite(app):
