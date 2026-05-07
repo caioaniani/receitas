@@ -1602,6 +1602,475 @@
         }
     });
 
+    // ── Aba Operação (unificada) ──
+    var opUltimoResultado = null;
+    var opMapaVisivel = false;
+    var opMapa = null;
+    var opMapaLayers = null;
+    var opJanelaFiltro = new Set();  // filtro local — vazio = todas
+
+    function opData() { return document.getElementById('op-data').value; }
+
+    function opCarregar() {
+        var data = opData();
+        if (!data) return;
+        var loading = document.getElementById('op-loading');
+        var msg = document.getElementById('op-msg');
+        var container = document.getElementById('op-container');
+        var resumo = document.getElementById('op-resumo');
+
+        loading.classList.remove('d-none');
+        msg.innerHTML = '';
+
+        var pAtrib = fetch('/entregas/api/atribuidos?data=' + encodeURIComponent(data),
+            {credentials: 'same-origin'}).then(function(r) { return r.json(); });
+        var pRotas = opMapaVisivel
+            ? fetch('/entregas/api/rotas?data=' + encodeURIComponent(data),
+                {credentials: 'same-origin'}).then(function(r) { return r.json(); })
+            : Promise.resolve(null);
+
+        Promise.all([pAtrib, pRotas]).then(function(rs) {
+            loading.classList.add('d-none');
+            var d = rs[0];
+            var dRotas = rs[1];
+            if (d.erro) {
+                msg.innerHTML = '<div class="alert alert-warning py-2 small">' + escapeHtml(d.erro) + '</div>';
+                container.innerHTML = '';
+                resumo.textContent = '';
+                return;
+            }
+            opUltimoResultado = d;
+            __driversDisp = d.drivers_disponiveis || [];
+            opMontarFiltroJanela(d);
+            opMontarBulkSelect(d);
+            opAtualizarResumo(d);
+            opRenderLista(d, container);
+            if (opMapaVisivel && dRotas) opRenderMapa(dRotas);
+        }).catch(function(e) {
+            loading.classList.add('d-none');
+            msg.innerHTML = '<div class="alert alert-danger py-2 small">Falha ao carregar: ' + escapeHtml(String(e)) + '</div>';
+        });
+    }
+
+    function opAtualizarResumo(d) {
+        var nDrivers = (d.drivers || []).length;
+        var nSem = (d.sem_driver || []).length;
+        var nPed = d.total_pedidos || 0;
+        var nAtrib = d.total_atribuidos || 0;
+        document.getElementById('op-resumo').innerHTML =
+            '<strong>' + nPed + '</strong> pedido(s) · <strong>' + nAtrib + '</strong> atribuído(s) em ' +
+            nDrivers + ' driver(s) · <strong>' + nSem + '</strong> sem driver';
+    }
+
+    function opMontarFiltroJanela(d) {
+        var todasJanelas = new Set();
+        (d.drivers || []).forEach(function(dr) {
+            (dr.paradas || []).forEach(function(p) {
+                if (p.periodo) todasJanelas.add(p.periodo);
+            });
+        });
+        (d.sem_driver || []).forEach(function(p) {
+            if (p.periodo) todasJanelas.add(p.periodo);
+        });
+        var cont = document.getElementById('op-janelas');
+        if (todasJanelas.size === 0) {
+            cont.innerHTML = '<span class="small text-muted fst-italic">(nenhuma)</span>';
+            return;
+        }
+        // Limpa janelas selecionadas que sumiram
+        opJanelaFiltro.forEach(function(j) { if (!todasJanelas.has(j)) opJanelaFiltro.delete(j); });
+        var html = '';
+        Array.from(todasJanelas).sort().forEach(function(j) {
+            var checked = opJanelaFiltro.has(j) ? 'checked' : '';
+            html += '<label class="form-check form-check-inline mb-0">' +
+                '<input class="form-check-input op-cb-janela" type="checkbox" value="' + escapeHtml(j) + '" ' + checked + '>' +
+                '<span class="form-check-label small">' + escapeHtml(j) + '</span>' +
+            '</label>';
+        });
+        cont.innerHTML = html;
+    }
+
+    function opMontarBulkSelect(d) {
+        var sel = document.getElementById('op-bulk-driver');
+        var html = '<option value="">— Sem driver —</option>';
+        (d.drivers_disponiveis || []).forEach(function(dr) {
+            html += '<option value="' + dr.id + '">' + escapeHtml(dr.nome) + '</option>';
+        });
+        sel.innerHTML = html;
+    }
+
+    function opPassaJanela(p) {
+        if (opJanelaFiltro.size === 0) return true;
+        return opJanelaFiltro.has(p.periodo || '');
+    }
+
+    function opRenderLista(d, container) {
+        var html = '';
+        // Sem driver primeiro (acao necessaria)
+        var sem = (d.sem_driver || []).filter(opPassaJanela);
+        if (sem.length > 0) {
+            html += opRenderSecao({id: '', nome: 'Sem driver', cor: '#94a3b8', paradas: sem, qtd: sem.length}, true, d.drivers_disponiveis);
+        }
+        (d.drivers || []).forEach(function(dr) {
+            var paradas = (dr.paradas || []).filter(opPassaJanela);
+            if (paradas.length === 0 && opJanelaFiltro.size > 0) return;
+            html += opRenderSecao({id: dr.id, nome: dr.nome, cor: dr.cor, paradas: paradas, qtd: paradas.length}, false, d.drivers_disponiveis);
+        });
+        if (!html) {
+            html = '<div class="alert alert-info py-2 small">Nenhum pedido para esta data.</div>';
+        }
+        container.innerHTML = html;
+        opAtivarSortable();
+    }
+
+    function opRenderSecao(driver, isSemDriver, driversDisp) {
+        var corFundo = isSemDriver ? '#f8fafc' : (driver.cor || '#5b8def') + '14';
+        var corBorda = isSemDriver ? '#cbd5e1' : (driver.cor || '#5b8def');
+        var html = '<div class="op-secao mb-3" data-driver-id="' + (driver.id || '') + '" style="background:' + corFundo + '; border-left:4px solid ' + corBorda + '; border-radius:6px; padding:10px;">';
+        html += '<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">';
+        html += '<div class="d-flex align-items-center gap-2">';
+        html += '<input type="checkbox" class="form-check-input op-check-secao d-print-none" title="Selecionar todos">';
+        html += '<strong style="color:' + corBorda + ';">' + (isSemDriver ? '<i class="bi bi-exclamation-triangle"></i> ' : '<i class="bi bi-person-fill"></i> ') + escapeHtml(driver.nome) + '</strong>';
+        html += '<span class="badge bg-light text-dark">' + driver.paradas.length + ' parada(s)</span>';
+        html += '</div>';
+        if (!isSemDriver) {
+            html += '<button class="btn btn-sm btn-outline-success d-print-none op-copiar-lista" data-driver-id="' + driver.id + '">' +
+                    '<i class="bi bi-clipboard"></i> Copiar p/ WhatsApp</button>';
+        }
+        html += '</div>';
+
+        html += '<div class="list-group list-group-flush op-list" data-driver-id="' + (driver.id || '') + '">';
+        for (var j = 0; j < driver.paradas.length; j++) {
+            html += opRenderItem(driver.paradas[j], driver, driversDisp);
+        }
+        html += '</div></div>';
+        return html;
+    }
+
+    function opRenderItem(p, driver, driversDisp) {
+        var st = p.status || 'pendente';
+        var stBadge = '';
+        if (st === 'entregue') {
+            stBadge = '<span class="badge bg-success" style="font-size:10px;"><i class="bi bi-check-circle"></i> Entregue</span>';
+        } else if (st === 'nao_entregue') {
+            stBadge = '<span class="badge bg-danger" style="font-size:10px;"><i class="bi bi-x-circle"></i> Não entregue</span>';
+        }
+        var fotosHtml = '';
+        if (p.fotos && p.fotos.length > 0) {
+            fotosHtml = '<div class="d-flex gap-1 mt-2">';
+            p.fotos.forEach(function(f) {
+                fotosHtml += '<a href="' + escapeHtml(f.url) + '" target="_blank" rel="noopener">' +
+                    '<img src="' + escapeHtml(f.url) + '" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid #e2e8f0;"></a>';
+            });
+            fotosHtml += '</div>';
+        }
+        var proofLink = '';
+        if (p.proof_hash) {
+            proofLink = ' <button class="btn btn-link btn-sm p-0 ms-2 op-copiar-proof d-print-none" data-hash="' + escapeHtml(p.proof_hash) + '" style="font-size:11px;" title="Copiar link do comprovante (cliente)"><i class="bi bi-link-45deg"></i> Comprovante</button>';
+        }
+        var adminBtns = '';
+        var temComprov = (st === 'entregue' || st === 'nao_entregue' || (p.fotos && p.fotos.length > 0) || p.proof_hash);
+        if (isAdmin() && temComprov) {
+            adminBtns =
+                ' <button class="btn btn-link btn-sm p-0 ms-2 op-reabrir d-print-none" data-code="' + escapeHtml(p.code) + '" style="font-size:11px;color:#b45309;" title="Voltar pra pendente e apagar fotos"><i class="bi bi-arrow-counterclockwise"></i> Reabrir</button>' +
+                ' <button class="btn btn-link btn-sm p-0 ms-2 op-mover d-print-none" data-code="' + escapeHtml(p.code) + '" style="font-size:11px;color:#0369a1;" title="Mover comprovante pra outro pedido"><i class="bi bi-arrow-left-right"></i> Mover</button>';
+        }
+
+        var html = '<div class="list-group-item op-item" data-code="' + escapeHtml(p.code) + '" data-driver-atual="' + (driver.id || '') + '">';
+        html += '<div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">';
+        html += '<div class="d-flex align-items-start gap-2" style="flex:1; min-width:240px;">';
+        html += '<input type="checkbox" class="form-check-input op-check d-print-none mt-1" data-code="' + escapeHtml(p.code) + '">';
+        html += '<div style="flex:1; min-width:0;">';
+        html += '<a href="https://www.padariaartesanalonline.com.br/admin/pedido?id=' + encodeURIComponent(p.code) + '" target="_blank" rel="noopener" class="text-decoration-none small fw-bold" style="color:var(--accent);">' +
+            '[' + escapeHtml(p.code) + '] <i class="bi bi-box-arrow-up-right" style="font-size:10px;"></i></a> ';
+        html += '<span class="fw-semibold"><i class="bi bi-person-fill"></i> ' + escapeHtml(p.destinatario || '—') + '</span>';
+        if (stBadge) html += ' ' + stBadge;
+        if (p.periodo) html += ' <span class="badge bg-light text-dark" style="font-size:10px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>';
+        html += proofLink + adminBtns;
+        html += '<div class="text-muted small mt-1"><i class="bi bi-geo-alt"></i> ' + escapeHtml(p.endereco || '') + '</div>';
+        if (p.telefone) html += '<div class="text-muted small"><i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) + '</div>';
+        if (p.nota_driver) html += '<div class="text-muted small fst-italic mt-1"><i class="bi bi-chat-left-quote"></i> ' + escapeHtml(p.nota_driver) + '</div>';
+        html += fotosHtml;
+        html += '</div></div>';
+        html += '<div class="d-print-none">';
+        html += '<select class="form-select form-select-sm op-select-driver" data-code="' + escapeHtml(p.code) + '" data-driver-atual="' + (driver.id || '') + '" style="max-width:160px; font-size:12px;">';
+        html += '<option value="">— Sem driver —</option>';
+        (driversDisp || []).forEach(function(dd) {
+            var sel = (driver.id && dd.id === driver.id) ? ' selected' : '';
+            html += '<option value="' + dd.id + '"' + sel + '>' + escapeHtml(dd.nome) + '</option>';
+        });
+        html += '</select></div></div></div>';
+        return html;
+    }
+
+    function opAtivarSortable() {
+        if (typeof Sortable === 'undefined') return;
+        document.querySelectorAll('.op-list').forEach(function(lst) {
+            new Sortable(lst, {
+                group: 'op-pedidos',
+                animation: 150,
+                draggable: '.op-item',
+                onEnd: function() { opSalvarOrdem(); },
+            });
+        });
+    }
+
+    function opSalvarOrdem() {
+        var items = [];
+        document.querySelectorAll('.op-secao').forEach(function(sec) {
+            var did = sec.dataset.driverId;
+            var driverId = did ? parseInt(did, 10) : null;
+            sec.querySelectorAll('.op-item').forEach(function(li, idx) {
+                items.push({code: li.dataset.code, driver_id: driverId, ordem: idx, data_entrega: opData()});
+            });
+        });
+        if (items.length === 0) return;
+        fetch('/entregas/api/atribuicao/lote', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+            body: JSON.stringify({items: items}),
+        }).then(function(r) { return r.json(); }).then(function(resp) {
+            if (!resp.ok) {
+                document.getElementById('op-msg').innerHTML = '<div class="alert alert-warning py-2 small">Falha ao salvar: ' + escapeHtml(resp.erro || '?') + '</div>';
+            } else {
+                opCarregar();
+            }
+        });
+    }
+
+    function opAtualizarBulkBar() {
+        var checks = document.querySelectorAll('.op-check:checked');
+        var bar = document.getElementById('op-bulk-bar');
+        document.getElementById('op-bulk-count').textContent = checks.length;
+        bar.style.display = checks.length > 0 ? '' : 'none';
+    }
+
+    function opRenderMapa(d) {
+        var el = document.getElementById('op-mapa');
+        var temCoords = (d.rotas || []).some(function(r) {
+            return r.paradas.some(function(p) { return p.lat != null && p.lng != null; });
+        });
+        if (!temCoords) { el.style.display = 'none'; return; }
+        el.style.display = '';
+        if (!opMapa) {
+            opMapa = L.map('op-mapa', {scrollWheelZoom: false}).setView([-23.5505, -46.6333], 11);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19, attribution: '© OpenStreetMap',
+            }).addTo(opMapa);
+            opMapaLayers = L.layerGroup().addTo(opMapa);
+        }
+        opMapaLayers.clearLayers();
+        var bounds = [];
+        if (d.origem && d.origem.lat && d.origem.lng) {
+            L.marker([d.origem.lat, d.origem.lng], {
+                icon: L.divIcon({
+                    className: 'matriz-icon',
+                    html: '<div style="background:#000;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid #fff;">🏠</div>',
+                    iconSize: [28, 28],
+                }),
+            }).addTo(opMapaLayers).bindPopup('<b>Loja matriz</b>');
+            bounds.push([d.origem.lat, d.origem.lng]);
+        }
+        (d.rotas || []).forEach(function(r, i) {
+            var cor = (r.driver && r.driver.cor) || ROTA_CORES[i % ROTA_CORES.length];
+            (r.paradas || []).forEach(function(p) {
+                if (p.lat == null || p.lng == null) return;
+                bounds.push([p.lat, p.lng]);
+                L.marker([p.lat, p.lng], {
+                    icon: L.divIcon({
+                        className: 'parada-icon',
+                        html: '<div style="background:' + cor + ';color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;border:2px solid #fff;">' + p.ordem + '</div>',
+                        iconSize: [24, 24],
+                    }),
+                }).addTo(opMapaLayers).bindPopup('<b>' + escapeHtml(r.driver.nome) + ' · #' + p.ordem + '</b><br>' + escapeHtml(p.destinatario || ''));
+            });
+        });
+        if (bounds.length > 0) opMapa.fitBounds(bounds, {padding: [40, 40]});
+        setTimeout(function() { if (opMapa) opMapa.invalidateSize(); }, 80);
+    }
+
+    function opAutoDistribuir() {
+        var data = opData();
+        if (!data) return;
+        var msg = document.getElementById('op-msg');
+        msg.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-hourglass-split"></i> Distribuindo…</div>';
+        fetch('/entregas/api/rotas?data=' + encodeURIComponent(data),
+            {credentials: 'same-origin'}).then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d.erro) { msg.innerHTML = '<div class="alert alert-warning py-2 small">' + escapeHtml(d.erro) + '</div>'; return; }
+                var items = [];
+                (d.rotas || []).forEach(function(r) {
+                    (r.paradas || []).forEach(function(p, idx) {
+                        items.push({code: p.code, driver_id: r.driver.id, ordem: idx, data_entrega: data});
+                    });
+                });
+                if (items.length === 0) {
+                    var nSem = (d.sem_cep || []).length;
+                    var nT = d.total_pedidos || 0;
+                    msg.innerHTML = '<div class="alert alert-warning py-2 small">Nada a distribuir (' + nT + ' pedidos, ' + nSem + ' sem geocode).</div>';
+                    opCarregar();
+                    return;
+                }
+                fetch('/entregas/api/atribuicao/lote', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+                    body: JSON.stringify({items: items}),
+                }).then(function(r) { return r.json(); }).then(function(resp) {
+                    if (!resp.ok) {
+                        msg.innerHTML = '<div class="alert alert-warning py-2 small">Falha ao salvar: ' + escapeHtml(resp.erro || '?') + '</div>';
+                        return;
+                    }
+                    msg.innerHTML = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle"></i> ' + items.length + ' pedido(s) distribuído(s) e salvo(s).</div>';
+                    if (opMapaVisivel) opRenderMapa(d);
+                    opCarregar();
+                });
+            })
+            .catch(function() { msg.innerHTML = '<div class="alert alert-danger py-2 small">Falha de rede.</div>'; });
+    }
+
+    function opCopiarListaWhatsApp(driverId) {
+        var driver = (opUltimoResultado.drivers || []).find(function(x) { return x.id === driverId; });
+        if (!driver) return;
+        copiarListaWhatsApp(driver, opUltimoResultado.data);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var btnHoje = document.getElementById('op-hoje');
+        var btnAuto = document.getElementById('op-auto');
+        var btnMapa = document.getElementById('op-mapa-toggle');
+        var inpData = document.getElementById('op-data');
+        var contJan = document.getElementById('op-janelas');
+        var cont = document.getElementById('op-container');
+        if (!cont) return;
+
+        if (btnHoje) btnHoje.addEventListener('click', function() {
+            inpData.value = new Date().toISOString().slice(0, 10);
+            opCarregar();
+        });
+        if (btnAuto) btnAuto.addEventListener('click', opAutoDistribuir);
+        if (btnMapa) btnMapa.addEventListener('click', function() {
+            opMapaVisivel = !opMapaVisivel;
+            document.getElementById('op-mapa-label').textContent = opMapaVisivel ? 'Esconder mapa' : 'Mostrar mapa';
+            if (!opMapaVisivel) document.getElementById('op-mapa').style.display = 'none';
+            opCarregar();
+        });
+        if (inpData) inpData.addEventListener('change', function() { opJanelaFiltro.clear(); opCarregar(); });
+
+        if (contJan) contJan.addEventListener('change', function(e) {
+            if (!e.target.matches('.op-cb-janela')) return;
+            var v = e.target.value;
+            if (e.target.checked) opJanelaFiltro.add(v); else opJanelaFiltro.delete(v);
+            opRenderLista(opUltimoResultado, cont);
+        });
+
+        // Click handlers (delegados ao container)
+        cont.addEventListener('click', function(e) {
+            var b;
+            if ((b = e.target.closest('.op-copiar-lista'))) {
+                opCopiarListaWhatsApp(parseInt(b.dataset.driverId, 10));
+                return;
+            }
+            if ((b = e.target.closest('.op-copiar-proof'))) {
+                e.preventDefault();
+                var link = window.location.origin + '/entrega/' + b.dataset.hash;
+                if (navigator.clipboard) navigator.clipboard.writeText(link).then(function() {
+                    var orig = b.innerHTML; b.innerHTML = '<i class="bi bi-check2"></i> Copiado!';
+                    setTimeout(function() { b.innerHTML = orig; }, 1500);
+                }); else prompt('Link:', link);
+                return;
+            }
+            if ((b = e.target.closest('.op-reabrir'))) {
+                e.preventDefault();
+                if (!confirm('Reabrir o pedido ' + b.dataset.code + '?\nApaga as fotos e volta pra pendente.')) return;
+                b.disabled = true;
+                fetch('/entregas/api/entrega/' + encodeURIComponent(b.dataset.code) + '/reset', {
+                    method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN}, credentials: 'same-origin',
+                }).then(function(r) { return r.json(); }).then(function(d) {
+                    if (!d.ok) { alert('Erro: ' + (d.erro || '?')); b.disabled = false; return; }
+                    if (d.data) document.getElementById('op-data').value = d.data;
+                    opCarregar();
+                });
+                return;
+            }
+            if ((b = e.target.closest('.op-mover'))) {
+                e.preventDefault();
+                var destino = prompt('Mover comprovante de ' + b.dataset.code + ' pra qual pedido?');
+                if (!destino) return;
+                destino = destino.trim();
+                if (!destino || destino === b.dataset.code) return;
+                b.disabled = true;
+                fetch('/entregas/api/entrega/' + encodeURIComponent(b.dataset.code) + '/migrar', {
+                    method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+                    credentials: 'same-origin', body: JSON.stringify({destino: destino}),
+                }).then(function(r) { return r.json(); }).then(function(d) {
+                    if (!d.ok) { alert('Erro: ' + (d.erro || '?')); b.disabled = false; return; }
+                    alert(d.fotos_movidas + ' foto(s) movida(s) pra ' + d.destino);
+                    if (d.data) document.getElementById('op-data').value = d.data;
+                    opCarregar();
+                });
+                return;
+            }
+        });
+
+        // Select de driver inline + checkboxes bulk
+        cont.addEventListener('change', function(e) {
+            if (e.target.matches('.op-select-driver')) {
+                var code = e.target.dataset.code;
+                var novo = e.target.value;
+                var url = '/entregas/api/atribuicao/' + encodeURIComponent(code);
+                if (!novo) {
+                    fetch(url, {method: 'DELETE', headers: {'X-CSRFToken': CSRF_TOKEN}, credentials: 'same-origin'})
+                        .then(function(r) { return r.json(); }).then(function() { opCarregar(); });
+                } else {
+                    fetch(url, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+                        credentials: 'same-origin',
+                        body: JSON.stringify({driver_id: parseInt(novo, 10), data_entrega: opData()}),
+                    }).then(function(r) { return r.json(); }).then(function() { opCarregar(); });
+                }
+                return;
+            }
+            if (e.target.matches('.op-check')) { opAtualizarBulkBar(); return; }
+            if (e.target.matches('.op-check-secao')) {
+                var sec = e.target.closest('.op-secao');
+                if (sec) sec.querySelectorAll('.op-check').forEach(function(cb) { cb.checked = e.target.checked; });
+                opAtualizarBulkBar();
+                return;
+            }
+        });
+
+        // Bulk: aplicar
+        var bulkAplicar = document.getElementById('op-bulk-aplicar');
+        if (bulkAplicar) bulkAplicar.addEventListener('click', function() {
+            var sel = document.getElementById('op-bulk-driver');
+            var driverId = sel.value ? parseInt(sel.value, 10) : null;
+            var checks = document.querySelectorAll('.op-check:checked');
+            if (checks.length === 0) return;
+            var items = [];
+            checks.forEach(function(cb, idx) {
+                items.push({code: cb.dataset.code, driver_id: driverId, ordem: idx, data_entrega: opData()});
+            });
+            fetch('/entregas/api/atribuicao/lote', {
+                method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+                credentials: 'same-origin', body: JSON.stringify({items: items}),
+            }).then(function(r) { return r.json(); }).then(function() { opCarregar(); });
+        });
+        var bulkLimpar = document.getElementById('op-bulk-limpar');
+        if (bulkLimpar) bulkLimpar.addEventListener('click', function() {
+            document.querySelectorAll('.op-check, .op-check-secao').forEach(function(cb) { cb.checked = false; });
+            opAtualizarBulkBar();
+        });
+
+        // Carrega ao abrir a aba pela primeira vez
+        var tabBtn = document.getElementById('btn-tab-operacao');
+        var carregada = false;
+        function bootOp() { if (!carregada) { carregada = true; opCarregar(); } }
+        if (tabBtn) tabBtn.addEventListener('shown.bs.tab', bootOp);
+        // Como a aba é a default ativa, carrega já
+        bootOp();
+    });
+
     // ── Init ──
     limparAntigos();
     carregarPedidos();
