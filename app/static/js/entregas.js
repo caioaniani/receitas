@@ -1,5 +1,9 @@
 (function() {
     var STORAGE_KEY = 'entregas_status';
+    function isAdmin() {
+        var t = document.getElementById('tab-atribuidos');
+        return !!(t && t.dataset.isAdmin === '1');
+    }
     var pedidos = [];
     var filtroAtual = 'todos';
     var calAno, calMes;
@@ -1196,6 +1200,13 @@
             if (p.proof_hash) {
                 proofLink = ' <button class="btn btn-link btn-sm p-0 ms-2 atrib-copiar-proof" data-hash="' + escapeHtml(p.proof_hash) + '" style="font-size:11px;" title="Copiar link do comprovante (cliente)"><i class="bi bi-link-45deg"></i> Comprovante</button>';
             }
+            var adminBtns = '';
+            var temComprovante = (st === 'entregue' || st === 'nao_entregue' || (p.fotos && p.fotos.length > 0) || p.proof_hash);
+            if (isAdmin() && temComprovante) {
+                adminBtns =
+                    ' <button class="btn btn-link btn-sm p-0 ms-2 atrib-reabrir d-print-none" data-code="' + escapeHtml(p.code) + '" style="font-size:11px;color:#b45309;" title="Voltar pra pendente e apagar fotos"><i class="bi bi-arrow-counterclockwise"></i> Reabrir</button>' +
+                    ' <button class="btn btn-link btn-sm p-0 ms-2 atrib-mover d-print-none" data-code="' + escapeHtml(p.code) + '" style="font-size:11px;color:#0369a1;" title="Mover comprovante pra outro pedido"><i class="bi bi-arrow-left-right"></i> Mover</button>';
+            }
             html += '<div class="list-group-item">' +
                 '<div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">' +
                     '<div class="d-flex align-items-start gap-2" style="flex:1; min-width:240px;">' +
@@ -1208,6 +1219,7 @@
                             (stBadge ? ' ' + stBadge : '') +
                             (p.periodo ? ' <span class="badge bg-light text-dark" style="font-size:10px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>' : '') +
                             proofLink +
+                            adminBtns +
                             '<div class="text-muted small mt-1"><i class="bi bi-geo-alt"></i> ' + escapeHtml(p.endereco || '') + '</div>' +
                             (p.telefone ? '<div class="text-muted small"><i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) + '</div>' : '') +
                             (p.nota_driver ? '<div class="text-muted small fst-italic mt-1"><i class="bi bi-chat-left-quote"></i> ' + escapeHtml(p.nota_driver) + '</div>' : '') +
@@ -1359,6 +1371,51 @@
                 } else {
                     prompt('Link do comprovante:', link);
                 }
+            });
+
+            // Admin: reabrir entrega (volta pra pendente + apaga fotos)
+            atribContainer.addEventListener('click', function(e) {
+                var b = e.target.closest('.atrib-reabrir');
+                if (!b) return;
+                e.preventDefault();
+                var code = b.dataset.code;
+                if (!confirm('Reabrir o pedido ' + code + '?\nIsso apaga as fotos e volta pra pendente.')) return;
+                b.disabled = true;
+                fetch('/entregas/api/entrega/' + encodeURIComponent(code) + '/reset', {
+                    method: 'POST',
+                    headers: {'X-CSRFToken': CSRF_TOKEN},
+                    credentials: 'same-origin',
+                }).then(function(r) { return r.json(); })
+                  .then(function(d) {
+                      if (!d.ok) { alert('Erro: ' + (d.erro || '?')); b.disabled = false; return; }
+                      carregarAtribuidos();
+                  })
+                  .catch(function() { alert('Falha de rede.'); b.disabled = false; });
+            });
+
+            // Admin: mover comprovante pra outro pedido
+            atribContainer.addEventListener('click', function(e) {
+                var b = e.target.closest('.atrib-mover');
+                if (!b) return;
+                e.preventDefault();
+                var code = b.dataset.code;
+                var destino = prompt('Mover comprovante de ' + code + ' para qual pedido?\nDigite o code do pedido destino:');
+                if (!destino) return;
+                destino = destino.trim();
+                if (!destino || destino === code) return;
+                b.disabled = true;
+                fetch('/entregas/api/entrega/' + encodeURIComponent(code) + '/migrar', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+                    credentials: 'same-origin',
+                    body: JSON.stringify({destino: destino}),
+                }).then(function(r) { return r.json(); })
+                  .then(function(d) {
+                      if (!d.ok) { alert('Erro: ' + (d.erro || '?')); b.disabled = false; return; }
+                      alert(d.fotos_movidas + ' foto(s) movida(s) para ' + d.destino + '.');
+                      carregarAtribuidos();
+                  })
+                  .catch(function() { alert('Falha de rede.'); b.disabled = false; });
             });
 
             // Bulk: checkbox individual

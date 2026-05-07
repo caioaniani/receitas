@@ -503,11 +503,24 @@ def resetar_atribuicoes_dia():
     return jsonify(ok=True, removidas=n, total_pedidos=len(codes))
 
 
+def _limpar_status_atribuicao(atrib):
+    atrib.status = 'pendente'
+    atrib.entregue_em = None
+    atrib.nota = None
+    atrib.motivo_falha = None
+    atrib.geo_lat = None
+    atrib.geo_lng = None
+    atrib.proof_hash = None
+
+
 @entregas_bp.route('/api/entrega/<code>/reset', methods=['POST'])
 @login_required
 @entrega_access_required
 def resetar_entrega(code):
     """Volta atribuicao do pedido pra 'pendente' e apaga fotos (DB + Dropbox)."""
+    if not current_user.is_admin():
+        return jsonify(ok=False, erro='somente admin'), 403
+
     atrib = AtribuicaoEntrega.query.filter_by(pedido_code=code).first()
     if not atrib:
         return jsonify(ok=False, erro='atribuicao nao encontrada'), 404
@@ -519,17 +532,70 @@ def resetar_entrega(code):
             apagadas_dropbox += 1
         db.session.delete(f)
 
-    atrib.status = 'pendente'
-    atrib.entregue_em = None
-    atrib.nota = None
-    atrib.motivo_falha = None
-    atrib.geo_lat = None
-    atrib.geo_lng = None
-    atrib.proof_hash = None
+    _limpar_status_atribuicao(atrib)
     db.session.commit()
 
     return jsonify(ok=True, fotos_removidas=len(fotos),
                    fotos_dropbox_apagadas=apagadas_dropbox)
+
+
+@entregas_bp.route('/api/entrega/<code>/migrar', methods=['POST'])
+@login_required
+@entrega_access_required
+def migrar_entrega(code):
+    """Move comprovante (status + fotos + geo + proof_hash) do pedido <code> pra outro.
+
+    Body: {destino: "OUTRO_CODE"}
+    Origem fica resetada como pendente.
+    Destino nao pode ja ter comprovante (precisa estar pendente/sem fotos).
+    """
+    if not current_user.is_admin():
+        return jsonify(ok=False, erro='somente admin'), 403
+
+    body = request.get_json(silent=True) or {}
+    destino_code = (body.get('destino') or '').strip()
+    if not destino_code:
+        return jsonify(ok=False, erro='destino obrigatorio'), 400
+    if destino_code == code:
+        return jsonify(ok=False, erro='origem e destino iguais'), 400
+
+    origem = AtribuicaoEntrega.query.filter_by(pedido_code=code).first()
+    if not origem:
+        return jsonify(ok=False, erro='origem nao encontrada'), 404
+
+    destino = AtribuicaoEntrega.query.filter_by(pedido_code=destino_code).first()
+    if destino is None:
+        destino = AtribuicaoEntrega(
+            pedido_code=destino_code,
+            driver_id=origem.driver_id,
+            data_entrega=origem.data_entrega,
+            ordem=0,
+        )
+        db.session.add(destino)
+        db.session.flush()
+    else:
+        tem_fotos = EntregaFoto.query.filter_by(atribuicao_id=destino.id).first() is not None
+        if destino.proof_hash or tem_fotos or destino.status == 'entregue':
+            return jsonify(ok=False, erro='destino ja tem comprovante; resete antes'), 409
+
+    # Move campos
+    destino.status = origem.status
+    destino.entregue_em = origem.entregue_em
+    destino.nota = origem.nota
+    destino.motivo_falha = origem.motivo_falha
+    destino.geo_lat = origem.geo_lat
+    destino.geo_lng = origem.geo_lng
+    destino.proof_hash = origem.proof_hash
+
+    # Move fotos (sem reupload — apenas troca atribuicao_id)
+    fotos = EntregaFoto.query.filter_by(atribuicao_id=origem.id).all()
+    for f in fotos:
+        f.atribuicao_id = destino.id
+
+    _limpar_status_atribuicao(origem)
+    db.session.commit()
+
+    return jsonify(ok=True, fotos_movidas=len(fotos), destino=destino_code)
 
 
 @entregas_bp.route('/api/atribuicao/lote', methods=['POST'])

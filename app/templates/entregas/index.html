@@ -133,7 +133,7 @@
     </div>
 
     <!-- Tab Atribuidos -->
-    <div class="tab-pane fade" id="tab-atribuidos">
+    <div class="tab-pane fade" id="tab-atribuidos" data-is-admin="{% if current_user.is_admin() %}1{% else %}0{% endif %}">
         <div class="d-flex flex-wrap gap-2 align-items-end mb-3 d-print-none">
             <div>
                 <label class="form-label small fw-bold mb-1">Data</label>
