@@ -110,13 +110,32 @@ def faturamento():
     total = 0.0
     por_loja = {}
     qtd = 0
+    # Diagnostico: distribuicao de createdAt local + amostra de descartados
+    distrib_createdAt = {}
+    distrib_company = {}
+    descartados_amostra = []
     for p in pedidos:
         if not isinstance(p, dict):
             continue
+        local = seru.data_local(p.get('createdAt'))
+        local_str = local.isoformat() if local else None
+        comp = (p.get('company') or {}).get('name') if isinstance(p.get('company'), dict) else None
+        distrib_createdAt[local_str] = distrib_createdAt.get(local_str, 0) + 1
+        if comp:
+            distrib_company[comp] = distrib_company.get(comp, 0) + 1
         if p.get('canceledAt'):
             continue
-        # createdAt da Seru e UTC; convertemos pra BRT pra comparar com a data local
-        if seru.data_local(p.get('createdAt')) != target:
+        if local != target:
+            if len(descartados_amostra) < 5:
+                descartados_amostra.append({
+                    'code': p.get('code'),
+                    'createdAt': p.get('createdAt'),
+                    'updatedAt': p.get('updatedAt'),
+                    'createdAt_local': local_str,
+                    'company': comp,
+                    'status': p.get('status'),
+                    'canceledAt': p.get('canceledAt'),
+                })
             continue
         valor = float(p.get('total') or 0)
         total += valor
@@ -155,6 +174,9 @@ def faturamento():
             'inicio': seru._iso_dia(target, fim=False),
             'fim': seru._iso_dia(target, fim=True),
         },
+        debug_distrib_createdAt=distrib_createdAt,
+        debug_distrib_company=distrib_company,
+        debug_descartados_amostra=descartados_amostra,
         mensagem=mensagem,
     )
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
