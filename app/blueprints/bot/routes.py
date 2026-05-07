@@ -94,11 +94,13 @@ def faturamento():
             target = hoje
             fallback_aplicado = True
 
-    # Bot prioriza resposta rapida (n8n/Z-API tem timeout curto), entao busca
-    # apenas a janela de updatedAt do dia em questao. Pedidos atualizados em
-    # dias posteriores podem nao aparecer — pra precisao total, usar a aba web.
+    # Bot expande updatedAt ate 3 dias pra capturar atualizacoes recentes
+    # (cancelamentos, ajustes feitos depois) sem estourar timeout do n8n.
+    # Pra precisao total em datas mais antigas, usar a aba web.
+    BOT_MAX_DIAS_EXTRA = 3
+    dias_extra = min(max(0, (hoje - target).days), BOT_MAX_DIAS_EXTRA) if target < hoje else 0
     try:
-        pedidos = seru.listar_pedidos_completo(target, target, expandir_dias_frente=0)
+        pedidos = seru.listar_pedidos_completo(target, target, expandir_dias_frente=dias_extra)
     except Exception as e:
         current_app.logger.exception('bot/faturamento: Seru falhou')
         return jsonify(ok=False, erro=f'falha ao buscar Seru: {type(e).__name__}'), 502
