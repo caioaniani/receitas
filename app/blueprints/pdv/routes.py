@@ -41,33 +41,58 @@ def api_vendas():
         current_app.logger.exception('Seru listar_pedidos falhou')
         return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502
 
-    # Resumo
-    total = 0.0
-    por_pagamento = {}
-    por_canal = {}
-    cancelados = 0
-    for p in pedidos:
-        if p.get('canceledAt'):
-            cancelados += 1
-            continue
-        total += float(p.get('total') or 0)
-        for pay in (p.get('payments') or []):
-            metodo = pay.get('method') or pay.get('type') or '—'
-            por_pagamento[metodo] = por_pagamento.get(metodo, 0) + float(pay.get('value') or pay.get('total') or 0)
-        canal = ((p.get('salesChannel') or {}).get('name')) or '—'
-        por_canal[canal] = por_canal.get(canal, 0) + float(p.get('total') or 0)
+    def _f(v):
+        try:
+            return float(v) if v is not None else 0.0
+        except (TypeError, ValueError):
+            return 0.0
 
-    return jsonify(
-        ok=True,
-        inicio=inicio.isoformat(),
-        fim=fim.isoformat(),
-        total_pedidos=len(pedidos),
-        cancelados=cancelados,
-        total_valor=total,
-        por_pagamento=por_pagamento,
-        por_canal=por_canal,
-        pedidos=pedidos,
-    )
+    try:
+        total = 0.0
+        por_pagamento = {}
+        por_canal = {}
+        cancelados = 0
+        for p in pedidos:
+            if not isinstance(p, dict):
+                continue
+            if p.get('canceledAt'):
+                cancelados += 1
+                continue
+            total += _f(p.get('total'))
+            for pay in (p.get('payments') or []):
+                if not isinstance(pay, dict):
+                    continue
+                metodo = pay.get('method') or pay.get('type') or '—'
+                valor = _f(pay.get('value') or pay.get('total') or pay.get('amount'))
+                por_pagamento[metodo] = por_pagamento.get(metodo, 0) + valor
+            sc = p.get('salesChannel') or {}
+            canal = (sc.get('name') if isinstance(sc, dict) else None) or '—'
+            por_canal[canal] = por_canal.get(canal, 0) + _f(p.get('total'))
+    except Exception as e:
+        import traceback
+        current_app.logger.exception('Erro agregando vendas Seru')
+        return jsonify(
+            ok=False,
+            erro=f'{type(e).__name__} ao agregar: {str(e)[:300]}',
+            traceback=traceback.format_exc().splitlines()[-5:],
+            amostra_pedido=pedidos[0] if pedidos else None,
+        ), 500
+
+    try:
+        return jsonify(
+            ok=True,
+            inicio=inicio.isoformat(),
+            fim=fim.isoformat(),
+            total_pedidos=len(pedidos),
+            cancelados=cancelados,
+            total_valor=total,
+            por_pagamento=por_pagamento,
+            por_canal=por_canal,
+            pedidos=pedidos,
+        )
+    except Exception as e:
+        current_app.logger.exception('Erro serializando resposta Seru')
+        return jsonify(ok=False, erro=f'{type(e).__name__} no jsonify: {str(e)[:300]}'), 500
 
 
 @pdv_bp.route('/api/vendas/<pedido_id>')
