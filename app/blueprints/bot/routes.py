@@ -151,6 +151,10 @@ def faturamento():
         qtd_pedidos_brutos=len(pedidos),
         por_loja={k: round(v, 2) for k, v in por_loja.items()},
         debug_paginas=debug_paginas,
+        debug_range_utc={
+            'inicio': seru._iso_dia(target, fim=False),
+            'fim': seru._iso_dia(target, fim=True),
+        },
         mensagem=mensagem,
     )
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
