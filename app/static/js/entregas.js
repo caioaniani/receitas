@@ -1388,6 +1388,7 @@
                 }).then(function(r) { return r.json(); })
                   .then(function(d) {
                       if (!d.ok) { alert('Erro: ' + (d.erro || '?')); b.disabled = false; return; }
+                      if (d.data) document.getElementById('atrib-data').value = d.data;
                       carregarAtribuidos();
                   })
                   .catch(function() { alert('Falha de rede.'); b.disabled = false; });
@@ -1412,6 +1413,7 @@
                 }).then(function(r) { return r.json(); })
                   .then(function(d) {
                       if (!d.ok) { alert('Erro: ' + (d.erro || '?')); b.disabled = false; return; }
+                      if (d.data) document.getElementById('atrib-data').value = d.data;
                       alert(d.fotos_movidas + ' foto(s) movida(s) para ' + d.destino + '.');
                       carregarAtribuidos();
                   })

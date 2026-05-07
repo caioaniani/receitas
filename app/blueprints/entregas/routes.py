@@ -536,7 +536,8 @@ def resetar_entrega(code):
     db.session.commit()
 
     return jsonify(ok=True, fotos_removidas=len(fotos),
-                   fotos_dropbox_apagadas=apagadas_dropbox)
+                   fotos_dropbox_apagadas=apagadas_dropbox,
+                   data=atrib.data_entrega.isoformat() if atrib.data_entrega else None)
 
 
 @entregas_bp.route('/api/entrega/<code>/migrar', methods=['POST'])
@@ -595,7 +596,8 @@ def migrar_entrega(code):
     _limpar_status_atribuicao(origem)
     db.session.commit()
 
-    return jsonify(ok=True, fotos_movidas=len(fotos), destino=destino_code)
+    return jsonify(ok=True, fotos_movidas=len(fotos), destino=destino_code,
+                   data=destino.data_entrega.isoformat() if destino.data_entrega else None)
 
 
 @entregas_bp.route('/api/atribuicao/lote', methods=['POST'])
