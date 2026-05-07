@@ -149,7 +149,14 @@
     function mostrarApp() {
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('app-screen').style.display = '';
-        carregarPedidos();
+        // Pula direto pra proxima data com entregas atribuidas pra esse driver.
+        // Se falhar (rede etc), cai pra hoje (valor default do input).
+        api('/proxima_data').then(function(r) {
+            if (r.body && r.body.ok && r.body.data) {
+                document.getElementById('data-input').value = r.body.data;
+            }
+            carregarPedidos();
+        }).catch(carregarPedidos);
     }
 
     document.getElementById('btn-login').addEventListener('click', function() {

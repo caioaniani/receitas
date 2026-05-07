@@ -87,6 +87,35 @@ def api_login(token):
     return jsonify(ok=True, driver={'id': driver.id, 'nome': driver.nome, 'cor': driver.cor})
 
 
+@driver_bp.route('/api/<token>/proxima_data')
+def api_proxima_data(token):
+    """Retorna a primeira data >= hoje com entregas atribuidas pra esse driver.
+    Se nao houver futura, devolve a mais recente passada. Se nao houver nenhuma,
+    retorna hoje. Usado pra abrir a tela do driver ja na data certa."""
+    driver = _driver_por_token(token)
+    if not driver or not driver.ativo:
+        return jsonify(ok=False, erro='Driver invalido'), 404
+    if not _autenticado(driver):
+        return jsonify(ok=False, erro='Autenticacao necessaria', precisa_pin=True), 401
+
+    hoje = date.today()
+    futura = (AtribuicaoEntrega.query
+              .filter(AtribuicaoEntrega.driver_id == driver.id,
+                      AtribuicaoEntrega.data_entrega >= hoje)
+              .order_by(AtribuicaoEntrega.data_entrega.asc())
+              .first())
+    if futura and futura.data_entrega:
+        return jsonify(ok=True, data=futura.data_entrega.isoformat())
+    passada = (AtribuicaoEntrega.query
+               .filter(AtribuicaoEntrega.driver_id == driver.id,
+                       AtribuicaoEntrega.data_entrega.isnot(None))
+               .order_by(AtribuicaoEntrega.data_entrega.desc())
+               .first())
+    if passada and passada.data_entrega:
+        return jsonify(ok=True, data=passada.data_entrega.isoformat())
+    return jsonify(ok=True, data=hoje.isoformat())
+
+
 @driver_bp.route('/api/<token>/pedidos')
 def api_pedidos(token):
     driver = _driver_por_token(token)
