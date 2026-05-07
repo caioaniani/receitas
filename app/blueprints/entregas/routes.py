@@ -48,59 +48,71 @@ def _carregar_overrides_full():
 @login_required
 @entrega_access_required
 def api_pedidos():
+    import traceback
     data_str = request.args.get('data', date.today().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
         target = date.today()
 
-    overrides_full = _carregar_overrides_full()
-    overrides_data = {code: o['data'] for code, o in overrides_full.items()}
-    resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides_data)
+    try:
+        overrides_full = _carregar_overrides_full()
+        overrides_data = {code: o['data'] for code, o in overrides_full.items()}
+        resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides_data)
+    except Exception as e:
+        current_app.logger.exception('api_pedidos: erro carregando VNDA/overrides')
+        return jsonify(pedidos=[], data=data_str,
+                       erro=f'{type(e).__name__}: {str(e)[:300]}')
 
     if 'erro' in resultado:
         resp = jsonify(pedidos=[], data=data_str, erro=resultado['erro'])
     else:
-        pedidos = resultado.get('pedidos', [])
-        total_janela = resultado.get('total_janela', 0)
+        try:
+            pedidos = resultado.get('pedidos', [])
+            total_janela = resultado.get('total_janela', 0)
 
-        codes = [p['code'] for p in pedidos if p['code']]
-        cartinhas_manuais = {}
-        if codes:
-            for c in CartinhaEntrega.query.filter(CartinhaEntrega.pedido_code.in_(codes)).all():
-                cartinhas_manuais[c.pedido_code] = c.texto or ''
+            codes = [p['code'] for p in pedidos if p['code']]
+            cartinhas_manuais = {}
+            if codes:
+                for c in CartinhaEntrega.query.filter(CartinhaEntrega.pedido_code.in_(codes)).all():
+                    cartinhas_manuais[c.pedido_code] = c.texto or ''
 
-        # Cartinha manual (editada pelo usuario) tem prioridade sobre a do VNDA
-        for p in pedidos:
-            manual = cartinhas_manuais.get(p['code'], '')
-            auto = p.get('cartinha_vnda', '')
-            p['cartinha'] = manual or auto
-            p['cartinha_origem'] = 'manual' if manual else ('vnda' if auto else None)
+            # Cartinha manual (editada pelo usuario) tem prioridade sobre a do VNDA
+            for p in pedidos:
+                manual = cartinhas_manuais.get(p['code'], '')
+                auto = p.get('cartinha_vnda', '')
+                p['cartinha'] = manual or auto
+                p['cartinha_origem'] = 'manual' if manual else ('vnda' if auto else None)
 
-            # Info adicional de override de data
-            if p.get('data_override'):
-                ov = overrides_full.get(p['code'])
-                if ov:
-                    p['override_motivo'] = ov['motivo']
-                    p['override_autor'] = ov['autor']
-                    p['override_em'] = ov['em']
+                # Info adicional de override de data
+                if p.get('data_override'):
+                    ov = overrides_full.get(p['code'])
+                    if ov:
+                        p['override_motivo'] = ov['motivo']
+                        p['override_autor'] = ov['autor']
+                        p['override_em'] = ov['em']
 
-        # Carrega driver atribuido (se houver)
-        atribuicoes = {}
-        if codes:
-            for a in AtribuicaoEntrega.query.filter(AtribuicaoEntrega.pedido_code.in_(codes)).all():
-                if a.driver_id:
-                    drv = Driver.query.get(a.driver_id)
-                    if drv:
-                        atribuicoes[a.pedido_code] = {
-                            'id': drv.id, 'nome': drv.nome, 'cor': drv.cor,
-                        }
-        for p in pedidos:
-            drv = atribuicoes.get(p['code'])
-            if drv:
-                p['driver'] = drv
+            # Carrega driver atribuido (se houver)
+            atribuicoes = {}
+            if codes:
+                for a in AtribuicaoEntrega.query.filter(AtribuicaoEntrega.pedido_code.in_(codes)).all():
+                    if a.driver_id:
+                        drv = Driver.query.get(a.driver_id)
+                        if drv:
+                            atribuicoes[a.pedido_code] = {
+                                'id': drv.id, 'nome': drv.nome, 'cor': drv.cor,
+                            }
+            for p in pedidos:
+                drv = atribuicoes.get(p['code'])
+                if drv:
+                    p['driver'] = drv
 
-        resp = jsonify(pedidos=pedidos, data=data_str, total_janela=total_janela)
+            resp = jsonify(pedidos=pedidos, data=data_str, total_janela=total_janela)
+        except Exception as e:
+            current_app.logger.exception('api_pedidos: erro processando pedidos')
+            tb_short = traceback.format_exc().splitlines()[-3:]
+            return jsonify(pedidos=[], data=data_str,
+                           erro=f'{type(e).__name__}: {str(e)[:200]} | {" | ".join(tb_short)}')
 
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
     return resp
@@ -1125,6 +1137,25 @@ def api_debug_pedido(code):
     except http_requests.RequestException:
         pass
 
+    return jsonify(info)
+
+
+@entregas_bp.route('/api/debug/schema')
+@login_required
+@entrega_access_required
+def api_debug_schema():
+    """Confere se as colunas novas (token, status, etc) existem nas tabelas."""
+    from sqlalchemy import text
+    info = {}
+    try:
+        with db.engine.connect() as c:
+            for tbl in ('driver_entrega', 'atribuicao_entrega', 'entrega_foto'):
+                r = c.execute(text(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name = :t"
+                ), {'t': tbl})
+                info[tbl] = sorted([row[0] for row in r])
+    except Exception as e:
+        info['erro'] = f'{type(e).__name__}: {str(e)[:300]}'
     return jsonify(info)
 
 
