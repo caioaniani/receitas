@@ -66,15 +66,14 @@ def _api_vendas_impl():
 
     # A API filtra por updatedAt, mas o usuario quer ver vendas POR DATA DE
     # CRIACAO (quando a venda aconteceu). Filtramos localmente pelo createdAt
-    # dentro do intervalo pedido.
-    inicio_iso = inicio.isoformat()
-    fim_iso = fim.isoformat()
+    # dentro do intervalo pedido — convertendo UTC pra BRT antes de comparar.
     total_bruto = len(pedidos)
-    pedidos = [
-        p for p in pedidos
-        if isinstance(p, dict) and (p.get('createdAt') or '')[:10] >= inicio_iso
-                               and (p.get('createdAt') or '')[:10] <= fim_iso
-    ]
+    def _passa(p):
+        if not isinstance(p, dict):
+            return False
+        d = seru.data_local(p.get('createdAt'))
+        return d is not None and inicio <= d <= fim
+    pedidos = [p for p in pedidos if _passa(p)]
     fora_intervalo = total_bruto - len(pedidos)
 
     def _f(v):

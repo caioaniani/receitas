@@ -8,6 +8,7 @@ memória do processo (com pequeno safety margin) e renovamos sob demanda.
 import base64
 import logging
 import time
+from datetime import datetime, timezone, timedelta
 
 import requests
 from flask import current_app
@@ -15,6 +16,30 @@ from flask import current_app
 logger = logging.getLogger(__name__)
 
 BASE = 'https://integration.plataformaseru.com.br/v1'
+
+# Fuso de Sao Paulo (Brasil nao tem horario de verao desde 2019).
+BRT = timezone(timedelta(hours=-3))
+
+
+def data_local(iso_utc):
+    """Converte string ISO UTC ('2026-05-07T01:30:00Z') pra date em
+    horario de Sao Paulo (BRT). Retorna None se input invalido.
+
+    Crucial: a Seru devolve createdAt/updatedAt em UTC. Sem conversao,
+    pedidos feitos depois das 21h BRT caem no dia seguinte UTC e sao
+    filtrados incorretamente.
+    """
+    if not iso_utc:
+        return None
+    try:
+        s = iso_utc.replace('Z', '+00:00')
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(BRT).date()
+    except (ValueError, TypeError):
+        return None
+
 
 # Cache do token entre requests do mesmo worker. Se expira, renovamos.
 _token_cache = {'access_token': None, 'expires_at': 0}
@@ -71,10 +96,16 @@ def _get(path, params=None):
 
 
 def _iso_dia(data, fim=False):
-    """Converte uma date pra ISO 8601 UTC. Fim do dia = 23:59:59Z."""
+    """Converte uma date BRT pra ISO 8601 UTC.
+
+    Inicio do dia BRT (00:00 -3) = 03:00 UTC do mesmo dia.
+    Fim do dia BRT (23:59:59 -3) = 02:59:59 UTC do dia seguinte.
+    """
     if fim:
-        return data.strftime('%Y-%m-%dT23:59:59Z')
-    return data.strftime('%Y-%m-%dT00:00:00Z')
+        dt_brt = datetime.combine(data, datetime.max.time().replace(microsecond=0), tzinfo=BRT)
+    else:
+        dt_brt = datetime.combine(data, datetime.min.time(), tzinfo=BRT)
+    return dt_brt.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 def listar_pedidos(data_inicial, data_final, page=1, limit=100, hasCanceledItem=None,

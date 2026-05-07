@@ -115,7 +115,8 @@ def faturamento():
             continue
         if p.get('canceledAt'):
             continue
-        if (p.get('createdAt') or '')[:10] != target_iso:
+        # createdAt da Seru e UTC; convertemos pra BRT pra comparar com a data local
+        if seru.data_local(p.get('createdAt')) != target:
             continue
         valor = float(p.get('total') or 0)
         total += valor
