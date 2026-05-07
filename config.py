@@ -35,6 +35,9 @@ class Config:
     # Token para integracao com bots externos (n8n / WhatsApp).
     # Gere com: python -c "import secrets; print(secrets.token_urlsafe(32))"
     BOT_API_TOKEN = os.environ.get('BOT_API_TOKEN', '')
+    # Telefones autorizados a consultar o bot (CSV, so digitos opcional).
+    # Ex: '5511999999999,5511888888888'. Se vazio, qualquer telefone passa.
+    BOT_ALLOWED_PHONES = os.environ.get('BOT_ALLOWED_PHONES', '')
 
     # Dropbox para fotos de comprovante de entrega
     # Token: https://www.dropbox.com/developers/apps -> escopo files.content.write + sharing.write

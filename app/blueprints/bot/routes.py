@@ -16,13 +16,18 @@ from app.extensions import csrf
 from app.services import seru
 
 
+def _normalizar_telefone(s):
+    """Mantem so digitos. '+55 (11) 9 9999-9999' → '5511999999999'."""
+    return ''.join(c for c in (s or '') if c.isdigit())
+
+
 def _bot_auth_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         token_cfg = (current_app.config.get('BOT_API_TOKEN') or '').strip()
         if not token_cfg:
             return jsonify(ok=False, erro='BOT_API_TOKEN nao configurado no servidor'), 503
-        # Aceita Authorization: Bearer X OU query string ?token=X
+        # Token: Authorization: Bearer X OU ?token=X
         auth = request.headers.get('Authorization', '')
         token_recebido = ''
         if auth.lower().startswith('bearer '):
@@ -31,6 +36,18 @@ def _bot_auth_required(f):
             token_recebido = (request.args.get('token') or '').strip()
         if not token_recebido or not _secrets.compare_digest(token_recebido, token_cfg):
             return jsonify(ok=False, erro='token invalido'), 401
+
+        # Whitelist de telefones (CSV em BOT_ALLOWED_PHONES). Se vazio, aceita
+        # qualquer um (backwards compat). Telefone vem em ?telefone=X.
+        allowed_csv = (current_app.config.get('BOT_ALLOWED_PHONES') or '').strip()
+        if allowed_csv:
+            telefone_recebido = _normalizar_telefone(request.args.get('telefone') or '')
+            if not telefone_recebido:
+                return jsonify(ok=False, erro='telefone obrigatorio (parametro telefone na query)'), 401
+            permitidos = {_normalizar_telefone(t) for t in allowed_csv.split(',') if t.strip()}
+            if telefone_recebido not in permitidos:
+                current_app.logger.warning('bot: telefone nao autorizado: %s', telefone_recebido)
+                return jsonify(ok=False, erro='telefone nao autorizado'), 403
         return f(*args, **kwargs)
     return wrapper
 
