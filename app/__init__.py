@@ -235,6 +235,7 @@ def create_app(config_class=None):
     from app.blueprints.pedidos import pedidos_bp
     from app.blueprints.entregas import entregas_bp
     from app.blueprints.driver import driver_bp
+    from app.blueprints.comprovante import comprovante_bp
     from app.blueprints.projetos import projetos_bp
 
     app.register_blueprint(main_bp)
@@ -248,6 +249,7 @@ def create_app(config_class=None):
     app.register_blueprint(pedidos_bp)
     app.register_blueprint(entregas_bp, url_prefix='/entregas')
     app.register_blueprint(driver_bp, url_prefix='/driver')
+    app.register_blueprint(comprovante_bp, url_prefix='/entrega')
     app.register_blueprint(projetos_bp)
 
     with app.app_context():

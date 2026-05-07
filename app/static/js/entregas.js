@@ -1176,6 +1176,26 @@
         html += '<div class="list-group list-group-flush">';
         for (var j = 0; j < driver.paradas.length; j++) {
             var p = driver.paradas[j];
+            var st = p.status || 'pendente';
+            var stBadge = '';
+            if (st === 'entregue') {
+                stBadge = '<span class="badge bg-success" style="font-size:10px;"><i class="bi bi-check-circle"></i> Entregue</span>';
+            } else if (st === 'nao_entregue') {
+                stBadge = '<span class="badge bg-danger" style="font-size:10px;"><i class="bi bi-x-circle"></i> Não entregue</span>';
+            }
+            var fotosHtml = '';
+            if (p.fotos && p.fotos.length > 0) {
+                fotosHtml = '<div class="d-flex gap-1 mt-2">';
+                for (var fi = 0; fi < p.fotos.length; fi++) {
+                    fotosHtml += '<a href="' + escapeHtml(p.fotos[fi].url) + '" target="_blank" rel="noopener">' +
+                        '<img src="' + escapeHtml(p.fotos[fi].url) + '" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid #e2e8f0;"></a>';
+                }
+                fotosHtml += '</div>';
+            }
+            var proofLink = '';
+            if (p.proof_hash) {
+                proofLink = ' <button class="btn btn-link btn-sm p-0 ms-2 atrib-copiar-proof" data-hash="' + escapeHtml(p.proof_hash) + '" style="font-size:11px;" title="Copiar link do comprovante (cliente)"><i class="bi bi-link-45deg"></i> Comprovante</button>';
+            }
             html += '<div class="list-group-item">' +
                 '<div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">' +
                     '<div class="d-flex align-items-start gap-2" style="flex:1; min-width:240px;">' +
@@ -1185,9 +1205,13 @@
                                 '[' + escapeHtml(p.code) + '] <i class="bi bi-box-arrow-up-right" style="font-size:10px;"></i>' +
                             '</a> ' +
                             '<span class="fw-semibold"><i class="bi bi-person-fill"></i> ' + escapeHtml(p.destinatario || '—') + '</span>' +
+                            (stBadge ? ' ' + stBadge : '') +
                             (p.periodo ? ' <span class="badge bg-light text-dark" style="font-size:10px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>' : '') +
+                            proofLink +
                             '<div class="text-muted small mt-1"><i class="bi bi-geo-alt"></i> ' + escapeHtml(p.endereco || '') + '</div>' +
                             (p.telefone ? '<div class="text-muted small"><i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) + '</div>' : '') +
+                            (p.nota_driver ? '<div class="text-muted small fst-italic mt-1"><i class="bi bi-chat-left-quote"></i> ' + escapeHtml(p.nota_driver) + '</div>' : '') +
+                            fotosHtml +
                         '</div>' +
                     '</div>' +
                     '<div class="d-print-none d-flex align-items-center gap-1">' +
@@ -1316,6 +1340,24 @@
                 var driver = (atribUltimoResultado.drivers || []).find(function(x) { return x.id === did; });
                 if (driver) {
                     copiarListaWhatsApp(driver, atribUltimoResultado.data);
+                }
+            });
+
+            // Copiar link do comprovante (cliente)
+            atribContainer.addEventListener('click', function(e) {
+                var b = e.target.closest('.atrib-copiar-proof');
+                if (!b) return;
+                e.preventDefault();
+                var hash = b.dataset.hash;
+                var link = window.location.origin + '/entrega/' + hash;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(link).then(function() {
+                        var orig = b.innerHTML;
+                        b.innerHTML = '<i class="bi bi-check2"></i> Copiado!';
+                        setTimeout(function() { b.innerHTML = orig; }, 1500);
+                    });
+                } else {
+                    prompt('Link do comprovante:', link);
                 }
             });
 

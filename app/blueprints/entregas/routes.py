@@ -664,9 +664,17 @@ def api_atribuidos():
     atribuicoes_por_code = {}
     if codes:
         for a in AtribuicaoEntrega.query.filter(AtribuicaoEntrega.pedido_code.in_(codes)).all():
+            fotos = [{'id': f.id, 'url': f.url} for f in a.fotos.all()]
             atribuicoes_por_code[a.pedido_code] = {
+                'atribuicao_id': a.id,
                 'driver_id': a.driver_id,
                 'ordem': a.ordem or 0,
+                'status': a.status or 'pendente',
+                'entregue_em': a.entregue_em.isoformat() if a.entregue_em else None,
+                'nota': a.nota,
+                'motivo_falha': a.motivo_falha,
+                'fotos': fotos,
+                'proof_hash': a.proof_hash,
             }
 
     drivers_db = Driver.query.order_by(Driver.nome).all()
@@ -678,6 +686,14 @@ def api_atribuidos():
     for p in pedidos:
         atrib = atribuicoes_por_code.get(p['code'])
         did = atrib['driver_id'] if atrib else None
+        # Enriquece o pedido com status/fotos/etc do registro de atribuicao
+        if atrib:
+            p['status'] = atrib.get('status') or 'pendente'
+            p['entregue_em'] = atrib.get('entregue_em')
+            p['nota_driver'] = atrib.get('nota')
+            p['motivo_falha'] = atrib.get('motivo_falha')
+            p['fotos'] = atrib.get('fotos') or []
+            p['proof_hash'] = atrib.get('proof_hash')
         if did and did in drivers_por_id:
             ordem = atrib.get('ordem', 0)
             paradas_por_driver.setdefault(did, []).append((ordem, p))
