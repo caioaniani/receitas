@@ -66,20 +66,33 @@ def faturamento():
     Aliases aceitos: hoje, ontem.
     Devolve total por loja + total geral + mensagem pronta pra WhatsApp.
     """
-    data_str = (request.args.get('data') or 'hoje').strip().lower()
+    data_raw = (request.args.get('data') or 'hoje').strip()
+    data_str = data_raw.lower()
     hoje = date.today()
-    if data_str == 'hoje':
+    target = None
+    fallback_aplicado = False
+
+    if data_str in ('hoje', 'today', ''):
         target = hoje
-    elif data_str == 'ontem':
+    elif data_str in ('ontem', 'yesterday'):
         target = hoje - timedelta(days=1)
+    elif data_str in ('anteontem',):
+        target = hoje - timedelta(days=2)
     else:
-        try:
-            target = datetime.strptime(data_str, '%Y-%m-%d').date()
-        except ValueError:
+        # Tenta varios formatos comuns. Pega so a parte da data se vier
+        # algo tipo '2026-05-07T17:42:36' ou '07/05/2026 17:42'.
+        candidato = data_raw.split('T')[0].split(' ')[0].strip()
+        for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%Y/%m/%d',
+                    '%d/%m/%y', '%d.%m.%Y', '%d %m %Y'):
             try:
-                target = datetime.strptime(data_str, '%d/%m/%Y').date()
+                target = datetime.strptime(candidato, fmt).date()
+                break
             except ValueError:
-                return jsonify(ok=False, erro='data invalida (use YYYY-MM-DD ou DD/MM/AAAA, ou "hoje"/"ontem")'), 400
+                continue
+        if target is None:
+            # Ultimo recurso: assume hoje e marca aviso
+            target = hoje
+            fallback_aplicado = True
 
     # Mesma estrategia da aba PDV: expande updatedAt ate hoje pra capturar
     # vendas atualizadas depois da data, e filtra por createdAt local.
@@ -121,9 +134,14 @@ def faturamento():
         linhas.append(f'_{qtd} venda(s)_')
         mensagem = '\n'.join(linhas)
 
+    if fallback_aplicado:
+        mensagem = (f'_(Não entendi a data "{data_raw}", mostrando hoje)_\n\n' + mensagem)
+
     return jsonify(
         ok=True,
         data=target_iso,
+        data_recebida=data_raw,
+        fallback_aplicado=fallback_aplicado,
         total=round(total, 2),
         qtd_pedidos=qtd,
         por_loja={k: round(v, 2) for k, v in por_loja.items()},
