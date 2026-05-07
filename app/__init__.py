@@ -234,6 +234,7 @@ def create_app(config_class=None):
     from app.blueprints.relatorios import relatorios_bp
     from app.blueprints.pedidos import pedidos_bp
     from app.blueprints.entregas import entregas_bp
+    from app.blueprints.driver import driver_bp
     from app.blueprints.projetos import projetos_bp
 
     app.register_blueprint(main_bp)
@@ -246,6 +247,7 @@ def create_app(config_class=None):
     app.register_blueprint(relatorios_bp, url_prefix='/relatorios')
     app.register_blueprint(pedidos_bp)
     app.register_blueprint(entregas_bp, url_prefix='/entregas')
+    app.register_blueprint(driver_bp, url_prefix='/driver')
     app.register_blueprint(projetos_bp)
 
     with app.app_context():
@@ -569,6 +571,45 @@ def _migrate_postgres(app):
         """)
         _try("CREATE INDEX IF NOT EXISTS idx_atribuicao_pedido ON atribuicao_entrega(pedido_code)")
         _try("CREATE INDEX IF NOT EXISTS idx_atribuicao_data ON atribuicao_entrega(data_entrega)")
+
+        # ── Comprovante de entrega: token+pin no driver, status+geo+fotos na atribuicao ──
+        _try("ALTER TABLE driver_entrega ADD COLUMN token VARCHAR(32)")
+        _try("CREATE UNIQUE INDEX IF NOT EXISTS idx_driver_token ON driver_entrega(token)")
+        _try("ALTER TABLE driver_entrega ADD COLUMN pin VARCHAR(8)")
+        _try("ALTER TABLE atribuicao_entrega ADD COLUMN status VARCHAR(20) DEFAULT 'pendente'")
+        _try("ALTER TABLE atribuicao_entrega ADD COLUMN entregue_em TIMESTAMP")
+        _try("ALTER TABLE atribuicao_entrega ADD COLUMN nota VARCHAR(500)")
+        _try("ALTER TABLE atribuicao_entrega ADD COLUMN motivo_falha VARCHAR(50)")
+        _try("ALTER TABLE atribuicao_entrega ADD COLUMN geo_lat DOUBLE PRECISION")
+        _try("ALTER TABLE atribuicao_entrega ADD COLUMN geo_lng DOUBLE PRECISION")
+        _try("ALTER TABLE atribuicao_entrega ADD COLUMN proof_hash VARCHAR(32)")
+        _try("CREATE UNIQUE INDEX IF NOT EXISTS idx_atribuicao_proof_hash ON atribuicao_entrega(proof_hash)")
+        _try("""
+        CREATE TABLE IF NOT EXISTS entrega_foto (
+            id SERIAL PRIMARY KEY,
+            atribuicao_id INTEGER NOT NULL REFERENCES atribuicao_entrega(id) ON DELETE CASCADE,
+            url VARCHAR(500) NOT NULL,
+            storage_path VARCHAR(500),
+            tirada_em TIMESTAMP DEFAULT NOW(),
+            tamanho_bytes INTEGER
+        )
+        """)
+        _try("CREATE INDEX IF NOT EXISTS idx_entrega_foto_atribuicao ON entrega_foto(atribuicao_id)")
+
+        # Backfill de tokens em drivers existentes (sem token)
+        try:
+            import secrets
+            from app.models import Driver
+            sem_token = Driver.query.filter(
+                (Driver.token == None) | (Driver.token == '')  # noqa: E711
+            ).all()
+            for drv in sem_token:
+                drv.token = secrets.token_urlsafe(16)
+            if sem_token:
+                db.session.commit()
+        except Exception as e:
+            app.logger.warning('backfill token driver falhou: %s', e)
+            db.session.rollback()
 
 
 def _migrate_sqlite(app):

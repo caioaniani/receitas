@@ -778,6 +778,10 @@ class Driver(db.Model):
     ativo = db.Column(db.Boolean, default=True)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # Acesso a pagina /driver/<token> + PIN 4 digitos pra dificultar acesso casual.
+    token = db.Column(db.String(32), unique=True, index=True)
+    pin = db.Column(db.String(8))  # 4 digitos, mas folga pra futuros 6
+
     atribuicoes = db.relationship('AtribuicaoEntrega', backref='driver', lazy='dynamic')
 
 
@@ -793,7 +797,31 @@ class AtribuicaoEntrega(db.Model):
     atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     atualizado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
+    # Status preenchido pela pagina do driver
+    status = db.Column(db.String(20), default='pendente')  # pendente|entregue|nao_entregue
+    entregue_em = db.Column(db.DateTime)
+    nota = db.Column(db.String(500))
+    motivo_falha = db.Column(db.String(50))  # ausente|recusou|endereco_errado|outro
+    geo_lat = db.Column(db.Float)
+    geo_lng = db.Column(db.Float)
+    # Hash publico pra link compartilhavel com cliente
+    proof_hash = db.Column(db.String(32), unique=True, index=True)
+
     autor = db.relationship('Usuario')
+    fotos = db.relationship('EntregaFoto', backref='atribuicao', lazy='dynamic',
+                            cascade='all, delete-orphan')
+
+
+class EntregaFoto(db.Model):
+    """Foto de comprovante de entrega tirada pelo driver."""
+    __tablename__ = 'entrega_foto'
+
+    id = db.Column(db.Integer, primary_key=True)
+    atribuicao_id = db.Column(db.Integer, db.ForeignKey('atribuicao_entrega.id'), nullable=False, index=True)
+    url = db.Column(db.String(500), nullable=False)  # URL publica (Dropbox shared link)
+    storage_path = db.Column(db.String(500))  # caminho no storage pra deletar depois
+    tirada_em = db.Column(db.DateTime, default=datetime.utcnow)
+    tamanho_bytes = db.Column(db.Integer)
 
 
 # ── Gestao de Projetos (PARA + 12 Week Year) ──

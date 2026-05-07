@@ -798,23 +798,36 @@
                     lista.innerHTML = '<div class="text-muted small text-center py-3">Nenhum driver cadastrado ainda.</div>';
                     return;
                 }
-                var html = '<div class="table-responsive"><table class="table table-sm"><thead><tr>' +
-                    '<th>Cor</th><th>Nome</th><th>Telefone</th><th>Ativo</th><th></th>' +
+                var html = '<div class="table-responsive"><table class="table table-sm align-middle"><thead><tr>' +
+                    '<th style="width:60px;">Cor</th><th>Nome</th><th>Telefone</th><th style="width:90px;">PIN</th><th style="width:70px;">Ativo</th><th>Acesso driver</th><th></th>' +
                     '</tr></thead><tbody>';
                 for (var i = 0; i < d.drivers.length; i++) {
                     var dr = d.drivers[i];
+                    var linkDriver = dr.token ? (window.location.origin + '/driver/' + dr.token) : '';
                     html += '<tr data-id="' + dr.id + '">' +
                         '<td><input type="color" class="form-control form-control-color form-control-sm drv-cor-edit" value="' + (dr.cor || '#666666') + '" style="width:36px;height:24px;"></td>' +
                         '<td><input type="text" class="form-control form-control-sm drv-nome-edit" value="' + escapeHtml(dr.nome) + '"></td>' +
                         '<td><input type="text" class="form-control form-control-sm drv-tel-edit" value="' + escapeHtml(dr.telefone || '') + '"></td>' +
+                        '<td><input type="text" maxlength="6" inputmode="numeric" class="form-control form-control-sm drv-pin-edit" placeholder="—" value="' + escapeHtml(dr.pin || '') + '"></td>' +
                         '<td class="text-center"><input type="checkbox" class="form-check-input drv-ativo-edit" ' + (dr.ativo ? 'checked' : '') + '></td>' +
+                        '<td>' +
+                            (linkDriver ?
+                                '<button class="btn btn-sm btn-outline-success btn-copiar-link" data-link="' + escapeHtml(linkDriver) + '" title="Copiar link p/ WhatsApp"><i class="bi bi-clipboard"></i> Copiar link</button>' +
+                                '<a href="' + escapeHtml(linkDriver) + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary ms-1" title="Abrir"><i class="bi bi-box-arrow-up-right"></i></a>'
+                                : '<span class="text-muted small">salve pra gerar</span>') +
+                        '</td>' +
                         '<td class="text-end">' +
-                        '<button class="btn btn-sm btn-outline-primary me-1 btn-drv-salvar"><i class="bi bi-check"></i></button>' +
-                        '<button class="btn btn-sm btn-outline-danger btn-drv-desativar" title="Desativar"><i class="bi bi-trash"></i></button>' +
+                            '<button class="btn btn-sm btn-outline-primary me-1 btn-drv-salvar"><i class="bi bi-check"></i></button>' +
+                            '<button class="btn btn-sm btn-outline-danger btn-drv-desativar" title="Desativar"><i class="bi bi-trash"></i></button>' +
                         '</td>' +
                         '</tr>';
                 }
-                html += '</tbody></table></div>';
+                html += '</tbody></table>' +
+                    '<div class="form-text small mt-2">' +
+                        '<i class="bi bi-info-circle"></i> ' +
+                        'O link de acesso fica fixo por driver. PIN é opcional (4-6 dígitos) — deixe vazio pra acesso livre. ' +
+                        'Mande o link pelo WhatsApp; o motorista salva nos favoritos do celular.' +
+                    '</div></div>';
                 lista.innerHTML = html;
             });
     }
@@ -1370,12 +1383,28 @@
                 var row = e.target.closest('tr[data-id]');
                 if (!row) return;
                 var id = row.dataset.id;
+                var btnCopiar = e.target.closest('.btn-copiar-link');
+                if (btnCopiar) {
+                    var link = btnCopiar.dataset.link;
+                    if (link) {
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(link).then(function() {
+                                btnCopiar.innerHTML = '<i class="bi bi-check2"></i> Copiado!';
+                                setTimeout(function() { btnCopiar.innerHTML = '<i class="bi bi-clipboard"></i> Copiar link'; }, 1500);
+                            });
+                        } else {
+                            prompt('Copie o link:', link);
+                        }
+                    }
+                    return;
+                }
                 if (e.target.closest('.btn-drv-salvar')) {
                     var dados = {
                         nome: row.querySelector('.drv-nome-edit').value,
                         telefone: row.querySelector('.drv-tel-edit').value,
                         cor: row.querySelector('.drv-cor-edit').value,
                         ativo: row.querySelector('.drv-ativo-edit').checked,
+                        pin: row.querySelector('.drv-pin-edit').value,
                     };
                     fetch('/entregas/api/drivers/' + id, {
                         method: 'POST',
@@ -1385,7 +1414,7 @@
                       .then(function(d) {
                           if (d.ok) {
                               row.style.background = '#d4edda';
-                              setTimeout(function() { row.style.background = ''; }, 1000);
+                              setTimeout(function() { row.style.background = ''; carregarDrivers(); }, 700);
                           } else {
                               alert('Erro: ' + (d.erro || 'desconhecido'));
                           }

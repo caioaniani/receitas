@@ -26,3 +26,8 @@ class Config:
     ROTA_ORIGEM_ENDERECO = os.environ.get('ROTA_ORIGEM_ENDERECO', '')
     # Chave da API do Google Maps Platform (Geocoding + Directions)
     GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', '')
+
+    # Dropbox para fotos de comprovante de entrega
+    # Token: https://www.dropbox.com/developers/apps -> escopo files.content.write + sharing.write
+    DROPBOX_ACCESS_TOKEN = os.environ.get('DROPBOX_ACCESS_TOKEN', '')
+    DROPBOX_PASTA_BASE = os.environ.get('DROPBOX_PASTA_BASE', '/Apps/Receitas-Entregas')

@@ -136,7 +136,10 @@ def listar_drivers():
         q = q.filter_by(ativo=True)
     drivers = q.order_by(Driver.nome).all()
     return jsonify(drivers=[
-        {'id': d.id, 'nome': d.nome, 'cor': d.cor, 'telefone': d.telefone, 'ativo': d.ativo}
+        {
+            'id': d.id, 'nome': d.nome, 'cor': d.cor, 'telefone': d.telefone, 'ativo': d.ativo,
+            'token': d.token, 'pin': d.pin,
+        }
         for d in drivers
     ])
 
@@ -145,6 +148,7 @@ def listar_drivers():
 @login_required
 @entrega_access_required
 def criar_driver():
+    import secrets
     data = request.get_json(silent=True) or {}
     nome = (data.get('nome') or '').strip()
     if not nome:
@@ -156,10 +160,11 @@ def criar_driver():
         cor=(data.get('cor') or '').strip() or None,
         telefone=(data.get('telefone') or '').strip() or None,
         ativo=True,
+        token=secrets.token_urlsafe(16),
     )
     db.session.add(d)
     db.session.commit()
-    return jsonify(ok=True, id=d.id, nome=d.nome)
+    return jsonify(ok=True, id=d.id, nome=d.nome, token=d.token)
 
 
 @entregas_bp.route('/api/drivers/<int:did>', methods=['POST'])
@@ -183,8 +188,20 @@ def atualizar_driver(did):
         d.telefone = (data['telefone'] or '').strip() or None
     if 'ativo' in data:
         d.ativo = bool(data['ativo'])
+    if 'pin' in data:
+        pin = (data['pin'] or '').strip()
+        # PIN vazio remove (acesso livre); 4-6 digitos so numero
+        if pin and not (pin.isdigit() and 4 <= len(pin) <= 6):
+            return jsonify(ok=False, erro='PIN deve ter 4-6 digitos'), 400
+        d.pin = pin or None
+    if data.get('regenerar_token'):
+        import secrets
+        d.token = secrets.token_urlsafe(16)
+    if not d.token:
+        import secrets
+        d.token = secrets.token_urlsafe(16)
     db.session.commit()
-    return jsonify(ok=True)
+    return jsonify(ok=True, token=d.token)
 
 
 @entregas_bp.route('/api/drivers/<int:did>', methods=['DELETE'])
