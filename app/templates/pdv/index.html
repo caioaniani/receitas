@@ -74,6 +74,14 @@
             return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
         });
     }
+    // Aceita string OU objeto {name, label, ...} OU array — devolve algo legivel
+    function s(v) {
+        if (v == null) return '';
+        if (typeof v === 'string') return v;
+        if (Array.isArray(v)) return v.map(s).filter(Boolean).join(', ');
+        if (typeof v === 'object') return v.name || v.label || v.tag || v.code || v.type || '';
+        return String(v);
+    }
 
     function buscar() {
         var inicio = document.getElementById('pdv-inicio').value;
@@ -175,9 +183,9 @@
                     quando = dt.toLocaleString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'});
                 }
             }
-            var cliente = (p.customer && p.customer.name) || '—';
-            var canal = (p.salesChannel && p.salesChannel.name) || '—';
-            var pgs = (p.payments || []).map(function(pay) { return pay.method || pay.type || '—'; }).join(', ') || '—';
+            var cliente = s(p.customer && p.customer.name) || '—';
+            var canal = s(p.salesChannel) || '—';
+            var pgs = (p.payments || []).map(function(pay) { return s(pay.method) || s(pay.type) || '—'; }).join(', ') || '—';
             var status = p.canceledAt
                 ? '<span class="badge bg-danger">Cancelado</span>'
                 : '<span class="badge bg-success">' + escapeHtml(p.status || 'OK') + '</span>';

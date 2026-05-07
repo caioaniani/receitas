@@ -47,6 +47,18 @@ def api_vendas():
         except (TypeError, ValueError):
             return 0.0
 
+    def _s(v):
+        """Converte qualquer valor pra string utilizavel como chave (dicts/listas viram nome aninhado)."""
+        if v is None:
+            return ''
+        if isinstance(v, str):
+            return v
+        if isinstance(v, dict):
+            return str(v.get('name') or v.get('label') or v.get('tag') or v.get('code') or v.get('type') or '')
+        if isinstance(v, (list, tuple)):
+            return ', '.join(_s(x) for x in v if x is not None)
+        return str(v)
+
     try:
         total = 0.0
         por_pagamento = {}
@@ -62,11 +74,13 @@ def api_vendas():
             for pay in (p.get('payments') or []):
                 if not isinstance(pay, dict):
                     continue
-                metodo = pay.get('method') or pay.get('type') or '—'
+                metodo = _s(pay.get('method') or pay.get('type')) or '—'
                 valor = _f(pay.get('value') or pay.get('total') or pay.get('amount'))
                 por_pagamento[metodo] = por_pagamento.get(metodo, 0) + valor
             sc = p.get('salesChannel') or {}
-            canal = (sc.get('name') if isinstance(sc, dict) else None) or '—'
+            canal = _s(sc) if isinstance(sc, dict) else _s(sc)
+            if not canal:
+                canal = '—'
             por_canal[canal] = por_canal.get(canal, 0) + _f(p.get('total'))
     except Exception as e:
         import traceback
