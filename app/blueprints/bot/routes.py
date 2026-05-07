@@ -99,45 +99,22 @@ def faturamento():
     # OPAO PADARIA (sync em batch nos dias seguintes).
     BOT_MAX_DIAS_EXTRA = 7
     dias_extra = min(max(0, (hoje - target).days), BOT_MAX_DIAS_EXTRA) if target < hoje else 0
-    debug_paginas = []
     try:
-        pedidos = seru.listar_pedidos_completo(target, target, expandir_dias_frente=dias_extra,
-                                                debug=debug_paginas)
+        pedidos = seru.listar_pedidos_completo(target, target, expandir_dias_frente=dias_extra)
     except Exception as e:
         current_app.logger.exception('bot/faturamento: Seru falhou')
         return jsonify(ok=False, erro=f'falha ao buscar Seru: {type(e).__name__}'), 502
-    current_app.logger.info('bot/faturamento %s: %s', target.isoformat(), debug_paginas)
 
-    target_iso = target.isoformat()
     total = 0.0
     por_loja = {}
     qtd = 0
-    # Diagnostico: distribuicao de createdAt local + amostra de descartados
-    distrib_createdAt = {}
-    distrib_company = {}
-    descartados_amostra = []
     for p in pedidos:
         if not isinstance(p, dict):
             continue
-        local = seru.data_local(p.get('createdAt'))
-        local_str = local.isoformat() if local else None
-        comp = (p.get('company') or {}).get('name') if isinstance(p.get('company'), dict) else None
-        distrib_createdAt[local_str] = distrib_createdAt.get(local_str, 0) + 1
-        if comp:
-            distrib_company[comp] = distrib_company.get(comp, 0) + 1
         if p.get('canceledAt'):
             continue
-        if local != target:
-            if len(descartados_amostra) < 5:
-                descartados_amostra.append({
-                    'code': p.get('code'),
-                    'createdAt': p.get('createdAt'),
-                    'updatedAt': p.get('updatedAt'),
-                    'createdAt_local': local_str,
-                    'company': comp,
-                    'status': p.get('status'),
-                    'canceledAt': p.get('canceledAt'),
-                })
+        # createdAt da Seru e UTC; convertemos pra BRT pra comparar com a data local
+        if seru.data_local(p.get('createdAt')) != target:
             continue
         valor = float(p.get('total') or 0)
         total += valor
@@ -164,21 +141,10 @@ def faturamento():
 
     resp = jsonify(
         ok=True,
-        data=target_iso,
-        data_recebida=data_raw,
-        fallback_aplicado=fallback_aplicado,
+        data=target.isoformat(),
         total=round(total, 2),
         qtd_pedidos=qtd,
-        qtd_pedidos_brutos=len(pedidos),
         por_loja={k: round(v, 2) for k, v in por_loja.items()},
-        debug_paginas=debug_paginas,
-        debug_range_utc={
-            'inicio': seru._iso_dia(target, fim=False),
-            'fim': seru._iso_dia(target, fim=True),
-        },
-        debug_distrib_createdAt=distrib_createdAt,
-        debug_distrib_company=distrib_company,
-        debug_descartados_amostra=descartados_amostra,
         mensagem=mensagem,
     )
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
