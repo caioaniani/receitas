@@ -48,40 +48,39 @@ def _legacy_token():
 
 
 def _token():
-    """Retorna access token valido. Usa cache, refaz via refresh se preciso."""
-    # Modo legado: token longo direto
-    legacy = _legacy_token()
-    if legacy:
-        return legacy
+    """Retorna access token valido. Usa cache, refaz via refresh se preciso.
 
+    Prioridade: refresh flow > token legado. Assim que o admin configura
+    o refresh, o token legado de 4h passa a ser ignorado e pode ser apagado.
+    """
     app_key, app_secret, refresh = _refresh_config()
-    if not (app_key and app_secret and refresh):
-        return ''
+    if app_key and app_secret and refresh:
+        with _token_lock:
+            agora = time.time()
+            if _token_cache['value'] and _token_cache['expira_em'] - 60 > agora:
+                return _token_cache['value']
 
-    with _token_lock:
-        agora = time.time()
-        if _token_cache['value'] and _token_cache['expira_em'] - 60 > agora:
-            return _token_cache['value']
+            r = requests.post(
+                'https://api.dropbox.com/oauth2/token',
+                data={
+                    'grant_type': 'refresh_token',
+                    'refresh_token': refresh,
+                },
+                auth=(app_key, app_secret),
+                timeout=10,
+            )
+            if r.status_code != 200:
+                logger.warning('Dropbox refresh falhou: %s %s', r.status_code, r.text[:200])
+                return ''
+            body = r.json()
+            access = body.get('access_token') or ''
+            ttl = int(body.get('expires_in') or 14400)  # default 4h
+            _token_cache['value'] = access
+            _token_cache['expira_em'] = agora + ttl
+            return access
 
-        # Pede novo access token
-        r = requests.post(
-            'https://api.dropbox.com/oauth2/token',
-            data={
-                'grant_type': 'refresh_token',
-                'refresh_token': refresh,
-            },
-            auth=(app_key, app_secret),
-            timeout=10,
-        )
-        if r.status_code != 200:
-            logger.warning('Dropbox refresh falhou: %s %s', r.status_code, r.text[:200])
-            return ''
-        body = r.json()
-        access = body.get('access_token') or ''
-        ttl = int(body.get('expires_in') or 14400)  # default 4h
-        _token_cache['value'] = access
-        _token_cache['expira_em'] = agora + ttl
-        return access
+    # Fallback: token legado (4h, so pra teste)
+    return _legacy_token()
 
 
 def disponivel():
