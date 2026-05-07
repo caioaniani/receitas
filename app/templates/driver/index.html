@@ -120,6 +120,29 @@
 
     var pedidoAtual = null; // referencia ao pedido sendo editado
     var pedidos = [];
+    var origemEndereco = '';
+
+    function gerarLinksMaps(matriz, paradas) {
+        if (!paradas || !paradas.length) return [];
+        var links = [];
+        var chunkSize = 10;
+        for (var i = 0; i < paradas.length; i += chunkSize) {
+            var chunk = paradas.slice(i, i + chunkSize);
+            var origem = matriz || chunk[0].endereco;
+            var destino = chunk[chunk.length - 1].endereco;
+            var ws;
+            if (matriz) ws = chunk.slice(0, -1);
+            else ws = chunk.slice(1, -1);
+            var waypoints = ws.map(function(p) { return encodeURIComponent(p.endereco); }).join('|');
+            var url = 'https://www.google.com/maps/dir/?api=1' +
+                '&origin=' + encodeURIComponent(origem) +
+                '&destination=' + encodeURIComponent(destino) +
+                (waypoints ? '&waypoints=' + waypoints : '') +
+                '&travelmode=driving';
+            links.push({url: url, de: i + 1, ate: Math.min(i + chunkSize, paradas.length)});
+        }
+        return links;
+    }
 
     function api(path, opts) {
         opts = opts || {};
@@ -127,7 +150,13 @@
         opts.headers['X-CSRFToken'] = CSRF;
         opts.credentials = 'same-origin';
         return fetch('/driver/api/' + TOKEN_DRIVER + path, opts).then(function(r) {
-            return r.json().then(function(d) { return {status: r.status, body: d}; });
+            return r.json().then(function(d) {
+                // Sessao expirada (deploy do servidor invalidou cookies, etc) -> volta pra tela de PIN
+                if (r.status === 401 && d && d.precisa_pin) {
+                    mostrarLogin();
+                }
+                return {status: r.status, body: d};
+            });
         });
     }
 
@@ -197,6 +226,7 @@
                 return;
             }
             pedidos = r.body.pedidos || [];
+            origemEndereco = r.body.origem_endereco || '';
             document.getElementById('topo-data').textContent =
                 data.split('-').reverse().join('/') + ' — ' + pedidos.length + ' entrega' + (pedidos.length !== 1 ? 's' : '');
             renderPedidos();
@@ -210,7 +240,20 @@
             c.innerHTML = '';
             return;
         }
+        // Botao(s) de rota no Maps. Cada link cobre ate 10 paradas.
+        var paradasComEndereco = pedidos.filter(function(p) { return p.endereco; });
+        var links = gerarLinksMaps(origemEndereco, paradasComEndereco);
         var html = '';
+        if (links.length > 0) {
+            html += '<div class="d-flex flex-wrap gap-2 mb-3">';
+            links.forEach(function(l) {
+                var label = links.length === 1
+                    ? '<i class="bi bi-geo-alt-fill"></i> Abrir rota no Google Maps'
+                    : '<i class="bi bi-geo-alt-fill"></i> Rota Maps (paradas ' + l.de + '-' + l.ate + ')';
+                html += '<a href="' + l.url + '" target="_blank" rel="noopener" class="btn btn-success btn-sm flex-grow-1">' + label + '</a>';
+            });
+            html += '</div>';
+        }
         for (var i = 0; i < pedidos.length; i++) {
             var p = pedidos[i];
             var st = p.status || 'pendente';

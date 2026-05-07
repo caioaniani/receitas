@@ -11,6 +11,11 @@ logger = logging.getLogger(__name__)
 
 _client_cache = {}
 
+# Cache curto de buscar_pedidos_do_dia: chave = (data_iso, overrides_hash) → (timestamp, resultado)
+# Reduz dependencia da API VNDA, que as vezes retorna lento ou vazio temporariamente.
+_pedidos_cache = {}
+_PEDIDOS_CACHE_TTL = 60  # segundos
+
 
 def _headers():
     token = current_app.config.get('VNDA_API_TOKEN', '')
@@ -380,11 +385,19 @@ _STATUS_IGNORAR = {'canceled', 'cancelled'}
 
 def buscar_pedidos_do_dia(target_date, overrides=None):
     """overrides: dict {pedido_code: data_entrega} para sobrescrever a data extraida."""
+    import time
     token = current_app.config.get('VNDA_API_TOKEN')
     if not token:
         return {'erro': 'Token Vnda nao configurado. Adicione VNDA_API_TOKEN nas variaveis de ambiente.', 'pedidos': []}
 
     overrides = overrides or {}
+
+    # Cache curto de 60s. Mesma data + mesmos overrides → reaproveita.
+    cache_key = (target_date.isoformat(),
+                 tuple(sorted((k, v.isoformat() if hasattr(v, 'isoformat') else v) for k, v in overrides.items())))
+    cached = _pedidos_cache.get(cache_key)
+    if cached and (time.time() - cached[0]) < _PEDIDOS_CACHE_TTL:
+        return cached[1]
 
     # Janela de criacao: pedidos VNDA podem ser feitos com bastante antecedencia
     # (encomendas de bolos, datas comemorativas). 60 dias cobre o caso geral.
@@ -424,7 +437,9 @@ def buscar_pedidos_do_dia(target_date, overrides=None):
         pedidos.append(p)
 
     pedidos.sort(key=lambda p: p.get('periodo') or '')
-    return {'pedidos': pedidos, 'total_janela': len(todos)}
+    resultado = {'pedidos': pedidos, 'total_janela': len(todos)}
+    _pedidos_cache[cache_key] = (time.time(), resultado)
+    return resultado
 
 
 def contar_pedidos_por_dia(year, month, overrides=None):

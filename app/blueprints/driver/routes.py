@@ -195,10 +195,12 @@ def api_pedidos(token):
 
     pedidos_driver.sort(key=lambda x: ((x.get('atribuicao_id') and atribs_por_code[x['code']].ordem) or 0, x.get('periodo') or ''))
 
+    from app.services import rotas as rotas_svc
     return jsonify(
         ok=True,
         data=data_str,
         driver={'id': driver.id, 'nome': driver.nome, 'cor': driver.cor},
+        origem_endereco=rotas_svc.origem_endereco(current_app),
         pedidos=pedidos_driver,
     )
 
