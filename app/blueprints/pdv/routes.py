@@ -37,9 +37,9 @@ def api_vendas():
 
     try:
         pedidos = seru.listar_pedidos_completo(inicio, fim)
-    except RuntimeError as e:
+    except Exception as e:
         current_app.logger.exception('Seru listar_pedidos falhou')
-        return jsonify(ok=False, erro=str(e)[:300]), 502
+        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502
 
     # Resumo
     total = 0.0

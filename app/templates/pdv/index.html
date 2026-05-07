@@ -91,19 +91,35 @@
 
         fetch('/pdv/api/vendas?inicio=' + encodeURIComponent(inicio) + '&fim=' + encodeURIComponent(fim),
               {credentials: 'same-origin'})
-            .then(function(r) { return r.json(); })
-            .then(function(d) {
+            .then(function(r) {
+                return r.text().then(function(txt) {
+                    try {
+                        return {status: r.status, body: JSON.parse(txt)};
+                    } catch (e) {
+                        return {status: r.status, body: null, raw: txt};
+                    }
+                });
+            })
+            .then(function(rs) {
                 loading.classList.add('d-none');
-                if (!d.ok) {
-                    msg.innerHTML = '<div class="alert alert-danger py-2 small">Erro: ' + escapeHtml(d.erro || '?') + '</div>';
+                if (rs.body == null) {
+                    msg.innerHTML = '<div class="alert alert-danger py-2 small"><strong>HTTP ' + rs.status + '</strong> — resposta não-JSON. Início: <code style="font-size:11px;">' + escapeHtml((rs.raw || '').slice(0, 300)) + '</code></div>';
                     return;
                 }
-                renderResumo(d);
-                renderLista(d);
+                if (!rs.body.ok) {
+                    msg.innerHTML = '<div class="alert alert-danger py-2 small">Erro (HTTP ' + rs.status + '): ' + escapeHtml(rs.body.erro || '?') + '</div>';
+                    return;
+                }
+                try {
+                    renderResumo(rs.body);
+                    renderLista(rs.body);
+                } catch (e) {
+                    msg.innerHTML = '<div class="alert alert-danger py-2 small"><strong>Erro ao renderizar:</strong> ' + escapeHtml(String(e && e.message || e)) + '<br><small style="font-family:monospace;">' + escapeHtml(((e && e.stack) || '').slice(0, 400)) + '</small></div>';
+                }
             })
             .catch(function(e) {
                 loading.classList.add('d-none');
-                msg.innerHTML = '<div class="alert alert-danger py-2 small">Falha de rede: ' + escapeHtml(String(e)) + '</div>';
+                msg.innerHTML = '<div class="alert alert-danger py-2 small">Falha de rede: ' + escapeHtml(String(e && e.message || e)) + '</div>';
             });
     }
 
@@ -152,7 +168,13 @@
         var html = '<div class="table-responsive"><table class="table table-sm table-hover">';
         html += '<thead><tr><th>Quando</th><th>Code</th><th>Cliente</th><th>Canal</th><th>Pagamento</th><th class="text-end">Total</th><th>Status</th></tr></thead><tbody>';
         pedidos.forEach(function(p) {
-            var quando = p.createdAt ? new Date(p.createdAt).toLocaleString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : '—';
+            var quando = '—';
+            if (p.createdAt) {
+                var dt = new Date(p.createdAt);
+                if (!isNaN(dt.getTime())) {
+                    quando = dt.toLocaleString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'});
+                }
+            }
             var cliente = (p.customer && p.customer.name) || '—';
             var canal = (p.salesChannel && p.salesChannel.name) || '—';
             var pgs = (p.payments || []).map(function(pay) { return pay.method || pay.type || '—'; }).join(', ') || '—';
