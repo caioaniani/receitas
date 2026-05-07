@@ -76,6 +76,7 @@ def api_vendas():
         total = 0.0
         por_pagamento = {}
         por_canal = {}
+        por_loja = {}
         cancelados = 0
         for p in pedidos:
             if not isinstance(p, dict):
@@ -95,6 +96,11 @@ def api_vendas():
             if not canal:
                 canal = '—'
             por_canal[canal] = por_canal.get(canal, 0) + _f(p.get('total'))
+            company = p.get('company') or {}
+            loja = _s(company) if isinstance(company, dict) else _s(company)
+            if not loja:
+                loja = '—'
+            por_loja[loja] = por_loja.get(loja, 0) + _f(p.get('total'))
     except Exception as e:
         import traceback
         current_app.logger.exception('Erro agregando vendas Seru')
@@ -116,6 +122,7 @@ def api_vendas():
             total_valor=total,
             por_pagamento=por_pagamento,
             por_canal=por_canal,
+            por_loja=por_loja,
             pedidos=pedidos,
         )
     except Exception as e:

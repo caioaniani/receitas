@@ -24,6 +24,12 @@
     <button class="btn btn-outline-secondary btn-sm" id="pdv-hoje">Hoje</button>
     <button class="btn btn-outline-secondary btn-sm" id="pdv-7d">Últimos 7 dias</button>
     <button class="btn btn-outline-secondary btn-sm" id="pdv-mes">Este mês</button>
+    <div class="ms-auto">
+        <label class="form-label small fw-bold mb-1 me-2">Loja</label>
+        <select id="pdv-filtro-loja" class="form-select form-select-sm d-inline-block" style="max-width:240px;">
+            <option value="">Todas</option>
+        </select>
+    </div>
 </div>
 
 <div id="pdv-loading" class="text-center py-4 d-none">
@@ -49,16 +55,22 @@
 </div>
 
 <div class="row g-2 mb-3">
-    <div class="col-md-6">
+    <div class="col-md-4">
         <div class="card p-2" id="pdv-pagamentos-card" style="display:none;">
             <strong class="small">Por forma de pagamento</strong>
             <div id="pdv-pagamentos"></div>
         </div>
     </div>
-    <div class="col-md-6">
+    <div class="col-md-4">
         <div class="card p-2" id="pdv-canais-card" style="display:none;">
             <strong class="small">Por canal de venda</strong>
             <div id="pdv-canais"></div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card p-2" id="pdv-lojas-card" style="display:none;">
+            <strong class="small">Por loja</strong>
+            <div id="pdv-lojas"></div>
         </div>
     </div>
 </div>
@@ -68,6 +80,8 @@
 <script>
 (function() {
     var CSRF = '{{ csrf_token() }}';
+    var ultimoResultado = null;
+    var filtroLoja = '';
     function fmt(n) { return (Number(n) || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
     function escapeHtml(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
@@ -119,8 +133,9 @@
                     return;
                 }
                 try {
-                    renderResumo(rs.body);
-                    renderLista(rs.body);
+                    ultimoResultado = rs.body;
+                    popularFiltroLoja(rs.body);
+                    aplicarFiltroEAtualizar();
                 } catch (e) {
                     msg.innerHTML = '<div class="alert alert-danger py-2 small"><strong>Erro ao renderizar:</strong> ' + escapeHtml(String(e && e.message || e)) + '<br><small style="font-family:monospace;">' + escapeHtml(((e && e.stack) || '').slice(0, 400)) + '</small></div>';
                 }
@@ -129,6 +144,55 @@
                 loading.classList.add('d-none');
                 msg.innerHTML = '<div class="alert alert-danger py-2 small">Falha de rede: ' + escapeHtml(String(e && e.message || e)) + '</div>';
             });
+    }
+
+    function popularFiltroLoja(d) {
+        var sel = document.getElementById('pdv-filtro-loja');
+        var atual = filtroLoja;
+        var lojas = Object.keys(d.por_loja || {}).sort();
+        var html = '<option value="">Todas (' + lojas.length + ')</option>';
+        lojas.forEach(function(nome) {
+            html += '<option value="' + escapeHtml(nome) + '"' + (nome === atual ? ' selected' : '') + '>' + escapeHtml(nome) + '</option>';
+        });
+        sel.innerHTML = html;
+    }
+
+    function aplicarFiltroEAtualizar() {
+        if (!ultimoResultado) return;
+        // Filtra cada pedido pelo company.name == filtroLoja (se filtro ativo)
+        var filtrados = (ultimoResultado.pedidos || []).filter(function(p) {
+            if (!filtroLoja) return true;
+            var c = (p.company && (p.company.name || p.company.legalName)) || '';
+            return c === filtroLoja;
+        });
+        // Reagregar localmente
+        var total = 0, cancelados = 0;
+        var por_pagamento = {}, por_canal = {}, por_loja = {};
+        filtrados.forEach(function(p) {
+            if (p.canceledAt) { cancelados++; return; }
+            total += Number(p.total) || 0;
+            (p.payments || []).forEach(function(pay) {
+                var m = s(pay.method) || s(pay.type) || '—';
+                var v = Number(pay.value || pay.total || pay.amount) || 0;
+                por_pagamento[m] = (por_pagamento[m] || 0) + v;
+            });
+            var canal = s(p.salesChannel) || '—';
+            por_canal[canal] = (por_canal[canal] || 0) + (Number(p.total) || 0);
+            var loja = s(p.company) || '—';
+            por_loja[loja] = (por_loja[loja] || 0) + (Number(p.total) || 0);
+        });
+        var view = {
+            total_pedidos: filtrados.length,
+            fora_intervalo: ultimoResultado.fora_intervalo,
+            cancelados: cancelados,
+            total_valor: total,
+            por_pagamento: por_pagamento,
+            por_canal: por_canal,
+            por_loja: por_loja,
+            pedidos: filtrados,
+        };
+        renderResumo(view);
+        renderLista(view);
     }
 
     function renderResumo(d) {
@@ -166,6 +230,21 @@
             });
             hc += '</tbody></table>';
             document.getElementById('pdv-canais').innerHTML = hc;
+        } else {
+            document.getElementById('pdv-canais-card').style.display = 'none';
+        }
+        // Por loja
+        var ljs = Object.entries(d.por_loja || {}).sort(function(a, b) { return b[1] - a[1]; });
+        if (ljs.length > 0) {
+            document.getElementById('pdv-lojas-card').style.display = '';
+            var hl = '<table class="table table-sm mb-0"><tbody>';
+            ljs.forEach(function(e) {
+                hl += '<tr><td class="small">' + escapeHtml(e[0]) + '</td><td class="text-end small fw-bold">R$ ' + fmt(e[1]) + '</td></tr>';
+            });
+            hl += '</tbody></table>';
+            document.getElementById('pdv-lojas').innerHTML = hl;
+        } else {
+            document.getElementById('pdv-lojas-card').style.display = 'none';
         }
     }
 
@@ -180,7 +259,7 @@
             return (b.createdAt || '').localeCompare(a.createdAt || '');
         });
         var html = '<div class="table-responsive"><table class="table table-sm table-hover">';
-        html += '<thead><tr><th>Quando</th><th>Code</th><th>Cliente</th><th>Canal</th><th>Pagamento</th><th class="text-end">Total</th><th>Status</th></tr></thead><tbody>';
+        html += '<thead><tr><th>Quando</th><th>Code</th><th>Loja</th><th>Cliente</th><th>Canal</th><th>Pagamento</th><th class="text-end">Total</th><th>Status</th></tr></thead><tbody>';
         pedidos.forEach(function(p) {
             var quando = '—';
             if (p.createdAt) {
@@ -195,9 +274,11 @@
             var status = p.canceledAt
                 ? '<span class="badge bg-danger">Cancelado</span>'
                 : '<span class="badge bg-success">' + escapeHtml(p.status || 'OK') + '</span>';
+            var loja = s(p.company) || '—';
             html += '<tr' + (p.canceledAt ? ' style="opacity:.5;"' : '') + '>' +
                 '<td class="small">' + escapeHtml(quando) + '</td>' +
                 '<td class="small fw-bold">' + escapeHtml(p.code || '—') + '</td>' +
+                '<td class="small">' + escapeHtml(loja) + '</td>' +
                 '<td class="small">' + escapeHtml(cliente) + '</td>' +
                 '<td class="small">' + escapeHtml(canal) + '</td>' +
                 '<td class="small">' + escapeHtml(pgs) + '</td>' +
@@ -209,6 +290,10 @@
         lista.innerHTML = html;
     }
 
+    document.getElementById('pdv-filtro-loja').addEventListener('change', function() {
+        filtroLoja = this.value;
+        aplicarFiltroEAtualizar();
+    });
     document.getElementById('pdv-buscar').addEventListener('click', buscar);
     document.getElementById('pdv-hoje').addEventListener('click', function() {
         var t = new Date().toISOString().slice(0, 10);
