@@ -268,6 +268,7 @@
                 if (d.ok) {
                     bootstrap.Modal.getInstance(document.getElementById('modal-alterar-data')).hide();
                     carregarPedidos();
+                    if (typeof window.opRecarregar === 'function') window.opRecarregar();
                 } else {
                     alert('Erro: ' + (d.erro || 'desconhecido'));
                 }
@@ -286,6 +287,7 @@
                 if (d.ok) {
                     bootstrap.Modal.getInstance(document.getElementById('modal-alterar-data')).hide();
                     carregarPedidos();
+                    if (typeof window.opRecarregar === 'function') window.opRecarregar();
                 }
             });
         });
@@ -1610,6 +1612,7 @@
     var opJanelaFiltro = new Set();  // filtro local — vazio = todas
 
     function opData() { return document.getElementById('op-data').value; }
+    var opBuscaTexto = '';
 
     function opCarregar() {
         var data = opData();
@@ -1657,9 +1660,21 @@
         var nSem = (d.sem_driver || []).length;
         var nPed = d.total_pedidos || 0;
         var nAtrib = d.total_atribuidos || 0;
+        var totalRs = 0;
+        (d.drivers || []).forEach(function(dr) {
+            (dr.paradas || []).forEach(function(p) { totalRs += (p.total || 0); });
+        });
+        (d.sem_driver || []).forEach(function(p) { totalRs += (p.total || 0); });
+        var totalFmt = totalRs.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         document.getElementById('op-resumo').innerHTML =
             '<strong>' + nPed + '</strong> pedido(s) · <strong>' + nAtrib + '</strong> atribuído(s) em ' +
-            nDrivers + ' driver(s) · <strong>' + nSem + '</strong> sem driver';
+            nDrivers + ' driver(s) · <strong>' + nSem + '</strong> sem driver · <strong>R$ ' + totalFmt + '</strong> total';
+    }
+
+    function opMatchBusca(p) {
+        if (!opBuscaTexto) return true;
+        var alvo = ((p.destinatario || '') + ' ' + (p.code || '') + ' ' + (p.endereco || '') + ' ' + (p.telefone || '')).toLowerCase();
+        return alvo.indexOf(opBuscaTexto.toLowerCase()) !== -1;
     }
 
     function opMontarFiltroJanela(d) {
@@ -1686,18 +1701,18 @@
 
     function opRenderLista(d, container) {
         var html = '';
-        // Sem driver primeiro (acao necessaria)
-        var sem = (d.sem_driver || []).filter(opPassaJanela);
+        var sem = (d.sem_driver || []).filter(opPassaJanela).filter(opMatchBusca);
         if (sem.length > 0) {
             html += opRenderSecao({id: '', nome: 'Sem driver', cor: '#94a3b8', paradas: sem, qtd: sem.length}, true, d.drivers_disponiveis);
         }
         (d.drivers || []).forEach(function(dr) {
-            var paradas = (dr.paradas || []).filter(opPassaJanela);
-            if (paradas.length === 0 && opJanelaFiltro.size > 0) return;
+            var paradas = (dr.paradas || []).filter(opPassaJanela).filter(opMatchBusca);
+            if (paradas.length === 0) return;
             html += opRenderSecao({id: dr.id, nome: dr.nome, cor: dr.cor, paradas: paradas, qtd: paradas.length}, false, d.drivers_disponiveis);
         });
         if (!html) {
-            html = '<div class="alert alert-info py-2 small">Nenhum pedido para esta data.</div>';
+            html = '<div class="alert alert-info py-2 small">' +
+                (opBuscaTexto ? 'Nenhum pedido bate com a busca.' : 'Nenhum pedido para esta data.') + '</div>';
         }
         container.innerHTML = html;
         opAtivarSortable();
@@ -1756,6 +1771,44 @@
                 ' <button class="btn btn-link btn-sm p-0 ms-2 op-mover d-print-none" data-code="' + escapeHtml(p.code) + '" style="font-size:11px;color:#0369a1;" title="Mover comprovante pra outro pedido"><i class="bi bi-arrow-left-right"></i> Mover</button>';
         }
 
+        // Botao 'Mudar data' (abre modal de override que ja existe)
+        var btnData = '';
+        if (!p.pedido_local) {
+            // Override so faz sentido pra pedidos VNDA. Pedido local edita direto via modal.
+            btnData = ' <button class="btn btn-link btn-sm p-0 ms-2 op-mudar-data d-print-none" data-code="' + escapeHtml(p.code) + '" style="font-size:11px;color:#7c3aed;" title="Mudar data so no ERP"><i class="bi bi-calendar-event"></i> Mudar data</button>';
+        }
+        // Badge override + badge pedido local
+        var badgeOrigem = '';
+        if (p.pedido_local) {
+            badgeOrigem = ' <span class="badge" style="background:#16a34a; font-size:10px;"><i class="bi bi-pencil-square"></i> Manual</span>';
+        } else if (p.data_override) {
+            badgeOrigem = ' <span class="badge bg-warning text-dark" style="font-size:10px;" title="Data alterada no ERP"><i class="bi bi-calendar-event"></i> Data alterada</span>';
+        }
+
+        // Total R$
+        var totalHtml = '';
+        if (p.total) {
+            totalHtml = ' <span class="badge bg-light text-dark" style="font-size:10px;">R$ ' + p.total.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</span>';
+        }
+
+        // Itens (collapse)
+        var itensHtml = '';
+        if (p.itens && p.itens.length > 0) {
+            var itensId = 'op-itens-' + p.code.replace(/[^a-zA-Z0-9]/g, '');
+            itensHtml = '<div class="mt-1"><button class="btn btn-link btn-sm p-0" type="button" data-bs-toggle="collapse" data-bs-target="#' + itensId + '" style="font-size:11px;"><i class="bi bi-list-ul"></i> ' + p.itens.length + ' item(s)</button>' +
+                '<div class="collapse" id="' + itensId + '"><ul class="small mb-0 mt-1" style="padding-left:18px; color:#475569;">';
+            p.itens.forEach(function(it) {
+                itensHtml += '<li>' + (it.quantidade || 1) + 'x ' + escapeHtml(it.nome || '') + (it.preco_unitario ? ' <span class="text-muted">— R$ ' + it.preco_unitario.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</span>' : '') + '</li>';
+            });
+            itensHtml += '</ul></div></div>';
+        }
+
+        // Botao editar pedido local
+        var editLocal = '';
+        if (p.pedido_local) {
+            editLocal = ' <button class="btn btn-link btn-sm p-0 ms-2 op-editar-local d-print-none" data-id="' + p.id + '" style="font-size:11px;color:#0369a1;" title="Editar pedido manual"><i class="bi bi-pencil"></i> Editar</button>';
+        }
+
         var html = '<div class="list-group-item op-item" data-code="' + escapeHtml(p.code) + '" data-driver-atual="' + (driver.id || '') + '">';
         html += '<div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">';
         html += '<div class="d-flex align-items-start gap-2" style="flex:1; min-width:240px;">';
@@ -1765,11 +1818,13 @@
             '[' + escapeHtml(p.code) + '] <i class="bi bi-box-arrow-up-right" style="font-size:10px;"></i></a> ';
         html += '<span class="fw-semibold"><i class="bi bi-person-fill"></i> ' + escapeHtml(p.destinatario || '—') + '</span>';
         if (stBadge) html += ' ' + stBadge;
+        if (badgeOrigem) html += badgeOrigem;
         if (p.periodo) html += ' <span class="badge bg-light text-dark" style="font-size:10px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>';
-        html += proofLink + adminBtns;
+        html += totalHtml + proofLink + adminBtns + btnData + editLocal;
         html += '<div class="text-muted small mt-1"><i class="bi bi-geo-alt"></i> ' + escapeHtml(p.endereco || '') + '</div>';
         if (p.telefone) html += '<div class="text-muted small"><i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) + '</div>';
         if (p.nota_driver) html += '<div class="text-muted small fst-italic mt-1"><i class="bi bi-chat-left-quote"></i> ' + escapeHtml(p.nota_driver) + '</div>';
+        html += itensHtml;
         html += fotosHtml;
         html += '</div></div>';
         html += '<div class="d-print-none">';
@@ -2042,6 +2097,50 @@
             opAtualizarBulkBar();
         });
 
+        // Busca por cliente/code
+        var busca = document.getElementById('op-busca');
+        if (busca) busca.addEventListener('input', function() {
+            opBuscaTexto = this.value.trim();
+            if (opUltimoResultado) opRenderLista(opUltimoResultado, cont);
+        });
+
+        // Mudar data (override) — handler usa a funcao window.abrirAlterarData ja existente
+        cont.addEventListener('click', function(e) {
+            var b = e.target.closest('.op-mudar-data');
+            if (!b) return;
+            e.preventDefault();
+            var code = b.dataset.code;
+            // Pega o pedido no resultado pra ler override info
+            var pedido = null;
+            (opUltimoResultado.drivers || []).forEach(function(dr) {
+                (dr.paradas || []).forEach(function(p) { if (p.code === code) pedido = p; });
+            });
+            (opUltimoResultado.sem_driver || []).forEach(function(p) { if (p.code === code) pedido = p; });
+            if (!pedido) return;
+            // Reaproveita o modal: precisa popular pedidos[] global pra abrirAlterarData encontrar
+            window.pedidos = window.pedidos || [];
+            var idx = -1;
+            for (var i = 0; i < window.pedidos.length; i++) if (window.pedidos[i].code === code) { idx = i; break; }
+            if (idx === -1) window.pedidos.push(pedido);
+            else window.pedidos[idx] = pedido;
+            var dataAtual = pedido.data_entrega || opData();
+            var jaTem = !!pedido.data_override;
+            window.abrirAlterarData(code, dataAtual, jaTem);
+        });
+
+        // Novo pedido / Editar pedido local
+        var btnNovo = document.getElementById('op-novo-pedido');
+        if (btnNovo) btnNovo.addEventListener('click', function() { abrirModalPedidoLocal(null); });
+        cont.addEventListener('click', function(e) {
+            var b = e.target.closest('.op-editar-local');
+            if (!b) return;
+            e.preventDefault();
+            abrirModalPedidoLocal(parseInt(b.dataset.id, 10));
+        });
+
+        // Expor recarregar pra outros handlers (modal alterar-data)
+        window.opRecarregar = opCarregar;
+
         // Carrega ao abrir a aba pela primeira vez
         var tabBtn = document.getElementById('btn-tab-operacao');
         var carregada = false;
@@ -2049,6 +2148,141 @@
         if (tabBtn) tabBtn.addEventListener('shown.bs.tab', bootOp);
         // Como a aba é a default ativa, carrega já
         bootOp();
+    });
+
+    // ── Modal: novo/editar pedido local ──
+    function npLimparItens() {
+        document.getElementById('np-itens').innerHTML = '';
+    }
+
+    function npAdicionarItem(item) {
+        item = item || {};
+        var div = document.createElement('div');
+        div.className = 'np-item d-flex gap-2 mb-2';
+        div.innerHTML =
+            '<input class="form-control form-control-sm np-i-nome" placeholder="Nome do item" value="' + escapeHtml(item.nome || '') + '" style="flex:2;">' +
+            '<input class="form-control form-control-sm np-i-qtd" type="number" min="1" placeholder="Qtd" value="' + (item.quantidade || 1) + '" style="max-width:70px;">' +
+            '<input class="form-control form-control-sm np-i-preco" type="number" step="0.01" min="0" placeholder="Preço" value="' + (item.preco_unitario || 0) + '" style="max-width:100px;">' +
+            '<button type="button" class="btn btn-sm btn-outline-danger np-i-remover" title="Remover"><i class="bi bi-x"></i></button>';
+        document.getElementById('np-itens').appendChild(div);
+        npRecalcular();
+    }
+
+    function npRecalcular() {
+        var total = 0;
+        document.querySelectorAll('#np-itens .np-item').forEach(function(div) {
+            var q = parseInt(div.querySelector('.np-i-qtd').value, 10) || 0;
+            var p = parseFloat(div.querySelector('.np-i-preco').value) || 0;
+            total += q * p;
+        });
+        document.getElementById('np-total').textContent = total.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    function abrirModalPedidoLocal(id) {
+        document.getElementById('np-id').value = id || '';
+        document.getElementById('np-destinatario').value = '';
+        document.getElementById('np-telefone').value = '';
+        document.getElementById('np-endereco').value = '';
+        document.getElementById('np-data').value = document.getElementById('op-data').value;
+        document.getElementById('np-periodo').value = '';
+        document.getElementById('np-cartinha').value = '';
+        document.getElementById('np-observacao').value = '';
+        npLimparItens();
+        var btnDel = document.getElementById('np-deletar');
+        btnDel.classList.add('d-none');
+
+        if (id) {
+            // Carregar do servidor
+            fetch('/entregas/api/pedido-local/' + id, {credentials: 'same-origin'})
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (!d.ok) { alert('Erro: ' + (d.erro || '?')); return; }
+                    var p = d.pedido;
+                    document.getElementById('np-destinatario').value = p.destinatario || '';
+                    document.getElementById('np-telefone').value = p.telefone || '';
+                    document.getElementById('np-endereco').value = p.endereco || '';
+                    document.getElementById('np-data').value = p.data_entrega || '';
+                    document.getElementById('np-periodo').value = p.periodo || '';
+                    document.getElementById('np-cartinha').value = p.cartinha_vnda || '';
+                    document.getElementById('np-observacao').value = p.observacao || '';
+                    npLimparItens();
+                    (p.itens || []).forEach(npAdicionarItem);
+                    if ((p.itens || []).length === 0) npAdicionarItem();
+                    btnDel.classList.remove('d-none');
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-novo-pedido')).show();
+                });
+        } else {
+            npAdicionarItem();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-novo-pedido')).show();
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var modal = document.getElementById('modal-novo-pedido');
+        if (!modal) return;
+
+        document.getElementById('np-add-item').addEventListener('click', function() { npAdicionarItem(); });
+
+        document.getElementById('np-itens').addEventListener('input', npRecalcular);
+        document.getElementById('np-itens').addEventListener('click', function(e) {
+            var b = e.target.closest('.np-i-remover');
+            if (!b) return;
+            b.closest('.np-item').remove();
+            npRecalcular();
+        });
+
+        document.getElementById('np-salvar').addEventListener('click', function() {
+            var id = document.getElementById('np-id').value;
+            var itens = [];
+            document.querySelectorAll('#np-itens .np-item').forEach(function(div) {
+                var nome = div.querySelector('.np-i-nome').value.trim();
+                if (!nome) return;
+                itens.push({
+                    nome: nome,
+                    quantidade: parseInt(div.querySelector('.np-i-qtd').value, 10) || 1,
+                    preco_unitario: parseFloat(div.querySelector('.np-i-preco').value) || 0,
+                });
+            });
+            var body = {
+                id: id ? parseInt(id, 10) : null,
+                destinatario: document.getElementById('np-destinatario').value.trim(),
+                telefone: document.getElementById('np-telefone').value.trim(),
+                endereco: document.getElementById('np-endereco').value.trim(),
+                data_entrega: document.getElementById('np-data').value,
+                periodo: document.getElementById('np-periodo').value.trim(),
+                cartinha: document.getElementById('np-cartinha').value.trim(),
+                observacao: document.getElementById('np-observacao').value.trim(),
+                itens: itens,
+            };
+            if (!body.destinatario || !body.telefone || !body.endereco || !body.data_entrega) {
+                alert('Preencha destinatário, telefone, endereço e data.'); return;
+            }
+            if (itens.length === 0) { alert('Adicione pelo menos um item.'); return; }
+            fetch('/entregas/api/pedido-local', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+                credentials: 'same-origin',
+                body: JSON.stringify(body),
+            }).then(function(r) { return r.json(); }).then(function(d) {
+                if (!d.ok) { alert('Erro: ' + (d.erro || '?')); return; }
+                bootstrap.Modal.getInstance(modal).hide();
+                if (d.pedido && d.pedido.data_entrega) document.getElementById('op-data').value = d.pedido.data_entrega;
+                if (typeof window.opRecarregar === 'function') window.opRecarregar();
+            });
+        });
+
+        document.getElementById('np-deletar').addEventListener('click', function() {
+            var id = document.getElementById('np-id').value;
+            if (!id) return;
+            if (!confirm('Deletar este pedido manual?')) return;
+            fetch('/entregas/api/pedido-local/' + id, {
+                method: 'DELETE', headers: {'X-CSRFToken': CSRF_TOKEN}, credentials: 'same-origin',
+            }).then(function(r) { return r.json(); }).then(function(d) {
+                if (!d.ok) { alert('Erro: ' + (d.erro || '?')); return; }
+                bootstrap.Modal.getInstance(modal).hide();
+                if (typeof window.opRecarregar === 'function') window.opRecarregar();
+            });
+        });
     });
 
     // ── Init ──

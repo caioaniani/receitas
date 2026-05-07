@@ -8,7 +8,7 @@ import requests as http_requests
 from app.blueprints.entregas import entregas_bp
 from app.decorators import entrega_access_required
 from app.extensions import db
-from app.models import CartinhaEntrega, OverrideEntrega, Driver, AtribuicaoEntrega, EntregaFoto, Produto, MateriaPrima
+from app.models import CartinhaEntrega, OverrideEntrega, Driver, AtribuicaoEntrega, EntregaFoto, PedidoLocal, PedidoLocalItem, Produto, MateriaPrima
 from app.services import vnda, rotas as rotas_svc, dropbox_storage
 
 
@@ -58,7 +58,7 @@ def api_pedidos():
     try:
         overrides_full = _carregar_overrides_full()
         overrides_data = {code: o['data'] for code, o in overrides_full.items()}
-        resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides_data)
+        resultado = _injetar_pedidos_locais(target, vnda.buscar_pedidos_do_dia(target, overrides=overrides_data))
     except Exception as e:
         current_app.logger.exception('api_pedidos: erro carregando VNDA/overrides')
         return jsonify(pedidos=[], data=data_str,
@@ -489,7 +489,7 @@ def resetar_atribuicoes_dia():
         return jsonify(ok=False, erro='data invalida'), 400
 
     overrides = _carregar_overrides_data()
-    resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
+    resultado = _injetar_pedidos_locais(target, vnda.buscar_pedidos_do_dia(target, overrides=overrides))
     if 'erro' in resultado:
         return jsonify(ok=False, erro=resultado['erro']), 500
 
@@ -600,6 +600,130 @@ def migrar_entrega(code):
                    data=destino.data_entrega.isoformat() if destino.data_entrega else None)
 
 
+# ── Pedidos manuais (fora do VNDA) ──
+
+def _injetar_pedidos_locais(target_date, resultado):
+    """Adiciona pedidos manuais (PedidoLocal) na lista de pedidos do dia."""
+    if 'erro' in resultado:
+        return resultado
+    locais = PedidoLocal.query.filter_by(data_entrega=target_date).all()
+    pedidos = resultado.setdefault('pedidos', [])
+    for p in locais:
+        pedidos.append(_serializar_pedido_local(p))
+    return resultado
+
+
+def _gerar_code_local():
+    import secrets
+    while True:
+        code = 'LOC-' + secrets.token_hex(4).upper()
+        if not PedidoLocal.query.filter_by(code=code).first():
+            return code
+
+
+def _serializar_pedido_local(p):
+    return {
+        'id': p.id,
+        'pedido_local': True,
+        'code': p.code,
+        'destinatario': p.destinatario,
+        'telefone': p.telefone,
+        'endereco': p.endereco,
+        'data_entrega': p.data_entrega.isoformat() if p.data_entrega else None,
+        'data_entrega_fmt': p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '',
+        'periodo': p.periodo or '',
+        'cartinha_vnda': p.cartinha or '',
+        'observacao': p.observacao,
+        'status_vnda': 'local',
+        'data_override': False,
+        'tem_customizacao': False,
+        'comprador': '',
+        'itens': [
+            {'nome': i.nome, 'quantidade': i.quantidade, 'preco_unitario': i.preco_unitario, 'sku': '', 'subtotal': (i.quantidade or 0) * (i.preco_unitario or 0)}
+            for i in p.itens
+        ],
+        'total': p.total,
+    }
+
+
+@entregas_bp.route('/api/pedido-local', methods=['POST'])
+@login_required
+@entrega_access_required
+def criar_pedido_local():
+    data = request.get_json(silent=True) or {}
+    obrigatorios = ['destinatario', 'telefone', 'endereco', 'data_entrega', 'itens']
+    for campo in obrigatorios:
+        if not data.get(campo):
+            return jsonify(ok=False, erro=f'campo obrigatorio: {campo}'), 400
+    try:
+        d = datetime.strptime(data['data_entrega'], '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return jsonify(ok=False, erro='data_entrega invalida'), 400
+
+    itens = data['itens']
+    if not isinstance(itens, list) or len(itens) == 0:
+        return jsonify(ok=False, erro='precisa de pelo menos 1 item'), 400
+
+    pid = data.get('id')
+    if pid:
+        p = PedidoLocal.query.get(pid)
+        if not p:
+            return jsonify(ok=False, erro='pedido nao encontrado'), 404
+        # Limpa itens existentes
+        for it in list(p.itens):
+            db.session.delete(it)
+    else:
+        p = PedidoLocal(code=_gerar_code_local(), criado_por=current_user.id)
+        db.session.add(p)
+
+    p.destinatario = data['destinatario'].strip()
+    p.telefone = data['telefone'].strip()
+    p.endereco = data['endereco'].strip()
+    p.data_entrega = d
+    p.periodo = (data.get('periodo') or '').strip() or None
+    p.cartinha = (data.get('cartinha') or '').strip() or None
+    p.observacao = (data.get('observacao') or '').strip() or None
+    db.session.flush()
+
+    for it in itens:
+        nome = (it.get('nome') or '').strip()
+        if not nome:
+            continue
+        try:
+            qtd = int(it.get('quantidade') or 1)
+            preco = float(it.get('preco_unitario') or 0)
+        except (ValueError, TypeError):
+            qtd, preco = 1, 0.0
+        db.session.add(PedidoLocalItem(pedido_local_id=p.id, nome=nome, quantidade=qtd, preco_unitario=preco))
+
+    db.session.commit()
+    return jsonify(ok=True, pedido=_serializar_pedido_local(p))
+
+
+@entregas_bp.route('/api/pedido-local/<int:pid>', methods=['GET'])
+@login_required
+@entrega_access_required
+def get_pedido_local(pid):
+    p = PedidoLocal.query.get(pid)
+    if not p:
+        return jsonify(ok=False, erro='nao encontrado'), 404
+    return jsonify(ok=True, pedido=_serializar_pedido_local(p))
+
+
+@entregas_bp.route('/api/pedido-local/<int:pid>', methods=['DELETE'])
+@login_required
+@entrega_access_required
+def deletar_pedido_local(pid):
+    p = PedidoLocal.query.get(pid)
+    if not p:
+        return jsonify(ok=False, erro='nao encontrado'), 404
+    # Apaga atribuicao do pedido se houver (mesmo code)
+    AtribuicaoEntrega.query.filter_by(pedido_code=p.code).delete()
+    db.session.delete(p)
+    db.session.commit()
+    return jsonify(ok=True)
+
+
 @entregas_bp.route('/api/atribuicao/lote', methods=['POST'])
 @login_required
 @entrega_access_required
@@ -681,7 +805,7 @@ def api_produtos():
     janelas = [j for j in request.args.getlist('janela') if j]
 
     overrides = _carregar_overrides_data()
-    resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
+    resultado = _injetar_pedidos_locais(target, vnda.buscar_pedidos_do_dia(target, overrides=overrides))
     if 'erro' in resultado:
         resp = jsonify(vendidos=[], producao=[], erro=resultado['erro'])
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
@@ -830,7 +954,7 @@ def api_atribuidos():
         target = date.today()
 
     overrides = _carregar_overrides_data()
-    resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
+    resultado = _injetar_pedidos_locais(target, vnda.buscar_pedidos_do_dia(target, overrides=overrides))
     if 'erro' in resultado:
         resp = jsonify(drivers=[], sem_driver=[], erro=resultado['erro'])
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
@@ -935,7 +1059,7 @@ def api_rotas():
                       for d in drivers_db]
 
     overrides = _carregar_overrides_data()
-    resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
+    resultado = _injetar_pedidos_locais(target, vnda.buscar_pedidos_do_dia(target, overrides=overrides))
     if 'erro' in resultado:
         resp = jsonify(rotas=[], erro=resultado['erro'])
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'

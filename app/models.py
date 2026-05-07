@@ -824,6 +824,40 @@ class EntregaFoto(db.Model):
     tamanho_bytes = db.Column(db.Integer)
 
 
+class PedidoLocal(db.Model):
+    """Pedido cadastrado manualmente, fora do VNDA. Aparece junto com os
+    pedidos VNDA na operacao do dia."""
+    __tablename__ = 'pedido_local'
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    destinatario = db.Column(db.String(200), nullable=False)
+    telefone = db.Column(db.String(50), nullable=False)
+    endereco = db.Column(db.String(500), nullable=False)
+    data_entrega = db.Column(db.Date, nullable=False, index=True)
+    periodo = db.Column(db.String(80))
+    cartinha = db.Column(db.Text)
+    observacao = db.Column(db.Text)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    itens = db.relationship('PedidoLocalItem', backref='pedido', cascade='all, delete-orphan', lazy='joined')
+
+    @property
+    def total(self):
+        return sum((i.quantidade or 0) * (i.preco_unitario or 0) for i in self.itens)
+
+
+class PedidoLocalItem(db.Model):
+    __tablename__ = 'pedido_local_item'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_local_id = db.Column(db.Integer, db.ForeignKey('pedido_local.id', ondelete='CASCADE'), nullable=False, index=True)
+    nome = db.Column(db.String(200), nullable=False)
+    quantidade = db.Column(db.Integer, default=1)
+    preco_unitario = db.Column(db.Float, default=0)
+
+
 # ── Gestao de Projetos (PARA + 12 Week Year) ──
 
 class ProjetoArea(db.Model):

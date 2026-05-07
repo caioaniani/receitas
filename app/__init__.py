@@ -598,6 +598,34 @@ def _migrate_postgres(app):
     """)
     _try("CREATE INDEX IF NOT EXISTS idx_entrega_foto_atribuicao ON entrega_foto(atribuicao_id)")
 
+    # ── Pedidos cadastrados fora do VNDA (manuais) ──
+    _try("""
+    CREATE TABLE IF NOT EXISTS pedido_local (
+        id SERIAL PRIMARY KEY,
+        code VARCHAR(50) NOT NULL UNIQUE,
+        destinatario VARCHAR(200) NOT NULL,
+        telefone VARCHAR(50) NOT NULL,
+        endereco VARCHAR(500) NOT NULL,
+        data_entrega DATE NOT NULL,
+        periodo VARCHAR(80),
+        cartinha TEXT,
+        observacao TEXT,
+        criado_em TIMESTAMP DEFAULT NOW(),
+        criado_por INTEGER REFERENCES usuario(id)
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_pedido_local_data ON pedido_local(data_entrega)")
+    _try("""
+    CREATE TABLE IF NOT EXISTS pedido_local_item (
+        id SERIAL PRIMARY KEY,
+        pedido_local_id INTEGER NOT NULL REFERENCES pedido_local(id) ON DELETE CASCADE,
+        nome VARCHAR(200) NOT NULL,
+        quantidade INTEGER DEFAULT 1,
+        preco_unitario REAL DEFAULT 0
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_pedido_local_item_pedido ON pedido_local_item(pedido_local_id)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
