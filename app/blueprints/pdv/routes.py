@@ -20,6 +20,19 @@ def index():
 @login_required
 @admin_required
 def api_vendas():
+    try:
+        return _api_vendas_impl()
+    except Exception as e:
+        current_app.logger.exception('api_vendas: erro inesperado')
+        import traceback
+        return jsonify(
+            ok=False,
+            erro=f'{type(e).__name__}: {str(e)[:300]}',
+            traceback=traceback.format_exc().splitlines()[-5:],
+        ), 500
+
+
+def _api_vendas_impl():
     """Lista vendas Seru no intervalo. Default: hoje.
 
     ?inicio=YYYY-MM-DD&fim=YYYY-MM-DD
@@ -35,14 +48,15 @@ def api_vendas():
     if (fim - inicio).days > 92:
         return jsonify(ok=False, erro='intervalo maximo de 92 dias'), 400
 
-    # Expandimos a janela de updatedAt ate hoje pra capturar pedidos criados
-    # no intervalo mas atualizados depois (cancelamentos, mudanca de status etc).
-    # Ainda filtramos por createdAt local pra precisao.
+    # Expandimos a janela de updatedAt ate N dias pra frente do fim, pra
+    # capturar pedidos criados no intervalo mas atualizados depois.
+    # Ainda filtramos por createdAt local. Cada dia adicional eh +1 chamada
+    # Seru, entao limitamos pra evitar timeout do gunicorn (60s).
+    MAX_DIAS_EXTRA = 7
     hoje = date.today()
-    if fim < hoje:
-        dias_extra = max(0, (hoje - fim).days)
-    else:
-        dias_extra = 0
+    dias_ate_hoje = max(0, (hoje - fim).days) if fim < hoje else 0
+    dias_extra = min(dias_ate_hoje, MAX_DIAS_EXTRA)
+    consulta_limitada = dias_ate_hoje > MAX_DIAS_EXTRA
 
     try:
         pedidos = seru.listar_pedidos_completo(inicio, fim, expandir_dias_frente=dias_extra)
@@ -132,6 +146,7 @@ def api_vendas():
             por_pagamento=por_pagamento,
             por_canal=por_canal,
             por_loja=por_loja,
+            consulta_limitada=consulta_limitada,
             pedidos=pedidos,
         )
     except Exception as e:

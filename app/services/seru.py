@@ -58,12 +58,12 @@ def _get(path, params=None):
     token = _obter_token()
     r = requests.get(f'{BASE}{path}',
                      headers={'Authorization': f'Bearer {token}'},
-                     params=params or {}, timeout=30)
+                     params=params or {}, timeout=15)
     if r.status_code == 401:
         token = _obter_token(force_refresh=True)
         r = requests.get(f'{BASE}{path}',
                          headers={'Authorization': f'Bearer {token}'},
-                         params=params or {}, timeout=30)
+                         params=params or {}, timeout=15)
     if r.status_code != 200:
         logger.error('Seru %s %s: %s', path, r.status_code, r.text[:300])
         raise RuntimeError(f'Seru {path} {r.status_code}: {r.text[:200]}')

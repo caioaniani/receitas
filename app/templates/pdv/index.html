@@ -197,12 +197,17 @@
 
     function renderResumo(d) {
         document.getElementById('pdv-resumo').style.display = '';
+        var avisos = '';
+        if (d.consulta_limitada) {
+            avisos += '<div class="alert alert-warning py-2 small mb-2"><i class="bi bi-exclamation-triangle"></i> Consulta limitada: vendas com alteração mais recente que 7 dias após o fim do intervalo podem não aparecer (a Seru exige busca dia a dia).</div>';
+        }
         if (d.fora_intervalo) {
-            document.getElementById('pdv-msg').innerHTML = '<div class="alert alert-secondary py-2 small mb-2">' +
+            avisos += '<div class="alert alert-secondary py-2 small mb-2">' +
                 '<i class="bi bi-info-circle"></i> ' + d.fora_intervalo + ' pedido(s) com alteração no período mas <strong>data de criação fora</strong> ' +
                 'foram ignorados. (A Seru filtra por data de alteração; o resumo conta só vendas criadas no intervalo.)' +
                 '</div>';
         }
+        document.getElementById('pdv-msg').innerHTML = avisos;
         document.getElementById('pdv-r-pedidos').textContent = d.total_pedidos - d.cancelados;
         document.getElementById('pdv-r-total').textContent = fmt(d.total_valor);
         var ticket = d.total_pedidos - d.cancelados > 0 ? d.total_valor / (d.total_pedidos - d.cancelados) : 0;
