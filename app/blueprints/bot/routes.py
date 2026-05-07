@@ -97,11 +97,14 @@ def faturamento():
     # Bot prioriza resposta rapida (n8n/AI Agent tem timeout). 1 chamada Seru
     # apenas — pedidos cancelados/atualizados em dias posteriores podem nao
     # aparecer. Pra auditoria completa, usar /pdv/ no site.
+    debug_paginas = []
     try:
-        pedidos = seru.listar_pedidos_completo(target, target, expandir_dias_frente=0)
+        pedidos = seru.listar_pedidos_completo(target, target, expandir_dias_frente=0,
+                                                debug=debug_paginas)
     except Exception as e:
         current_app.logger.exception('bot/faturamento: Seru falhou')
         return jsonify(ok=False, erro=f'falha ao buscar Seru: {type(e).__name__}'), 502
+    current_app.logger.info('bot/faturamento %s: %s', target.isoformat(), debug_paginas)
 
     target_iso = target.isoformat()
     total = 0.0
@@ -144,7 +147,9 @@ def faturamento():
         fallback_aplicado=fallback_aplicado,
         total=round(total, 2),
         qtd_pedidos=qtd,
+        qtd_pedidos_brutos=len(pedidos),
         por_loja={k: round(v, 2) for k, v in por_loja.items()},
+        debug_paginas=debug_paginas,
         mensagem=mensagem,
     )
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'

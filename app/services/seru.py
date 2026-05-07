@@ -98,7 +98,7 @@ def listar_pedidos(data_inicial, data_final, page=1, limit=100, hasCanceledItem=
     return _get('/orders', params=params)
 
 
-def listar_pedidos_completo(data_inicial, data_final, expandir_dias_frente=0):
+def listar_pedidos_completo(data_inicial, data_final, expandir_dias_frente=0, debug=None):
     """Itera todas as páginas e devolve uma lista única.
 
     A Seru limita cada chamada a uma janela de 24h em updatedAt. Pra cobrir
@@ -106,6 +106,9 @@ def listar_pedidos_completo(data_inicial, data_final, expandir_dias_frente=0):
     POR DIA desde data_inicial ate data_final + expandir_dias_frente.
 
     Caller deve filtrar pelo createdAt depois pra precisao.
+
+    debug: lista opcional onde anexar dicts {dia, page, qtd, totalPages} de
+    cada chamada — util pra diagnosticar paginacao.
     """
     from datetime import timedelta
     fim_busca = data_final + timedelta(days=expandir_dias_frente)
@@ -116,8 +119,16 @@ def listar_pedidos_completo(data_inicial, data_final, expandir_dias_frente=0):
         page = 1
         while True:
             r = listar_pedidos(dia, dia, page=page, limit=100)
-            todos.extend(r.get('data') or [])
+            data_pagina = r.get('data') or []
+            todos.extend(data_pagina)
             total = r.get('totalPages') or 1
+            if debug is not None:
+                debug.append({
+                    'dia': dia.isoformat(), 'page': page,
+                    'qtd_recebida': len(data_pagina),
+                    'totalPages': total,
+                    'success': r.get('success'),
+                })
             if page >= total:
                 break
             page += 1
