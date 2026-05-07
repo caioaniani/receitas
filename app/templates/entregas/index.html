@@ -95,8 +95,8 @@
                 <label class="form-label small fw-bold mb-1">Data</label>
                 <input type="date" id="rotas-data" class="form-control form-control-sm" style="max-width:180px;" value="{{ hoje }}">
             </div>
-            <button class="btn btn-primary btn-sm" id="btn-gerar-rotas">
-                <i class="bi bi-arrow-clockwise"></i> Gerar rotas
+            <button class="btn btn-primary btn-sm" id="btn-gerar-rotas" title="Distribui apenas pedidos sem driver atribuído. Mantém os que você já atribuiu manualmente.">
+                <i class="bi bi-magic"></i> Auto-distribuir vazios
             </button>
 
             <button class="btn btn-outline-secondary btn-sm ms-auto" id="btn-gerenciar-drivers"
@@ -153,6 +153,23 @@
         </div>
 
         <div id="atrib-msg" class="d-print-none"></div>
+
+        <!-- Barra de acao em lote (aparece quando tem selecao) -->
+        <div id="atrib-bulk-bar" class="d-print-none mb-2 p-2 rounded" style="display:none; background:#f1f5f9; border:1px solid #cbd5e1;">
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <span class="fw-semibold small"><span id="atrib-bulk-count">0</span> selecionados</span>
+                <span class="text-muted">&middot;</span>
+                <span class="small">Atribuir a:</span>
+                <select id="atrib-bulk-driver" class="form-select form-select-sm" style="max-width:200px;">
+                    <option value="">&mdash; Sem driver &mdash;</option>
+                </select>
+                <button class="btn btn-primary btn-sm" id="atrib-bulk-aplicar">
+                    <i class="bi bi-check2"></i> Aplicar
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" id="atrib-bulk-limpar">Limpar selecao</button>
+            </div>
+        </div>
+
         <div id="atrib-container"></div>
     </div>
 

@@ -1077,6 +1077,9 @@
             });
     }
 
+    // Cache de drivers disponiveis (usado pelo bulk)
+    var __driversDisp = [];
+
     function renderAtribuidos(d) {
         var container = document.getElementById('atrib-container');
         var msg = document.getElementById('atrib-msg');
@@ -1084,6 +1087,8 @@
 
         if ((!d.drivers || d.drivers.length === 0) && (!d.sem_driver || d.sem_driver.length === 0)) {
             container.innerHTML = '<div class="alert alert-info py-2 small">Nenhum pedido para essa data.</div>';
+            __driversDisp = d.drivers_disponiveis || [];
+            atualizarBulkDrivers();
             return;
         }
 
@@ -1093,34 +1098,60 @@
                 '</div>';
         }
 
-        // Secoes por driver
-        for (var i = 0; i < d.drivers.length; i++) {
-            html += renderSecaoAtribuidos(d.drivers[i], d.drivers_disponiveis, false);
-        }
+        __driversDisp = d.drivers_disponiveis || [];
+        atualizarBulkDrivers();
 
-        // Secao "Sem driver"
+        // Topo: Sem driver (acao necessaria)
         if (d.sem_driver && d.sem_driver.length > 0) {
             var pseudoDriver = {
                 id: null,
-                nome: 'Sem atribuição',
-                cor: '#999',
+                nome: 'Sem driver',
+                cor: '#dc3545',
                 paradas: d.sem_driver,
                 qtd: d.sem_driver.length,
             };
             html += renderSecaoAtribuidos(pseudoDriver, d.drivers_disponiveis, true);
         }
 
+        // Embaixo: por driver
+        for (var i = 0; i < d.drivers.length; i++) {
+            html += renderSecaoAtribuidos(d.drivers[i], d.drivers_disponiveis, false);
+        }
+
         container.innerHTML = html;
+        atualizarBulkBar();
+    }
+
+    function atualizarBulkDrivers() {
+        var sel = document.getElementById('atrib-bulk-driver');
+        if (!sel) return;
+        var html = '<option value="">— Sem driver —</option>';
+        for (var i = 0; i < __driversDisp.length; i++) {
+            html += '<option value="' + __driversDisp[i].id + '">' + escapeHtml(__driversDisp[i].nome) + '</option>';
+        }
+        sel.innerHTML = html;
+    }
+
+    function atualizarBulkBar() {
+        var bar = document.getElementById('atrib-bulk-bar');
+        var count = document.querySelectorAll('.atrib-check:checked').length;
+        if (bar) {
+            bar.style.display = count > 0 ? '' : 'none';
+            var c = document.getElementById('atrib-bulk-count');
+            if (c) c.textContent = count;
+        }
     }
 
     function renderSecaoAtribuidos(driver, driversDisp, isSemDriver) {
         var cor = driver.cor || '#999';
+        var bgHeader = isSemDriver ? '#fff5f5' : '';
         var html = '<div class="card mb-3 atrib-secao">' +
-            '<div class="card-header py-2 d-flex justify-content-between align-items-center" style="border-left:4px solid ' + cor + ';">' +
-                '<div>' +
+            '<div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap gap-2" style="border-left:4px solid ' + cor + ';' + (bgHeader ? 'background:' + bgHeader + ';' : '') + '">' +
+                '<div class="d-flex align-items-center gap-2">' +
+                    '<input type="checkbox" class="form-check-input atrib-check-secao d-print-none" data-secao="' + (isSemDriver ? 'sem' : driver.id) + '" title="Selecionar todos desta secao">' +
                     '<strong style="color:' + cor + ';"><i class="bi bi-' + (isSemDriver ? 'exclamation-circle' : 'person-badge') + '"></i> ' + escapeHtml(driver.nome) + '</strong>' +
-                    '<span class="text-muted small ms-2">' + driver.qtd + ' pedido' + (driver.qtd !== 1 ? 's' : '') + '</span>' +
-                    (driver.telefone ? '<small class="text-muted ms-2"><i class="bi bi-telephone"></i> ' + escapeHtml(driver.telefone) + '</small>' : '') +
+                    '<span class="text-muted small">' + driver.qtd + ' pedido' + (driver.qtd !== 1 ? 's' : '') + '</span>' +
+                    (driver.telefone ? '<small class="text-muted"><i class="bi bi-telephone"></i> ' + escapeHtml(driver.telefone) + '</small>' : '') +
                 '</div>';
 
         if (!isSemDriver) {
@@ -1134,14 +1165,17 @@
             var p = driver.paradas[j];
             html += '<div class="list-group-item">' +
                 '<div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">' +
-                    '<div style="flex:1; min-width:240px;">' +
-                        '<a href="https://www.padariaartesanalonline.com.br/admin/pedido?id=' + encodeURIComponent(p.code) + '" target="_blank" rel="noopener" class="text-decoration-none small fw-bold" style="color:var(--accent);">' +
-                            '[' + escapeHtml(p.code) + '] <i class="bi bi-box-arrow-up-right" style="font-size:10px;"></i>' +
-                        '</a> ' +
-                        '<span class="fw-semibold"><i class="bi bi-person-fill"></i> ' + escapeHtml(p.destinatario || '—') + '</span>' +
-                        (p.periodo ? ' <span class="badge bg-light text-dark" style="font-size:10px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>' : '') +
-                        '<div class="text-muted small mt-1"><i class="bi bi-geo-alt"></i> ' + escapeHtml(p.endereco || '') + '</div>' +
-                        (p.telefone ? '<div class="text-muted small"><i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) + '</div>' : '') +
+                    '<div class="d-flex align-items-start gap-2" style="flex:1; min-width:240px;">' +
+                        '<input type="checkbox" class="form-check-input atrib-check d-print-none mt-1" data-code="' + escapeHtml(p.code) + '" data-driver-atual="' + (driver.id || '') + '">' +
+                        '<div style="flex:1; min-width:0;">' +
+                            '<a href="https://www.padariaartesanalonline.com.br/admin/pedido?id=' + encodeURIComponent(p.code) + '" target="_blank" rel="noopener" class="text-decoration-none small fw-bold" style="color:var(--accent);">' +
+                                '[' + escapeHtml(p.code) + '] <i class="bi bi-box-arrow-up-right" style="font-size:10px;"></i>' +
+                            '</a> ' +
+                            '<span class="fw-semibold"><i class="bi bi-person-fill"></i> ' + escapeHtml(p.destinatario || '—') + '</span>' +
+                            (p.periodo ? ' <span class="badge bg-light text-dark" style="font-size:10px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>' : '') +
+                            '<div class="text-muted small mt-1"><i class="bi bi-geo-alt"></i> ' + escapeHtml(p.endereco || '') + '</div>' +
+                            (p.telefone ? '<div class="text-muted small"><i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) + '</div>' : '') +
+                        '</div>' +
                     '</div>' +
                     '<div class="d-print-none d-flex align-items-center gap-1">' +
                         '<select class="form-select form-select-sm atrib-select-driver" data-code="' + escapeHtml(p.code) + '" data-driver-atual="' + (driver.id || '') + '" style="max-width:160px; font-size:12px;">' +
@@ -1271,7 +1305,58 @@
                     copiarListaWhatsApp(driver, atribUltimoResultado.data);
                 }
             });
+
+            // Bulk: checkbox individual
+            atribContainer.addEventListener('change', function(e) {
+                if (e.target.matches('.atrib-check')) {
+                    atualizarBulkBar();
+                }
+                // Checkbox de secao (selecionar todos da secao)
+                if (e.target.matches('.atrib-check-secao')) {
+                    var card = e.target.closest('.atrib-secao');
+                    if (card) {
+                        card.querySelectorAll('.atrib-check').forEach(function(cb) {
+                            cb.checked = e.target.checked;
+                        });
+                        atualizarBulkBar();
+                    }
+                }
+            });
         }
+
+        // Bulk bar: aplicar atribuicao em lote
+        var btnBulkAplicar = document.getElementById('atrib-bulk-aplicar');
+        if (btnBulkAplicar) btnBulkAplicar.addEventListener('click', function() {
+            var driverSel = document.getElementById('atrib-bulk-driver');
+            var driverId = driverSel.value ? parseInt(driverSel.value, 10) : null;
+            var checks = document.querySelectorAll('.atrib-check:checked');
+            if (checks.length === 0) return;
+            var dataAtual = (atribUltimoResultado && atribUltimoResultado.data) || '';
+            var items = [];
+            checks.forEach(function(cb, idx) {
+                items.push({code: cb.dataset.code, driver_id: driverId, ordem: idx, data_entrega: dataAtual});
+            });
+            fetch('/entregas/api/atribuicao/lote', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+                body: JSON.stringify({items: items}),
+            }).then(function(r) { return r.json(); })
+              .then(function(d) {
+                  if (d.ok) {
+                      carregarAtribuidos();
+                  } else {
+                      alert('Erro: ' + (d.erro || 'desconhecido'));
+                  }
+              });
+        });
+
+        var btnBulkLimpar = document.getElementById('atrib-bulk-limpar');
+        if (btnBulkLimpar) btnBulkLimpar.addEventListener('click', function() {
+            document.querySelectorAll('.atrib-check, .atrib-check-secao').forEach(function(cb) {
+                cb.checked = false;
+            });
+            atualizarBulkBar();
+        });
 
         // Modal de drivers
         var btnCriar = document.getElementById('btn-criar-driver');
