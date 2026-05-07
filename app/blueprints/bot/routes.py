@@ -94,12 +94,14 @@ def faturamento():
             target = hoje
             fallback_aplicado = True
 
-    # Bot prioriza resposta rapida (n8n/AI Agent tem timeout). 1 chamada Seru
-    # apenas — pedidos cancelados/atualizados em dias posteriores podem nao
-    # aparecer. Pra auditoria completa, usar /pdv/ no site.
+    # Mesma logica do PDV (expansao ate 7 dias) — chamadas paralelizadas
+    # cabem no timeout do n8n. Captura pedidos sincronizados com atraso pela
+    # OPAO PADARIA (sync em batch nos dias seguintes).
+    BOT_MAX_DIAS_EXTRA = 7
+    dias_extra = min(max(0, (hoje - target).days), BOT_MAX_DIAS_EXTRA) if target < hoje else 0
     debug_paginas = []
     try:
-        pedidos = seru.listar_pedidos_completo(target, target, expandir_dias_frente=0,
+        pedidos = seru.listar_pedidos_completo(target, target, expandir_dias_frente=dias_extra,
                                                 debug=debug_paginas)
     except Exception as e:
         current_app.logger.exception('bot/faturamento: Seru falhou')

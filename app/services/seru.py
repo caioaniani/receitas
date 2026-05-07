@@ -135,42 +135,65 @@ def listar_pedidos_completo(data_inicial, data_final, expandir_dias_frente=0, de
     A Seru limita cada chamada a uma janela de 24h em updatedAt. Pra cobrir
     intervalos maiores ou pegar pedidos atualizados depois, fazemos uma chamada
     POR DIA desde data_inicial ate data_final + expandir_dias_frente.
+    Chamadas executam em paralelo (threads) pra reduzir latencia.
 
     Caller deve filtrar pelo createdAt depois pra precisao.
-
-    debug: lista opcional onde anexar dicts {dia, page, qtd, totalPages} de
-    cada chamada — util pra diagnosticar paginacao.
     """
+    from concurrent.futures import ThreadPoolExecutor
     from datetime import timedelta
+    from flask import current_app
+    app = current_app._get_current_object()
+
     fim_busca = data_final + timedelta(days=expandir_dias_frente)
+    dias = []
+    d = data_inicial
+    while d <= fim_busca:
+        dias.append(d)
+        d += timedelta(days=1)
+        if len(dias) > 60:  # safety
+            logger.warning('Seru listar_pedidos: parando em 60 dias')
+            break
+
+    def _fetch(dia, page):
+        with app.app_context():
+            return dia, page, listar_pedidos(dia, dia, page=page, limit=100)
+
     todos = []
-    dia = data_inicial
-    dias_consultados = 0
-    while dia <= fim_busca:
-        page = 1
-        while True:
-            r = listar_pedidos(dia, dia, page=page, limit=100)
+    # Etapa 1: pega pagina 1 de cada dia em paralelo
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        firsts = list(ex.map(lambda d: _fetch(d, 1), dias))
+
+    # Coleta dados + identifica paginas extras
+    extras = []
+    for dia, page, r in firsts:
+        data_pagina = r.get('data') or []
+        todos.extend(data_pagina)
+        total = r.get('totalPages') or 1
+        if debug is not None:
+            debug.append({
+                'dia': dia.isoformat(), 'page': page,
+                'qtd_recebida': len(data_pagina),
+                'totalPages': total,
+                'success': r.get('success'),
+            })
+        for p in range(2, min(total + 1, 51)):
+            extras.append((dia, p))
+
+    # Etapa 2: paginas extras em paralelo
+    if extras:
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            results = list(ex.map(lambda x: _fetch(x[0], x[1]), extras))
+        for dia, page, r in results:
             data_pagina = r.get('data') or []
             todos.extend(data_pagina)
-            total = r.get('totalPages') or 1
             if debug is not None:
                 debug.append({
                     'dia': dia.isoformat(), 'page': page,
                     'qtd_recebida': len(data_pagina),
-                    'totalPages': total,
+                    'totalPages': r.get('totalPages') or 1,
                     'success': r.get('success'),
                 })
-            if page >= total:
-                break
-            page += 1
-            if page > 50:
-                logger.warning('Seru listar_pedidos: parando em 50 paginas no dia %s', dia)
-                break
-        dias_consultados += 1
-        if dias_consultados > 60:  # safety
-            logger.warning('Seru listar_pedidos: parando em 60 dias')
-            break
-        dia += timedelta(days=1)
+
     return todos
 
 
