@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}Vendas PDV{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-shop"></i> Vendas PDV
+        <small class="text-muted" style="font-size:11px;font-weight:normal;">via Seru</small>
+    </h1>
+</div>
+
+<div class="d-flex flex-wrap gap-2 align-items-end mb-3">
+    <div>
+        <label class="form-label small fw-bold mb-1">De</label>
+        <input type="date" id="pdv-inicio" class="form-control form-control-sm" style="max-width:170px;" value="{{ hoje }}">
+    </div>
+    <div>
+        <label class="form-label small fw-bold mb-1">Até</label>
+        <input type="date" id="pdv-fim" class="form-control form-control-sm" style="max-width:170px;" value="{{ hoje }}">
+    </div>
+    <button class="btn btn-primary btn-sm" id="pdv-buscar">
+        <i class="bi bi-search"></i> Buscar
+    </button>
+    <button class="btn btn-outline-secondary btn-sm" id="pdv-hoje">Hoje</button>
+    <button class="btn btn-outline-secondary btn-sm" id="pdv-7d">Últimos 7 dias</button>
+    <button class="btn btn-outline-secondary btn-sm" id="pdv-mes">Este mês</button>
+</div>
+
+<div id="pdv-loading" class="text-center py-4 d-none">
+    <div class="spinner-border spinner-border-sm text-primary"></div>
+    <span class="ms-2 text-muted">Carregando…</span>
+</div>
+
+<div id="pdv-msg"></div>
+
+<div id="pdv-resumo" class="row g-2 mb-3" style="display:none;">
+    <div class="col-md-3">
+        <div class="card p-2"><small class="text-muted">Pedidos</small><div class="h4 mb-0" id="pdv-r-pedidos">0</div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card p-2"><small class="text-muted">Faturamento</small><div class="h4 mb-0 text-success">R$ <span id="pdv-r-total">0,00</span></div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card p-2"><small class="text-muted">Ticket médio</small><div class="h4 mb-0">R$ <span id="pdv-r-ticket">0,00</span></div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card p-2"><small class="text-muted">Cancelados</small><div class="h4 mb-0 text-danger" id="pdv-r-cancelados">0</div></div>
+    </div>
+</div>
+
+<div class="row g-2 mb-3">
+    <div class="col-md-6">
+        <div class="card p-2" id="pdv-pagamentos-card" style="display:none;">
+            <strong class="small">Por forma de pagamento</strong>
+            <div id="pdv-pagamentos"></div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card p-2" id="pdv-canais-card" style="display:none;">
+            <strong class="small">Por canal de venda</strong>
+            <div id="pdv-canais"></div>
+        </div>
+    </div>
+</div>
+
+<div id="pdv-lista"></div>
+
+<script>
+(function() {
+    var CSRF = '{{ csrf_token() }}';
+    function fmt(n) { return (Number(n) || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+    function escapeHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+        });
+    }
+
+    function buscar() {
+        var inicio = document.getElementById('pdv-inicio').value;
+        var fim = document.getElementById('pdv-fim').value;
+        if (!inicio || !fim) return;
+        var loading = document.getElementById('pdv-loading');
+        var msg = document.getElementById('pdv-msg');
+        var lista = document.getElementById('pdv-lista');
+        loading.classList.remove('d-none');
+        msg.innerHTML = '';
+        lista.innerHTML = '';
+        document.getElementById('pdv-resumo').style.display = 'none';
+        document.getElementById('pdv-pagamentos-card').style.display = 'none';
+        document.getElementById('pdv-canais-card').style.display = 'none';
+
+        fetch('/pdv/api/vendas?inicio=' + encodeURIComponent(inicio) + '&fim=' + encodeURIComponent(fim),
+              {credentials: 'same-origin'})
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                loading.classList.add('d-none');
+                if (!d.ok) {
+                    msg.innerHTML = '<div class="alert alert-danger py-2 small">Erro: ' + escapeHtml(d.erro || '?') + '</div>';
+                    return;
+                }
+                renderResumo(d);
+                renderLista(d);
+            })
+            .catch(function(e) {
+                loading.classList.add('d-none');
+                msg.innerHTML = '<div class="alert alert-danger py-2 small">Falha de rede: ' + escapeHtml(String(e)) + '</div>';
+            });
+    }
+
+    function renderResumo(d) {
+        document.getElementById('pdv-resumo').style.display = '';
+        document.getElementById('pdv-r-pedidos').textContent = d.total_pedidos - d.cancelados;
+        document.getElementById('pdv-r-total').textContent = fmt(d.total_valor);
+        var ticket = d.total_pedidos - d.cancelados > 0 ? d.total_valor / (d.total_pedidos - d.cancelados) : 0;
+        document.getElementById('pdv-r-ticket').textContent = fmt(ticket);
+        document.getElementById('pdv-r-cancelados').textContent = d.cancelados;
+
+        // Por pagamento
+        var pgs = Object.entries(d.por_pagamento || {}).sort(function(a, b) { return b[1] - a[1]; });
+        if (pgs.length > 0) {
+            document.getElementById('pdv-pagamentos-card').style.display = '';
+            var hp = '<table class="table table-sm mb-0"><tbody>';
+            pgs.forEach(function(e) {
+                hp += '<tr><td class="small">' + escapeHtml(e[0]) + '</td><td class="text-end small fw-bold">R$ ' + fmt(e[1]) + '</td></tr>';
+            });
+            hp += '</tbody></table>';
+            document.getElementById('pdv-pagamentos').innerHTML = hp;
+        }
+        // Por canal
+        var cns = Object.entries(d.por_canal || {}).sort(function(a, b) { return b[1] - a[1]; });
+        if (cns.length > 0) {
+            document.getElementById('pdv-canais-card').style.display = '';
+            var hc = '<table class="table table-sm mb-0"><tbody>';
+            cns.forEach(function(e) {
+                hc += '<tr><td class="small">' + escapeHtml(e[0]) + '</td><td class="text-end small fw-bold">R$ ' + fmt(e[1]) + '</td></tr>';
+            });
+            hc += '</tbody></table>';
+            document.getElementById('pdv-canais').innerHTML = hc;
+        }
+    }
+
+    function renderLista(d) {
+        var lista = document.getElementById('pdv-lista');
+        if (!d.pedidos || d.pedidos.length === 0) {
+            lista.innerHTML = '<div class="alert alert-info py-2 small">Nenhum pedido neste período.</div>';
+            return;
+        }
+        // Ordena por createdAt desc
+        var pedidos = d.pedidos.slice().sort(function(a, b) {
+            return (b.createdAt || '').localeCompare(a.createdAt || '');
+        });
+        var html = '<div class="table-responsive"><table class="table table-sm table-hover">';
+        html += '<thead><tr><th>Quando</th><th>Code</th><th>Cliente</th><th>Canal</th><th>Pagamento</th><th class="text-end">Total</th><th>Status</th></tr></thead><tbody>';
+        pedidos.forEach(function(p) {
+            var quando = p.createdAt ? new Date(p.createdAt).toLocaleString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : '—';
+            var cliente = (p.customer && p.customer.name) || '—';
+            var canal = (p.salesChannel && p.salesChannel.name) || '—';
+            var pgs = (p.payments || []).map(function(pay) { return pay.method || pay.type || '—'; }).join(', ') || '—';
+            var status = p.canceledAt
+                ? '<span class="badge bg-danger">Cancelado</span>'
+                : '<span class="badge bg-success">' + escapeHtml(p.status || 'OK') + '</span>';
+            html += '<tr' + (p.canceledAt ? ' style="opacity:.5;"' : '') + '>' +
+                '<td class="small">' + escapeHtml(quando) + '</td>' +
+                '<td class="small fw-bold">' + escapeHtml(p.code || '—') + '</td>' +
+                '<td class="small">' + escapeHtml(cliente) + '</td>' +
+                '<td class="small">' + escapeHtml(canal) + '</td>' +
+                '<td class="small">' + escapeHtml(pgs) + '</td>' +
+                '<td class="text-end small fw-bold">R$ ' + fmt(p.total) + '</td>' +
+                '<td>' + status + '</td>' +
+            '</tr>';
+        });
+        html += '</tbody></table></div>';
+        lista.innerHTML = html;
+    }
+
+    document.getElementById('pdv-buscar').addEventListener('click', buscar);
+    document.getElementById('pdv-hoje').addEventListener('click', function() {
+        var t = new Date().toISOString().slice(0, 10);
+        document.getElementById('pdv-inicio').value = t;
+        document.getElementById('pdv-fim').value = t;
+        buscar();
+    });
+    document.getElementById('pdv-7d').addEventListener('click', function() {
+        var hoje = new Date();
+        var ha7 = new Date(hoje.getTime() - 7 * 86400000);
+        document.getElementById('pdv-inicio').value = ha7.toISOString().slice(0, 10);
+        document.getElementById('pdv-fim').value = hoje.toISOString().slice(0, 10);
+        buscar();
+    });
+    document.getElementById('pdv-mes').addEventListener('click', function() {
+        var hoje = new Date();
+        var primeiro = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        document.getElementById('pdv-inicio').value = primeiro.toISOString().slice(0, 10);
+        document.getElementById('pdv-fim').value = hoje.toISOString().slice(0, 10);
+        buscar();
+    });
+
+    // Auto-busca ao abrir
+    buscar();
+})();
+</script>
+{% endblock %}

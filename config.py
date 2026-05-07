@@ -27,6 +27,11 @@ class Config:
     # Chave da API do Google Maps Platform (Geocoding + Directions)
     GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', '')
 
+    # Seru (PDV) — credenciais OAuth2 client_credentials
+    # Documentacao: https://integration.plataformaseru.com.br/v1/docs
+    SERU_CLIENT_ID = os.environ.get('SERU_CLIENT_ID', '')
+    SERU_CLIENT_SECRET = os.environ.get('SERU_CLIENT_SECRET', '')
+
     # Dropbox para fotos de comprovante de entrega
     # Token: https://www.dropbox.com/developers/apps -> escopo files.content.write + sharing.write
     DROPBOX_ACCESS_TOKEN = os.environ.get('DROPBOX_ACCESS_TOKEN', '')

@@ -118,6 +118,13 @@
             <i class="bi bi-truck"></i> Entregas Site
         </a>
 
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('pdv.index') }}"
+           class="sidebar-link {% if request.path.startswith('/pdv') %}active{% endif %}">
+            <i class="bi bi-shop-window"></i> Vendas PDV
+        </a>
+        {% endif %}
+
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">RH</div>
 
@@ -206,6 +213,13 @@
            class="sidebar-link {% if request.path.startswith('/entregas') %}active{% endif %}">
             <i class="bi bi-truck"></i> Entregas Site
         </a>
+
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('pdv.index') }}"
+           class="sidebar-link {% if request.path.startswith('/pdv') %}active{% endif %}">
+            <i class="bi bi-shop-window"></i> Vendas PDV
+        </a>
+        {% endif %}
         {% endif %}
 
         <div class="sidebar-divider"></div>

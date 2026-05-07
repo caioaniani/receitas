@@ -251,6 +251,8 @@ def create_app(config_class=None):
     app.register_blueprint(driver_bp, url_prefix='/driver')
     app.register_blueprint(comprovante_bp, url_prefix='/entrega')
     app.register_blueprint(projetos_bp)
+    from app.blueprints.pdv import pdv_bp
+    app.register_blueprint(pdv_bp, url_prefix='/pdv')
 
     with app.app_context():
         db.create_all()
