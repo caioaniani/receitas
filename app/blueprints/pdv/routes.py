@@ -35,8 +35,17 @@ def api_vendas():
     if (fim - inicio).days > 92:
         return jsonify(ok=False, erro='intervalo maximo de 92 dias'), 400
 
+    # Expandimos a janela de updatedAt ate hoje pra capturar pedidos criados
+    # no intervalo mas atualizados depois (cancelamentos, mudanca de status etc).
+    # Ainda filtramos por createdAt local pra precisao.
+    hoje = date.today()
+    if fim < hoje:
+        dias_extra = max(0, (hoje - fim).days)
+    else:
+        dias_extra = 0
+
     try:
-        pedidos = seru.listar_pedidos_completo(inicio, fim)
+        pedidos = seru.listar_pedidos_completo(inicio, fim, expandir_dias_frente=dias_extra)
     except Exception as e:
         current_app.logger.exception('Seru listar_pedidos falhou')
         return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502

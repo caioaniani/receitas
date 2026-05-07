@@ -77,15 +77,19 @@ def _iso_dia(data, fim=False):
     return data.strftime('%Y-%m-%dT00:00:00Z')
 
 
-def listar_pedidos(data_inicial, data_final, page=1, limit=100, hasCanceledItem=None):
-    """Lista pedidos da Seru entre duas datas (filtra por updatedAt).
+def listar_pedidos(data_inicial, data_final, page=1, limit=100, hasCanceledItem=None,
+                   initial_updated_at=None, final_updated_at=None):
+    """Lista pedidos da Seru. Por padrao filtra por updatedAt no intervalo
+    [data_inicial, data_final], mas o caller pode sobrescrever passando
+    initial_updated_at/final_updated_at (objetos date).
 
-    data_inicial / data_final: objetos `date`. Convertidos pra inicio/fim do dia UTC.
     Retorna dict {success, page, limit, totalPages, data: [...]}
     """
+    iu = initial_updated_at or data_inicial
+    fu = final_updated_at or data_final
     params = {
-        'initialUpdatedAt': _iso_dia(data_inicial, fim=False),
-        'finalUpdatedAt': _iso_dia(data_final, fim=True),
+        'initialUpdatedAt': _iso_dia(iu, fim=False),
+        'finalUpdatedAt': _iso_dia(fu, fim=True),
         'page': page,
         'limit': limit,
     }
@@ -94,12 +98,21 @@ def listar_pedidos(data_inicial, data_final, page=1, limit=100, hasCanceledItem=
     return _get('/orders', params=params)
 
 
-def listar_pedidos_completo(data_inicial, data_final):
-    """Itera todas as páginas e devolve uma lista única com todos os pedidos."""
+def listar_pedidos_completo(data_inicial, data_final, expandir_dias_frente=0):
+    """Itera todas as páginas e devolve uma lista única.
+
+    expandir_dias_frente: extende o filtro de updatedAt N dias pra frente do
+    data_final, pra capturar pedidos criados no intervalo mas atualizados
+    depois (a API so filtra por updatedAt). Caller deve filtrar pelo
+    createdAt depois.
+    """
+    from datetime import timedelta
+    fu = data_final + timedelta(days=expandir_dias_frente) if expandir_dias_frente else data_final
     todos = []
     page = 1
     while True:
-        r = listar_pedidos(data_inicial, data_final, page=page, limit=100)
+        r = listar_pedidos(data_inicial, data_final, page=page, limit=100,
+                           final_updated_at=fu)
         todos.extend(r.get('data') or [])
         total = r.get('totalPages') or 1
         if page >= total:
