@@ -1663,31 +1663,11 @@
     }
 
     function opMontarFiltroJanela(d) {
-        var todasJanelas = new Set();
-        (d.drivers || []).forEach(function(dr) {
-            (dr.paradas || []).forEach(function(p) {
-                if (p.periodo) todasJanelas.add(p.periodo);
-            });
-        });
-        (d.sem_driver || []).forEach(function(p) {
-            if (p.periodo) todasJanelas.add(p.periodo);
-        });
+        // Filtro de janela foi removido da UI; manter funcao como no-op pra
+        // nao precisar mexer nas chamadas existentes.
         var cont = document.getElementById('op-janelas');
-        if (todasJanelas.size === 0) {
-            cont.innerHTML = '<span class="small text-muted fst-italic">(nenhuma)</span>';
-            return;
-        }
-        // Limpa janelas selecionadas que sumiram
-        opJanelaFiltro.forEach(function(j) { if (!todasJanelas.has(j)) opJanelaFiltro.delete(j); });
-        var html = '';
-        Array.from(todasJanelas).sort().forEach(function(j) {
-            var checked = opJanelaFiltro.has(j) ? 'checked' : '';
-            html += '<label class="form-check form-check-inline mb-0">' +
-                '<input class="form-check-input op-cb-janela" type="checkbox" value="' + escapeHtml(j) + '" ' + checked + '>' +
-                '<span class="form-check-label small">' + escapeHtml(j) + '</span>' +
-            '</label>';
-        });
-        cont.innerHTML = html;
+        if (!cont) return;
+        cont.innerHTML = '';
     }
 
     function opMontarBulkSelect(d) {
