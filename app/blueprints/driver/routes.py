@@ -116,6 +116,45 @@ def api_proxima_data(token):
     return jsonify(ok=True, data=hoje.isoformat())
 
 
+@driver_bp.route('/api/<token>/debug')
+def api_debug(token):
+    """Diagnostico: porque um pedido aparece (ou nao) pro driver na data X."""
+    driver = _driver_por_token(token)
+    if not driver:
+        return jsonify(ok=False, erro='token invalido'), 404
+    data_str = request.args.get('data', date.today().isoformat())
+    try:
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        target = date.today()
+
+    autenticado = _autenticado(driver)
+    atribs_data = AtribuicaoEntrega.query.filter(
+        AtribuicaoEntrega.driver_id == driver.id,
+        AtribuicaoEntrega.data_entrega == target,
+    ).all()
+    todas_atribs = AtribuicaoEntrega.query.filter_by(driver_id=driver.id).count()
+
+    resultado = vnda.buscar_pedidos_do_dia(target, overrides={})
+    vnda_codes = [p.get('code') for p in resultado.get('pedidos', []) if p.get('code')]
+    matches = [a.pedido_code for a in atribs_data if a.pedido_code in vnda_codes]
+    so_no_banco = [a.pedido_code for a in atribs_data if a.pedido_code not in vnda_codes]
+
+    return jsonify(
+        ok=True,
+        driver={'id': driver.id, 'nome': driver.nome, 'ativo': driver.ativo},
+        autenticado=autenticado,
+        data=data_str,
+        vnda_pedidos_na_data=len(vnda_codes),
+        vnda_erro=resultado.get('erro'),
+        atribuicoes_total_driver=todas_atribs,
+        atribuicoes_nessa_data=len(atribs_data),
+        atribuicoes_codes=[a.pedido_code for a in atribs_data],
+        matches_vnda_x_atribuicao=len(matches),
+        atribuicoes_sem_pedido_vnda=so_no_banco,
+    )
+
+
 @driver_bp.route('/api/<token>/pedidos')
 def api_pedidos(token):
     driver = _driver_por_token(token)
