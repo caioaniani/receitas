@@ -8,8 +8,8 @@ import requests as http_requests
 from app.blueprints.entregas import entregas_bp
 from app.decorators import entrega_access_required
 from app.extensions import db
-from app.models import CartinhaEntrega, OverrideEntrega, Driver, AtribuicaoEntrega, Produto, MateriaPrima
-from app.services import vnda, rotas as rotas_svc
+from app.models import CartinhaEntrega, OverrideEntrega, Driver, AtribuicaoEntrega, EntregaFoto, Produto, MateriaPrima
+from app.services import vnda, rotas as rotas_svc, dropbox_storage
 
 
 @entregas_bp.route('/')
@@ -501,6 +501,35 @@ def resetar_atribuicoes_dia():
         ).delete(synchronize_session=False)
         db.session.commit()
     return jsonify(ok=True, removidas=n, total_pedidos=len(codes))
+
+
+@entregas_bp.route('/api/entrega/<code>/reset', methods=['POST'])
+@login_required
+@entrega_access_required
+def resetar_entrega(code):
+    """Volta atribuicao do pedido pra 'pendente' e apaga fotos (DB + Dropbox)."""
+    atrib = AtribuicaoEntrega.query.filter_by(pedido_code=code).first()
+    if not atrib:
+        return jsonify(ok=False, erro='atribuicao nao encontrada'), 404
+
+    fotos = EntregaFoto.query.filter_by(atribuicao_id=atrib.id).all()
+    apagadas_dropbox = 0
+    for f in fotos:
+        if f.storage_path and dropbox_storage.deletar(f.storage_path):
+            apagadas_dropbox += 1
+        db.session.delete(f)
+
+    atrib.status = 'pendente'
+    atrib.entregue_em = None
+    atrib.nota = None
+    atrib.motivo_falha = None
+    atrib.geo_lat = None
+    atrib.geo_lng = None
+    atrib.proof_hash = None
+    db.session.commit()
+
+    return jsonify(ok=True, fotos_removidas=len(fotos),
+                   fotos_dropbox_apagadas=apagadas_dropbox)
 
 
 @entregas_bp.route('/api/atribuicao/lote', methods=['POST'])
