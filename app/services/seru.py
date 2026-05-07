@@ -101,26 +101,34 @@ def listar_pedidos(data_inicial, data_final, page=1, limit=100, hasCanceledItem=
 def listar_pedidos_completo(data_inicial, data_final, expandir_dias_frente=0):
     """Itera todas as páginas e devolve uma lista única.
 
-    expandir_dias_frente: extende o filtro de updatedAt N dias pra frente do
-    data_final, pra capturar pedidos criados no intervalo mas atualizados
-    depois (a API so filtra por updatedAt). Caller deve filtrar pelo
-    createdAt depois.
+    A Seru limita cada chamada a uma janela de 24h em updatedAt. Pra cobrir
+    intervalos maiores ou pegar pedidos atualizados depois, fazemos uma chamada
+    POR DIA desde data_inicial ate data_final + expandir_dias_frente.
+
+    Caller deve filtrar pelo createdAt depois pra precisao.
     """
     from datetime import timedelta
-    fu = data_final + timedelta(days=expandir_dias_frente) if expandir_dias_frente else data_final
+    fim_busca = data_final + timedelta(days=expandir_dias_frente)
     todos = []
-    page = 1
-    while True:
-        r = listar_pedidos(data_inicial, data_final, page=page, limit=100,
-                           final_updated_at=fu)
-        todos.extend(r.get('data') or [])
-        total = r.get('totalPages') or 1
-        if page >= total:
+    dia = data_inicial
+    dias_consultados = 0
+    while dia <= fim_busca:
+        page = 1
+        while True:
+            r = listar_pedidos(dia, dia, page=page, limit=100)
+            todos.extend(r.get('data') or [])
+            total = r.get('totalPages') or 1
+            if page >= total:
+                break
+            page += 1
+            if page > 50:
+                logger.warning('Seru listar_pedidos: parando em 50 paginas no dia %s', dia)
+                break
+        dias_consultados += 1
+        if dias_consultados > 60:  # safety
+            logger.warning('Seru listar_pedidos: parando em 60 dias')
             break
-        page += 1
-        if page > 50:  # safety
-            logger.warning('Seru listar_pedidos: parando em 50 paginas')
-            break
+        dia += timedelta(days=1)
     return todos
 
 
