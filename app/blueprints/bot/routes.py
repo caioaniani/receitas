@@ -139,7 +139,7 @@ def faturamento():
     if fallback_aplicado:
         mensagem = (f'_(Não entendi a data "{data_raw}", mostrando hoje)_\n\n' + mensagem)
 
-    return jsonify(
+    resp = jsonify(
         ok=True,
         data=target_iso,
         data_recebida=data_raw,
@@ -149,3 +149,6 @@ def faturamento():
         por_loja={k: round(v, 2) for k, v in por_loja.items()},
         mensagem=mensagem,
     )
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp

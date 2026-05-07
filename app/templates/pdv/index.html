@@ -111,8 +111,8 @@
         document.getElementById('pdv-pagamentos-card').style.display = 'none';
         document.getElementById('pdv-canais-card').style.display = 'none';
 
-        fetch('/pdv/api/vendas?inicio=' + encodeURIComponent(inicio) + '&fim=' + encodeURIComponent(fim),
-              {credentials: 'same-origin'})
+        fetch('/pdv/api/vendas?inicio=' + encodeURIComponent(inicio) + '&fim=' + encodeURIComponent(fim) + '&_=' + Date.now(),
+              {credentials: 'same-origin', cache: 'no-store'})
             .then(function(r) {
                 return r.text().then(function(txt) {
                     try {

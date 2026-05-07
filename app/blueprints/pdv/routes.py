@@ -135,7 +135,7 @@ def _api_vendas_impl():
         ), 500
 
     try:
-        return jsonify(
+        resp = jsonify(
             ok=True,
             inicio=inicio.isoformat(),
             fim=fim.isoformat(),
@@ -149,6 +149,9 @@ def _api_vendas_impl():
             consulta_limitada=consulta_limitada,
             pedidos=pedidos,
         )
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        resp.headers['Pragma'] = 'no-cache'
+        return resp
     except Exception as e:
         current_app.logger.exception('Erro serializando resposta Seru')
         return jsonify(ok=False, erro=f'{type(e).__name__} no jsonify: {str(e)[:300]}'), 500
