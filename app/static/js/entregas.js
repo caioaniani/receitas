@@ -543,8 +543,21 @@
                 '</div>';
         }
 
+        // Limpa pinos do mapa de buscas anteriores
+        var mapaEl = document.getElementById('rotas-mapa');
+        if (rotasMapaLayers) rotasMapaLayers.clearLayers();
+
         if (!d.rotas || d.rotas.length === 0) {
-            container.innerHTML = '<div class="alert alert-info py-2 small">Nenhum pedido para esses filtros.</div>';
+            if (mapaEl) mapaEl.style.display = 'none';
+            var qtdSemCep = (d.sem_cep || []).length;
+            var qtdTotal = d.total_pedidos || 0;
+            var diag = '';
+            if (qtdTotal > 0 && qtdSemCep === qtdTotal) {
+                diag = ' Nenhum dos ' + qtdTotal + ' pedidos foi geocodado — pode ser cota do Google Maps esgotada ou GOOGLE_MAPS_API_KEY ausente.';
+            } else if (qtdTotal > 0) {
+                diag = ' (' + qtdTotal + ' pedidos no VNDA, ' + qtdSemCep + ' sem CEP/geocode)';
+            }
+            container.innerHTML = '<div class="alert alert-info py-2 small">Nenhum pedido para esses filtros.' + escapeHtml(diag) + '</div>';
             return;
         }
 
