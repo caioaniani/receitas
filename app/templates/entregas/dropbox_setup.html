@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Setup Dropbox · Entregas{% endblock %}
+{% block content %}
+<div class="container py-3" style="max-width:760px;">
+    <h3><i class="bi bi-dropbox"></i> Conectar Dropbox</h3>
+    <p class="text-muted">
+        Wizard one-shot pra gerar o <code>refresh_token</code> do Dropbox.
+        O refresh token não expira; o sistema usa pra gerar tokens curtos automaticamente.
+    </p>
+
+    <!-- Status atual -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="small fw-bold mb-1">Status atual:</div>
+            <ul class="small mb-0">
+                <li>DROPBOX_APP_KEY: {% if cfg_app_key_set %}<span class="text-success">configurado</span>{% else %}<span class="text-danger">não configurado</span>{% endif %}</li>
+                <li>DROPBOX_APP_SECRET: {% if cfg_app_secret_set %}<span class="text-success">configurado</span>{% else %}<span class="text-danger">não configurado</span>{% endif %}</li>
+                <li>DROPBOX_REFRESH_TOKEN: {% if cfg_refresh_set %}<span class="text-success">configurado</span>{% else %}<span class="text-danger">não configurado</span>{% endif %}</li>
+                {% if legacy_set %}
+                    <li class="text-warning">DROPBOX_ACCESS_TOKEN (legado, expira em 4h) está configurado — vai ser ignorado quando o refresh estiver pronto.</li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+
+    {% if msg %}<div class="alert alert-success">{{ msg }}</div>{% endif %}
+    {% if erro %}<div class="alert alert-danger">{{ erro }}</div>{% endif %}
+
+    <!-- Passo 1: criar app -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5>1. Criar o app no Dropbox</h5>
+            <ol class="small">
+                <li>Vai em <a href="https://www.dropbox.com/developers/apps" target="_blank" rel="noopener">dropbox.com/developers/apps</a> → <strong>Create app</strong>.</li>
+                <li><strong>Scoped access</strong> + <strong>App folder</strong> + nome único.</li>
+                <li>Aba <strong>Permissions</strong>: marca <code>files.metadata.write</code>, <code>files.content.write</code>, <code>sharing.write</code> → <strong>Submit</strong>.</li>
+                <li>Aba <strong>Settings</strong>: copia <strong>App key</strong> e <strong>App secret</strong>.</li>
+            </ol>
+        </div>
+    </div>
+
+    <!-- Passo 2: chave/secret + URL de autorização -->
+    <form method="post" action="{{ url_for('entregas.dropbox_setup') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5>2. App key e secret</h5>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">App key</label>
+                        <input type="text" name="app_key" id="app_key" class="form-control form-control-sm" value="{{ app_key }}" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">App secret</label>
+                        <input type="text" name="app_secret" id="app_secret" class="form-control form-control-sm" value="{{ app_secret }}" required>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Passo 3: autorizar -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5>3. Autorizar no Dropbox</h5>
+                <p class="small text-muted mb-2">
+                    Clica no botão abaixo (após preencher a App key acima). Vai abrir o Dropbox pra autorizar — clica em <strong>Allow</strong> e copia o código que aparecer.
+                </p>
+                <a href="#" id="btn-autorizar" class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener">
+                    <i class="bi bi-box-arrow-up-right"></i> Abrir página de autorização
+                </a>
+                <small class="text-muted ms-2 d-block mt-2" id="msg-preencher" style="display:none !important;">
+                    Preencha a App key acima primeiro.
+                </small>
+            </div>
+        </div>
+
+        <!-- Passo 4: colar código -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5>4. Colar código de autorização</h5>
+                <label class="form-label small fw-bold">Código (vai ter algo tipo <code>abc123_XYZ-...</code>)</label>
+                <input type="text" name="code" class="form-control form-control-sm" placeholder="Cola aqui o código que o Dropbox mostrou">
+                <button type="submit" class="btn btn-primary mt-2">Gerar refresh token</button>
+            </div>
+        </div>
+    </form>
+
+    <!-- Resultado -->
+    {% if refresh_token %}
+    <div class="card border-success mb-3">
+        <div class="card-body">
+            <h5 class="text-success"><i class="bi bi-check2-circle"></i> 5. Pronto! Copie pro Railway</h5>
+            <p class="small">Cole essas 3 variáveis no <strong>Railway → seu serviço → Variables</strong>:</p>
+            <pre class="bg-light p-3 rounded small"><code>DROPBOX_APP_KEY={{ app_key }}
+DROPBOX_APP_SECRET={{ app_secret }}
+DROPBOX_REFRESH_TOKEN={{ refresh_token }}</code></pre>
+            <p class="small text-muted">
+                Se você já tinha <code>DROPBOX_ACCESS_TOKEN</code> (legado de 4h), pode <strong>apagar</strong>.
+            </p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+(function() {
+    function atualizar() {
+        var k = document.getElementById('app_key').value.trim();
+        var btn = document.getElementById('btn-autorizar');
+        var aviso = document.getElementById('msg-preencher');
+        if (k) {
+            btn.href = 'https://www.dropbox.com/oauth2/authorize?client_id=' + encodeURIComponent(k) + '&token_access_type=offline&response_type=code';
+            btn.classList.remove('disabled');
+            aviso.style.display = 'none';
+        } else {
+            btn.href = '#';
+            btn.classList.add('disabled');
+            aviso.style.display = '';
+        }
+    }
+    document.getElementById('app_key').addEventListener('input', atualizar);
+    atualizar();
+})();
+</script>
+{% endblock %}

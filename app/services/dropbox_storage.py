@@ -1,18 +1,22 @@
 """Upload de fotos de entrega no Dropbox.
 
 Usa a Dropbox HTTP API direto (sem SDK) pra evitar dependencia extra.
-Fluxo:
-1. Faz upload via /2/files/upload -> retorna metadata (path)
-2. Cria/recupera link compartilhavel via /2/sharing/create_shared_link_with_settings
-3. Converte URL "?dl=0" pra "?raw=1" pra servir bytes direto
 
-Config necessaria:
-- DROPBOX_ACCESS_TOKEN: token gerado no painel da Dropbox app
-  (escopo: files.content.write, sharing.write)
-- DROPBOX_PASTA_BASE: pasta dentro do Dropbox onde salvar (default /Apps/Receitas-Entregas)
+Dois modos de autenticacao:
+1. **Refresh token (recomendado)**: DROPBOX_APP_KEY + DROPBOX_APP_SECRET +
+   DROPBOX_REFRESH_TOKEN. Refresh token nao expira; o servico troca por
+   access tokens curtos automaticamente e cacheia em memoria. Setup
+   one-shot via /entregas/dropbox/setup.
+2. **Access token direto (curto)**: DROPBOX_ACCESS_TOKEN gerado no
+   painel — expira em 4h. So serve pra teste rapido.
+
+Pasta base: DROPBOX_PASTA_BASE (default /Apps/Receitas-Entregas).
+Em apps "App folder", o Dropbox prefixa /Apps/<nome-do-app>/ automaticamente.
 """
 import json
 import logging
+import threading
+import time
 import uuid
 from datetime import datetime
 
@@ -21,17 +25,77 @@ from flask import current_app
 
 logger = logging.getLogger(__name__)
 
-
-def _token():
-    return (current_app.config.get('DROPBOX_ACCESS_TOKEN') or '').strip()
+# Cache do access token curto (gerado a partir do refresh)
+_token_cache = {'value': None, 'expira_em': 0}
+_token_lock = threading.Lock()
 
 
 def _pasta_base():
     return (current_app.config.get('DROPBOX_PASTA_BASE') or '/Apps/Receitas-Entregas').rstrip('/')
 
 
+def _refresh_config():
+    cfg = current_app.config
+    return (
+        (cfg.get('DROPBOX_APP_KEY') or '').strip(),
+        (cfg.get('DROPBOX_APP_SECRET') or '').strip(),
+        (cfg.get('DROPBOX_REFRESH_TOKEN') or '').strip(),
+    )
+
+
+def _legacy_token():
+    return (current_app.config.get('DROPBOX_ACCESS_TOKEN') or '').strip()
+
+
+def _token():
+    """Retorna access token valido. Usa cache, refaz via refresh se preciso."""
+    # Modo legado: token longo direto
+    legacy = _legacy_token()
+    if legacy:
+        return legacy
+
+    app_key, app_secret, refresh = _refresh_config()
+    if not (app_key and app_secret and refresh):
+        return ''
+
+    with _token_lock:
+        agora = time.time()
+        if _token_cache['value'] and _token_cache['expira_em'] - 60 > agora:
+            return _token_cache['value']
+
+        # Pede novo access token
+        r = requests.post(
+            'https://api.dropbox.com/oauth2/token',
+            data={
+                'grant_type': 'refresh_token',
+                'refresh_token': refresh,
+            },
+            auth=(app_key, app_secret),
+            timeout=10,
+        )
+        if r.status_code != 200:
+            logger.warning('Dropbox refresh falhou: %s %s', r.status_code, r.text[:200])
+            return ''
+        body = r.json()
+        access = body.get('access_token') or ''
+        ttl = int(body.get('expires_in') or 14400)  # default 4h
+        _token_cache['value'] = access
+        _token_cache['expira_em'] = agora + ttl
+        return access
+
+
 def disponivel():
-    return bool(_token())
+    """True se token direto OU refresh flow estao configurados."""
+    if _legacy_token():
+        return True
+    app_key, app_secret, refresh = _refresh_config()
+    return bool(app_key and app_secret and refresh)
+
+
+def _invalidar_cache():
+    with _token_lock:
+        _token_cache['value'] = None
+        _token_cache['expira_em'] = 0
 
 
 def upload_foto(file_bytes, atribuicao_id, ext='jpg'):
@@ -39,9 +103,6 @@ def upload_foto(file_bytes, atribuicao_id, ext='jpg'):
 
     Levanta RuntimeError se nao configurado ou se a API falhar.
     """
-    token = _token()
-    if not token:
-        raise RuntimeError('Dropbox nao configurado (DROPBOX_ACCESS_TOKEN ausente)')
     if not file_bytes:
         raise RuntimeError('Arquivo vazio')
 
@@ -50,32 +111,39 @@ def upload_foto(file_bytes, atribuicao_id, ext='jpg'):
     nome = f"{atribuicao_id}_{uuid.uuid4().hex[:8]}.{ext}"
     path = f"{_pasta_base()}/{hoje}/{nome}"
 
-    # 1. Upload
     api_args = {
         'path': path,
         'mode': 'add',
         'autorename': True,
         'mute': True,
     }
-    r = requests.post(
-        'https://content.dropboxapi.com/2/files/upload',
-        headers={
-            'Authorization': f'Bearer {token}',
-            'Dropbox-API-Arg': json.dumps(api_args),
-            'Content-Type': 'application/octet-stream',
-        },
-        data=file_bytes,
-        timeout=30,
-    )
+
+    def _do_upload():
+        token = _token()
+        if not token:
+            raise RuntimeError('Dropbox nao configurado')
+        return requests.post(
+            'https://content.dropboxapi.com/2/files/upload',
+            headers={
+                'Authorization': f'Bearer {token}',
+                'Dropbox-API-Arg': json.dumps(api_args),
+                'Content-Type': 'application/octet-stream',
+            },
+            data=file_bytes,
+            timeout=30,
+        )
+
+    r = _do_upload()
+    if r.status_code == 401:  # token expirado mid-request
+        _invalidar_cache()
+        r = _do_upload()
     if r.status_code != 200:
         logger.warning('Dropbox upload falhou: %s %s', r.status_code, r.text[:200])
         raise RuntimeError(f'Upload Dropbox falhou: {r.status_code}')
 
     meta = r.json()
     storage_path = meta.get('path_lower') or path
-
-    # 2. Cria shared link
-    url = _criar_shared_link(token, storage_path)
+    url = _criar_shared_link(_token(), storage_path)
 
     return {
         'url': url,

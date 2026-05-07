@@ -31,3 +31,8 @@ class Config:
     # Token: https://www.dropbox.com/developers/apps -> escopo files.content.write + sharing.write
     DROPBOX_ACCESS_TOKEN = os.environ.get('DROPBOX_ACCESS_TOKEN', '')
     DROPBOX_PASTA_BASE = os.environ.get('DROPBOX_PASTA_BASE', '/Apps/Receitas-Entregas')
+    # Refresh token flow (recomendado: token nao expira)
+    # Setup: /entregas/dropbox/setup (apenas admin)
+    DROPBOX_APP_KEY = os.environ.get('DROPBOX_APP_KEY', '')
+    DROPBOX_APP_SECRET = os.environ.get('DROPBOX_APP_SECRET', '')
+    DROPBOX_REFRESH_TOKEN = os.environ.get('DROPBOX_REFRESH_TOKEN', '')

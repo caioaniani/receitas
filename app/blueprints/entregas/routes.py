@@ -126,6 +126,75 @@ def api_calendario():
 
 # ── Drivers de entrega ──
 
+@entregas_bp.route('/dropbox/setup', methods=['GET', 'POST'])
+@login_required
+@entrega_access_required
+def dropbox_setup():
+    """Wizard one-shot pra obter o refresh_token do Dropbox.
+
+    Passos:
+    1. Admin cria o app no painel da Dropbox e copia App key + App secret.
+    2. Cola aqui na primeira tela -> recebe URL pra autorizar.
+    3. Autoriza no Dropbox -> recebe um codigo curto.
+    4. Cola o codigo aqui -> backend troca por refresh_token via API.
+    5. Pagina mostra o refresh_token. Admin copia pro Railway env junto
+       com app_key/app_secret. Token nao expira.
+    """
+    msg = None
+    erro = None
+    refresh_token = None
+
+    # Pre-preencher dos envs se ja existirem (UI mostra status atual)
+    cfg_app_key = (current_app.config.get('DROPBOX_APP_KEY') or '').strip()
+    cfg_app_secret = (current_app.config.get('DROPBOX_APP_SECRET') or '').strip()
+    cfg_refresh = (current_app.config.get('DROPBOX_REFRESH_TOKEN') or '').strip()
+    legacy = (current_app.config.get('DROPBOX_ACCESS_TOKEN') or '').strip()
+
+    app_key = cfg_app_key
+    app_secret = cfg_app_secret
+
+    if request.method == 'POST':
+        app_key = (request.form.get('app_key') or '').strip()
+        app_secret = (request.form.get('app_secret') or '').strip()
+        code = (request.form.get('code') or '').strip()
+
+        if app_key and app_secret and code:
+            r = http_requests.post(
+                'https://api.dropbox.com/oauth2/token',
+                data={
+                    'grant_type': 'authorization_code',
+                    'code': code,
+                },
+                auth=(app_key, app_secret),
+                timeout=15,
+            )
+            if r.status_code == 200:
+                body = r.json()
+                refresh_token = body.get('refresh_token')
+                if refresh_token:
+                    msg = 'Refresh token gerado com sucesso. Copie os 3 valores abaixo pro Railway.'
+                else:
+                    erro = ('Resposta sem refresh_token. Verifique se voce usou '
+                            '"token_access_type=offline" na URL de autorizacao.')
+            else:
+                erro = f'Dropbox retornou {r.status_code}: {r.text[:200]}'
+        elif app_key and app_secret:
+            msg = 'App key e secret salvos. Agora autorize abaixo e cole o codigo.'
+
+    return render_template(
+        'entregas/dropbox_setup.html',
+        msg=msg,
+        erro=erro,
+        refresh_token=refresh_token,
+        app_key=app_key,
+        app_secret=app_secret,
+        cfg_app_key_set=bool(cfg_app_key),
+        cfg_app_secret_set=bool(cfg_app_secret),
+        cfg_refresh_set=bool(cfg_refresh),
+        legacy_set=bool(legacy),
+    )
+
+
 @entregas_bp.route('/api/drivers', methods=['GET'])
 @login_required
 @entrega_access_required
