@@ -41,6 +41,19 @@ def api_vendas():
         current_app.logger.exception('Seru listar_pedidos falhou')
         return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502
 
+    # A API filtra por updatedAt, mas o usuario quer ver vendas POR DATA DE
+    # CRIACAO (quando a venda aconteceu). Filtramos localmente pelo createdAt
+    # dentro do intervalo pedido.
+    inicio_iso = inicio.isoformat()
+    fim_iso = fim.isoformat()
+    total_bruto = len(pedidos)
+    pedidos = [
+        p for p in pedidos
+        if isinstance(p, dict) and (p.get('createdAt') or '')[:10] >= inicio_iso
+                               and (p.get('createdAt') or '')[:10] <= fim_iso
+    ]
+    fora_intervalo = total_bruto - len(pedidos)
+
     def _f(v):
         try:
             return float(v) if v is not None else 0.0
@@ -98,6 +111,7 @@ def api_vendas():
             inicio=inicio.isoformat(),
             fim=fim.isoformat(),
             total_pedidos=len(pedidos),
+            fora_intervalo=fora_intervalo,
             cancelados=cancelados,
             total_valor=total,
             por_pagamento=por_pagamento,
