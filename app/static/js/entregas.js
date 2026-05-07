@@ -439,7 +439,7 @@
         cont.innerHTML = html;
     }
 
-    function gerarRotas() {
+    function gerarRotas(salvar) {
         var data = document.getElementById('rotas-data').value;
         var janelas = getJanelas('rotas');
         var loading = document.getElementById('rotas-loading');
@@ -484,6 +484,7 @@
                         '</div>';
                     if (window.console) console.error('Erro renderRotas:', renderErr);
                 }
+                if (salvar) salvarAtribuicoesGeradas(d, msg);
             })
             .catch(function(err) {
                 loading.classList.add('d-none');
@@ -1281,6 +1282,36 @@
         }
     }
 
+    function salvarAtribuicoesGeradas(d, msgEl) {
+        var items = [];
+        (d.rotas || []).forEach(function(r) {
+            (r.paradas || []).forEach(function(p, idx) {
+                items.push({
+                    code: p.code,
+                    driver_id: r.driver.id,
+                    ordem: idx,
+                    data_entrega: d.data,
+                });
+            });
+        });
+        if (items.length === 0) return;
+        fetch('/entregas/api/atribuicao/lote', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+            body: JSON.stringify({items: items}),
+        }).then(function(r) { return r.json(); })
+          .then(function(resp) {
+              if (!resp.ok) {
+                  if (msgEl) msgEl.innerHTML = '<div class="alert alert-warning py-2 small">Distribuição feita mas falhou ao salvar: ' + escapeHtml(resp.erro || '?') + '</div>';
+                  return;
+              }
+              if (msgEl) msgEl.innerHTML = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle"></i> ' + items.length + ' pedido(s) atribuído(s) e salvo(s).</div>';
+          })
+          .catch(function() {
+              if (msgEl) msgEl.innerHTML = '<div class="alert alert-danger py-2 small">Falha ao salvar atribuições no banco.</div>';
+          });
+    }
+
     function fallbackCopiar(texto) {
         var ta = document.createElement('textarea');
         ta.value = texto;
@@ -1294,7 +1325,7 @@
 
     document.addEventListener('DOMContentLoaded', function() {
         var btn = document.getElementById('btn-gerar-rotas');
-        if (btn) btn.addEventListener('click', gerarRotas);
+        if (btn) btn.addEventListener('click', function() { gerarRotas(true); });
         var tabBtn = document.getElementById('btn-tab-rotas');
         if (tabBtn) tabBtn.addEventListener('shown.bs.tab', function() {
             var dataPedidos = document.getElementById('data-entrega').value;
@@ -1303,7 +1334,7 @@
         // Trocar checkbox de janela re-busca automatico
         var rotasJanCb = document.getElementById('rotas-janelas-cb');
         if (rotasJanCb) rotasJanCb.addEventListener('change', function(e) {
-            if (e.target.matches('input[type=checkbox]')) gerarRotas();
+            if (e.target.matches('input[type=checkbox]')) gerarRotas(false);
         });
         var prodJanCb = document.getElementById('prod-janelas-cb');
         if (prodJanCb) prodJanCb.addEventListener('change', function(e) {
