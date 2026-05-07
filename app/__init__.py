@@ -253,6 +253,8 @@ def create_app(config_class=None):
     app.register_blueprint(projetos_bp)
     from app.blueprints.pdv import pdv_bp
     app.register_blueprint(pdv_bp, url_prefix='/pdv')
+    from app.blueprints.bot import bot_bp
+    app.register_blueprint(bot_bp)
 
     with app.app_context():
         db.create_all()

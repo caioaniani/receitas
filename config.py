@@ -32,6 +32,10 @@ class Config:
     SERU_CLIENT_ID = os.environ.get('SERU_CLIENT_ID', '')
     SERU_CLIENT_SECRET = os.environ.get('SERU_CLIENT_SECRET', '')
 
+    # Token para integracao com bots externos (n8n / WhatsApp).
+    # Gere com: python -c "import secrets; print(secrets.token_urlsafe(32))"
+    BOT_API_TOKEN = os.environ.get('BOT_API_TOKEN', '')
+
     # Dropbox para fotos de comprovante de entrega
     # Token: https://www.dropbox.com/developers/apps -> escopo files.content.write + sharing.write
     DROPBOX_ACCESS_TOKEN = os.environ.get('DROPBOX_ACCESS_TOKEN', '')
