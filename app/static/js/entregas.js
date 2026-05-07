@@ -1336,6 +1336,13 @@
         if (rotasJanCb) rotasJanCb.addEventListener('change', function(e) {
             if (e.target.matches('input[type=checkbox]')) gerarRotas(false);
         });
+        // Trocar a data: limpa janelas (podem nao existir no dia novo) e re-busca em modo preview
+        var rotasDataInput = document.getElementById('rotas-data');
+        if (rotasDataInput) rotasDataInput.addEventListener('change', function() {
+            var cont = document.getElementById('rotas-janelas-cb');
+            if (cont) cont.querySelectorAll('input[type=checkbox]:checked').forEach(function(cb) { cb.checked = false; });
+            gerarRotas(false);
+        });
         var prodJanCb = document.getElementById('prod-janelas-cb');
         if (prodJanCb) prodJanCb.addEventListener('change', function(e) {
             if (e.target.matches('input[type=checkbox]')) carregarProdutos();
