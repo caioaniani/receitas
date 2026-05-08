@@ -1678,11 +1678,47 @@
     }
 
     function opMontarFiltroJanela(d) {
-        // Filtro de janela foi removido da UI; manter funcao como no-op pra
-        // nao precisar mexer nas chamadas existentes.
+        var area = document.getElementById('op-janelas-area');
         var cont = document.getElementById('op-janelas');
         if (!cont) return;
-        cont.innerHTML = '';
+        var todas = new Set();
+        (d.drivers || []).forEach(function(dr) {
+            (dr.paradas || []).forEach(function(p) { todas.add(p.periodo || '(sem janela)'); });
+        });
+        (d.sem_driver || []).forEach(function(p) { todas.add(p.periodo || '(sem janela)'); });
+
+        if (todas.size === 0) {
+            if (area) area.style.display = 'none';
+            cont.innerHTML = '';
+            return;
+        }
+        if (area) area.style.display = '';
+
+        // Inicializa: todas marcadas (a menos que ja exista escolha do usuario com mesmas janelas)
+        var primeiraVez = (opJanelaFiltro.size === 0);
+        if (primeiraVez) {
+            todas.forEach(function(j) { opJanelaFiltro.add(j); });
+        } else {
+            // Remove janelas que nao existem mais
+            opJanelaFiltro.forEach(function(j) { if (!todas.has(j)) opJanelaFiltro.delete(j); });
+            // Se ainda nao tem nada, marca tudo de novo
+            if (opJanelaFiltro.size === 0) todas.forEach(function(j) { opJanelaFiltro.add(j); });
+        }
+
+        var html = '';
+        Array.from(todas).sort().forEach(function(j) {
+            var checked = opJanelaFiltro.has(j) ? 'checked' : '';
+            html += '<label class="form-check form-check-inline mb-0">' +
+                '<input class="form-check-input op-cb-janela" type="checkbox" value="' + escapeHtml(j) + '" ' + checked + '>' +
+                '<span class="form-check-label small">' + escapeHtml(j) + '</span>' +
+            '</label>';
+        });
+        cont.innerHTML = html;
+    }
+
+    function opPassaJanela(p) {
+        if (opJanelaFiltro.size === 0) return false;  // nada marcado = nada passa
+        return opJanelaFiltro.has(p.periodo || '(sem janela)');
     }
 
     function opMontarBulkSelect(d) {
@@ -1692,11 +1728,6 @@
             html += '<option value="' + dr.id + '">' + escapeHtml(dr.nome) + '</option>';
         });
         sel.innerHTML = html;
-    }
-
-    function opPassaJanela(p) {
-        if (opJanelaFiltro.size === 0) return true;
-        return opJanelaFiltro.has(p.periodo || '');
     }
 
     function opRenderLista(d, container) {
@@ -1928,8 +1959,19 @@
         var data = opData();
         if (!data) return;
         var msg = document.getElementById('op-msg');
-        msg.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-hourglass-split"></i> Distribuindo…</div>';
-        fetch('/entregas/api/rotas?data=' + encodeURIComponent(data),
+        // So distribui pedidos das janelas marcadas. (sem janela) eh enviado vazio.
+        var janelasSel = Array.from(opJanelaFiltro);
+        if (janelasSel.length === 0) {
+            msg.innerHTML = '<div class="alert alert-warning py-2 small">Nenhuma janela selecionada. Marca pelo menos uma janela acima.</div>';
+            return;
+        }
+        var qs = janelasSel.map(function(j) {
+            // backend espera o periodo cru; '(sem janela)' representa periodo vazio
+            var v = (j === '(sem janela)') ? '' : j;
+            return '&janela=' + encodeURIComponent(v);
+        }).join('');
+        msg.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-hourglass-split"></i> Distribuindo ' + janelasSel.length + ' janela(s)…</div>';
+        fetch('/entregas/api/rotas?data=' + encodeURIComponent(data) + qs,
             {credentials: 'same-origin'}).then(function(r) { return r.json(); })
             .then(function(d) {
                 if (d.erro) { msg.innerHTML = '<div class="alert alert-warning py-2 small">' + escapeHtml(d.erro) + '</div>'; return; }
@@ -1996,6 +2038,23 @@
             var v = e.target.value;
             if (e.target.checked) opJanelaFiltro.add(v); else opJanelaFiltro.delete(v);
             opRenderLista(opUltimoResultado, cont);
+        });
+        var btnAll = document.getElementById('op-janelas-todas');
+        var btnNone = document.getElementById('op-janelas-nenhuma');
+        if (btnAll) btnAll.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.querySelectorAll('.op-cb-janela').forEach(function(cb) {
+                cb.checked = true; opJanelaFiltro.add(cb.value);
+            });
+            if (opUltimoResultado) opRenderLista(opUltimoResultado, cont);
+        });
+        if (btnNone) btnNone.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.querySelectorAll('.op-cb-janela').forEach(function(cb) {
+                cb.checked = false;
+            });
+            opJanelaFiltro.clear();
+            if (opUltimoResultado) opRenderLista(opUltimoResultado, cont);
         });
 
         // Click handlers (delegados ao container)
