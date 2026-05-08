@@ -1889,7 +1889,7 @@
         el.style.display = '';
         if (!opMapa) {
             opMapa = L.map('op-mapa', {scrollWheelZoom: false}).setView([-23.5505, -46.6333], 11);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            L.tileLayer('/entregas/tiles/{z}/{x}/{y}.png', {
                 maxZoom: 19, attribution: '© OpenStreetMap',
             }).addTo(opMapa);
             opMapaLayers = L.layerGroup().addTo(opMapa);
@@ -2125,7 +2125,7 @@
             else window.pedidos[idx] = pedido;
             var dataAtual = pedido.data_entrega || opData();
             var jaTem = !!pedido.data_override;
-            window.abrirAlterarData(code, dataAtual, jaTem);
+            window.editarData(code, dataAtual, jaTem);
         });
 
         // Novo pedido / Editar pedido local
