@@ -1261,27 +1261,35 @@ def api_rotas():
     if janelas:
         pedidos = [p for p in pedidos if (p.get('periodo') or '') in janelas]
 
-    # Carrega atribuicoes existentes pros pedidos do dia.
-    # IMPORTANTE: pedidos JA FINALIZADOS (entregue ou nao_entregue) sao
-    # excluidos do que vai pro gerar_rotas. Isso libera capacidade dos
-    # drivers pra um novo turno (ex: motorista que ja saiu de manha
-    # com 15 pedidos e voltou; aqueles 15 ja foram entregues e ele tem
-    # capacidade fresca pra distribuir os 15 da tarde).
+    # Carrega atribuicoes existentes. Cada Distribuir e' uma SAIDA — pedidos
+    # que ja estao em outros lotes (com driver) ja saíram pra rua, entao nao
+    # consomem capacidade do driver na rodada nova. Idem pedidos finalizados.
+    # Eles sao removidos do pool antes de chamar gerar_rotas.
+    #
+    # O que SOBROU pra distribuir nesta rodada:
+    # - Pedidos novos (nunca atribuidos)
+    # - Sobras de lotes anteriores (lote_id != NULL mas driver_id == NULL)
     codes = [p['code'] for p in pedidos if p.get('code')]
     atribuicoes = {}
     lote_por_code = {}
-    codes_finalizados = set()
+    codes_excluir = set()
     if codes:
         for a in AtribuicaoEntrega.query.filter(AtribuicaoEntrega.pedido_code.in_(codes)).all():
-            atribuicoes[a.pedido_code] = {'driver_id': a.driver_id, 'ordem': a.ordem or 0}
             if a.lote_id:
                 lote_por_code[a.pedido_code] = a.lote_id
-            if (a.status or 'pendente') in ('entregue', 'nao_entregue'):
-                codes_finalizados.add(a.pedido_code)
-    if codes_finalizados:
-        pedidos = [p for p in pedidos if p.get('code') not in codes_finalizados]
-        for c in codes_finalizados:
-            atribuicoes.pop(c, None)
+            status = (a.status or 'pendente')
+            ja_finalizado = status in ('entregue', 'nao_entregue')
+            ja_em_outro_lote = bool(a.lote_id) and a.driver_id is not None
+            if ja_finalizado or ja_em_outro_lote:
+                # Fora desta rodada — nao entra em gerar_rotas e nao
+                # ocupa capacidade do driver
+                codes_excluir.add(a.pedido_code)
+            else:
+                # Sobra (driver_id=null) ou atribuicao sem lote — entra como
+                # candidato a redistribuir
+                atribuicoes[a.pedido_code] = {'driver_id': a.driver_id, 'ordem': a.ordem or 0}
+    if codes_excluir:
+        pedidos = [p for p in pedidos if p.get('code') not in codes_excluir]
 
     if not drivers_struct:
         resp = jsonify(
