@@ -936,15 +936,24 @@ def deletar_lote(lote_id):
     # so admin pode fazer.
     if apagar and not current_user.is_admin():
         return jsonify(ok=False, erro='Apenas admin pode apagar as atribuições do lote'), 403
-    afetadas = AtribuicaoEntrega.query.filter_by(lote_id=lote_id).all()
-    if apagar:
-        for a in afetadas:
-            db.session.delete(a)
-    else:
-        for a in afetadas:
-            a.lote_id = None
-    db.session.delete(lote)
-    db.session.commit()
+    try:
+        afetadas = AtribuicaoEntrega.query.filter_by(lote_id=lote_id).all()
+        if apagar:
+            for a in afetadas:
+                db.session.delete(a)
+        else:
+            # UPDATE em lote via SQL: simples e evita N round-trips e
+            # problema de ordem de flush antes do DELETE do lote (FK
+            # constraint reclama se a UPDATE nao tiver rodado primeiro).
+            AtribuicaoEntrega.query.filter_by(lote_id=lote_id) \
+                .update({AtribuicaoEntrega.lote_id: None}, synchronize_session=False)
+        db.session.flush()
+        db.session.delete(lote)
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception('falha ao deletar lote %s', lote_id)
+        return jsonify(ok=False, erro=str(exc)), 500
     return jsonify(ok=True, atribuicoes_afetadas=len(afetadas), apagadas=apagar)
 
 
