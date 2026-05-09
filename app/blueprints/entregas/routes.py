@@ -922,6 +922,28 @@ def listar_lotes():
     return jsonify(lotes=out)
 
 
+@entregas_bp.route('/api/lotes/<int:lote_id>', methods=['DELETE'])
+@login_required
+@entrega_access_required
+def deletar_lote(lote_id):
+    """Exclui um lote. Por padrão, desvincula as atribuições filhas
+    (lote_id ← NULL) e elas voltam pro pool 'Sem lote'. Com
+    ?apagar_atribuicoes=1, apaga as atribuições junto (use só pra
+    limpar testes; perde dados de driver/ordem/status)."""
+    lote = LoteSaida.query.get_or_404(lote_id)
+    apagar = request.args.get('apagar_atribuicoes') == '1'
+    afetadas = AtribuicaoEntrega.query.filter_by(lote_id=lote_id).all()
+    if apagar:
+        for a in afetadas:
+            db.session.delete(a)
+    else:
+        for a in afetadas:
+            a.lote_id = None
+    db.session.delete(lote)
+    db.session.commit()
+    return jsonify(ok=True, atribuicoes_afetadas=len(afetadas), apagadas=apagar)
+
+
 @entregas_bp.route('/cartinha/<code>', methods=['POST'])
 @login_required
 @entrega_access_required

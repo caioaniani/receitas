@@ -1879,19 +1879,49 @@
         else if (prev !== null && opLotes.some(function(l) { return l.id === prev; })) sel.value = String(prev);
         else { sel.value = ''; opLoteFiltro = null; }
 
-        // Status badge + meta do lote selecionado
-        if (opLoteFiltro && opLoteFiltro !== 'sem_lote') {
+        // Status badge + meta do lote selecionado + botão excluir
+        var btnExcluir = document.getElementById('op-lote-excluir');
+        if (typeof opLoteFiltro === 'number') {
             var l = opLotes.find(function(x) { return x.id === opLoteFiltro; });
             if (l) {
                 st.outerHTML = '<span id="op-lote-status">' + opStatusBadge(l.status) + '</span>';
                 var jan = (l.janelas || []).filter(Boolean).join(' + ') || '—';
                 meta.textContent = 'Janelas: ' + jan + ' · ' + l.qtd_pedidos + ' pedido(s)';
+                if (btnExcluir) btnExcluir.style.display = '';
             } else {
                 st.innerHTML = ''; meta.textContent = '';
+                if (btnExcluir) btnExcluir.style.display = 'none';
             }
         } else {
             st.innerHTML = ''; meta.textContent = '';
+            if (btnExcluir) btnExcluir.style.display = 'none';
         }
+    }
+
+    function opExcluirLoteAtual() {
+        if (typeof opLoteFiltro !== 'number') return;
+        var l = opLotes.find(function(x) { return x.id === opLoteFiltro; });
+        if (!l) return;
+        var msg1 = 'Excluir lote "' + l.nome + '"?\n\n' +
+            'Os ' + l.qtd_pedidos + ' pedido(s) NÃO são apagados — voltam pra "Sem lote", ' +
+            'mantendo o motorista e a ordem de cada um.';
+        if (!confirm(msg1)) return;
+        var apagarTudo = false;
+        // Segunda pergunta: pra "limpar lixo de teste" sem deixar atribuicoes orfas
+        if (confirm('Apagar TAMBÉM as atribuições (driver, ordem, status)?\n\n' +
+                    'OK = limpa tudo (uso pra apagar testes).\n' +
+                    'Cancel = mantém atribuições, só desvincula do lote.')) {
+            apagarTudo = true;
+        }
+        var url = '/entregas/api/lotes/' + l.id + (apagarTudo ? '?apagar_atribuicoes=1' : '');
+        apiSafe(url, {
+            method: 'DELETE',
+            headers: {'X-CSRFToken': CSRF_TOKEN},
+            credentials: 'same-origin',
+        }, 'Excluir lote ' + l.nome).then(function() {
+            opLoteFiltro = null;
+            opCarregar();
+        }).catch(function() {/* banner cuida */});
     }
 
     function opMontarBulkSelect(d) {
@@ -2376,6 +2406,8 @@
         if (btnAuto) btnAuto.addEventListener('click', opAbrirModalDistribuir);
         var btnReot = document.getElementById('op-reotimizar');
         if (btnReot) btnReot.addEventListener('click', opReotimizarRotas);
+        var btnLoteEx = document.getElementById('op-lote-excluir');
+        if (btnLoteEx) btnLoteEx.addEventListener('click', opExcluirLoteAtual);
         var loteSel = document.getElementById('op-lote-filter');
         if (loteSel) loteSel.addEventListener('change', function() {
             var v = this.value;
