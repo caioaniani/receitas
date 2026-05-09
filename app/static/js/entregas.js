@@ -1800,11 +1800,11 @@
         (d.sem_driver || []).forEach(function(p) { todas.add(p.periodo || '(sem janela)'); });
 
         if (todas.size === 0) {
-            if (area) area.style.display = 'none';
+            if (area) area.classList.add('d-none');
             cont.innerHTML = '';
             return;
         }
-        if (area) area.style.display = '';
+        if (area) area.classList.remove('d-none');
 
         // Inicializa: todas marcadas (a menos que ja exista escolha do usuario com mesmas janelas)
         var primeiraVez = (opJanelaFiltro.size === 0);
@@ -1860,10 +1860,10 @@
         var meta = document.getElementById('op-lote-meta');
         if (!sel || !area) return;
         if (!opLotes || opLotes.length === 0) {
-            area.style.display = 'none';
+            area.classList.add('d-none');
             return;
         }
-        area.style.display = '';
+        area.classList.remove('d-none');
         var html = '<option value="">Todos os lotes (' + opLotes.length + ')</option>' +
             '<option value="sem_driver">⚠ Sem driver (todos os pedidos sem motorista)</option>' +
             '<option value="sem_lote">Sem lote (nunca distribuídos)</option>';
