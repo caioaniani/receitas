@@ -337,6 +337,16 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None):
     # 2.5. Aplica capacidade de cada driver. Sobras viram excedentes que
     # tentam encaixar em outros drivers com vaga; o que sobrar fica em
     # 'sem_atribuir'.
+    logger.info('rotas: %d pedidos, %d drivers, %d pre_atribuidos, %d nao_atribuidos, %d distribuidos via clustering',
+                len(pedidos), len(drivers),
+                sum(len(v) for v in pre_atribuidos.values()),
+                len(nao_atribuidos),
+                sum(len(v) for v in distribuidos.values()))
+    for d in drivers:
+        logger.info('rotas: driver %s cap=%s pre=%d kmeans_atribuiu=%d',
+                    d.get('nome'), d.get('capacidade'),
+                    len(pre_atribuidos.get(d['id'], [])),
+                    len(distribuidos.get(d['id']) or []))
     excedentes = []
     for d in drivers:
         cap = d.get('capacidade') or 999
@@ -369,6 +379,11 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None):
                 sem_atribuir.append(p)
     else:
         sem_atribuir = []
+
+    logger.info('rotas: final → %d distribuidos, %d sem_atribuir, %d sem_cep',
+                sum(len(v) for v in distribuidos.values()),
+                len(sem_atribuir),
+                len(sem_cep))
 
     # 3. Otimiza ordem dentro de cada rota com Google Directions (se disponivel)
     origem = origem_latlng(app) if tem_google else None
