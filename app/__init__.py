@@ -582,6 +582,7 @@ def _migrate_postgres(app):
     _try("ALTER TABLE driver_entrega ADD COLUMN token VARCHAR(32)")
     _try("CREATE UNIQUE INDEX IF NOT EXISTS idx_driver_token ON driver_entrega(token)")
     _try("ALTER TABLE driver_entrega ADD COLUMN pin VARCHAR(8)")
+    _try("ALTER TABLE driver_entrega ADD COLUMN capacidade INTEGER DEFAULT 999")
     _try("ALTER TABLE atribuicao_entrega ADD COLUMN status VARCHAR(20) DEFAULT 'pendente'")
     _try("ALTER TABLE atribuicao_entrega ADD COLUMN entregue_em TIMESTAMP")
     _try("ALTER TABLE atribuicao_entrega ADD COLUMN nota VARCHAR(500)")

@@ -777,6 +777,9 @@ class Driver(db.Model):
     telefone = db.Column(db.String(30))
     ativo = db.Column(db.Boolean, default=True)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    # Capacidade maxima de pedidos por rodada de Auto-distribuir.
+    # Usada pra moto (cap 2-3) vs carro (cap 12-15). Default alto = sem limite efetivo.
+    capacidade = db.Column(db.Integer, default=999)
 
     # Acesso a pagina /driver/<token> + PIN 4 digitos pra dificultar acesso casual.
     token = db.Column(db.String(32), unique=True, index=True)

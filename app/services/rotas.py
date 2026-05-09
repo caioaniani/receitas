@@ -261,7 +261,7 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None):
     """
     atribuicoes = atribuicoes or {}
     if not drivers:
-        return {'rotas': [], 'sem_cep': []}
+        return {'rotas': [], 'sem_cep': [], 'sem_atribuir': list(pedidos)}
 
     if app is None:
         from flask import current_app
@@ -333,6 +333,42 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None):
                 if inicio >= len(ped_dist):
                     break
                 distribuidos[drivers[i]['id']] = ped_dist[inicio:fim]
+
+    # 2.5. Aplica capacidade de cada driver. Sobras viram excedentes que
+    # tentam encaixar em outros drivers com vaga; o que sobrar fica em
+    # 'sem_atribuir'.
+    excedentes = []
+    for d in drivers:
+        cap = d.get('capacidade') or 999
+        ja_tem = len(pre_atribuidos.get(d['id'], []))
+        vagas = max(0, cap - ja_tem)
+        novos = distribuidos.get(d['id']) or []
+        if len(novos) > vagas:
+            distribuidos[d['id']] = novos[:vagas]
+            excedentes.extend(novos[vagas:])
+
+    # Tenta encaixar excedentes em drivers com vagas restantes (round-robin)
+    if excedentes:
+        i = 0
+        sem_atribuir = []
+        for p in excedentes:
+            colocado = False
+            tentativas = 0
+            while tentativas < len(drivers):
+                d = drivers[i % len(drivers)]
+                cap = d.get('capacidade') or 999
+                total_atual = len(pre_atribuidos.get(d['id'], [])) + len(distribuidos.get(d['id'], []))
+                if total_atual < cap:
+                    distribuidos[d['id']].append(p)
+                    colocado = True
+                    i += 1
+                    break
+                i += 1
+                tentativas += 1
+            if not colocado:
+                sem_atribuir.append(p)
+    else:
+        sem_atribuir = []
 
     # 3. Otimiza ordem dentro de cada rota com Google Directions (se disponivel)
     origem = origem_latlng(app) if tem_google else None
@@ -407,4 +443,4 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None):
             'minutos': minutos,
         })
 
-    return {'rotas': rotas, 'sem_cep': sem_cep}
+    return {'rotas': rotas, 'sem_cep': sem_cep, 'sem_atribuir': sem_atribuir}

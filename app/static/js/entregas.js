@@ -819,7 +819,7 @@
                     return;
                 }
                 var html = '<div class="table-responsive"><table class="table table-sm align-middle"><thead><tr>' +
-                    '<th style="width:60px;">Cor</th><th>Nome</th><th>Telefone</th><th style="width:90px;">PIN</th><th style="width:70px;">Ativo</th><th>Acesso driver</th><th></th>' +
+                    '<th style="width:60px;">Cor</th><th>Nome</th><th>Telefone</th><th style="width:80px;" title="Pedidos máx por rodada">Cap.</th><th style="width:90px;">PIN</th><th style="width:70px;">Ativo</th><th>Acesso driver</th><th></th>' +
                     '</tr></thead><tbody>';
                 for (var i = 0; i < d.drivers.length; i++) {
                     var dr = d.drivers[i];
@@ -828,6 +828,7 @@
                         '<td><input type="color" class="form-control form-control-color form-control-sm drv-cor-edit" value="' + (dr.cor || '#666666') + '" style="width:36px;height:24px;"></td>' +
                         '<td><input type="text" class="form-control form-control-sm drv-nome-edit" value="' + escapeHtml(dr.nome) + '"></td>' +
                         '<td><input type="text" class="form-control form-control-sm drv-tel-edit" value="' + escapeHtml(dr.telefone || '') + '"></td>' +
+                        '<td><input type="number" min="1" class="form-control form-control-sm drv-cap-edit" value="' + (dr.capacidade || 999) + '"></td>' +
                         '<td><input type="text" maxlength="6" inputmode="numeric" class="form-control form-control-sm drv-pin-edit" placeholder="—" value="' + escapeHtml(dr.pin || '') + '"></td>' +
                         '<td class="text-center"><input type="checkbox" class="form-check-input drv-ativo-edit" ' + (dr.ativo ? 'checked' : '') + '></td>' +
                         '<td>' +
@@ -856,13 +857,15 @@
         var nome = (document.getElementById('drv-nome').value || '').trim();
         var tel = (document.getElementById('drv-telefone').value || '').trim();
         var cor = document.getElementById('drv-cor').value;
+        var capInput = document.getElementById('drv-capacidade');
+        var cap = capInput ? parseInt(capInput.value, 10) || 15 : 15;
         var msg = document.getElementById('drv-msg');
         msg.innerHTML = '';
         if (!nome) { msg.innerHTML = '<div class="text-danger">Informe o nome.</div>'; return; }
         fetch('/entregas/api/drivers', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
-            body: JSON.stringify({nome: nome, telefone: tel, cor: cor})
+            body: JSON.stringify({nome: nome, telefone: tel, cor: cor, capacidade: cap})
         }).then(function(r) { return r.json(); })
           .then(function(d) {
               if (d.ok) {
@@ -1553,12 +1556,14 @@
                     return;
                 }
                 if (e.target.closest('.btn-drv-salvar')) {
+                    var capEl = row.querySelector('.drv-cap-edit');
                     var dados = {
                         nome: row.querySelector('.drv-nome-edit').value,
                         telefone: row.querySelector('.drv-tel-edit').value,
                         cor: row.querySelector('.drv-cor-edit').value,
                         ativo: row.querySelector('.drv-ativo-edit').checked,
                         pin: row.querySelector('.drv-pin-edit').value,
+                        capacidade: capEl ? parseInt(capEl.value, 10) || 999 : 999,
                     };
                     fetch('/entregas/api/drivers/' + id, {
                         method: 'POST',
@@ -1955,22 +1960,61 @@
         setTimeout(function() { if (opMapa) opMapa.invalidateSize(); }, 80);
     }
 
-    function opAutoDistribuir() {
-        var data = opData();
-        if (!data) return;
-        var msg = document.getElementById('op-msg');
-        // So distribui pedidos das janelas marcadas. (sem janela) eh enviado vazio.
-        var janelasSel = Array.from(opJanelaFiltro);
-        if (janelasSel.length === 0) {
-            msg.innerHTML = '<div class="alert alert-warning py-2 small">Nenhuma janela selecionada. Marca pelo menos uma janela acima.</div>';
+    function opAbrirModalDistribuir() {
+        if (!opUltimoResultado) return;
+        // Popula motoristas (so ativos)
+        var contDrv = document.getElementById('dist-drivers');
+        var drivers = opUltimoResultado.drivers_disponiveis || [];
+        if (drivers.length === 0) {
+            alert('Nenhum motorista cadastrado. Vá em "Drivers" e cadastre.');
             return;
         }
+        var html = '';
+        drivers.forEach(function(dr) {
+            var cap = dr.capacidade || 999;
+            html += '<label class="form-check mb-0">' +
+                '<input class="form-check-input dist-cb-driver" type="checkbox" value="' + dr.id + '" checked>' +
+                '<span class="form-check-label small">' +
+                    '<span style="display:inline-block;width:10px;height:10px;background:' + (dr.cor || '#666') + ';border-radius:50%;margin-right:6px;"></span>' +
+                    escapeHtml(dr.nome) + ' <span class="text-muted">(cap: ' + cap + ')</span>' +
+                '</span></label>';
+        });
+        contDrv.innerHTML = html;
+
+        // Popula janelas (das que aparecem no resultado atual)
+        var contJan = document.getElementById('dist-janelas');
+        var todas = new Set();
+        (opUltimoResultado.drivers || []).forEach(function(dr) {
+            (dr.paradas || []).forEach(function(p) { todas.add(p.periodo || '(sem janela)'); });
+        });
+        (opUltimoResultado.sem_driver || []).forEach(function(p) { todas.add(p.periodo || '(sem janela)'); });
+        var hj = '';
+        Array.from(todas).sort().forEach(function(j) {
+            var checked = (opJanelaFiltro.size === 0 || opJanelaFiltro.has(j)) ? 'checked' : '';
+            hj += '<label class="form-check mb-0">' +
+                '<input class="form-check-input dist-cb-janela" type="checkbox" value="' + escapeHtml(j) + '" ' + checked + '>' +
+                '<span class="form-check-label small">' + escapeHtml(j) + '</span></label>';
+        });
+        contJan.innerHTML = hj || '<div class="text-muted small">(nenhuma)</div>';
+
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-distribuir')).show();
+    }
+
+    function opExecutarDistribuir() {
+        var data = opData();
+        if (!data) return;
+        var driverIds = Array.from(document.querySelectorAll('.dist-cb-driver:checked')).map(function(cb) { return parseInt(cb.value, 10); });
+        var janelasSel = Array.from(document.querySelectorAll('.dist-cb-janela:checked')).map(function(cb) { return cb.value; });
+        if (driverIds.length === 0) { alert('Selecione pelo menos um motorista.'); return; }
+        if (janelasSel.length === 0) { alert('Selecione pelo menos uma janela.'); return; }
+
+        bootstrap.Modal.getInstance(document.getElementById('modal-distribuir')).hide();
+        var msg = document.getElementById('op-msg');
         var qs = janelasSel.map(function(j) {
-            // backend espera o periodo cru; '(sem janela)' representa periodo vazio
             var v = (j === '(sem janela)') ? '' : j;
             return '&janela=' + encodeURIComponent(v);
-        }).join('');
-        msg.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-hourglass-split"></i> Distribuindo ' + janelasSel.length + ' janela(s)…</div>';
+        }).join('') + '&drivers=' + driverIds.join(',');
+        msg.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-hourglass-split"></i> Distribuindo ' + janelasSel.length + ' janela(s) entre ' + driverIds.length + ' motorista(s)…</div>';
         fetch('/entregas/api/rotas?data=' + encodeURIComponent(data) + qs,
             {credentials: 'same-origin'}).then(function(r) { return r.json(); })
             .then(function(d) {
@@ -1997,7 +2041,12 @@
                         msg.innerHTML = '<div class="alert alert-warning py-2 small">Falha ao salvar: ' + escapeHtml(resp.erro || '?') + '</div>';
                         return;
                     }
-                    msg.innerHTML = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle"></i> ' + items.length + ' pedido(s) distribuído(s) e salvo(s).</div>';
+                    var aviso = '';
+                    var nSobra = (d.sem_atribuir || []).length;
+                    var nSemCep = (d.sem_cep || []).length;
+                    if (nSobra > 0) aviso += ' <strong>' + nSobra + ' sobra(s)</strong> em "Sem driver" (capacidade cheia).';
+                    if (nSemCep > 0) aviso += ' ' + nSemCep + ' sem geocode/CEP.';
+                    msg.innerHTML = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle"></i> ' + items.length + ' pedido(s) distribuído(s).' + aviso + '</div>';
                     if (opMapaVisivel) opRenderMapa(d);
                     opCarregar();
                 });
@@ -2024,7 +2073,29 @@
             inpData.value = new Date().toISOString().slice(0, 10);
             opCarregar();
         });
-        if (btnAuto) btnAuto.addEventListener('click', opAutoDistribuir);
+        if (btnAuto) btnAuto.addEventListener('click', opAbrirModalDistribuir);
+        var btnDistConf = document.getElementById('dist-confirmar');
+        if (btnDistConf) btnDistConf.addEventListener('click', opExecutarDistribuir);
+        var btnDistDrvAll = document.getElementById('dist-drv-todos');
+        if (btnDistDrvAll) btnDistDrvAll.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.querySelectorAll('.dist-cb-driver').forEach(function(cb) { cb.checked = true; });
+        });
+        var btnDistDrvNone = document.getElementById('dist-drv-nenhum');
+        if (btnDistDrvNone) btnDistDrvNone.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.querySelectorAll('.dist-cb-driver').forEach(function(cb) { cb.checked = false; });
+        });
+        var btnDistJanAll = document.getElementById('dist-jan-todas');
+        if (btnDistJanAll) btnDistJanAll.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.querySelectorAll('.dist-cb-janela').forEach(function(cb) { cb.checked = true; });
+        });
+        var btnDistJanNone = document.getElementById('dist-jan-nenhuma');
+        if (btnDistJanNone) btnDistJanNone.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.querySelectorAll('.dist-cb-janela').forEach(function(cb) { cb.checked = false; });
+        });
         if (btnMapa) btnMapa.addEventListener('click', function() {
             opMapaVisivel = !opMapaVisivel;
             document.getElementById('op-mapa-label').textContent = opMapaVisivel ? 'Esconder mapa' : 'Mostrar mapa';

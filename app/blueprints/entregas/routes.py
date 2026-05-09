@@ -219,7 +219,7 @@ def listar_drivers():
     return jsonify(drivers=[
         {
             'id': d.id, 'nome': d.nome, 'cor': d.cor, 'telefone': d.telefone, 'ativo': d.ativo,
-            'token': d.token, 'pin': d.pin,
+            'token': d.token, 'pin': d.pin, 'capacidade': d.capacidade or 999,
         }
         for d in drivers
     ])
@@ -236,12 +236,17 @@ def criar_driver():
         return jsonify(ok=False, erro='nome obrigatorio'), 400
     if Driver.query.filter_by(nome=nome).first():
         return jsonify(ok=False, erro='ja existe driver com esse nome'), 400
+    try:
+        cap = int(data.get('capacidade') or 999)
+    except (TypeError, ValueError):
+        cap = 999
     d = Driver(
         nome=nome,
         cor=(data.get('cor') or '').strip() or None,
         telefone=(data.get('telefone') or '').strip() or None,
         ativo=True,
         token=secrets.token_urlsafe(16),
+        capacidade=max(1, cap),
     )
     db.session.add(d)
     db.session.commit()
@@ -275,6 +280,11 @@ def atualizar_driver(did):
         if pin and not (pin.isdigit() and 4 <= len(pin) <= 6):
             return jsonify(ok=False, erro='PIN deve ter 4-6 digitos'), 400
         d.pin = pin or None
+    if 'capacidade' in data:
+        try:
+            d.capacidade = max(1, int(data['capacidade']))
+        except (TypeError, ValueError):
+            pass
     if data.get('regenerar_token'):
         import secrets
         d.token = secrets.token_urlsafe(16)
@@ -1055,7 +1065,8 @@ def api_rotas():
         except ValueError:
             pass
     drivers_db = q.order_by(Driver.nome).all()
-    drivers_struct = [{'id': d.id, 'nome': d.nome, 'cor': d.cor, 'telefone': d.telefone}
+    drivers_struct = [{'id': d.id, 'nome': d.nome, 'cor': d.cor, 'telefone': d.telefone,
+                       'capacidade': d.capacidade or 999}
                       for d in drivers_db]
 
     overrides = _carregar_overrides_data()
@@ -1113,6 +1124,11 @@ def api_rotas():
             {'code': p['code'], 'destinatario': p.get('destinatario', ''),
              'endereco': p.get('endereco', ''), 'periodo': p.get('periodo', '')}
             for p in geradas['sem_cep']
+        ],
+        sem_atribuir=[
+            {'code': p['code'], 'destinatario': p.get('destinatario', ''),
+             'endereco': p.get('endereco', ''), 'periodo': p.get('periodo', '')}
+            for p in geradas.get('sem_atribuir') or []
         ],
         total_pedidos=len(pedidos),
         origem_endereco=rotas_svc.origem_endereco(current_app),
