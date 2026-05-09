@@ -1905,8 +1905,9 @@
         else if (prev !== null && opLotes.some(function(l) { return l.id === prev; })) sel.value = String(prev);
         else { sel.value = ''; opLoteFiltro = null; }
 
-        // Status badge + meta do lote selecionado + botão excluir
+        // Status badge + meta do lote selecionado + botões de ação
         var btnExcluir = document.getElementById('op-lote-excluir');
+        var btnRoteirizar = document.getElementById('op-lote-roteirizar');
         if (typeof opLoteFiltro === 'number') {
             var l = opLotes.find(function(x) { return x.id === opLoteFiltro; });
             if (l) {
@@ -1914,14 +1915,75 @@
                 var jan = (l.janelas || []).filter(Boolean).join(' + ') || '—';
                 meta.textContent = 'Janelas: ' + jan + ' · ' + l.qtd_pedidos + ' pedido(s)';
                 if (btnExcluir) btnExcluir.style.display = '';
+                // Roteirizar so aparece se ha sobras nesse lote
+                var sobrasCount = ((opUltimoResultado && opUltimoResultado.sem_driver) || [])
+                    .filter(function(p) { return p.lote_id === l.id; }).length;
+                if (btnRoteirizar) btnRoteirizar.style.display = sobrasCount > 0 ? '' : 'none';
             } else {
                 st.innerHTML = ''; meta.textContent = '';
                 if (btnExcluir) btnExcluir.style.display = 'none';
+                if (btnRoteirizar) btnRoteirizar.style.display = 'none';
             }
         } else {
             st.innerHTML = ''; meta.textContent = '';
             if (btnExcluir) btnExcluir.style.display = 'none';
+            if (btnRoteirizar) btnRoteirizar.style.display = 'none';
         }
+    }
+
+    function opRoteirizarSobrasDoLote() {
+        if (typeof opLoteFiltro !== 'number') return;
+        var l = opLotes.find(function(x) { return x.id === opLoteFiltro; });
+        if (!l) return;
+        var data = opData();
+        if (!data) return;
+        var msg = document.getElementById('op-msg');
+        // Drivers do lote: os que tem paradas no lote selecionado
+        var driversDoLote = new Set();
+        ((opUltimoResultado && opUltimoResultado.drivers) || []).forEach(function(dr) {
+            (dr.paradas || []).forEach(function(p) {
+                if (p.lote_id === l.id) driversDoLote.add(dr.id);
+            });
+        });
+        if (driversDoLote.size === 0) {
+            // Nao ha drivers nesse lote — usa todos os ativos
+            ((opUltimoResultado && opUltimoResultado.drivers_disponiveis) || []).forEach(function(d) {
+                driversDoLote.add(d.id);
+            });
+        }
+        if (driversDoLote.size === 0) {
+            msg.innerHTML = '<div class="alert alert-warning py-2 small">Sem drivers cadastrados.</div>';
+            return;
+        }
+        msg.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-hourglass-split"></i> Roteirizando sobras do lote…</div>';
+        var qs = '&drivers=' + Array.from(driversDoLote).join(',') + '&lote_id=' + l.id;
+        fetch('/entregas/api/rotas?data=' + encodeURIComponent(data) + qs,
+            {credentials: 'same-origin'}).then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d.erro) { msg.innerHTML = '<div class="alert alert-danger py-2 small">' + escapeHtml(d.erro) + '</div>'; return; }
+                var items = [];
+                (d.rotas || []).forEach(function(r) {
+                    (r.paradas || []).forEach(function(p, idx) {
+                        items.push({code: p.code, driver_id: r.driver.id, ordem: idx, data_entrega: data});
+                    });
+                });
+                if (items.length === 0) {
+                    msg.innerHTML = '<div class="alert alert-warning py-2 small">Nenhuma sobra coube nos drivers atuais. ' +
+                        'Aumente capacidade dos drivers ou marque pedidos como entregue pra liberar vagas.</div>';
+                    return;
+                }
+                // Salva no MESMO lote (lote_id, nao criar_lote)
+                apiSalvarLote(items, 'Roteirizar sobras do lote (' + items.length + ')', {lote_id: l.id})
+                    .then(function() {
+                        var nSobra = (d.sem_atribuir || []).length;
+                        var aviso = nSobra > 0 ? ' (' + nSobra + ' nao couberam)' : '';
+                        msg.innerHTML = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle"></i> ' +
+                            items.length + ' sobra(s) atribuida(s) no lote' + aviso + '.</div>';
+                        opCarregar();
+                    })
+                    .catch(function() {/* banner cuida */});
+            })
+            .catch(function() { msg.innerHTML = '<div class="alert alert-danger py-2 small">Falha de rede.</div>'; });
     }
 
     function opExcluirLoteAtual() {
@@ -2437,6 +2499,8 @@
         if (btnReot) btnReot.addEventListener('click', opReotimizarRotas);
         var btnLoteEx = document.getElementById('op-lote-excluir');
         if (btnLoteEx) btnLoteEx.addEventListener('click', opExcluirLoteAtual);
+        var btnLoteRot = document.getElementById('op-lote-roteirizar');
+        if (btnLoteRot) btnLoteRot.addEventListener('click', opRoteirizarSobrasDoLote);
         var loteSel = document.getElementById('op-lote-filter');
         if (loteSel) loteSel.addEventListener('change', function() {
             var v = this.value;

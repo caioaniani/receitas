@@ -1261,6 +1261,16 @@ def api_rotas():
     if janelas:
         pedidos = [p for p in pedidos if (p.get('periodo') or '') in janelas]
 
+    # MODO 'roteirizar lote': escopa a um lote especifico. Pega so as sobras
+    # desse lote (driver_id NULL), e a capacidade dos drivers e' calculada
+    # contando os atribuidos do MESMO lote (nao do dia inteiro).
+    lote_alvo_id = request.args.get('lote_id')
+    if lote_alvo_id:
+        try:
+            lote_alvo_id = int(lote_alvo_id)
+        except (TypeError, ValueError):
+            lote_alvo_id = None
+
     # Carrega atribuicoes existentes. Cada Distribuir e' uma SAIDA — pedidos
     # que ja estao em outros lotes (com driver) ja saíram pra rua, entao nao
     # consomem capacidade do driver na rodada nova. Idem pedidos finalizados.
@@ -1279,17 +1289,29 @@ def api_rotas():
                 lote_por_code[a.pedido_code] = a.lote_id
             status = (a.status or 'pendente')
             ja_finalizado = status in ('entregue', 'nao_entregue')
-            ja_em_outro_lote = bool(a.lote_id) and a.driver_id is not None
-            if ja_finalizado or ja_em_outro_lote:
-                # Fora desta rodada — nao entra em gerar_rotas e nao
-                # ocupa capacidade do driver
-                codes_excluir.add(a.pedido_code)
+            if lote_alvo_id:
+                # MODO LOTE: escopa ao lote alvo. Atribuidos com driver no mesmo
+                # lote viram pre_atribuidos (consomem capacidade). Sobras do
+                # mesmo lote viram candidatos. Pedidos de outros lotes ou ja
+                # finalizados ficam fora.
+                if ja_finalizado or a.lote_id != lote_alvo_id:
+                    codes_excluir.add(a.pedido_code)
+                else:
+                    atribuicoes[a.pedido_code] = {'driver_id': a.driver_id, 'ordem': a.ordem or 0}
             else:
-                # Sobra (driver_id=null) ou atribuicao sem lote — entra como
-                # candidato a redistribuir
-                atribuicoes[a.pedido_code] = {'driver_id': a.driver_id, 'ordem': a.ordem or 0}
+                # MODO PADRAO: cria lote novo, capacidade fresca
+                ja_em_outro_lote = bool(a.lote_id) and a.driver_id is not None
+                if ja_finalizado or ja_em_outro_lote:
+                    codes_excluir.add(a.pedido_code)
+                else:
+                    atribuicoes[a.pedido_code] = {'driver_id': a.driver_id, 'ordem': a.ordem or 0}
     if codes_excluir:
         pedidos = [p for p in pedidos if p.get('code') not in codes_excluir]
+    # MODO LOTE: tambem exclui pedidos que nao tem registro de atribuicao
+    # nesse lote (nunca atribuidos ao lote_alvo).
+    if lote_alvo_id:
+        codes_no_lote = {c for c, lid in lote_por_code.items() if lid == lote_alvo_id}
+        pedidos = [p for p in pedidos if p.get('code') in codes_no_lote]
 
     if not drivers_struct:
         resp = jsonify(
