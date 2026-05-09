@@ -1703,6 +1703,9 @@
     var opMapaLayers = null;
     var opJanelaFiltro = new Set();  // filtro local — vazio = todas
     var opTeveEdicaoManual = false;  // setado quando usuario reatribui pelo mapa
+    var opLotes = [];                // lotes do dia (resposta de /api/lotes)
+    var opLoteFiltro = null;         // id do lote selecionado, null = todos
+    var opUltimoRotas = null;        // ultimo /api/rotas (pra re-render do mapa em filtro)
 
     function opData() { return document.getElementById('op-data').value; }
     var opBuscaTexto = '';
@@ -1720,15 +1723,18 @@
 
         var pAtrib = fetch('/entregas/api/atribuidos?data=' + encodeURIComponent(data),
             {credentials: 'same-origin'}).then(function(r) { return r.json(); });
+        var pLotes = fetch('/entregas/api/lotes?data=' + encodeURIComponent(data),
+            {credentials: 'same-origin'}).then(function(r) { return r.json(); }).catch(function() { return {lotes: []}; });
         var pRotas = opMapaVisivel
             ? fetch('/entregas/api/rotas?data=' + encodeURIComponent(data),
                 {credentials: 'same-origin'}).then(function(r) { return r.json(); })
             : Promise.resolve(null);
 
-        Promise.all([pAtrib, pRotas]).then(function(rs) {
+        Promise.all([pAtrib, pRotas, pLotes]).then(function(rs) {
             loading.classList.add('d-none');
             var d = rs[0];
             var dRotas = rs[1];
+            var dLotes = rs[2];
             if (d.erro) {
                 msg.innerHTML = '<div class="alert alert-warning py-2 small">' + escapeHtml(d.erro) + '</div>';
                 container.innerHTML = '';
@@ -1736,11 +1742,14 @@
                 return;
             }
             opUltimoResultado = d;
+            opLotes = (dLotes && dLotes.lotes) || [];
+            opRenderSeletorLotes();
             __driversDisp = d.drivers_disponiveis || [];
             opMontarFiltroJanela(d);
             opMontarBulkSelect(d);
             opAtualizarResumo(d);
             opRenderLista(d, container);
+            opUltimoRotas = dRotas;
             if (opMapaVisivel && dRotas) opRenderMapa(dRotas);
         }).catch(function(e) {
             loading.classList.add('d-none');
@@ -1814,6 +1823,60 @@
         return opJanelaFiltro.has(p.periodo || '(sem janela)');
     }
 
+    function opPassaLote(p) {
+        if (opLoteFiltro === null) return true;            // 'todos os lotes'
+        if (opLoteFiltro === 'sem_lote') return !p.lote_id;
+        return p.lote_id === opLoteFiltro;
+    }
+
+    function opStatusBadge(status) {
+        var s = (status || 'aberto').toLowerCase();
+        if (s === 'em_rota') return '<span class="badge bg-warning text-dark">Em rota</span>';
+        if (s === 'concluido') return '<span class="badge bg-success">Concluído</span>';
+        if (s === 'cancelado') return '<span class="badge bg-secondary">Cancelado</span>';
+        return '<span class="badge bg-info text-dark">Aberto</span>';
+    }
+
+    function opRenderSeletorLotes() {
+        var area = document.getElementById('op-lotes-area');
+        var sel = document.getElementById('op-lote-filter');
+        var st = document.getElementById('op-lote-status');
+        var meta = document.getElementById('op-lote-meta');
+        if (!sel || !area) return;
+        if (!opLotes || opLotes.length === 0) {
+            area.style.display = 'none';
+            return;
+        }
+        area.style.display = '';
+        var html = '<option value="">Todos os lotes (' + opLotes.length + ')</option>' +
+            '<option value="sem_lote">Sem lote (não distribuídos)</option>';
+        opLotes.forEach(function(l) {
+            var emoji = l.status === 'concluido' ? '✓' : (l.status === 'em_rota' ? '🚚' : '○');
+            html += '<option value="' + l.id + '">' + emoji + ' ' + escapeHtml(l.nome) +
+                ' · ' + l.qtd_pedidos + ' ped.</option>';
+        });
+        var prev = opLoteFiltro;
+        sel.innerHTML = html;
+        // Tenta preservar selecao
+        if (prev === 'sem_lote') sel.value = 'sem_lote';
+        else if (prev !== null && opLotes.some(function(l) { return l.id === prev; })) sel.value = String(prev);
+        else { sel.value = ''; opLoteFiltro = null; }
+
+        // Status badge + meta do lote selecionado
+        if (opLoteFiltro && opLoteFiltro !== 'sem_lote') {
+            var l = opLotes.find(function(x) { return x.id === opLoteFiltro; });
+            if (l) {
+                st.outerHTML = '<span id="op-lote-status">' + opStatusBadge(l.status) + '</span>';
+                var jan = (l.janelas || []).filter(Boolean).join(' + ') || '—';
+                meta.textContent = 'Janelas: ' + jan + ' · ' + l.qtd_pedidos + ' pedido(s)';
+            } else {
+                st.innerHTML = ''; meta.textContent = '';
+            }
+        } else {
+            st.innerHTML = ''; meta.textContent = '';
+        }
+    }
+
     function opMontarBulkSelect(d) {
         var sel = document.getElementById('op-bulk-driver');
         var html = '<option value="">— Sem driver —</option>';
@@ -1825,12 +1888,12 @@
 
     function opRenderLista(d, container) {
         var html = '';
-        var sem = (d.sem_driver || []).filter(opPassaJanela).filter(opMatchBusca);
+        var sem = (d.sem_driver || []).filter(opPassaJanela).filter(opMatchBusca).filter(opPassaLote);
         if (sem.length > 0) {
             html += opRenderSecao({id: '', nome: 'Sem driver', cor: '#94a3b8', paradas: sem, qtd: sem.length}, true, d.drivers_disponiveis);
         }
         (d.drivers || []).forEach(function(dr) {
-            var paradas = (dr.paradas || []).filter(opPassaJanela).filter(opMatchBusca);
+            var paradas = (dr.paradas || []).filter(opPassaJanela).filter(opMatchBusca).filter(opPassaLote);
             if (paradas.length === 0) return;
             html += opRenderSecao({id: dr.id, nome: dr.nome, cor: dr.cor, paradas: paradas, qtd: paradas.length}, false, d.drivers_disponiveis);
         });
@@ -2044,6 +2107,7 @@
             var cor = (r.driver && r.driver.cor) || ROTA_CORES[i % ROTA_CORES.length];
             (r.paradas || []).forEach(function(p) {
                 if (p.lat == null || p.lng == null) return;
+                if (!opPassaLote(p)) return;
                 bounds.push([p.lat, p.lng]);
                 L.marker([p.lat, p.lng], {
                     icon: L.divIcon({
@@ -2057,6 +2121,7 @@
         // Pins "sem driver" — clicáveis pra atribuir
         (d.sem_driver || []).forEach(function(p) {
             if (p.lat == null || p.lng == null) return;
+            if (!opPassaLote(p)) return;
             bounds.push([p.lat, p.lng]);
             L.marker([p.lat, p.lng], {
                 icon: L.divIcon({
@@ -2147,13 +2212,15 @@
                     data_entrega: data,
                 };
                 apiSalvarLote(items, 'Distribuir vazios (' + items.length + ')', {criar_lote: criarLote})
-                    .then(function() {
+                    .then(function(resp) {
                         var aviso = '';
                         var nSobra = (d.sem_atribuir || []).length;
                         var nSemCep = (d.sem_cep || []).length;
                         if (nSobra > 0) aviso += ' <strong>' + nSobra + ' sobra(s)</strong> em "Sem driver" (capacidade cheia).';
                         if (nSemCep > 0) aviso += ' ' + nSemCep + ' sem geocode/CEP.';
                         msg.innerHTML = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle"></i> ' + items.length + ' pedido(s) distribuído(s).' + aviso + '</div>';
+                        // Foca no lote recem-criado pra o usuario ver so o que ele acabou de fazer
+                        if (resp && resp.lote_id) opLoteFiltro = resp.lote_id;
                         if (opMapaVisivel) opRenderMapa(d);
                         opCarregar();
                     })
@@ -2255,6 +2322,16 @@
         if (btnAuto) btnAuto.addEventListener('click', opAbrirModalDistribuir);
         var btnReot = document.getElementById('op-reotimizar');
         if (btnReot) btnReot.addEventListener('click', opReotimizarRotas);
+        var loteSel = document.getElementById('op-lote-filter');
+        if (loteSel) loteSel.addEventListener('change', function() {
+            var v = this.value;
+            opLoteFiltro = v === '' ? null : (v === 'sem_lote' ? 'sem_lote' : parseInt(v, 10));
+            opRenderSeletorLotes();
+            if (opUltimoResultado) {
+                opRenderLista(opUltimoResultado, document.getElementById('op-container'));
+            }
+            if (opMapaVisivel && opUltimoRotas) opRenderMapa(opUltimoRotas);
+        });
         var btnDistConf = document.getElementById('dist-confirmar');
         if (btnDistConf) btnDistConf.addEventListener('click', opExecutarDistribuir);
         var btnDistDrvAll = document.getElementById('dist-drv-todos');

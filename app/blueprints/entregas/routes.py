@@ -1111,6 +1111,7 @@ def api_atribuidos():
             atribuicoes_por_code[a.pedido_code] = {
                 'atribuicao_id': a.id,
                 'driver_id': a.driver_id,
+                'lote_id': a.lote_id,
                 'ordem': a.ordem or 0,
                 'status': a.status or 'pendente',
                 'entregue_em': a.entregue_em.isoformat() if a.entregue_em else None,
@@ -1137,6 +1138,7 @@ def api_atribuidos():
             p['motivo_falha'] = atrib.get('motivo_falha')
             p['fotos'] = atrib.get('fotos') or []
             p['proof_hash'] = atrib.get('proof_hash')
+            p['lote_id'] = atrib.get('lote_id')
         if did and did in drivers_por_id:
             ordem = atrib.get('ordem', 0)
             paradas_por_driver.setdefault(did, []).append((ordem, p))
@@ -1215,9 +1217,12 @@ def api_rotas():
     # Carrega atribuicoes existentes pros pedidos do dia
     codes = [p['code'] for p in pedidos if p.get('code')]
     atribuicoes = {}
+    lote_por_code = {}
     if codes:
         for a in AtribuicaoEntrega.query.filter(AtribuicaoEntrega.pedido_code.in_(codes)).all():
             atribuicoes[a.pedido_code] = {'driver_id': a.driver_id, 'ordem': a.ordem or 0}
+            if a.lote_id:
+                lote_por_code[a.pedido_code] = a.lote_id
 
     if not drivers_struct:
         resp = jsonify(
@@ -1238,6 +1243,11 @@ def api_rotas():
         return resp
 
     geradas = rotas_svc.gerar_rotas(pedidos, drivers_struct, atribuicoes=atribuicoes)
+    # Enriquece cada parada com lote_id da atribuicao salva (pra filtro de lote no front)
+    for r in geradas.get('rotas', []):
+        for p in r.get('paradas', []):
+            if p.get('code') in lote_por_code:
+                p['lote_id'] = lote_por_code[p['code']]
     periodos = sorted({p.get('periodo') or '' for p in resultado.get('pedidos', []) if p.get('periodo')})
 
     origem_coords = rotas_svc.origem_latlng(current_app)
