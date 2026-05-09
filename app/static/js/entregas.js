@@ -1758,17 +1758,27 @@
     }
 
     function opAtualizarResumo(d) {
-        var nDrivers = (d.drivers || []).length;
-        var nSem = (d.sem_driver || []).length;
-        var nPed = d.total_pedidos || 0;
-        var nAtrib = d.total_atribuidos || 0;
-        var totalRs = 0;
+        // Resumo respeita filtro de lote: se ha lote selecionado, conta so do lote
+        var paradasComDriver = [];
+        var driversComParadas = new Set();
         (d.drivers || []).forEach(function(dr) {
-            (dr.paradas || []).forEach(function(p) { totalRs += (p.total || 0); });
+            (dr.paradas || []).forEach(function(p) {
+                if (!opPassaLote(p)) return;
+                paradasComDriver.push(p);
+                driversComParadas.add(dr.id);
+            });
         });
-        (d.sem_driver || []).forEach(function(p) { totalRs += (p.total || 0); });
+        var sem = (d.sem_driver || []).filter(opPassaLote);
+        var nDrivers = driversComParadas.size;
+        var nSem = sem.length;
+        var nAtrib = paradasComDriver.length;
+        var nPed = nAtrib + nSem;
+        var totalRs = 0;
+        paradasComDriver.forEach(function(p) { totalRs += (p.total || 0); });
+        sem.forEach(function(p) { totalRs += (p.total || 0); });
         var totalFmt = totalRs.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        document.getElementById('op-resumo').innerHTML =
+        var prefixo = (opLoteFiltro && opLoteFiltro !== 'sem_lote') ? '<span class="text-primary">[Lote selecionado]</span> ' : '';
+        document.getElementById('op-resumo').innerHTML = prefixo +
             '<strong>' + nPed + '</strong> pedido(s) · <strong>' + nAtrib + '</strong> atribuído(s) em ' +
             nDrivers + ' driver(s) · <strong>' + nSem + '</strong> sem driver · <strong>R$ ' + totalFmt + '</strong> total';
     }
@@ -1890,7 +1900,8 @@
         var html = '';
         var sem = (d.sem_driver || []).filter(opPassaJanela).filter(opMatchBusca).filter(opPassaLote);
         if (sem.length > 0) {
-            html += opRenderSecao({id: '', nome: 'Sem driver', cor: '#94a3b8', paradas: sem, qtd: sem.length}, true, d.drivers_disponiveis);
+            var nomeSec = (opLoteFiltro && opLoteFiltro !== 'sem_lote') ? 'Sobras do lote' : 'Sem driver';
+            html += opRenderSecao({id: '', nome: nomeSec, cor: '#94a3b8', paradas: sem, qtd: sem.length}, true, d.drivers_disponiveis);
         }
         (d.drivers || []).forEach(function(dr) {
             var paradas = (dr.paradas || []).filter(opPassaJanela).filter(opMatchBusca).filter(opPassaLote);
@@ -2200,6 +2211,11 @@
                         items.push({code: p.code, driver_id: r.driver.id, ordem: idx, data_entrega: data});
                     });
                 });
+                // Sobras (capacidade cheia) entram no MESMO lote com driver_id=null,
+                // viram "Sem driver" filtravel pelo lote.
+                (d.sem_atribuir || []).forEach(function(p) {
+                    items.push({code: p.code, driver_id: null, ordem: 0, data_entrega: data});
+                });
                 if (items.length === 0) {
                     var nSem = (d.sem_cep || []).length;
                     var nT = d.total_pedidos || 0;
@@ -2273,7 +2289,16 @@
         var drivers = opUltimoResultado.drivers_disponiveis || [];
         if (drivers.length === 0) return;
         var msg = document.getElementById('op-msg');
-        msg.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-arrow-repeat"></i> Re-otimizando…</div>';
+        // Escopo: se ha lote selecionado, so re-otimiza esse lote.
+        // Mapa code → lote_id (do opUltimoResultado)
+        var loteByCode = {};
+        (opUltimoResultado.drivers || []).forEach(function(dr) {
+            (dr.paradas || []).forEach(function(p) { loteByCode[p.code] = p.lote_id || null; });
+        });
+        (opUltimoResultado.sem_driver || []).forEach(function(p) { loteByCode[p.code] = p.lote_id || null; });
+        var escopoLote = (opLoteFiltro && opLoteFiltro !== 'sem_lote') ? opLoteFiltro : null;
+        var rotulo = escopoLote ? 'lote selecionado' : 'todas as rotas';
+        msg.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-arrow-repeat"></i> Re-otimizando ' + rotulo + '…</div>';
         var qs = '&drivers=' + drivers.map(function(d) { return d.id; }).join(',');
         fetch('/entregas/api/rotas?data=' + encodeURIComponent(data) + qs,
             {credentials: 'same-origin'}).then(function(r) { return r.json(); })
@@ -2282,12 +2307,13 @@
                 var items = [];
                 (d.rotas || []).forEach(function(r) {
                     (r.paradas || []).forEach(function(p) {
-                        items.push({pedido_code: p.code, driver_id: r.driver.id, ordem: p.ordem, data_entrega: data});
+                        if (escopoLote && loteByCode[p.code] !== escopoLote) return;
+                        items.push({code: p.code, driver_id: r.driver.id, ordem: p.ordem, data_entrega: data});
                     });
                 });
                 if (items.length === 0) { msg.innerHTML = '<div class="alert alert-warning py-2 small">Nada a re-otimizar.</div>'; return; }
-                apiSalvarLote(items, 'Re-otimizar rotas (' + items.length + ')').then(function() {
-                    msg.innerHTML = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle"></i> Rotas re-otimizadas.</div>';
+                apiSalvarLote(items, 'Re-otimizar ' + rotulo + ' (' + items.length + ')').then(function() {
+                    msg.innerHTML = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle"></i> ' + items.length + ' parada(s) re-otimizada(s).</div>';
                     opTeveEdicaoManual = false;
                     var btnReot = document.getElementById('op-reotimizar');
                     if (btnReot) btnReot.style.display = 'none';
@@ -2328,6 +2354,7 @@
             opLoteFiltro = v === '' ? null : (v === 'sem_lote' ? 'sem_lote' : parseInt(v, 10));
             opRenderSeletorLotes();
             if (opUltimoResultado) {
+                opAtualizarResumo(opUltimoResultado);
                 opRenderLista(opUltimoResultado, document.getElementById('op-container'));
             }
             if (opMapaVisivel && opUltimoRotas) opRenderMapa(opUltimoRotas);
