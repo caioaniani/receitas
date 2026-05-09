@@ -1763,12 +1763,12 @@
         var driversComParadas = new Set();
         (d.drivers || []).forEach(function(dr) {
             (dr.paradas || []).forEach(function(p) {
-                if (!opPassaLote(p)) return;
+                if (!opPassaLoteParada(p)) return;
                 paradasComDriver.push(p);
                 driversComParadas.add(dr.id);
             });
         });
-        var sem = (d.sem_driver || []).filter(opPassaLote);
+        var sem = (d.sem_driver || []).filter(opPassaLoteSem);
         var nDrivers = driversComParadas.size;
         var nSem = sem.length;
         var nAtrib = paradasComDriver.length;
@@ -1833,11 +1833,17 @@
         return opJanelaFiltro.has(p.periodo || '(sem janela)');
     }
 
-    function opPassaLote(p) {
-        if (opLoteFiltro === null) return true;            // 'todos os lotes'
-        if (opLoteFiltro === 'sem_lote') return !p.lote_id;
+    // isSemDriver: true se o pedido vem da lista d.sem_driver (sem motorista
+    // atribuido), false se vem de dr.paradas (com motorista). Permite ao
+    // filtro 'sem_driver' mostrar TODOS os sem driver, mesmo dentro de lotes.
+    function opPassaLote(p, isSemDriver) {
+        if (opLoteFiltro === null) return true;                   // todos os lotes
+        if (opLoteFiltro === 'sem_driver') return isSemDriver === true;
+        if (opLoteFiltro === 'sem_lote') return !p.lote_id;       // nunca distribuidos
         return p.lote_id === opLoteFiltro;
     }
+    function opPassaLoteSem(p) { return opPassaLote(p, true); }
+    function opPassaLoteParada(p) { return opPassaLote(p, false); }
 
     function opStatusBadge(status) {
         var s = (status || 'aberto').toLowerCase();
@@ -1859,7 +1865,8 @@
         }
         area.style.display = '';
         var html = '<option value="">Todos os lotes (' + opLotes.length + ')</option>' +
-            '<option value="sem_lote">Sem lote (não distribuídos)</option>';
+            '<option value="sem_driver">⚠ Sem driver (todos os pedidos sem motorista)</option>' +
+            '<option value="sem_lote">Sem lote (nunca distribuídos)</option>';
         opLotes.forEach(function(l) {
             var emoji = l.status === 'concluido' ? '✓' : (l.status === 'em_rota' ? '🚚' : '○');
             html += '<option value="' + l.id + '">' + emoji + ' ' + escapeHtml(l.nome) +
@@ -1868,7 +1875,7 @@
         var prev = opLoteFiltro;
         sel.innerHTML = html;
         // Tenta preservar selecao
-        if (prev === 'sem_lote') sel.value = 'sem_lote';
+        if (prev === 'sem_lote' || prev === 'sem_driver') sel.value = prev;
         else if (prev !== null && opLotes.some(function(l) { return l.id === prev; })) sel.value = String(prev);
         else { sel.value = ''; opLoteFiltro = null; }
 
@@ -1898,13 +1905,17 @@
 
     function opRenderLista(d, container) {
         var html = '';
-        var sem = (d.sem_driver || []).filter(opPassaJanela).filter(opMatchBusca).filter(opPassaLote);
+        var sem = (d.sem_driver || []).filter(opPassaJanela).filter(opMatchBusca).filter(opPassaLoteSem);
         if (sem.length > 0) {
-            var nomeSec = (opLoteFiltro && opLoteFiltro !== 'sem_lote') ? 'Sobras do lote' : 'Sem driver';
+            // Titulo dinamico conforme filtro
+            var nomeSec = 'Sem driver';
+            if (opLoteFiltro && opLoteFiltro !== 'sem_lote' && opLoteFiltro !== 'sem_driver') {
+                nomeSec = 'Sobras do lote';
+            }
             html += opRenderSecao({id: '', nome: nomeSec, cor: '#94a3b8', paradas: sem, qtd: sem.length}, true, d.drivers_disponiveis);
         }
         (d.drivers || []).forEach(function(dr) {
-            var paradas = (dr.paradas || []).filter(opPassaJanela).filter(opMatchBusca).filter(opPassaLote);
+            var paradas = (dr.paradas || []).filter(opPassaJanela).filter(opMatchBusca).filter(opPassaLoteParada);
             if (paradas.length === 0) return;
             html += opRenderSecao({id: dr.id, nome: dr.nome, cor: dr.cor, paradas: paradas, qtd: paradas.length}, false, d.drivers_disponiveis);
         });
@@ -2118,7 +2129,7 @@
             var cor = (r.driver && r.driver.cor) || ROTA_CORES[i % ROTA_CORES.length];
             (r.paradas || []).forEach(function(p) {
                 if (p.lat == null || p.lng == null) return;
-                if (!opPassaLote(p)) return;
+                if (!opPassaLoteParada(p)) return;
                 bounds.push([p.lat, p.lng]);
                 L.marker([p.lat, p.lng], {
                     icon: L.divIcon({
@@ -2132,7 +2143,7 @@
         // Pins "sem driver" — clicáveis pra atribuir
         (d.sem_driver || []).forEach(function(p) {
             if (p.lat == null || p.lng == null) return;
-            if (!opPassaLote(p)) return;
+            if (!opPassaLoteSem(p)) return;
             bounds.push([p.lat, p.lng]);
             L.marker([p.lat, p.lng], {
                 icon: L.divIcon({
@@ -2351,7 +2362,9 @@
         var loteSel = document.getElementById('op-lote-filter');
         if (loteSel) loteSel.addEventListener('change', function() {
             var v = this.value;
-            opLoteFiltro = v === '' ? null : (v === 'sem_lote' ? 'sem_lote' : parseInt(v, 10));
+            if (v === '') opLoteFiltro = null;
+            else if (v === 'sem_lote' || v === 'sem_driver') opLoteFiltro = v;
+            else opLoteFiltro = parseInt(v, 10);
             opRenderSeletorLotes();
             if (opUltimoResultado) {
                 opAtualizarResumo(opUltimoResultado);
