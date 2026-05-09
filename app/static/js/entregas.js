@@ -13,6 +13,137 @@
     var rotasMapaLeaflet = null;
     var rotasMapaLayers = null;
 
+    // ── Salvamento confiável ──────────────────────────────
+    // Wrapper que retenta com backoff e nunca falha em silêncio.
+    // Cada chamada vira uma "tarefa pendente" com id; banner vermelho fica
+    // sticky enquanto há tarefas pendentes. Quando todas concluem, mostra
+    // "Salvo às HH:MM".
+    var apiPendentes = [];   // [{id, descricao, tentativas, ultimoErro}]
+    var apiUltimoSalvo = null;
+    var apiNextId = 1;
+
+    function apiAtualizarUI() {
+        var banner = document.getElementById('op-save-banner');
+        var detail = document.getElementById('op-save-banner-detail');
+        var status = document.getElementById('op-save-status');
+        var statusTxt = document.getElementById('op-save-status-text');
+        if (!banner || !status) return;
+        var falhando = apiPendentes.filter(function(t) { return t.tentativas > 0; });
+        if (falhando.length > 0) {
+            banner.classList.remove('d-none');
+            var t = falhando[0];
+            detail.textContent = ' ' + falhando.length + ' alteração(ões) pendente(s). Última: "' +
+                t.descricao + '" (tentativa ' + t.tentativas + ')' +
+                (t.ultimoErro ? ' — ' + t.ultimoErro : '') + '. Não recarregue a página.';
+            status.classList.add('d-none');
+        } else if (apiPendentes.length > 0) {
+            // Há salvamentos em andamento, primeira tentativa
+            banner.classList.add('d-none');
+            status.classList.remove('d-none');
+            statusTxt.innerHTML = '<i class="bi bi-arrow-repeat"></i> Salvando…';
+        } else {
+            banner.classList.add('d-none');
+            if (apiUltimoSalvo) {
+                status.classList.remove('d-none');
+                var hh = String(apiUltimoSalvo.getHours()).padStart(2, '0');
+                var mm = String(apiUltimoSalvo.getMinutes()).padStart(2, '0');
+                statusTxt.textContent = 'Salvo às ' + hh + ':' + mm;
+            }
+        }
+    }
+
+    // Faz fetch com retry exponencial (2,4,8,16s...). Resolve quando salva
+    // de verdade; rejeita só se 5xx persistir além de 5 tentativas (aí o
+    // banner mostra erro final pra o usuário decidir).
+    function apiSafe(url, options, descricao) {
+        options = options || {};
+        descricao = descricao || (options.method || 'GET') + ' ' + url;
+        var task = {id: apiNextId++, descricao: descricao, tentativas: 0, ultimoErro: null};
+        apiPendentes.push(task);
+        apiAtualizarUI();
+
+        return new Promise(function(resolve, reject) {
+            var timerId = null;
+            function tentar() {
+                if (timerId) { clearTimeout(timerId); timerId = null; }
+                fetch(url, options).then(function(r) {
+                    if (!r.ok) {
+                        var err = new Error('HTTP ' + r.status);
+                        err.status = r.status;
+                        throw err;
+                    }
+                    return r.json();
+                }).then(function(data) {
+                    apiPendentes = apiPendentes.filter(function(t) { return t.id !== task.id; });
+                    apiUltimoSalvo = new Date();
+                    apiAtualizarUI();
+                    resolve(data);
+                }).catch(function(err) {
+                    task.tentativas += 1;
+                    if (err.status && err.status >= 400 && err.status < 500
+                        && err.status !== 408 && err.status !== 429) {
+                        task.ultimoErro = 'erro ' + err.status;
+                        apiPendentes = apiPendentes.filter(function(t) { return t.id !== task.id; });
+                        apiAtualizarUI();
+                        reject(err);
+                        return;
+                    }
+                    task.ultimoErro = err.message || 'sem rede';
+                    apiAtualizarUI();
+                    if (task.tentativas >= 8) return;
+                    var delay = Math.min(30000, 2000 * Math.pow(2, task.tentativas - 1));
+                    timerId = setTimeout(tentar, delay);
+                });
+            }
+            // Permite que apiTentarAgora dispare retry imediato
+            task.retryNow = tentar;
+            tentar();
+        });
+    }
+
+    function apiTentarAgora() {
+        apiPendentes.forEach(function(t) {
+            t.tentativas = 0;
+            t.ultimoErro = null;
+            if (typeof t.retryNow === 'function') t.retryNow();
+        });
+        apiAtualizarUI();
+    }
+
+    // Helpers que envolvem os endpoints de mutação críticos com apiSafe
+    function apiSalvarAtrib(code, payload, descricao) {
+        var url = '/entregas/api/atribuicao/' + encodeURIComponent(code);
+        if (!payload || payload.driver_id === null || payload.driver_id === undefined) {
+            return apiSafe(url, {
+                method: 'DELETE',
+                headers: {'X-CSRFToken': CSRF_TOKEN},
+                credentials: 'same-origin',
+            }, descricao || 'Remover atribuição #' + code);
+        }
+        return apiSafe(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+            credentials: 'same-origin',
+            body: JSON.stringify(payload),
+        }, descricao || 'Atribuir #' + code);
+    }
+
+    function apiSalvarLote(items, descricao) {
+        return apiSafe('/entregas/api/atribuicao/lote', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+            credentials: 'same-origin',
+            body: JSON.stringify({items: items}),
+        }, descricao || ('Salvar lote (' + items.length + ' item(s))'));
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var btnRetry = document.getElementById('op-save-retry-now');
+        if (btnRetry) btnRetry.addEventListener('click', apiTentarAgora);
+        // Quando volta online, força tentativa
+        window.addEventListener('online', apiTentarAgora);
+    });
+
     // ── localStorage status ──
 
     function getStatusStore() {
@@ -794,16 +925,9 @@
             renderMapa(rotasUltimoResultado);
         }
         if (items.length === 0) return;
-        fetch('/entregas/api/atribuicao/lote', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
-            body: JSON.stringify({items: items}),
-        }).then(function(r) { return r.json(); })
-          .then(function(d) {
-              if (!d.ok) {
-                  console.error('Erro ao salvar atribuicoes:', d.erro);
-              }
-          });
+        apiSalvarLote(items, 'Salvar rotas geradas (' + items.length + ')').catch(function(e) {
+            console.error('Erro ao salvar atribuicoes:', e);
+        });
     }
 
     // ── Modal: gerenciar drivers ──
@@ -1300,21 +1424,14 @@
             });
         });
         if (items.length === 0) return;
-        fetch('/entregas/api/atribuicao/lote', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
-            body: JSON.stringify({items: items}),
-        }).then(function(r) { return r.json(); })
-          .then(function(resp) {
-              if (!resp.ok) {
-                  if (msgEl) msgEl.innerHTML = '<div class="alert alert-warning py-2 small">Distribuição feita mas falhou ao salvar: ' + escapeHtml(resp.erro || '?') + '</div>';
-                  return;
-              }
-              if (msgEl) msgEl.innerHTML = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle"></i> ' + items.length + ' pedido(s) atribuído(s) e salvo(s).</div>';
-          })
-          .catch(function() {
-              if (msgEl) msgEl.innerHTML = '<div class="alert alert-danger py-2 small">Falha ao salvar atribuições no banco.</div>';
-          });
+        apiSalvarLote(items, 'Salvar distribuição (' + items.length + ')')
+            .then(function() {
+                if (msgEl) msgEl.innerHTML = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle"></i> ' + items.length + ' pedido(s) atribuído(s) e salvo(s).</div>';
+            })
+            .catch(function() {
+                // O banner persistente já mostra o erro com retry — aqui só uma confirmação
+                if (msgEl) msgEl.innerHTML = '<div class="alert alert-warning py-2 small">Distribuição feita; salvamento sendo retentado (veja banner acima).</div>';
+            });
     }
 
     function fallbackCopiar(texto) {
@@ -1370,34 +1487,12 @@
                 var sel = e.target.closest('.atrib-select-driver');
                 if (!sel) return;
                 var code = sel.dataset.code;
-                var novoId = sel.value || null;
+                var novoId = sel.value ? parseInt(sel.value, 10) : null;
                 var dataAtual = (atribUltimoResultado && atribUltimoResultado.data) || '';
-                var url = '/entregas/api/atribuicao/' + encodeURIComponent(code);
-                var body = {data_entrega: dataAtual};
-                var fetchPromise;
-                if (!novoId) {
-                    // Remover atribuicao
-                    fetchPromise = fetch(url, {
-                        method: 'DELETE',
-                        headers: {'X-CSRFToken': CSRF_TOKEN},
-                    });
-                } else {
-                    body.driver_id = parseInt(novoId, 10);
-                    fetchPromise = fetch(url, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
-                        body: JSON.stringify(body),
-                    });
-                }
-                fetchPromise.then(function(r) { return r.json(); })
-                    .then(function(d) {
-                        if (d.ok) {
-                            // Recarrega tudo pra refletir
-                            carregarAtribuidos();
-                        } else {
-                            alert('Erro: ' + (d.erro || 'desconhecido'));
-                        }
-                    });
+                var payload = novoId ? {driver_id: novoId, data_entrega: dataAtual} : null;
+                apiSalvarAtrib(code, payload, (novoId ? 'Atribuir' : 'Desatribuir') + ' #' + code)
+                    .then(function() { carregarAtribuidos(); })
+                    .catch(function() {/* banner cuida */});
             });
             // Botao copiar lista
             atribContainer.addEventListener('click', function(e) {
@@ -1506,18 +1601,9 @@
             checks.forEach(function(cb, idx) {
                 items.push({code: cb.dataset.code, driver_id: driverId, ordem: idx, data_entrega: dataAtual});
             });
-            fetch('/entregas/api/atribuicao/lote', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
-                body: JSON.stringify({items: items}),
-            }).then(function(r) { return r.json(); })
-              .then(function(d) {
-                  if (d.ok) {
-                      carregarAtribuidos();
-                  } else {
-                      alert('Erro: ' + (d.erro || 'desconhecido'));
-                  }
-              });
+            apiSalvarLote(items, 'Atribuir em lote (' + items.length + ')')
+                .then(function(d) { if (d.ok) carregarAtribuidos(); })
+                .catch(function() {/* banner cuida */});
         });
 
         var btnBulkLimpar = document.getElementById('atrib-bulk-limpar');
@@ -1897,17 +1983,9 @@
             });
         });
         if (items.length === 0) return;
-        fetch('/entregas/api/atribuicao/lote', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
-            body: JSON.stringify({items: items}),
-        }).then(function(r) { return r.json(); }).then(function(resp) {
-            if (!resp.ok) {
-                document.getElementById('op-msg').innerHTML = '<div class="alert alert-warning py-2 small">Falha ao salvar: ' + escapeHtml(resp.erro || '?') + '</div>';
-            } else {
-                opCarregar();
-            }
-        });
+        apiSalvarLote(items, 'Reordenar paradas (' + items.length + ')')
+            .then(function() { opCarregar(); })
+            .catch(function() {/* banner cuida */});
     }
 
     function opAtualizarBulkBar() {
@@ -2063,24 +2141,18 @@
                     opCarregar();
                     return;
                 }
-                fetch('/entregas/api/atribuicao/lote', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
-                    body: JSON.stringify({items: items}),
-                }).then(function(r) { return r.json(); }).then(function(resp) {
-                    if (!resp.ok) {
-                        msg.innerHTML = '<div class="alert alert-warning py-2 small">Falha ao salvar: ' + escapeHtml(resp.erro || '?') + '</div>';
-                        return;
-                    }
-                    var aviso = '';
-                    var nSobra = (d.sem_atribuir || []).length;
-                    var nSemCep = (d.sem_cep || []).length;
-                    if (nSobra > 0) aviso += ' <strong>' + nSobra + ' sobra(s)</strong> em "Sem driver" (capacidade cheia).';
-                    if (nSemCep > 0) aviso += ' ' + nSemCep + ' sem geocode/CEP.';
-                    msg.innerHTML = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle"></i> ' + items.length + ' pedido(s) distribuído(s).' + aviso + '</div>';
-                    if (opMapaVisivel) opRenderMapa(d);
-                    opCarregar();
-                });
+                apiSalvarLote(items, 'Distribuir vazios (' + items.length + ')')
+                    .then(function() {
+                        var aviso = '';
+                        var nSobra = (d.sem_atribuir || []).length;
+                        var nSemCep = (d.sem_cep || []).length;
+                        if (nSobra > 0) aviso += ' <strong>' + nSobra + ' sobra(s)</strong> em "Sem driver" (capacidade cheia).';
+                        if (nSemCep > 0) aviso += ' ' + nSemCep + ' sem geocode/CEP.';
+                        msg.innerHTML = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle"></i> ' + items.length + ' pedido(s) distribuído(s).' + aviso + '</div>';
+                        if (opMapaVisivel) opRenderMapa(d);
+                        opCarregar();
+                    })
+                    .catch(function() {/* banner cuida */});
             })
             .catch(function() { msg.innerHTML = '<div class="alert alert-danger py-2 small">Falha de rede.</div>'; });
     }
@@ -2093,15 +2165,8 @@
 
     // Reatribuir pedido pelo popup do pin
     function opReatribuirViaPin(code, novoDriverId) {
-        var url = '/entregas/api/atribuicao/' + encodeURIComponent(code);
-        var fetchPromise;
-        if (!novoDriverId) {
-            fetchPromise = fetch(url, {
-                method: 'DELETE',
-                headers: {'X-CSRFToken': CSRF_TOKEN},
-                credentials: 'same-origin',
-            });
-        } else {
+        var payload = null;
+        if (novoDriverId) {
             // Calcula ordem = fim da rota do novo driver (pra anexar no fim)
             var ordemFim = 1;
             if (opUltimoResultado) {
@@ -2113,20 +2178,17 @@
                     paradas.forEach(function(p) { if ((p.ordem || 0) >= ordemFim) ordemFim = (p.ordem || 0) + 1; });
                 }
             }
-            fetchPromise = fetch(url, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
-                credentials: 'same-origin',
-                body: JSON.stringify({driver_id: novoDriverId, data_entrega: opData(), ordem: ordemFim}),
-            });
+            payload = {driver_id: novoDriverId, data_entrega: opData(), ordem: ordemFim};
         }
-        fetchPromise.then(function(r) { return r.json(); }).then(function() {
-            opTeveEdicaoManual = true;
-            var btnReot = document.getElementById('op-reotimizar');
-            if (btnReot) btnReot.style.display = '';
-            if (opMapa) opMapa.closePopup();
-            opCarregar();
-        });
+        apiSalvarAtrib(code, payload, (novoDriverId ? 'Reatribuir' : 'Desatribuir') + ' #' + code + ' (mapa)')
+            .then(function() {
+                opTeveEdicaoManual = true;
+                var btnReot = document.getElementById('op-reotimizar');
+                if (btnReot) btnReot.style.display = '';
+                if (opMapa) opMapa.closePopup();
+                opCarregar();
+            })
+            .catch(function() {/* banner cuida */});
     }
 
     // Re-otimiza ordem das rotas com base nas atribuições atuais.
@@ -2152,16 +2214,7 @@
                     });
                 });
                 if (items.length === 0) { msg.innerHTML = '<div class="alert alert-warning py-2 small">Nada a re-otimizar.</div>'; return; }
-                fetch('/entregas/api/atribuicao/lote', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
-                    credentials: 'same-origin',
-                    body: JSON.stringify({items: items}),
-                }).then(function(r) { return r.json(); }).then(function(resp) {
-                    if (!resp.ok) {
-                        msg.innerHTML = '<div class="alert alert-warning py-2 small">Falha: ' + escapeHtml(resp.erro || '?') + '</div>';
-                        return;
-                    }
+                apiSalvarLote(items, 'Re-otimizar rotas (' + items.length + ')').then(function() {
                     msg.innerHTML = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle"></i> Rotas re-otimizadas.</div>';
                     opTeveEdicaoManual = false;
                     var btnReot = document.getElementById('op-reotimizar');
@@ -2304,19 +2357,11 @@
         cont.addEventListener('change', function(e) {
             if (e.target.matches('.op-select-driver')) {
                 var code = e.target.dataset.code;
-                var novo = e.target.value;
-                var url = '/entregas/api/atribuicao/' + encodeURIComponent(code);
-                if (!novo) {
-                    fetch(url, {method: 'DELETE', headers: {'X-CSRFToken': CSRF_TOKEN}, credentials: 'same-origin'})
-                        .then(function(r) { return r.json(); }).then(function() { opCarregar(); });
-                } else {
-                    fetch(url, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
-                        credentials: 'same-origin',
-                        body: JSON.stringify({driver_id: parseInt(novo, 10), data_entrega: opData()}),
-                    }).then(function(r) { return r.json(); }).then(function() { opCarregar(); });
-                }
+                var novo = e.target.value ? parseInt(e.target.value, 10) : null;
+                var payload = novo ? {driver_id: novo, data_entrega: opData()} : null;
+                apiSalvarAtrib(code, payload, (novo ? 'Atribuir' : 'Desatribuir') + ' #' + code)
+                    .then(function() { opCarregar(); })
+                    .catch(function() {/* banner cuida */});
                 return;
             }
             if (e.target.matches('.op-check')) { opAtualizarBulkBar(); return; }
@@ -2339,10 +2384,9 @@
             checks.forEach(function(cb, idx) {
                 items.push({code: cb.dataset.code, driver_id: driverId, ordem: idx, data_entrega: opData()});
             });
-            fetch('/entregas/api/atribuicao/lote', {
-                method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
-                credentials: 'same-origin', body: JSON.stringify({items: items}),
-            }).then(function(r) { return r.json(); }).then(function() { opCarregar(); });
+            apiSalvarLote(items, 'Atribuir em lote (' + items.length + ')')
+                .then(function() { opCarregar(); })
+                .catch(function() {/* banner cuida */});
         });
         var bulkLimpar = document.getElementById('op-bulk-limpar');
         if (bulkLimpar) bulkLimpar.addEventListener('click', function() {

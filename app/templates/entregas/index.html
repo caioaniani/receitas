@@ -91,6 +91,20 @@
             <div class="spinner-border spinner-border-sm text-primary"></div>
             <span class="ms-2 text-muted">Carregando…</span>
         </div>
+        <!-- Banner persistente de erro de salvamento (só aparece quando há falha em curso) -->
+        <div id="op-save-banner" class="d-print-none alert alert-danger py-2 mb-2 d-none" style="position:sticky; top:0; z-index:1030;">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <strong id="op-save-banner-title">Falha ao salvar.</strong>
+            <span id="op-save-banner-detail" class="ms-1"></span>
+            <button class="btn btn-sm btn-outline-light ms-2" id="op-save-retry-now" type="button">
+                <i class="bi bi-arrow-clockwise"></i> Tentar agora
+            </button>
+        </div>
+        <!-- Indicador discreto de status (verde quando tudo salvo) -->
+        <div id="op-save-status" class="small text-muted mb-2 d-none">
+            <i class="bi bi-check-circle-fill text-success"></i>
+            <span id="op-save-status-text">Salvo</span>
+        </div>
         <div id="op-msg" class="d-print-none"></div>
 
         <!-- Barra de selecao em lote -->
