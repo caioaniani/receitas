@@ -2166,14 +2166,27 @@
             alert('Nenhum motorista cadastrado. Vá em "Drivers" e cadastre.');
             return;
         }
+        // Conta pedidos pendentes (status=pendente, com driver) por driver — esses
+        // ocupam capacidade ate serem entregues/falharem
+        var usadoPorDriver = {};
+        (opUltimoResultado.drivers || []).forEach(function(dr) {
+            var pend = (dr.paradas || []).filter(function(p) {
+                return (p.status || 'pendente') === 'pendente';
+            });
+            usadoPorDriver[dr.id] = pend.length;
+        });
         var html = '';
         drivers.forEach(function(dr) {
             var cap = dr.capacidade || 999;
+            var usado = usadoPorDriver[dr.id] || 0;
+            var livre = Math.max(0, cap - usado);
+            var cls = livre === 0 ? 'text-danger' : (livre < cap / 2 ? 'text-warning' : 'text-muted');
+            var txt = 'cap: ' + cap + ' · usado: ' + usado + ' · livre: ' + livre;
             html += '<label class="form-check mb-0">' +
                 '<input class="form-check-input dist-cb-driver" type="checkbox" value="' + dr.id + '" checked>' +
                 '<span class="form-check-label small">' +
                     '<span style="display:inline-block;width:10px;height:10px;background:' + (dr.cor || '#666') + ';border-radius:50%;margin-right:6px;"></span>' +
-                    escapeHtml(dr.nome) + ' <span class="text-muted">(cap: ' + cap + ')</span>' +
+                    escapeHtml(dr.nome) + ' <span class="' + cls + '">(' + txt + ')</span>' +
                 '</span></label>';
         });
         contDrv.innerHTML = html;
@@ -2243,7 +2256,11 @@
                         var aviso = '';
                         var nSobra = (d.sem_atribuir || []).length;
                         var nSemCep = (d.sem_cep || []).length;
-                        if (nSobra > 0) aviso += ' <strong>' + nSobra + ' sobra(s)</strong> em "Sem driver" (capacidade cheia).';
+                        if (nSobra > 0) {
+                            aviso += ' <strong>' + nSobra + ' sobra(s)</strong> — todos os motoristas selecionados estão com a capacidade ocupada. ' +
+                                'Pra distribuir as sobras: aumente a capacidade nos Drivers, marque pedidos como entregues pra liberar vagas, ' +
+                                'ou atribua manualmente pelo mapa/lista.';
+                        }
                         if (nSemCep > 0) aviso += ' ' + nSemCep + ' sem geocode/CEP.';
                         msg.innerHTML = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle"></i> ' + items.length + ' pedido(s) distribuído(s).' + aviso + '</div>';
                         // Foca no lote recem-criado pra o usuario ver so o que ele acabou de fazer

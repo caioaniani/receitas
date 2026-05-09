@@ -1226,15 +1226,27 @@ def api_rotas():
     if janelas:
         pedidos = [p for p in pedidos if (p.get('periodo') or '') in janelas]
 
-    # Carrega atribuicoes existentes pros pedidos do dia
+    # Carrega atribuicoes existentes pros pedidos do dia.
+    # IMPORTANTE: pedidos JA FINALIZADOS (entregue ou nao_entregue) sao
+    # excluidos do que vai pro gerar_rotas. Isso libera capacidade dos
+    # drivers pra um novo turno (ex: motorista que ja saiu de manha
+    # com 15 pedidos e voltou; aqueles 15 ja foram entregues e ele tem
+    # capacidade fresca pra distribuir os 15 da tarde).
     codes = [p['code'] for p in pedidos if p.get('code')]
     atribuicoes = {}
     lote_por_code = {}
+    codes_finalizados = set()
     if codes:
         for a in AtribuicaoEntrega.query.filter(AtribuicaoEntrega.pedido_code.in_(codes)).all():
             atribuicoes[a.pedido_code] = {'driver_id': a.driver_id, 'ordem': a.ordem or 0}
             if a.lote_id:
                 lote_por_code[a.pedido_code] = a.lote_id
+            if (a.status or 'pendente') in ('entregue', 'nao_entregue'):
+                codes_finalizados.add(a.pedido_code)
+    if codes_finalizados:
+        pedidos = [p for p in pedidos if p.get('code') not in codes_finalizados]
+        for c in codes_finalizados:
+            atribuicoes.pop(c, None)
 
     if not drivers_struct:
         resp = jsonify(
