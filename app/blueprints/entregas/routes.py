@@ -932,6 +932,10 @@ def deletar_lote(lote_id):
     limpar testes; perde dados de driver/ordem/status)."""
     lote = LoteSaida.query.get_or_404(lote_id)
     apagar = request.args.get('apagar_atribuicoes') == '1'
+    # Apagar atribuicoes destroi histórico (status, fotos, comprovantes) —
+    # so admin pode fazer.
+    if apagar and not current_user.is_admin():
+        return jsonify(ok=False, erro='Apenas admin pode apagar as atribuições do lote'), 403
     afetadas = AtribuicaoEntrega.query.filter_by(lote_id=lote_id).all()
     if apagar:
         for a in afetadas:

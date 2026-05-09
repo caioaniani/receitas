@@ -1907,11 +1907,14 @@
             'mantendo o motorista e a ordem de cada um.';
         if (!confirm(msg1)) return;
         var apagarTudo = false;
-        // Segunda pergunta: pra "limpar lixo de teste" sem deixar atribuicoes orfas
-        if (confirm('Apagar TAMBÉM as atribuições (driver, ordem, status)?\n\n' +
-                    'OK = limpa tudo (uso pra apagar testes).\n' +
-                    'Cancel = mantém atribuições, só desvincula do lote.')) {
-            apagarTudo = true;
+        // Segunda pergunta SO PRA ADMIN: apagar atribuicoes destroi historico
+        // (driver, ordem, status, fotos, comprovante).
+        if (isAdmin()) {
+            if (confirm('Apagar TAMBÉM as atribuições (driver, ordem, status, fotos)?\n\n' +
+                        'OK = limpa tudo (uso pra apagar testes; perde histórico de entrega).\n' +
+                        'Cancel = mantém atribuições, só desvincula do lote.')) {
+                apagarTudo = true;
+            }
         }
         var url = '/entregas/api/lotes/' + l.id + (apagarTudo ? '?apagar_atribuicoes=1' : '');
         apiSafe(url, {
