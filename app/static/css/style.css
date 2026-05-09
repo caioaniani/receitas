@@ -1,150 +1,217 @@
 /* ═══════════════════════════════════════════
    Padaria — Sistema de Fichas Técnicas
+   Reskin Olist-inspired: tipografia grande, lowercase no chrome,
+   chips arredondados, paleta clean azul.
    ═══════════════════════════════════════════ */
 
 :root {
-    --sidebar-width: 220px;
-    --cor-azul: #1565c0;
-    --cor-verde: #2e7d32;
-    --cor-preto: #212121;
-    --cor-amarelo: #fff9c4;
-    --cor-amarelo-borda: #f9a825;
+    --sidebar-width: 240px;
 
-    --bg-body: #f5f6f8;
-    --bg-card: #fff;
-    --bg-input: #fff;
-    --bg-table-head: #37474f;
-    --bg-table-head-mp: #455a64;
+    /* Paleta primária — azul Olist */
+    --cor-azul: #2563eb;
+    --cor-azul-strong: #1d4ed8;
+    --cor-azul-soft: #dbeafe;
+    --cor-verde: #16a34a;
+    --cor-verde-soft: #dcfce7;
+    --cor-vermelho: #dc2626;
+    --cor-vermelho-soft: #fee2e2;
+    --cor-amarelo: #fef3c7;
+    --cor-amarelo-borda: #f59e0b;
+    --cor-preto: #0f172a;
+
+    /* Backgrounds */
+    --bg-body: #f8fafc;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f1f5f9;
+    --bg-input: #ffffff;
+    --bg-table-head: #f1f5f9;
+    --bg-table-head-mp: #e2e8f0;
     --bg-calc: #fafafa;
-    --bg-mp-val: #f1f8e9;
-    --bg-input-blue: #f8fbff;
-    --bg-input-blue-focus: #e3f2fd;
-    --bg-legenda: #fff;
-    --bg-locked: #f0f0f0;
-    --text-main: #212529;
-    --text-muted: #6c757d;
-    --text-calc: #212121;
-    --border-color: #e2e5e9;
-    --border-input: #dee2e6;
-    --table-hover: rgba(0,0,0,0.04);
-    --alert-bg: #fff;
+    --bg-mp-val: #f0fdf4;
+    --bg-input-blue: #eff6ff;
+    --bg-input-blue-focus: #dbeafe;
+    --bg-legenda: #ffffff;
+    --bg-locked: #f1f5f9;
+    --bg-chip: #f1f5f9;
+    --bg-chip-active: #dbeafe;
 
-    --radius-sm: 8px;
-    --radius-md: 12px;
-    --radius-lg: 16px;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
-    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
-    --shadow-hover: 0 8px 24px rgba(0,0,0,0.1);
-    --transition: 0.2s ease;
-    --accent: #6366f1;
-    --accent-light: #e0e7ff;
+    /* Texto */
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --text-soft: #94a3b8;
+    --text-calc: #0f172a;
+
+    /* Borda */
+    --border-color: #e2e8f0;
+    --border-input: #cbd5e1;
+    --border-strong: #94a3b8;
+
+    --table-hover: #f8fafc;
+    --alert-bg: #ffffff;
+
+    /* Radius — chips e pills muito arredondados (Olist style) */
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-pill: 999px;
+
+    /* Sombras suaves */
+    --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+    --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06);
+    --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+    --shadow-hover: 0 8px 24px rgba(15, 23, 42, 0.10);
+
+    --transition: 0.15s ease;
+    --accent: #2563eb;
+    --accent-light: #dbeafe;
+
+    /* Tipografia */
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 [data-theme="dark"] {
-    --bg-body: #1a1a2e;
-    --bg-card: #16213e;
-    --bg-input: #0f3460;
-    --bg-table-head: #0f3460;
-    --bg-table-head-mp: #0f3460;
-    --bg-calc: #16213e;
-    --bg-mp-val: #1a2e1a;
-    --bg-input-blue: #0d2a4a;
-    --bg-input-blue-focus: #0f3460;
-    --bg-legenda: #16213e;
-    --bg-locked: #1a2340;
-    --text-main: #e0e0e0;
-    --text-muted: #8899aa;
-    --text-calc: #e0e0e0;
-    --border-color: #2a3a5c;
-    --border-input: #2a3a5c;
-    --table-hover: rgba(255,255,255,0.05);
-    --alert-bg: #16213e;
-    --cor-amarelo: #3d3520;
-    --cor-amarelo-borda: #b8860b;
+    --cor-azul: #60a5fa;
+    --cor-azul-strong: #3b82f6;
+    --cor-azul-soft: #1e3a8a;
+    --cor-verde: #4ade80;
+    --cor-verde-soft: #14532d;
+    --cor-vermelho: #f87171;
+    --cor-vermelho-soft: #7f1d1d;
 
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
-    --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-    --shadow-hover: 0 8px 24px rgba(0,0,0,0.5);
-    --accent: #818cf8;
-    --accent-light: #1e1b4b;
+    --bg-body: #0a0a0a;
+    --bg-card: #141414;
+    --bg-card-hover: #1f1f1f;
+    --bg-input: #1a1a1a;
+    --bg-table-head: #1a1a1a;
+    --bg-table-head-mp: #1a1a1a;
+    --bg-calc: #141414;
+    --bg-mp-val: #0a2818;
+    --bg-input-blue: #0c1c33;
+    --bg-input-blue-focus: #14274d;
+    --bg-legenda: #141414;
+    --bg-locked: #1a1a1a;
+    --bg-chip: #1f1f1f;
+    --bg-chip-active: #1e3a8a;
+
+    --text-main: #f1f5f9;
+    --text-muted: #94a3b8;
+    --text-soft: #64748b;
+    --text-calc: #f1f5f9;
+
+    --border-color: #262626;
+    --border-input: #333333;
+    --border-strong: #525252;
+
+    --table-hover: #1f1f1f;
+    --alert-bg: #141414;
+    --cor-amarelo: #422006;
+    --cor-amarelo-borda: #f59e0b;
+
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.6);
+    --shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.7);
+    --accent: #60a5fa;
+    --accent-light: #1e3a8a;
 }
 
 body {
     background-color: var(--bg-body);
     color: var(--text-main);
-    font-size: 15px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Sidebar ── */
+/* ── Sidebar Olist-style ── */
 .sidebar {
     position: fixed;
     top: 0;
     left: 0;
     width: var(--sidebar-width);
     height: 100vh;
-    background: #1a1a2e;
-    color: #ccc;
+    background: var(--bg-card);
+    border-right: 1px solid var(--border-color);
+    color: var(--text-main);
     overflow-y: auto;
     padding: 0;
     z-index: 100;
 }
 
 .sidebar-header {
-    padding: 16px;
-    font-size: 1.3rem;
-    font-weight: bold;
-    color: #fff;
-    background: #16213e;
-    text-align: center;
+    padding: 18px 20px 14px;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--cor-azul);
+    background: transparent;
+    text-align: left;
+    letter-spacing: -0.02em;
 }
 
 .sidebar-link {
-    display: block;
-    padding: 7px 12px;
-    margin: 2px 8px;
-    color: #bbb;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    margin: 1px 8px;
+    color: var(--text-main);
     text-decoration: none;
-    font-size: 13px;
-    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 400;
+    border-radius: var(--radius-sm);
     transition: all var(--transition);
+    text-transform: lowercase;
 }
 
 .sidebar-link:hover {
-    background: #16213e;
-    color: #fff;
+    background: var(--bg-card-hover);
+    color: var(--text-main);
 }
 
 .sidebar-link.active {
-    background: #0f3460;
-    color: #fff;
+    background: var(--bg-chip-active);
+    color: var(--cor-azul);
     font-weight: 600;
 }
 
+.sidebar-link i {
+    font-size: 16px;
+    opacity: 0.85;
+}
+
+.sidebar-link.active i {
+    opacity: 1;
+}
+
 .sidebar-recipe {
-    padding-left: 28px;
-    font-size: 12px;
+    padding-left: 32px;
+    font-size: 12.5px;
+    text-transform: none;  /* nomes de receita ficam capitalizados */
 }
 
 .sidebar-divider {
-    border-top: 1px solid #333;
-    margin: 8px 0;
+    border-top: 1px solid var(--border-color);
+    margin: 10px 12px;
 }
 
 .sidebar-section-title {
-    padding: 4px 16px;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: #666;
+    padding: 10px 16px 4px;
+    font-size: 11px;
+    text-transform: lowercase;
+    letter-spacing: 0;
+    color: var(--text-soft);
+    font-weight: 600;
 }
 
 .sidebar-cat {
     padding: 6px 16px 2px;
     font-size: 11px;
     font-weight: 600;
-    color: #8ab4f8;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    color: var(--cor-azul);
+    text-transform: lowercase;
+    letter-spacing: 0;
 }
 
 .sidebar-action {
@@ -371,13 +438,23 @@ body {
     top: 0;
     left: 0;
     right: 0;
-    height: 48px;
-    background: #1a1a2e;
-    color: #fff;
+    height: 56px;
+    background: var(--bg-card);
+    color: var(--text-main);
+    border-bottom: 1px solid var(--border-color);
     align-items: center;
-    padding: 0 12px;
+    padding: 0 14px;
     z-index: 200;
-    gap: 8px;
+    gap: 10px;
+}
+.mobile-header .btn i {
+    color: var(--text-main) !important;
+}
+.mobile-header .fw-bold {
+    font-weight: 700;
+    color: var(--cor-azul);
+    letter-spacing: -0.02em;
+    font-size: 16px;
 }
 
 /* ── Overlay ── */
@@ -1170,4 +1247,259 @@ body {
 .proj-nav-tabs .nav-link .badge.bg-danger {
     vertical-align: middle;
     font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════
+   COMPONENTES OLIST-STYLE
+   Chips, botões pill, tabelas densas, ações circulares.
+   Use aplicando classes nos templates novos.
+   ═══════════════════════════════════════════ */
+
+/* ── Chips (filtros, status, badges arredondados) ── */
+.chip,
+.chip-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: var(--radius-pill);
+    background: var(--bg-chip);
+    color: var(--text-main);
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all var(--transition);
+    text-transform: lowercase;
+}
+.chip:hover,
+.chip-filter:hover {
+    background: var(--bg-card-hover);
+}
+.chip.active,
+.chip-filter.active {
+    background: var(--bg-chip-active);
+    color: var(--cor-azul);
+    border-color: var(--cor-azul);
+}
+.chip .chip-bullet {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.chip-bullet.aberto    { background: #f59e0b; }
+.chip-bullet.em-rota   { background: #2563eb; }
+.chip-bullet.concluido { background: #16a34a; }
+.chip-bullet.cancelado { background: #94a3b8; }
+
+/* ── Botões pill (ação primária Olist-style) ── */
+.btn-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
+    border-radius: var(--radius-pill);
+    border: 1px solid transparent;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition);
+    text-transform: lowercase;
+}
+.btn-pill-primary {
+    background: var(--cor-azul);
+    color: #fff;
+    border-color: var(--cor-azul);
+}
+.btn-pill-primary:hover {
+    background: var(--cor-azul-strong);
+    color: #fff;
+}
+.btn-pill-outline {
+    background: transparent;
+    color: var(--text-main);
+    border-color: var(--border-strong);
+}
+.btn-pill-outline:hover {
+    background: var(--bg-card-hover);
+}
+
+/* ── Botão de ação circular (menu "..." em linha de tabela) ── */
+.btn-circle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-chip);
+    color: var(--text-muted);
+    border: 0;
+    cursor: pointer;
+    transition: all var(--transition);
+    padding: 0;
+}
+.btn-circle:hover {
+    background: var(--bg-card-hover);
+    color: var(--text-main);
+}
+.btn-circle.active {
+    background: var(--cor-azul);
+    color: #fff;
+}
+
+/* ── Tabela densa Olist-style ── */
+.table-dense {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 14px;
+}
+.table-dense thead th {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 500;
+    color: var(--text-muted);
+    font-size: 13px;
+    text-transform: lowercase;
+    background: transparent;
+}
+.table-dense tbody td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+.table-dense tbody tr:hover td {
+    background: var(--bg-card-hover);
+}
+.table-dense tbody tr.selected td {
+    background: var(--bg-chip-active);
+}
+.table-dense .col-acoes {
+    width: 56px;
+    text-align: center;
+}
+.table-dense .col-check {
+    width: 32px;
+}
+.table-dense .col-chevron {
+    width: 32px;
+    color: var(--text-soft);
+}
+
+/* ── Badge de status com bullet (Olist) ── */
+.badge-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    background: var(--bg-chip);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-main);
+    text-transform: lowercase;
+}
+.badge-status .bullet {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+/* ── Ações flutuantes embaixo (footer Olist-style) ── */
+.olist-footer {
+    position: sticky;
+    bottom: 0;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border-color);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+/* ── Cabeçalho de página (título + ações) ── */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+.page-header h1,
+.page-header .page-title {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0;
+    text-transform: lowercase;
+}
+.page-header .page-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* ── Refinamentos globais ── */
+
+/* Bootstrap btn-primary respeita a paleta nova */
+.btn-primary {
+    background-color: var(--cor-azul);
+    border-color: var(--cor-azul);
+}
+.btn-primary:hover,
+.btn-primary:focus {
+    background-color: var(--cor-azul-strong);
+    border-color: var(--cor-azul-strong);
+}
+
+/* Inputs/cards combinam com a paleta no dark mode */
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .form-select {
+    background-color: var(--bg-input);
+    color: var(--text-main);
+    border-color: var(--border-input);
+}
+[data-theme="dark"] .form-control::placeholder {
+    color: var(--text-soft);
+}
+
+/* Cards Bootstrap default usam vars novas */
+.card {
+    background-color: var(--bg-card);
+    border-color: var(--border-color);
+    border-radius: var(--radius-md);
+}
+
+/* Modais com tema dark consistentes */
+[data-theme="dark"] .modal-content {
+    background-color: var(--bg-card);
+    color: var(--text-main);
+    border-color: var(--border-color);
+}
+
+/* Dropdowns dark */
+[data-theme="dark"] .dropdown-menu {
+    background-color: var(--bg-card);
+    border-color: var(--border-color);
+    color: var(--text-main);
+}
+[data-theme="dark"] .dropdown-item {
+    color: var(--text-main);
+}
+[data-theme="dark"] .dropdown-item:hover {
+    background-color: var(--bg-card-hover);
+    color: var(--text-main);
+}
+
+/* Tooltip dark */
+[data-theme="dark"] .tooltip-inner {
+    background-color: var(--bg-card);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
 }

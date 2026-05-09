@@ -14,12 +14,12 @@
 <body>
     <!-- Mobile header -->
     <div class="mobile-header d-md-none">
-        <button class="btn btn-sm" id="btn-sidebar-toggle" aria-label="Menu">
-            <i class="bi bi-list" style="font-size:1.5rem; color:#fff;"></i>
+        <button class="btn btn-sm p-1" id="btn-sidebar-toggle" aria-label="Menu" style="border:0;">
+            <i class="bi bi-list" style="font-size:1.5rem;"></i>
         </button>
-        <span class="fw-bold"><i class="bi bi-shop"></i> Padaria</span>
+        <span class="fw-bold">padaria</span>
         {% if current_user.is_authenticated %}
-        <small class="ms-auto me-2" style="color:#8899aa;">
+        <small class="ms-auto me-2 text-muted">
             <i class="bi bi-person-circle"></i> {{ current_user.nome }}
         </small>
         {% endif %}
@@ -31,14 +31,14 @@
     <!-- Sidebar -->
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">
-            <i class="bi bi-shop"></i> Padaria
+            padaria
         </div>
 
         {% if current_user.is_authenticated %}
-        <div class="px-2 pb-1">
-            <small style="color:#8899aa;">
+        <div class="px-3 pb-2">
+            <small class="text-muted">
                 <i class="bi bi-person-circle"></i> {{ current_user.nome }}
-                {% if current_user.is_admin() %}<span class="badge bg-primary" style="font-size:8px;">Admin</span>{% endif %}
+                {% if current_user.is_admin() %}<span class="badge-status ms-1" style="font-size:9px;"><span class="bullet" style="background:var(--cor-azul);"></span>admin</span>{% endif %}
             </small>
         </div>
         {% endif %}
@@ -239,9 +239,9 @@
         </a>
 
         <!-- Busca de receitas -->
-        <div class="px-2 pb-1">
+        <div class="px-3 pb-2">
             <input type="text" id="sidebar-busca" class="form-control form-control-sm"
-                   placeholder="Buscar receita..." style="font-size:11px; background:#16213e; border-color:#333; color:#fff;">
+                   placeholder="buscar receita..." style="font-size:12px;">
         </div>
 
         <div id="sidebar-receitas">
@@ -249,8 +249,7 @@
             <div class="sidebar-cat" data-cat>{{ categoria }}</div>
             {% for r in receitas %}
             <a href="{{ url_for('receitas.ficha', id=r.id) }}"
-               class="sidebar-link sidebar-recipe" data-recipe
-               {% if request.path == '/receitas/' ~ r.id|string %}style="background:#0f3460;color:#fff;font-weight:600"{% endif %}>
+               class="sidebar-link sidebar-recipe {% if request.path == '/receitas/' ~ r.id|string %}active{% endif %}" data-recipe>
                 {{ r.nome }}
                 {% if r.observacao %}<span class="badge bg-danger" style="font-size:7px; vertical-align:middle; margin-left:3px;" title="{{ r.observacao }}">TO-DO</span>{% endif %}
                 {% if not r.ingredientes %}<span class="badge bg-warning text-dark" style="font-size:8px; vertical-align:middle; margin-left:4px;" title="Ficha vazia — preencher ingredientes">VAZIA</span>{% endif %}
@@ -294,7 +293,7 @@
 
         {% if current_user.is_authenticated %}
         <div class="sidebar-divider"></div>
-        <a href="{{ url_for('auth.logout') }}" class="sidebar-link" style="color:#ef9a9a;">
+        <a href="{{ url_for('auth.logout') }}" class="sidebar-link" style="color:var(--cor-vermelho);">
             <i class="bi bi-box-arrow-left"></i> Sair
         </a>
         {% endif %}
