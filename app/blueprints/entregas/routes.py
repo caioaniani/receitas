@@ -797,6 +797,7 @@ def atribuir_lote():
 
     drivers_validos = {d.id for d in Driver.query.all()}
     salvos = 0
+    lotes_afetados = set()
     for item in items:
         code = (item.get('code') or '').strip()
         if not code:
@@ -827,12 +828,18 @@ def atribuir_lote():
             except (TypeError, ValueError):
                 pass
         a.atualizado_por = current_user.id
+        # Coleta lotes afetados conforme processa items (mais robusto que
+        # inspecionar db.session.dirty, que pode incluir objetos inesperados)
+        if a.lote_id:
+            lotes_afetados.add(a.lote_id)
         salvos += 1
-    # Recalcula status dos lotes afetados
-    lotes_afetados = {a.lote_id for a in db.session.dirty if isinstance(a, AtribuicaoEntrega) and a.lote_id}
     if lote_id:
         lotes_afetados.add(lote_id)
-    db.session.flush()
+    try:
+        db.session.flush()
+    except Exception:
+        db.session.rollback()
+        raise
     for lid in lotes_afetados:
         _recompute_lote_status(lid)
     db.session.commit()
@@ -840,34 +847,39 @@ def atribuir_lote():
 
 
 def _recompute_lote_status(lote_id):
-    """Infere status do lote olhando atribuicoes filhas.
+    """Infere status do lote olhando atribuicoes filhas. Defensivo: nunca
+    propaga excecao — log + segue. Status do lote e' inferencia de UI, nao
+    pode quebrar salvamentos.
 
     aberto      = nenhuma atribuicao saiu (status != 'pendente') ainda
     em_rota     = >=1 saiu/entregue/falhou, mas falta entregar (>0 pendentes
                   com driver atribuido)
     concluido   = tudo entregue ou falhou (sem pendentes com driver)
     """
-    lote = LoteSaida.query.get(lote_id)
-    if not lote:
-        return
-    atribs = AtribuicaoEntrega.query.filter_by(lote_id=lote_id).all()
-    if not atribs:
-        return  # mantem status atual (lote vazio recem-criado)
-    finais = {'entregue', 'nao_entregue'}
-    n_total = len(atribs)
-    n_finalizadas = sum(1 for a in atribs if (a.status or 'pendente') in finais)
-    n_pendentes_com_driver = sum(
-        1 for a in atribs
-        if (a.status or 'pendente') == 'pendente' and a.driver_id is not None
-    )
-    if n_finalizadas == 0:
-        novo = 'aberto'
-    elif n_pendentes_com_driver == 0 and n_finalizadas > 0:
-        novo = 'concluido'
-    else:
-        novo = 'em_rota'
-    if lote.status != novo:
-        lote.status = novo
+    try:
+        with db.session.no_autoflush:
+            lote = LoteSaida.query.get(lote_id)
+            if not lote:
+                return
+            atribs = AtribuicaoEntrega.query.filter_by(lote_id=lote_id).all()
+            if not atribs:
+                return
+            finais = {'entregue', 'nao_entregue'}
+            n_finalizadas = sum(1 for a in atribs if (a.status or 'pendente') in finais)
+            n_pendentes_com_driver = sum(
+                1 for a in atribs
+                if (a.status or 'pendente') == 'pendente' and a.driver_id is not None
+            )
+            if n_finalizadas == 0:
+                novo = 'aberto'
+            elif n_pendentes_com_driver == 0 and n_finalizadas > 0:
+                novo = 'concluido'
+            else:
+                novo = 'em_rota'
+            if lote.status != novo:
+                lote.status = novo
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.warning('falha ao recalcular status do lote %s: %s', lote_id, exc)
 
 
 @entregas_bp.route('/api/lotes', methods=['GET'])
