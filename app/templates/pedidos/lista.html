@@ -3,24 +3,24 @@
 {% block title %}Pedidos{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h1 class="page-title mb-0"><i class="bi bi-cart3"></i> Pedidos</h1>
-    <div class="d-flex gap-2">
+<div class="page-header">
+    <h1 class="page-title">pedidos</h1>
+    <div class="page-actions">
         {% if current_user.is_admin() %}
-        <a href="{{ url_for('pedidos.relatorio') }}" class="btn btn-outline-success btn-sm">
-            <i class="bi bi-file-earmark-bar-graph"></i> Relatorio
+        <a href="{{ url_for('pedidos.relatorio') }}" class="btn-pill btn-pill-outline">
+            <i class="bi bi-file-earmark-bar-graph"></i> relatório
         </a>
         {% endif %}
-        <a href="{{ url_for('pedidos.novo') }}" class="btn btn-primary btn-sm">
-            <i class="bi bi-plus-lg"></i> Novo Pedido
+        <a href="{{ url_for('pedidos.novo') }}" class="btn-pill btn-pill-primary">
+            <i class="bi bi-plus-lg"></i> novo pedido
         </a>
     </div>
 </div>
 
 {% if current_user.is_admin() %}
-<form method="GET" class="mb-3 d-flex align-items-center gap-2">
-    <select name="loja" class="form-select form-select-sm" style="max-width:250px;" onchange="this.form.submit()">
-        <option value="">Todas as lojas</option>
+<form method="GET" class="mb-3">
+    <select name="loja" class="form-select form-select-sm chip-filter" style="max-width:260px; appearance:auto;" onchange="this.form.submit()">
+        <option value="">todas as lojas</option>
         {% for l in lojas %}
         <option value="{{ l.id }}" {% if filtro_loja == l.id|string %}selected{% endif %}>{{ l.nome }}</option>
         {% endfor %}
@@ -28,42 +28,59 @@
 </form>
 {% endif %}
 
-<div class="table-responsive">
-    <table class="table table-sm table-bordered table-hover bg-white">
-        <thead class="thead-padaria">
+<div class="card" style="padding:0; overflow:hidden;">
+    <table class="table-dense">
+        <thead>
             <tr>
-                <th style="width:50px">#</th>
-                <th>Loja</th>
-                <th>Data Entrega</th>
-                <th class="text-center">Itens</th>
-                <th class="text-center">Status</th>
-                <th>Criado em</th>
+                <th class="col-check"><input type="checkbox" class="form-check-input" disabled></th>
+                <th class="col-acoes"></th>
+                <th>nº</th>
+                <th>loja</th>
+                <th>data entrega</th>
+                <th class="text-center">itens</th>
+                <th class="text-center">status</th>
+                <th>criado em</th>
+                <th class="col-chevron"></th>
             </tr>
         </thead>
         <tbody>
             {% for p in pedidos %}
             <tr style="cursor:pointer" onclick="window.location='{{ url_for('pedidos.detalhe', id=p.id) }}'">
+                <td class="col-check" onclick="event.stopPropagation()"><input type="checkbox" class="form-check-input"></td>
+                <td class="col-acoes" onclick="event.stopPropagation()">
+                    <button class="btn-circle" title="Ações" type="button"><i class="bi bi-three-dots"></i></button>
+                </td>
                 <td class="text-muted">{{ p.id }}</td>
                 <td>{{ p.loja.nome }}</td>
-                <td>{{ p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '-' }}</td>
+                <td>{{ p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '—' }}</td>
                 <td class="text-center">{{ p.itens|length }}</td>
                 <td class="text-center">
                     {% set s = p.status %}
-                    <span class="status-badge status-{{ s.replace('_','-') }}">
-                        {{ {'pendente':'Pendente','confirmado':'Confirmado','separado':'Separado',
-                             'em_transporte':'Em transporte','entregue':'Entregue','cancelado':'Cancelado'}.get(s, s) }}
+                    {% set status_color = {
+                        'pendente': '#f59e0b',
+                        'confirmado': '#2563eb',
+                        'separado': '#06b6d4',
+                        'em_transporte': '#8b5cf6',
+                        'entregue': '#16a34a',
+                        'cancelado': '#94a3b8'
+                    }.get(s, '#94a3b8') %}
+                    <span class="badge-status">
+                        <span class="bullet" style="background:{{ status_color }};"></span>
+                        {{ {'pendente':'pendente','confirmado':'confirmado','separado':'separado',
+                             'em_transporte':'em transporte','entregue':'entregue','cancelado':'cancelado'}.get(s, s) }}
                     </span>
                     {% if p.tem_divergencia %}
-                    <span class="status-badge status-divergencia" title="Quantidade recebida diferente da pedida">
-                        <i class="bi bi-exclamation-triangle-fill"></i> Divergência
+                    <span class="badge-status" style="background:var(--cor-vermelho-soft); color:var(--cor-vermelho);" title="Quantidade recebida diferente da pedida">
+                        <i class="bi bi-exclamation-triangle-fill"></i> divergência
                     </span>
                     {% endif %}
                 </td>
-                <td class="text-muted" style="font-size:12px;">{{ p.criado_em.strftime('%d/%m %H:%M') if p.criado_em else '-' }}</td>
+                <td class="text-muted" style="font-size:12px;">{{ p.criado_em.strftime('%d/%m %H:%M') if p.criado_em else '—' }}</td>
+                <td class="col-chevron"><i class="bi bi-chevron-right"></i></td>
             </tr>
             {% endfor %}
             {% if not pedidos %}
-            <tr><td colspan="6" class="text-center text-muted py-3">Nenhum pedido encontrado.</td></tr>
+            <tr><td colspan="9" class="text-center text-muted py-4">Nenhum pedido encontrado.</td></tr>
             {% endif %}
         </tbody>
     </table>

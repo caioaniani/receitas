@@ -3,83 +3,86 @@
 {% block title %}Funcionários{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="page-title"><i class="bi bi-people"></i> Funcionários</h1>
-    <a href="{{ url_for('rh.novo_funcionario') }}" class="btn btn-primary btn-sm">
-        <i class="bi bi-plus-lg"></i> Novo Funcionário
-    </a>
+<div class="page-header">
+    <h1 class="page-title">funcionários</h1>
+    <div class="page-actions">
+        <a href="{{ url_for('rh.novo_funcionario') }}" class="btn-pill btn-pill-primary">
+            <i class="bi bi-plus-lg"></i> novo funcionário
+        </a>
+    </div>
 </div>
 
 <!-- Filtros -->
-<div class="d-flex gap-2 mb-3 flex-wrap">
-    <form method="GET" class="d-flex gap-2 flex-wrap">
-        <select name="loja" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
-            <option value="">Todas as lojas</option>
-            {% for l in lojas %}
-            <option value="{{ l.id }}" {{ 'selected' if loja_id == l.id }}>{{ l.nome }}</option>
-            {% endfor %}
-        </select>
-        <div class="form-check form-switch d-flex align-items-center ms-2">
-            <input class="form-check-input" type="checkbox" name="ativos" value="1"
-                   id="chk-ativos" {{ 'checked' if apenas_ativos }} onchange="this.form.submit()">
-            <label class="form-check-label ms-1 small" for="chk-ativos">Apenas ativos</label>
-        </div>
-    </form>
-</div>
+<form method="GET" class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+    <select name="loja" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
+        <option value="">todas as lojas</option>
+        {% for l in lojas %}
+        <option value="{{ l.id }}" {{ 'selected' if loja_id == l.id }}>{{ l.nome }}</option>
+        {% endfor %}
+    </select>
+    <label class="chip" style="cursor:pointer;">
+        <input class="form-check-input m-0" type="checkbox" name="ativos" value="1"
+               id="chk-ativos" {{ 'checked' if apenas_ativos }} onchange="this.form.submit()">
+        apenas ativos
+    </label>
+</form>
 
-<div class="table-responsive">
-    <table class="table table-sm table-bordered table-hover bg-white">
+<div class="card" style="padding:0; overflow:hidden;">
+    <table class="table-dense">
         <thead>
-            <tr style="background:#1565c0; color:#fff; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">
-                <th>Nome</th>
-                <th>Função</th>
-                <th>Operacional</th>
-                <th>Período</th>
-                <th>Lojas</th>
-                <th class="text-end">Salário</th>
-                <th class="text-center">Admissão</th>
-                <th>Telefone</th>
-                <th class="text-center">Status</th>
-                <th style="width:40px"></th>
+            <tr>
+                <th class="col-acoes"></th>
+                <th>nome</th>
+                <th>função</th>
+                <th>operacional</th>
+                <th>período</th>
+                <th>lojas</th>
+                <th class="text-end">salário</th>
+                <th class="text-center">admissão</th>
+                <th>telefone</th>
+                <th class="text-center">status</th>
+                <th class="col-chevron"></th>
             </tr>
         </thead>
         <tbody>
             {% for f in funcionarios %}
-            <tr {% if f.cadastro_pendente %}style="background:#fff8e1;"{% endif %}>
-                <td class="fw-bold">
-                    <a href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}" class="text-decoration-none">
-                        {{ f.nome }}
-                    </a>
-                    {% if f.cadastro_pendente %}<span class="badge bg-warning text-dark" style="font-size:8px;">PENDENTE</span>{% endif %}
+            <tr style="cursor:pointer; {% if f.cadastro_pendente %}background:var(--cor-amarelo);{% endif %}"
+                onclick="window.location='{{ url_for('rh.detalhe_funcionario', id=f.id) }}'">
+                <td class="col-acoes" onclick="event.stopPropagation()">
+                    <button class="btn-circle" type="button" title="Ações"><i class="bi bi-three-dots"></i></button>
                 </td>
-                <td><span class="badge bg-secondary">{{ f.funcao or '-' }}</span></td>
-                <td style="font-size:12px;">{{ f.funcao_operacional or '-' }}</td>
-                <td style="font-size:12px;">{{ f.periodo or '-' }}</td>
-                <td>
-                    {% for l in f.lojas %}
-                    <span class="badge bg-info" style="font-size:10px;">{{ l.nome }}</span>
-                    {% endfor %}
-                    {% if not f.lojas %}<span class="text-muted small">-</span>{% endif %}
-                </td>
-                <td class="text-end">{{ f.salario_base | brl }}</td>
-                <td class="text-center">{{ f.data_admissao.strftime('%d/%m/%Y') if f.data_admissao else '-' }}</td>
-                <td style="font-size:12px;">{{ f.telefone or '-' }}</td>
-                <td class="text-center">
-                    {% if f.ativo %}
-                    <span class="badge bg-success">Ativo</span>
-                    {% else %}
-                    <span class="badge bg-danger">Inativo</span>
+                <td class="fw-semibold">
+                    {{ f.nome }}
+                    {% if f.cadastro_pendente %}
+                    <span class="badge-status" style="background:var(--cor-amarelo); color:var(--cor-amarelo-borda);">
+                        <span class="bullet" style="background:var(--cor-amarelo-borda);"></span>pendente
+                    </span>
                     {% endif %}
                 </td>
-                <td class="text-center">
-                    <a href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}" class="btn btn-sm btn-outline-secondary" title="Ver">
-                        <i class="bi bi-eye"></i>
-                    </a>
+                <td>{{ f.funcao or '—' }}</td>
+                <td style="font-size:12.5px;">{{ f.funcao_operacional or '—' }}</td>
+                <td style="font-size:12.5px;">{{ f.periodo or '—' }}</td>
+                <td>
+                    {% for l in f.lojas %}
+                    <span class="chip" style="font-size:11px; padding:2px 8px;">{{ l.nome }}</span>
+                    {% endfor %}
+                    {% if not f.lojas %}<span class="text-muted small">—</span>{% endif %}
                 </td>
+                <td class="text-end">{{ f.salario_base | brl }}</td>
+                <td class="text-center">{{ f.data_admissao.strftime('%d/%m/%Y') if f.data_admissao else '—' }}</td>
+                <td style="font-size:12.5px;">{{ f.telefone or '—' }}</td>
+                <td class="text-center">
+                    {% if f.ativo %}
+                    <span class="badge-status"><span class="bullet" style="background:var(--cor-verde);"></span>ativo</span>
+                    {% else %}
+                    <span class="badge-status" style="background:var(--cor-vermelho-soft); color:var(--cor-vermelho);"><span class="bullet" style="background:var(--cor-vermelho);"></span>inativo</span>
+                    {% endif %}
+                </td>
+                <td class="col-chevron"><i class="bi bi-chevron-right"></i></td>
             </tr>
             {% endfor %}
             {% if not funcionarios %}
-            <tr><td colspan="10" class="text-center text-muted py-3">Nenhum funcionário encontrado.</td></tr>
+            <tr><td colspan="11" class="text-center text-muted py-4">Nenhum funcionário encontrado.</td></tr>
             {% endif %}
         </tbody>
     </table>

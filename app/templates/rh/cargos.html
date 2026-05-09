@@ -3,8 +3,8 @@
 {% block title %}Cargos{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="page-title mb-0"><i class="bi bi-briefcase"></i> Cargos</h1>
+<div class="page-header">
+    <h1 class="page-title">cargos</h1>
 </div>
 
 <div class="alert alert-info py-2" style="font-size:13px;">
@@ -14,16 +14,16 @@
 <form method="POST" action="{{ url_for('rh.salvar_cargos') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-    <div class="table-responsive">
-        <table class="table table-sm table-bordered bg-white">
-            <thead class="thead-padaria">
+    <div class="card" style="padding:0; overflow:hidden;">
+        <table class="table-dense">
+            <thead>
                 <tr>
-                    <th style="width:30%">Nome</th>
-                    <th style="width:140px">Salário Base</th>
-                    <th>Descrição</th>
-                    <th style="width:80px" class="text-center">Ativo</th>
-                    <th style="width:100px" class="text-center">Funcs</th>
-                    <th style="width:60px"></th>
+                    <th style="width:30%">nome</th>
+                    <th style="width:160px">salário base</th>
+                    <th>descrição</th>
+                    <th style="width:80px" class="text-center">ativo</th>
+                    <th style="width:80px" class="text-center">funcs</th>
+                    <th class="col-acoes"></th>
                 </tr>
             </thead>
             <tbody>
@@ -42,12 +42,10 @@
                     <td class="text-center">
                         <input type="checkbox" name="cargo_ativo[]" value="{{ c.id }}" class="form-check-input" {% if c.ativo %}checked{% endif %}>
                     </td>
-                    <td class="text-center text-muted">
-                        {{ c.funcionarios|length }}
-                    </td>
-                    <td class="text-center">
+                    <td class="text-center text-muted">{{ c.funcionarios|length }}</td>
+                    <td class="col-acoes">
                         {% if not c.funcionarios %}
-                        <button type="button" class="btn btn-sm btn-link text-danger p-0"
+                        <button type="button" class="btn-circle"
                                 onclick="if(confirm('Excluir cargo {{ c.nome }}?')) { document.getElementById('del-cargo-{{ c.id }}').submit(); }"
                                 title="Excluir">
                             <i class="bi bi-trash"></i>
@@ -58,7 +56,7 @@
                 {% endfor %}
 
                 <!-- Linha vazia para novo cargo -->
-                <tr style="background:#f9f9f9;">
+                <tr style="background:var(--bg-card-hover);">
                     <td>
                         <input type="hidden" name="cargo_id[]" value="">
                         <input type="text" name="cargo_nome[]" value="" placeholder="+ Novo cargo" class="form-control form-control-sm input-blue">
@@ -79,8 +77,8 @@
         </table>
     </div>
 
-    <button type="submit" class="btn btn-primary btn-sm">
-        <i class="bi bi-check-lg"></i> Salvar
+    <button type="submit" class="btn-pill btn-pill-primary mt-3">
+        <i class="bi bi-check-lg"></i> salvar
     </button>
 </form>
 

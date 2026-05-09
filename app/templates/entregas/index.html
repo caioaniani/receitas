@@ -3,13 +3,15 @@
 {% block title %}Entregas Site{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="page-title mb-0"><i class="bi bi-truck"></i> Entregas Site
-        <small class="text-muted" style="font-size:11px;font-weight:normal;">build {{ static_v['js/entregas.js'] }}</small>
+<div class="page-header">
+    <h1 class="page-title">entregas
+        <small class="text-muted" style="font-size:11px;font-weight:normal;text-transform:none;">build {{ static_v['js/entregas.js'] }}</small>
     </h1>
-    <button class="btn btn-outline-secondary btn-sm d-print-none" onclick="imprimirPedidos()">
-        <i class="bi bi-printer"></i> Imprimir
-    </button>
+    <div class="page-actions">
+        <button class="btn-pill btn-pill-outline d-print-none" onclick="imprimirPedidos()">
+            <i class="bi bi-printer"></i> imprimir
+        </button>
+    </div>
 </div>
 
 <!-- Tabs -->
@@ -53,30 +55,30 @@
 <div class="tab-content">
     <!-- Tab Operação (unificada) -->
     <div class="tab-pane fade show active" id="tab-operacao" data-is-admin="{% if current_user.is_admin() %}1{% else %}0{% endif %}">
-        <div class="d-flex flex-wrap gap-2 align-items-end mb-2 d-print-none">
+        <div class="d-flex flex-wrap gap-2 align-items-end mb-3 d-print-none">
             <div>
-                <label class="form-label small fw-bold mb-1">Data</label>
+                <label class="form-label small fw-bold mb-1" style="text-transform:lowercase;">data</label>
                 <input type="date" id="op-data" class="form-control form-control-sm" style="max-width:170px;" value="{{ hoje }}">
             </div>
-            <button class="btn btn-outline-secondary btn-sm" id="op-hoje" title="Voltar pra hoje">Hoje</button>
-            <button class="btn btn-primary btn-sm" id="op-auto" title="Distribui pedidos sem driver e SALVA. Mantém os já atribuídos.">
-                <i class="bi bi-magic"></i> Auto-distribuir vazios
+            <button class="btn-pill btn-pill-outline" id="op-hoje" title="Voltar pra hoje">hoje</button>
+            <button class="btn-pill btn-pill-primary" id="op-auto" title="Distribui pedidos sem driver e SALVA. Mantém os já atribuídos.">
+                <i class="bi bi-magic"></i> auto-distribuir vazios
             </button>
-            <button class="btn btn-outline-secondary btn-sm" id="op-mapa-toggle">
-                <i class="bi bi-map"></i> <span id="op-mapa-label">Mostrar mapa</span>
+            <button class="btn-pill btn-pill-outline" id="op-mapa-toggle">
+                <i class="bi bi-map"></i> <span id="op-mapa-label">mostrar mapa</span>
             </button>
-            <button class="btn btn-outline-warning btn-sm" id="op-reotimizar" style="display:none;" title="Reordena as paradas dentro de cada rota com base nas atribuições atuais.">
-                <i class="bi bi-arrow-repeat"></i> Re-otimizar rotas
+            <button class="btn-pill btn-pill-outline" id="op-reotimizar" style="display:none; border-color:var(--cor-amarelo-borda); color:var(--cor-amarelo-borda);" title="Reordena as paradas dentro de cada rota com base nas atribuições atuais.">
+                <i class="bi bi-arrow-repeat"></i> re-otimizar rotas
             </button>
-            <button class="btn btn-success btn-sm" id="op-novo-pedido" title="Cadastrar pedido feito fora do VNDA">
-                <i class="bi bi-plus-lg"></i> Novo pedido
+            <button class="btn-pill btn-pill-outline" id="op-novo-pedido" title="Cadastrar pedido feito fora do VNDA" style="border-color:var(--cor-verde); color:var(--cor-verde);">
+                <i class="bi bi-plus-lg"></i> novo pedido
             </button>
-            <input type="text" id="op-busca" class="form-control form-control-sm" placeholder="Buscar cliente ou code..." style="max-width:200px;">
-            <button class="btn btn-outline-secondary btn-sm ms-auto" data-bs-toggle="modal" data-bs-target="#modal-drivers">
-                <i class="bi bi-people"></i> Drivers
+            <input type="text" id="op-busca" class="form-control form-control-sm" placeholder="buscar cliente ou code..." style="max-width:220px; border-radius:var(--radius-pill);">
+            <button class="btn-pill btn-pill-outline ms-auto" data-bs-toggle="modal" data-bs-target="#modal-drivers">
+                <i class="bi bi-people"></i> drivers
             </button>
-            <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">
-                <i class="bi bi-printer"></i> Imprimir
+            <button class="btn-pill btn-pill-outline" onclick="window.print()">
+                <i class="bi bi-printer"></i> imprimir
             </button>
         </div>
 
@@ -89,11 +91,11 @@
             </select>
             <span id="op-lote-status" class="badge"></span>
             <span id="op-lote-meta" class="small text-muted"></span>
-            <button id="op-lote-excluir" class="btn btn-sm btn-outline-danger" style="display:none;" title="Excluir o lote selecionado. Atribuições viram 'Sem lote'.">
-                <i class="bi bi-trash"></i> Excluir lote
+            <button id="op-lote-excluir" class="btn-pill btn-pill-outline" style="display:none; border-color:var(--cor-vermelho); color:var(--cor-vermelho); padding:4px 12px; font-size:13px;" title="Excluir o lote selecionado. Atribuições viram 'Sem lote'.">
+                <i class="bi bi-trash"></i> excluir lote
             </button>
-            <button id="op-lote-roteirizar" class="btn btn-sm btn-warning" style="display:none;" title="Atribui driver às sobras desse lote, mantendo o mesmo lote. Não cria lote novo.">
-                <i class="bi bi-magic"></i> Roteirizar sobras
+            <button id="op-lote-roteirizar" class="btn-pill" style="display:none; background:var(--cor-amarelo-borda); color:#fff; padding:4px 12px; font-size:13px;" title="Atribui driver às sobras desse lote, mantendo o mesmo lote. Não cria lote novo.">
+                <i class="bi bi-magic"></i> roteirizar sobras
             </button>
         </div>
         <div class="d-flex flex-wrap gap-2 align-items-center mb-2 d-print-none d-none" id="op-janelas-area">
