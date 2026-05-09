@@ -128,12 +128,13 @@
         }, descricao || 'Atribuir #' + code);
     }
 
-    function apiSalvarLote(items, descricao) {
+    function apiSalvarLote(items, descricao, extra) {
+        var body = Object.assign({items: items}, extra || {});
         return apiSafe('/entregas/api/atribuicao/lote', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
             credentials: 'same-origin',
-            body: JSON.stringify({items: items}),
+            body: JSON.stringify(body),
         }, descricao || ('Salvar lote (' + items.length + ' item(s))'));
     }
 
@@ -2141,7 +2142,11 @@
                     opCarregar();
                     return;
                 }
-                apiSalvarLote(items, 'Distribuir vazios (' + items.length + ')')
+                var criarLote = {
+                    janelas: janelasSel.map(function(j) { return j === '(sem janela)' ? '' : j; }),
+                    data_entrega: data,
+                };
+                apiSalvarLote(items, 'Distribuir vazios (' + items.length + ')', {criar_lote: criarLote})
                     .then(function() {
                         var aviso = '';
                         var nSobra = (d.sem_atribuir || []).length;

@@ -245,6 +245,11 @@ def api_status(token):
         except (TypeError, ValueError):
             pass
 
+    # Recalcula status do lote dono (aberto / em_rota / concluido)
+    if a.lote_id:
+        from app.blueprints.entregas.routes import _recompute_lote_status
+        _recompute_lote_status(a.lote_id)
+
     db.session.commit()
     return jsonify(ok=True, status=a.status, proof_hash=a.proof_hash)
 

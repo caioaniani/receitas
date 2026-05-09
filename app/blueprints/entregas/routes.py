@@ -8,7 +8,7 @@ import requests as http_requests
 from app.blueprints.entregas import entregas_bp
 from app.decorators import entrega_access_required
 from app.extensions import db
-from app.models import CartinhaEntrega, OverrideEntrega, Driver, AtribuicaoEntrega, EntregaFoto, PedidoLocal, PedidoLocalItem, Produto, MateriaPrima
+from app.models import CartinhaEntrega, OverrideEntrega, Driver, AtribuicaoEntrega, LoteSaida, EntregaFoto, PedidoLocal, PedidoLocalItem, Produto, MateriaPrima
 from app.services import vnda, rotas as rotas_svc, dropbox_storage
 
 
@@ -360,6 +360,8 @@ def atribuir_pedido(code):
         except (TypeError, ValueError):
             pass
     a.atualizado_por = current_user.id
+    if a.lote_id:
+        _recompute_lote_status(a.lote_id)
     db.session.commit()
     return jsonify(ok=True)
 
@@ -738,11 +740,60 @@ def deletar_pedido_local(pid):
 @login_required
 @entrega_access_required
 def atribuir_lote():
-    """Atribui em lote: [{code, driver_id, ordem, data_entrega}...]."""
+    """Atribui em lote.
+
+    Body:
+      items: [{code, driver_id, ordem, data_entrega}...]
+      criar_lote (opcional): {janelas: [...], nome?: str, data_entrega: 'YYYY-MM-DD'}
+        → cria um LoteSaida novo e marca todos os items com seu lote_id.
+      lote_id (opcional): int — usa lote existente em vez de criar.
+    """
+    import json as _json
     data = request.get_json(silent=True) or {}
     items = data.get('items') or []
     if not isinstance(items, list):
         return jsonify(ok=False, erro='items deve ser lista'), 400
+
+    # 1. Resolve lote_id (criar novo OU usar existente OU nenhum)
+    lote_id = None
+    criar = data.get('criar_lote')
+    if criar and isinstance(criar, dict):
+        # Data do lote: do payload, ou do primeiro item, ou hoje
+        data_str = criar.get('data_entrega')
+        if not data_str:
+            for it in items:
+                if it.get('data_entrega'):
+                    data_str = it['data_entrega']
+                    break
+        try:
+            data_lote = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else date.today()
+        except ValueError:
+            data_lote = date.today()
+        janelas = criar.get('janelas') or []
+        if not isinstance(janelas, list):
+            janelas = []
+        nome = (criar.get('nome') or '').strip()
+        if not nome:
+            agora = datetime.now()
+            jan_str = ' + '.join(j or '(sem janela)' for j in janelas) if janelas else 'todas as janelas'
+            nome = data_lote.strftime('%d/%m') + ' ' + agora.strftime('%H:%M') + ' · ' + jan_str
+        novo = LoteSaida(
+            nome=nome[:120],
+            data_entrega=data_lote,
+            janelas_json=_json.dumps(janelas),
+            status='aberto',
+            criado_por=current_user.id,
+        )
+        db.session.add(novo)
+        db.session.flush()
+        lote_id = novo.id
+    elif data.get('lote_id') is not None:
+        try:
+            lote_id = int(data['lote_id'])
+        except (TypeError, ValueError):
+            return jsonify(ok=False, erro='lote_id invalido'), 400
+        if not LoteSaida.query.get(lote_id):
+            return jsonify(ok=False, erro='lote nao encontrado'), 404
 
     drivers_validos = {d.id for d in Driver.query.all()}
     salvos = 0
@@ -763,6 +814,8 @@ def atribuir_lote():
             a = AtribuicaoEntrega(pedido_code=code)
             db.session.add(a)
         a.driver_id = driver_id
+        if lote_id is not None:
+            a.lote_id = lote_id
         if item.get('data_entrega'):
             try:
                 a.data_entrega = datetime.strptime(item['data_entrega'], '%Y-%m-%d').date()
@@ -775,8 +828,86 @@ def atribuir_lote():
                 pass
         a.atualizado_por = current_user.id
         salvos += 1
+    # Recalcula status dos lotes afetados
+    lotes_afetados = {a.lote_id for a in db.session.dirty if isinstance(a, AtribuicaoEntrega) and a.lote_id}
+    if lote_id:
+        lotes_afetados.add(lote_id)
+    db.session.flush()
+    for lid in lotes_afetados:
+        _recompute_lote_status(lid)
     db.session.commit()
-    return jsonify(ok=True, salvos=salvos)
+    return jsonify(ok=True, salvos=salvos, lote_id=lote_id)
+
+
+def _recompute_lote_status(lote_id):
+    """Infere status do lote olhando atribuicoes filhas.
+
+    aberto      = nenhuma atribuicao saiu (status != 'pendente') ainda
+    em_rota     = >=1 saiu/entregue/falhou, mas falta entregar (>0 pendentes
+                  com driver atribuido)
+    concluido   = tudo entregue ou falhou (sem pendentes com driver)
+    """
+    lote = LoteSaida.query.get(lote_id)
+    if not lote:
+        return
+    atribs = AtribuicaoEntrega.query.filter_by(lote_id=lote_id).all()
+    if not atribs:
+        return  # mantem status atual (lote vazio recem-criado)
+    finais = {'entregue', 'nao_entregue'}
+    n_total = len(atribs)
+    n_finalizadas = sum(1 for a in atribs if (a.status or 'pendente') in finais)
+    n_pendentes_com_driver = sum(
+        1 for a in atribs
+        if (a.status or 'pendente') == 'pendente' and a.driver_id is not None
+    )
+    if n_finalizadas == 0:
+        novo = 'aberto'
+    elif n_pendentes_com_driver == 0 and n_finalizadas > 0:
+        novo = 'concluido'
+    else:
+        novo = 'em_rota'
+    if lote.status != novo:
+        lote.status = novo
+
+
+@entregas_bp.route('/api/lotes', methods=['GET'])
+@login_required
+@entrega_access_required
+def listar_lotes():
+    """Lista lotes de uma data (?data=YYYY-MM-DD).
+    Retorna metadados + contadores por status."""
+    import json as _json
+    data_str = request.args.get('data', date.today().isoformat())
+    try:
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        target = date.today()
+    lotes = LoteSaida.query.filter_by(data_entrega=target).order_by(LoteSaida.criado_em).all()
+
+    # Conta atribuicoes por lote em 1 query
+    from sqlalchemy import func
+    contagens = dict(
+        db.session.query(AtribuicaoEntrega.lote_id, func.count(AtribuicaoEntrega.id))
+        .filter(AtribuicaoEntrega.lote_id.in_([l.id for l in lotes] or [0]))
+        .group_by(AtribuicaoEntrega.lote_id).all()
+    )
+
+    out = []
+    for l in lotes:
+        try:
+            janelas = _json.loads(l.janelas_json) if l.janelas_json else []
+        except (ValueError, TypeError):
+            janelas = []
+        out.append({
+            'id': l.id,
+            'nome': l.nome,
+            'data_entrega': l.data_entrega.isoformat() if l.data_entrega else None,
+            'criado_em': l.criado_em.isoformat() if l.criado_em else None,
+            'janelas': janelas,
+            'status': l.status or 'aberto',
+            'qtd_pedidos': contagens.get(l.id, 0),
+        })
+    return jsonify(lotes=out)
 
 
 @entregas_bp.route('/cartinha/<code>', methods=['POST'])

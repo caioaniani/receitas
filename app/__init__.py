@@ -603,6 +603,45 @@ def _migrate_postgres(app):
     """)
     _try("CREATE INDEX IF NOT EXISTS idx_entrega_foto_atribuicao ON entrega_foto(atribuicao_id)")
 
+    # ── Lotes de saída ──
+    _try("""
+    CREATE TABLE IF NOT EXISTS lote_saida (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(120) NOT NULL,
+        data_entrega DATE NOT NULL,
+        criado_em TIMESTAMP DEFAULT NOW(),
+        janelas_json TEXT,
+        status VARCHAR(20) DEFAULT 'aberto',
+        criado_por INTEGER REFERENCES usuario(id)
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_lote_saida_data ON lote_saida(data_entrega)")
+    _try("CREATE INDEX IF NOT EXISTS idx_lote_saida_status ON lote_saida(status)")
+    _try("ALTER TABLE atribuicao_entrega ADD COLUMN lote_id INTEGER REFERENCES lote_saida(id)")
+    _try("CREATE INDEX IF NOT EXISTS idx_atribuicao_lote ON atribuicao_entrega(lote_id)")
+
+    # Backfill: cada data com atribuicoes orfas vira 1 lote 'Histórico DD/MM' concluido.
+    # Idempotente — so cria se ainda houver lote_id NULL.
+    _try("""
+    INSERT INTO lote_saida (nome, data_entrega, criado_em, status)
+    SELECT
+        'Histórico ' || TO_CHAR(data_entrega, 'DD/MM/YYYY'),
+        data_entrega,
+        COALESCE(MIN(atualizado_em), NOW()),
+        'concluido'
+    FROM atribuicao_entrega
+    WHERE lote_id IS NULL AND data_entrega IS NOT NULL
+    GROUP BY data_entrega
+    """)
+    _try("""
+    UPDATE atribuicao_entrega a
+    SET lote_id = l.id
+    FROM lote_saida l
+    WHERE a.lote_id IS NULL
+      AND a.data_entrega = l.data_entrega
+      AND l.nome LIKE 'Histórico %'
+    """)
+
     # ── Pedidos cadastrados fora do VNDA (manuais) ──
     _try("""
     CREATE TABLE IF NOT EXISTS pedido_local (

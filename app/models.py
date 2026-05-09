@@ -788,6 +788,22 @@ class Driver(db.Model):
     atribuicoes = db.relationship('AtribuicaoEntrega', backref='driver', lazy='dynamic')
 
 
+class LoteSaida(db.Model):
+    """Pacote nomeado de uma rodada de distribuicao.
+    Cada vez que o usuario clica 'Distribuir' (ou cria manualmente), gera 1 lote.
+    Status e inferido a partir das atribuicoes filhas."""
+    __tablename__ = 'lote_saida'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(120), nullable=False)
+    data_entrega = db.Column(db.Date, nullable=False, index=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    janelas_json = db.Column(db.Text)  # JSON array de strings, ex: ["07-08","08-09"]
+    # aberto = nenhum saiu | em_rota = >=1 saiu, falta entregar | concluido = 100%
+    status = db.Column(db.String(20), default='aberto', index=True)
+    criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+
 class AtribuicaoEntrega(db.Model):
     """Vincula um pedido VNDA a um Driver. Pedido tem no maximo 1 driver por vez."""
     __tablename__ = 'atribuicao_entrega'
@@ -795,6 +811,7 @@ class AtribuicaoEntrega(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     pedido_code = db.Column(db.String(50), nullable=False, unique=True, index=True)
     driver_id = db.Column(db.Integer, db.ForeignKey('driver_entrega.id'))
+    lote_id = db.Column(db.Integer, db.ForeignKey('lote_saida.id'), index=True)
     data_entrega = db.Column(db.Date, index=True)
     ordem = db.Column(db.Integer, default=0)  # ordem dentro da rota do driver
     atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
