@@ -10,6 +10,9 @@ from flask import current_app
 logger = logging.getLogger(__name__)
 
 _client_cache = {}
+# Cache de enderecos de entrega — endereco raramente muda, evita hit
+# repetido no /shipping_address (causa de 429 do VNDA).
+_shipping_cache = {}
 
 # Cache curto de buscar_pedidos_do_dia: chave = (data_iso, overrides_hash) → (timestamp, resultado)
 # Reduz dependencia da API VNDA, que as vezes retorna lento ou vazio temporariamente.
@@ -34,15 +37,31 @@ def _base_url():
     return 'https://api.vnda.com.br/api/v2'
 
 
-def _get(endpoint, params=None):
+def _get(endpoint, params=None, max_retries=3):
+    """Faz GET no VNDA. Retenta em 429 (rate limit) e 5xx com backoff
+    exponencial. Pra outros erros, retorna None."""
+    import time
     url = f'{_base_url()}{endpoint}'
-    try:
-        resp = requests.get(url, headers=_headers(), params=params, timeout=15)
-        resp.raise_for_status()
-        return resp
-    except requests.RequestException as e:
-        logger.error('Erro API Vnda %s: %s', endpoint, e)
-        return None
+    for tentativa in range(max_retries + 1):
+        try:
+            resp = requests.get(url, headers=_headers(), params=params, timeout=15)
+            if resp.status_code == 429 or 500 <= resp.status_code < 600:
+                if tentativa < max_retries:
+                    # Respeita Retry-After se presente; senao backoff 1,2,4s
+                    retry_after = resp.headers.get('Retry-After')
+                    delay = float(retry_after) if retry_after else (2 ** tentativa)
+                    delay = min(delay, 8.0)
+                    time.sleep(delay)
+                    continue
+            resp.raise_for_status()
+            return resp
+        except requests.RequestException as e:
+            if tentativa < max_retries and isinstance(e, (requests.Timeout, requests.ConnectionError)):
+                time.sleep(2 ** tentativa)
+                continue
+            logger.error('Erro API Vnda %s: %s', endpoint, e)
+            return None
+    return None
 
 
 def _is_entrega_expressa(order):
@@ -199,11 +218,19 @@ def buscar_shipping_address(code):
     """Busca o endereco de entrega de um pedido (endpoint dedicado).
     Diferente de /orders/{code}, este endpoint inclui recipient_name —
     o nome real do destinatario, que pode ser diferente do comprador.
+
+    Usa cache em memoria — endereco raramente muda dentro de uma sessao.
     """
+    if not code:
+        return None
+    if code in _shipping_cache:
+        return _shipping_cache[code]
     resp = _get(f'/orders/{code}/shipping_address')
     if resp:
         try:
-            return resp.json()
+            data = resp.json()
+            _shipping_cache[code] = data
+            return data
         except ValueError:
             pass
     return None

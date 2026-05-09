@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime
 
-from flask import Flask, Response, request
+from flask import Flask, Response, render_template, request
 
 from app.extensions import db, csrf, login_manager, limiter
 from config import Config
