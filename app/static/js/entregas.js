@@ -1615,6 +1615,7 @@
     var opMapa = null;
     var opMapaLayers = null;
     var opJanelaFiltro = new Set();  // filtro local — vazio = todas
+    var opTeveEdicaoManual = false;  // setado quando usuario reatribui pelo mapa
 
     function opData() { return document.getElementById('op-data').value; }
     var opBuscaTexto = '';
@@ -1916,12 +1917,30 @@
         bar.style.display = checks.length > 0 ? '' : 'none';
     }
 
+    function opPopupHTML(p, driverIdAtual, nomeAtual, ordem) {
+        var drivers = (opUltimoResultado && opUltimoResultado.drivers_disponiveis) || [];
+        var opts = '<option value="">— Sem driver —</option>';
+        drivers.forEach(function(dr) {
+            var sel = (dr.id === driverIdAtual) ? ' selected' : '';
+            opts += '<option value="' + dr.id + '"' + sel + '>' + escapeHtml(dr.nome) + '</option>';
+        });
+        var titulo = nomeAtual
+            ? '<b>' + escapeHtml(nomeAtual) + (ordem ? ' · #' + ordem : '') + '</b>'
+            : '<b class="text-muted">Sem driver</b>';
+        return titulo +
+            '<br>' + escapeHtml(p.destinatario || '') +
+            '<br><small class="text-muted">' + escapeHtml(p.endereco || '') + '</small>' +
+            '<br><label class="small fw-bold mt-2 mb-1 d-block">Motorista:</label>' +
+            '<select class="form-select form-select-sm op-pin-select" data-code="' + escapeHtml(p.code) + '">' + opts + '</select>';
+    }
+
     function opRenderMapa(d) {
         var el = document.getElementById('op-mapa');
-        var temCoords = (d.rotas || []).some(function(r) {
+        var temCoordsRotas = (d.rotas || []).some(function(r) {
             return r.paradas.some(function(p) { return p.lat != null && p.lng != null; });
         });
-        if (!temCoords) { el.style.display = 'none'; return; }
+        var temCoordsSem = (d.sem_driver || []).some(function(p) { return p.lat != null && p.lng != null; });
+        if (!temCoordsRotas && !temCoordsSem) { el.style.display = 'none'; return; }
         el.style.display = '';
         if (!opMapa) {
             opMapa = L.map('op-mapa', {scrollWheelZoom: false}).setView([-23.5505, -46.6333], 11);
@@ -1950,11 +1969,23 @@
                 L.marker([p.lat, p.lng], {
                     icon: L.divIcon({
                         className: 'parada-icon',
-                        html: '<div style="background:' + cor + ';color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;border:2px solid #fff;">' + p.ordem + '</div>',
+                        html: '<div style="background:' + cor + ';color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;border:2px solid #fff;cursor:pointer;">' + p.ordem + '</div>',
                         iconSize: [24, 24],
                     }),
-                }).addTo(opMapaLayers).bindPopup('<b>' + escapeHtml(r.driver.nome) + ' · #' + p.ordem + '</b><br>' + escapeHtml(p.destinatario || ''));
+                }).addTo(opMapaLayers).bindPopup(opPopupHTML(p, r.driver.id, r.driver.nome, p.ordem));
             });
+        });
+        // Pins "sem driver" — clicáveis pra atribuir
+        (d.sem_driver || []).forEach(function(p) {
+            if (p.lat == null || p.lng == null) return;
+            bounds.push([p.lat, p.lng]);
+            L.marker([p.lat, p.lng], {
+                icon: L.divIcon({
+                    className: 'parada-sem-icon',
+                    html: '<div style="background:#999;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;border:2px dashed #fff;cursor:pointer;">?</div>',
+                    iconSize: [24, 24],
+                }),
+            }).addTo(opMapaLayers).bindPopup(opPopupHTML(p, null, null, null));
         });
         if (bounds.length > 0) opMapa.fitBounds(bounds, {padding: [40, 40]});
         setTimeout(function() { if (opMapa) opMapa.invalidateSize(); }, 80);
@@ -2060,6 +2091,96 @@
         copiarListaWhatsApp(driver, opUltimoResultado.data);
     }
 
+    // Reatribuir pedido pelo popup do pin
+    function opReatribuirViaPin(code, novoDriverId) {
+        var url = '/entregas/api/atribuicao/' + encodeURIComponent(code);
+        var fetchPromise;
+        if (!novoDriverId) {
+            fetchPromise = fetch(url, {
+                method: 'DELETE',
+                headers: {'X-CSRFToken': CSRF_TOKEN},
+                credentials: 'same-origin',
+            });
+        } else {
+            // Calcula ordem = fim da rota do novo driver (pra anexar no fim)
+            var ordemFim = 1;
+            if (opUltimoResultado) {
+                var rota = (opUltimoResultado.drivers || opUltimoResultado.rotas || []).find(function(r) {
+                    return (r.driver && r.driver.id === novoDriverId) || (r.id === novoDriverId);
+                });
+                if (rota) {
+                    var paradas = rota.paradas || [];
+                    paradas.forEach(function(p) { if ((p.ordem || 0) >= ordemFim) ordemFim = (p.ordem || 0) + 1; });
+                }
+            }
+            fetchPromise = fetch(url, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+                credentials: 'same-origin',
+                body: JSON.stringify({driver_id: novoDriverId, data_entrega: opData(), ordem: ordemFim}),
+            });
+        }
+        fetchPromise.then(function(r) { return r.json(); }).then(function() {
+            opTeveEdicaoManual = true;
+            var btnReot = document.getElementById('op-reotimizar');
+            if (btnReot) btnReot.style.display = '';
+            if (opMapa) opMapa.closePopup();
+            opCarregar();
+        });
+    }
+
+    // Re-otimiza ordem das rotas com base nas atribuições atuais.
+    // Chama /api/rotas (que respeita pre-atribuídos) com TODOS drivers/janelas
+    // e salva o resultado.
+    function opReotimizarRotas() {
+        var data = opData();
+        if (!data) return;
+        if (!opUltimoResultado) return;
+        var drivers = opUltimoResultado.drivers_disponiveis || [];
+        if (drivers.length === 0) return;
+        var msg = document.getElementById('op-msg');
+        msg.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-arrow-repeat"></i> Re-otimizando…</div>';
+        var qs = '&drivers=' + drivers.map(function(d) { return d.id; }).join(',');
+        fetch('/entregas/api/rotas?data=' + encodeURIComponent(data) + qs,
+            {credentials: 'same-origin'}).then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d.erro) { msg.innerHTML = '<div class="alert alert-danger py-2 small">' + escapeHtml(d.erro) + '</div>'; return; }
+                var items = [];
+                (d.rotas || []).forEach(function(r) {
+                    (r.paradas || []).forEach(function(p) {
+                        items.push({pedido_code: p.code, driver_id: r.driver.id, ordem: p.ordem, data_entrega: data});
+                    });
+                });
+                if (items.length === 0) { msg.innerHTML = '<div class="alert alert-warning py-2 small">Nada a re-otimizar.</div>'; return; }
+                fetch('/entregas/api/atribuicao/lote', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+                    credentials: 'same-origin',
+                    body: JSON.stringify({items: items}),
+                }).then(function(r) { return r.json(); }).then(function(resp) {
+                    if (!resp.ok) {
+                        msg.innerHTML = '<div class="alert alert-warning py-2 small">Falha: ' + escapeHtml(resp.erro || '?') + '</div>';
+                        return;
+                    }
+                    msg.innerHTML = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle"></i> Rotas re-otimizadas.</div>';
+                    opTeveEdicaoManual = false;
+                    var btnReot = document.getElementById('op-reotimizar');
+                    if (btnReot) btnReot.style.display = 'none';
+                    opCarregar();
+                });
+            })
+            .catch(function() { msg.innerHTML = '<div class="alert alert-danger py-2 small">Falha de rede.</div>'; });
+    }
+
+    // Delegação: change no select dentro do popup do Leaflet
+    document.addEventListener('change', function(e) {
+        if (e.target && e.target.classList && e.target.classList.contains('op-pin-select')) {
+            var code = e.target.dataset.code;
+            var novo = e.target.value ? parseInt(e.target.value, 10) : null;
+            opReatribuirViaPin(code, novo);
+        }
+    });
+
     document.addEventListener('DOMContentLoaded', function() {
         var btnHoje = document.getElementById('op-hoje');
         var btnAuto = document.getElementById('op-auto');
@@ -2074,6 +2195,8 @@
             opCarregar();
         });
         if (btnAuto) btnAuto.addEventListener('click', opAbrirModalDistribuir);
+        var btnReot = document.getElementById('op-reotimizar');
+        if (btnReot) btnReot.addEventListener('click', opReotimizarRotas);
         var btnDistConf = document.getElementById('dist-confirmar');
         if (btnDistConf) btnDistConf.addEventListener('click', opExecutarDistribuir);
         var btnDistDrvAll = document.getElementById('dist-drv-todos');
