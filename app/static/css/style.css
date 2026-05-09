@@ -1503,3 +1503,338 @@ body {
     color: var(--text-main);
     border: 1px solid var(--border-color);
 }
+
+/* ═══════════════════════════════════════════
+   OVERRIDES GLOBAIS — Bootstrap herda visual Olist
+   Aplicado automaticamente em TODOS os templates,
+   sem precisar editar HTML.
+   ═══════════════════════════════════════════ */
+
+/* Botões Bootstrap → pill por padrão */
+.btn {
+    border-radius: var(--radius-pill);
+    font-weight: 500;
+    padding: 7px 16px;
+    transition: all var(--transition);
+}
+.btn-sm {
+    padding: 5px 14px;
+    font-size: 13px;
+}
+.btn-lg {
+    padding: 10px 24px;
+    font-size: 15px;
+}
+
+/* Outline buttons usam border + accent color */
+.btn-outline-primary { border-color: var(--cor-azul); color: var(--cor-azul); }
+.btn-outline-primary:hover { background: var(--cor-azul); border-color: var(--cor-azul); color: #fff; }
+.btn-outline-secondary { border-color: var(--border-strong); color: var(--text-main); }
+.btn-outline-secondary:hover { background: var(--bg-card-hover); border-color: var(--border-strong); color: var(--text-main); }
+.btn-outline-success { border-color: var(--cor-verde); color: var(--cor-verde); }
+.btn-outline-success:hover { background: var(--cor-verde); border-color: var(--cor-verde); color: #fff; }
+.btn-outline-danger { border-color: var(--cor-vermelho); color: var(--cor-vermelho); }
+.btn-outline-danger:hover { background: var(--cor-vermelho); border-color: var(--cor-vermelho); color: #fff; }
+.btn-outline-warning { border-color: var(--cor-amarelo-borda); color: var(--cor-amarelo-borda); }
+.btn-outline-warning:hover { background: var(--cor-amarelo-borda); border-color: var(--cor-amarelo-borda); color: #fff; }
+.btn-outline-info { border-color: var(--cor-azul); color: var(--cor-azul); }
+
+.btn-success { background: var(--cor-verde); border-color: var(--cor-verde); }
+.btn-success:hover { background: #15803d; border-color: #15803d; }
+.btn-danger { background: var(--cor-vermelho); border-color: var(--cor-vermelho); }
+.btn-danger:hover { background: #b91c1c; border-color: #b91c1c; }
+.btn-warning { background: var(--cor-amarelo-borda); border-color: var(--cor-amarelo-borda); color: #fff; }
+.btn-warning:hover { background: #d97706; border-color: #d97706; color: #fff; }
+.btn-info { background: var(--cor-azul); border-color: var(--cor-azul); color: #fff; }
+.btn-info:hover { background: var(--cor-azul-strong); border-color: var(--cor-azul-strong); }
+
+/* btn-link continua flat, sem pill */
+.btn-link {
+    border-radius: var(--radius-sm);
+    color: var(--cor-azul);
+    text-decoration: none;
+}
+.btn-link:hover { color: var(--cor-azul-strong); text-decoration: underline; }
+
+/* Badges Bootstrap → pill por padrão, lowercase */
+.badge {
+    border-radius: var(--radius-pill);
+    font-weight: 500;
+    padding: 4px 10px;
+    font-size: 11px;
+    text-transform: lowercase;
+    letter-spacing: 0;
+}
+.badge.bg-primary { background-color: var(--cor-azul) !important; }
+.badge.bg-success { background-color: var(--cor-verde) !important; }
+.badge.bg-danger { background-color: var(--cor-vermelho) !important; }
+.badge.bg-warning { background-color: var(--cor-amarelo-borda) !important; color: #fff !important; }
+.badge.bg-info { background-color: #06b6d4 !important; }
+.badge.bg-secondary { background-color: var(--text-soft) !important; }
+.badge.bg-light { background-color: var(--bg-chip) !important; color: var(--text-main) !important; }
+.badge.bg-dark { background-color: var(--text-main) !important; color: var(--bg-card) !important; }
+
+/* Tabelas Bootstrap → visual Olist (sem bordas externas, hover sutil) */
+.table {
+    --bs-table-bg: transparent;
+    color: var(--text-main);
+    border-color: var(--border-color);
+    margin-bottom: 0;
+}
+.table thead {
+    background: transparent;
+}
+.table thead th,
+.thead-padaria,
+.thead-padaria tr th,
+table .thead-padaria th {
+    background: var(--bg-table-head) !important;
+    color: var(--text-muted) !important;
+    font-weight: 500;
+    font-size: 12px;
+    text-transform: lowercase;
+    letter-spacing: 0;
+    border-bottom: 1px solid var(--border-color);
+    padding: 10px 12px;
+}
+.table tbody td {
+    border-color: var(--border-color);
+    vertical-align: middle;
+}
+.table-hover tbody tr:hover td {
+    background: var(--bg-card-hover);
+}
+.table-bordered { border: 1px solid var(--border-color); }
+.table-bordered th, .table-bordered td { border-color: var(--border-color); }
+
+/* tabelas dentro de cards: remove borda dupla */
+.card .table { margin-bottom: 0; }
+
+/* Form controls */
+.form-control,
+.form-select {
+    background-color: var(--bg-input);
+    border-color: var(--border-input);
+    color: var(--text-main);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    transition: all var(--transition);
+}
+.form-control:focus,
+.form-select:focus {
+    background-color: var(--bg-input);
+    border-color: var(--cor-azul);
+    box-shadow: 0 0 0 3px var(--accent-light);
+    color: var(--text-main);
+}
+.form-control::placeholder { color: var(--text-soft); }
+.form-control-sm, .form-select-sm { font-size: 13px; }
+
+.form-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-main);
+    margin-bottom: 4px;
+}
+.form-label.small { font-size: 12px; color: var(--text-muted); }
+
+/* Form switch (toggle) — cor accent Olist */
+.form-check-input:checked {
+    background-color: var(--cor-azul);
+    border-color: var(--cor-azul);
+}
+.form-check-input:focus {
+    box-shadow: 0 0 0 3px var(--accent-light);
+    border-color: var(--cor-azul);
+}
+
+/* Alerts */
+.alert {
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    padding: 12px 16px;
+    font-size: 14px;
+}
+.alert-info {
+    background: var(--cor-azul-soft);
+    color: var(--cor-azul-strong);
+    border-color: transparent;
+}
+.alert-success {
+    background: var(--cor-verde-soft);
+    color: #14532d;
+}
+.alert-warning {
+    background: var(--cor-amarelo);
+    color: #78350f;
+    border-color: transparent;
+}
+.alert-danger {
+    background: var(--cor-vermelho-soft);
+    color: #7f1d1d;
+}
+.alert-light {
+    background: var(--bg-card-hover);
+    color: var(--text-main);
+}
+[data-theme="dark"] .alert-info { color: #93c5fd; }
+[data-theme="dark"] .alert-success { color: #86efac; }
+[data-theme="dark"] .alert-warning { color: #fcd34d; }
+[data-theme="dark"] .alert-danger { color: #fca5a5; }
+
+/* Page titles antigos (sem .page-header wrapper) — herdam estilo */
+h1.page-title,
+.page-title {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    text-transform: lowercase;
+    color: var(--text-main);
+}
+h1.page-title i,
+.page-title i { font-size: 0.85em; opacity: 0.7; }
+
+h2 { font-size: 20px; font-weight: 600; }
+h3 { font-size: 17px; font-weight: 600; }
+h4 { font-size: 15px; font-weight: 600; }
+h5 { font-size: 14px; font-weight: 600; }
+
+/* Nav tabs Olist-style */
+.nav-tabs {
+    border-bottom: 1px solid var(--border-color);
+    gap: 4px;
+}
+.nav-tabs .nav-link {
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    color: var(--text-muted);
+    font-weight: 500;
+    padding: 10px 14px;
+    font-size: 14px;
+    text-transform: lowercase;
+    transition: all var(--transition);
+    background: transparent;
+}
+.nav-tabs .nav-link:hover {
+    color: var(--text-main);
+    border-bottom-color: var(--border-strong);
+    background: transparent;
+}
+.nav-tabs .nav-link.active {
+    color: var(--cor-azul);
+    border-bottom-color: var(--cor-azul);
+    background: transparent;
+    font-weight: 600;
+}
+
+/* Pills nav (rabbit-pills no projetos, etc) */
+.nav-pills .nav-link {
+    border-radius: var(--radius-pill);
+    color: var(--text-muted);
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: lowercase;
+}
+.nav-pills .nav-link.active {
+    background: var(--cor-azul);
+    color: #fff;
+}
+
+/* List group */
+.list-group {
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+.list-group-item {
+    background: var(--bg-card);
+    color: var(--text-main);
+    border-color: var(--border-color);
+}
+
+/* Modais */
+.modal-content {
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-main);
+}
+.modal-header {
+    border-bottom: 1px solid var(--border-color);
+    padding: 16px 20px;
+}
+.modal-header.bg-primary,
+.modal-header.bg-success,
+.modal-header.bg-warning,
+.modal-header.bg-danger,
+.modal-header.bg-info,
+.modal-header.bg-secondary,
+.modal-header[class*="bg-"] {
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.modal-header.bg-primary { background: var(--cor-azul) !important; }
+.modal-header.bg-success { background: var(--cor-verde) !important; }
+.modal-header.bg-warning { background: var(--cor-amarelo-borda) !important; }
+.modal-header.bg-danger  { background: var(--cor-vermelho) !important; }
+.modal-title {
+    font-weight: 600;
+    text-transform: lowercase;
+}
+.modal-footer {
+    border-top: 1px solid var(--border-color);
+    padding: 12px 20px;
+}
+
+/* Status badges legados (status-pendente, status-entregue etc) */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: lowercase;
+    background: var(--bg-chip);
+    color: var(--text-main);
+}
+.status-pendente   { background: #fef3c7; color: #78350f; }
+.status-confirmado { background: #dbeafe; color: #1e40af; }
+.status-separado   { background: #cffafe; color: #155e75; }
+.status-em-transporte { background: #ede9fe; color: #5b21b6; }
+.status-entregue   { background: var(--cor-verde-soft); color: #14532d; }
+.status-cancelado  { background: #f1f5f9; color: #64748b; }
+.status-divergencia{ background: var(--cor-vermelho-soft); color: #7f1d1d; }
+[data-theme="dark"] .status-pendente   { background: #422006; color: #fcd34d; }
+[data-theme="dark"] .status-confirmado { background: #172554; color: #93c5fd; }
+[data-theme="dark"] .status-separado   { background: #083344; color: #67e8f9; }
+[data-theme="dark"] .status-em-transporte { background: #2e1065; color: #c4b5fd; }
+[data-theme="dark"] .status-entregue   { background: #052e16; color: #86efac; }
+[data-theme="dark"] .status-cancelado  { background: #1f2937; color: #94a3b8; }
+[data-theme="dark"] .status-divergencia{ background: #450a0a; color: #fca5a5; }
+
+/* Title nas tabs/abas e h6 modal */
+h6 { font-weight: 600; text-transform: lowercase; }
+
+/* Cards com header colorido (ex: rh dashboard) — bordas arredondadas */
+.card-header {
+    background: var(--bg-card-hover);
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 16px;
+    font-weight: 600;
+}
+.card-header.bg-primary,
+.card-header.bg-success,
+.card-header.bg-warning,
+.card-header.bg-danger,
+.card-header.bg-info { color: #fff !important; }
+.card-header.bg-primary { background: var(--cor-azul) !important; }
+.card-header.bg-success { background: var(--cor-verde) !important; }
+.card-header.bg-warning { background: var(--cor-amarelo-borda) !important; }
+.card-header.bg-danger  { background: var(--cor-vermelho) !important; }
+
+/* Print styles — mantém compatibilidade */
+@media print {
+    .btn { box-shadow: none !important; }
+}
