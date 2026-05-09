@@ -1706,6 +1706,8 @@
     var opLotes = [];                // lotes do dia (resposta de /api/lotes)
     var opLoteFiltro = null;         // id do lote selecionado, null = todos
     var opUltimoRotas = null;        // ultimo /api/rotas (pra re-render do mapa em filtro)
+    var opRetryTentativa = 0;        // contador de retries quando VNDA cai
+    var opRetryTimer = null;         // setTimeout pendente do retry
 
     function opData() { return document.getElementById('op-data').value; }
     var opBuscaTexto = '';
@@ -1717,6 +1719,9 @@
         var msg = document.getElementById('op-msg');
         var container = document.getElementById('op-container');
         var resumo = document.getElementById('op-resumo');
+
+        // Cancela retry pendente (usuario pode ter trocado data ou clicado de novo)
+        if (opRetryTimer) { clearTimeout(opRetryTimer); opRetryTimer = null; }
 
         loading.classList.remove('d-none');
         msg.innerHTML = '';
@@ -1735,12 +1740,26 @@
             var d = rs[0];
             var dRotas = rs[1];
             var dLotes = rs[2];
+            // VNDA fora do ar → retry automatico com backoff (3,6,12,24,30,30,30...).
+            // Mantem o ultimo estado bom em tela (nao apaga lista) pra usuario nao
+            // ter sensacao de 'pedidos sumiram'.
+            if (d.erro === 'vnda_indisponivel') {
+                opRetryTentativa += 1;
+                var delay = Math.min(30, 3 * Math.pow(2, opRetryTentativa - 1));
+                msg.innerHTML = '<div class="alert alert-warning py-2 small">' +
+                    '<i class="bi bi-arrow-repeat"></i> Erro temporário ao buscar pedidos no VNDA. ' +
+                    'Tentando de novo em ' + delay + 's (tentativa ' + opRetryTentativa + ')…' +
+                    '</div>';
+                opRetryTimer = setTimeout(opCarregar, delay * 1000);
+                return;
+            }
             if (d.erro) {
                 msg.innerHTML = '<div class="alert alert-warning py-2 small">' + escapeHtml(d.erro) + '</div>';
                 container.innerHTML = '';
                 resumo.textContent = '';
                 return;
             }
+            opRetryTentativa = 0;
             opUltimoResultado = d;
             opLotes = (dLotes && dLotes.lotes) || [];
             opRenderSeletorLotes();
@@ -1752,8 +1771,15 @@
             opUltimoRotas = dRotas;
             if (opMapaVisivel && dRotas) opRenderMapa(dRotas);
         }).catch(function(e) {
+            // Falha de rede (servidor caiu, sem internet) — retenta com backoff
             loading.classList.add('d-none');
-            msg.innerHTML = '<div class="alert alert-danger py-2 small">Falha ao carregar: ' + escapeHtml(String(e)) + '</div>';
+            opRetryTentativa += 1;
+            var delay = Math.min(30, 3 * Math.pow(2, opRetryTentativa - 1));
+            msg.innerHTML = '<div class="alert alert-warning py-2 small">' +
+                '<i class="bi bi-arrow-repeat"></i> Sem conexão com o servidor. ' +
+                'Tentando de novo em ' + delay + 's (tentativa ' + opRetryTentativa + ')…' +
+                '</div>';
+            opRetryTimer = setTimeout(opCarregar, delay * 1000);
         });
     }
 

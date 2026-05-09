@@ -337,8 +337,15 @@ def buscar_cliente(client_id):
     return None
 
 
+class VndaUnavailableError(Exception):
+    """VNDA temporariamente fora do ar (timeout, 5xx, rede).
+    Diferente de '0 pedidos legitimos' — caller deve mostrar mensagem
+    de erro e/ou retentar, em vez de assumir lista vazia."""
+
+
 def _buscar_pedidos_janela(start_date, end_date):
-    """Busca todos os pedidos numa janela de datas (com paginacao)."""
+    """Busca todos os pedidos numa janela de datas (com paginacao).
+    Levanta VndaUnavailableError se a 1a pagina falhar (rede/timeout)."""
     todos = []
     page = 1
     per_page = 100
@@ -351,6 +358,10 @@ def _buscar_pedidos_janela(start_date, end_date):
         }
         resp = _get('/orders', params=params)
         if not resp:
+            if page == 1:
+                # Falha na 1a pagina = VNDA fora do ar. Propaga em vez de
+                # retornar lista vazia silenciosamente.
+                raise VndaUnavailableError('Falha ao consultar Vnda /orders')
             break
         try:
             data = resp.json()
@@ -403,7 +414,11 @@ def buscar_pedidos_do_dia(target_date, overrides=None):
     # (encomendas de bolos, datas comemorativas). 60 dias cobre o caso geral.
     start = target_date - timedelta(days=60)
     end = target_date + timedelta(days=3)
-    todos = _buscar_pedidos_janela(start, end)
+    try:
+        todos = _buscar_pedidos_janela(start, end)
+    except VndaUnavailableError as exc:
+        # NAO faz cache de erro — proxima chamada tenta de novo
+        return {'erro': 'vnda_indisponivel', 'erro_detalhe': str(exc), 'pedidos': []}
 
     logger.info('Vnda: %d pedidos na janela, filtrando para %s', len(todos), target_date)
 
