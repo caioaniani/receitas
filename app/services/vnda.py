@@ -18,6 +18,11 @@ _shipping_cache = {}
 # Reduz dependencia da API VNDA, que as vezes retorna lento ou vazio temporariamente.
 _pedidos_cache = {}
 _PEDIDOS_CACHE_TTL = 300  # 5 minutos — reduz hit no VNDA quando varios usuarios mexem no mesmo dia
+# Cache CURTO de erro: evita martelar VNDA durante rate limit.
+# Quando _buscar_pedidos_janela falha com 429/timeout, cacheamos a falha
+# por N segundos. Proximas chamadas (incluindo retries do frontend)
+# retornam o mesmo erro instantaneo, sem bater no VNDA.
+_PEDIDOS_ERROR_CACHE_TTL = 30  # segundos
 
 
 def _headers():
@@ -435,12 +440,19 @@ def buscar_pedidos_do_dia(target_date, overrides=None):
 
     overrides = overrides or {}
 
-    # Cache curto de 60s. Mesma data + mesmos overrides → reaproveita.
+    # Cache curto. Mesma data + mesmos overrides → reaproveita.
+    # Cacheia tanto sucesso (5 min) quanto falha (30 s) — falha cacheada
+    # quebra ciclo onde frontend retenta e bate VNDA repetido durante
+    # rate limit residual.
     cache_key = (target_date.isoformat(),
                  tuple(sorted((k, v.isoformat() if hasattr(v, 'isoformat') else v) for k, v in overrides.items())))
     cached = _pedidos_cache.get(cache_key)
-    if cached and (time.time() - cached[0]) < _PEDIDOS_CACHE_TTL:
-        return cached[1]
+    if cached:
+        idade = time.time() - cached[0]
+        is_erro = isinstance(cached[1], dict) and cached[1].get('erro')
+        ttl = _PEDIDOS_ERROR_CACHE_TTL if is_erro else _PEDIDOS_CACHE_TTL
+        if idade < ttl:
+            return cached[1]
 
     # Janela de criacao: pedidos VNDA podem ser feitos com bastante antecedencia
     # (encomendas de bolos, datas comemorativas). 60 dias cobre o caso geral.
@@ -449,8 +461,9 @@ def buscar_pedidos_do_dia(target_date, overrides=None):
     try:
         todos = _buscar_pedidos_janela(start, end)
     except VndaUnavailableError as exc:
-        # NAO faz cache de erro — proxima chamada tenta de novo
-        return {'erro': 'vnda_indisponivel', 'erro_detalhe': str(exc), 'pedidos': []}
+        erro_resp = {'erro': 'vnda_indisponivel', 'erro_detalhe': str(exc), 'pedidos': []}
+        _pedidos_cache[cache_key] = (time.time(), erro_resp)
+        return erro_resp
 
     logger.info('Vnda: %d pedidos na janela, filtrando para %s', len(todos), target_date)
 
