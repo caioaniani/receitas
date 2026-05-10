@@ -42,36 +42,20 @@ def _base_url():
     return 'https://api.vnda.com.br/api/v2'
 
 
-def _get(endpoint, params=None, max_retries=1, timeout=10):
-    """Faz GET no VNDA. Retenta em 429 (rate limit) e 5xx com backoff
-    exponencial. Pra outros erros, retorna None.
-
-    max_retries default reduzido pra 1 — chamadas em massa (buscar
-    cliente, shipping de N pedidos) não devem somar minutos quando
-    VNDA está sob rate limit. Frontend ja faz seu proprio retry.
-    """
-    import time
+def _get(endpoint, params=None):
+    """Faz GET no VNDA. Sem retry — chamadas em massa (buscar cliente +
+    shipping pra dezenas de pedidos) viram problema rapido se cada uma
+    retentar. Falhas individuais sao toleradas pelos callers (pedido
+    fica incompleto mas o resto continua). Frontend tem seu proprio
+    retry com cache de 30s pro caso de falha total."""
     url = f'{_base_url()}{endpoint}'
-    for tentativa in range(max_retries + 1):
-        try:
-            resp = requests.get(url, headers=_headers(), params=params, timeout=timeout)
-            if resp.status_code == 429 or 500 <= resp.status_code < 600:
-                if tentativa < max_retries:
-                    # Respeita Retry-After se presente; senao 1s fixo
-                    retry_after = resp.headers.get('Retry-After')
-                    delay = float(retry_after) if retry_after else 1.0
-                    delay = min(delay, 3.0)  # nunca mais que 3s
-                    time.sleep(delay)
-                    continue
-            resp.raise_for_status()
-            return resp
-        except requests.RequestException as e:
-            if tentativa < max_retries and isinstance(e, (requests.Timeout, requests.ConnectionError)):
-                time.sleep(1)
-                continue
-            logger.error('Erro API Vnda %s: %s', endpoint, e)
-            return None
-    return None
+    try:
+        resp = requests.get(url, headers=_headers(), params=params, timeout=10)
+        resp.raise_for_status()
+        return resp
+    except requests.RequestException as e:
+        logger.error('Erro API Vnda %s: %s', endpoint, e)
+        return None
 
 
 def _is_entrega_expressa(order):
