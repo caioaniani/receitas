@@ -1726,13 +1726,29 @@
         loading.classList.remove('d-none');
         msg.innerHTML = '';
 
-        var pAtrib = fetch('/entregas/api/atribuidos?data=' + encodeURIComponent(data),
-            {credentials: 'same-origin'}).then(function(r) { return r.json(); });
-        var pLotes = fetch('/entregas/api/lotes?data=' + encodeURIComponent(data),
-            {credentials: 'same-origin'}).then(function(r) { return r.json(); }).catch(function() { return {lotes: []}; });
+        // fetch com timeout: se backend pendura (VNDA lento, etc), nao
+        // fica eternamente em 'Carregando...'. Cancela apos 25s e retenta.
+        function fetchTimeout(url) {
+            var ctrl = new AbortController();
+            var t = setTimeout(function() { ctrl.abort(); }, 25000);
+            return fetch(url, {credentials: 'same-origin', signal: ctrl.signal})
+                .then(function(r) { clearTimeout(t); return r.json(); })
+                .catch(function(e) {
+                    clearTimeout(t);
+                    if (e.name === 'AbortError') {
+                        var err = new Error('timeout');
+                        err.timeout = true;
+                        throw err;
+                    }
+                    throw e;
+                });
+        }
+
+        var pAtrib = fetchTimeout('/entregas/api/atribuidos?data=' + encodeURIComponent(data));
+        var pLotes = fetchTimeout('/entregas/api/lotes?data=' + encodeURIComponent(data))
+            .catch(function() { return {lotes: []}; });
         var pRotas = opMapaVisivel
-            ? fetch('/entregas/api/rotas?data=' + encodeURIComponent(data),
-                {credentials: 'same-origin'}).then(function(r) { return r.json(); })
+            ? fetchTimeout('/entregas/api/rotas?data=' + encodeURIComponent(data))
             : Promise.resolve(null);
 
         Promise.all([pAtrib, pRotas, pLotes]).then(function(rs) {
@@ -1771,13 +1787,15 @@
             opUltimoRotas = dRotas;
             if (opMapaVisivel && dRotas) opRenderMapa(dRotas);
         }).catch(function(e) {
-            // Falha de rede (servidor caiu, sem internet) — retenta com backoff
+            // Falha de rede ou timeout — retenta com backoff
             loading.classList.add('d-none');
             opRetryTentativa += 1;
             var delay = Math.min(30, 3 * Math.pow(2, opRetryTentativa - 1));
+            var motivo = e && e.timeout ? 'O servidor não respondeu em 25s (talvez VNDA lento).' : 'Sem conexão com o servidor.';
             msg.innerHTML = '<div class="alert alert-warning py-2 small">' +
-                '<i class="bi bi-arrow-repeat"></i> Sem conexão com o servidor. ' +
+                '<i class="bi bi-arrow-repeat"></i> ' + motivo + ' ' +
                 'Tentando de novo em ' + delay + 's (tentativa ' + opRetryTentativa + ')…' +
+                ' <button class="btn btn-sm btn-link p-0 ms-2" onclick="if(window.opRecarregar)window.opRecarregar()">tentar agora</button>' +
                 '</div>';
             opRetryTimer = setTimeout(opCarregar, delay * 1000);
         });

@@ -17,7 +17,7 @@ _shipping_cache = {}
 # Cache curto de buscar_pedidos_do_dia: chave = (data_iso, overrides_hash) → (timestamp, resultado)
 # Reduz dependencia da API VNDA, que as vezes retorna lento ou vazio temporariamente.
 _pedidos_cache = {}
-_PEDIDOS_CACHE_TTL = 60  # segundos
+_PEDIDOS_CACHE_TTL = 300  # 5 minutos — reduz hit no VNDA quando varios usuarios mexem no mesmo dia
 
 
 def _headers():
@@ -37,27 +37,32 @@ def _base_url():
     return 'https://api.vnda.com.br/api/v2'
 
 
-def _get(endpoint, params=None, max_retries=3):
+def _get(endpoint, params=None, max_retries=1, timeout=10):
     """Faz GET no VNDA. Retenta em 429 (rate limit) e 5xx com backoff
-    exponencial. Pra outros erros, retorna None."""
+    exponencial. Pra outros erros, retorna None.
+
+    max_retries default reduzido pra 1 — chamadas em massa (buscar
+    cliente, shipping de N pedidos) não devem somar minutos quando
+    VNDA está sob rate limit. Frontend ja faz seu proprio retry.
+    """
     import time
     url = f'{_base_url()}{endpoint}'
     for tentativa in range(max_retries + 1):
         try:
-            resp = requests.get(url, headers=_headers(), params=params, timeout=15)
+            resp = requests.get(url, headers=_headers(), params=params, timeout=timeout)
             if resp.status_code == 429 or 500 <= resp.status_code < 600:
                 if tentativa < max_retries:
-                    # Respeita Retry-After se presente; senao backoff 1,2,4s
+                    # Respeita Retry-After se presente; senao 1s fixo
                     retry_after = resp.headers.get('Retry-After')
-                    delay = float(retry_after) if retry_after else (2 ** tentativa)
-                    delay = min(delay, 8.0)
+                    delay = float(retry_after) if retry_after else 1.0
+                    delay = min(delay, 3.0)  # nunca mais que 3s
                     time.sleep(delay)
                     continue
             resp.raise_for_status()
             return resp
         except requests.RequestException as e:
             if tentativa < max_retries and isinstance(e, (requests.Timeout, requests.ConnectionError)):
-                time.sleep(2 ** tentativa)
+                time.sleep(1)
                 continue
             logger.error('Erro API Vnda %s: %s', endpoint, e)
             return None
