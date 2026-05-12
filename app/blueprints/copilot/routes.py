@@ -159,7 +159,8 @@ def aprovar(conversa_id):
     conversa.registro_id = resultado.get('registro_id')
     db.session.commit()
 
-    return jsonify(ok=True, **resultado)
+    # resultado ja contem 'ok': True — usa direto pra evitar colisao de kwargs
+    return jsonify(resultado)
 
 
 @copilot_bp.route('/api/lojas', methods=['GET'])
