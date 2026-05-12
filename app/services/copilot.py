@@ -281,6 +281,59 @@ REQUER_APROVACAO = {
 }
 
 
+# ── PERMISSOES POR TOOL ────────────────────────────────────────────────
+# Tres papeis: 'admin' (tudo), 'gerente' (loja), 'funcionario' (limitado).
+# Cada tool lista quais papeis podem usar. Default (nao listado) = so admin.
+PAPEIS_POR_TOOL = {
+    # Operacao geral — admin + gerente
+    'criar_pedido': {'admin', 'gerente'},
+    'mudar_status_pedido': {'admin', 'gerente'},
+    'receber_mp': {'admin', 'gerente'},
+    'ajuste_estoque': {'admin', 'gerente'},
+    'marcar_ponto': {'admin', 'gerente'},
+    # Cadastros — so admin
+    'criar_fornecedor': {'admin'},
+    'consultar_margem': {'admin'},
+    # Consultas operacionais — admin + gerente
+    'consultar_fornecedores': {'admin', 'gerente'},
+    'consultar_funcionario': {'admin', 'gerente'},
+    'consultar_caixa': {'admin', 'gerente'},
+    # Consultas + planejamento — todos
+    'consultar_pedido': {'admin', 'gerente', 'funcionario'},
+    'consultar_estoque': {'admin', 'gerente', 'funcionario'},
+    'consultar_foco': {'admin', 'gerente', 'funcionario'},
+    'consultar_tarefas': {'admin', 'gerente', 'funcionario'},
+    'criar_tarefa': {'admin', 'gerente', 'funcionario'},
+    'marcar_tarefa_feita': {'admin', 'gerente', 'funcionario'},
+}
+
+
+def papel_efetivo(user):
+    """Mapeia user → string de papel canonico pra checagem."""
+    if not user or not getattr(user, 'is_authenticated', False):
+        return None
+    if user.is_admin():
+        return 'admin'
+    papel = (getattr(user, 'papel', None) or '').lower()
+    if papel == 'gerente':
+        return 'gerente'
+    return 'funcionario'
+
+
+def pode_usar(tool_name, user):
+    papel = papel_efetivo(user)
+    if not papel:
+        return False
+    permitidos = PAPEIS_POR_TOOL.get(tool_name, {'admin'})
+    return papel in permitidos
+
+
+def tools_permitidas(user):
+    """Lista tools que o user pode usar — vai pro Claude no system prompt
+    pra ele nao tentar tools que vao ser rejeitadas."""
+    return [t for t in TOOLS if pode_usar(t['name'], user)]
+
+
 def _catalogo_texto():
     """Lista produtos + receitas + MPs + fornecedores + funcionarios
     formatados pra contexto do LLM. Crescera com o sistema; cache de
@@ -411,12 +464,17 @@ def interpretar(prompt_text, user, historico=None):
         while messages and messages[0]['role'] != 'user':
             messages = messages[1:]
 
+    # Filtra tools pelo papel do user — Claude so ve o que o user pode usar
+    tools_filtradas = tools_permitidas(user)
+    if not tools_filtradas:
+        return {'tipo': 'erro', 'explicacao': 'Sem permissao pra usar o copilot.', 'raw': None}
+
     try:
         response = client.messages.create(
             model='claude-haiku-4-5',
             max_tokens=2000,
             system=[{'type': 'text', 'text': system, 'cache_control': {'type': 'ephemeral'}}],
-            tools=TOOLS,
+            tools=tools_filtradas,
             messages=messages,
         )
     except Exception as exc:  # noqa: BLE001
@@ -547,12 +605,17 @@ def _executar_read(tool_name, params, user):
 def _read_consultar_pedido(params, user):
     from app.models import PedidoLoja
     q = PedidoLoja.query
+    # Nao-admin: so consulta pedidos da propria loja
+    if not user.is_admin():
+        if not user.loja_id:
+            return {'texto': 'Seu usuario nao tem loja vinculada.'}
+        q = q.filter_by(loja_id=user.loja_id)
     if params.get('pedido_id'):
-        p = q.get(params['pedido_id'])
+        p = q.filter_by(id=params['pedido_id']).first()
         if not p:
-            return {'texto': f'Pedido #{params["pedido_id"]} nao encontrado.'}
+            return {'texto': f'Pedido #{params["pedido_id"]} nao encontrado (ou nao e da sua loja).'}
         return {'texto': _formatar_pedido(p)}
-    if params.get('loja_id'):
+    if params.get('loja_id') and user.is_admin():
         q = q.filter_by(loja_id=params['loja_id'])
     if params.get('status'):
         q = q.filter_by(status=params['status'])
@@ -644,6 +707,13 @@ def executar(tipo_acao, params, user):
 def executar_criar_pedido(params, user):
     from app.models import PedidoLoja, PedidoItem
     loja_id = params.get('loja_id')
+    # Gerente/funcionario: forca loja_id do user, nao aceita override
+    if not user.is_admin():
+        if not user.loja_id:
+            return {'ok': False, 'erro': 'Seu usuario nao tem loja vinculada'}
+        if loja_id and loja_id != user.loja_id:
+            return {'ok': False, 'erro': 'Voce so pode criar pedido pra sua loja'}
+        loja_id = user.loja_id
     if not loja_id:
         return {'ok': False, 'erro': 'Loja nao especificada'}
     loja = Loja.query.get(loja_id)
@@ -857,6 +927,9 @@ def executar_mudar_status_pedido(params, user):
     p = PedidoLoja.query.get(pid)
     if not p:
         return {'ok': False, 'erro': f'Pedido #{pid} nao encontrado'}
+    # Restricao de loja pra nao-admin
+    if not user.is_admin() and p.loja_id != user.loja_id:
+        return {'ok': False, 'erro': f'Pedido #{pid} nao e da sua loja'}
     # Transicoes validas
     transicoes = {
         'confirmar': ('pendente', 'confirmado'),

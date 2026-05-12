@@ -35,6 +35,8 @@ def _copilot_error_handler(exc):
 
 
 def _admin_only():
+    """Mantido pra alguns endpoints. Pra interpretar/aprovar, usamos
+    _logado_only e filtramos tools pelo papel."""
     if not current_user.is_authenticated:
         return jsonify(ok=False, erro='login obrigatorio'), 401
     if not current_user.is_admin():
@@ -42,10 +44,18 @@ def _admin_only():
     return None
 
 
+def _logado_only():
+    """Qualquer user autenticado pode usar /api/interpretar — tools
+    sao filtradas pelo papel dele em copilot.tools_permitidas()."""
+    if not current_user.is_authenticated:
+        return jsonify(ok=False, erro='login obrigatorio'), 401
+    return None
+
+
 @copilot_bp.route('/api/interpretar', methods=['POST'])
 @login_required
 def interpretar():
-    guard = _admin_only()
+    guard = _logado_only()
     if guard:
         return guard
     data = request.get_json(silent=True) or {}
@@ -96,7 +106,7 @@ def interpretar():
 @copilot_bp.route('/api/<int:conversa_id>/aprovar', methods=['POST'])
 @login_required
 def aprovar(conversa_id):
-    guard = _admin_only()
+    guard = _logado_only()
     if guard:
         return guard
     conversa = CopilotConversa.query.get_or_404(conversa_id)
@@ -166,19 +176,25 @@ def aprovar(conversa_id):
 @copilot_bp.route('/api/lojas', methods=['GET'])
 @login_required
 def listar_lojas():
-    """Lista lojas pra dropdown do preview de criar_pedido."""
-    guard = _admin_only()
+    """Lista lojas pra dropdown do preview de criar_pedido.
+    Admin ve todas; nao-admin so a propria loja."""
+    guard = _logado_only()
     if guard:
         return guard
     from app.models import Loja
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    if current_user.is_admin():
+        lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    elif current_user.loja_id:
+        lojas = Loja.query.filter_by(id=current_user.loja_id, ativa=True).all()
+    else:
+        lojas = []
     return jsonify(lojas=[{'id': l.id, 'nome': l.nome} for l in lojas])
 
 
 @copilot_bp.route('/api/<int:conversa_id>/cancelar', methods=['POST'])
 @login_required
 def cancelar(conversa_id):
-    guard = _admin_only()
+    guard = _logado_only()
     if guard:
         return guard
     conversa = CopilotConversa.query.get_or_404(conversa_id)

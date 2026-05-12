@@ -327,8 +327,9 @@
         {% block content %}{% endblock %}
     </main>
 
-    {% if current_user.is_authenticated and current_user.is_admin() %}
-    <!-- Copilot — botao flutuante + painel lateral -->
+    {% if current_user.is_authenticated %}
+    <!-- Copilot — botao flutuante + painel lateral. Tools sao filtradas
+         pelo papel no backend (admin/gerente/funcionario). -->
     <button id="copilot-fab" type="button" title="Copilot (Cmd/Ctrl+K)" aria-label="Copilot">
         <i class="bi bi-stars"></i>
     </button>
