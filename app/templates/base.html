@@ -263,8 +263,8 @@
         {% if current_user.is_authenticated and current_user.is_admin() %}
         <form method="POST" action="{{ url_for('receitas.nova') }}" class="sidebar-action">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-sm btn-outline-light w-100">
-                <i class="bi bi-plus-lg"></i> Adicionar Produto
+            <button type="submit" class="btn-pill btn-pill-outline w-100" style="justify-content:center;">
+                <i class="bi bi-plus-lg"></i> adicionar produto
             </button>
         </form>
 
