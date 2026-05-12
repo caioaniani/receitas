@@ -222,22 +222,62 @@ TOOL_CONSULTAR_CAIXA = {
     },
 }
 
+# ───── Tools de Planejamento (PARA + 12 Week Year) ─────────────────────
+
+TOOL_CONSULTAR_FOCO = {
+    "name": "consultar_foco",
+    "description": "Lista projetos marcados como FOCO das 12 semanas + tarefas pendentes deles. Use quando alguem pergunta 'no que estou focado?', 'qual o foco?', 'meu planejamento'.",
+    "input_schema": {
+        "type": "object",
+        "properties": {},
+    },
+}
+
+TOOL_CONSULTAR_TAREFAS = {
+    "name": "consultar_tarefas",
+    "description": "Lista tarefas com filtros. Use pra 'quais tarefas pendentes?', 'tarefas atrasadas', 'tarefas do projeto X'.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "projeto_nome": {"type": ["string", "null"]},
+            "apenas_atrasadas": {"type": "boolean", "default": False},
+            "apenas_pendentes": {"type": "boolean", "default": True},
+            "apenas_foco": {"type": "boolean", "default": False, "description": "So tarefas de projetos foco_12s"},
+        },
+    },
+}
+
+TOOL_MARCAR_TAREFA_FEITA = {
+    "name": "marcar_tarefa_feita",
+    "description": "Marca tarefa como concluida (status='feito'). Preview antes.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "tarefa_id": {"type": "integer"},
+        },
+        "required": ["tarefa_id"],
+    },
+}
+
 TOOLS = [
     # Existentes
     TOOL_CRIAR_PEDIDO, TOOL_CONSULTAR_PEDIDO, TOOL_CONSULTAR_ESTOQUE,
     TOOL_RECEBER_MP, TOOL_AJUSTE_ESTOQUE,
-    # Novas — acoes
+    # Novas — acoes operacionais
     TOOL_MUDAR_STATUS_PEDIDO, TOOL_CRIAR_FORNECEDOR, TOOL_MARCAR_PONTO,
     TOOL_CRIAR_TAREFA,
     # Novas — consultas
     TOOL_CONSULTAR_FORNECEDORES, TOOL_CONSULTAR_MARGEM,
     TOOL_CONSULTAR_FUNCIONARIO, TOOL_CONSULTAR_CAIXA,
+    # Planejamento
+    TOOL_CONSULTAR_FOCO, TOOL_CONSULTAR_TAREFAS, TOOL_MARCAR_TAREFA_FEITA,
 ]
 
 # Quais tools requerem preview/aprovacao (writes)
 REQUER_APROVACAO = {
     'criar_pedido', 'receber_mp', 'ajuste_estoque',
     'mudar_status_pedido', 'criar_fornecedor', 'marcar_ponto', 'criar_tarefa',
+    'marcar_tarefa_feita',
 }
 
 
@@ -314,6 +354,12 @@ TOOLS DISPONIVEIS — CONSULTAS (read, sem aprovacao):
 - consultar_margem: custo + preco + margem de receita/produto
 - consultar_funcionario: info de funcionario
 - consultar_caixa: numeros do dia (entregas, pedidos locais, compras MP)
+- consultar_foco: lista projetos foco_12s + tarefas pendentes deles
+- consultar_tarefas: lista tarefas com filtros (atrasadas, pendentes, projeto, foco)
+
+TOOLS DISPONIVEIS — PLANEJAMENTO (PARA + 12 Week Year):
+- marcar_tarefa_feita: marca uma tarefa como concluida (preview)
+- criar_tarefa: cria nova tarefa em projeto ou inbox
 
 REGRAS:
 - Use o nome EXATO dos catalogos. Se ambiguo ('100 croissants' com varios tipos),
@@ -931,3 +977,97 @@ def executar(tipo_acao, params, user):  # noqa: F811
     if tipo_acao == 'criar_tarefa':
         return executar_criar_tarefa(params, user)
     return {'ok': False, 'erro': f'tipo de acao desconhecido: {tipo_acao}'}
+
+
+# ───── Tools de Planejamento — READ ────────────────────────────────────
+
+def _read_consultar_foco(params, user):
+    """Lista projetos foco_12s + tarefas pendentes deles."""
+    from app.models import Projeto, TarefaProjeto
+    projetos = (Projeto.query.filter_by(foco_12s=True)
+                .order_by(Projeto.prioridade.desc(), Projeto.nome).all())
+    if not projetos:
+        return {'texto': 'Nenhum projeto marcado como foco das 12 semanas. Marque em /projetos.'}
+    linhas = [f'**{len(projetos)} projeto(s) em FOCO:**']
+    for p in projetos:
+        tarefas = [t for t in p.tarefas if t.status not in ('feito', 'cancelado')]
+        atrasadas = sum(1 for t in tarefas if t.atrasada)
+        info = f'{len(tarefas)} tarefa(s) pendente(s)'
+        if atrasadas:
+            info += f' · ⚠ {atrasadas} atrasada(s)'
+        linhas.append(f'\n**[{p.id}] {p.nome}** — {info}')
+        for t in tarefas[:5]:
+            prazo = f' (prazo {t.prazo.strftime("%d/%m")})' if t.prazo else ''
+            atrasada = ' ⚠' if t.atrasada else ''
+            linhas.append(f'  - #{t.id} {t.nome}{prazo}{atrasada}')
+        if len(tarefas) > 5:
+            linhas.append(f'  ... +{len(tarefas) - 5} tarefas')
+    return {'texto': '\n'.join(linhas)}
+
+
+def _read_consultar_tarefas(params, user):
+    from app.models import Projeto, TarefaProjeto
+    from sqlalchemy import and_
+    q = TarefaProjeto.query.join(Projeto)
+    if params.get('apenas_pendentes', True):
+        q = q.filter(TarefaProjeto.status.notin_(['feito', 'cancelado']))
+    if params.get('apenas_atrasadas'):
+        q = q.filter(TarefaProjeto.prazo.isnot(None), TarefaProjeto.prazo < date.today())
+    if params.get('apenas_foco'):
+        q = q.filter(Projeto.foco_12s == True)
+    proj_nome = (params.get('projeto_nome') or '').strip()
+    if proj_nome:
+        q = q.filter(Projeto.nome.ilike(f'%{proj_nome}%'))
+    tarefas = q.order_by(TarefaProjeto.prazo.asc().nulls_last(), TarefaProjeto.id).limit(40).all()
+    if not tarefas:
+        return {'texto': 'Nenhuma tarefa encontrada com esses filtros.'}
+    linhas = [f'**{len(tarefas)} tarefa(s):**']
+    for t in tarefas:
+        prazo = f' · prazo {t.prazo.strftime("%d/%m/%Y")}' if t.prazo else ''
+        atrasada = ' ⚠ ATRASADA' if t.atrasada else ''
+        foco = ' 🎯' if t.projeto.foco_12s else ''
+        linhas.append(f'- #{t.id} [{t.projeto.nome}{foco}] {t.nome}{prazo}{atrasada}')
+    return {'texto': '\n'.join(linhas)}
+
+
+# ───── Tools de Planejamento — WRITE ───────────────────────────────────
+
+def executar_marcar_tarefa_feita(params, user):
+    from app.models import TarefaProjeto
+    tid = params.get('tarefa_id')
+    t = TarefaProjeto.query.get(tid)
+    if not t:
+        return {'ok': False, 'erro': f'Tarefa #{tid} nao encontrada'}
+    if t.status == 'feito':
+        return {'ok': False, 'erro': f'Tarefa #{tid} ja esta marcada como feita'}
+    t.status = 'feito'
+    t.feito_em = datetime.utcnow()
+    db.session.commit()
+    return {'ok': True, 'tarefa_id': tid, 'nome': t.nome,
+            'registro_tipo': 'tarefa_projeto', 'registro_id': tid}
+
+
+# Re-defino os roteadores pra incluir as novas tools.
+# Como _executar_read e executar foram redefinidos com `# noqa: F811`,
+# preciso adicionar mais um nivel.
+
+_BASE_READ = _executar_read
+_BASE_EXEC = executar
+
+
+def _executar_read(tool_name, params, user):  # noqa: F811
+    try:
+        if tool_name == 'consultar_foco':
+            return _read_consultar_foco(params, user)
+        if tool_name == 'consultar_tarefas':
+            return _read_consultar_tarefas(params, user)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('Copilot read tool falhou')
+        return {'erro': str(exc)}
+    return _BASE_READ(tool_name, params, user)
+
+
+def executar(tipo_acao, params, user):  # noqa: F811
+    if tipo_acao == 'marcar_tarefa_feita':
+        return executar_marcar_tarefa_feita(params, user)
+    return _BASE_EXEC(tipo_acao, params, user)
