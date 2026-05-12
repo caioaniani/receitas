@@ -303,12 +303,12 @@
             var params = coletarParams(preview);
             btnAprovar.disabled = true;
             btnAprovar.innerHTML = '<i class="bi bi-arrow-repeat"></i> aplicando…';
-            fetch('/copilot/api/' + conversaId + '/aprovar', {
+            fetchJson('/copilot/api/' + conversaId + '/aprovar', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', 'X-CSRFToken': (typeof CSRF_TOKEN !== 'undefined' ? CSRF_TOKEN : '')},
                 credentials: 'same-origin',
                 body: JSON.stringify({params: params}),
-            }).then(function(r) { return r.json(); }).then(function(d) {
+            }).then(function(d) {
                 if (d.ok) {
                     var link = d.url ? '<a href="' + d.url + '" target="_blank" class="btn-pill btn-pill-outline mt-2">abrir →</a>' : '';
                     preview.innerHTML = '<div class="copilot-preview-header" style="color:var(--cor-verde);">✓ feito</div>' + link;
@@ -320,7 +320,7 @@
             }).catch(function(e) {
                 btnAprovar.disabled = false;
                 btnAprovar.innerHTML = 'aplicar';
-                alert('Falha de rede: ' + e);
+                alert('Falha: ' + (e.message || e));
             });
         }
     });
