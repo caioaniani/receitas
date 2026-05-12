@@ -65,6 +65,8 @@ def interpretar():
         tipo=resultado.get('tipo'),
         params=resultado.get('params'),
         explicacao=resultado.get('explicacao'),
+        resultado=resultado.get('resultado'),
+        requer_aprovacao=resultado.get('requer_aprovacao', False),
     )
 
 
