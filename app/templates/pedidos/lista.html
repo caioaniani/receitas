@@ -51,6 +51,13 @@
             style="padding:4px 12px; font-size:12px; border-color:var(--cor-vermelho); color:var(--cor-vermelho);">
         <i class="bi bi-x-circle"></i> cancelar
     </button>
+    {% if current_user.is_admin() %}
+    <button type="button" class="btn-pill btn-pill-outline btn-sm pedidos-bulk-acao" data-acao="excluir"
+            style="padding:4px 12px; font-size:12px; border-color:var(--cor-vermelho); color:var(--cor-vermelho); background:var(--cor-vermelho-soft);"
+            title="Apaga permanentemente. Só status cancelado ou pendente.">
+        <i class="bi bi-trash"></i> excluir
+    </button>
+    {% endif %}
     <button type="button" class="btn-link btn-sm ms-auto" id="pedidos-bulk-clear" style="text-decoration:none;">limpar seleção</button>
 </div>
 
@@ -235,6 +242,7 @@
         separar: ['pendente', 'confirmado'],
         enviar: ['separado'],
         cancelar: ['pendente', 'confirmado', 'separado', 'em_transporte'],
+        excluir: ['cancelado', 'pendente'],  // destrutivo — só status seguros
     };
 
     if (bulkBar) {
@@ -250,7 +258,12 @@
                 alert('Nenhum dos pedidos selecionados pode receber a ação "' + acao + '".');
                 return;
             }
-            var msg = 'Aplicar "' + acao + '" em ' + aplicaveis.length + ' pedido(s)?';
+            var msg;
+            if (acao === 'excluir') {
+                msg = '⚠ EXCLUIR PERMANENTEMENTE ' + aplicaveis.length + ' pedido(s)? Esta ação NÃO pode ser desfeita.';
+            } else {
+                msg = 'Aplicar "' + acao + '" em ' + aplicaveis.length + ' pedido(s)?';
+            }
             if (aplicaveis.length < sel.length) {
                 msg += '\n(' + (sel.length - aplicaveis.length) + ' pedido(s) ignorados por status incompatível)';
             }
