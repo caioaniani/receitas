@@ -49,7 +49,23 @@
             <tr style="cursor:pointer; {% if f.cadastro_pendente %}background:var(--cor-amarelo);{% endif %}"
                 onclick="window.location='{{ url_for('rh.detalhe_funcionario', id=f.id) }}'">
                 <td class="col-acoes" onclick="event.stopPropagation()">
-                    <button class="btn-circle" type="button" title="Ações"><i class="bi bi-three-dots"></i></button>
+                    <div class="dropdown">
+                        <button class="btn-circle" title="Ações" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-three-dots"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}">
+                                    <i class="bi bi-eye"></i> ver detalhes
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}#feedback">
+                                    <i class="bi bi-chat-left-text"></i> registrar feedback
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
                 </td>
                 <td class="fw-semibold">
                     {{ f.nome }}

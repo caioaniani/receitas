@@ -48,7 +48,71 @@
             <tr style="cursor:pointer" onclick="window.location='{{ url_for('pedidos.detalhe', id=p.id) }}'">
                 <td class="col-check" onclick="event.stopPropagation()"><input type="checkbox" class="form-check-input"></td>
                 <td class="col-acoes" onclick="event.stopPropagation()">
-                    <button class="btn-circle" title="Ações" type="button"><i class="bi bi-three-dots"></i></button>
+                    <div class="dropdown">
+                        <button class="btn-circle" title="Ações" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-three-dots"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('pedidos.detalhe', id=p.id) }}">
+                                    <i class="bi bi-eye"></i> ver detalhes
+                                </a>
+                            </li>
+                            {% if p.status == 'pendente' and current_user.is_admin() %}
+                            <li>
+                                <form method="POST" action="{{ url_for('pedidos.confirmar', id=p.id) }}" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="bi bi-check-lg"></i> confirmar
+                                    </button>
+                                </form>
+                            </li>
+                            {% endif %}
+                            {% if p.status in ('confirmado', 'pendente') and current_user.is_admin() %}
+                            <li>
+                                <form method="POST" action="{{ url_for('pedidos.separar', id=p.id) }}" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="bi bi-box-seam"></i> marcar como separado
+                                    </button>
+                                </form>
+                            </li>
+                            {% endif %}
+                            {% if p.status == 'separado' and current_user.is_admin() %}
+                            <li>
+                                <form method="POST" action="{{ url_for('pedidos.enviar', id=p.id) }}" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="bi bi-truck"></i> marcar como em transporte
+                                    </button>
+                                </form>
+                            </li>
+                            {% endif %}
+                            {% if p.status not in ('cancelado', 'entregue') %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form method="POST" action="{{ url_for('pedidos.cancelar', id=p.id) }}" class="d-inline"
+                                      onsubmit="return confirm('Cancelar pedido #{{ p.id }}?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="dropdown-item text-danger">
+                                        <i class="bi bi-x-circle"></i> cancelar pedido
+                                    </button>
+                                </form>
+                            </li>
+                            {% endif %}
+                            {% if current_user.is_admin() and p.status in ('cancelado', 'pendente') %}
+                            <li>
+                                <form method="POST" action="{{ url_for('pedidos.excluir', id=p.id) }}" class="d-inline"
+                                      onsubmit="return confirm('Excluir pedido #{{ p.id }} permanentemente? Esta ação não pode ser desfeita.');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="dropdown-item text-danger">
+                                        <i class="bi bi-trash"></i> excluir
+                                    </button>
+                                </form>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </div>
                 </td>
                 <td class="text-muted">{{ p.id }}</td>
                 <td>{{ p.loja.nome }}</td>
