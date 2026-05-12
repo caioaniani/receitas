@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Comparar preços — {{ mp.nome }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">comparar preços · {{ mp.nome|lower }}</h1>
+    <div class="page-actions">
+        <a href="{{ url_for('materias_primas.banco') }}" class="btn-pill btn-pill-outline">
+            <i class="bi bi-arrow-left"></i> voltar
+        </a>
+    </div>
+</div>
+
+<div class="card mb-3" style="padding:0; overflow:hidden;">
+    <table class="table-dense">
+        <thead>
+            <tr>
+                <th>fornecedor</th>
+                <th class="text-end">último preço</th>
+                <th class="text-end">média</th>
+                <th class="text-end">mínimo</th>
+                <th class="text-end">máximo</th>
+                <th class="text-end">qtd total</th>
+                <th>última compra</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in por_fornecedor|sort(attribute='ultimo_preco') %}
+            <tr>
+                <td class="fw-semibold">
+                    <a href="{{ url_for('fornecedores.detalhe', id=f.fornecedor.id) }}" class="text-decoration-none">
+                        {{ f.fornecedor.nome }}
+                    </a>
+                </td>
+                <td class="text-end fw-bold">R$ {{ "%.4f"|format(f.ultimo_preco) }}</td>
+                <td class="text-end">R$ {{ "%.4f"|format(f.preco_medio) }}</td>
+                <td class="text-end text-success">R$ {{ "%.4f"|format(f.min_preco) }}</td>
+                <td class="text-end text-danger">R$ {{ "%.4f"|format(f.max_preco) }}</td>
+                <td class="text-end">{{ "%.2f"|format(f.total_qtd) }} {{ mp.unidade or '' }}</td>
+                <td>{{ f.ultima_data.strftime('%d/%m/%Y') if f.ultima_data else '—' }}</td>
+            </tr>
+            {% endfor %}
+            {% if not por_fornecedor %}
+            <tr><td colspan="7" class="text-center text-muted py-4">Sem histórico de compras pra esta MP.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<h2 class="mb-3">últimas {{ historico|length }} compras</h2>
+<div class="card" style="padding:0; overflow:hidden;">
+    <table class="table-dense">
+        <thead>
+            <tr>
+                <th>data</th>
+                <th>fornecedor</th>
+                <th class="text-end">qtd</th>
+                <th class="text-end">preço unit.</th>
+                <th class="text-end">total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for h in historico %}
+            <tr>
+                <td>{{ h.data.strftime('%d/%m/%Y') if h.data else '—' }}</td>
+                <td>{{ h.fornecedor.nome }}</td>
+                <td class="text-end">{{ h.quantidade }}</td>
+                <td class="text-end">R$ {{ "%.4f"|format(h.preco_unitario) }}</td>
+                <td class="text-end">R$ {{ "%.2f"|format((h.preco_unitario or 0) * (h.quantidade or 0)) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -84,6 +84,42 @@ class MateriaPrima(db.Model):
         return f'<MateriaPrima {self.nome}>'
 
 
+class Fornecedor(db.Model):
+    """Fornecedor de materias-primas. Histórico de compras + cadastro
+    pra evitar texto solto em MateriaPrima.fornecedor (campo legacy)."""
+    __tablename__ = 'fornecedor'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(150), nullable=False, unique=True)
+    cnpj = db.Column(db.String(20))
+    telefone = db.Column(db.String(30))
+    email = db.Column(db.String(120))
+    contato = db.Column(db.String(100))  # nome do contato/vendedor
+    observacao = db.Column(db.Text)
+    ativo = db.Column(db.Boolean, default=True, index=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class HistoricoPrecoMP(db.Model):
+    """Registro de cada compra de MP de um fornecedor — preço, quantidade,
+    data. Alimentado automaticamente quando ha entrada de MP via
+    MovimentacaoEstoque com fornecedor_id."""
+    __tablename__ = 'historico_preco_mp'
+
+    id = db.Column(db.Integer, primary_key=True)
+    materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'), nullable=False, index=True)
+    fornecedor_id = db.Column(db.Integer, db.ForeignKey('fornecedor.id'), nullable=False, index=True)
+    preco_unitario = db.Column(db.Float, nullable=False)
+    quantidade = db.Column(db.Float, nullable=False)
+    data = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    referencia = db.Column(db.String(200))  # NF, observacao
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    materia_prima = db.relationship('MateriaPrima')
+    fornecedor = db.relationship('Fornecedor', backref='compras')
+    usuario = db.relationship('Usuario')
+
+
 class Receita(db.Model):
     __tablename__ = 'receita'
 
@@ -468,9 +504,12 @@ class MovimentacaoEstoque(db.Model):
     data = db.Column(db.DateTime, default=datetime.utcnow)
     referencia = db.Column(db.String(200))
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    # Fornecedor (opcional) — usado em entradas pra alimentar historico de preco
+    fornecedor_id = db.Column(db.Integer, db.ForeignKey('fornecedor.id'))
 
     materia_prima = db.relationship('MateriaPrima', backref='movimentacoes')
     usuario = db.relationship('Usuario', backref='movimentacoes_estoque')
+    fornecedor = db.relationship('Fornecedor')
 
     def __repr__(self):
         return f'<Movimentacao {self.tipo} {self.quantidade} MP={self.materia_prima_id}>'

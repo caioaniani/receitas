@@ -97,6 +97,10 @@
            class="sidebar-link {% if '/materias-primas/estoque' in request.path %}active{% endif %}">
             <i class="bi bi-boxes"></i> Estoque MP
         </a>
+        <a href="{{ url_for('fornecedores.lista') }}"
+           class="sidebar-link {% if request.path.startswith('/fornecedores') %}active{% endif %}">
+            <i class="bi bi-truck-front"></i> Fornecedores
+        </a>
 
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Receitas & Produtos</div>

@@ -257,6 +257,8 @@ def create_app(config_class=None):
     app.register_blueprint(bot_bp)
     from app.blueprints.copilot import copilot_bp
     app.register_blueprint(copilot_bp)
+    from app.blueprints.fornecedores import fornecedores_bp
+    app.register_blueprint(fornecedores_bp)
 
     with app.app_context():
         db.create_all()
@@ -621,6 +623,38 @@ def _migrate_postgres(app):
     _try("CREATE INDEX IF NOT EXISTS idx_lote_saida_status ON lote_saida(status)")
     _try("ALTER TABLE atribuicao_entrega ADD COLUMN lote_id INTEGER REFERENCES lote_saida(id)")
     _try("CREATE INDEX IF NOT EXISTS idx_atribuicao_lote ON atribuicao_entrega(lote_id)")
+
+    # ── Fornecedores + historico de preco MP ──
+    _try("""
+    CREATE TABLE IF NOT EXISTS fornecedor (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(150) NOT NULL UNIQUE,
+        cnpj VARCHAR(20),
+        telefone VARCHAR(30),
+        email VARCHAR(120),
+        contato VARCHAR(100),
+        observacao TEXT,
+        ativo BOOLEAN DEFAULT TRUE,
+        criado_em TIMESTAMP DEFAULT NOW()
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_fornecedor_ativo ON fornecedor(ativo)")
+    _try("""
+    CREATE TABLE IF NOT EXISTS historico_preco_mp (
+        id SERIAL PRIMARY KEY,
+        materia_prima_id INTEGER NOT NULL REFERENCES materia_prima(id),
+        fornecedor_id INTEGER NOT NULL REFERENCES fornecedor(id),
+        preco_unitario DOUBLE PRECISION NOT NULL,
+        quantidade DOUBLE PRECISION NOT NULL,
+        data TIMESTAMP DEFAULT NOW(),
+        referencia VARCHAR(200),
+        usuario_id INTEGER REFERENCES usuario(id)
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_hpm_mp ON historico_preco_mp(materia_prima_id)")
+    _try("CREATE INDEX IF NOT EXISTS idx_hpm_fornecedor ON historico_preco_mp(fornecedor_id)")
+    _try("CREATE INDEX IF NOT EXISTS idx_hpm_data ON historico_preco_mp(data)")
+    _try("ALTER TABLE movimentacao_estoque ADD COLUMN fornecedor_id INTEGER REFERENCES fornecedor(id)")
 
     # ── Copilot conversas (audit trail das interacoes com LLM) ──
     _try("""
