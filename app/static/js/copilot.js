@@ -155,6 +155,27 @@
             '</div></div>';
     }
 
+    // Preview generico: lista os params como tabela read-only + botoes
+    // aprovar/cancelar. Usado pra tools simples sem UI customizada.
+    function previewGenerico(conversaId, tipo, params, titulo, labelAprovar) {
+        var rows = '';
+        for (var k in params) {
+            if (!params.hasOwnProperty(k)) continue;
+            if (k.indexOf('_') === 0) continue;  // skip _privados
+            var v = params[k];
+            if (v === null || v === undefined || v === '') continue;
+            if (typeof v === 'object') v = JSON.stringify(v);
+            rows += '<div class="copilot-preview-row"><span class="label">' + escape(k) + '</span>: <strong>' + escape(String(v)) + '</strong></div>';
+        }
+        return '<div class="copilot-preview" data-conversa="' + conversaId + '" data-tipo="' + tipo + '">' +
+            '<div class="copilot-preview-header">' + escape(titulo) + '</div>' +
+            rows +
+            '<div class="copilot-preview-actions">' +
+            '<button type="button" class="btn-pill btn-pill-outline copilot-cancel">cancelar</button>' +
+            '<button type="button" class="btn-pill btn-pill-primary copilot-approve">' + escape(labelAprovar) + '</button>' +
+            '</div></div>';
+    }
+
     function renderResposta(d) {
         var html = texto2html(d.explicacao || '');
         if (d.resultado && d.resultado.texto) {
@@ -164,9 +185,15 @@
             html += '<div class="warn">erro: ' + escape(d.resultado.erro) + '</div>';
         }
         if (d.requer_aprovacao && d.params) {
+            // Previews customizados (com campos editaveis)
             if (d.tipo === 'criar_pedido') html += previewCriarPedido(d.conversa_id, d.params);
             else if (d.tipo === 'receber_mp') html += previewReceberMP(d.conversa_id, d.params);
             else if (d.tipo === 'ajuste_estoque') html += previewAjusteEstoque(d.conversa_id, d.params);
+            // Previews genericos pras tools novas (sem edicao inline ainda)
+            else if (d.tipo === 'mudar_status_pedido') html += previewGenerico(d.conversa_id, d.tipo, d.params, 'mudar status do pedido', 'aplicar');
+            else if (d.tipo === 'criar_fornecedor') html += previewGenerico(d.conversa_id, d.tipo, d.params, 'criar fornecedor', 'cadastrar');
+            else if (d.tipo === 'marcar_ponto') html += previewGenerico(d.conversa_id, d.tipo, d.params, 'marcar ponto', 'registrar');
+            else if (d.tipo === 'criar_tarefa') html += previewGenerico(d.conversa_id, d.tipo, d.params, 'criar tarefa', 'criar');
         }
         return html;
     }
