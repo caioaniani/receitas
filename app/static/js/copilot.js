@@ -166,17 +166,30 @@
         return html;
     }
 
+    function fetchJson(url, opts) {
+        return fetch(url, opts).then(function(r) {
+            return r.text().then(function(body) {
+                try {
+                    return JSON.parse(body);
+                } catch (e) {
+                    // Backend devolveu HTML (erro 500/404 do Flask)
+                    throw new Error('Servidor retornou HTTP ' + r.status + '. Provável erro do backend.');
+                }
+            });
+        });
+    }
+
     function enviar(prompt) {
         sendBtn.disabled = true;
         addMsg('user', escape(prompt));
         var loading = addMsg('bot', '<i class="bi bi-arrow-repeat"></i> pensando…');
 
-        fetch('/copilot/api/interpretar', {
+        fetchJson('/copilot/api/interpretar', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRFToken': window.CSRF_TOKEN || ''},
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': (typeof CSRF_TOKEN !== 'undefined' ? CSRF_TOKEN : '')},
             credentials: 'same-origin',
             body: JSON.stringify({prompt: prompt}),
-        }).then(function(r) { return r.json(); }).then(function(d) {
+        }).then(function(d) {
             loading.remove();
             sendBtn.disabled = false;
             if (!d.ok) {
@@ -187,7 +200,7 @@
         }).catch(function(e) {
             loading.remove();
             sendBtn.disabled = false;
-            addMsg('bot', '<span style="color:var(--cor-vermelho);">falha de rede: ' + escape(String(e)) + '</span>');
+            addMsg('bot', '<span style="color:var(--cor-vermelho);">' + escape(String(e.message || e)) + '</span>');
         });
     }
 
@@ -259,7 +272,7 @@
         if (btnCancelar) {
             fetch('/copilot/api/' + conversaId + '/cancelar', {
                 method: 'POST',
-                headers: {'X-CSRFToken': window.CSRF_TOKEN || ''},
+                headers: {'X-CSRFToken': (typeof CSRF_TOKEN !== 'undefined' ? CSRF_TOKEN : '')},
                 credentials: 'same-origin',
             });
             preview.innerHTML = '<div class="copilot-preview-header" style="color:var(--text-muted);">— cancelado —</div>';
@@ -271,7 +284,7 @@
             btnAprovar.innerHTML = '<i class="bi bi-arrow-repeat"></i> aplicando…';
             fetch('/copilot/api/' + conversaId + '/aprovar', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json', 'X-CSRFToken': window.CSRF_TOKEN || ''},
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': (typeof CSRF_TOKEN !== 'undefined' ? CSRF_TOKEN : '')},
                 credentials: 'same-origin',
                 body: JSON.stringify({params: params}),
             }).then(function(r) { return r.json(); }).then(function(d) {
