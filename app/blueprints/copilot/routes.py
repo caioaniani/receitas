@@ -7,11 +7,17 @@ from flask import jsonify, request
 from flask_login import current_user, login_required
 
 from app.blueprints.copilot import copilot_bp
-from app.extensions import db
+from app.extensions import csrf, db
 from app.models import CopilotConversa
 from app.services import copilot as copilot_svc
 
 logger = logging.getLogger(__name__)
+
+
+# CSRF exempt em todos os endpoints — usuario ja precisa estar logado E
+# ser admin (validado pelo _admin_only()). Frontend envia o token mesmo
+# assim, mas evita issues sutis de validacao do Flask-WTF com fetch+JSON.
+csrf.exempt(copilot_bp)
 
 
 def _admin_only():
