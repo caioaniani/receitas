@@ -172,6 +172,10 @@
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Análise</div>
 
+        <a href="{{ url_for('main.caixa') }}"
+           class="sidebar-link {% if request.path == '/caixa' %}active{% endif %}">
+            <i class="bi bi-cash-coin"></i> Caixa Diário
+        </a>
         <a href="{{ url_for('main.rentabilidade') }}"
            class="sidebar-link {% if request.path == '/rentabilidade' %}active{% endif %}">
             <i class="bi bi-graph-up"></i> Rentabilidade
