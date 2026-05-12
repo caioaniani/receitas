@@ -255,6 +255,8 @@ def create_app(config_class=None):
     app.register_blueprint(pdv_bp, url_prefix='/pdv')
     from app.blueprints.bot import bot_bp
     app.register_blueprint(bot_bp)
+    from app.blueprints.copilot import copilot_bp
+    app.register_blueprint(copilot_bp)
 
     with app.app_context():
         db.create_all()
@@ -619,6 +621,26 @@ def _migrate_postgres(app):
     _try("CREATE INDEX IF NOT EXISTS idx_lote_saida_status ON lote_saida(status)")
     _try("ALTER TABLE atribuicao_entrega ADD COLUMN lote_id INTEGER REFERENCES lote_saida(id)")
     _try("CREATE INDEX IF NOT EXISTS idx_atribuicao_lote ON atribuicao_entrega(lote_id)")
+
+    # ── Copilot conversas (audit trail das interacoes com LLM) ──
+    _try("""
+    CREATE TABLE IF NOT EXISTS copilot_conversa (
+        id SERIAL PRIMARY KEY,
+        usuario_id INTEGER NOT NULL REFERENCES usuario(id),
+        criado_em TIMESTAMP DEFAULT NOW(),
+        prompt TEXT NOT NULL,
+        interpretacao_json TEXT,
+        tipo_acao VARCHAR(40),
+        status VARCHAR(20) DEFAULT 'pendente',
+        executado_em TIMESTAMP,
+        registro_tipo VARCHAR(40),
+        registro_id INTEGER,
+        erro TEXT
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_copilot_usuario ON copilot_conversa(usuario_id)")
+    _try("CREATE INDEX IF NOT EXISTS idx_copilot_criado ON copilot_conversa(criado_em)")
+    _try("CREATE INDEX IF NOT EXISTS idx_copilot_status ON copilot_conversa(status)")
 
     # Backfill: cada data com atribuicoes orfas vira 1 lote 'Histórico DD/MM' concluido.
     # Idempotente — so cria se ainda houver lote_id NULL.

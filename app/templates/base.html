@@ -315,6 +315,30 @@
         {% block content %}{% endblock %}
     </main>
 
+    {% if current_user.is_authenticated and current_user.is_admin() %}
+    <!-- Copilot — botao flutuante + painel lateral -->
+    <button id="copilot-fab" type="button" title="Copilot (Cmd/Ctrl+K)" aria-label="Copilot">
+        <i class="bi bi-stars"></i>
+    </button>
+    <div id="copilot-overlay" class="d-none"></div>
+    <aside id="copilot-panel" class="d-none" aria-hidden="true">
+        <header>
+            <strong>copilot</strong>
+            <button type="button" id="copilot-close" aria-label="Fechar" title="Fechar (Esc)">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </header>
+        <div id="copilot-history"></div>
+        <form id="copilot-form">
+            <input type="text" id="copilot-input" placeholder="ex: preciso pedir 100 croissants pra amanhã"
+                   maxlength="2000" autocomplete="off">
+            <button type="submit" id="copilot-send" title="Enviar">
+                <i class="bi bi-arrow-up"></i>
+            </button>
+        </form>
+    </aside>
+    {% endif %}
+
     <!-- Legenda de cores -->
     <div class="legenda-cores">
         <span class="legenda-item"><span class="legenda-box bg-input-base"></span> Input principal</span>
@@ -328,6 +352,9 @@
     <script>const CSRF_TOKEN = "{{ csrf_token() }}";</script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}?v={{ static_v['js/app.js'] }}"></script>
+    {% if current_user.is_authenticated and current_user.is_admin() %}
+    <script src="{{ url_for('static', filename='js/copilot.js') }}?v={{ static_v.get('js/copilot.js', '0') }}"></script>
+    {% endif %}
     <script>
     (function(){
         var sw = document.getElementById('dark-mode-switch');

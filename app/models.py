@@ -878,6 +878,30 @@ class PedidoLocalItem(db.Model):
     preco_unitario = db.Column(db.Float, default=0)
 
 
+class CopilotConversa(db.Model):
+    """Audit trail das interacoes com o copilot.
+    Cada prompt do usuario vira 1 registro. Guarda a interpretacao da
+    LLM, status (pendente/aprovado/cancelado/executado/falhou) e link
+    pro registro resultante (ex: pedido criado)."""
+    __tablename__ = 'copilot_conversa'
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False, index=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    prompt = db.Column(db.Text, nullable=False)
+    # JSON com {tipo, params, explicacao, ambiguidades?}
+    interpretacao_json = db.Column(db.Text)
+    tipo_acao = db.Column(db.String(40), index=True)
+    status = db.Column(db.String(20), default='pendente', index=True)
+    executado_em = db.Column(db.DateTime)
+    # Link pro registro criado (ex: pedido_loja.id se criou um pedido)
+    registro_tipo = db.Column(db.String(40))
+    registro_id = db.Column(db.Integer)
+    erro = db.Column(db.Text)
+
+    usuario = db.relationship('Usuario')
+
+
 # ── Gestao de Projetos (PARA + 12 Week Year) ──
 
 class ProjetoArea(db.Model):
