@@ -174,12 +174,20 @@
     function fetchJson(url, opts) {
         return fetch(url, opts).then(function(r) {
             return r.text().then(function(body) {
+                var data;
                 try {
-                    return JSON.parse(body);
+                    data = JSON.parse(body);
                 } catch (e) {
                     // Backend devolveu HTML (erro 500/404 do Flask)
                     throw new Error('Servidor retornou HTTP ' + r.status + '. Provável erro do backend.');
                 }
+                // Se status nao-ok mas JSON valido, propaga como erro com mensagem clara
+                if (!r.ok && data && data.erro) {
+                    var err = new Error(data.erro);
+                    err.detalhe = data.traceback || '';
+                    throw err;
+                }
+                return data;
             });
         });
     }

@@ -20,6 +20,20 @@ logger = logging.getLogger(__name__)
 csrf.exempt(copilot_bp)
 
 
+# Garante que QUALQUER erro do blueprint retorne JSON, nao HTML.
+# Sem isso, exceptions fora do try/except dos handlers caem na pagina
+# 500.html padrao do Flask, que quebra o fetchJson do frontend.
+@copilot_bp.errorhandler(Exception)
+def _copilot_error_handler(exc):
+    import traceback
+    tb = traceback.format_exc()
+    logger.exception('Erro nao-tratado no blueprint copilot')
+    # HTTPException (404, 403, etc) — preserva o status code
+    code = getattr(exc, 'code', 500)
+    msg = getattr(exc, 'description', None) or str(exc)
+    return jsonify(ok=False, erro=f'{type(exc).__name__}: {msg}', traceback=tb[:1500]), code
+
+
 def _admin_only():
     if not current_user.is_authenticated:
         return jsonify(ok=False, erro='login obrigatorio'), 401
