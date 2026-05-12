@@ -111,11 +111,20 @@ def aprovar(conversa_id):
     try:
         resultado = copilot_svc.executar(tipo, params, current_user)
     except Exception as exc:  # noqa: BLE001
-        logger.exception('Copilot.executar falhou')
-        conversa.status = 'falhou'
-        conversa.erro = str(exc)
-        db.session.commit()
-        return jsonify(ok=False, erro=str(exc)), 500
+        import traceback
+        tb = traceback.format_exc()
+        logger.exception('Copilot.executar falhou. tipo=%s params=%r', tipo, params)
+        db.session.rollback()
+        # Re-busca conversa apos rollback pra marcar status
+        c = CopilotConversa.query.get(conversa_id)
+        if c:
+            c.status = 'falhou'
+            c.erro = f'{type(exc).__name__}: {exc}\n{tb[:2000]}'
+            try:
+                db.session.commit()
+            except Exception:  # noqa: BLE001
+                db.session.rollback()
+        return jsonify(ok=False, erro=f'{type(exc).__name__}: {exc}'), 500
 
     if not resultado.get('ok'):
         conversa.status = 'falhou'
