@@ -260,6 +260,10 @@ def create_app(config_class=None):
     from app.blueprints.fornecedores import fornecedores_bp
     app.register_blueprint(fornecedores_bp)
 
+    # Ativa audit log (listeners SQLAlchemy)
+    from app.services.audit import init_audit
+    init_audit()
+
     with app.app_context():
         db.create_all()
         _migrate(app)
@@ -623,6 +627,26 @@ def _migrate_postgres(app):
     _try("CREATE INDEX IF NOT EXISTS idx_lote_saida_status ON lote_saida(status)")
     _try("ALTER TABLE atribuicao_entrega ADD COLUMN lote_id INTEGER REFERENCES lote_saida(id)")
     _try("CREATE INDEX IF NOT EXISTS idx_atribuicao_lote ON atribuicao_entrega(lote_id)")
+
+    # ── Audit Log estruturado ──
+    _try("""
+    CREATE TABLE IF NOT EXISTS audit_log (
+        id SERIAL PRIMARY KEY,
+        usuario_id INTEGER REFERENCES usuario(id),
+        criado_em TIMESTAMP DEFAULT NOW(),
+        tabela VARCHAR(60) NOT NULL,
+        registro_id INTEGER,
+        acao VARCHAR(10) NOT NULL,
+        antes TEXT,
+        depois TEXT,
+        ip VARCHAR(45),
+        user_agent VARCHAR(300)
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_audit_usuario ON audit_log(usuario_id)")
+    _try("CREATE INDEX IF NOT EXISTS idx_audit_criado ON audit_log(criado_em)")
+    _try("CREATE INDEX IF NOT EXISTS idx_audit_tabela ON audit_log(tabela)")
+    _try("CREATE INDEX IF NOT EXISTS idx_audit_registro ON audit_log(tabela, registro_id)")
 
     # ── Fornecedores + historico de preco MP ──
     _try("""

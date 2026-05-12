@@ -943,6 +943,28 @@ class CopilotConversa(db.Model):
 
 # ── Gestao de Projetos (PARA + 12 Week Year) ──
 
+class AuditLog(db.Model):
+    """Trilha de auditoria de mutacoes em modelos sensiveis.
+    Populado automaticamente via SQLAlchemy event listener (depois_flush)
+    pros modelos registrados em audit_models.py.
+
+    Guarda snapshot 'antes' e 'depois' em JSON pra reconstrucao."""
+    __tablename__ = 'audit_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), index=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    tabela = db.Column(db.String(60), nullable=False, index=True)
+    registro_id = db.Column(db.Integer, index=True)
+    acao = db.Column(db.String(10), nullable=False)  # insert | update | delete
+    antes = db.Column(db.Text)  # JSON: snapshot pré-mudança (null em insert)
+    depois = db.Column(db.Text)  # JSON: snapshot pós-mudança (null em delete)
+    ip = db.Column(db.String(45))
+    user_agent = db.Column(db.String(300))
+
+    usuario = db.relationship('Usuario')
+
+
 class ProjetoArea(db.Model):
     __tablename__ = "projeto_area"
 

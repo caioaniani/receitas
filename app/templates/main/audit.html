@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Audit Log{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">audit log</h1>
+    <div class="text-muted small">últimas 200 alterações</div>
+</div>
+
+<form method="GET" class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+    <select name="tabela" class="form-select form-select-sm" style="max-width:200px;" onchange="this.form.submit()">
+        <option value="">todas as tabelas</option>
+        {% for t in tabelas %}
+        <option value="{{ t }}" {% if filtros.tabela == t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+    </select>
+    <select name="usuario_id" class="form-select form-select-sm" style="max-width:200px;" onchange="this.form.submit()">
+        <option value="">todos os usuários</option>
+        {% for u in usuarios %}
+        <option value="{{ u.id }}" {% if filtros.usuario_id == u.id %}selected{% endif %}>{{ u.nome }}</option>
+        {% endfor %}
+    </select>
+    <select name="acao" class="form-select form-select-sm" style="max-width:160px;" onchange="this.form.submit()">
+        <option value="">todas ações</option>
+        <option value="insert" {% if filtros.acao == 'insert' %}selected{% endif %}>insert (criar)</option>
+        <option value="update" {% if filtros.acao == 'update' %}selected{% endif %}>update (editar)</option>
+        <option value="delete" {% if filtros.acao == 'delete' %}selected{% endif %}>delete (excluir)</option>
+    </select>
+    {% if filtros.tabela or filtros.usuario_id or filtros.acao %}
+    <a href="{{ url_for('main.audit') }}" class="btn-link btn-sm" style="text-decoration:none;">limpar filtros</a>
+    {% endif %}
+</form>
+
+<div class="card" style="padding:0; overflow:hidden;">
+    <table class="table-dense">
+        <thead>
+            <tr>
+                <th style="width:130px">data/hora</th>
+                <th>usuário</th>
+                <th>tabela</th>
+                <th>registro</th>
+                <th>ação</th>
+                <th>mudanças</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            {% set l = r.log %}
+            <tr>
+                <td class="text-muted" style="font-size:12px; white-space:nowrap;">
+                    {{ l.criado_em.strftime('%d/%m %H:%M:%S') }}
+                </td>
+                <td>{{ l.usuario.nome if l.usuario else '—' }}</td>
+                <td class="text-muted" style="font-family:monospace; font-size:12px;">{{ l.tabela }}</td>
+                <td class="text-muted">{{ l.registro_id or '—' }}</td>
+                <td>
+                    {% if l.acao == 'insert' %}
+                    <span class="badge-status"><span class="bullet" style="background:var(--cor-verde);"></span>insert</span>
+                    {% elif l.acao == 'update' %}
+                    <span class="badge-status"><span class="bullet" style="background:var(--cor-azul);"></span>update</span>
+                    {% else %}
+                    <span class="badge-status" style="background:var(--cor-vermelho-soft); color:var(--cor-vermelho);"><span class="bullet" style="background:var(--cor-vermelho);"></span>delete</span>
+                    {% endif %}
+                </td>
+                <td style="font-size:12px; max-width:600px;">
+                    {% if l.acao == 'update' and r.antes and r.depois %}
+                        {% for col in r.depois %}
+                        <div style="font-family:monospace; padding:2px 0;">
+                            <strong>{{ col }}</strong>:
+                            <span style="color:var(--cor-vermelho); text-decoration:line-through;">{{ r.antes.get(col) }}</span>
+                            →
+                            <span style="color:var(--cor-verde);">{{ r.depois.get(col) }}</span>
+                        </div>
+                        {% endfor %}
+                    {% elif r.depois %}
+                        <details>
+                            <summary class="text-muted small">{{ r.depois|length }} campos</summary>
+                            <pre style="font-size:11px; margin:4px 0 0; max-height:200px; overflow:auto;">{{ r.depois|tojson(indent=2) }}</pre>
+                        </details>
+                    {% elif r.antes %}
+                        <details>
+                            <summary class="text-muted small">snapshot pré-delete ({{ r.antes|length }} campos)</summary>
+                            <pre style="font-size:11px; margin:4px 0 0; max-height:200px; overflow:auto;">{{ r.antes|tojson(indent=2) }}</pre>
+                        </details>
+                    {% else %}
+                        <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not rows %}
+            <tr><td colspan="6" class="text-center text-muted py-4">Nenhum registro de auditoria encontrado.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -196,6 +196,10 @@
            class="sidebar-link {% if request.path == '/auth/usuarios' %}active{% endif %}">
             <i class="bi bi-people"></i> Usuários
         </a>
+        <a href="{{ url_for('main.audit') }}"
+           class="sidebar-link {% if request.path == '/audit' %}active{% endif %}">
+            <i class="bi bi-shield-check"></i> Audit Log
+        </a>
         {% elif current_user.is_authenticated %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Lojas</div>

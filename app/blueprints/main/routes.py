@@ -8,7 +8,8 @@ from app.blueprints.main import main_bp
 from app.decorators import admin_required
 from app.extensions import db
 from app.models import (MateriaPrima, Receita, ReceitaIngrediente, Produto, ProdutoItem,
-                        Funcionario, Atribuicao, AlertaEstoque, PlanejamentoProducao)
+                        Funcionario, Atribuicao, AlertaEstoque, PlanejamentoProducao,
+                        AuditLog, Usuario)
 from app.services.custos import calcular_custos_receitas, calcular_rendimento
 
 
@@ -284,3 +285,43 @@ def todo():
         Produto.observacao.isnot(None), Produto.observacao != ''
     ).order_by(Produto.nome).all()
     return render_template('main/todo.html', receitas=receitas, produtos=produtos)
+
+
+@main_bp.route("/audit")
+@login_required
+@admin_required
+def audit():
+    """Visualizador do audit log. So admin pode ver."""
+    import json as _json
+    tabela_f = request.args.get("tabela") or None
+    usuario_f = request.args.get("usuario_id", type=int)
+    acao_f = request.args.get("acao") or None
+    q = AuditLog.query
+    if tabela_f:
+        q = q.filter_by(tabela=tabela_f)
+    if usuario_f:
+        q = q.filter_by(usuario_id=usuario_f)
+    if acao_f in ("insert", "update", "delete"):
+        q = q.filter_by(acao=acao_f)
+    logs = q.order_by(AuditLog.criado_em.desc()).limit(200).all()
+    # Parse JSON dos campos antes/depois pra exibir formatado
+    rows = []
+    for l in logs:
+        try:
+            antes = _json.loads(l.antes) if l.antes else None
+        except Exception:
+            antes = None
+        try:
+            depois = _json.loads(l.depois) if l.depois else None
+        except Exception:
+            depois = None
+        rows.append({
+            "log": l, "antes": antes, "depois": depois,
+        })
+    # Lista de tabelas e usuarios pra filtros
+    tabelas = [r[0] for r in db.session.query(AuditLog.tabela).distinct().all()]
+    usuarios = Usuario.query.order_by(Usuario.nome).all()
+    return render_template("main/audit.html", rows=rows, tabelas=sorted(tabelas),
+                           usuarios=usuarios, filtros={"tabela": tabela_f,
+                           "usuario_id": usuario_f, "acao": acao_f})
+
