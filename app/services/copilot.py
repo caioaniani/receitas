@@ -863,7 +863,9 @@ def _read_consultar_funcionario(params, user):
     linhas.append(f'- Função: {f.funcao or f.funcao_operacional or "—"}')
     linhas.append(f'- Período: {f.periodo or "—"}')
     linhas.append(f'- Lojas: {lojas}')
-    linhas.append(f'- Salário base: R$ {(f.salario_base or 0):.2f}')
+    # Salario so pra super admin (is_owner)
+    if getattr(user, 'is_owner', False):
+        linhas.append(f'- Salário base: R$ {(f.salario_base or 0):.2f}')
     if f.telefone:
         linhas.append(f'- Telefone: {f.telefone}')
     if f.data_admissao:

@@ -37,7 +37,7 @@
                 <th>operacional</th>
                 <th>período</th>
                 <th>lojas</th>
-                <th class="text-end">salário</th>
+                {% if current_user.is_owner %}<th class="text-end">salário</th>{% endif %}
                 <th class="text-center">admissão</th>
                 <th>telefone</th>
                 <th class="text-center">status</th>
@@ -84,7 +84,7 @@
                     {% endfor %}
                     {% if not f.lojas %}<span class="text-muted small">—</span>{% endif %}
                 </td>
-                <td class="text-end">{{ f.salario_base | brl }}</td>
+                {% if current_user.is_owner %}<td class="text-end">{{ f.salario_base | brl }}</td>{% endif %}
                 <td class="text-center">{{ f.data_admissao.strftime('%d/%m/%Y') if f.data_admissao else '—' }}</td>
                 <td style="font-size:12.5px;">{{ f.telefone or '—' }}</td>
                 <td class="text-center">
@@ -98,7 +98,7 @@
             </tr>
             {% endfor %}
             {% if not funcionarios %}
-            <tr><td colspan="11" class="text-center text-muted py-4">Nenhum funcionário encontrado.</td></tr>
+            <tr><td colspan="{{ 11 if current_user.is_owner else 10 }}" class="text-center text-muted py-4">Nenhum funcionário encontrado.</td></tr>
             {% endif %}
         </tbody>
     </table>

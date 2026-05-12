@@ -16,6 +16,7 @@
             </div>
         </div>
     </div>
+    {% if current_user.is_owner %}
     <div class="col-md-4">
         <div class="card border-0 shadow-sm">
             <div class="card-body text-center">
@@ -34,6 +35,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 </div>
 
 <!-- Ações Rápidas: Atestado + Feedback -->
@@ -127,7 +129,8 @@
     </div>
 </div>
 
-<!-- Custo por Loja -->
+<!-- Custo por Loja (so super admin) -->
+{% if current_user.is_owner %}
 <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-shop"></i> Custo por Loja</h6>
 <div class="row g-3 mb-4">
     {% for nome_loja, dados in custo_por_loja.items() %}
@@ -147,6 +150,7 @@
     </div>
     {% endif %}
 </div>
+{% endif %}
 
 <!-- Aniversários -->
 <div class="row g-3 mb-4">

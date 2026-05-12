@@ -7,7 +7,7 @@ from sqlalchemy.orm import defer, joinedload, selectinload
 from werkzeug.utils import secure_filename
 
 from app.blueprints.rh import rh_bp
-from app.decorators import admin_required
+from app.decorators import admin_required, owner_required
 from app.extensions import db
 from flask import jsonify
 from app.models import (Funcionario, Loja, FolhaPagamento, Feedback, Posicao,
@@ -98,11 +98,15 @@ def funcionarios():
 @admin_required
 def novo_funcionario():
     if request.method == 'POST':
+        # Salario so e' aceito do form se user e' owner; senao usa 0
+        # (admin sem is_owner nao deve poder definir salarios)
+        salario_in = parse_float_br(request.form.get('salario_base', ''), default=0) \
+            if getattr(current_user, 'is_owner', False) else 0
         func = Funcionario(
             nome=request.form.get('nome', '').strip(),
             cpf=request.form.get('cpf', '').strip(),
             funcao=request.form.get('funcao', '').strip() or None,
-            salario_base=parse_float_br(request.form.get('salario_base', ''), default=0),
+            salario_base=salario_in,
             tem_cargo_confianca='tem_cargo_confianca' in request.form,
             premiacao=parse_float_br(request.form.get('premiacao', ''), default=0),
             vt_dia=parse_float_br(request.form.get('vt_dia', ''), default=0),
@@ -278,7 +282,7 @@ def lojas():
 
 @rh_bp.route('/cargos')
 @login_required
-@admin_required
+@owner_required
 def cargos():
     lista = Cargo.query.order_by(Cargo.nome).all()
     return render_template('rh/cargos.html', cargos=lista)
@@ -286,7 +290,7 @@ def cargos():
 
 @rh_bp.route('/cargos/salvar', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def salvar_cargos():
     ids = request.form.getlist('cargo_id[]')
     nomes = request.form.getlist('cargo_nome[]')
@@ -322,7 +326,7 @@ def salvar_cargos():
 
 @rh_bp.route('/cargos/<int:id>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def excluir_cargo(id):
     c = Cargo.query.get_or_404(id)
     if c.funcionarios:
@@ -389,7 +393,7 @@ def excluir_loja(id):
 
 @rh_bp.route('/folha')
 @login_required
-@admin_required
+@owner_required
 def folha():
     mes = request.args.get('mes', type=int, default=datetime.now().month)
     ano = request.args.get('ano', type=int, default=datetime.now().year)
@@ -405,7 +409,7 @@ def folha():
 
 @rh_bp.route('/folha/gerar', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def gerar_folha():
     mes = int(request.form.get('mes', datetime.now().month))
     ano = int(request.form.get('ano', datetime.now().year))
@@ -439,7 +443,7 @@ def gerar_folha():
 
 @rh_bp.route('/folha/<int:folha_id>/salvar', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def salvar_folha_item(folha_id):
     f = FolhaPagamento.query.get_or_404(folha_id)
     f.dias_trabalhados = int(request.form.get('dias_trabalhados', '26') or 26)
@@ -564,7 +568,7 @@ def excluir_posicao(pos_id):
 
 @rh_bp.route('/folha/<int:folha_id>/pdf')
 @login_required
-@admin_required
+@owner_required
 def holerite_pdf(folha_id):
     from app.services.pdf import gerar_holerite
     folha = FolhaPagamento.query.get_or_404(folha_id)
@@ -576,7 +580,7 @@ def holerite_pdf(folha_id):
 
 @rh_bp.route('/folha/<int:folha_id>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def excluir_folha_item(folha_id):
     f = FolhaPagamento.query.get_or_404(folha_id)
     mes, ano = f.mes, f.ano
