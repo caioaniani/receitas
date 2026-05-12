@@ -476,8 +476,10 @@ def separacao():
     ).order_by(PedidoLoja.data_entrega).all()
 
     por_data = defaultdict(lambda: defaultdict(lambda: {'total': 0, 'lojas': defaultdict(int)}))
+    ids_por_data = defaultdict(list)
     for p in pedidos:
         chave_data = p.data_entrega or p.data_pedido
+        ids_por_data[chave_data].append(p.id)
         for item in p.itens:
             nome = item.nome_item
             por_data[chave_data][nome]['total'] += item.quantidade
@@ -486,7 +488,9 @@ def separacao():
     congelados = {ep.nome_item: ep.quantidade for ep in EstoqueProducao.query.all()}
 
     return render_template('pedidos/separacao.html',
-                           por_data=dict(por_data), congelados=congelados)
+                           por_data=dict(por_data),
+                           ids_por_data=dict(ids_por_data),
+                           congelados=congelados)
 
 
 # ── Estoque de Congelados ──

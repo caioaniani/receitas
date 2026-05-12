@@ -3,54 +3,106 @@
 {% block title %}Separação do Dia{% endblock %}
 
 {% block content %}
-<h1 class="page-title mb-3"><i class="bi bi-clipboard-data"></i> Painel de Separação</h1>
+<div class="page-header">
+    <h1 class="page-title">separação</h1>
+    <div class="page-actions">
+        <button class="btn-pill btn-pill-outline d-print-none" onclick="window.print()">
+            <i class="bi bi-printer"></i> imprimir
+        </button>
+    </div>
+</div>
 
 {% if not por_data %}
 <div class="alert alert-info">Nenhum pedido pendente ou confirmado no momento.</div>
 {% endif %}
 
 {% for data, itens in por_data|dictsort %}
+{% set ids = ids_por_data.get(data, []) %}
 <div class="card mb-3">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-        <strong><i class="bi bi-calendar-event"></i> {{ data.strftime('%d/%m/%Y (%A)') if data else 'Sem data' }}</strong>
-        <span class="badge bg-primary">{{ itens|length }} itens</span>
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <strong>
+            <i class="bi bi-calendar-event"></i>
+            {{ data.strftime('%d/%m/%Y (%A)') if data else 'Sem data' }}
+        </strong>
+        <div class="d-flex gap-2 align-items-center flex-wrap d-print-none">
+            <span class="badge-status">
+                <span class="bullet" style="background:var(--cor-azul);"></span>
+                {{ itens|length }} produto(s) · {{ ids|length }} pedido(s)
+            </span>
+            <a href="{{ url_for('pedidos.lista') }}" class="btn-pill btn-pill-outline" style="padding:4px 12px; font-size:12px;">
+                <i class="bi bi-list-ul"></i> ver pedidos
+            </a>
+            <button type="button" class="btn-pill btn-pill-primary sep-marcar-separado"
+                    style="padding:4px 12px; font-size:12px;"
+                    data-ids="{{ ids|join(',') }}"
+                    data-data="{{ data.strftime('%d/%m/%Y') if data else '—' }}">
+                <i class="bi bi-check2-all"></i> marcar tudo como separado
+            </button>
+        </div>
     </div>
     <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-sm table-bordered mb-0">
-                <thead>
-                    <tr style="background:#455a64; color:#fff; font-size:11px; text-transform:uppercase;">
-                        <th>Produto</th>
-                        <th class="text-center" style="width:90px">Total</th>
-                        <th class="text-center" style="width:90px">Congelado</th>
-                        <th class="text-center" style="width:80px">Saldo</th>
-                        <th>Detalhe por Loja</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for nome, info in itens|dictsort %}
-                    {% set cong = congelados.get(nome, 0) %}
-                    {% set saldo = cong - info.total %}
-                    <tr>
-                        <td class="fw-semibold">{{ nome }}</td>
-                        <td class="text-center fw-bold">{{ info.total }}</td>
-                        <td class="text-center">{{ cong }}</td>
-                        <td class="text-center fw-bold {% if saldo < 0 %}text-danger{% else %}text-success{% endif %}">
-                            {{ saldo }}
-                        </td>
-                        <td>
-                            {% for loja_nome, qtd in info.lojas|dictsort %}
-                            <span class="badge bg-light text-dark me-1" style="font-size:11px;">
-                                {{ loja_nome }}: <strong>{{ qtd }}</strong>
-                            </span>
-                            {% endfor %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+        <table class="table-dense">
+            <thead>
+                <tr>
+                    <th>produto</th>
+                    <th class="text-center" style="width:90px">total</th>
+                    <th class="text-center" style="width:100px">congelado</th>
+                    <th class="text-center" style="width:80px">saldo</th>
+                    <th>detalhe por loja</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for nome, info in itens|dictsort %}
+                {% set cong = congelados.get(nome, 0) %}
+                {% set saldo = cong - info.total %}
+                <tr>
+                    <td class="fw-semibold">{{ nome }}</td>
+                    <td class="text-center fw-bold">{{ info.total }}</td>
+                    <td class="text-center">{{ cong }}</td>
+                    <td class="text-center fw-bold {% if saldo < 0 %}text-danger{% else %}text-success{% endif %}">
+                        {{ saldo }}
+                    </td>
+                    <td>
+                        {% for loja_nome, qtd in info.lojas|dictsort %}
+                        <span class="chip" style="font-size:11px; padding:2px 8px;">
+                            {{ loja_nome }}: <strong style="margin-left:3px;">{{ qtd }}</strong>
+                        </span>
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
 {% endfor %}
+
+<script>
+(function() {
+    var CSRF = '{{ csrf_token() }}';
+    document.querySelectorAll('.sep-marcar-separado').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var ids = (btn.dataset.ids || '').split(',').filter(Boolean);
+            var data = btn.dataset.data;
+            if (ids.length === 0) return;
+            if (!confirm('Marcar todos os ' + ids.length + ' pedido(s) de ' + data + ' como separado(s)?')) return;
+            btn.disabled = true;
+            var orig = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> aplicando...';
+            var promises = ids.map(function(id) {
+                var fd = new FormData();
+                fd.append('csrf_token', CSRF);
+                return fetch('/pedidos/' + id + '/separar', {method: 'POST', body: fd, credentials: 'same-origin'});
+            });
+            Promise.all(promises).then(function() {
+                location.reload();
+            }).catch(function(e) {
+                alert('Erro: ' + e);
+                btn.disabled = false;
+                btn.innerHTML = orig;
+            });
+        });
+    });
+})();
+</script>
 {% endblock %}
