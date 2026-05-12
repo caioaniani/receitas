@@ -177,8 +177,13 @@ REGRAS:
 """
 
 
-def interpretar(prompt_text, user):
-    """Chama Claude. Retorna dict com tipo, params, explicacao."""
+def interpretar(prompt_text, user, historico=None):
+    """Chama Claude. Retorna dict com tipo, params, explicacao.
+
+    historico: lista de {role: 'user'|'assistant', content: str} com
+    conversas anteriores nessa sessao. Permite copilot lembrar contexto
+    ('ah entendi, foi aqui' depois de uma resposta).
+    """
     api_key = os.environ.get('ANTHROPIC_API_KEY') or current_app.config.get('ANTHROPIC_API_KEY')
     if not api_key:
         return {'tipo': 'erro', 'explicacao': 'Copilot indisponivel: ANTHROPIC_API_KEY nao configurada.', 'raw': None}
@@ -190,13 +195,28 @@ def interpretar(prompt_text, user):
     client = anthropic.Anthropic(api_key=api_key)
     system = _build_system_prompt(user)
 
+    # Monta mensagens: historico (filtrado/sanitizado) + prompt atual
+    messages = []
+    for m in (historico or []):
+        role = m.get('role')
+        content = (m.get('content') or '').strip()
+        if role in ('user', 'assistant') and content:
+            messages.append({'role': role, 'content': content})
+    messages.append({'role': 'user', 'content': prompt_text})
+    # Limita as ultimas 20 mensagens pra nao estourar tokens
+    if len(messages) > 20:
+        messages = messages[-20:]
+        # Garante que comece com user (Claude exige primeira msg = user)
+        while messages and messages[0]['role'] != 'user':
+            messages = messages[1:]
+
     try:
         response = client.messages.create(
             model='claude-haiku-4-5',
             max_tokens=2000,
             system=[{'type': 'text', 'text': system, 'cache_control': {'type': 'ephemeral'}}],
             tools=TOOLS,
-            messages=[{'role': 'user', 'content': prompt_text}],
+            messages=messages,
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception('Copilot: erro Anthropic')

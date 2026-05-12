@@ -30,10 +30,13 @@ def interpretar():
         return guard
     data = request.get_json(silent=True) or {}
     prompt = (data.get('prompt') or '').strip()
+    historico = data.get('historico') or []
     if not prompt:
         return jsonify(ok=False, erro='prompt vazio'), 400
     if len(prompt) > 2000:
         return jsonify(ok=False, erro='prompt muito longo (max 2000 chars)'), 400
+    if not isinstance(historico, list):
+        historico = []
 
     conversa = CopilotConversa(
         usuario_id=current_user.id,
@@ -44,7 +47,7 @@ def interpretar():
     db.session.flush()
 
     try:
-        resultado = copilot_svc.interpretar(prompt, current_user)
+        resultado = copilot_svc.interpretar(prompt, current_user, historico=historico)
     except Exception as exc:  # noqa: BLE001
         logger.exception('Copilot.interpretar falhou')
         conversa.status = 'falhou'

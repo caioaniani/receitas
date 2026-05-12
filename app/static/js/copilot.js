@@ -15,6 +15,11 @@
     // Lojas pra dropdown (carregada sob demanda)
     var __lojasCache = null;
 
+    // Historico de conversa em memoria pra dar contexto ao Claude
+    // ('ah entendi, foi aqui' depois de uma resposta).
+    // [{role: 'user'|'assistant', content: 'texto'}]
+    var copilotHistorico = [];
+
     function carregarLojas() {
         if (__lojasCache) return Promise.resolve(__lojasCache);
         return fetch('/copilot/api/lojas', {credentials: 'same-origin'})
@@ -184,11 +189,16 @@
         addMsg('user', escape(prompt));
         var loading = addMsg('bot', '<i class="bi bi-arrow-repeat"></i> pensando…');
 
+        // Envia historico ANTES do prompt atual (Claude ja recebe o prompt como
+        // 'messages[-1]' no backend)
+        var historicoParaEnvio = copilotHistorico.slice();
+        copilotHistorico.push({role: 'user', content: prompt});
+
         fetchJson('/copilot/api/interpretar', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': (typeof CSRF_TOKEN !== 'undefined' ? CSRF_TOKEN : '')},
             credentials: 'same-origin',
-            body: JSON.stringify({prompt: prompt}),
+            body: JSON.stringify({prompt: prompt, historico: historicoParaEnvio}),
         }).then(function(d) {
             loading.remove();
             sendBtn.disabled = false;
@@ -196,10 +206,21 @@
                 addMsg('bot', '<span style="color:var(--cor-vermelho);">erro: ' + escape(d.erro || 'desconhecido') + '</span>');
                 return;
             }
+            // Compoe texto da resposta pra historico (sem o preview HTML)
+            var respostaTexto = d.explicacao || '';
+            if (d.resultado && d.resultado.texto) respostaTexto += '\n' + d.resultado.texto;
+            if (respostaTexto.trim()) {
+                copilotHistorico.push({role: 'assistant', content: respostaTexto.trim()});
+            }
+            // Limita a 20 mensagens (mantem ultimas)
+            if (copilotHistorico.length > 20) copilotHistorico = copilotHistorico.slice(-20);
+
             addMsg('bot', renderResposta(d));
         }).catch(function(e) {
             loading.remove();
             sendBtn.disabled = false;
+            // Remove a user msg que adicionei otimisticamente
+            copilotHistorico.pop();
             addMsg('bot', '<span style="color:var(--cor-vermelho);">' + escape(String(e.message || e)) + '</span>');
         });
     }
