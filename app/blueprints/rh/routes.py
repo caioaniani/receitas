@@ -3,7 +3,7 @@ from urllib.parse import quote
 
 from flask import render_template, redirect, url_for, flash, request, Response, abort
 from flask_login import login_required, current_user
-from sqlalchemy.orm import defer
+from sqlalchemy.orm import defer, joinedload, selectinload
 from werkzeug.utils import secure_filename
 
 from app.blueprints.rh import rh_bp
@@ -21,7 +21,13 @@ ALLOWED_MIMETYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'appl
 @login_required
 @admin_required
 def dashboard():
-    funcionarios = Funcionario.query.filter_by(ativo=True).all()
+    # Eager load de cargo + lojas evita N+1 ao calcular custo_total() e
+    # custo por loja (cada Funcionario acessa cargo.salario_base e lojas).
+    funcionarios = (
+        Funcionario.query
+        .options(joinedload(Funcionario.cargo), selectinload(Funcionario.lojas))
+        .filter_by(ativo=True).all()
+    )
     lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
 
     total_salarios = sum(f.salario_base for f in funcionarios)

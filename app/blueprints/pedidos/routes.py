@@ -2,7 +2,7 @@ import io
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
-from flask import render_template, redirect, url_for, flash, request, abort, send_file
+from flask import render_template, redirect, url_for, flash, request, abort, send_file, current_app
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -65,11 +65,15 @@ def lista():
         selectinload(PedidoLoja.itens),
     ).order_by(PedidoLoja.criado_em.desc())
     if loja_id:
+        # nao-admin: sempre filtra pela propria loja, ignora ?loja= do form
         query = query.filter_by(loja_id=loja_id)
     else:
         filtro = request.args.get('loja')
         if filtro:
-            query = query.filter_by(loja_id=int(filtro))
+            try:
+                query = query.filter_by(loja_id=int(filtro))
+            except (TypeError, ValueError):
+                pass
     pedidos = query.limit(100).all()
     lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
     return render_template('pedidos/lista.html', pedidos=pedidos, lojas=lojas,
@@ -87,7 +91,23 @@ def novo():
     amanha = date.today() + timedelta(days=1)
 
     if request.method == 'POST':
-        sel_loja = int(request.form.get('loja_id', 0)) if current_user.is_admin() else loja_id
+        try:
+            sel_loja = int(request.form.get('loja_id', 0)) if current_user.is_admin() else loja_id
+        except (TypeError, ValueError):
+            sel_loja = 0
+        # Validacao multi-loja: nao-admin so cria pra propria loja
+        if not current_user.is_admin() and sel_loja != loja_id:
+            abort(403)
+        # Loja precisa existir e estar ativa
+        if not sel_loja or not Loja.query.filter_by(id=sel_loja, ativa=True).first():
+            flash('Selecione uma loja valida.', 'warning')
+            lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+            receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+            materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+            return render_template('pedidos/novo.html', lojas=lojas,
+                                   receitas=receitas, materias=materias,
+                                   amanha=amanha, loja_id=loja_id)
+
         data_str = request.form.get('data_entrega', '')
         obs = request.form.get('observacao', '').strip()
 
@@ -105,35 +125,47 @@ def novo():
                                    receitas=receitas, materias=materias,
                                    amanha=amanha, loja_id=loja_id)
 
-        pedido = PedidoLoja(
-            loja_id=sel_loja,
-            data_entrega=data_entrega,
-            observacao=obs or None,
-            criado_por=current_user.id,
-        )
-        db.session.add(pedido)
-        db.session.flush()
-
-        ids = request.form.getlist('item_id[]')
-        qtds = request.form.getlist('item_qtd[]')
-        notas = request.form.getlist('item_obs[]')
-
-        for i in range(len(ids)):
-            if not ids[i] or not qtds[i]:
-                continue
-            tipo, item_id = _parse_item_id(ids[i])
-            if not tipo:
-                continue
-            item = PedidoItem(
-                pedido_id=pedido.id,
-                receita_id=item_id if tipo == 'receita' else None,
-                materia_prima_id=item_id if tipo == 'mp' else None,
-                quantidade=int(qtds[i]),
-                observacao=notas[i].strip() if i < len(notas) else None,
+        try:
+            pedido = PedidoLoja(
+                loja_id=sel_loja,
+                data_entrega=data_entrega,
+                observacao=obs or None,
+                criado_por=current_user.id,
             )
-            db.session.add(item)
+            db.session.add(pedido)
+            db.session.flush()
 
-        db.session.commit()
+            ids = request.form.getlist('item_id[]')
+            qtds = request.form.getlist('item_qtd[]')
+            notas = request.form.getlist('item_obs[]')
+
+            for i in range(len(ids)):
+                if not ids[i] or not qtds[i]:
+                    continue
+                tipo, item_id = _parse_item_id(ids[i])
+                if not tipo:
+                    continue
+                try:
+                    qtd = int(qtds[i])
+                except (TypeError, ValueError):
+                    continue
+                if qtd <= 0:
+                    continue
+                item = PedidoItem(
+                    pedido_id=pedido.id,
+                    receita_id=item_id if tipo == 'receita' else None,
+                    materia_prima_id=item_id if tipo == 'mp' else None,
+                    quantidade=qtd,
+                    observacao=notas[i].strip() if i < len(notas) else None,
+                )
+                db.session.add(item)
+
+            db.session.commit()
+        except Exception as exc:  # noqa: BLE001
+            db.session.rollback()
+            current_app.logger.exception('Falha ao criar pedido')
+            flash(f'Erro ao criar pedido: {exc}', 'danger')
+            return redirect(url_for('pedidos.novo'))
         flash('Pedido criado!', 'success')
         return redirect(url_for('pedidos.detalhe', id=pedido.id))
 
@@ -189,33 +221,39 @@ def enviar(id):
         flash('Pedido precisa estar separado para sair pra entrega.', 'warning')
         return redirect(url_for('pedidos.detalhe', id=id))
 
-    for item in pedido.itens:
-        if item.materia_prima_id:
-            mp = MateriaPrima.query.get(item.materia_prima_id)
-            if mp:
-                mp.estoque_atual = max(0, (mp.estoque_atual or 0) - item.quantidade)
-                db.session.add(MovimentacaoEstoque(
-                    materia_prima_id=mp.id, tipo='saida',
+    try:
+        for item in pedido.itens:
+            if item.materia_prima_id:
+                mp = MateriaPrima.query.get(item.materia_prima_id)
+                if mp:
+                    mp.estoque_atual = max(0, (mp.estoque_atual or 0) - item.quantidade)
+                    db.session.add(MovimentacaoEstoque(
+                        materia_prima_id=mp.id, tipo='saida',
+                        quantidade=item.quantidade,
+                        referencia=f'Pedido #{pedido.id} → {pedido.loja.nome}',
+                        usuario_id=current_user.id,
+                    ))
+                continue
+
+            ep = EstoqueProducao.query.filter_by(
+                receita_id=item.receita_id, produto_id=item.produto_id
+            ).first()
+            if ep:
+                ep.quantidade = max(0, ep.quantidade - item.quantidade)
+                db.session.add(MovEstoqueProducao(
+                    estoque_producao_id=ep.id, tipo='saida_pedido',
                     quantidade=item.quantidade,
                     referencia=f'Pedido #{pedido.id} → {pedido.loja.nome}',
                     usuario_id=current_user.id,
                 ))
-            continue
 
-        ep = EstoqueProducao.query.filter_by(
-            receita_id=item.receita_id, produto_id=item.produto_id
-        ).first()
-        if ep:
-            ep.quantidade = max(0, ep.quantidade - item.quantidade)
-            db.session.add(MovEstoqueProducao(
-                estoque_producao_id=ep.id, tipo='saida_pedido',
-                quantidade=item.quantidade,
-                referencia=f'Pedido #{pedido.id} → {pedido.loja.nome}',
-                usuario_id=current_user.id,
-            ))
-
-    pedido.status = 'em_transporte'
-    db.session.commit()
+        pedido.status = 'em_transporte'
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception('Falha ao enviar pedido %s', id)
+        flash(f'Erro ao processar saída do pedido: {exc}. Nada foi alterado.', 'danger')
+        return redirect(url_for('pedidos.detalhe', id=id))
     flash('Pedido em transporte. Estoque da industria baixado.', 'success')
     return redirect(url_for('pedidos.detalhe', id=id))
 
@@ -239,61 +277,68 @@ def receber(id):
             except ValueError:
                 continue
 
-    divergencias = []
-    for item in pedido.itens:
-        qtd_rec = recebidos.get(item.id, item.quantidade)
-        item.quantidade_recebida = qtd_rec
-        if qtd_rec != item.quantidade:
-            divergencias.append(f'{item.nome_item}: pedido {item.quantidade}, recebido {qtd_rec}')
+    try:
+        divergencias = []
+        for item in pedido.itens:
+            qtd_rec = recebidos.get(item.id, item.quantidade)
+            item.quantidade_recebida = qtd_rec
+            if qtd_rec != item.quantidade:
+                divergencias.append(f'{item.nome_item}: pedido {item.quantidade}, recebido {qtd_rec}')
 
-        if qtd_rec <= 0:
-            continue
+            if qtd_rec <= 0:
+                continue
 
-        el = EstoqueLoja.query.filter_by(
-            loja_id=pedido.loja_id,
-            receita_id=item.receita_id,
-            produto_id=item.produto_id,
-            materia_prima_id=item.materia_prima_id,
-        ).first()
-        if not el:
-            el = EstoqueLoja(loja_id=pedido.loja_id,
-                             receita_id=item.receita_id,
-                             produto_id=item.produto_id,
-                             materia_prima_id=item.materia_prima_id)
-            db.session.add(el)
-            db.session.flush()
-        el.quantidade += qtd_rec
-        ref_div = ' (divergente)' if qtd_rec != item.quantidade else ''
-        db.session.add(MovEstoqueLoja(
-            estoque_loja_id=el.id, tipo='entrada_pedido',
-            quantidade=qtd_rec,
-            referencia=f'Pedido #{pedido.id}{ref_div}',
-            usuario_id=current_user.id,
-        ))
+            el = EstoqueLoja.query.filter_by(
+                loja_id=pedido.loja_id,
+                receita_id=item.receita_id,
+                produto_id=item.produto_id,
+                materia_prima_id=item.materia_prima_id,
+            ).first()
+            if not el:
+                el = EstoqueLoja(loja_id=pedido.loja_id,
+                                 receita_id=item.receita_id,
+                                 produto_id=item.produto_id,
+                                 materia_prima_id=item.materia_prima_id)
+                db.session.add(el)
+                db.session.flush()
+            el.quantidade += qtd_rec
+            ref_div = ' (divergente)' if qtd_rec != item.quantidade else ''
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el.id, tipo='entrada_pedido',
+                quantidade=qtd_rec,
+                referencia=f'Pedido #{pedido.id}{ref_div}',
+                usuario_id=current_user.id,
+            ))
 
-    pedido.status = 'entregue'
-    if divergencias:
-        nota = 'Divergencias no recebimento: ' + '; '.join(divergencias)
-        pedido.observacao = (pedido.observacao + ' | ' if pedido.observacao else '') + nota
+        pedido.status = 'entregue'
+        if divergencias:
+            nota = 'Divergencias no recebimento: ' + '; '.join(divergencias)
+            pedido.observacao = (pedido.observacao + ' | ' if pedido.observacao else '') + nota
 
-    for f in request.files.getlist('fotos'):
-        if not f or not f.filename:
-            continue
-        content = f.read()
-        if not content:
-            continue
-        db.session.add(FotoRecebimento(
-            pedido_id=pedido.id,
-            imagem=content,
-            mimetype=f.mimetype or 'image/jpeg',
-            enviada_por=current_user.id,
-        ))
+        for f in request.files.getlist('fotos'):
+            if not f or not f.filename:
+                continue
+            content = f.read()
+            if not content:
+                continue
+            db.session.add(FotoRecebimento(
+                pedido_id=pedido.id,
+                imagem=content,
+                mimetype=f.mimetype or 'image/jpeg',
+                enviada_por=current_user.id,
+            ))
+
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception('Falha ao receber pedido %s', id)
+        flash(f'Erro ao processar recebimento: {exc}. Nada foi alterado.', 'danger')
+        return redirect(url_for('pedidos.detalhe', id=id))
 
     if divergencias:
         flash('Pedido recebido com divergencias. Detalhes salvos na observacao.', 'warning')
     else:
         flash('Pedido recebido integralmente. Estoque da loja atualizado.', 'success')
-    db.session.commit()
     return redirect(url_for('pedidos.detalhe', id=id))
 
 
