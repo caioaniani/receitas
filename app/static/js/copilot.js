@@ -1,5 +1,6 @@
-/* Copilot UI — painel lateral com chat e preview de ações.
-   Backend: POST /copilot/api/interpretar → preview → POST /api/<id>/aprovar */
+/* Copilot UI — chat com preview de ações.
+   Tools: criar_pedido, receber_mp, ajuste_estoque (write — preview obrigatório)
+          consultar_pedido, consultar_estoque (read — resultado direto). */
 (function() {
     var fab = document.getElementById('copilot-fab');
     var panel = document.getElementById('copilot-panel');
@@ -9,12 +10,24 @@
     var form = document.getElementById('copilot-form');
     var input = document.getElementById('copilot-input');
     var sendBtn = document.getElementById('copilot-send');
-    if (!fab || !panel) return;  // não está logado / não admin
+    if (!fab || !panel) return;
+
+    // Lojas pra dropdown (carregada sob demanda)
+    var __lojasCache = null;
+
+    function carregarLojas() {
+        if (__lojasCache) return Promise.resolve(__lojasCache);
+        return fetch('/copilot/api/lojas', {credentials: 'same-origin'})
+            .then(function(r) { return r.ok ? r.json() : {lojas: []}; })
+            .catch(function() { return {lojas: []}; })
+            .then(function(d) { __lojasCache = d.lojas || []; return __lojasCache; });
+    }
 
     function abrir() {
         panel.classList.remove('d-none');
         overlay.classList.remove('d-none');
         setTimeout(function() { input && input.focus(); }, 60);
+        carregarLojas();
     }
     function fechar() {
         panel.classList.add('d-none');
@@ -23,8 +36,6 @@
     fab.addEventListener('click', abrir);
     closeBtn.addEventListener('click', fechar);
     overlay.addEventListener('click', fechar);
-
-    // Cmd/Ctrl+K abre; Esc fecha
     document.addEventListener('keydown', function(e) {
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
             e.preventDefault();
@@ -39,56 +50,120 @@
             return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
         });
     }
-
     function nowHHMM() {
         var d = new Date();
         return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
     }
-
     function addMsg(role, html) {
         var div = document.createElement('div');
         div.className = 'copilot-msg ' + role;
-        div.innerHTML = '<div class="bubble">' + html + '</div>' +
-            '<div class="timestamp">' + nowHHMM() + '</div>';
+        div.innerHTML = '<div class="bubble">' + html + '</div><div class="timestamp">' + nowHHMM() + '</div>';
         history.appendChild(div);
         history.scrollTop = history.scrollHeight;
         return div;
     }
+    function texto2html(t) {
+        // markdown bem leve: **bold**, quebras de linha
+        return escape(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+    }
 
-    function renderPreviewPedido(conversaId, params) {
-        var loja = params.loja_nome ? escape(params.loja_nome) : '<span class="warn">— escolha uma loja —</span>';
-        var data = params.data_entrega || '—';
-        var obs = params.observacao ? escape(params.observacao) : '';
+    // ── Previews por tipo de ação ─────────────────────────────
+
+    function previewCriarPedido(conversaId, params) {
+        var lojaSel = '<select class="form-control form-control-sm copilot-loja-sel">';
+        lojaSel += '<option value="">— escolha a loja —</option>';
+        (__lojasCache || []).forEach(function(l) {
+            var sel = (params.loja_id === l.id) ? ' selected' : '';
+            lojaSel += '<option value="' + l.id + '"' + sel + '>' + escape(l.nome) + '</option>';
+        });
+        lojaSel += '</select>';
+
+        var dataInput = '<input type="date" class="form-control form-control-sm copilot-data-input" value="' + escape(params.data_entrega || '') + '">';
+        var obsInput = '<input type="text" class="form-control form-control-sm copilot-obs-input" placeholder="opcional" value="' + escape(params.observacao || '') + '">';
 
         var itensHtml = '';
         (params.itens || []).forEach(function(item, idx) {
-            var resolvido = item.resolvido;
-            var matches = item.matches || [];
             var optHtml = '<option value="">— escolha —</option>';
-            matches.forEach(function(m) {
-                var sel = (resolvido && m.tipo === resolvido.tipo && m.id === resolvido.id) ? ' selected' : '';
-                optHtml += '<option value="' + m.tipo + ':' + m.id + '"' + sel + '>' +
-                    escape(m.nome) + ' (' + m.tipo + ', ' + m.match + ')</option>';
+            (item.matches || []).forEach(function(m) {
+                var sel = (item.resolvido && m.tipo === item.resolvido.tipo && m.id === item.resolvido.id) ? ' selected' : '';
+                optHtml += '<option value="' + m.tipo + ':' + m.id + '"' + sel + '>' + escape(m.nome) + '</option>';
             });
-            var warn = !resolvido ? '<div class="warn">não achei "' + escape(item.nome_original) + '" — corrija ou remova</div>' : '';
+            var warn = !item.resolvido ? '<div class="warn">não achei "' + escape(item.nome_original) + '"</div>' : '';
             itensHtml += '<div class="copilot-preview-item" data-idx="' + idx + '">' +
-                '<span class="qty">' + item.quantidade + '×</span>' +
+                '<input type="number" min="1" class="form-control form-control-sm qty-input" value="' + item.quantidade + '" style="max-width:60px; text-align:right;">' +
+                '<span style="margin:0 4px;">×</span>' +
                 '<select class="form-control form-control-sm copilot-item-sel">' + optHtml + '</select>' +
                 '<button type="button" class="btn-circle copilot-item-remove" title="Remover" style="width:28px;height:28px;"><i class="bi bi-x"></i></button>' +
                 '</div>' + warn;
         });
 
-        return '<div class="copilot-preview" data-conversa="' + conversaId + '">' +
+        return '<div class="copilot-preview" data-conversa="' + conversaId + '" data-tipo="criar_pedido">' +
             '<div class="copilot-preview-header">criar pedido</div>' +
-            '<div class="copilot-preview-row"><span class="label">loja</span><strong>' + loja + '</strong></div>' +
-            '<div class="copilot-preview-row"><span class="label">data de entrega</span><strong>' + data + '</strong></div>' +
-            (obs ? '<div class="copilot-preview-row"><span class="label">observação</span><span>' + obs + '</span></div>' : '') +
+            '<div class="copilot-preview-row"><span class="label">loja</span></div>' + lojaSel +
+            '<div class="copilot-preview-row"><span class="label">data</span></div>' + dataInput +
+            '<div class="copilot-preview-row"><span class="label">observação</span></div>' + obsInput +
             '<div class="copilot-preview-row"><span class="label">itens</span></div>' +
             '<div class="copilot-items">' + itensHtml + '</div>' +
             '<div class="copilot-preview-actions">' +
             '<button type="button" class="btn-pill btn-pill-outline copilot-cancel">cancelar</button>' +
             '<button type="button" class="btn-pill btn-pill-primary copilot-approve">criar pedido</button>' +
             '</div></div>';
+    }
+
+    function previewReceberMP(conversaId, params) {
+        var mp = params.mp_resolvida;
+        var mpInfo = mp ? escape(mp.nome) + ' (' + escape(mp.unidade || '') + ')' : '<span class="warn">MP não identificada: ' + escape(params.mp_nome) + '</span>';
+        var precoTotal = params.preco_total || '';
+        var ref = params.referencia || '';
+        return '<div class="copilot-preview" data-conversa="' + conversaId + '" data-tipo="receber_mp">' +
+            '<div class="copilot-preview-header">receber MP</div>' +
+            '<div class="copilot-preview-row"><span class="label">MP</span><strong>' + mpInfo + '</strong></div>' +
+            '<div class="copilot-preview-row"><span class="label">quantidade</span></div>' +
+            '<input type="number" step="0.01" min="0.01" class="form-control form-control-sm copilot-mp-qtd" value="' + (params.quantidade || '') + '">' +
+            '<div class="copilot-preview-row"><span class="label">preço total (R$)</span></div>' +
+            '<input type="number" step="0.01" min="0" class="form-control form-control-sm copilot-mp-preco" value="' + precoTotal + '" placeholder="opcional">' +
+            '<div class="copilot-preview-row"><span class="label">referência (NF/fornecedor)</span></div>' +
+            '<input type="text" class="form-control form-control-sm copilot-mp-ref" value="' + escape(ref) + '" placeholder="opcional">' +
+            '<div class="copilot-preview-actions">' +
+            '<button type="button" class="btn-pill btn-pill-outline copilot-cancel">cancelar</button>' +
+            '<button type="button" class="btn-pill btn-pill-primary copilot-approve">registrar entrada</button>' +
+            '</div></div>';
+    }
+
+    function previewAjusteEstoque(conversaId, params) {
+        var mp = params.mp_resolvida;
+        var mpInfo = mp ? escape(mp.nome) + ' (' + escape(mp.unidade || '') + ')' : '<span class="warn">MP não identificada</span>';
+        var tipoSel = '<select class="form-control form-control-sm copilot-ajuste-tipo">' +
+            '<option value="entrada"' + (params.tipo === 'entrada' ? ' selected' : '') + '>entrada (+)</option>' +
+            '<option value="saida"' + (params.tipo === 'saida' ? ' selected' : '') + '>saída (−)</option></select>';
+        return '<div class="copilot-preview" data-conversa="' + conversaId + '" data-tipo="ajuste_estoque">' +
+            '<div class="copilot-preview-header">ajuste de estoque</div>' +
+            '<div class="copilot-preview-row"><span class="label">MP</span><strong>' + mpInfo + '</strong></div>' +
+            '<div class="copilot-preview-row"><span class="label">tipo</span></div>' + tipoSel +
+            '<div class="copilot-preview-row"><span class="label">quantidade</span></div>' +
+            '<input type="number" step="0.01" min="0.01" class="form-control form-control-sm copilot-ajuste-qtd" value="' + (params.quantidade || '') + '">' +
+            '<div class="copilot-preview-row"><span class="label">motivo</span></div>' +
+            '<input type="text" class="form-control form-control-sm copilot-ajuste-motivo" value="' + escape(params.motivo || '') + '" placeholder="ex: quebra por umidade">' +
+            '<div class="copilot-preview-actions">' +
+            '<button type="button" class="btn-pill btn-pill-outline copilot-cancel">cancelar</button>' +
+            '<button type="button" class="btn-pill btn-pill-primary copilot-approve">registrar ajuste</button>' +
+            '</div></div>';
+    }
+
+    function renderResposta(d) {
+        var html = texto2html(d.explicacao || '');
+        if (d.resultado && d.resultado.texto) {
+            html += '<div class="copilot-result-text">' + texto2html(d.resultado.texto) + '</div>';
+        }
+        if (d.resultado && d.resultado.erro) {
+            html += '<div class="warn">erro: ' + escape(d.resultado.erro) + '</div>';
+        }
+        if (d.requer_aprovacao && d.params) {
+            if (d.tipo === 'criar_pedido') html += previewCriarPedido(d.conversa_id, d.params);
+            else if (d.tipo === 'receber_mp') html += previewReceberMP(d.conversa_id, d.params);
+            else if (d.tipo === 'ajuste_estoque') html += previewAjusteEstoque(d.conversa_id, d.params);
+        }
+        return html;
     }
 
     function enviar(prompt) {
@@ -108,11 +183,7 @@
                 addMsg('bot', '<span style="color:var(--cor-vermelho);">erro: ' + escape(d.erro || 'desconhecido') + '</span>');
                 return;
             }
-            var conteudo = escape(d.explicacao || '');
-            if (d.tipo === 'criar_pedido' && d.params) {
-                conteudo += renderPreviewPedido(d.conversa_id, d.params);
-            }
-            addMsg('bot', conteudo);
+            addMsg('bot', renderResposta(d));
         }).catch(function(e) {
             loading.remove();
             sendBtn.disabled = false;
@@ -128,7 +199,50 @@
         enviar(v);
     });
 
-    // Handler clicks dentro do history (preview actions)
+    // Coleta params do preview baseado no tipo
+    function coletarParams(preview) {
+        var tipo = preview.dataset.tipo;
+        if (tipo === 'criar_pedido') {
+            var itens = [];
+            preview.querySelectorAll('.copilot-preview-item').forEach(function(div) {
+                var sel = div.querySelector('.copilot-item-sel');
+                var qtd = parseInt(div.querySelector('.qty-input').value, 10);
+                if (!sel.value || qtd <= 0) return;
+                var parts = sel.value.split(':');
+                var nomeOpc = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
+                itens.push({
+                    quantidade: qtd,
+                    resolvido: {tipo: parts[0], id: parseInt(parts[1], 10), nome: nomeOpc},
+                });
+            });
+            var lojaSel = preview.querySelector('.copilot-loja-sel');
+            var loja_id = lojaSel && lojaSel.value ? parseInt(lojaSel.value, 10) : null;
+            var dataInp = preview.querySelector('.copilot-data-input');
+            var obsInp = preview.querySelector('.copilot-obs-input');
+            return {
+                _itens_editados: itens,
+                loja_id: loja_id,
+                data_entrega: dataInp ? dataInp.value : null,
+                observacao: obsInp ? obsInp.value : null,
+            };
+        }
+        if (tipo === 'receber_mp') {
+            return {
+                quantidade: parseFloat(preview.querySelector('.copilot-mp-qtd').value),
+                preco_total: parseFloat(preview.querySelector('.copilot-mp-preco').value) || null,
+                referencia: preview.querySelector('.copilot-mp-ref').value || null,
+            };
+        }
+        if (tipo === 'ajuste_estoque') {
+            return {
+                tipo: preview.querySelector('.copilot-ajuste-tipo').value,
+                quantidade: parseFloat(preview.querySelector('.copilot-ajuste-qtd').value),
+                motivo: preview.querySelector('.copilot-ajuste-motivo').value,
+            };
+        }
+        return {};
+    }
+
     history.addEventListener('click', function(e) {
         var btnAprovar = e.target.closest('.copilot-approve');
         var btnCancelar = e.target.closest('.copilot-cancel');
@@ -142,7 +256,6 @@
             if (item) item.remove();
             return;
         }
-
         if (btnCancelar) {
             fetch('/copilot/api/' + conversaId + '/cancelar', {
                 method: 'POST',
@@ -152,59 +265,27 @@
             preview.innerHTML = '<div class="copilot-preview-header" style="color:var(--text-muted);">— cancelado —</div>';
             return;
         }
-
         if (btnAprovar) {
-            // Coleta itens editados do preview
-            var itens = [];
-            preview.querySelectorAll('.copilot-preview-item').forEach(function(div) {
-                var sel = div.querySelector('.copilot-item-sel');
-                var qtdSpan = div.querySelector('.qty');
-                var qtd = parseInt((qtdSpan.textContent || '').replace('×', '').trim(), 10);
-                if (!sel.value || qtd <= 0) return;
-                var parts = sel.value.split(':');
-                var tipo = parts[0], id = parseInt(parts[1], 10);
-                var nomeOpcao = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
-                itens.push({
-                    quantidade: qtd,
-                    resolvido: {tipo: tipo, id: id, nome: nomeOpcao},
-                });
-            });
-
-            if (itens.length === 0) {
-                alert('Adicione pelo menos 1 item antes de aprovar.');
-                return;
-            }
-
-            // Reconstroi params editados (pega loja/data do preview original — não permitimos editar via UI ainda)
-            // Pega da string visualmente — pra simplificar, vamos buscar de novo do server o estado original?
-            // Mais simples: backend usa params salvos na conversa SE não passar params; vamos passar items editados + os campos read-only originais
-            var lojaStr = preview.querySelector('.copilot-preview-row strong');
-            var dataStr = preview.querySelectorAll('.copilot-preview-row strong')[1];
-
+            var params = coletarParams(preview);
             btnAprovar.disabled = true;
-            btnAprovar.innerHTML = '<i class="bi bi-arrow-repeat"></i> criando…';
-
+            btnAprovar.innerHTML = '<i class="bi bi-arrow-repeat"></i> aplicando…';
             fetch('/copilot/api/' + conversaId + '/aprovar', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', 'X-CSRFToken': window.CSRF_TOKEN || ''},
                 credentials: 'same-origin',
-                body: JSON.stringify({params: {
-                    // backend lê loja_id/data_entrega/observacao da conversa salva se faltarem.
-                    // Aqui só passamos os itens editados.
-                    _itens_editados: itens,
-                }}),
+                body: JSON.stringify({params: params}),
             }).then(function(r) { return r.json(); }).then(function(d) {
                 if (d.ok) {
-                    preview.innerHTML = '<div class="copilot-preview-header" style="color:var(--cor-verde);">✓ pedido #' + d.pedido_id + ' criado</div>' +
-                        '<div style="text-align:center; margin-top:8px;"><a href="/pedidos/' + d.pedido_id + '" target="_blank" class="btn-pill btn-pill-outline">ver pedido →</a></div>';
+                    var link = d.url ? '<a href="' + d.url + '" target="_blank" class="btn-pill btn-pill-outline mt-2">abrir →</a>' : '';
+                    preview.innerHTML = '<div class="copilot-preview-header" style="color:var(--cor-verde);">✓ feito</div>' + link;
                 } else {
                     btnAprovar.disabled = false;
-                    btnAprovar.innerHTML = 'criar pedido';
+                    btnAprovar.innerHTML = 'aplicar';
                     alert('Erro: ' + (d.erro || 'desconhecido'));
                 }
             }).catch(function(e) {
                 btnAprovar.disabled = false;
-                btnAprovar.innerHTML = 'criar pedido';
+                btnAprovar.innerHTML = 'aplicar';
                 alert('Falha de rede: ' + e);
             });
         }

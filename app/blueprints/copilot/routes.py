@@ -99,13 +99,14 @@ def aprovar(conversa_id):
             base_params[k] = params[k]
     params = base_params
 
-    if conversa.tipo_acao != 'criar_pedido':
-        return jsonify(ok=False, erro=f'tipo de acao nao executavel: {conversa.tipo_acao}'), 400
+    tipo = conversa.tipo_acao
+    if tipo not in copilot_svc.REQUER_APROVACAO:
+        return jsonify(ok=False, erro=f'tipo de acao nao executavel: {tipo}'), 400
 
     try:
-        resultado = copilot_svc.executar_criar_pedido(params, current_user)
+        resultado = copilot_svc.executar(tipo, params, current_user)
     except Exception as exc:  # noqa: BLE001
-        logger.exception('Copilot.executar_criar_pedido falhou')
+        logger.exception('Copilot.executar falhou')
         conversa.status = 'falhou'
         conversa.erro = str(exc)
         db.session.commit()
@@ -120,11 +121,23 @@ def aprovar(conversa_id):
     from datetime import datetime
     conversa.status = 'executado'
     conversa.executado_em = datetime.utcnow()
-    conversa.registro_tipo = 'pedido_loja'
-    conversa.registro_id = resultado.get('pedido_id')
+    conversa.registro_tipo = resultado.get('registro_tipo')
+    conversa.registro_id = resultado.get('registro_id')
     db.session.commit()
 
     return jsonify(ok=True, **resultado)
+
+
+@copilot_bp.route('/api/lojas', methods=['GET'])
+@login_required
+def listar_lojas():
+    """Lista lojas pra dropdown do preview de criar_pedido."""
+    guard = _admin_only()
+    if guard:
+        return guard
+    from app.models import Loja
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    return jsonify(lojas=[{'id': l.id, 'nome': l.nome} for l in lojas])
 
 
 @copilot_bp.route('/api/<int:conversa_id>/cancelar', methods=['POST'])
