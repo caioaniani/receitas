@@ -35,24 +35,45 @@ def _resolver_produto(vnda_nome, vnda_sku):
     return mp
 
 
-def _baixar_item(loja_id, mp, qtd, vnda_code, user_id):
-    """Aplica baixa em EstoqueLoja(loja Anesio) considerando fator_quantidade
-    com acumulador fracionario (mesma logica do Seru)."""
+def _componentes_de_cesta(produto):
+    """Se produto for cesta (tem ProdutoItens), retorna lista de
+    (tipo, id, item_nome, quantidade_no_item). Senao retorna []."""
+    if not produto or not produto.itens:
+        return []
+    out = []
+    for pi in produto.itens:
+        if pi.tipo == 'receita':
+            r = Receita.query.filter_by(nome=pi.item_nome).first()
+            if r:
+                out.append(('receita', r.id, r.nome, float(pi.quantidade or 1.0)))
+        elif pi.tipo == 'mp':
+            m = MateriaPrima.query.filter_by(nome=pi.item_nome).first()
+            if m:
+                out.append(('mp', m.id, m.nome, float(pi.quantidade or 1.0)))
+    return out
+
+
+def _baixar_componente(loja_id, mp, componente_key, tipo, item_id,
+                       a_baixar_float, vnda_code, user_id, label=''):
+    """Baixa UM componente com seu proprio acumulador fracionario."""
+    if not item_id:
+        return {'baixado': False, 'faltou': a_baixar_float}
+
     filtro = {'loja_id': loja_id}
-    if mp.receita_id:
-        filtro['receita_id'] = mp.receita_id
-    elif mp.produto_id:
-        filtro['produto_id'] = mp.produto_id
+    if tipo == 'receita':
+        filtro['receita_id'] = item_id
+    elif tipo == 'produto':
+        filtro['produto_id'] = item_id
+    elif tipo == 'mp':
+        filtro['materia_prima_id'] = item_id
     else:
-        return {'baixado': False, 'faltou': qtd}
+        return {'baixado': False, 'faltou': 0}
 
-    fator = float(mp.fator_quantidade or 1.0)
-    a_baixar_float = float(qtd) * fator
-
-    # Acumulador: soma a fracao pendente, separa inteiros pra baixar agora
-    debito = VndaDebito.query.filter_by(vnda_produto_map_id=mp.id).first()
+    debito = VndaDebito.query.filter_by(
+        vnda_produto_map_id=mp.id, componente_key=componente_key).first()
     if not debito:
-        debito = VndaDebito(vnda_produto_map_id=mp.id, fracao_pendente=0.0)
+        debito = VndaDebito(vnda_produto_map_id=mp.id,
+                            componente_key=componente_key, fracao_pendente=0.0)
         db.session.add(debito)
         db.session.flush()
     debito_total = (debito.fracao_pendente or 0.0) + a_baixar_float
@@ -60,7 +81,7 @@ def _baixar_item(loja_id, mp, qtd, vnda_code, user_id):
     debito.fracao_pendente = max(0.0, round(debito_total - inteiros, 6))
 
     if inteiros <= 0:
-        return {'baixado': False, 'faltou': 0, 'acumulado': debito.fracao_pendente}
+        return {'baixado': False, 'faltou': 0}
 
     el = EstoqueLoja.query.filter_by(**filtro).first()
     if not el:
@@ -71,26 +92,59 @@ def _baixar_item(loja_id, mp, qtd, vnda_code, user_id):
     atual = el.quantidade or 0
     real = min(inteiros, atual)
     falta = inteiros - real
-    ref_extra = '' if fator == 1.0 else f' (fator {fator})'
 
     if real > 0:
         el.quantidade = atual - real
         db.session.add(MovEstoqueLoja(
-            estoque_loja_id=el.id,
-            tipo='venda_vnda',
-            quantidade=real,
-            referencia=f'VNDA #{vnda_code}{ref_extra}',
-            usuario_id=user_id,
+            estoque_loja_id=el.id, tipo='venda_vnda', quantidade=real,
+            referencia=f'VNDA #{vnda_code}{label}', usuario_id=user_id,
         ))
     if falta > 0:
         db.session.add(MovEstoqueLoja(
-            estoque_loja_id=el.id,
-            tipo='venda_vnda_sem_estoque',
-            quantidade=falta,
-            referencia=f'VNDA #{vnda_code}{ref_extra} — sem estoque suficiente',
+            estoque_loja_id=el.id, tipo='venda_vnda_sem_estoque', quantidade=falta,
+            referencia=f'VNDA #{vnda_code}{label} — sem estoque suficiente',
             usuario_id=user_id,
         ))
-    return {'baixado': real > 0, 'faltou': falta, 'acumulado': debito.fracao_pendente}
+    return {'baixado': real > 0, 'faltou': falta}
+
+
+def _baixar_item(loja_id, mp, qtd, vnda_code, user_id):
+    """Aplica baixa considerando fator e CESTAS.
+
+    Se mp aponta pra Produto que e cesta (tem ProdutoItens), explode em
+    multiplas baixas — cada componente baixa proporcionalmente. Cada
+    componente tem seu proprio acumulador via `componente_key`.
+    """
+    fator = float(mp.fator_quantidade or 1.0)
+    qtd_efetiva = float(qtd) * fator
+    ref_extra = '' if fator == 1.0 else f' (fator {fator})'
+
+    componentes = _componentes_de_cesta(mp.produto) if mp.produto_id else []
+
+    if componentes:
+        # Cesta: baixa cada componente
+        algum_baixou = False
+        falta_total = 0
+        for tipo, item_id, item_nome, qtd_no_item in componentes:
+            a_baixar = qtd_efetiva * qtd_no_item
+            ckey = f'{tipo[0]}:{item_id}'
+            label = f'{ref_extra} [{item_nome}]'
+            res = _baixar_componente(loja_id, mp, ckey, tipo, item_id,
+                                      a_baixar, vnda_code, user_id, label=label)
+            if res['baixado']:
+                algum_baixou = True
+            falta_total += res.get('faltou', 0)
+        return {'baixado': algum_baixou, 'faltou': falta_total}
+
+    # Produto simples: 1 baixa direta
+    if mp.receita_id:
+        tipo, item_id = 'receita', mp.receita_id
+    elif mp.produto_id:
+        tipo, item_id = 'produto', mp.produto_id
+    else:
+        return {'baixado': False, 'faltou': qtd}
+    return _baixar_componente(loja_id, mp, 'self', tipo, item_id,
+                               qtd_efetiva, vnda_code, user_id, label=ref_extra)
 
 
 def _estornar_pedido(reg, user_id):
