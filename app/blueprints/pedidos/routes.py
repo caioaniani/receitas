@@ -86,7 +86,7 @@ def lista():
             except (TypeError, ValueError):
                 pass
     pedidos = query.limit(100).all()
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    lojas = _lojas_operacionais()
     return render_template('pedidos/lista.html', pedidos=pedidos, lojas=lojas,
                            filtro_loja=request.args.get('loja', ''))
 
@@ -112,7 +112,7 @@ def novo():
         # Loja precisa existir e estar ativa
         if not sel_loja or not Loja.query.filter_by(id=sel_loja, ativa=True).first():
             flash('Selecione uma loja valida.', 'warning')
-            lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+            lojas = _lojas_operacionais()
             receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
             materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
             return render_template('pedidos/novo.html', lojas=lojas,
@@ -129,7 +129,7 @@ def novo():
 
         if data_entrega < amanha:
             flash('A data de entrega deve ser a partir de amanha.', 'warning')
-            lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+            lojas = _lojas_operacionais()
             receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
             materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
             return render_template('pedidos/novo.html', lojas=lojas,
@@ -180,7 +180,7 @@ def novo():
         flash('Pedido criado!', 'success')
         return redirect(url_for('pedidos.detalhe', id=pedido.id))
 
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    lojas = _lojas_operacionais()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
     return render_template('pedidos/novo.html', lojas=lojas,
@@ -399,7 +399,7 @@ def precos_loja(loja_id):
         return redirect(url_for('pedidos.precos_loja', loja_id=loja_id))
 
     precos = {p.receita_id: p.preco for p in PrecoLojaReceita.query.filter_by(loja_id=loja_id).all()}
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    lojas = _lojas_operacionais()
     return render_template('pedidos/precos_loja.html', loja=loja, receitas=receitas,
                            precos=precos, lojas=lojas)
 
@@ -424,7 +424,7 @@ def relatorio():
     except ValueError:
         ate = hoje
 
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    lojas = _lojas_operacionais()
     pedidos = []
     totais = {'qtd_pedidos': 0, 'valor_total': 0.0, 'divergencias': 0}
     por_item = defaultdict(lambda: {'quantidade': 0, 'recebido': 0, 'valor': 0.0})
@@ -725,7 +725,7 @@ def estoque_loja():
 
     loja = Loja.query.get(loja_id) if loja_id else None
     itens = EstoqueLoja.query.filter_by(loja_id=loja_id).all() if loja_id else []
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    lojas = _lojas_operacionais()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all() \
         if current_user.is_admin() else []
     materias = MateriaPrima.query.order_by(MateriaPrima.nome).all() \
