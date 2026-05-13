@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}Caixa Diário{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">caixa diário</h1>
+    <div class="page-actions">
+        <form method="GET" class="d-flex gap-2 align-items-center">
+            <input type="date" name="data" class="form-control form-control-sm" style="max-width:170px;"
+                   value="{{ data_alvo.isoformat() }}" onchange="this.form.submit()">
+        </form>
+        <a href="{{ url_for('pdv.index') }}" class="btn-pill btn-pill-outline">
+            <i class="bi bi-shop-window"></i> ver vendas PDV
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-info py-2 small">
+    <i class="bi bi-info-circle"></i>
+    Resumo do dia <strong>{{ data_alvo.strftime('%d/%m/%Y') }}</strong>
+    a partir de dados locais (pedidos do banco). Pra ver vendas detalhadas do PDV
+    (Seru), use o link acima.
+</div>
+
+<!-- KPIs principais -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+        <div class="card" style="padding:16px;">
+            <div class="text-muted small">pedidos locais</div>
+            <div class="fw-bold" style="font-size:24px;">{{ hoje.n_locais }}</div>
+            <div class="text-success" style="font-size:14px;">R$ {{ "%.2f"|format(hoje.valor_locais) }}</div>
+            {% if delta_locais is not none %}
+            <div class="mt-1" style="font-size:11px;">
+                {% if delta_locais > 0 %}
+                <span class="text-success">▲ {{ "%.0f"|format(delta_locais) }}% vs ontem</span>
+                {% elif delta_locais < 0 %}
+                <span class="text-danger">▼ {{ "%.0f"|format(delta_locais|abs) }}% vs ontem</span>
+                {% else %}
+                <span class="text-muted">= vs ontem</span>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="col-md-3 col-6">
+        <div class="card" style="padding:16px;">
+            <div class="text-muted small">entregas</div>
+            <div class="fw-bold" style="font-size:24px;">{{ hoje.n_entregas }}</div>
+            <div style="font-size:13px;">
+                <span class="text-success">✓ {{ hoje.n_entregas_feitas }}</span>
+                {% if hoje.n_entregas_falhas %}
+                <span class="text-danger ms-2">✗ {{ hoje.n_entregas_falhas }}</span>
+                {% endif %}
+            </div>
+            {% if delta_entregas is not none %}
+            <div class="mt-1" style="font-size:11px;">
+                {% if delta_entregas > 0 %}
+                <span class="text-success">▲ {{ "%.0f"|format(delta_entregas) }}% vs ontem</span>
+                {% elif delta_entregas < 0 %}
+                <span class="text-danger">▼ {{ "%.0f"|format(delta_entregas|abs) }}% vs ontem</span>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="col-md-3 col-6">
+        <div class="card" style="padding:16px;">
+            <div class="text-muted small">pedidos entre lojas</div>
+            <div class="fw-bold" style="font-size:24px;">{{ hoje.n_ped_loja }}</div>
+            <div style="font-size:13px;">
+                <span class="text-success">✓ {{ hoje.n_ped_loja_entregue }} entregues</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-6">
+        <div class="card" style="padding:16px;">
+            <div class="text-muted small">compras de MP</div>
+            <div class="fw-bold" style="font-size:24px;">{{ hoje.n_compras }}</div>
+            <div class="text-danger" style="font-size:14px;">- R$ {{ "%.2f"|format(hoje.valor_compras) }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Comparação temporal -->
+<h3 class="mb-3">comparativo</h3>
+<div class="card" style="padding:0; overflow:hidden;">
+    <table class="table-dense">
+        <thead>
+            <tr>
+                <th>indicador</th>
+                <th class="text-end">hoje ({{ data_alvo.strftime('%d/%m') }})</th>
+                <th class="text-end">ontem ({{ ontem_data.strftime('%d/%m') }})</th>
+                <th class="text-end">há 7 dias ({{ semana_data.strftime('%d/%m') }})</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="fw-semibold">pedidos locais (qtd)</td>
+                <td class="text-end fw-bold">{{ hoje.n_locais }}</td>
+                <td class="text-end text-muted">{{ ontem.n_locais }}</td>
+                <td class="text-end text-muted">{{ semana.n_locais }}</td>
+            </tr>
+            <tr>
+                <td class="fw-semibold">pedidos locais (R$)</td>
+                <td class="text-end fw-bold text-success">R$ {{ "%.2f"|format(hoje.valor_locais) }}</td>
+                <td class="text-end text-muted">R$ {{ "%.2f"|format(ontem.valor_locais) }}</td>
+                <td class="text-end text-muted">R$ {{ "%.2f"|format(semana.valor_locais) }}</td>
+            </tr>
+            <tr>
+                <td class="fw-semibold">entregas totais</td>
+                <td class="text-end fw-bold">{{ hoje.n_entregas }}</td>
+                <td class="text-end text-muted">{{ ontem.n_entregas }}</td>
+                <td class="text-end text-muted">{{ semana.n_entregas }}</td>
+            </tr>
+            <tr>
+                <td class="fw-semibold">entregas concluídas</td>
+                <td class="text-end fw-bold text-success">{{ hoje.n_entregas_feitas }}</td>
+                <td class="text-end text-muted">{{ ontem.n_entregas_feitas }}</td>
+                <td class="text-end text-muted">{{ semana.n_entregas_feitas }}</td>
+            </tr>
+            <tr>
+                <td class="fw-semibold">entregas falhadas</td>
+                <td class="text-end fw-bold text-danger">{{ hoje.n_entregas_falhas }}</td>
+                <td class="text-end text-muted">{{ ontem.n_entregas_falhas }}</td>
+                <td class="text-end text-muted">{{ semana.n_entregas_falhas }}</td>
+            </tr>
+            <tr>
+                <td class="fw-semibold">pedidos entre lojas</td>
+                <td class="text-end fw-bold">{{ hoje.n_ped_loja }}</td>
+                <td class="text-end text-muted">{{ ontem.n_ped_loja }}</td>
+                <td class="text-end text-muted">{{ semana.n_ped_loja }}</td>
+            </tr>
+            <tr>
+                <td class="fw-semibold">compras de MP (R$)</td>
+                <td class="text-end fw-bold text-danger">R$ {{ "%.2f"|format(hoje.valor_compras) }}</td>
+                <td class="text-end text-muted">R$ {{ "%.2f"|format(ontem.valor_compras) }}</td>
+                <td class="text-end text-muted">R$ {{ "%.2f"|format(semana.valor_compras) }}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="alert alert-light border mt-3 small">
+    <i class="bi bi-lightbulb"></i>
+    <strong>O que NÃO está aqui:</strong> vendas PDV (Seru) e entregas do site (VNDA) com valor real.
+    Esses são APIs externas — pra ver, abre <a href="{{ url_for('pdv.index') }}">/pdv</a>
+    ou <a href="{{ url_for('entregas.index') }}">/entregas</a>. Próximas iterações podem cachear
+    esses números pra entrarem no caixa.
+</div>
+{% endblock %}

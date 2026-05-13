@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Fornecedores{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">fornecedores</h1>
+    <div class="page-actions">
+        <a href="{{ url_for('fornecedores.lista', inativos=1 if not incluir_inativos else 0) }}" class="btn-pill btn-pill-outline">
+            {% if incluir_inativos %}<i class="bi bi-eye-slash"></i> só ativos{% else %}<i class="bi bi-eye"></i> ver inativos{% endif %}
+        </a>
+        <a href="{{ url_for('fornecedores.novo') }}" class="btn-pill btn-pill-primary">
+            <i class="bi bi-plus-lg"></i> novo fornecedor
+        </a>
+    </div>
+</div>
+
+<div class="card" style="padding:0; overflow:hidden;">
+    <table class="table-dense">
+        <thead>
+            <tr>
+                <th>nome</th>
+                <th>contato</th>
+                <th>telefone</th>
+                <th>email</th>
+                <th>cnpj</th>
+                <th class="text-center">compras</th>
+                <th class="text-center">status</th>
+                <th class="col-chevron"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in fornecedores %}
+            <tr style="cursor:pointer;" onclick="window.location='{{ url_for('fornecedores.detalhe', id=f.id) }}'">
+                <td class="fw-semibold">{{ f.nome }}</td>
+                <td>{{ f.contato or '—' }}</td>
+                <td>{{ f.telefone or '—' }}</td>
+                <td>{{ f.email or '—' }}</td>
+                <td>{{ f.cnpj or '—' }}</td>
+                <td class="text-center">{{ f.compras|length }}</td>
+                <td class="text-center">
+                    {% if f.ativo %}
+                    <span class="badge-status"><span class="bullet" style="background:var(--cor-verde);"></span>ativo</span>
+                    {% else %}
+                    <span class="badge-status" style="background:var(--bg-chip); color:var(--text-soft);"><span class="bullet" style="background:var(--text-soft);"></span>inativo</span>
+                    {% endif %}
+                </td>
+                <td class="col-chevron"><i class="bi bi-chevron-right"></i></td>
+            </tr>
+            {% endfor %}
+            {% if not fornecedores %}
+            <tr><td colspan="8" class="text-center text-muted py-4">Nenhum fornecedor cadastrado.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

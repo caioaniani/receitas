@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2><i class="bi bi-box-seam"></i> Banco de Matérias-Primas</h2>
+    <h1 class="page-title mb-0"><i class="bi bi-box-seam"></i> Banco de Matérias-Primas</h1>
 </div>
 
 <form method="POST" action="{{ url_for('materias_primas.salvar') }}">
@@ -18,6 +18,7 @@
                     <th style="width:22%">Nome do Ingrediente</th>
                     <th style="width:80px">Unid.</th>
                     <th style="width:120px">Custo (R$)</th>
+                    <th style="width:110px" title="Peso de cada unidade em gramas (opcional, so faz sentido se Unid = un)">Peso/un (g)</th>
                     <th style="width:18%">Fornecedor</th>
                     <th>Observações</th>
                     <th style="width:50px"></th>
@@ -46,6 +47,12 @@
                         </div>
                     </td>
                     <td>
+                        <input type="number" name="peso_unidade[]" value="{{ '%.0f' % mp.peso_unidade if mp.peso_unidade else '' }}"
+                               step="any" min="0" placeholder="-"
+                               class="form-control form-control-sm input-blue text-end mp-peso-unidade"
+                               {% if mp.unidade != 'un' %}readonly style="background:#eee;"{% endif %}>
+                    </td>
+                    <td>
                         <input type="text" name="fornecedor[]" value="{{ mp.fornecedor or '' }}" class="form-control form-control-sm input-blue">
                     </td>
                     <td>
@@ -67,7 +74,7 @@
             <i class="bi bi-plus-lg"></i> Adicionar Linha
         </button>
         <button type="submit" class="btn btn-primary btn-sm">
-            <i class="bi bi-check-lg"></i> Salvar Tudo
+            <i class="bi bi-check-lg"></i> Salvar
         </button>
     </div>
 </form>
@@ -95,6 +102,11 @@
             </div>
         </td>
         <td>
+            <input type="number" name="peso_unidade[]" value="" step="any" min="0" placeholder="-"
+                   class="form-control form-control-sm input-blue text-end mp-peso-unidade"
+                   readonly style="background:#eee;">
+        </td>
+        <td>
             <input type="text" name="fornecedor[]" value="" class="form-control form-control-sm input-blue">
         </td>
         <td>
@@ -112,12 +124,18 @@
 
 {% block scripts %}
 <script>
-// Atualiza label /kg ou /un quando muda a unidade
+// Atualiza label /kg ou /un + habilita peso/un quando unidade = un
 document.getElementById('mp-table').addEventListener('change', function(e) {
     if (e.target.classList.contains('mp-unidade-select')) {
-        var label = e.target.closest('tr').querySelector('.mp-custo-label');
-        if (label) {
-            label.textContent = e.target.value === 'un' ? '/un' : '/kg';
+        var row = e.target.closest('tr');
+        var ehUn = e.target.value === 'un';
+        var label = row.querySelector('.mp-custo-label');
+        if (label) label.textContent = ehUn ? '/un' : '/kg';
+        var peso = row.querySelector('.mp-peso-unidade');
+        if (peso) {
+            peso.readOnly = !ehUn;
+            peso.style.background = ehUn ? '' : '#eee';
+            if (!ehUn) peso.value = '';
         }
     }
 });

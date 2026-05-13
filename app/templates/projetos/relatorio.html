@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% import "projetos/_partials.html" as ui %}
+
+{% block title %}Projetos · Relatório{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-graph-up"></i> Relatório de Produtividade</h1>
+</div>
+
+{{ ui.stats(contadores) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    {{ ui.nav_views(view, contadores.inbox) }}
+    <form method="GET" class="d-flex gap-2 align-items-end">
+        <div>
+            <label class="form-label small fw-bold mb-0">De</label>
+            <input type="date" name="de" value="{{ de }}" class="form-control form-control-sm">
+        </div>
+        <div>
+            <label class="form-label small fw-bold mb-0">Até</label>
+            <input type="date" name="ate" value="{{ ate }}" class="form-control form-control-sm">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i></button>
+    </form>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row text-center g-2">
+            <div class="col-md-4">
+                <small class="text-muted">Tarefas no período</small>
+                <div class="fw-bold fs-4">{{ total_tarefas }}</div>
+            </div>
+            <div class="col-md-4">
+                <small class="text-muted">Concluídas</small>
+                <div class="fw-bold fs-4 text-success">{{ total_concluidas }}</div>
+            </div>
+            <div class="col-md-4">
+                <small class="text-muted">% Conclusão geral</small>
+                <div class="fw-bold fs-4">{{ pct_geral }}%</div>
+                <div class="progress mt-1" style="height:6px;">
+                    <div class="progress-bar bg-success" style="width:{{ pct_geral }}%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h6 class="fw-bold mb-2">Por área</h6>
+<div class="card">
+    <div class="card-body">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Área</th>
+                    <th class="text-center">Projetos ativos</th>
+                    <th class="text-center">Tarefas</th>
+                    <th class="text-center">Concluídas</th>
+                    <th class="text-center">Atrasadas</th>
+                    <th class="text-center">Canceladas</th>
+                    <th style="width:30%">% Conclusão</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in dados %}
+                <tr>
+                    <td>{{ ui.area_badge(d.area) }} <strong class="ms-1">{{ d.area.nome }}</strong></td>
+                    <td class="text-center">{{ d.ativos }}</td>
+                    <td class="text-center">{{ d.total }}</td>
+                    <td class="text-center text-success fw-bold">{{ d.concluidas }}</td>
+                    <td class="text-center {% if d.atrasadas %}text-danger fw-bold{% endif %}">{{ d.atrasadas }}</td>
+                    <td class="text-center text-muted">{{ d.canceladas }}</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress flex-grow-1" style="height:8px;">
+                                <div class="progress-bar bg-success" style="width:{{ d.pct }}%"></div>
+                            </div>
+                            <small class="fw-bold">{{ d.pct }}%</small>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{{ ui.modal_novo_projeto(areas, usuarios) }}
+{{ ui.modal_nova_area(current_user) }}
+{{ ui.modal_novo_de_template(areas, templates_disponiveis, usuarios) }}
+{{ ui.modal_weekly() }}
+{% endblock %}

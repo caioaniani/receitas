@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% import "projetos/_partials.html" as ui %}
+
+{% block title %}Projetos · Inbox{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-inbox"></i> Inbox</h1>
+    {{ ui.botoes_acao() }}
+</div>
+
+{{ ui.stats(contadores) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    {{ ui.nav_views(view, pendentes|length) }}
+    <small class="text-muted">
+        {{ pendentes|length }} pendente{{ 's' if pendentes|length != 1 }} ·
+        Tarefas avulsas — classifique movendo pra um projeto.
+    </small>
+</div>
+
+{{ ui.quick_add_input() }}
+
+<div class="card">
+    <div class="card-body">
+        <h6 class="fw-bold mb-3"><i class="bi bi-collection"></i> Pendentes ({{ pendentes|length }})</h6>
+
+        {% if not pendentes %}
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-check2-circle" style="font-size:48px; color:#5a9a5e;"></i>
+            <p class="mt-2 mb-0">Inbox vazia.</p>
+            <small>Capture novas tarefas no campo "Tarefa rápida" acima ou pressione <kbd>i</kbd>.</small>
+        </div>
+        {% endif %}
+
+        {% for t in pendentes %}
+        <div class="proj-inbox-item d-flex align-items-center gap-2 py-2 border-bottom"
+             {{ ui.tarefa_data_attr(t) }}>
+            {{ ui.tarefa_status_btn(t) }}
+
+            <div style="flex:1; min-width:0;">
+                <div class="fw-semibold tarefa-nome-editavel" style="cursor:pointer;" title="Clique para classificar">
+                    {{ t.nome }}
+                </div>
+                <div class="proj-meta">
+                    <small class="text-muted"><i class="bi bi-clock"></i> {{ t.criado_em.strftime('%d/%m %H:%M') }}</small>
+                    {% if t.prazo %}
+                    <span class="badge {% if t.atrasada %}bg-danger{% else %}bg-light text-dark{% endif %}">
+                        <i class="bi bi-calendar3"></i> {{ data_relativa(t.prazo) }}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <select class="form-select form-select-sm proj-mover-rapido" data-tarefa-id="{{ t.id }}"
+                    style="max-width:240px; font-size:12px;" title="Mover para projeto">
+                <option value="">→ Mover pra projeto…</option>
+                {% for area_nome, grupo in projetos_alvo|groupby('area.nome') %}
+                {% if area_nome != 'Inbox' %}
+                <optgroup label="{{ area_nome }}">
+                    {% for p in grupo %}
+                    <option value="{{ p.id }}">{{ p.nome }}</option>
+                    {% endfor %}
+                </optgroup>
+                {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% if feitas_recentes %}
+<div class="card mt-3">
+    <div class="card-body">
+        <h6 class="fw-bold mb-3 text-muted">
+            <i class="bi bi-check2-all"></i> Concluídas ou descartadas (últimos 14 dias)
+        </h6>
+        {% for t in feitas_recentes %}
+        <div class="d-flex align-items-center gap-2 py-1" style="opacity:.7;">
+            <span class="text-muted">
+                {% if t.status == 'feito' %}<i class="bi bi-check-circle-fill text-success"></i>
+                {% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}
+            </span>
+            <span style="flex:1; text-decoration:line-through;">{{ t.nome }}</span>
+            <small class="text-muted">{{ t.feito_em.strftime('%d/%m') if t.feito_em }}</small>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{{ ui.modal_editar_tarefa(usuarios, projetos_alvo) }}
+{{ ui.modal_novo_projeto(areas, usuarios) }}
+{{ ui.modal_nova_area(current_user) }}
+{{ ui.modal_novo_de_template(areas, templates_disponiveis, usuarios) }}
+{{ ui.modal_weekly() }}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/projetos.js') }}?v={{ static_v['js/projetos.js'] }}"></script>
+{% endblock %}

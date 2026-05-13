@@ -3,18 +3,22 @@
 {% block title %}Entregas Site{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="fw-bold mb-0"><i class="bi bi-truck"></i> Entregas Site</h5>
-    <button class="btn btn-outline-secondary btn-sm d-print-none" onclick="imprimirPedidos()">
-        <i class="bi bi-printer"></i> Imprimir
-    </button>
+<div class="page-header">
+    <h1 class="page-title">entregas
+        <small class="text-muted" style="font-size:11px;font-weight:normal;text-transform:none;">build {{ static_v['js/entregas.js'] }}</small>
+    </h1>
+    <div class="page-actions">
+        <button class="btn-pill btn-pill-outline d-print-none" onclick="imprimirPedidos()">
+            <i class="bi bi-printer"></i> imprimir
+        </button>
+    </div>
 </div>
 
 <!-- Tabs -->
 <ul class="nav nav-tabs mb-3 d-print-none" role="tablist">
     <li class="nav-item">
-        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-pedidos" type="button">
-            <i class="bi bi-list-check"></i> Pedidos do Dia
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-operacao" type="button" id="btn-tab-operacao">
+            <i class="bi bi-truck"></i> Operação
         </button>
     </li>
     <li class="nav-item">
@@ -22,11 +26,126 @@
             <i class="bi bi-calendar3"></i> Calendario
         </button>
     </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-produtos" type="button" id="btn-tab-produtos">
+            <i class="bi bi-box-seam"></i> Produtos
+        </button>
+    </li>
+    {# Abas legadas (substituidas pela aba Operacao). Ocultas por padrao;
+       inclua ?legado=1 na URL pra reabilitar caso precise voltar. #}
+    {% if request.args.get('legado') %}
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-pedidos" type="button">
+            <i class="bi bi-list-check"></i> Pedidos do Dia <small class="text-muted">(legado)</small>
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-rotas" type="button" id="btn-tab-rotas">
+            <i class="bi bi-signpost-2"></i> Rotas <small class="text-muted">(legado)</small>
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-atribuidos" type="button" id="btn-tab-atribuidos">
+            <i class="bi bi-person-check"></i> Atribuídos <small class="text-muted">(legado)</small>
+        </button>
+    </li>
+    {% endif %}
 </ul>
 
 <div class="tab-content">
+    <!-- Tab Operação (unificada) -->
+    <div class="tab-pane fade show active" id="tab-operacao" data-is-admin="{% if current_user.is_admin() %}1{% else %}0{% endif %}">
+        <div class="d-flex flex-wrap gap-2 align-items-end mb-3 d-print-none">
+            <div>
+                <label class="form-label small fw-bold mb-1" style="text-transform:lowercase;">data</label>
+                <input type="date" id="op-data" class="form-control form-control-sm" style="max-width:170px;" value="{{ hoje }}">
+            </div>
+            <button class="btn-pill btn-pill-outline" id="op-hoje" title="Voltar pra hoje">hoje</button>
+            <button class="btn-pill btn-pill-primary" id="op-auto" title="Distribui pedidos sem driver e SALVA. Mantém os já atribuídos.">
+                <i class="bi bi-magic"></i> auto-distribuir vazios
+            </button>
+            <button class="btn-pill btn-pill-outline" id="op-mapa-toggle">
+                <i class="bi bi-map"></i> <span id="op-mapa-label">mostrar mapa</span>
+            </button>
+            <button class="btn-pill btn-pill-outline" id="op-reotimizar" style="display:none; border-color:var(--cor-amarelo-borda); color:var(--cor-amarelo-borda);" title="Reordena as paradas dentro de cada rota com base nas atribuições atuais.">
+                <i class="bi bi-arrow-repeat"></i> re-otimizar rotas
+            </button>
+            <button class="btn-pill btn-pill-outline" id="op-novo-pedido" title="Cadastrar pedido feito fora do VNDA" style="border-color:var(--cor-verde); color:var(--cor-verde);">
+                <i class="bi bi-plus-lg"></i> novo pedido
+            </button>
+            <input type="text" id="op-busca" class="form-control form-control-sm" placeholder="buscar cliente ou code..." style="max-width:220px; border-radius:var(--radius-pill);">
+            <button class="btn-pill btn-pill-outline ms-auto" data-bs-toggle="modal" data-bs-target="#modal-drivers">
+                <i class="bi bi-people"></i> drivers
+            </button>
+            <button class="btn-pill btn-pill-outline" onclick="window.print()">
+                <i class="bi bi-printer"></i> imprimir
+            </button>
+        </div>
+
+        <div id="op-resumo" class="small text-muted mb-2"></div>
+        <!-- Seletor de lote do dia -->
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-2 d-print-none d-none" id="op-lotes-area">
+            <span class="small fw-bold text-muted">Lote:</span>
+            <select id="op-lote-filter" class="form-select form-select-sm" style="max-width:380px;">
+                <option value="">Todos os lotes</option>
+            </select>
+            <span id="op-lote-status" class="badge"></span>
+            <span id="op-lote-meta" class="small text-muted"></span>
+            <button id="op-lote-excluir" class="btn-pill btn-pill-outline" style="display:none; border-color:var(--cor-vermelho); color:var(--cor-vermelho); padding:4px 12px; font-size:13px;" title="Excluir o lote selecionado. Atribuições viram 'Sem lote'.">
+                <i class="bi bi-trash"></i> excluir lote
+            </button>
+            <button id="op-lote-roteirizar" class="btn-pill" style="display:none; background:var(--cor-amarelo-borda); color:#fff; padding:4px 12px; font-size:13px;" title="Atribui driver às sobras desse lote, mantendo o mesmo lote. Não cria lote novo.">
+                <i class="bi bi-magic"></i> roteirizar sobras
+            </button>
+        </div>
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-2 d-print-none d-none" id="op-janelas-area">
+            <span class="small fw-bold text-muted">Janelas:</span>
+            <div id="op-janelas" class="d-flex flex-wrap gap-2"></div>
+            <button class="btn btn-link btn-sm p-0 ms-2" id="op-janelas-todas" type="button">Todas</button>
+            <button class="btn btn-link btn-sm p-0" id="op-janelas-nenhuma" type="button">Nenhuma</button>
+        </div>
+        <div id="op-loading" class="text-center py-4 d-none">
+            <div class="spinner-border spinner-border-sm text-primary"></div>
+            <span class="ms-2 text-muted">Carregando…</span>
+        </div>
+        <!-- Banner persistente de erro de salvamento (só aparece quando há falha em curso) -->
+        <div id="op-save-banner" class="d-print-none alert alert-danger py-2 mb-2 d-none" style="position:sticky; top:0; z-index:1030;">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <strong id="op-save-banner-title">Falha ao salvar.</strong>
+            <span id="op-save-banner-detail" class="ms-1"></span>
+            <button class="btn btn-sm btn-outline-light ms-2" id="op-save-retry-now" type="button">
+                <i class="bi bi-arrow-clockwise"></i> Tentar agora
+            </button>
+        </div>
+        <!-- Indicador discreto de status (verde quando tudo salvo) -->
+        <div id="op-save-status" class="small text-muted mb-2 d-none">
+            <i class="bi bi-check-circle-fill text-success"></i>
+            <span id="op-save-status-text">Salvo</span>
+        </div>
+        <div id="op-msg" class="d-print-none"></div>
+
+        <!-- Barra de selecao em lote -->
+        <div id="op-bulk-bar" class="d-print-none mb-2 p-2 rounded" style="display:none; background:#f1f5f9; border:1px solid #cbd5e1;">
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <span class="fw-semibold small"><span id="op-bulk-count">0</span> selecionados</span>
+                <span class="text-muted">·</span>
+                <span class="small">Atribuir a:</span>
+                <select id="op-bulk-driver" class="form-select form-select-sm" style="max-width:200px;">
+                    <option value="">— Sem driver —</option>
+                </select>
+                <button class="btn btn-primary btn-sm" id="op-bulk-aplicar">
+                    <i class="bi bi-check2"></i> Aplicar
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" id="op-bulk-limpar">Limpar seleção</button>
+            </div>
+        </div>
+
+        <div id="op-mapa" style="display:none; height:380px; border-radius:6px; margin-bottom:12px;"></div>
+        <div id="op-container"></div>
+    </div>
+
     <!-- Tab Pedidos -->
-    <div class="tab-pane fade show active" id="tab-pedidos">
+    <div class="tab-pane fade" id="tab-pedidos">
         <!-- Controles -->
         <div class="d-flex flex-wrap gap-2 align-items-center mb-3 d-print-none">
             <input type="date" id="data-entrega" class="form-control form-control-sm" style="max-width:180px;" value="{{ hoje }}">
@@ -36,9 +155,9 @@
             <div class="vr d-none d-md-block"></div>
             <div class="btn-group btn-group-sm">
                 <button class="btn btn-outline-secondary active" data-filtro="todos">Todos <span class="badge bg-dark" id="cnt-todos">0</span></button>
-                <button class="btn btn-outline-warning" data-filtro="pendente">Pendentes <span class="badge bg-warning text-dark" id="cnt-pendente">0</span></button>
-                <button class="btn btn-outline-info" data-filtro="separado">Separados <span class="badge bg-info" id="cnt-separado">0</span></button>
-                <button class="btn btn-outline-success" data-filtro="entregue">Entregues <span class="badge bg-success" id="cnt-entregue">0</span></button>
+                <button class="btn btn-outline-warning" data-filtro="pendente">Pendentes <span class="status-badge status-pendente" id="cnt-pendente">0</span></button>
+                <button class="btn btn-outline-info" data-filtro="separado">Separados <span class="status-badge status-separado" id="cnt-separado">0</span></button>
+                <button class="btn btn-outline-success" data-filtro="entregue">Entregues <span class="status-badge status-entregue" id="cnt-entregue">0</span></button>
             </div>
             <span class="badge bg-success fs-6" id="total-dia" title="Soma de todos os pedidos da data selecionada">
                 <i class="bi bi-cash-coin"></i> Total do dia: R$ <span id="total-dia-valor">0,00</span>
@@ -69,6 +188,119 @@
             <button class="btn btn-outline-secondary btn-sm" onclick="calMesProximo()"><i class="bi bi-chevron-right"></i></button>
         </div>
         <div id="calendario-grid"></div>
+    </div>
+
+    <!-- Tab Rotas -->
+    <div class="tab-pane fade" id="tab-rotas">
+        <div class="d-flex flex-wrap gap-2 align-items-end mb-2 d-print-none">
+            <div>
+                <label class="form-label small fw-bold mb-1">Data</label>
+                <input type="date" id="rotas-data" class="form-control form-control-sm" style="max-width:180px;" value="{{ hoje }}">
+            </div>
+            <button class="btn btn-primary btn-sm" id="btn-gerar-rotas" title="Distribui pedidos sem driver e SALVA as atribuições no banco. Mantém os que você já atribuiu manualmente.">
+                <i class="bi bi-magic"></i> Auto-distribuir vazios
+            </button>
+
+            <button class="btn btn-outline-secondary btn-sm ms-auto" id="btn-gerenciar-drivers"
+                    data-bs-toggle="modal" data-bs-target="#modal-drivers">
+                <i class="bi bi-people"></i> Drivers
+            </button>
+        </div>
+
+        <!-- Linha 2: filtro de janelas (aparece após primeiro Gerar) -->
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-2 d-print-none"
+             id="rotas-janelas-area" style="display:none !important;">
+            <small class="fw-bold text-muted me-1">Janelas:</small>
+            <div id="rotas-janelas-cb" class="d-flex flex-wrap gap-2"></div>
+        </div>
+
+        <!-- Linha 3: dica discreta -->
+        <div class="text-muted small mb-3 d-print-none" style="font-size:11px;">
+            <i class="bi bi-info-circle"></i>
+            Cadastre os drivers, arraste pedidos entre eles — atribuições são salvas automaticamente.
+        </div>
+
+        <div id="rotas-loading" class="text-center py-4 d-none">
+            <div class="spinner-border spinner-border-sm text-primary"></div>
+            <span class="ms-2 text-muted">Carregando…</span>
+        </div>
+
+        <div id="rotas-msg" class="d-print-none"></div>
+
+        <div id="rotas-mapa" class="d-print-none" style="height:380px;border-radius:8px;margin-bottom:16px;display:none;"></div>
+
+        <div id="rotas-container"></div>
+
+        <div id="rotas-sem-cep" class="d-print-none mt-3"></div>
+    </div>
+
+    <!-- Tab Atribuidos -->
+    <div class="tab-pane fade" id="tab-atribuidos" data-is-admin="{% if current_user.is_admin() %}1{% else %}0{% endif %}">
+        <div class="d-flex flex-wrap gap-2 align-items-end mb-3 d-print-none">
+            <div>
+                <label class="form-label small fw-bold mb-1">Data</label>
+                <input type="date" id="atrib-data" class="form-control form-control-sm" style="max-width:180px;" value="{{ hoje }}">
+            </div>
+            <button class="btn btn-primary btn-sm" id="btn-atrib-carregar">
+                <i class="bi bi-search"></i> Buscar
+            </button>
+            <span class="badge bg-light text-dark fs-6" id="atrib-resumo" style="display:none;">
+                <span id="atrib-total-atrib">0</span> de <span id="atrib-total">0</span> atribuídos
+            </span>
+        </div>
+
+        <div id="atrib-loading" class="text-center py-4 d-none">
+            <div class="spinner-border spinner-border-sm text-primary"></div>
+            <span class="ms-2 text-muted">Carregando…</span>
+        </div>
+
+        <div id="atrib-msg" class="d-print-none"></div>
+
+        <!-- Barra de acao em lote (aparece quando tem selecao) -->
+        <div id="atrib-bulk-bar" class="d-print-none mb-2 p-2 rounded" style="display:none; background:#f1f5f9; border:1px solid #cbd5e1;">
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <span class="fw-semibold small"><span id="atrib-bulk-count">0</span> selecionados</span>
+                <span class="text-muted">&middot;</span>
+                <span class="small">Atribuir a:</span>
+                <select id="atrib-bulk-driver" class="form-select form-select-sm" style="max-width:200px;">
+                    <option value="">&mdash; Sem driver &mdash;</option>
+                </select>
+                <button class="btn btn-primary btn-sm" id="atrib-bulk-aplicar">
+                    <i class="bi bi-check2"></i> Aplicar
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" id="atrib-bulk-limpar">Limpar selecao</button>
+            </div>
+        </div>
+
+        <div id="atrib-container"></div>
+    </div>
+
+    <!-- Tab Produtos -->
+    <div class="tab-pane fade" id="tab-produtos">
+        <div class="d-flex flex-wrap gap-2 align-items-end mb-3 d-print-none">
+            <div>
+                <label class="form-label small fw-bold mb-1">Data</label>
+                <input type="date" id="prod-data" class="form-control form-control-sm" style="max-width:180px;" value="{{ hoje }}">
+            </div>
+            <button class="btn btn-primary btn-sm" id="btn-prod-carregar">
+                <i class="bi bi-search"></i> Buscar
+            </button>
+            <span class="ms-auto small text-muted" id="prod-resumo" style="display:none;">
+                <span id="prod-total-pedidos">0</span> pedidos
+            </span>
+        </div>
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-3 d-print-none" id="prod-janelas-area" style="display:none !important;">
+            <small class="fw-bold text-muted me-1">Janelas:</small>
+            <div id="prod-janelas-cb" class="d-flex flex-wrap gap-2"></div>
+        </div>
+
+        <div id="prod-loading" class="text-center py-4 d-none">
+            <div class="spinner-border spinner-border-sm text-primary"></div>
+            <span class="ms-2 text-muted">Carregando…</span>
+        </div>
+
+        <div id="prod-msg" class="d-print-none"></div>
+        <div id="prod-container"></div>
     </div>
 </div>
 
@@ -121,333 +353,207 @@
     background: transparent;
 }
 </style>
+
+<!-- Modal: Alterar data de entrega -->
+<div class="modal fade" id="modal-alterar-data" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h6 class="modal-title"><i class="bi bi-calendar-event"></i> Alterar data de entrega</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="md-code">
+                <div class="alert alert-light border small mb-3 py-2" style="font-size:12px;">
+                    <i class="bi bi-info-circle"></i> Pedido <strong id="md-info-code">—</strong>.
+                    Data original do VNDA: <strong id="md-info-original">—</strong>.
+                    A mudança fica <strong>só no nosso ERP</strong> — o cliente não é notificado.
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Nova data de entrega</label>
+                    <input type="date" id="md-data" class="form-control form-control-sm">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Motivo <small class="text-muted fw-normal">(opcional, ajuda no histórico)</small></label>
+                    <textarea id="md-motivo" class="form-control form-control-sm" rows="2"
+                        placeholder="Ex: Cliente pediu pra adiar pq estará viajando."></textarea>
+                </div>
+
+                <div id="md-historico" class="d-none alert alert-secondary small mt-2 py-2" style="font-size:12px;"></div>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <button type="button" id="md-remover" class="btn btn-sm btn-outline-danger d-none">
+                    <i class="bi bi-arrow-counterclockwise"></i> Remover override (voltar à data do VNDA)
+                </button>
+                <div class="d-flex gap-2 ms-auto">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" id="md-salvar" class="btn btn-sm btn-warning">
+                        <i class="bi bi-check-lg"></i> Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: novo pedido manual (fora do VNDA) -->
+<div class="modal fade" id="modal-novo-pedido" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h6 class="modal-title"><i class="bi bi-plus-circle"></i> Novo pedido (fora do VNDA)</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="np-id">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Destinatário *</label>
+                        <input type="text" id="np-destinatario" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Telefone *</label>
+                        <input type="text" id="np-telefone" class="form-control form-control-sm" placeholder="(11) 99999-9999" required>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">Endereço *</label>
+                        <textarea id="np-endereco" class="form-control form-control-sm" rows="2" placeholder="Rua, número, complemento, bairro, cidade, CEP" required></textarea>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Data de entrega *</label>
+                        <input type="date" id="np-data" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Período</label>
+                        <input type="text" id="np-periodo" class="form-control form-control-sm" placeholder="Ex: 8h às 9h">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Cartinha (opcional)</label>
+                        <input type="text" id="np-cartinha" class="form-control form-control-sm" placeholder="Mensagem do cliente">
+                    </div>
+                </div>
+
+                <hr class="my-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong class="small">Itens do pedido *</strong>
+                    <button type="button" class="btn btn-sm btn-outline-success" id="np-add-item">
+                        <i class="bi bi-plus-lg"></i> Adicionar item
+                    </button>
+                </div>
+                <div id="np-itens"></div>
+                <div class="d-flex justify-content-end mt-2">
+                    <strong>Total: R$ <span id="np-total">0,00</span></strong>
+                </div>
+
+                <div class="mt-3">
+                    <label class="form-label small fw-bold">Observação (opcional)</label>
+                    <textarea id="np-observacao" class="form-control form-control-sm" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <button type="button" id="np-deletar" class="btn btn-sm btn-outline-danger d-none">
+                    <i class="bi bi-trash"></i> Deletar pedido
+                </button>
+                <div class="d-flex gap-2 ms-auto">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" id="np-salvar" class="btn btn-sm btn-success">
+                        <i class="bi bi-check-lg"></i> Salvar pedido
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: opções da distribuição automática -->
+<div class="modal fade" id="modal-distribuir" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h6 class="modal-title"><i class="bi bi-magic"></i> Distribuir vendas</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold mb-1">Motoristas que vão receber</label>
+                    <div id="dist-drivers" class="d-flex flex-column gap-1"></div>
+                    <div class="mt-1">
+                        <button class="btn btn-link btn-sm p-0" id="dist-drv-todos" type="button">Todos</button>
+                        ·
+                        <button class="btn btn-link btn-sm p-0" id="dist-drv-nenhum" type="button">Nenhum</button>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold mb-1">Janelas a distribuir</label>
+                    <div id="dist-janelas" class="d-flex flex-column gap-1"></div>
+                    <div class="mt-1">
+                        <button class="btn btn-link btn-sm p-0" id="dist-jan-todas" type="button">Todas</button>
+                        ·
+                        <button class="btn btn-link btn-sm p-0" id="dist-jan-nenhuma" type="button">Nenhuma</button>
+                    </div>
+                </div>
+                <div class="alert alert-light border small py-2 mb-0">
+                    <i class="bi bi-info-circle"></i> Sobras (driver cheio) vão pra <strong>Sem driver</strong> — você roda de novo no próximo turno.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-sm btn-primary" id="dist-confirmar">
+                    <i class="bi bi-check-lg"></i> Distribuir
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: gerenciar drivers -->
+<div class="modal fade" id="modal-drivers" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h6 class="modal-title"><i class="bi bi-people"></i> Drivers cadastrados</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2 mb-3 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold mb-1">Nome do novo driver</label>
+                        <input type="text" id="drv-nome" class="form-control form-control-sm" placeholder="Ex: João">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold mb-1">Telefone</label>
+                        <input type="text" id="drv-telefone" class="form-control form-control-sm" placeholder="(11) 99999-9999">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold mb-1" title="Pedidos máx por rodada (carro=15, moto=2)">Capacidade</label>
+                        <input type="number" min="1" id="drv-capacidade" class="form-control form-control-sm" value="15">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold mb-1">Cor</label>
+                        <input type="color" id="drv-cor" class="form-control form-control-color form-control-sm" value="#3cb44b">
+                    </div>
+                    <div class="col-md-1">
+                        <button type="button" class="btn btn-primary btn-sm w-100" id="btn-criar-driver">+</button>
+                    </div>
+                </div>
+                <div id="drv-msg" class="small"></div>
+                <hr>
+                <div id="drv-lista">
+                    <div class="text-muted small">Carregando…</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
-<script>
-(function() {
-    var STORAGE_KEY = 'entregas_status';
-    var pedidos = [];
-    var filtroAtual = 'todos';
-    var calAno, calMes;
-
-    // ── localStorage status ──
-
-    function getStatusStore() {
-        try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(e) { return {}; }
-    }
-
-    function saveStatusStore(store) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-    }
-
-    function getStatus(dataStr, code) {
-        return getStatusStore()[dataStr + ':' + code] || 'pendente';
-    }
-
-    function setStatus(dataStr, code, status) {
-        var store = getStatusStore();
-        store[dataStr + ':' + code] = status;
-        saveStatusStore(store);
-    }
-
-    function limparAntigos() {
-        var store = getStatusStore();
-        var limite = new Date();
-        limite.setDate(limite.getDate() - 7);
-        var limiteStr = limite.toISOString().slice(0, 10);
-        var changed = false;
-        for (var key in store) {
-            var datepart = key.split(':')[0];
-            if (datepart < limiteStr) {
-                delete store[key];
-                changed = true;
-            }
-        }
-        if (changed) saveStatusStore(store);
-    }
-
-    // ── Carregar pedidos ──
-
-    window.carregarPedidos = function() {
-        var dataStr = document.getElementById('data-entrega').value;
-        var loading = document.getElementById('loading');
-        var container = document.getElementById('pedidos-container');
-        var msg = document.getElementById('msg-container');
-
-        loading.classList.remove('d-none');
-        container.innerHTML = '';
-        msg.innerHTML = '';
-
-        fetch('/entregas/api/pedidos?data=' + dataStr, {
-            headers: {'X-CSRFToken': CSRF_TOKEN}
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            loading.classList.add('d-none');
-            if (data.erro) {
-                msg.innerHTML = '<div class="alert alert-warning">' + data.erro + '</div>';
-                pedidos = [];
-            } else {
-                pedidos = data.pedidos || [];
-            }
-            if (pedidos.length === 0 && !data.erro) {
-                var extra = data.total_janela ? ' (' + data.total_janela + ' pedidos na janela, nenhum com entrega nesta data)' : '';
-                msg.innerHTML = '<div class="alert alert-info">Nenhum pedido para esta data.' + extra + '</div>';
-            }
-            renderPedidos();
-        })
-        .catch(function(err) {
-            loading.classList.add('d-none');
-            msg.innerHTML = '<div class="alert alert-danger">Erro ao carregar pedidos.</div>';
-            pedidos = [];
-            renderPedidos();
-        });
-    };
-
-    // ── Render ──
-
-    function renderPedidos() {
-        var container = document.getElementById('pedidos-container');
-        var dataStr = document.getElementById('data-entrega').value;
-        var busca = (document.getElementById('busca-pedido').value || '').toLowerCase();
-        var counts = {todos: 0, pendente: 0, separado: 0, entregue: 0};
-        var totalDia = 0;
-
-        var html = '';
-        for (var i = 0; i < pedidos.length; i++) {
-            var p = pedidos[i];
-            var status = getStatus(dataStr, p.code);
-            counts.todos++;
-            counts[status] = (counts[status] || 0) + 1;
-            totalDia += Number(p.total) || 0;
-
-            if (filtroAtual !== 'todos' && status !== filtroAtual) continue;
-            var buscaTexto = (p.destinatario + ' ' + p.comprador + ' ' + p.code).toLowerCase();
-            if (busca && buscaTexto.indexOf(busca) === -1) continue;
-
-            var statusBadge = '';
-            if (status === 'pendente') statusBadge = '<span class="badge rounded-pill bg-warning text-dark">Pendente</span>';
-            else if (status === 'separado') statusBadge = '<span class="badge rounded-pill bg-info text-dark">Separado</span>';
-            else if (status === 'entregue') statusBadge = '<span class="badge rounded-pill bg-success">Entregue</span>';
-
-            var itensHtml = '';
-            for (var j = 0; j < p.itens.length; j++) {
-                var it = p.itens[j];
-                itensHtml += '<span class="me-3">' + it.quantidade + 'x ' + escapeHtml(it.nome) + '</span>';
-            }
-
-            var cartinhaClass = (p.cartinha || p.tem_customizacao) ? 'has-text' : '';
-            var cartinhaBadge = p.tem_customizacao ? ' <span class="badge bg-warning text-dark" style="font-size:10px;"><i class="bi bi-envelope-heart"></i> Cartinha</span>' : '';
-
-            var compradorLine = '';
-            if (p.comprador && p.comprador !== p.destinatario) {
-                compradorLine = '<div class="text-muted" style="font-size:11px;"><i class="bi bi-person"></i> Comprador: ' + escapeHtml(p.comprador) + '</div>';
-            }
-
-            html += '<div class="card mb-2">' +
-                '<div class="card-body py-2 px-3">' +
-                    '<div class="d-flex justify-content-between align-items-start">' +
-                        '<div>' +
-                            '<a href="https://www.padariaartesanalonline.com.br/admin/pedido?id=' + encodeURIComponent(p.code) + '" target="_blank" rel="noopener" class="text-decoration-none" title="Abrir no VNDA" style="color: var(--accent);">' +
-                                '<strong style="font-size:13px; color: var(--accent);">[' + escapeHtml(p.code) + '] <i class="bi bi-box-arrow-up-right" style="font-size:11px;"></i></strong>' +
-                            '</a> ' +
-                            '<span class="fw-semibold"><i class="bi bi-person-fill"></i> ' + escapeHtml(p.destinatario) + '</span>' +
-                            cartinhaBadge +
-                        '</div>' +
-                        '<div class="d-flex align-items-center gap-2">' +
-                            (p.periodo ? '<span class="badge bg-light text-dark" style="font-size:11px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>' : '') +
-                            statusBadge +
-                        '</div>' +
-                    '</div>' +
-                    compradorLine +
-                    '<div class="text-muted" style="font-size:12px;">' +
-                        (p.endereco ? '<i class="bi bi-geo-alt"></i> ' + escapeHtml(p.endereco) : '') +
-                        (p.telefone ? ' &nbsp;<i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) : '') +
-                    '</div>' +
-                    '<div class="mt-1" style="font-size:13px;">' + itensHtml + '</div>' +
-                    '<div class="d-flex justify-content-between align-items-center mt-1">' +
-                        '<strong>R$ ' + formatMoney(p.total) + '</strong>' +
-                        '<div class="d-print-none d-flex gap-1">' +
-                            (status !== 'separado' ? '<button class="btn btn-sm btn-outline-info" onclick="marcarStatus(\'' + p.code + '\',\'separado\')"><i class="bi bi-check"></i> Separar</button>' : '') +
-                            (status !== 'entregue' ? '<button class="btn btn-sm btn-outline-success" onclick="marcarStatus(\'' + p.code + '\',\'entregue\')"><i class="bi bi-check-all"></i> Entregar</button>' : '') +
-                            (status !== 'pendente' ? '<button class="btn btn-sm btn-outline-secondary" onclick="marcarStatus(\'' + p.code + '\',\'pendente\')"><i class="bi bi-arrow-counterclockwise"></i></button>' : '') +
-                            (p.tem_customizacao ? '<button class="btn btn-sm btn-outline-warning" onclick="toggleCartinha(\'' + p.code + '\')"><i class="bi bi-envelope-heart"></i></button>' : '') +
-                            '<a class="btn btn-sm btn-outline-dark" href="https://www.padariaartesanalonline.com.br/admin/pedido?id=' + encodeURIComponent(p.code) + '" target="_blank" rel="noopener" title="Abrir pedido no VNDA"><i class="bi bi-box-arrow-up-right"></i> VNDA</a>' +
-                        '</div>' +
-                    '</div>' +
-                    '<div class="cartinha-area ' + cartinhaClass + ' mt-2 d-none" id="cartinha-' + p.code + '">' +
-                        '<textarea class="form-control form-control-sm mb-1" rows="3" id="cartinha-txt-' + p.code + '" placeholder="Cole a cartinha do admin Vnda...">' + escapeHtml(p.cartinha || '') + '</textarea>' +
-                        '<button class="btn btn-sm btn-warning d-print-none" onclick="salvarCartinha(\'' + p.code + '\')"><i class="bi bi-save"></i> Salvar Cartinha</button>' +
-                    '</div>' +
-                '</div>' +
-            '</div>';
-        }
-
-        container.innerHTML = html;
-
-        document.getElementById('cnt-todos').textContent = counts.todos;
-        document.getElementById('cnt-pendente').textContent = counts.pendente;
-        document.getElementById('cnt-separado').textContent = counts.separado;
-        document.getElementById('cnt-entregue').textContent = counts.entregue;
-        document.getElementById('total-dia-valor').textContent = formatMoney(totalDia);
-    }
-
-    // ── Acoes ──
-
-    window.marcarStatus = function(code, status) {
-        var dataStr = document.getElementById('data-entrega').value;
-        setStatus(dataStr, code, status);
-        renderPedidos();
-    };
-
-    window.toggleCartinha = function(code) {
-        var el = document.getElementById('cartinha-' + code);
-        if (el) el.classList.toggle('d-none');
-    };
-
-    window.salvarCartinha = function(code) {
-        var texto = document.getElementById('cartinha-txt-' + code).value;
-        fetch('/entregas/cartinha/' + code, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': CSRF_TOKEN
-            },
-            body: JSON.stringify({texto: texto})
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data.ok) {
-                for (var i = 0; i < pedidos.length; i++) {
-                    if (pedidos[i].code === code) pedidos[i].cartinha = texto;
-                }
-                var btn = document.querySelector('#cartinha-' + code + ' .btn');
-                if (btn) { btn.textContent = ' Salvo!'; setTimeout(function(){ btn.innerHTML = '<i class="bi bi-save"></i> Salvar Cartinha'; }, 1500); }
-            }
-        });
-    };
-
-    window.imprimirPedidos = function() {
-        window.print();
-    };
-
-    // ── Filtros ──
-
-    document.querySelectorAll('[data-filtro]').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            document.querySelectorAll('[data-filtro]').forEach(function(b) { b.classList.remove('active'); });
-            btn.classList.add('active');
-            filtroAtual = btn.getAttribute('data-filtro');
-            renderPedidos();
-        });
-    });
-
-    document.getElementById('busca-pedido').addEventListener('input', function() {
-        renderPedidos();
-    });
-
-    document.getElementById('data-entrega').addEventListener('change', function() {
-        carregarPedidos();
-    });
-
-    // ── Calendario ──
-
-    var mesesNome = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-    var diasSemana = ['Seg','Ter','Qua','Qui','Sex','Sab','Dom'];
-
-    function initCalendario() {
-        var hoje = new Date();
-        calAno = hoje.getFullYear();
-        calMes = hoje.getMonth() + 1;
-    }
-
-    window.calMesAnterior = function() {
-        calMes--;
-        if (calMes < 1) { calMes = 12; calAno--; }
-        carregarCalendario();
-    };
-
-    window.calMesProximo = function() {
-        calMes++;
-        if (calMes > 12) { calMes = 1; calAno++; }
-        carregarCalendario();
-    };
-
-    function carregarCalendario() {
-        var mesStr = calAno + '-' + String(calMes).padStart(2, '0');
-        document.getElementById('cal-titulo').textContent = mesesNome[calMes - 1] + ' ' + calAno;
-
-        fetch('/entregas/api/calendario?mes=' + mesStr, {
-            headers: {'X-CSRFToken': CSRF_TOKEN}
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            renderCalendario(data.dias || {});
-        });
-    }
-
-    function renderCalendario(dias) {
-        var grid = document.getElementById('calendario-grid');
-        var html = '<div class="cal-grid">';
-
-        for (var d = 0; d < 7; d++) {
-            html += '<div class="cal-header">' + diasSemana[d] + '</div>';
-        }
-
-        var primeiro = new Date(calAno, calMes - 1, 1);
-        var ultimoDia = new Date(calAno, calMes, 0).getDate();
-        var diaSemana = primeiro.getDay();
-        diaSemana = diaSemana === 0 ? 6 : diaSemana - 1;
-
-        for (var e = 0; e < diaSemana; e++) {
-            html += '<div class="cal-day cal-day-empty"></div>';
-        }
-
-        for (var dia = 1; dia <= ultimoDia; dia++) {
-            var dateStr = calAno + '-' + String(calMes).padStart(2, '0') + '-' + String(dia).padStart(2, '0');
-            var count = dias[dateStr] || 0;
-            html += '<div class="cal-day" onclick="selecionarDia(\'' + dateStr + '\')">';
-            html += '<div class="cal-day-num">' + dia + '</div>';
-            if (count > 0) {
-                html += '<span class="badge bg-primary" style="font-size:11px;">' + count + ' pedido' + (count > 1 ? 's' : '') + '</span>';
-            }
-            html += '</div>';
-        }
-
-        html += '</div>';
-        grid.innerHTML = html;
-    }
-
-    window.selecionarDia = function(dateStr) {
-        document.getElementById('data-entrega').value = dateStr;
-        var tabBtn = document.querySelector('[data-bs-target="#tab-pedidos"]');
-        if (tabBtn) new bootstrap.Tab(tabBtn).show();
-        carregarPedidos();
-    };
-
-    document.getElementById('btn-tab-cal').addEventListener('shown.bs.tab', function() {
-        if (!calAno) initCalendario();
-        carregarCalendario();
-    });
-
-    // ── Helpers ──
-
-    function escapeHtml(str) {
-        if (!str) return '';
-        var div = document.createElement('div');
-        div.appendChild(document.createTextNode(str));
-        return div.innerHTML;
-    }
-
-    function formatMoney(val) {
-        if (!val && val !== 0) return '0,00';
-        return Number(val).toFixed(2).replace('.', ',');
-    }
-
-    // ── Init ──
-    limparAntigos();
-    carregarPedidos();
-})();
-</script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script src="{{ url_for('static', filename='js/entregas.js') }}?v={{ static_v['js/entregas.js'] }}"></script>
 {% endblock %}

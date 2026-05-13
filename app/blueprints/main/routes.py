@@ -8,7 +8,9 @@ from app.blueprints.main import main_bp
 from app.decorators import admin_required
 from app.extensions import db
 from app.models import (MateriaPrima, Receita, ReceitaIngrediente, Produto, ProdutoItem,
-                        Funcionario, Atribuicao, AlertaEstoque, PlanejamentoProducao)
+                        Funcionario, Atribuicao, AlertaEstoque, PlanejamentoProducao,
+                        AuditLog, Usuario, PedidoLoja, PedidoLocal, AtribuicaoEntrega,
+                        MovimentacaoEstoque, Driver, Loja, Fornecedor, HistoricoPrecoMP)
 from app.services.custos import calcular_custos_receitas, calcular_rendimento
 
 
@@ -17,7 +19,13 @@ from app.services.custos import calcular_custos_receitas, calcular_rendimento
 def index():
     if not current_user.is_admin():
         return redirect(url_for('auth.minhas_fichas'))
+    return render_template('main/home.html')
 
+
+@main_bp.route('/dashboard')
+@login_required
+@admin_required
+def dashboard():
     resultado = calcular_custos_receitas()
     custos_map = resultado.get('custos', {})
     receitas = Receita.query.all()
@@ -284,3 +292,118 @@ def todo():
         Produto.observacao.isnot(None), Produto.observacao != ''
     ).order_by(Produto.nome).all()
     return render_template('main/todo.html', receitas=receitas, produtos=produtos)
+
+
+@main_bp.route("/audit")
+@login_required
+@admin_required
+def audit():
+    """Visualizador do audit log. So admin pode ver."""
+    import json as _json
+    tabela_f = request.args.get("tabela") or None
+    usuario_f = request.args.get("usuario_id", type=int)
+    acao_f = request.args.get("acao") or None
+    q = AuditLog.query
+    if tabela_f:
+        q = q.filter_by(tabela=tabela_f)
+    if usuario_f:
+        q = q.filter_by(usuario_id=usuario_f)
+    if acao_f in ("insert", "update", "delete"):
+        q = q.filter_by(acao=acao_f)
+    logs = q.order_by(AuditLog.criado_em.desc()).limit(200).all()
+    # Parse JSON dos campos antes/depois pra exibir formatado
+    rows = []
+    for l in logs:
+        try:
+            antes = _json.loads(l.antes) if l.antes else None
+        except Exception:
+            antes = None
+        try:
+            depois = _json.loads(l.depois) if l.depois else None
+        except Exception:
+            depois = None
+        rows.append({
+            "log": l, "antes": antes, "depois": depois,
+        })
+    # Lista de tabelas e usuarios pra filtros
+    tabelas = [r[0] for r in db.session.query(AuditLog.tabela).distinct().all()]
+    usuarios = Usuario.query.order_by(Usuario.nome).all()
+    return render_template("main/audit.html", rows=rows, tabelas=sorted(tabelas),
+                           usuarios=usuarios, filtros={"tabela": tabela_f,
+                           "usuario_id": usuario_f, "acao": acao_f})
+
+
+
+@main_bp.route('/caixa')
+@login_required
+@admin_required
+def caixa():
+    """Dashboard de caixa diario: agrega dados LOCAIS do banco.
+    Vendas PDV (Seru) NAO entram aqui pra evitar chamadas externas
+    lentas — use /pdv pra esse detalhe."""
+    from datetime import date, timedelta
+    from sqlalchemy import func as sqlfunc
+
+    data_str = request.args.get('data', date.today().isoformat())
+    try:
+        data_alvo = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        data_alvo = date.today()
+
+    ontem = data_alvo - timedelta(days=1)
+    semana_atras = data_alvo - timedelta(days=7)
+
+    def metricas_do_dia(d):
+        """Sumario de um dia: pedidos locais, pedidos loja, entregas,
+        movimentacoes de estoque."""
+        # Pedidos locais (entregas avulsas) — tem valor_total
+        locais = PedidoLocal.query.filter(PedidoLocal.data_entrega == d).all()
+        valor_locais = sum(p.valor_total for p in locais)
+
+        # Pedidos entre lojas — quantidade
+        pedidos_loja = PedidoLoja.query.filter(PedidoLoja.data_entrega == d).all()
+        n_ped_loja = len(pedidos_loja)
+        n_ped_loja_entregue = sum(1 for p in pedidos_loja if p.status == 'entregue')
+
+        # Entregas atribuidas — quantidade + entregues
+        atribs = AtribuicaoEntrega.query.filter(AtribuicaoEntrega.data_entrega == d).all()
+        n_entregas = len(atribs)
+        n_entregas_feitas = sum(1 for a in atribs if a.status == 'entregue')
+        n_entregas_falhas = sum(1 for a in atribs if a.status == 'nao_entregue')
+
+        # Entradas de MP (compras) — valor + count
+        movs = MovimentacaoEstoque.query.filter(
+            MovimentacaoEstoque.tipo == 'entrada',
+            sqlfunc.date(MovimentacaoEstoque.data) == d,
+        ).all()
+        valor_compras = sum((m.quantidade or 0) * (m.preco_unitario or 0) for m in movs)
+        n_compras = len(movs)
+
+        return {
+            'data': d,
+            'valor_locais': valor_locais,
+            'n_locais': len(locais),
+            'n_ped_loja': n_ped_loja,
+            'n_ped_loja_entregue': n_ped_loja_entregue,
+            'n_entregas': n_entregas,
+            'n_entregas_feitas': n_entregas_feitas,
+            'n_entregas_falhas': n_entregas_falhas,
+            'valor_compras': valor_compras,
+            'n_compras': n_compras,
+        }
+
+    hoje_m = metricas_do_dia(data_alvo)
+    ontem_m = metricas_do_dia(ontem)
+    semana_m = metricas_do_dia(semana_atras)
+
+    def delta_pct(atual, anterior):
+        if not anterior:
+            return None
+        return ((atual - anterior) / anterior) * 100
+
+    return render_template('main/caixa.html',
+                           hoje=hoje_m, ontem=ontem_m, semana=semana_m,
+                           data_alvo=data_alvo, ontem_data=ontem,
+                           semana_data=semana_atras,
+                           delta_locais=delta_pct(hoje_m['valor_locais'], ontem_m['valor_locais']),
+                           delta_entregas=delta_pct(hoje_m['n_entregas'], ontem_m['n_entregas']))

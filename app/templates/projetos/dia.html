@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% import "projetos/_partials.html" as ui %}
+
+{% block title %}Projetos · Dia {{ alvo.strftime('%d/%m/%Y') }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-calendar-day"></i> Dia</h1>
+    {{ ui.botoes_acao() }}
+</div>
+
+{{ ui.stats(contadores) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    {{ ui.nav_views(view, contadores.inbox) }}
+    <form method="GET" class="d-flex align-items-center gap-2">
+        <a href="{{ url_for('projetos.dia', data=dia_anterior) }}" class="btn btn-outline-secondary btn-sm" title="Dia anterior">
+            <i class="bi bi-chevron-left"></i>
+        </a>
+        <input type="date" name="data" value="{{ alvo_iso }}" class="form-control form-control-sm" onchange="this.form.submit()" style="max-width:170px;">
+        <a href="{{ url_for('projetos.dia', data=dia_proximo) }}" class="btn btn-outline-secondary btn-sm" title="Próximo dia">
+            <i class="bi bi-chevron-right"></i>
+        </a>
+        {% if alvo != hoje %}
+        <a href="{{ url_for('projetos.dia') }}" class="btn btn-outline-success btn-sm">Hoje</a>
+        {% endif %}
+    </form>
+</div>
+
+<div class="alert alert-light border py-2 mb-3" style="font-size:13px;">
+    <strong>{{ alvo.strftime('%A, %d de %B de %Y') }}</strong>
+    {% if alvo == hoje %}<span class="badge bg-success ms-2">Hoje</span>
+    {% elif alvo < hoje %}<span class="badge bg-secondary ms-2">{{ data_relativa(alvo) }}</span>
+    {% else %}<span class="badge bg-info ms-2">{{ data_relativa(alvo) }}</span>{% endif %}
+    · <strong>{{ do_dia|length }}</strong> tarefa{{ 's' if do_dia|length != 1 }} com prazo nesse dia
+</div>
+
+<div class="row g-3">
+    <!-- Coluna 1: Atrasadas até a data alvo -->
+    <div class="col-lg-4">
+        <div class="card h-100" style="border-top: 3px solid #b54a3f;">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3" style="color:#b54a3f;">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    {% if alvo == hoje %}Atrasadas{% else %}Atrasadas até essa data{% endif %} ({{ atrasadas|length }})
+                </h6>
+                {% if not atrasadas %}
+                <div class="text-muted small text-center py-3"><i class="bi bi-emoji-smile"></i> Nenhuma.</div>
+                {% endif %}
+                {% for t in atrasadas %}
+                <div class="proj-kanban-card atrasada {% if t.projeto.foco_12s %}foco{% endif %} mb-2" {{ ui.tarefa_data_attr(t) }}>
+                    <div class="d-flex align-items-start gap-2">
+                        {{ ui.tarefa_status_btn(t) }}
+                        <div style="flex:1;">
+                            <div class="fw-semibold tarefa-nome-editavel" title="Clique para editar" style="cursor:pointer;">{{ t.nome }}</div>
+                            <div class="proj-meta">
+                                {{ ui.area_badge(t.projeto.area) }}
+                                <span class="badge bg-light text-dark">{{ t.projeto.nome }}</span>
+                                <span class="badge bg-danger">{{ t.prazo.strftime('%d/%m') }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Coluna 2: Tarefas DESSE dia (qualquer status) -->
+    <div class="col-lg-4">
+        <div class="card h-100" style="border-top: 3px solid #d4a435;">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3" style="color:#d4a435;">
+                    <i class="bi bi-calendar-event"></i> Prazo {{ alvo.strftime('%d/%m') }} ({{ do_dia|length }})
+                </h6>
+                {% if not do_dia %}
+                <div class="text-muted small text-center py-3">Nenhuma tarefa com prazo nesse dia.</div>
+                {% endif %}
+                {% for t in do_dia %}
+                <div class="proj-kanban-card {% if t.projeto.foco_12s %}foco{% endif %} mb-2 {% if t.status == 'feito' %}opacity-50{% endif %}" {{ ui.tarefa_data_attr(t) }}>
+                    <div class="d-flex align-items-start gap-2">
+                        {{ ui.tarefa_status_btn(t) }}
+                        <div style="flex:1;">
+                            <div class="fw-semibold tarefa-nome-editavel" title="Clique para editar" style="cursor:pointer;">{{ t.nome }}</div>
+                            <div class="proj-meta">
+                                {{ ui.area_badge(t.projeto.area) }}
+                                <span class="badge bg-light text-dark">{{ t.projeto.nome }}</span>
+                                {% if t.responsavel %}<span class="badge bg-dark"><i class="bi bi-person"></i> {{ t.responsavel.nome.split()[0] }}</span>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+
+                <hr class="my-3">
+                <h6 class="fw-bold mb-2 text-muted">
+                    <i class="bi bi-calendar3"></i> Próximos 7 dias ({{ semana|length }})
+                </h6>
+                {% if not semana %}
+                <div class="text-muted small text-center py-2">Nada nos próximos 7 dias.</div>
+                {% endif %}
+                {% for t in semana %}
+                <div class="proj-kanban-card {% if t.projeto.foco_12s %}foco{% endif %} mb-2" {{ ui.tarefa_data_attr(t) }}>
+                    <div class="d-flex align-items-start gap-2">
+                        {{ ui.tarefa_status_btn(t) }}
+                        <div style="flex:1;">
+                            <div class="fw-semibold tarefa-nome-editavel" title="Clique para editar" style="cursor:pointer;">{{ t.nome }}</div>
+                            <div class="proj-meta">
+                                {{ ui.area_badge(t.projeto.area) }}
+                                <span class="badge bg-light text-dark">{{ t.projeto.nome }}</span>
+                                <span class="badge bg-light text-dark">{{ t.prazo.strftime('%d/%m') }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Coluna 3: Em andamento -->
+    <div class="col-lg-4">
+        <div class="card h-100" style="border-top: 3px solid #084298;">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3" style="color:#084298;">
+                    <i class="bi bi-play-fill"></i> Em andamento ({{ fazendo|length }})
+                    {% if contadores.wip_estourado %}<span class="badge bg-danger ms-1">WIP +{{ fazendo|length - contadores.wip_limit }}</span>{% endif %}
+                </h6>
+                {% if not fazendo %}
+                <div class="text-muted small text-center py-3">Nada em andamento.</div>
+                {% endif %}
+                {% for t in fazendo %}
+                <div class="proj-kanban-card {% if t.atrasada %}atrasada{% endif %} {% if t.projeto.foco_12s %}foco{% endif %} mb-2" {{ ui.tarefa_data_attr(t) }}>
+                    <div class="d-flex align-items-start gap-2">
+                        {{ ui.tarefa_status_btn(t) }}
+                        <div style="flex:1;">
+                            <div class="fw-semibold tarefa-nome-editavel" title="Clique para editar" style="cursor:pointer;">{{ t.nome }}</div>
+                            <div class="proj-meta">
+                                {{ ui.area_badge(t.projeto.area) }}
+                                <span class="badge bg-light text-dark">{{ t.projeto.nome }}</span>
+                                {% if t.prazo %}<span class="badge {% if t.atrasada %}bg-danger{% else %}bg-light text-dark{% endif %}">{{ data_relativa(t.prazo) }}</span>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{{ ui.modal_editar_tarefa(usuarios, projetos_alvo) }}
+{{ ui.modal_novo_projeto(areas, usuarios) }}
+{{ ui.modal_nova_area(current_user) }}
+{{ ui.modal_novo_de_template(areas, templates_disponiveis, usuarios) }}
+{{ ui.modal_weekly() }}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/projetos.js') }}?v={{ static_v['js/projetos.js'] }}"></script>
+{% endblock %}

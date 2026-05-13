@@ -1,16 +1,19 @@
 {% extends "base.html" %}
+{% import "_macros.html" as ui %}
 
 {% block title %}{{ func.nome }}{% endblock %}
 
 {% block content %}
+{{ ui.breadcrumbs([
+    ('Funcionários', url_for('rh.funcionarios')),
+    (func.nome, None),
+]) }}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="fw-bold">
+    <h1 class="page-title">
         <i class="bi bi-person"></i> {{ func.nome }}
         {% if not func.ativo %}<span class="badge bg-danger">Inativo</span>{% endif %}
-    </h5>
-    <a href="{{ url_for('rh.funcionarios') }}" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left"></i> Voltar
-    </a>
+    </h1>
+    {{ ui.botao_voltar(url_for('rh.funcionarios')) }}
 </div>
 
 <!-- Dados do Funcionário -->
@@ -27,20 +30,42 @@
             <input type="text" name="cpf" class="form-control input-blue" value="{{ func.cpf }}" required>
         </div>
         <div class="col-md-4">
-            <label class="form-label fw-bold">Função</label>
-            <input type="text" name="funcao" class="form-control input-blue" value="{{ func.funcao or '' }}">
+            <label class="form-label fw-bold">Cargo</label>
+            <select name="cargo_id" class="form-select input-blue" {% if not current_user.is_owner %}disabled{% endif %}>
+                <option value="">— sem cargo —</option>
+                {% for c in cargos_disponiveis %}
+                <option value="{{ c.id }}" {% if func.cargo_id == c.id %}selected{% endif %}>
+                    {{ c.nome }}{% if current_user.is_owner %} (R$ {{ '%.2f'|format(c.salario_base)|replace('.', ',') }}){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+            {% if current_user.is_owner %}
+            <small class="text-muted"><a href="{{ url_for('rh.cargos') }}">Gerenciar cargos →</a></small>
+            {% endif %}
         </div>
     </div>
 
     <div class="row g-3 mt-1">
+        {% if current_user.is_owner %}
         <div class="col-md-2">
-            <label class="form-label fw-bold">Salário Base</label>
-            <input type="text" name="salario_base" class="form-control input-blue" value="{{ '%.2f' % func.salario_base }}">
+            <label class="form-label fw-bold">Salário Base
+                <small class="text-muted fw-normal">(do cargo)</small>
+            </label>
+            <input type="text" class="form-control" value="{{ '%.2f' % func.salario_efetivo() }}" disabled style="background:#f0f0f0;">
         </div>
+        {% endif %}
         <div class="col-md-2">
             <label class="form-label fw-bold">Cargo Confiança</label>
-            <input type="text" name="cargo_confianca" class="form-control input-blue"
-                   value="{{ '%.2f' % func.cargo_confianca if func.cargo_confianca else '' }}">
+            <div class="form-control input-blue d-flex align-items-center" style="gap:8px;">
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" name="tem_cargo_confianca" value="1" id="chk-cc"
+                           {% if func.tem_cargo_confianca %}checked{% endif %}>
+                    <label class="form-check-label small" for="chk-cc">40% do salário</label>
+                </div>
+                {% if func.tem_cargo_confianca %}
+                <small class="text-muted ms-auto">{{ func.valor_cargo_confianca() | brl }}</small>
+                {% endif %}
+            </div>
         </div>
         <div class="col-md-2">
             <label class="form-label fw-bold">Premiação</label>
@@ -51,6 +76,12 @@
             <label class="form-label fw-bold">Hora Extra %</label>
             <input type="text" name="hora_extra_pct" class="form-control input-blue"
                    value="{{ '%.0f' % func.hora_extra_pct }}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label fw-bold">Horas Extras (h)</label>
+            <input type="text" name="horas_extras" class="form-control input-blue"
+                   value="{{ '%.0f' % func.horas_extras if func.horas_extras else '' }}"
+                   placeholder="0">
         </div>
         <div class="col-md-2">
             <label class="form-label fw-bold">VT/dia</label>
@@ -121,13 +152,18 @@
         </div>
     </div>
 
-    <!-- Resumo Financeiro -->
+    {% if current_user.is_owner %}
+    <!-- Resumo Financeiro — só super admin -->
     <div class="card border-0 shadow-sm mt-3 mb-3" style="background:#f5f5f5;">
         <div class="card-body">
             <div class="row text-center">
                 <div class="col">
                     <div class="small text-muted">Salário Base</div>
                     <div class="fw-bold">{{ func.salario_base | brl }}</div>
+                </div>
+                <div class="col">
+                    <div class="small text-muted">Cargo Conf.{% if func.tem_cargo_confianca %} <span class="text-muted">(40%)</span>{% endif %}</div>
+                    <div class="fw-bold">{{ func.valor_cargo_confianca() | brl }}</div>
                 </div>
                 <div class="col">
                     <div class="small text-muted">Total VT</div>
@@ -138,12 +174,19 @@
                     <div class="fw-bold">{{ func.total_vr() | brl }}</div>
                 </div>
                 <div class="col">
+                    <div class="small text-muted">Total HE
+                        {% if func.horas_extras %}<span class="text-muted">({{ '%.0f'|format(func.horas_extras) }}h)</span>{% endif %}
+                    </div>
+                    <div class="fw-bold">{{ func.total_horas_extras() | brl }}</div>
+                </div>
+                <div class="col">
                     <div class="small text-muted">Custo Total</div>
                     <div class="fw-bold" style="color:#e65100;">{{ func.custo_total() | brl }}</div>
                 </div>
             </div>
         </div>
     </div>
+    {% endif %}
 
     <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check-lg"></i> Salvar Alterações</button>
 </form>
@@ -202,8 +245,8 @@
 <p class="text-muted small mb-4">Nenhum feedback registrado.</p>
 {% endif %}
 
-<!-- Histórico Folhas -->
-{% if folhas %}
+<!-- Histórico Folhas — só super admin -->
+{% if folhas and current_user.is_owner %}
 <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-file-earmark-text"></i> Últimas Folhas</h6>
 <div class="table-responsive mb-4">
     <table class="table table-sm table-bordered bg-white">

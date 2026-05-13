@@ -3,10 +3,10 @@
 {% block title %}{{ 'Editar' if func else 'Novo' }} Funcionário{% endblock %}
 
 {% block content %}
-<h5 class="fw-bold mb-3">
+<h1 class="page-title mb-3">
     <i class="bi bi-person-plus"></i>
     {{ 'Editar Funcionário' if func else 'Novo Funcionário' }}
-</h5>
+</h1>
 
 <form method="POST" action="{{ url_for('rh.novo_funcionario') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -28,11 +28,13 @@
     </div>
 
     <div class="row g-3 mt-1">
+        {% if current_user.is_owner %}
         <div class="col-md-3">
             <label class="form-label fw-bold">Salário Base</label>
             <input type="text" name="salario_base" class="form-control"
                    value="{{ '%.2f' % func.salario_base if func else '' }}">
         </div>
+        {% endif %}
         <div class="col-md-3">
             <label class="form-label fw-bold">Cargo de Confiança</label>
             <input type="text" name="cargo_confianca" class="form-control"

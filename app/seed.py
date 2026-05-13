@@ -1279,3 +1279,91 @@ def seed_rh_escala():
         pos_ariane.status = 'ativo'
 
     db.session.commit()
+
+
+def seed_projetos():
+    """Seed inicial de Areas / Projetos / Tarefas (PARA + 12 Week Year)."""
+    from datetime import date as _date
+    from app.models import ProjetoArea, Projeto, TarefaProjeto
+
+    if ProjetoArea.query.first():
+        return  # ja seeded
+
+    areas_def = [
+        ('1851', 'empresa', 1),
+        ('Filial', 'empresa', 2),
+        ('Indústria', 'empresa', 3),
+        ('Site', 'empresa', 4),
+        ('Empresa', 'empresa', 5),
+        ('Matriz', 'empresa', 6),
+        ('EK / Eklektos', 'igreja', 10),
+        ('Deus', 'vida', 20),
+        ('Família', 'vida', 21),
+    ]
+    areas = {}
+    for nome, tipo, ordem in areas_def:
+        a = ProjetoArea(nome=nome, tipo=tipo, ordem=ordem)
+        db.session.add(a)
+        areas[nome] = a
+    db.session.flush()
+
+    projetos_def = [
+        ('Implementação ERP', 'Indústria', 'ativo', 'alta', True),
+        ('Trocar CNPJ pagar.me', 'Filial', 'planejado', None, False),
+        ('Retiro EK', 'EK / Eklektos', 'planejado', None, False),
+        ('Stories', 'EK / Eklektos', 'planejado', None, False),
+        ('Colibri - 1851', '1851', 'planejado', None, False),
+        ('Colibri - Filial', 'Filial', 'planejado', None, False),
+        ('Custos', 'Empresa', 'planejado', None, False),
+        ('Cardápio indústria', 'Indústria', 'planejado', None, False),
+        ('Robozinho', 'Site', 'planejado', None, False),
+        ('Conclusão de obra IND', 'Indústria', 'planejado', None, False),
+        ('Licença Alane', 'Empresa', 'planejado', 'alta', False),
+        ('Controle de estoque e perdas', '1851', 'planejado', None, False),
+        ('Estrutura RH', 'Empresa', 'planejado', None, False),
+    ]
+    projetos = {}
+    for nome, area_nome, status, prioridade, foco in projetos_def:
+        p = Projeto(area_id=areas[area_nome].id, nome=nome, status=status,
+                    prioridade=prioridade, foco_12s=foco)
+        db.session.add(p)
+        projetos[nome] = p
+    db.session.flush()
+
+    def _d(s):
+        return _date.fromisoformat(s) if s else None
+
+    tarefas_def = [
+        ('ERP · 1. Cadastrar todas as receitas', 'Implementação ERP', 'a_fazer', 'acao', 'G', '2026-05-05'),
+        ('ERP · 2. Cadastrar todos os itens do cardápio', 'Implementação ERP', 'a_fazer', 'acao', 'G', '2026-05-12'),
+        ('ERP · 3. Atualizar custos de matéria-prima', 'Implementação ERP', 'a_fazer', 'acao', 'M', '2026-05-19'),
+        ('ERP · 4. Cadastrar estoque de Congelados', 'Implementação ERP', 'a_fazer', 'acao', 'M', '2026-05-26'),
+        ('ERP · 5. Utilizar aba "Pedido loja"', 'Implementação ERP', 'a_fazer', 'rotina', 'P', '2026-06-02'),
+        ('ERP · 6. Utilizar "Separar pedido"', 'Implementação ERP', 'a_fazer', 'rotina', 'P', '2026-06-09'),
+        ('Trocar Indeed pelo Info', 'Estrutura RH', 'a_fazer', 'acao', None, '2026-04-09'),
+        ('Bumpers e Countdown', 'Retiro EK', 'a_fazer', 'acao', None, '2026-04-13'),
+        ('Mandar e-mail VNDA', 'Trocar CNPJ pagar.me', 'fazendo', None, None, None),
+        ('Criar conta na Tiny', 'Trocar CNPJ pagar.me', 'a_fazer', None, None, None),
+        ('Criar conta pagar.me', 'Trocar CNPJ pagar.me', 'a_fazer', None, None, None),
+        ('TOKEN', 'Colibri - 1851', 'fazendo', None, None, None),
+        ('Troca ar condicionado', 'Conclusão de obra IND', 'fazendo', None, None, None),
+        ('Encanamento de gás torto', 'Conclusão de obra IND', 'fazendo', None, None, None),
+        ('Atualizar funcionários', 'Estrutura RH', 'fazendo', 'follow_up', None, '2026-04-09'),
+        ('Robo JIVOCHAT', 'Robozinho', 'a_fazer', 'acao', None, None),
+        ('Contrato 1851', 'Colibri - 1851', 'a_fazer', 'acao', None, '2026-04-13'),
+        ('Incorporar empresa', 'Estrutura RH', 'fazendo', 'acao', None, '2026-04-13'),
+        ('Criar reuniões igual tinha na DA', 'Estrutura RH', 'a_fazer', 'acao', None, None),
+        ('Custos', 'Custos', 'fazendo', 'acao', None, '2026-04-13'),
+        ('Abertura CNPJ', 'Colibri - 1851', 'a_fazer', 'follow_up', None, None),
+        ('Chip indústria e RH', 'Estrutura RH', 'a_fazer', None, None, None),
+    ]
+    for i, (nome, proj, status, tipo, esforco, prazo) in enumerate(tarefas_def):
+        if proj not in projetos:
+            continue
+        t = TarefaProjeto(
+            projeto_id=projetos[proj].id, nome=nome, status=status,
+            tipo=tipo, esforco=esforco, prazo=_d(prazo), ordem=i,
+        )
+        db.session.add(t)
+
+    db.session.commit()

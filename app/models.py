@@ -15,6 +15,7 @@ class Usuario(UserMixin, db.Model):
     senha_hash = db.Column(db.String(256), nullable=False)
     papel = db.Column(db.String(20), nullable=False, default='funcionario')
     loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=True)
+    is_owner = db.Column(db.Boolean, default=False)
 
     loja = db.relationship('Loja', backref='usuarios')
 
@@ -26,6 +27,14 @@ class Usuario(UserMixin, db.Model):
 
     def is_admin(self):
         return self.papel == 'admin'
+
+    def is_dono(self):
+        """Owner: dono unico do sistema (ve areas pessoais Vida/Igreja).
+        Defensivo: se a coluna ainda nao existir, retorna False sem quebrar."""
+        try:
+            return bool(getattr(self, 'is_owner', False))
+        except Exception:
+            return False
 
     def __repr__(self):
         return f'<Usuario {self.login}>'
@@ -55,6 +64,7 @@ class MateriaPrima(db.Model):
     nome = db.Column(db.String(100), nullable=False, unique=True)
     unidade = db.Column(db.String(10), nullable=False, default='g')
     custo_por_kg = db.Column(db.Float, nullable=False)
+    peso_unidade = db.Column(db.Float, nullable=True)
     fornecedor = db.Column(db.String(100))
     observacoes = db.Column(db.String(200))
 
@@ -63,6 +73,7 @@ class MateriaPrima(db.Model):
             'nome': self.nome,
             'unidade': self.unidade,
             'custo_por_kg': self.custo_por_kg,
+            'peso_unidade': self.peso_unidade,
             'fornecedor': self.fornecedor or '',
             'observacoes': self.observacoes or '',
         }
@@ -71,6 +82,42 @@ class MateriaPrima(db.Model):
 
     def __repr__(self):
         return f'<MateriaPrima {self.nome}>'
+
+
+class Fornecedor(db.Model):
+    """Fornecedor de materias-primas. Histórico de compras + cadastro
+    pra evitar texto solto em MateriaPrima.fornecedor (campo legacy)."""
+    __tablename__ = 'fornecedor'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(150), nullable=False, unique=True)
+    cnpj = db.Column(db.String(20))
+    telefone = db.Column(db.String(30))
+    email = db.Column(db.String(120))
+    contato = db.Column(db.String(100))  # nome do contato/vendedor
+    observacao = db.Column(db.Text)
+    ativo = db.Column(db.Boolean, default=True, index=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class HistoricoPrecoMP(db.Model):
+    """Registro de cada compra de MP de um fornecedor — preço, quantidade,
+    data. Alimentado automaticamente quando ha entrada de MP via
+    MovimentacaoEstoque com fornecedor_id."""
+    __tablename__ = 'historico_preco_mp'
+
+    id = db.Column(db.Integer, primary_key=True)
+    materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'), nullable=False, index=True)
+    fornecedor_id = db.Column(db.Integer, db.ForeignKey('fornecedor.id'), nullable=False, index=True)
+    preco_unitario = db.Column(db.Float, nullable=False)
+    quantidade = db.Column(db.Float, nullable=False)
+    data = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    referencia = db.Column(db.String(200))  # NF, observacao
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    materia_prima = db.relationship('MateriaPrima')
+    fornecedor = db.relationship('Fornecedor', backref='compras')
+    usuario = db.relationship('Usuario')
 
 
 class Receita(db.Model):
@@ -211,6 +258,20 @@ funcionario_loja = db.Table('funcionario_loja',
 )
 
 
+class Cargo(db.Model):
+    __tablename__ = 'cargo'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False, unique=True)
+    salario_base = db.Column(db.Float, nullable=False, default=0)
+    descricao = db.Column(db.String(200))
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Cargo {self.nome} R$ {self.salario_base:.2f}>'
+
+
 class Funcionario(db.Model):
     __tablename__ = 'funcionario'
 
@@ -222,8 +283,11 @@ class Funcionario(db.Model):
     data_admissao = db.Column(db.Date)
     data_demissao = db.Column(db.Date)
     ativo = db.Column(db.Boolean, default=True)
+    cargo_id = db.Column(db.Integer, db.ForeignKey('cargo.id'), nullable=True)
     cargo_confianca = db.Column(db.Float, default=0)
+    tem_cargo_confianca = db.Column(db.Boolean, default=False)
     hora_extra_pct = db.Column(db.Float, default=55)
+    horas_extras = db.Column(db.Float, default=0)
     premiacao = db.Column(db.Float, default=0)
     vt_dia = db.Column(db.Float, default=0)
     vr_dia = db.Column(db.Float, default=22.00)
@@ -237,6 +301,16 @@ class Funcionario(db.Model):
     data_nascimento = db.Column(db.Date)
 
     lojas = db.relationship('Loja', secondary=funcionario_loja, backref='funcionarios')
+    cargo = db.relationship('Cargo', backref='funcionarios')
+
+    def salario_efetivo(self):
+        """Salario base vem do Cargo. Fallback para o campo legado se cargo nao setado."""
+        try:
+            if self.cargo:
+                return self.cargo.salario_base or 0
+        except Exception:
+            pass
+        return self.salario_base or 0
 
     def total_vt(self):
         return self.vt_dia * self.dias_trabalhados if self.vt_dia else 0
@@ -244,11 +318,34 @@ class Funcionario(db.Model):
     def total_vr(self):
         return self.vr_dia * self.dias_trabalhados if self.vr_dia else 0
 
+    def valor_cargo_confianca(self):
+        """Cargo de confianca = 40% do salario efetivo (se ativo)."""
+        try:
+            if not getattr(self, 'tem_cargo_confianca', False):
+                return 0
+        except Exception:
+            return 0
+        return self.salario_efetivo() * 0.40
+
+    def total_horas_extras(self):
+        """Valor mensal das horas extras: (salario / 220h) * (1 + pct/100) * qtd_horas."""
+        try:
+            qtd = self.horas_extras or 0
+        except Exception:
+            return 0
+        sal = self.salario_efetivo()
+        if not qtd or not sal:
+            return 0
+        valor_hora = sal / 220.0
+        adicional = 1 + (self.hora_extra_pct or 0) / 100
+        return valor_hora * adicional * qtd
+
     def custo_total(self):
         return (
-            self.salario_base +
-            (self.cargo_confianca or 0) +
+            self.salario_efetivo() +
+            self.valor_cargo_confianca() +
             (self.premiacao or 0) +
+            self.total_horas_extras() +
             self.total_vt() +
             self.total_vr()
         )
@@ -407,9 +504,12 @@ class MovimentacaoEstoque(db.Model):
     data = db.Column(db.DateTime, default=datetime.utcnow)
     referencia = db.Column(db.String(200))
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    # Fornecedor (opcional) — usado em entradas pra alimentar historico de preco
+    fornecedor_id = db.Column(db.Integer, db.ForeignKey('fornecedor.id'))
 
     materia_prima = db.relationship('MateriaPrima', backref='movimentacoes')
     usuario = db.relationship('Usuario', backref='movimentacoes_estoque')
+    fornecedor = db.relationship('Fornecedor')
 
     def __repr__(self):
         return f'<Movimentacao {self.tipo} {self.quantidade} MP={self.materia_prima_id}>'
@@ -558,6 +658,20 @@ class PedidoLoja(db.Model):
     criador = db.relationship('Usuario')
     itens = db.relationship('PedidoItem', backref='pedido', cascade='all, delete-orphan')
 
+    @property
+    def tem_divergencia(self):
+        return any(
+            i.quantidade_recebida is not None and i.quantidade_recebida != i.quantidade
+            for i in self.itens
+        )
+
+    @property
+    def itens_divergentes(self):
+        return [
+            i for i in self.itens
+            if i.quantidade_recebida is not None and i.quantidade_recebida != i.quantidade
+        ]
+
 
 class PedidoItem(db.Model):
     __tablename__ = 'pedido_item'
@@ -566,11 +680,14 @@ class PedidoItem(db.Model):
     pedido_id = db.Column(db.Integer, db.ForeignKey('pedido_loja.id'), nullable=False)
     receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
     produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
+    materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'), nullable=True)
     quantidade = db.Column(db.Integer, nullable=False)
+    quantidade_recebida = db.Column(db.Integer, nullable=True)
     observacao = db.Column(db.String(200))
 
     receita = db.relationship('Receita')
     produto = db.relationship('Produto')
+    materia_prima = db.relationship('MateriaPrima')
 
     @property
     def nome_item(self):
@@ -578,6 +695,8 @@ class PedidoItem(db.Model):
             return self.receita.nome
         if self.produto:
             return self.produto.nome
+        if self.materia_prima:
+            return self.materia_prima.nome + ' (MP)'
         return '?'
 
 
@@ -590,11 +709,13 @@ class EstoqueLoja(db.Model):
     loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
     receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
     produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
+    materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'), nullable=True)
     quantidade = db.Column(db.Integer, default=0)
 
     loja = db.relationship('Loja')
     receita = db.relationship('Receita')
     produto = db.relationship('Produto')
+    materia_prima = db.relationship('MateriaPrima')
     movimentacoes = db.relationship('MovEstoqueLoja', backref='estoque', cascade='all, delete-orphan')
 
     @property
@@ -603,7 +724,33 @@ class EstoqueLoja(db.Model):
             return self.receita.nome
         if self.produto:
             return self.produto.nome
+        if self.materia_prima:
+            return self.materia_prima.nome + ' (MP)'
         return '?'
+
+
+class PrecoLojaReceita(db.Model):
+    __tablename__ = 'preco_loja_receita'
+
+    id = db.Column(db.Integer, primary_key=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=False)
+    preco = db.Column(db.Float, nullable=False)
+
+    __table_args__ = (db.UniqueConstraint('loja_id', 'receita_id', name='uq_preco_loja_receita'),)
+
+
+class FotoRecebimento(db.Model):
+    __tablename__ = 'foto_recebimento'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_id = db.Column(db.Integer, db.ForeignKey('pedido_loja.id'), nullable=False)
+    imagem = db.Column(db.LargeBinary, nullable=False)
+    mimetype = db.Column(db.String(100))
+    enviada_em = db.Column(db.DateTime, default=datetime.utcnow)
+    enviada_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    pedido = db.relationship('PedidoLoja', backref=db.backref('fotos', cascade='all, delete-orphan'))
 
 
 class MovEstoqueLoja(db.Model):
@@ -630,3 +777,304 @@ class CartinhaEntrega(db.Model):
     atualizado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
     autor = db.relationship('Usuario', backref='cartinhas')
+
+
+class OverrideEntrega(db.Model):
+    """Sobrescreve a data de entrega de um pedido VNDA — local, nao sincroniza com o VNDA."""
+    __tablename__ = 'override_entrega'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_code = db.Column(db.String(50), nullable=False, unique=True, index=True)
+    data_entrega = db.Column(db.Date, nullable=False)
+    motivo = db.Column(db.Text)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    autor = db.relationship('Usuario', backref='overrides_entrega')
+
+
+class GeocodeCache(db.Model):
+    """Cache de enderecos geocodificados (CEP -> lat/lng).
+    Evita re-bater o Nominatim (rate limit 1 req/s)."""
+    __tablename__ = 'geocode_cache'
+
+    id = db.Column(db.Integer, primary_key=True)
+    chave = db.Column(db.String(200), nullable=False, unique=True, index=True)
+    lat = db.Column(db.Float)
+    lng = db.Column(db.Float)
+    fonte = db.Column(db.String(50))  # 'brasilapi', 'awesomeapi', 'nominatim', 'nominatim_cep_rejeitado', etc.
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class Driver(db.Model):
+    """Motorista/motoboy cadastrado. Pedidos sao atribuidos a um Driver."""
+    __tablename__ = 'driver_entrega'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(80), nullable=False, unique=True)
+    cor = db.Column(db.String(20))  # opcional: hex pra UI
+    telefone = db.Column(db.String(30))
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    # Capacidade maxima de pedidos por rodada de Auto-distribuir.
+    # Usada pra moto (cap 2-3) vs carro (cap 12-15). Default alto = sem limite efetivo.
+    capacidade = db.Column(db.Integer, default=999)
+
+    # Acesso a pagina /driver/<token> + PIN 4 digitos pra dificultar acesso casual.
+    token = db.Column(db.String(32), unique=True, index=True)
+    pin = db.Column(db.String(8))  # 4 digitos, mas folga pra futuros 6
+
+    atribuicoes = db.relationship('AtribuicaoEntrega', backref='driver', lazy='dynamic')
+
+
+class LoteSaida(db.Model):
+    """Pacote nomeado de uma rodada de distribuicao.
+    Cada vez que o usuario clica 'Distribuir' (ou cria manualmente), gera 1 lote.
+    Status e inferido a partir das atribuicoes filhas."""
+    __tablename__ = 'lote_saida'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(120), nullable=False)
+    data_entrega = db.Column(db.Date, nullable=False, index=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    janelas_json = db.Column(db.Text)  # JSON array de strings, ex: ["07-08","08-09"]
+    # aberto = nenhum saiu | em_rota = >=1 saiu, falta entregar | concluido = 100%
+    status = db.Column(db.String(20), default='aberto', index=True)
+    criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+
+class AtribuicaoEntrega(db.Model):
+    """Vincula um pedido VNDA a um Driver. Pedido tem no maximo 1 driver por vez."""
+    __tablename__ = 'atribuicao_entrega'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_code = db.Column(db.String(50), nullable=False, unique=True, index=True)
+    driver_id = db.Column(db.Integer, db.ForeignKey('driver_entrega.id'))
+    lote_id = db.Column(db.Integer, db.ForeignKey('lote_saida.id'), index=True)
+    data_entrega = db.Column(db.Date, index=True)
+    ordem = db.Column(db.Integer, default=0)  # ordem dentro da rota do driver
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    atualizado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    # Status preenchido pela pagina do driver
+    status = db.Column(db.String(20), default='pendente')  # pendente|entregue|nao_entregue
+    entregue_em = db.Column(db.DateTime)
+    nota = db.Column(db.String(500))
+    motivo_falha = db.Column(db.String(50))  # ausente|recusou|endereco_errado|outro
+    geo_lat = db.Column(db.Float)
+    geo_lng = db.Column(db.Float)
+    # Hash publico pra link compartilhavel com cliente
+    proof_hash = db.Column(db.String(32), unique=True, index=True)
+
+    autor = db.relationship('Usuario')
+    fotos = db.relationship('EntregaFoto', backref='atribuicao', lazy='dynamic',
+                            cascade='all, delete-orphan')
+
+
+class EntregaFoto(db.Model):
+    """Foto de comprovante de entrega tirada pelo driver."""
+    __tablename__ = 'entrega_foto'
+
+    id = db.Column(db.Integer, primary_key=True)
+    atribuicao_id = db.Column(db.Integer, db.ForeignKey('atribuicao_entrega.id'), nullable=False, index=True)
+    url = db.Column(db.String(500), nullable=False)  # URL publica (Dropbox shared link)
+    storage_path = db.Column(db.String(500))  # caminho no storage pra deletar depois
+    tirada_em = db.Column(db.DateTime, default=datetime.utcnow)
+    tamanho_bytes = db.Column(db.Integer)
+
+
+class PedidoLocal(db.Model):
+    """Pedido cadastrado manualmente, fora do VNDA. Aparece junto com os
+    pedidos VNDA na operacao do dia."""
+    __tablename__ = 'pedido_local'
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    destinatario = db.Column(db.String(200), nullable=False)
+    telefone = db.Column(db.String(50), nullable=False)
+    endereco = db.Column(db.String(500), nullable=False)
+    data_entrega = db.Column(db.Date, nullable=False, index=True)
+    periodo = db.Column(db.String(80))
+    cartinha = db.Column(db.Text)
+    observacao = db.Column(db.Text)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    itens = db.relationship('PedidoLocalItem', backref='pedido', cascade='all, delete-orphan', lazy='joined')
+
+    @property
+    def total(self):
+        return sum((i.quantidade or 0) * (i.preco_unitario or 0) for i in self.itens)
+
+
+class PedidoLocalItem(db.Model):
+    __tablename__ = 'pedido_local_item'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_local_id = db.Column(db.Integer, db.ForeignKey('pedido_local.id', ondelete='CASCADE'), nullable=False, index=True)
+    nome = db.Column(db.String(200), nullable=False)
+    quantidade = db.Column(db.Integer, default=1)
+    preco_unitario = db.Column(db.Float, default=0)
+
+
+class CopilotConversa(db.Model):
+    """Audit trail das interacoes com o copilot.
+    Cada prompt do usuario vira 1 registro. Guarda a interpretacao da
+    LLM, status (pendente/aprovado/cancelado/executado/falhou) e link
+    pro registro resultante (ex: pedido criado)."""
+    __tablename__ = 'copilot_conversa'
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False, index=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    prompt = db.Column(db.Text, nullable=False)
+    # JSON com {tipo, params, explicacao, ambiguidades?}
+    interpretacao_json = db.Column(db.Text)
+    tipo_acao = db.Column(db.String(40), index=True)
+    status = db.Column(db.String(20), default='pendente', index=True)
+    executado_em = db.Column(db.DateTime)
+    # Link pro registro criado (ex: pedido_loja.id se criou um pedido)
+    registro_tipo = db.Column(db.String(40))
+    registro_id = db.Column(db.Integer)
+    erro = db.Column(db.Text)
+
+    usuario = db.relationship('Usuario')
+
+
+# ── Gestao de Projetos (PARA + 12 Week Year) ──
+
+class AuditLog(db.Model):
+    """Trilha de auditoria de mutacoes em modelos sensiveis.
+    Populado automaticamente via SQLAlchemy event listener (depois_flush)
+    pros modelos registrados em audit_models.py.
+
+    Guarda snapshot 'antes' e 'depois' em JSON pra reconstrucao."""
+    __tablename__ = 'audit_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), index=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    tabela = db.Column(db.String(60), nullable=False, index=True)
+    registro_id = db.Column(db.Integer, index=True)
+    acao = db.Column(db.String(10), nullable=False)  # insert | update | delete
+    antes = db.Column(db.Text)  # JSON: snapshot pré-mudança (null em insert)
+    depois = db.Column(db.Text)  # JSON: snapshot pós-mudança (null em delete)
+    ip = db.Column(db.String(45))
+    user_agent = db.Column(db.String(300))
+
+    usuario = db.relationship('Usuario')
+
+
+class ProjetoArea(db.Model):
+    __tablename__ = "projeto_area"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False, unique=True)
+    tipo = db.Column(db.String(20), nullable=False, default="empresa")  # empresa/igreja/vida
+    cor = db.Column(db.String(20))  # ex: '#5b8def' — opcional, sobrescreve cor padrao do tipo
+    ativa = db.Column(db.Boolean, default=True)
+    ordem = db.Column(db.Integer, default=0)
+
+    projetos = db.relationship("Projeto", backref="area",
+                                cascade="all, delete-orphan",
+                                order_by="Projeto.criado_em.desc()")
+
+
+class Projeto(db.Model):
+    __tablename__ = "projeto"
+
+    id = db.Column(db.Integer, primary_key=True)
+    area_id = db.Column(db.Integer, db.ForeignKey("projeto_area.id"), nullable=False)
+    nome = db.Column(db.String(200), nullable=False)
+    status = db.Column(db.String(20), default="planejado")
+    prioridade = db.Column(db.String(10))
+    foco_12s = db.Column(db.Boolean, default=False)
+    responsavel_id = db.Column(db.Integer, db.ForeignKey("usuario.id"), nullable=True)
+    observacao = db.Column(db.Text)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    responsavel = db.relationship("Usuario")
+    tarefas = db.relationship("TarefaProjeto", backref="projeto",
+                               cascade="all, delete-orphan",
+                               order_by="TarefaProjeto.ordem, TarefaProjeto.id")
+
+    @property
+    def tarefas_ativas(self):
+        return [t for t in self.tarefas if t.status not in ("feito", "cancelado")]
+
+    @property
+    def tem_atrasada(self):
+        return any(t.atrasada for t in self.tarefas)
+
+
+class TarefaProjeto(db.Model):
+    __tablename__ = "tarefa_projeto"
+
+    id = db.Column(db.Integer, primary_key=True)
+    projeto_id = db.Column(db.Integer, db.ForeignKey("projeto.id"), nullable=False)
+    nome = db.Column(db.String(300), nullable=False)
+    status = db.Column(db.String(20), default="a_fazer")
+    tipo = db.Column(db.String(20))
+    esforco = db.Column(db.String(2))
+    prazo = db.Column(db.Date, nullable=True)
+    responsavel_id = db.Column(db.Integer, db.ForeignKey("usuario.id"), nullable=True)
+    observacao = db.Column(db.Text)
+    recorrencia = db.Column(db.String(20))  # diaria/semanal/quinzenal/mensal/trimestral
+    ordem = db.Column(db.Integer, default=0)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    feito_em = db.Column(db.DateTime, nullable=True)
+
+    responsavel = db.relationship("Usuario")
+
+    @property
+    def atrasada(self):
+        return (self.prazo is not None
+                and self.status not in ("feito", "cancelado")
+                and self.prazo < date.today())
+
+
+
+class WeeklyReview(db.Model):
+    __tablename__ = "weekly_review"
+
+    id = db.Column(db.Integer, primary_key=True)
+    data = db.Column(db.Date, default=date.today, nullable=False)
+    reflexao = db.Column(db.Text)
+    fazendo_count = db.Column(db.Integer, default=0)
+    a_fazer_count = db.Column(db.Integer, default=0)
+    atrasadas_count = db.Column(db.Integer, default=0)
+    foco_count = db.Column(db.Integer, default=0)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por = db.Column(db.Integer, db.ForeignKey("usuario.id"))
+
+    autor = db.relationship("Usuario")
+
+
+# ── Templates de Projeto ──
+
+class ProjetoTemplate(db.Model):
+    __tablename__ = "projeto_template"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(150), nullable=False)
+    area_id_padrao = db.Column(db.Integer, db.ForeignKey("projeto_area.id"), nullable=True)
+    descricao = db.Column(db.Text)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    area_padrao = db.relationship("ProjetoArea")
+    tarefas = db.relationship("TarefaTemplate", backref="template",
+                               cascade="all, delete-orphan",
+                               order_by="TarefaTemplate.ordem")
+
+
+class TarefaTemplate(db.Model):
+    __tablename__ = "tarefa_template"
+
+    id = db.Column(db.Integer, primary_key=True)
+    template_id = db.Column(db.Integer, db.ForeignKey("projeto_template.id"), nullable=False)
+    nome = db.Column(db.String(300), nullable=False)
+    tipo = db.Column(db.String(20))
+    esforco = db.Column(db.String(2))
+    dias_prazo = db.Column(db.Integer)  # dias a partir da criacao do projeto
+    ordem = db.Column(db.Integer, default=0)

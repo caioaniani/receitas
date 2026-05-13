@@ -3,12 +3,17 @@
 {% block title %}Estoque Congelados{% endblock %}
 
 {% block content %}
-<h5 class="fw-bold mb-3"><i class="bi bi-snow2"></i> Estoque de Congelados</h5>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-snow2"></i> Estoque de Congelados</h1>
+    <a href="{{ url_for('pedidos.congelados_balanco') }}" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-clipboard-check"></i> Fazer Balanço (contagem física)
+    </a>
+</div>
 
 <!-- Entrada de producao -->
 <div class="card mb-3">
     <div class="card-header bg-white fw-bold">
-        <i class="bi bi-plus-circle"></i> Registrar Entrada de Producao
+        <i class="bi bi-plus-circle"></i> Registrar Entrada de Produção
     </div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('pedidos.congelados_entrada') }}" class="row g-2 align-items-end">
@@ -42,8 +47,8 @@
 <!-- Tabela de estoque -->
 <div class="table-responsive">
     <table class="table table-sm table-bordered table-hover bg-white">
-        <thead>
-            <tr style="background:#37474f; color:#fff; font-size:11px; text-transform:uppercase;">
+        <thead class="thead-padaria">
+            <tr>
                 <th>Item</th>
                 <th class="text-center" style="width:100px">Tipo</th>
                 <th class="text-center" style="width:100px">Quantidade</th>

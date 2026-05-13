@@ -1,0 +1,21 @@
+{% macro breadcrumbs(items) %}
+{# items = [(label, url_or_None), ...]   ultimo item sempre eh a pagina atual #}
+<nav aria-label="breadcrumb" class="mb-2 d-print-none">
+    <ol class="breadcrumb mb-0" style="font-size:12.5px;">
+        {% for label, url in items %}
+            {% if url and not loop.last %}
+            <li class="breadcrumb-item"><a href="{{ url }}" class="text-decoration-none">{{ label }}</a></li>
+            {% else %}
+            <li class="breadcrumb-item active" aria-current="page">{{ label }}</li>
+            {% endif %}
+        {% endfor %}
+    </ol>
+</nav>
+{% endmacro %}
+
+
+{% macro botao_voltar(url, texto='Voltar') %}
+<a href="{{ url }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i> {{ texto }}
+</a>
+{% endmacro %}

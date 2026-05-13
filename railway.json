@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "gunicorn run:app",
+    "startCommand": "gunicorn run:app --workers 2 --threads 4 --worker-class gthread --timeout 120 --keep-alive 5",
     "restartPolicyType": "ON_FAILURE"
   }
 }

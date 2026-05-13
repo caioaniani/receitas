@@ -3,17 +3,24 @@
 {% block title %}Pedidos{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="fw-bold mb-0"><i class="bi bi-cart3"></i> Pedidos</h5>
-    <a href="{{ url_for('pedidos.novo') }}" class="btn btn-primary btn-sm">
-        <i class="bi bi-plus-lg"></i> Novo Pedido
-    </a>
+<div class="page-header">
+    <h1 class="page-title">pedidos</h1>
+    <div class="page-actions">
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('pedidos.relatorio') }}" class="btn-pill btn-pill-outline">
+            <i class="bi bi-file-earmark-bar-graph"></i> relatório
+        </a>
+        {% endif %}
+        <a href="{{ url_for('pedidos.novo') }}" class="btn-pill btn-pill-primary">
+            <i class="bi bi-plus-lg"></i> novo pedido
+        </a>
+    </div>
 </div>
 
 {% if current_user.is_admin() %}
-<form method="GET" class="mb-3 d-flex align-items-center gap-2">
-    <select name="loja" class="form-select form-select-sm" style="max-width:250px;" onchange="this.form.submit()">
-        <option value="">Todas as lojas</option>
+<form method="GET" class="mb-3">
+    <select name="loja" class="form-select form-select-sm chip-filter" style="max-width:260px; appearance:auto;" onchange="this.form.submit()">
+        <option value="">todas as lojas</option>
         {% for l in lojas %}
         <option value="{{ l.id }}" {% if filtro_loja == l.id|string %}selected{% endif %}>{{ l.nome }}</option>
         {% endfor %}
@@ -21,45 +28,267 @@
 </form>
 {% endif %}
 
-<div class="table-responsive">
-    <table class="table table-sm table-bordered table-hover bg-white">
+<!-- Bulk action bar -->
+<div id="pedidos-bulk-bar" class="d-none mb-3 p-2 d-flex flex-wrap gap-2 align-items-center"
+     style="background:var(--bg-chip); border-radius:var(--radius-md); border:1px solid var(--border-color);">
+    <span class="fw-semibold small ps-2"><span id="pedidos-bulk-count">0</span> selecionado(s)</span>
+    <span class="text-muted">·</span>
+    {% if current_user.is_admin() %}
+    <button type="button" class="btn-pill btn-pill-outline btn-sm pedidos-bulk-acao" data-acao="confirmar"
+            style="padding:4px 12px; font-size:12px;">
+        <i class="bi bi-check-lg"></i> confirmar
+    </button>
+    <button type="button" class="btn-pill btn-pill-outline btn-sm pedidos-bulk-acao" data-acao="separar"
+            style="padding:4px 12px; font-size:12px;">
+        <i class="bi bi-box-seam"></i> separar
+    </button>
+    <button type="button" class="btn-pill btn-pill-outline btn-sm pedidos-bulk-acao" data-acao="enviar"
+            style="padding:4px 12px; font-size:12px;">
+        <i class="bi bi-truck"></i> em transporte
+    </button>
+    {% endif %}
+    <button type="button" class="btn-pill btn-pill-outline btn-sm pedidos-bulk-acao" data-acao="cancelar"
+            style="padding:4px 12px; font-size:12px; border-color:var(--cor-vermelho); color:var(--cor-vermelho);">
+        <i class="bi bi-x-circle"></i> cancelar
+    </button>
+    {% if current_user.is_admin() %}
+    <button type="button" class="btn-pill btn-pill-outline btn-sm pedidos-bulk-acao" data-acao="excluir"
+            style="padding:4px 12px; font-size:12px; border-color:var(--cor-vermelho); color:var(--cor-vermelho); background:var(--cor-vermelho-soft);"
+            title="Apaga permanentemente. Só status cancelado ou pendente.">
+        <i class="bi bi-trash"></i> excluir
+    </button>
+    {% endif %}
+    <button type="button" class="btn-link btn-sm ms-auto" id="pedidos-bulk-clear" style="text-decoration:none;">limpar seleção</button>
+</div>
+
+<div class="card" id="pedidos-tabela-card" style="padding:0; overflow:hidden;">
+    <table class="table-dense">
         <thead>
-            <tr style="background:#37474f; color:#fff; font-size:11px; text-transform:uppercase;">
-                <th style="width:50px">#</th>
-                <th>Loja</th>
-                <th>Data Entrega</th>
-                <th class="text-center">Itens</th>
-                <th class="text-center">Status</th>
-                <th>Criado em</th>
+            <tr>
+                <th class="col-check">
+                    <input type="checkbox" class="form-check-input" id="pedidos-check-all" title="Selecionar todos">
+                </th>
+                <th class="col-acoes"></th>
+                <th>nº</th>
+                <th>loja</th>
+                <th>data entrega</th>
+                <th class="text-center">itens</th>
+                <th class="text-center">status</th>
+                <th>criado em</th>
+                <th class="col-chevron"></th>
             </tr>
         </thead>
         <tbody>
             {% for p in pedidos %}
             <tr style="cursor:pointer" onclick="window.location='{{ url_for('pedidos.detalhe', id=p.id) }}'">
+                <td class="col-check" onclick="event.stopPropagation()">
+                    <input type="checkbox" class="form-check-input pedidos-check"
+                           data-id="{{ p.id }}" data-status="{{ p.status }}">
+                </td>
+                <td class="col-acoes" onclick="event.stopPropagation()">
+                    <div class="dropdown">
+                        <button class="btn-circle" title="Ações" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-three-dots"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('pedidos.detalhe', id=p.id) }}">
+                                    <i class="bi bi-eye"></i> ver detalhes
+                                </a>
+                            </li>
+                            {% if p.status == 'pendente' and current_user.is_admin() %}
+                            <li>
+                                <form method="POST" action="{{ url_for('pedidos.confirmar', id=p.id) }}" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="bi bi-check-lg"></i> confirmar
+                                    </button>
+                                </form>
+                            </li>
+                            {% endif %}
+                            {% if p.status in ('confirmado', 'pendente') and current_user.is_admin() %}
+                            <li>
+                                <form method="POST" action="{{ url_for('pedidos.separar', id=p.id) }}" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="bi bi-box-seam"></i> marcar como separado
+                                    </button>
+                                </form>
+                            </li>
+                            {% endif %}
+                            {% if p.status == 'separado' and current_user.is_admin() %}
+                            <li>
+                                <form method="POST" action="{{ url_for('pedidos.enviar', id=p.id) }}" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="bi bi-truck"></i> marcar como em transporte
+                                    </button>
+                                </form>
+                            </li>
+                            {% endif %}
+                            {% if p.status not in ('cancelado', 'entregue') %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form method="POST" action="{{ url_for('pedidos.cancelar', id=p.id) }}" class="d-inline"
+                                      onsubmit="return confirm('Cancelar pedido #{{ p.id }}?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="dropdown-item text-danger">
+                                        <i class="bi bi-x-circle"></i> cancelar pedido
+                                    </button>
+                                </form>
+                            </li>
+                            {% endif %}
+                            {% if current_user.is_admin() and p.status in ('cancelado', 'pendente') %}
+                            <li>
+                                <form method="POST" action="{{ url_for('pedidos.excluir', id=p.id) }}" class="d-inline"
+                                      onsubmit="return confirm('Excluir pedido #{{ p.id }} permanentemente? Esta ação não pode ser desfeita.');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="dropdown-item text-danger">
+                                        <i class="bi bi-trash"></i> excluir
+                                    </button>
+                                </form>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </td>
                 <td class="text-muted">{{ p.id }}</td>
                 <td>{{ p.loja.nome }}</td>
-                <td>{{ p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '-' }}</td>
+                <td>{{ p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '—' }}</td>
                 <td class="text-center">{{ p.itens|length }}</td>
                 <td class="text-center">
-                    {% if p.status == 'pendente' %}
-                    <span class="badge rounded-pill bg-warning text-dark">Pendente</span>
-                    {% elif p.status == 'confirmado' %}
-                    <span class="badge rounded-pill bg-info text-dark">Confirmado</span>
-                    {% elif p.status == 'entregue' %}
-                    <span class="badge rounded-pill bg-success">Entregue</span>
-                    {% elif p.status == 'cancelado' %}
-                    <span class="badge rounded-pill bg-secondary">Cancelado</span>
-                    {% else %}
-                    <span class="badge rounded-pill bg-light text-dark">{{ p.status }}</span>
+                    {% set s = p.status %}
+                    {% set status_color = {
+                        'pendente': '#f59e0b',
+                        'confirmado': '#2563eb',
+                        'separado': '#06b6d4',
+                        'em_transporte': '#8b5cf6',
+                        'entregue': '#16a34a',
+                        'cancelado': '#94a3b8'
+                    }.get(s, '#94a3b8') %}
+                    <span class="badge-status">
+                        <span class="bullet" style="background:{{ status_color }};"></span>
+                        {{ {'pendente':'pendente','confirmado':'confirmado','separado':'separado',
+                             'em_transporte':'em transporte','entregue':'entregue','cancelado':'cancelado'}.get(s, s) }}
+                    </span>
+                    {% if p.tem_divergencia %}
+                    <span class="badge-status" style="background:var(--cor-vermelho-soft); color:var(--cor-vermelho);" title="Quantidade recebida diferente da pedida">
+                        <i class="bi bi-exclamation-triangle-fill"></i> divergência
+                    </span>
                     {% endif %}
                 </td>
-                <td class="text-muted" style="font-size:12px;">{{ p.criado_em.strftime('%d/%m %H:%M') if p.criado_em else '-' }}</td>
+                <td class="text-muted" style="font-size:12px;">{{ p.criado_em.strftime('%d/%m %H:%M') if p.criado_em else '—' }}</td>
+                <td class="col-chevron"><i class="bi bi-chevron-right"></i></td>
             </tr>
             {% endfor %}
             {% if not pedidos %}
-            <tr><td colspan="6" class="text-center text-muted py-3">Nenhum pedido encontrado.</td></tr>
+            <tr><td colspan="9" class="text-center text-muted py-4">Nenhum pedido encontrado.</td></tr>
             {% endif %}
         </tbody>
     </table>
 </div>
+
+<script>
+(function() {
+    var checkAll = document.getElementById('pedidos-check-all');
+    var bulkBar = document.getElementById('pedidos-bulk-bar');
+    var bulkCount = document.getElementById('pedidos-bulk-count');
+    var btnClear = document.getElementById('pedidos-bulk-clear');
+    var CSRF = '{{ csrf_token() }}';
+
+    function checks() { return document.querySelectorAll('.pedidos-check'); }
+    function selecionados() {
+        return Array.from(checks()).filter(function(c) { return c.checked; });
+    }
+
+    function atualizarBulkBar() {
+        var sel = selecionados();
+        if (sel.length > 0) {
+            bulkBar.classList.remove('d-none');
+            bulkCount.textContent = sel.length;
+        } else {
+            bulkBar.classList.add('d-none');
+        }
+        var todos = checks();
+        if (todos.length > 0) {
+            checkAll.checked = sel.length === todos.length;
+            checkAll.indeterminate = sel.length > 0 && sel.length < todos.length;
+        }
+    }
+
+    if (checkAll) {
+        checkAll.addEventListener('change', function() {
+            checks().forEach(function(c) { c.checked = checkAll.checked; });
+            atualizarBulkBar();
+        });
+    }
+
+    document.addEventListener('change', function(e) {
+        if (e.target.matches && e.target.matches('.pedidos-check')) {
+            atualizarBulkBar();
+        }
+    });
+
+    if (btnClear) {
+        btnClear.addEventListener('click', function() {
+            checks().forEach(function(c) { c.checked = false; });
+            atualizarBulkBar();
+        });
+    }
+
+    // Compatibilidade por acao: quais status permitem cada acao
+    var ACOES_VALIDAS = {
+        confirmar: ['pendente'],
+        separar: ['pendente', 'confirmado'],
+        enviar: ['separado'],
+        cancelar: ['pendente', 'confirmado', 'separado', 'em_transporte'],
+        excluir: ['cancelado', 'pendente'],  // destrutivo — só status seguros
+    };
+
+    if (bulkBar) {
+        bulkBar.addEventListener('click', function(e) {
+            var btn = e.target.closest('.pedidos-bulk-acao');
+            if (!btn) return;
+            var acao = btn.dataset.acao;
+            var validos = ACOES_VALIDAS[acao] || [];
+            var sel = selecionados();
+            var aplicaveis = sel.filter(function(c) { return validos.indexOf(c.dataset.status) !== -1; });
+
+            if (aplicaveis.length === 0) {
+                alert('Nenhum dos pedidos selecionados pode receber a ação "' + acao + '".');
+                return;
+            }
+            var msg;
+            if (acao === 'excluir') {
+                msg = '⚠ EXCLUIR PERMANENTEMENTE ' + aplicaveis.length + ' pedido(s)? Esta ação NÃO pode ser desfeita.';
+            } else {
+                msg = 'Aplicar "' + acao + '" em ' + aplicaveis.length + ' pedido(s)?';
+            }
+            if (aplicaveis.length < sel.length) {
+                msg += '\n(' + (sel.length - aplicaveis.length) + ' pedido(s) ignorados por status incompatível)';
+            }
+            if (!confirm(msg)) return;
+
+            btn.disabled = true;
+            var orig = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> aplicando...';
+
+            var promises = aplicaveis.map(function(c) {
+                var fd = new FormData();
+                fd.append('csrf_token', CSRF);
+                return fetch('/pedidos/' + c.dataset.id + '/' + acao, {
+                    method: 'POST', body: fd, credentials: 'same-origin',
+                });
+            });
+            Promise.all(promises).then(function() {
+                location.reload();
+            }).catch(function(err) {
+                alert('Erro ao processar lote: ' + err);
+                btn.disabled = false;
+                btn.innerHTML = orig;
+            });
+        });
+    }
+})();
+</script>
 {% endblock %}

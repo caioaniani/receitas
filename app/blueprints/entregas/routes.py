@@ -8,45 +8,114 @@ import requests as http_requests
 from app.blueprints.entregas import entregas_bp
 from app.decorators import entrega_access_required
 from app.extensions import db
-from app.models import CartinhaEntrega
-from app.services import vnda
+from app.models import CartinhaEntrega, OverrideEntrega, Driver, AtribuicaoEntrega, LoteSaida, EntregaFoto, PedidoLocal, PedidoLocalItem, Produto, MateriaPrima
+from app.services import vnda, rotas as rotas_svc, dropbox_storage
 
 
 @entregas_bp.route('/')
 @login_required
 @entrega_access_required
 def index():
-    return render_template('entregas/index.html', hoje=date.today().isoformat())
+    resp = current_app.make_response(
+        render_template('entregas/index.html', hoje=date.today().isoformat())
+    )
+    # Evita cache do HTML (Safari teima muito com inline JS)
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
+
+
+def _carregar_overrides_data():
+    """Retorna dict {pedido_code: date} com todas as datas sobrescritas no ERP."""
+    return {o.pedido_code: o.data_entrega for o in OverrideEntrega.query.all()}
+
+
+def _carregar_overrides_full():
+    """Como _carregar_overrides_data mas inclui motivo, autor e data de alteracao."""
+    out = {}
+    for o in OverrideEntrega.query.all():
+        out[o.pedido_code] = {
+            'data': o.data_entrega,
+            'motivo': o.motivo or '',
+            'autor': o.autor.nome if o.autor else '',
+            'em': o.atualizado_em.isoformat() if o.atualizado_em else None,
+        }
+    return out
 
 
 @entregas_bp.route('/api/pedidos')
 @login_required
 @entrega_access_required
 def api_pedidos():
+    import traceback
     data_str = request.args.get('data', date.today().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
         target = date.today()
 
-    resultado = vnda.buscar_pedidos_do_dia(target)
+    try:
+        overrides_full = _carregar_overrides_full()
+        overrides_data = {code: o['data'] for code, o in overrides_full.items()}
+        resultado = _injetar_pedidos_locais(target, vnda.buscar_pedidos_do_dia(target, overrides=overrides_data))
+    except Exception as e:
+        current_app.logger.exception('api_pedidos: erro carregando VNDA/overrides')
+        return jsonify(pedidos=[], data=data_str,
+                       erro=f'{type(e).__name__}: {str(e)[:300]}')
 
     if 'erro' in resultado:
-        return jsonify(pedidos=[], data=data_str, erro=resultado['erro'])
+        resp = jsonify(pedidos=[], data=data_str, erro=resultado['erro'])
+    else:
+        try:
+            pedidos = resultado.get('pedidos', [])
+            total_janela = resultado.get('total_janela', 0)
 
-    pedidos = resultado.get('pedidos', [])
-    total_janela = resultado.get('total_janela', 0)
+            codes = [p['code'] for p in pedidos if p['code']]
+            cartinhas_manuais = {}
+            if codes:
+                for c in CartinhaEntrega.query.filter(CartinhaEntrega.pedido_code.in_(codes)).all():
+                    cartinhas_manuais[c.pedido_code] = c.texto or ''
 
-    codes = [p['code'] for p in pedidos if p['code']]
-    cartinhas = {}
-    if codes:
-        for c in CartinhaEntrega.query.filter(CartinhaEntrega.pedido_code.in_(codes)).all():
-            cartinhas[c.pedido_code] = c.texto or ''
+            # Cartinha manual (editada pelo usuario) tem prioridade sobre a do VNDA
+            for p in pedidos:
+                manual = cartinhas_manuais.get(p['code'], '')
+                auto = p.get('cartinha_vnda', '')
+                p['cartinha'] = manual or auto
+                p['cartinha_origem'] = 'manual' if manual else ('vnda' if auto else None)
 
-    for p in pedidos:
-        p['cartinha'] = cartinhas.get(p['code'], '')
+                # Info adicional de override de data
+                if p.get('data_override'):
+                    ov = overrides_full.get(p['code'])
+                    if ov:
+                        p['override_motivo'] = ov['motivo']
+                        p['override_autor'] = ov['autor']
+                        p['override_em'] = ov['em']
 
-    return jsonify(pedidos=pedidos, data=data_str, total_janela=total_janela)
+            # Carrega driver atribuido (se houver)
+            atribuicoes = {}
+            if codes:
+                for a in AtribuicaoEntrega.query.filter(AtribuicaoEntrega.pedido_code.in_(codes)).all():
+                    if a.driver_id:
+                        drv = Driver.query.get(a.driver_id)
+                        if drv:
+                            atribuicoes[a.pedido_code] = {
+                                'id': drv.id, 'nome': drv.nome, 'cor': drv.cor,
+                            }
+            for p in pedidos:
+                drv = atribuicoes.get(p['code'])
+                if drv:
+                    p['driver'] = drv
+
+            resp = jsonify(pedidos=pedidos, data=data_str, total_janela=total_janela)
+        except Exception as e:
+            current_app.logger.exception('api_pedidos: erro processando pedidos')
+            tb_short = traceback.format_exc().splitlines()[-3:]
+            return jsonify(pedidos=[], data=data_str,
+                           erro=f'{type(e).__name__}: {str(e)[:200]} | {" | ".join(tb_short)}')
+
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    return resp
 
 
 @entregas_bp.route('/api/calendario')
@@ -60,8 +129,832 @@ def api_calendario():
     except (ValueError, IndexError):
         year, month = date.today().year, date.today().month
 
-    dias = vnda.contar_pedidos_por_dia(year, month)
-    return jsonify(dias=dias)
+    overrides = _carregar_overrides_data()
+    dias = vnda.contar_pedidos_por_dia(year, month, overrides=overrides)
+    resp = jsonify(dias=dias)
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    return resp
+
+
+# ── Drivers de entrega ──
+
+@entregas_bp.route('/dropbox/setup', methods=['GET', 'POST'])
+@login_required
+@entrega_access_required
+def dropbox_setup():
+    """Wizard one-shot pra obter o refresh_token do Dropbox.
+
+    Passos:
+    1. Admin cria o app no painel da Dropbox e copia App key + App secret.
+    2. Cola aqui na primeira tela -> recebe URL pra autorizar.
+    3. Autoriza no Dropbox -> recebe um codigo curto.
+    4. Cola o codigo aqui -> backend troca por refresh_token via API.
+    5. Pagina mostra o refresh_token. Admin copia pro Railway env junto
+       com app_key/app_secret. Token nao expira.
+    """
+    msg = None
+    erro = None
+    refresh_token = None
+
+    # Pre-preencher dos envs se ja existirem (UI mostra status atual)
+    cfg_app_key = (current_app.config.get('DROPBOX_APP_KEY') or '').strip()
+    cfg_app_secret = (current_app.config.get('DROPBOX_APP_SECRET') or '').strip()
+    cfg_refresh = (current_app.config.get('DROPBOX_REFRESH_TOKEN') or '').strip()
+    legacy = (current_app.config.get('DROPBOX_ACCESS_TOKEN') or '').strip()
+
+    app_key = cfg_app_key
+    app_secret = cfg_app_secret
+
+    if request.method == 'POST':
+        app_key = (request.form.get('app_key') or '').strip()
+        app_secret = (request.form.get('app_secret') or '').strip()
+        code = (request.form.get('code') or '').strip()
+
+        if app_key and app_secret and code:
+            r = http_requests.post(
+                'https://api.dropbox.com/oauth2/token',
+                data={
+                    'grant_type': 'authorization_code',
+                    'code': code,
+                },
+                auth=(app_key, app_secret),
+                timeout=15,
+            )
+            if r.status_code == 200:
+                body = r.json()
+                refresh_token = body.get('refresh_token')
+                if refresh_token:
+                    msg = 'Refresh token gerado com sucesso. Copie os 3 valores abaixo pro Railway.'
+                else:
+                    erro = ('Resposta sem refresh_token. Verifique se voce usou '
+                            '"token_access_type=offline" na URL de autorizacao.')
+            else:
+                erro = f'Dropbox retornou {r.status_code}: {r.text[:200]}'
+        elif app_key and app_secret:
+            msg = 'App key e secret salvos. Agora autorize abaixo e cole o codigo.'
+
+    return render_template(
+        'entregas/dropbox_setup.html',
+        msg=msg,
+        erro=erro,
+        refresh_token=refresh_token,
+        app_key=app_key,
+        app_secret=app_secret,
+        cfg_app_key_set=bool(cfg_app_key),
+        cfg_app_secret_set=bool(cfg_app_secret),
+        cfg_refresh_set=bool(cfg_refresh),
+        legacy_set=bool(legacy),
+    )
+
+
+@entregas_bp.route('/api/drivers', methods=['GET'])
+@login_required
+@entrega_access_required
+def listar_drivers():
+    incluir_inativos = request.args.get('inativos') == '1'
+    q = Driver.query
+    if not incluir_inativos:
+        q = q.filter_by(ativo=True)
+    drivers = q.order_by(Driver.nome).all()
+    return jsonify(drivers=[
+        {
+            'id': d.id, 'nome': d.nome, 'cor': d.cor, 'telefone': d.telefone, 'ativo': d.ativo,
+            'token': d.token, 'pin': d.pin, 'capacidade': d.capacidade or 999,
+        }
+        for d in drivers
+    ])
+
+
+@entregas_bp.route('/api/drivers', methods=['POST'])
+@login_required
+@entrega_access_required
+def criar_driver():
+    import secrets
+    data = request.get_json(silent=True) or {}
+    nome = (data.get('nome') or '').strip()
+    if not nome:
+        return jsonify(ok=False, erro='nome obrigatorio'), 400
+    if Driver.query.filter_by(nome=nome).first():
+        return jsonify(ok=False, erro='ja existe driver com esse nome'), 400
+    try:
+        cap = int(data.get('capacidade') or 999)
+    except (TypeError, ValueError):
+        cap = 999
+    d = Driver(
+        nome=nome,
+        cor=(data.get('cor') or '').strip() or None,
+        telefone=(data.get('telefone') or '').strip() or None,
+        ativo=True,
+        token=secrets.token_urlsafe(16),
+        capacidade=max(1, cap),
+    )
+    db.session.add(d)
+    db.session.commit()
+    return jsonify(ok=True, id=d.id, nome=d.nome, token=d.token)
+
+
+@entregas_bp.route('/api/drivers/<int:did>', methods=['POST'])
+@login_required
+@entrega_access_required
+def atualizar_driver(did):
+    d = Driver.query.get_or_404(did)
+    data = request.get_json(silent=True) or {}
+    if 'nome' in data:
+        nome = (data['nome'] or '').strip()
+        if not nome:
+            return jsonify(ok=False, erro='nome obrigatorio'), 400
+        # Se mudou e ja existe outro com esse nome, rejeita
+        outro = Driver.query.filter(Driver.nome == nome, Driver.id != did).first()
+        if outro:
+            return jsonify(ok=False, erro='ja existe driver com esse nome'), 400
+        d.nome = nome
+    if 'cor' in data:
+        d.cor = (data['cor'] or '').strip() or None
+    if 'telefone' in data:
+        d.telefone = (data['telefone'] or '').strip() or None
+    if 'ativo' in data:
+        d.ativo = bool(data['ativo'])
+    if 'pin' in data:
+        pin = (data['pin'] or '').strip()
+        # PIN vazio remove (acesso livre); 4-6 digitos so numero
+        if pin and not (pin.isdigit() and 4 <= len(pin) <= 6):
+            return jsonify(ok=False, erro='PIN deve ter 4-6 digitos'), 400
+        d.pin = pin or None
+    if 'capacidade' in data:
+        try:
+            d.capacidade = max(1, int(data['capacidade']))
+        except (TypeError, ValueError):
+            pass
+    if data.get('regenerar_token'):
+        import secrets
+        d.token = secrets.token_urlsafe(16)
+    if not d.token:
+        import secrets
+        d.token = secrets.token_urlsafe(16)
+    db.session.commit()
+    return jsonify(ok=True, token=d.token)
+
+
+@entregas_bp.route('/api/drivers/<int:did>', methods=['DELETE'])
+@login_required
+@entrega_access_required
+def remover_driver(did):
+    """Exclui o driver de vez se nao tem historico; senao apenas desativa.
+    Forca exclusao com ?force=1 (cuidado: apaga atribuicoes)."""
+    d = Driver.query.get_or_404(did)
+    force = request.args.get('force') == '1'
+
+    n_atrib = AtribuicaoEntrega.query.filter_by(driver_id=did).count()
+
+    if n_atrib == 0:
+        # Sem historico — exclui de vez
+        nome = d.nome
+        db.session.delete(d)
+        db.session.commit()
+        return jsonify(ok=True, acao='excluido', nome=nome)
+
+    if force:
+        # Apaga as atribuicoes tambem (cuidado!)
+        AtribuicaoEntrega.query.filter_by(driver_id=did).delete()
+        nome = d.nome
+        db.session.delete(d)
+        db.session.commit()
+        return jsonify(ok=True, acao='excluido_com_historico', nome=nome, atribuicoes_apagadas=n_atrib)
+
+    # Tem historico mas sem force — apenas desativa
+    d.ativo = False
+    db.session.commit()
+    return jsonify(ok=True, acao='desativado', nome=d.nome, atribuicoes=n_atrib)
+
+
+# ── Atribuicao pedido <-> driver ──
+
+@entregas_bp.route('/api/atribuicao/<code>', methods=['POST'])
+@login_required
+@entrega_access_required
+def atribuir_pedido(code):
+    """Atribui um pedido a um driver (ou troca de driver). data_entrega opcional."""
+    data = request.get_json(silent=True) or {}
+    driver_id = data.get('driver_id')
+    if driver_id is not None:
+        try:
+            driver_id = int(driver_id)
+        except (TypeError, ValueError):
+            return jsonify(ok=False, erro='driver_id invalido'), 400
+        if not Driver.query.get(driver_id):
+            return jsonify(ok=False, erro='driver nao encontrado'), 404
+
+    a = AtribuicaoEntrega.query.filter_by(pedido_code=code).first()
+    if not a:
+        a = AtribuicaoEntrega(pedido_code=code)
+        db.session.add(a)
+    a.driver_id = driver_id
+    if 'data_entrega' in data and data['data_entrega']:
+        try:
+            a.data_entrega = datetime.strptime(data['data_entrega'], '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    if 'ordem' in data:
+        try:
+            a.ordem = int(data['ordem'])
+        except (TypeError, ValueError):
+            pass
+    a.atualizado_por = current_user.id
+    if a.lote_id:
+        _recompute_lote_status(a.lote_id)
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@entregas_bp.route('/api/atribuicao/<code>', methods=['DELETE'])
+@login_required
+@entrega_access_required
+def remover_atribuicao(code):
+    """Remove atribuicao do pedido (volta a ficar sem driver)."""
+    a = AtribuicaoEntrega.query.filter_by(pedido_code=code).first()
+    if a:
+        db.session.delete(a)
+        db.session.commit()
+    return jsonify(ok=True)
+
+
+@entregas_bp.route('/tiles/<int:z>/<int:x>/<int:y>.png')
+@login_required
+@entrega_access_required
+def tile_proxy(z, x, y):
+    """Proxy de tiles do OpenStreetMap. Necessario porque o ambiente
+    do usuario bloqueia CDNs externas (unpkg, jsdelivr, openstreetmap.org,
+    cartocdn). Servimos os tiles via nosso dominio.
+
+    Cache no proxy + browser pra reduzir trafego."""
+    import requests as r
+    from flask import Response, abort
+    if z < 0 or z > 19 or x < 0 or y < 0:
+        abort(400)
+    try:
+        resp = r.get(
+            f'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            headers={'User-Agent': 'OPaoPadariaERP/1.0 (rotas-de-entrega)'},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            abort(resp.status_code)
+        out = Response(resp.content, mimetype='image/png')
+        # Cacheia 1 dia no browser. OSM tiles raramente mudam.
+        out.headers['Cache-Control'] = 'public, max-age=86400'
+        return out
+    except r.RequestException:
+        abort(502)
+
+
+@entregas_bp.route('/api/google/limpar-falhas', methods=['POST'])
+@login_required
+@entrega_access_required
+def api_google_limpar_falhas():
+    """Apaga registros do GeocodeCache com fonte=google_fail ou lat=NULL.
+    Forca re-geocoding na proxima chamada de rotas."""
+    from app.models import GeocodeCache
+    n = GeocodeCache.query.filter(
+        db.or_(
+            GeocodeCache.fonte == 'google_fail',
+            GeocodeCache.lat.is_(None),
+        )
+    ).delete(synchronize_session=False)
+    db.session.commit()
+    return jsonify(ok=True, removidas=n)
+
+
+@entregas_bp.route('/api/debug/google')
+@login_required
+@entrega_access_required
+def api_debug_google():
+    """Diagnostico da integracao Google Maps."""
+    import requests as r
+    key = (current_app.config.get('GOOGLE_MAPS_API_KEY') or '').strip()
+    info = {
+        'key_configurada': bool(key),
+        'key_inicio': key[:10] + '...' if len(key) > 10 else '(vazio)',
+        'origem_endereco': (current_app.config.get('ROTA_ORIGEM_ENDERECO') or ''),
+    }
+    if not key:
+        info['erro'] = 'GOOGLE_MAPS_API_KEY nao configurada'
+        return jsonify(info)
+
+    # Testa geocoding com endereco conhecido
+    try:
+        resp = r.get(
+            'https://maps.googleapis.com/maps/api/geocode/json',
+            params={
+                'address': 'Avenida Paulista 1000, Sao Paulo, SP',
+                'key': key,
+                'components': 'country:BR',
+            },
+            timeout=10,
+        )
+        info['geocode_status_http'] = resp.status_code
+        try:
+            data = resp.json()
+            info['geocode_status_api'] = data.get('status')
+            info['geocode_error_message'] = data.get('error_message', '')
+            if data.get('status') == 'OK' and data.get('results'):
+                loc = data['results'][0]['geometry']['location']
+                info['geocode_resultado'] = f"{loc['lat']},{loc['lng']}"
+                info['geocode_endereco_formatado'] = data['results'][0].get('formatted_address')
+        except ValueError:
+            info['geocode_body'] = resp.text[:500]
+    except Exception as e:
+        info['geocode_erro_conexao'] = str(e)
+
+    # Conta cache
+    try:
+        from app.models import GeocodeCache
+        info['cache_total'] = GeocodeCache.query.count()
+        info['cache_google_ok'] = GeocodeCache.query.filter(
+            GeocodeCache.fonte == 'google',
+            GeocodeCache.lat.isnot(None),
+        ).count()
+        info['cache_google_fail'] = GeocodeCache.query.filter_by(fonte='google_fail').count()
+        info['cache_outras_fontes'] = GeocodeCache.query.filter(
+            ~GeocodeCache.fonte.in_(['google', 'google_fail']),
+            GeocodeCache.fonte.isnot(None),
+        ).count()
+    except Exception as e:
+        info['cache_erro'] = str(e)
+
+    return jsonify(info)
+
+
+@entregas_bp.route('/api/atribuicao/reset', methods=['POST'])
+@login_required
+@entrega_access_required
+def resetar_atribuicoes_dia():
+    """Apaga atribuicoes de TODOS os pedidos do dia escolhido.
+    Pega os codes do VNDA (respeitando overrides de data) e remove suas
+    AtribuicaoEntrega. Usado pra "redistribuir do zero" sem afetar outras datas."""
+    data = request.get_json(silent=True) or {}
+    data_str = (data.get('data') or '').strip()
+    if not data_str:
+        return jsonify(ok=False, erro='data obrigatoria'), 400
+    try:
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify(ok=False, erro='data invalida'), 400
+
+    overrides = _carregar_overrides_data()
+    resultado = _injetar_pedidos_locais(target, vnda.buscar_pedidos_do_dia(target, overrides=overrides))
+    if 'erro' in resultado:
+        return jsonify(ok=False, erro=resultado['erro']), 500
+
+    codes = [p['code'] for p in resultado.get('pedidos', []) if p.get('code')]
+    n = 0
+    if codes:
+        n = AtribuicaoEntrega.query.filter(
+            AtribuicaoEntrega.pedido_code.in_(codes)
+        ).delete(synchronize_session=False)
+        db.session.commit()
+    return jsonify(ok=True, removidas=n, total_pedidos=len(codes))
+
+
+def _limpar_status_atribuicao(atrib):
+    atrib.status = 'pendente'
+    atrib.entregue_em = None
+    atrib.nota = None
+    atrib.motivo_falha = None
+    atrib.geo_lat = None
+    atrib.geo_lng = None
+    atrib.proof_hash = None
+
+
+@entregas_bp.route('/api/entrega/<code>/reset', methods=['POST'])
+@login_required
+@entrega_access_required
+def resetar_entrega(code):
+    """Volta atribuicao do pedido pra 'pendente' e apaga fotos (DB + Dropbox)."""
+    if not current_user.is_admin():
+        return jsonify(ok=False, erro='somente admin'), 403
+
+    atrib = AtribuicaoEntrega.query.filter_by(pedido_code=code).first()
+    if not atrib:
+        return jsonify(ok=False, erro='atribuicao nao encontrada'), 404
+
+    fotos = EntregaFoto.query.filter_by(atribuicao_id=atrib.id).all()
+    apagadas_dropbox = 0
+    for f in fotos:
+        if f.storage_path and dropbox_storage.deletar(f.storage_path):
+            apagadas_dropbox += 1
+        db.session.delete(f)
+
+    _limpar_status_atribuicao(atrib)
+    db.session.commit()
+
+    return jsonify(ok=True, fotos_removidas=len(fotos),
+                   fotos_dropbox_apagadas=apagadas_dropbox,
+                   data=atrib.data_entrega.isoformat() if atrib.data_entrega else None)
+
+
+@entregas_bp.route('/api/entrega/<code>/migrar', methods=['POST'])
+@login_required
+@entrega_access_required
+def migrar_entrega(code):
+    """Move comprovante (status + fotos + geo + proof_hash) do pedido <code> pra outro.
+
+    Body: {destino: "OUTRO_CODE"}
+    Origem fica resetada como pendente.
+    Destino nao pode ja ter comprovante (precisa estar pendente/sem fotos).
+    """
+    if not current_user.is_admin():
+        return jsonify(ok=False, erro='somente admin'), 403
+
+    body = request.get_json(silent=True) or {}
+    destino_code = (body.get('destino') or '').strip()
+    if not destino_code:
+        return jsonify(ok=False, erro='destino obrigatorio'), 400
+    if destino_code == code:
+        return jsonify(ok=False, erro='origem e destino iguais'), 400
+
+    origem = AtribuicaoEntrega.query.filter_by(pedido_code=code).first()
+    if not origem:
+        return jsonify(ok=False, erro='origem nao encontrada'), 404
+
+    destino = AtribuicaoEntrega.query.filter_by(pedido_code=destino_code).first()
+    if destino is None:
+        destino = AtribuicaoEntrega(
+            pedido_code=destino_code,
+            driver_id=origem.driver_id,
+            data_entrega=origem.data_entrega,
+            ordem=0,
+        )
+        db.session.add(destino)
+        db.session.flush()
+    else:
+        tem_fotos = EntregaFoto.query.filter_by(atribuicao_id=destino.id).first() is not None
+        if destino.proof_hash or tem_fotos or destino.status == 'entregue':
+            return jsonify(ok=False, erro='destino ja tem comprovante; resete antes'), 409
+
+    # Move campos
+    destino.status = origem.status
+    destino.entregue_em = origem.entregue_em
+    destino.nota = origem.nota
+    destino.motivo_falha = origem.motivo_falha
+    destino.geo_lat = origem.geo_lat
+    destino.geo_lng = origem.geo_lng
+    destino.proof_hash = origem.proof_hash
+
+    # Move fotos (sem reupload — apenas troca atribuicao_id)
+    fotos = EntregaFoto.query.filter_by(atribuicao_id=origem.id).all()
+    for f in fotos:
+        f.atribuicao_id = destino.id
+
+    _limpar_status_atribuicao(origem)
+    db.session.commit()
+
+    return jsonify(ok=True, fotos_movidas=len(fotos), destino=destino_code,
+                   data=destino.data_entrega.isoformat() if destino.data_entrega else None)
+
+
+# ── Pedidos manuais (fora do VNDA) ──
+
+def _injetar_pedidos_locais(target_date, resultado):
+    """Adiciona pedidos manuais (PedidoLocal) na lista de pedidos do dia."""
+    if 'erro' in resultado:
+        return resultado
+    locais = PedidoLocal.query.filter_by(data_entrega=target_date).all()
+    pedidos = resultado.setdefault('pedidos', [])
+    for p in locais:
+        pedidos.append(_serializar_pedido_local(p))
+    return resultado
+
+
+def _gerar_code_local():
+    import secrets
+    while True:
+        code = 'LOC-' + secrets.token_hex(4).upper()
+        if not PedidoLocal.query.filter_by(code=code).first():
+            return code
+
+
+def _serializar_pedido_local(p):
+    return {
+        'id': p.id,
+        'pedido_local': True,
+        'code': p.code,
+        'destinatario': p.destinatario,
+        'telefone': p.telefone,
+        'endereco': p.endereco,
+        'data_entrega': p.data_entrega.isoformat() if p.data_entrega else None,
+        'data_entrega_fmt': p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '',
+        'periodo': p.periodo or '',
+        'cartinha_vnda': p.cartinha or '',
+        'observacao': p.observacao,
+        'status_vnda': 'local',
+        'data_override': False,
+        'tem_customizacao': False,
+        'comprador': '',
+        'itens': [
+            {'nome': i.nome, 'quantidade': i.quantidade, 'preco_unitario': i.preco_unitario, 'sku': '', 'subtotal': (i.quantidade or 0) * (i.preco_unitario or 0)}
+            for i in p.itens
+        ],
+        'total': p.total,
+    }
+
+
+@entregas_bp.route('/api/pedido-local', methods=['POST'])
+@login_required
+@entrega_access_required
+def criar_pedido_local():
+    data = request.get_json(silent=True) or {}
+    obrigatorios = ['destinatario', 'telefone', 'endereco', 'data_entrega', 'itens']
+    for campo in obrigatorios:
+        if not data.get(campo):
+            return jsonify(ok=False, erro=f'campo obrigatorio: {campo}'), 400
+    try:
+        d = datetime.strptime(data['data_entrega'], '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return jsonify(ok=False, erro='data_entrega invalida'), 400
+
+    itens = data['itens']
+    if not isinstance(itens, list) or len(itens) == 0:
+        return jsonify(ok=False, erro='precisa de pelo menos 1 item'), 400
+
+    pid = data.get('id')
+    if pid:
+        p = PedidoLocal.query.get(pid)
+        if not p:
+            return jsonify(ok=False, erro='pedido nao encontrado'), 404
+        # Limpa itens existentes
+        for it in list(p.itens):
+            db.session.delete(it)
+    else:
+        p = PedidoLocal(code=_gerar_code_local(), criado_por=current_user.id)
+        db.session.add(p)
+
+    p.destinatario = data['destinatario'].strip()
+    p.telefone = data['telefone'].strip()
+    p.endereco = data['endereco'].strip()
+    p.data_entrega = d
+    p.periodo = (data.get('periodo') or '').strip() or None
+    p.cartinha = (data.get('cartinha') or '').strip() or None
+    p.observacao = (data.get('observacao') or '').strip() or None
+    db.session.flush()
+
+    for it in itens:
+        nome = (it.get('nome') or '').strip()
+        if not nome:
+            continue
+        try:
+            qtd = int(it.get('quantidade') or 1)
+            preco = float(it.get('preco_unitario') or 0)
+        except (ValueError, TypeError):
+            qtd, preco = 1, 0.0
+        db.session.add(PedidoLocalItem(pedido_local_id=p.id, nome=nome, quantidade=qtd, preco_unitario=preco))
+
+    db.session.commit()
+    return jsonify(ok=True, pedido=_serializar_pedido_local(p))
+
+
+@entregas_bp.route('/api/pedido-local/<int:pid>', methods=['GET'])
+@login_required
+@entrega_access_required
+def get_pedido_local(pid):
+    p = PedidoLocal.query.get(pid)
+    if not p:
+        return jsonify(ok=False, erro='nao encontrado'), 404
+    return jsonify(ok=True, pedido=_serializar_pedido_local(p))
+
+
+@entregas_bp.route('/api/pedido-local/<int:pid>', methods=['DELETE'])
+@login_required
+@entrega_access_required
+def deletar_pedido_local(pid):
+    p = PedidoLocal.query.get(pid)
+    if not p:
+        return jsonify(ok=False, erro='nao encontrado'), 404
+    # Apaga atribuicao do pedido se houver (mesmo code)
+    AtribuicaoEntrega.query.filter_by(pedido_code=p.code).delete()
+    db.session.delete(p)
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@entregas_bp.route('/api/atribuicao/lote', methods=['POST'])
+@login_required
+@entrega_access_required
+def atribuir_lote():
+    """Atribui em lote.
+
+    Body:
+      items: [{code, driver_id, ordem, data_entrega}...]
+      criar_lote (opcional): {janelas: [...], nome?: str, data_entrega: 'YYYY-MM-DD'}
+        → cria um LoteSaida novo e marca todos os items com seu lote_id.
+      lote_id (opcional): int — usa lote existente em vez de criar.
+    """
+    import json as _json
+    data = request.get_json(silent=True) or {}
+    items = data.get('items') or []
+    if not isinstance(items, list):
+        return jsonify(ok=False, erro='items deve ser lista'), 400
+
+    # 1. Resolve lote_id (criar novo OU usar existente OU nenhum)
+    lote_id = None
+    criar = data.get('criar_lote')
+    if criar and isinstance(criar, dict):
+        # Data do lote: do payload, ou do primeiro item, ou hoje
+        data_str = criar.get('data_entrega')
+        if not data_str:
+            for it in items:
+                if it.get('data_entrega'):
+                    data_str = it['data_entrega']
+                    break
+        try:
+            data_lote = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else date.today()
+        except ValueError:
+            data_lote = date.today()
+        janelas = criar.get('janelas') or []
+        if not isinstance(janelas, list):
+            janelas = []
+        nome = (criar.get('nome') or '').strip()
+        if not nome:
+            agora = datetime.now()
+            jan_str = ' + '.join(j or '(sem janela)' for j in janelas) if janelas else 'todas as janelas'
+            nome = data_lote.strftime('%d/%m') + ' ' + agora.strftime('%H:%M') + ' · ' + jan_str
+        novo = LoteSaida(
+            nome=nome[:120],
+            data_entrega=data_lote,
+            janelas_json=_json.dumps(janelas),
+            status='aberto',
+            criado_por=current_user.id,
+        )
+        db.session.add(novo)
+        db.session.flush()
+        lote_id = novo.id
+    elif data.get('lote_id') is not None:
+        try:
+            lote_id = int(data['lote_id'])
+        except (TypeError, ValueError):
+            return jsonify(ok=False, erro='lote_id invalido'), 400
+        if not LoteSaida.query.get(lote_id):
+            return jsonify(ok=False, erro='lote nao encontrado'), 404
+
+    drivers_validos = {d.id for d in Driver.query.all()}
+    salvos = 0
+    lotes_afetados = set()
+    for item in items:
+        code = (item.get('code') or '').strip()
+        if not code:
+            continue
+        driver_id = item.get('driver_id')
+        if driver_id is not None:
+            try:
+                driver_id = int(driver_id)
+            except (TypeError, ValueError):
+                continue
+            if driver_id not in drivers_validos:
+                continue
+        a = AtribuicaoEntrega.query.filter_by(pedido_code=code).first()
+        if not a:
+            a = AtribuicaoEntrega(pedido_code=code)
+            db.session.add(a)
+        a.driver_id = driver_id
+        if lote_id is not None:
+            a.lote_id = lote_id
+        if item.get('data_entrega'):
+            try:
+                a.data_entrega = datetime.strptime(item['data_entrega'], '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        if 'ordem' in item:
+            try:
+                a.ordem = int(item['ordem'])
+            except (TypeError, ValueError):
+                pass
+        a.atualizado_por = current_user.id
+        # Coleta lotes afetados conforme processa items (mais robusto que
+        # inspecionar db.session.dirty, que pode incluir objetos inesperados)
+        if a.lote_id:
+            lotes_afetados.add(a.lote_id)
+        salvos += 1
+    if lote_id:
+        lotes_afetados.add(lote_id)
+    try:
+        db.session.flush()
+    except Exception:
+        db.session.rollback()
+        raise
+    for lid in lotes_afetados:
+        _recompute_lote_status(lid)
+    db.session.commit()
+    return jsonify(ok=True, salvos=salvos, lote_id=lote_id)
+
+
+def _recompute_lote_status(lote_id):
+    """Infere status do lote olhando atribuicoes filhas. Defensivo: nunca
+    propaga excecao — log + segue. Status do lote e' inferencia de UI, nao
+    pode quebrar salvamentos.
+
+    aberto      = nenhuma atribuicao saiu (status != 'pendente') ainda
+    em_rota     = >=1 saiu/entregue/falhou, mas falta entregar (>0 pendentes
+                  com driver atribuido)
+    concluido   = tudo entregue ou falhou (sem pendentes com driver)
+    """
+    try:
+        with db.session.no_autoflush:
+            lote = LoteSaida.query.get(lote_id)
+            if not lote:
+                return
+            atribs = AtribuicaoEntrega.query.filter_by(lote_id=lote_id).all()
+            if not atribs:
+                return
+            finais = {'entregue', 'nao_entregue'}
+            n_finalizadas = sum(1 for a in atribs if (a.status or 'pendente') in finais)
+            n_pendentes_com_driver = sum(
+                1 for a in atribs
+                if (a.status or 'pendente') == 'pendente' and a.driver_id is not None
+            )
+            if n_finalizadas == 0:
+                novo = 'aberto'
+            elif n_pendentes_com_driver == 0 and n_finalizadas > 0:
+                novo = 'concluido'
+            else:
+                novo = 'em_rota'
+            if lote.status != novo:
+                lote.status = novo
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.warning('falha ao recalcular status do lote %s: %s', lote_id, exc)
+
+
+@entregas_bp.route('/api/lotes', methods=['GET'])
+@login_required
+@entrega_access_required
+def listar_lotes():
+    """Lista lotes de uma data (?data=YYYY-MM-DD).
+    Retorna metadados + contadores por status."""
+    import json as _json
+    data_str = request.args.get('data', date.today().isoformat())
+    try:
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        target = date.today()
+    lotes = LoteSaida.query.filter_by(data_entrega=target).order_by(LoteSaida.criado_em).all()
+
+    # Conta atribuicoes por lote em 1 query
+    from sqlalchemy import func
+    contagens = dict(
+        db.session.query(AtribuicaoEntrega.lote_id, func.count(AtribuicaoEntrega.id))
+        .filter(AtribuicaoEntrega.lote_id.in_([l.id for l in lotes] or [0]))
+        .group_by(AtribuicaoEntrega.lote_id).all()
+    )
+
+    out = []
+    for l in lotes:
+        try:
+            janelas = _json.loads(l.janelas_json) if l.janelas_json else []
+        except (ValueError, TypeError):
+            janelas = []
+        out.append({
+            'id': l.id,
+            'nome': l.nome,
+            'data_entrega': l.data_entrega.isoformat() if l.data_entrega else None,
+            'criado_em': l.criado_em.isoformat() if l.criado_em else None,
+            'janelas': janelas,
+            'status': l.status or 'aberto',
+            'qtd_pedidos': contagens.get(l.id, 0),
+        })
+    return jsonify(lotes=out)
+
+
+@entregas_bp.route('/api/lotes/<int:lote_id>', methods=['DELETE'])
+@login_required
+@entrega_access_required
+def deletar_lote(lote_id):
+    """Exclui um lote. Por padrão, desvincula as atribuições filhas
+    (lote_id ← NULL) e elas voltam pro pool 'Sem lote'. Com
+    ?apagar_atribuicoes=1, apaga as atribuições junto (use só pra
+    limpar testes; perde dados de driver/ordem/status)."""
+    lote = LoteSaida.query.get_or_404(lote_id)
+    apagar = request.args.get('apagar_atribuicoes') == '1'
+    # Apagar atribuicoes destroi histórico (status, fotos, comprovantes) —
+    # so admin pode fazer.
+    if apagar and not current_user.is_admin():
+        return jsonify(ok=False, erro='Apenas admin pode apagar as atribuições do lote'), 403
+    try:
+        afetadas = AtribuicaoEntrega.query.filter_by(lote_id=lote_id).all()
+        if apagar:
+            for a in afetadas:
+                db.session.delete(a)
+        else:
+            # UPDATE em lote via SQL: simples e evita N round-trips e
+            # problema de ordem de flush antes do DELETE do lote (FK
+            # constraint reclama se a UPDATE nao tiver rodado primeiro).
+            AtribuicaoEntrega.query.filter_by(lote_id=lote_id) \
+                .update({AtribuicaoEntrega.lote_id: None}, synchronize_session=False)
+        db.session.flush()
+        db.session.delete(lote)
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception('falha ao deletar lote %s', lote_id)
+        return jsonify(ok=False, erro=str(exc)), 500
+    return jsonify(ok=True, atribuicoes_afetadas=len(afetadas), apagadas=apagar)
 
 
 @entregas_bp.route('/cartinha/<code>', methods=['POST'])
@@ -81,6 +974,437 @@ def salvar_cartinha(code):
     c.atualizado_por = current_user.id
     db.session.commit()
 
+    return jsonify(ok=True)
+
+
+@entregas_bp.route('/api/produtos')
+@login_required
+@entrega_access_required
+def api_produtos():
+    """Agrega itens dos pedidos do dia. Retorna duas listas:
+    - 'vendidos': como veio do VNDA (cestas como produto unico)
+    - 'producao': cestas explodidas em componentes (usa Produto+ProdutoItem do banco)"""
+    data_str = request.args.get('data', date.today().isoformat())
+    try:
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        target = date.today()
+
+    janelas = [j for j in request.args.getlist('janela') if j]
+
+    overrides = _carregar_overrides_data()
+    resultado = _injetar_pedidos_locais(target, vnda.buscar_pedidos_do_dia(target, overrides=overrides))
+    if 'erro' in resultado:
+        resp = jsonify(vendidos=[], producao=[], erro=resultado['erro'])
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        return resp
+
+    pedidos = resultado.get('pedidos', [])
+    if janelas:
+        pedidos = [p for p in pedidos if (p.get('periodo') or '') in janelas]
+
+    # Carrega catalogo de Produtos cadastrados (pra expandir cestas)
+    produtos_db = {}  # nome_lower -> Produto
+    for prod in Produto.query.filter_by(ativo=True).all():
+        if prod.nome:
+            produtos_db[prod.nome.strip().lower()] = prod
+
+    # Cache de MateriaPrima pra pegar unidade dos componentes 'mp'
+    mp_db = {}  # nome_lower -> MateriaPrima
+    for mp in MateriaPrima.query.all():
+        if mp.nome:
+            mp_db[mp.nome.strip().lower()] = mp
+
+    # Vendidos (como veio do VNDA) — chave por SKU+nome
+    vendidos = {}
+
+    def _agg_vendido(sku, nome, qty, preco):
+        chave = (sku or nome or '').strip().lower()
+        if not chave:
+            return
+        a = vendidos.get(chave)
+        if not a:
+            a = {
+                'sku': sku, 'nome': nome, 'quantidade': 0,
+                'preco_unitario': preco, 'valor_total': 0.0,
+                'componente_de': [],
+            }
+            vendidos[chave] = a
+        a['quantidade'] += qty
+        a['valor_total'] += qty * preco
+
+    # Producao — chave SO por nome (ignora SKU). Croissant de Family Box +
+    # Croissant comprado avulso somam na mesma linha.
+    producao = {}
+
+    def _agg_producao(nome, qty, unidade='un', componente_de=None):
+        chave = (nome or '').strip().lower()
+        if not chave:
+            return
+        a = producao.get(chave)
+        if not a:
+            a = {
+                'sku': '', 'nome': nome, 'unidade': unidade, 'quantidade': 0,
+                'preco_unitario': 0.0, 'valor_total': 0.0,
+                'componente_de': set(),
+            }
+            producao[chave] = a
+        # Se ja tem com unidade diferente, mantem a primeira (deveria ser sempre a mesma)
+        a['quantidade'] += qty
+        if componente_de:
+            a['componente_de'].add(componente_de)
+
+    for p in pedidos:
+        for item in (p.get('itens') or []):
+            sku = (item.get('sku') or '').strip()
+            nome = (item.get('nome') or '').strip()
+            if not nome and not sku:
+                continue
+            try:
+                qty = int(item.get('quantidade') or 0)
+            except (TypeError, ValueError):
+                qty = 0
+            try:
+                preco = float(item.get('preco_unitario') or 0)
+            except (TypeError, ValueError):
+                preco = 0.0
+
+            # Vendidos: sempre adiciona como veio do VNDA
+            _agg_vendido(sku, nome, qty, preco)
+
+            # Producao: se for cesta cadastrada, soma componentes
+            prod_cadastrado = produtos_db.get(nome.lower())
+            if prod_cadastrado and prod_cadastrado.itens:
+                for comp in prod_cadastrado.itens:
+                    cnome = (comp.item_nome or '').strip()
+                    if not cnome:
+                        continue
+                    cqty_unitario = comp.quantidade or 1
+                    total_qty = qty * cqty_unitario
+                    if total_qty <= 0:
+                        continue
+                    total_qty = int(total_qty) if total_qty == int(total_qty) else total_qty
+                    # Detecta unidade: 'mp' usa unidade da MateriaPrima; 'receita' = unidade
+                    if (comp.tipo or '').lower() == 'mp':
+                        mp = mp_db.get(cnome.lower())
+                        unidade = mp.unidade if mp else 'g'
+                    else:
+                        unidade = 'un'
+                    _agg_producao(cnome, total_qty, unidade=unidade, componente_de=nome)
+            else:
+                # Item simples — vai pra producao direto, sem origem
+                _agg_producao(nome, qty, unidade='un')
+
+    def _serializa(d):
+        out = []
+        for v in d.values():
+            cd = v.get('componente_de')
+            v['componente_de'] = sorted(cd) if isinstance(cd, set) else (cd or [])
+            out.append(v)
+        return sorted(out, key=lambda x: (-x['quantidade'], x['nome']))
+
+    vendidos_lista = _serializa(vendidos)
+    producao_lista = _serializa(producao)
+    periodos = sorted({p.get('periodo') or '' for p in resultado.get('pedidos', []) if p.get('periodo')})
+
+    # Soma producao agrupada por unidade (300 g + 12 un nao sao somaveis)
+    totais_por_unidade = {}
+    for p in producao_lista:
+        u = p.get('unidade') or 'un'
+        totais_por_unidade[u] = totais_por_unidade.get(u, 0) + p['quantidade']
+
+    resp = jsonify(
+        data=data_str,
+        janelas=janelas,
+        periodos_disponiveis=periodos,
+        vendidos=vendidos_lista,
+        producao=producao_lista,
+        total_pedidos=len(pedidos),
+        total_itens_vendidos=sum(p['quantidade'] for p in vendidos_lista),
+        total_skus_vendidos=len(vendidos_lista),
+        total_skus_producao=len(producao_lista),
+        totais_producao_por_unidade=totais_por_unidade,
+        valor_total=round(sum(p['valor_total'] for p in vendidos_lista), 2),
+    )
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    return resp
+
+
+@entregas_bp.route('/api/atribuidos')
+@login_required
+@entrega_access_required
+def api_atribuidos():
+    """Lista pedidos do dia agrupados por driver atribuido + secao 'sem driver'."""
+    data_str = request.args.get('data', date.today().isoformat())
+    try:
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        target = date.today()
+
+    overrides = _carregar_overrides_data()
+    resultado = _injetar_pedidos_locais(target, vnda.buscar_pedidos_do_dia(target, overrides=overrides))
+    if 'erro' in resultado:
+        resp = jsonify(drivers=[], sem_driver=[], erro=resultado['erro'])
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        return resp
+
+    pedidos = resultado.get('pedidos', [])
+    codes = [p['code'] for p in pedidos if p.get('code')]
+
+    atribuicoes_por_code = {}
+    if codes:
+        for a in AtribuicaoEntrega.query.filter(AtribuicaoEntrega.pedido_code.in_(codes)).all():
+            fotos = [{'id': f.id, 'url': f.url} for f in a.fotos.all()]
+            atribuicoes_por_code[a.pedido_code] = {
+                'atribuicao_id': a.id,
+                'driver_id': a.driver_id,
+                'lote_id': a.lote_id,
+                'ordem': a.ordem or 0,
+                'status': a.status or 'pendente',
+                'entregue_em': a.entregue_em.isoformat() if a.entregue_em else None,
+                'nota': a.nota,
+                'motivo_falha': a.motivo_falha,
+                'fotos': fotos,
+                'proof_hash': a.proof_hash,
+            }
+
+    drivers_db = Driver.query.order_by(Driver.nome).all()
+    drivers_por_id = {d.id: d for d in drivers_db}
+
+    paradas_por_driver = {}
+    sem_driver = []
+
+    for p in pedidos:
+        atrib = atribuicoes_por_code.get(p['code'])
+        did = atrib['driver_id'] if atrib else None
+        # Enriquece o pedido com status/fotos/etc do registro de atribuicao
+        if atrib:
+            p['status'] = atrib.get('status') or 'pendente'
+            p['entregue_em'] = atrib.get('entregue_em')
+            p['nota_driver'] = atrib.get('nota')
+            p['motivo_falha'] = atrib.get('motivo_falha')
+            p['fotos'] = atrib.get('fotos') or []
+            p['proof_hash'] = atrib.get('proof_hash')
+            p['lote_id'] = atrib.get('lote_id')
+        if did and did in drivers_por_id:
+            ordem = atrib.get('ordem', 0)
+            paradas_por_driver.setdefault(did, []).append((ordem, p))
+        else:
+            sem_driver.append(p)
+
+    drivers_resp = []
+    for d in drivers_db:
+        if d.id not in paradas_por_driver:
+            continue
+        paradas_list = sorted(paradas_por_driver[d.id], key=lambda x: (x[0], x[1].get('periodo') or ''))
+        drivers_resp.append({
+            'id': d.id,
+            'nome': d.nome,
+            'cor': d.cor,
+            'telefone': d.telefone,
+            'ativo': d.ativo,
+            'paradas': [p for _, p in paradas_list],
+            'qtd': len(paradas_list),
+        })
+
+    return jsonify(
+        data=data_str,
+        drivers=drivers_resp,
+        sem_driver=sem_driver,
+        total_pedidos=len(pedidos),
+        total_atribuidos=sum(d['qtd'] for d in drivers_resp),
+        drivers_disponiveis=[
+            {'id': d.id, 'nome': d.nome, 'cor': d.cor}
+            for d in drivers_db if d.ativo
+        ],
+        origem_endereco=rotas_svc.origem_endereco(current_app),
+    )
+
+
+@entregas_bp.route('/api/rotas')
+@login_required
+@entrega_access_required
+def api_rotas():
+    """Distribui pedidos entre drivers nominais (cadastrados em /api/drivers).
+    Pedidos com atribuicao salva (AtribuicaoEntrega) preservam o driver."""
+    data_str = request.args.get('data', date.today().isoformat())
+    try:
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        target = date.today()
+
+    janelas = [j for j in request.args.getlist('janela') if j]
+
+    # Drivers ativos cadastrados; opcionalmente filtra pelos selecionados (?drivers=1,2,3)
+    sel = (request.args.get('drivers') or '').strip()
+    q = Driver.query.filter_by(ativo=True)
+    if sel:
+        try:
+            ids = [int(x) for x in sel.split(',') if x.strip()]
+            q = q.filter(Driver.id.in_(ids))
+        except ValueError:
+            pass
+    drivers_db = q.order_by(Driver.nome).all()
+    drivers_struct = [{'id': d.id, 'nome': d.nome, 'cor': d.cor, 'telefone': d.telefone,
+                       'capacidade': d.capacidade or 999}
+                      for d in drivers_db]
+
+    overrides = _carregar_overrides_data()
+    resultado = _injetar_pedidos_locais(target, vnda.buscar_pedidos_do_dia(target, overrides=overrides))
+    if 'erro' in resultado:
+        resp = jsonify(rotas=[], erro=resultado['erro'])
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        return resp
+
+    pedidos = resultado.get('pedidos', [])
+
+    if janelas:
+        pedidos = [p for p in pedidos if (p.get('periodo') or '') in janelas]
+
+    # MODO 'roteirizar lote': escopa a um lote especifico. Pega so as sobras
+    # desse lote (driver_id NULL), e a capacidade dos drivers e' calculada
+    # contando os atribuidos do MESMO lote (nao do dia inteiro).
+    lote_alvo_id = request.args.get('lote_id')
+    if lote_alvo_id:
+        try:
+            lote_alvo_id = int(lote_alvo_id)
+        except (TypeError, ValueError):
+            lote_alvo_id = None
+
+    # Carrega atribuicoes existentes. Cada Distribuir e' uma SAIDA — pedidos
+    # que ja estao em outros lotes (com driver) ja saíram pra rua, entao nao
+    # consomem capacidade do driver na rodada nova. Idem pedidos finalizados.
+    # Eles sao removidos do pool antes de chamar gerar_rotas.
+    #
+    # O que SOBROU pra distribuir nesta rodada:
+    # - Pedidos novos (nunca atribuidos)
+    # - Sobras de lotes anteriores (lote_id != NULL mas driver_id == NULL)
+    codes = [p['code'] for p in pedidos if p.get('code')]
+    atribuicoes = {}
+    lote_por_code = {}
+    codes_excluir = set()
+    if codes:
+        for a in AtribuicaoEntrega.query.filter(AtribuicaoEntrega.pedido_code.in_(codes)).all():
+            if a.lote_id:
+                lote_por_code[a.pedido_code] = a.lote_id
+            status = (a.status or 'pendente')
+            ja_finalizado = status in ('entregue', 'nao_entregue')
+            if lote_alvo_id:
+                # MODO LOTE: escopa ao lote alvo. Atribuidos com driver no mesmo
+                # lote viram pre_atribuidos (consomem capacidade). Sobras do
+                # mesmo lote viram candidatos. Pedidos de outros lotes ou ja
+                # finalizados ficam fora.
+                if ja_finalizado or a.lote_id != lote_alvo_id:
+                    codes_excluir.add(a.pedido_code)
+                else:
+                    atribuicoes[a.pedido_code] = {'driver_id': a.driver_id, 'ordem': a.ordem or 0}
+            else:
+                # MODO PADRAO: cria lote novo, capacidade fresca
+                ja_em_outro_lote = bool(a.lote_id) and a.driver_id is not None
+                if ja_finalizado or ja_em_outro_lote:
+                    codes_excluir.add(a.pedido_code)
+                else:
+                    atribuicoes[a.pedido_code] = {'driver_id': a.driver_id, 'ordem': a.ordem or 0}
+    if codes_excluir:
+        pedidos = [p for p in pedidos if p.get('code') not in codes_excluir]
+    # MODO LOTE: tambem exclui pedidos que nao tem registro de atribuicao
+    # nesse lote (nunca atribuidos ao lote_alvo).
+    if lote_alvo_id:
+        codes_no_lote = {c for c, lid in lote_por_code.items() if lid == lote_alvo_id}
+        pedidos = [p for p in pedidos if p.get('code') in codes_no_lote]
+
+    if not drivers_struct:
+        resp = jsonify(
+            data=data_str,
+            janelas=janelas,
+            periodos_disponiveis=sorted({p.get('periodo') or '' for p in resultado.get('pedidos', []) if p.get('periodo')}),
+            drivers_disponiveis=[],
+            rotas=[],
+            sem_atribuir=[
+                {'code': p['code'], 'destinatario': p.get('destinatario', ''),
+                 'endereco': p.get('endereco', ''), 'periodo': p.get('periodo', '')}
+                for p in pedidos
+            ],
+            origem_endereco=rotas_svc.origem_endereco(current_app),
+            sem_cep=[],
+        )
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        return resp
+
+    geradas = rotas_svc.gerar_rotas(pedidos, drivers_struct, atribuicoes=atribuicoes)
+    # Enriquece cada parada com lote_id da atribuicao salva (pra filtro de lote no front)
+    for r in geradas.get('rotas', []):
+        for p in r.get('paradas', []):
+            if p.get('code') in lote_por_code:
+                p['lote_id'] = lote_por_code[p['code']]
+    periodos = sorted({p.get('periodo') or '' for p in resultado.get('pedidos', []) if p.get('periodo')})
+
+    origem_coords = rotas_svc.origem_latlng(current_app)
+    origem_payload = None
+    if origem_coords:
+        origem_payload = {'lat': origem_coords[0], 'lng': origem_coords[1]}
+
+    resp = jsonify(
+        data=data_str,
+        janelas=janelas,
+        periodos_disponiveis=periodos,
+        drivers_disponiveis=drivers_struct,
+        rotas=geradas['rotas'],
+        sem_cep=[
+            {'code': p['code'], 'destinatario': p.get('destinatario', ''),
+             'endereco': p.get('endereco', ''), 'periodo': p.get('periodo', '')}
+            for p in geradas['sem_cep']
+        ],
+        sem_atribuir=[
+            {'code': p['code'], 'destinatario': p.get('destinatario', ''),
+             'endereco': p.get('endereco', ''), 'periodo': p.get('periodo', '')}
+            for p in geradas.get('sem_atribuir') or []
+        ],
+        total_pedidos=len(pedidos),
+        origem_endereco=rotas_svc.origem_endereco(current_app),
+        origem=origem_payload,
+    )
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    return resp
+
+
+@entregas_bp.route('/data/<code>', methods=['POST'])
+@login_required
+@entrega_access_required
+def salvar_data_override(code):
+    """Sobrescreve a data de entrega de um pedido (apenas no ERP, nao sincroniza com VNDA)."""
+    data = request.get_json(silent=True) or {}
+    data_str = (data.get('data') or '').strip()
+    motivo = (data.get('motivo') or '').strip() or None
+
+    try:
+        nova_data = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify(ok=False, erro='data invalida'), 400
+
+    o = OverrideEntrega.query.filter_by(pedido_code=code).first()
+    if not o:
+        o = OverrideEntrega(pedido_code=code)
+        db.session.add(o)
+
+    o.data_entrega = nova_data
+    o.motivo = motivo
+    o.atualizado_em = datetime.utcnow()
+    o.atualizado_por = current_user.id
+    db.session.commit()
+
+    return jsonify(ok=True, data=nova_data.isoformat())
+
+
+@entregas_bp.route('/data/<code>', methods=['DELETE'])
+@login_required
+@entrega_access_required
+def remover_data_override(code):
+    """Remove o override; pedido volta a usar a data original do VNDA."""
+    o = OverrideEntrega.query.filter_by(pedido_code=code).first()
+    if o:
+        db.session.delete(o)
+        db.session.commit()
     return jsonify(ok=True)
 
 
@@ -116,6 +1440,8 @@ def api_debug_pedido(code):
     }
 
     info = {}
+
+    # 1) Chamada padrao
     try:
         resp = http_requests.get(
             f'https://api.vnda.com.br/api/v2/orders/{code}',
@@ -129,17 +1455,19 @@ def api_debug_pedido(code):
                 info['erro'] = 'resposta nao-json'
                 return jsonify(info)
 
-            skip_keys = {'items'}
+            info['todas_chaves_padrao'] = sorted(order.keys())
+            info['shipping_address_padrao'] = order.get('shipping_address')
+            info['client_padrao'] = order.get('client')
+
             for k, v in order.items():
-                if k in skip_keys:
-                    continue
                 if isinstance(v, dict):
                     info[k] = {sk: str(sv) for sk, sv in v.items() if sv is not None}
                 elif isinstance(v, list):
-                    info[k] = str(v)[:300]
+                    info[k] = str(v)[:5000]
                 else:
                     info[k] = v
             info['items_count'] = len(order.get('items') or [])
+            info['items_full'] = order.get('items')
 
             from app.services.vnda import _extrair_data_entrega, _extrair_periodo
             de = _extrair_data_entrega(order)
@@ -154,6 +1482,148 @@ def api_debug_pedido(code):
     except Exception as e:
         info['erro_geral'] = str(e)
 
+    # 2) Tentar variantes de include
+    for inc in ('shipping_address', 'address', 'shipping', 'client'):
+        try:
+            r = http_requests.get(
+                f'https://api.vnda.com.br/api/v2/orders/{code}',
+                headers=headers, params={'include': inc}, timeout=10,
+            )
+            if r.status_code == 200:
+                try:
+                    o = r.json()
+                    info[f'include_{inc}_chaves'] = sorted(o.keys())
+                    info[f'include_{inc}_shipping'] = o.get('shipping_address')
+                    info[f'include_{inc}_client'] = o.get('client')
+                except ValueError:
+                    pass
+        except http_requests.RequestException:
+            pass
+
+    # 3) Tentar endpoints relacionados
+    for path in (f'/orders/{code}/shipping_address', f'/orders/{code}/address', f'/orders/{code}/shipments', f'/orders/{code}/packages'):
+        try:
+            r = http_requests.get(
+                f'https://api.vnda.com.br/api/v2{path}',
+                headers=headers, timeout=10,
+            )
+            info[f'endpoint_{path}'] = {
+                'status': r.status_code,
+                'body': r.text[:4000] if r.status_code != 404 else None,
+            }
+        except http_requests.RequestException:
+            pass
+
+    # 4) Procurar 'ana' (case insensitive) em todo o JSON do pedido
+    import json as _json
+    try:
+        full_text = _json.dumps(order, ensure_ascii=False) if 'order' in locals() else ''
+        info['contains_ana_in_order'] = 'ana' in full_text.lower()
+        # Caminhos onde a string 'ana' aparece (heuristic)
+        if 'ana' in full_text.lower():
+            paths = []
+            def _walk(obj, prefix):
+                if isinstance(obj, dict):
+                    for k, v in obj.items():
+                        _walk(v, f'{prefix}.{k}')
+                elif isinstance(obj, list):
+                    for i, v in enumerate(obj):
+                        _walk(v, f'{prefix}[{i}]')
+                elif isinstance(obj, str) and 'ana' in obj.lower():
+                    paths.append(f'{prefix} = {obj[:80]}')
+            _walk(order, 'order')
+            info['ana_paths'] = paths[:30]
+    except Exception as e:
+        info['walk_erro'] = str(e)
+
+    # 5) Endpoints adicionais (label/print/customizations/notes/extra)
+    for path in (f'/orders/{code}/customizations', f'/orders/{code}/notes', f'/orders/{code}/label', f'/orders/{code}/print', f'/orders/{code}/print_layout', f'/orders/{code}/extra', f'/orders/{code}/items'):
+        try:
+            r = http_requests.get(
+                f'https://api.vnda.com.br/api/v2{path}',
+                headers=headers, timeout=10,
+            )
+            info[f'endpoint_{path}'] = {
+                'status': r.status_code,
+                'body': r.text[:3000] if r.status_code != 404 else None,
+            }
+        except http_requests.RequestException:
+            pass
+
+    # 6) Tentativas de buscar customizations por item_id
+    if 'order' in locals():
+        item_ids = [str(i.get('id')) for i in (order.get('items') or []) if i.get('id')]
+        cart_id = order.get('cart_id')
+        for item_id in item_ids:
+            for path in (f'/orders/{code}/items/{item_id}/customizations',
+                         f'/orders/{code}/items/{item_id}',
+                         f'/items/{item_id}/customizations',
+                         f'/items/{item_id}',
+                         f'/customizations/{item_id}',
+                         f'/cart_items/{item_id}/customizations'):
+                try:
+                    r = http_requests.get(
+                        f'https://api.vnda.com.br/api/v2{path}',
+                        headers=headers, timeout=8,
+                    )
+                    if r.status_code == 200:
+                        info[f'endpoint_{path}'] = {
+                            'status': r.status_code,
+                            'body': r.text[:3000],
+                        }
+                except http_requests.RequestException:
+                    pass
+        if cart_id:
+            for path in (f'/carts/{cart_id}', f'/carts/{cart_id}/items', f'/carts/{cart_id}/customizations'):
+                try:
+                    r = http_requests.get(
+                        f'https://api.vnda.com.br/api/v2{path}',
+                        headers=headers, timeout=8,
+                    )
+                    if r.status_code == 200:
+                        info[f'endpoint_{path}'] = {
+                            'status': r.status_code,
+                            'body': r.text[:3000],
+                        }
+                except http_requests.RequestException:
+                    pass
+
+    # 7) include=customizations
+    try:
+        r = http_requests.get(
+            f'https://api.vnda.com.br/api/v2/orders/{code}',
+            headers=headers, params={'include': 'customizations'}, timeout=10,
+        )
+        if r.status_code == 200:
+            try:
+                o = r.json()
+                info['include_customizations_chaves'] = sorted(o.keys())
+                info['include_customizations_items_extra'] = [i.get('extra') for i in (o.get('items') or [])]
+                info['include_customizations_customizations'] = o.get('customizations')
+            except ValueError:
+                pass
+    except http_requests.RequestException:
+        pass
+
+    return jsonify(info)
+
+
+@entregas_bp.route('/api/debug/schema')
+@login_required
+@entrega_access_required
+def api_debug_schema():
+    """Confere se as colunas novas (token, status, etc) existem nas tabelas."""
+    from sqlalchemy import text
+    info = {}
+    try:
+        with db.engine.connect() as c:
+            for tbl in ('driver_entrega', 'atribuicao_entrega', 'entrega_foto'):
+                r = c.execute(text(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name = :t"
+                ), {'t': tbl})
+                info[tbl] = sorted([row[0] for row in r])
+    except Exception as e:
+        info['erro'] = f'{type(e).__name__}: {str(e)[:300]}'
     return jsonify(info)
 
 

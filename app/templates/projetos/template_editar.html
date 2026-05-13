@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}{{ template.nome }} · Template{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-bookmark-star"></i> {{ template.nome }}</h1>
+    <a href="{{ url_for('projetos.templates_lista') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header bg-white fw-bold">Configuração do template</div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('projetos.template_atualizar', tid=template.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Nome</label>
+                        <input type="text" name="nome" class="form-control form-control-sm" value="{{ template.nome }}" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Área padrão</label>
+                        <select name="area_id_padrao" class="form-select form-select-sm">
+                            <option value="">— sem área padrão —</option>
+                            {% for a in areas %}
+                            <option value="{{ a.id }}" {% if template.area_id_padrao == a.id %}selected{% endif %}>{{ a.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Descrição</label>
+                        <textarea name="descricao" class="form-control form-control-sm" rows="3">{{ template.descricao or '' }}</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header bg-white fw-bold">Tarefas do template ({{ template.tarefas|length }})</div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('projetos.template_tarefa_nova', tid=template.id) }}" class="mb-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">Nome da tarefa</label>
+                            <input type="text" name="nome" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">Tipo</label>
+                            <select name="tipo" class="form-select form-select-sm">
+                                <option value="">—</option>
+                                <option value="acao">Ação</option>
+                                <option value="rotina">Rotina</option>
+                                <option value="follow_up">Follow-up</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">Esforço</label>
+                            <select name="esforco" class="form-select form-select-sm">
+                                <option value="">—</option>
+                                <option value="P">P</option>
+                                <option value="M">M</option>
+                                <option value="G">G</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold" title="Dias após criar o projeto">Prazo (+dias)</label>
+                            <input type="number" name="dias_prazo" class="form-control form-control-sm" min="0" placeholder="—">
+                        </div>
+                        <div class="col-md-1">
+                            <button type="submit" class="btn btn-primary btn-sm w-100">+</button>
+                        </div>
+                    </div>
+                </form>
+
+                {% if not template.tarefas %}
+                <div class="text-muted">Nenhuma tarefa neste template ainda.</div>
+                {% endif %}
+                <ol class="mb-0">
+                {% for tt in template.tarefas %}
+                <li class="d-flex justify-content-between align-items-center py-1 border-bottom">
+                    <div>
+                        <strong>{{ tt.nome }}</strong>
+                        {% if tt.tipo %}<span class="badge bg-light text-dark ms-1" style="font-size:9px;">{{ tt.tipo|replace('_',' ') }}</span>{% endif %}
+                        {% if tt.esforco %}<span class="badge bg-secondary ms-1" style="font-size:9px;">{{ tt.esforco }}</span>{% endif %}
+                        {% if tt.dias_prazo is not none %}<span class="badge bg-light text-dark ms-1" style="font-size:9px;">+{{ tt.dias_prazo }}d</span>{% endif %}
+                    </div>
+                    <form method="POST" action="{{ url_for('projetos.template_tarefa_excluir', tt_id=tt.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-link text-danger btn-sm p-0"><i class="bi bi-x-lg"></i></button>
+                    </form>
+                </li>
+                {% endfor %}
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

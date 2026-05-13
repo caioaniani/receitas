@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% import "projetos/_partials.html" as ui %}
+
+{% set meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'] %}
+{% set dias_sem = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'] %}
+
+{% block title %}Projetos · Calendário{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-calendar3"></i> Calendário</h1>
+</div>
+
+{{ ui.stats(contadores) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    {{ ui.nav_views(view, contadores.inbox) }}
+    <div class="d-flex align-items-center gap-2">
+        <a href="{{ url_for('projetos.calendario', mes=mes-1, ano=ano) }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-chevron-left"></i>
+        </a>
+        <strong style="min-width:170px;text-align:center;">{{ meses[mes-1] }} de {{ ano }}</strong>
+        <a href="{{ url_for('projetos.calendario', mes=mes+1, ano=ano) }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-chevron-right"></i>
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="cal-grid">
+            {% for d in dias_sem %}
+            <div class="cal-header">{{ d }}</div>
+            {% endfor %}
+
+            {% for _ in range(primeiro_dia_semana) %}
+            <div class="cal-day cal-day-empty"></div>
+            {% endfor %}
+
+            {% for dia in range(1, ultimo_dia + 1) %}
+            {% set tarefas_dia = por_dia.get(dia, []) %}
+            <div class="cal-day {% if dia == hoje.day and mes == hoje.month and ano == hoje.year %}cal-day-hoje{% endif %}">
+                <div class="cal-day-num">{{ dia }}</div>
+                {% for t in tarefas_dia[:4] %}
+                <div class="cal-tarefa {% if t.atrasada %}atrasada{% endif %} {% if t.projeto.foco_12s %}foco{% endif %}"
+                     title="{{ t.nome }} — {{ t.projeto.nome }}"
+                     style="{% if t.projeto.area.cor %}background:{{ t.projeto.area.cor }}22;border-left-color:{{ t.projeto.area.cor }};{% endif %}">
+                    <span class="cal-tarefa-status">
+                        {% if t.status == 'fazendo' %}▶{% elif t.status == 'feito' %}✓{% elif t.status == 'cancelado' %}✕{% else %}○{% endif %}
+                    </span>
+                    {{ t.nome|truncate(28, true) }}
+                </div>
+                {% endfor %}
+                {% if tarefas_dia|length > 4 %}
+                <div class="text-muted small text-center">+{{ tarefas_dia|length - 4 }} mais</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+{{ ui.modal_novo_projeto(areas, usuarios) }}
+{{ ui.modal_nova_area(current_user) }}
+{{ ui.modal_novo_de_template(areas, templates_disponiveis, usuarios) }}
+{{ ui.modal_weekly() }}
+{% endblock %}

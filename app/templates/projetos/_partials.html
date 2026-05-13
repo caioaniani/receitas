@@ -1,0 +1,579 @@
+{# Macros e blocos compartilhados pelas views de projetos #}
+
+{% macro stats(c) %}
+<div class="proj-stats">
+    <div class="proj-stat {% if c.wip_estourado %}alerta{% endif %}">
+        <div class="proj-stat-label">Fazendo (WIP {{ c.wip_limit }})</div>
+        <div class="proj-stat-valor">{{ c.fazendo }}</div>
+    </div>
+    <div class="proj-stat">
+        <div class="proj-stat-label">A fazer</div>
+        <div class="proj-stat-valor">{{ c.a_fazer }}</div>
+    </div>
+    <div class="proj-stat" style="{% if c.atrasadas %}border-color:#b54a3f;{% endif %}">
+        <div class="proj-stat-label">Atrasadas</div>
+        <div class="proj-stat-valor" {% if c.atrasadas %}style="color:#b54a3f"{% endif %}>{{ c.atrasadas }}</div>
+    </div>
+    <div class="proj-stat" style="border-color:#d4a435;">
+        <div class="proj-stat-label">Foco 12s</div>
+        <div class="proj-stat-valor" style="color:#d4a435">{{ c.foco_12s }}</div>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro nav_views(view, inbox_count=0) %}
+<ul class="nav nav-pills proj-nav-tabs flex-wrap">
+    <li class="nav-item">
+        <a href="{{ url_for('projetos.painel') }}" class="nav-link {% if view == 'dashboard' %}active{% endif %}">
+            <i class="bi bi-grid"></i> Dashboard
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('projetos.hoje') }}" class="nav-link {% if view == 'hoje' %}active{% endif %}">
+            <i class="bi bi-sun"></i> Hoje
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('projetos.inbox') }}" class="nav-link {% if view == 'inbox' %}active{% endif %}" title="Tarefas avulsas (atalho: i)">
+            <i class="bi bi-inbox"></i> Inbox
+            {% if inbox_count %}<span class="badge bg-danger ms-1" style="font-size:10px;">{{ inbox_count }}</span>{% endif %}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('projetos.dia') }}" class="nav-link {% if view == 'dia' %}active{% endif %}">
+            <i class="bi bi-calendar-day"></i> Dia
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('projetos.kanban') }}" class="nav-link {% if view == 'kanban' %}active{% endif %}">
+            <i class="bi bi-kanban"></i> Kanban
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('projetos.foco') }}" class="nav-link {% if view == 'foco' %}active{% endif %}">
+            <i class="bi bi-star-fill"></i> Foco
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('projetos.calendario') }}" class="nav-link {% if view == 'calendario' %}active{% endif %}">
+            <i class="bi bi-calendar3"></i> Calendário
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('projetos.relatorio') }}" class="nav-link {% if view == 'relatorio' %}active{% endif %}">
+            <i class="bi bi-graph-up"></i> Relatório
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('projetos.templates_lista') }}" class="nav-link {% if view == 'templates' %}active{% endif %}">
+            <i class="bi bi-bookmark-star"></i> Templates
+        </a>
+    </li>
+</ul>
+{% endmacro %}
+
+
+{% macro quick_add_input() %}
+<form id="form-quick-add" class="card mb-3" data-no-intercept="1">
+    <div class="card-body py-2">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-lightning-charge-fill text-warning"></i>
+            <input type="text" id="quick-add-nome" class="form-control form-control-sm border-0 bg-transparent flex-grow-1"
+                   placeholder="Tarefa rápida — vai pra Inbox (atalho: i)" maxlength="300"
+                   style="box-shadow:none;">
+            <input type="date" id="quick-add-prazo" class="form-control form-control-sm" style="max-width:150px;" title="Prazo (opcional)">
+            <button type="submit" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-lg"></i> Adicionar
+            </button>
+        </div>
+    </div>
+</form>
+{% endmacro %}
+
+
+{% macro botoes_acao() %}
+<div class="d-flex gap-2 flex-wrap align-items-center">
+    <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modal-weekly">
+        <i class="bi bi-arrow-repeat"></i> Weekly Review
+    </button>
+    <div class="dropdown">
+        <button class="btn btn-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-plus-lg"></i> Novo
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#modal-novo-projeto">
+                <i class="bi bi-folder-plus"></i> Projeto
+            </button></li>
+            <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#modal-novo-de-template">
+                <i class="bi bi-bookmark-star"></i> Projeto a partir de Template
+            </button></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#modal-nova-area">
+                <i class="bi bi-collection"></i> Área
+            </button></li>
+        </ul>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro area_badge(area) %}
+{% if area.cor %}
+<span class="badge" style="font-size:10px;background:{{ area.cor }};color:#fff;">{{ area.nome }}</span>
+{% else %}
+<span class="badge proj-area-{{ area.tipo }}" style="font-size:10px;">{{ area.nome }}</span>
+{% endif %}
+{% endmacro %}
+
+
+{# Atributo data-tarefa com todos os campos pra abrir o modal de edicao sem fetch #}
+{% macro tarefa_data_attr(t) %}
+data-tarefa-id="{{ t.id }}"
+data-tarefa='{{ {
+    "id": t.id, "nome": t.nome, "status": t.status,
+    "tipo": t.tipo or "", "esforco": t.esforco or "",
+    "prazo": t.prazo.isoformat() if t.prazo else "",
+    "recorrencia": t.recorrencia or "",
+    "responsavel_id": t.responsavel_id or "",
+    "observacao": t.observacao or "",
+    "projeto_nome": t.projeto.nome
+}|tojson }}'
+{% endmacro %}
+
+
+{% macro tarefa_status_btn(t) %}
+<button type="button" class="proj-tarefa-status {{ t.status }}"
+        data-tarefa-id="{{ t.id }}"
+        title="Clique para mudar status">
+    {% if t.status == 'a_fazer' %}○
+    {% elif t.status == 'fazendo' %}▶
+    {% elif t.status == 'feito' %}✓
+    {% elif t.status == 'cancelado' %}✕
+    {% endif %}
+</button>
+{% endmacro %}
+
+
+{% macro dri_select(entidade, tipo, usuarios, classes='') %}
+{# entidade pode ser projeto ou tarefa; tipo = 'projeto' | 'tarefa' #}
+<select class="form-select form-select-sm proj-dri {{ classes }}"
+        data-tipo="{{ tipo }}" data-id="{{ entidade.id }}"
+        title="Responsável (DRI)" style="font-size:11px;">
+    <option value="">— sem DRI —</option>
+    {% for u in usuarios %}
+    <option value="{{ u.id }}" {% if entidade.responsavel_id == u.id %}selected{% endif %}>
+        {{ u.nome }}
+    </option>
+    {% endfor %}
+</select>
+{% endmacro %}
+
+
+{% macro modal_nova_tarefa(usuarios) %}
+<div class="modal fade" id="modal-nova-tarefa" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('projetos.tarefa_nova') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="projeto_id" id="modal-tarefa-projeto-id">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h6 class="modal-title"><i class="bi bi-plus-circle"></i> Nova Tarefa</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Projeto</label>
+                        <input type="text" class="form-control form-control-sm" id="modal-tarefa-projeto-nome" disabled>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Nome</label>
+                        <input type="text" name="nome" class="form-control form-control-sm" required autofocus>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <label class="form-label small fw-bold">Tipo</label>
+                            <select name="tipo" class="form-select form-select-sm">
+                                <option value="">—</option>
+                                <option value="acao">Ação</option>
+                                <option value="rotina">Rotina</option>
+                                <option value="follow_up">Follow-up</option>
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small fw-bold">Esforço</label>
+                            <select name="esforco" class="form-select form-select-sm">
+                                <option value="">—</option>
+                                <option value="P">P</option>
+                                <option value="M">M</option>
+                                <option value="G">G</option>
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small fw-bold">Prazo</label>
+                            <input type="date" name="prazo" class="form-control form-control-sm">
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <label class="form-label small fw-bold">Responsável (DRI)</label>
+                        <select name="responsavel_id" class="form-select form-select-sm">
+                            <option value="">— sem DRI —</option>
+                            {% for u in usuarios %}
+                            <option value="{{ u.id }}">{{ u.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Criar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro modal_novo_projeto(areas, usuarios) %}
+<div class="modal fade" id="modal-novo-projeto" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('projetos.projeto_novo') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h6 class="modal-title"><i class="bi bi-folder-plus"></i> Novo Projeto</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Área</label>
+                        <select name="area_id" class="form-select form-select-sm" required id="modal-projeto-area">
+                            {% for a in areas %}
+                            <option value="{{ a.id }}">{{ a.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Nome</label>
+                        <input type="text" name="nome" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <label class="form-label small fw-bold">Status</label>
+                            <select name="status" class="form-select form-select-sm">
+                                <option value="planejado">Planejado</option>
+                                <option value="ativo">Ativo</option>
+                                <option value="em_espera">Em espera</option>
+                                <option value="concluido">Concluído</option>
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small fw-bold">Prioridade</label>
+                            <select name="prioridade" class="form-select form-select-sm">
+                                <option value="">—</option>
+                                <option value="alta">Alta</option>
+                                <option value="media">Média</option>
+                                <option value="baixa">Baixa</option>
+                            </select>
+                        </div>
+                        <div class="col-4 d-flex align-items-end">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="foco_12s" value="1" id="modal-projeto-foco">
+                                <label class="form-check-label small" for="modal-projeto-foco">⭐ Foco 12s</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <label class="form-label small fw-bold">Responsável (DRI)</label>
+                        <select name="responsavel_id" class="form-select form-select-sm">
+                            <option value="">— sem DRI —</option>
+                            {% for u in usuarios %}
+                            <option value="{{ u.id }}">{{ u.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Criar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro modal_nova_area(usuario=None) %}
+<div class="modal fade" id="modal-nova-area" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <form method="POST" action="{{ url_for('projetos.area_nova') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h6 class="modal-title"><i class="bi bi-collection"></i> Nova Área</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Nome</label>
+                        <input type="text" name="nome" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Tipo</label>
+                        <select name="tipo" class="form-select form-select-sm">
+                            <option value="empresa">Empresa</option>
+                            {% if usuario and usuario.is_dono() %}
+                            <option value="igreja">Igreja (privada)</option>
+                            <option value="vida">Vida (privada)</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Criar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro modal_comentario() %}
+<div class="modal fade" id="modal-comentario" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info">
+                <h6 class="modal-title"><i class="bi bi-chat-text"></i> <span id="comentario-titulo">Comentário</span></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="comentario-tipo">
+                <input type="hidden" id="comentario-id">
+                <textarea id="comentario-texto" class="form-control" rows="6" placeholder="Notas, contexto, próximos passos…"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-salvar-comentario">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro modal_novo_de_template(areas, templates_disponiveis, usuarios) %}
+<div class="modal fade" id="modal-novo-de-template" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('projetos.projeto_novo_de_template') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h6 class="modal-title"><i class="bi bi-bookmark-star"></i> Novo Projeto a partir de Template</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    {% if not templates_disponiveis %}
+                    <div class="alert alert-warning small mb-2">
+                        Nenhum template ainda. <a href="{{ url_for('projetos.templates_lista') }}">Crie um aqui</a>.
+                    </div>
+                    {% endif %}
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Template</label>
+                        <select name="template_id" class="form-select form-select-sm" required>
+                            <option value="">Selecione…</option>
+                            {% for t in templates_disponiveis %}
+                            <option value="{{ t.id }}" data-area="{{ t.area_id_padrao or '' }}">{{ t.nome }} ({{ t.tarefas|length }} tarefa{{ 's' if t.tarefas|length != 1 }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Nome do projeto</label>
+                        <input type="text" name="nome" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Área</label>
+                        <select name="area_id" class="form-select form-select-sm" required id="modal-tpl-area">
+                            {% for a in areas %}
+                            <option value="{{ a.id }}">{{ a.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Responsável (DRI)</label>
+                        <select name="responsavel_id" class="form-select form-select-sm">
+                            <option value="">— sem DRI —</option>
+                            {% for u in usuarios %}
+                            <option value="{{ u.id }}">{{ u.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="alert alert-info small mb-0">
+                        <i class="bi bi-info-circle"></i> As tarefas do template serão criadas com prazos calculados a partir de hoje.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm" {% if not templates_disponiveis %}disabled{% endif %}>Criar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro modal_editar_tarefa(usuarios, projetos_alvo=None) %}
+<div class="modal fade" id="modal-editar-tarefa" tabindex="-1">
+    <div class="modal-dialog">
+        <form id="form-editar-tarefa" data-no-intercept="1">
+            <input type="hidden" id="edt-id">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <div>
+                        <h6 class="modal-title mb-0"><i class="bi bi-pencil"></i> Editar Tarefa</h6>
+                        <small id="edt-projeto" class="text-white-50"></small>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Nome</label>
+                        <input id="edt-nome" name="nome" class="form-control form-control-sm" required>
+                    </div>
+                    {% if projetos_alvo %}
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Projeto</label>
+                        <select id="edt-projeto-id" name="projeto_id" class="form-select form-select-sm">
+                            {% for area_nome, grupo in projetos_alvo|groupby('area.nome') %}
+                            <optgroup label="{{ area_nome }}">
+                                {% for p in grupo %}
+                                <option value="{{ p.id }}">{{ p.nome }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Status</label>
+                            <select id="edt-status" name="status" class="form-select form-select-sm">
+                                <option value="a_fazer">A fazer</option>
+                                <option value="fazendo">Fazendo</option>
+                                <option value="feito">Feito</option>
+                                <option value="cancelado">Cancelado</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Tipo</label>
+                            <select id="edt-tipo" name="tipo" class="form-select form-select-sm">
+                                <option value="">—</option>
+                                <option value="acao">Ação</option>
+                                <option value="rotina">Rotina</option>
+                                <option value="follow_up">Follow-up</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Esforço</label>
+                            <select id="edt-esforco" name="esforco" class="form-select form-select-sm">
+                                <option value="">—</option>
+                                <option value="P">P</option>
+                                <option value="M">M</option>
+                                <option value="G">G</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-2 mt-1">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Prazo</label>
+                            <input type="date" id="edt-prazo" name="prazo" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Recorrência</label>
+                            <select id="edt-recorrencia" name="recorrencia" class="form-select form-select-sm">
+                                <option value="">Sem recorrência</option>
+                                <option value="diaria">Diária</option>
+                                <option value="semanal">Semanal</option>
+                                <option value="quinzenal">Quinzenal</option>
+                                <option value="mensal">Mensal</option>
+                                <option value="trimestral">Trimestral</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <label class="form-label small fw-bold">Responsável (DRI)</label>
+                        <select id="edt-responsavel" name="responsavel_id" class="form-select form-select-sm">
+                            <option value="">— sem DRI —</option>
+                            {% for u in usuarios %}
+                            <option value="{{ u.id }}">{{ u.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mt-2">
+                        <label class="form-label small fw-bold">Observação / nota</label>
+                        <textarea id="edt-observacao" name="observacao" class="form-control form-control-sm" rows="3" placeholder="Notas, contexto, próximos passos…"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-danger btn-sm me-auto" id="edt-excluir">
+                        <i class="bi bi-trash"></i> Excluir tarefa
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check-lg"></i> Salvar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro modal_weekly() %}
+<div class="modal fade" id="modal-weekly" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h6 class="modal-title"><i class="bi bi-arrow-repeat"></i> Weekly Review (~30 min)</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="weekly-body">
+                <p class="text-muted small">Carregando…</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro card_tarefa_kanban(t, data_relativa) %}
+<div class="proj-kanban-card {% if t.atrasada %}atrasada{% endif %} {% if t.projeto.foco_12s %}foco{% endif %}"
+     {{ tarefa_data_attr(t) }}>
+    <div class="d-flex align-items-start gap-2">
+        {{ tarefa_status_btn(t) }}
+        <div style="flex:1;">
+            <div class="fw-semibold tarefa-nome-editavel" title="Clique para editar" style="cursor:pointer;">{{ t.nome }}</div>
+            <div class="proj-meta">
+                {{ area_badge(t.projeto.area) }}
+                <span class="badge bg-light text-dark">{{ t.projeto.nome }}</span>
+                {% if t.tipo %}<span class="badge bg-secondary">{{ t.tipo|replace('_',' ') }}</span>{% endif %}
+                {% if t.esforco %}<span class="badge bg-info text-dark">{{ t.esforco }}</span>{% endif %}
+                {% if t.responsavel %}<span class="badge bg-dark"><i class="bi bi-person"></i> {{ t.responsavel.nome.split()[0] }}</span>{% endif %}
+                {% if t.prazo %}
+                <span class="badge {% if t.atrasada %}bg-danger{% else %}bg-light text-dark{% endif %}"
+                      title="{{ t.prazo.strftime('%d/%m/%Y') }}">
+                    <i class="bi bi-calendar3"></i> {{ data_relativa(t.prazo) }}
+                </span>
+                {% endif %}
+                {% if t.projeto.foco_12s %}<span class="badge" style="background:#d4a435;color:#fff;">⭐</span>{% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}

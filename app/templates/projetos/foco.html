@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% import "projetos/_partials.html" as ui %}
+
+{% block title %}Projetos · Foco 12s{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0" style="color:#d4a435;"><i class="bi bi-star-fill"></i> Foco 12s</h1>
+    {{ ui.botoes_acao() }}
+</div>
+
+{{ ui.stats(contadores) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    {{ ui.nav_views(view, contadores.inbox) }}
+    <small class="text-muted">Recomendado: 3-5 projetos em foco simultâneo. Hoje: <strong>{{ projetos|length }}</strong>{% if projetos|length > 5 %} <span class="text-danger">⚠ acima do recomendado</span>{% endif %}</small>
+</div>
+
+{% if not projetos %}
+<div class="alert alert-warning">
+    Nenhum projeto em foco. Marque a estrela ⭐ em projetos da visão hierárquica para defini-los como foco do trimestre.
+</div>
+{% endif %}
+
+{% for p in projetos %}
+<div class="card mb-3" style="border-left:4px solid #d4a435;">
+    <div class="card-body py-2 px-3">
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
+            <h6 class="fw-bold mb-0">
+                {{ ui.area_badge(p.area) }}
+                <span class="ms-2">{{ p.nome }}</span>
+                {% if p.responsavel %}<span class="badge bg-dark ms-1" style="font-size:10px;"><i class="bi bi-person"></i> {{ p.responsavel.nome.split()[0] }}</span>{% endif %}
+            </h6>
+            <small class="text-muted">{{ p.tarefas_ativas|length }} ativa{{ 's' if p.tarefas_ativas|length != 1 }}</small>
+        </div>
+
+        <div class="proj-kanban">
+            {% set cols = {'a_fazer':[], 'fazendo':[], 'feito':[]} %}
+            {% for t in p.tarefas %}
+                {% if t.status in cols %}{{ cols[t.status].append(t) or '' }}{% endif %}
+            {% endfor %}
+            {% for chave, label in [('a_fazer','A fazer'), ('fazendo','Fazendo'), ('feito','Feito')] %}
+            <div class="proj-coluna">
+                <div class="proj-coluna-header">{{ label }} ({{ cols[chave]|length }})</div>
+                <div class="proj-coluna-cards" data-status="{{ chave }}">
+                    {% for t in cols[chave] %}
+                        {{ ui.card_tarefa_kanban(t, data_relativa) }}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{{ ui.modal_editar_tarefa(usuarios, projetos_alvo) }}
+{{ ui.modal_novo_projeto(areas, usuarios) }}
+{{ ui.modal_nova_area(current_user) }}
+{{ ui.modal_novo_de_template(areas, templates_disponiveis, usuarios) }}
+{{ ui.modal_weekly() }}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script src="{{ url_for('static', filename='js/projetos.js') }}?v={{ static_v['js/projetos.js'] }}"></script>
+{% endblock %}

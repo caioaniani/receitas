@@ -24,8 +24,21 @@ def salvar():
     nomes = request.form.getlist('nome[]')
     unidades = request.form.getlist('unidade[]')
     custos = request.form.getlist('custo_por_kg[]')
+    pesos_unidade = request.form.getlist('peso_unidade[]')
     fornecedores = request.form.getlist('fornecedor[]')
     observacoes_list = request.form.getlist('observacoes[]')
+
+    def _parse_peso(idx, unidade):
+        if unidade != 'un' or idx >= len(pesos_unidade):
+            return None
+        raw = (pesos_unidade[idx] or '').replace(',', '.').strip()
+        if not raw:
+            return None
+        try:
+            v = float(raw)
+            return v if v > 0 else None
+        except ValueError:
+            return None
 
     for i in range(len(nomes)):
         nome = nomes[i].strip()
@@ -41,6 +54,7 @@ def salvar():
                 mp.nome = nome
                 mp.unidade = unidades[i]
                 mp.custo_por_kg = float(custo)
+                mp.peso_unidade = _parse_peso(i, unidades[i])
                 mp.fornecedor = fornecedores[i].strip() or None
                 mp.observacoes = observacoes_list[i].strip() or None
         else:
@@ -48,6 +62,7 @@ def salvar():
                 nome=nome,
                 unidade=unidades[i],
                 custo_por_kg=float(custo),
+                peso_unidade=_parse_peso(i, unidades[i]),
                 fornecedor=fornecedores[i].strip() or None,
                 observacoes=observacoes_list[i].strip() or None,
             )

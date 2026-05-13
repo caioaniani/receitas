@@ -3,14 +3,15 @@ from urllib.parse import quote
 
 from flask import render_template, redirect, url_for, flash, request, Response, abort
 from flask_login import login_required, current_user
+from sqlalchemy.orm import defer, joinedload, selectinload
 from werkzeug.utils import secure_filename
 
 from app.blueprints.rh import rh_bp
-from app.decorators import admin_required
+from app.decorators import admin_required, owner_required
 from app.extensions import db
 from flask import jsonify
 from app.models import (Funcionario, Loja, FolhaPagamento, Feedback, Posicao,
-                        Atestado, SlotMapa, funcionario_loja, Ferias, RegistroPonto)
+                        Atestado, SlotMapa, funcionario_loja, Ferias, RegistroPonto, Cargo)
 from app.utils import parse_float_br
 
 ALLOWED_MIMETYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'}
@@ -20,8 +21,14 @@ ALLOWED_MIMETYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'appl
 @login_required
 @admin_required
 def dashboard():
-    funcionarios = Funcionario.query.filter_by(ativo=True).all()
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    # Eager load de cargo + lojas evita N+1 ao calcular custo_total() e
+    # custo por loja (cada Funcionario acessa cargo.salario_base e lojas).
+    funcionarios = (
+        Funcionario.query
+        .options(joinedload(Funcionario.cargo), selectinload(Funcionario.lojas))
+        .filter_by(ativo=True).all()
+    )
+    lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
 
     total_salarios = sum(f.salario_base for f in funcionarios)
     total_custo = sum(f.custo_total() for f in funcionarios)
@@ -77,7 +84,7 @@ def funcionarios():
         query = query.filter(Funcionario.lojas.any(Loja.id == loja_id))
 
     lista = query.order_by(Funcionario.nome).all()
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
 
     return render_template('rh/funcionarios.html',
                            funcionarios=lista,
@@ -91,17 +98,22 @@ def funcionarios():
 @admin_required
 def novo_funcionario():
     if request.method == 'POST':
+        # Salario so e' aceito do form se user e' owner; senao usa 0
+        # (admin sem is_owner nao deve poder definir salarios)
+        salario_in = parse_float_br(request.form.get('salario_base', ''), default=0) \
+            if getattr(current_user, 'is_owner', False) else 0
         func = Funcionario(
             nome=request.form.get('nome', '').strip(),
             cpf=request.form.get('cpf', '').strip(),
             funcao=request.form.get('funcao', '').strip() or None,
-            salario_base=parse_float_br(request.form.get('salario_base', ''), default=0),
-            cargo_confianca=parse_float_br(request.form.get('cargo_confianca', ''), default=0),
+            salario_base=salario_in,
+            tem_cargo_confianca='tem_cargo_confianca' in request.form,
             premiacao=parse_float_br(request.form.get('premiacao', ''), default=0),
             vt_dia=parse_float_br(request.form.get('vt_dia', ''), default=0),
             vr_dia=parse_float_br(request.form.get('vr_dia', ''), default=22),
             dias_trabalhados=int(request.form.get('dias_trabalhados', '26') or 26),
             hora_extra_pct=parse_float_br(request.form.get('hora_extra_pct', ''), default=55),
+            horas_extras=parse_float_br(request.form.get('horas_extras', ''), default=0),
             telefone=request.form.get('telefone', '').strip() or None,
             email=request.form.get('email', '').strip() or None,
             observacao=request.form.get('observacao', '').strip() or None,
@@ -131,7 +143,7 @@ def novo_funcionario():
         flash(f'Funcionário "{func.nome}" cadastrado!', 'success')
         return redirect(url_for('rh.detalhe_funcionario', id=func.id))
 
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
     return render_template('rh/funcionario_form.html', func=None, lojas=lojas)
 
 
@@ -140,14 +152,16 @@ def novo_funcionario():
 @admin_required
 def detalhe_funcionario(id):
     func = Funcionario.query.get_or_404(id)
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
+    cargos_disp = Cargo.query.filter_by(ativo=True).order_by(Cargo.nome).all()
     feedbacks = Feedback.query.filter_by(funcionario_id=id).order_by(Feedback.data.desc()).all()
     folhas = FolhaPagamento.query.filter_by(funcionario_id=id).order_by(
         FolhaPagamento.ano.desc(), FolhaPagamento.mes.desc()
     ).limit(12).all()
 
     return render_template('rh/funcionario_detalhe.html',
-                           func=func, lojas=lojas, feedbacks=feedbacks, folhas=folhas)
+                           func=func, lojas=lojas, cargos_disponiveis=cargos_disp,
+                           feedbacks=feedbacks, folhas=folhas)
 
 
 @rh_bp.route('/funcionarios/<int:id>/salvar', methods=['POST'])
@@ -164,14 +178,21 @@ def salvar_funcionario(id):
             flash(f'CPF já cadastrado para "{existente.nome}".', 'warning')
             return redirect(url_for('rh.detalhe_funcionario', id=func.id))
     func.cpf = novo_cpf or func.cpf
-    func.funcao = request.form.get('funcao', '').strip() or None
-    func.salario_base = parse_float_br(request.form.get('salario_base', ''), default=0)
-    func.cargo_confianca = parse_float_br(request.form.get('cargo_confianca', ''), default=0)
+    cargo_id_raw = request.form.get('cargo_id', '').strip()
+    func.cargo_id = int(cargo_id_raw) if cargo_id_raw else None
+    # Sincroniza funcao (string legacy) com nome do cargo, pra compat com telas antigas
+    if func.cargo_id:
+        c = Cargo.query.get(func.cargo_id)
+        if c:
+            func.funcao = c.nome
+            func.salario_base = c.salario_base  # cache, calculo usa salario_efetivo()
+    func.tem_cargo_confianca = 'tem_cargo_confianca' in request.form
     func.premiacao = parse_float_br(request.form.get('premiacao', ''), default=0)
     func.vt_dia = parse_float_br(request.form.get('vt_dia', ''), default=0)
     func.vr_dia = parse_float_br(request.form.get('vr_dia', ''), default=22)
     func.dias_trabalhados = int(request.form.get('dias_trabalhados', '26') or 26)
     func.hora_extra_pct = parse_float_br(request.form.get('hora_extra_pct', ''), default=55)
+    func.horas_extras = parse_float_br(request.form.get('horas_extras', ''), default=0)
     func.telefone = request.form.get('telefone', '').strip() or None
     func.email = request.form.get('email', '').strip() or None
     func.observacao = request.form.get('observacao', '').strip() or None
@@ -253,8 +274,68 @@ def excluir_feedback(id, fb_id):
 @login_required
 @admin_required
 def lojas():
-    lista = Loja.query.order_by(Loja.nome).all()
+    lista = Loja.query.options(defer(Loja.planta_imagem)).order_by(Loja.nome).all()
     return render_template('rh/lojas.html', lojas=lista)
+
+
+# ── Cargos ──
+
+@rh_bp.route('/cargos')
+@login_required
+@owner_required
+def cargos():
+    lista = Cargo.query.order_by(Cargo.nome).all()
+    return render_template('rh/cargos.html', cargos=lista)
+
+
+@rh_bp.route('/cargos/salvar', methods=['POST'])
+@login_required
+@owner_required
+def salvar_cargos():
+    ids = request.form.getlist('cargo_id[]')
+    nomes = request.form.getlist('cargo_nome[]')
+    salarios = request.form.getlist('cargo_salario[]')
+    descricoes = request.form.getlist('cargo_descricao[]')
+    ativos = request.form.getlist('cargo_ativo[]')  # so chega quem foi marcado
+
+    ativos_set = set(ativos)
+    for i, nome in enumerate(nomes):
+        nome = nome.strip()
+        if not nome:
+            continue
+        salario = parse_float_br(salarios[i] if i < len(salarios) else '', default=0)
+        descricao = descricoes[i].strip() if i < len(descricoes) else ''
+        cid = ids[i].strip() if i < len(ids) else ''
+        ativo = (cid or str(i)) in ativos_set
+
+        if cid:
+            c = Cargo.query.get(int(cid))
+            if c:
+                c.nome = nome
+                c.salario_base = salario
+                c.descricao = descricao or None
+                c.ativo = ativo
+        else:
+            db.session.add(Cargo(nome=nome, salario_base=salario,
+                                  descricao=descricao or None, ativo=ativo))
+
+    db.session.commit()
+    flash('Cargos salvos.', 'success')
+    return redirect(url_for('rh.cargos'))
+
+
+@rh_bp.route('/cargos/<int:id>/excluir', methods=['POST'])
+@login_required
+@owner_required
+def excluir_cargo(id):
+    c = Cargo.query.get_or_404(id)
+    if c.funcionarios:
+        flash(f'Cargo "{c.nome}" tem {len(c.funcionarios)} funcionario(s) vinculado(s); reatribua antes.', 'warning')
+        return redirect(url_for('rh.cargos'))
+    db.session.delete(c)
+    db.session.commit()
+    flash('Cargo removido.', 'success')
+    return redirect(url_for('rh.cargos'))
 
 
 @rh_bp.route('/lojas/salvar', methods=['POST'])
@@ -312,7 +393,7 @@ def excluir_loja(id):
 
 @rh_bp.route('/folha')
 @login_required
-@admin_required
+@owner_required
 def folha():
     mes = request.args.get('mes', type=int, default=datetime.now().month)
     ano = request.args.get('ano', type=int, default=datetime.now().year)
@@ -328,7 +409,7 @@ def folha():
 
 @rh_bp.route('/folha/gerar', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def gerar_folha():
     mes = int(request.form.get('mes', datetime.now().month))
     ano = int(request.form.get('ano', datetime.now().year))
@@ -345,7 +426,7 @@ def gerar_folha():
             mes=mes,
             ano=ano,
             salario_base=f.salario_base,
-            cargo_confianca=f.cargo_confianca or 0,
+            cargo_confianca=f.valor_cargo_confianca(),
             horas_extras=0,
             premiacao=f.premiacao or 0,
             vt_dia=f.vt_dia or 0,
@@ -362,7 +443,7 @@ def gerar_folha():
 
 @rh_bp.route('/folha/<int:folha_id>/salvar', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def salvar_folha_item(folha_id):
     f = FolhaPagamento.query.get_or_404(folha_id)
     f.dias_trabalhados = int(request.form.get('dias_trabalhados', '26') or 26)
@@ -380,7 +461,7 @@ def salvar_folha_item(folha_id):
 @admin_required
 def escala():
     modo = request.args.get('modo', 'tabela')
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
 
     # Modo tabela: somente posições manuais
     posicoes = Posicao.query.filter(
@@ -487,7 +568,7 @@ def excluir_posicao(pos_id):
 
 @rh_bp.route('/folha/<int:folha_id>/pdf')
 @login_required
-@admin_required
+@owner_required
 def holerite_pdf(folha_id):
     from app.services.pdf import gerar_holerite
     folha = FolhaPagamento.query.get_or_404(folha_id)
@@ -499,7 +580,7 @@ def holerite_pdf(folha_id):
 
 @rh_bp.route('/folha/<int:folha_id>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def excluir_folha_item(folha_id):
     f = FolhaPagamento.query.get_or_404(folha_id)
     mes, ano = f.mes, f.ano
@@ -618,7 +699,7 @@ def novo_feedback_dashboard():
 @login_required
 @admin_required
 def mapa_index():
-    loja = Loja.query.filter_by(ativa=True).order_by(Loja.nome).first()
+    loja = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).first()
     if loja:
         return redirect(url_for('rh.mapa', loja_id=loja.id))
     flash('Cadastre uma loja primeiro.', 'warning')
@@ -630,7 +711,7 @@ def mapa_index():
 @admin_required
 def mapa(loja_id):
     loja = Loja.query.get_or_404(loja_id)
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
     funcionarios_ativos = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
     return render_template('rh/mapa.html', loja=loja, lojas=lojas,
                            funcionarios_ativos=funcionarios_ativos)

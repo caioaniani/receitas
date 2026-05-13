@@ -1,17 +1,53 @@
+import io
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
-from flask import render_template, redirect, url_for, flash, request, abort
+from flask import render_template, redirect, url_for, flash, request, abort, send_file, current_app
 from flask_login import login_required, current_user
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.blueprints.pedidos import pedidos_bp
 from app.decorators import admin_required
 from app.extensions import db
 from app.models import (
-    Loja, Receita, Produto, PedidoLoja, PedidoItem,
+    Loja, Receita, Produto, MateriaPrima, MovimentacaoEstoque,
+    PedidoLoja, PedidoItem,
     EstoqueProducao, MovEstoqueProducao,
     EstoqueLoja, MovEstoqueLoja,
+    PrecoLojaReceita, FotoRecebimento,
 )
+
+
+def _parse_item_id(value):
+    """Decodifica 'r_5'/'mp_5'/'5' em ('receita'|'mp', id). Legacy: int puro = receita."""
+    if not value:
+        return None, None
+    if value.startswith('r_'):
+        try:
+            return 'receita', int(value[2:])
+        except ValueError:
+            return None, None
+    if value.startswith('mp_'):
+        try:
+            return 'mp', int(value[3:])
+        except ValueError:
+            return None, None
+    try:
+        return 'receita', int(value)
+    except ValueError:
+        return None, None
+
+
+def _preco_para_loja(receita_id, loja_id):
+    """Preco customizado da loja para a receita, ou preco_loja padrao."""
+    if receita_id and loja_id:
+        custom = PrecoLojaReceita.query.filter_by(
+            loja_id=loja_id, receita_id=receita_id
+        ).first()
+        if custom:
+            return custom.preco
+    rec = Receita.query.get(receita_id) if receita_id else None
+    return (rec.preco_loja if rec and rec.preco_loja else 0) or 0
 
 
 def _loja_do_usuario():
@@ -24,13 +60,20 @@ def _loja_do_usuario():
 @login_required
 def lista():
     loja_id = _loja_do_usuario()
-    query = PedidoLoja.query.order_by(PedidoLoja.criado_em.desc())
+    query = PedidoLoja.query.options(
+        joinedload(PedidoLoja.loja),
+        selectinload(PedidoLoja.itens),
+    ).order_by(PedidoLoja.criado_em.desc())
     if loja_id:
+        # nao-admin: sempre filtra pela propria loja, ignora ?loja= do form
         query = query.filter_by(loja_id=loja_id)
     else:
         filtro = request.args.get('loja')
         if filtro:
-            query = query.filter_by(loja_id=int(filtro))
+            try:
+                query = query.filter_by(loja_id=int(filtro))
+            except (TypeError, ValueError):
+                pass
     pedidos = query.limit(100).all()
     lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
     return render_template('pedidos/lista.html', pedidos=pedidos, lojas=lojas,
@@ -48,7 +91,23 @@ def novo():
     amanha = date.today() + timedelta(days=1)
 
     if request.method == 'POST':
-        sel_loja = int(request.form.get('loja_id', 0)) if current_user.is_admin() else loja_id
+        try:
+            sel_loja = int(request.form.get('loja_id', 0)) if current_user.is_admin() else loja_id
+        except (TypeError, ValueError):
+            sel_loja = 0
+        # Validacao multi-loja: nao-admin so cria pra propria loja
+        if not current_user.is_admin() and sel_loja != loja_id:
+            abort(403)
+        # Loja precisa existir e estar ativa
+        if not sel_loja or not Loja.query.filter_by(id=sel_loja, ativa=True).first():
+            flash('Selecione uma loja valida.', 'warning')
+            lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+            receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+            materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+            return render_template('pedidos/novo.html', lojas=lojas,
+                                   receitas=receitas, materias=materias,
+                                   amanha=amanha, loja_id=loja_id)
+
         data_str = request.form.get('data_entrega', '')
         obs = request.form.get('observacao', '').strip()
 
@@ -61,41 +120,61 @@ def novo():
             flash('A data de entrega deve ser a partir de amanha.', 'warning')
             lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
             receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+            materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
             return render_template('pedidos/novo.html', lojas=lojas,
-                                   receitas=receitas, amanha=amanha, loja_id=loja_id)
+                                   receitas=receitas, materias=materias,
+                                   amanha=amanha, loja_id=loja_id)
 
-        pedido = PedidoLoja(
-            loja_id=sel_loja,
-            data_entrega=data_entrega,
-            observacao=obs or None,
-            criado_por=current_user.id,
-        )
-        db.session.add(pedido)
-        db.session.flush()
-
-        ids = request.form.getlist('item_id[]')
-        qtds = request.form.getlist('item_qtd[]')
-        notas = request.form.getlist('item_obs[]')
-
-        for i in range(len(ids)):
-            if not ids[i] or not qtds[i]:
-                continue
-            item = PedidoItem(
-                pedido_id=pedido.id,
-                receita_id=int(ids[i]),
-                quantidade=int(qtds[i]),
-                observacao=notas[i].strip() if i < len(notas) else None,
+        try:
+            pedido = PedidoLoja(
+                loja_id=sel_loja,
+                data_entrega=data_entrega,
+                observacao=obs or None,
+                criado_por=current_user.id,
             )
-            db.session.add(item)
+            db.session.add(pedido)
+            db.session.flush()
 
-        db.session.commit()
+            ids = request.form.getlist('item_id[]')
+            qtds = request.form.getlist('item_qtd[]')
+            notas = request.form.getlist('item_obs[]')
+
+            for i in range(len(ids)):
+                if not ids[i] or not qtds[i]:
+                    continue
+                tipo, item_id = _parse_item_id(ids[i])
+                if not tipo:
+                    continue
+                try:
+                    qtd = int(qtds[i])
+                except (TypeError, ValueError):
+                    continue
+                if qtd <= 0:
+                    continue
+                item = PedidoItem(
+                    pedido_id=pedido.id,
+                    receita_id=item_id if tipo == 'receita' else None,
+                    materia_prima_id=item_id if tipo == 'mp' else None,
+                    quantidade=qtd,
+                    observacao=notas[i].strip() if i < len(notas) else None,
+                )
+                db.session.add(item)
+
+            db.session.commit()
+        except Exception as exc:  # noqa: BLE001
+            db.session.rollback()
+            current_app.logger.exception('Falha ao criar pedido')
+            flash(f'Erro ao criar pedido: {exc}', 'danger')
+            return redirect(url_for('pedidos.novo'))
         flash('Pedido criado!', 'success')
         return redirect(url_for('pedidos.detalhe', id=pedido.id))
 
     lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
     return render_template('pedidos/novo.html', lojas=lojas,
-                           receitas=receitas, amanha=amanha, loja_id=loja_id)
+                           receitas=receitas, materias=materias,
+                           amanha=amanha, loja_id=loja_id)
 
 
 @pedidos_bp.route('/<int:id>')
@@ -119,45 +198,289 @@ def confirmar(id):
     return redirect(url_for('pedidos.detalhe', id=id))
 
 
-@pedidos_bp.route('/<int:id>/entregar', methods=['POST'])
+@pedidos_bp.route('/<int:id>/separar', methods=['POST'])
 @login_required
 @admin_required
-def entregar(id):
+def separar(id):
     pedido = PedidoLoja.query.get_or_404(id)
+    if pedido.status not in ('pendente', 'confirmado'):
+        flash('Pedido deve estar pendente ou confirmado para ser separado.', 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
+    pedido.status = 'separado'
+    db.session.commit()
+    flash('Pedido marcado como separado. Estoque ainda nao foi baixado.', 'success')
+    return redirect(url_for('pedidos.detalhe', id=id))
 
-    for item in pedido.itens:
-        ep = EstoqueProducao.query.filter_by(
-            receita_id=item.receita_id, produto_id=item.produto_id
-        ).first()
-        if ep:
-            ep.quantidade = max(0, ep.quantidade - item.quantidade)
-            db.session.add(MovEstoqueProducao(
-                estoque_producao_id=ep.id, tipo='saida_pedido',
-                quantidade=item.quantidade,
-                referencia=f'Pedido #{pedido.id} → {pedido.loja.nome}',
+
+@pedidos_bp.route('/<int:id>/enviar', methods=['POST'])
+@login_required
+@admin_required
+def enviar(id):
+    pedido = PedidoLoja.query.get_or_404(id)
+    if pedido.status != 'separado':
+        flash('Pedido precisa estar separado para sair pra entrega.', 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
+
+    try:
+        for item in pedido.itens:
+            if item.materia_prima_id:
+                mp = MateriaPrima.query.get(item.materia_prima_id)
+                if mp:
+                    mp.estoque_atual = max(0, (mp.estoque_atual or 0) - item.quantidade)
+                    db.session.add(MovimentacaoEstoque(
+                        materia_prima_id=mp.id, tipo='saida',
+                        quantidade=item.quantidade,
+                        referencia=f'Pedido #{pedido.id} → {pedido.loja.nome}',
+                        usuario_id=current_user.id,
+                    ))
+                continue
+
+            ep = EstoqueProducao.query.filter_by(
+                receita_id=item.receita_id, produto_id=item.produto_id
+            ).first()
+            if ep:
+                ep.quantidade = max(0, ep.quantidade - item.quantidade)
+                db.session.add(MovEstoqueProducao(
+                    estoque_producao_id=ep.id, tipo='saida_pedido',
+                    quantidade=item.quantidade,
+                    referencia=f'Pedido #{pedido.id} → {pedido.loja.nome}',
+                    usuario_id=current_user.id,
+                ))
+
+        pedido.status = 'em_transporte'
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception('Falha ao enviar pedido %s', id)
+        flash(f'Erro ao processar saída do pedido: {exc}. Nada foi alterado.', 'danger')
+        return redirect(url_for('pedidos.detalhe', id=id))
+    flash('Pedido em transporte. Estoque da industria baixado.', 'success')
+    return redirect(url_for('pedidos.detalhe', id=id))
+
+
+@pedidos_bp.route('/<int:id>/receber', methods=['POST'])
+@login_required
+def receber(id):
+    pedido = PedidoLoja.query.get_or_404(id)
+    loja_id = _loja_do_usuario()
+    if loja_id and pedido.loja_id != loja_id:
+        abort(403)
+    if pedido.status != 'em_transporte':
+        flash('Pedido precisa estar em transporte para ser recebido.', 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
+
+    recebidos = {}
+    for key, val in request.form.items():
+        if key.startswith('recebido_') and val.strip():
+            try:
+                recebidos[int(key[len('recebido_'):])] = max(0, int(val))
+            except ValueError:
+                continue
+
+    try:
+        divergencias = []
+        for item in pedido.itens:
+            qtd_rec = recebidos.get(item.id, item.quantidade)
+            item.quantidade_recebida = qtd_rec
+            if qtd_rec != item.quantidade:
+                divergencias.append(f'{item.nome_item}: pedido {item.quantidade}, recebido {qtd_rec}')
+
+            if qtd_rec <= 0:
+                continue
+
+            el = EstoqueLoja.query.filter_by(
+                loja_id=pedido.loja_id,
+                receita_id=item.receita_id,
+                produto_id=item.produto_id,
+                materia_prima_id=item.materia_prima_id,
+            ).first()
+            if not el:
+                el = EstoqueLoja(loja_id=pedido.loja_id,
+                                 receita_id=item.receita_id,
+                                 produto_id=item.produto_id,
+                                 materia_prima_id=item.materia_prima_id)
+                db.session.add(el)
+                db.session.flush()
+            el.quantidade += qtd_rec
+            ref_div = ' (divergente)' if qtd_rec != item.quantidade else ''
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el.id, tipo='entrada_pedido',
+                quantidade=qtd_rec,
+                referencia=f'Pedido #{pedido.id}{ref_div}',
                 usuario_id=current_user.id,
             ))
 
-        el = EstoqueLoja.query.filter_by(
-            loja_id=pedido.loja_id, receita_id=item.receita_id, produto_id=item.produto_id
-        ).first()
-        if not el:
-            el = EstoqueLoja(loja_id=pedido.loja_id, receita_id=item.receita_id,
-                             produto_id=item.produto_id)
-            db.session.add(el)
-            db.session.flush()
-        el.quantidade += item.quantidade
-        db.session.add(MovEstoqueLoja(
-            estoque_loja_id=el.id, tipo='entrada_pedido',
-            quantidade=item.quantidade,
-            referencia=f'Pedido #{pedido.id}',
-            usuario_id=current_user.id,
-        ))
+        pedido.status = 'entregue'
+        if divergencias:
+            nota = 'Divergencias no recebimento: ' + '; '.join(divergencias)
+            pedido.observacao = (pedido.observacao + ' | ' if pedido.observacao else '') + nota
 
-    pedido.status = 'entregue'
-    db.session.commit()
-    flash('Pedido entregue! Estoque da loja e congelados atualizados.', 'success')
+        for f in request.files.getlist('fotos'):
+            if not f or not f.filename:
+                continue
+            content = f.read()
+            if not content:
+                continue
+            db.session.add(FotoRecebimento(
+                pedido_id=pedido.id,
+                imagem=content,
+                mimetype=f.mimetype or 'image/jpeg',
+                enviada_por=current_user.id,
+            ))
+
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception('Falha ao receber pedido %s', id)
+        flash(f'Erro ao processar recebimento: {exc}. Nada foi alterado.', 'danger')
+        return redirect(url_for('pedidos.detalhe', id=id))
+
+    if divergencias:
+        flash('Pedido recebido com divergencias. Detalhes salvos na observacao.', 'warning')
+    else:
+        flash('Pedido recebido integralmente. Estoque da loja atualizado.', 'success')
     return redirect(url_for('pedidos.detalhe', id=id))
+
+
+@pedidos_bp.route('/foto/<int:foto_id>')
+@login_required
+def foto(foto_id):
+    f = FotoRecebimento.query.get_or_404(foto_id)
+    loja_id = _loja_do_usuario()
+    if loja_id and f.pedido.loja_id != loja_id:
+        abort(403)
+    return send_file(io.BytesIO(f.imagem), mimetype=f.mimetype or 'image/jpeg')
+
+
+@pedidos_bp.route('/lojas/<int:loja_id>/precos', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def precos_loja(loja_id):
+    loja = Loja.query.get_or_404(loja_id)
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+
+    if request.method == 'POST':
+        for r in receitas:
+            val = (request.form.get(f'preco_{r.id}', '') or '').strip().replace(',', '.')
+            existente = PrecoLojaReceita.query.filter_by(
+                loja_id=loja_id, receita_id=r.id
+            ).first()
+            if not val:
+                if existente:
+                    db.session.delete(existente)
+                continue
+            try:
+                preco = float(val)
+            except ValueError:
+                continue
+            if preco <= 0:
+                if existente:
+                    db.session.delete(existente)
+                continue
+            if existente:
+                existente.preco = preco
+            else:
+                db.session.add(PrecoLojaReceita(
+                    loja_id=loja_id, receita_id=r.id, preco=preco
+                ))
+        db.session.commit()
+        flash(f'Precos da loja {loja.nome} atualizados.', 'success')
+        return redirect(url_for('pedidos.precos_loja', loja_id=loja_id))
+
+    precos = {p.receita_id: p.preco for p in PrecoLojaReceita.query.filter_by(loja_id=loja_id).all()}
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    return render_template('pedidos/precos_loja.html', loja=loja, receitas=receitas,
+                           precos=precos, lojas=lojas)
+
+
+@pedidos_bp.route('/relatorio')
+@login_required
+@admin_required
+def relatorio():
+    hoje = date.today()
+    loja_id = request.args.get('loja', type=int)
+    de_str = request.args.get('de', '')
+    ate_str = request.args.get('ate', '')
+    formato = request.args.get('formato', 'html')
+    incluir_fotos = request.args.get('fotos') == '1'
+
+    try:
+        de = datetime.strptime(de_str, '%Y-%m-%d').date()
+    except ValueError:
+        de = hoje.replace(day=1)
+    try:
+        ate = datetime.strptime(ate_str, '%Y-%m-%d').date()
+    except ValueError:
+        ate = hoje
+
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    pedidos = []
+    totais = {'qtd_pedidos': 0, 'valor_total': 0.0, 'divergencias': 0}
+    por_item = defaultdict(lambda: {'quantidade': 0, 'recebido': 0, 'valor': 0.0})
+
+    if loja_id:
+        query = PedidoLoja.query.filter(
+            PedidoLoja.loja_id == loja_id,
+            PedidoLoja.status == 'entregue',
+            PedidoLoja.data_entrega >= de,
+            PedidoLoja.data_entrega <= ate,
+        ).order_by(PedidoLoja.data_entrega)
+        pedidos_raw = query.all()
+
+        for p in pedidos_raw:
+            subtotal = 0.0
+            linhas = []
+            for it in p.itens:
+                preco = _preco_para_loja(it.receita_id, loja_id)
+                qtd_efetiva = it.quantidade_recebida if it.quantidade_recebida is not None else it.quantidade
+                valor_linha = preco * qtd_efetiva
+                subtotal += valor_linha
+                linhas.append({
+                    'nome': it.nome_item,
+                    'quantidade': it.quantidade,
+                    'recebido': qtd_efetiva,
+                    'preco': preco,
+                    'subtotal': valor_linha,
+                    'divergente': it.quantidade_recebida is not None and it.quantidade_recebida != it.quantidade,
+                })
+                por_item[it.nome_item]['quantidade'] += it.quantidade
+                por_item[it.nome_item]['recebido'] += qtd_efetiva
+                por_item[it.nome_item]['valor'] += valor_linha
+
+            pedidos.append({'p': p, 'linhas': linhas, 'subtotal': subtotal})
+            totais['qtd_pedidos'] += 1
+            totais['valor_total'] += subtotal
+            if p.tem_divergencia:
+                totais['divergencias'] += 1
+
+    loja_nome = next((l.nome for l in lojas if l.id == loja_id), 'loja') if loja_id else 'loja'
+
+    if formato == 'xlsx' and loja_id:
+        from app.services.relatorio import gerar_xlsx_pedidos
+        buf = gerar_xlsx_pedidos(loja_nome, de, ate, pedidos, totais, por_item)
+        return send_file(
+            buf, as_attachment=True,
+            download_name=f'pedidos_{loja_nome}_{de}_a_{ate}.xlsx',
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+
+    if formato == 'pdf' and loja_id:
+        from app.services.relatorio import gerar_pdf_pedidos
+        buf = gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item,
+                                incluir_fotos=incluir_fotos)
+        sufixo = '_com_fotos' if incluir_fotos else ''
+        return send_file(
+            buf, as_attachment=True,
+            download_name=f'pedidos_{loja_nome}_{de}_a_{ate}{sufixo}.pdf',
+            mimetype='application/pdf',
+        )
+
+    return render_template('pedidos/relatorio.html',
+                           lojas=lojas, loja_id=loja_id,
+                           de=de.isoformat(), ate=ate.isoformat(),
+                           pedidos=pedidos, totais=totais,
+                           incluir_fotos=incluir_fotos,
+                           por_item=sorted(por_item.items(), key=lambda x: x[0]))
 
 
 @pedidos_bp.route('/<int:id>/cancelar', methods=['POST'])
@@ -167,8 +490,8 @@ def cancelar(id):
     loja_id = _loja_do_usuario()
     if loja_id and pedido.loja_id != loja_id:
         abort(403)
-    if pedido.status not in ('pendente', 'confirmado'):
-        flash('Só é possível cancelar pedidos pendentes ou confirmados.', 'warning')
+    if pedido.status not in ('pendente', 'confirmado', 'separado'):
+        flash('Só é possível cancelar pedidos pendentes, confirmados ou separados (antes do envio).', 'warning')
         return redirect(url_for('pedidos.detalhe', id=id))
     pedido.status = 'cancelado'
     db.session.commit()
@@ -198,8 +521,10 @@ def separacao():
     ).order_by(PedidoLoja.data_entrega).all()
 
     por_data = defaultdict(lambda: defaultdict(lambda: {'total': 0, 'lojas': defaultdict(int)}))
+    ids_por_data = defaultdict(list)
     for p in pedidos:
         chave_data = p.data_entrega or p.data_pedido
+        ids_por_data[chave_data].append(p.id)
         for item in p.itens:
             nome = item.nome_item
             por_data[chave_data][nome]['total'] += item.quantidade
@@ -208,7 +533,9 @@ def separacao():
     congelados = {ep.nome_item: ep.quantidade for ep in EstoqueProducao.query.all()}
 
     return render_template('pedidos/separacao.html',
-                           por_data=dict(por_data), congelados=congelados)
+                           por_data=dict(por_data),
+                           ids_por_data=dict(ids_por_data),
+                           congelados=congelados)
 
 
 # ── Estoque de Congelados ──
@@ -275,6 +602,49 @@ def congelados_ajuste():
     return redirect(url_for('pedidos.congelados'))
 
 
+# ── Balanco de Congelados (sobrescreve com contagem fisica) ──
+
+@pedidos_bp.route('/congelados/balanco', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def congelados_balanco():
+    """Tela de balanco: usuario cola lista 'nome: qtd' e sistema sobrescreve
+    EstoqueProducao.quantidade pra cada item, com auditoria por delta."""
+    from app.services import estoque_congelados as svc
+    texto = request.form.get('texto', '') if request.method == 'POST' else ''
+    referencia = request.form.get('referencia', '').strip()
+    itens = []
+    if request.method == 'POST' and texto.strip():
+        parseados = svc.parsear_lista(texto)
+        itens = svc.resolver_lista(parseados)
+    return render_template('pedidos/balanco_congelados.html',
+                           texto=texto, referencia=referencia, itens=itens)
+
+
+@pedidos_bp.route('/congelados/balanco/aplicar', methods=['POST'])
+@login_required
+@admin_required
+def congelados_balanco_aplicar():
+    """Aplica o balanco apos preview. Re-parseia o texto pra ser idempotente."""
+    from app.services import estoque_congelados as svc
+    texto = request.form.get('texto', '')
+    referencia = request.form.get('referencia', '').strip() or None
+    if not texto.strip():
+        flash('Lista vazia — nada pra aplicar.', 'warning')
+        return redirect(url_for('pedidos.congelados_balanco'))
+    parseados = svc.parsear_lista(texto)
+    resolvidos = svc.resolver_lista(parseados)
+    resultado = svc.aplicar_balanco(resolvidos, current_user, referencia=referencia)
+    n_ok = len(resultado['aplicados'])
+    n_ign = len(resultado['ignorados'])
+    if n_ok:
+        flash(f'Balanço aplicado: {n_ok} item(ns) atualizados.'
+              + (f' {n_ign} ignorados.' if n_ign else ''), 'success')
+    else:
+        flash(f'Nenhum item aplicado. {n_ign} ignorados.', 'warning')
+    return redirect(url_for('pedidos.congelados'))
+
+
 # ── Estoque de Loja ──
 
 @pedidos_bp.route('/estoque-loja')
@@ -288,8 +658,13 @@ def estoque_loja():
     loja = Loja.query.get(loja_id) if loja_id else None
     itens = EstoqueLoja.query.filter_by(loja_id=loja_id).all() if loja_id else []
     lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all() \
+        if current_user.is_admin() else []
+    materias = MateriaPrima.query.order_by(MateriaPrima.nome).all() \
+        if current_user.is_admin() else []
     return render_template('pedidos/estoque_loja.html', loja=loja, itens=itens,
-                           lojas=lojas, sel_loja=loja_id)
+                           lojas=lojas, sel_loja=loja_id,
+                           receitas=receitas, materias=materias)
 
 
 @pedidos_bp.route('/estoque-loja/registrar', methods=['POST'])
@@ -324,4 +699,50 @@ def estoque_loja_registrar():
 
     db.session.commit()
     flash('Estoque atualizado.', 'success')
+    return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
+
+
+@pedidos_bp.route('/estoque-loja/ajuste', methods=['POST'])
+@login_required
+@admin_required
+def estoque_loja_ajuste():
+    loja_id = int(request.form.get('loja_id', 0))
+    tipo, item_id = _parse_item_id(request.form.get('item_id', ''))
+    qtd = int(request.form.get('quantidade', 0))
+    operacao = request.form.get('operacao', 'entrada')
+    motivo = request.form.get('motivo', '').strip()
+
+    if not loja_id or not item_id or qtd <= 0 or not motivo:
+        flash('Loja, item, quantidade (>0) e motivo sao obrigatorios.', 'warning')
+        return redirect(url_for('pedidos.estoque_loja', loja=loja_id or None))
+
+    filtro = {'loja_id': loja_id}
+    if tipo == 'receita':
+        filtro['receita_id'] = item_id
+    else:
+        filtro['materia_prima_id'] = item_id
+    el = EstoqueLoja.query.filter_by(**filtro).first()
+    if not el:
+        if operacao != 'entrada':
+            flash('Item inexistente no estoque — so e possivel fazer entrada.', 'warning')
+            return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
+        el = EstoqueLoja(**filtro)
+        db.session.add(el)
+        db.session.flush()
+
+    if operacao == 'entrada':
+        el.quantidade += qtd
+        tipo_mov = 'entrada_manual'
+        sinal = '+'
+    else:
+        el.quantidade = max(0, el.quantidade - qtd)
+        tipo_mov = 'ajuste_negativo'
+        sinal = '-'
+
+    db.session.add(MovEstoqueLoja(
+        estoque_loja_id=el.id, tipo=tipo_mov, quantidade=qtd,
+        referencia=motivo, usuario_id=current_user.id,
+    ))
+    db.session.commit()
+    flash(f'Ajuste de estoque registrado ({sinal}{qtd}).', 'success')
     return redirect(url_for('pedidos.estoque_loja', loja=loja_id))

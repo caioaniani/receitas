@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}{{ fornecedor.nome }} — Fornecedor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">{{ fornecedor.nome|lower }}</h1>
+    <div class="page-actions">
+        <a href="{{ url_for('fornecedores.lista') }}" class="btn-pill btn-pill-outline">
+            <i class="bi bi-arrow-left"></i> voltar
+        </a>
+        <a href="{{ url_for('fornecedores.editar', id=fornecedor.id) }}" class="btn-pill btn-pill-primary">
+            <i class="bi bi-pencil"></i> editar
+        </a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card" style="padding:14px;">
+            <div class="text-muted small">contato</div>
+            <div class="fw-semibold">{{ fornecedor.contato or '—' }}</div>
+            <div class="text-muted small mt-2">telefone</div>
+            <div>{{ fornecedor.telefone or '—' }}</div>
+            <div class="text-muted small mt-2">email</div>
+            <div>{{ fornecedor.email or '—' }}</div>
+            <div class="text-muted small mt-2">cnpj</div>
+            <div>{{ fornecedor.cnpj or '—' }}</div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="card text-center" style="padding:14px;">
+                    <div class="text-muted small">compras</div>
+                    <div class="fw-bold" style="font-size:24px;">{{ historico|length }}</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center" style="padding:14px;">
+                    <div class="text-muted small">MPs distintas</div>
+                    <div class="fw-bold" style="font-size:24px;">{{ mps_distintas }}</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center" style="padding:14px;">
+                    <div class="text-muted small">total gasto</div>
+                    <div class="fw-bold text-success" style="font-size:24px;">R$ {{ "%.2f"|format(total_gasto) }}</div>
+                </div>
+            </div>
+            {% if fornecedor.observacao %}
+            <div class="col-12">
+                <div class="card" style="padding:14px;">
+                    <div class="text-muted small mb-1">observação</div>
+                    <div>{{ fornecedor.observacao }}</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<h2 class="mb-3">histórico de compras</h2>
+<div class="card" style="padding:0; overflow:hidden;">
+    <table class="table-dense">
+        <thead>
+            <tr>
+                <th>data</th>
+                <th>matéria-prima</th>
+                <th class="text-end">quantidade</th>
+                <th class="text-end">preço unit.</th>
+                <th class="text-end">total</th>
+                <th>referência</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for h in historico %}
+            <tr>
+                <td>{{ h.data.strftime('%d/%m/%Y') if h.data else '—' }}</td>
+                <td class="fw-semibold">{{ h.materia_prima.nome }}</td>
+                <td class="text-end">{{ h.quantidade }} {{ h.materia_prima.unidade or '' }}</td>
+                <td class="text-end">R$ {{ "%.4f"|format(h.preco_unitario) }}</td>
+                <td class="text-end fw-bold">R$ {{ "%.2f"|format((h.preco_unitario or 0) * (h.quantidade or 0)) }}</td>
+                <td class="text-muted" style="font-size:12px;">{{ h.referencia or '—' }}</td>
+            </tr>
+            {% endfor %}
+            {% if not historico %}
+            <tr><td colspan="6" class="text-center text-muted py-4">Sem compras registradas. Ao registrar entrada de MP, vincule este fornecedor.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

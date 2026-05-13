@@ -1,14 +1,34 @@
 {% extends "base.html" %}
+{% import "_macros.html" as ui %}
 
 {% block title %}Pedido #{{ pedido.id }}{% endblock %}
 
 {% block content %}
+{{ ui.breadcrumbs([
+    ('Pedidos', url_for('pedidos.lista')),
+    ('#' ~ pedido.id, None),
+]) }}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="fw-bold mb-0"><i class="bi bi-cart3"></i> Pedido #{{ pedido.id }}</h5>
-    <a href="{{ url_for('pedidos.lista') }}" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left"></i> Voltar
-    </a>
+    <h1 class="page-title mb-0"><i class="bi bi-cart3"></i> Pedido #{{ pedido.id }}</h1>
+    {{ ui.botao_voltar(url_for('pedidos.lista')) }}
 </div>
+
+{% if pedido.tem_divergencia %}
+<div class="alert alert-danger d-flex align-items-start gap-2 mb-3">
+    <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+    <div>
+        <strong>Divergencia no recebimento</strong><br>
+        <span style="font-size:13px;">A quantidade recebida pela loja foi diferente da separada pela industria. Detalhes:</span>
+        <ul class="mb-0 mt-1" style="font-size:13px;">
+            {% for i in pedido.itens_divergentes %}
+            <li><strong>{{ i.nome_item }}</strong>: pedido <strong>{{ i.quantidade }}</strong>, recebido <strong>{{ i.quantidade_recebida }}</strong>
+                <span class="text-muted">({{ 'faltou' if i.quantidade_recebida < i.quantidade else 'sobrou' }} {{ (i.quantidade - i.quantidade_recebida)|abs }})</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endif %}
 
 <div class="card mb-3">
     <div class="card-body">
@@ -23,14 +43,15 @@
             </div>
             <div class="col-md-2">
                 <small class="text-muted d-block">Status</small>
-                {% if pedido.status == 'pendente' %}
-                <span class="badge rounded-pill bg-warning text-dark">Pendente</span>
-                {% elif pedido.status == 'confirmado' %}
-                <span class="badge rounded-pill bg-info text-dark">Confirmado</span>
-                {% elif pedido.status == 'entregue' %}
-                <span class="badge rounded-pill bg-success">Entregue</span>
-                {% elif pedido.status == 'cancelado' %}
-                <span class="badge rounded-pill bg-secondary">Cancelado</span>
+                {% set s = pedido.status %}
+                <span class="status-badge status-{{ s.replace('_','-') }}">
+                    {{ {'pendente':'Pendente','confirmado':'Confirmado','separado':'Separado',
+                         'em_transporte':'Em transporte','entregue':'Entregue','cancelado':'Cancelado'}.get(s, s) }}
+                </span>
+                {% if pedido.tem_divergencia %}
+                <span class="status-badge status-divergencia ms-1" title="Ver detalhes no topo">
+                    <i class="bi bi-exclamation-triangle-fill"></i> Divergência
+                </span>
                 {% endif %}
             </div>
             <div class="col-md-2">
@@ -52,12 +73,28 @@
 </div>
 
 <h6 class="fw-bold mb-2">Itens</h6>
+
+{% if pedido.status == 'em_transporte' %}
+<div class="alert alert-info py-2" style="font-size:13px;">
+    <i class="bi bi-info-circle"></i> Informe a <strong>quantidade realmente recebida</strong> por item. Se nao mexer, o sistema assume que chegou tudo conforme pedido. Tire foto(s) do pedido pra registro.
+</div>
+<form method="POST" action="{{ url_for('pedidos.receber', id=pedido.id) }}"
+      enctype="multipart/form-data"
+      onsubmit="return confirm('Confirmar recebimento deste pedido?')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{% endif %}
+
 <div class="table-responsive">
     <table class="table table-sm table-bordered bg-white">
-        <thead>
-            <tr style="background:#37474f; color:#fff; font-size:11px; text-transform:uppercase;">
+        <thead class="thead-padaria">
+            <tr>
                 <th>Produto</th>
-                <th style="width:100px" class="text-center">Quantidade</th>
+                <th style="width:100px" class="text-center">Pedido</th>
+                {% if pedido.status == 'em_transporte' %}
+                <th style="width:120px" class="text-center">Recebido</th>
+                {% elif pedido.status == 'entregue' %}
+                <th style="width:100px" class="text-center">Recebido</th>
+                {% endif %}
                 <th>Obs</th>
             </tr>
         </thead>
@@ -66,6 +103,16 @@
             <tr>
                 <td>{{ item.nome_item }}</td>
                 <td class="text-center fw-bold">{{ item.quantidade }}</td>
+                {% if pedido.status == 'em_transporte' %}
+                <td>
+                    <input type="number" name="recebido_{{ item.id }}" class="form-control form-control-sm text-center input-blue"
+                           min="0" value="{{ item.quantidade }}">
+                </td>
+                {% elif pedido.status == 'entregue' %}
+                <td class="text-center {% if item.quantidade_recebida is not none and item.quantidade_recebida != item.quantidade %}text-danger fw-bold{% endif %}">
+                    {{ item.quantidade_recebida if item.quantidade_recebida is not none else item.quantidade }}
+                </td>
+                {% endif %}
                 <td class="text-muted">{{ item.observacao or '' }}</td>
             </tr>
             {% endfor %}
@@ -73,7 +120,7 @@
     </table>
 </div>
 
-<div class="d-flex gap-2 mt-3">
+<div class="d-flex gap-2 mt-3 flex-wrap">
     {% if current_user.is_admin() %}
         {% if pedido.status == 'pendente' %}
         <form method="POST" action="{{ url_for('pedidos.confirmar', id=pedido.id) }}">
@@ -85,17 +132,39 @@
         {% endif %}
 
         {% if pedido.status in ('pendente', 'confirmado') %}
-        <form method="POST" action="{{ url_for('pedidos.entregar', id=pedido.id) }}"
-              onsubmit="return confirm('Confirma entrega? O estoque de congelados sera descontado.')">
+        <form method="POST" action="{{ url_for('pedidos.separar', id=pedido.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-success btn-sm">
-                <i class="bi bi-truck"></i> Entregar
+            <button type="submit" class="btn btn-primary btn-sm">
+                <i class="bi bi-box-seam"></i> Marcar como Separado
+            </button>
+        </form>
+        {% endif %}
+
+        {% if pedido.status == 'separado' %}
+        <form method="POST" action="{{ url_for('pedidos.enviar', id=pedido.id) }}"
+              onsubmit="return confirm('Saiu para entrega? O estoque da industria sera baixado agora.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm" style="background:#6f42c1;color:#fff;">
+                <i class="bi bi-truck"></i> Saiu para Entrega
             </button>
         </form>
         {% endif %}
     {% endif %}
 
-    {% if pedido.status in ('pendente', 'confirmado') %}
+    {% if pedido.status == 'em_transporte' %}
+    <div class="w-100 mb-2">
+        <label class="form-label fw-semibold" style="font-size:13px;">
+            <i class="bi bi-camera"></i> Foto(s) do pedido recebido
+        </label>
+        <input type="file" name="fotos" class="form-control form-control-sm" accept="image/*" capture="environment" multiple>
+        <small class="text-muted">No celular abre a camera direto. Pode enviar mais de uma.</small>
+    </div>
+    <button type="submit" class="btn btn-success btn-sm">
+        <i class="bi bi-check-all"></i> Confirmar Recebimento
+    </button>
+    {% endif %}
+
+    {% if pedido.status in ('pendente', 'confirmado', 'separado') %}
     <form method="POST" action="{{ url_for('pedidos.cancelar', id=pedido.id) }}"
           onsubmit="return confirm('Cancelar este pedido?')">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -115,4 +184,21 @@
     </form>
     {% endif %}
 </div>
+
+{% if pedido.status == 'em_transporte' %}
+</form>
+{% endif %}
+
+{% if pedido.fotos|length > 0 %}
+<h6 class="fw-bold mt-4 mb-2"><i class="bi bi-images"></i> Fotos do Recebimento</h6>
+<div class="d-flex flex-wrap gap-2">
+    {% for f in pedido.fotos %}
+    <a href="{{ url_for('pedidos.foto', foto_id=f.id) }}" target="_blank" rel="noopener"
+       title="Enviada em {{ f.enviada_em.strftime('%d/%m/%Y %H:%M') if f.enviada_em else '' }}">
+        <img src="{{ url_for('pedidos.foto', foto_id=f.id) }}" alt="Foto do recebimento"
+             style="max-height:160px; max-width:200px; border:1px solid var(--border-color); border-radius:6px; object-fit:cover;">
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
 {% endblock %}
