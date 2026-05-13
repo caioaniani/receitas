@@ -21,10 +21,11 @@ LOCK_KEY = 7723  # arbitrario, so precisa ser estavel entre workers
 
 
 def status():
-    """Retorna info do scheduler pra UI mostrar."""
+    """Retorna info do scheduler pra UI mostrar.
+    `ultimo_run` e um datetime UTC (pra template aplicar filtro |brt)."""
     return {
         'ativo': _scheduler is not None and _scheduler.running,
-        'ultimo_run': _ult_run.isoformat() if _ult_run else None,
+        'ultimo_run': _ult_run,
     }
 
 
