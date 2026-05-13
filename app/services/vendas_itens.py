@@ -120,12 +120,30 @@ def agregar_itens(data_inicial, data_final, loja_seru=None,
     faturamento_total = sum(v['faturamento'] for v in agg.values())
     total_itens = sum(v['qtd'] for v in agg.values())
 
+    # Index dos SeruProdutoMap pra mostrar estado nas linhas.
+    maps = {m.seru_nome: m for m in SeruProdutoMap.query.filter(
+        SeruProdutoMap.seru_nome.in_(list(agg.keys()))).all()}
+
     produtos_lista = []
     sem_match = 0
     for nome, v in agg.items():
         match = _match_local(nome, receitas, produtos)
         if not match:
             sem_match += 1
+        # Estado do mapeamento Seru (autoritativo pra auto-baixa).
+        m = maps.get(nome)
+        if m:
+            estado_map = m.estado  # mapeado/ignorado/pendente
+            mapeado_para = {
+                'tipo': 'receita' if m.receita_id else ('produto' if m.produto_id else None),
+                'id': m.receita_id or m.produto_id,
+                'nome': m.alvo_nome,
+            } if m.estado == 'mapeado' else None
+            map_id = m.id
+        else:
+            estado_map = 'sem_map'  # ainda nao foi visto numa sync
+            mapeado_para = None
+            map_id = None
         produtos_lista.append({
             'nome': nome,
             'sku': v['sku'],
@@ -134,7 +152,10 @@ def agregar_itens(data_inicial, data_final, loja_seru=None,
             'n_pedidos': len(v['pedidos']),
             'pct_faturamento': round(100 * v['faturamento'] / faturamento_total, 1)
                 if faturamento_total else 0.0,
-            'match': match,
+            'match': match,  # palpite por fuzzy local (sugestao)
+            'estado_map': estado_map,
+            'mapeado_para': mapeado_para,
+            'map_id': map_id,
         })
     produtos_lista.sort(key=lambda x: x['faturamento'], reverse=True)
 
