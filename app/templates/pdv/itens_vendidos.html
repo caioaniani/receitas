@@ -331,10 +331,39 @@ var __PRODUTOS = [
     var mmNome = document.getElementById('mm-nome');
     var mmTipo = document.getElementById('mm-tipo');
     var mmAlvo = document.getElementById('mm-alvo');
+    var mmFator = document.getElementById('mm-fator');
+    var mmFatorX = document.getElementById('mm-fator-x');
+    var mmFatorY = document.getElementById('mm-fator-y');
+    var mmFatorHelp = document.getElementById('mm-fator-help');
     var mmVincFields = document.getElementById('mm-vincular-fields');
     var mmHelp = document.getElementById('mm-acao-help');
     var mmSalvar = document.getElementById('mm-salvar');
     var currentNome = null;
+
+    function atualizarFatorHelp() {
+        var f = parseFloat(mmFator.value) || 1;
+        if (Math.abs(f - 1) < 0.001) {
+            mmFatorHelp.textContent = '1 venda = 1 unidade (default)';
+            mmFatorHelp.className = 'text-muted';
+        } else if (f < 1) {
+            mmFatorHelp.textContent = '1 venda = ' + f + ' unidade (composto: ' + Math.round(1/f) + ' vendas baixam 1 inteiro)';
+            mmFatorHelp.className = 'text-info';
+        } else {
+            mmFatorHelp.textContent = '1 venda = ' + f + ' unidades';
+            mmFatorHelp.className = 'text-info';
+        }
+    }
+    mmFator.addEventListener('input', atualizarFatorHelp);
+    function recalcDeFracao() {
+        var x = parseFloat(mmFatorX.value);
+        var y = parseFloat(mmFatorY.value);
+        if (x > 0 && y > 0) {
+            mmFator.value = (x / y).toFixed(4).replace(/\.?0+$/, '');
+            atualizarFatorHelp();
+        }
+    }
+    mmFatorX.addEventListener('input', recalcDeFracao);
+    mmFatorY.addEventListener('input', recalcDeFracao);
 
     function popularAlvo(tipo, selectedId) {
         mmAlvo.innerHTML = '';
