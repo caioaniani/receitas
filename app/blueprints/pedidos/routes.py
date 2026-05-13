@@ -50,6 +50,17 @@ def _preco_para_loja(receita_id, loja_id):
     return (rec.preco_loja if rec and rec.preco_loja else 0) or 0
 
 
+# Lojas com a 'Industria' (fabrica de producao) excluida.
+# Industria existe como Loja so pra fins de RH/escala (padeiros, auxiliares),
+# mas nao recebe pedidos, nao tem PDV, nao tem estoque de venda. Use em
+# qualquer dropdown operacional (pedidos, estoque de loja, precos).
+def _lojas_operacionais():
+    return (Loja.query
+            .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
+            .order_by(Loja.nome)
+            .all())
+
+
 def _loja_do_usuario():
     if current_user.is_admin():
         return None
