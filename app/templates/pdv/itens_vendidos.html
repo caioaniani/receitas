@@ -427,6 +427,7 @@ var __PRODUTOS = [
         if (acao === 'vincular') {
             fd.append('alvo_tipo', mmTipo.value);
             fd.append('alvo_id', mmAlvo.value);
+            fd.append('fator', mmFator.value || '1');
         }
         mmSalvar.disabled = true;
         fetch('/pdv/api/mapear', {method: 'POST', body: fd, credentials: 'same-origin'})
