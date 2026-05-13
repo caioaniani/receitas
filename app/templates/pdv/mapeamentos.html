@@ -17,11 +17,17 @@
 
 <div class="alert alert-info" style="font-size:13px;">
     <i class="bi bi-info-circle"></i>
-    <strong>Como funciona:</strong> a sincronizacao da Seru so baixa estoque
-    de produtos <strong>mapeados</strong> a uma receita/produto.
-    Itens novos aparecem como <strong>pendentes</strong> ate voce decidir.
-    Marque como <strong>ignorado</strong> os que voce nao quer rastrear (cafe, agua, etc).
+    <strong>Como funciona:</strong> a sincronizacao da Seru so baixa estoque de
+    produtos <strong>mapeados</strong> a uma receita/produto, em lojas que voce
+    <strong>confirmou</strong> o mapeamento. Auto-fuzzy adivinha mas <em>nao
+    processa estoque</em> ate voce clicar OK ou Vincular.
 </div>
+
+<style>
+    .mapa-confirmado { background: rgba(52,199,89,0.06) !important; border-left: 3px solid #34c759; }
+    .mapa-pendente   { background: rgba(255,149,0,0.10) !important; border-left: 3px solid #ff9500; }
+    .mapa-ignorado   { background: rgba(0,0,0,0.04) !important; }
+</style>
 
 <!-- ── Lojas ── -->
 <div class="card mb-3">
