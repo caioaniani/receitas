@@ -10,7 +10,7 @@ import logging
 from datetime import date, datetime, timedelta
 
 from app.extensions import db
-from app.models import (Loja, EstoqueLoja, MovEstoqueLoja,
+from app.models import (Loja, EstoqueLoja, MovEstoqueLoja, Receita, MateriaPrima,
                         VndaProdutoMap, VndaPedidoProcessado, VndaDebito)
 from app.services import vnda
 
