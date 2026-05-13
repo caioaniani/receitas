@@ -140,10 +140,12 @@ def agregar_itens(data_inicial, data_final, loja_seru=None,
                 'nome': m.alvo_nome,
             } if m.estado == 'mapeado' else None
             map_id = m.id
+            fator = float(m.fator_quantidade or 1.0)
         else:
             estado_map = 'sem_map'  # ainda nao foi visto numa sync
             mapeado_para = None
             map_id = None
+            fator = 1.0
         produtos_lista.append({
             'nome': nome,
             'sku': v['sku'],
@@ -156,6 +158,7 @@ def agregar_itens(data_inicial, data_final, loja_seru=None,
             'estado_map': estado_map,
             'mapeado_para': mapeado_para,
             'map_id': map_id,
+            'fator': fator,
         })
     produtos_lista.sort(key=lambda x: x['faturamento'], reverse=True)
 
