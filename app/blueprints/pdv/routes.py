@@ -241,6 +241,14 @@ def api_mapear():
             mp.receita_id = None
         else:
             return jsonify(ok=False, erro='alvo_tipo/alvo_id invalidos'), 400
+        # Fator de composicao (1 venda Seru = X unidades do alvo). Default 1.0.
+        try:
+            fator = float(data.get('fator') or 1.0)
+            if fator <= 0:
+                fator = 1.0
+        except (TypeError, ValueError):
+            fator = 1.0
+        mp.fator_quantidade = fator
         mp.ignorar = False
         mp.confirmado_em = datetime.utcnow()
         mp.confirmado_por = current_user.id
