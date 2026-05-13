@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block title %}Mapeamentos Seru{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-link-45deg"></i> Mapeamentos Seru</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('pdv.itens_vendidos') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-bag-check"></i> Itens vendidos
+        </a>
+        <a href="{{ url_for('pdv.index') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-shop"></i> Vendas PDV
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-info" style="font-size:13px;">
+    <i class="bi bi-info-circle"></i>
+    <strong>Como funciona:</strong> a sincronizacao da Seru so baixa estoque
+    de produtos <strong>mapeados</strong> a uma receita/produto.
+    Itens novos aparecem como <strong>pendentes</strong> ate voce decidir.
+    Marque como <strong>ignorado</strong> os que voce nao quer rastrear (cafe, agua, etc).
+</div>
+
+<!-- ── Lojas ── -->
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <strong><i class="bi bi-shop"></i> Lojas Seru</strong>
+        <small class="text-muted">{{ lojas_map|length }} mapeamento(s)</small>
+    </div>
+    {% if lojas_map %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead class="thead-padaria">
+                <tr>
+                    <th>Company name (Seru)</th>
+                    <th>Estado</th>
+                    <th>Vinculada a</th>
+                    <th style="width:380px">Acao</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for lm in lojas_map %}
+                <tr class="{% if lm.estado == 'pendente' %}table-warning{% elif lm.ignorar %}text-muted{% endif %}">
+                    <td class="fw-semibold">{{ lm.seru_company_name }}</td>
+                    <td>
+                        {% if lm.estado == 'mapeado' %}
+                            {% if lm.auto_match and not lm.confirmado_em %}
+                                <span class="badge bg-info">auto-fuzzy</span>
+                            {% else %}
+                                <span class="badge bg-success">confirmado</span>
+                            {% endif %}
+                        {% elif lm.estado == 'ignorado' %}
+                            <span class="badge bg-secondary">ignorado</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark">pendente</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ lm.loja.nome if lm.loja else '—' }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('pdv.vincular_loja', map_id=lm.id) }}" class="d-flex gap-1">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <select name="loja_id" class="form-select form-select-sm" style="max-width:200px;">
+                                <option value="">— escolha —</option>
+                                {% for l in lojas %}
+                                <option value="{{ l.id }}" {% if lm.loja_id == l.id %}selected{% endif %}>{{ l.nome }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" name="acao" value="vincular" class="btn btn-sm btn-primary">Vincular</button>
+                            {% if lm.auto_match and not lm.confirmado_em and lm.loja_id %}
+                            <button type="submit" name="acao" value="confirmar" class="btn btn-sm btn-outline-success" title="Confirmar mapeamento auto-fuzzy">OK</button>
+                            {% endif %}
+                            <button type="submit" name="acao" value="ignorar" class="btn btn-sm btn-outline-secondary" title="Ignorar todas as vendas dessa company">Ignorar</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-muted text-center py-3">
+        Ainda nenhuma loja Seru vista. Clique em "Sincronizar agora" na tela de Itens Vendidos pra popular.
+    </div>
+    {% endif %}
+</div>
+
+<!-- ── Produtos ── -->
+{% set pendentes = produtos_map | selectattr('estado','equalto','pendente') | list %}
+{% set mapeados = produtos_map | selectattr('estado','equalto','mapeado') | list %}
+{% set ignorados = produtos_map | selectattr('estado','equalto','ignorado') | list %}
+
+<div class="row g-2 mb-3">
+    <div class="col-md-4">
+        <div class="card border-warning">
+            <div class="card-body py-2 px-3">
+                <small class="text-muted d-block" style="font-size:11px;">Pendentes</small>
+                <div class="fw-bold" style="font-size:22px;">{{ pendentes|length }}</div>
+                <small class="text-muted" style="font-size:11px;">precisa decidir</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-success">
+            <div class="card-body py-2 px-3">
+                <small class="text-muted d-block" style="font-size:11px;">Mapeados</small>
+                <div class="fw-bold" style="font-size:22px;">{{ mapeados|length }}</div>
+                <small class="text-muted" style="font-size:11px;">baixam estoque automatico</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body py-2 px-3">
+                <small class="text-muted d-block" style="font-size:11px;">Ignorados</small>
+                <div class="fw-bold" style="font-size:22px;">{{ ignorados|length }}</div>
+                <small class="text-muted" style="font-size:11px;">nunca processam</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <strong><i class="bi bi-box-seam"></i> Produtos Seru</strong>
+        <input type="text" id="filtro" class="form-control form-control-sm" placeholder="filtrar..." style="max-width:220px;">
+    </div>
+    {% if produtos_map %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" id="tabela-produtos">
+            <thead class="thead-padaria" style="position:sticky;top:0;">
+                <tr>
+                    <th>Produto Seru</th>
+                    <th style="width:100px">SKU</th>
+                    <th style="width:90px">Estado</th>
+                    <th>Vinculado a</th>
+                    <th style="width:480px">Acao</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mp in produtos_map %}
+                <tr data-nome="{{ mp.seru_nome|lower }}" class="{% if mp.estado == 'pendente' %}table-warning{% elif mp.ignorar %}text-muted{% endif %}">
+                    <td class="fw-semibold">{{ mp.seru_nome }}</td>
+                    <td><small class="text-muted">{{ mp.seru_sku or '—' }}</small></td>
+                    <td>
+                        {% if mp.estado == 'mapeado' %}
+                            <span class="badge bg-success">mapeado</span>
+                        {% elif mp.estado == 'ignorado' %}
+                            <span class="badge bg-secondary">ignorado</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark">pendente</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if mp.alvo_nome %}
+                            <small>{{ mp.alvo_nome }}
+                                {% if mp.receita_id %}<span class="badge bg-primary" style="font-size:9px;">R</span>
+                                {% else %}<span class="badge bg-secondary" style="font-size:9px;">P</span>{% endif %}
+                            </small>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" action="{{ url_for('pdv.vincular_produto', map_id=mp.id) }}" class="d-flex gap-1">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <select name="alvo_tipo" class="form-select form-select-sm" style="width:90px;"
+                                    onchange="atualizarLista(this)">
+                                <option value="receita" {% if mp.receita_id %}selected{% endif %}>Receita</option>
+                                <option value="produto" {% if mp.produto_id %}selected{% endif %}>Produto</option>
+                            </select>
+                            <select name="alvo_id" class="form-select form-select-sm vinc-alvo" style="max-width:220px;">
+                                {% if mp.receita_id or not mp.produto_id %}
+                                    {% for r in receitas %}
+                                    <option value="{{ r.id }}" {% if mp.receita_id == r.id %}selected{% endif %}>{{ r.categoria }} — {{ r.nome }}</option>
+                                    {% endfor %}
+                                {% else %}
+                                    {% for p in produtos %}
+                                    <option value="{{ p.id }}" {% if mp.produto_id == p.id %}selected{% endif %}>{{ p.nome }}</option>
+                                    {% endfor %}
+                                {% endif %}
+                            </select>
+                            <button type="submit" name="acao" value="vincular" class="btn btn-sm btn-primary">Vincular</button>
+                            {% if mp.estado != 'ignorado' %}
+                            <button type="submit" name="acao" value="ignorar" class="btn btn-sm btn-outline-secondary" title="Nunca processar este produto">Ignorar</button>
+                            {% endif %}
+                            {% if mp.estado != 'pendente' %}
+                            <button type="submit" name="acao" value="desfazer" class="btn btn-sm btn-outline-warning" title="Voltar pra pendente">⤺</button>
+                            {% endif %}
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-muted text-center py-3">
+        Nenhum produto Seru visto ainda. Clique em "Sincronizar agora" na tela de Itens Vendidos pra popular.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var __receitas = [
+    {% for r in receitas %}
+    {id: {{ r.id }}, nome: {{ r.nome|tojson }}, cat: {{ (r.categoria or '')|tojson }}},
+    {% endfor %}
+];
+var __produtos = [
+    {% for p in produtos %}
+    {id: {{ p.id }}, nome: {{ p.nome|tojson }}},
+    {% endfor %}
+];
+function atualizarLista(tipoSel) {
+    var form = tipoSel.closest('form');
+    var sel = form.querySelector('.vinc-alvo');
+    var prevValue = sel.value;
+    sel.innerHTML = '';
+    var list = tipoSel.value === 'receita' ? __receitas : __produtos;
+    list.forEach(function(item) {
+        var opt = document.createElement('option');
+        opt.value = item.id;
+        opt.textContent = item.cat ? item.cat + ' — ' + item.nome : item.nome;
+        if (String(item.id) === prevValue) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+(function() {
+    var f = document.getElementById('filtro');
+    if (!f) return;
+    var rows = document.querySelectorAll('#tabela-produtos tbody tr[data-nome]');
+    f.addEventListener('input', function() {
+        var t = this.value.toLowerCase().trim();
+        rows.forEach(function(r) {
+            r.style.display = (!t || r.dataset.nome.indexOf(t) >= 0) ? '' : 'none';
+        });
+    });
+})();
+</script>
+{% endblock %}
