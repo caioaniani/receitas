@@ -240,7 +240,7 @@ var __PRODUTOS = [
                 document.getElementById('kpi-faturamento').textContent = fmtBRL(d.faturamento_total);
                 document.getElementById('kpi-pedidos').textContent = fmtInt(d.total_pedidos);
                 document.getElementById('kpi-itens').textContent = fmtInt(d.total_itens_vendidos);
-                document.getElementById('kpi-sem-match').textContent = fmtInt(d.sem_match_count);
+                document.getElementById('kpi-pendentes').textContent = fmtInt(d.pendentes_count != null ? d.pendentes_count : d.sem_match_count);
 
                 // popula dropdown de lojas (preserva selecao)
                 var prevLoja = lojaSel.value;
