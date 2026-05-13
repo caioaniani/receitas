@@ -29,11 +29,19 @@ def hoje_brt():
 
 
 def status():
-    """Retorna info do scheduler pra UI mostrar.
+    """Retorna info do scheduler pra UI mostrar (Seru).
     `ultimo_run` e um datetime UTC (pra template aplicar filtro |brt)."""
     return {
         'ativo': _scheduler is not None and _scheduler.running,
         'ultimo_run': _ult_run,
+    }
+
+
+def status_vnda():
+    """Status do job VNDA."""
+    return {
+        'ativo': _scheduler is not None and _scheduler.running,
+        'ultimo_run': _ult_run_vnda,
     }
 
 
