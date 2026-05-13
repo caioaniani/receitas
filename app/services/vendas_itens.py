@@ -5,6 +5,7 @@ Para cada produto vendido num intervalo, calcula:
 - faturamento total
 - numero de pedidos distintos
 - match no catalogo local (Receita ou Produto), por fuzzy
+- estado do mapeamento Seru (SeruProdutoMap): mapeado/ignorado/pendente/sem_map
 
 Filtros: intervalo de datas BRT e (opcional) nome da loja Seru
 (o campo 'company.name' do pedido — que e o que a Seru chama de loja).
@@ -12,7 +13,7 @@ Filtros: intervalo de datas BRT e (opcional) nome da loja Seru
 import re
 import unicodedata
 
-from app.models import Receita, Produto
+from app.models import Receita, Produto, SeruProdutoMap
 from app.services import seru
 
 
