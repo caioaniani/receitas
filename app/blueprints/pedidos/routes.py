@@ -621,6 +621,63 @@ def congelados_balanco():
                            texto=texto, referencia=referencia, itens=itens)
 
 
+@pedidos_bp.route('/congelados/vincular', methods=['POST'])
+@login_required
+@admin_required
+def congelados_vincular():
+    """Vincula uma EstoqueProducao pendente (sem receita/produto) a uma
+    receita ou produto existente. Se ja existe outra EstoqueProducao com
+    aquela receita/produto, soma a quantidade e apaga o orfao."""
+    ep_id = int(request.form['estoque_id'])
+    alvo_tipo = request.form.get('alvo_tipo')
+    try:
+        alvo_id = int(request.form.get('alvo_id', ''))
+    except (TypeError, ValueError):
+        alvo_id = 0
+    if alvo_tipo not in ('receita', 'produto') or not alvo_id:
+        flash('Selecione uma receita ou produto.', 'danger')
+        return redirect(url_for('pedidos.congelados'))
+
+    orfao = EstoqueProducao.query.get_or_404(ep_id)
+    if not orfao.pendente:
+        flash('Este item já está vinculado.', 'warning')
+        return redirect(url_for('pedidos.congelados'))
+
+    # Existe ja uma linha com aquela receita/produto? Se sim, mescla.
+    existente = EstoqueProducao.query.filter_by(
+        receita_id=alvo_id if alvo_tipo == 'receita' else None,
+        produto_id=alvo_id if alvo_tipo == 'produto' else None,
+    ).first()
+
+    nome_orfao = orfao.nome_pendente or '?'
+    qtd_orfao = orfao.quantidade or 0
+
+    if existente and existente.id != orfao.id:
+        anterior = existente.quantidade or 0
+        existente.quantidade = anterior + qtd_orfao
+        if qtd_orfao:
+            db.session.add(MovEstoqueProducao(
+                estoque_producao_id=existente.id,
+                tipo='balanco_entrada',
+                quantidade=qtd_orfao,
+                referencia=f'Vinculação de pendente "{nome_orfao}" (era {anterior}, ficou {existente.quantidade})',
+                usuario_id=current_user.id,
+            ))
+        db.session.delete(orfao)
+        db.session.commit()
+        flash(f'"{nome_orfao}" mesclado em {existente.nome_item} (+{qtd_orfao} unidades).', 'success')
+    else:
+        if alvo_tipo == 'receita':
+            orfao.receita_id = alvo_id
+        else:
+            orfao.produto_id = alvo_id
+        orfao.nome_pendente = None
+        db.session.commit()
+        flash(f'"{nome_orfao}" vinculado com sucesso.', 'success')
+
+    return redirect(url_for('pedidos.congelados'))
+
+
 @pedidos_bp.route('/congelados/balanco/aplicar', methods=['POST'])
 @login_required
 @admin_required

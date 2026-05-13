@@ -614,6 +614,10 @@ class EstoqueProducao(db.Model):
     receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
     produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
     quantidade = db.Column(db.Integer, default=0)
+    # Nome digitado no balanco quando nao houve match com Receita/Produto.
+    # Permite registrar a contagem fisica mesmo sem cadastro previo;
+    # depois o admin vincula a uma receita/produto e isso volta a NULL.
+    nome_pendente = db.Column(db.String(200), nullable=True)
 
     receita = db.relationship('Receita')
     produto = db.relationship('Produto')
@@ -625,7 +629,13 @@ class EstoqueProducao(db.Model):
             return self.receita.nome
         if self.produto:
             return self.produto.nome
+        if self.nome_pendente:
+            return self.nome_pendente
         return '?'
+
+    @property
+    def pendente(self):
+        return self.receita_id is None and self.produto_id is None and bool(self.nome_pendente)
 
 
 class MovEstoqueProducao(db.Model):

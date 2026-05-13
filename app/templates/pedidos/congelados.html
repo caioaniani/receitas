@@ -44,6 +44,60 @@
     </div>
 </div>
 
+{% set pendentes = itens | selectattr('pendente') | list %}
+{% set vinculados = itens | rejectattr('pendente') | list %}
+
+{% if pendentes %}
+<div class="card mb-3 border-warning">
+    <div class="card-header bg-warning bg-opacity-10 fw-bold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-link-45deg"></i> Pendentes de vinculação ({{ pendentes|length }})</span>
+        <small class="text-muted fw-normal">Itens contados no balanço sem cadastro prévio. Vincule a uma receita/produto.</small>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead class="thead-padaria">
+                <tr>
+                    <th>Nome digitado</th>
+                    <th class="text-center" style="width:100px">Quantidade</th>
+                    <th style="width:420px">Vincular a...</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ep in pendentes %}
+                <tr class="table-warning">
+                    <td class="fw-semibold">
+                        <span class="badge bg-warning text-dark me-1" style="font-size:10px;">Pendente</span>
+                        {{ ep.nome_item }}
+                    </td>
+                    <td class="text-center fw-bold">{{ ep.quantidade }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('pedidos.congelados_vincular') }}" class="d-flex gap-1 align-items-center">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="estoque_id" value="{{ ep.id }}">
+                            <select name="alvo_tipo" class="form-select form-select-sm" style="width:90px;"
+                                    onchange="atualizarVincular(this)">
+                                <option value="receita">Receita</option>
+                                <option value="produto">Produto</option>
+                            </select>
+                            <select name="alvo_id" class="form-select form-select-sm vinc-item" required>
+                                {% for r in receitas %}
+                                <option value="{{ r.id }}">{{ r.categoria }} — {{ r.nome }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-primary"
+                                    onclick="return confirm('Vincular este pendente?')">
+                                <i class="bi bi-link"></i> Vincular
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 <!-- Tabela de estoque -->
 <div class="table-responsive">
     <table class="table table-sm table-bordered table-hover bg-white">
@@ -56,7 +110,7 @@
             </tr>
         </thead>
         <tbody>
-            {% for ep in itens %}
+            {% for ep in vinculados %}
             <tr>
                 <td class="fw-semibold">{{ ep.nome_item }}</td>
                 <td class="text-center">
@@ -84,8 +138,8 @@
                 </td>
             </tr>
             {% endfor %}
-            {% if not itens %}
-            <tr><td colspan="4" class="text-center text-muted py-3">Nenhum item no estoque de congelados.</td></tr>
+            {% if not vinculados %}
+            <tr><td colspan="4" class="text-center text-muted py-3">Nenhum item vinculado no estoque de congelados.</td></tr>
             {% endif %}
         </tbody>
     </table>
@@ -118,5 +172,20 @@ function atualizarEntrada() {
     });
 }
 atualizarEntrada();
+
+// Troca o segundo select (item) baseado no tipo escolhido no primeiro,
+// dentro do mesmo form de vincular-pendente.
+function atualizarVincular(tipoSel) {
+    var form = tipoSel.closest('form');
+    var sel = form.querySelector('.vinc-item');
+    sel.innerHTML = '';
+    var list = tipoSel.value === 'receita' ? receitas : produtos;
+    list.forEach(function(item) {
+        var opt = document.createElement('option');
+        opt.value = item.id;
+        opt.textContent = item.cat ? item.cat + ' — ' + item.nome : item.nome;
+        sel.appendChild(opt);
+    });
+}
 </script>
 {% endblock %}

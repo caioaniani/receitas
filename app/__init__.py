@@ -484,6 +484,15 @@ def _migrate_postgres(app):
         if cols_el and 'materia_prima_id' not in cols_el:
             conn.execute(text("ALTER TABLE estoque_loja ADD COLUMN materia_prima_id INTEGER REFERENCES materia_prima(id)"))
 
+        # estoque_producao.nome_pendente (balanco aceita itens sem cadastro previo)
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'estoque_producao'"
+        ))
+        cols_ep = {row[0] for row in result}
+        if cols_ep and 'nome_pendente' not in cols_ep:
+            conn.execute(text("ALTER TABLE estoque_producao ADD COLUMN nome_pendente VARCHAR(200)"))
+
         conn.commit()
 
     # Migrações resilientes (cada ALTER em sua própria transação)
@@ -918,6 +927,12 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE tarefa_projeto ADD COLUMN observacao TEXT")
     if cols_tp and 'recorrencia' not in cols_tp:
         cursor.execute("ALTER TABLE tarefa_projeto ADD COLUMN recorrencia VARCHAR(20)")
+
+    # estoque_producao.nome_pendente
+    cursor.execute("PRAGMA table_info(estoque_producao)")
+    cols_ep = [row[1] for row in cursor.fetchall()]
+    if cols_ep and 'nome_pendente' not in cols_ep:
+        cursor.execute("ALTER TABLE estoque_producao ADD COLUMN nome_pendente VARCHAR(200)")
 
     conn.commit()
     conn.close()

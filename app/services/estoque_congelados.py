@@ -87,13 +87,25 @@ def parsear_lista(texto):
 
 
 def _carregar_catalogo():
-    """Carrega todas receitas/produtos uma vez, com versao ascii pra match."""
+    """Carrega todas receitas/produtos + orfaos do estoque (EstoqueProducao
+    sem receita/produto vinculado) pra match. Os orfaos entram no match pra
+    que reaplicar o balanco com o mesmo nome reuse a linha existente em vez
+    de criar uma nova orfa."""
     receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.query.all()]
     produtos = [(p.id, p.nome, _ascii(p.nome)) for p in Produto.query.all()]
-    return receitas, produtos
+    orfaos = [
+        (ep.id, ep.nome_pendente, _ascii(ep.nome_pendente))
+        for ep in EstoqueProducao.query.filter(
+            EstoqueProducao.nome_pendente.isnot(None),
+            EstoqueProducao.receita_id.is_(None),
+            EstoqueProducao.produto_id.is_(None),
+        ).all()
+        if ep.nome_pendente
+    ]
+    return receitas, produtos, orfaos
 
 
-def _matches_para(nome, receitas, produtos):
+def _matches_para(nome, receitas, produtos, orfaos=()):
     """Resolve 1 nome contra o catalogo carregado.
 
     Estrategias em ordem:
@@ -101,7 +113,8 @@ def _matches_para(nome, receitas, produtos):
     2. Substring direta (ascii)
     3. Substring com abreviacoes expandidas (CRO -> croissant, TRD -> mini)
 
-    Retorna [{tipo, id, nome, match}] (max 10).
+    Em todas as fases, orfaos (EstoqueProducao pendentes) sao candidatos
+    junto com receitas e produtos. Retorna [{tipo, id, nome, match}] (max 10).
     """
     alvo = _ascii(nome)
     if not alvo:
@@ -115,7 +128,10 @@ def _matches_para(nome, receitas, produtos):
         seen.add(key)
         out.append({'tipo': tipo, 'id': _id, 'nome': nome_real, 'match': kind})
 
-    # 1. exato
+    # 1. exato — orfaos primeiro pra colar nele se for reaplicar o balanco
+    for oid, onome, oasc in orfaos:
+        if oasc == alvo:
+            add('pendente', oid, onome, 'exato')
     for rid, rnome, rasc in receitas:
         if rasc == alvo:
             add('receita', rid, rnome, 'exato')
@@ -126,6 +142,9 @@ def _matches_para(nome, receitas, produtos):
         return out
 
     # 2. substring direta — ambos os sentidos (alvo dentro do catalogo OU vice-versa)
+    for oid, onome, oasc in orfaos:
+        if alvo in oasc or oasc in alvo:
+            add('pendente', oid, onome, 'fuzzy')
     for rid, rnome, rasc in receitas:
         if alvo in rasc or rasc in alvo:
             add('receita', rid, rnome, 'fuzzy')
@@ -138,6 +157,9 @@ def _matches_para(nome, receitas, produtos):
     # 3. com abreviacoes expandidas
     expandido = _expandir_abreviacoes(alvo)
     if expandido != alvo:
+        for oid, onome, oasc in orfaos:
+            if expandido in oasc or oasc in expandido:
+                add('pendente', oid, onome, 'fuzzy')
         for rid, rnome, rasc in receitas:
             if expandido in rasc or rasc in expandido:
                 add('receita', rid, rnome, 'fuzzy')
@@ -150,23 +172,29 @@ def _matches_para(nome, receitas, produtos):
 
 def resolver_lista(linhas_parseadas):
     """Enriquece cada item com matches, resolvido (primeiro match),
-    estoque_atual e delta. Itens com 'erro' passam intactos."""
-    receitas, produtos = _carregar_catalogo()
+    estoque_atual e delta. Itens com 'erro' passam intactos.
+
+    Itens sem match nao sao mais 'erro' — entram no balanco como pendentes
+    e ganham linha em EstoqueProducao com nome_pendente preenchido."""
+    receitas, produtos, orfaos = _carregar_catalogo()
     enriq = []
     for item in linhas_parseadas:
         if item.get('erro'):
             enriq.append(item)
             continue
-        matches = _matches_para(item['nome'], receitas, produtos)
+        matches = _matches_para(item['nome'], receitas, produtos, orfaos)
         resolvido = matches[0] if matches else None
         atual = 0
         if resolvido:
-            ep = EstoqueProducao.query.filter_by(
-                receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
-                produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
-            ).first()
+            if resolvido['tipo'] == 'pendente':
+                ep = EstoqueProducao.query.get(resolvido['id'])
+            else:
+                ep = EstoqueProducao.query.filter_by(
+                    receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
+                    produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
+                ).first()
             atual = ep.quantidade if ep else 0
-        delta = (item['quantidade'] - atual) if resolvido else None
+        delta = item['quantidade'] - atual
         enriq.append({
             **item,
             'matches': matches,
@@ -182,7 +210,10 @@ def aplicar_balanco(itens_resolvidos, user, referencia=None):
 
     - tipo='balanco_entrada' se nova > anterior, 'balanco_saida' se menor.
     - quantidade da mov = |delta|; nao registra movimento se delta == 0.
-    - Pula itens sem resolvido ou com erro de parse (entram em 'ignorados').
+    - Itens sem match no catalogo (receita/produto/orfao existente) sao
+      gravados como EstoqueProducao pendente — guardam a contagem fisica e
+      ficam disponiveis pra serem vinculados a uma receita/produto depois.
+    - So entram em 'ignorados' linhas com erro de parse.
 
     Retorna {aplicados:[{nome,tipo,anterior,novo,delta}], ignorados:[{linha,motivo}]}.
     """
@@ -194,29 +225,47 @@ def aplicar_balanco(itens_resolvidos, user, referencia=None):
         if item.get('erro'):
             ignorados.append({'linha': item.get('linha', '?'), 'motivo': item['erro']})
             continue
-        resolvido = item.get('resolvido')
-        if not resolvido or not resolvido.get('id'):
-            ignorados.append({'linha': item.get('linha') or item.get('nome', '?'),
-                              'motivo': 'nao_encontrado'})
-            continue
         try:
             nova_qtd = int(item['quantidade'])
         except (KeyError, TypeError, ValueError):
             ignorados.append({'linha': item.get('linha', '?'), 'motivo': 'quantidade_invalida'})
             continue
 
-        ep = EstoqueProducao.query.filter_by(
-            receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
-            produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
-        ).first()
-        if not ep:
+        resolvido = item.get('resolvido')
+        ep = None
+
+        if resolvido and resolvido.get('id'):
+            if resolvido['tipo'] == 'pendente':
+                ep = EstoqueProducao.query.get(resolvido['id'])
+            else:
+                ep = EstoqueProducao.query.filter_by(
+                    receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
+                    produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
+                ).first()
+                if not ep:
+                    ep = EstoqueProducao(
+                        receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
+                        produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
+                        quantidade=0,
+                    )
+                    db.session.add(ep)
+                    db.session.flush()
+            tipo_resultado = resolvido['tipo']
+            nome_resultado = resolvido['nome']
+        else:
+            # Sem match — cria orfao guardando o nome digitado.
+            nome_digitado = (item.get('nome') or '').strip()
+            if not nome_digitado:
+                ignorados.append({'linha': item.get('linha', '?'), 'motivo': 'sem_nome'})
+                continue
             ep = EstoqueProducao(
-                receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
-                produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
+                nome_pendente=nome_digitado,
                 quantidade=0,
             )
             db.session.add(ep)
             db.session.flush()
+            tipo_resultado = 'pendente'
+            nome_resultado = nome_digitado
 
         anterior = ep.quantidade or 0
         delta = nova_qtd - anterior
@@ -232,8 +281,8 @@ def aplicar_balanco(itens_resolvidos, user, referencia=None):
             ))
 
         aplicados.append({
-            'nome': resolvido['nome'],
-            'tipo': resolvido['tipo'],
+            'nome': nome_resultado,
+            'tipo': tipo_resultado,
             'anterior': anterior,
             'novo': nova_qtd,
             'delta': delta,
