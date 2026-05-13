@@ -391,6 +391,7 @@ PAPEIS_POR_TOOL = {
     'consultar_fornecedores': {'admin', 'gerente'},
     'consultar_funcionario': {'admin', 'gerente'},
     'consultar_caixa': {'admin', 'gerente'},
+    'consultar_vendas_itens': {'admin', 'gerente'},
     # Consultas + planejamento — todos
     'consultar_pedido': {'admin', 'gerente', 'funcionario'},
     'consultar_estoque': {'admin', 'gerente', 'funcionario'},
