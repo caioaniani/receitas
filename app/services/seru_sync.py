@@ -247,6 +247,14 @@ def processar_pedidos(data_inicial, data_final, user=None,
             ))
             continue
 
+        # SALVAGUARDA: so baixa estoque se voce CONFIRMOU o mapeamento da loja.
+        # Auto-fuzzy sozinho nao basta — pode ter chutado errado.
+        # Pedido fica aguardando, sera retentado na proxima sync depois que
+        # voce abrir /pdv/mapeamentos e clicar OK/Vincular.
+        if not loja_map.confirmado_em:
+            stats['pedidos_aguardando_loja'] += 1
+            continue  # NAO marca como processado — retenta depois
+
         itens = seru.extrair_itens(p)
         n_total = len(itens)
         n_baixados = 0
