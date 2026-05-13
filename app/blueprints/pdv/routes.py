@@ -207,6 +207,57 @@ def api_venda_detalhe(pedido_id):
 
 # ── Fase 2: Sync Seru → EstoqueLoja (auto-baixa) ──
 
+@pdv_bp.route('/api/mapear', methods=['POST'])
+@login_required
+@admin_required
+def api_mapear():
+    """Cria/atualiza SeruProdutoMap inline (do relatorio de itens vendidos)."""
+    nome = (request.form.get('seru_nome') or request.json.get('seru_nome') if request.is_json else request.form.get('seru_nome'))
+    nome = (nome or '').strip()
+    if not nome:
+        return jsonify(ok=False, erro='seru_nome obrigatorio'), 400
+    data = request.json if request.is_json else request.form
+    acao = data.get('acao')  # 'vincular' | 'ignorar' | 'desfazer'
+    mp = SeruProdutoMap.query.filter_by(seru_nome=nome).first()
+    if not mp:
+        mp = SeruProdutoMap(seru_nome=nome)
+        db.session.add(mp)
+        db.session.flush()
+    if acao == 'vincular':
+        tipo = data.get('alvo_tipo')
+        try:
+            alvo_id = int(data.get('alvo_id') or 0)
+        except (TypeError, ValueError):
+            alvo_id = 0
+        if tipo == 'receita' and alvo_id:
+            mp.receita_id = alvo_id
+            mp.produto_id = None
+        elif tipo == 'produto' and alvo_id:
+            mp.produto_id = alvo_id
+            mp.receita_id = None
+        else:
+            return jsonify(ok=False, erro='alvo_tipo/alvo_id invalidos'), 400
+        mp.ignorar = False
+        mp.confirmado_em = datetime.utcnow()
+        mp.confirmado_por = current_user.id
+    elif acao == 'ignorar':
+        mp.ignorar = True
+        mp.receita_id = None
+        mp.produto_id = None
+        mp.confirmado_em = datetime.utcnow()
+        mp.confirmado_por = current_user.id
+    elif acao == 'desfazer':
+        mp.ignorar = False
+        mp.receita_id = None
+        mp.produto_id = None
+        mp.confirmado_em = None
+        mp.confirmado_por = None
+    else:
+        return jsonify(ok=False, erro='acao desconhecida'), 400
+    db.session.commit()
+    return jsonify(ok=True, estado=mp.estado, alvo_nome=mp.alvo_nome, map_id=mp.id)
+
+
 @pdv_bp.route('/sync', methods=['POST'])
 @login_required
 @admin_required
