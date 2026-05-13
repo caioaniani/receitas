@@ -27,6 +27,52 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    // ═══ SECOES COLAPSAVEIS NA SIDEBAR ═══
+    // Cada <div class="sidebar-section-title"> ganha um chevron clicavel.
+    // Os elementos seguintes (links) somem ate o proximo .sidebar-divider.
+    // Estado fica em localStorage por nome de secao.
+    if (sidebar) {
+        var titulos = sidebar.querySelectorAll('.sidebar-section-title');
+        titulos.forEach(function (titulo) {
+            var key = (titulo.textContent || '').trim().toLowerCase();
+            if (!key) return;
+            titulo.classList.add('sidebar-section-title-toggle');
+            titulo.dataset.section = key;
+
+            // chevron
+            var chev = document.createElement('span');
+            chev.className = 'sidebar-section-chevron';
+            chev.innerHTML = '<i class="bi bi-chevron-down"></i>';
+            titulo.appendChild(chev);
+
+            // colete irmaos ate o proximo divider
+            var siblings = [];
+            var el = titulo.nextElementSibling;
+            while (el && !el.classList.contains('sidebar-divider')
+                       && !el.classList.contains('sidebar-section-title')) {
+                siblings.push(el);
+                el = el.nextElementSibling;
+            }
+
+            function aplicar(collapsed) {
+                titulo.classList.toggle('collapsed', collapsed);
+                siblings.forEach(function (s) {
+                    s.style.display = collapsed ? 'none' : '';
+                });
+            }
+
+            // restaura estado
+            var saved = localStorage.getItem('sidebar-collapsed-' + key) === '1';
+            if (saved) aplicar(true);
+
+            titulo.addEventListener('click', function () {
+                var nowCollapsed = !titulo.classList.contains('collapsed');
+                aplicar(nowCollapsed);
+                localStorage.setItem('sidebar-collapsed-' + key, nowCollapsed ? '1' : '0');
+            });
+        });
+    }
+
     // ═══ BUSCA NA SIDEBAR ═══
     var sidebarBusca = document.getElementById('sidebar-busca');
     if (sidebarBusca) {
