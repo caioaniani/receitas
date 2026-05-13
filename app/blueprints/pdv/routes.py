@@ -16,6 +16,42 @@ def index():
     return render_template('pdv/index.html', hoje=date.today().isoformat())
 
 
+@pdv_bp.route('/itens-vendidos')
+@login_required
+@admin_required
+def itens_vendidos():
+    """Tela de relatorio: itens vendidos por intervalo + loja Seru."""
+    return render_template('pdv/itens_vendidos.html', hoje=date.today().isoformat())
+
+
+@pdv_bp.route('/api/itens-vendidos')
+@login_required
+@admin_required
+def api_itens_vendidos():
+    from app.services import vendas_itens
+    inicio_str = request.args.get('inicio') or date.today().isoformat()
+    fim_str = request.args.get('fim') or inicio_str
+    loja = (request.args.get('loja') or '').strip() or None
+    try:
+        inicio = datetime.strptime(inicio_str, '%Y-%m-%d').date()
+        fim = datetime.strptime(fim_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify(ok=False, erro='datas invalidas (use YYYY-MM-DD)'), 400
+    if (fim - inicio).days > 92:
+        return jsonify(ok=False, erro='intervalo maximo de 92 dias'), 400
+
+    hoje = date.today()
+    dias_ate_hoje = max(0, (hoje - fim).days) if fim < hoje else 0
+    dias_extra = min(dias_ate_hoje, 7)
+    try:
+        data = vendas_itens.agregar_itens(inicio, fim, loja_seru=loja,
+                                          expandir_dias_frente=dias_extra)
+    except Exception as e:
+        current_app.logger.exception('itens-vendidos falhou')
+        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502
+    return jsonify(ok=True, **data)
+
+
 @pdv_bp.route('/api/vendas')
 @login_required
 @admin_required
