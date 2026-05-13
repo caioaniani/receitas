@@ -416,10 +416,12 @@ var __PRODUTOS = [
                     syncStatus.innerHTML = '<div class="alert alert-danger py-2 small"><i class="bi bi-exclamation-triangle"></i> ' + esc(d.erro) + '</div>';
                     return;
                 }
-                var html = '<div class="alert alert-success py-2 small">' +
+                var alertClass = (d.pedidos_aguardando_loja || d.pedidos_sem_loja_mapeada) ? 'alert-warning' : 'alert-success';
+                var html = '<div class="alert ' + alertClass + ' py-2 small">' +
                     '<strong>Sincronizado:</strong> ' +
                     d.pedidos_novos + ' pedido(s) novo(s) · ' +
                     d.itens_baixados + ' itens baixados';
+                if (d.pedidos_aguardando_loja) html += ' · <strong class="text-warning">' + d.pedidos_aguardando_loja + ' pedido(s) aguardando confirmacao de loja</strong> — vai em <a href="/pdv/mapeamentos">Mapeamentos</a> e clique OK';
                 if (d.itens_pendentes_novos) html += ' · <strong>' + d.itens_pendentes_novos + ' produto(s) novo(s)</strong> em <a href="/pdv/mapeamentos">Mapeamentos</a>';
                 if (d.itens_ignorados) html += ' · ' + d.itens_ignorados + ' ignorados';
                 if (d.itens_sem_estoque) html += ' · <span class="text-warning">' + d.itens_sem_estoque + ' sem estoque</span>';
