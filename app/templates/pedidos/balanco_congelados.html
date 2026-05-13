@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Balanço de Congelados{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-clipboard-check"></i> Balanço de Congelados</h1>
+    <a href="{{ url_for('pedidos.congelados') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar ao estoque
+    </a>
+</div>
+
+<div class="alert alert-info" style="font-size:13px;">
+    <i class="bi bi-info-circle"></i>
+    <strong>Como funciona:</strong> cole a contagem física e o sistema vai
+    <strong>sobrescrever</strong> o estoque pra bater com o que você contou.
+    Cada diferença gera um registro de auditoria (entrada ou saída).
+    Use isso pra inventário — pra registrar produção do dia use
+    <a href="{{ url_for('pedidos.congelados') }}">Entrada de Produção</a>.
+</div>
+
+<form method="POST" action="{{ url_for('pedidos.congelados_balanco') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card mb-3">
+        <div class="card-header bg-white fw-bold">
+            <i class="bi bi-pencil-square"></i> Lista da contagem
+        </div>
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-9">
+                    <label class="form-label" style="font-size:12px;">
+                        Uma linha por item, formato <code>Nome: quantidade</code>
+                    </label>
+                    <textarea name="texto" class="form-control font-monospace" rows="14"
+                              placeholder="Pão Francês: 570&#10;Sourdough Tradicional: 268&#10;Croissant: 2060&#10;Cookie Bolinha: 718">{{ texto }}</textarea>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" style="font-size:12px;">Referência (opcional)</label>
+                    <input type="text" name="referencia" class="form-control form-control-sm input-blue"
+                           placeholder="Ex: Inventário 13/05" value="{{ referencia }}">
+                    <div class="mt-3 d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bi bi-eye"></i> Pré-visualizar
+                        </button>
+                    </div>
+                    <small class="text-muted d-block mt-2" style="font-size:11px;">
+                        Aceita separadores <code>:</code>, <code>=</code> ou <code>-</code>.<br>
+                        Pontos/vírgulas no número são tratados como separador de milhar
+                        (ex: <code>2.060</code> = 2060).
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+{% if itens %}
+{% set n_ok = itens | selectattr('resolvido') | list | length %}
+{% set n_erro = itens | selectattr('erro') | list | length %}
+{% set n_naoresolvido = itens | rejectattr('erro') | rejectattr('resolvido') | list | length %}
+
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <span class="fw-bold"><i class="bi bi-list-check"></i> Pré-visualização</span>
+        <span>
+            <span class="badge bg-success">{{ n_ok }} pronto(s)</span>
+            {% if n_naoresolvido %}<span class="badge bg-warning text-dark">{{ n_naoresolvido }} sem match</span>{% endif %}
+            {% if n_erro %}<span class="badge bg-danger">{{ n_erro }} com erro</span>{% endif %}
+        </span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0">
+                <thead class="thead-padaria">
+                    <tr>
+                        <th style="width:30px;">#</th>
+                        <th>Você digitou</th>
+                        <th>Match no sistema</th>
+                        <th class="text-center" style="width:80px;">Tipo</th>
+                        <th class="text-end" style="width:90px;">Atual</th>
+                        <th class="text-end" style="width:90px;">Novo</th>
+                        <th class="text-end" style="width:100px;">Delta</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in itens %}
+                    <tr class="{% if item.erro %}table-danger{% elif not item.resolvido %}table-warning{% endif %}">
+                        <td class="text-muted">{{ loop.index }}</td>
+                        <td>
+                            <div class="fw-semibold">{{ item.nome or item.linha }}</div>
+                            {% if item.linha and item.linha != item.nome %}
+                                <small class="text-muted">{{ item.linha }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.erro %}
+                                <span class="text-danger">⚠ erro: {{ item.erro }}</span>
+                            {% elif item.resolvido %}
+                                {{ item.resolvido.nome }}
+                                {% if item.resolvido.match == 'fuzzy' %}
+                                    <small class="badge bg-info text-dark">fuzzy</small>
+                                {% endif %}
+                                {% if item.matches | length > 1 %}
+                                    <details class="d-inline">
+                                        <summary class="text-muted" style="font-size:11px; cursor:pointer;">
+                                            +{{ item.matches | length - 1 }} alternativa(s)
+                                        </summary>
+                                        <ul class="mb-0" style="font-size:11px;">
+                                        {% for m in item.matches[1:] %}
+                                            <li>{{ m.nome }} ({{ m.tipo }})</li>
+                                        {% endfor %}
+                                        </ul>
+                                    </details>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-warning">⚠ não encontrado</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if item.resolvido %}
+                                {% if item.resolvido.tipo == 'receita' %}
+                                    <span class="badge bg-primary" style="font-size:10px;">Receita</span>
+                                {% else %}
+                                    <span class="badge bg-secondary" style="font-size:10px;">Produto</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if item.resolvido %}{{ item.estoque_atual }}{% endif %}
+                        </td>
+                        <td class="text-end fw-bold">
+                            {% if item.quantidade is defined %}{{ item.quantidade }}{% endif %}
+                        </td>
+                        <td class="text-end fw-bold">
+                            {% if item.delta is not none and item.resolvido %}
+                                {% if item.delta > 0 %}
+                                    <span class="text-success">+{{ item.delta }}</span>
+                                {% elif item.delta < 0 %}
+                                    <span class="text-danger">{{ item.delta }}</span>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+        <small class="text-muted">
+            {% if n_naoresolvido or n_erro %}
+                Itens sem match ou com erro serão <strong>ignorados</strong>.
+                Edite o nome no textarea e pré-visualize de novo se quiser corrigir.
+            {% else %}
+                Tudo certo. Pode aplicar.
+            {% endif %}
+        </small>
+        <form method="POST" action="{{ url_for('pedidos.congelados_balanco_aplicar') }}"
+              onsubmit="return confirm('Aplicar o balanço? Os valores atuais serão sobrescritos.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="texto" value="{{ texto|e }}">
+            <input type="hidden" name="referencia" value="{{ referencia|e }}">
+            <button type="submit" class="btn btn-success" {% if not n_ok %}disabled{% endif %}>
+                <i class="bi bi-check-circle"></i> Aplicar Balanço ({{ n_ok }} item(ns))
+            </button>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

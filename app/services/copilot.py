@@ -259,6 +259,38 @@ TOOL_MARCAR_TAREFA_FEITA = {
     },
 }
 
+TOOL_BALANCO_CONGELADOS = {
+    "name": "balanco_congelados",
+    "description": (
+        "Lanca balanco/inventario do estoque de congelados (sobrescreve as "
+        "quantidades pra bater com a contagem fisica). Use quando o usuario "
+        "disser 'fazer balanco de congelados', 'lancar inventario', 'corrigir "
+        "estoque do freezer', ou ditar uma lista de itens com quantidades "
+        "absolutas pra setar o estoque. NAO usar pra 'entrada de producao' "
+        "(que SOMA) ou 'perda/quebra' (que SUBTRAI) — esses tem tools/rotas "
+        "proprias. NAO executa direto — retorna preview pra aprovar."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "itens": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "nome": {"type": "string", "description": "Nome do produto/receita. Aceita aproximacoes (sistema faz fuzzy match)."},
+                        "quantidade": {"type": "integer", "minimum": 0, "description": "Quantidade CONTADA fisicamente (valor absoluto, nao delta)."},
+                    },
+                    "required": ["nome", "quantidade"],
+                },
+                "minItems": 1,
+            },
+            "referencia": {"type": ["string", "null"], "description": "Identificacao do balanco. Ex: 'Inventario 13/05', 'Contagem semanal'."},
+        },
+        "required": ["itens"],
+    },
+}
+
 TOOLS = [
     # Existentes
     TOOL_CRIAR_PEDIDO, TOOL_CONSULTAR_PEDIDO, TOOL_CONSULTAR_ESTOQUE,
@@ -271,13 +303,15 @@ TOOLS = [
     TOOL_CONSULTAR_FUNCIONARIO, TOOL_CONSULTAR_CAIXA,
     # Planejamento
     TOOL_CONSULTAR_FOCO, TOOL_CONSULTAR_TAREFAS, TOOL_MARCAR_TAREFA_FEITA,
+    # Estoque de congelados
+    TOOL_BALANCO_CONGELADOS,
 ]
 
 # Quais tools requerem preview/aprovacao (writes)
 REQUER_APROVACAO = {
     'criar_pedido', 'receber_mp', 'ajuste_estoque',
     'mudar_status_pedido', 'criar_fornecedor', 'marcar_ponto', 'criar_tarefa',
-    'marcar_tarefa_feita',
+    'marcar_tarefa_feita', 'balanco_congelados',
 }
 
 
@@ -294,6 +328,8 @@ PAPEIS_POR_TOOL = {
     # Cadastros — so admin
     'criar_fornecedor': {'admin'},
     'consultar_margem': {'admin'},
+    # Balanco de congelados — so admin (sobrescreve estoque)
+    'balanco_congelados': {'admin'},
     # Consultas operacionais — admin + gerente
     'consultar_fornecedores': {'admin', 'gerente'},
     'consultar_funcionario': {'admin', 'gerente'},
@@ -399,6 +435,7 @@ TOOLS DISPONIVEIS — ACOES:
 - criar_fornecedor: cadastrar novo fornecedor
 - marcar_ponto: registrar ponto de funcionario (entrada, saida, almoco)
 - criar_tarefa: criar tarefa em projetos (inbox ou projeto especifico)
+- balanco_congelados: balanco/inventario do estoque de congelados (SOBRESCREVE quantidades). Use quando o usuario ditar uma contagem fisica do freezer — valores absolutos, nao deltas. Diferente de 'entrada de producao' (que soma).
 
 TOOLS DISPONIVEIS — CONSULTAS (read, sem aprovacao):
 - consultar_pedido: ver pedidos por loja/data/status/id
@@ -526,8 +563,36 @@ def _enriquecer_params(tool_name, tool_input, user):
         nome = (tool_input.get('mp_nome') or '').strip()
         matches = _resolver_mp(nome) if nome else []
         return {**tool_input, 'mp_matches': matches, 'mp_resolvida': matches[0] if matches else None}
+    if tool_name == 'balanco_congelados':
+        return _enriquecer_balanco_congelados(tool_input)
     # consultar_pedido / consultar_estoque: passam direto
     return tool_input
+
+
+def _enriquecer_balanco_congelados(tool_input):
+    """Resolve cada item e adiciona match + estoque atual + delta pra preview."""
+    from app.services import estoque_congelados as svc
+    itens_raw = tool_input.get('itens') or []
+    # Adapta pro formato do servico: precisa de 'linha' fake
+    parseados = [{'linha': f"{(it.get('nome') or '').strip()}: {it.get('quantidade')}",
+                  'nome': (it.get('nome') or '').strip(),
+                  'quantidade': int(it.get('quantidade') or 0)}
+                 for it in itens_raw
+                 if (it.get('nome') or '').strip() and int(it.get('quantidade') or 0) >= 0]
+    resolvidos = svc.resolver_lista(parseados)
+    n_ok = sum(1 for i in resolvidos if i.get('resolvido'))
+    n_nao = sum(1 for i in resolvidos if not i.get('erro') and not i.get('resolvido'))
+    delta_total = sum((i.get('delta') or 0) for i in resolvidos if i.get('resolvido'))
+    return {
+        'itens': resolvidos,
+        'referencia': tool_input.get('referencia'),
+        'totais': {
+            'total_itens': len(resolvidos),
+            'resolvidos': n_ok,
+            'nao_resolvidos': n_nao,
+            'delta_total': delta_total,
+        },
+    }
 
 
 def _enriquecer_criar_pedido(tool_input):
@@ -1122,6 +1187,37 @@ def executar_marcar_tarefa_feita(params, user):
             'registro_tipo': 'tarefa_projeto', 'registro_id': tid}
 
 
+def executar_balanco_congelados(params, user):
+    """Aplica balanco/inventario de congelados. Re-resolve nomes se necessario."""
+    from app.services import estoque_congelados as svc
+    itens = params.get('itens') or []
+    if not itens:
+        return {'ok': False, 'erro': 'Lista de itens vazia'}
+    # Garante que cada item tem 'resolvido' — se nao tiver, resolve agora
+    precisa_resolver = any(not (i.get('erro') or i.get('resolvido')) for i in itens)
+    if precisa_resolver:
+        parseados = [{'linha': f"{(i.get('nome') or '').strip()}: {i.get('quantidade')}",
+                      'nome': (i.get('nome') or '').strip(),
+                      'quantidade': int(i.get('quantidade') or 0)}
+                     for i in itens
+                     if (i.get('nome') or '').strip() and int(i.get('quantidade') or 0) >= 0]
+        itens = svc.resolver_lista(parseados)
+
+    referencia = (params.get('referencia') or '').strip() or None
+    resultado = svc.aplicar_balanco(itens, user, referencia=referencia)
+    n_ok = len(resultado['aplicados'])
+    n_ign = len(resultado['ignorados'])
+    if n_ok == 0:
+        return {'ok': False, 'erro': f'Nenhum item aplicado. {n_ign} ignorados.',
+                'ignorados': resultado['ignorados']}
+    return {'ok': True, 'aplicados': resultado['aplicados'],
+            'ignorados': resultado['ignorados'],
+            'total_aplicados': n_ok, 'total_ignorados': n_ign,
+            'registro_tipo': 'estoque_producao_balanco',
+            'registro_id': None,
+            'url': '/pedidos/congelados'}
+
+
 # Re-defino os roteadores pra incluir as novas tools.
 # Como _executar_read e executar foram redefinidos com `# noqa: F811`,
 # preciso adicionar mais um nivel.
@@ -1145,4 +1241,6 @@ def _executar_read(tool_name, params, user):  # noqa: F811
 def executar(tipo_acao, params, user):  # noqa: F811
     if tipo_acao == 'marcar_tarefa_feita':
         return executar_marcar_tarefa_feita(params, user)
+    if tipo_acao == 'balanco_congelados':
+        return executar_balanco_congelados(params, user)
     return _BASE_EXEC(tipo_acao, params, user)
