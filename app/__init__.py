@@ -486,6 +486,46 @@ def _migrate_postgres(app):
         if cols_el and 'nome_pendente' not in cols_el:
             conn.execute(text("ALTER TABLE estoque_loja ADD COLUMN nome_pendente VARCHAR(200)"))
 
+        # Tabelas Seru (mapeamento + idempotencia). db.create_all() cria
+        # automaticamente, este bloco e so safety pra ambientes que ja
+        # existiam antes do schema.
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS seru_produto_map (
+                id SERIAL PRIMARY KEY,
+                seru_nome VARCHAR(300) NOT NULL UNIQUE,
+                seru_sku VARCHAR(100),
+                receita_id INTEGER REFERENCES receita(id),
+                produto_id INTEGER REFERENCES produto(id),
+                ignorar BOOLEAN NOT NULL DEFAULT FALSE,
+                primeira_visto_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                confirmado_em TIMESTAMP,
+                confirmado_por INTEGER REFERENCES usuario(id)
+            )
+        """))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_seru_produto_nome ON seru_produto_map(seru_nome)"))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS seru_loja_map (
+                id SERIAL PRIMARY KEY,
+                seru_company_name VARCHAR(300) NOT NULL UNIQUE,
+                loja_id INTEGER REFERENCES loja(id),
+                ignorar BOOLEAN NOT NULL DEFAULT FALSE,
+                auto_match BOOLEAN DEFAULT FALSE,
+                confirmado_em TIMESTAMP,
+                confirmado_por INTEGER REFERENCES usuario(id)
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS seru_pedido_processado (
+                seru_pedido_id VARCHAR(100) PRIMARY KEY,
+                processado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                loja_id INTEGER REFERENCES loja(id),
+                n_itens_total INTEGER DEFAULT 0,
+                n_itens_baixados INTEGER DEFAULT 0,
+                cancelado_em TIMESTAMP,
+                estornado_em TIMESTAMP
+            )
+        """))
+
         # estoque_producao.nome_pendente (balanco aceita itens sem cadastro previo)
         result = conn.execute(text(
             "SELECT column_name FROM information_schema.columns "
