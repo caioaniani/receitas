@@ -216,13 +216,16 @@ var vincReceitas = [
     {id: {{ r.id }}, nome: {{ r.nome|tojson }}, cat: {{ (r.categoria or '')|tojson }}},
     {% endfor %}
 ];
+var vincProdutos = [
+    {% for p in produtos %}
+    {id: {{ p.id }}, nome: {{ p.nome|tojson }}},
+    {% endfor %}
+];
 var vincMaterias = [
     {% for m in materias %}
     {id: {{ m.id }}, nome: {{ m.nome|tojson }}},
     {% endfor %}
 ];
-// produtos: nao expomos lista aqui (caso seja vazio nao quebra; o select
-// fica vazio e o usuario precisa cadastrar primeiro).
 
 function atualizarVincLoja(tipoSel) {
     var form = tipoSel.closest('form');
@@ -230,8 +233,8 @@ function atualizarVincLoja(tipoSel) {
     sel.innerHTML = '';
     var list = [];
     if (tipoSel.value === 'receita') list = vincReceitas;
+    else if (tipoSel.value === 'produto') list = vincProdutos;
     else if (tipoSel.value === 'mp') list = vincMaterias;
-    else list = [];  // produto: vazio por ora
     list.forEach(function(item) {
         var opt = document.createElement('option');
         opt.value = item.id;
