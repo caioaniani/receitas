@@ -67,9 +67,9 @@
                     </td>
                     <td>{{ lm.loja.nome if lm.loja else '—' }}</td>
                     <td>
-                        <form method="POST" action="{{ url_for('pdv.vincular_loja', map_id=lm.id) }}" class="d-flex gap-1">
+                        <form method="POST" action="{{ url_for('pdv.vincular_loja', map_id=lm.id) }}" class="d-flex gap-1 form-vincular-loja">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <select name="loja_id" class="form-select form-select-sm" style="max-width:200px;">
+                            <select name="loja_id" class="form-select form-select-sm" style="max-width:200px;" data-required-on-vincular="1">
                                 <option value="">— escolha —</option>
                                 {% for l in lojas %}
                                 <option value="{{ l.id }}" {% if lm.loja_id == l.id %}selected{% endif %}>{{ l.nome }}</option>
