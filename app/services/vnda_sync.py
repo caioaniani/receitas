@@ -190,9 +190,10 @@ def processar_pedidos(data_entrega, user=None):
     """
     user_id = getattr(user, 'id', None) if user else None
 
-    loja = Loja.query.filter_by(nome=LOJA_VNDA_NOME).first()
+    loja = loja_vnda()
     if not loja:
-        return {'erro': f'Loja "{LOJA_VNDA_NOME}" nao encontrada', 'erros': []}
+        return {'erro': 'Loja VNDA nao configurada. Configure em /pdv/vnda/mapeamentos.',
+                'erros': []}
 
     start = data_entrega - timedelta(days=60)
     end = data_entrega + timedelta(days=3)
