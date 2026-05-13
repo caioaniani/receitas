@@ -169,7 +169,7 @@
                         {% else %}—{% endif %}
                     </td>
                     <td>
-                        <form method="POST" action="{{ url_for('pdv.vincular_produto', map_id=mp.id) }}" class="d-flex gap-1">
+                        <form method="POST" action="{{ url_for('pdv.vincular_produto', map_id=mp.id) }}" class="d-flex gap-1 flex-wrap">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <select name="alvo_tipo" class="form-select form-select-sm" style="width:90px;"
                                     onchange="atualizarLista(this)">
@@ -187,6 +187,9 @@
                                     {% endfor %}
                                 {% endif %}
                             </select>
+                            <input type="number" name="fator" class="form-control form-control-sm"
+                                   step="0.01" min="0.01" value="{{ '%g'|format(mp.fator_quantidade or 1) }}"
+                                   style="width:75px;" title="Fator: 1 venda = X unidades. Ex: 0.2 = 2 fatias de 10.">
                             <button type="submit" name="acao" value="vincular" class="btn btn-sm btn-primary">Vincular</button>
                             {% if mp.estado != 'ignorado' %}
                             <button type="submit" name="acao" value="ignorar" class="btn btn-sm btn-outline-secondary" title="Nunca processar este produto">Ignorar</button>
