@@ -88,13 +88,54 @@ def _run_sync(app):
             conn.close()
 
 
+def _run_vnda_sync(app):
+    """Job: roda 1 ciclo VNDA pra data de entrega = HOJE (BRT)."""
+    global _ult_run_vnda
+    from app.extensions import db
+    from app.services import vnda_sync
+    from datetime import datetime as _dt
+
+    with app.app_context():
+        uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
+        is_pg = 'postgresql' in uri
+        conn = db.engine.connect()
+        try:
+            if is_pg:
+                got = conn.execute(text('SELECT pg_try_advisory_lock(:k)'),
+                                   {'k': LOCK_KEY_VNDA}).scalar()
+                if not got:
+                    return
+            try:
+                hoje = hoje_brt()
+                stats = vnda_sync.processar_pedidos(hoje, user=None)
+                _ult_run_vnda = _dt.utcnow()
+                if stats.get('erro'):
+                    logger.warning('vnda auto-sync erro: %s', stats['erro'])
+                elif any(stats.get(k, 0) for k in (
+                        'pedidos_novos', 'itens_baixados',
+                        'pedidos_cancelados_estornados')):
+                    logger.info('vnda auto-sync (com mudancas): %s', stats)
+            except Exception:
+                logger.exception('vnda auto-sync falhou')
+            finally:
+                if is_pg:
+                    try:
+                        conn.execute(text('SELECT pg_advisory_unlock(:k)'),
+                                     {'k': LOCK_KEY_VNDA})
+                    except Exception:
+                        pass
+        finally:
+            conn.close()
+
+
 def iniciar(app):
-    """Inicia o scheduler. Chamado uma vez no startup do app."""
+    """Inicia o scheduler. Chamado uma vez no startup do app.
+    Roda jobs Seru E VNDA no mesmo scheduler."""
     global _scheduler
     if _scheduler is not None:
         return
     if os.environ.get('SERU_AUTO_SYNC', '1') == '0':
-        logger.info('Seru auto-sync DESLIGADO (SERU_AUTO_SYNC=0)')
+        logger.info('Auto-sync DESLIGADO (SERU_AUTO_SYNC=0)')
         return
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
@@ -107,7 +148,11 @@ def iniciar(app):
         lambda: _run_sync(app),
         'interval', minutes=15, id='seru-sync',
         max_instances=1, coalesce=True,
-        next_run_time=None,  # primeira execucao em 15min, nao no startup
+    )
+    _scheduler.add_job(
+        lambda: _run_vnda_sync(app),
+        'interval', minutes=15, id='vnda-sync',
+        max_instances=1, coalesce=True,
     )
     _scheduler.start()
-    logger.info('Seru auto-sync iniciado (intervalo 15min)')
+    logger.info('Auto-sync iniciado: Seru + VNDA a cada 15min')
