@@ -308,6 +308,13 @@ def vincular_produto(map_id):
     """Vincula/ignora/limpa um produto Seru."""
     mp = SeruProdutoMap.query.get_or_404(map_id)
     acao = request.form.get('acao')
+    # Mesmo fallback do vincular_loja: se acao nao veio mas alvo_id sim,
+    # assume 'vincular' (caso Enter no dropdown).
+    if not acao and request.form.get('alvo_id'):
+        acao = 'vincular'
+    if not acao:
+        flash('Clique em "Vincular", "Ignorar" ou "Desfazer".', 'warning')
+        return redirect(url_for('pdv.mapeamentos'))
     if acao == 'vincular':
         tipo = request.form.get('alvo_tipo')
         try:
