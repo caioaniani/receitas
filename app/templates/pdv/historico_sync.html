@@ -88,7 +88,7 @@
                     <td>
                         {% if p.estornado_em %}
                             <span class="badge bg-warning text-dark" style="font-size:9px;">
-                                ↩ ESTORNADO {{ p.estornado_em.strftime('%d/%m') }}
+                                ↩ ESTORNADO {{ p.estornado_em | brt('%d/%m') }}
                             </span>
                         {% elif p.cancelado_em %}
                             <span class="badge bg-secondary" style="font-size:9px;">CANCELADO</span>
