@@ -353,6 +353,17 @@ def vincular_loja(map_id):
     lm = SeruLojaMap.query.get_or_404(map_id)
     acao = request.form.get('acao')
     raw_loja = request.form.get('loja_id', '')
+
+    # Se acao nao veio (caso classico: usuario apertou Enter no dropdown
+    # em vez de clicar um botao — o navegador nao envia o 'submitter'),
+    # inferir pela presenca de loja_id.
+    if not acao:
+        if raw_loja and raw_loja.strip():
+            acao = 'vincular'
+        else:
+            flash('Clique em "Vincular", "Ignorar" ou "OK" — nao da pra adivinhar a acao.', 'warning')
+            return redirect(url_for('pdv.mapeamentos'))
+
     current_app.logger.info(
         'vincular_loja id=%s acao=%s raw_loja=%r form_keys=%s',
         map_id, acao, raw_loja, list(request.form.keys()))
