@@ -222,6 +222,27 @@ TOOL_CONSULTAR_CAIXA = {
     },
 }
 
+TOOL_CONSULTAR_VENDAS_ITENS = {
+    "name": "consultar_vendas_itens",
+    "description": (
+        "Vendas POR PRODUTO no PDV/Seru. Use quando o usuario perguntar "
+        "'o que mais vendeu', 'top produtos', 'vendas de X no periodo', "
+        "'quanto saiu de Y na loja Z'. Retorna lista de produtos com "
+        "quantidade vendida, faturamento e % do total. Pode filtrar por "
+        "loja Seru (nome exato como aparece la — passe a string igual "
+        "o usuario disser e o sistema vai listar as opcoes se nao bater)."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "inicio": {"type": ["string", "null"], "description": "YYYY-MM-DD. Default hoje."},
+            "fim": {"type": ["string", "null"], "description": "YYYY-MM-DD. Default hoje."},
+            "loja": {"type": ["string", "null"], "description": "Nome da loja na Seru (opcional)."},
+            "top": {"type": ["integer", "null"], "description": "Quantos produtos retornar (default 10, max 30)."},
+        },
+    },
+}
+
 # ───── Tools de Planejamento (PARA + 12 Week Year) ─────────────────────
 
 TOOL_CONSULTAR_FOCO = {
