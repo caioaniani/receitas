@@ -165,6 +165,10 @@
                             <small>{{ mp.alvo_nome }}
                                 {% if mp.receita_id %}<span class="badge bg-primary" style="font-size:9px;">R</span>
                                 {% else %}<span class="badge bg-secondary" style="font-size:9px;">P</span>{% endif %}
+                                {% if mp.fator_quantidade and mp.fator_quantidade != 1.0 %}
+                                <span class="badge bg-warning text-dark" style="font-size:9px;"
+                                      title="1 venda = {{ '%g'|format(mp.fator_quantidade) }} unidade do alvo">×{{ '%g'|format(mp.fator_quantidade) }}</span>
+                                {% endif %}
                             </small>
                         {% else %}—{% endif %}
                     </td>
