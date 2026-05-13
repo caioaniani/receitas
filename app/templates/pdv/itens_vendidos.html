@@ -215,9 +215,15 @@ var __PRODUTOS = [
         });
     }
 
-    function buscar() {
+    function buscar(opts) {
+        opts = opts || {};
+        // Em refreshes apos mapeamento/sync, mantem a posicao do scroll
+        // pra o usuario nao perder onde estava.
+        var savedScroll = opts.preserveScroll ? window.scrollY : null;
         alerta.innerHTML = '';
-        resultado.classList.add('d-none');
+        if (!opts.preserveScroll) {
+            resultado.classList.add('d-none');
+        }
         loading.classList.remove('d-none');
         var qs = new URLSearchParams({
             inicio: inicio.value, fim: fim.value, loja: lojaSel.value
