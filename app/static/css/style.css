@@ -205,6 +205,28 @@ body {
     font-weight: 600;
 }
 
+/* Versao colapsavel — JS adiciona .sidebar-section-title-toggle */
+.sidebar-section-title-toggle {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background 0.15s;
+}
+.sidebar-section-title-toggle:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+.sidebar-section-chevron {
+    font-size: 10px;
+    transition: transform 0.15s ease;
+    margin-right: 4px;
+    opacity: 0.6;
+}
+.sidebar-section-title-toggle.collapsed .sidebar-section-chevron {
+    transform: rotate(-90deg);
+}
+
 .sidebar-cat {
     padding: 6px 16px 2px;
     font-size: 11px;
