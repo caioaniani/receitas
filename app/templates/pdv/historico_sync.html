@@ -144,7 +144,6 @@
 <script>
 (function() {
     var btn = document.getElementById('btn-reprocessar');
-    var dias = document.getElementById('rep-dias');
     var status = document.getElementById('rep-status');
     if (!btn) return;
     function esc(s) {
@@ -153,16 +152,15 @@
         });
     }
     btn.addEventListener('click', function() {
-        var d = dias.value;
-        if (!confirm('Reprocessar pedidos dos ultimos ' + d + ' dia(s)?\n\n' +
-                     'So vai apagar registros de pedidos que NAO baixaram nada ' +
-                     'e re-rodar a sincronizacao. Pedidos que ja baixaram nao ' +
-                     'sao afetados (zero risco de duplo desconto).')) return;
+        if (!confirm('Reprocessar pedidos de HOJE?\n\n' +
+                     'Apaga registros de hoje que processaram sem baixa ' +
+                     'e re-roda a sincronizacao com os mapeamentos atuais.\n\n' +
+                     'Yesterday e anteriores nao sao tocados. ' +
+                     'Pedidos que ja baixaram tambem nao sao afetados.')) return;
         btn.disabled = true;
         status.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-hourglass-split"></i> reprocessando, pode levar 30s...</div>';
         var fd = new FormData();
         fd.append('csrf_token', CSRF_TOKEN);
-        fd.append('dias', d);
         fetch('/pdv/reprocessar', {method:'POST', body:fd, credentials:'same-origin'})
             .then(function(r) { return r.json(); })
             .then(function(d) {
