@@ -936,5 +936,11 @@ def _migrate_sqlite(app):
     if cols_ep and 'nome_pendente' not in cols_ep:
         cursor.execute("ALTER TABLE estoque_producao ADD COLUMN nome_pendente VARCHAR(200)")
 
+    # estoque_loja.nome_pendente
+    cursor.execute("PRAGMA table_info(estoque_loja)")
+    cols_el = [row[1] for row in cursor.fetchall()]
+    if cols_el and 'nome_pendente' not in cols_el:
+        cursor.execute("ALTER TABLE estoque_loja ADD COLUMN nome_pendente VARCHAR(200)")
+
     conn.commit()
     conn.close()
