@@ -413,6 +413,12 @@ var __PRODUTOS = [
         var alvoId = btn.dataset.alvoId || btn.dataset.sugestaoId || '';
         mmTipo.value = (alvoTipo === 'produto') ? 'produto' : 'receita';
         popularAlvo(mmTipo.value, alvoId);
+        // Pre-fill fator (se ja vinculado, vem no dataset; senao 1)
+        var fatorAtual = parseFloat(btn.dataset.fator) || 1;
+        mmFator.value = fatorAtual;
+        mmFatorX.value = '';
+        mmFatorY.value = '';
+        atualizarFatorHelp();
         atualizarFieldsConformeAcao();
         modal.show();
     });
