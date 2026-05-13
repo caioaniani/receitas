@@ -145,3 +145,55 @@
     </div>
 </div>
 {% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var btn = document.getElementById('btn-reprocessar');
+    var dias = document.getElementById('rep-dias');
+    var status = document.getElementById('rep-status');
+    if (!btn) return;
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+        });
+    }
+    btn.addEventListener('click', function() {
+        var d = dias.value;
+        if (!confirm('Reprocessar pedidos dos ultimos ' + d + ' dia(s)?\n\n' +
+                     'So vai apagar registros de pedidos que NAO baixaram nada ' +
+                     'e re-rodar a sincronizacao. Pedidos que ja baixaram nao ' +
+                     'sao afetados (zero risco de duplo desconto).')) return;
+        btn.disabled = true;
+        status.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-hourglass-split"></i> reprocessando, pode levar 30s...</div>';
+        var fd = new FormData();
+        fd.append('csrf_token', CSRF_TOKEN);
+        fd.append('dias', d);
+        fetch('/pdv/reprocessar', {method:'POST', body:fd, credentials:'same-origin'})
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                btn.disabled = false;
+                if (!d.ok) {
+                    status.innerHTML = '<div class="alert alert-danger py-2 small"><i class="bi bi-exclamation-triangle"></i> ' + esc(d.erro) + '</div>';
+                    return;
+                }
+                var html = '<div class="alert alert-success py-2 small">' +
+                    '<strong>Reprocessado:</strong> ' +
+                    d.n_apagados + ' pedido(s) liberado(s) · ' +
+                    d.pedidos_novos + ' agora processado(s) · ' +
+                    '<strong>' + d.itens_baixados + ' itens baixados</strong>';
+                if (d.itens_pendentes_novos) html += ' · ' + d.itens_pendentes_novos + ' produtos ainda pendentes';
+                if (d.pedidos_aguardando_loja) html += ' · ' + d.pedidos_aguardando_loja + ' aguardando confirmacao de loja';
+                if (d.pedidos_sem_loja_mapeada) html += ' · ' + d.pedidos_sem_loja_mapeada + ' sem loja';
+                html += '. Recarregando lista...</div>';
+                status.innerHTML = html;
+                setTimeout(function() { window.location.reload(); }, 2000);
+            })
+            .catch(function(e) {
+                btn.disabled = false;
+                status.innerHTML = '<div class="alert alert-danger py-2 small"><i class="bi bi-exclamation-triangle"></i> erro: ' + esc(e.message) + '</div>';
+            });
+    });
+})();
+</script>
+{% endblock %}
