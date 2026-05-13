@@ -3,14 +3,23 @@
 {% block title %}Itens Vendidos (Seru){% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h1 class="page-title mb-0"><i class="bi bi-bag-check"></i> Itens Vendidos
         <small class="text-muted" style="font-size:11px;font-weight:normal;">via Seru</small>
     </h1>
-    <a href="{{ url_for('pdv.index') }}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-arrow-left"></i> Vendas PDV
-    </a>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('pdv.mapeamentos') }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-link-45deg"></i> Mapeamentos
+        </a>
+        <button type="button" id="btn-sync" class="btn btn-sm btn-success" title="Processa vendas dos ultimos N dias e baixa estoque dos itens mapeados">
+            <i class="bi bi-arrow-repeat"></i> Sincronizar (<select id="sync-dias" style="border:0;background:transparent;color:white;font-size:13px;" onclick="event.stopPropagation();"><option value="1">hoje</option><option value="3">3d</option><option value="7" selected>7d</option><option value="14">14d</option></select>)
+        </button>
+        <a href="{{ url_for('pdv.index') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Vendas PDV
+        </a>
+    </div>
 </div>
+<div id="sync-status"></div>
 
 <form id="filtros" class="row g-2 align-items-end mb-3">
     <div class="col-auto">
