@@ -218,6 +218,44 @@
 
     // auto-busca no load
     buscar();
+
+    // ── Sincronizar (Fase 2) ──
+    var btnSync = document.getElementById('btn-sync');
+    var syncStatus = document.getElementById('sync-status');
+    var syncDias = document.getElementById('sync-dias');
+    btnSync.addEventListener('click', function() {
+        if (!confirm('Sincronizar vendas dos ultimos ' + syncDias.value + ' dia(s) e baixar estoque?')) return;
+        btnSync.disabled = true;
+        syncStatus.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-hourglass-split"></i> processando, isso pode levar 30s...</div>';
+        var fd = new FormData();
+        fd.append('csrf_token', CSRF_TOKEN);
+        fd.append('dias', syncDias.value);
+        fetch('/pdv/sync', {method: 'POST', body: fd, credentials: 'same-origin'})
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                btnSync.disabled = false;
+                if (!d.ok) {
+                    syncStatus.innerHTML = '<div class="alert alert-danger py-2 small"><i class="bi bi-exclamation-triangle"></i> ' + esc(d.erro) + '</div>';
+                    return;
+                }
+                var html = '<div class="alert alert-success py-2 small">' +
+                    '<strong>Sincronizado:</strong> ' +
+                    d.pedidos_novos + ' pedido(s) novo(s) · ' +
+                    d.itens_baixados + ' itens baixados';
+                if (d.itens_pendentes_novos) html += ' · <strong>' + d.itens_pendentes_novos + ' produto(s) novo(s)</strong> em <a href="/pdv/mapeamentos">Mapeamentos</a>';
+                if (d.itens_ignorados) html += ' · ' + d.itens_ignorados + ' ignorados';
+                if (d.itens_sem_estoque) html += ' · <span class="text-warning">' + d.itens_sem_estoque + ' sem estoque</span>';
+                if (d.pedidos_sem_loja_mapeada) html += ' · <span class="text-warning">' + d.pedidos_sem_loja_mapeada + ' pedido(s) sem loja mapeada</span>';
+                if (d.pedidos_cancelados_estornados) html += ' · ' + d.pedidos_cancelados_estornados + ' estornados';
+                html += '</div>';
+                syncStatus.innerHTML = html;
+                buscar();  // re-renderiza relatorio (matches atualizados)
+            })
+            .catch(function(e) {
+                btnSync.disabled = false;
+                syncStatus.innerHTML = '<div class="alert alert-danger py-2 small"><i class="bi bi-exclamation-triangle"></i> erro de rede: ' + esc(e.message) + '</div>';
+            });
+    });
 })();
 </script>
 {% endblock %}
