@@ -728,11 +728,13 @@ def estoque_loja():
     lojas = _lojas_operacionais()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all() \
         if current_user.is_admin() else []
+    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all() \
+        if current_user.is_admin() else []
     materias = MateriaPrima.query.order_by(MateriaPrima.nome).all() \
         if current_user.is_admin() else []
     return render_template('pedidos/estoque_loja.html', loja=loja, itens=itens,
                            lojas=lojas, sel_loja=loja_id,
-                           receitas=receitas, materias=materias)
+                           receitas=receitas, produtos=produtos, materias=materias)
 
 
 # ── Entrada em lote no Estoque de Loja ──
