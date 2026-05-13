@@ -285,6 +285,7 @@ var __PRODUTOS = [
                         + 'data-sugestao-id="' + esc(p.match ? p.match.id : '') + '" '
                         + 'data-alvo-tipo="' + esc(p.mapeado_para ? p.mapeado_para.tipo : '') + '" '
                         + 'data-alvo-id="' + esc(p.mapeado_para ? p.mapeado_para.id : '') + '" '
+                        + 'data-fator="' + esc(p.fator || 1) + '" '
                         + 'style="font-size:11px; white-space:nowrap;">' + btnLabel + '</button>';
 
                     var sku = p.sku ? '<small class="text-muted d-block" style="font-size:10px;">sku: ' + esc(p.sku) + '</small>' : '';
