@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block title %}Mapeamentos VNDA{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-link-45deg"></i> Mapeamentos VNDA (site)</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('pdv.vnda_historico_sync') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-clock-history"></i> Historico VNDA
+        </a>
+        <button type="button" id="btn-vnda-sync" class="btn btn-sm btn-success">
+            <i class="bi bi-arrow-repeat"></i> Sincronizar VNDA (hoje)
+        </button>
+    </div>
+</div>
+<div id="vnda-sync-status"></div>
+
+<div class="alert alert-info" style="font-size:13px;">
+    <i class="bi bi-info-circle"></i>
+    <strong>VNDA = pedidos do site.</strong> A baixa de estoque acontece sempre da
+    <strong>Loja Anesio Pinto Rosa</strong> no <strong>dia da entrega</strong>
+    (campo expected_delivery_date / extra.DataDeEntrega), independente do status.
+    Itens pendentes nao baixam. Marque como ignorado os que voce nao quer rastrear.
+</div>
+
+<style>
+    .mapa-confirmado { background: rgba(52,199,89,0.06) !important; border-left: 3px solid #34c759; }
+    .mapa-pendente   { background: rgba(255,149,0,0.10) !important; border-left: 3px solid #ff9500; }
+</style>
+
+{% set pendentes = produtos_map | selectattr('estado','equalto','pendente') | list %}
+{% set mapeados = produtos_map | selectattr('estado','equalto','mapeado') | list %}
+{% set ignorados = produtos_map | selectattr('estado','equalto','ignorado') | list %}
+
+<div class="row g-2 mb-3">
+    <div class="col-md-4">
+        <div class="card border-warning"><div class="card-body py-2 px-3">
+            <small class="text-muted d-block" style="font-size:11px;">Pendentes</small>
+            <div class="fw-bold" style="font-size:22px;">{{ pendentes|length }}</div>
+            <small class="text-muted" style="font-size:11px;">precisa decidir</small>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-success"><div class="card-body py-2 px-3">
+            <small class="text-muted d-block" style="font-size:11px;">Mapeados</small>
+            <div class="fw-bold" style="font-size:22px;">{{ mapeados|length }}</div>
+            <small class="text-muted" style="font-size:11px;">baixam estoque automatico</small>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card"><div class="card-body py-2 px-3">
+            <small class="text-muted d-block" style="font-size:11px;">Ignorados</small>
+            <div class="fw-bold" style="font-size:22px;">{{ ignorados|length }}</div>
+            <small class="text-muted" style="font-size:11px;">nunca processam</small>
+        </div></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <strong><i class="bi bi-box-seam"></i> Produtos VNDA</strong>
+        <input type="text" id="filtro" class="form-control form-control-sm" placeholder="filtrar..." style="max-width:220px;">
+    </div>
+    {% if produtos_map %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" id="tabela-produtos">
+            <thead class="thead-padaria" style="position:sticky;top:0;">
+                <tr>
+                    <th>Produto VNDA</th>
+                    <th style="width:100px">SKU</th>
+                    <th style="width:100px">Estado</th>
+                    <th>Vinculado a</th>
+                    <th style="width:500px">Acao</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mp in produtos_map %}
+                {% set linha_class = 'mapa-confirmado' if (mp.estado == 'mapeado' and mp.confirmado_em) else ('mapa-pendente' if mp.estado == 'pendente' else '') %}
+                <tr data-nome="{{ mp.vnda_nome|lower }}" class="{{ linha_class }}">
+                    <td class="fw-semibold">{{ mp.vnda_nome }}</td>
+                    <td><small class="text-muted">{{ mp.vnda_sku or '—' }}</small></td>
+                    <td>
+                        {% if mp.estado == 'mapeado' %}<span class="badge bg-success">MAPEADO</span>
+                        {% elif mp.estado == 'ignorado' %}<span class="badge bg-secondary">IGNORADO</span>
+                        {% else %}<span class="badge bg-warning text-dark">PENDENTE</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if mp.alvo_nome %}
+                            <small>{{ mp.alvo_nome }}
+                                {% if mp.receita_id %}<span class="badge bg-primary" style="font-size:9px;">R</span>
+                                {% else %}<span class="badge bg-secondary" style="font-size:9px;">P</span>{% endif %}
+                                {% if mp.fator_quantidade and mp.fator_quantidade != 1.0 %}
+                                <span class="badge bg-warning text-dark" style="font-size:9px;"
+                                      title="1 venda = {{ '%g'|format(mp.fator_quantidade) }} unidade do alvo">×{{ '%g'|format(mp.fator_quantidade) }}</span>
+                                {% endif %}
+                            </small>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" action="{{ url_for('pdv.vnda_vincular_produto', map_id=mp.id) }}" class="d-flex gap-1 flex-wrap">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <select name="alvo_tipo" class="form-select form-select-sm" style="width:90px;"
+                                    onchange="atualizarLista(this)">
+                                <option value="receita" {% if mp.receita_id %}selected{% endif %}>Receita</option>
+                                <option value="produto" {% if mp.produto_id %}selected{% endif %}>Produto</option>
+                            </select>
+                            <select name="alvo_id" class="form-select form-select-sm vinc-alvo" style="max-width:220px;">
+                                {% if mp.receita_id or not mp.produto_id %}
+                                    {% for r in receitas %}
+                                    <option value="{{ r.id }}" {% if mp.receita_id == r.id %}selected{% endif %}>{{ r.categoria }} — {{ r.nome }}</option>
+                                    {% endfor %}
+                                {% else %}
+                                    {% for p in produtos %}
+                                    <option value="{{ p.id }}" {% if mp.produto_id == p.id %}selected{% endif %}>{{ p.nome }}</option>
+                                    {% endfor %}
+                                {% endif %}
+                            </select>
+                            <input type="text" inputmode="decimal" name="fator" class="form-control form-control-sm"
+                                   value="{{ '%g'|format(mp.fator_quantidade or 1) }}"
+                                   style="width:75px;" title="1 venda = X unidades. Ex: 0.2 = 2 fatias de 10.">
+                            <button type="submit" name="acao" value="vincular" class="btn btn-sm btn-primary">Vincular</button>
+                            {% if mp.estado != 'ignorado' %}
+                            <button type="submit" name="acao" value="ignorar" class="btn btn-sm btn-outline-secondary">Ignorar</button>
+                            {% endif %}
+                            {% if mp.estado != 'pendente' %}
+                            <button type="submit" name="acao" value="desfazer" class="btn btn-sm btn-outline-warning">⤺</button>
+                            {% endif %}
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-muted text-center py-3">
+        Nenhum produto VNDA visto ainda. Clique em "Sincronizar VNDA (hoje)" pra popular
+        com os pedidos do dia.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var __receitas = [
+    {% for r in receitas %}
+    {id: {{ r.id }}, nome: {{ r.nome|tojson }}, cat: {{ (r.categoria or '')|tojson }}},
+    {% endfor %}
+];
+var __produtos = [
+    {% for p in produtos %}
+    {id: {{ p.id }}, nome: {{ p.nome|tojson }}},
+    {% endfor %}
+];
+function atualizarLista(tipoSel) {
+    var form = tipoSel.closest('form');
+    var sel = form.querySelector('.vinc-alvo');
+    var prev = sel.value;
+    sel.innerHTML = '';
+    var list = tipoSel.value === 'receita' ? __receitas : __produtos;
+    list.forEach(function(item) {
+        var opt = document.createElement('option');
+        opt.value = item.id;
+        opt.textContent = item.cat ? item.cat + ' — ' + item.nome : item.nome;
+        if (String(item.id) === prev) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+(function() {
+    var f = document.getElementById('filtro');
+    if (f) {
+        var rows = document.querySelectorAll('#tabela-produtos tbody tr[data-nome]');
+        f.addEventListener('input', function() {
+            var t = this.value.toLowerCase().trim();
+            rows.forEach(function(r) {
+                r.style.display = (!t || r.dataset.nome.indexOf(t) >= 0) ? '' : 'none';
+            });
+        });
+    }
+    var KEY = 'pdv-vnda-mapeamentos-scroll';
+    document.querySelectorAll('form').forEach(function(f) {
+        f.addEventListener('submit', function() {
+            try { sessionStorage.setItem(KEY, String(window.scrollY)); } catch (e) {}
+        });
+    });
+    window.addEventListener('load', function() {
+        try {
+            var y = parseInt(sessionStorage.getItem(KEY) || '0', 10);
+            if (y > 0) { window.scrollTo(0, y); sessionStorage.removeItem(KEY); }
+        } catch (e) {}
+    });
+
+    var btn = document.getElementById('btn-vnda-sync');
+    var status = document.getElementById('vnda-sync-status');
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    }); }
+    btn.addEventListener('click', function() {
+        if (!confirm('Sincronizar VNDA agora? Processa pedidos com entrega hoje.')) return;
+        btn.disabled = true;
+        status.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-hourglass-split"></i> consultando VNDA...</div>';
+        var fd = new FormData();
+        fd.append('csrf_token', CSRF_TOKEN);
+        fetch('/pdv/vnda/sync', {method:'POST', body:fd, credentials:'same-origin'})
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                btn.disabled = false;
+                if (!d.ok) {
+                    status.innerHTML = '<div class="alert alert-danger py-2 small">' + esc(d.erro) + '</div>';
+                    return;
+                }
+                var html = '<div class="alert alert-success py-2 small"><strong>Sincronizado:</strong> ' +
+                    d.pedidos_novos + ' pedido(s) · ' + d.itens_baixados + ' itens baixados';
+                if (d.itens_pendentes_novos) html += ' · <strong>' + d.itens_pendentes_novos + ' produto(s) novo(s)</strong> pra mapear';
+                if (d.itens_ignorados) html += ' · ' + d.itens_ignorados + ' ignorados';
+                if (d.itens_sem_estoque) html += ' · <span class="text-warning">' + d.itens_sem_estoque + ' sem estoque</span>';
+                if (d.pedidos_cancelados_estornados) html += ' · ' + d.pedidos_cancelados_estornados + ' estornados';
+                html += '</div>';
+                status.innerHTML = html;
+                setTimeout(function() { window.location.reload(); }, 1500);
+            })
+            .catch(function(e) {
+                btn.disabled = false;
+                status.innerHTML = '<div class="alert alert-danger py-2 small">erro: ' + esc(e.message) + '</div>';
+            });
+    });
+})();
+</script>
+{% endblock %}
