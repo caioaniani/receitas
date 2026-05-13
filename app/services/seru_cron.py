@@ -9,7 +9,7 @@ SERU_AUTO_SYNC=0 antes do startup.
 """
 import logging
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import text
 
@@ -18,6 +18,12 @@ logger = logging.getLogger(__name__)
 _scheduler = None
 _ult_run = None
 LOCK_KEY = 7723  # arbitrario, so precisa ser estavel entre workers
+BRT = timezone(timedelta(hours=-3))
+
+
+def hoje_brt():
+    """Data 'hoje' em horario de Brasilia (Railway roda em UTC)."""
+    return datetime.now(BRT).date()
 
 
 def status():
