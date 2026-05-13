@@ -19,7 +19,13 @@ from app.services.custos import calcular_custos_receitas, calcular_rendimento
 def index():
     if not current_user.is_admin():
         return redirect(url_for('auth.minhas_fichas'))
+    return render_template('main/home.html')
 
+
+@main_bp.route('/dashboard')
+@login_required
+@admin_required
+def dashboard():
     resultado = calcular_custos_receitas()
     custos_map = resultado.get('custos', {})
     receitas = Receita.query.all()

@@ -46,6 +46,10 @@
         {% if current_user.is_authenticated and current_user.is_admin() %}
         <a href="{{ url_for('main.index') }}"
            class="sidebar-link {% if request.path == '/' %}active{% endif %}">
+            <i class="bi bi-stars"></i> Início
+        </a>
+        <a href="{{ url_for('main.dashboard') }}"
+           class="sidebar-link {% if request.path == '/dashboard' %}active{% endif %}">
             <i class="bi bi-speedometer2"></i> Painel
         </a>
         <a href="{{ url_for('projetos.painel') }}"
