@@ -352,30 +352,46 @@ def vincular_produto(map_id):
 def vincular_loja(map_id):
     lm = SeruLojaMap.query.get_or_404(map_id)
     acao = request.form.get('acao')
+    raw_loja = request.form.get('loja_id', '')
+    current_app.logger.info(
+        'vincular_loja id=%s acao=%s raw_loja=%r form_keys=%s',
+        map_id, acao, raw_loja, list(request.form.keys()))
     if acao == 'vincular':
         try:
-            loja_id = int(request.form.get('loja_id', ''))
+            loja_id = int(raw_loja) if raw_loja else 0
         except (TypeError, ValueError):
             loja_id = 0
         if not loja_id:
-            flash('Selecione uma loja.', 'danger')
+            flash(f'Selecione uma loja antes de clicar Vincular (recebido: "{raw_loja or "vazio"}"). '
+                  f'Clique no dropdown, escolha, depois Vincular.', 'danger')
+            return redirect(url_for('pdv.mapeamentos'))
+        loja_obj = Loja.query.get(loja_id)
+        if not loja_obj:
+            flash(f'Loja id={loja_id} nao existe.', 'danger')
             return redirect(url_for('pdv.mapeamentos'))
         lm.loja_id = loja_id
         lm.ignorar = False
         lm.auto_match = False
         lm.confirmado_em = datetime.utcnow()
         lm.confirmado_por = current_user.id
-        flash(f'"{lm.seru_company_name}" → {lm.loja.nome if lm.loja else "?"}', 'success')
-    elif acao == 'ignorar':
+        db.session.commit()
+        flash(f'OK: "{lm.seru_company_name}" agora vinculada a {loja_obj.nome}. '
+              f'Vendas dessa company vao baixar estoque dessa loja.', 'success')
+        return redirect(url_for('pdv.mapeamentos'))
+    if acao == 'ignorar':
         lm.ignorar = True
         lm.loja_id = None
         lm.confirmado_em = datetime.utcnow()
         lm.confirmado_por = current_user.id
+        db.session.commit()
         flash(f'"{lm.seru_company_name}" ignorada — vendas nao processarao.', 'info')
-    elif acao == 'confirmar':
+        return redirect(url_for('pdv.mapeamentos'))
+    if acao == 'confirmar':
         lm.auto_match = False
         lm.confirmado_em = datetime.utcnow()
         lm.confirmado_por = current_user.id
+        db.session.commit()
         flash(f'"{lm.seru_company_name}" confirmada.', 'success')
-    db.session.commit()
+        return redirect(url_for('pdv.mapeamentos'))
+    flash(f'Acao desconhecida: "{acao}".', 'warning')
     return redirect(url_for('pdv.mapeamentos'))
