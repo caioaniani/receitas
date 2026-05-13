@@ -1153,6 +1153,8 @@ def _executar_read(tool_name, params, user):  # noqa: F811
             return _read_consultar_funcionario(params, user)
         if tool_name == 'consultar_caixa':
             return _read_consultar_caixa(params, user)
+        if tool_name == 'consultar_vendas_itens':
+            return _read_consultar_vendas_itens(params, user)
     except Exception as exc:  # noqa: BLE001
         logger.exception('Copilot read tool falhou')
         return {'erro': str(exc)}
