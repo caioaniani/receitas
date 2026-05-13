@@ -605,6 +605,12 @@ def _migrate_postgres(app):
                 PRIMARY KEY (vnda_produto_map_id, componente_key)
             )
         """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS app_config (
+                key VARCHAR(100) PRIMARY KEY,
+                value TEXT
+            )
+        """))
 
         # estoque_producao.nome_pendente (balanco aceita itens sem cadastro previo)
         result = conn.execute(text(
