@@ -284,7 +284,7 @@
                   placeholder="Anote o que precisa ser atualizado nesta receita...">{{ receita.observacao or '' }}</textarea>
     </div>
 
-    <!-- Botoes -->
+    <!-- Botoes do form principal -->
     <div class="d-flex gap-2 flex-wrap">
         <button type="submit" class="btn btn-primary">
             <i class="bi bi-check-lg"></i> Salvar Ficha
@@ -292,52 +292,56 @@
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
             <i class="bi bi-printer"></i> Imprimir
         </button>
-        {% if current_user.is_authenticated and current_user.is_admin() %}
-        <form method="POST" action="{{ url_for('receitas.duplicar', id=receita.id) }}" class="d-inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-outline-info btn-sm">
-                <i class="bi bi-copy"></i> Duplicar Receita
-            </button>
-        </form>
-        <form method="POST" action="{{ url_for('receitas.excluir', id=receita.id) }}" class="d-inline"
-              onsubmit="return confirm('Excluir {{ receita.nome }}?')">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-outline-danger btn-sm">
-                <i class="bi bi-trash"></i> Excluir Produto
-            </button>
-        </form>
-        {% endif %}
     </div>
+</form>
 
-    <!-- Atribuir a funcionário (só admin) -->
-    {% if current_user.is_authenticated and current_user.is_admin() and funcionarios %}
-    <div class="mt-3 p-2 border rounded" style="background:#f5f5f5; max-width:400px;">
-        <form method="POST" action="{{ url_for('auth.atribuir', receita_id=receita.id) }}" class="d-flex gap-2 align-items-center">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <i class="bi bi-send" style="color:#1565c0;"></i>
-            <select name="usuario_id" class="form-select form-select-sm" style="width:auto;" required>
-                <option value="">Funcionario...</option>
-                {% for f in funcionarios %}
-                <option value="{{ f.id }}">{{ f.nome }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit" class="btn btn-sm btn-primary">
-                <i class="bi bi-send"></i> Atribuir
-            </button>
-        </form>
-        {% if receita.atribuicoes %}
-        <div class="mt-1 small text-muted">
-            Atribuida a:
-            {% for a in receita.atribuicoes %}
-                <span class="badge {{ 'bg-success' if a.status == 'concluida' else 'bg-warning text-dark' }}">
-                    {{ a.usuario.nome }} ({{ a.status }})
-                </span>
+<!-- Acoes admin (fora do form principal — HTML nao permite forms aninhados) -->
+{% if current_user.is_authenticated and current_user.is_admin() %}
+<div class="d-flex gap-2 flex-wrap mt-2">
+    <form method="POST" action="{{ url_for('receitas.duplicar', id=receita.id) }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-info btn-sm">
+            <i class="bi bi-copy"></i> Duplicar Receita
+        </button>
+    </form>
+    <form method="POST" action="{{ url_for('receitas.excluir', id=receita.id) }}" class="d-inline"
+          onsubmit="return confirm('Excluir {{ receita.nome }}?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-trash"></i> Excluir Produto
+        </button>
+    </form>
+</div>
+{% endif %}
+
+<!-- Atribuir a funcionário (só admin) -->
+{% if current_user.is_authenticated and current_user.is_admin() and funcionarios %}
+<div class="mt-3 p-2 border rounded" style="background:#f5f5f5; max-width:400px;">
+    <form method="POST" action="{{ url_for('auth.atribuir', receita_id=receita.id) }}" class="d-flex gap-2 align-items-center">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <i class="bi bi-send" style="color:#1565c0;"></i>
+        <select name="usuario_id" class="form-select form-select-sm" style="width:auto;" required>
+            <option value="">Funcionario...</option>
+            {% for f in funcionarios %}
+            <option value="{{ f.id }}">{{ f.nome }}</option>
             {% endfor %}
-        </div>
-        {% endif %}
+        </select>
+        <button type="submit" class="btn btn-sm btn-primary">
+            <i class="bi bi-send"></i> Atribuir
+        </button>
+    </form>
+    {% if receita.atribuicoes %}
+    <div class="mt-1 small text-muted">
+        Atribuida a:
+        {% for a in receita.atribuicoes %}
+            <span class="badge {{ 'bg-success' if a.status == 'concluida' else 'bg-warning text-dark' }}">
+                {{ a.usuario.nome }} ({{ a.status }})
+            </span>
+        {% endfor %}
     </div>
     {% endif %}
-</form>
+</div>
+{% endif %}
 
 <!-- Template para nova linha de ingrediente -->
 <template id="ing-row-template">
