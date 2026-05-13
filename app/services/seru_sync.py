@@ -104,8 +104,14 @@ def _resolver_produto(seru_nome, seru_sku):
 
 
 def _baixar_item(loja_id, mapping_produto, qtd, seru_pedido_id, user_id):
-    """Aplica baixa em EstoqueLoja. Se nao tiver row, cria com 0.
-    Retorna {baixado: bool, faltou: float}."""
+    """Aplica baixa em EstoqueLoja considerando fator_quantidade.
+
+    Se fator_quantidade < 1 (composto), acumula fracao em SeruDebito ate
+    formar inteiros. Ex: fator=0.2, qtd=4 → debito acumulado=0.8, nao
+    baixa nada. Proxima venda de 1 com fator=0.2 → debito=1.0 → baixa 1.
+
+    Retorna {baixado: bool, faltou: float}.
+    """
     filtro = {'loja_id': loja_id}
     if mapping_produto.receita_id:
         filtro['receita_id'] = mapping_produto.receita_id
@@ -114,6 +120,27 @@ def _baixar_item(loja_id, mapping_produto, qtd, seru_pedido_id, user_id):
     else:
         return {'baixado': False, 'faltou': qtd}
 
+    fator = float(mapping_produto.fator_quantidade or 1.0)
+    a_baixar_float = float(qtd) * fator
+
+    # Acumulador: soma a fracao pendente, separa inteiros pra baixar agora
+    debito = SeruDebito.query.filter_by(
+        loja_id=loja_id, seru_produto_map_id=mapping_produto.id).first()
+    if not debito:
+        debito = SeruDebito(loja_id=loja_id,
+                            seru_produto_map_id=mapping_produto.id,
+                            fracao_pendente=0.0)
+        db.session.add(debito)
+        db.session.flush()
+    debito_total = (debito.fracao_pendente or 0.0) + a_baixar_float
+    # Floor com tolerancia pra erros de float (0.9999... vira 1)
+    inteiros = int(debito_total + 1e-9)
+    debito.fracao_pendente = max(0.0, round(debito_total - inteiros, 6))
+
+    if inteiros <= 0:
+        # Tudo acumulado — nada baixa ainda
+        return {'baixado': False, 'faltou': 0, 'acumulado': debito.fracao_pendente}
+
     el = EstoqueLoja.query.filter_by(**filtro).first()
     if not el:
         el = EstoqueLoja(**filtro, quantidade=0)
@@ -121,29 +148,29 @@ def _baixar_item(loja_id, mapping_produto, qtd, seru_pedido_id, user_id):
         db.session.flush()
 
     atual = el.quantidade or 0
-    qtd_int = int(qtd)
-    real = min(qtd_int, atual)
-    falta = qtd_int - real
+    real = min(inteiros, atual)
+    falta = inteiros - real
 
+    # Referencia: se houver fator, anota
+    ref_extra = '' if fator == 1.0 else f' (fator {fator})'
     if real > 0:
         el.quantidade = atual - real
         db.session.add(MovEstoqueLoja(
             estoque_loja_id=el.id,
             tipo='venda_seru',
             quantidade=real,
-            referencia=f'Seru #{seru_pedido_id}',
+            referencia=f'Seru #{seru_pedido_id}{ref_extra}',
             usuario_id=user_id,
         ))
     if falta > 0:
-        # Marca a falta sem zerar mais — auditoria
         db.session.add(MovEstoqueLoja(
             estoque_loja_id=el.id,
             tipo='venda_seru_sem_estoque',
             quantidade=falta,
-            referencia=f'Seru #{seru_pedido_id} — sem estoque suficiente',
+            referencia=f'Seru #{seru_pedido_id}{ref_extra} — sem estoque suficiente',
             usuario_id=user_id,
         ))
-    return {'baixado': real > 0, 'faltou': falta}
+    return {'baixado': real > 0, 'faltou': falta, 'acumulado': debito.fracao_pendente}
 
 
 def _estornar_pedido(reg, lojas_ativas, user_id):
