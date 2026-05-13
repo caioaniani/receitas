@@ -1904,7 +1904,10 @@ h6 { font-weight: 600; text-transform: lowercase; }
     right: 0;
     width: 420px;
     max-width: 100vw;
+    /* dvh respeita o teclado virtual no mobile, o que vh nao faz.
+       Fallback pra vh em browsers antigos. */
     height: 100vh;
+    height: 100dvh;
     background: var(--bg-card);
     border-left: 1px solid var(--border-color);
     box-shadow: var(--shadow-hover);
