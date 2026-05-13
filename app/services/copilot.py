@@ -647,6 +647,46 @@ def _enriquecer_balanco_congelados(tool_input):
     }
 
 
+def _enriquecer_entrada_lote_loja(tool_input):
+    """Enriquece itens com match + estoque atual + novo total pra preview."""
+    from app.services import estoque_loja_lote as svc
+    try:
+        loja_id = int(tool_input.get('loja_id') or 0) or None
+    except (TypeError, ValueError):
+        loja_id = None
+    loja_nome = None
+    if loja_id:
+        l = Loja.query.get(loja_id)
+        if l:
+            loja_nome = l.nome
+        else:
+            loja_id = None
+
+    itens_raw = tool_input.get('itens') or []
+    parseados = [{'linha': f"{(it.get('nome') or '').strip()}: {it.get('quantidade')}",
+                  'nome': (it.get('nome') or '').strip(),
+                  'quantidade': int(it.get('quantidade') or 0)}
+                 for it in itens_raw
+                 if (it.get('nome') or '').strip() and int(it.get('quantidade') or 0) > 0]
+    resolvidos = svc.resolver_lista(parseados, loja_id) if loja_id else []
+    n_ok = sum(1 for i in resolvidos if i.get('resolvido'))
+    n_nao = sum(1 for i in resolvidos if not i.get('erro') and not i.get('resolvido'))
+    delta_total = sum(int(i.get('quantidade') or 0) for i in resolvidos
+                      if not i.get('erro'))
+    return {
+        'loja_id': loja_id,
+        'loja_nome': loja_nome,
+        'itens': resolvidos,
+        'referencia': tool_input.get('referencia'),
+        'totais': {
+            'total_itens': len(resolvidos),
+            'resolvidos': n_ok,
+            'nao_resolvidos': n_nao,
+            'delta_total': delta_total,
+        },
+    }
+
+
 def _enriquecer_criar_pedido(tool_input):
     itens_enriq = []
     for item in (tool_input.get('itens') or []):
