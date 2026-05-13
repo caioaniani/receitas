@@ -551,6 +551,66 @@ def separacao():
 
 # ── Estoque de Congelados ──
 
+@pedidos_bp.route('/congelados/dashboard')
+@login_required
+@admin_required
+def congelados_dashboard():
+    """Visao consolidada: itens em EstoqueProducao cruzados com os mesmos
+    itens em cada loja (EstoqueLoja). Mostra qtd por local + total."""
+    lojas = _lojas_operacionais()
+    eps = EstoqueProducao.query.all()
+
+    # Index dos estoques de loja por (tipo_chave, item_id) → {loja_id: qtd}
+    receita_loja = {}   # receita_id -> {loja_id: qtd}
+    produto_loja = {}   # produto_id -> {loja_id: qtd}
+    for el in EstoqueLoja.query.filter(
+            (EstoqueLoja.receita_id.isnot(None)) | (EstoqueLoja.produto_id.isnot(None))
+        ).all():
+        if el.receita_id:
+            receita_loja.setdefault(el.receita_id, {})[el.loja_id] = el.quantidade or 0
+        elif el.produto_id:
+            produto_loja.setdefault(el.produto_id, {})[el.loja_id] = el.quantidade or 0
+
+    linhas = []
+    for ep in eps:
+        if ep.receita_id:
+            por_loja = receita_loja.get(ep.receita_id, {})
+            tipo = 'receita'
+        elif ep.produto_id:
+            por_loja = produto_loja.get(ep.produto_id, {})
+            tipo = 'produto'
+        else:
+            por_loja = {}
+            tipo = 'pendente'
+        total_lojas = sum(por_loja.values())
+        linhas.append({
+            'nome': ep.nome_item,
+            'tipo': tipo,
+            'industria': ep.quantidade or 0,
+            'por_loja': por_loja,
+            'total_lojas': total_lojas,
+            'total_geral': (ep.quantidade or 0) + total_lojas,
+            'pendente': ep.pendente,
+        })
+
+    linhas.sort(key=lambda r: (r['pendente'], r['nome'].lower()))
+
+    # Totais por coluna (Industria + cada loja)
+    tot_industria = sum(r['industria'] for r in linhas)
+    tot_por_loja = {l.id: 0 for l in lojas}
+    for r in linhas:
+        for lid, qt in r['por_loja'].items():
+            if lid in tot_por_loja:
+                tot_por_loja[lid] += qt
+    tot_geral = tot_industria + sum(tot_por_loja.values())
+
+    return render_template('pedidos/congelados_dashboard.html',
+                           linhas=linhas, lojas=lojas,
+                           tot_industria=tot_industria,
+                           tot_por_loja=tot_por_loja,
+                           tot_geral=tot_geral)
+
+
 @pedidos_bp.route('/congelados')
 @login_required
 @admin_required
