@@ -24,7 +24,11 @@ def index():
 @admin_required
 def itens_vendidos():
     """Tela de relatorio: itens vendidos por intervalo + loja Seru."""
-    return render_template('pdv/itens_vendidos.html', hoje=date.today().isoformat())
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+    return render_template('pdv/itens_vendidos.html',
+                           hoje=date.today().isoformat(),
+                           receitas=receitas, produtos=produtos)
 
 
 @pdv_bp.route('/api/itens-vendidos')
