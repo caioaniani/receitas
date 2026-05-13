@@ -1109,6 +1109,10 @@ class SeruProdutoMap(db.Model):
     - MAPEADO: receita_id ou produto_id setado → auto-baixa estoque na venda
     - IGNORADO: ignorar=True → nunca processa (cafe, agua, etc)
     - PENDENTE: tudo NULL/False → fica na fila de revisao, vendas nao baixam
+
+    Composicao: fator_quantidade indica quanto 1 venda Seru desconta do alvo.
+    Ex: 'NOZES COM MANTEIGA' = 2 fatias de 1 Sourdough que rende 10 fatias →
+    fator_quantidade = 0.2. Default 1.0 (1 venda = 1 unidade do alvo).
     """
     __tablename__ = 'seru_produto_map'
 
@@ -1118,6 +1122,7 @@ class SeruProdutoMap(db.Model):
     receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
     produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
     ignorar = db.Column(db.Boolean, default=False, nullable=False)
+    fator_quantidade = db.Column(db.Float, nullable=False, default=1.0)
 
     primeira_visto_em = db.Column(db.DateTime, default=datetime.utcnow)
     confirmado_em = db.Column(db.DateTime, nullable=True)
