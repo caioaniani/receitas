@@ -472,8 +472,8 @@ REGRAS:
   do catalogo de RECEITAS (priorize produtos prontos/assados; NUNCA escolha
   'Massa de X' quando o usuario disse 'X' simples — massa e materia prima,
   nao produto final). Itens que voce nao reconhecer no catalogo: passe
-  o nome como ditado mesmo (a tool marca como 'sem match' no preview e
-  o usuario decide depois).
+  o nome como ditado — o sistema grava como 'pendente' e o usuario vincula
+  a uma receita depois em /pedidos/congelados.
 - Se algo for impossivel ou ambiguo demais, NAO use tool — responda em texto
   pedindo clarificacao.
 - Respostas: portugues brasileiro, lowercase, conciso (1-2 frases).
@@ -594,7 +594,10 @@ def _enriquecer_balanco_congelados(tool_input):
     resolvidos = svc.resolver_lista(parseados)
     n_ok = sum(1 for i in resolvidos if i.get('resolvido'))
     n_nao = sum(1 for i in resolvidos if not i.get('erro') and not i.get('resolvido'))
-    delta_total = sum((i.get('delta') or 0) for i in resolvidos if i.get('resolvido'))
+    # Pendentes tambem sao aplicados (entram como EstoqueProducao orfa) —
+    # somam no delta total junto com os matched.
+    delta_total = sum((i.get('delta') or 0) for i in resolvidos
+                      if not i.get('erro'))
     return {
         'itens': resolvidos,
         'referencia': tool_input.get('referencia'),

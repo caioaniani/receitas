@@ -165,9 +165,10 @@
         var n_nao = totais.nao_resolvidos || 0;
         var delta = totais.delta_total;
 
+        var n_aplicaveis = n_ok + n_nao;
         var resumo = '<div class="copilot-preview-row" style="font-size:12px;">' +
-            '<span class="badge bg-success" style="margin-right:4px;">' + n_ok + ' ok</span>' +
-            (n_nao ? '<span class="badge bg-warning text-dark" style="margin-right:4px;">' + n_nao + ' sem match</span>' : '') +
+            '<span class="badge bg-success" style="margin-right:4px;">' + n_ok + ' com match</span>' +
+            (n_nao ? '<span class="badge bg-warning text-dark" style="margin-right:4px;">' + n_nao + ' pendente(s)</span>' : '') +
             (delta !== undefined && delta !== null
                 ? '<span class="badge bg-info text-dark" style="margin-right:4px;">delta ' + (delta >= 0 ? '+' : '') + delta + '</span>'
                 : '') +
@@ -178,10 +179,10 @@
         itens.forEach(function(it, idx) {
             var nome = escape(it.nome || '?');
             var qtd = it.quantidade !== undefined ? it.quantidade : '';
-            var atual = (it.resolvido && it.estoque_atual !== undefined) ? it.estoque_atual : '—';
+            var atual = (it.estoque_atual !== undefined && !it.erro) ? it.estoque_atual : '—';
             var d = it.delta;
             var deltaCell = '—';
-            if (it.resolvido && d !== null && d !== undefined) {
+            if (!it.erro && d !== null && d !== undefined) {
                 if (d > 0) deltaCell = '<span style="color:#198754;">+' + d + '</span>';
                 else if (d < 0) deltaCell = '<span style="color:#dc3545;">' + d + '</span>';
                 else deltaCell = '<span style="color:#888;">0</span>';
@@ -193,7 +194,7 @@
                 var tag = it.resolvido.match === 'fuzzy' ? ' <small style="color:#888;">(fuzzy)</small>' : '';
                 match = escape(it.resolvido.nome) + tag;
             } else {
-                match = '<span style="color:#cc7700;">⚠ sem match</span>';
+                match = '<span style="color:#cc7700;" title="Vai entrar como pendente — vincule a uma receita depois em /pedidos/congelados">↪ pendente</span>';
             }
             rows += '<tr>' +
                 '<td style="color:#888;">' + (idx + 1) + '</td>' +
@@ -217,8 +218,8 @@
             '<div class="copilot-preview-actions">' +
             '<button type="button" class="btn-pill btn-pill-outline copilot-cancel">cancelar</button>' +
             '<button type="button" class="btn-pill btn-pill-primary copilot-approve"' +
-            (n_ok === 0 ? ' disabled' : '') + '>' +
-            'aplicar ' + n_ok + ' item(s)</button>' +
+            (n_aplicaveis === 0 ? ' disabled' : '') + '>' +
+            'aplicar ' + n_aplicaveis + ' item(s)</button>' +
             '</div></div>';
     }
 
