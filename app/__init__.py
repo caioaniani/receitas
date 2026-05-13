@@ -475,7 +475,7 @@ def _migrate_postgres(app):
         if cols_pi and 'materia_prima_id' not in cols_pi:
             conn.execute(text("ALTER TABLE pedido_item ADD COLUMN materia_prima_id INTEGER REFERENCES materia_prima(id)"))
 
-        # estoque_loja.materia_prima_id
+        # estoque_loja.materia_prima_id + nome_pendente
         result = conn.execute(text(
             "SELECT column_name FROM information_schema.columns "
             "WHERE table_name = 'estoque_loja'"
@@ -483,6 +483,8 @@ def _migrate_postgres(app):
         cols_el = {row[0] for row in result}
         if cols_el and 'materia_prima_id' not in cols_el:
             conn.execute(text("ALTER TABLE estoque_loja ADD COLUMN materia_prima_id INTEGER REFERENCES materia_prima(id)"))
+        if cols_el and 'nome_pendente' not in cols_el:
+            conn.execute(text("ALTER TABLE estoque_loja ADD COLUMN nome_pendente VARCHAR(200)"))
 
         # estoque_producao.nome_pendente (balanco aceita itens sem cadastro previo)
         result = conn.execute(text(
