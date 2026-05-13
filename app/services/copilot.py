@@ -471,6 +471,7 @@ TOOLS DISPONIVEIS — ACOES:
 - marcar_ponto: registrar ponto de funcionario (entrada, saida, almoco)
 - criar_tarefa: criar tarefa em projetos (inbox ou projeto especifico)
 - balanco_congelados: balanco/inventario do estoque de congelados (SOBRESCREVE quantidades). Use quando o usuario ditar uma contagem fisica do freezer — valores absolutos, nao deltas. Diferente de 'entrada de producao' (que soma).
+- entrada_lote_loja: entrada em lote no estoque de uma LOJA especifica (SOMA quantidades). Use quando o usuario disser 'dar entrada na loja X', 'chegou entrega na loja Y', 'somar no estoque da loja Z' + lista de itens. Precisa do loja_id — se nao souber qual loja, pergunte primeiro. Itens sem cadastro entram como pendentes.
 
 TOOLS DISPONIVEIS — CONSULTAS (read, sem aprovacao):
 - consultar_pedido: ver pedidos por loja/data/status/id
