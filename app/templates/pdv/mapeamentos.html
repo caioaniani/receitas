@@ -218,6 +218,26 @@
 
 {% block scripts %}
 <script>
+// Preserva scroll entre submits — form-POST-redirect normalmente joga
+// o usuario pro topo. Salvamos antes do submit e restauramos no load.
+(function() {
+    var KEY = 'pdv-mapeamentos-scroll';
+    document.querySelectorAll('form').forEach(function(f) {
+        f.addEventListener('submit', function() {
+            try { sessionStorage.setItem(KEY, String(window.scrollY)); } catch (e) {}
+        });
+    });
+    window.addEventListener('load', function() {
+        try {
+            var y = parseInt(sessionStorage.getItem(KEY) || '0', 10);
+            if (y > 0) {
+                window.scrollTo(0, y);
+                sessionStorage.removeItem(KEY);
+            }
+        } catch (e) {}
+    });
+})();
+
 // Impede submit do form de vincular loja se o dropdown ainda esta em "— escolha —"
 // (so quando o botao clicado e 'vincular'; 'ignorar' nao precisa de loja).
 document.querySelectorAll('.form-vincular-loja').forEach(function(f) {
