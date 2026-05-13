@@ -569,6 +569,41 @@ def _migrate_postgres(app):
         except Exception:
             pass
 
+        # Tabelas VNDA (mapeamento + idempotencia + acumulador fracionario)
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS vnda_produto_map (
+                id SERIAL PRIMARY KEY,
+                vnda_nome VARCHAR(300) NOT NULL UNIQUE,
+                vnda_sku VARCHAR(100),
+                receita_id INTEGER REFERENCES receita(id),
+                produto_id INTEGER REFERENCES produto(id),
+                ignorar BOOLEAN NOT NULL DEFAULT FALSE,
+                fator_quantidade REAL NOT NULL DEFAULT 1.0,
+                primeira_visto_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                confirmado_em TIMESTAMP,
+                confirmado_por INTEGER REFERENCES usuario(id)
+            )
+        """))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_vnda_produto_nome ON vnda_produto_map(vnda_nome)"))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS vnda_pedido_processado (
+                vnda_pedido_code VARCHAR(100) PRIMARY KEY,
+                processado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                data_entrega DATE,
+                n_itens_total INTEGER DEFAULT 0,
+                n_itens_baixados INTEGER DEFAULT 0,
+                cancelado_em TIMESTAMP,
+                estornado_em TIMESTAMP
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS vnda_debito (
+                vnda_produto_map_id INTEGER PRIMARY KEY REFERENCES vnda_produto_map(id) ON DELETE CASCADE,
+                fracao_pendente REAL NOT NULL DEFAULT 0.0,
+                atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
         # estoque_producao.nome_pendente (balanco aceita itens sem cadastro previo)
         result = conn.execute(text(
             "SELECT column_name FROM information_schema.columns "
