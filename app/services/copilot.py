@@ -344,7 +344,7 @@ TOOLS = [
 REQUER_APROVACAO = {
     'criar_pedido', 'receber_mp', 'ajuste_estoque',
     'mudar_status_pedido', 'criar_fornecedor', 'marcar_ponto', 'criar_tarefa',
-    'marcar_tarefa_feita', 'balanco_congelados',
+    'marcar_tarefa_feita', 'balanco_congelados', 'entrada_lote_loja',
 }
 
 
