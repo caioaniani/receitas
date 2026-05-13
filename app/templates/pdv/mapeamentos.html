@@ -211,6 +211,25 @@
 
 {% block scripts %}
 <script>
+// Impede submit do form de vincular loja se o dropdown ainda esta em "— escolha —"
+// (so quando o botao clicado e 'vincular'; 'ignorar' nao precisa de loja).
+document.querySelectorAll('.form-vincular-loja').forEach(function(f) {
+    f.addEventListener('submit', function(e) {
+        // submitter e o botao que disparou o submit
+        var btn = e.submitter || document.activeElement;
+        var acao = btn && btn.value;
+        if (acao === 'vincular') {
+            var sel = f.querySelector('select[data-required-on-vincular]');
+            if (sel && !sel.value) {
+                e.preventDefault();
+                sel.focus();
+                sel.style.borderColor = '#dc3545';
+                sel.style.boxShadow = '0 0 0 3px rgba(220,53,69,0.25)';
+                alert('Escolha uma loja no dropdown antes de clicar Vincular.');
+            }
+        }
+    });
+});
 var __receitas = [
     {% for r in receitas %}
     {id: {{ r.id }}, nome: {{ r.nome|tojson }}, cat: {{ (r.categoria or '')|tojson }}},
