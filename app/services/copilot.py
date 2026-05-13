@@ -1330,9 +1330,49 @@ def _executar_read(tool_name, params, user):  # noqa: F811
     return _BASE_READ(tool_name, params, user)
 
 
+def executar_entrada_lote_loja(params, user):
+    """Aplica entrada em lote no estoque de uma loja. Resolve nomes se preciso."""
+    from app.services import estoque_loja_lote as svc
+    try:
+        loja_id = int(params.get('loja_id') or 0)
+    except (TypeError, ValueError):
+        loja_id = 0
+    if not loja_id:
+        return {'ok': False, 'erro': 'Loja nao especificada'}
+
+    itens = params.get('itens') or []
+    if not itens:
+        return {'ok': False, 'erro': 'Lista de itens vazia'}
+
+    precisa_resolver = any(not (i.get('erro') or i.get('resolvido')) for i in itens)
+    if precisa_resolver:
+        parseados = [{'linha': f"{(i.get('nome') or '').strip()}: {i.get('quantidade')}",
+                      'nome': (i.get('nome') or '').strip(),
+                      'quantidade': int(i.get('quantidade') or 0)}
+                     for i in itens
+                     if (i.get('nome') or '').strip() and int(i.get('quantidade') or 0) > 0]
+        itens = svc.resolver_lista(parseados, loja_id)
+
+    referencia = (params.get('referencia') or '').strip() or None
+    resultado = svc.aplicar_entrada_lote(itens, loja_id, user, referencia=referencia)
+    n_ok = len(resultado['aplicados'])
+    n_ign = len(resultado['ignorados'])
+    if n_ok == 0:
+        return {'ok': False, 'erro': f'Nenhum item aplicado. {n_ign} ignorados.',
+                'ignorados': resultado['ignorados']}
+    return {'ok': True, 'aplicados': resultado['aplicados'],
+            'ignorados': resultado['ignorados'],
+            'total_aplicados': n_ok, 'total_ignorados': n_ign,
+            'registro_tipo': 'estoque_loja_entrada_lote',
+            'registro_id': None,
+            'url': f'/pedidos/estoque-loja?loja={loja_id}'}
+
+
 def executar(tipo_acao, params, user):  # noqa: F811
     if tipo_acao == 'marcar_tarefa_feita':
         return executar_marcar_tarefa_feita(params, user)
     if tipo_acao == 'balanco_congelados':
         return executar_balanco_congelados(params, user)
+    if tipo_acao == 'entrada_lote_loja':
+        return executar_entrada_lote_loja(params, user)
     return _BASE_EXEC(tipo_acao, params, user)
