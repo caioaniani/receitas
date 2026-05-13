@@ -24,11 +24,14 @@ def index():
 @admin_required
 def itens_vendidos():
     """Tela de relatorio: itens vendidos por intervalo + loja Seru."""
+    from app.services import seru_cron
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+    cron_status = seru_cron.status()
     return render_template('pdv/itens_vendidos.html',
                            hoje=date.today().isoformat(),
-                           receitas=receitas, produtos=produtos)
+                           receitas=receitas, produtos=produtos,
+                           cron_status=cron_status)
 
 
 @pdv_bp.route('/api/itens-vendidos')
