@@ -19,6 +19,57 @@ def index():
     return render_template('pdv/index.html', hoje=date.today().isoformat())
 
 
+@pdv_bp.route('/historico-sync')
+@login_required
+@admin_required
+def historico_sync():
+    """Lista pedidos Seru ja processados pelo cron/sync manual."""
+    from sqlalchemy import desc
+    try:
+        loja_id = int(request.args.get('loja') or 0) or None
+    except ValueError:
+        loja_id = None
+    status_filtro = request.args.get('status', '')  # '', 'baixados', 'estornados', 'sem_loja', 'cancelados'
+
+    q = SeruPedidoProcessado.query
+    if loja_id:
+        q = q.filter(SeruPedidoProcessado.loja_id == loja_id)
+    if status_filtro == 'baixados':
+        q = q.filter(SeruPedidoProcessado.n_itens_baixados > 0,
+                     SeruPedidoProcessado.cancelado_em.is_(None))
+    elif status_filtro == 'estornados':
+        q = q.filter(SeruPedidoProcessado.estornado_em.isnot(None))
+    elif status_filtro == 'sem_loja':
+        q = q.filter(SeruPedidoProcessado.loja_id.is_(None))
+    elif status_filtro == 'cancelados':
+        q = q.filter(SeruPedidoProcessado.cancelado_em.isnot(None))
+
+    pedidos = q.order_by(desc(SeruPedidoProcessado.processado_em)).limit(200).all()
+
+    # Agregado de movs do EstoqueLoja por pedido (pra mostrar o que efetivamente baixou)
+    from app.models import MovEstoqueLoja
+    refs = [f'Seru #{p.seru_pedido_id}' for p in pedidos]
+    refs_like = [r + '%' for r in refs]
+    movs_por_pedido = {}
+    if pedidos:
+        from sqlalchemy import or_, func as sqlfunc
+        # Busca todas as movs que comecam com 'Seru #<id>' pros pedidos listados
+        clauses = [MovEstoqueLoja.referencia.like(r + '%') for r in refs]
+        all_movs = MovEstoqueLoja.query.filter(or_(*clauses)).all()
+        for m in all_movs:
+            # extrai o pedido_id do prefixo
+            pref = (m.referencia or '').split(' ', 2)
+            if len(pref) >= 2 and pref[0] == 'Seru' and pref[1].startswith('#'):
+                pid = pref[1][1:]  # remove '#'
+                movs_por_pedido.setdefault(pid, []).append(m)
+
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    return render_template('pdv/historico_sync.html',
+                           pedidos=pedidos, lojas=lojas,
+                           sel_loja=loja_id, sel_status=status_filtro,
+                           movs_por_pedido=movs_por_pedido)
+
+
 @pdv_bp.route('/itens-vendidos')
 @login_required
 @admin_required
