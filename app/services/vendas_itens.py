@@ -126,6 +126,7 @@ def agregar_itens(data_inicial, data_final, loja_seru=None,
 
     produtos_lista = []
     sem_match = 0
+    pendentes = 0
     for nome, v in agg.items():
         match = _match_local(nome, receitas, produtos)
         if not match:
@@ -146,6 +147,8 @@ def agregar_itens(data_inicial, data_final, loja_seru=None,
             mapeado_para = None
             map_id = None
             fator = 1.0
+        if estado_map in ('pendente', 'sem_map'):
+            pendentes += 1
         produtos_lista.append({
             'nome': nome,
             'sku': v['sku'],
