@@ -598,9 +598,11 @@ def _migrate_postgres(app):
         """))
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS vnda_debito (
-                vnda_produto_map_id INTEGER PRIMARY KEY REFERENCES vnda_produto_map(id) ON DELETE CASCADE,
+                vnda_produto_map_id INTEGER NOT NULL REFERENCES vnda_produto_map(id) ON DELETE CASCADE,
+                componente_key VARCHAR(50) NOT NULL DEFAULT 'self',
                 fracao_pendente REAL NOT NULL DEFAULT 0.0,
-                atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (vnda_produto_map_id, componente_key)
             )
         """))
 
