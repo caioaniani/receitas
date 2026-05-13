@@ -390,11 +390,30 @@
         });
     }
 
+    // Auto-resize do textarea conforme digita (max 5 linhas / 140px).
+    function autosizeInput() {
+        if (!input) return;
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 140) + 'px';
+    }
+    if (input) {
+        input.addEventListener('input', autosizeInput);
+        // Enter envia, Shift+Enter pula linha (igual home).
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (form.requestSubmit) form.requestSubmit();
+                else form.dispatchEvent(new Event('submit', {cancelable: true}));
+            }
+        });
+    }
+
     form.addEventListener('submit', function(e) {
         e.preventDefault();
         var v = (input.value || '').trim();
         if (!v) return;
         input.value = '';
+        autosizeInput();
         enviar(v);
     });
 
