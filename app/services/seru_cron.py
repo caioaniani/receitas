@@ -17,7 +17,9 @@ logger = logging.getLogger(__name__)
 
 _scheduler = None
 _ult_run = None
-LOCK_KEY = 7723  # arbitrario, so precisa ser estavel entre workers
+_ult_run_vnda = None
+LOCK_KEY = 7723  # advisory lock pro Seru
+LOCK_KEY_VNDA = 7724  # advisory lock pro VNDA
 BRT = timezone(timedelta(hours=-3))
 
 
