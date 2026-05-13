@@ -135,6 +135,10 @@
            class="sidebar-link {% if '/pdv/itens-vendidos' in request.path %}active{% endif %}">
             <i class="bi bi-bag-check"></i> Itens Vendidos
         </a>
+        <a href="{{ url_for('pdv.mapeamentos') }}"
+           class="sidebar-link {% if '/pdv/mapeamentos' in request.path %}active{% endif %}">
+            <i class="bi bi-link-45deg"></i> Mapeamentos Seru
+        </a>
         {% endif %}
 
         <div class="sidebar-divider"></div>
