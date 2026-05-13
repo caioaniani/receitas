@@ -24,6 +24,9 @@
         <a href="{{ url_for('pedidos.precos_loja', loja_id=loja.id) }}" class="btn btn-outline-dark btn-sm">
             <i class="bi bi-tag"></i> Precos
         </a>
+        <a href="{{ url_for('pedidos.estoque_loja_entrada_lote', loja=loja.id) }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-box-arrow-in-down"></i> Entrada em lote
+        </a>
         <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modal-ajuste">
             <i class="bi bi-plus-slash-minus"></i> Entrada / Ajuste
         </button>
@@ -31,7 +34,62 @@
     {% endif %}
 </div>
 
-{% if itens %}
+{% set pendentes = itens | selectattr('pendente') | list if itens else [] %}
+{% set vinculados = itens | rejectattr('pendente') | list if itens else [] %}
+
+{% if pendentes and current_user.is_admin() %}
+<div class="card mb-3 border-warning">
+    <div class="card-header bg-warning bg-opacity-10 fw-bold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-link-45deg"></i> Pendentes de vinculação ({{ pendentes|length }})</span>
+        <small class="text-muted fw-normal">Itens entrados em lote sem cadastro. Vincule a uma receita/produto/MP.</small>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead class="thead-padaria">
+                <tr>
+                    <th>Nome digitado</th>
+                    <th class="text-center" style="width:100px">Quantidade</th>
+                    <th style="width:480px">Vincular a...</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for el in pendentes %}
+                <tr class="table-warning">
+                    <td class="fw-semibold">
+                        <span class="badge bg-warning text-dark me-1" style="font-size:10px;">Pendente</span>
+                        {{ el.nome_item }}
+                    </td>
+                    <td class="text-center fw-bold">{{ el.quantidade }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('pedidos.estoque_loja_vincular') }}" class="d-flex gap-1 align-items-center">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="estoque_id" value="{{ el.id }}">
+                            <select name="alvo_tipo" class="form-select form-select-sm" style="width:100px;"
+                                    onchange="atualizarVincLoja(this)">
+                                <option value="receita">Receita</option>
+                                <option value="produto">Produto</option>
+                                <option value="mp">MP</option>
+                            </select>
+                            <select name="alvo_id" class="form-select form-select-sm vinc-item-loja" required>
+                                {% for r in receitas %}
+                                <option value="{{ r.id }}">{{ r.categoria }} — {{ r.nome }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-primary"
+                                    onclick="return confirm('Vincular este pendente?')">
+                                <i class="bi bi-link"></i> Vincular
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if vinculados %}
 <form method="POST" action="{{ url_for('pedidos.estoque_loja_registrar') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if current_user.is_admin() %}
