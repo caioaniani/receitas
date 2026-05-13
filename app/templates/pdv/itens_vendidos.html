@@ -309,9 +309,14 @@ var __PRODUTOS = [
                     tbody.appendChild(tr);
                 });
                 if (!d.produtos || !d.produtos.length) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">Nenhum item vendido no intervalo.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Nenhum item vendido no intervalo.</td></tr>';
                 }
                 resultado.classList.remove('d-none');
+                if (savedScroll !== null) {
+                    requestAnimationFrame(function() {
+                        window.scrollTo(0, savedScroll);
+                    });
+                }
             })
             .catch(function(e) {
                 loading.classList.add('d-none');
