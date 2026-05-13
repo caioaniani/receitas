@@ -1098,3 +1098,85 @@ class TarefaTemplate(db.Model):
     esforco = db.Column(db.String(2))
     dias_prazo = db.Column(db.Integer)  # dias a partir da criacao do projeto
     ordem = db.Column(db.Integer, default=0)
+
+
+# ── Integracao Seru (PDV): mapeamento de produtos/lojas + idempotencia ──
+
+class SeruProdutoMap(db.Model):
+    """Mapeia 'nome do produto' como vem da Seru pra um item do nosso catalogo.
+
+    Estados (mutuamente exclusivos):
+    - MAPEADO: receita_id ou produto_id setado → auto-baixa estoque na venda
+    - IGNORADO: ignorar=True → nunca processa (cafe, agua, etc)
+    - PENDENTE: tudo NULL/False → fica na fila de revisao, vendas nao baixam
+    """
+    __tablename__ = 'seru_produto_map'
+
+    id = db.Column(db.Integer, primary_key=True)
+    seru_nome = db.Column(db.String(300), nullable=False, unique=True, index=True)
+    seru_sku = db.Column(db.String(100), nullable=True)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
+    ignorar = db.Column(db.Boolean, default=False, nullable=False)
+
+    primeira_visto_em = db.Column(db.DateTime, default=datetime.utcnow)
+    confirmado_em = db.Column(db.DateTime, nullable=True)
+    confirmado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)
+
+    receita = db.relationship('Receita')
+    produto = db.relationship('Produto')
+
+    @property
+    def estado(self):
+        if self.ignorar:
+            return 'ignorado'
+        if self.receita_id or self.produto_id:
+            return 'mapeado'
+        return 'pendente'
+
+    @property
+    def alvo_nome(self):
+        if self.receita:
+            return self.receita.nome
+        if self.produto:
+            return self.produto.nome
+        return None
+
+
+class SeruLojaMap(db.Model):
+    """Mapeia 'company.name' da Seru pra nossa Loja. Auto-fuzzy na primeira
+    aparicao; admin pode confirmar/corrigir/ignorar via /pdv/config-lojas."""
+    __tablename__ = 'seru_loja_map'
+
+    id = db.Column(db.Integer, primary_key=True)
+    seru_company_name = db.Column(db.String(300), nullable=False, unique=True, index=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=True)
+    ignorar = db.Column(db.Boolean, default=False, nullable=False)
+    auto_match = db.Column(db.Boolean, default=False)  # True se foi setado via fuzzy
+    confirmado_em = db.Column(db.DateTime, nullable=True)
+    confirmado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)
+
+    loja = db.relationship('Loja')
+
+    @property
+    def estado(self):
+        if self.ignorar:
+            return 'ignorado'
+        if self.loja_id:
+            return 'mapeado'
+        return 'pendente'
+
+
+class SeruPedidoProcessado(db.Model):
+    """Garante idempotencia: cada pedido Seru e processado UMA vez.
+    Se a venda for cancelada na Seru depois, marcamos cancelado_em e
+    o proximo sync gera estornos."""
+    __tablename__ = 'seru_pedido_processado'
+
+    seru_pedido_id = db.Column(db.String(100), primary_key=True)
+    processado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=True)
+    n_itens_total = db.Column(db.Integer, default=0)
+    n_itens_baixados = db.Column(db.Integer, default=0)
+    cancelado_em = db.Column(db.DateTime, nullable=True)
+    estornado_em = db.Column(db.DateTime, nullable=True)
