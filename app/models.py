@@ -1185,3 +1185,21 @@ class SeruPedidoProcessado(db.Model):
     n_itens_baixados = db.Column(db.Integer, default=0)
     cancelado_em = db.Column(db.DateTime, nullable=True)
     estornado_em = db.Column(db.DateTime, nullable=True)
+
+
+class SeruDebito(db.Model):
+    """Acumulador de baixas fracionadas por (loja, produto Seru).
+
+    Quando um produto Seru tem fator_quantidade < 1 (ex: 0.2), vender 1 nao
+    baixa estoque inteiro. A fracao fica aqui ate atingir >= 1 inteiro, dai
+    baixa N inteiros do EstoqueLoja e fracao_pendente fica com o resto.
+    """
+    __tablename__ = 'seru_debito'
+
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), primary_key=True)
+    seru_produto_map_id = db.Column(db.Integer,
+                                     db.ForeignKey('seru_produto_map.id', ondelete='CASCADE'),
+                                     primary_key=True)
+    fracao_pendente = db.Column(db.Float, nullable=False, default=0.0)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow,
+                               onupdate=datetime.utcnow)
