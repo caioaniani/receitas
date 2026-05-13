@@ -223,6 +223,68 @@
             '</div></div>';
     }
 
+    function previewEntradaLoteLoja(conversaId, params) {
+        var itens = params.itens || [];
+        var totais = params.totais || {};
+        var lojaNome = params.loja_nome ? escape(params.loja_nome) : '(sem loja)';
+        var ref = params.referencia ? escape(params.referencia) : '(sem referência)';
+        var n_ok = totais.resolvidos || 0;
+        var n_nao = totais.nao_resolvidos || 0;
+        var delta = totais.delta_total;
+        var n_aplicaveis = n_ok + n_nao;
+
+        var resumo = '<div class="copilot-preview-row" style="font-size:12px;">' +
+            '<span class="badge bg-primary" style="margin-right:4px;">loja: ' + lojaNome + '</span>' +
+            '<span class="badge bg-success" style="margin-right:4px;">' + n_ok + ' com match</span>' +
+            (n_nao ? '<span class="badge bg-warning text-dark" style="margin-right:4px;">' + n_nao + ' pendente(s)</span>' : '') +
+            (delta !== undefined && delta !== null
+                ? '<span class="badge bg-info text-dark" style="margin-right:4px;">soma total +' + delta + '</span>'
+                : '') +
+            '<span style="color:var(--text-muted);">ref: ' + ref + '</span>' +
+            '</div>';
+
+        var rows = '';
+        itens.forEach(function(it, idx) {
+            var nome = escape(it.nome || '?');
+            var qtd = it.quantidade !== undefined ? it.quantidade : '';
+            var atual = (it.estoque_atual !== undefined && !it.erro) ? it.estoque_atual : '—';
+            var novo = (it.novo !== undefined && !it.erro) ? it.novo : '—';
+            var match;
+            if (it.erro) {
+                match = '<span style="color:#dc3545;">⚠ ' + escape(it.erro) + '</span>';
+            } else if (it.resolvido) {
+                var tag = it.resolvido.match === 'fuzzy' ? ' <small style="color:#888;">(fuzzy)</small>' : '';
+                match = escape(it.resolvido.nome) + tag;
+            } else {
+                match = '<span style="color:#cc7700;" title="Vai entrar como pendente — vincule a uma receita/produto/MP depois">↪ pendente</span>';
+            }
+            rows += '<tr>' +
+                '<td style="color:#888;">' + (idx + 1) + '</td>' +
+                '<td>' + nome + '</td>' +
+                '<td>' + match + '</td>' +
+                '<td style="text-align:right;">' + atual + '</td>' +
+                '<td style="text-align:right; color:#198754; font-weight:600;">+' + qtd + '</td>' +
+                '<td style="text-align:right; font-weight:600;">' + novo + '</td>' +
+                '</tr>';
+        });
+
+        return '<div class="copilot-preview" data-conversa="' + conversaId + '" data-tipo="entrada_lote_loja">' +
+            '<div class="copilot-preview-header">entrada em lote no estoque de loja</div>' +
+            resumo +
+            '<div style="max-height:280px; overflow-y:auto; margin-top:6px;">' +
+            '<table class="table table-sm table-bordered mb-0" style="font-size:11.5px;">' +
+            '<thead><tr><th>#</th><th>ditado</th><th>match</th>' +
+            '<th style="text-align:right;">atual</th><th style="text-align:right;">soma</th>' +
+            '<th style="text-align:right;">novo</th></tr></thead>' +
+            '<tbody>' + rows + '</tbody></table></div>' +
+            '<div class="copilot-preview-actions">' +
+            '<button type="button" class="btn-pill btn-pill-outline copilot-cancel">cancelar</button>' +
+            '<button type="button" class="btn-pill btn-pill-primary copilot-approve"' +
+            (n_aplicaveis === 0 ? ' disabled' : '') + '>' +
+            'aplicar ' + n_aplicaveis + ' item(s)</button>' +
+            '</div></div>';
+    }
+
     function previewGenerico(conversaId, tipo, params, titulo, labelAprovar) {
         var rows = '';
         for (var k in params) {
