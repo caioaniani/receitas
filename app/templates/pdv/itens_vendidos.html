@@ -109,10 +109,69 @@
         </div>
     </div>
 </div>
+<!-- Modal de Vincular -->
+<div class="modal fade" id="modal-mapear" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-link-45deg"></i> Vincular produto Seru</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label small text-muted">Produto Seru</label>
+                    <div class="fw-bold" id="mm-nome">—</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Acao</label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="mm-acao" id="mm-acao-vincular" value="vincular" checked>
+                        <label class="btn btn-outline-primary" for="mm-acao-vincular">Vincular</label>
+                        <input type="radio" class="btn-check" name="mm-acao" id="mm-acao-ignorar" value="ignorar">
+                        <label class="btn btn-outline-secondary" for="mm-acao-ignorar">Ignorar</label>
+                        <input type="radio" class="btn-check" name="mm-acao" id="mm-acao-desfazer" value="desfazer">
+                        <label class="btn btn-outline-warning" for="mm-acao-desfazer">Desfazer</label>
+                    </div>
+                    <small class="text-muted mt-1 d-block" id="mm-acao-help">Vincular: aponta pra uma receita/produto e baixa estoque automatico nas proximas vendas.</small>
+                </div>
+                <div id="mm-vincular-fields">
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <label class="form-label small text-muted">Tipo</label>
+                            <select id="mm-tipo" class="form-select form-select-sm">
+                                <option value="receita">Receita</option>
+                                <option value="produto">Produto</option>
+                            </select>
+                        </div>
+                        <div class="col-8">
+                            <label class="form-label small text-muted">Item</label>
+                            <select id="mm-alvo" class="form-select form-select-sm"></select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" id="mm-salvar">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+var __RECEITAS = [
+    {% for r in receitas %}
+    {id: {{ r.id }}, nome: {{ r.nome|tojson }}, cat: {{ (r.categoria or '')|tojson }}},
+    {% endfor %}
+];
+var __PRODUTOS = [
+    {% for p in produtos %}
+    {id: {{ p.id }}, nome: {{ p.nome|tojson }}},
+    {% endfor %}
+];
+
 (function() {
     var form = document.getElementById('filtros');
     var inicio = document.getElementById('inicio');
