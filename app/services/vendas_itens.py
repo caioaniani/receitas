@@ -173,6 +173,7 @@ def agregar_itens(data_inicial, data_final, loja_seru=None,
         'total_itens_vendidos': round(total_itens, 2),
         'faturamento_total': round(faturamento_total, 2),
         'produtos': produtos_lista,
-        'sem_match_count': sem_match,
+        'sem_match_count': sem_match,  # mantido por compat
+        'pendentes_count': pendentes,
         'lojas_no_intervalo': sorted(lojas_vistas),
     }
