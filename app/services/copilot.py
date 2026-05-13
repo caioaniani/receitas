@@ -612,6 +612,8 @@ def _enriquecer_params(tool_name, tool_input, user):
         return {**tool_input, 'mp_matches': matches, 'mp_resolvida': matches[0] if matches else None}
     if tool_name == 'balanco_congelados':
         return _enriquecer_balanco_congelados(tool_input)
+    if tool_name == 'entrada_lote_loja':
+        return _enriquecer_entrada_lote_loja(tool_input)
     # consultar_pedido / consultar_estoque: passam direto
     return tool_input
 
