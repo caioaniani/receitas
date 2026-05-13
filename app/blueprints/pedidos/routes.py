@@ -602,6 +602,49 @@ def congelados_ajuste():
     return redirect(url_for('pedidos.congelados'))
 
 
+# ── Balanco de Congelados (sobrescreve com contagem fisica) ──
+
+@pedidos_bp.route('/congelados/balanco', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def congelados_balanco():
+    """Tela de balanco: usuario cola lista 'nome: qtd' e sistema sobrescreve
+    EstoqueProducao.quantidade pra cada item, com auditoria por delta."""
+    from app.services import estoque_congelados as svc
+    texto = request.form.get('texto', '') if request.method == 'POST' else ''
+    referencia = request.form.get('referencia', '').strip()
+    itens = []
+    if request.method == 'POST' and texto.strip():
+        parseados = svc.parsear_lista(texto)
+        itens = svc.resolver_lista(parseados)
+    return render_template('pedidos/balanco_congelados.html',
+                           texto=texto, referencia=referencia, itens=itens)
+
+
+@pedidos_bp.route('/congelados/balanco/aplicar', methods=['POST'])
+@login_required
+@admin_required
+def congelados_balanco_aplicar():
+    """Aplica o balanco apos preview. Re-parseia o texto pra ser idempotente."""
+    from app.services import estoque_congelados as svc
+    texto = request.form.get('texto', '')
+    referencia = request.form.get('referencia', '').strip() or None
+    if not texto.strip():
+        flash('Lista vazia — nada pra aplicar.', 'warning')
+        return redirect(url_for('pedidos.congelados_balanco'))
+    parseados = svc.parsear_lista(texto)
+    resolvidos = svc.resolver_lista(parseados)
+    resultado = svc.aplicar_balanco(resolvidos, current_user, referencia=referencia)
+    n_ok = len(resultado['aplicados'])
+    n_ign = len(resultado['ignorados'])
+    if n_ok:
+        flash(f'Balanço aplicado: {n_ok} item(ns) atualizados.'
+              + (f' {n_ign} ignorados.' if n_ign else ''), 'success')
+    else:
+        flash(f'Nenhum item aplicado. {n_ign} ignorados.', 'warning')
+    return redirect(url_for('pedidos.congelados'))
+
+
 # ── Estoque de Loja ──
 
 @pedidos_bp.route('/estoque-loja')
