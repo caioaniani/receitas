@@ -27,7 +27,7 @@
 <div class="alert alert-success py-1 px-2 small mb-2" style="font-size:11px;">
     <i class="bi bi-clock-history"></i>
     <strong>Sync automatica ativa</strong> — rodando a cada 15 minutos em background.
-    {% if cron_status.ultimo_run %}Ultima execucao: <code>{{ cron_status.ultimo_run }}</code> (UTC).{% else %}Aguardando primeira execucao.{% endif %}
+    {% if cron_status.ultimo_run %}Ultima execucao: <code>{{ cron_status.ultimo_run | brt }}</code> (horario Brasilia).{% else %}Aguardando primeira execucao.{% endif %}
 </div>
 {% endif %}
 
