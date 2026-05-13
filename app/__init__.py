@@ -34,6 +34,14 @@ def create_app(config_class=None):
         formatted = formatted.replace(',', 'X').replace('.', ',').replace('X', '.')
         return f'R$ {formatted}'
 
+    @app.template_filter('brt')
+    def brt_filter(dt, fmt='%d/%m %H:%M'):
+        """Converte datetime UTC pra horario de Brasilia (UTC-3, sem DST)."""
+        if not dt:
+            return ''
+        from datetime import timedelta
+        return (dt - timedelta(hours=3)).strftime(fmt)
+
     @app.context_processor
     def inject_now():
         return {'now': datetime.now}
