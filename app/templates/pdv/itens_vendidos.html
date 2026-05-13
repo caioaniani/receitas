@@ -489,7 +489,7 @@ var __PRODUTOS = [
                     return;
                 }
                 modal.hide();
-                buscar();  // refresh tabela
+                buscar({preserveScroll: true});
             })
             .catch(function(e) {
                 mmSalvar.disabled = false;
