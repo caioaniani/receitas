@@ -23,23 +23,22 @@ def index():
 @login_required
 @admin_required
 def reprocessar():
-    """Apaga SeruPedidoProcessado dos que NAO baixaram nada e roda sync de novo.
-    Util quando voce mapeou produtos/lojas DEPOIS do cron processar.
-    Safety: nao apaga pedidos com baixados>0 (evita double-decrement); nao
-    apaga estornados nem cancelados."""
+    """Reprocessa SOMENTE as vendas de HOJE (BRT) — vendas de ontem ou
+    anteriores ficam intocadas (preferencia do usuario).
+
+    Apaga SeruPedidoProcessado dos pedidos de hoje que NAO baixaram nada
+    e re-roda processar_pedidos. Pedidos com baixados>0 nao sao apagados
+    (zero risco de duplo desconto). Cancelados/estornados tambem nao."""
     from app.services import seru_sync
-    try:
-        dias = max(1, min(int(request.form.get('dias') or 7), 30))
-    except ValueError:
-        dias = 7
+    from app.services.seru_cron import hoje_brt
 
-    fim = date.today()
-    inicio = fim - timedelta(days=dias - 1)
-    cutoff = datetime.utcnow() - timedelta(days=dias + 1)
+    hoje = hoje_brt()
+    # Inicio do dia BRT em UTC: 00:00 BRT = 03:00 UTC
+    inicio_dia_utc = datetime.combine(hoje, datetime.min.time()) + timedelta(hours=3)
 
-    # Apaga so os "sem baixa" — seguros pra reprocessar
+    # Apaga so os de HOJE "sem baixa"
     n_apagados = SeruPedidoProcessado.query.filter(
-        SeruPedidoProcessado.processado_em >= cutoff,
+        SeruPedidoProcessado.processado_em >= inicio_dia_utc,
         SeruPedidoProcessado.n_itens_baixados == 0,
         SeruPedidoProcessado.estornado_em.is_(None),
         SeruPedidoProcessado.cancelado_em.is_(None),
@@ -47,7 +46,7 @@ def reprocessar():
     db.session.commit()
 
     try:
-        stats = seru_sync.processar_pedidos(inicio, fim, user=current_user)
+        stats = seru_sync.processar_pedidos(hoje, hoje, user=current_user)
     except Exception as e:
         current_app.logger.exception('reprocessar falhou')
         return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502
