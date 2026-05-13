@@ -735,6 +735,136 @@ def estoque_loja():
                            receitas=receitas, materias=materias)
 
 
+# ── Entrada em lote no Estoque de Loja ──
+
+@pedidos_bp.route('/estoque-loja/entrada-lote', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def estoque_loja_entrada_lote():
+    """Preview de entrada em lote — usuario cola lista 'nome: qtd' e ve o que
+    vai somar. Apply em outra rota pra ser idempotente."""
+    from app.services import estoque_loja_lote as svc
+
+    loja_id = None
+    if request.method == 'POST':
+        try:
+            loja_id = int(request.form.get('loja_id') or 0) or None
+        except ValueError:
+            loja_id = None
+    else:
+        try:
+            loja_id = int(request.args.get('loja') or 0) or None
+        except ValueError:
+            loja_id = None
+
+    texto = request.form.get('texto', '') if request.method == 'POST' else ''
+    referencia = request.form.get('referencia', '').strip()
+    itens = []
+    if request.method == 'POST' and texto.strip() and loja_id:
+        parseados = svc.parsear_lista(texto)
+        itens = svc.resolver_lista(parseados, loja_id)
+
+    lojas = _lojas_operacionais()
+    loja = Loja.query.get(loja_id) if loja_id else None
+    return render_template('pedidos/estoque_loja_entrada_lote.html',
+                           texto=texto, referencia=referencia, itens=itens,
+                           lojas=lojas, loja=loja, sel_loja=loja_id)
+
+
+@pedidos_bp.route('/estoque-loja/entrada-lote/aplicar', methods=['POST'])
+@login_required
+@admin_required
+def estoque_loja_entrada_lote_aplicar():
+    from app.services import estoque_loja_lote as svc
+    try:
+        loja_id = int(request.form.get('loja_id') or 0)
+    except ValueError:
+        loja_id = 0
+    if not loja_id:
+        flash('Selecione uma loja.', 'warning')
+        return redirect(url_for('pedidos.estoque_loja_entrada_lote'))
+
+    texto = request.form.get('texto', '')
+    referencia = request.form.get('referencia', '').strip() or None
+    if not texto.strip():
+        flash('Lista vazia — nada pra aplicar.', 'warning')
+        return redirect(url_for('pedidos.estoque_loja_entrada_lote', loja=loja_id))
+
+    parseados = svc.parsear_lista(texto)
+    resolvidos = svc.resolver_lista(parseados, loja_id)
+    resultado = svc.aplicar_entrada_lote(resolvidos, loja_id, current_user,
+                                          referencia=referencia)
+    n_ok = len(resultado['aplicados'])
+    n_ign = len(resultado['ignorados'])
+    if n_ok:
+        flash(f'Entrada aplicada: {n_ok} item(ns).'
+              + (f' {n_ign} ignorados.' if n_ign else ''), 'success')
+    else:
+        flash(f'Nenhum item aplicado. {n_ign} ignorados.', 'warning')
+    return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
+
+
+@pedidos_bp.route('/estoque-loja/vincular', methods=['POST'])
+@login_required
+@admin_required
+def estoque_loja_vincular():
+    """Vincula uma EstoqueLoja pendente a uma receita/produto/MP."""
+    ep_id = int(request.form['estoque_id'])
+    alvo_tipo = request.form.get('alvo_tipo')
+    try:
+        alvo_id = int(request.form.get('alvo_id', ''))
+    except (TypeError, ValueError):
+        alvo_id = 0
+    if alvo_tipo not in ('receita', 'produto', 'mp') or not alvo_id:
+        flash('Selecione um item valido.', 'danger')
+        return redirect(url_for('pedidos.estoque_loja'))
+
+    orfao = EstoqueLoja.query.get_or_404(ep_id)
+    loja_id = orfao.loja_id
+    if not orfao.pendente:
+        flash('Este item ja esta vinculado.', 'warning')
+        return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
+
+    filtro = {'loja_id': loja_id}
+    if alvo_tipo == 'receita':
+        filtro['receita_id'] = alvo_id
+    elif alvo_tipo == 'produto':
+        filtro['produto_id'] = alvo_id
+    else:
+        filtro['materia_prima_id'] = alvo_id
+
+    existente = EstoqueLoja.query.filter_by(**filtro).first()
+    nome_orfao = orfao.nome_pendente or '?'
+    qtd_orfao = orfao.quantidade or 0
+
+    if existente and existente.id != orfao.id:
+        anterior = existente.quantidade or 0
+        existente.quantidade = anterior + qtd_orfao
+        if qtd_orfao:
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=existente.id,
+                tipo='entrada_lote',
+                quantidade=qtd_orfao,
+                referencia=f'Vinculacao de pendente "{nome_orfao}" (era {anterior}, ficou {existente.quantidade})',
+                usuario_id=current_user.id,
+            ))
+        db.session.delete(orfao)
+        db.session.commit()
+        flash(f'"{nome_orfao}" mesclado em {existente.nome_item} (+{qtd_orfao}).', 'success')
+    else:
+        if alvo_tipo == 'receita':
+            orfao.receita_id = alvo_id
+        elif alvo_tipo == 'produto':
+            orfao.produto_id = alvo_id
+        else:
+            orfao.materia_prima_id = alvo_id
+        orfao.nome_pendente = None
+        db.session.commit()
+        flash(f'"{nome_orfao}" vinculado com sucesso.', 'success')
+
+    return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
+
+
 @pedidos_bp.route('/estoque-loja/registrar', methods=['POST'])
 @login_required
 def estoque_loja_registrar():
