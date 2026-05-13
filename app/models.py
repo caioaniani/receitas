@@ -1261,13 +1261,19 @@ class VndaPedidoProcessado(db.Model):
 
 
 class VndaDebito(db.Model):
-    """Acumulador de baixas fracionadas por produto VNDA.
-    Loja unica (Anesio) entao chave so pelo produto_map."""
+    """Acumulador de baixas fracionadas por produto VNDA + componente.
+
+    `componente_key` permite que CESTAS (Produto com ProdutoItens) tenham
+    um acumulador POR COMPONENTE — cada item interno baixa separado.
+    Valores: 'self' (produto simples) | 'r:<id>' (receita componente) |
+    'm:<id>' (materia-prima componente).
+    """
     __tablename__ = 'vnda_debito'
 
     vnda_produto_map_id = db.Column(db.Integer,
                                      db.ForeignKey('vnda_produto_map.id', ondelete='CASCADE'),
                                      primary_key=True)
+    componente_key = db.Column(db.String(50), primary_key=True, default='self')
     fracao_pendente = db.Column(db.Float, nullable=False, default=0.0)
     atualizado_em = db.Column(db.DateTime, default=datetime.utcnow,
                                onupdate=datetime.utcnow)
