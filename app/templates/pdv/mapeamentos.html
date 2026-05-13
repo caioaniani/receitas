@@ -48,19 +48,21 @@
             </thead>
             <tbody>
                 {% for lm in lojas_map %}
-                <tr class="{% if lm.estado == 'pendente' %}table-warning{% elif lm.ignorar %}text-muted{% endif %}">
+                {% set linha_class = 'mapa-confirmado' if (lm.estado == 'mapeado' and lm.confirmado_em) else ('mapa-pendente' if (lm.estado == 'pendente' or (lm.estado == 'mapeado' and not lm.confirmado_em)) else 'mapa-ignorado' if lm.ignorar else '') %}
+                <tr class="{{ linha_class }}">
                     <td class="fw-semibold">{{ lm.seru_company_name }}</td>
                     <td>
-                        {% if lm.estado == 'mapeado' %}
-                            {% if lm.auto_match and not lm.confirmado_em %}
-                                <span class="badge bg-info">auto-fuzzy</span>
-                            {% else %}
-                                <span class="badge bg-success">confirmado</span>
-                            {% endif %}
+                        {% if lm.estado == 'mapeado' and lm.confirmado_em %}
+                            <span class="badge bg-success"><i class="bi bi-check-circle"></i> CONFIRMADO</span>
+                            <br><small class="text-muted">processa estoque</small>
+                        {% elif lm.estado == 'mapeado' and not lm.confirmado_em %}
+                            <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> AUTO-FUZZY</span>
+                            <br><small class="text-muted">nao processa ate confirmar</small>
                         {% elif lm.estado == 'ignorado' %}
-                            <span class="badge bg-secondary">ignorado</span>
+                            <span class="badge bg-secondary">IGNORADO</span>
                         {% else %}
-                            <span class="badge bg-warning text-dark">pendente</span>
+                            <span class="badge bg-warning text-dark">PENDENTE</span>
+                            <br><small class="text-muted">selecione uma loja</small>
                         {% endif %}
                     </td>
                     <td>{{ lm.loja.nome if lm.loja else '—' }}</td>
