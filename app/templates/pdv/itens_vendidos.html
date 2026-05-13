@@ -257,8 +257,11 @@ var __PRODUTOS = [
                         var tipoBadge = p.mapeado_para.tipo === 'receita'
                             ? '<span class="badge bg-primary" style="font-size:9px;">R</span>'
                             : '<span class="badge bg-secondary" style="font-size:9px;">P</span>';
+                        var fatorBadge = (p.fator && Math.abs(p.fator - 1) > 0.001)
+                            ? ' <span class="badge bg-warning text-dark" style="font-size:9px;" title="1 venda = ' + p.fator + ' unidade do item">×' + p.fator + '</span>'
+                            : '';
                         vinculoHtml = '<span class="badge bg-success" style="font-size:9px;margin-right:4px;">✓ mapeado</span>'
-                            + tipoBadge + ' ' + esc(p.mapeado_para.nome);
+                            + tipoBadge + ' ' + esc(p.mapeado_para.nome) + fatorBadge;
                         btnLabel = 'Editar';
                         btnClass = 'btn-outline-secondary';
                     } else if (p.estado_map === 'ignorado') {
