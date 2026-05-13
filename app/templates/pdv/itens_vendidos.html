@@ -436,20 +436,41 @@ var __PRODUTOS = [
     });
 
     mmSalvar.addEventListener('click', function() {
-        if (!currentNome) return;
-        var acao = document.querySelector('input[name="mm-acao"]:checked').value;
+        if (!currentNome) {
+            alert('Nenhum produto selecionado.');
+            return;
+        }
+        var acao = (document.querySelector('input[name="mm-acao"]:checked') || {}).value;
+        if (!acao) { alert('Escolha uma acao.'); return; }
+
+        // Validacao manual (evita o erro chato do Safari com type=number)
+        if (acao === 'vincular') {
+            if (!mmAlvo.value) {
+                alert('Selecione um item no dropdown.');
+                return;
+            }
+        }
+        var fator = parseFator(mmFator.value);
+
         var fd = new FormData();
-        fd.append('csrf_token', CSRF_TOKEN);
+        fd.append('csrf_token', CSRF_TOKEN || '');
         fd.append('seru_nome', currentNome);
         fd.append('acao', acao);
         if (acao === 'vincular') {
-            fd.append('alvo_tipo', mmTipo.value);
-            fd.append('alvo_id', mmAlvo.value);
-            fd.append('fator', mmFator.value || '1');
+            fd.append('alvo_tipo', mmTipo.value || 'receita');
+            fd.append('alvo_id', mmAlvo.value || '');
+            fd.append('fator', String(fator));
         }
         mmSalvar.disabled = true;
         fetch('/pdv/api/mapear', {method: 'POST', body: fd, credentials: 'same-origin'})
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok && r.status !== 200) {
+                    return r.text().then(function(t) {
+                        throw new Error('HTTP ' + r.status + ': ' + (t || '').slice(0, 200));
+                    });
+                }
+                return r.json();
+            })
             .then(function(d) {
                 mmSalvar.disabled = false;
                 if (!d.ok) {
@@ -461,7 +482,9 @@ var __PRODUTOS = [
             })
             .catch(function(e) {
                 mmSalvar.disabled = false;
-                alert('Erro de rede: ' + e.message);
+                console.error('Erro ao salvar mapeamento:', e);
+                var msg = (e && e.message) ? e.message : String(e);
+                alert('Falhou ao salvar: ' + msg + '\n\nSe persistir, abra o /pdv/mapeamentos no navegador (Safari/Chrome normal — nao dentro de app) e tente la.');
             });
     });
 
