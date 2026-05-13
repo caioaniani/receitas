@@ -363,6 +363,8 @@ PAPEIS_POR_TOOL = {
     'consultar_margem': {'admin'},
     # Balanco de congelados — so admin (sobrescreve estoque)
     'balanco_congelados': {'admin'},
+    # Entrada em lote no estoque de loja — so admin
+    'entrada_lote_loja': {'admin'},
     # Consultas operacionais — admin + gerente
     'consultar_fornecedores': {'admin', 'gerente'},
     'consultar_funcionario': {'admin', 'gerente'},
