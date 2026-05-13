@@ -563,6 +563,12 @@ def _migrate_postgres(app):
             )
         """))
 
+        # mov_estoque_loja.tipo: VARCHAR(20) era curto pra 'venda_seru_sem_estoque' (22)
+        try:
+            conn.execute(text("ALTER TABLE mov_estoque_loja ALTER COLUMN tipo TYPE VARCHAR(50)"))
+        except Exception:
+            pass
+
         # estoque_producao.nome_pendente (balanco aceita itens sem cadastro previo)
         result = conn.execute(text(
             "SELECT column_name FROM information_schema.columns "
