@@ -68,8 +68,8 @@
                 {% for p in pedidos %}
                 <tr class="{% if p.estornado_em %}table-warning{% elif p.cancelado_em %}text-muted{% elif not p.loja_id %}table-light{% endif %}">
                     <td>
-                        <small>{{ p.processado_em.strftime('%d/%m %H:%M') if p.processado_em else '—' }}</small>
-                        <small class="text-muted d-block" style="font-size:10px;">UTC</small>
+                        <small>{{ p.processado_em | brt }}</small>
+                        <small class="text-muted d-block" style="font-size:10px;">horario Brasilia</small>
                     </td>
                     <td>
                         <code style="font-size:11px;">#{{ p.seru_pedido_id }}</code>
