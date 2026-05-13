@@ -340,9 +340,17 @@ def vincular_produto(map_id):
         else:
             flash('Selecione receita ou produto valido.', 'danger')
             return redirect(url_for('pdv.mapeamentos'))
+        try:
+            fator = float(request.form.get('fator') or 1.0)
+            if fator <= 0:
+                fator = 1.0
+        except (TypeError, ValueError):
+            fator = 1.0
+        mp.fator_quantidade = fator
         mp.confirmado_em = datetime.utcnow()
         mp.confirmado_por = current_user.id
-        flash(f'"{mp.seru_nome}" → {mp.alvo_nome}', 'success')
+        fator_msg = '' if fator == 1.0 else f' · fator {fator}'
+        flash(f'"{mp.seru_nome}" → {mp.alvo_nome}{fator_msg}', 'success')
     elif acao == 'ignorar':
         mp.ignorar = True
         mp.receita_id = None
