@@ -203,3 +203,124 @@ def api_venda_detalhe(pedido_id):
         return jsonify(ok=True, pedido=seru.detalhes_pedido(pedido_id))
     except RuntimeError as e:
         return jsonify(ok=False, erro=str(e)[:300]), 502
+
+
+# ── Fase 2: Sync Seru → EstoqueLoja (auto-baixa) ──
+
+@pdv_bp.route('/sync', methods=['POST'])
+@login_required
+@admin_required
+def pdv_sync():
+    """Botao 'Sincronizar agora'. Processa vendas dos N dias informados."""
+    from app.services import seru_sync
+    try:
+        dias = max(1, min(int(request.form.get('dias') or 1), 30))
+    except ValueError:
+        dias = 1
+    fim = date.today()
+    inicio = fim - timedelta(days=dias - 1)
+    try:
+        stats = seru_sync.processar_pedidos(inicio, fim, user=current_user)
+    except Exception as e:
+        current_app.logger.exception('seru_sync falhou')
+        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502
+    return jsonify(ok=True, **stats)
+
+
+@pdv_bp.route('/mapeamentos')
+@login_required
+@admin_required
+def mapeamentos():
+    """Tela de mapeamento de produtos Seru e lojas Seru."""
+    produtos_map = SeruProdutoMap.query.order_by(
+        SeruProdutoMap.ignorar.asc(),
+        SeruProdutoMap.confirmado_em.is_(None).desc(),  # pendentes no topo
+        SeruProdutoMap.seru_nome,
+    ).all()
+    lojas_map = SeruLojaMap.query.order_by(SeruLojaMap.seru_company_name).all()
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    return render_template('pdv/mapeamentos.html',
+                           produtos_map=produtos_map, lojas_map=lojas_map,
+                           receitas=receitas, produtos=produtos, lojas=lojas)
+
+
+@pdv_bp.route('/mapeamentos/produto/<int:map_id>', methods=['POST'])
+@login_required
+@admin_required
+def vincular_produto(map_id):
+    """Vincula/ignora/limpa um produto Seru."""
+    mp = SeruProdutoMap.query.get_or_404(map_id)
+    acao = request.form.get('acao')
+    if acao == 'vincular':
+        tipo = request.form.get('alvo_tipo')
+        try:
+            alvo_id = int(request.form.get('alvo_id', ''))
+        except (TypeError, ValueError):
+            alvo_id = 0
+        if tipo == 'receita' and alvo_id:
+            mp.receita_id = alvo_id
+            mp.produto_id = None
+            mp.ignorar = False
+        elif tipo == 'produto' and alvo_id:
+            mp.produto_id = alvo_id
+            mp.receita_id = None
+            mp.ignorar = False
+        else:
+            flash('Selecione receita ou produto valido.', 'danger')
+            return redirect(url_for('pdv.mapeamentos'))
+        mp.confirmado_em = datetime.utcnow()
+        mp.confirmado_por = current_user.id
+        flash(f'"{mp.seru_nome}" → {mp.alvo_nome}', 'success')
+    elif acao == 'ignorar':
+        mp.ignorar = True
+        mp.receita_id = None
+        mp.produto_id = None
+        mp.confirmado_em = datetime.utcnow()
+        mp.confirmado_por = current_user.id
+        flash(f'"{mp.seru_nome}" ignorado — nao baixara estoque.', 'info')
+    elif acao == 'desfazer':
+        mp.ignorar = False
+        mp.receita_id = None
+        mp.produto_id = None
+        mp.confirmado_em = None
+        mp.confirmado_por = None
+        flash(f'"{mp.seru_nome}" voltou pra pendente.', 'info')
+    db.session.commit()
+    return redirect(url_for('pdv.mapeamentos'))
+
+
+@pdv_bp.route('/mapeamentos/loja/<int:map_id>', methods=['POST'])
+@login_required
+@admin_required
+def vincular_loja(map_id):
+    lm = SeruLojaMap.query.get_or_404(map_id)
+    acao = request.form.get('acao')
+    if acao == 'vincular':
+        try:
+            loja_id = int(request.form.get('loja_id', ''))
+        except (TypeError, ValueError):
+            loja_id = 0
+        if not loja_id:
+            flash('Selecione uma loja.', 'danger')
+            return redirect(url_for('pdv.mapeamentos'))
+        lm.loja_id = loja_id
+        lm.ignorar = False
+        lm.auto_match = False
+        lm.confirmado_em = datetime.utcnow()
+        lm.confirmado_por = current_user.id
+        flash(f'"{lm.seru_company_name}" → {lm.loja.nome if lm.loja else "?"}', 'success')
+    elif acao == 'ignorar':
+        lm.ignorar = True
+        lm.loja_id = None
+        lm.confirmado_em = datetime.utcnow()
+        lm.confirmado_por = current_user.id
+        flash(f'"{lm.seru_company_name}" ignorada — vendas nao processarao.', 'info')
+    elif acao == 'confirmar':
+        lm.auto_match = False
+        lm.confirmado_em = datetime.utcnow()
+        lm.confirmado_por = current_user.id
+        flash(f'"{lm.seru_company_name}" confirmada.', 'success')
+    db.session.commit()
+    return redirect(url_for('pdv.mapeamentos'))
