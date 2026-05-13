@@ -530,6 +530,7 @@ def vincular_loja(map_id):
 @login_required
 @admin_required
 def vnda_mapeamentos():
+    from app.services import vnda_sync as svc
     produtos_map = VndaProdutoMap.query.order_by(
         VndaProdutoMap.ignorar.asc(),
         VndaProdutoMap.confirmado_em.is_(None).desc(),
@@ -537,9 +538,34 @@ def vnda_mapeamentos():
     ).all()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    loja_atual = svc.loja_vnda()
     return render_template('pdv/vnda_mapeamentos.html',
                            produtos_map=produtos_map,
-                           receitas=receitas, produtos=produtos)
+                           receitas=receitas, produtos=produtos,
+                           lojas=lojas, loja_atual=loja_atual)
+
+
+@pdv_bp.route('/vnda/config-loja', methods=['POST'])
+@login_required
+@admin_required
+def vnda_config_loja():
+    """Salva qual loja recebe as baixas VNDA."""
+    try:
+        loja_id = int(request.form.get('loja_id') or 0)
+    except (TypeError, ValueError):
+        loja_id = 0
+    if not loja_id:
+        flash('Selecione uma loja valida.', 'danger')
+        return redirect(url_for('pdv.vnda_mapeamentos'))
+    loja = Loja.query.get(loja_id)
+    if not loja:
+        flash(f'Loja id={loja_id} nao existe.', 'danger')
+        return redirect(url_for('pdv.vnda_mapeamentos'))
+    AppConfig.set('vnda_loja_id', loja.id)
+    db.session.commit()
+    flash(f'Loja destino VNDA agora e "{loja.nome}". Baixas vao pra essa loja a partir de agora.', 'success')
+    return redirect(url_for('pdv.vnda_mapeamentos'))
 
 
 @pdv_bp.route('/vnda/mapeamentos/produto/<int:map_id>', methods=['POST'])
