@@ -305,6 +305,98 @@ var __PRODUTOS = [
     // auto-busca no load
     buscar();
 
+    // ── Modal de Mapeamento inline ──
+    var modalEl = document.getElementById('modal-mapear');
+    var modal = new bootstrap.Modal(modalEl);
+    var mmNome = document.getElementById('mm-nome');
+    var mmTipo = document.getElementById('mm-tipo');
+    var mmAlvo = document.getElementById('mm-alvo');
+    var mmVincFields = document.getElementById('mm-vincular-fields');
+    var mmHelp = document.getElementById('mm-acao-help');
+    var mmSalvar = document.getElementById('mm-salvar');
+    var currentNome = null;
+
+    function popularAlvo(tipo, selectedId) {
+        mmAlvo.innerHTML = '';
+        var list = tipo === 'receita' ? __RECEITAS : __PRODUTOS;
+        list.forEach(function(item) {
+            var opt = document.createElement('option');
+            opt.value = item.id;
+            opt.textContent = item.cat ? item.cat + ' — ' + item.nome : item.nome;
+            if (selectedId && String(item.id) === String(selectedId)) opt.selected = true;
+            mmAlvo.appendChild(opt);
+        });
+    }
+
+    function atualizarFieldsConformeAcao() {
+        var acao = document.querySelector('input[name="mm-acao"]:checked').value;
+        if (acao === 'vincular') {
+            mmVincFields.style.display = '';
+            mmHelp.textContent = 'Vincular: aponta pra uma receita/produto e baixa estoque automatico nas proximas vendas.';
+        } else if (acao === 'ignorar') {
+            mmVincFields.style.display = 'none';
+            mmHelp.textContent = 'Ignorar: nunca processa este produto (use pra cafe, agua, items que voce nao controla).';
+        } else {
+            mmVincFields.style.display = 'none';
+            mmHelp.textContent = 'Desfazer: volta o produto pra estado pendente.';
+        }
+    }
+    document.querySelectorAll('input[name="mm-acao"]').forEach(function(r) {
+        r.addEventListener('change', atualizarFieldsConformeAcao);
+    });
+    mmTipo.addEventListener('change', function() { popularAlvo(this.value); });
+
+    // delegação no tbody (botoes renderizados dinamicamente)
+    tbody.addEventListener('click', function(e) {
+        var btn = e.target.closest('.btn-mapear');
+        if (!btn) return;
+        currentNome = btn.dataset.nome;
+        mmNome.textContent = currentNome;
+        var estado = btn.dataset.estado;
+        if (estado === 'ignorado') {
+            document.getElementById('mm-acao-desfazer').checked = true;
+        } else {
+            document.getElementById('mm-acao-vincular').checked = true;
+        }
+        // pre-popula: prefere alvo ja mapeado, senao a sugestao do fuzzy
+        var alvoTipo = btn.dataset.alvoTipo || btn.dataset.sugestaoTipo || 'receita';
+        if (alvoTipo === 'mp') alvoTipo = 'receita';  // fuzzy local pode sugerir mp; modal so trata r/p
+        var alvoId = btn.dataset.alvoId || btn.dataset.sugestaoId || '';
+        mmTipo.value = (alvoTipo === 'produto') ? 'produto' : 'receita';
+        popularAlvo(mmTipo.value, alvoId);
+        atualizarFieldsConformeAcao();
+        modal.show();
+    });
+
+    mmSalvar.addEventListener('click', function() {
+        if (!currentNome) return;
+        var acao = document.querySelector('input[name="mm-acao"]:checked').value;
+        var fd = new FormData();
+        fd.append('csrf_token', CSRF_TOKEN);
+        fd.append('seru_nome', currentNome);
+        fd.append('acao', acao);
+        if (acao === 'vincular') {
+            fd.append('alvo_tipo', mmTipo.value);
+            fd.append('alvo_id', mmAlvo.value);
+        }
+        mmSalvar.disabled = true;
+        fetch('/pdv/api/mapear', {method: 'POST', body: fd, credentials: 'same-origin'})
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                mmSalvar.disabled = false;
+                if (!d.ok) {
+                    alert('Erro: ' + (d.erro || 'desconhecido'));
+                    return;
+                }
+                modal.hide();
+                buscar();  // refresh tabela
+            })
+            .catch(function(e) {
+                mmSalvar.disabled = false;
+                alert('Erro de rede: ' + e.message);
+            });
+    });
+
     // ── Sincronizar (Fase 2) ──
     var btnSync = document.getElementById('btn-sync');
     var syncStatus = document.getElementById('sync-status');
