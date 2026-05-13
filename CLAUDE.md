@@ -1,22 +1,99 @@
 # Convenções de trabalho (Claude)
 
-## Branches
+## Branches & Deploy
 
 - **Branch de produção (Railway acompanha)**: `claude/continue-controller-conversation-aGS3F`
-- **Auto-deploy ativo no Railway** (Auto deploys ON, Wait for CI OFF). Qualquer push
-  pra esse branch dispara build + deploy em ~2-3 min automaticamente.
-- **Workflow padrão**: commit direto no branch de produção (preferência do usuário:
-  Opção B). Se a mudança for grande/arriscada, abra PR mirando ele pra ter
-  janela de revisão antes do merge.
-- **Nunca** force-push nem use `--no-verify` sem autorização explícita.
+- **Auto-deploy** no Railway (Auto deploys ON, Wait for CI OFF). Push = build + deploy
+  automatico em ~2-3 min.
+- **Workflow padrão**: commit direto no branch de produção. Mudanças grandes/arriscadas
+  abrir PR mirando ele.
+- **Nunca** force-push nem `--no-verify` sem autorização explícita.
 
-## Deploy
+## Auto-commit hook ativo
 
-Railway → projeto `receitas` → serviço `web` → conectado em
-`caioaniani/receitas` branch `claude/continue-controller-conversation-aGS3F`.
-Push = deploy automático.
+`.claude/scripts/auto-commit.sh` + `.claude/settings.json` configurados:
+PostToolUse no Write|Edit faz `git add <file>` + commit "auto: update X" + push pro branch
+atual. Em sessao nova, o hook ja esta ativo no startup.
 
-## Sistema
+## Stack
 
-Flask + SQLAlchemy + Bootstrap 5. Padaria Opão (gestão completa: receitas,
-pedidos, entregas, PDV, estoque, RH, copilot com Claude Haiku 4.5).
+Flask 3 + SQLAlchemy + Bootstrap 5 + Postgres em prod / SQLite local.
+Padaria Opão: receitas, pedidos, entregas, PDV, estoque, RH, copilot (Claude Haiku 4.5).
+
+## Schema migrations
+
+Sem Alembic — `app/__init__.py` tem `_migrate_postgres()` e `_migrate_sqlite()` chamados
+após `db.create_all()`. Adicione `ALTER TABLE IF NOT EXISTS` ali quando criar coluna nova.
+
+## Convenções de codigo
+
+- **Lojas operacionais**: SEMPRE use `_lojas_operacionais()` em `pedidos/routes.py` —
+  filtra "Industria" (que existe como Loja só pra RH). RH usa `Loja.query.filter_by(ativa=True)`
+  normal.
+- **Forms aninhados**: HTML não permite. Em `ficha.html` (receitas), os botões
+  Duplicar/Excluir/Atribuir ficam como `<form>` **fora** do form principal de salvar.
+
+## Estoque pendente (congelados + loja)
+
+Tanto `EstoqueProducao` quanto `EstoqueLoja` tem coluna `nome_pendente`. Quando o
+balanco/entrada-em-lote acha um item sem cadastro, cria linha com `nome_pendente` setado
++ `receita_id`/`produto_id`/`materia_prima_id` todos NULL. Admin vincula depois em
+`/pedidos/congelados` ou `/pedidos/estoque-loja` (cards amarelos no topo). `_carregar_catalogo`
+nos services inclui orfaos pra match — reaplicar o balanco com o mesmo nome reusa a linha.
+
+## Integracao Seru (PDV)
+
+**Documentação**: https://integration.plataformaseru.com.br/v1/docs.
+Credenciais: `SERU_CLIENT_ID` + `SERU_CLIENT_SECRET` no env Railway.
+
+**Service base**: `app/services/seru.py` (OAuth2 client_credentials, token cache,
+paginacao por dia em paralelo). `data_local()` converte UTC → BRT.
+
+### Fase 1 — Relatorio
+- Rota `/pdv/itens-vendidos` + API `/pdv/api/itens-vendidos`
+- Service `app/services/vendas_itens.py` agrega por produto com match fuzzy local
+- Tool copilot `consultar_vendas_itens` (read, admin+gerente)
+
+### Fase 2 — Auto-baixa estoque
+Mapeamentos persistentes em 3 tabelas:
+- **`SeruProdutoMap`**: nome Seru → receita/produto + estado (mapeado/ignorado/pendente)
+  + `fator_quantidade` (Float, default 1.0) pra produtos compostos
+  (ex: "NOZES COM MANTEIGA" = 2 fatias / 10 por pao = fator 0.2)
+- **`SeruLojaMap`**: company.name Seru → Loja. Auto-fuzzy NÃO basta — exige `confirmado_em`
+  preenchido (admin clica OK ou Vincular em `/pdv/mapeamentos`) pra processar baixas.
+- **`SeruPedidoProcessado`**: idempotencia por seru_pedido_id; cancelados depois geram
+  estorno automatico (mov tipo `venda_seru_estorno`).
+- **`SeruDebito`**: acumulador por (loja, mapping) pra fracoes — quando `fator < 1`,
+  acumula ate `>= 1.0` e baixa inteiros. Mantem `EstoqueLoja.quantidade` sempre inteiro.
+
+**Processador**: `app/services/seru_sync.py::processar_pedidos(data_ini, data_fim, user)`.
+Idempotente. Salvaguardas:
+- Loja nao-confirmada → pedido NAO marca como processado, retenta na proxima sync.
+- Produto pendente/ignorado → pula sem alarme.
+- Estoque negativo → registra `venda_seru_sem_estoque` em vez de zerar.
+
+**Cron**: `app/services/seru_cron.py` inicia APScheduler 15min no startup do app.
+`pg_try_advisory_lock(7723)` garante exec unica entre workers gunicorn.
+Desligar: env `SERU_AUTO_SYNC=0` (default `1`).
+
+**UI mapeamentos**:
+- `/pdv/itens-vendidos`: cada linha tem botao "Editar" que abre modal inline com
+  Vincular/Ignorar/Desfazer + campo fator (helper: "X fatias de Y" → calcula).
+- `/pdv/mapeamentos`: tabela completa de produtos + tabela de lojas. Form POST normal
+  (scroll preservado via `sessionStorage`).
+
+## Copilot
+
+`app/services/copilot.py` orquestra tools com Claude Haiku 4.5 (Anthropic API).
+Tools: criar_pedido, receber_mp, ajuste_estoque, mudar_status_pedido, criar_fornecedor,
+marcar_ponto, criar_tarefa, marcar_tarefa_feita, balanco_congelados, entrada_lote_loja,
+consultar_pedido/estoque/fornecedores/margem/funcionario/caixa/foco/tarefas/vendas_itens.
+
+Tools de write requerem aprovacao (preview HTML no chat). Frontend em
+`app/static/js/copilot.js` — modal lateral com textarea, Enter envia, Shift+Enter
+quebra linha.
+
+## Sidebar
+
+Secoes (`sidebar-section-title`) sao **colapsaveis** — JS adiciona chevron + persiste
+estado em `localStorage` por nome. Implementacao em `app/static/js/app.js`.
