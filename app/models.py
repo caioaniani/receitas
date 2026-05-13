@@ -721,6 +721,9 @@ class EstoqueLoja(db.Model):
     produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
     materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'), nullable=True)
     quantidade = db.Column(db.Integer, default=0)
+    # Nome digitado em entrada-em-lote quando nao houve match com nenhum
+    # cadastro. Mesma logica do EstoqueProducao.nome_pendente.
+    nome_pendente = db.Column(db.String(200), nullable=True)
 
     loja = db.relationship('Loja')
     receita = db.relationship('Receita')
@@ -736,7 +739,14 @@ class EstoqueLoja(db.Model):
             return self.produto.nome
         if self.materia_prima:
             return self.materia_prima.nome + ' (MP)'
+        if self.nome_pendente:
+            return self.nome_pendente
         return '?'
+
+    @property
+    def pendente(self):
+        return (self.receita_id is None and self.produto_id is None
+                and self.materia_prima_id is None and bool(self.nome_pendente))
 
 
 class PrecoLojaReceita(db.Model):
