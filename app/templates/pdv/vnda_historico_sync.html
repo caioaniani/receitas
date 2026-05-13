@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Historico VNDA{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-clock-history"></i> Historico de Sync VNDA</h1>
+    <div class="d-flex gap-2 flex-wrap">
+        <button type="button" id="btn-reprocessar" class="btn btn-sm btn-warning"
+                title="Apaga registros de hoje sem baixa e re-roda com mapeamentos atuais. Pedidos ja-baixados nao sao afetados.">
+            <i class="bi bi-arrow-counterclockwise"></i> Reprocessar (so hoje)
+        </button>
+        <a href="{{ url_for('pdv.vnda_mapeamentos') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-link-45deg"></i> Mapeamentos
+        </a>
+    </div>
+</div>
+<div id="rep-status"></div>
+
+<div class="alert alert-info py-2 small">
+    <i class="bi bi-info-circle"></i>
+    Cada linha = 1 pedido VNDA processado. Baixa estoque da <strong>Loja Anesio Pinto Rosa</strong>
+    no dia da entrega. Ate 200 mais recentes.
+</div>
+
+<form method="GET" class="row g-2 mb-3 align-items-end">
+    <div class="col-auto">
+        <label class="form-label small text-muted">Status</label>
+        <select name="status" class="form-select form-select-sm input-blue" onchange="this.form.submit()">
+            <option value="" {% if not sel_status %}selected{% endif %}>Todos</option>
+            <option value="baixados" {% if sel_status == 'baixados' %}selected{% endif %}>Com baixa</option>
+            <option value="estornados" {% if sel_status == 'estornados' %}selected{% endif %}>Estornados</option>
+            <option value="cancelados" {% if sel_status == 'cancelados' %}selected{% endif %}>Cancelados</option>
+            <option value="sem_baixa" {% if sel_status == 'sem_baixa' %}selected{% endif %}>Sem baixa</option>
+        </select>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('pdv.vnda_historico_sync') }}" class="btn btn-sm btn-outline-secondary">Limpar</a>
+    </div>
+</form>
+
+<div class="card">
+    <div class="card-header bg-white">
+        <strong>{{ pedidos|length }} pedido(s)</strong>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead class="thead-padaria" style="position:sticky;top:0;">
+                <tr>
+                    <th style="width:150px;">Processado em</th>
+                    <th>Pedido VNDA</th>
+                    <th>Data entrega</th>
+                    <th class="text-end" style="width:80px;">Itens</th>
+                    <th class="text-end" style="width:90px;">Baixados</th>
+                    <th>Status</th>
+                    <th>Movimentacoes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in pedidos %}
+                <tr class="{% if p.estornado_em %}table-warning{% elif p.cancelado_em %}text-muted{% endif %}">
+                    <td>
+                        <small>{{ p.processado_em | brt }}</small>
+                        <small class="text-muted d-block" style="font-size:10px;">horario Brasilia</small>
+                    </td>
+                    <td><code style="font-size:11px;">#{{ p.vnda_pedido_code }}</code></td>
+                    <td>{{ p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '—' }}</td>
+                    <td class="text-end">{{ p.n_itens_total or 0 }}</td>
+                    <td class="text-end {% if p.n_itens_baixados %}fw-bold text-success{% else %}text-muted{% endif %}">
+                        {{ p.n_itens_baixados or 0 }}
+                    </td>
+                    <td>
+                        {% if p.estornado_em %}
+                            <span class="badge bg-warning text-dark" style="font-size:9px;">↩ ESTORNADO</span>
+                        {% elif p.cancelado_em %}
+                            <span class="badge bg-secondary" style="font-size:9px;">CANCELADO</span>
+                        {% elif p.n_itens_baixados %}
+                            <span class="badge bg-success" style="font-size:9px;">PROCESSADO</span>
+                        {% else %}
+                            <span class="badge bg-secondary" style="font-size:9px;">SEM BAIXA</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size:11px;">
+                        {% set movs = movs_por_pedido.get(p.vnda_pedido_code, []) %}
+                        {% if movs %}
+                            <details>
+                                <summary class="text-primary" style="cursor:pointer;">{{ movs|length }} mov(s)</summary>
+                                <ul class="mb-0 mt-1" style="padding-left:18px;">
+                                {% for m in movs %}
+                                    <li>
+                                        <span class="badge" style="font-size:9px; background:
+                                            {%- if m.tipo == 'venda_vnda' %}#198754
+                                            {%- elif m.tipo == 'venda_vnda_estorno' %}#fd7e14
+                                            {%- elif m.tipo == 'venda_vnda_sem_estoque' %}#dc3545
+                                            {%- else %}#6c757d{% endif -%};color:#fff;">{{ m.tipo }}</span>
+                                        <strong>{{ m.quantidade }}</strong>
+                                        un de {{ m.estoque.nome_item if m.estoque else '?' }}
+                                    </li>
+                                {% endfor %}
+                                </ul>
+                            </details>
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="text-center text-muted py-3">
+                    Nenhum pedido VNDA processado ainda. Aguarde o cron (15min) ou clique
+                    <a href="{{ url_for('pdv.vnda_mapeamentos') }}">Sincronizar VNDA</a>.
+                </td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var btn = document.getElementById('btn-reprocessar');
+    var status = document.getElementById('rep-status');
+    if (!btn) return;
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+        });
+    }
+    btn.addEventListener('click', function() {
+        if (!confirm('Reprocessar VNDA de HOJE?\n\nApaga so registros com baixados=0 ' +
+                     'e re-roda. Pedidos ja-baixados nao sao afetados.')) return;
+        btn.disabled = true;
+        status.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-hourglass-split"></i> reprocessando, pode levar 30s...</div>';
+        var fd = new FormData();
+        fd.append('csrf_token', CSRF_TOKEN);
+        fetch('/pdv/vnda/reprocessar', {method:'POST', body:fd, credentials:'same-origin'})
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                btn.disabled = false;
+                if (!d.ok) {
+                    status.innerHTML = '<div class="alert alert-danger py-2 small">' + esc(d.erro) + '</div>';
+                    return;
+                }
+                var html = '<div class="alert alert-success py-2 small"><strong>Reprocessado:</strong> ' +
+                    d.n_apagados + ' liberado(s) · ' + d.pedidos_novos + ' agora processado(s) · ' +
+                    '<strong>' + d.itens_baixados + ' itens baixados</strong>';
+                if (d.itens_pendentes_novos) html += ' · ' + d.itens_pendentes_novos + ' pendentes';
+                html += '. Recarregando...</div>';
+                status.innerHTML = html;
+                setTimeout(function() { window.location.reload(); }, 2000);
+            })
+            .catch(function(e) {
+                btn.disabled = false;
+                status.innerHTML = '<div class="alert alert-danger py-2 small">erro: ' + esc(e.message) + '</div>';
+            });
+    });
+})();
+</script>
+{% endblock %}
