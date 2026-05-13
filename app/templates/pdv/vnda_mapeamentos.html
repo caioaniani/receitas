@@ -16,11 +16,34 @@
 </div>
 <div id="vnda-sync-status"></div>
 
+<div class="card mb-3 border-primary">
+    <div class="card-header bg-white">
+        <strong><i class="bi bi-shop"></i> Loja destino das baixas VNDA</strong>
+    </div>
+    <div class="card-body py-2">
+        <form method="POST" action="{{ url_for('pdv.vnda_config_loja') }}" class="d-flex gap-2 align-items-center flex-wrap">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <span class="small text-muted">Toda venda VNDA vai baixar estoque de:</span>
+            <select name="loja_id" class="form-select form-select-sm input-blue" style="max-width:280px;" required>
+                <option value="">— escolha uma loja —</option>
+                {% for l in lojas %}
+                <option value="{{ l.id }}" {% if loja_atual and loja_atual.id == l.id %}selected{% endif %}>{{ l.nome }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-sm btn-primary">Salvar</button>
+            {% if loja_atual %}
+            <small class="text-success ms-auto"><i class="bi bi-check-circle"></i> atual: <strong>{{ loja_atual.nome }}</strong></small>
+            {% else %}
+            <small class="text-danger ms-auto"><i class="bi bi-exclamation-triangle"></i> nenhuma loja configurada — sync nao funciona</small>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
 <div class="alert alert-info" style="font-size:13px;">
     <i class="bi bi-info-circle"></i>
-    <strong>VNDA = pedidos do site.</strong> A baixa de estoque acontece sempre da
-    <strong>Loja Anesio Pinto Rosa</strong> no <strong>dia da entrega</strong>
-    (campo expected_delivery_date / extra.DataDeEntrega), independente do status.
+    <strong>VNDA = pedidos do site.</strong> Baixa acontece no <strong>dia da entrega</strong>
+    do pedido (campo expected_delivery_date / extra.DataDeEntrega), independente do status.
     Itens pendentes nao baixam. Marque como ignorado os que voce nao quer rastrear.
 </div>
 
