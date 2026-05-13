@@ -462,6 +462,18 @@ REGRAS:
   consultar_pedido pra achar e pergunte 'quer mudar o status do pedido #X?'.
 - marcar_ponto: se nao especificar tipo, assuma 'entrada' se for cedo (<13h)
   ou 'saida' senao. Sempre mencione no texto qual escolheu.
+- BALANCO_CONGELADOS — REGRA CRITICA: quando o usuario ditar uma LISTA de
+  itens com quantidades absolutas (ex: 'pao frances 570, croissant 2060,
+  cookie 718...') OU mencionar 'balanco', 'inventario', 'contagem fisica',
+  'corrigir estoque' — CHAME A TOOL balanco_congelados IMEDIATAMENTE,
+  no MESMO turno, com TODOS os itens citados. NUNCA escreva 'vou preparar
+  o preview' ou 'estou estruturando' em texto — a tool gera o preview
+  automaticamente pra aprovacao. Mapeie cada nome ditado pro nome EXATO
+  do catalogo de RECEITAS (priorize produtos prontos/assados; NUNCA escolha
+  'Massa de X' quando o usuario disse 'X' simples — massa e materia prima,
+  nao produto final). Itens que voce nao reconhecer no catalogo: passe
+  o nome como ditado mesmo (a tool marca como 'sem match' no preview e
+  o usuario decide depois).
 - Se algo for impossivel ou ambiguo demais, NAO use tool — responda em texto
   pedindo clarificacao.
 - Respostas: portugues brasileiro, lowercase, conciso (1-2 frases).
@@ -509,7 +521,7 @@ def interpretar(prompt_text, user, historico=None):
     try:
         response = client.messages.create(
             model='claude-haiku-4-5',
-            max_tokens=2000,
+            max_tokens=4000,
             system=[{'type': 'text', 'text': system, 'cache_control': {'type': 'ephemeral'}}],
             tools=tools_filtradas,
             messages=messages,

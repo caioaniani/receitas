@@ -157,6 +157,71 @@
 
     // Preview generico: lista os params como tabela read-only + botoes
     // aprovar/cancelar. Usado pra tools simples sem UI customizada.
+    function previewBalancoCongelados(conversaId, params) {
+        var itens = params.itens || [];
+        var totais = params.totais || {};
+        var ref = params.referencia ? escape(params.referencia) : '(sem referência)';
+        var n_ok = totais.resolvidos || 0;
+        var n_nao = totais.nao_resolvidos || 0;
+        var delta = totais.delta_total;
+
+        var resumo = '<div class="copilot-preview-row" style="font-size:12px;">' +
+            '<span class="badge bg-success" style="margin-right:4px;">' + n_ok + ' ok</span>' +
+            (n_nao ? '<span class="badge bg-warning text-dark" style="margin-right:4px;">' + n_nao + ' sem match</span>' : '') +
+            (delta !== undefined && delta !== null
+                ? '<span class="badge bg-info text-dark" style="margin-right:4px;">delta ' + (delta >= 0 ? '+' : '') + delta + '</span>'
+                : '') +
+            '<span style="color:var(--text-muted);">ref: ' + ref + '</span>' +
+            '</div>';
+
+        var rows = '';
+        itens.forEach(function(it, idx) {
+            var nome = escape(it.nome || '?');
+            var qtd = it.quantidade !== undefined ? it.quantidade : '';
+            var atual = (it.resolvido && it.estoque_atual !== undefined) ? it.estoque_atual : '—';
+            var d = it.delta;
+            var deltaCell = '—';
+            if (it.resolvido && d !== null && d !== undefined) {
+                if (d > 0) deltaCell = '<span style="color:#198754;">+' + d + '</span>';
+                else if (d < 0) deltaCell = '<span style="color:#dc3545;">' + d + '</span>';
+                else deltaCell = '<span style="color:#888;">0</span>';
+            }
+            var match;
+            if (it.erro) {
+                match = '<span style="color:#dc3545;">⚠ ' + escape(it.erro) + '</span>';
+            } else if (it.resolvido) {
+                var tag = it.resolvido.match === 'fuzzy' ? ' <small style="color:#888;">(fuzzy)</small>' : '';
+                match = escape(it.resolvido.nome) + tag;
+            } else {
+                match = '<span style="color:#cc7700;">⚠ sem match</span>';
+            }
+            rows += '<tr>' +
+                '<td style="color:#888;">' + (idx + 1) + '</td>' +
+                '<td>' + nome + '</td>' +
+                '<td>' + match + '</td>' +
+                '<td style="text-align:right;">' + atual + '</td>' +
+                '<td style="text-align:right; font-weight:600;">' + qtd + '</td>' +
+                '<td style="text-align:right; font-weight:600;">' + deltaCell + '</td>' +
+                '</tr>';
+        });
+
+        return '<div class="copilot-preview" data-conversa="' + conversaId + '" data-tipo="balanco_congelados">' +
+            '<div class="copilot-preview-header">balanço de congelados</div>' +
+            resumo +
+            '<div style="max-height:280px; overflow-y:auto; margin-top:6px;">' +
+            '<table class="table table-sm table-bordered mb-0" style="font-size:11.5px;">' +
+            '<thead><tr><th>#</th><th>ditado</th><th>match</th>' +
+            '<th style="text-align:right;">atual</th><th style="text-align:right;">novo</th>' +
+            '<th style="text-align:right;">Δ</th></tr></thead>' +
+            '<tbody>' + rows + '</tbody></table></div>' +
+            '<div class="copilot-preview-actions">' +
+            '<button type="button" class="btn-pill btn-pill-outline copilot-cancel">cancelar</button>' +
+            '<button type="button" class="btn-pill btn-pill-primary copilot-approve"' +
+            (n_ok === 0 ? ' disabled' : '') + '>' +
+            'aplicar ' + n_ok + ' item(s)</button>' +
+            '</div></div>';
+    }
+
     function previewGenerico(conversaId, tipo, params, titulo, labelAprovar) {
         var rows = '';
         for (var k in params) {
@@ -194,6 +259,7 @@
             else if (d.tipo === 'criar_fornecedor') html += previewGenerico(d.conversa_id, d.tipo, d.params, 'criar fornecedor', 'cadastrar');
             else if (d.tipo === 'marcar_ponto') html += previewGenerico(d.conversa_id, d.tipo, d.params, 'marcar ponto', 'registrar');
             else if (d.tipo === 'criar_tarefa') html += previewGenerico(d.conversa_id, d.tipo, d.params, 'criar tarefa', 'criar');
+            else if (d.tipo === 'balanco_congelados') html += previewBalancoCongelados(d.conversa_id, d.params);
         }
         return html;
     }
