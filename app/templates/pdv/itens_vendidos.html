@@ -531,7 +531,7 @@ var __PRODUTOS = [
                 if (d.pedidos_cancelados_estornados) html += ' · ' + d.pedidos_cancelados_estornados + ' estornados';
                 html += '</div>';
                 syncStatus.innerHTML = html;
-                buscar();  // re-renderiza relatorio (matches atualizados)
+                buscar({preserveScroll: true});  // re-renderiza relatorio (matches atualizados)
             })
             .catch(function(e) {
                 btnSync.disabled = false;
