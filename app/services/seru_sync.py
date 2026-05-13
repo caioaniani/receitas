@@ -24,7 +24,8 @@ from datetime import datetime
 
 from app.extensions import db
 from app.models import (Loja, EstoqueLoja, MovEstoqueLoja,
-                        SeruProdutoMap, SeruLojaMap, SeruPedidoProcessado)
+                        SeruProdutoMap, SeruLojaMap, SeruPedidoProcessado,
+                        SeruDebito)
 from app.services import seru
 
 logger = logging.getLogger(__name__)
