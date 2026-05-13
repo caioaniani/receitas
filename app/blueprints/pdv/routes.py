@@ -9,7 +9,8 @@ from app.decorators import admin_required
 from app.extensions import db
 from app.models import (Loja, Receita, Produto,
                         SeruProdutoMap, SeruLojaMap, SeruPedidoProcessado,
-                        VndaProdutoMap, VndaPedidoProcessado, MovEstoqueLoja)
+                        VndaProdutoMap, VndaPedidoProcessado, MovEstoqueLoja,
+                        AppConfig)
 from app.services import seru
 
 
