@@ -778,7 +778,8 @@ class MovEstoqueLoja(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     estoque_loja_id = db.Column(db.Integer, db.ForeignKey('estoque_loja.id'), nullable=False)
-    tipo = db.Column(db.String(20), nullable=False)
+    # 50 pra caber 'venda_seru_sem_estoque' (22) e futuros tipos.
+    tipo = db.Column(db.String(50), nullable=False)
     quantidade = db.Column(db.Integer, nullable=False)
     data = db.Column(db.DateTime, default=datetime.utcnow)
     referencia = db.Column(db.String(200))
