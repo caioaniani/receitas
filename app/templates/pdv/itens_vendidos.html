@@ -344,8 +344,15 @@ var __PRODUTOS = [
     var mmSalvar = document.getElementById('mm-salvar');
     var currentNome = null;
 
+    function parseFator(raw) {
+        // Aceita ponto OU virgula como separador decimal (PT-BR).
+        var s = String(raw || '1').trim().replace(',', '.');
+        var f = parseFloat(s);
+        if (!isFinite(f) || f <= 0) return 1;
+        return f;
+    }
     function atualizarFatorHelp() {
-        var f = parseFloat(mmFator.value) || 1;
+        var f = parseFator(mmFator.value);
         if (Math.abs(f - 1) < 0.001) {
             mmFatorHelp.textContent = '1 venda = 1 unidade (default)';
             mmFatorHelp.className = 'text-muted';
@@ -359,10 +366,11 @@ var __PRODUTOS = [
     }
     mmFator.addEventListener('input', atualizarFatorHelp);
     function recalcDeFracao() {
-        var x = parseFloat(mmFatorX.value);
-        var y = parseFloat(mmFatorY.value);
+        var x = parseFloat(String(mmFatorX.value || '').replace(',', '.'));
+        var y = parseFloat(String(mmFatorY.value || '').replace(',', '.'));
         if (x > 0 && y > 0) {
-            mmFator.value = (x / y).toFixed(4).replace(/\.?0+$/, '');
+            var f = x / y;
+            mmFator.value = f.toFixed(4).replace(/\.?0+$/, '');
             atualizarFatorHelp();
         }
     }
