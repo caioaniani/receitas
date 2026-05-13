@@ -519,3 +519,153 @@ def vincular_loja(map_id):
         return redirect(url_for('pdv.mapeamentos'))
     flash(f'Acao desconhecida: "{acao}".', 'warning')
     return redirect(url_for('pdv.mapeamentos'))
+
+
+# ════════════════════════════════════════════════════════════════════
+# VNDA (site) — espelha o Seru mas com loja fixa e baixa por data entrega
+# ════════════════════════════════════════════════════════════════════
+
+@pdv_bp.route('/vnda/mapeamentos')
+@login_required
+@admin_required
+def vnda_mapeamentos():
+    produtos_map = VndaProdutoMap.query.order_by(
+        VndaProdutoMap.ignorar.asc(),
+        VndaProdutoMap.confirmado_em.is_(None).desc(),
+        VndaProdutoMap.vnda_nome,
+    ).all()
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+    return render_template('pdv/vnda_mapeamentos.html',
+                           produtos_map=produtos_map,
+                           receitas=receitas, produtos=produtos)
+
+
+@pdv_bp.route('/vnda/mapeamentos/produto/<int:map_id>', methods=['POST'])
+@login_required
+@admin_required
+def vnda_vincular_produto(map_id):
+    mp = VndaProdutoMap.query.get_or_404(map_id)
+    acao = request.form.get('acao')
+    if not acao and request.form.get('alvo_id'):
+        acao = 'vincular'
+    if not acao:
+        flash('Clique em "Vincular", "Ignorar" ou "Desfazer".', 'warning')
+        return redirect(url_for('pdv.vnda_mapeamentos'))
+
+    if acao == 'vincular':
+        tipo = request.form.get('alvo_tipo')
+        try:
+            alvo_id = int(request.form.get('alvo_id', ''))
+        except (TypeError, ValueError):
+            alvo_id = 0
+        if tipo == 'receita' and alvo_id:
+            mp.receita_id = alvo_id; mp.produto_id = None; mp.ignorar = False
+        elif tipo == 'produto' and alvo_id:
+            mp.produto_id = alvo_id; mp.receita_id = None; mp.ignorar = False
+        else:
+            flash('Selecione receita ou produto valido.', 'danger')
+            return redirect(url_for('pdv.vnda_mapeamentos'))
+        try:
+            fator = float(request.form.get('fator') or 1.0)
+            if fator <= 0:
+                fator = 1.0
+        except (TypeError, ValueError):
+            fator = 1.0
+        mp.fator_quantidade = fator
+        mp.confirmado_em = datetime.utcnow()
+        mp.confirmado_por = current_user.id
+        fator_msg = '' if fator == 1.0 else f' · fator {fator}'
+        flash(f'"{mp.vnda_nome}" → {mp.alvo_nome}{fator_msg}', 'success')
+    elif acao == 'ignorar':
+        mp.ignorar = True; mp.receita_id = None; mp.produto_id = None
+        mp.confirmado_em = datetime.utcnow(); mp.confirmado_por = current_user.id
+        flash(f'"{mp.vnda_nome}" ignorado — nao baixara estoque.', 'info')
+    elif acao == 'desfazer':
+        mp.ignorar = False; mp.receita_id = None; mp.produto_id = None
+        mp.confirmado_em = None; mp.confirmado_por = None
+        flash(f'"{mp.vnda_nome}" voltou pra pendente.', 'info')
+    db.session.commit()
+    return redirect(url_for('pdv.vnda_mapeamentos'))
+
+
+@pdv_bp.route('/vnda/sync', methods=['POST'])
+@login_required
+@admin_required
+def vnda_sync():
+    """Botao 'Sincronizar VNDA agora' — processa pedidos com entrega hoje."""
+    from app.services import vnda_sync as svc
+    from app.services.seru_cron import hoje_brt
+    hoje = hoje_brt()
+    try:
+        stats = svc.processar_pedidos(hoje, user=current_user)
+    except Exception as e:
+        current_app.logger.exception('vnda_sync falhou')
+        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502
+    if stats.get('erro'):
+        return jsonify(ok=False, erro=stats['erro']), 502
+    return jsonify(ok=True, **stats)
+
+
+@pdv_bp.route('/vnda/reprocessar', methods=['POST'])
+@login_required
+@admin_required
+def vnda_reprocessar():
+    """Apaga pedidos VNDA processados HOJE com baixados=0 e re-roda.
+    Safety identica a do Seru: nao apaga os ja-baixados."""
+    from app.services import vnda_sync as svc
+    from app.services.seru_cron import hoje_brt
+    hoje = hoje_brt()
+    inicio_dia_utc = datetime.combine(hoje, datetime.min.time()) + timedelta(hours=3)
+    n_apagados = VndaPedidoProcessado.query.filter(
+        VndaPedidoProcessado.processado_em >= inicio_dia_utc,
+        VndaPedidoProcessado.n_itens_baixados == 0,
+        VndaPedidoProcessado.estornado_em.is_(None),
+        VndaPedidoProcessado.cancelado_em.is_(None),
+    ).delete(synchronize_session=False)
+    db.session.commit()
+    try:
+        stats = svc.processar_pedidos(hoje, user=current_user)
+    except Exception as e:
+        current_app.logger.exception('vnda_reprocessar falhou')
+        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502
+    if stats.get('erro'):
+        return jsonify(ok=False, erro=stats['erro']), 502
+    stats['n_apagados'] = n_apagados
+    return jsonify(ok=True, **stats)
+
+
+@pdv_bp.route('/vnda/historico-sync')
+@login_required
+@admin_required
+def vnda_historico_sync():
+    from sqlalchemy import desc, or_
+    status_filtro = request.args.get('status', '')
+    q = VndaPedidoProcessado.query
+    if status_filtro == 'baixados':
+        q = q.filter(VndaPedidoProcessado.n_itens_baixados > 0,
+                     VndaPedidoProcessado.cancelado_em.is_(None))
+    elif status_filtro == 'estornados':
+        q = q.filter(VndaPedidoProcessado.estornado_em.isnot(None))
+    elif status_filtro == 'cancelados':
+        q = q.filter(VndaPedidoProcessado.cancelado_em.isnot(None))
+    elif status_filtro == 'sem_baixa':
+        q = q.filter(VndaPedidoProcessado.n_itens_baixados == 0,
+                     VndaPedidoProcessado.cancelado_em.is_(None),
+                     VndaPedidoProcessado.estornado_em.is_(None))
+
+    pedidos = q.order_by(desc(VndaPedidoProcessado.processado_em)).limit(200).all()
+
+    movs_por_pedido = {}
+    if pedidos:
+        clauses = [MovEstoqueLoja.referencia.like(f'VNDA #{p.vnda_pedido_code}%') for p in pedidos]
+        all_movs = MovEstoqueLoja.query.filter(or_(*clauses)).all()
+        for m in all_movs:
+            pref = (m.referencia or '').split(' ', 2)
+            if len(pref) >= 2 and pref[0] == 'VNDA' and pref[1].startswith('#'):
+                pid = pref[1][1:]
+                movs_por_pedido.setdefault(pid, []).append(m)
+
+    return render_template('pdv/vnda_historico_sync.html',
+                           pedidos=pedidos, sel_status=status_filtro,
+                           movs_por_pedido=movs_por_pedido)
