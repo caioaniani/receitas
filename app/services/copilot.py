@@ -291,6 +291,39 @@ TOOL_BALANCO_CONGELADOS = {
     },
 }
 
+TOOL_ENTRADA_LOTE_LOJA = {
+    "name": "entrada_lote_loja",
+    "description": (
+        "Lanca entrada em lote no estoque de uma loja especifica (SOMA as "
+        "quantidades ao estoque atual). Use quando o usuario disser 'dar "
+        "entrada na loja X', 'chegou entrega na loja Y', 'somar no estoque "
+        "da loja Z' com uma lista de itens. Itens sem cadastro no sistema "
+        "entram como pendentes e depois o admin vincula. NAO usar pra "
+        "balanco (sobrescrever) ou pra estoque de congelados (que e outra "
+        "tool). NAO executa direto — retorna preview pra aprovar."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "loja_id": {"type": "integer", "description": "ID da loja onde sera lancada a entrada."},
+            "itens": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "nome": {"type": "string", "description": "Nome do item. Aceita aproximacoes (fuzzy match)."},
+                        "quantidade": {"type": "integer", "minimum": 1, "description": "Quantidade a SOMAR no estoque atual."},
+                    },
+                    "required": ["nome", "quantidade"],
+                },
+                "minItems": 1,
+            },
+            "referencia": {"type": ["string", "null"], "description": "Ex: 'Entrega 13/05'."},
+        },
+        "required": ["loja_id", "itens"],
+    },
+}
+
 TOOLS = [
     # Existentes
     TOOL_CRIAR_PEDIDO, TOOL_CONSULTAR_PEDIDO, TOOL_CONSULTAR_ESTOQUE,
@@ -303,8 +336,8 @@ TOOLS = [
     TOOL_CONSULTAR_FUNCIONARIO, TOOL_CONSULTAR_CAIXA,
     # Planejamento
     TOOL_CONSULTAR_FOCO, TOOL_CONSULTAR_TAREFAS, TOOL_MARCAR_TAREFA_FEITA,
-    # Estoque de congelados
-    TOOL_BALANCO_CONGELADOS,
+    # Estoque de congelados / loja
+    TOOL_BALANCO_CONGELADOS, TOOL_ENTRADA_LOTE_LOJA,
 ]
 
 # Quais tools requerem preview/aprovacao (writes)
