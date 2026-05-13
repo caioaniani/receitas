@@ -1002,5 +1002,11 @@ def _migrate_sqlite(app):
     if cols_el and 'nome_pendente' not in cols_el:
         cursor.execute("ALTER TABLE estoque_loja ADD COLUMN nome_pendente VARCHAR(200)")
 
+    # seru_produto_map.fator_quantidade
+    cursor.execute("PRAGMA table_info(seru_produto_map)")
+    cols_spm = [row[1] for row in cursor.fetchall()]
+    if cols_spm and 'fator_quantidade' not in cols_spm:
+        cursor.execute("ALTER TABLE seru_produto_map ADD COLUMN fator_quantidade REAL NOT NULL DEFAULT 1.0")
+
     conn.commit()
     conn.close()
