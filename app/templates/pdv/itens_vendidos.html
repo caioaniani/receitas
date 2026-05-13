@@ -154,16 +154,16 @@
                             <i class="bi bi-info-circle" title="Quantas unidades do item cima sao consumidas em 1 venda Seru. Ex: NOZES COM MANTEIGA = 2 fatias / 10 fatias por pao = 0.2"></i>
                         </label>
                         <div class="d-flex gap-2 align-items-center">
-                            <input type="number" id="mm-fator" class="form-control form-control-sm" step="0.01" min="0.01" value="1" style="max-width:120px;">
+                            <input type="text" inputmode="decimal" id="mm-fator" class="form-control form-control-sm" value="1" style="max-width:120px;" placeholder="ex: 0.2">
                             <small class="text-muted" id="mm-fator-help">1 venda = 1 unidade (default)</small>
                         </div>
                         <details class="mt-1">
                             <summary class="small text-primary" style="cursor:pointer;">Calcular como X fatias de Y</summary>
                             <div class="d-flex gap-1 align-items-center mt-1">
                                 <span class="small">1 venda usa</span>
-                                <input type="number" id="mm-fator-x" class="form-control form-control-sm" min="1" placeholder="X" style="width:70px;">
+                                <input type="text" inputmode="numeric" id="mm-fator-x" class="form-control form-control-sm" placeholder="X" style="width:70px;">
                                 <span class="small">partes de uma unidade dividida em</span>
-                                <input type="number" id="mm-fator-y" class="form-control form-control-sm" min="1" placeholder="Y" style="width:70px;">
+                                <input type="text" inputmode="numeric" id="mm-fator-y" class="form-control form-control-sm" placeholder="Y" style="width:70px;">
                                 <span class="small">partes</span>
                             </div>
                         </details>
