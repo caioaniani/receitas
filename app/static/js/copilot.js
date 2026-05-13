@@ -261,6 +261,7 @@
             else if (d.tipo === 'marcar_ponto') html += previewGenerico(d.conversa_id, d.tipo, d.params, 'marcar ponto', 'registrar');
             else if (d.tipo === 'criar_tarefa') html += previewGenerico(d.conversa_id, d.tipo, d.params, 'criar tarefa', 'criar');
             else if (d.tipo === 'balanco_congelados') html += previewBalancoCongelados(d.conversa_id, d.params);
+            else if (d.tipo === 'entrada_lote_loja') html += previewEntradaLoteLoja(d.conversa_id, d.params);
         }
         return html;
     }
