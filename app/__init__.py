@@ -290,6 +290,15 @@ def create_app(config_class=None):
 
         _criar_admin()
 
+    # Cron de auto-sync Seru → EstoqueLoja (15min). Roda dentro de
+    # cada worker gunicorn mas usa pg_try_advisory_lock pra deduplicate.
+    if not app.config.get('TESTING'):
+        try:
+            from app.services import seru_cron
+            seru_cron.iniciar(app)
+        except Exception as e:
+            app.logger.warning('Nao foi possivel iniciar seru auto-sync: %s', e)
+
     return app
 
 
