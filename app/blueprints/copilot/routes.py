@@ -183,7 +183,11 @@ def listar_lojas():
         return guard
     from app.models import Loja
     if current_user.is_admin():
-        lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+        # Industria nao recebe pedidos — esconde do dropdown do copilot.
+        lojas = (Loja.query
+                 .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
+                 .order_by(Loja.nome)
+                 .all())
     elif current_user.loja_id:
         lojas = Loja.query.filter_by(id=current_user.loja_id, ativa=True).all()
     else:
