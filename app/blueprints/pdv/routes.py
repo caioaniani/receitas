@@ -19,6 +19,42 @@ def index():
     return render_template('pdv/index.html', hoje=date.today().isoformat())
 
 
+@pdv_bp.route('/reprocessar', methods=['POST'])
+@login_required
+@admin_required
+def reprocessar():
+    """Apaga SeruPedidoProcessado dos que NAO baixaram nada e roda sync de novo.
+    Util quando voce mapeou produtos/lojas DEPOIS do cron processar.
+    Safety: nao apaga pedidos com baixados>0 (evita double-decrement); nao
+    apaga estornados nem cancelados."""
+    from app.services import seru_sync
+    try:
+        dias = max(1, min(int(request.form.get('dias') or 7), 30))
+    except ValueError:
+        dias = 7
+
+    fim = date.today()
+    inicio = fim - timedelta(days=dias - 1)
+    cutoff = datetime.utcnow() - timedelta(days=dias + 1)
+
+    # Apaga so os "sem baixa" — seguros pra reprocessar
+    n_apagados = SeruPedidoProcessado.query.filter(
+        SeruPedidoProcessado.processado_em >= cutoff,
+        SeruPedidoProcessado.n_itens_baixados == 0,
+        SeruPedidoProcessado.estornado_em.is_(None),
+        SeruPedidoProcessado.cancelado_em.is_(None),
+    ).delete(synchronize_session=False)
+    db.session.commit()
+
+    try:
+        stats = seru_sync.processar_pedidos(inicio, fim, user=current_user)
+    except Exception as e:
+        current_app.logger.exception('reprocessar falhou')
+        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502
+    stats['n_apagados'] = n_apagados
+    return jsonify(ok=True, **stats)
+
+
 @pdv_bp.route('/historico-sync')
 @login_required
 @admin_required
