@@ -11,13 +11,27 @@ from datetime import date, datetime, timedelta
 
 from app.extensions import db
 from app.models import (Loja, EstoqueLoja, MovEstoqueLoja, Receita, MateriaPrima,
-                        VndaProdutoMap, VndaPedidoProcessado, VndaDebito)
+                        VndaProdutoMap, VndaPedidoProcessado, VndaDebito,
+                        AppConfig)
 from app.services import vnda
 
 logger = logging.getLogger(__name__)
 
-LOJA_VNDA_NOME = 'Loja Anesio Pinto Rosa'
+# Default usado se admin nao configurou ainda em /pdv/vnda/mapeamentos.
+LOJA_VNDA_NOME_DEFAULT = 'Loja Anesio Pinto Rosa'
 STATUS_CANCELADO = {'canceled', 'cancelled'}
+
+
+def loja_vnda():
+    """Retorna a Loja configurada pra receber as baixas VNDA.
+    Le de AppConfig.vnda_loja_id; se nao houver, faz fallback pelo nome
+    default ('Loja Anesio Pinto Rosa')."""
+    loja_id = AppConfig.get_int('vnda_loja_id')
+    if loja_id:
+        l = Loja.query.get(loja_id)
+        if l:
+            return l
+    return Loja.query.filter_by(nome=LOJA_VNDA_NOME_DEFAULT).first()
 
 
 def _resolver_produto(vnda_nome, vnda_sku):
