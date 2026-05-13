@@ -1,11 +1,14 @@
 """Vendas PDV via integracao Seru. Sob demanda — sem cache local."""
 from datetime import date, datetime, timedelta
 
-from flask import render_template, request, jsonify, current_app
-from flask_login import login_required
+from flask import render_template, request, jsonify, current_app, redirect, url_for, flash
+from flask_login import login_required, current_user
 
 from app.blueprints.pdv import pdv_bp
 from app.decorators import admin_required
+from app.extensions import db
+from app.models import (Loja, Receita, Produto,
+                        SeruProdutoMap, SeruLojaMap, SeruPedidoProcessado)
 from app.services import seru
 
 
