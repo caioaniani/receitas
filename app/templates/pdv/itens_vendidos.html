@@ -169,27 +169,53 @@
 
                 tbody.innerHTML = '';
                 (d.produtos || []).forEach(function(p, idx) {
-                    var match;
-                    if (p.match) {
-                        var fuzzy = p.match.kind === 'fuzzy' ? ' <small class="badge bg-info text-dark" style="font-size:9px;">fuzzy</small>' : '';
-                        var tipoBadge = p.match.tipo === 'receita'
+                    // Coluna 'Vinculo': mostra estado autoritativo (SeruProdutoMap)
+                    // + sugestao fuzzy se ainda nao mapeado.
+                    var vinculoHtml;
+                    var btnLabel, btnClass;
+                    if (p.estado_map === 'mapeado' && p.mapeado_para) {
+                        var tipoBadge = p.mapeado_para.tipo === 'receita'
                             ? '<span class="badge bg-primary" style="font-size:9px;">R</span>'
                             : '<span class="badge bg-secondary" style="font-size:9px;">P</span>';
-                        match = tipoBadge + ' ' + esc(p.match.nome) + fuzzy;
+                        vinculoHtml = '<span class="badge bg-success" style="font-size:9px;margin-right:4px;">✓ mapeado</span>'
+                            + tipoBadge + ' ' + esc(p.mapeado_para.nome);
+                        btnLabel = 'Editar';
+                        btnClass = 'btn-outline-secondary';
+                    } else if (p.estado_map === 'ignorado') {
+                        vinculoHtml = '<span class="badge bg-secondary" style="font-size:9px;">ignorado</span> <small class="text-muted">nao baixa estoque</small>';
+                        btnLabel = 'Editar';
+                        btnClass = 'btn-outline-secondary';
                     } else {
-                        match = '<span class="text-warning">⚠ sem match</span>';
+                        var sugestao = '';
+                        if (p.match) {
+                            var fuzzy = p.match.kind === 'fuzzy' ? ' <small style="font-size:9px;">(fuzzy)</small>' : '';
+                            sugestao = '<small class="text-muted d-block" style="font-size:10px;">sugestao: ' + esc(p.match.nome) + fuzzy + '</small>';
+                        }
+                        vinculoHtml = '<span class="badge bg-warning text-dark" style="font-size:9px;">sem vinculo</span>' + sugestao;
+                        btnLabel = '+ Vincular';
+                        btnClass = 'btn-primary';
                     }
+                    var btn = '<button type="button" class="btn btn-sm ' + btnClass + ' btn-mapear" '
+                        + 'data-nome="' + esc(p.nome) + '" '
+                        + 'data-estado="' + esc(p.estado_map || 'sem_map') + '" '
+                        + 'data-sugestao-tipo="' + esc(p.match ? p.match.tipo : '') + '" '
+                        + 'data-sugestao-id="' + esc(p.match ? p.match.id : '') + '" '
+                        + 'data-alvo-tipo="' + esc(p.mapeado_para ? p.mapeado_para.tipo : '') + '" '
+                        + 'data-alvo-id="' + esc(p.mapeado_para ? p.mapeado_para.id : '') + '" '
+                        + 'style="font-size:11px; white-space:nowrap;">' + btnLabel + '</button>';
+
                     var sku = p.sku ? '<small class="text-muted d-block" style="font-size:10px;">sku: ' + esc(p.sku) + '</small>' : '';
                     var tr = document.createElement('tr');
                     tr.dataset.nome = (p.nome || '').toLowerCase();
                     tr.innerHTML =
                         '<td class="text-muted">' + (idx + 1) + '</td>' +
                         '<td><div class="fw-semibold">' + esc(p.nome) + '</div>' + sku + '</td>' +
-                        '<td>' + match + '</td>' +
+                        '<td>' + vinculoHtml + '</td>' +
                         '<td class="text-end fw-bold">' + fmtInt(p.qtd) + '</td>' +
                         '<td class="text-end">R$ ' + fmtBRL(p.faturamento) + '</td>' +
                         '<td class="text-end text-muted">' + (p.pct_faturamento || 0).toFixed(1) + '%</td>' +
-                        '<td class="text-end text-muted">' + fmtInt(p.n_pedidos) + '</td>';
+                        '<td class="text-end text-muted">' + fmtInt(p.n_pedidos) + '</td>' +
+                        '<td>' + btn + '</td>';
                     tbody.appendChild(tr);
                 });
                 if (!d.produtos || !d.produtos.length) {
