@@ -1080,6 +1080,64 @@ def _read_consultar_caixa(params, user):
     return {'texto': '\n'.join(linhas)}
 
 
+def _read_consultar_vendas_itens(params, user):
+    """Agrega itens vendidos da Seru no intervalo (e loja opcional)."""
+    from datetime import date as _date
+    from app.services import vendas_itens
+    hoje = _date.today()
+    try:
+        ini = datetime.strptime(params['inicio'], '%Y-%m-%d').date() if params.get('inicio') else hoje
+    except (ValueError, TypeError):
+        ini = hoje
+    try:
+        fim = datetime.strptime(params['fim'], '%Y-%m-%d').date() if params.get('fim') else hoje
+    except (ValueError, TypeError):
+        fim = hoje
+    if fim < ini:
+        ini, fim = fim, ini
+    if (fim - ini).days > 92:
+        return {'texto': 'Intervalo máximo é 92 dias.'}
+    loja = (params.get('loja') or '').strip() or None
+    top = max(1, min(int(params.get('top') or 10), 30))
+
+    dias_ate_hoje = max(0, (hoje - fim).days) if fim < hoje else 0
+    dias_extra = min(dias_ate_hoje, 7)
+    try:
+        data = vendas_itens.agregar_itens(ini, fim, loja_seru=loja,
+                                          expandir_dias_frente=dias_extra)
+    except Exception as e:
+        logger.exception('consultar_vendas_itens falhou')
+        return {'erro': f'{type(e).__name__}: {str(e)[:300]}'}
+
+    if not data['produtos']:
+        sufixo = f' na loja "{loja}"' if loja else ''
+        return {'texto': f'Nenhuma venda encontrada de {ini.strftime("%d/%m")} a {fim.strftime("%d/%m")}{sufixo}.'}
+
+    cab = f'**Vendas {ini.strftime("%d/%m")} → {fim.strftime("%d/%m")}**'
+    if loja:
+        cab += f' · {loja}'
+    cab += f' · {data["total_pedidos"]} pedido(s) · R$ {data["faturamento_total"]:.2f}'
+
+    linhas = [cab, '']
+    for i, p in enumerate(data['produtos'][:top], 1):
+        match_str = ''
+        if p['match']:
+            kind = ' (fuzzy)' if p['match']['kind'] == 'fuzzy' else ''
+            match_str = f' ↔ {p["match"]["nome"]}{kind}'
+        else:
+            match_str = ' ⚠ sem match no sistema'
+        linhas.append(
+            f'{i}. **{p["nome"]}** — {int(p["qtd"])} un · R$ {p["faturamento"]:.2f} ({p["pct_faturamento"]:.0f}%){match_str}'
+        )
+    if data['sem_match_count']:
+        linhas.append('')
+        linhas.append(f'_{data["sem_match_count"]} produto(s) Seru sem match no cadastro._')
+    if not loja and data['lojas_no_intervalo']:
+        linhas.append('')
+        linhas.append('Lojas no intervalo: ' + ', '.join(data['lojas_no_intervalo']))
+    return {'texto': '\n'.join(linhas)}
+
+
 # Roteador read estendido
 def _executar_read(tool_name, params, user):  # noqa: F811
     try:
