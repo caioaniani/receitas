@@ -8,7 +8,8 @@ from app.blueprints.pdv import pdv_bp
 from app.decorators import admin_required
 from app.extensions import db
 from app.models import (Loja, Receita, Produto,
-                        SeruProdutoMap, SeruLojaMap, SeruPedidoProcessado)
+                        SeruProdutoMap, SeruLojaMap, SeruPedidoProcessado,
+                        VndaProdutoMap, VndaPedidoProcessado, MovEstoqueLoja)
 from app.services import seru
 
 
