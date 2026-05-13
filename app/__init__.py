@@ -526,6 +526,26 @@ def _migrate_postgres(app):
             )
         """))
 
+        # Coluna nova em SeruProdutoMap pra produtos compostos/fracionados
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'seru_produto_map'"
+        ))
+        cols_spm = {row[0] for row in result}
+        if cols_spm and 'fator_quantidade' not in cols_spm:
+            conn.execute(text("ALTER TABLE seru_produto_map ADD COLUMN fator_quantidade REAL NOT NULL DEFAULT 1.0"))
+
+        # Acumulador de baixas fracionadas
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS seru_debito (
+                loja_id INTEGER NOT NULL REFERENCES loja(id),
+                seru_produto_map_id INTEGER NOT NULL REFERENCES seru_produto_map(id) ON DELETE CASCADE,
+                fracao_pendente REAL NOT NULL DEFAULT 0.0,
+                atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (loja_id, seru_produto_map_id)
+            )
+        """))
+
         # estoque_producao.nome_pendente (balanco aceita itens sem cadastro previo)
         result = conn.execute(text(
             "SELECT column_name FROM information_schema.columns "
