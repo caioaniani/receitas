@@ -128,8 +128,12 @@
 
         {% if current_user.is_admin() %}
         <a href="{{ url_for('pdv.index') }}"
-           class="sidebar-link {% if request.path.startswith('/pdv') %}active{% endif %}">
+           class="sidebar-link {% if request.path == '/pdv/' or request.path == '/pdv' %}active{% endif %}">
             <i class="bi bi-shop-window"></i> Vendas PDV
+        </a>
+        <a href="{{ url_for('pdv.itens_vendidos') }}"
+           class="sidebar-link {% if '/pdv/itens-vendidos' in request.path %}active{% endif %}">
+            <i class="bi bi-bag-check"></i> Itens Vendidos
         </a>
         {% endif %}
 
