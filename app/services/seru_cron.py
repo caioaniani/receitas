@@ -53,9 +53,10 @@ def _run_sync(app):
                 if not got:
                     return  # outro worker esta executando
             try:
-                hoje = date.today()
-                inicio = hoje - timedelta(days=1)  # ultimas 24h
-                stats = seru_sync.processar_pedidos(inicio, hoje, user=None)
+                # Processa SO o dia de HOJE (BRT). Vendas de ontem ou
+                # anteriores nao sao tocadas — preferencia do usuario.
+                hoje = hoje_brt()
+                stats = seru_sync.processar_pedidos(hoje, hoje, user=None)
                 _ult_run = _dt.utcnow()
                 ativas = any(stats.get(k, 0) for k in (
                     'pedidos_novos', 'itens_baixados',
