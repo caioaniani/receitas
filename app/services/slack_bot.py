@@ -263,7 +263,8 @@ def processar_evento_mensagem(evento):
                                 thread_ts=thread_ts)
         return
 
-    blocks = slack_blocks.build_preview(tipo, resp.get('params') or {},
+    # Usa params_acao (que tem _n_imagens pra preview da foto)
+    blocks = slack_blocks.build_preview(tipo, params_acao,
                                          token=token,
                                          explicacao=explicacao)
     res = slack_api.post_message(channel, blocks=blocks,
