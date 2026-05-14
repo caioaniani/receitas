@@ -184,8 +184,13 @@ def processar_evento_mensagem(evento):
 
     tipo = resp.get('tipo')
     explicacao = resp.get('explicacao') or ''
+    in_dm = (channel_type == 'im')
+    invocacao_explicita = in_dm or evento.get('type') == 'app_mention'
 
     if tipo == 'erro':
+        # Em canal sem @mention, fica quieto pra nao virar zoeira
+        if not invocacao_explicita:
+            return
         slack_api.post_message(channel,
                                 blocks=slack_blocks.build_texto(f':warning: {explicacao}'),
                                 text=explicacao,
@@ -193,6 +198,9 @@ def processar_evento_mensagem(evento):
         return
 
     if tipo == 'conversa':
+        # Em canal sem @mention, ignora conversa fiada — so age em comando
+        if not invocacao_explicita:
+            return
         slack_api.post_message(channel,
                                 blocks=slack_blocks.build_texto(explicacao),
                                 text=explicacao[:200],
