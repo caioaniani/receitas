@@ -1371,3 +1371,21 @@ class LojaProdutoMap(db.Model):
         if self.materia_prima_id:
             return 'mp'
         return None
+
+
+class LojaDebito(db.Model):
+    """Acumulador de fracoes pra saida em lote.
+
+    Mesma logica do SeruDebito/VndaDebito: quando fator<1 (ex: 0.2), vender 3
+    unidades nao baixa estoque (qtd_efetiva=0.6). A fracao fica aqui ate
+    acumular >=1, dai baixa N inteiros. Sem isso, fracoes se perdem.
+    """
+    __tablename__ = 'loja_debito'
+
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), primary_key=True)
+    loja_produto_map_id = db.Column(db.Integer,
+                                     db.ForeignKey('loja_produto_map.id', ondelete='CASCADE'),
+                                     primary_key=True)
+    fracao_pendente = db.Column(db.Float, nullable=False, default=0.0)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow,
+                               onupdate=datetime.utcnow)
