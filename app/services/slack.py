@@ -96,3 +96,37 @@ def info_usuario(slack_user_id):
     except Exception:
         logger.exception('slack info_usuario falhou')
         return None
+
+
+def baixar_arquivo(file_info, tamanho_max=10 * 1024 * 1024):
+    """Baixa um arquivo do Slack usando o bot token.
+
+    `file_info`: dict do event['files'][i] (precisa de 'url_private_download',
+    'mimetype', 'size', 'name').
+
+    Retorna {'bytes': bytes, 'mimetype': str, 'name': str} ou None.
+    Limita a `tamanho_max` (default 10MB) pra nao estourar memoria.
+    """
+    import requests
+    url = file_info.get('url_private_download') or file_info.get('url_private')
+    if not url:
+        return None
+    if (file_info.get('size') or 0) > tamanho_max:
+        logger.warning('slack baixar_arquivo: arquivo grande demais (%s bytes)', file_info.get('size'))
+        return None
+    token = (current_app.config.get('SLACK_BOT_TOKEN') or '').strip()
+    if not token:
+        return None
+    try:
+        r = requests.get(url, headers={'Authorization': f'Bearer {token}'}, timeout=15)
+        if r.status_code != 200:
+            logger.warning('slack baixar_arquivo: %s %s', r.status_code, r.text[:200])
+            return None
+        return {
+            'bytes': r.content,
+            'mimetype': file_info.get('mimetype') or r.headers.get('Content-Type', ''),
+            'name': file_info.get('name') or 'arquivo',
+        }
+    except Exception:
+        logger.exception('slack baixar_arquivo falhou')
+        return None
