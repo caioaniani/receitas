@@ -1232,7 +1232,7 @@ def estoque_loja_saida_lote_aplicar():
 
 @pedidos_bp.route('/estoque-loja/entrada-lote/aplicar', methods=['POST'])
 @login_required
-@gerente_required
+@admin_required
 def estoque_loja_entrada_lote_aplicar():
     from app.services import estoque_loja_lote as svc
     try:
