@@ -56,12 +56,11 @@
         </a>
         {% endif %}
 
-        {# ── 1. OPERAÇÃO ── #}
-        {% if current_user.pode_lojas() or current_user.pode_producao() %}
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Operação</div>
-
+        {# ── 1. LOJAS (gerente) ── #}
         {% if current_user.pode_lojas() %}
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">Lojas</div>
+
         <a href="{{ url_for('pedidos.lista') }}"
            class="sidebar-link {% if request.path == '/pedidos/' or request.path == '/pedidos' %}active{% endif %}">
             Pedidos
@@ -79,7 +78,12 @@
             Desperdício
         </a>
         {% endif %}
+
+        {# ── 2. PRODUÇÃO (industria) ── #}
         {% if current_user.pode_producao() %}
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">Produção</div>
+
         <a href="{{ url_for('producao.lista') }}"
            class="sidebar-link {% if request.path.startswith('/producao') %}active{% endif %}">
             Plano de Produção
@@ -92,7 +96,6 @@
            class="sidebar-link {% if '/pedidos/separacao' in request.path %}active{% endif %}">
             Separação do Dia
         </a>
-        {% endif %}
         {% endif %}
 
         {# ── 2. CATÁLOGO ── #}
