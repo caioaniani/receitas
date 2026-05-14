@@ -70,6 +70,7 @@ def _loja_do_usuario():
 
 @pedidos_bp.route('/')
 @login_required
+@gerente_required
 def lista():
     loja_id = _loja_do_usuario()
     query = PedidoLoja.query.options(
