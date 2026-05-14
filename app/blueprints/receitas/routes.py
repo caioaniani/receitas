@@ -28,7 +28,17 @@ def ficha(id):
 
     resultado = calcular_custos_receitas()
 
+    # Lista de usuarios pra dropdown "Atribuir" (admin so ve)
+    from app.models import Usuario
+    funcionarios = []
+    if current_user.is_admin():
+        funcionarios = (Usuario.query
+                        .filter(Usuario.papel != 'admin')
+                        .order_by(Usuario.nome)
+                        .all())
+
     return render_template('receitas/ficha.html', receita=receita, mp_dict=mp_dict,
+                           funcionarios=funcionarios,
                            receita_custos_json=json.dumps(resultado['custos'], ensure_ascii=False),
                            receita_pesos_json=json.dumps(resultado['pesos'], ensure_ascii=False))
 
