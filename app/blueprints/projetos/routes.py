@@ -6,6 +6,7 @@ from flask_login import login_required, current_user
 from app.blueprints.projetos import projetos_bp
 from app.decorators import admin_required, owner_required
 from app.extensions import db
+from app.utils.time import agora, hoje as hoje_brt
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.models import (ProjetoArea, Projeto, TarefaProjeto, Usuario, WeeklyReview)
