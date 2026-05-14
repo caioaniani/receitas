@@ -611,6 +611,21 @@ def _migrate_postgres(app):
                 value TEXT
             )
         """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS loja_produto_map (
+                id SERIAL PRIMARY KEY,
+                nome_digitado VARCHAR(200) NOT NULL UNIQUE,
+                receita_id INTEGER REFERENCES receita(id),
+                produto_id INTEGER REFERENCES produto(id),
+                materia_prima_id INTEGER REFERENCES materia_prima(id),
+                ignorar BOOLEAN DEFAULT FALSE NOT NULL,
+                fator_quantidade REAL NOT NULL DEFAULT 1.0,
+                primeira_visto_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                confirmado_em TIMESTAMP,
+                confirmado_por INTEGER REFERENCES usuario(id)
+            )
+        """))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_loja_produto_map_nome ON loja_produto_map(nome_digitado)"))
 
         # estoque_producao.nome_pendente (balanco aceita itens sem cadastro previo)
         result = conn.execute(text(
