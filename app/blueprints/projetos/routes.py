@@ -150,7 +150,7 @@ def _projetos_para_select():
 
 @projetos_bp.route('/')
 @login_required
-@admin_required
+@owner_required
 def painel():
     """Dashboard: cards de projetos agrupados por area, ordenados por urgencia."""
     import traceback
@@ -276,7 +276,7 @@ def painel():
 
 @projetos_bp.route('/lista')
 @login_required
-@admin_required
+@owner_required
 def hierarquia():
     """Visão hierárquica densa: Área › Projeto › Tarefas (todos expandidos)."""
     from app.models import ProjetoTemplate
@@ -305,7 +305,7 @@ def hierarquia():
 
 @projetos_bp.route('/p/<int:pid>')
 @login_required
-@admin_required
+@owner_required
 def projeto_detalhe(pid):
     """Página dedicada de um projeto com mini-kanban."""
     p = Projeto.query.options(
@@ -338,7 +338,7 @@ def projeto_detalhe(pid):
 
 @projetos_bp.route('/kanban')
 @login_required
-@admin_required
+@owner_required
 def kanban():
     filtro_area = request.args.get('area', type=int)
     so_foco = request.args.get('foco') == '1'
@@ -393,7 +393,7 @@ def kanban():
 
 @projetos_bp.route('/foco')
 @login_required
-@admin_required
+@owner_required
 def foco():
     q = Projeto.query.filter_by(foco_12s=True).join(ProjetoArea)
     if not current_user.is_dono():
@@ -409,7 +409,7 @@ def foco():
 
 @projetos_bp.route('/dia')
 @login_required
-@admin_required
+@owner_required
 def dia():
     """Tarefas de uma data especifica (similar a 'hoje' mas com seletor)."""
     data_str = request.args.get('data', '')
@@ -465,7 +465,7 @@ def dia():
 
 @projetos_bp.route('/hoje')
 @login_required
-@admin_required
+@owner_required
 def hoje():
     hoje_d = date.today()
 
@@ -512,7 +512,7 @@ def hoje():
 
 @projetos_bp.route('/area/nova', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def area_nova():
     nome = request.form.get('nome', '').strip()
     tipo = request.form.get('tipo', 'empresa')
@@ -536,7 +536,7 @@ def area_nova():
 
 @projetos_bp.route('/area/<int:area_id>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def area_excluir(area_id):
     area = ProjetoArea.query.get_or_404(area_id)
     if area.projetos:
@@ -552,7 +552,7 @@ def area_excluir(area_id):
 
 @projetos_bp.route('/projeto/novo', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def projeto_novo():
     area_id = request.form.get('area_id', type=int)
     nome = request.form.get('nome', '').strip()
@@ -575,7 +575,7 @@ def projeto_novo():
 
 @projetos_bp.route('/projeto/<int:pid>/editar', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def projeto_editar(pid):
     p = Projeto.query.get_or_404(pid)
     if not _projeto_visivel(p):
@@ -606,7 +606,7 @@ def projeto_editar(pid):
 
 @projetos_bp.route('/projeto/<int:pid>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def projeto_excluir(pid):
     p = Projeto.query.get_or_404(pid)
     if not _projeto_visivel(p):
@@ -622,7 +622,7 @@ def projeto_excluir(pid):
 
 @projetos_bp.route('/tarefa/quick', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def tarefa_quick():
     """Cria tarefa rapida na Inbox (sem vinculo a projeto especifico)."""
     nome = request.form.get('nome', '').strip()
@@ -653,7 +653,7 @@ def tarefa_quick():
 
 @projetos_bp.route('/inbox')
 @login_required
-@admin_required
+@owner_required
 def inbox():
     """Caixa de entrada: tarefas avulsas aguardando classificacao."""
     inbox_proj = _get_inbox_projeto()
@@ -680,7 +680,7 @@ def inbox():
 
 @projetos_bp.route('/tarefa/nova', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def tarefa_nova():
     projeto_id = request.form.get('projeto_id', type=int)
     nome = request.form.get('nome', '').strip()
@@ -717,7 +717,7 @@ def tarefa_nova():
 
 @projetos_bp.route('/tarefa/<int:tid>/editar', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def tarefa_editar(tid):
     t = TarefaProjeto.query.get_or_404(tid)
     if not _tarefa_visivel(t):
@@ -761,7 +761,7 @@ def tarefa_editar(tid):
 
 @projetos_bp.route('/tarefa/<int:tid>/mover', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def tarefa_mover(tid):
     """Drag-and-drop: muda status (coluna kanban) e atualiza ordens das tarefas afetadas."""
     t = TarefaProjeto.query.get_or_404(tid)
@@ -788,7 +788,7 @@ def tarefa_mover(tid):
 
 @projetos_bp.route('/tarefa/<int:tid>/dados')
 @login_required
-@admin_required
+@owner_required
 def tarefa_dados(tid):
     """Retorna dados completos de uma tarefa (para o modal de edicao)."""
     t = TarefaProjeto.query.get_or_404(tid)
@@ -811,7 +811,7 @@ def tarefa_dados(tid):
 
 @projetos_bp.route('/tarefa/<int:tid>/atualizar', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def tarefa_atualizar(tid):
     """Atualiza todos os campos de uma tarefa de uma vez."""
     t = TarefaProjeto.query.get_or_404(tid)
@@ -858,7 +858,7 @@ def tarefa_atualizar(tid):
 
 @projetos_bp.route('/tarefa/<int:tid>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def tarefa_excluir(tid):
     t = TarefaProjeto.query.get_or_404(tid)
     db.session.delete(t)
@@ -871,7 +871,7 @@ def tarefa_excluir(tid):
 
 @projetos_bp.route('/weekly')
 @login_required
-@admin_required
+@owner_required
 def weekly():
     """Dados pra modal de Weekly Review."""
     hoje_d = date.today()
@@ -911,7 +911,7 @@ def weekly():
 
 @projetos_bp.route('/_migrar', methods=['GET'])
 @login_required
-@admin_required
+@owner_required
 def forcar_migrate():
     """Endpoint de emergencia para forcar migrations das colunas novas."""
     import traceback
@@ -935,7 +935,7 @@ def forcar_migrate():
 
 @projetos_bp.route('/weekly/salvar', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def weekly_salvar():
     reflexao = request.form.get('reflexao', '').strip()
     if not reflexao:
@@ -991,7 +991,7 @@ def _agendar_proxima(tarefa):
 
 @projetos_bp.route('/templates')
 @login_required
-@admin_required
+@owner_required
 def templates_lista():
     from app.models import ProjetoTemplate
     templates = ProjetoTemplate.query.order_by(ProjetoTemplate.nome).all()
@@ -1004,7 +1004,7 @@ def templates_lista():
 
 @projetos_bp.route('/templates/novo', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def template_novo():
     from app.models import ProjetoTemplate
     nome = request.form.get('nome', '').strip()
@@ -1024,7 +1024,7 @@ def template_novo():
 
 @projetos_bp.route('/templates/<int:tid>')
 @login_required
-@admin_required
+@owner_required
 def template_editar(tid):
     from app.models import ProjetoTemplate
     template = ProjetoTemplate.query.get_or_404(tid)
@@ -1037,7 +1037,7 @@ def template_editar(tid):
 
 @projetos_bp.route('/templates/<int:tid>/atualizar', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def template_atualizar(tid):
     from app.models import ProjetoTemplate
     template = ProjetoTemplate.query.get_or_404(tid)
@@ -1051,7 +1051,7 @@ def template_atualizar(tid):
 
 @projetos_bp.route('/templates/<int:tid>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def template_excluir(tid):
     from app.models import ProjetoTemplate
     template = ProjetoTemplate.query.get_or_404(tid)
@@ -1063,7 +1063,7 @@ def template_excluir(tid):
 
 @projetos_bp.route('/templates/<int:tid>/tarefa', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def template_tarefa_nova(tid):
     from app.models import ProjetoTemplate, TarefaTemplate
     template = ProjetoTemplate.query.get_or_404(tid)
@@ -1094,7 +1094,7 @@ def template_tarefa_nova(tid):
 
 @projetos_bp.route('/templates/tarefa/<int:tt_id>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def template_tarefa_excluir(tt_id):
     from app.models import TarefaTemplate
     tt = TarefaTemplate.query.get_or_404(tt_id)
@@ -1106,7 +1106,7 @@ def template_tarefa_excluir(tt_id):
 
 @projetos_bp.route('/projeto/novo-de-template', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def projeto_novo_de_template():
     from app.models import ProjetoTemplate
     template_id = request.form.get('template_id', type=int)
@@ -1146,7 +1146,7 @@ def projeto_novo_de_template():
 
 @projetos_bp.route('/calendario')
 @login_required
-@admin_required
+@owner_required
 def calendario():
     ano = request.args.get('ano', type=int) or date.today().year
     mes = request.args.get('mes', type=int) or date.today().month
@@ -1191,7 +1191,7 @@ def calendario():
 
 @projetos_bp.route('/relatorio')
 @login_required
-@admin_required
+@owner_required
 def relatorio():
     hoje_d = date.today()
     de_str = request.args.get('de', '')
@@ -1255,7 +1255,7 @@ def relatorio():
 
 @projetos_bp.route('/area/<int:area_id>/editar', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def area_editar(area_id):
     area = ProjetoArea.query.get_or_404(area_id)
     campo = request.form.get('campo')
