@@ -3,20 +3,25 @@
 {% block title %}Saida em Lote — Estoque de Loja{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h1 class="page-title mb-0"><i class="bi bi-box-arrow-up"></i> Saida em Lote — Estoque de Loja</h1>
-    <a href="{{ url_for('pedidos.estoque_loja', loja=sel_loja or None) }}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-arrow-left"></i> Voltar ao estoque
-    </a>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('pedidos.estoque_loja_mapeamentos') }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-link-45deg"></i> Mapeamentos
+        </a>
+        <a href="{{ url_for('pedidos.estoque_loja', loja=sel_loja or None) }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar ao estoque
+        </a>
+    </div>
 </div>
 
 <div class="alert alert-warning" style="font-size:13px;">
     <i class="bi bi-info-circle"></i>
-    <strong>Como funciona:</strong> escolha a loja, cole a lista de vendas
-    (PDV sem API) e cada item <strong>subtrai</strong> do estoque atual.
-    Itens <strong>sem cadastro no sistema sao ignorados</strong> — cadastre como
-    receita/produto/MP primeiro. Se estoque atual menor que a saida, baixa ate 0
-    e registra a falta como "sem estoque".
+    <strong>Como funciona:</strong> cola sua lista de vendas (PDV sem API).
+    Nomes novos viram <strong>pendentes</strong> automaticamente — vincule em
+    <a href="{{ url_for('pedidos.estoque_loja_mapeamentos') }}">Mapeamentos</a>
+    ou marque como ignorar. Uma vez vinculado, o nome lembra pra sempre.
+    Pendentes e ignorados <strong>nao baixam estoque</strong>.
 </div>
 
 <form method="POST" action="{{ url_for('pedidos.estoque_loja_saida_lote') }}">
@@ -58,19 +63,29 @@
 </form>
 
 {% if itens %}
-{% set n_ok = itens | selectattr('resolvido') | list | length %}
+{% set n_mapeado = itens | rejectattr('erro') | selectattr('map_entry') | selectattr('map_entry.estado','equalto','mapeado') | list | length %}
+{% set n_pendente = itens | rejectattr('erro') | selectattr('map_entry') | selectattr('map_entry.estado','equalto','pendente') | list | length %}
+{% set n_ignorado = itens | rejectattr('erro') | selectattr('map_entry') | selectattr('map_entry.estado','equalto','ignorado') | list | length %}
 {% set n_erro = itens | selectattr('erro') | list | length %}
-{% set n_naoresolvido = itens | rejectattr('erro') | rejectattr('resolvido') | list | length %}
 
 <div class="card mb-3">
     <div class="card-header bg-white d-flex justify-content-between align-items-center">
         <span class="fw-bold"><i class="bi bi-list-check"></i> Pre-visualizacao — {{ loja.nome if loja else '?' }}</span>
         <span>
-            <span class="badge bg-success">{{ n_ok }} com match</span>
-            {% if n_naoresolvido %}<span class="badge bg-secondary">{{ n_naoresolvido }} sem cadastro — IGNORADO</span>{% endif %}
+            <span class="badge bg-success">{{ n_mapeado }} mapeado(s)</span>
+            {% if n_pendente %}<span class="badge bg-warning text-dark">{{ n_pendente }} pendente(s)</span>{% endif %}
+            {% if n_ignorado %}<span class="badge bg-secondary">{{ n_ignorado }} ignorado(s)</span>{% endif %}
             {% if n_erro %}<span class="badge bg-danger">{{ n_erro }} com erro</span>{% endif %}
         </span>
     </div>
+    {% if n_pendente %}
+    <div class="alert alert-warning mb-0 rounded-0 py-2" style="font-size:12px;">
+        <i class="bi bi-exclamation-triangle"></i>
+        <strong>{{ n_pendente }} item(ns) pendente(s)</strong> nao serao descontados.
+        <a href="{{ url_for('pedidos.estoque_loja_mapeamentos') }}" target="_blank">Abra Mapeamentos</a>
+        pra vincular ou ignorar, depois volte e clique "Aplicar" de novo.
+    </div>
+    {% endif %}
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-sm table-bordered mb-0">
@@ -78,17 +93,19 @@
                     <tr>
                         <th style="width:30px;">#</th>
                         <th>Voce digitou</th>
-                        <th>Match no sistema</th>
-                        <th class="text-center" style="width:80px;">Tipo</th>
-                        <th class="text-end" style="width:90px;">Atual</th>
-                        <th class="text-end" style="width:90px;">Saida</th>
-                        <th class="text-end" style="width:100px;">Novo</th>
-                        <th class="text-end" style="width:90px;">Faltou</th>
+                        <th>Mapeado para</th>
+                        <th class="text-center" style="width:90px;">Estado</th>
+                        <th class="text-end" style="width:80px;">Atual</th>
+                        <th class="text-end" style="width:80px;">Saida</th>
+                        <th class="text-end" style="width:90px;">Novo</th>
+                        <th class="text-end" style="width:80px;">Faltou</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in itens %}
-                    <tr class="{% if item.erro %}table-danger{% elif not item.resolvido %}table-secondary{% elif item.faltou and item.faltou > 0 %}table-warning{% endif %}">
+                    {% set mp = item.map_entry %}
+                    {% set estado = mp.estado if mp else None %}
+                    <tr class="{% if item.erro %}table-danger{% elif estado == 'pendente' %}table-warning{% elif estado == 'ignorado' %}table-secondary{% elif item.faltou and item.faltou > 0 %}table-warning{% endif %}">
                         <td class="text-muted">{{ loop.index }}</td>
                         <td>
                             <div class="fw-semibold">{{ item.nome or item.linha }}</div>
@@ -99,41 +116,41 @@
                         <td>
                             {% if item.erro %}
                                 <span class="text-danger">⚠ erro: {{ item.erro }}</span>
-                            {% elif item.resolvido %}
-                                {{ item.resolvido.nome }}
-                                {% if item.resolvido.match == 'fuzzy' %}
-                                    <small class="badge bg-info text-dark">fuzzy</small>
+                            {% elif mp and mp.alvo_nome %}
+                                {{ mp.alvo_nome }}
+                                {% if mp.fator_quantidade and mp.fator_quantidade != 1.0 %}
+                                    <span class="badge bg-warning text-dark" style="font-size:9px;">×{{ '%g'|format(mp.fator_quantidade) }}</span>
                                 {% endif %}
-                            {% else %}
-                                <span class="text-muted">
-                                    <i class="bi bi-x-circle"></i> sem cadastro — sera <strong>ignorado</strong>
-                                </span>
+                            {% elif estado == 'pendente' %}
+                                <a href="{{ url_for('pedidos.estoque_loja_mapeamentos') }}" target="_blank" class="text-warning">
+                                    <i class="bi bi-link-45deg"></i> vincular ou ignorar
+                                </a>
+                            {% elif estado == 'ignorado' %}
+                                <span class="text-muted"><i class="bi bi-x-circle"></i> ignorado</span>
                             {% endif %}
                         </td>
                         <td class="text-center">
-                            {% if item.resolvido %}
-                                {% if item.resolvido.tipo == 'receita' %}
-                                    <span class="badge bg-primary" style="font-size:10px;">Receita</span>
-                                {% elif item.resolvido.tipo == 'produto' %}
-                                    <span class="badge bg-secondary" style="font-size:10px;">Produto</span>
-                                {% elif item.resolvido.tipo == 'mp' %}
-                                    <span class="badge bg-dark" style="font-size:10px;">MP</span>
-                                {% else %}
-                                    <span class="badge bg-warning text-dark" style="font-size:10px;">Pendente</span>
-                                {% endif %}
+                            {% if estado == 'mapeado' %}
+                                {% if mp.receita_id %}<span class="badge bg-primary" style="font-size:10px;">Receita</span>
+                                {% elif mp.produto_id %}<span class="badge bg-secondary" style="font-size:10px;">Produto</span>
+                                {% else %}<span class="badge bg-dark" style="font-size:10px;">MP</span>{% endif %}
+                            {% elif estado == 'pendente' %}
+                                <span class="badge bg-warning text-dark" style="font-size:10px;">PENDENTE</span>
+                            {% elif estado == 'ignorado' %}
+                                <span class="badge bg-secondary" style="font-size:10px;">IGNORADO</span>
                             {% endif %}
                         </td>
                         <td class="text-end">
-                            {% if item.resolvido %}{{ item.estoque_atual or 0 }}{% endif %}
+                            {% if estado == 'mapeado' %}{{ item.estoque_atual or 0 }}{% endif %}
                         </td>
                         <td class="text-end fw-bold text-danger">
-                            {% if item.quantidade is defined and item.resolvido %}-{{ item.quantidade }}{% endif %}
+                            {% if estado == 'mapeado' and item.quantidade is defined %}-{{ item.quantidade }}{% endif %}
                         </td>
                         <td class="text-end fw-bold">
-                            {% if item.resolvido and item.novo is defined %}{{ item.novo }}{% endif %}
+                            {% if estado == 'mapeado' and item.novo is defined %}{{ item.novo }}{% endif %}
                         </td>
                         <td class="text-end">
-                            {% if item.resolvido and item.faltou and item.faltou > 0 %}
+                            {% if estado == 'mapeado' and item.faltou and item.faltou > 0 %}
                                 <span class="badge bg-warning text-dark">{{ item.faltou }}</span>
                             {% endif %}
                         </td>
@@ -143,21 +160,18 @@
             </table>
         </div>
     </div>
-    <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
         <small class="text-muted">
-            {% if n_erro %}Linhas com erro serao ignoradas. {% endif %}
-            {% if n_naoresolvido %}
-                Itens sem cadastro <strong>nao serao descontados</strong> — cadastre primeiro como receita/produto/MP.
-            {% endif %}
+            Apenas itens <strong>mapeados</strong> sao descontados. Pendentes/ignorados sao pulados.
         </small>
         <form method="POST" action="{{ url_for('pedidos.estoque_loja_saida_lote_aplicar') }}"
-              onsubmit="return confirm('Aplicar a saida em lote? Cada item sera SUBTRAIDO do estoque atual.');">
+              onsubmit="return confirm('Aplicar saida em lote? Cada item mapeado sera SUBTRAIDO do estoque atual.');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="texto" value="{{ texto|e }}">
             <input type="hidden" name="loja_id" value="{{ sel_loja or '' }}">
             <input type="hidden" name="referencia" value="{{ referencia|e }}">
-            <button type="submit" class="btn btn-warning" {% if not n_ok %}disabled{% endif %}>
-                <i class="bi bi-check-circle"></i> Aplicar Saida ({{ n_ok }} item(ns))
+            <button type="submit" class="btn btn-warning" {% if not n_mapeado %}disabled{% endif %}>
+                <i class="bi bi-check-circle"></i> Aplicar Saida ({{ n_mapeado }} item(ns))
             </button>
         </form>
     </div>
