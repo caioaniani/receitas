@@ -1262,14 +1262,17 @@ def desperdicio():
             flash('Selecione uma loja.', 'warning')
             return redirect(url_for('pedidos.desperdicio'))
 
-        tipo_item, item_id = _parse_item_id(request.form.get('item_id', ''))
-        if tipo_item == 'mp':
-            tipo_item = 'mp'
-        elif request.form.get('item_id', '').startswith('p_'):
-            try:
-                tipo_item, item_id = 'produto', int(request.form['item_id'][2:])
-            except ValueError:
-                tipo_item = None
+        raw = request.form.get('item_id', '')
+        tipo_item, item_id = None, None
+        try:
+            if raw.startswith('r_'):
+                tipo_item, item_id = 'receita', int(raw[2:])
+            elif raw.startswith('mp_'):
+                tipo_item, item_id = 'mp', int(raw[3:])
+            elif raw.startswith('p_'):
+                tipo_item, item_id = 'produto', int(raw[2:])
+        except ValueError:
+            tipo_item, item_id = None, None
         if not tipo_item or not item_id:
             flash('Selecione um item valido.', 'warning')
             return redirect(url_for('pedidos.desperdicio', loja=sel_loja))
