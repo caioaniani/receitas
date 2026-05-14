@@ -178,7 +178,7 @@ def processar_evento_mensagem(evento):
     historico.append({'role': 'assistant',
                        'content': resp.get('explicacao') or ''})
     try:
-        _salvar_historico(cc, historico)
+        _salvar_historico(sc, historico)
     except Exception:
         logger.exception('slack_bot: falha salvando historico')
 
