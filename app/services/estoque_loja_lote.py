@@ -202,6 +202,89 @@ def resolver_lista(linhas_parseadas, loja_id):
     return enriq
 
 
+def aplicar_saida_lote(itens_resolvidos, loja_id, user, referencia=None):
+    """SUBTRAI a quantidade de cada item do EstoqueLoja correspondente.
+
+    Itens sem match no catalogo sao IGNORADOS (saida nao cria pendentes —
+    usuario precisa cadastrar antes). Se estoque atual < qtd saida, baixa
+    ate 0 e registra mov 'venda_loja_sem_estoque' pra falta.
+    """
+    ref = (referencia or 'Saida em lote').strip()
+    aplicados = []
+    ignorados = []
+
+    if not loja_id:
+        return {'aplicados': [], 'ignorados': [{'linha': '*', 'motivo': 'sem_loja'}]}
+
+    for item in itens_resolvidos:
+        if item.get('erro'):
+            ignorados.append({'linha': item.get('linha', '?'), 'motivo': item['erro']})
+            continue
+        try:
+            qtd_sub = int(item['quantidade'])
+        except (KeyError, TypeError, ValueError):
+            ignorados.append({'linha': item.get('linha', '?'), 'motivo': 'quantidade_invalida'})
+            continue
+        if qtd_sub <= 0:
+            ignorados.append({'linha': item.get('linha', '?'), 'motivo': 'quantidade_invalida'})
+            continue
+
+        resolvido = item.get('resolvido')
+        if not resolvido or not resolvido.get('id'):
+            ignorados.append({
+                'linha': item.get('linha', '?'),
+                'nome': item.get('nome', ''),
+                'motivo': 'sem_match',
+            })
+            continue
+
+        if resolvido['tipo'] == 'pendente':
+            ep = EstoqueLoja.query.get(resolvido['id'])
+        else:
+            filtro = _filtro_para_resolvido(loja_id, resolvido)
+            ep = EstoqueLoja.query.filter_by(**filtro).first()
+            if not ep:
+                ep = EstoqueLoja(**filtro, quantidade=0)
+                db.session.add(ep)
+                db.session.flush()
+
+        anterior = ep.quantidade or 0
+        real = min(qtd_sub, anterior)
+        falta = qtd_sub - real
+        ep.quantidade = anterior - real
+
+        if real > 0:
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=ep.id,
+                tipo='saida_lote',
+                quantidade=real,
+                referencia=f'{ref} (era {anterior}, ficou {ep.quantidade})',
+                usuario_id=getattr(user, 'id', None),
+            ))
+        if falta > 0:
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=ep.id,
+                tipo='venda_loja_sem_estoque',
+                quantidade=falta,
+                referencia=f'{ref} — faltou {falta} (tinha {anterior})',
+                usuario_id=getattr(user, 'id', None),
+            ))
+
+        aplicados.append({
+            'nome': resolvido['nome'],
+            'tipo': resolvido['tipo'],
+            'anterior': anterior,
+            'novo': ep.quantidade,
+            'delta': -real,
+            'faltou': falta,
+        })
+
+    if aplicados:
+        db.session.commit()
+
+    return {'aplicados': aplicados, 'ignorados': ignorados}
+
+
 def aplicar_entrada_lote(itens_resolvidos, loja_id, user, referencia=None):
     """SOMA a quantidade de cada item ao EstoqueLoja correspondente.
 
