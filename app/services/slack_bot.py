@@ -153,7 +153,7 @@ def processar_evento_mensagem(evento):
 
     # Carrega contexto
     try:
-        _, cc = _conversa(slack_user_id, channel)
+        sc = _conversa(slack_user_id, channel)
     except Exception:
         logger.exception('slack_bot: falha ao carregar conversa')
         slack_api.post_message(channel,
@@ -161,7 +161,7 @@ def processar_evento_mensagem(evento):
                                 thread_ts=thread_ts)
         return
 
-    historico = _historico_da_conversa(cc)
+    historico = _historico_da_conversa(sc)
 
     # Chama o copilot
     try:
