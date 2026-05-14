@@ -18,7 +18,8 @@ from sqlalchemy import func
 
 from app.extensions import db
 from app.models import (EstoqueLoja, MovEstoqueLoja,
-                        Receita, Produto, MateriaPrima, LojaProdutoMap)
+                        Receita, Produto, MateriaPrima,
+                        LojaProdutoMap, LojaDebito)
 
 
 EXPANSOES = {
