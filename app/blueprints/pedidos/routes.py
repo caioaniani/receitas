@@ -868,6 +868,84 @@ def estoque_loja_saida_lote():
                            lojas=lojas, loja=loja, sel_loja=loja_id)
 
 
+@pedidos_bp.route('/estoque-loja/mapeamentos')
+@login_required
+@admin_required
+def estoque_loja_mapeamentos():
+    """Lista LojaProdutoMap pra admin vincular/ignorar nomes digitados."""
+    produtos_map = LojaProdutoMap.query.order_by(
+        LojaProdutoMap.ignorar.asc(),
+        LojaProdutoMap.confirmado_em.is_(None).desc(),
+        LojaProdutoMap.nome_digitado,
+    ).all()
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+    materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    return render_template('pedidos/estoque_loja_mapeamentos.html',
+                           produtos_map=produtos_map,
+                           receitas=receitas, produtos=produtos, materias=materias)
+
+
+@pedidos_bp.route('/estoque-loja/mapeamentos/vincular/<int:map_id>', methods=['POST'])
+@login_required
+@admin_required
+def estoque_loja_mapeamentos_vincular(map_id):
+    """Vincula/ignora/desfaz uma entrada do LojaProdutoMap."""
+    from datetime import datetime
+    mp = LojaProdutoMap.query.get_or_404(map_id)
+    acao = (request.form.get('acao') or '').strip()
+    alvo_tipo = (request.form.get('alvo_tipo') or '').strip()
+    raw_alvo = request.form.get('alvo_id') or ''
+    try:
+        alvo_id = int(raw_alvo)
+    except (TypeError, ValueError):
+        alvo_id = 0
+    try:
+        fator = float((request.form.get('fator') or '1').replace(',', '.'))
+    except (TypeError, ValueError):
+        fator = 1.0
+    if fator <= 0:
+        fator = 1.0
+
+    # Fallback: form sem submitter (Enter no select)
+    if not acao and alvo_id and alvo_tipo in ('receita', 'produto', 'mp'):
+        acao = 'vincular'
+
+    if acao == 'vincular':
+        if alvo_tipo not in ('receita', 'produto', 'mp') or not alvo_id:
+            flash('Selecione um alvo valido.', 'danger')
+            return redirect(url_for('pedidos.estoque_loja_mapeamentos'))
+        mp.receita_id = alvo_id if alvo_tipo == 'receita' else None
+        mp.produto_id = alvo_id if alvo_tipo == 'produto' else None
+        mp.materia_prima_id = alvo_id if alvo_tipo == 'mp' else None
+        mp.ignorar = False
+        mp.fator_quantidade = fator
+        mp.confirmado_em = datetime.utcnow()
+        mp.confirmado_por = current_user.id
+        fator_msg = f' (fator {fator:g})' if fator != 1.0 else ''
+        flash(f'"{mp.nome_digitado}" → {mp.alvo_nome}{fator_msg}', 'success')
+    elif acao == 'ignorar':
+        mp.ignorar = True
+        mp.receita_id = None
+        mp.produto_id = None
+        mp.materia_prima_id = None
+        mp.confirmado_em = datetime.utcnow()
+        mp.confirmado_por = current_user.id
+        flash(f'"{mp.nome_digitado}" ignorado.', 'info')
+    elif acao == 'desfazer':
+        mp.ignorar = False
+        mp.receita_id = None
+        mp.produto_id = None
+        mp.materia_prima_id = None
+        mp.confirmado_em = None
+        flash(f'"{mp.nome_digitado}" voltou pra pendente.', 'info')
+    else:
+        flash(f'Acao desconhecida: {acao!r}.', 'danger')
+
+    db.session.commit()
+    return redirect(url_for('pedidos.estoque_loja_mapeamentos'))
+
+
 @pedidos_bp.route('/estoque-loja/saida-lote/aplicar', methods=['POST'])
 @login_required
 @admin_required
