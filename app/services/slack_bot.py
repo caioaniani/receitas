@@ -234,7 +234,14 @@ def processar_evento_mensagem(evento):
                                 thread_ts=thread_ts)
         return
 
-    # Write tool: cria SlackAcaoPendente + preview Block Kit
+    # Write tool: cria SlackAcaoPendente + preview Block Kit.
+    # Se tem imagens E a tool e anexar_foto_pedido, embute as imagens nos
+    # params pra o executor ter acesso quando clicar Confirmar.
+    params_acao = dict(resp.get('params') or {})
+    if tipo == 'anexar_foto_pedido' and imagens:
+        params_acao['imagens'] = imagens
+        params_acao['_n_imagens'] = len(imagens)
+
     token = secrets.token_urlsafe(24)
     try:
         from app.models import SlackAcaoPendente
@@ -243,7 +250,7 @@ def processar_evento_mensagem(evento):
             slack_user_id=slack_user_id,
             slack_channel_id=channel,
             tipo_acao=tipo,
-            params_json=json.dumps(resp.get('params') or {}, ensure_ascii=False, default=str),
+            params_json=json.dumps(params_acao, ensure_ascii=False, default=str),
             usuario_id=user.id,
         )
         db.session.add(acao)
