@@ -108,7 +108,7 @@ def upload_foto(file_bytes, atribuicao_id, ext='jpg'):
         raise RuntimeError('Arquivo vazio')
 
     # Caminho organizado por data + atribuicao + uuid pra evitar colisao
-    hoje = agora().strftime('%Y-%m-%d')
+    hoje = _agora_brt().strftime('%Y-%m-%d')
     nome = f"{atribuicao_id}_{uuid.uuid4().hex[:8]}.{ext}"
     path = f"{_pasta_base()}/{hoje}/{nome}"
 
