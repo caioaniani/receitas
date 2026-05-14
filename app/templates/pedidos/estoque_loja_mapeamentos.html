@@ -131,6 +131,16 @@
                             <button type="submit" name="acao" value="desfazer" class="btn btn-sm btn-outline-warning">⤺</button>
                             {% endif %}
                         </form>
+                        <details class="mt-1 helper-fatias" style="font-size:11px;">
+                            <summary class="text-primary" style="cursor:pointer;">Calcular X fatias de Y</summary>
+                            <div class="d-flex gap-1 align-items-center mt-1 flex-wrap">
+                                <span class="small text-muted">1 venda usa</span>
+                                <input type="number" min="0" step="1" class="form-control form-control-sm fat-x" style="width:60px;" placeholder="X">
+                                <span class="small text-muted">de</span>
+                                <input type="number" min="1" step="1" class="form-control form-control-sm fat-y" style="width:60px;" placeholder="Y">
+                                <span class="small text-muted">fatias (= fator automatico)</span>
+                            </div>
+                        </details>
                     </td>
                 </tr>
                 {% endfor %}
