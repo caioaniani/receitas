@@ -5,7 +5,7 @@ from flask import render_template, redirect, url_for, flash, request, abort, jso
 from flask_login import login_required, current_user
 
 from app.blueprints.fornecedores import fornecedores_bp
-from app.decorators import admin_required
+from app.decorators import admin_required, catalogo_required
 from app.extensions import db
 from app.models import Fornecedor, HistoricoPrecoMP, MateriaPrima, MovimentacaoEstoque
 
