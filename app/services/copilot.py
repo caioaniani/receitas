@@ -542,6 +542,7 @@ TOOLS DISPONIVEIS — CONSULTAS (read, sem aprovacao):
 - consultar_funcionario: info de funcionario
 - consultar_caixa: numeros do dia (entregas, pedidos locais, compras MP)
 - consultar_vendas_itens: vendas POR PRODUTO no PDV/Seru no intervalo (top N + filtro de loja). Use pra 'o que mais vendeu', 'top produtos', 'quanto saiu de X'.
+- consultar_desperdicio: lista desperdicios (sobra do dia) por periodo + loja. Use pra 'quanto venceu', 'desperdicio da semana', 'sobrou de X'.
 - consultar_foco: lista projetos foco_12s + tarefas pendentes deles
 - consultar_tarefas: lista tarefas com filtros (atrasadas, pendentes, projeto, foco)
 
