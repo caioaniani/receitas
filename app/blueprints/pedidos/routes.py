@@ -554,7 +554,7 @@ def separacao():
 
 @pedidos_bp.route('/congelados/dashboard')
 @login_required
-@admin_required
+@producao_required
 def congelados_dashboard():
     """Visao consolidada: itens em EstoqueProducao cruzados com os mesmos
     itens em cada loja (EstoqueLoja). Mostra qtd por local + total."""
