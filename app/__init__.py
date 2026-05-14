@@ -626,6 +626,15 @@ def _migrate_postgres(app):
             )
         """))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_loja_produto_map_nome ON loja_produto_map(nome_digitado)"))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS loja_debito (
+                loja_id INTEGER NOT NULL REFERENCES loja(id),
+                loja_produto_map_id INTEGER NOT NULL REFERENCES loja_produto_map(id) ON DELETE CASCADE,
+                fracao_pendente REAL NOT NULL DEFAULT 0.0,
+                atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (loja_id, loja_produto_map_id)
+            )
+        """))
 
         # estoque_producao.nome_pendente (balanco aceita itens sem cadastro previo)
         result = conn.execute(text(
