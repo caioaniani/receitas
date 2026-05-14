@@ -6,6 +6,9 @@
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h1 class="page-title mb-0"><i class="bi bi-link-45deg"></i> Mapeamentos — Saida em Lote</h1>
     <div class="d-flex gap-2">
+        <a href="{{ url_for('pedidos.estoque_loja_historico_saida_lote') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-clock-history"></i> Historico
+        </a>
         <a href="{{ url_for('pedidos.estoque_loja_saida_lote') }}" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-arrow-left"></i> Voltar a Saida em Lote
         </a>
