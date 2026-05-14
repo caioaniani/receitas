@@ -1444,14 +1444,15 @@ def desperdicio():
     e baixa do estoque (limitado ao saldo, sem ficar negativo).
     """
     loja_id_user = _loja_do_usuario()
+    pode_qualquer_loja = current_user.is_admin() or current_user.is_gerente()
 
     if request.method == 'POST':
         try:
             sel_loja = (int(request.form.get('loja_id') or 0)
-                        if current_user.is_admin() else loja_id_user)
+                        if pode_qualquer_loja else loja_id_user)
         except (TypeError, ValueError):
             sel_loja = 0
-        if not current_user.is_admin() and sel_loja != loja_id_user:
+        if not pode_qualquer_loja and sel_loja != current_user.loja_id:
             abort(403)
         if not sel_loja:
             flash('Selecione uma loja.', 'warning')
