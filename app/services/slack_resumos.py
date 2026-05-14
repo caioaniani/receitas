@@ -143,9 +143,9 @@ def enviar_lembretes_pedido_amanha():
     """
     from app.services import slack as slack_api
 
-    canal = (current_app.config.get('SLACK_CANAL_PRODUCAO') or '').strip()
+    canal = (current_app.config.get('SLACK_CANAL_PEDIDOS') or '').strip()
     if not canal:
-        logger.info('slack_resumos: SLACK_CANAL_PRODUCAO nao configurado, pulando lembretes')
+        logger.info('slack_resumos: SLACK_CANAL_PEDIDOS nao configurado, pulando lembretes')
         return
     if not slack_api.disponivel():
         return
