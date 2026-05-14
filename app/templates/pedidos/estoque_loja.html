@@ -27,6 +27,9 @@
         <a href="{{ url_for('pedidos.estoque_loja_entrada_lote', loja=loja.id) }}" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-box-arrow-in-down"></i> Entrada em lote
         </a>
+        <a href="{{ url_for('pedidos.estoque_loja_saida_lote', loja=loja.id) }}" class="btn btn-outline-warning btn-sm">
+            <i class="bi bi-box-arrow-up"></i> Saida em lote
+        </a>
         <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modal-ajuste">
             <i class="bi bi-plus-slash-minus"></i> Entrada / Ajuste
         </button>
