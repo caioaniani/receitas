@@ -500,6 +500,92 @@ def relatorio():
                            por_item=sorted(por_item.items(), key=lambda x: x[0]))
 
 
+@pedidos_bp.route('/<int:id>/voltar-status', methods=['POST'])
+@login_required
+@admin_required
+def voltar_status(id):
+    """Volta o pedido pra o status anterior, estornando movimentos de estoque
+    se necessario. So admin (risco de descompasso de estoque).
+
+    Transicoes:
+      recebido     -> em_transporte (estorna estoque loja)
+      em_transporte-> separado      (estorna estoque producao + MP)
+      separado     -> confirmado    (so status)
+      confirmado   -> pendente      (so status)
+    Cancelado/pendente: nao volta.
+    """
+    pedido = PedidoLoja.query.get_or_404(id)
+    status_atual = pedido.status
+    novo_status = None
+
+    try:
+        if status_atual == 'recebido':
+            # Estorna o que somou no estoque da loja
+            for item in pedido.itens:
+                qtd = item.quantidade_recebida or 0
+                if qtd <= 0:
+                    continue
+                el = EstoqueLoja.query.filter_by(
+                    loja_id=pedido.loja_id,
+                    receita_id=item.receita_id,
+                    produto_id=item.produto_id,
+                    materia_prima_id=item.materia_prima_id,
+                ).first()
+                if el:
+                    el.quantidade = max(0, (el.quantidade or 0) - qtd)
+                    db.session.add(MovEstoqueLoja(
+                        estoque_loja_id=el.id,
+                        tipo='ajuste_negativo',
+                        quantidade=qtd,
+                        referencia=f'Estorno pedido #{pedido.id} (voltar status)',
+                        usuario_id=current_user.id,
+                    ))
+                item.quantidade_recebida = None
+            novo_status = 'em_transporte'
+        elif status_atual == 'em_transporte':
+            # Estorna baixa do estoque producao/MP
+            for item in pedido.itens:
+                if item.materia_prima_id:
+                    mp = MateriaPrima.query.get(item.materia_prima_id)
+                    if mp:
+                        mp.estoque_atual = (mp.estoque_atual or 0) + item.quantidade
+                        db.session.add(MovimentacaoEstoque(
+                            materia_prima_id=mp.id, tipo='entrada',
+                            quantidade=item.quantidade,
+                            referencia=f'Estorno pedido #{pedido.id} (voltar status)',
+                            usuario_id=current_user.id,
+                        ))
+                    continue
+                ep = EstoqueProducao.query.filter_by(
+                    receita_id=item.receita_id, produto_id=item.produto_id
+                ).first()
+                if ep:
+                    ep.quantidade = (ep.quantidade or 0) + item.quantidade
+                    db.session.add(MovEstoqueProducao(
+                        estoque_producao_id=ep.id, tipo='ajuste',
+                        quantidade=item.quantidade,
+                        referencia=f'Estorno pedido #{pedido.id} (voltar status)',
+                        usuario_id=current_user.id,
+                    ))
+            novo_status = 'separado'
+        elif status_atual == 'separado':
+            novo_status = 'confirmado'
+        elif status_atual == 'confirmado':
+            novo_status = 'pendente'
+        else:
+            flash(f'Nao da pra voltar status "{status_atual}".', 'warning')
+            return redirect(url_for('pedidos.detalhe', id=id))
+
+        pedido.status = novo_status
+        db.session.commit()
+        flash(f'Status revertido: {status_atual} → {novo_status}.', 'success')
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception('Falha ao voltar status pedido %s', id)
+        flash(f'Erro ao voltar status: {exc}. Nada foi alterado.', 'danger')
+    return redirect(url_for('pedidos.detalhe', id=id))
+
+
 @pedidos_bp.route('/<int:id>/cancelar', methods=['POST'])
 @login_required
 @gerente_required
