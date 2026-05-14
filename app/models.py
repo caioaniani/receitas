@@ -1531,3 +1531,26 @@ class SlackConversa(db.Model):
     __table_args__ = (
         db.UniqueConstraint('slack_user_id', 'slack_channel_id', name='uq_slack_conversa'),
     )
+
+
+class LembretePedidoOptOut(db.Model):
+    """Marcador que uma loja NAO vai fazer pedido em uma data especifica.
+
+    Quando alguem clica "nao vai ter pedido" no lembrete do Slack, cria
+    uma linha aqui. O job de lembrete checa isso pra nao repetir.
+    """
+    __tablename__ = 'lembrete_pedido_optout'
+
+    id = db.Column(db.Integer, primary_key=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False, index=True)
+    data_entrega = db.Column(db.Date, nullable=False, index=True)
+    marcado_por_slack_uid = db.Column(db.String(30))
+    marcado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    criado_em = db.Column(db.DateTime, default=agora)
+
+    loja = db.relationship('Loja')
+    marcado_por = db.relationship('Usuario')
+
+    __table_args__ = (
+        db.UniqueConstraint('loja_id', 'data_entrega', name='uq_lembrete_optout'),
+    )
