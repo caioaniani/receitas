@@ -158,8 +158,16 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
+    # Lembretes de pedido pra amanha — 4 vezes ao dia
+    for h in (9, 12, 16, 19):
+        _scheduler.add_job(
+            lambda app=app: _run_slack_lembretes_amanha(app),
+            'cron', hour=h, minute=0, id=f'slack-lembrete-{h}h',
+            max_instances=1, coalesce=True,
+        )
+
     _scheduler.start()
-    logger.info('Auto-sync iniciado: Seru + VNDA a cada 15min · Slack resumo diario 04:00 BRT')
+    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes 9h/12h/16h/19h')
 
 
 def _run_slack_resumo_diario(app):
