@@ -802,7 +802,7 @@ def estoque_loja():
 
 @pedidos_bp.route('/estoque-loja/entrada-lote', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@gerente_required
 def estoque_loja_entrada_lote():
     """Preview de entrada em lote — usuario cola lista 'nome: qtd' e ve o que
     vai somar. Apply em outra rota pra ser idempotente."""
