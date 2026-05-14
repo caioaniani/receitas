@@ -65,8 +65,12 @@
             <i class="bi bi-cart3"></i> Pedidos
         </a>
         <a href="{{ url_for('pedidos.estoque_loja') }}"
-           class="sidebar-link {% if '/pedidos/estoque-loja' in request.path %}active{% endif %}">
+           class="sidebar-link {% if request.path == '/pedidos/estoque-loja' %}active{% endif %}">
             <i class="bi bi-box-seam"></i> Estoque Loja
+        </a>
+        <a href="{{ url_for('pedidos.estoque_loja_historico') }}"
+           class="sidebar-link {% if request.path == '/pedidos/estoque-loja/historico' %}active{% endif %}">
+            <i class="bi bi-clock-history"></i> Historico Estoque
         </a>
         <a href="{{ url_for('pedidos.desperdicio') }}"
            class="sidebar-link {% if '/pedidos/desperdicio' in request.path %}active{% endif %}">
