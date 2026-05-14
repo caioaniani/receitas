@@ -3,10 +3,12 @@
 ## Branches & Deploy
 
 - **Branch de produção (Railway acompanha)**: `claude/continue-controller-conversation-aGS3F`
+- **URL publica de prod**: https://gestao.opaopadariaartesanal.com.br/
 - **Auto-deploy** no Railway (Auto deploys ON, Wait for CI OFF). Push = build + deploy
   automatico em ~2-3 min.
-- **Workflow padrão**: commit direto no branch de produção. Mudanças grandes/arriscadas
-  abrir PR mirando ele.
+- **Workflow**: **SEMPRE commit direto no branch de producao**. Nao abrir PR — o auto-commit
+  hook ja faz commit+push pro branch atual, e o usuario nao quer mergear nada manualmente.
+  Se a mudanca for grande, ainda assim vai direto em prod (auto-commit acumula varios commits).
 - **Nunca** force-push nem `--no-verify` sem autorização explícita.
 
 ## Auto-commit hook ativo
