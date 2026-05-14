@@ -614,7 +614,7 @@ def congelados_dashboard():
 
 @pedidos_bp.route('/congelados')
 @login_required
-@admin_required
+@producao_required
 def congelados():
     itens = EstoqueProducao.query.all()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
