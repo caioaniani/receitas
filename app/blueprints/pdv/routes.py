@@ -33,18 +33,25 @@ def reprocessar():
     (zero risco de duplo desconto). Cancelados/estornados tambem nao."""
     from app.services import seru_sync
     from app.services.seru_cron import hoje_brt
+    from sqlalchemy import or_
 
     hoje = hoje_brt()
     # Inicio do dia BRT em UTC: 00:00 BRT = 03:00 UTC
     inicio_dia_utc = datetime.combine(hoje, datetime.min.time()) + timedelta(hours=3)
 
     # Apaga so os de HOJE "sem baixa"
-    n_apagados = SeruPedidoProcessado.query.filter(
+    alvo_q = SeruPedidoProcessado.query.filter(
         SeruPedidoProcessado.processado_em >= inicio_dia_utc,
         SeruPedidoProcessado.n_itens_baixados == 0,
         SeruPedidoProcessado.estornado_em.is_(None),
         SeruPedidoProcessado.cancelado_em.is_(None),
-    ).delete(synchronize_session=False)
+    )
+    ids = [p.seru_pedido_id for p in alvo_q.all()]
+    # Limpa MovEstoqueLoja antigas (todas sem_estoque, ok apagar)
+    if ids:
+        clauses = [MovEstoqueLoja.referencia.like(f'Seru #{i}%') for i in ids]
+        MovEstoqueLoja.query.filter(or_(*clauses)).delete(synchronize_session=False)
+    n_apagados = alvo_q.delete(synchronize_session=False)
     db.session.commit()
 
     try:
