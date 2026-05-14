@@ -1389,7 +1389,7 @@ def executar_mudar_status_pedido(params, user):
     p = PedidoLoja.query.get(pid)
     if not p:
         return {'ok': False, 'erro': f'Pedido #{pid} nao encontrado'}
-    if not user.is_admin() and p.loja_id != user.loja_id:
+    if not (user.is_admin() or user.is_gerente()) and p.loja_id != user.loja_id:
         return {'ok': False, 'erro': f'Pedido #{pid} nao e da sua loja'}
 
     transicoes = {
@@ -1756,7 +1756,7 @@ def executar_anexar_foto_pedido(params, user):
     p = PedidoLoja.query.get(pid)
     if not p:
         return {'ok': False, 'erro': f'Pedido #{pid} nao encontrado'}
-    if not user.is_admin() and p.loja_id != user.loja_id:
+    if not (user.is_admin() or user.is_gerente()) and p.loja_id != user.loja_id:
         return {'ok': False, 'erro': f'Pedido #{pid} nao e da sua loja'}
 
     imgs = params.get('imagens') or []

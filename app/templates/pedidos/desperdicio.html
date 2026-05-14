@@ -5,7 +5,7 @@
 {% block content %}
 <h1 class="page-title mb-3"><i class="bi bi-trash3"></i> Desperdicio (sobra do dia)</h1>
 
-{% if current_user.is_admin() %}
+{% if current_user.is_admin() or current_user.is_gerente() %}
 <form method="GET" class="mb-3 d-flex align-items-center gap-2">
     <select name="loja" class="form-select form-select-sm" style="max-width:250px;" onchange="this.form.submit()">
         <option value="">Selecione uma loja...</option>
@@ -24,7 +24,7 @@
     <div class="card-body">
         <form method="POST" class="row g-2 align-items-end">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            {% if current_user.is_admin() %}
+            {% if current_user.is_admin() or current_user.is_gerente() %}
             <input type="hidden" name="loja_id" value="{{ loja.id }}">
             {% endif %}
 
@@ -105,7 +105,7 @@
                     <th style="width:100px;">Motivo</th>
                     <th>Observacao</th>
                     <th class="text-muted small" style="width:140px;">Registrado</th>
-                    {% if current_user.is_admin() %}<th style="width:60px;"></th>{% endif %}
+                    {% if current_user.is_admin() or current_user.is_gerente() %}<th style="width:60px;"></th>{% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -121,7 +121,7 @@
                         {{ d.criado_em.strftime('%d/%m %H:%M') if d.criado_em else '' }}
                         {% if d.criado_por %}<br><span style="font-size:11px;">{{ d.criado_por.nome }}</span>{% endif %}
                     </td>
-                    {% if current_user.is_admin() %}
+                    {% if current_user.is_admin() or current_user.is_gerente() %}
                     <td>
                         <form method="POST" action="{{ url_for('pedidos.desperdicio_excluir', id=d.id) }}"
                               onsubmit="return confirm('Excluir e estornar {{ d.quantidade }} un de {{ d.nome_item }}?');">
