@@ -457,6 +457,7 @@ PAPEIS_POR_TOOL = {
     'consultar_vendas_itens': {'admin', 'gerente'},
     'consultar_desperdicio': {'admin', 'gerente'},
     'registrar_desperdicio': {'admin', 'gerente'},
+    'anexar_foto_pedido': {'admin', 'gerente'},
     # Consultas + planejamento — todos
     'consultar_pedido': {'admin', 'gerente', 'funcionario'},
     'consultar_estoque': {'admin', 'gerente', 'funcionario'},
