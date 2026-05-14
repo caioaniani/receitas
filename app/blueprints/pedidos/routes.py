@@ -1143,15 +1143,33 @@ def estoque_loja_registrar():
     ids = request.form.getlist('estoque_id[]')
     qtds = request.form.getlist('qtd[]')
     tipos = request.form.getlist('tipo[]')
+    TIPOS_VALIDOS = {'venda', 'ajuste', 'devolucao', 'descarte'}
 
-    for i, eid in enumerate(ids):
-        if not qtds[i] or int(qtds[i]) <= 0:
+    # Pre-carrega EstoqueLoja em batch (evita N+1)
+    eids_int = []
+    for eid in ids:
+        try:
+            eids_int.append(int(eid))
+        except (TypeError, ValueError):
+            eids_int.append(None)
+    eids_validos = [e for e in eids_int if e is not None]
+    els_map = {e.id: e for e in EstoqueLoja.query.filter(EstoqueLoja.id.in_(eids_validos)).all()} if eids_validos else {}
+
+    for i, eid_int in enumerate(eids_int):
+        if eid_int is None:
             continue
-        el = EstoqueLoja.query.get(int(eid))
+        try:
+            qtd = int(qtds[i]) if i < len(qtds) and qtds[i] else 0
+        except (TypeError, ValueError):
+            continue
+        if qtd <= 0:
+            continue
+        el = els_map.get(eid_int)
         if not el or el.loja_id != loja_id:
             continue
-        qtd = int(qtds[i])
         tipo = tipos[i] if i < len(tipos) else 'venda'
+        if tipo not in TIPOS_VALIDOS:
+            tipo = 'venda'
         el.quantidade = max(0, el.quantidade - qtd)
         db.session.add(MovEstoqueLoja(
             estoque_loja_id=el.id, tipo=tipo, quantidade=qtd,
