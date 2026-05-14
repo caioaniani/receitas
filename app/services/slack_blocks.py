@@ -213,6 +213,18 @@ def _preview_entrada_lote_loja(p, token):
     ]
 
 
+def _preview_anexar_foto_pedido(p, token):
+    n = p.get('_n_imagens') or 0
+    return [
+        _header('Anexar foto ao pedido'),
+        _fields([
+            ('Pedido ID', p.get('pedido_id')),
+            ('Fotos a anexar', n if n else '?'),
+        ]),
+        _botoes(token, 'Anexar', 'Cancelar'),
+    ]
+
+
 def _preview_registrar_desperdicio(p, token):
     return [
         _header('Registrar desperdicio'),
