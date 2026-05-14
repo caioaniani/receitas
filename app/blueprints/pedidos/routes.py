@@ -95,6 +95,7 @@ def lista():
 
 @pedidos_bp.route('/novo', methods=['GET', 'POST'])
 @login_required
+@gerente_required
 def novo():
     loja_id = _loja_do_usuario()
     if not current_user.is_admin() and not loja_id:
