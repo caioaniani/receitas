@@ -40,7 +40,7 @@ def lista():
 
 @produtos_bp.route('/novo', methods=['POST'])
 @login_required
-@admin_required
+@catalogo_required
 def novo():
     produto = Produto(nome='Nova Cesta', categoria='Cestas')
     db.session.add(produto)
@@ -92,7 +92,7 @@ def detalhe(id):
 
 @produtos_bp.route('/<int:id>/salvar', methods=['POST'])
 @login_required
-@admin_required
+@catalogo_required
 def salvar_composicao(id):
     produto = Produto.query.get_or_404(id)
 
@@ -138,7 +138,7 @@ def salvar_composicao(id):
 
 @produtos_bp.route('/api/nova-mp', methods=['POST'])
 @login_required
-@admin_required
+@catalogo_required
 def nova_mp():
     """Cria matéria-prima via AJAX (sem sair da página da cesta)."""
     nome = request.form.get('mp_nome', '').strip()
@@ -164,7 +164,7 @@ def nova_mp():
 
 @produtos_bp.route('/excluir/<int:id>', methods=['POST'])
 @login_required
-@admin_required
+@catalogo_required
 def excluir(id):
     produto = Produto.query.get_or_404(id)
     nome = produto.nome
