@@ -1101,19 +1101,12 @@ def executar(tipo_acao, params, user):
 def executar_criar_pedido(params, user):
     from app.models import PedidoLoja, PedidoItem
     loja_id = params.get('loja_id')
-    # Admin e gerente podem criar pedido pra qualquer loja.
-    # Outros papeis: forca a propria loja (loja_id no usuario).
-    if not (user.is_admin() or user.is_gerente()):
-        if not user.loja_id:
-            return {'ok': False, 'erro': 'Seu usuario nao tem loja vinculada'}
-        if loja_id and loja_id != user.loja_id:
-            return {'ok': False, 'erro': 'Voce so pode criar pedido pra sua loja'}
-        loja_id = user.loja_id
-    # Fallback: se nao foi especificado e o usuario tem uma loja vinculada, usa
+    # Sem responsavel por loja — qualquer um com permissao pra criar_pedido
+    # pode criar em qualquer loja. user.loja_id e apenas fallback default.
     if not loja_id and user.loja_id:
         loja_id = user.loja_id
     if not loja_id:
-        return {'ok': False, 'erro': 'Loja nao especificada'}
+        return {'ok': False, 'erro': 'Especifique a loja (ex: Anesio, Nebraska, Ribeiro do Vale).'}
     loja = Loja.query.get(loja_id)
     if not loja:
         return {'ok': False, 'erro': f'Loja {loja_id} nao encontrada'}
