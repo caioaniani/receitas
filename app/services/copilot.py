@@ -944,21 +944,43 @@ def _formatar_pedido(p):
 
 
 def _read_consultar_estoque(params, user):
-    from app.models import MovimentacaoEstoque, AlertaEstoque
+    """Consulta estoque em 3 escopos: mp, producao, loja."""
+    from app.models import AlertaEstoque, EstoqueProducao, EstoqueLoja
     from sqlalchemy import func as sqlfunc
-    mp_nome = (params.get('mp_nome') or '').strip()
+
+    # Compatibilidade: se nao passou escopo mas passou mp_nome, assume mp
+    escopo = (params.get('escopo') or '').strip().lower()
+    item_nome_legacy = (params.get('mp_nome') or '').strip()
+    if not escopo and item_nome_legacy:
+        escopo = 'mp'
+    if not escopo:
+        escopo = 'mp'
+
+    item_nome = (params.get('item_nome') or item_nome_legacy or '').strip()
     apenas_baixo = bool(params.get('apenas_baixo'))
 
-    if mp_nome:
-        matches = _resolver_mp(mp_nome)
+    if escopo == 'mp':
+        return _consultar_estoque_mp(item_nome, apenas_baixo)
+    if escopo == 'producao':
+        return _consultar_estoque_producao(item_nome)
+    if escopo == 'loja':
+        loja_nome = (params.get('loja_nome') or '').strip()
+        return _consultar_estoque_loja(loja_nome, item_nome, user)
+    return {'texto': f'Escopo invalido: "{escopo}". Use mp, producao ou loja.'}
+
+
+def _consultar_estoque_mp(item_nome, apenas_baixo):
+    from app.models import AlertaEstoque
+    if item_nome:
+        matches = _resolver_mp(item_nome)
         if not matches:
-            return {'texto': f'MP "{mp_nome}" nao encontrada.'}
+            return {'texto': f'MP "{item_nome}" nao encontrada.'}
         m = MateriaPrima.query.get(matches[0]['id'])
         saldo = _calcular_saldo_mp(m.id)
         alerta = AlertaEstoque.query.filter_by(materia_prima_id=m.id).first()
         txt = f'**{m.nome}**: {saldo} {m.unidade or ""} em estoque.'
         if alerta and saldo < alerta.estoque_minimo:
-            txt += f'\n⚠ ABAIXO do minimo ({alerta.estoque_minimo} {m.unidade}).'
+            txt += f'\n:warning: ABAIXO do minimo ({alerta.estoque_minimo} {m.unidade}).'
         return {'texto': txt}
 
     if apenas_baixo:
@@ -973,7 +995,82 @@ def _read_consultar_estoque(params, user):
             return {'texto': 'Nenhuma MP esta abaixo do estoque minimo.'}
         return {'texto': '**MPs em alerta:**\n' + '\n'.join(baixos)}
 
-    return {'texto': 'Especifique uma MP ou peca pra listar as baixas (apenas_baixo=true).'}
+    # Sem filtro: lista top com saldo positivo (limita 30)
+    mps = MateriaPrima.query.order_by(MateriaPrima.nome).limit(80).all()
+    if not mps:
+        return {'texto': 'Nenhuma MP cadastrada.'}
+    linhas = []
+    for m in mps:
+        saldo = _calcular_saldo_mp(m.id)
+        if saldo > 0:
+            linhas.append(f'- {m.nome}: {saldo} {m.unidade or ""}')
+    if not linhas:
+        return {'texto': 'Nenhuma MP com saldo positivo.'}
+    return {'texto': f'**Estoque de MPs ({len(linhas)} itens com saldo):**\n'
+                    + '\n'.join(linhas[:50])}
+
+
+def _consultar_estoque_producao(item_nome):
+    """Lista estoque da industria (EstoqueProducao). Receitas + Produtos."""
+    from app.models import EstoqueProducao
+
+    q = EstoqueProducao.query.filter(EstoqueProducao.quantidade > 0)
+    itens = q.all()
+    if not itens:
+        return {'texto': 'Estoque da industria esta vazio.'}
+
+    # Filtra por nome se fornecido
+    if item_nome:
+        def _match(ep):
+            n = (ep.nome_item or '').lower()
+            return item_nome.lower() in n
+        itens = [ep for ep in itens if _match(ep)]
+        if not itens:
+            return {'texto': f'Nenhum item da industria com "{item_nome}".'}
+
+    itens.sort(key=lambda ep: -(ep.quantidade or 0))
+    linhas = [f'- {ep.nome_item}: {ep.quantidade}' for ep in itens[:50]]
+    cabecalho = f'**Estoque da industria** ({len(itens)} item{"" if len(itens) == 1 else "ns"} com saldo):'
+    if len(itens) > 50:
+        linhas.append(f'_... +{len(itens) - 50} itens_')
+    return {'texto': cabecalho + '\n' + '\n'.join(linhas)}
+
+
+def _consultar_estoque_loja(loja_nome, item_nome, user):
+    """Lista estoque de uma loja especifica (EstoqueLoja)."""
+    from app.models import EstoqueLoja
+
+    # Resolve loja
+    loja = None
+    if loja_nome:
+        from sqlalchemy import func
+        loja = Loja.query.filter(func.lower(Loja.nome) == loja_nome.lower()).first()
+        if not loja:
+            loja = Loja.query.filter(Loja.nome.ilike(f'%{loja_nome}%')).first()
+    elif not user.is_admin() and user.loja_id:
+        loja = Loja.query.get(user.loja_id)
+
+    if not loja:
+        return {'texto': f'Loja "{loja_nome}" nao encontrada. Informe o nome correto.'}
+
+    q = EstoqueLoja.query.filter_by(loja_id=loja.id).filter(EstoqueLoja.quantidade > 0)
+    itens = q.all()
+    if not itens:
+        return {'texto': f'Estoque da {loja.nome} esta vazio.'}
+
+    if item_nome:
+        def _match(el):
+            return item_nome.lower() in (el.nome_item or '').lower()
+        itens = [el for el in itens if _match(el)]
+        if not itens:
+            return {'texto': f'Nenhum item com "{item_nome}" na {loja.nome}.'}
+
+    itens.sort(key=lambda el: -(el.quantidade or 0))
+    linhas = [f'- {el.nome_item}: {el.quantidade}' for el in itens[:50]]
+    cabecalho = f'**Estoque da {loja.nome}** ({len(itens)} item{"" if len(itens) == 1 else "ns"} com saldo):'
+    if len(itens) > 50:
+        linhas.append(f'_... +{len(itens) - 50} itens_')
+    return {'texto': cabecalho + '\n' + '\n'.join(linhas)}
 
 
 def _calcular_saldo_mp(mp_id):
