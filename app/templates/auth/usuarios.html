@@ -58,10 +58,19 @@
                 <td class="fw-bold">{{ u.nome }}</td>
                 <td><code>{{ u.login }}</code></td>
                 <td>
-                    {% if u.papel == 'admin' %}
-                        <span class="badge bg-primary">Admin</span>
+                    {% if u.is_owner %}
+                        <span class="badge bg-dark">Owner</span>
                     {% else %}
-                        <span class="badge bg-secondary">Funcionario</span>
+                        <form method="POST" action="{{ url_for('auth.alterar_papel', id=u.id) }}" class="d-flex gap-1">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <select name="papel" class="form-select form-select-sm" style="width:130px; font-size:11px;" onchange="this.form.submit()">
+                                <option value="funcionario" {% if u.papel == 'funcionario' %}selected{% endif %}>Funcionario</option>
+                                <option value="gerente" {% if u.papel == 'gerente' %}selected{% endif %}>Gerente</option>
+                                <option value="producao" {% if u.papel == 'producao' %}selected{% endif %}>Producao</option>
+                                <option value="rh" {% if u.papel == 'rh' %}selected{% endif %}>RH</option>
+                                <option value="admin" {% if u.papel == 'admin' %}selected{% endif %}>Admin</option>
+                            </select>
+                        </form>
                     {% endif %}
                 </td>
                 <td>
