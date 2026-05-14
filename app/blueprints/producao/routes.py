@@ -4,7 +4,7 @@ from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 
 from app.blueprints.producao import producao_bp
-from app.decorators import admin_required
+from app.decorators import producao_required
 from app.extensions import db
 from app.models import PlanejamentoProducao, PlanejamentoItem, Receita, MateriaPrima, MovimentacaoEstoque
 from app.services.producao import consolidar_lista_compras
