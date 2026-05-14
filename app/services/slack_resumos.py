@@ -98,7 +98,7 @@ def _formatar_blocks(resumo):
             agreg[it['item']] += it['qtd']
         linhas_loja = '\n'.join(f'  • {qtd}x {nome}'
                                  for nome, qtd in sorted(agreg.items()))
-        texto = f'*{nome_loja}* ({len(itens)} item{"ns" if len(itens) != 1 else ""})\n{linhas_loja}'
+        texto = f'*{nome_loja}* ({len(itens)} {"itens" if len(itens) != 1 else "item"})\n{linhas_loja}'
         blocks.append({'type': 'section',
                        'text': {'type': 'mrkdwn', 'text': texto[:2900]}})
 
