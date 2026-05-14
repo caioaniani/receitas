@@ -697,8 +697,35 @@ def _enriquecer_params(tool_name, tool_input, user):
         return _enriquecer_balanco_congelados(tool_input)
     if tool_name == 'entrada_lote_loja':
         return _enriquecer_entrada_lote_loja(tool_input)
+    if tool_name == 'registrar_desperdicio':
+        return _enriquecer_registrar_desperdicio(tool_input, user)
     # consultar_pedido / consultar_estoque: passam direto
     return tool_input
+
+
+def _enriquecer_registrar_desperdicio(tool_input, user):
+    """Resolve loja_nome + item_nome no banco antes do preview."""
+    from sqlalchemy import func
+    out = dict(tool_input)
+    # Loja: tenta id, depois nome
+    loja = None
+    try:
+        loja_id = int(out.get('loja_id') or 0) or None
+    except (TypeError, ValueError):
+        loja_id = None
+    if loja_id:
+        loja = Loja.query.get(loja_id)
+    if not loja:
+        nome = (out.get('loja_nome') or '').strip()
+        if nome:
+            loja = Loja.query.filter(func.lower(Loja.nome) == nome.lower()).first()
+            if not loja:
+                loja = Loja.query.filter(Loja.nome.ilike(f'%{nome}%')).first()
+    if loja:
+        out['loja_id'] = loja.id
+        out['loja_nome'] = loja.nome
+    # Item: ja resolvido em executor via _resolver_item_qualquer
+    return out
 
 
 def _enriquecer_balanco_congelados(tool_input):
