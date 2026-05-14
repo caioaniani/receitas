@@ -904,7 +904,8 @@ def estoque_loja_mapeamentos_vincular(map_id):
         fator = float((request.form.get('fator') or '1').replace(',', '.'))
     except (TypeError, ValueError):
         fator = 1.0
-    if fator <= 0:
+    # Sanidade: rejeita absurdos. 100 = teto generoso (compra de 1 venda = 100 unidades).
+    if fator < 0.001 or fator > 100:
         fator = 1.0
 
     # Fallback: form sem submitter (Enter no select)
