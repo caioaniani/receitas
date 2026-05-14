@@ -1018,6 +1018,20 @@ def _migrate_postgres(app):
     _try("CREATE INDEX IF NOT EXISTS idx_slack_conversa_uid ON slack_conversa(slack_user_id)")
     _try("CREATE INDEX IF NOT EXISTS idx_slack_conversa_em ON slack_conversa(ultima_msg_em)")
 
+    # ── Lembrete de pedido pra amanha (opt-out por loja+data) ──
+    _try("""
+    CREATE TABLE IF NOT EXISTS lembrete_pedido_optout (
+        id SERIAL PRIMARY KEY,
+        loja_id INTEGER NOT NULL REFERENCES loja(id),
+        data_entrega DATE NOT NULL,
+        marcado_por_slack_uid VARCHAR(30),
+        marcado_por_id INTEGER REFERENCES usuario(id),
+        criado_em TIMESTAMP DEFAULT NOW(),
+        UNIQUE (loja_id, data_entrega)
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_lembrete_optout_data ON lembrete_pedido_optout(data_entrega)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
