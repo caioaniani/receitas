@@ -346,6 +346,35 @@ TOOL_ENTRADA_LOTE_LOJA = {
     },
 }
 
+TOOL_REGISTRAR_DESPERDICIO = {
+    "name": "registrar_desperdicio",
+    "description": "Registra sobra do dia descartada na loja (vencido/estragado/queimado/caiu). Baixa do estoque. NAO executa — preview.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "loja_id": {"type": ["integer", "null"]},
+            "loja_nome": {"type": ["string", "null"], "description": "Nome da loja. Use loja_id quando souber."},
+            "item_nome": {"type": "string", "description": "Nome da receita, produto ou MP descartado."},
+            "quantidade": {"type": "integer", "minimum": 1},
+            "motivo": {"type": "string", "enum": ["vencido", "estragado", "queimado", "caiu", "outro"], "description": "Default 'vencido'."},
+            "observacao": {"type": ["string", "null"]},
+        },
+        "required": ["item_nome", "quantidade"],
+    },
+}
+
+TOOL_CONSULTAR_DESPERDICIO = {
+    "name": "consultar_desperdicio",
+    "description": "Lista desperdicios registrados num periodo (default ultimos 7 dias). Filtra por loja opcionalmente.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "loja_nome": {"type": ["string", "null"]},
+            "dias": {"type": "integer", "minimum": 1, "maximum": 90, "description": "Janela de dias. Default 7."},
+        },
+    },
+}
+
 TOOLS = [
     # Existentes
     TOOL_CRIAR_PEDIDO, TOOL_CONSULTAR_PEDIDO, TOOL_CONSULTAR_ESTOQUE,
@@ -361,6 +390,8 @@ TOOLS = [
     TOOL_CONSULTAR_FOCO, TOOL_CONSULTAR_TAREFAS, TOOL_MARCAR_TAREFA_FEITA,
     # Estoque de congelados / loja
     TOOL_BALANCO_CONGELADOS, TOOL_ENTRADA_LOTE_LOJA,
+    # Desperdicio (sobra do dia / vencido)
+    TOOL_REGISTRAR_DESPERDICIO, TOOL_CONSULTAR_DESPERDICIO,
 ]
 
 # Quais tools requerem preview/aprovacao (writes)
@@ -368,6 +399,7 @@ REQUER_APROVACAO = {
     'criar_pedido', 'receber_mp', 'ajuste_estoque',
     'mudar_status_pedido', 'criar_fornecedor', 'marcar_ponto', 'criar_tarefa',
     'marcar_tarefa_feita', 'balanco_congelados', 'entrada_lote_loja',
+    'registrar_desperdicio',
 }
 
 
@@ -1235,7 +1267,7 @@ def executar_marcar_ponto(params, user):
     rp = _RP(
         funcionario_id=f.id,
         tipo=tipo,
-        timestamp=datetime.utcnow(),
+        timestamp=agora(),
     )
     db.session.add(rp)
     db.session.commit()
@@ -1359,7 +1391,7 @@ def executar_marcar_tarefa_feita(params, user):
     if t.status == 'feito':
         return {'ok': False, 'erro': f'Tarefa #{tid} ja esta marcada como feita'}
     t.status = 'feito'
-    t.feito_em = datetime.utcnow()
+    t.feito_em = agora()
     db.session.commit()
     return {'ok': True, 'tarefa_id': tid, 'nome': t.nome,
             'registro_tipo': 'tarefa_projeto', 'registro_id': tid}
