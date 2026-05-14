@@ -564,7 +564,7 @@ TOOLS DISPONIVEIS — ACOES:
 
 TOOLS DISPONIVEIS — CONSULTAS (read, sem aprovacao):
 - consultar_pedido: ver pedidos por loja/data/status/id
-- consultar_estoque: estoque de MP especifica ou MPs em alerta
+- consultar_estoque: estoque em 3 escopos: `mp` (materias-primas), `producao` (produtos prontos / freezer da industria), `loja` (produtos numa loja). Quando o usuario perguntar "estoque da loja X", use escopo='loja' e loja_nome='X'. Quando perguntar "o que tem no freezer / na industria", escopo='producao'. MP padrao se nao disser nada.
 - consultar_fornecedores: lista fornecedores
 - consultar_margem: custo + preco + margem de receita/produto
 - consultar_funcionario: info de funcionario
