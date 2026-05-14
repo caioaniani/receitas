@@ -30,6 +30,10 @@
         <a href="{{ url_for('pedidos.estoque_loja_saida_lote', loja=loja.id) }}" class="btn btn-outline-warning btn-sm">
             <i class="bi bi-box-arrow-up"></i> Saida em lote
         </a>
+        <a href="{{ url_for('pedidos.estoque_loja_mapeamentos') }}" class="btn btn-outline-dark btn-sm"
+           title="Mapeamentos dos nomes digitados em Saida em Lote">
+            <i class="bi bi-link-45deg"></i> Mapeamentos saida
+        </a>
         <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modal-ajuste">
             <i class="bi bi-plus-slash-minus"></i> Entrada / Ajuste
         </button>
