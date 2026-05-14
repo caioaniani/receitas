@@ -7,7 +7,7 @@ from sqlalchemy.orm import defer, joinedload, selectinload
 from werkzeug.utils import secure_filename
 
 from app.blueprints.rh import rh_bp
-from app.decorators import admin_required, owner_required
+from app.decorators import admin_required, owner_required, rh_required
 from app.extensions import db
 from flask import jsonify
 from app.models import (Funcionario, Loja, FolhaPagamento, Feedback, Posicao,
