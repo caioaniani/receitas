@@ -60,3 +60,6 @@ class Config:
     # Canais publicos onde o bot responde a @mention (CSV de IDs C123...).
     # Vazio = so DM.
     SLACK_CANAIS_PERMITIDOS = os.environ.get('SLACK_CANAIS_PERMITIDOS', '')
+    # Canal onde o bot posta o resumo diario as 04:00 BRT de pedidos pra
+    # entregar hoje. Vazio = desligado. Ex: C0ABC1234.
+    SLACK_CANAL_RESUMO_DIARIO = os.environ.get('SLACK_CANAL_RESUMO_DIARIO', '')
