@@ -308,6 +308,61 @@ def api_venda_detalhe(pedido_id):
         return jsonify(ok=False, erro=str(e)[:300]), 502
 
 
+@pdv_bp.route('/seru/<pedido_id>')
+@login_required
+@admin_required
+def venda_seru_detalhe(pedido_id):
+    """Mostra um pedido Seru completo com status de mapeamento de cada item.
+
+    Util pra diagnosticar 'porque o pedido foi processado mas so X de Y itens
+    baixaram': cada item nao baixado aparece com motivo (pendente / ignorado /
+    sem cadastro).
+    """
+    try:
+        pedido = seru.detalhes_pedido(pedido_id)
+    except RuntimeError as e:
+        flash(f'Erro Seru: {e}', 'danger')
+        return redirect(url_for('pdv.itens_vendidos'))
+
+    itens_raw = seru.extrair_itens(pedido)
+
+    # Cross-reference com SeruProdutoMap
+    nomes = list({it['nome'] for it in itens_raw if it.get('nome')})
+    maps_dict = {}
+    if nomes:
+        maps = SeruProdutoMap.query.filter(SeruProdutoMap.seru_nome.in_(nomes)).all()
+        maps_dict = {m.seru_nome: m for m in maps}
+
+    itens = []
+    for it in itens_raw:
+        nome = it.get('nome', '')
+        mapa = maps_dict.get(nome)
+        estado = mapa.estado if mapa else 'novo'
+        alvo = None
+        if mapa:
+            if mapa.receita_id:
+                from app.models import Receita
+                r = Receita.query.get(mapa.receita_id)
+                alvo = ('receita', r.nome if r else f'id={mapa.receita_id}')
+            elif mapa.produto_id:
+                p = Produto.query.get(mapa.produto_id)
+                alvo = ('produto', p.nome if p else f'id={mapa.produto_id}')
+        itens.append({
+            'nome': nome, 'sku': it.get('sku', ''),
+            'qtd': it.get('qtd', 0), 'total': it.get('total', 0),
+            'cancelado': it.get('cancelado', False),
+            'estado': estado, 'alvo': alvo,
+            'fator': mapa.fator_quantidade if mapa else None,
+        })
+
+    # SeruPedidoProcessado: o que registramos
+    processado = SeruPedidoProcessado.query.get(pedido_id)
+
+    return render_template('pdv/venda_seru_detalhe.html',
+                           pedido_id=pedido_id, pedido_raw=pedido,
+                           itens=itens, processado=processado)
+
+
 # ── Fase 2: Sync Seru → EstoqueLoja (auto-baixa) ──
 
 @pdv_bp.route('/api/mapear', methods=['POST'])
