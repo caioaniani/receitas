@@ -656,7 +656,7 @@ def congelados_entrada():
 
 @pedidos_bp.route('/congelados/ajuste', methods=['POST'])
 @login_required
-@admin_required
+@producao_required
 def congelados_ajuste():
     ep_id = int(request.form['estoque_id'])
     qtd = int(request.form['quantidade'])
