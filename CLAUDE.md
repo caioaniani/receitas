@@ -87,11 +87,49 @@ Desligar: env `SERU_AUTO_SYNC=0` (default `1`).
 `app/services/copilot.py` orquestra tools com Claude Haiku 4.5 (Anthropic API).
 Tools: criar_pedido, receber_mp, ajuste_estoque, mudar_status_pedido, criar_fornecedor,
 marcar_ponto, criar_tarefa, marcar_tarefa_feita, balanco_congelados, entrada_lote_loja,
-consultar_pedido/estoque/fornecedores/margem/funcionario/caixa/foco/tarefas/vendas_itens.
+registrar_desperdicio,
+consultar_pedido/estoque/fornecedores/margem/funcionario/caixa/foco/tarefas/vendas_itens/desperdicio.
 
 Tools de write requerem aprovacao (preview HTML no chat). Frontend em
 `app/static/js/copilot.js` — modal lateral com textarea, Enter envia, Shift+Enter
 quebra linha.
+
+## Slack Bot (copilot via DM/@mention)
+
+Bot reutiliza 100% das tools do copilot. DM direta ou @mention em canal permitido
+dispara o mesmo `copilot_svc.interpretar` — single-workspace.
+
+**Env vars** (Railway):
+- `SLACK_BOT_TOKEN`: xoxb-... (Bot User OAuth Token)
+- `SLACK_SIGNING_SECRET`: assinatura HMAC pra validar webhooks
+- `SLACK_CANAIS_PERMITIDOS`: CSV de IDs de canais publicos (ex `C012,C034`). Vazio = so DM.
+
+**Setup do Slack App** (https://api.slack.com/apps):
+- Bot scopes: `chat:write`, `im:history`, `im:write`, `app_mentions:read`, `users:read`
+- Event subscriptions: `message.im`, `app_mention`. Request URL: `<host>/slack/events`
+- Interactivity: ON. Request URL: `<host>/slack/interact`
+- Install no workspace, copia tokens pro env
+
+**Fluxo**:
+1. `/slack/events` (POST) valida signing + idempotencia (`SlackEventoProcessado`),
+   dispara processamento async via ThreadPoolExecutor (ack <3s).
+2. `slack_bot.processar_evento_mensagem`: resolve `SlackVinculo` (slack_uid → Usuario),
+   carrega `SlackConversa` (multi-turn), chama `copilot_svc.interpretar(text, user, historico)`.
+3. Resposta:
+   - Write tool → cria `SlackAcaoPendente` (token unico) + posta Block Kit preview com botoes
+   - Read tool → posta texto direto
+   - Conversa → posta texto
+4. `/slack/interact` (POST) recebe clique. Resolve token → SlackAcaoPendente.
+   Confirmar → `copilot_svc.executar` + `chat.update` com resultado. Cancelar → marca cancelado.
+
+**Seguranca**:
+- HMAC-SHA256 do signing secret obrigatorio (rejeita >5min de delta = replay)
+- `SlackVinculo.ativo=True` obrigatorio — sem vinculo, bot recusa
+- Token de acao expira em 10min e so quem pediu pode confirmar (`acao.slack_user_id == clicker`)
+- Canais publicos: lista branca via `SLACK_CANAIS_PERMITIDOS`
+- CSRF isento no blueprint (Slack nao envia o token CSRF; autenticidade vai pela signing)
+
+**UI admin**: `/slack/install` lista vinculos + form pra criar novos (slack_user_id ↔ Usuario).
 
 ## Sidebar
 

@@ -237,6 +237,10 @@
            class="sidebar-link {% if request.path == '/audit' %}active{% endif %}">
             <i class="bi bi-shield-check"></i> Audit Log
         </a>
+        <a href="{{ url_for('slack.install') }}"
+           class="sidebar-link {% if request.path.startswith('/slack') %}active{% endif %}">
+            <i class="bi bi-slack"></i> Slack Bot
+        </a>
         {% endif %}
 
         {% if not current_user.is_admin() %}

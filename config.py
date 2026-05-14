@@ -48,3 +48,15 @@ class Config:
     DROPBOX_APP_KEY = os.environ.get('DROPBOX_APP_KEY', '')
     DROPBOX_APP_SECRET = os.environ.get('DROPBOX_APP_SECRET', '')
     DROPBOX_REFRESH_TOKEN = os.environ.get('DROPBOX_REFRESH_TOKEN', '')
+
+    # Slack bot — copilot via DM/@mention.
+    # Setup do app: https://api.slack.com/apps -> Create New App
+    # Scopes do bot: chat:write, im:history, im:write, app_mentions:read, users:read
+    # Event subscriptions: app_mention, message.im
+    # Interactivity URL: <host>/slack/interact
+    # Events URL: <host>/slack/events
+    SLACK_BOT_TOKEN = os.environ.get('SLACK_BOT_TOKEN', '')  # xoxb-...
+    SLACK_SIGNING_SECRET = os.environ.get('SLACK_SIGNING_SECRET', '')
+    # Canais publicos onde o bot responde a @mention (CSV de IDs C123...).
+    # Vazio = so DM.
+    SLACK_CANAIS_PERMITIDOS = os.environ.get('SLACK_CANAIS_PERMITIDOS', '')

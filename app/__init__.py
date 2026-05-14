@@ -270,6 +270,8 @@ def create_app(config_class=None):
     app.register_blueprint(copilot_bp)
     from app.blueprints.fornecedores import fornecedores_bp
     app.register_blueprint(fornecedores_bp)
+    from app.blueprints.slack import slack_bp
+    app.register_blueprint(slack_bp)
 
     # Ativa audit log (listeners SQLAlchemy)
     from app.services.audit import init_audit
@@ -961,6 +963,60 @@ def _migrate_postgres(app):
     """)
     _try("CREATE INDEX IF NOT EXISTS idx_desperdicio_loja ON desperdicio(loja_id)")
     _try("CREATE INDEX IF NOT EXISTS idx_desperdicio_data ON desperdicio(data)")
+
+    # ── Slack bot (DM/@mention → copilot) ──
+    _try("""
+    CREATE TABLE IF NOT EXISTS slack_vinculo (
+        id SERIAL PRIMARY KEY,
+        slack_user_id VARCHAR(30) NOT NULL UNIQUE,
+        slack_workspace_id VARCHAR(30),
+        usuario_id INTEGER NOT NULL REFERENCES usuario(id),
+        ativo BOOLEAN DEFAULT TRUE,
+        criado_em TIMESTAMP DEFAULT NOW(),
+        criado_por_id INTEGER REFERENCES usuario(id)
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_slack_vinculo_uid ON slack_vinculo(slack_user_id)")
+    _try("CREATE INDEX IF NOT EXISTS idx_slack_vinculo_ativo ON slack_vinculo(ativo)")
+
+    _try("""
+    CREATE TABLE IF NOT EXISTS slack_evento_processado (
+        event_id VARCHAR(50) PRIMARY KEY,
+        processado_em TIMESTAMP DEFAULT NOW()
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_slack_evento_em ON slack_evento_processado(processado_em)")
+
+    _try("""
+    CREATE TABLE IF NOT EXISTS slack_acao_pendente (
+        id SERIAL PRIMARY KEY,
+        token VARCHAR(40) NOT NULL UNIQUE,
+        slack_user_id VARCHAR(30) NOT NULL,
+        slack_channel_id VARCHAR(30),
+        slack_message_ts VARCHAR(30),
+        tipo_acao VARCHAR(50) NOT NULL,
+        params_json TEXT NOT NULL,
+        usuario_id INTEGER NOT NULL REFERENCES usuario(id),
+        criado_em TIMESTAMP DEFAULT NOW(),
+        executado_em TIMESTAMP,
+        cancelado_em TIMESTAMP
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_slack_acao_token ON slack_acao_pendente(token)")
+    _try("CREATE INDEX IF NOT EXISTS idx_slack_acao_em ON slack_acao_pendente(criado_em)")
+
+    _try("""
+    CREATE TABLE IF NOT EXISTS slack_conversa (
+        id SERIAL PRIMARY KEY,
+        slack_user_id VARCHAR(30) NOT NULL,
+        slack_channel_id VARCHAR(30) NOT NULL,
+        mensagens_json TEXT DEFAULT '[]',
+        ultima_msg_em TIMESTAMP DEFAULT NOW(),
+        UNIQUE (slack_user_id, slack_channel_id)
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_slack_conversa_uid ON slack_conversa(slack_user_id)")
+    _try("CREATE INDEX IF NOT EXISTS idx_slack_conversa_em ON slack_conversa(ultima_msg_em)")
 
     # Backfill de tokens em drivers existentes (sem token)
     try:
