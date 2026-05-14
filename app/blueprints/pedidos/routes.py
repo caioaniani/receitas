@@ -966,24 +966,34 @@ def estoque_loja_historico_saida_lote():
         q = q.filter(EstoqueLoja.loja_id == loja_id)
     rows = q.order_by(desc(MovEstoqueLoja.data)).limit(300).all()
 
-    # Enriquece com loja + nome do item
+    # Pre-carrega catalogos em batch (evita N+1)
+    loja_ids = {est.loja_id for _, est in rows}
+    rec_ids = {est.receita_id for _, est in rows if est.receita_id}
+    prod_ids = {est.produto_id for _, est in rows if est.produto_id}
+    mp_ids = {est.materia_prima_id for _, est in rows if est.materia_prima_id}
+    lojas_map = {l.id: l for l in Loja.query.filter(Loja.id.in_(loja_ids)).all()} if loja_ids else {}
+    rec_map = {r.id: r for r in Receita.query.filter(Receita.id.in_(rec_ids)).all()} if rec_ids else {}
+    prod_map = {p.id: p for p in Produto.query.filter(Produto.id.in_(prod_ids)).all()} if prod_ids else {}
+    mp_map = {m.id: m for m in MateriaPrima.query.filter(MateriaPrima.id.in_(mp_ids)).all()} if mp_ids else {}
+
     linhas = []
     for mov, est in rows:
-        loja = Loja.query.get(est.loja_id)
-        item_nome = '?'
         if est.receita_id:
-            r = Receita.query.get(est.receita_id)
+            r = rec_map.get(est.receita_id)
             item_nome = r.nome if r else '?'
         elif est.produto_id:
-            p = Produto.query.get(est.produto_id)
+            p = prod_map.get(est.produto_id)
             item_nome = p.nome if p else '?'
         elif est.materia_prima_id:
-            m = MateriaPrima.query.get(est.materia_prima_id)
+            m = mp_map.get(est.materia_prima_id)
             item_nome = m.nome if m else '?'
         elif est.nome_pendente:
             item_nome = est.nome_pendente
+        else:
+            item_nome = '?'
         linhas.append({
-            'mov': mov, 'estoque': est, 'loja': loja, 'item_nome': item_nome,
+            'mov': mov, 'estoque': est,
+            'loja': lojas_map.get(est.loja_id), 'item_nome': item_nome,
         })
 
     lojas = _lojas_operacionais()
