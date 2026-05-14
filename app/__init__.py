@@ -270,6 +270,8 @@ def create_app(config_class=None):
     app.register_blueprint(copilot_bp)
     from app.blueprints.fornecedores import fornecedores_bp
     app.register_blueprint(fornecedores_bp)
+    from app.blueprints.slack import slack_bp
+    app.register_blueprint(slack_bp)
 
     # Ativa audit log (listeners SQLAlchemy)
     from app.services.audit import init_audit
