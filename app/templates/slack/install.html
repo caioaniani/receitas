@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}Slack Bot - Setup{% endblock %}
+
+{% block content %}
+<h1 class="page-title mb-3"><i class="bi bi-slack"></i> Slack Bot</h1>
+
+{% if not cfg_ok %}
+<div class="alert alert-warning">
+    <strong>Bot nao configurado.</strong> Defina <code>SLACK_BOT_TOKEN</code> e
+    <code>SLACK_SIGNING_SECRET</code> no Railway. Setup do app:
+    <a href="https://api.slack.com/apps" target="_blank">api.slack.com/apps</a>
+    → Create New App → From scratch.
+    Scopes do bot: <code>chat:write</code>, <code>im:history</code>,
+    <code>im:write</code>, <code>app_mentions:read</code>, <code>users:read</code>.
+    Event subscriptions: <code>message.im</code>, <code>app_mention</code>.
+    Request URL: <code>{{ request.host_url }}slack/events</code>.
+    Interactivity URL: <code>{{ request.host_url }}slack/interact</code>.
+</div>
+{% else %}
+<div class="alert alert-success py-2">
+    <i class="bi bi-check-circle"></i> Bot configurado.
+    Endpoints: <code>{{ request.host_url }}slack/events</code> e <code>{{ request.host_url }}slack/interact</code>.
+</div>
+{% endif %}
+
+<div class="card mb-3">
+    <div class="card-header bg-light fw-bold">
+        <i class="bi bi-plus-circle"></i> Vincular Slack user a um usuario do sistema
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('slack.vincular') }}" class="row g-2 align-items-end">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-md-4">
+                <label class="form-label small mb-1">Slack User ID</label>
+                <input type="text" name="slack_user_id" class="form-control form-control-sm"
+                       placeholder="U01ABCDEF12" required>
+                <small class="text-muted">Slack → perfil da pessoa → "Copy member ID"</small>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Workspace ID (opcional)</label>
+                <input type="text" name="slack_workspace_id" class="form-control form-control-sm"
+                       placeholder="T01XYZ...">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Usuario do sistema</label>
+                <select name="usuario_id" class="form-select form-select-sm" required>
+                    <option value="">Selecione...</option>
+                    {% for u in usuarios %}
+                    <option value="{{ u.id }}">{{ u.nome }} ({{ u.papel }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary btn-sm w-100">
+                    <i class="bi bi-link-45deg"></i> Vincular
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-light fw-bold">
+        <i class="bi bi-people"></i> Vinculacoes ({{ vinculos|length }})
+    </div>
+    {% if vinculos %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead class="thead-padaria">
+                <tr>
+                    <th>Slack User</th>
+                    <th>Workspace</th>
+                    <th>Usuario sistema</th>
+                    <th>Papel</th>
+                    <th>Status</th>
+                    <th class="text-muted small">Criado</th>
+                    <th style="width:80px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in vinculos %}
+                <tr {% if not v.ativo %}class="text-muted"{% endif %}>
+                    <td><code>{{ v.slack_user_id }}</code></td>
+                    <td class="small">{{ v.slack_workspace_id or '—' }}</td>
+                    <td>{{ v.usuario.nome if v.usuario else '?' }}</td>
+                    <td><span class="badge bg-secondary">{{ v.usuario.papel if v.usuario else '?' }}</span></td>
+                    <td>
+                        {% if v.ativo %}
+                        <span class="badge bg-success">Ativo</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Inativo</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-muted small">{{ v.criado_em.strftime('%d/%m/%Y') if v.criado_em else '' }}</td>
+                    <td>
+                        {% if v.ativo %}
+                        <form method="POST" action="{{ url_for('slack.desvincular', vinc_id=v.id) }}"
+                              onsubmit="return confirm('Desativar este vinculo?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-link btn-sm text-danger p-0" title="Desativar">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-center text-muted py-4">
+        Nenhum vinculo criado. Adicione um acima pra o bot reconhecer alguem do Slack.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
