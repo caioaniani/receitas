@@ -63,7 +63,7 @@ def _run_sync(app):
                 # anteriores nao sao tocadas — preferencia do usuario.
                 hoje = hoje_brt()
                 stats = seru_sync.processar_pedidos(hoje, hoje, user=None)
-                _ult_run = _dt.utcnow()
+                _ult_run = _agora()
                 ativas = any(stats.get(k, 0) for k in (
                     'pedidos_novos', 'itens_baixados',
                     'pedidos_cancelados_estornados'))
