@@ -954,6 +954,107 @@ def estoque_loja_mapeamentos_vincular(map_id):
     return redirect(url_for('pedidos.estoque_loja_mapeamentos'))
 
 
+@pedidos_bp.route('/estoque-loja/historico')
+@login_required
+@gerente_required
+def estoque_loja_historico():
+    """Lista TODAS as movimentacoes de MovEstoqueLoja, filtravel por loja/tipo/data."""
+    from sqlalchemy import desc
+
+    raw_loja = request.args.get('loja')
+    try:
+        loja_id = int(raw_loja) if raw_loja else None
+    except ValueError:
+        loja_id = None
+
+    tipos_disp = [
+        'entrada_pedido', 'entrada_manual', 'ajuste_negativo',
+        'saida_lote', 'venda_loja_sem_estoque',
+        'venda_seru', 'venda_seru_estorno', 'venda_seru_sem_estoque',
+        'venda_vnda', 'venda_vnda_estorno', 'venda_vnda_sem_estoque',
+        'desperdicio', 'desperdicio_sem_estoque', 'desperdicio_estorno',
+    ]
+    tipo_filtro = request.args.get('tipo', '').strip()
+
+    de_str = (request.args.get('de') or '').strip()
+    ate_str = (request.args.get('ate') or '').strip()
+    try:
+        de = datetime.strptime(de_str, '%Y-%m-%d').date() if de_str else None
+    except ValueError:
+        de = None
+    try:
+        ate = datetime.strptime(ate_str, '%Y-%m-%d').date() if ate_str else None
+    except ValueError:
+        ate = None
+
+    # Nao-admin so ve a propria loja
+    loja_user = _loja_do_usuario()
+    if loja_user:
+        loja_id = loja_user
+
+    q = db.session.query(MovEstoqueLoja, EstoqueLoja).join(
+        EstoqueLoja, MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id
+    )
+    if loja_id:
+        q = q.filter(EstoqueLoja.loja_id == loja_id)
+    if tipo_filtro:
+        q = q.filter(MovEstoqueLoja.tipo == tipo_filtro)
+    if de:
+        q = q.filter(MovEstoqueLoja.data >= datetime.combine(de, datetime.min.time()))
+    if ate:
+        q = q.filter(MovEstoqueLoja.data <= datetime.combine(ate, datetime.max.time()))
+
+    rows = q.order_by(desc(MovEstoqueLoja.data)).limit(500).all()
+
+    loja_ids = {est.loja_id for _, est in rows}
+    rec_ids = {est.receita_id for _, est in rows if est.receita_id}
+    prod_ids = {est.produto_id for _, est in rows if est.produto_id}
+    mp_ids = {est.materia_prima_id for _, est in rows if est.materia_prima_id}
+    user_ids = {mov.usuario_id for mov, _ in rows if mov.usuario_id}
+
+    from app.models import Usuario
+    lojas_map = {l.id: l for l in Loja.query.filter(Loja.id.in_(loja_ids)).all()} if loja_ids else {}
+    rec_map = {r.id: r for r in Receita.query.filter(Receita.id.in_(rec_ids)).all()} if rec_ids else {}
+    prod_map = {p.id: p for p in Produto.query.filter(Produto.id.in_(prod_ids)).all()} if prod_ids else {}
+    mp_map = {m.id: m for m in MateriaPrima.query.filter(MateriaPrima.id.in_(mp_ids)).all()} if mp_ids else {}
+    user_map = {u.id: u for u in Usuario.query.filter(Usuario.id.in_(user_ids)).all()} if user_ids else {}
+
+    linhas = []
+    for mov, est in rows:
+        if est.receita_id:
+            r = rec_map.get(est.receita_id)
+            item_nome = r.nome if r else '?'
+        elif est.produto_id:
+            p = prod_map.get(est.produto_id)
+            item_nome = p.nome if p else '?'
+        elif est.materia_prima_id:
+            m = mp_map.get(est.materia_prima_id)
+            item_nome = m.nome + ' (MP)' if m else '?'
+        elif est.nome_pendente:
+            item_nome = est.nome_pendente
+        else:
+            item_nome = '?'
+        linhas.append({
+            'mov': mov, 'estoque': est,
+            'loja': lojas_map.get(est.loja_id),
+            'item_nome': item_nome,
+            'usuario': user_map.get(mov.usuario_id) if mov.usuario_id else None,
+        })
+
+    # Totais por tipo
+    from collections import defaultdict
+    totais = defaultdict(lambda: {'qtd': 0, 'n': 0})
+    for mov, _ in rows:
+        totais[mov.tipo]['qtd'] += mov.quantidade or 0
+        totais[mov.tipo]['n'] += 1
+
+    lojas = _lojas_operacionais()
+    return render_template('pedidos/estoque_loja_historico.html',
+                           linhas=linhas, lojas=lojas, sel_loja=loja_id,
+                           tipos_disp=tipos_disp, tipo_filtro=tipo_filtro,
+                           de=de_str, ate=ate_str, totais=dict(totais))
+
+
 @pedidos_bp.route('/estoque-loja/historico-saida-lote')
 @login_required
 @gerente_required
