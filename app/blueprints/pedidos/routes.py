@@ -695,7 +695,7 @@ def congelados_balanco():
 
 @pedidos_bp.route('/congelados/vincular', methods=['POST'])
 @login_required
-@admin_required
+@producao_required
 def congelados_vincular():
     """Vincula uma EstoqueProducao pendente (sem receita/produto) a uma
     receita ou produto existente. Se ja existe outra EstoqueProducao com
