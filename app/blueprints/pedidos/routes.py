@@ -833,6 +833,79 @@ def estoque_loja_entrada_lote():
                            lojas=lojas, loja=loja, sel_loja=loja_id)
 
 
+@pedidos_bp.route('/estoque-loja/saida-lote', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def estoque_loja_saida_lote():
+    """Preview de saida em lote — usuario cola lista 'nome: qtd' (vendas
+    manuais sem PDV API) e ve o que vai descontar. Apply em outra rota."""
+    from app.services import estoque_loja_lote as svc
+
+    loja_id = None
+    if request.method == 'POST':
+        try:
+            loja_id = int(request.form.get('loja_id') or 0) or None
+        except ValueError:
+            loja_id = None
+    else:
+        try:
+            loja_id = int(request.args.get('loja') or 0) or None
+        except ValueError:
+            loja_id = None
+
+    texto = request.form.get('texto', '') if request.method == 'POST' else ''
+    referencia = request.form.get('referencia', '').strip()
+    itens = []
+    if request.method == 'POST' and texto.strip() and loja_id:
+        parseados = svc.parsear_lista(texto)
+        itens = svc.resolver_lista(parseados, loja_id)
+        # marca o "novo" pra subtrair em vez de somar (display only)
+        for it in itens:
+            if it.get('erro') or not it.get('resolvido'):
+                continue
+            it['novo'] = max(0, (it.get('estoque_atual') or 0) - (it.get('quantidade') or 0))
+            it['faltou'] = max(0, (it.get('quantidade') or 0) - (it.get('estoque_atual') or 0))
+
+    lojas = _lojas_operacionais()
+    loja = Loja.query.get(loja_id) if loja_id else None
+    return render_template('pedidos/estoque_loja_saida_lote.html',
+                           texto=texto, referencia=referencia, itens=itens,
+                           lojas=lojas, loja=loja, sel_loja=loja_id)
+
+
+@pedidos_bp.route('/estoque-loja/saida-lote/aplicar', methods=['POST'])
+@login_required
+@admin_required
+def estoque_loja_saida_lote_aplicar():
+    from app.services import estoque_loja_lote as svc
+    try:
+        loja_id = int(request.form.get('loja_id') or 0)
+    except ValueError:
+        loja_id = 0
+    if not loja_id:
+        flash('Selecione uma loja.', 'warning')
+        return redirect(url_for('pedidos.estoque_loja_saida_lote'))
+
+    texto = request.form.get('texto', '')
+    referencia = request.form.get('referencia', '').strip() or None
+    if not texto.strip():
+        flash('Lista vazia — nada pra aplicar.', 'warning')
+        return redirect(url_for('pedidos.estoque_loja_saida_lote', loja=loja_id))
+
+    parseados = svc.parsear_lista(texto)
+    resolvidos = svc.resolver_lista(parseados, loja_id)
+    resultado = svc.aplicar_saida_lote(resolvidos, loja_id, current_user,
+                                        referencia=referencia)
+    n_ok = len(resultado['aplicados'])
+    n_ign = len(resultado['ignorados'])
+    if n_ok:
+        flash(f'Saida aplicada: {n_ok} item(ns) descontado(s).'
+              + (f' {n_ign} ignorados (sem cadastro).' if n_ign else ''), 'success')
+    else:
+        flash(f'Nenhum item descontado. {n_ign} ignorados.', 'warning')
+    return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
+
+
 @pedidos_bp.route('/estoque-loja/entrada-lote/aplicar', methods=['POST'])
 @login_required
 @admin_required
