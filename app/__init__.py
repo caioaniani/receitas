@@ -37,15 +37,17 @@ def create_app(config_class=None):
 
     @app.template_filter('brt')
     def brt_filter(dt, fmt='%d/%m %H:%M'):
-        """Converte datetime UTC pra horario de Brasilia (UTC-3, sem DST)."""
+        """Formata datetime ja em BRT (sistema todo armazena BRT naive).
+
+        Mantido como filtro pra padronizar o display de data/hora nos templates.
+        """
         if not dt:
             return ''
-        from datetime import timedelta
-        return (dt - timedelta(hours=3)).strftime(fmt)
+        return dt.strftime(fmt)
 
     @app.context_processor
     def inject_now():
-        return {'now': datetime.now}
+        return {'now': agora_brt}
 
     @app.context_processor
     def inject_static_version():
