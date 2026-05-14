@@ -887,17 +887,18 @@ def estoque_loja_saida_lote_aplicar():
         return redirect(url_for('pedidos.estoque_loja_saida_lote', loja=loja_id))
 
     parseados = svc.parsear_lista(texto)
-    resolvidos = svc.resolver_lista(parseados, loja_id)
+    resolvidos = svc.resolver_lista_saida(parseados, loja_id)
     resultado = svc.aplicar_saida_lote(resolvidos, loja_id, current_user,
                                         referencia=referencia)
     n_ok = len(resultado['aplicados'])
     n_ign = len(resultado['ignorados'])
     if n_ok:
         flash(f'Saida aplicada: {n_ok} item(ns) descontado(s).'
-              + (f' {n_ign} ignorados (sem cadastro).' if n_ign else ''), 'success')
+              + (f' {n_ign} ignorado(s)/pendente(s).' if n_ign else ''), 'success')
     else:
-        flash(f'Nenhum item descontado. {n_ign} ignorados.', 'warning')
-    return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
+        flash(f'Nenhum item descontado. {n_ign} ignorado(s)/pendente(s) — '
+              f'vincule em /pedidos/estoque-loja/mapeamentos.', 'warning')
+    return redirect(url_for('pedidos.estoque_loja_saida_lote', loja=loja_id))
 
 
 @pedidos_bp.route('/estoque-loja/entrada-lote/aplicar', methods=['POST'])
