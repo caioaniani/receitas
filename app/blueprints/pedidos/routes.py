@@ -946,6 +946,51 @@ def estoque_loja_mapeamentos_vincular(map_id):
     return redirect(url_for('pedidos.estoque_loja_mapeamentos'))
 
 
+@pedidos_bp.route('/estoque-loja/historico-saida-lote')
+@login_required
+@admin_required
+def estoque_loja_historico_saida_lote():
+    """Lista MovEstoqueLoja de tipo saida_lote/venda_loja_sem_estoque."""
+    from sqlalchemy import desc
+
+    raw_loja = request.args.get('loja')
+    try:
+        loja_id = int(raw_loja) if raw_loja else None
+    except ValueError:
+        loja_id = None
+
+    q = db.session.query(MovEstoqueLoja, EstoqueLoja).join(
+        EstoqueLoja, MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id
+    ).filter(MovEstoqueLoja.tipo.in_(['saida_lote', 'venda_loja_sem_estoque']))
+    if loja_id:
+        q = q.filter(EstoqueLoja.loja_id == loja_id)
+    rows = q.order_by(desc(MovEstoqueLoja.data)).limit(300).all()
+
+    # Enriquece com loja + nome do item
+    linhas = []
+    for mov, est in rows:
+        loja = Loja.query.get(est.loja_id)
+        item_nome = '?'
+        if est.receita_id:
+            r = Receita.query.get(est.receita_id)
+            item_nome = r.nome if r else '?'
+        elif est.produto_id:
+            p = Produto.query.get(est.produto_id)
+            item_nome = p.nome if p else '?'
+        elif est.materia_prima_id:
+            m = MateriaPrima.query.get(est.materia_prima_id)
+            item_nome = m.nome if m else '?'
+        elif est.nome_pendente:
+            item_nome = est.nome_pendente
+        linhas.append({
+            'mov': mov, 'estoque': est, 'loja': loja, 'item_nome': item_nome,
+        })
+
+    lojas = _lojas_operacionais()
+    return render_template('pedidos/estoque_loja_historico_saida_lote.html',
+                           linhas=linhas, lojas=lojas, sel_loja=loja_id)
+
+
 @pedidos_bp.route('/estoque-loja/saida-lote/aplicar', methods=['POST'])
 @login_required
 @admin_required
