@@ -949,7 +949,7 @@ def estoque_loja_mapeamentos_vincular(map_id):
 
 @pedidos_bp.route('/estoque-loja/historico-saida-lote')
 @login_required
-@admin_required
+@gerente_required
 def estoque_loja_historico_saida_lote():
     """Lista MovEstoqueLoja de tipo saida_lote/venda_loja_sem_estoque."""
     from sqlalchemy import desc
