@@ -81,7 +81,7 @@ def _formatar_blocks(resumo):
     # Total geral pra producao
     if resumo['por_item']:
         linhas = sorted(resumo['por_item'].items(), key=lambda x: -x[1])
-        texto = '*PRODUCAO TOTAL DO DIA:*\n' + '\n'.join(
+        texto = '*ENTREGA TOTAL DO DIA:*\n' + '\n'.join(
             f'• {qtd}x {nome}' for nome, qtd in linhas[:30]
         )
         if len(linhas) > 30:
