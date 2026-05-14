@@ -1376,20 +1376,22 @@ def _executar_read(tool_name, params, user):  # noqa: F811
 # ───── Tools WRITE novas ───────────────────────────────────────────────
 
 def executar_mudar_status_pedido(params, user):
-    from app.models import PedidoLoja
+    from app.models import (PedidoLoja, MateriaPrima, EstoqueProducao,
+                             MovEstoqueProducao, EstoqueLoja, MovEstoqueLoja,
+                             MovimentacaoEstoque)
     pid = params.get('pedido_id')
     novo = params.get('novo_status')
     p = PedidoLoja.query.get(pid)
     if not p:
         return {'ok': False, 'erro': f'Pedido #{pid} nao encontrado'}
-    # Restricao de loja pra nao-admin
     if not user.is_admin() and p.loja_id != user.loja_id:
         return {'ok': False, 'erro': f'Pedido #{pid} nao e da sua loja'}
-    # Transicoes validas
+
     transicoes = {
         'confirmar': ('pendente', 'confirmado'),
         'separar': (('pendente', 'confirmado'), 'separado'),
         'enviar': ('separado', 'em_transporte'),
+        'receber': ('em_transporte', 'recebido'),
         'cancelar': (('pendente', 'confirmado', 'separado', 'em_transporte'), 'cancelado'),
     }
     if novo not in transicoes:
@@ -1399,8 +1401,66 @@ def executar_mudar_status_pedido(params, user):
         de = (de,)
     if p.status not in de:
         return {'ok': False, 'erro': f'Pedido #{pid} esta {p.status}, nao pode {novo}'}
-    p.status = para
-    db.session.commit()
+
+    try:
+        # ENVIAR: baixa estoque da industria
+        if novo == 'enviar':
+            for item in p.itens:
+                if item.materia_prima_id:
+                    mp = MateriaPrima.query.get(item.materia_prima_id)
+                    if mp:
+                        mp.estoque_atual = max(0, (mp.estoque_atual or 0) - item.quantidade)
+                        db.session.add(MovimentacaoEstoque(
+                            materia_prima_id=mp.id, tipo='saida',
+                            quantidade=item.quantidade,
+                            referencia=f'Pedido #{pid} → {p.loja.nome} (copilot)',
+                            usuario_id=user.id,
+                        ))
+                    continue
+                ep = EstoqueProducao.query.filter_by(
+                    receita_id=item.receita_id, produto_id=item.produto_id).first()
+                if ep:
+                    ep.quantidade = max(0, ep.quantidade - item.quantidade)
+                    db.session.add(MovEstoqueProducao(
+                        estoque_producao_id=ep.id, tipo='saida_pedido',
+                        quantidade=item.quantidade,
+                        referencia=f'Pedido #{pid} → {p.loja.nome} (copilot)',
+                        usuario_id=user.id,
+                    ))
+
+        # RECEBER: soma no estoque da loja (qtd conforme pedido, sem divergencia)
+        if novo == 'receber':
+            for item in p.itens:
+                qtd = item.quantidade
+                item.quantidade_recebida = qtd
+                el = EstoqueLoja.query.filter_by(
+                    loja_id=p.loja_id,
+                    receita_id=item.receita_id,
+                    produto_id=item.produto_id,
+                    materia_prima_id=item.materia_prima_id,
+                ).first()
+                if not el:
+                    el = EstoqueLoja(loja_id=p.loja_id,
+                                     receita_id=item.receita_id,
+                                     produto_id=item.produto_id,
+                                     materia_prima_id=item.materia_prima_id)
+                    db.session.add(el)
+                    db.session.flush()
+                el.quantidade = (el.quantidade or 0) + qtd
+                db.session.add(MovEstoqueLoja(
+                    estoque_loja_id=el.id, tipo='entrada_pedido',
+                    quantidade=qtd,
+                    referencia=f'Pedido #{pid} (copilot)',
+                    usuario_id=user.id,
+                ))
+
+        p.status = para
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        logger.exception('mudar_status_pedido %s falhou', novo)
+        return {'ok': False, 'erro': f'Erro: {exc}'}
+
     return {'ok': True, 'pedido_id': pid, 'novo_status': para,
             'registro_tipo': 'pedido_loja', 'registro_id': pid,
             'url': f'/pedidos/{pid}'}
