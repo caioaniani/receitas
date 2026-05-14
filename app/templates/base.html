@@ -48,11 +48,13 @@
            class="sidebar-link {% if request.path == '/' %}active{% endif %}">
             <i class="bi bi-stars"></i> Início
         </a>
+        {% if current_user.is_owner %}
         <a href="{{ url_for('projetos.painel') }}"
            class="sidebar-link {% if request.path.startswith('/projetos') %}active{% endif %}">
             <i class="bi bi-kanban"></i> Projetos
             {% if proj_atrasadas %}<span class="badge bg-danger ms-1" style="font-size:9px;" title="Tarefas atrasadas">{{ proj_atrasadas }}</span>{% endif %}
         </a>
+        {% endif %}
 
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Lojas</div>
