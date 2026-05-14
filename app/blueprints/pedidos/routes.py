@@ -1185,7 +1185,7 @@ def estoque_loja_registrar():
 
 @pedidos_bp.route('/estoque-loja/ajuste', methods=['POST'])
 @login_required
-@admin_required
+@gerente_required
 def estoque_loja_ajuste():
     loja_id = int(request.form.get('loja_id', 0))
     tipo, item_id = _parse_item_id(request.form.get('item_id', ''))
