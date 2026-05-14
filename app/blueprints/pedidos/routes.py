@@ -407,7 +407,7 @@ def precos_loja(loja_id):
 
 @pedidos_bp.route('/relatorio')
 @login_required
-@admin_required
+@gerente_required
 def relatorio():
     hoje = date.today()
     loja_id = request.args.get('loja', type=int)
