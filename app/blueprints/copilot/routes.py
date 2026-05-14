@@ -8,6 +8,7 @@ from flask_login import current_user, login_required
 
 from app.blueprints.copilot import copilot_bp
 from app.extensions import csrf, db
+from app.utils.time import agora
 from app.models import CopilotConversa
 from app.services import copilot as copilot_svc
 
