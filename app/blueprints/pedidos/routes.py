@@ -111,12 +111,15 @@ def novo():
     amanha = date.today() + timedelta(days=1)
 
     if request.method == 'POST':
+        # Admin e gerente podem escolher qualquer loja no form;
+        # outros papeis sao forcados pra propria loja.
+        pode_qualquer_loja = current_user.is_admin() or current_user.is_gerente()
         try:
-            sel_loja = int(request.form.get('loja_id', 0)) if current_user.is_admin() else loja_id
+            sel_loja = (int(request.form.get('loja_id', 0)) if pode_qualquer_loja
+                        else (loja_id or current_user.loja_id))
         except (TypeError, ValueError):
             sel_loja = 0
-        # Validacao multi-loja: nao-admin so cria pra propria loja
-        if not current_user.is_admin() and sel_loja != loja_id:
+        if not pode_qualquer_loja and sel_loja != current_user.loja_id:
             abort(403)
         # Loja precisa existir e estar ativa
         if not sel_loja or not Loja.query.filter_by(id=sel_loja, ativa=True).first():
