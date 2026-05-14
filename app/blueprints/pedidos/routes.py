@@ -678,7 +678,7 @@ def congelados_ajuste():
 
 @pedidos_bp.route('/congelados/balanco', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@producao_required
 def congelados_balanco():
     """Tela de balanco: usuario cola lista 'nome: qtd' e sistema sobrescreve
     EstoqueProducao.quantidade pra cada item, com auditoria por delta."""
