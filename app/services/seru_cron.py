@@ -89,7 +89,7 @@ def _run_vnda_sync(app):
     global _ult_run_vnda
     from app.extensions import db
     from app.services import vnda_sync
-    from datetime import datetime as _dt
+    from app.utils.time import agora as _agora
 
     with app.app_context():
         uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
