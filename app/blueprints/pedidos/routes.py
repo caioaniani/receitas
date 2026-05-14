@@ -526,7 +526,7 @@ def excluir(id):
 
 @pedidos_bp.route('/separacao')
 @login_required
-@admin_required
+@producao_required
 def separacao():
     pedidos = PedidoLoja.query.filter(
         PedidoLoja.status.in_(['pendente', 'confirmado'])
