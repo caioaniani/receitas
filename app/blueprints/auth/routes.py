@@ -67,7 +67,7 @@ def usuarios():
     usuarios = Usuario.query.order_by(Usuario.papel, Usuario.nome).all()
     lojas = (Loja.query.filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
              .order_by(Loja.nome).all())
-    return render_template('auth/usuarios.html', usuarios=usuarios)
+    return render_template('auth/usuarios.html', usuarios=usuarios, lojas=lojas)
 
 
 @auth_bp.route('/usuarios/novo', methods=['POST'])
