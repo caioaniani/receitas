@@ -62,6 +62,33 @@
     </div>
 </form>
 
+<script>
+(function() {
+    var ta = document.querySelector('textarea[name="texto"]');
+    var ref = document.querySelector('input[name="referencia"]');
+    var KEY = 'saida-lote-texto';
+    var KEY_REF = 'saida-lote-ref';
+    if (ta && !ta.value.trim()) {
+        try {
+            var saved = sessionStorage.getItem(KEY);
+            if (saved) ta.value = saved;
+        } catch (e) {}
+    }
+    if (ref && !ref.value.trim()) {
+        try {
+            var savedRef = sessionStorage.getItem(KEY_REF);
+            if (savedRef) ref.value = savedRef;
+        } catch (e) {}
+    }
+    if (ta) ta.addEventListener('input', function() {
+        try { sessionStorage.setItem(KEY, ta.value); } catch (e) {}
+    });
+    if (ref) ref.addEventListener('input', function() {
+        try { sessionStorage.setItem(KEY_REF, ref.value); } catch (e) {}
+    });
+})();
+</script>
+
 {% if itens %}
 {% set n_mapeado = itens | rejectattr('erro') | selectattr('map_entry') | selectattr('map_entry.estado','equalto','mapeado') | list | length %}
 {% set n_pendente = itens | rejectattr('erro') | selectattr('map_entry') | selectattr('map_entry.estado','equalto','pendente') | list | length %}
