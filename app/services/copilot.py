@@ -579,12 +579,15 @@ REGRAS:
 """
 
 
-def interpretar(prompt_text, user, historico=None):
+def interpretar(prompt_text, user, historico=None, images=None):
     """Chama Claude. Retorna dict com tipo, params, explicacao.
 
     historico: lista de {role: 'user'|'assistant', content: str} com
     conversas anteriores nessa sessao. Permite copilot lembrar contexto
     ('ah entendi, foi aqui' depois de uma resposta).
+
+    images: lista opcional de {mimetype, base64} pra mandar imagens junto
+    com o prompt (vision do Haiku). Usado pelo Slack bot.
     """
     api_key = os.environ.get('ANTHROPIC_API_KEY') or current_app.config.get('ANTHROPIC_API_KEY')
     if not api_key:
@@ -604,7 +607,23 @@ def interpretar(prompt_text, user, historico=None):
         content = (m.get('content') or '').strip()
         if role in ('user', 'assistant') and content:
             messages.append({'role': role, 'content': content})
-    messages.append({'role': 'user', 'content': prompt_text})
+
+    # Se tem imagens, prompt vira lista de content blocks
+    if images:
+        content_blocks = []
+        for img in images[:5]:  # limita 5 imagens por msg
+            content_blocks.append({
+                'type': 'image',
+                'source': {
+                    'type': 'base64',
+                    'media_type': img.get('mimetype') or 'image/jpeg',
+                    'data': img.get('base64') or '',
+                },
+            })
+        content_blocks.append({'type': 'text', 'text': prompt_text})
+        messages.append({'role': 'user', 'content': content_blocks})
+    else:
+        messages.append({'role': 'user', 'content': prompt_text})
     # Limita as ultimas 20 mensagens pra nao estourar tokens
     if len(messages) > 20:
         messages = messages[-20:]
