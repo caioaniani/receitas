@@ -168,9 +168,26 @@ def processar_evento_mensagem(evento):
 
     historico = _historico_da_conversa(sc)
 
+    # Baixa imagens (se houver) e converte pra base64 pro Claude
+    imagens = []
+    for f in files:
+        mime = (f.get('mimetype') or '').lower()
+        if not mime.startswith('image/'):
+            continue
+        arq = slack_api.baixar_arquivo(f)
+        if not arq:
+            continue
+        import base64
+        b64 = base64.b64encode(arq['bytes']).decode('ascii')
+        imagens.append({
+            'mimetype': arq['mimetype'] or 'image/jpeg',
+            'base64': b64,
+        })
+
     # Chama o copilot
     try:
-        resp = copilot_svc.interpretar(text, user, historico=historico)
+        resp = copilot_svc.interpretar(text, user, historico=historico,
+                                        images=imagens or None)
     except Exception:
         logger.exception('slack_bot: copilot.interpretar falhou')
         slack_api.post_message(channel,
