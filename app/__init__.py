@@ -621,6 +621,21 @@ def _migrate_postgres(app):
         if cols_ep and 'nome_pendente' not in cols_ep:
             conn.execute(text("ALTER TABLE estoque_producao ADD COLUMN nome_pendente VARCHAR(200)"))
 
+        # vnda_debito.componente_key (cestas: PK composta para 1 acumulador por componente)
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'vnda_debito'"
+        ))
+        cols_vd = {row[0] for row in result}
+        if cols_vd and 'componente_key' not in cols_vd:
+            conn.execute(text("ALTER TABLE vnda_debito DROP CONSTRAINT IF EXISTS vnda_debito_pkey"))
+            conn.execute(text(
+                "ALTER TABLE vnda_debito ADD COLUMN componente_key VARCHAR(50) NOT NULL DEFAULT 'self'"
+            ))
+            conn.execute(text(
+                "ALTER TABLE vnda_debito ADD PRIMARY KEY (vnda_produto_map_id, componente_key)"
+            ))
+
         conn.commit()
 
     # Migrações resilientes (cada ALTER em sua própria transação)
