@@ -63,9 +63,13 @@ def events():
     if tipo not in ('message', 'app_mention'):
         return ('', 200)
 
-    # Em canais publicos, so responde se for @mention. message_im (DM) ok.
-    if tipo == 'message' and event.get('channel_type') != 'im':
-        return ('', 200)
+    # Filtra: aceita DM (im), @mention, OU msg em canal whitelisted.
+    # Msg em canal nao-whitelisted = ignora.
+    canal = event.get('channel')
+    canal_tipo = event.get('channel_type', '')
+    if tipo == 'message' and canal_tipo != 'im':
+        if not slack_bot._canal_permitido(canal, canal_tipo):
+            return ('', 200)
 
     slack_bot.disparar_evento(event)
     return ('', 200)
