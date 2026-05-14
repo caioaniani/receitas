@@ -553,7 +553,8 @@ LOJAS DISPONIVEIS:
 
 TOOLS DISPONIVEIS — ACOES:
 - criar_pedido: criar encomenda de produtos pra producao entregar numa loja
-- mudar_status_pedido: confirmar / separar / enviar / cancelar pedido (use pedido_id)
+- mudar_status_pedido: confirmar / separar / enviar / **receber** / cancelar pedido (use pedido_id). 'receber' soma no estoque da loja sem divergencias (qtd igual ao pedido).
+- anexar_foto_pedido: anexa foto(s) de comprovante a um pedido (ex: foto da entrega, nota fiscal). Usa as imagens da mensagem do usuario no Slack. Se o usuario mandar foto e dizer "recebi pedido X", chame **as duas** tools em sequencia OU pergunte qual fazer primeiro.
 - receber_mp: registrar entrada de materia-prima (compra/fornecedor)
 - ajuste_estoque: quebra, perda, contagem fisica de MP
 - criar_fornecedor: cadastrar novo fornecedor
