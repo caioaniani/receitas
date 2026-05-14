@@ -1540,7 +1540,7 @@ def desperdicio():
         return redirect(url_for('pedidos.desperdicio', loja=sel_loja))
 
     # GET: form + lista
-    if current_user.is_admin():
+    if pode_qualquer_loja:
         sel = request.args.get('loja')
         loja_filtro = int(sel) if sel else None
     else:
