@@ -26,7 +26,36 @@ class Usuario(UserMixin, db.Model):
         return check_password_hash(self.senha_hash, senha)
 
     def is_admin(self):
-        return self.papel == 'admin'
+        return self.papel == 'admin' or self.is_dono()
+
+    def is_gerente(self):
+        return self.papel == 'gerente'
+
+    def is_producao(self):
+        return self.papel == 'producao'
+
+    def is_rh(self):
+        return self.papel == 'rh'
+
+    def pode_lojas(self):
+        """Pedidos, Estoque Loja, Relatorio."""
+        return self.is_admin() or self.is_gerente()
+
+    def pode_producao(self):
+        """Plano de Producao, Congelados, Separacao."""
+        return self.is_admin() or self.is_producao()
+
+    def pode_catalogo(self):
+        """Receitas, MP, Produtos, Fornecedores (producao = read-only)."""
+        return self.is_admin() or self.is_producao()
+
+    def pode_rh(self):
+        """RH (ponto/ferias/cargos sem salario)."""
+        return self.is_admin() or self.is_rh()
+
+    def pode_pdv(self):
+        """PDV, Seru, VNDA, Mapeamentos."""
+        return self.is_admin()
 
     def is_dono(self):
         """Owner: dono unico do sistema (ve areas pessoais Vida/Igreja).
