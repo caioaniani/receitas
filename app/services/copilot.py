@@ -1853,15 +1853,10 @@ def executar_registrar_desperdicio(params, user):
     loja = _resolver_loja_para_user(params.get('loja_id'),
                                      params.get('loja_nome'), user)
     if not loja:
-        # Diagnostico especifico pro caso
-        if not user.is_admin() and not user.loja_id:
-            return {'ok': False, 'erro': ('Sua conta nao esta vinculada a nenhuma loja. '
-                                           'Peca pro admin vincular voce a uma loja em /auth/usuarios.')}
-        if not user.is_admin() and user.loja_id:
-            return {'ok': False, 'erro': ('Voce so pode registrar desperdicio na sua loja. '
-                                           'Verifique se a loja vinculada a voce esta ativa.')}
-        return {'ok': False, 'erro': f'Loja nao identificada: "{params.get("loja_nome") or "(vazio)"}". '
-                                       'Verifique o nome.'}
+        nome_tentado = params.get('loja_nome') or params.get('loja_id')
+        if nome_tentado:
+            return {'ok': False, 'erro': f'Loja "{nome_tentado}" nao encontrada. Verifique o nome.'}
+        return {'ok': False, 'erro': 'Especifique a loja (ex: Anesio, Nebraska, Ribeiro do Vale).'}
 
     nome_item = (params.get('item_nome') or '').strip()
     if not nome_item:
