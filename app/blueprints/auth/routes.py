@@ -202,7 +202,7 @@ def concluir(id):
         return redirect(url_for('auth.minhas_fichas'))
 
     atrib.status = 'concluida'
-    atrib.data_conclusao = datetime.utcnow()
+    atrib.data_conclusao = agora()
     db.session.commit()
     flash('Ficha marcada como concluida!', 'success')
     return redirect(url_for('auth.minhas_fichas'))
