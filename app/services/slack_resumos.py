@@ -20,9 +20,11 @@ def resumo_pedidos_dia(data=None):
     if data is None:
         data = hoje_brt()
 
+    # So pedidos ainda nao processados pela industria — pendente ou confirmado.
+    # Separado/em_transporte/recebido/cancelado = nao precisa lembrar a industria.
     pedidos = (PedidoLoja.query
                .filter(PedidoLoja.data_entrega == data)
-               .filter(~PedidoLoja.status.in_(['recebido', 'cancelado']))
+               .filter(PedidoLoja.status.in_(['pendente', 'confirmado']))
                .all())
 
     por_loja = defaultdict(list)  # loja_nome -> [{item, qtd, pedido_id, status}]
