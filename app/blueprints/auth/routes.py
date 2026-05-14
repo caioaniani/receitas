@@ -77,6 +77,9 @@ def novo_usuario():
     login_val = request.form.get('login', '').strip()
     senha = request.form.get('senha', '').strip()
     papel = request.form.get('papel', 'funcionario')
+    PAPEIS_VALIDOS = {'admin', 'gerente', 'producao', 'rh', 'funcionario'}
+    if papel not in PAPEIS_VALIDOS:
+        papel = 'funcionario'
 
     if not nome or not login_val or not senha:
         flash('Preencha todos os campos.', 'warning')
