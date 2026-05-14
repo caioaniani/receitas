@@ -1095,6 +1095,18 @@ def _migrate_sqlite(app):
             "(SELECT id FROM usuario WHERE papel = 'admin' ORDER BY id LIMIT 1)"
         )
 
+    # Migracao papel_v1: introduz niveis. Roda uma vez.
+    try:
+        cursor.execute("CREATE TABLE IF NOT EXISTS migracao_marker (nome VARCHAR(50) PRIMARY KEY, executado_em DATETIME DEFAULT CURRENT_TIMESTAMP)")
+        cursor.execute("SELECT 1 FROM migracao_marker WHERE nome='papel_v1'")
+        ja_rodou = cursor.fetchone() is not None
+        if not ja_rodou:
+            cursor.execute("UPDATE usuario SET papel='funcionario' WHERE papel='admin' AND (is_owner IS NULL OR is_owner = 0)")
+            cursor.execute("UPDATE usuario SET papel='admin' WHERE is_owner = 1 AND papel <> 'admin'")
+            cursor.execute("INSERT INTO migracao_marker (nome) VALUES ('papel_v1')")
+    except Exception:
+        pass
+
     # Migração projeto_area.cor
     cursor.execute("PRAGMA table_info(projeto_area)")
     cols_pa = [row[1] for row in cursor.fetchall()]
