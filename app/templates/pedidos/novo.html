@@ -9,13 +9,13 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <div class="row g-3 mb-3">
-        {% if current_user.is_admin() %}
+        {% if current_user.is_admin() or current_user.is_gerente() %}
         <div class="col-md-4">
             <label class="form-label fw-semibold">Loja</label>
             <select name="loja_id" class="form-select form-select-sm" required>
                 <option value="">Selecione...</option>
                 {% for l in lojas %}
-                <option value="{{ l.id }}">{{ l.nome }}</option>
+                <option value="{{ l.id }}" {% if loja_id == l.id %}selected{% endif %}>{{ l.nome }}</option>
                 {% endfor %}
             </select>
         </div>
