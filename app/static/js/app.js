@@ -61,9 +61,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             }
 
-            // restaura estado
-            var saved = localStorage.getItem('sidebar-collapsed-' + key) === '1';
-            if (saved) aplicar(true);
+            // Estado inicial: COLAPSADO por padrao.
+            // Exceções: (a) secao contem link ativo (pagina atual) → expande
+            //           (b) usuario expandiu manualmente antes → respeita ('0' em localStorage)
+            var hasActive = siblings.some(function (s) {
+                if (!s.classList) return false;
+                if (s.classList.contains('active')) return true;
+                return s.querySelector && s.querySelector('.active');
+            });
+            var saved = localStorage.getItem('sidebar-collapsed-' + key);
+            var collapsedInicial;
+            if (hasActive) {
+                collapsedInicial = false;
+            } else if (saved === '0') {
+                collapsedInicial = false;
+            } else {
+                collapsedInicial = true;
+            }
+            aplicar(collapsedInicial);
 
             titulo.addEventListener('click', function () {
                 var nowCollapsed = !titulo.classList.contains('collapsed');
