@@ -13,12 +13,11 @@ from datetime import datetime, timezone, timedelta
 import requests
 from flask import current_app
 
+from app.utils.time import BRT
+
 logger = logging.getLogger(__name__)
 
 BASE = 'https://integration.plataformaseru.com.br/v1'
-
-# Fuso de Sao Paulo (Brasil nao tem horario de verao desde 2019).
-BRT = timezone(timedelta(hours=-3))
 
 
 def data_local(iso_utc):
