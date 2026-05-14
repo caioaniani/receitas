@@ -669,6 +669,20 @@ def _migrate_postgres(app):
         _try("UPDATE usuario SET is_owner = TRUE WHERE id = "
              "(SELECT id FROM usuario WHERE papel = 'admin' ORDER BY id LIMIT 1)")
 
+    # Migracao papel_v1: introduz niveis (gerente/producao/rh). Roda uma vez.
+    # Downgrade de admins NAO-owner pra funcionario; owner sobe pra papel='admin' se ainda nao for.
+    _try("CREATE TABLE IF NOT EXISTS migracao_marker (nome VARCHAR(50) PRIMARY KEY, executado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+    try:
+        with db.engine.connect() as c:
+            r = c.execute(text("SELECT 1 FROM migracao_marker WHERE nome='papel_v1'")).fetchone()
+            ja_rodou = bool(r)
+    except Exception:
+        ja_rodou = True  # se nao consegue ler, nao mexe
+    if not ja_rodou:
+        _try("UPDATE usuario SET papel='funcionario' WHERE papel='admin' AND (is_owner IS NULL OR is_owner = FALSE)")
+        _try("UPDATE usuario SET papel='admin' WHERE is_owner = TRUE AND papel <> 'admin'")
+        _try("INSERT INTO migracao_marker (nome) VALUES ('papel_v1')")
+
     cols_pa = _cols('projeto_area')
     if cols_pa and 'cor' not in cols_pa:
         _try("ALTER TABLE projeto_area ADD COLUMN cor VARCHAR(20)")
