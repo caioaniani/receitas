@@ -68,6 +68,10 @@
            class="sidebar-link {% if '/pedidos/estoque-loja' in request.path %}active{% endif %}">
             <i class="bi bi-box-seam"></i> Estoque Loja
         </a>
+        <a href="{{ url_for('pedidos.desperdicio') }}"
+           class="sidebar-link {% if '/pedidos/desperdicio' in request.path %}active{% endif %}">
+            <i class="bi bi-trash3"></i> Desperdicio
+        </a>
         <a href="{{ url_for('pedidos.relatorio') }}"
            class="sidebar-link {% if '/pedidos/relatorio' in request.path %}active{% endif %}">
             <i class="bi bi-file-earmark-bar-graph"></i> Relatório de Pedidos
