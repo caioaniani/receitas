@@ -902,15 +902,10 @@ def _executar_read(tool_name, params, user):
 def _read_consultar_pedido(params, user):
     from app.models import PedidoLoja
     q = PedidoLoja.query
-    # Nao-admin: so consulta pedidos da propria loja
-    if not user.is_admin():
-        if not user.loja_id:
-            return {'texto': 'Seu usuario nao tem loja vinculada.'}
-        q = q.filter_by(loja_id=user.loja_id)
     if params.get('pedido_id'):
         p = q.filter_by(id=params['pedido_id']).first()
         if not p:
-            return {'texto': f'Pedido #{params["pedido_id"]} nao encontrado (ou nao e da sua loja).'}
+            return {'texto': f'Pedido #{params["pedido_id"]} nao encontrado.'}
         return {'texto': _formatar_pedido(p)}
     if params.get('loja_id') and user.is_admin():
         q = q.filter_by(loja_id=params['loja_id'])
@@ -1382,8 +1377,6 @@ def executar_mudar_status_pedido(params, user):
     p = PedidoLoja.query.get(pid)
     if not p:
         return {'ok': False, 'erro': f'Pedido #{pid} nao encontrado'}
-    if not (user.is_admin() or user.is_gerente()) and p.loja_id != user.loja_id:
-        return {'ok': False, 'erro': f'Pedido #{pid} nao e da sua loja'}
 
     transicoes = {
         'confirmar': ('pendente', 'confirmado'),
@@ -1749,8 +1742,6 @@ def executar_anexar_foto_pedido(params, user):
     p = PedidoLoja.query.get(pid)
     if not p:
         return {'ok': False, 'erro': f'Pedido #{pid} nao encontrado'}
-    if not (user.is_admin() or user.is_gerente()) and p.loja_id != user.loja_id:
-        return {'ok': False, 'erro': f'Pedido #{pid} nao e da sua loja'}
 
     imgs = params.get('imagens') or []
     if not imgs:
