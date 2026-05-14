@@ -174,6 +174,22 @@
     </form>
     {% endif %}
 
+    {% if current_user.is_admin() and pedido.status in ('confirmado', 'separado', 'em_transporte', 'recebido') %}
+    {% set msgs = {
+        'recebido': 'Voltar pra Em Transporte? Vai estornar o que somou no estoque da loja.',
+        'em_transporte': 'Voltar pra Separado? Vai estornar a baixa do estoque da industria/MP.',
+        'separado': 'Voltar pra Confirmado? (sem efeito no estoque)',
+        'confirmado': 'Voltar pra Pendente? (sem efeito no estoque)',
+    } %}
+    <form method="POST" action="{{ url_for('pedidos.voltar_status', id=pedido.id) }}"
+          onsubmit="return confirm('{{ msgs[pedido.status] }}')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-secondary btn-sm" title="Volta 1 status pra tras">
+            <i class="bi bi-arrow-counterclockwise"></i> Voltar status
+        </button>
+    </form>
+    {% endif %}
+
     {% if current_user.is_admin() %}
     <form method="POST" action="{{ url_for('pedidos.excluir', id=pedido.id) }}"
           onsubmit="return confirm('Excluir permanentemente este pedido?')">
