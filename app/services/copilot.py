@@ -7,6 +7,8 @@ Tools suportadas:
 - consultar_estoque (read) — consulta estoque MP / produtos
 - receber_mp (write) — entrada de materia-prima
 - ajuste_estoque (write) — ajuste manual (quebra/perda)
+- registrar_desperdicio (write) — registra sobra do dia/vencido na loja
+- consultar_desperdicio (read) — lista desperdicios por periodo
 
 Toda acao 'write' retorna preview pra aprovacao manual antes de executar.
 Acoes 'read' executam direto e retornam texto."""
