@@ -625,7 +625,7 @@ def congelados():
 
 @pedidos_bp.route('/congelados/entrada', methods=['POST'])
 @login_required
-@admin_required
+@producao_required
 def congelados_entrada():
     tipo = request.form.get('tipo', 'receita')
     item_id = int(request.form['item_id'])
