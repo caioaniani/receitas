@@ -1823,21 +1823,24 @@ def _resolver_item_qualquer(nome):
 
 
 def _resolver_loja_para_user(loja_id, loja_nome, user):
-    """Resolve loja: admin pode passar id/nome; gerente forca user.loja_id."""
-    if not user.is_admin():
-        if user.loja_id:
-            l = Loja.query.get(user.loja_id)
-            if l:
-                return l
-        return None
+    """Resolve loja por id ou nome (fuzzy). Admin e gerente podem escolher
+    qualquer loja. Default e a loja vinculada ao usuario (se houver).
+    """
     if loja_id:
-        return Loja.query.get(int(loja_id))
+        l = Loja.query.get(int(loja_id))
+        if l:
+            return l
     if loja_nome:
         from sqlalchemy import func
         l = Loja.query.filter(func.lower(Loja.nome) == loja_nome.lower()).first()
         if l:
             return l
-        return Loja.query.filter(Loja.nome.ilike(f'%{loja_nome}%')).first()
+        l = Loja.query.filter(Loja.nome.ilike(f'%{loja_nome}%')).first()
+        if l:
+            return l
+    # Fallback: loja vinculada ao usuario, se nao explicitou nada
+    if user.loja_id:
+        return Loja.query.get(user.loja_id)
     return None
 
 
