@@ -104,7 +104,7 @@ def _run_vnda_sync(app):
             try:
                 hoje = hoje_brt()
                 stats = vnda_sync.processar_pedidos(hoje, user=None)
-                _ult_run_vnda = _dt.utcnow()
+                _ult_run_vnda = _agora()
                 if stats.get('erro'):
                     logger.warning('vnda auto-sync erro: %s', stats['erro'])
                 elif any(stats.get(k, 0) for k in (
