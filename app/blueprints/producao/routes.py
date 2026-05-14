@@ -12,7 +12,7 @@ from app.services.producao import consolidar_lista_compras
 
 @producao_bp.route('/')
 @login_required
-@admin_required
+@producao_required
 def lista():
     planos = PlanejamentoProducao.query.order_by(
         PlanejamentoProducao.data.desc()
@@ -22,7 +22,7 @@ def lista():
 
 @producao_bp.route('/novo', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@producao_required
 def novo():
     if request.method == 'POST':
         data_str = request.form.get('data', '')
@@ -64,7 +64,7 @@ def novo():
 
 @producao_bp.route('/<int:id>')
 @login_required
-@admin_required
+@producao_required
 def detalhe(id):
     plano = PlanejamentoProducao.query.get_or_404(id)
     itens = [{'receita_id': i.receita_id, 'multiplicador': i.multiplicador} for i in plano.itens]
@@ -77,7 +77,7 @@ def detalhe(id):
 
 @producao_bp.route('/<int:id>/lista-compras')
 @login_required
-@admin_required
+@producao_required
 def lista_compras(id):
     plano = PlanejamentoProducao.query.get_or_404(id)
     itens = [{'receita_id': i.receita_id, 'multiplicador': i.multiplicador} for i in plano.itens]
@@ -90,7 +90,7 @@ def lista_compras(id):
 
 @producao_bp.route('/<int:id>/baixar-estoque', methods=['POST'])
 @login_required
-@admin_required
+@producao_required
 def baixar_estoque(id):
     plano = PlanejamentoProducao.query.get_or_404(id)
     itens = [{'receita_id': i.receita_id, 'multiplicador': i.multiplicador} for i in plano.itens]
@@ -119,7 +119,7 @@ def baixar_estoque(id):
 
 @producao_bp.route('/<int:id>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@producao_required
 def excluir(id):
     plano = PlanejamentoProducao.query.get_or_404(id)
     db.session.delete(plano)
