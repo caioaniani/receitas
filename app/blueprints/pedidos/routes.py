@@ -752,7 +752,7 @@ def congelados_vincular():
 
 @pedidos_bp.route('/congelados/balanco/aplicar', methods=['POST'])
 @login_required
-@admin_required
+@producao_required
 def congelados_balanco_aplicar():
     """Aplica o balanco apos preview. Re-parseia o texto pra ser idempotente."""
     from app.services import estoque_congelados as svc
