@@ -226,7 +226,7 @@ def separar(id):
 
 @pedidos_bp.route('/<int:id>/enviar', methods=['POST'])
 @login_required
-@admin_required
+@gerente_required
 def enviar(id):
     pedido = PedidoLoja.query.get_or_404(id)
     if pedido.status != 'separado':
