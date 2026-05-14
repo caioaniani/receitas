@@ -113,6 +113,30 @@ def excluir_usuario(id):
     return redirect(url_for('auth.usuarios'))
 
 
+@auth_bp.route('/usuarios/<int:id>/papel', methods=['POST'])
+@login_required
+def alterar_papel(id):
+    if not current_user.is_admin():
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('auth.minhas_fichas'))
+
+    u = Usuario.query.get_or_404(id)
+    if u.is_owner:
+        flash('Owner nao pode ter o papel alterado.', 'warning')
+        return redirect(url_for('auth.usuarios'))
+
+    papel = (request.form.get('papel') or '').strip()
+    PAPEIS_VALIDOS = {'admin', 'gerente', 'producao', 'rh', 'funcionario'}
+    if papel not in PAPEIS_VALIDOS:
+        flash('Papel invalido.', 'warning')
+        return redirect(url_for('auth.usuarios'))
+
+    u.papel = papel
+    db.session.commit()
+    flash(f'Papel de "{u.nome}" alterado para {papel}.', 'success')
+    return redirect(url_for('auth.usuarios'))
+
+
 @auth_bp.route('/usuarios/<int:id>/reset-senha', methods=['POST'])
 @login_required
 def reset_senha(id):
