@@ -43,7 +43,7 @@
         </div>
         {% endif %}
 
-        {% if current_user.is_authenticated and current_user.is_admin() %}
+        {% if current_user.is_authenticated %}
         <a href="{{ url_for('main.index') }}"
            class="sidebar-link {% if request.path == '/' %}active{% endif %}">
             <i class="bi bi-stars"></i> Início
@@ -56,6 +56,7 @@
         </a>
         {% endif %}
 
+        {% if current_user.pode_lojas() %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Lojas</div>
 
@@ -71,7 +72,9 @@
            class="sidebar-link {% if '/pedidos/relatorio' in request.path %}active{% endif %}">
             <i class="bi bi-file-earmark-bar-graph"></i> Relatório de Pedidos
         </a>
+        {% endif %}
 
+        {% if current_user.pode_producao() %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Produção</div>
 
@@ -87,7 +90,9 @@
            class="sidebar-link {% if '/pedidos/separacao' in request.path %}active{% endif %}">
             <i class="bi bi-clipboard-data"></i> Separação do Dia
         </a>
+        {% endif %}
 
+        {% if current_user.pode_catalogo() %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Insumos</div>
 
@@ -115,7 +120,9 @@
            class="sidebar-link {% if request.path == '/cardapio' %}active{% endif %}">
             <i class="bi bi-file-earmark-pdf"></i> Cardápio PDF
         </a>
+        {% endif %}
 
+        {% if current_user.is_admin() %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Site</div>
 
@@ -123,8 +130,9 @@
            class="sidebar-link {% if request.path.startswith('/entregas') %}active{% endif %}">
             <i class="bi bi-truck"></i> Entregas Site
         </a>
+        {% endif %}
 
-        {% if current_user.is_admin() %}
+        {% if current_user.pode_pdv() %}
         <a href="{{ url_for('pdv.index') }}"
            class="sidebar-link {% if request.path == '/pdv/' or request.path == '/pdv' %}active{% endif %}">
             <i class="bi bi-shop-window"></i> Vendas PDV
@@ -143,6 +151,7 @@
         </a>
         {% endif %}
 
+        {% if current_user.pode_rh() %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">RH</div>
 
@@ -186,7 +195,9 @@
            class="sidebar-link {% if '/rh/ferias' in request.path %}active{% endif %}">
             <i class="bi bi-calendar-heart"></i> Férias / Folgas
         </a>
+        {% endif %}
 
+        {% if current_user.is_admin() %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Análise</div>
 
@@ -222,42 +233,15 @@
            class="sidebar-link {% if request.path == '/audit' %}active{% endif %}">
             <i class="bi bi-shield-check"></i> Audit Log
         </a>
-        {% elif current_user.is_authenticated %}
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Lojas</div>
-
-        <a href="{{ url_for('pedidos.lista') }}"
-           class="sidebar-link {% if request.path == '/pedidos/' or request.path == '/pedidos' %}active{% endif %}">
-            <i class="bi bi-cart3"></i> Pedidos
-        </a>
-        <a href="{{ url_for('pedidos.estoque_loja') }}"
-           class="sidebar-link {% if '/pedidos/estoque-loja' in request.path %}active{% endif %}">
-            <i class="bi bi-box-seam"></i> Estoque Loja
-        </a>
-
-        {% if current_user.loja_id %}
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Site</div>
-
-        <a href="{{ url_for('entregas.index') }}"
-           class="sidebar-link {% if request.path.startswith('/entregas') %}active{% endif %}">
-            <i class="bi bi-truck"></i> Entregas Site
-        </a>
-
-        {% if current_user.is_admin() %}
-        <a href="{{ url_for('pdv.index') }}"
-           class="sidebar-link {% if request.path.startswith('/pdv') %}active{% endif %}">
-            <i class="bi bi-shop-window"></i> Vendas PDV
-        </a>
-        {% endif %}
         {% endif %}
 
+        {% if not current_user.is_admin() %}
         <div class="sidebar-divider"></div>
-
         <a href="{{ url_for('auth.minhas_fichas') }}"
            class="sidebar-link {% if request.path == '/auth/minhas-fichas' %}active{% endif %}">
             <i class="bi bi-clipboard-check"></i> Minhas Fichas
         </a>
+        {% endif %}
         {% endif %}
 
         <div class="sidebar-divider"></div>
