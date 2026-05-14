@@ -75,6 +75,17 @@
                     {% endif %}
                 </td>
                 <td>
+                    <form method="POST" action="{{ url_for('auth.alterar_loja', id=u.id) }}" class="d-flex gap-1">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <select name="loja_id" class="form-select form-select-sm" style="width:170px; font-size:11px;" onchange="this.form.submit()">
+                            <option value="" {% if not u.loja_id %}selected{% endif %}>— sem loja —</option>
+                            {% for l in lojas %}
+                            <option value="{{ l.id }}" {% if u.loja_id == l.id %}selected{% endif %}>{{ l.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                </td>
+                <td>
                     {% set pendentes = u.atribuicoes | selectattr('status', 'equalto', 'pendente') | list %}
                     {% set concluidas = u.atribuicoes | selectattr('status', 'equalto', 'concluida') | list %}
                     {% if pendentes %}
