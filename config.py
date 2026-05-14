@@ -63,6 +63,6 @@ class Config:
     # Canal onde o bot posta o resumo diario as 04:00 BRT de pedidos pra
     # entregar hoje. Vazio = desligado. Ex: C0ABC1234.
     SLACK_CANAL_RESUMO_DIARIO = os.environ.get('SLACK_CANAL_RESUMO_DIARIO', '')
-    # Canal de produção — recebe lembretes 9h/12h/16h/19h sobre lojas
+    # Canal #pedidos — recebe lembretes 9h/12h/16h/19h sobre lojas
     # que nao fizeram pedido pra amanha. Vazio = desligado.
-    SLACK_CANAL_PRODUCAO = os.environ.get('SLACK_CANAL_PRODUCAO', '')
+    SLACK_CANAL_PEDIDOS = os.environ.get('SLACK_CANAL_PEDIDOS', '')
