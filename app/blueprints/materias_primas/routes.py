@@ -18,7 +18,7 @@ def banco():
 
 @materias_primas_bp.route('/salvar', methods=['POST'])
 @login_required
-@admin_required
+@catalogo_required
 def salvar():
     ids = request.form.getlist('mp_id[]')
     nomes = request.form.getlist('nome[]')
@@ -77,7 +77,7 @@ def salvar():
 
 @materias_primas_bp.route('/excluir/<int:id>', methods=['POST'])
 @login_required
-@admin_required
+@catalogo_required
 def excluir(id):
     mp = MateriaPrima.query.get_or_404(id)
     uso = ReceitaIngrediente.query.filter_by(ingrediente_nome=mp.nome).first()
@@ -94,7 +94,7 @@ def excluir(id):
 
 @materias_primas_bp.route('/estoque')
 @login_required
-@admin_required
+@catalogo_required
 def estoque():
     materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
     alertas = {a.materia_prima_id: a.estoque_minimo for a in AlertaEstoque.query.all()}
@@ -103,7 +103,7 @@ def estoque():
 
 @materias_primas_bp.route('/estoque/entrada', methods=['POST'])
 @login_required
-@admin_required
+@catalogo_required
 def estoque_entrada():
     mp_id = int(request.form['mp_id'])
     quantidade = float(request.form['quantidade'].replace(',', '.'))
@@ -135,7 +135,7 @@ def estoque_entrada():
 
 @materias_primas_bp.route('/estoque/saida', methods=['POST'])
 @login_required
-@admin_required
+@catalogo_required
 def estoque_saida():
     mp_id = int(request.form['mp_id'])
     quantidade = float(request.form['quantidade'].replace(',', '.'))
@@ -160,7 +160,7 @@ def estoque_saida():
 
 @materias_primas_bp.route('/estoque/<int:mp_id>/historico')
 @login_required
-@admin_required
+@catalogo_required
 def estoque_historico(mp_id):
     mp = MateriaPrima.query.get_or_404(mp_id)
     movimentacoes = MovimentacaoEstoque.query.filter_by(
@@ -171,7 +171,7 @@ def estoque_historico(mp_id):
 
 @materias_primas_bp.route('/estoque/alertas', methods=['POST'])
 @login_required
-@admin_required
+@catalogo_required
 def estoque_alertas():
     mp_ids = request.form.getlist('mp_id[]')
     minimos = request.form.getlist('estoque_minimo[]')
