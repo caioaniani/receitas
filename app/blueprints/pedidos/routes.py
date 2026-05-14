@@ -501,6 +501,7 @@ def relatorio():
 
 @pedidos_bp.route('/<int:id>/cancelar', methods=['POST'])
 @login_required
+@gerente_required
 def cancelar(id):
     pedido = PedidoLoja.query.get_or_404(id)
     loja_id = _loja_do_usuario()
