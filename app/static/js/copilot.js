@@ -1,5 +1,5 @@
 /* Copilot UI — chat com preview de ações.
-   Tools: criar_pedido, receber_mp, ajuste_estoque (write — preview obrigatório)
+   Tools: criar_pedido, receber_mp, ajuste_estoque, registrar_desperdicio (write — preview obrigatório)
           consultar_pedido, consultar_estoque (read — resultado direto). */
 (function() {
     var fab = document.getElementById('copilot-fab');
