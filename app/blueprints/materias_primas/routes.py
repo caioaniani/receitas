@@ -4,7 +4,7 @@ from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 
 from app.blueprints.materias_primas import materias_primas_bp
-from app.decorators import admin_required
+from app.decorators import admin_required, catalogo_required
 from app.extensions import db
 from app.models import MateriaPrima, ReceitaIngrediente, MovimentacaoEstoque, AlertaEstoque
 
