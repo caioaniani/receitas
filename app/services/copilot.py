@@ -1733,7 +1733,60 @@ def executar(tipo_acao, params, user):  # noqa: F811
         return executar_entrada_lote_loja(params, user)
     if tipo_acao == 'registrar_desperdicio':
         return executar_registrar_desperdicio(params, user)
+    if tipo_acao == 'anexar_foto_pedido':
+        return executar_anexar_foto_pedido(params, user)
     return _BASE_EXEC(tipo_acao, params, user)
+
+
+def executar_anexar_foto_pedido(params, user):
+    """Salva 1+ fotos como FotoRecebimento no pedido.
+
+    `params['imagens']` = lista de {mimetype, base64} embutida pelo slack_bot
+    quando o usuario anexou imagens na msg que originou a acao.
+    """
+    import base64
+    from app.models import PedidoLoja, FotoRecebimento
+
+    pid = params.get('pedido_id')
+    p = PedidoLoja.query.get(pid)
+    if not p:
+        return {'ok': False, 'erro': f'Pedido #{pid} nao encontrado'}
+    if not user.is_admin() and p.loja_id != user.loja_id:
+        return {'ok': False, 'erro': f'Pedido #{pid} nao e da sua loja'}
+
+    imgs = params.get('imagens') or []
+    if not imgs:
+        return {'ok': False, 'erro': 'Nenhuma imagem anexada na mensagem.'}
+
+    salvas = 0
+    try:
+        for img in imgs:
+            b64 = img.get('base64')
+            if not b64:
+                continue
+            try:
+                blob = base64.b64decode(b64)
+            except Exception:
+                continue
+            db.session.add(FotoRecebimento(
+                pedido_id=p.id,
+                imagem=blob,
+                mimetype=img.get('mimetype') or 'image/jpeg',
+                enviada_por=user.id,
+            ))
+            salvas += 1
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        logger.exception('anexar_foto_pedido falhou')
+        return {'ok': False, 'erro': f'Erro: {exc}'}
+
+    if salvas == 0:
+        return {'ok': False, 'erro': 'Nao consegui decodificar nenhuma imagem.'}
+
+    return {'ok': True, 'pedido_id': pid, 'fotos_salvas': salvas,
+            'registro_tipo': 'pedido_loja', 'registro_id': pid,
+            'url': f'/pedidos/{pid}'}
 
 
 # ── Desperdicio (sobra do dia / vencido) ───────────────────────────────
