@@ -275,6 +275,7 @@ def enviar(id):
 
 @pedidos_bp.route('/<int:id>/receber', methods=['POST'])
 @login_required
+@gerente_required
 def receber(id):
     pedido = PedidoLoja.query.get_or_404(id)
     loja_id = _loja_do_usuario()
