@@ -46,7 +46,7 @@ def _run_sync(app):
     global _ult_run
     from app.extensions import db
     from app.services import seru_sync
-    from datetime import datetime as _dt
+    from app.utils.time import agora as _agora
 
     with app.app_context():
         uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
