@@ -9,6 +9,9 @@
         <a href="{{ url_for('pedidos.estoque_loja_mapeamentos') }}" class="btn btn-sm btn-outline-primary">
             <i class="bi bi-link-45deg"></i> Mapeamentos
         </a>
+        <a href="{{ url_for('pedidos.estoque_loja_historico_saida_lote') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-clock-history"></i> Historico
+        </a>
         <a href="{{ url_for('pedidos.estoque_loja', loja=sel_loja or None) }}" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-arrow-left"></i> Voltar ao estoque
         </a>
