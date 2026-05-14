@@ -76,7 +76,10 @@
                         <small class="text-muted d-block" style="font-size:10px;">horario Brasilia</small>
                     </td>
                     <td>
-                        <code style="font-size:11px;">#{{ p.seru_pedido_id }}</code>
+                        <a href="{{ url_for('pdv.venda_seru_detalhe', pedido_id=p.seru_pedido_id) }}"
+                           title="Ver detalhe do pedido com mapeamentos">
+                            <code style="font-size:11px;">#{{ p.seru_pedido_id }}</code>
+                        </a>
                     </td>
                     <td>
                         {% if p.loja_id %}
