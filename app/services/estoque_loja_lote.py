@@ -6,13 +6,19 @@ cada item soma na quantidade existente em vez de sobrescrever.
 Itens sem match no catalogo (receita/produto/MP/orfao existente) entram
 como EstoqueLoja com nome_pendente preenchido — depois o admin vincula
 a um item cadastrado via /pedidos/estoque-loja/vincular.
+
+Saida em lote (manual, lojas sem PDV API) usa LojaProdutoMap pra lembrar
+vinculacoes — vincula um nome uma vez, vale pra sempre. Espelha SeruProdutoMap.
 """
 import re
 import unicodedata
+from datetime import datetime
+
+from sqlalchemy import func
 
 from app.extensions import db
 from app.models import (EstoqueLoja, MovEstoqueLoja,
-                        Receita, Produto, MateriaPrima)
+                        Receita, Produto, MateriaPrima, LojaProdutoMap)
 
 
 EXPANSOES = {
