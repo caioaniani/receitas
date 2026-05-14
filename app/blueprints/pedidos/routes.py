@@ -858,13 +858,7 @@ def estoque_loja_saida_lote():
     itens = []
     if request.method == 'POST' and texto.strip() and loja_id:
         parseados = svc.parsear_lista(texto)
-        itens = svc.resolver_lista(parseados, loja_id)
-        # marca o "novo" pra subtrair em vez de somar (display only)
-        for it in itens:
-            if it.get('erro') or not it.get('resolvido'):
-                continue
-            it['novo'] = max(0, (it.get('estoque_atual') or 0) - (it.get('quantidade') or 0))
-            it['faltou'] = max(0, (it.get('quantidade') or 0) - (it.get('estoque_atual') or 0))
+        itens = svc.resolver_lista_saida(parseados, loja_id)
 
     lojas = _lojas_operacionais()
     loja = Loja.query.get(loja_id) if loja_id else None
