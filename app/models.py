@@ -1456,3 +1456,78 @@ class Desperdicio(db.Model):
         if self.materia_prima:
             return self.materia_prima.nome + ' (MP)'
         return '?'
+
+
+# ── Slack bot (copilot via DM/@mention) ───────────────────────────────
+
+class SlackVinculo(db.Model):
+    """Mapeia slack_user_id → Usuario do sistema.
+
+    Sem vinculo ativo, bot recusa. Admin cria mapeamentos em /slack/install.
+    """
+    __tablename__ = 'slack_vinculo'
+
+    id = db.Column(db.Integer, primary_key=True)
+    slack_user_id = db.Column(db.String(30), unique=True, nullable=False, index=True)
+    slack_workspace_id = db.Column(db.String(30))
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    ativo = db.Column(db.Boolean, default=True, index=True)
+    criado_em = db.Column(db.DateTime, default=agora)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    usuario = db.relationship('Usuario', foreign_keys=[usuario_id])
+    criado_por = db.relationship('Usuario', foreign_keys=[criado_por_id])
+
+
+class SlackEventoProcessado(db.Model):
+    """Idempotencia: Slack reenvia eventos se nao recebe 200 em 3s.
+
+    Antes de processar, checa se event_id ja foi visto. TTL implicito de 1h
+    (limpeza opcional via cron — eventos sao pequenos).
+    """
+    __tablename__ = 'slack_evento_processado'
+
+    event_id = db.Column(db.String(50), primary_key=True)
+    processado_em = db.Column(db.DateTime, default=agora, index=True)
+
+
+class SlackAcaoPendente(db.Model):
+    """Acao de write aguardando confirmacao via botao.
+
+    Token unico embutido no botao. Slack nao guarda params raw (seguranca:
+    evita injetar params via interacao). Expira em 10min.
+    """
+    __tablename__ = 'slack_acao_pendente'
+
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(40), unique=True, nullable=False, index=True)
+    slack_user_id = db.Column(db.String(30), nullable=False)
+    slack_channel_id = db.Column(db.String(30))
+    slack_message_ts = db.Column(db.String(30))  # pra chat.update apos clique
+    tipo_acao = db.Column(db.String(50), nullable=False)
+    params_json = db.Column(db.Text, nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora, index=True)
+    executado_em = db.Column(db.DateTime)
+    cancelado_em = db.Column(db.DateTime)
+
+    usuario = db.relationship('Usuario')
+
+
+class SlackConversa(db.Model):
+    """Context multi-turn por (slack_user_id, channel_id).
+
+    Reusa CopilotConversa do copilot existente — so encapsula o mapping
+    pra o Slack saber qual conversa retomar quando user manda nova msg.
+    """
+    __tablename__ = 'slack_conversa'
+
+    id = db.Column(db.Integer, primary_key=True)
+    slack_user_id = db.Column(db.String(30), nullable=False, index=True)
+    slack_channel_id = db.Column(db.String(30), nullable=False)
+    copilot_conversa_id = db.Column(db.Integer, db.ForeignKey('copilot_conversa.id'))
+    ultima_msg_em = db.Column(db.DateTime, default=agora, onupdate=agora, index=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('slack_user_id', 'slack_channel_id', name='uq_slack_conversa'),
+    )
