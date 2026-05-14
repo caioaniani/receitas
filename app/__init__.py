@@ -943,6 +943,25 @@ def _migrate_postgres(app):
     """)
     _try("CREATE INDEX IF NOT EXISTS idx_pedido_local_item_pedido ON pedido_local_item(pedido_local_id)")
 
+    # ── Desperdicio (sobra do dia / vencido) ──
+    _try("""
+    CREATE TABLE IF NOT EXISTS desperdicio (
+        id SERIAL PRIMARY KEY,
+        loja_id INTEGER NOT NULL REFERENCES loja(id),
+        receita_id INTEGER REFERENCES receita(id),
+        produto_id INTEGER REFERENCES produto(id),
+        materia_prima_id INTEGER REFERENCES materia_prima(id),
+        quantidade INTEGER NOT NULL,
+        data DATE NOT NULL,
+        motivo VARCHAR(30) NOT NULL DEFAULT 'vencido',
+        observacao TEXT,
+        criado_em TIMESTAMP DEFAULT NOW(),
+        criado_por_id INTEGER REFERENCES usuario(id)
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_desperdicio_loja ON desperdicio(loja_id)")
+    _try("CREATE INDEX IF NOT EXISTS idx_desperdicio_data ON desperdicio(data)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
