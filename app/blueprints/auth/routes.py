@@ -63,7 +63,10 @@ def usuarios():
         flash('Acesso negado.', 'danger')
         return redirect(url_for('auth.minhas_fichas'))
 
+    from app.models import Loja
     usuarios = Usuario.query.order_by(Usuario.papel, Usuario.nome).all()
+    lojas = (Loja.query.filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
+             .order_by(Loja.nome).all())
     return render_template('auth/usuarios.html', usuarios=usuarios)
 
 
