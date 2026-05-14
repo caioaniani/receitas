@@ -639,17 +639,27 @@ def vnda_sync():
 @admin_required
 def vnda_reprocessar():
     """Apaga pedidos VNDA processados HOJE com baixados=0 e re-roda.
-    Safety identica a do Seru: nao apaga os ja-baixados."""
+    Safety identica a do Seru: nao apaga os ja-baixados.
+    Tambem limpa MovEstoqueLoja antigas dos pedidos sendo reprocessados
+    pra evitar duplicacao visual no historico."""
     from app.services import vnda_sync as svc
     from app.services.seru_cron import hoje_brt
+    from sqlalchemy import or_
     hoje = hoje_brt()
     inicio_dia_utc = datetime.combine(hoje, datetime.min.time()) + timedelta(hours=3)
-    n_apagados = VndaPedidoProcessado.query.filter(
+    alvo_q = VndaPedidoProcessado.query.filter(
         VndaPedidoProcessado.processado_em >= inicio_dia_utc,
         VndaPedidoProcessado.n_itens_baixados == 0,
         VndaPedidoProcessado.estornado_em.is_(None),
         VndaPedidoProcessado.cancelado_em.is_(None),
-    ).delete(synchronize_session=False)
+    )
+    codes = [p.vnda_pedido_code for p in alvo_q.all()]
+    # Apaga movs antigos desses pedidos. Como sao baixados=0, todos os movs
+    # sao do tipo sem_estoque (nao mexem em estoque) — seguro apagar.
+    if codes:
+        clauses = [MovEstoqueLoja.referencia.like(f'VNDA #{c}%') for c in codes]
+        MovEstoqueLoja.query.filter(or_(*clauses)).delete(synchronize_session=False)
+    n_apagados = alvo_q.delete(synchronize_session=False)
     db.session.commit()
     try:
         stats = svc.processar_pedidos(hoje, user=current_user)
