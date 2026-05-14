@@ -312,10 +312,25 @@ def aplicar_saida_lote(itens_resolvidos, loja_id, user, referencia=None):
                               'nome': mp.nome_digitado, 'motivo': 'pendente'})
             continue
 
-        qtd_efetiva = int((qtd_sub * float(mp.fator_quantidade or 1.0)) + 1e-9)
-        if qtd_efetiva <= 0:
+        fator = float(mp.fator_quantidade or 1.0)
+        qtd_efetiva_float = qtd_sub * fator
+
+        # Acumulador (igual SeruDebito/VndaDebito) — fracao soma proxima vez
+        debito = LojaDebito.query.filter_by(
+            loja_id=loja_id, loja_produto_map_id=mp.id).first()
+        if not debito:
+            debito = LojaDebito(loja_id=loja_id, loja_produto_map_id=mp.id,
+                                 fracao_pendente=0.0)
+            db.session.add(debito)
+            db.session.flush()
+        debito_total = (debito.fracao_pendente or 0.0) + qtd_efetiva_float
+        inteiros = int(debito_total + 1e-9)
+        debito.fracao_pendente = max(0.0, round(debito_total - inteiros, 6))
+
+        if inteiros <= 0:
             ignorados.append({'linha': item.get('linha', '?'),
-                              'nome': mp.nome_digitado, 'motivo': 'fator_zero'})
+                              'nome': mp.nome_digitado,
+                              'motivo': f'fracao_acumulando ({debito.fracao_pendente:g})'})
             continue
 
         filtro = {'loja_id': loja_id}
@@ -337,8 +352,8 @@ def aplicar_saida_lote(itens_resolvidos, loja_id, user, referencia=None):
             db.session.flush()
 
         anterior = ep.quantidade or 0
-        real = min(qtd_efetiva, anterior)
-        falta = qtd_efetiva - real
+        real = min(inteiros, anterior)
+        falta = inteiros - real
         ep.quantidade = anterior - real
 
         if real > 0:
