@@ -251,7 +251,11 @@ _PREVIEW_BUILDERS = {
     'balanco_congelados': _preview_balanco_congelados,
     'entrada_lote_loja': _preview_entrada_lote_loja,
     'registrar_desperdicio': _preview_registrar_desperdicio,
+    'anexar_foto_pedido': _preview_anexar_foto_pedido,
 }
+
+# Chaves de params que NUNCA devem aparecer no preview generico (sao grandes/internas).
+_SKIP_KEYS_PREVIEW = {'imagens'}
 
 
 def build_preview(tipo_acao, params, token, explicacao=None):
