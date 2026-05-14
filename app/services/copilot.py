@@ -75,13 +75,24 @@ TOOL_CONSULTAR_PEDIDO = {
 
 TOOL_CONSULTAR_ESTOQUE = {
     "name": "consultar_estoque",
-    "description": "Consulta estoque atual de uma materia-prima especifica, ou lista MPs com estoque baixo.",
+    "description": ("Consulta estoque em 3 escopos diferentes: "
+                    "'mp' (materias-primas da industria), "
+                    "'producao' (produtos prontos / freezer da industria), "
+                    "'loja' (produtos no estoque de uma loja especifica). "
+                    "Sempre informe 'escopo'. Se for loja, informe 'loja_nome'."),
     "input_schema": {
         "type": "object",
         "properties": {
-            "mp_nome": {"type": ["string", "null"], "description": "Nome EXATO da MP. Null pra listar todas baixas."},
-            "apenas_baixo": {"type": "boolean", "default": False, "description": "Se true, lista so MPs abaixo do estoque minimo."},
+            "escopo": {"type": "string", "enum": ["mp", "producao", "loja"],
+                       "description": "Onde olhar: 'mp', 'producao' ou 'loja'."},
+            "item_nome": {"type": ["string", "null"],
+                          "description": "Nome do item especifico (MP, receita, produto). Null pra listar tudo do escopo."},
+            "loja_nome": {"type": ["string", "null"],
+                          "description": "Necessario quando escopo='loja'. Ex: 'anesio', 'nebraska'."},
+            "apenas_baixo": {"type": "boolean",
+                              "description": "Para escopo='mp', lista so MPs abaixo do estoque minimo."},
         },
+        "required": ["escopo"],
     },
 }
 
