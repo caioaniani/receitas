@@ -1008,7 +1008,7 @@ def _migrate_postgres(app):
         id SERIAL PRIMARY KEY,
         slack_user_id VARCHAR(30) NOT NULL,
         slack_channel_id VARCHAR(30) NOT NULL,
-        copilot_conversa_id INTEGER REFERENCES copilot_conversa(id),
+        mensagens_json TEXT DEFAULT '[]',
         ultima_msg_em TIMESTAMP DEFAULT NOW(),
         UNIQUE (slack_user_id, slack_channel_id)
     )
