@@ -267,10 +267,11 @@ def build_preview(tipo_acao, params, token, explicacao=None):
     if builder:
         blocks.extend(builder(params, token))
     else:
-        # Fallback generico: lista params + botoes
+        # Fallback generico: lista params + botoes (pula chaves internas/grandes)
         blocks.append(_header(f'Confirmar acao: {tipo_acao}'))
         pares = [(k, v) for k, v in params.items()
-                 if not k.startswith('_') and v not in (None, '')]
+                 if not k.startswith('_') and k not in _SKIP_KEYS_PREVIEW
+                 and v not in (None, '')]
         blocks.append(_fields(pares))
         blocks.append(_botoes(token, 'Confirmar', 'Cancelar'))
     blocks.append(_ctx('_acao expira em 10min_'))
