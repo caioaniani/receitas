@@ -109,6 +109,16 @@ def interact():
 
     if not slack_user_id or not channel or not message_ts or not token:
         return ('', 200)
+    if action_id == 'lembrete_no_pedido':
+        # Botao do lembrete pedido amanha — cria opt-out
+        slack_bot.disparar_interacao_lembrete(action_id, token, slack_user_id,
+                                               channel, message_ts)
+        return ('', 200)
+    if action_id == 'lembrete_fazer_pedido':
+        # Botao com URL ja redireciona o usuario — apenas confirma com chat.update
+        slack_bot.disparar_interacao_lembrete(action_id, token, slack_user_id,
+                                               channel, message_ts)
+        return ('', 200)
     if action_id not in ('copilot_confirmar', 'copilot_cancelar'):
         return ('', 200)
 
