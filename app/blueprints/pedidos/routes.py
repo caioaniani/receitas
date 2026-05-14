@@ -64,7 +64,12 @@ def _lojas_operacionais():
 
 
 def _loja_do_usuario():
-    if current_user.is_admin():
+    """Retorna a loja com que o usuario opera por padrao.
+
+    Admin e gerente: None (podem ver/atuar em qualquer loja).
+    Outros papeis: forca a loja vinculada ao usuario.
+    """
+    if current_user.is_admin() or current_user.is_gerente():
         return None
     return current_user.loja_id
 
