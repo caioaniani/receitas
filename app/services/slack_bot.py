@@ -67,40 +67,32 @@ def _evento_visto(event_id):
 
 
 def _conversa(slack_user_id, slack_channel_id):
-    """Recupera/cria SlackConversa + CopilotConversa associada."""
-    from app.models import SlackConversa, CopilotConversa
+    """Recupera/cria SlackConversa pra (user, channel)."""
+    from app.models import SlackConversa
     sc = (SlackConversa.query
           .filter_by(slack_user_id=slack_user_id,
                      slack_channel_id=slack_channel_id)
           .first())
-    if sc and sc.copilot_conversa_id:
-        cc = CopilotConversa.query.get(sc.copilot_conversa_id)
-        if cc:
-            return sc, cc
-    cc = CopilotConversa(mensagens_json='[]', usuario_id=None)
-    db.session.add(cc)
-    db.session.flush()
-    if not sc:
-        sc = SlackConversa(slack_user_id=slack_user_id,
-                           slack_channel_id=slack_channel_id,
-                           copilot_conversa_id=cc.id)
-        db.session.add(sc)
-    else:
-        sc.copilot_conversa_id = cc.id
+    if sc:
+        return sc
+    sc = SlackConversa(slack_user_id=slack_user_id,
+                       slack_channel_id=slack_channel_id,
+                       mensagens_json='[]')
+    db.session.add(sc)
     db.session.commit()
-    return sc, cc
+    return sc
 
 
-def _historico_da_conversa(cc):
+def _historico_da_conversa(sc):
     try:
-        return json.loads(cc.mensagens_json or '[]')
+        return json.loads(sc.mensagens_json or '[]')
     except (ValueError, TypeError):
         return []
 
 
-def _salvar_historico(cc, historico):
-    cc.mensagens_json = json.dumps(historico[-40:], ensure_ascii=False)
-    db.session.add(cc)
+def _salvar_historico(sc, historico):
+    sc.mensagens_json = json.dumps(historico[-40:], ensure_ascii=False)
+    db.session.add(sc)
     db.session.commit()
 
 
