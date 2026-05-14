@@ -1517,15 +1517,15 @@ class SlackAcaoPendente(db.Model):
 class SlackConversa(db.Model):
     """Context multi-turn por (slack_user_id, channel_id).
 
-    Reusa CopilotConversa do copilot existente — so encapsula o mapping
-    pra o Slack saber qual conversa retomar quando user manda nova msg.
+    Guarda historico de msgs JSON [{role, content}] pra Claude lembrar
+    do contexto entre mensagens (copilot ja aceita historico=...).
     """
     __tablename__ = 'slack_conversa'
 
     id = db.Column(db.Integer, primary_key=True)
     slack_user_id = db.Column(db.String(30), nullable=False, index=True)
     slack_channel_id = db.Column(db.String(30), nullable=False)
-    copilot_conversa_id = db.Column(db.Integer, db.ForeignKey('copilot_conversa.id'))
+    mensagens_json = db.Column(db.Text, default='[]')
     ultima_msg_em = db.Column(db.DateTime, default=agora, onupdate=agora, index=True)
 
     __table_args__ = (
