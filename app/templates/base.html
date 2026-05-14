@@ -46,204 +46,202 @@
         {% if current_user.is_authenticated %}
         <a href="{{ url_for('main.index') }}"
            class="sidebar-link {% if request.path == '/' %}active{% endif %}">
-            <i class="bi bi-stars"></i> Início
+            Início
         </a>
         {% if current_user.is_owner %}
         <a href="{{ url_for('projetos.painel') }}"
            class="sidebar-link {% if request.path.startswith('/projetos') %}active{% endif %}">
-            <i class="bi bi-kanban"></i> Projetos
+            Projetos
             {% if proj_atrasadas %}<span class="badge bg-danger ms-1" style="font-size:9px;" title="Tarefas atrasadas">{{ proj_atrasadas }}</span>{% endif %}
         </a>
         {% endif %}
 
-        {% if current_user.pode_lojas() %}
+        {# ── 1. OPERAÇÃO ── #}
+        {% if current_user.pode_lojas() or current_user.pode_producao() %}
         <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Lojas</div>
+        <div class="sidebar-section-title">Operação</div>
 
+        {% if current_user.pode_lojas() %}
         <a href="{{ url_for('pedidos.lista') }}"
            class="sidebar-link {% if request.path == '/pedidos/' or request.path == '/pedidos' %}active{% endif %}">
-            <i class="bi bi-cart3"></i> Pedidos
+            Pedidos
         </a>
         <a href="{{ url_for('pedidos.estoque_loja') }}"
            class="sidebar-link {% if request.path == '/pedidos/estoque-loja' %}active{% endif %}">
-            <i class="bi bi-box-seam"></i> Estoque Loja
+            Estoque Loja
         </a>
         <a href="{{ url_for('pedidos.estoque_loja_historico') }}"
            class="sidebar-link {% if request.path == '/pedidos/estoque-loja/historico' %}active{% endif %}">
-            <i class="bi bi-clock-history"></i> Historico Estoque
+            Histórico Estoque
         </a>
         <a href="{{ url_for('pedidos.desperdicio') }}"
            class="sidebar-link {% if '/pedidos/desperdicio' in request.path %}active{% endif %}">
-            <i class="bi bi-trash3"></i> Desperdicio
-        </a>
-        <a href="{{ url_for('pedidos.relatorio') }}"
-           class="sidebar-link {% if '/pedidos/relatorio' in request.path %}active{% endif %}">
-            <i class="bi bi-file-earmark-bar-graph"></i> Relatório de Pedidos
+            Desperdício
         </a>
         {% endif %}
-
         {% if current_user.pode_producao() %}
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Produção</div>
-
         <a href="{{ url_for('producao.lista') }}"
            class="sidebar-link {% if request.path.startswith('/producao') %}active{% endif %}">
-            <i class="bi bi-calendar-check"></i> Plano de Produção
+            Plano de Produção
         </a>
         <a href="{{ url_for('pedidos.congelados') }}"
            class="sidebar-link {% if '/pedidos/congelados' in request.path %}active{% endif %}">
-            <i class="bi bi-snow2"></i> Congelados
+            Congelados
         </a>
         <a href="{{ url_for('pedidos.separacao') }}"
            class="sidebar-link {% if '/pedidos/separacao' in request.path %}active{% endif %}">
-            <i class="bi bi-clipboard-data"></i> Separação do Dia
+            Separação do Dia
         </a>
         {% endif %}
+        {% endif %}
 
+        {# ── 2. CATÁLOGO ── #}
         {% if current_user.pode_catalogo() %}
         <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Insumos</div>
+        <div class="sidebar-section-title">Catálogo</div>
 
         <a href="{{ url_for('materias_primas.banco') }}"
            class="sidebar-link {% if request.path == '/materias-primas/' or request.path == '/materias-primas' %}active{% endif %}">
-            <i class="bi bi-box-seam"></i> Banco de MP
+            Matérias-primas
         </a>
         <a href="{{ url_for('materias_primas.estoque') }}"
            class="sidebar-link {% if '/materias-primas/estoque' in request.path %}active{% endif %}">
-            <i class="bi bi-boxes"></i> Estoque MP
+            Estoque MP
         </a>
         <a href="{{ url_for('fornecedores.lista') }}"
            class="sidebar-link {% if request.path.startswith('/fornecedores') %}active{% endif %}">
-            <i class="bi bi-truck-front"></i> Fornecedores
+            Fornecedores
         </a>
-
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Receitas & Produtos</div>
-
         <a href="{{ url_for('produtos.lista') }}"
            class="sidebar-link {% if request.path.startswith('/produtos') %}active{% endif %}">
-            <i class="bi bi-basket3"></i> Produtos / Cestas
+            Produtos / Cestas
         </a>
         <a href="{{ url_for('main.cardapio', tipo='atacado') }}"
            class="sidebar-link {% if request.path == '/cardapio' %}active{% endif %}">
-            <i class="bi bi-file-earmark-pdf"></i> Cardápio PDF
+            Cardápio PDF
         </a>
         {% endif %}
 
-        {% if current_user.is_admin() %}
+        {# ── 3. VENDAS & ENTREGAS ── #}
+        {% if current_user.pode_pdv() or current_user.is_admin() or current_user.pode_lojas() %}
         <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Site</div>
-
-        <a href="{{ url_for('entregas.index') }}"
-           class="sidebar-link {% if request.path.startswith('/entregas') %}active{% endif %}">
-            <i class="bi bi-truck"></i> Entregas Site
-        </a>
-        {% endif %}
+        <div class="sidebar-section-title">Vendas & Entregas</div>
 
         {% if current_user.pode_pdv() %}
         <a href="{{ url_for('pdv.index') }}"
            class="sidebar-link {% if request.path == '/pdv/' or request.path == '/pdv' %}active{% endif %}">
-            <i class="bi bi-shop-window"></i> Vendas PDV
+            Vendas PDV
         </a>
         <a href="{{ url_for('pdv.itens_vendidos') }}"
            class="sidebar-link {% if '/pdv/itens-vendidos' in request.path %}active{% endif %}">
-            <i class="bi bi-bag-check"></i> Itens Vendidos
+            Itens Vendidos
         </a>
         <a href="{{ url_for('pdv.mapeamentos') }}"
            class="sidebar-link {% if '/pdv/mapeamentos' in request.path %}active{% endif %}">
-            <i class="bi bi-link-45deg"></i> Mapeamentos Seru
+            Mapeamentos Seru
         </a>
         <a href="{{ url_for('pdv.vnda_mapeamentos') }}"
            class="sidebar-link {% if '/pdv/vnda/' in request.path %}active{% endif %}">
-            <i class="bi bi-globe"></i> Mapeamentos VNDA
+            Mapeamentos VNDA
         </a>
         {% endif %}
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('entregas.index') }}"
+           class="sidebar-link {% if request.path.startswith('/entregas') %}active{% endif %}">
+            Entregas Site
+        </a>
+        {% endif %}
+        {% if current_user.pode_lojas() %}
+        <a href="{{ url_for('pedidos.relatorio') }}"
+           class="sidebar-link {% if '/pedidos/relatorio' in request.path %}active{% endif %}">
+            Relatório de Pedidos
+        </a>
+        {% endif %}
+        {% endif %}
 
+        {# ── 4. RH ── #}
         {% if current_user.pode_rh() %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">RH</div>
 
         <a href="{{ url_for('rh.dashboard') }}"
            class="sidebar-link {% if request.path == '/rh/' %}active{% endif %}">
-            <i class="bi bi-speedometer2"></i> Painel RH
+            Painel RH
         </a>
         <a href="{{ url_for('rh.funcionarios') }}"
            class="sidebar-link {% if '/rh/funcionarios' in request.path %}active{% endif %}">
-            <i class="bi bi-person-badge"></i> Funcionários
+            Funcionários
         </a>
         {% if current_user.is_owner %}
         <a href="{{ url_for('rh.folha') }}"
            class="sidebar-link {% if '/rh/folha' in request.path %}active{% endif %}">
-            <i class="bi bi-file-earmark-text"></i> Folha de Pagamento
+            Folha de Pagamento
         </a>
         {% endif %}
         <a href="{{ url_for('rh.lojas') }}"
            class="sidebar-link {% if request.path == '/rh/lojas' %}active{% endif %}">
-            <i class="bi bi-shop-window"></i> Lojas
+            Lojas
         </a>
         {% if current_user.is_owner %}
         <a href="{{ url_for('rh.cargos') }}"
            class="sidebar-link {% if request.path == '/rh/cargos' %}active{% endif %}">
-            <i class="bi bi-briefcase"></i> Cargos
+            Cargos
         </a>
         {% endif %}
         <a href="{{ url_for('rh.escala') }}"
            class="sidebar-link {% if '/rh/escala' in request.path and '/mapa' not in request.path %}active{% endif %}">
-            <i class="bi bi-diagram-3"></i> Escala Operacional
+            Escala Operacional
         </a>
         <a href="{{ url_for('rh.mapa_index') }}"
            class="sidebar-link {% if '/rh/mapa' in request.path %}active{% endif %}">
-            <i class="bi bi-map"></i> Mapa das Lojas
+            Mapa das Lojas
         </a>
         <a href="{{ url_for('rh.ponto') }}"
            class="sidebar-link {% if '/rh/ponto' in request.path %}active{% endif %}">
-            <i class="bi bi-clock"></i> Ponto
+            Ponto
         </a>
         <a href="{{ url_for('rh.ferias') }}"
            class="sidebar-link {% if '/rh/ferias' in request.path %}active{% endif %}">
-            <i class="bi bi-calendar-heart"></i> Férias / Folgas
+            Férias / Folgas
         </a>
         {% endif %}
 
+        {# ── 5. SISTEMA (admin) ── #}
         {% if current_user.is_admin() %}
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Análise</div>
-
-        <a href="{{ url_for('main.caixa') }}"
-           class="sidebar-link {% if request.path == '/caixa' %}active{% endif %}">
-            <i class="bi bi-cash-coin"></i> Caixa Diário
-        </a>
-        <a href="{{ url_for('main.rentabilidade') }}"
-           class="sidebar-link {% if request.path == '/rentabilidade' %}active{% endif %}">
-            <i class="bi bi-graph-up"></i> Rentabilidade
-        </a>
-        <a href="{{ url_for('relatorios.custos') }}"
-           class="sidebar-link {% if request.path.startswith('/relatorios') %}active{% endif %}">
-            <i class="bi bi-file-earmark-bar-graph"></i> Relatórios de Custos
-        </a>
-        <a href="{{ url_for('main.todo') }}"
-           class="sidebar-link {% if request.path == '/todo' %}active{% endif %}">
-            <i class="bi bi-check2-square"></i> TO-DO
-        </a>
-
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Sistema</div>
 
+        <a href="{{ url_for('main.caixa') }}"
+           class="sidebar-link {% if request.path == '/caixa' %}active{% endif %}">
+            Caixa Diário
+        </a>
+        <a href="{{ url_for('main.rentabilidade') }}"
+           class="sidebar-link {% if request.path == '/rentabilidade' %}active{% endif %}">
+            Rentabilidade
+        </a>
+        <a href="{{ url_for('relatorios.custos') }}"
+           class="sidebar-link {% if request.path.startswith('/relatorios') %}active{% endif %}">
+            Relatórios de Custos
+        </a>
+        <a href="{{ url_for('main.todo') }}"
+           class="sidebar-link {% if request.path == '/todo' %}active{% endif %}">
+            TO-DO
+        </a>
         <a href="{{ url_for('auth.painel') }}"
            class="sidebar-link {% if request.path == '/auth/painel' %}active{% endif %}">
-            <i class="bi bi-kanban"></i> Atribuições
+            Atribuições
         </a>
         <a href="{{ url_for('auth.usuarios') }}"
            class="sidebar-link {% if request.path == '/auth/usuarios' %}active{% endif %}">
-            <i class="bi bi-people"></i> Usuários
+            Usuários
         </a>
         <a href="{{ url_for('main.audit') }}"
            class="sidebar-link {% if request.path == '/audit' %}active{% endif %}">
-            <i class="bi bi-shield-check"></i> Audit Log
+            Audit Log
         </a>
         <a href="{{ url_for('slack.install') }}"
            class="sidebar-link {% if request.path.startswith('/slack') %}active{% endif %}">
-            <i class="bi bi-slack"></i> Slack Bot
+            Slack Bot
         </a>
         {% endif %}
 
@@ -251,7 +249,7 @@
         <div class="sidebar-divider"></div>
         <a href="{{ url_for('auth.minhas_fichas') }}"
            class="sidebar-link {% if request.path == '/auth/minhas-fichas' %}active{% endif %}">
-            <i class="bi bi-clipboard-check"></i> Minhas Fichas
+            Minhas Fichas
         </a>
         {% endif %}
         {% endif %}
