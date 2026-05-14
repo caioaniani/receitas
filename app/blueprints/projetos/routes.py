@@ -4,7 +4,7 @@ from flask import render_template, request, jsonify, redirect, url_for, flash, a
 from flask_login import login_required, current_user
 
 from app.blueprints.projetos import projetos_bp
-from app.decorators import admin_required
+from app.decorators import admin_required, owner_required
 from app.extensions import db
 from sqlalchemy.orm import joinedload, selectinload
 
