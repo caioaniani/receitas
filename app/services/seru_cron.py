@@ -150,5 +150,41 @@ def iniciar(app):
         'interval', minutes=15, id='vnda-sync',
         max_instances=1, coalesce=True,
     )
+
+    # Resumo diario de pedidos no Slack as 04:00 BRT
+    _scheduler.add_job(
+        lambda: _run_slack_resumo_diario(app),
+        'cron', hour=4, minute=0, id='slack-resumo-diario',
+        max_instances=1, coalesce=True,
+    )
+
     _scheduler.start()
-    logger.info('Auto-sync iniciado: Seru + VNDA a cada 15min')
+    logger.info('Auto-sync iniciado: Seru + VNDA a cada 15min · Slack resumo diario 04:00 BRT')
+
+
+def _run_slack_resumo_diario(app):
+    """Job: posta o resumo de pedidos do dia no Slack (04:00 BRT).
+
+    Usa pg_advisory_lock pra garantir 1x entre workers gunicorn.
+    """
+    from app.extensions import db
+    from app.services import slack_resumos
+
+    with app.app_context():
+        uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
+        is_pg = 'postgresql' in uri
+        try:
+            if is_pg:
+                with db.engine.connect() as c:
+                    got = c.execute(text("SELECT pg_try_advisory_lock(7725)")).scalar()
+                    if not got:
+                        return  # outro worker pegou
+            try:
+                slack_resumos.enviar_resumo_pedidos_dia()
+            finally:
+                if is_pg:
+                    with db.engine.connect() as c:
+                        c.execute(text("SELECT pg_advisory_unlock(7725)"))
+                        c.commit()
+        except Exception:
+            logger.exception('slack resumo diario falhou')
