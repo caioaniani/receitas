@@ -1312,3 +1312,62 @@ class VndaDebito(db.Model):
     fracao_pendente = db.Column(db.Float, nullable=False, default=0.0)
     atualizado_em = db.Column(db.DateTime, default=datetime.utcnow,
                                onupdate=datetime.utcnow)
+
+
+# ── Saida em lote manual (lojas com PDV sem API) ──
+# Mapeia nomes digitados em /pedidos/estoque-loja/saida-lote pra catalogo.
+# Vincular uma vez, lembra pra sempre. Espelha SeruProdutoMap.
+
+class LojaProdutoMap(db.Model):
+    """Mapeamento persistente de nomes digitados (saida em lote) → catalogo.
+
+    Estados:
+    - MAPEADO: receita_id/produto_id/materia_prima_id setado → baixa
+    - IGNORADO: ignorar=True → nunca desconta
+    - PENDENTE: nada vinculado → fica na fila, saidas nao mexem em estoque
+    """
+    __tablename__ = 'loja_produto_map'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome_digitado = db.Column(db.String(200), nullable=False, unique=True, index=True)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
+    materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'), nullable=True)
+    ignorar = db.Column(db.Boolean, default=False, nullable=False)
+    fator_quantidade = db.Column(db.Float, nullable=False, default=1.0)
+
+    primeira_visto_em = db.Column(db.DateTime, default=datetime.utcnow)
+    confirmado_em = db.Column(db.DateTime, nullable=True)
+    confirmado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)
+
+    receita = db.relationship('Receita')
+    produto = db.relationship('Produto')
+    materia_prima = db.relationship('MateriaPrima')
+
+    @property
+    def estado(self):
+        if self.ignorar:
+            return 'ignorado'
+        if self.receita_id or self.produto_id or self.materia_prima_id:
+            return 'mapeado'
+        return 'pendente'
+
+    @property
+    def alvo_nome(self):
+        if self.receita:
+            return self.receita.nome
+        if self.produto:
+            return self.produto.nome
+        if self.materia_prima:
+            return self.materia_prima.nome
+        return None
+
+    @property
+    def alvo_tipo(self):
+        if self.receita_id:
+            return 'receita'
+        if self.produto_id:
+            return 'produto'
+        if self.materia_prima_id:
+            return 'mp'
+        return None
