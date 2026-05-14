@@ -1495,4 +1495,204 @@ def executar(tipo_acao, params, user):  # noqa: F811
         return executar_balanco_congelados(params, user)
     if tipo_acao == 'entrada_lote_loja':
         return executar_entrada_lote_loja(params, user)
+    if tipo_acao == 'registrar_desperdicio':
+        return executar_registrar_desperdicio(params, user)
     return _BASE_EXEC(tipo_acao, params, user)
+
+
+# ── Desperdicio (sobra do dia / vencido) ───────────────────────────────
+
+def _resolver_item_qualquer(nome):
+    """Match flex: tenta Receita, Produto e MP. Retorna (tipo, id, nome) ou None.
+
+    Tipo retornado: 'receita' | 'produto' | 'mp'.
+    """
+    from sqlalchemy import func
+    nome = (nome or '').strip()
+    if not nome:
+        return None
+    r = Receita.query.filter(func.lower(Receita.nome) == nome.lower()).first()
+    if r:
+        return ('receita', r.id, r.nome)
+    p = Produto.query.filter(func.lower(Produto.nome) == nome.lower()).first()
+    if p:
+        return ('produto', p.id, p.nome)
+    m = MateriaPrima.query.filter(func.lower(MateriaPrima.nome) == nome.lower()).first()
+    if m:
+        return ('mp', m.id, m.nome)
+    r = Receita.query.filter(Receita.nome.ilike(f'%{nome}%')).first()
+    if r:
+        return ('receita', r.id, r.nome)
+    p = Produto.query.filter(Produto.nome.ilike(f'%{nome}%')).first()
+    if p:
+        return ('produto', p.id, p.nome)
+    m = MateriaPrima.query.filter(MateriaPrima.nome.ilike(f'%{nome}%')).first()
+    if m:
+        return ('mp', m.id, m.nome)
+    return None
+
+
+def _resolver_loja_para_user(loja_id, loja_nome, user):
+    """Resolve loja: admin pode passar id/nome; gerente forca user.loja_id."""
+    if not user.is_admin():
+        if user.loja_id:
+            l = Loja.query.get(user.loja_id)
+            if l:
+                return l
+        return None
+    if loja_id:
+        return Loja.query.get(int(loja_id))
+    if loja_nome:
+        from sqlalchemy import func
+        l = Loja.query.filter(func.lower(Loja.nome) == loja_nome.lower()).first()
+        if l:
+            return l
+        return Loja.query.filter(Loja.nome.ilike(f'%{loja_nome}%')).first()
+    return None
+
+
+def executar_registrar_desperdicio(params, user):
+    from app.models import Desperdicio, EstoqueLoja, MovEstoqueLoja
+    loja = _resolver_loja_para_user(params.get('loja_id'),
+                                     params.get('loja_nome'), user)
+    if not loja:
+        return {'ok': False, 'erro': 'Loja nao identificada. Informe loja_nome.'}
+
+    nome_item = (params.get('item_nome') or '').strip()
+    if not nome_item:
+        return {'ok': False, 'erro': 'item_nome obrigatorio.'}
+    resolvido = _resolver_item_qualquer(nome_item)
+    if not resolvido:
+        return {'ok': False, 'erro': f'Item nao encontrado no cadastro: "{nome_item}"'}
+    tipo_item, item_id, nome_item_ok = resolvido
+
+    try:
+        qtd = int(params.get('quantidade') or 0)
+    except (TypeError, ValueError):
+        qtd = 0
+    if qtd <= 0:
+        return {'ok': False, 'erro': 'Quantidade deve ser > 0.'}
+
+    motivo = (params.get('motivo') or 'vencido').strip() or 'vencido'
+    if motivo not in ('vencido', 'estragado', 'queimado', 'caiu', 'outro'):
+        motivo = 'vencido'
+    observacao = (params.get('observacao') or '').strip() or None
+
+    filtro = {'loja_id': loja.id}
+    if tipo_item == 'receita':
+        filtro['receita_id'] = item_id
+    elif tipo_item == 'produto':
+        filtro['produto_id'] = item_id
+    else:
+        filtro['materia_prima_id'] = item_id
+
+    el = EstoqueLoja.query.filter_by(**filtro).first()
+    if not el:
+        el = EstoqueLoja(**filtro, quantidade=0)
+        db.session.add(el)
+        db.session.flush()
+
+    saldo = el.quantidade or 0
+    baixa = min(qtd, saldo)
+    el.quantidade = saldo - baixa
+
+    desp = Desperdicio(
+        loja_id=loja.id,
+        receita_id=item_id if tipo_item == 'receita' else None,
+        produto_id=item_id if tipo_item == 'produto' else None,
+        materia_prima_id=item_id if tipo_item == 'mp' else None,
+        quantidade=qtd, motivo=motivo, observacao=observacao,
+        criado_por_id=user.id,
+    )
+    db.session.add(desp)
+
+    if baixa > 0:
+        db.session.add(MovEstoqueLoja(
+            estoque_loja_id=el.id, tipo='desperdicio', quantidade=baixa,
+            referencia=f'Desperdicio {motivo}'
+            + (f' — {observacao}' if observacao else '')
+            + ' (copilot)',
+            usuario_id=user.id,
+        ))
+    if qtd > baixa:
+        falta = qtd - baixa
+        db.session.add(MovEstoqueLoja(
+            estoque_loja_id=el.id, tipo='desperdicio_sem_estoque',
+            quantidade=falta,
+            referencia=f'Desperdicio {motivo} — registrado sem estoque ({falta}) (copilot)',
+            usuario_id=user.id,
+        ))
+
+    db.session.commit()
+    return {'ok': True, 'desperdicio_id': desp.id,
+            'loja': loja.nome, 'item': nome_item_ok,
+            'quantidade': qtd, 'baixado_do_estoque': baixa,
+            'motivo': motivo,
+            'registro_tipo': 'desperdicio', 'registro_id': desp.id,
+            'url': f'/pedidos/desperdicio?loja={loja.id}'}
+
+
+def _read_consultar_desperdicio(params, user):
+    from app.models import Desperdicio
+    try:
+        dias = int(params.get('dias') or 7)
+    except (TypeError, ValueError):
+        dias = 7
+    dias = max(1, min(90, dias))
+    desde = hoje() - timedelta(days=dias)
+
+    q = Desperdicio.query.filter(Desperdicio.data >= desde)
+
+    loja_nome = (params.get('loja_nome') or '').strip()
+    if loja_nome:
+        from sqlalchemy import func
+        l = Loja.query.filter(
+            (func.lower(Loja.nome) == loja_nome.lower())
+            | (Loja.nome.ilike(f'%{loja_nome}%'))
+        ).first()
+        if not l:
+            return {'texto': f'Loja "{loja_nome}" nao encontrada.'}
+        q = q.filter(Desperdicio.loja_id == l.id)
+    elif not user.is_admin() and user.loja_id:
+        q = q.filter(Desperdicio.loja_id == user.loja_id)
+
+    registros = q.order_by(Desperdicio.data.desc(), Desperdicio.criado_em.desc()).all()
+    if not registros:
+        return {'texto': f'Nenhum desperdicio nos ultimos {dias} dias.'}
+
+    total_qtd = sum(d.quantidade for d in registros)
+    linhas = [f'**Desperdicio — ultimos {dias} dias ({len(registros)} reg, {total_qtd} un):**']
+
+    por_item = {}
+    for d in registros:
+        key = d.nome_item
+        por_item.setdefault(key, 0)
+        por_item[key] += d.quantidade
+    top = sorted(por_item.items(), key=lambda x: -x[1])[:10]
+    linhas.append('')
+    linhas.append('**Por item (top 10):**')
+    for nome, qt in top:
+        linhas.append(f'- {nome}: {qt} un')
+
+    linhas.append('')
+    linhas.append('**Registros recentes:**')
+    for d in registros[:15]:
+        l_nome = d.loja.nome if d.loja else '?'
+        linhas.append(f'- {d.data.strftime("%d/%m")} · {l_nome} · {d.nome_item}: '
+                      f'{d.quantidade} un ({d.motivo})')
+
+    return {'texto': '\n'.join(linhas)}
+
+
+# Roteador read final — inclui consultar_desperdicio
+_BASE_READ2 = _executar_read
+
+
+def _executar_read(tool_name, params, user):  # noqa: F811
+    if tool_name == 'consultar_desperdicio':
+        try:
+            return _read_consultar_desperdicio(params, user)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception('consultar_desperdicio falhou')
+            return {'erro': str(exc)}
+    return _BASE_READ2(tool_name, params, user)
