@@ -292,15 +292,11 @@
             </button>
         </form>
 
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Dados</div>
-
         <a href="{{ url_for('main.exportar') }}" class="sidebar-link">
-            <i class="bi bi-download"></i> Exportar JSON
+            Exportar JSON
         </a>
-
         <label class="sidebar-link" style="cursor:pointer">
-            <i class="bi bi-upload"></i> Importar JSON
+            Importar JSON
             <input type="file" id="import-file" accept=".json" style="display:none">
         </label>
         {% endif %}
