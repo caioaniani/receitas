@@ -125,9 +125,14 @@ def processar_evento_mensagem(evento):
     text = (evento.get('text') or '').strip()
     channel_type = evento.get('channel_type', '')
     thread_ts = evento.get('thread_ts')
+    files = evento.get('files') or []
 
-    if not slack_user_id or not channel or not text:
+    if not slack_user_id or not channel:
         return
+    if not text and not files:
+        return
+    if not text:
+        text = '(imagem enviada)'
 
     if not _canal_permitido(channel, channel_type):
         return
