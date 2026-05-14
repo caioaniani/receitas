@@ -77,7 +77,7 @@ class Atribuicao(db.Model):
     receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=False)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
     status = db.Column(db.String(20), default='pendente')  # 'pendente' ou 'concluida'
-    data_atribuicao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_atribuicao = db.Column(db.DateTime, default=agora)
     data_conclusao = db.Column(db.DateTime)
 
     receita = db.relationship('Receita', backref='atribuicoes')
@@ -127,7 +127,7 @@ class Fornecedor(db.Model):
     contato = db.Column(db.String(100))  # nome do contato/vendedor
     observacao = db.Column(db.Text)
     ativo = db.Column(db.Boolean, default=True, index=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora)
 
 
 class HistoricoPrecoMP(db.Model):
@@ -141,7 +141,7 @@ class HistoricoPrecoMP(db.Model):
     fornecedor_id = db.Column(db.Integer, db.ForeignKey('fornecedor.id'), nullable=False, index=True)
     preco_unitario = db.Column(db.Float, nullable=False)
     quantidade = db.Column(db.Float, nullable=False)
-    data = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    data = db.Column(db.DateTime, default=agora, index=True)
     referencia = db.Column(db.String(200))  # NF, observacao
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
@@ -296,7 +296,7 @@ class Cargo(db.Model):
     salario_base = db.Column(db.Float, nullable=False, default=0)
     descricao = db.Column(db.String(200))
     ativo = db.Column(db.Boolean, default=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora)
 
     def __repr__(self):
         return f'<Cargo {self.nome} R$ {self.salario_base:.2f}>'
@@ -472,7 +472,7 @@ class Feedback(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     funcionario_id = db.Column(db.Integer, db.ForeignKey('funcionario.id'), nullable=False)
     autor_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
-    data = db.Column(db.DateTime, default=datetime.utcnow)
+    data = db.Column(db.DateTime, default=agora)
     tipo = db.Column(db.String(20), default='neutro')
     texto = db.Column(db.Text, nullable=False)
 
@@ -493,7 +493,7 @@ class Atestado(db.Model):
     arquivo = db.Column(db.LargeBinary)
     arquivo_nome = db.Column(db.String(255))
     arquivo_mimetype = db.Column(db.String(100))
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora)
     criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
     funcionario = db.relationship('Funcionario', backref='atestados')
@@ -531,7 +531,7 @@ class MovimentacaoEstoque(db.Model):
     tipo = db.Column(db.String(10), nullable=False)  # 'entrada' ou 'saida'
     quantidade = db.Column(db.Float, nullable=False)
     preco_unitario = db.Column(db.Float)
-    data = db.Column(db.DateTime, default=datetime.utcnow)
+    data = db.Column(db.DateTime, default=agora)
     referencia = db.Column(db.String(200))
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
     # Fornecedor (opcional) — usado em entradas pra alimentar historico de preco
@@ -564,7 +564,7 @@ class PlanejamentoProducao(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     data = db.Column(db.Date, nullable=False)
     nome = db.Column(db.String(100))
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora)
     criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
     status = db.Column(db.String(20), default='rascunho')
 
@@ -601,7 +601,7 @@ class Ferias(db.Model):
     status = db.Column(db.String(20), default='agendada')
     observacao = db.Column(db.Text)
     criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora)
 
     funcionario = db.relationship('Funcionario', backref='ferias')
     autor = db.relationship('Usuario', backref='ferias_criadas')
@@ -675,7 +675,7 @@ class MovEstoqueProducao(db.Model):
     estoque_producao_id = db.Column(db.Integer, db.ForeignKey('estoque_producao.id'), nullable=False)
     tipo = db.Column(db.String(20), nullable=False)
     quantidade = db.Column(db.Integer, nullable=False)
-    data = db.Column(db.DateTime, default=datetime.utcnow)
+    data = db.Column(db.DateTime, default=agora)
     referencia = db.Column(db.String(200))
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
@@ -692,7 +692,7 @@ class PedidoLoja(db.Model):
     status = db.Column(db.String(20), default='pendente')
     observacao = db.Column(db.Text)
     criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora)
 
     loja = db.relationship('Loja', backref='pedidos')
     criador = db.relationship('Usuario')
@@ -797,7 +797,7 @@ class FotoRecebimento(db.Model):
     pedido_id = db.Column(db.Integer, db.ForeignKey('pedido_loja.id'), nullable=False)
     imagem = db.Column(db.LargeBinary, nullable=False)
     mimetype = db.Column(db.String(100))
-    enviada_em = db.Column(db.DateTime, default=datetime.utcnow)
+    enviada_em = db.Column(db.DateTime, default=agora)
     enviada_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
     pedido = db.relationship('PedidoLoja', backref=db.backref('fotos', cascade='all, delete-orphan'))
@@ -811,7 +811,7 @@ class MovEstoqueLoja(db.Model):
     # 50 pra caber 'venda_seru_sem_estoque' (22) e futuros tipos.
     tipo = db.Column(db.String(50), nullable=False)
     quantidade = db.Column(db.Integer, nullable=False)
-    data = db.Column(db.DateTime, default=datetime.utcnow)
+    data = db.Column(db.DateTime, default=agora)
     referencia = db.Column(db.String(200))
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
@@ -824,7 +824,7 @@ class CartinhaEntrega(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     pedido_code = db.Column(db.String(50), nullable=False, unique=True)
     texto = db.Column(db.Text)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=agora)
     atualizado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
     autor = db.relationship('Usuario', backref='cartinhas')
@@ -838,7 +838,7 @@ class OverrideEntrega(db.Model):
     pedido_code = db.Column(db.String(50), nullable=False, unique=True, index=True)
     data_entrega = db.Column(db.Date, nullable=False)
     motivo = db.Column(db.Text)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=agora)
     atualizado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
     autor = db.relationship('Usuario', backref='overrides_entrega')
@@ -854,7 +854,7 @@ class GeocodeCache(db.Model):
     lat = db.Column(db.Float)
     lng = db.Column(db.Float)
     fonte = db.Column(db.String(50))  # 'brasilapi', 'awesomeapi', 'nominatim', 'nominatim_cep_rejeitado', etc.
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora)
 
 
 class Driver(db.Model):
@@ -866,7 +866,7 @@ class Driver(db.Model):
     cor = db.Column(db.String(20))  # opcional: hex pra UI
     telefone = db.Column(db.String(30))
     ativo = db.Column(db.Boolean, default=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora)
     # Capacidade maxima de pedidos por rodada de Auto-distribuir.
     # Usada pra moto (cap 2-3) vs carro (cap 12-15). Default alto = sem limite efetivo.
     capacidade = db.Column(db.Integer, default=999)
@@ -887,7 +887,7 @@ class LoteSaida(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(120), nullable=False)
     data_entrega = db.Column(db.Date, nullable=False, index=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora)
     janelas_json = db.Column(db.Text)  # JSON array de strings, ex: ["07-08","08-09"]
     # aberto = nenhum saiu | em_rota = >=1 saiu, falta entregar | concluido = 100%
     status = db.Column(db.String(20), default='aberto', index=True)
@@ -904,7 +904,7 @@ class AtribuicaoEntrega(db.Model):
     lote_id = db.Column(db.Integer, db.ForeignKey('lote_saida.id'), index=True)
     data_entrega = db.Column(db.Date, index=True)
     ordem = db.Column(db.Integer, default=0)  # ordem dentro da rota do driver
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
     atualizado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
     # Status preenchido pela pagina do driver
@@ -930,7 +930,7 @@ class EntregaFoto(db.Model):
     atribuicao_id = db.Column(db.Integer, db.ForeignKey('atribuicao_entrega.id'), nullable=False, index=True)
     url = db.Column(db.String(500), nullable=False)  # URL publica (Dropbox shared link)
     storage_path = db.Column(db.String(500))  # caminho no storage pra deletar depois
-    tirada_em = db.Column(db.DateTime, default=datetime.utcnow)
+    tirada_em = db.Column(db.DateTime, default=agora)
     tamanho_bytes = db.Column(db.Integer)
 
 
@@ -948,7 +948,7 @@ class PedidoLocal(db.Model):
     periodo = db.Column(db.String(80))
     cartinha = db.Column(db.Text)
     observacao = db.Column(db.Text)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora)
     criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
     itens = db.relationship('PedidoLocalItem', backref='pedido', cascade='all, delete-orphan', lazy='joined')
@@ -977,7 +977,7 @@ class CopilotConversa(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False, index=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    criado_em = db.Column(db.DateTime, default=agora, index=True)
     prompt = db.Column(db.Text, nullable=False)
     # JSON com {tipo, params, explicacao, ambiguidades?}
     interpretacao_json = db.Column(db.Text)
@@ -1004,7 +1004,7 @@ class AuditLog(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), index=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    criado_em = db.Column(db.DateTime, default=agora, index=True)
     tabela = db.Column(db.String(60), nullable=False, index=True)
     registro_id = db.Column(db.Integer, index=True)
     acao = db.Column(db.String(10), nullable=False)  # insert | update | delete
@@ -1042,8 +1042,8 @@ class Projeto(db.Model):
     foco_12s = db.Column(db.Boolean, default=False)
     responsavel_id = db.Column(db.Integer, db.ForeignKey("usuario.id"), nullable=True)
     observacao = db.Column(db.Text)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora)
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
 
     responsavel = db.relationship("Usuario")
     tarefas = db.relationship("TarefaProjeto", backref="projeto",
@@ -1073,7 +1073,7 @@ class TarefaProjeto(db.Model):
     observacao = db.Column(db.Text)
     recorrencia = db.Column(db.String(20))  # diaria/semanal/quinzenal/mensal/trimestral
     ordem = db.Column(db.Integer, default=0)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora)
     feito_em = db.Column(db.DateTime, nullable=True)
 
     responsavel = db.relationship("Usuario")
@@ -1096,7 +1096,7 @@ class WeeklyReview(db.Model):
     a_fazer_count = db.Column(db.Integer, default=0)
     atrasadas_count = db.Column(db.Integer, default=0)
     foco_count = db.Column(db.Integer, default=0)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora)
     criado_por = db.Column(db.Integer, db.ForeignKey("usuario.id"))
 
     autor = db.relationship("Usuario")
@@ -1111,7 +1111,7 @@ class ProjetoTemplate(db.Model):
     nome = db.Column(db.String(150), nullable=False)
     area_id_padrao = db.Column(db.Integer, db.ForeignKey("projeto_area.id"), nullable=True)
     descricao = db.Column(db.Text)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora)
 
     area_padrao = db.relationship("ProjetoArea")
     tarefas = db.relationship("TarefaTemplate", backref="template",
@@ -1155,7 +1155,7 @@ class SeruProdutoMap(db.Model):
     ignorar = db.Column(db.Boolean, default=False, nullable=False)
     fator_quantidade = db.Column(db.Float, nullable=False, default=1.0)
 
-    primeira_visto_em = db.Column(db.DateTime, default=datetime.utcnow)
+    primeira_visto_em = db.Column(db.DateTime, default=agora)
     confirmado_em = db.Column(db.DateTime, nullable=True)
     confirmado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)
 
@@ -1210,7 +1210,7 @@ class SeruPedidoProcessado(db.Model):
     __tablename__ = 'seru_pedido_processado'
 
     seru_pedido_id = db.Column(db.String(100), primary_key=True)
-    processado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    processado_em = db.Column(db.DateTime, default=agora)
     loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=True)
     n_itens_total = db.Column(db.Integer, default=0)
     n_itens_baixados = db.Column(db.Integer, default=0)
@@ -1232,8 +1232,8 @@ class SeruDebito(db.Model):
                                      db.ForeignKey('seru_produto_map.id', ondelete='CASCADE'),
                                      primary_key=True)
     fracao_pendente = db.Column(db.Float, nullable=False, default=0.0)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow,
-                               onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=agora,
+                               onupdate=agora)
 
 
 # ── Integracao VNDA (site/e-commerce): mapeamentos + idempotencia ──
@@ -1252,7 +1252,7 @@ class VndaProdutoMap(db.Model):
     ignorar = db.Column(db.Boolean, default=False, nullable=False)
     fator_quantidade = db.Column(db.Float, nullable=False, default=1.0)
 
-    primeira_visto_em = db.Column(db.DateTime, default=datetime.utcnow)
+    primeira_visto_em = db.Column(db.DateTime, default=agora)
     confirmado_em = db.Column(db.DateTime, nullable=True)
     confirmado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)
 
@@ -1282,7 +1282,7 @@ class VndaPedidoProcessado(db.Model):
     __tablename__ = 'vnda_pedido_processado'
 
     vnda_pedido_code = db.Column(db.String(100), primary_key=True)
-    processado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    processado_em = db.Column(db.DateTime, default=agora)
     data_entrega = db.Column(db.Date)  # data agendada de entrega
     n_itens_total = db.Column(db.Integer, default=0)
     n_itens_baixados = db.Column(db.Integer, default=0)
@@ -1340,8 +1340,8 @@ class VndaDebito(db.Model):
                                      primary_key=True)
     componente_key = db.Column(db.String(50), primary_key=True, default='self')
     fracao_pendente = db.Column(db.Float, nullable=False, default=0.0)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow,
-                               onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=agora,
+                               onupdate=agora)
 
 
 # ── Saida em lote manual (lojas com PDV sem API) ──
@@ -1366,7 +1366,7 @@ class LojaProdutoMap(db.Model):
     ignorar = db.Column(db.Boolean, default=False, nullable=False)
     fator_quantidade = db.Column(db.Float, nullable=False, default=1.0)
 
-    primeira_visto_em = db.Column(db.DateTime, default=datetime.utcnow)
+    primeira_visto_em = db.Column(db.DateTime, default=agora)
     confirmado_em = db.Column(db.DateTime, nullable=True)
     confirmado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)
 
@@ -1417,5 +1417,42 @@ class LojaDebito(db.Model):
                                      db.ForeignKey('loja_produto_map.id', ondelete='CASCADE'),
                                      primary_key=True)
     fracao_pendente = db.Column(db.Float, nullable=False, default=0.0)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow,
-                               onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=agora,
+                               onupdate=agora)
+
+
+class Desperdicio(db.Model):
+    """Registro de sobra do dia descartada na loja (vencida).
+
+    Item identificado por receita/produto/MP (exclusivo). Cada registro gera
+    um MovEstoqueLoja(tipo='desperdicio') que de fato baixa o estoque.
+    """
+    __tablename__ = 'desperdicio'
+
+    id = db.Column(db.Integer, primary_key=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False, index=True)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
+    materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'), nullable=True)
+    quantidade = db.Column(db.Integer, nullable=False)
+    data = db.Column(db.Date, nullable=False, default=lambda: agora().date(), index=True)
+    motivo = db.Column(db.String(30), nullable=False, default='vencido')
+    observacao = db.Column(db.Text)
+    criado_em = db.Column(db.DateTime, default=agora)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    loja = db.relationship('Loja')
+    receita = db.relationship('Receita')
+    produto = db.relationship('Produto')
+    materia_prima = db.relationship('MateriaPrima')
+    criado_por = db.relationship('Usuario')
+
+    @property
+    def nome_item(self):
+        if self.receita:
+            return self.receita.nome
+        if self.produto:
+            return self.produto.nome
+        if self.materia_prima:
+            return self.materia_prima.nome + ' (MP)'
+        return '?'
