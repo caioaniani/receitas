@@ -193,6 +193,7 @@ def novo():
 
 @pedidos_bp.route('/<int:id>')
 @login_required
+@gerente_required
 def detalhe(id):
     pedido = PedidoLoja.query.get_or_404(id)
     loja_id = _loja_do_usuario()
