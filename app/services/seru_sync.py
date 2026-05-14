@@ -23,6 +23,7 @@ import unicodedata
 from datetime import datetime
 
 from app.extensions import db
+from app.utils.time import agora
 from app.models import (Loja, EstoqueLoja, MovEstoqueLoja,
                         SeruProdutoMap, SeruLojaMap, SeruPedidoProcessado,
                         SeruDebito)
@@ -190,7 +191,7 @@ def _estornar_pedido(reg, lojas_ativas, user_id):
                 referencia=f'Estorno Seru #{reg.seru_pedido_id} (cancelada)',
                 usuario_id=user_id,
             ))
-    reg.estornado_em = datetime.utcnow()
+    reg.estornado_em = agora()
 
 
 def processar_pedidos(data_inicial, data_final, user=None,
@@ -240,7 +241,7 @@ def processar_pedidos(data_inicial, data_final, user=None,
             # Se foi cancelado depois e ainda nao estornamos, estornar
             if cancelado_at and not reg.estornado_em:
                 _estornar_pedido(reg, lojas_ativas, user_id)
-                reg.cancelado_em = datetime.utcnow()
+                reg.cancelado_em = agora()
                 stats['pedidos_cancelados_estornados'] += 1
             continue
 
@@ -249,7 +250,7 @@ def processar_pedidos(data_inicial, data_final, user=None,
             # Ja cancelado — registra mas nao processa items
             db.session.add(SeruPedidoProcessado(
                 seru_pedido_id=pid,
-                cancelado_em=datetime.utcnow(),
+                cancelado_em=agora(),
                 n_itens_total=len(seru.extrair_itens(p)),
                 n_itens_baixados=0,
             ))
