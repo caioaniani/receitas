@@ -23,7 +23,7 @@ import unicodedata
 from datetime import datetime
 
 from app.extensions import db
-from app.utils.time import agora
+from app.utils import agora
 from app.models import (Loja, EstoqueLoja, MovEstoqueLoja,
                         SeruProdutoMap, SeruLojaMap, SeruPedidoProcessado,
                         SeruDebito)

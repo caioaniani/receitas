@@ -23,7 +23,7 @@ from datetime import datetime
 import requests
 from flask import current_app
 
-from app.utils.time import agora as _agora_brt
+from app.utils import agora as _agora_brt
 
 logger = logging.getLogger(__name__)
 

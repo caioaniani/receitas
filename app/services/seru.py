@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 import requests
 from flask import current_app
 
-from app.utils.time import BRT
+from app.utils import BRT
 
 logger = logging.getLogger(__name__)
 

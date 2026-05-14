@@ -5,7 +5,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 
 from app.blueprints.auth import auth_bp
 from app.extensions import db, limiter
-from app.utils.time import agora
+from app.utils import agora
 from app.models import Usuario, Atribuicao, Receita
 
 

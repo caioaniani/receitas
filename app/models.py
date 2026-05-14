@@ -4,7 +4,7 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app.extensions import db
-from app.utils.time import agora
+from app.utils import agora
 
 
 class Usuario(UserMixin, db.Model):

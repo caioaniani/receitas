@@ -9,7 +9,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from app.blueprints.pedidos import pedidos_bp
 from app.decorators import admin_required, gerente_required, producao_required
 from app.extensions import db
-from app.utils.time import agora, hoje as hoje_brt
+from app.utils import agora, hoje as hoje_brt
 from app.models import (
     Loja, Receita, Produto, MateriaPrima, MovimentacaoEstoque,
     PedidoLoja, PedidoItem,

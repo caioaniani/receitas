@@ -8,7 +8,7 @@ from flask_login import current_user, login_required
 
 from app.blueprints.copilot import copilot_bp
 from app.extensions import csrf, db
-from app.utils.time import agora
+from app.utils import agora
 from app.models import CopilotConversa
 from app.services import copilot as copilot_svc
 
@@ -165,7 +165,7 @@ def aprovar(conversa_id):
 
     from datetime import datetime
     conversa.status = 'executado'
-    conversa.executado_em = datetime.utcnow()
+    conversa.executado_em = agora()
     conversa.registro_tipo = resultado.get('registro_tipo')
     conversa.registro_id = resultado.get('registro_id')
     db.session.commit()

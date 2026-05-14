@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import text
 
-from app.utils.time import BRT, hoje as hoje_brt
+from app.utils import BRT, hoje as hoje_brt
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def _run_sync(app):
     global _ult_run
     from app.extensions import db
     from app.services import seru_sync
-    from app.utils.time import agora as _agora
+    from app.utils import agora as _agora
 
     with app.app_context():
         uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
@@ -89,7 +89,7 @@ def _run_vnda_sync(app):
     global _ult_run_vnda
     from app.extensions import db
     from app.services import vnda_sync
-    from app.utils.time import agora as _agora
+    from app.utils import agora as _agora
 
     with app.app_context():
         uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''

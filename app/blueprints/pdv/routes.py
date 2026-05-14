@@ -7,7 +7,7 @@ from flask_login import login_required, current_user
 from app.blueprints.pdv import pdv_bp
 from app.decorators import admin_required
 from app.extensions import db
-from app.utils.time import agora, hoje as hoje_brt
+from app.utils import agora, hoje as hoje_brt
 from app.models import (Loja, Receita, Produto,
                         SeruProdutoMap, SeruLojaMap, SeruPedidoProcessado,
                         VndaProdutoMap, VndaPedidoProcessado, MovEstoqueLoja,
@@ -349,13 +349,13 @@ def api_mapear():
             fator = 1.0
         mp.fator_quantidade = fator
         mp.ignorar = False
-        mp.confirmado_em = datetime.utcnow()
+        mp.confirmado_em = agora()
         mp.confirmado_por = current_user.id
     elif acao == 'ignorar':
         mp.ignorar = True
         mp.receita_id = None
         mp.produto_id = None
-        mp.confirmado_em = datetime.utcnow()
+        mp.confirmado_em = agora()
         mp.confirmado_por = current_user.id
     elif acao == 'desfazer':
         mp.ignorar = False
@@ -446,7 +446,7 @@ def vincular_produto(map_id):
         except (TypeError, ValueError):
             fator = 1.0
         mp.fator_quantidade = fator
-        mp.confirmado_em = datetime.utcnow()
+        mp.confirmado_em = agora()
         mp.confirmado_por = current_user.id
         fator_msg = '' if fator == 1.0 else f' · fator {fator}'
         flash(f'"{mp.seru_nome}" → {mp.alvo_nome}{fator_msg}', 'success')
@@ -454,7 +454,7 @@ def vincular_produto(map_id):
         mp.ignorar = True
         mp.receita_id = None
         mp.produto_id = None
-        mp.confirmado_em = datetime.utcnow()
+        mp.confirmado_em = agora()
         mp.confirmado_por = current_user.id
         flash(f'"{mp.seru_nome}" ignorado — nao baixara estoque.', 'info')
     elif acao == 'desfazer':
@@ -505,7 +505,7 @@ def vincular_loja(map_id):
         lm.loja_id = loja_id
         lm.ignorar = False
         lm.auto_match = False
-        lm.confirmado_em = datetime.utcnow()
+        lm.confirmado_em = agora()
         lm.confirmado_por = current_user.id
         db.session.commit()
         flash(f'OK: "{lm.seru_company_name}" agora vinculada a {loja_obj.nome}. '
@@ -514,14 +514,14 @@ def vincular_loja(map_id):
     if acao == 'ignorar':
         lm.ignorar = True
         lm.loja_id = None
-        lm.confirmado_em = datetime.utcnow()
+        lm.confirmado_em = agora()
         lm.confirmado_por = current_user.id
         db.session.commit()
         flash(f'"{lm.seru_company_name}" ignorada — vendas nao processarao.', 'info')
         return redirect(url_for('pdv.mapeamentos'))
     if acao == 'confirmar':
         lm.auto_match = False
-        lm.confirmado_em = datetime.utcnow()
+        lm.confirmado_em = agora()
         lm.confirmado_por = current_user.id
         db.session.commit()
         flash(f'"{lm.seru_company_name}" confirmada.', 'success')
@@ -608,13 +608,13 @@ def vnda_vincular_produto(map_id):
         except (TypeError, ValueError):
             fator = 1.0
         mp.fator_quantidade = fator
-        mp.confirmado_em = datetime.utcnow()
+        mp.confirmado_em = agora()
         mp.confirmado_por = current_user.id
         fator_msg = '' if fator == 1.0 else f' · fator {fator}'
         flash(f'"{mp.vnda_nome}" → {mp.alvo_nome}{fator_msg}', 'success')
     elif acao == 'ignorar':
         mp.ignorar = True; mp.receita_id = None; mp.produto_id = None
-        mp.confirmado_em = datetime.utcnow(); mp.confirmado_por = current_user.id
+        mp.confirmado_em = agora(); mp.confirmado_por = current_user.id
         flash(f'"{mp.vnda_nome}" ignorado — nao baixara estoque.', 'info')
     elif acao == 'desfazer':
         mp.ignorar = False; mp.receita_id = None; mp.produto_id = None

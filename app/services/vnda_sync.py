@@ -10,7 +10,7 @@ import logging
 from datetime import date, datetime, timedelta
 
 from app.extensions import db
-from app.utils.time import agora
+from app.utils import agora
 from app.models import (Loja, EstoqueLoja, MovEstoqueLoja, Receita, MateriaPrima,
                         VndaProdutoMap, VndaPedidoProcessado, VndaDebito,
                         AppConfig)
@@ -179,7 +179,7 @@ def _estornar_pedido(reg, user_id):
                 referencia=f'Estorno VNDA #{reg.vnda_pedido_code} (cancelada)',
                 usuario_id=user_id,
             ))
-    reg.estornado_em = datetime.utcnow()
+    reg.estornado_em = agora()
 
 
 def processar_pedidos(data_entrega, user=None):
@@ -235,7 +235,7 @@ def processar_pedidos(data_entrega, user=None):
             stats['pedidos_ja_processados'] += 1
             if is_canceled and not reg.estornado_em:
                 _estornar_pedido(reg, user_id)
-                reg.cancelado_em = datetime.utcnow()
+                reg.cancelado_em = agora()
                 stats['pedidos_cancelados_estornados'] += 1
             continue
 
@@ -245,7 +245,7 @@ def processar_pedidos(data_entrega, user=None):
             db.session.add(VndaPedidoProcessado(
                 vnda_pedido_code=code,
                 data_entrega=de,
-                cancelado_em=datetime.utcnow(),
+                cancelado_em=agora(),
                 n_itens_total=len(items),
                 n_itens_baixados=0,
             ))
