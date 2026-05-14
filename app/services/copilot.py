@@ -18,6 +18,7 @@ from datetime import date, datetime, timedelta
 from flask import current_app
 
 from app.extensions import db
+from app.utils.time import agora, hoje
 from app.models import Loja, Produto, Receita, MateriaPrima
 
 logger = logging.getLogger(__name__)
