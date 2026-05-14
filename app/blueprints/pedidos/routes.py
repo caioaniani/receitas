@@ -1234,3 +1234,168 @@ def estoque_loja_ajuste():
     db.session.commit()
     flash(f'Ajuste de estoque registrado ({sinal}{qtd}).', 'success')
     return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
+
+
+# ── Desperdicio (sobra do dia / vencido) ──
+
+@pedidos_bp.route('/desperdicio', methods=['GET', 'POST'])
+@login_required
+@gerente_required
+def desperdicio():
+    """Registra sobra do dia descartada (vencida) + lista historico.
+
+    Form: loja, item (receita/produto/MP), quantidade, data (default hoje),
+    observacao. Cria Desperdicio + MovEstoqueLoja(tipo='desperdicio')
+    e baixa do estoque (limitado ao saldo, sem ficar negativo).
+    """
+    loja_id_user = _loja_do_usuario()
+
+    if request.method == 'POST':
+        try:
+            sel_loja = (int(request.form.get('loja_id') or 0)
+                        if current_user.is_admin() else loja_id_user)
+        except (TypeError, ValueError):
+            sel_loja = 0
+        if not current_user.is_admin() and sel_loja != loja_id_user:
+            abort(403)
+        if not sel_loja:
+            flash('Selecione uma loja.', 'warning')
+            return redirect(url_for('pedidos.desperdicio'))
+
+        tipo_item, item_id = _parse_item_id(request.form.get('item_id', ''))
+        if tipo_item == 'mp':
+            tipo_item = 'mp'
+        elif request.form.get('item_id', '').startswith('p_'):
+            try:
+                tipo_item, item_id = 'produto', int(request.form['item_id'][2:])
+            except ValueError:
+                tipo_item = None
+        if not tipo_item or not item_id:
+            flash('Selecione um item valido.', 'warning')
+            return redirect(url_for('pedidos.desperdicio', loja=sel_loja))
+
+        try:
+            qtd = int(request.form.get('quantidade') or 0)
+        except (TypeError, ValueError):
+            qtd = 0
+        if qtd <= 0:
+            flash('Quantidade deve ser > 0.', 'warning')
+            return redirect(url_for('pedidos.desperdicio', loja=sel_loja))
+
+        data_str = request.form.get('data', '')
+        try:
+            data_desp = datetime.strptime(data_str, '%Y-%m-%d').date()
+        except ValueError:
+            data_desp = hoje_brt()
+
+        observacao = (request.form.get('observacao') or '').strip() or None
+        motivo = (request.form.get('motivo') or 'vencido').strip() or 'vencido'
+
+        filtro = {'loja_id': sel_loja}
+        if tipo_item == 'receita':
+            filtro['receita_id'] = item_id
+        elif tipo_item == 'produto':
+            filtro['produto_id'] = item_id
+        elif tipo_item == 'mp':
+            filtro['materia_prima_id'] = item_id
+
+        el = EstoqueLoja.query.filter_by(**filtro).first()
+        if not el:
+            el = EstoqueLoja(**filtro, quantidade=0)
+            db.session.add(el)
+            db.session.flush()
+
+        saldo = el.quantidade or 0
+        baixa = min(qtd, saldo)
+        el.quantidade = saldo - baixa
+
+        desp = Desperdicio(
+            loja_id=sel_loja,
+            receita_id=item_id if tipo_item == 'receita' else None,
+            produto_id=item_id if tipo_item == 'produto' else None,
+            materia_prima_id=item_id if tipo_item == 'mp' else None,
+            quantidade=qtd,
+            data=data_desp,
+            motivo=motivo,
+            observacao=observacao,
+            criado_por_id=current_user.id,
+        )
+        db.session.add(desp)
+        if baixa > 0:
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el.id, tipo='desperdicio', quantidade=baixa,
+                referencia=f'Desperdicio {motivo}'
+                + (f' — {observacao}' if observacao else ''),
+                usuario_id=current_user.id,
+            ))
+        if qtd > baixa:
+            falta = qtd - baixa
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el.id, tipo='desperdicio_sem_estoque',
+                quantidade=falta,
+                referencia=f'Desperdicio {motivo} — registrado sem estoque ({falta})',
+                usuario_id=current_user.id,
+            ))
+        db.session.commit()
+        flash(f'Desperdicio registrado: {qtd} un de {desp.nome_item}.', 'success')
+        return redirect(url_for('pedidos.desperdicio', loja=sel_loja))
+
+    # GET: form + lista
+    if current_user.is_admin():
+        sel = request.args.get('loja')
+        loja_filtro = int(sel) if sel else None
+    else:
+        loja_filtro = loja_id_user
+
+    lojas = _lojas_operacionais()
+    loja = Loja.query.get(loja_filtro) if loja_filtro else None
+
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+    materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+
+    # Historico: 30 dias
+    desde = hoje_brt() - timedelta(days=30)
+    q = (Desperdicio.query
+         .filter(Desperdicio.data >= desde)
+         .order_by(Desperdicio.data.desc(), Desperdicio.criado_em.desc()))
+    if loja_filtro:
+        q = q.filter(Desperdicio.loja_id == loja_filtro)
+    registros = q.limit(200).all()
+
+    return render_template('pedidos/desperdicio.html',
+                           lojas=lojas, loja=loja, sel_loja=loja_filtro,
+                           receitas=receitas, produtos=produtos, materias=materias,
+                           registros=registros, hoje=hoje_brt().isoformat())
+
+
+@pedidos_bp.route('/desperdicio/<int:id>/excluir', methods=['POST'])
+@login_required
+@admin_required
+def desperdicio_excluir(id):
+    """Exclui registro de desperdicio e estorna o estoque baixado."""
+    desp = Desperdicio.query.get_or_404(id)
+    loja_id = desp.loja_id
+
+    filtro = {'loja_id': desp.loja_id}
+    if desp.receita_id:
+        filtro['receita_id'] = desp.receita_id
+    elif desp.produto_id:
+        filtro['produto_id'] = desp.produto_id
+    elif desp.materia_prima_id:
+        filtro['materia_prima_id'] = desp.materia_prima_id
+
+    el = EstoqueLoja.query.filter_by(**filtro).first()
+    if el:
+        el.quantidade = (el.quantidade or 0) + desp.quantidade
+        db.session.add(MovEstoqueLoja(
+            estoque_loja_id=el.id, tipo='desperdicio_estorno',
+            quantidade=desp.quantidade,
+            referencia=f'Estorno desperdicio #{desp.id}',
+            usuario_id=current_user.id,
+        ))
+
+    db.session.delete(desp)
+    db.session.commit()
+    flash('Desperdicio excluido e estoque estornado.', 'success')
+    return redirect(url_for('pedidos.desperdicio', loja=loja_id))
