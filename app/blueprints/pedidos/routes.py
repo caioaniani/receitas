@@ -836,7 +836,7 @@ def estoque_loja_entrada_lote():
 
 @pedidos_bp.route('/estoque-loja/saida-lote', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@gerente_required
 def estoque_loja_saida_lote():
     """Preview de saida em lote — usuario cola lista 'nome: qtd' (vendas
     manuais sem PDV API) e ve o que vai descontar. Apply em outra rota."""
