@@ -115,7 +115,7 @@ def salvar(id):
 
 @receitas_bp.route('/nova', methods=['POST'])
 @login_required
-@admin_required
+@catalogo_required
 def nova():
     receita = Receita(
         nome='Novo Produto',
@@ -132,7 +132,7 @@ def nova():
 
 @receitas_bp.route('/<int:id>/duplicar', methods=['POST'])
 @login_required
-@admin_required
+@catalogo_required
 def duplicar(id):
     original = Receita.query.get_or_404(id)
     copia = Receita(
@@ -170,7 +170,7 @@ def duplicar(id):
 
 @receitas_bp.route('/<int:id>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@catalogo_required
 def excluir(id):
     receita = Receita.query.get_or_404(id)
     nome = receita.nome
@@ -182,7 +182,7 @@ def excluir(id):
 
 @receitas_bp.route('/api/nova-mp', methods=['POST'])
 @login_required
-@admin_required
+@catalogo_required
 def nova_mp():
     """Cria matéria-prima via AJAX (sem sair da ficha técnica)."""
     nome = request.form.get('mp_nome', '').strip()
