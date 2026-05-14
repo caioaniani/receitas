@@ -23,6 +23,8 @@ from datetime import datetime
 import requests
 from flask import current_app
 
+from app.utils import agora as _agora_brt
+
 logger = logging.getLogger(__name__)
 
 # Cache do access token curto (gerado a partir do refresh)
@@ -106,7 +108,7 @@ def upload_foto(file_bytes, atribuicao_id, ext='jpg'):
         raise RuntimeError('Arquivo vazio')
 
     # Caminho organizado por data + atribuicao + uuid pra evitar colisao
-    hoje = datetime.utcnow().strftime('%Y-%m-%d')
+    hoje = _agora_brt().strftime('%Y-%m-%d')
     nome = f"{atribuicao_id}_{uuid.uuid4().hex[:8]}.{ext}"
     path = f"{_pasta_base()}/{hoje}/{nome}"
 

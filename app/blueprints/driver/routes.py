@@ -11,6 +11,7 @@ from flask import (
 )
 
 from app.extensions import db
+from app.utils import agora
 from app.models import (
     AtribuicaoEntrega, Driver, EntregaFoto,
 )
@@ -226,7 +227,7 @@ def api_status(token):
     a.status = novo_status
     a.nota = (body.get('nota') or '')[:500] or None
     if novo_status == 'entregue':
-        a.entregue_em = datetime.utcnow()
+        a.entregue_em = agora()
         a.motivo_falha = None
         if not a.proof_hash:
             a.proof_hash = _gerar_proof_hash()

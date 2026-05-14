@@ -13,6 +13,8 @@ from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import text
 
+from app.utils import BRT, hoje as hoje_brt
+
 logger = logging.getLogger(__name__)
 
 _scheduler = None
@@ -20,12 +22,6 @@ _ult_run = None
 _ult_run_vnda = None
 LOCK_KEY = 7723  # advisory lock pro Seru
 LOCK_KEY_VNDA = 7724  # advisory lock pro VNDA
-BRT = timezone(timedelta(hours=-3))
-
-
-def hoje_brt():
-    """Data 'hoje' em horario de Brasilia (Railway roda em UTC)."""
-    return datetime.now(BRT).date()
 
 
 def status():
@@ -50,7 +46,7 @@ def _run_sync(app):
     global _ult_run
     from app.extensions import db
     from app.services import seru_sync
-    from datetime import datetime as _dt
+    from app.utils import agora as _agora
 
     with app.app_context():
         uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
@@ -67,7 +63,7 @@ def _run_sync(app):
                 # anteriores nao sao tocadas — preferencia do usuario.
                 hoje = hoje_brt()
                 stats = seru_sync.processar_pedidos(hoje, hoje, user=None)
-                _ult_run = _dt.utcnow()
+                _ult_run = _agora()
                 ativas = any(stats.get(k, 0) for k in (
                     'pedidos_novos', 'itens_baixados',
                     'pedidos_cancelados_estornados'))
@@ -93,7 +89,7 @@ def _run_vnda_sync(app):
     global _ult_run_vnda
     from app.extensions import db
     from app.services import vnda_sync
-    from datetime import datetime as _dt
+    from app.utils import agora as _agora
 
     with app.app_context():
         uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
@@ -108,7 +104,7 @@ def _run_vnda_sync(app):
             try:
                 hoje = hoje_brt()
                 stats = vnda_sync.processar_pedidos(hoje, user=None)
-                _ult_run_vnda = _dt.utcnow()
+                _ult_run_vnda = _agora()
                 if stats.get('erro'):
                     logger.warning('vnda auto-sync erro: %s', stats['erro'])
                 elif any(stats.get(k, 0) for k in (

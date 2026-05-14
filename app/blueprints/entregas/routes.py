@@ -8,6 +8,7 @@ import requests as http_requests
 from app.blueprints.entregas import entregas_bp
 from app.decorators import entrega_access_required
 from app.extensions import db
+from app.utils import agora, hoje as hoje_brt
 from app.models import CartinhaEntrega, OverrideEntrega, Driver, AtribuicaoEntrega, LoteSaida, EntregaFoto, PedidoLocal, PedidoLocalItem, Produto, MateriaPrima
 from app.services import vnda, rotas as rotas_svc, dropbox_storage
 
@@ -970,7 +971,7 @@ def salvar_cartinha(code):
         db.session.add(c)
 
     c.texto = texto
-    c.atualizado_em = datetime.utcnow()
+    c.atualizado_em = agora()
     c.atualizado_por = current_user.id
     db.session.commit()
 
@@ -1389,7 +1390,7 @@ def salvar_data_override(code):
 
     o.data_entrega = nova_data
     o.motivo = motivo
-    o.atualizado_em = datetime.utcnow()
+    o.atualizado_em = agora()
     o.atualizado_por = current_user.id
     db.session.commit()
 

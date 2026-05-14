@@ -6,6 +6,7 @@ from flask_login import login_required, current_user
 from app.blueprints.projetos import projetos_bp
 from app.decorators import admin_required, owner_required
 from app.extensions import db
+from app.utils import agora, hoje as hoje_brt
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.models import (ProjetoArea, Projeto, TarefaProjeto, Usuario, WeeklyReview)
@@ -359,7 +360,7 @@ def kanban():
     # Por padrao, oculta tarefas concluidas/canceladas ha mais de 7 dias do kanban
     # — evita poluicao da coluna Feito ao longo do tempo.
     if not mostrar_antigas:
-        corte = datetime.utcnow() - timedelta(days=7)
+        corte = agora() - timedelta(days=7)
         q = q.filter(
             db.or_(
                 ~TarefaProjeto.status.in_(['feito', 'cancelado']),
@@ -666,7 +667,7 @@ def inbox():
         TarefaProjeto.projeto_id == inbox_proj.id,
         TarefaProjeto.status.in_(['feito', 'cancelado']),
         TarefaProjeto.feito_em.isnot(None),
-        TarefaProjeto.feito_em >= datetime.utcnow() - timedelta(days=14),
+        TarefaProjeto.feito_em >= agora() - timedelta(days=14),
     ).order_by(TarefaProjeto.feito_em.desc()).all()
 
     return render_template('projetos/inbox.html',
@@ -728,7 +729,7 @@ def tarefa_editar(tid):
     if campo == 'status' and valor in STATUS_TAREFA:
         antigo = t.status
         t.status = valor
-        t.feito_em = datetime.utcnow() if valor == 'feito' else None
+        t.feito_em = agora() if valor == 'feito' else None
         # Recorrencia: ao marcar como feita, cria proxima ocorrencia
         if valor == 'feito' and antigo != 'feito' and t.recorrencia:
             _agendar_proxima(t)
@@ -770,7 +771,7 @@ def tarefa_mover(tid):
         return jsonify(ok=False, erro='status invalido'), 400
     if t.status != novo_status:
         t.status = novo_status
-        t.feito_em = datetime.utcnow() if novo_status == 'feito' else None
+        t.feito_em = agora() if novo_status == 'feito' else None
 
     # Reordena: a lista vem como ids[]=[...] na ordem desejada na coluna de destino
     ids_ordem = request.form.getlist('ids[]')
@@ -848,7 +849,7 @@ def tarefa_atualizar(tid):
     if novo_status in STATUS_TAREFA:
         antigo = t.status
         t.status = novo_status
-        t.feito_em = datetime.utcnow() if novo_status == 'feito' else None
+        t.feito_em = agora() if novo_status == 'feito' else None
         if novo_status == 'feito' and antigo != 'feito' and t.recorrencia:
             _agendar_proxima(t)
 

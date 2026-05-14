@@ -5,6 +5,7 @@ from datetime import datetime
 from flask import Flask, Response, render_template, request
 
 from app.extensions import db, csrf, login_manager, limiter
+from app.utils import agora as agora_brt
 from config import Config
 
 
@@ -36,15 +37,17 @@ def create_app(config_class=None):
 
     @app.template_filter('brt')
     def brt_filter(dt, fmt='%d/%m %H:%M'):
-        """Converte datetime UTC pra horario de Brasilia (UTC-3, sem DST)."""
+        """Formata datetime ja em BRT (sistema todo armazena BRT naive).
+
+        Mantido como filtro pra padronizar o display de data/hora nos templates.
+        """
         if not dt:
             return ''
-        from datetime import timedelta
-        return (dt - timedelta(hours=3)).strftime(fmt)
+        return dt.strftime(fmt)
 
     @app.context_processor
     def inject_now():
-        return {'now': datetime.now}
+        return {'now': agora_brt}
 
     @app.context_processor
     def inject_static_version():
@@ -939,6 +942,25 @@ def _migrate_postgres(app):
     )
     """)
     _try("CREATE INDEX IF NOT EXISTS idx_pedido_local_item_pedido ON pedido_local_item(pedido_local_id)")
+
+    # ── Desperdicio (sobra do dia / vencido) ──
+    _try("""
+    CREATE TABLE IF NOT EXISTS desperdicio (
+        id SERIAL PRIMARY KEY,
+        loja_id INTEGER NOT NULL REFERENCES loja(id),
+        receita_id INTEGER REFERENCES receita(id),
+        produto_id INTEGER REFERENCES produto(id),
+        materia_prima_id INTEGER REFERENCES materia_prima(id),
+        quantidade INTEGER NOT NULL,
+        data DATE NOT NULL,
+        motivo VARCHAR(30) NOT NULL DEFAULT 'vencido',
+        observacao TEXT,
+        criado_em TIMESTAMP DEFAULT NOW(),
+        criado_por_id INTEGER REFERENCES usuario(id)
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_desperdicio_loja ON desperdicio(loja_id)")
+    _try("CREATE INDEX IF NOT EXISTS idx_desperdicio_data ON desperdicio(data)")
 
     # Backfill de tokens em drivers existentes (sem token)
     try:

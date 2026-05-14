@@ -1,5 +1,5 @@
 /* Copilot UI — chat com preview de ações.
-   Tools: criar_pedido, receber_mp, ajuste_estoque (write — preview obrigatório)
+   Tools: criar_pedido, receber_mp, ajuste_estoque, registrar_desperdicio (write — preview obrigatório)
           consultar_pedido, consultar_estoque (read — resultado direto). */
 (function() {
     var fab = document.getElementById('copilot-fab');
@@ -324,6 +324,7 @@
             else if (d.tipo === 'criar_tarefa') html += previewGenerico(d.conversa_id, d.tipo, d.params, 'criar tarefa', 'criar');
             else if (d.tipo === 'balanco_congelados') html += previewBalancoCongelados(d.conversa_id, d.params);
             else if (d.tipo === 'entrada_lote_loja') html += previewEntradaLoteLoja(d.conversa_id, d.params);
+            else if (d.tipo === 'registrar_desperdicio') html += previewGenerico(d.conversa_id, d.tipo, d.params, 'registrar desperdicio', 'registrar');
         }
         return html;
     }

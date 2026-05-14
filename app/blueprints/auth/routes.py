@@ -5,6 +5,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 
 from app.blueprints.auth import auth_bp
 from app.extensions import db, limiter
+from app.utils import agora
 from app.models import Usuario, Atribuicao, Receita
 
 
@@ -201,7 +202,7 @@ def concluir(id):
         return redirect(url_for('auth.minhas_fichas'))
 
     atrib.status = 'concluida'
-    atrib.data_conclusao = datetime.utcnow()
+    atrib.data_conclusao = agora()
     db.session.commit()
     flash('Ficha marcada como concluida!', 'success')
     return redirect(url_for('auth.minhas_fichas'))
