@@ -381,3 +381,81 @@ def disparar_interacao_botao(action_id, token, slack_user_id, channel_id,
                 logger.exception('slack_bot: erro processando interacao')
 
     _executor.submit(_runner)
+
+
+def processar_interacao_lembrete(action_id, valor, slack_user_id, channel_id,
+                                  message_ts):
+    """Botoes do lembrete pedido amanha. value vem como 'loja_id:YYYY-MM-DD'."""
+    from datetime import datetime
+    from app.models import LembretePedidoOptOut, Loja, SlackVinculo
+    from app.services import slack as slack_api
+
+    try:
+        loja_id_str, data_str = valor.split(':', 1)
+        loja_id = int(loja_id_str)
+        data = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except (ValueError, AttributeError):
+        slack_api.update_message(channel_id, message_ts,
+                                  text='Erro: token invalido.')
+        return
+
+    loja = Loja.query.get(loja_id)
+    if not loja:
+        slack_api.update_message(channel_id, message_ts,
+                                  text='Loja nao encontrada.')
+        return
+
+    # Identifica quem clicou (pra audit)
+    vinc = SlackVinculo.query.filter_by(slack_user_id=slack_user_id, ativo=True).first()
+    usuario_id = vinc.usuario_id if vinc else None
+
+    if action_id == 'lembrete_no_pedido':
+        # Cria opt-out (ignora se ja existe)
+        existente = LembretePedidoOptOut.query.filter_by(
+            loja_id=loja_id, data_entrega=data).first()
+        if not existente:
+            db.session.add(LembretePedidoOptOut(
+                loja_id=loja_id, data_entrega=data,
+                marcado_por_slack_uid=slack_user_id,
+                marcado_por_id=usuario_id,
+            ))
+            db.session.commit()
+        slack_api.update_message(
+            channel_id, message_ts,
+            text=f'OK, sem pedido pra {loja.nome} em {data.strftime("%d/%m")}',
+            blocks=[{'type': 'section',
+                     'text': {'type': 'mrkdwn',
+                              'text': (f':white_check_mark: *{loja.nome}* sem pedido '
+                                        f'pra {data.strftime("%d/%m/%Y")} '
+                                        f'(<@{slack_user_id}> marcou).')}}],
+        )
+        return
+
+    if action_id == 'lembrete_fazer_pedido':
+        # O botao tem 'url' (Slack ja abre o link). Aqui so atualizamos a msg
+        # pra registrar que alguem clicou pra fazer o pedido.
+        slack_api.update_message(
+            channel_id, message_ts,
+            text=f'{loja.nome}: pedido em andamento',
+            blocks=[{'type': 'section',
+                     'text': {'type': 'mrkdwn',
+                              'text': (f':pencil2: <@{slack_user_id}> abriu o '
+                                        f'formulario pra criar pedido da '
+                                        f'*{loja.nome}* ({data.strftime("%d/%m")}).')}}],
+        )
+        return
+
+
+def disparar_interacao_lembrete(action_id, valor, slack_user_id, channel_id,
+                                 message_ts):
+    app = current_app._get_current_object()
+
+    def _runner():
+        with app.app_context():
+            try:
+                processar_interacao_lembrete(action_id, valor, slack_user_id,
+                                              channel_id, message_ts)
+            except Exception:
+                logger.exception('slack_bot: erro processando lembrete')
+
+    _executor.submit(_runner)
