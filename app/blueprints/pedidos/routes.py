@@ -16,7 +16,7 @@ from app.models import (
     EstoqueProducao, MovEstoqueProducao,
     EstoqueLoja, MovEstoqueLoja,
     PrecoLojaReceita, FotoRecebimento,
-    LojaProdutoMap,
+    LojaProdutoMap, Desperdicio,
 )
 
 
@@ -928,7 +928,7 @@ def estoque_loja_mapeamentos_vincular(map_id):
         mp.materia_prima_id = alvo_id if alvo_tipo == 'mp' else None
         mp.ignorar = False
         mp.fator_quantidade = fator
-        mp.confirmado_em = datetime.utcnow()
+        mp.confirmado_em = agora()
         mp.confirmado_por = current_user.id
         fator_msg = f' (fator {fator:g})' if fator != 1.0 else ''
         flash(f'"{mp.nome_digitado}" → {mp.alvo_nome}{fator_msg}', 'success')
@@ -937,7 +937,7 @@ def estoque_loja_mapeamentos_vincular(map_id):
         mp.receita_id = None
         mp.produto_id = None
         mp.materia_prima_id = None
-        mp.confirmado_em = datetime.utcnow()
+        mp.confirmado_em = agora()
         mp.confirmado_por = current_user.id
         flash(f'"{mp.nome_digitado}" ignorado.', 'info')
     elif acao == 'desfazer':
