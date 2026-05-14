@@ -208,12 +208,76 @@ def resolver_lista(linhas_parseadas, loja_id):
     return enriq
 
 
-def aplicar_saida_lote(itens_resolvidos, loja_id, user, referencia=None):
-    """SUBTRAI a quantidade de cada item do EstoqueLoja correspondente.
+def _get_or_create_map(nome_digitado):
+    """Acha LojaProdutoMap por nome (case-insensitive) ou cria novo pendente."""
+    nome = (nome_digitado or '').strip()
+    if not nome:
+        return None
+    nome_lower = nome.lower()
+    mp = LojaProdutoMap.query.filter(
+        func.lower(LojaProdutoMap.nome_digitado) == nome_lower
+    ).first()
+    if mp:
+        return mp
+    mp = LojaProdutoMap(nome_digitado=nome)
+    db.session.add(mp)
+    db.session.flush()
+    return mp
 
-    Itens sem match no catalogo sao IGNORADOS (saida nao cria pendentes —
-    usuario precisa cadastrar antes). Se estoque atual < qtd saida, baixa
-    ate 0 e registra mov 'venda_loja_sem_estoque' pra falta.
+
+def resolver_lista_saida(linhas_parseadas, loja_id):
+    """Resolve usando LojaProdutoMap (cria pendentes pra nomes novos).
+
+    Retorna lista enriquecida com 'map_entry' (LojaProdutoMap),
+    'estoque_atual', 'novo', 'faltou'.
+    """
+    enriq = []
+    for item in linhas_parseadas:
+        if item.get('erro'):
+            enriq.append(item)
+            continue
+        nome = (item.get('nome') or '').strip()
+        if not nome:
+            enriq.append(item)
+            continue
+        mp = _get_or_create_map(nome)
+        atual = 0
+        novo = 0
+        faltou = 0
+        qtd = item.get('quantidade') or 0
+        if mp and mp.estado == 'mapeado' and loja_id:
+            filtro = {'loja_id': loja_id}
+            if mp.receita_id:
+                filtro['receita_id'] = mp.receita_id
+            elif mp.produto_id:
+                filtro['produto_id'] = mp.produto_id
+            elif mp.materia_prima_id:
+                filtro['materia_prima_id'] = mp.materia_prima_id
+            el = EstoqueLoja.query.filter_by(**filtro).first()
+            atual = (el.quantidade if el else 0) or 0
+            qtd_efetiva = int((qtd * float(mp.fator_quantidade or 1.0)) + 1e-9)
+            real = min(qtd_efetiva, atual)
+            novo = atual - real
+            faltou = max(0, qtd_efetiva - atual)
+        enriq.append({
+            **item,
+            'map_entry': mp,
+            'estoque_atual': atual,
+            'novo': novo,
+            'faltou': faltou,
+        })
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+    return enriq
+
+
+def aplicar_saida_lote(itens_resolvidos, loja_id, user, referencia=None):
+    """Aplica saida usando LojaProdutoMap. Pendentes/ignorados sao pulados.
+
+    Mapeados: subtrai qtd*fator do EstoqueLoja correspondente. Se estoque
+    insuficiente, baixa ate 0 e registra 'venda_loja_sem_estoque' pra falta.
     """
     ref = (referencia or 'Saida em lote').strip()
     aplicados = []
@@ -234,51 +298,65 @@ def aplicar_saida_lote(itens_resolvidos, loja_id, user, referencia=None):
         if qtd_sub <= 0:
             ignorados.append({'linha': item.get('linha', '?'), 'motivo': 'quantidade_invalida'})
             continue
-
-        resolvido = item.get('resolvido')
-        if not resolvido or not resolvido.get('id'):
-            ignorados.append({
-                'linha': item.get('linha', '?'),
-                'nome': item.get('nome', ''),
-                'motivo': 'sem_match',
-            })
+        mp = item.get('map_entry')
+        if not mp:
+            ignorados.append({'linha': item.get('linha', '?'), 'motivo': 'sem_map'})
+            continue
+        if mp.ignorar:
+            ignorados.append({'linha': item.get('linha', '?'),
+                              'nome': mp.nome_digitado, 'motivo': 'ignorado'})
+            continue
+        if mp.estado == 'pendente':
+            ignorados.append({'linha': item.get('linha', '?'),
+                              'nome': mp.nome_digitado, 'motivo': 'pendente'})
             continue
 
-        if resolvido['tipo'] == 'pendente':
-            ep = EstoqueLoja.query.get(resolvido['id'])
+        qtd_efetiva = int((qtd_sub * float(mp.fator_quantidade or 1.0)) + 1e-9)
+        if qtd_efetiva <= 0:
+            ignorados.append({'linha': item.get('linha', '?'),
+                              'nome': mp.nome_digitado, 'motivo': 'fator_zero'})
+            continue
+
+        filtro = {'loja_id': loja_id}
+        if mp.receita_id:
+            filtro['receita_id'] = mp.receita_id
+        elif mp.produto_id:
+            filtro['produto_id'] = mp.produto_id
+        elif mp.materia_prima_id:
+            filtro['materia_prima_id'] = mp.materia_prima_id
         else:
-            filtro = _filtro_para_resolvido(loja_id, resolvido)
-            ep = EstoqueLoja.query.filter_by(**filtro).first()
-            if not ep:
-                ep = EstoqueLoja(**filtro, quantidade=0)
-                db.session.add(ep)
-                db.session.flush()
+            ignorados.append({'linha': item.get('linha', '?'),
+                              'nome': mp.nome_digitado, 'motivo': 'sem_alvo'})
+            continue
+
+        ep = EstoqueLoja.query.filter_by(**filtro).first()
+        if not ep:
+            ep = EstoqueLoja(**filtro, quantidade=0)
+            db.session.add(ep)
+            db.session.flush()
 
         anterior = ep.quantidade or 0
-        real = min(qtd_sub, anterior)
-        falta = qtd_sub - real
+        real = min(qtd_efetiva, anterior)
+        falta = qtd_efetiva - real
         ep.quantidade = anterior - real
 
         if real > 0:
             db.session.add(MovEstoqueLoja(
-                estoque_loja_id=ep.id,
-                tipo='saida_lote',
-                quantidade=real,
-                referencia=f'{ref} (era {anterior}, ficou {ep.quantidade})',
+                estoque_loja_id=ep.id, tipo='saida_lote', quantidade=real,
+                referencia=f'{ref} [{mp.nome_digitado}] (era {anterior}, ficou {ep.quantidade})',
                 usuario_id=getattr(user, 'id', None),
             ))
         if falta > 0:
             db.session.add(MovEstoqueLoja(
-                estoque_loja_id=ep.id,
-                tipo='venda_loja_sem_estoque',
-                quantidade=falta,
-                referencia=f'{ref} — faltou {falta} (tinha {anterior})',
+                estoque_loja_id=ep.id, tipo='venda_loja_sem_estoque', quantidade=falta,
+                referencia=f'{ref} [{mp.nome_digitado}] — faltou {falta}',
                 usuario_id=getattr(user, 'id', None),
             ))
 
         aplicados.append({
-            'nome': resolvido['nome'],
-            'tipo': resolvido['tipo'],
+            'nome': mp.nome_digitado,
+            'alvo': mp.alvo_nome,
+            'tipo': mp.alvo_tipo,
             'anterior': anterior,
             'novo': ep.quantidade,
             'delta': -real,
