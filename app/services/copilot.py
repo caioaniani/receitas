@@ -120,14 +120,30 @@ TOOL_AJUSTE_ESTOQUE = {
 
 TOOL_MUDAR_STATUS_PEDIDO = {
     "name": "mudar_status_pedido",
-    "description": "Confirma, separa, envia ou cancela um pedido entre lojas. NAO executa — preview.",
+    "description": ("Muda o status de um pedido entre lojas: confirmar (pendente→confirmado), "
+                    "separar (→separado), enviar (→em_transporte, baixa estoque industria), "
+                    "receber (→recebido, soma no estoque da loja, sem divergencias), "
+                    "ou cancelar. NAO executa — preview."),
     "input_schema": {
         "type": "object",
         "properties": {
             "pedido_id": {"type": "integer"},
-            "novo_status": {"type": "string", "enum": ["confirmar", "separar", "enviar", "cancelar"]},
+            "novo_status": {"type": "string", "enum": ["confirmar", "separar", "enviar", "receber", "cancelar"]},
         },
         "required": ["pedido_id", "novo_status"],
+    },
+}
+
+TOOL_ANEXAR_FOTO_PEDIDO = {
+    "name": "anexar_foto_pedido",
+    "description": ("Anexa foto(s) de comprovante a um pedido (ex: foto da entrega, nota fiscal). "
+                    "As imagens vem da mensagem do usuario no Slack. NAO executa — preview."),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "pedido_id": {"type": "integer"},
+        },
+        "required": ["pedido_id"],
     },
 }
 
