@@ -61,11 +61,19 @@ def events():
 
     tipo = event.get('type')
     if tipo not in ('message', 'app_mention'):
+        logger.info('slack /events: ignorado tipo=%s', tipo)
         return ('', 200)
 
-    # Em canais publicos, so responde se for @mention. message_im (DM) ok.
-    if tipo == 'message' and event.get('channel_type') != 'im':
-        return ('', 200)
+    # Filtra: aceita DM (im), @mention, OU msg em canal whitelisted.
+    canal = event.get('channel')
+    canal_tipo = event.get('channel_type', '')
+    logger.info('slack /events: tipo=%s canal=%s canal_tipo=%s subtype=%s user=%s',
+                tipo, canal, canal_tipo, event.get('subtype'), event.get('user'))
+    if tipo == 'message' and canal_tipo != 'im':
+        if not slack_bot._canal_permitido(canal, canal_tipo):
+            logger.info('slack /events: canal %s NAO esta no whitelist (env=%r)',
+                         canal, current_app.config.get('SLACK_CANAIS_PERMITIDOS'))
+            return ('', 200)
 
     slack_bot.disparar_evento(event)
     return ('', 200)
