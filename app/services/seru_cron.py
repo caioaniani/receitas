@@ -13,6 +13,8 @@ from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import text
 
+from app.utils.time import BRT, hoje as hoje_brt
+
 logger = logging.getLogger(__name__)
 
 _scheduler = None
@@ -20,12 +22,6 @@ _ult_run = None
 _ult_run_vnda = None
 LOCK_KEY = 7723  # advisory lock pro Seru
 LOCK_KEY_VNDA = 7724  # advisory lock pro VNDA
-BRT = timezone(timedelta(hours=-3))
-
-
-def hoje_brt():
-    """Data 'hoje' em horario de Brasilia (Railway roda em UTC)."""
-    return datetime.now(BRT).date()
 
 
 def status():
