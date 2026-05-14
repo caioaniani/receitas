@@ -213,6 +213,27 @@ function atualizarLista(tipoSel) {
             if (y > 0) { window.scrollTo(0, y); sessionStorage.removeItem(KEY); }
         } catch (e) {}
     });
+
+    // Helper "X fatias de Y" → calcula fator automatico
+    document.querySelectorAll('details.helper-fatias').forEach(function(d) {
+        var td = d.closest('td');
+        if (!td) return;
+        var form = td.querySelector('form');
+        if (!form) return;
+        var fatX = d.querySelector('.fat-x');
+        var fatY = d.querySelector('.fat-y');
+        var fator = form.querySelector('input[name="fator"]');
+        function calc() {
+            var x = parseFloat(fatX.value);
+            var y = parseFloat(fatY.value);
+            if (x > 0 && y > 0) {
+                var v = x / y;
+                fator.value = v.toFixed(4).replace(/\.?0+$/, '');
+            }
+        }
+        fatX.addEventListener('input', calc);
+        fatY.addEventListener('input', calc);
+    });
 })();
 </script>
 {% endblock %}
