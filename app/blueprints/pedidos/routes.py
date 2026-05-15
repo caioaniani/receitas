@@ -634,19 +634,41 @@ def separacao():
 
     por_data = defaultdict(lambda: defaultdict(lambda: {'total': 0, 'lojas': defaultdict(int)}))
     ids_por_data = defaultdict(list)
+    # data → loja_nome → [(item, qtd, pedido_id)]
+    por_data_loja = defaultdict(lambda: defaultdict(list))
+    ids_por_data_loja = defaultdict(lambda: defaultdict(list))
+
     for p in pedidos:
         chave_data = p.data_entrega or p.data_pedido
         ids_por_data[chave_data].append(p.id)
+        loja_nome = p.loja.nome if p.loja else '?'
+        ids_por_data_loja[chave_data][loja_nome].append(p.id)
         for item in p.itens:
             nome = item.nome_item
             por_data[chave_data][nome]['total'] += item.quantidade
-            por_data[chave_data][nome]['lojas'][p.loja.nome] += item.quantidade
+            por_data[chave_data][nome]['lojas'][loja_nome] += item.quantidade
+            por_data_loja[chave_data][loja_nome].append({
+                'item': nome, 'qtd': item.quantidade, 'pedido_id': p.id,
+            })
+
+    # Agrega items duplicados dentro de cada loja (mesmo item em 2 pedidos)
+    for data, lojas in por_data_loja.items():
+        for loja_nome, itens in lojas.items():
+            agreg = defaultdict(int)
+            for it in itens:
+                agreg[it['item']] += it['qtd']
+            lojas[loja_nome] = sorted(
+                [{'item': nome, 'qtd': qtd} for nome, qtd in agreg.items()],
+                key=lambda x: x['item']
+            )
 
     congelados = {ep.nome_item: ep.quantidade for ep in EstoqueProducao.query.all()}
 
     return render_template('pedidos/separacao.html',
                            por_data=dict(por_data),
                            ids_por_data=dict(ids_por_data),
+                           por_data_loja={d: dict(ls) for d, ls in por_data_loja.items()},
+                           ids_por_data_loja={d: dict(ls) for d, ls in ids_por_data_loja.items()},
                            congelados=congelados)
 
 
