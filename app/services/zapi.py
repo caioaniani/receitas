@@ -27,8 +27,23 @@ def _normalizar_numero(numero):
     return ''.join(c for c in (numero or '') if c.isdigit())
 
 
+def _whitelist_numeros():
+    """Numeros permitidos (set). Vazio = recusa tudo (fail-closed)."""
+    raw = (current_app.config.get('ZAPI_NUMEROS_PERMITIDOS') or '').strip()
+    permitidos = {_normalizar_numero(n) for n in raw.split(',') if n.strip()}
+    # Inclui o destino padrao do digest tambem (atalho)
+    destino = _normalizar_numero(current_app.config.get('ZAPI_NUMERO_DESTINO') or '')
+    if destino:
+        permitidos.add(destino)
+    return {n for n in permitidos if n}
+
+
 def enviar_texto(numero, mensagem):
-    """POST /send-text com texto simples. Retorna {'ok': bool, ...}."""
+    """POST /send-text com texto simples. Retorna {'ok': bool, ...}.
+
+    SEGURANCA: rejeita envio pra numero fora do whitelist
+    `ZAPI_NUMEROS_PERMITIDOS` (+ `ZAPI_NUMERO_DESTINO`). Fail-closed.
+    """
     cfg = current_app.config
     instance_id = (cfg.get('ZAPI_INSTANCE_ID') or '').strip()
     token = (cfg.get('ZAPI_TOKEN') or '').strip()
@@ -40,6 +55,15 @@ def enviar_texto(numero, mensagem):
     numero_norm = _normalizar_numero(numero)
     if not numero_norm:
         return {'ok': False, 'erro': 'numero invalido'}
+
+    permitidos = _whitelist_numeros()
+    if not permitidos:
+        logger.error('zapi: ZAPI_NUMEROS_PERMITIDOS vazio — recusa total. Numero pedido: %s', numero_norm)
+        return {'ok': False, 'erro': 'whitelist vazio — configure ZAPI_NUMEROS_PERMITIDOS'}
+    if numero_norm not in permitidos:
+        logger.error('zapi: numero %s NAO esta no whitelist (%s permitidos). RECUSADO.',
+                      numero_norm, len(permitidos))
+        return {'ok': False, 'erro': f'numero {numero_norm} fora do whitelist — recusado por seguranca'}
 
     url = f'{BASE}/instances/{instance_id}/token/{token}/send-text'
     headers = {'Content-Type': 'application/json'}
