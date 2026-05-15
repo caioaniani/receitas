@@ -69,7 +69,7 @@ def faturamento():
     """
     data_raw = (request.args.get('data') or 'hoje').strip()
     data_str = data_raw.lower()
-    hoje = date.today()
+    hoje = hoje_brt()
     target = None
     fallback_aplicado = False
 

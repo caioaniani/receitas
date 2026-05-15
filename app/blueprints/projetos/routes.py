@@ -30,7 +30,7 @@ def _contadores():
     fazendo = base_t.filter(TarefaProjeto.status == 'fazendo').count()
     atrasadas = base_t.filter(
         TarefaProjeto.prazo.isnot(None),
-        TarefaProjeto.prazo < date.today(),
+        TarefaProjeto.prazo < hoje_brt(),
         ~TarefaProjeto.status.in_(['feito', 'cancelado']),
     ).count()
     foco_12s = base_p.filter(Projeto.foco_12s.is_(True)).count()
@@ -99,7 +99,7 @@ def _data_relativa(prazo):
     """Retorna string amigavel: 'Hoje', 'Amanha', 'Em 3 dias', 'Atrasada ha 2 dias'."""
     if not prazo:
         return ''
-    delta = (prazo - date.today()).days
+    delta = (prazo - hoje_brt()).days
     if delta == 0:
         return 'Hoje'
     if delta == 1:
@@ -182,7 +182,7 @@ def painel():
         if busca:
             projetos = [p for p in projetos if busca in p.nome.lower()]
 
-        hoje_d = date.today()
+        hoje_d = hoje_brt()
 
         def _urgencia(p, atras):
             # Menor = mais urgente
@@ -417,7 +417,7 @@ def dia():
     try:
         alvo = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
-        alvo = date.today()
+        alvo = hoje_brt()
 
     base = TarefaProjeto.query.join(Projeto).join(ProjetoArea).options(
         joinedload(TarefaProjeto.projeto).joinedload(Projeto.area),
@@ -457,7 +457,7 @@ def dia():
                            fazendo=fazendo,
                            atrasadas=atrasadas,
                            semana=semana,
-                           hoje=date.today(),
+                           hoje=hoje_brt(),
                            contadores=_contadores(),
                            data_relativa=_data_relativa,
                            view='dia',
@@ -468,7 +468,7 @@ def dia():
 @login_required
 @owner_required
 def hoje():
-    hoje_d = date.today()
+    hoje_d = hoje_brt()
 
     base = TarefaProjeto.query.join(Projeto).join(ProjetoArea).options(
         joinedload(TarefaProjeto.projeto).joinedload(Projeto.area),
@@ -875,7 +875,7 @@ def tarefa_excluir(tid):
 @owner_required
 def weekly():
     """Dados pra modal de Weekly Review."""
-    hoje_d = date.today()
+    hoje_d = hoje_brt()
     atrasadas = TarefaProjeto.query.filter(
         TarefaProjeto.prazo.isnot(None),
         TarefaProjeto.prazo < hoje_d,
@@ -943,7 +943,7 @@ def weekly_salvar():
         return jsonify(ok=False, erro='reflexao vazia'), 400
     c = _contadores()
     review = WeeklyReview(
-        data=date.today(),
+        data=hoje_brt(),
         reflexao=reflexao,
         fazendo_count=c['fazendo'],
         a_fazer_count=c['a_fazer'],
@@ -972,7 +972,7 @@ def _agendar_proxima(tarefa):
     dias = _RECORRENCIA_DIAS.get(tarefa.recorrencia)
     if not dias:
         return
-    base = tarefa.prazo or date.today()
+    base = tarefa.prazo or hoje_brt()
     nova = TarefaProjeto(
         projeto_id=tarefa.projeto_id,
         nome=tarefa.nome,
@@ -1126,7 +1126,7 @@ def projeto_novo_de_template():
     db.session.add(p)
     db.session.flush()
 
-    base_data = date.today()
+    base_data = hoje_brt()
     for tt in sorted(template.tarefas, key=lambda x: x.ordem):
         prazo = base_data + timedelta(days=tt.dias_prazo) if tt.dias_prazo is not None else None
         db.session.add(TarefaProjeto(
@@ -1149,8 +1149,8 @@ def projeto_novo_de_template():
 @login_required
 @owner_required
 def calendario():
-    ano = request.args.get('ano', type=int) or date.today().year
-    mes = request.args.get('mes', type=int) or date.today().month
+    ano = request.args.get('ano', type=int) or hoje_brt().year
+    mes = request.args.get('mes', type=int) or hoje_brt().month
 
     if mes < 1: mes, ano = 12, ano - 1
     if mes > 12: mes, ano = 1, ano + 1
@@ -1182,7 +1182,7 @@ def calendario():
                            primeiro_dia_semana=primeiro_dia_semana,
                            ultimo_dia=ultimo_dia,
                            por_dia=por_dia,
-                           hoje=date.today(),
+                           hoje=hoje_brt(),
                            contadores=_contadores(),
                            view='calendario',
                            **_contexto_acao())
@@ -1194,7 +1194,7 @@ def calendario():
 @login_required
 @owner_required
 def relatorio():
-    hoje_d = date.today()
+    hoje_d = hoje_brt()
     de_str = request.args.get('de', '')
     ate_str = request.args.get('ate', '')
     try:

@@ -73,7 +73,7 @@ def index(token):
     driver = _driver_por_token(token)
     if not driver or not driver.ativo:
         abort(404)
-    return render_template('driver/index.html', driver=driver, hoje=date.today().isoformat())
+    return render_template('driver/index.html', driver=driver, hoje=hoje_brt().isoformat())
 
 
 @driver_bp.route('/api/<token>/login', methods=['POST'])
@@ -99,7 +99,7 @@ def api_proxima_data(token):
     if not _autenticado(driver):
         return jsonify(ok=False, erro='Autenticacao necessaria', precisa_pin=True), 401
 
-    hoje = date.today()
+    hoje = hoje_brt()
     futura = (AtribuicaoEntrega.query
               .filter(AtribuicaoEntrega.driver_id == driver.id,
                       AtribuicaoEntrega.data_entrega >= hoje)
@@ -123,11 +123,11 @@ def api_debug(token):
     driver = _driver_por_token(token)
     if not driver:
         return jsonify(ok=False, erro='token invalido'), 404
-    data_str = request.args.get('data', date.today().isoformat())
+    data_str = request.args.get('data', hoje_brt().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
-        target = date.today()
+        target = hoje_brt()
 
     autenticado = _autenticado(driver)
     atribs_data = AtribuicaoEntrega.query.filter(
@@ -164,11 +164,11 @@ def api_pedidos(token):
     if not _autenticado(driver):
         return jsonify(ok=False, erro='Autenticacao necessaria', precisa_pin=True), 401
 
-    data_str = request.args.get('data', date.today().isoformat())
+    data_str = request.args.get('data', hoje_brt().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
-        target = date.today()
+        target = hoje_brt()
 
     # Reaproveita a busca da API geral
     overrides = {}  # nao mexe em overrides na pagina do driver
