@@ -958,29 +958,104 @@ def _formatar_pedido(p):
 
 
 def _read_consultar_estoque(params, user):
-    """Consulta estoque em 3 escopos: mp, producao, loja."""
-    from app.models import AlertaEstoque, EstoqueProducao, EstoqueLoja
-    from sqlalchemy import func as sqlfunc
-
-    # Compatibilidade: se nao passou escopo mas passou mp_nome, assume mp
+    """Consulta estoque em 4 escopos: mp, producao, loja, todos."""
     escopo = (params.get('escopo') or '').strip().lower()
     item_nome_legacy = (params.get('mp_nome') or '').strip()
     if not escopo and item_nome_legacy:
         escopo = 'mp'
     if not escopo:
-        escopo = 'mp'
+        escopo = 'todos'
 
     item_nome = (params.get('item_nome') or item_nome_legacy or '').strip()
     apenas_baixo = bool(params.get('apenas_baixo'))
+    loja_nome = (params.get('loja_nome') or '').strip()
 
     if escopo == 'mp':
         return _consultar_estoque_mp(item_nome, apenas_baixo)
     if escopo == 'producao':
         return _consultar_estoque_producao(item_nome)
     if escopo == 'loja':
-        loja_nome = (params.get('loja_nome') or '').strip()
-        return _consultar_estoque_loja(loja_nome, item_nome, user)
-    return {'texto': f'Escopo invalido: "{escopo}". Use mp, producao ou loja.'}
+        if loja_nome:
+            return _consultar_estoque_loja(loja_nome, item_nome, user)
+        # sem loja_nome → todas as lojas
+        return _consultar_estoque_todas_lojas(item_nome)
+    if escopo == 'todos':
+        return _consultar_estoque_todos(item_nome)
+    return {'texto': f'Escopo invalido: "{escopo}". Use mp, producao, loja ou todos.'}
+
+
+def _consultar_estoque_todas_lojas(item_nome):
+    """Lista estoque em TODAS as lojas, agrupado por loja."""
+    from app.models import EstoqueLoja
+    lojas = (Loja.query.filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
+             .order_by(Loja.nome).all())
+    if not lojas:
+        return {'texto': 'Nenhuma loja ativa.'}
+
+    bloco = []
+    total_geral = 0
+    for loja in lojas:
+        q = (EstoqueLoja.query.filter_by(loja_id=loja.id)
+             .filter(EstoqueLoja.quantidade > 0).all())
+        if item_nome:
+            q = [el for el in q if item_nome.lower() in (el.nome_item or '').lower()]
+        if not q:
+            continue
+        q.sort(key=lambda el: -(el.quantidade or 0))
+        soma = sum((el.quantidade or 0) for el in q)
+        total_geral += soma
+        linhas = [f'  - {el.nome_item}: {el.quantidade}' for el in q[:20]]
+        if len(q) > 20:
+            linhas.append(f'  - _... +{len(q) - 20} itens_')
+        bloco.append(f'*{loja.nome}* (total {soma}):\n' + '\n'.join(linhas))
+
+    if not bloco:
+        msg = (f'Nenhum item com "{item_nome}" em estoque em nenhuma loja.'
+               if item_nome else 'Nenhuma loja com saldo positivo.')
+        return {'texto': msg}
+
+    cabecalho = (f'**Estoque por loja' + (f' (filtro "{item_nome}")' if item_nome else '')
+                  + f' — total {total_geral} un:**')
+    return {'texto': cabecalho + '\n\n' + '\n\n'.join(bloco)}
+
+
+def _consultar_estoque_todos(item_nome):
+    """Visao geral: MP + producao + todas as lojas, idealmente filtrado por item."""
+    blocos = []
+
+    # Producao
+    res_prod = _consultar_estoque_producao(item_nome)
+    txt = res_prod.get('texto', '')
+    if 'vazio' not in txt.lower() and 'nenhum item' not in txt.lower():
+        blocos.append(txt)
+
+    # Todas as lojas
+    res_lojas = _consultar_estoque_todas_lojas(item_nome)
+    txt = res_lojas.get('texto', '')
+    if 'nenhuma' not in txt.lower() and 'nenhum item' not in txt.lower():
+        blocos.append(txt)
+
+    # MP — so se nao tiver filtro de item (item_nome geralmente e produto) OU se for explicito
+    if not item_nome:
+        res_mp = _consultar_estoque_mp(item_nome='', apenas_baixo=False)
+        txt = res_mp.get('texto', '')
+        if 'nenhuma' not in txt.lower():
+            blocos.append(txt)
+    elif item_nome:
+        # Tenta MP tambem (talvez seja MP)
+        from app.models import AlertaEstoque
+        matches = _resolver_mp(item_nome)
+        if matches:
+            res_mp = _consultar_estoque_mp(item_nome, apenas_baixo=False)
+            txt = res_mp.get('texto', '')
+            if txt and 'nao encontrada' not in txt.lower():
+                blocos.append(txt)
+
+    if not blocos:
+        msg = (f'Nenhum estoque com "{item_nome}" encontrado.'
+               if item_nome else 'Estoque vazio em todos os escopos.')
+        return {'texto': msg}
+    return {'texto': '\n\n'.join(blocos)}
 
 
 def _consultar_estoque_mp(item_nome, apenas_baixo):
