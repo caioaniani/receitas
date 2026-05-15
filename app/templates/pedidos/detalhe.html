@@ -174,8 +174,9 @@
     </form>
     {% endif %}
 
-    {% if current_user.is_admin() and pedido.status in ('confirmado', 'separado', 'em_transporte', 'recebido') %}
+    {% if current_user.is_admin() and pedido.status in ('confirmado', 'separado', 'em_transporte', 'entregue', 'recebido') %}
     {% set msgs = {
+        'entregue': 'Voltar pra Em Transporte? Vai estornar o que somou no estoque da loja.',
         'recebido': 'Voltar pra Em Transporte? Vai estornar o que somou no estoque da loja.',
         'em_transporte': 'Voltar pra Separado? Vai estornar a baixa do estoque da industria/MP.',
         'separado': 'Voltar pra Confirmado? (sem efeito no estoque)',
