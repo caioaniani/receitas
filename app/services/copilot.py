@@ -1456,7 +1456,7 @@ def executar_mudar_status_pedido(params, user):
         'confirmar': ('pendente', 'confirmado'),
         'separar': (('pendente', 'confirmado'), 'separado'),
         'enviar': ('separado', 'em_transporte'),
-        'receber': ('em_transporte', 'recebido'),
+        'receber': ('em_transporte', 'entregue'),
         'cancelar': (('pendente', 'confirmado', 'separado', 'em_transporte'), 'cancelado'),
     }
     if novo not in transicoes:
