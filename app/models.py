@@ -4,7 +4,7 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app.extensions import db
-from app.utils import agora
+from app.utils import agora, hoje
 
 
 class Usuario(UserMixin, db.Model):
@@ -1082,7 +1082,7 @@ class TarefaProjeto(db.Model):
     def atrasada(self):
         return (self.prazo is not None
                 and self.status not in ("feito", "cancelado")
-                and self.prazo < date.today())
+                and self.prazo < hoje_brt())
 
 
 
