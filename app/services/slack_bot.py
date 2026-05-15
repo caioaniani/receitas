@@ -393,11 +393,24 @@ def disparar_interacao_botao(action_id, token, slack_user_id, channel_id,
 
 def processar_interacao_lembrete(action_id, valor, slack_user_id, channel_id,
                                   message_ts):
-    """Botoes do lembrete pedido amanha. value vem como 'loja_id:YYYY-MM-DD'."""
+    """Roteia botoes de lembrete.
+
+    - 'lembrete_no_pedido' / 'lembrete_fazer_pedido': value = 'loja_id:YYYY-MM-DD'
+    - 'lembrete_receber_pedido': value = '<pedido_id>'
+    """
     from datetime import datetime
     from app.models import LembretePedidoOptOut, Loja, SlackVinculo
     from app.services import slack as slack_api
 
+    # Identifica quem clicou (pra audit)
+    vinc = SlackVinculo.query.filter_by(slack_user_id=slack_user_id, ativo=True).first()
+
+    if action_id == 'lembrete_receber_pedido':
+        _processar_lembrete_receber_pedido(valor, slack_user_id, vinc,
+                                            channel_id, message_ts)
+        return
+
+    # Demais botoes esperam 'loja_id:YYYY-MM-DD'
     try:
         loja_id_str, data_str = valor.split(':', 1)
         loja_id = int(loja_id_str)
@@ -413,8 +426,6 @@ def processar_interacao_lembrete(action_id, valor, slack_user_id, channel_id,
                                   text='Loja nao encontrada.')
         return
 
-    # Identifica quem clicou (pra audit)
-    vinc = SlackVinculo.query.filter_by(slack_user_id=slack_user_id, ativo=True).first()
     usuario_id = vinc.usuario_id if vinc else None
 
     if action_id == 'lembrete_no_pedido':
