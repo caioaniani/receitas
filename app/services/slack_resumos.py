@@ -189,7 +189,10 @@ def enviar_lembretes_pedido_amanha():
 
 def pedidos_hoje_pendentes(data=None):
     """Retorna lista de PedidoLoja com data_entrega = hoje (ou `data`) e
-    status diferente de 'recebido' e 'cancelado'. Agrupa por loja_id.
+    status diferente de 'entregue', 'recebido' e 'cancelado'.
+
+    Status 'entregue' e 'recebido' existem por historico (site usava
+    'entregue', copilot recente usa 'recebido') — filtramos ambos.
 
     Retorna dict {loja_id: {'loja': Loja, 'pedidos': [PedidoLoja, ...]}}.
     """
@@ -198,7 +201,7 @@ def pedidos_hoje_pendentes(data=None):
         data = hoje_brt()
     pedidos = (PedidoLoja.query
                .filter(PedidoLoja.data_entrega == data)
-               .filter(~PedidoLoja.status.in_(['recebido', 'cancelado']))
+               .filter(~PedidoLoja.status.in_(['entregue', 'recebido', 'cancelado']))
                .order_by(PedidoLoja.criado_em)
                .all())
     por_loja = {}
