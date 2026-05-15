@@ -237,6 +237,31 @@ def _run_slack_lembretes_amanha(app):
             logger.exception('slack lembrete pedido amanha falhou')
 
 
+def _run_zapi_digest_tarefas(app):
+    """Job: envia digest WhatsApp das tarefas do dia (07:00 BRT)."""
+    from app.extensions import db
+    from app.services import zapi_resumos
+
+    with app.app_context():
+        uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
+        is_pg = 'postgresql' in uri
+        try:
+            if is_pg:
+                with db.engine.connect() as c:
+                    got = c.execute(text("SELECT pg_try_advisory_lock(7728)")).scalar()
+                    if not got:
+                        return
+            try:
+                zapi_resumos.enviar_digest_tarefas()
+            finally:
+                if is_pg:
+                    with db.engine.connect() as c:
+                        c.execute(text("SELECT pg_advisory_unlock(7728)"))
+                        c.commit()
+        except Exception:
+            logger.exception('zapi digest tarefas falhou')
+
+
 def _run_slack_lembretes_pedidos_hoje(app):
     """Job: posta no #pedidos lembretes de pedidos de hoje nao entregues
     (10h, 11h, ..., 19h BRT). Advisory lock pra evitar duplicacao entre workers."""
