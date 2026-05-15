@@ -1742,6 +1742,10 @@ def executar(tipo_acao, params, user):  # noqa: F811
         return executar_registrar_desperdicio(params, user)
     if tipo_acao == 'anexar_foto_pedido':
         return executar_anexar_foto_pedido(params, user)
+    if tipo_acao == 'receber_pedido':
+        # Reusa o executor de mudar_status_pedido com novo_status='receber'
+        return executar_mudar_status_pedido(
+            {**params, 'novo_status': 'receber'}, user)
     return _BASE_EXEC(tipo_acao, params, user)
 
 
