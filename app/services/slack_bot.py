@@ -391,6 +391,72 @@ def disparar_interacao_botao(action_id, token, slack_user_id, channel_id,
     _executor.submit(_runner)
 
 
+def _processar_lembrete_receber_pedido(valor, slack_user_id, vinc,
+                                         channel_id, message_ts):
+    """Clique no botao 'Marcar #X como recebido' na mensagem de lembrete
+    de pedidos hoje. value = '<pedido_id>'.
+    """
+    from app.models import Usuario, PedidoLoja
+    from app.services import slack as slack_api
+    from app.services import copilot as copilot_svc
+
+    try:
+        pedido_id = int(valor)
+    except (ValueError, TypeError):
+        slack_api.post_message(channel_id, text='Token invalido.',
+                                thread_ts=message_ts)
+        return
+
+    if not vinc:
+        slack_api.post_message(channel_id,
+                                text=f'<@{slack_user_id}> nao esta vinculado ao sistema. '
+                                      'Peca pro admin vincular voce em /slack/install.',
+                                thread_ts=message_ts)
+        return
+
+    user = Usuario.query.get(vinc.usuario_id)
+    if not user:
+        slack_api.post_message(channel_id, text='Usuario nao encontrado.',
+                                thread_ts=message_ts)
+        return
+
+    p = PedidoLoja.query.get(pedido_id)
+    if not p:
+        slack_api.post_message(channel_id,
+                                text=f'Pedido #{pedido_id} nao encontrado.',
+                                thread_ts=message_ts)
+        return
+
+    try:
+        resultado = copilot_svc.executar('receber_pedido',
+                                          {'pedido_id': pedido_id}, user)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('lembrete_receber_pedido: executar falhou')
+        resultado = {'ok': False, 'erro': str(exc)}
+
+    if resultado.get('ok'):
+        slack_api.post_message(
+            channel_id,
+            thread_ts=message_ts,
+            text=f'Pedido #{pedido_id} marcado como recebido',
+            blocks=[{'type': 'section',
+                     'text': {'type': 'mrkdwn',
+                              'text': (f':white_check_mark: <@{slack_user_id}> marcou o '
+                                        f'*pedido #{pedido_id}* como recebido. '
+                                        f'Estoque da loja atualizado.')}}],
+        )
+    else:
+        erro = resultado.get('erro', 'erro desconhecido')
+        slack_api.post_message(
+            channel_id,
+            thread_ts=message_ts,
+            text=f'Erro ao receber pedido #{pedido_id}: {erro}',
+            blocks=[{'type': 'section',
+                     'text': {'type': 'mrkdwn',
+                              'text': f':warning: Erro ao receber *#{pedido_id}*: {erro}'}}],
+        )
+
+
 def processar_interacao_lembrete(action_id, valor, slack_user_id, channel_id,
                                   message_ts):
     """Roteia botoes de lembrete.
