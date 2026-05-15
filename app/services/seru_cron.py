@@ -228,3 +228,29 @@ def _run_slack_lembretes_amanha(app):
                         c.commit()
         except Exception:
             logger.exception('slack lembrete pedido amanha falhou')
+
+
+def _run_slack_lembretes_pedidos_hoje(app):
+    """Job: posta no #pedidos lembretes de pedidos de hoje nao entregues
+    (10h, 11h, ..., 19h BRT). Advisory lock pra evitar duplicacao entre workers."""
+    from app.extensions import db
+    from app.services import slack_resumos
+
+    with app.app_context():
+        uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
+        is_pg = 'postgresql' in uri
+        try:
+            if is_pg:
+                with db.engine.connect() as c:
+                    got = c.execute(text("SELECT pg_try_advisory_lock(7727)")).scalar()
+                    if not got:
+                        return
+            try:
+                slack_resumos.enviar_lembrete_pedidos_hoje_pendentes()
+            finally:
+                if is_pg:
+                    with db.engine.connect() as c:
+                        c.execute(text("SELECT pg_advisory_unlock(7727)"))
+                        c.commit()
+        except Exception:
+            logger.exception('slack lembrete pedidos hoje falhou')
