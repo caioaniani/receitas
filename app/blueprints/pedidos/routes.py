@@ -422,7 +422,7 @@ def precos_loja(loja_id):
 @login_required
 @gerente_required
 def relatorio():
-    hoje = date.today()
+    hoje = hoje_brt()
     loja_id = request.args.get('loja', type=int)
     de_str = request.args.get('de', '')
     ate_str = request.args.get('ate', '')
