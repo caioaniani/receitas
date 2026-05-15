@@ -146,6 +146,16 @@ TOOL_MUDAR_STATUS_PEDIDO = {
     },
 }
 
+TOOL_ENVIAR_DIGEST_WHATSAPP = {
+    "name": "enviar_digest_whatsapp",
+    "description": ("Envia agora o digest de tarefas (PARA: hoje + atrasadas) "
+                    "pelo WhatsApp pro numero configurado em ZAPI_NUMERO_DESTINO. "
+                    "Use quando o usuario disser 'me manda no whatsapp', "
+                    "'envia no zap', 'me lembra das tarefas no whatsapp'."),
+    "input_schema": {"type": "object", "properties": {}},
+}
+
+
 TOOL_RECEBER_PEDIDO = {
     "name": "receber_pedido",
     "description": ("Marca um pedido como recebido na loja (em_transporte→recebido). "
