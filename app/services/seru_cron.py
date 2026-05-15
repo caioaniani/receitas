@@ -173,8 +173,15 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
+    # Digest WhatsApp de tarefas do dia (PARA) — 07:00 BRT
+    _scheduler.add_job(
+        lambda app=app: _run_zapi_digest_tarefas(app),
+        'cron', hour=7, minute=0, id='zapi-digest-tarefas',
+        max_instances=1, coalesce=True,
+    )
+
     _scheduler.start()
-    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h')
+    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h · zapi 07:00')
 
 
 def _run_slack_resumo_diario(app):
