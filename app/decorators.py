@@ -34,6 +34,18 @@ def producao_required(f):
     return decorated
 
 
+def operacional_pedido_required(f):
+    """Permite admin + gerente + producao. Pra mudar status de pedido
+    (confirmar/separar/enviar/cancelar) — ambos os lados da operacao."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not (current_user.is_admin() or current_user.is_gerente()
+                or current_user.is_producao()):
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
+
 def catalogo_required(f):
     """Permite admin + producao (+ owner) — Receitas/MP/Produtos/Fornecedores."""
     @wraps(f)
