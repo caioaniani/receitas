@@ -148,11 +148,19 @@ TOOL_MUDAR_STATUS_PEDIDO = {
 
 TOOL_ENVIAR_DIGEST_WHATSAPP = {
     "name": "enviar_digest_whatsapp",
-    "description": ("Envia agora o digest de tarefas (PARA: hoje + atrasadas) "
-                    "pelo WhatsApp pro numero configurado em ZAPI_NUMERO_DESTINO. "
-                    "Use quando o usuario disser 'me manda no whatsapp', "
-                    "'envia no zap', 'me lembra das tarefas no whatsapp'."),
-    "input_schema": {"type": "object", "properties": {}},
+    "description": ("Envia uma mensagem WhatsApp pro numero configurado em "
+                    "ZAPI_NUMERO_DESTINO. Use sempre que o usuario disser "
+                    "'manda no whatsapp', 'envia no zap', 'me lembra das "
+                    "tarefas no whatsapp', 'faz um teste no whatsapp'. "
+                    "Se `texto_custom` for fornecido, envia esse texto. "
+                    "Caso contrario, envia o digest de tarefas (hoje + atrasadas)."),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "texto_custom": {"type": ["string", "null"],
+                              "description": "Texto personalizado a enviar. Null = manda o digest de tarefas."},
+        },
+    },
 }
 
 
