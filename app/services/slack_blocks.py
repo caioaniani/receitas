@@ -263,6 +263,7 @@ _PREVIEW_BUILDERS = {
     'entrada_lote_loja': _preview_entrada_lote_loja,
     'registrar_desperdicio': _preview_registrar_desperdicio,
     'anexar_foto_pedido': _preview_anexar_foto_pedido,
+    'receber_pedido': _preview_receber_pedido,
 }
 
 # Chaves de params que NUNCA devem aparecer no preview generico (sao grandes/internas).
