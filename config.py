@@ -75,3 +75,7 @@ class Config:
     ZAPI_CLIENT_TOKEN = os.environ.get('ZAPI_CLIENT_TOKEN', '')
     # Numero destino do digest (formato 5511999999999, so digitos)
     ZAPI_NUMERO_DESTINO = os.environ.get('ZAPI_NUMERO_DESTINO', '')
+    # Whitelist de numeros que o sistema pode enviar mensagem (CSV).
+    # SEGURANCA: o servico recusa enviar pra numeros fora dessa lista.
+    # Se vazio, refuse-all (nada e enviado). Inclui o ZAPI_NUMERO_DESTINO.
+    ZAPI_NUMEROS_PERMITIDOS = os.environ.get('ZAPI_NUMEROS_PERMITIDOS', '')
