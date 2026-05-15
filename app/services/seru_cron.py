@@ -166,8 +166,15 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
+    # Lembrete de pedidos de HOJE nao entregues — 10h, 11h, ..., 19h
+    _scheduler.add_job(
+        lambda app=app: _run_slack_lembretes_pedidos_hoje(app),
+        'cron', hour='10-19', minute=0, id='slack-lembrete-pedidos-hoje',
+        max_instances=1, coalesce=True,
+    )
+
     _scheduler.start()
-    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes 9h/12h/16h/19h')
+    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h')
 
 
 def _run_slack_resumo_diario(app):
