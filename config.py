@@ -66,3 +66,12 @@ class Config:
     # Canal #pedidos — recebe lembretes 9h/12h/16h/19h sobre lojas
     # que nao fizeram pedido pra amanha. Vazio = desligado.
     SLACK_CANAL_PEDIDOS = os.environ.get('SLACK_CANAL_PEDIDOS', '')
+
+    # Z-API (WhatsApp) — envia digest diario de tarefas.
+    # Cadastro: https://z-api.io/ → cria instancia → copia ID + token.
+    ZAPI_INSTANCE_ID = os.environ.get('ZAPI_INSTANCE_ID', '')
+    ZAPI_TOKEN = os.environ.get('ZAPI_TOKEN', '')
+    # Header de seguranca opcional da Z-API (Account Settings → Token de seguranca)
+    ZAPI_CLIENT_TOKEN = os.environ.get('ZAPI_CLIENT_TOKEN', '')
+    # Numero destino do digest (formato 5511999999999, so digitos)
+    ZAPI_NUMERO_DESTINO = os.environ.get('ZAPI_NUMERO_DESTINO', '')
