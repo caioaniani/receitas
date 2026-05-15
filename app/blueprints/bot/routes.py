@@ -13,6 +13,7 @@ from flask import current_app, jsonify, request
 
 from app.blueprints.bot import bot_bp
 from app.extensions import csrf
+from app.utils import hoje as hoje_brt
 from app.services import seru
 
 
