@@ -187,6 +187,97 @@ def enviar_lembretes_pedido_amanha():
                                 blocks=blocks)
 
 
+def pedidos_hoje_pendentes(data=None):
+    """Retorna lista de PedidoLoja com data_entrega = hoje (ou `data`) e
+    status diferente de 'recebido' e 'cancelado'. Agrupa por loja_id.
+
+    Retorna dict {loja_id: {'loja': Loja, 'pedidos': [PedidoLoja, ...]}}.
+    """
+    from app.models import PedidoLoja
+    if data is None:
+        data = hoje_brt()
+    pedidos = (PedidoLoja.query
+               .filter(PedidoLoja.data_entrega == data)
+               .filter(~PedidoLoja.status.in_(['recebido', 'cancelado']))
+               .order_by(PedidoLoja.criado_em)
+               .all())
+    por_loja = {}
+    for p in pedidos:
+        if not p.loja_id:
+            continue
+        por_loja.setdefault(p.loja_id, {'loja': p.loja, 'pedidos': []})['pedidos'].append(p)
+    return por_loja
+
+
+def _formatar_pedido_section(p):
+    """Section de um pedido (header + itens) + botao acao."""
+    itens_txt = '\n'.join(
+        f'  • {it.quantidade}x {it.nome_item if hasattr(it, "nome_item") else _nome_item(it)}'
+        for it in p.itens
+    ) or '  _(sem itens)_'
+    criado = (p.criado_em.strftime('%d/%m %H:%M') if p.criado_em else '?')
+    texto = (f'*Pedido #{p.id}* (status: _{p.status}_)\n'
+             f'{itens_txt}\n'
+             f'_Criado: {criado}_')
+    return [
+        {'type': 'section', 'text': {'type': 'mrkdwn', 'text': texto[:2900]}},
+        {'type': 'actions', 'elements': [
+            {'type': 'button', 'style': 'primary',
+             'text': {'type': 'plain_text', 'text': f'Marcar #{p.id} como recebido'},
+             'action_id': 'lembrete_receber_pedido',
+             'value': str(p.id)},
+        ]},
+    ]
+
+
+def enviar_lembrete_pedidos_hoje_pendentes():
+    """Posta no canal SLACK_CANAL_PEDIDOS uma mensagem POR LOJA com os
+    pedidos de hoje ainda nao recebidos. Cada pedido tem botao de marcar
+    como recebido. Roda de hora em hora das 10h as 19h.
+    """
+    from app.services import slack as slack_api
+
+    canal = (current_app.config.get('SLACK_CANAL_PEDIDOS') or '').strip()
+    if not canal:
+        logger.info('slack_resumos: SLACK_CANAL_PEDIDOS nao configurado, pulando hoje-pendentes')
+        return
+    if not slack_api.disponivel():
+        return
+
+    hoje = hoje_brt()
+    por_loja = pedidos_hoje_pendentes(hoje)
+    if not por_loja:
+        logger.info('slack_resumos: nenhum pedido pendente pra hoje, nada a postar')
+        return
+
+    for loja_id, info in por_loja.items():
+        loja = info['loja']
+        pedidos = info['pedidos']
+        loja_nome = loja.nome if loja else f'id={loja_id}'
+
+        n = len(pedidos)
+        header_txt = (f':warning: *{loja_nome}* — {n} pedido{"" if n == 1 else "s"} '
+                       f'a entregar hoje ({hoje.strftime("%d/%m")})')
+
+        blocks = [
+            {'type': 'section', 'text': {'type': 'mrkdwn', 'text': header_txt}},
+            {'type': 'divider'},
+        ]
+        for p in pedidos:
+            blocks.extend(_formatar_pedido_section(p))
+            blocks.append({'type': 'divider'})
+        # Tira o ultimo divider
+        if blocks and blocks[-1].get('type') == 'divider':
+            blocks.pop()
+
+        slack_api.post_message(
+            canal,
+            text=f'{loja_nome}: {n} pedido(s) ainda nao entregue(s) hoje',
+            blocks=blocks,
+        )
+    logger.info('slack_resumos: lembrete pedidos hoje postado (%d lojas)', len(por_loja))
+
+
 def enviar_resumo_pedidos_dia():
     """Job: posta o resumo do dia no canal configurado.
 
