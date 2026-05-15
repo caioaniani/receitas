@@ -75,22 +75,23 @@ TOOL_CONSULTAR_PEDIDO = {
 
 TOOL_CONSULTAR_ESTOQUE = {
     "name": "consultar_estoque",
-    "description": ("Consulta estoque em 3 escopos diferentes: "
-                    "'mp' (materias-primas da industria), "
-                    "'producao' (produtos prontos / freezer da industria), "
-                    "'loja' (produtos no estoque de uma loja especifica). "
-                    "Sempre informe 'escopo'. Se for loja, informe 'loja_nome'."),
+    "description": ("Consulta estoque. Escopo determina onde olhar: "
+                    "'mp' (materias-primas), 'producao' (freezer/produtos prontos da industria), "
+                    "'loja' (uma loja especifica), 'todos' (mp + producao + todas as lojas — "
+                    "use quando o usuario pedir visao geral ou 'em todas as lojas'). "
+                    "Sempre informe escopo. Pra escopo='loja' COM loja especifica, informe loja_nome; "
+                    "sem loja_nome, lista todas. Use item_nome pra filtrar um produto especifico."),
     "input_schema": {
         "type": "object",
         "properties": {
-            "escopo": {"type": "string", "enum": ["mp", "producao", "loja"],
-                       "description": "Onde olhar: 'mp', 'producao' ou 'loja'."},
+            "escopo": {"type": "string", "enum": ["mp", "producao", "loja", "todos"],
+                       "description": "Onde olhar."},
             "item_nome": {"type": ["string", "null"],
-                          "description": "Nome do item especifico (MP, receita, produto). Null pra listar tudo do escopo."},
+                          "description": "Nome do item (filtra por substring)."},
             "loja_nome": {"type": ["string", "null"],
-                          "description": "Necessario quando escopo='loja'. Ex: 'anesio', 'nebraska'."},
+                          "description": "Nome da loja (so com escopo='loja')."},
             "apenas_baixo": {"type": "boolean",
-                              "description": "Para escopo='mp', lista so MPs abaixo do estoque minimo."},
+                              "description": "Para escopo='mp', lista so MPs abaixo do minimo."},
         },
         "required": ["escopo"],
     },
