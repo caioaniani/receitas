@@ -2087,7 +2087,8 @@ def _executar_read(tool_name, params, user):  # noqa: F811
 
 
 def _read_enviar_digest_whatsapp(params, user):
-    """Dispara o digest WhatsApp na hora pro ZAPI_NUMERO_DESTINO."""
+    """Envia WhatsApp pro ZAPI_NUMERO_DESTINO. Se texto_custom, manda esse;
+    senao, monta o digest de tarefas."""
     from app.services import zapi_resumos
     from app.services import zapi as zapi_svc
 
@@ -2098,8 +2099,15 @@ def _read_enviar_digest_whatsapp(params, user):
     if not numero:
         return {'texto': ':warning: ZAPI_NUMERO_DESTINO nao configurado.'}
 
-    texto_digest = zapi_resumos.montar_digest_tarefas(user)
-    res = zapi_svc.enviar_texto(numero, texto_digest)
+    texto_custom = (params.get('texto_custom') or '').strip()
+    if texto_custom:
+        texto = texto_custom
+        rotulo = 'mensagem'
+    else:
+        texto = zapi_resumos.montar_digest_tarefas(user)
+        rotulo = 'digest de tarefas'
+
+    res = zapi_svc.enviar_texto(numero, texto)
     if res.get('ok'):
-        return {'texto': f':white_check_mark: Digest enviado pra {numero}.\n\n_Preview:_\n```\n{texto_digest[:800]}\n```'}
+        return {'texto': f':white_check_mark: {rotulo.capitalize()} enviada pra {numero}.\n\n_Preview:_\n```\n{texto[:800]}\n```'}
     return {'texto': f':warning: Falha ao enviar: {res.get("erro", "?")}'}
