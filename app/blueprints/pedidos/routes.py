@@ -723,6 +723,72 @@ def congelados():
                            receitas=receitas, produtos=produtos)
 
 
+@pedidos_bp.route('/congelados/historico')
+@login_required
+@producao_required
+def congelados_historico():
+    """Historico de movimentos do estoque da industria (EstoqueProducao).
+
+    Filtros: item (id), tipo, periodo (de/ate).
+    """
+    from sqlalchemy import desc
+
+    item_id = request.args.get('item', type=int)
+    tipo_filtro = (request.args.get('tipo') or '').strip()
+    de_str = (request.args.get('de') or '').strip()
+    ate_str = (request.args.get('ate') or '').strip()
+    try:
+        de = datetime.strptime(de_str, '%Y-%m-%d').date() if de_str else None
+    except ValueError:
+        de = None
+    try:
+        ate = datetime.strptime(ate_str, '%Y-%m-%d').date() if ate_str else None
+    except ValueError:
+        ate = None
+
+    tipos_disp = ['entrada', 'saida_pedido', 'ajuste', 'balanco', 'desperdicio']
+
+    q = db.session.query(MovEstoqueProducao, EstoqueProducao).join(
+        EstoqueProducao, MovEstoqueProducao.estoque_producao_id == EstoqueProducao.id
+    )
+    if item_id:
+        q = q.filter(EstoqueProducao.id == item_id)
+    if tipo_filtro:
+        q = q.filter(MovEstoqueProducao.tipo == tipo_filtro)
+    if de:
+        q = q.filter(MovEstoqueProducao.data >= datetime.combine(de, datetime.min.time()))
+    if ate:
+        q = q.filter(MovEstoqueProducao.data <= datetime.combine(ate, datetime.max.time()))
+
+    rows = q.order_by(desc(MovEstoqueProducao.data)).limit(500).all()
+
+    from app.models import Usuario
+    user_ids = {mov.usuario_id for mov, _ in rows if mov.usuario_id}
+    user_map = {u.id: u for u in Usuario.query.filter(Usuario.id.in_(user_ids)).all()} if user_ids else {}
+
+    linhas = []
+    for mov, ep in rows:
+        linhas.append({
+            'mov': mov, 'estoque': ep,
+            'item_nome': ep.nome_item,
+            'usuario': user_map.get(mov.usuario_id) if mov.usuario_id else None,
+        })
+
+    from collections import defaultdict
+    totais = defaultdict(lambda: {'qtd': 0, 'n': 0})
+    for mov, _ in rows:
+        totais[mov.tipo]['qtd'] += mov.quantidade or 0
+        totais[mov.tipo]['n'] += 1
+
+    itens_disp = EstoqueProducao.query.order_by(EstoqueProducao.id).all()
+    item_sel = EstoqueProducao.query.get(item_id) if item_id else None
+
+    return render_template('pedidos/congelados_historico.html',
+                           linhas=linhas, itens_disp=itens_disp, item_sel=item_sel,
+                           tipos_disp=tipos_disp, tipo_filtro=tipo_filtro,
+                           de=de_str, ate=ate_str, totais=dict(totais))
+
+
 @pedidos_bp.route('/congelados/entrada', methods=['POST'])
 @login_required
 @producao_required
