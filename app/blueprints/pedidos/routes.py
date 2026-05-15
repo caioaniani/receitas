@@ -225,7 +225,7 @@ def confirmar(id):
 
 @pedidos_bp.route('/<int:id>/separar', methods=['POST'])
 @login_required
-@gerente_required
+@operacional_pedido_required
 def separar(id):
     pedido = PedidoLoja.query.get_or_404(id)
     if pedido.status not in ('pendente', 'confirmado'):
