@@ -527,7 +527,7 @@ def voltar_status(id):
     novo_status = None
 
     try:
-        if status_atual == 'recebido':
+        if status_atual in ('entregue', 'recebido'):
             # Estorna o que somou no estoque da loja
             for item in pedido.itens:
                 qtd = item.quantidade_recebida or 0
