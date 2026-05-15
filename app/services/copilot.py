@@ -483,6 +483,7 @@ PAPEIS_POR_TOOL = {
     'consultar_caixa': {'admin', 'gerente'},
     'consultar_vendas_itens': {'admin', 'gerente'},
     'consultar_desperdicio': {'admin', 'gerente'},
+    'enviar_digest_whatsapp': {'admin'},
     'registrar_desperdicio': {'admin', 'gerente'},
     'anexar_foto_pedido': {'admin', 'gerente', 'funcionario'},
     'receber_pedido': {'admin', 'gerente', 'funcionario'},
