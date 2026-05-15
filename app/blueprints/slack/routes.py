@@ -119,6 +119,11 @@ def interact():
         slack_bot.disparar_interacao_lembrete(action_id, token, slack_user_id,
                                                channel, message_ts)
         return ('', 200)
+    if action_id == 'lembrete_receber_pedido':
+        # Botao "Marcar #X como recebido" na mensagem de pedidos hoje pendentes
+        slack_bot.disparar_interacao_lembrete(action_id, token, slack_user_id,
+                                               channel, message_ts)
+        return ('', 200)
     if action_id not in ('copilot_confirmar', 'copilot_cancelar'):
         return ('', 200)
 
