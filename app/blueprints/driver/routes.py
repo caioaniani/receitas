@@ -11,7 +11,7 @@ from flask import (
 )
 
 from app.extensions import db
-from app.utils import agora
+from app.utils import agora, hoje as hoje_brt
 from app.models import (
     AtribuicaoEntrega, Driver, EntregaFoto,
 )
