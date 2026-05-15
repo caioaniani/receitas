@@ -145,6 +145,21 @@ TOOL_MUDAR_STATUS_PEDIDO = {
     },
 }
 
+TOOL_RECEBER_PEDIDO = {
+    "name": "receber_pedido",
+    "description": ("Marca um pedido como recebido na loja (em_transporte→recebido). "
+                    "Soma no estoque da loja, sem divergencias (qtd igual ao pedido). "
+                    "NAO executa — preview. Use quando o usuario disser 'recebi pedido X', "
+                    "'pedido X chegou', 'confirma recebimento do X'."),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "pedido_id": {"type": "integer"},
+        },
+        "required": ["pedido_id"],
+    },
+}
+
 TOOL_ANEXAR_FOTO_PEDIDO = {
     "name": "anexar_foto_pedido",
     "description": ("Anexa foto(s) de comprovante a um pedido (ex: foto da entrega, nota fiscal). "
