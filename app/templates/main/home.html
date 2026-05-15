@@ -58,16 +58,17 @@
     gap: 0.6rem;
 }
 .suggestion {
-    background: var(--card-bg, #fff);
+    background: var(--bg-card, #fff);
     border: 1px solid var(--border-color, #e5e5e5);
     border-radius: 14px; padding: 0.8rem 1rem;
     display: flex; align-items: center; gap: 0.7rem;
-    cursor: pointer; font-size: 13.5px; text-align: left; color: inherit;
+    cursor: pointer; font-size: 13.5px; text-align: left;
+    color: var(--text-main, inherit);
     transition: all .15s ease;
 }
 .suggestion:hover {
-    border-color: var(--bs-primary, #0d6efd);
-    background: rgba(13,110,253,0.04);
+    border-color: var(--cor-azul, #0d6efd);
+    background: var(--bg-card-hover, rgba(13,110,253,0.04));
     transform: translateY(-1px);
 }
 .suggestion .icon { font-size: 20px; flex-shrink: 0; }
