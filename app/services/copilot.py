@@ -583,7 +583,7 @@ TOOLS DISPONIVEIS — ACOES:
 
 TOOLS DISPONIVEIS — CONSULTAS (read, sem aprovacao):
 - consultar_pedido: ver pedidos por loja/data/status/id
-- consultar_estoque: escopos `producao` (freezer/industria), `loja` (uma loja), `todos` (producao + todas as lojas), `mp` (materias-primas — **so use mp se o usuario falar explicitamente "materia-prima" ou "MP"**). Pra "estoque geral", "quanto temos de X" ou similar: use **escopo='todos'**. Pra uma loja: escopo='loja' + loja_nome. **NUNCA use escopo='mp' se o usuario nao mencionou MP explicitamente.**
+- consultar_estoque: escopos `producao` (freezer/industria), `loja` (uma loja), `todos` (producao + todas as lojas), `mp` (materias-primas). **DEFAULT = `todos`**: use sempre que o usuario perguntar "estoque", "quanto temos", "estoque de X", "estoque em todas as lojas". So use `loja` quando ele citar UMA loja especifica (ex: "estoque da Anesio"). So use `mp` quando ele falar explicitamente "materia-prima" ou "MP". So use `producao` quando ele falar especificamente "industria", "freezer", "congelados". Em duvida → `todos`.
 - consultar_fornecedores: lista fornecedores
 - consultar_margem: custo + preco + margem de receita/produto
 - consultar_funcionario: info de funcionario
