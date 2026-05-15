@@ -109,7 +109,7 @@ def novo():
         flash('Vincule sua conta a uma loja para criar pedidos.', 'warning')
         return redirect(url_for('pedidos.lista'))
 
-    amanha = date.today() + timedelta(days=1)
+    amanha = hoje_brt() + timedelta(days=1)
 
     if request.method == 'POST':
         # Admin e gerente podem escolher qualquer loja no form;
