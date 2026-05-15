@@ -214,7 +214,7 @@ def detalhe(id):
 
 @pedidos_bp.route('/<int:id>/confirmar', methods=['POST'])
 @login_required
-@gerente_required
+@operacional_pedido_required
 def confirmar(id):
     pedido = PedidoLoja.query.get_or_404(id)
     pedido.status = 'confirmado'
