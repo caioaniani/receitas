@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Historico Industria{% endblock %}
+
+{% set TIPOS_LABEL = {
+    'entrada': ('Entrada', 'primary'),
+    'saida_pedido': ('Saida (pedido)', 'warning'),
+    'ajuste': ('Ajuste', 'secondary'),
+    'balanco': ('Balanco', 'info'),
+    'desperdicio': ('Desperdicio', 'danger'),
+} %}
+
+{% block content %}
+<h1 class="page-title mb-3"><i class="bi bi-clock-history"></i> Historico do Estoque da Industria</h1>
+
+<form method="GET" class="card mb-3">
+    <div class="card-body row g-2 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label small mb-1">Item</label>
+            <select name="item" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">Todos</option>
+                {% for it in itens_disp %}
+                <option value="{{ it.id }}" {% if item_sel and item_sel.id == it.id %}selected{% endif %}>
+                    {{ it.nome_item }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small mb-1">Tipo</label>
+            <select name="tipo" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">Todos</option>
+                {% for t in tipos_disp %}
+                {% set label = TIPOS_LABEL.get(t, (t, 'secondary'))[0] %}
+                <option value="{{ t }}" {% if tipo_filtro == t %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small mb-1">De</label>
+            <input type="date" name="de" value="{{ de }}" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small mb-1">Ate</label>
+            <input type="date" name="ate" value="{{ ate }}" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2 d-flex gap-1">
+            <button type="submit" class="btn btn-primary btn-sm flex-grow-1">Filtrar</button>
+            <a href="{{ url_for('pedidos.congelados_historico') }}" class="btn btn-outline-secondary btn-sm" title="Limpar">
+                <i class="bi bi-x"></i>
+            </a>
+        </div>
+    </div>
+</form>
+
+{% if totais %}
+<div class="row g-2 mb-3">
+    {% for tipo, info in totais.items() %}
+    {% set label, color = TIPOS_LABEL.get(tipo, (tipo, 'secondary')) %}
+    <div class="col-md-3">
+        <div class="card border-{{ color }}">
+            <div class="card-body py-2 px-3">
+                <small class="text-muted">{{ label }}</small>
+                <div class="d-flex justify-content-between">
+                    <strong>{{ info.qtd }} un</strong>
+                    <span class="text-muted small">{{ info.n }} mov</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-list-ul"></i> Movimentacoes</span>
+        <small class="text-muted fw-normal">{{ linhas|length }} registro{{ '' if linhas|length == 1 else 's' }} (max 500)</small>
+    </div>
+    {% if linhas %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead class="thead-padaria">
+                <tr>
+                    <th style="width:140px;">Data</th>
+                    {% if not item_sel %}<th>Item</th>{% endif %}
+                    <th class="text-center" style="width:80px;">Qtd</th>
+                    <th style="width:160px;">Tipo</th>
+                    <th>Referencia</th>
+                    <th style="width:120px;" class="text-muted small">Usuario</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for l in linhas %}
+                {% set label, color = TIPOS_LABEL.get(l.mov.tipo, (l.mov.tipo, 'secondary')) %}
+                <tr>
+                    <td class="small">{{ l.mov.data.strftime('%d/%m/%Y %H:%M') if l.mov.data else '—' }}</td>
+                    {% if not item_sel %}<td>{{ l.item_nome }}</td>{% endif %}
+                    <td class="text-center fw-bold">{{ l.mov.quantidade }}</td>
+                    <td><span class="badge bg-{{ color }}">{{ label }}</span></td>
+                    <td class="text-muted small">{{ l.mov.referencia or '' }}</td>
+                    <td class="text-muted small">{{ l.usuario.nome if l.usuario else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-center text-muted py-4">
+        Nenhuma movimentacao encontrada com esses filtros.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
