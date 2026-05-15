@@ -1020,40 +1020,22 @@ def _consultar_estoque_todas_lojas(item_nome):
 
 
 def _consultar_estoque_todos(item_nome):
-    """Visao geral: MP + producao + todas as lojas, idealmente filtrado por item."""
+    """Visao geral: producao + todas as lojas. NAO inclui MP (uso so explicito)."""
     blocos = []
 
-    # Producao
     res_prod = _consultar_estoque_producao(item_nome)
     txt = res_prod.get('texto', '')
     if 'vazio' not in txt.lower() and 'nenhum item' not in txt.lower():
         blocos.append(txt)
 
-    # Todas as lojas
     res_lojas = _consultar_estoque_todas_lojas(item_nome)
     txt = res_lojas.get('texto', '')
     if 'nenhuma' not in txt.lower() and 'nenhum item' not in txt.lower():
         blocos.append(txt)
 
-    # MP — so se nao tiver filtro de item (item_nome geralmente e produto) OU se for explicito
-    if not item_nome:
-        res_mp = _consultar_estoque_mp(item_nome='', apenas_baixo=False)
-        txt = res_mp.get('texto', '')
-        if 'nenhuma' not in txt.lower():
-            blocos.append(txt)
-    elif item_nome:
-        # Tenta MP tambem (talvez seja MP)
-        from app.models import AlertaEstoque
-        matches = _resolver_mp(item_nome)
-        if matches:
-            res_mp = _consultar_estoque_mp(item_nome, apenas_baixo=False)
-            txt = res_mp.get('texto', '')
-            if txt and 'nao encontrada' not in txt.lower():
-                blocos.append(txt)
-
     if not blocos:
-        msg = (f'Nenhum estoque com "{item_nome}" encontrado.'
-               if item_nome else 'Estoque vazio em todos os escopos.')
+        msg = (f'Nenhum estoque com "{item_nome}" encontrado em industria ou lojas.'
+               if item_nome else 'Estoque vazio em industria e lojas.')
         return {'texto': msg}
     return {'texto': '\n\n'.join(blocos)}
 
