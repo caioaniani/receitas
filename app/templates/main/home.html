@@ -12,7 +12,7 @@
     letter-spacing: -0.01em;
 }
 .home-input-wrap {
-    background: var(--card-bg, #fff);
+    background: var(--bg-card, #fff);
     border: 1px solid var(--border-color, #d0d0d0);
     border-radius: 18px;
     padding: 0.4rem 0.4rem 0.4rem 0.5rem;
@@ -21,7 +21,7 @@
     transition: border-color .15s ease, box-shadow .15s ease;
 }
 .home-input-wrap:focus-within {
-    border-color: var(--bs-primary, #0d6efd);
+    border-color: var(--cor-azul, #0d6efd);
     box-shadow: 0 0 0 3px rgba(13,110,253,0.12);
 }
 .home-input-wrap textarea {
@@ -31,7 +31,7 @@
 }
 .home-input-wrap textarea::placeholder { color: var(--text-muted, #888); }
 .home-input-wrap .send-btn {
-    border: 0; background: var(--bs-primary, #0d6efd); color: #fff; border-radius: 12px;
+    border: 0; background: var(--cor-azul, #0d6efd); color: #fff; border-radius: 12px;
     width: 40px; height: 40px; cursor: pointer; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
     font-size: 18px; transition: background .15s ease;
@@ -40,10 +40,12 @@
 .home-input-wrap .send-btn:disabled { background: #aaa; cursor: not-allowed; }
 .home-keytip {
     text-align: center; margin-top: 0.9rem; font-size: 12.5px;
-    color: #555;
+    color: var(--text-muted, #555);
 }
 .home-keytip kbd {
-    background: #fff; border: 1px solid #bbb; color: #222;
+    background: var(--bg-card, #fff);
+    border: 1px solid var(--border-color, #bbb);
+    color: var(--text-main, #222);
     padding: 1px 6px; border-radius: 4px; font-family: inherit; font-size: 11.5px;
     box-shadow: 0 1px 0 rgba(0,0,0,0.08);
 }
