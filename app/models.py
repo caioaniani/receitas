@@ -687,7 +687,7 @@ class PedidoLoja(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
-    data_pedido = db.Column(db.Date, default=date.today)
+    data_pedido = db.Column(db.Date, default=hoje)
     data_entrega = db.Column(db.Date)
     status = db.Column(db.String(20), default='pendente')
     observacao = db.Column(db.Text)
@@ -1082,7 +1082,7 @@ class TarefaProjeto(db.Model):
     def atrasada(self):
         return (self.prazo is not None
                 and self.status not in ("feito", "cancelado")
-                and self.prazo < hoje_brt())
+                and self.prazo < hoje())
 
 
 
@@ -1090,7 +1090,7 @@ class WeeklyReview(db.Model):
     __tablename__ = "weekly_review"
 
     id = db.Column(db.Integer, primary_key=True)
-    data = db.Column(db.Date, default=date.today, nullable=False)
+    data = db.Column(db.Date, default=hoje, nullable=False)
     reflexao = db.Column(db.Text)
     fazendo_count = db.Column(db.Integer, default=0)
     a_fazer_count = db.Column(db.Integer, default=0)
