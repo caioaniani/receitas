@@ -213,6 +213,17 @@ def _preview_entrada_lote_loja(p, token):
     ]
 
 
+def _preview_receber_pedido(p, token):
+    return [
+        _header('Receber pedido'),
+        _fields([
+            ('Pedido ID', p.get('pedido_id')),
+        ]),
+        _section(':information_source: Soma no estoque da loja. Sem divergencia.'),
+        _botoes(token, 'Confirmar recebimento', 'Cancelar'),
+    ]
+
+
 def _preview_anexar_foto_pedido(p, token):
     n = p.get('_n_imagens') or 0
     return [
