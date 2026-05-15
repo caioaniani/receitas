@@ -2058,7 +2058,7 @@ def _read_consultar_desperdicio(params, user):
     return {'texto': '\n'.join(linhas)}
 
 
-# Roteador read final — inclui consultar_desperdicio
+# Roteador read final — inclui consultar_desperdicio + enviar_digest_whatsapp
 _BASE_READ2 = _executar_read
 
 
@@ -2069,4 +2069,29 @@ def _executar_read(tool_name, params, user):  # noqa: F811
         except Exception as exc:  # noqa: BLE001
             logger.exception('consultar_desperdicio falhou')
             return {'erro': str(exc)}
+    if tool_name == 'enviar_digest_whatsapp':
+        try:
+            return _read_enviar_digest_whatsapp(params, user)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception('enviar_digest_whatsapp falhou')
+            return {'erro': str(exc)}
     return _BASE_READ2(tool_name, params, user)
+
+
+def _read_enviar_digest_whatsapp(params, user):
+    """Dispara o digest WhatsApp na hora pro ZAPI_NUMERO_DESTINO."""
+    from app.services import zapi_resumos
+    from app.services import zapi as zapi_svc
+
+    if not zapi_svc.disponivel():
+        return {'texto': ':warning: Z-API nao configurado. Defina ZAPI_INSTANCE_ID + ZAPI_TOKEN no Railway.'}
+
+    numero = (current_app.config.get('ZAPI_NUMERO_DESTINO') or '').strip()
+    if not numero:
+        return {'texto': ':warning: ZAPI_NUMERO_DESTINO nao configurado.'}
+
+    texto_digest = zapi_resumos.montar_digest_tarefas(user)
+    res = zapi_svc.enviar_texto(numero, texto_digest)
+    if res.get('ok'):
+        return {'texto': f':white_check_mark: Digest enviado pra {numero}.\n\n_Preview:_\n```\n{texto_digest[:800]}\n```'}
+    return {'texto': f':warning: Falha ao enviar: {res.get("erro", "?")}'}
