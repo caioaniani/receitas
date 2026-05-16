@@ -1153,8 +1153,6 @@ def _consultar_estoque_loja(loja_nome, item_nome, user):
         loja = Loja.query.filter(func.lower(Loja.nome) == loja_nome.lower()).first()
         if not loja:
             loja = Loja.query.filter(Loja.nome.ilike(f'%{loja_nome}%')).first()
-    elif not user.is_admin() and user.loja_id:
-        loja = Loja.query.get(user.loja_id)
 
     if not loja:
         return {'texto': f'Loja "{loja_nome}" nao encontrada. Informe o nome correto.'}
