@@ -568,12 +568,13 @@ def _catalogo_texto():
 
 
 def _lojas_texto(user):
-    if user.is_admin():
-        lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
-    else:
-        lojas = [user.loja] if user.loja_id and user.loja else []
+    """Lista todas as lojas operacionais (ativas, sem Industria) — todos os
+    usuarios podem atuar em qualquer loja, entao listamos tudo."""
+    lojas = (Loja.query
+             .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
+             .order_by(Loja.nome).all())
     if not lojas:
-        return "(nenhuma loja disponivel)"
+        return "(nenhuma loja cadastrada)"
     return "\n".join(f"  - id={l.id}: {l.nome}" for l in lojas)
 
 
