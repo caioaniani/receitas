@@ -907,6 +907,21 @@ def _enriquecer_criar_pedido(tool_input):
     }
 
 
+def _score_proximidade(query, nome):
+    """Score pra desempatar fuzzy matches.
+
+    Menor = melhor. Prefere (1) nome que comeca com a query, (2) nome
+    mais curto (mais proximo da query em comprimento). Resolve casos
+    como "sourdough" -> "Sourdough" vence "Mini Sourdough" e "pain au
+    chocolat" -> "Pain au Chocolat" vence "Pain au Chocolat Bicolor".
+    """
+    q = (query or '').strip().lower()
+    n = (nome or '').lower()
+    starts_with = 0 if n.startswith(q) else 1
+    diff_len = abs(len(n) - len(q))
+    return (starts_with, diff_len)
+
+
 def _resolver_produto(nome):
     from sqlalchemy import func
     matches = []
@@ -918,11 +933,12 @@ def _resolver_produto(nome):
         matches.append({'tipo': 'receita', 'id': r.id, 'nome': r.nome, 'match': 'exato'})
     if matches:
         return matches
-    for p in Produto.query.filter(Produto.nome.ilike(f'%{nome}%')).limit(5).all():
+    for p in Produto.query.filter(Produto.nome.ilike(f'%{nome}%')).limit(10).all():
         matches.append({'tipo': 'produto', 'id': p.id, 'nome': p.nome, 'match': 'fuzzy'})
-    for r in Receita.query.filter(Receita.nome.ilike(f'%{nome}%')).limit(5).all():
+    for r in Receita.query.filter(Receita.nome.ilike(f'%{nome}%')).limit(10).all():
         matches.append({'tipo': 'receita', 'id': r.id, 'nome': r.nome, 'match': 'fuzzy'})
-    return matches
+    matches.sort(key=lambda m: _score_proximidade(nome, m['nome']))
+    return matches[:5]
 
 
 def _resolver_mp(nome):
@@ -933,9 +949,10 @@ def _resolver_mp(nome):
         matches.append({'id': m.id, 'nome': m.nome, 'unidade': m.unidade, 'match': 'exato'})
     if matches:
         return matches
-    for m in MateriaPrima.query.filter(MateriaPrima.nome.ilike(f'%{nome}%')).limit(5).all():
+    for m in MateriaPrima.query.filter(MateriaPrima.nome.ilike(f'%{nome}%')).limit(10).all():
         matches.append({'id': m.id, 'nome': m.nome, 'unidade': m.unidade, 'match': 'fuzzy'})
-    return matches
+    matches.sort(key=lambda x: _score_proximidade(nome, x['nome']))
+    return matches[:5]
 
 
 # ── Executores READ (sem aprovacao) ───────────────────────────────────
