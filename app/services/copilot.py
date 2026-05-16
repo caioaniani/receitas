@@ -634,8 +634,8 @@ REGRAS:
   'X backup' ou 'backup de X', isso significa um item ultra-congelado JA
   RECHEADO pra reposicao rapida. Preencha `observacao: 'backup'` no item
   correspondente. Se ele pedir '5 croissants e mais 3 backup', envie 2
-  itens separados: {nome:'Croissant', quantidade:5} e
-  {nome:'Croissant', quantidade:3, observacao:'backup'}. Backup conta como
+  itens separados: {{nome:'Croissant', quantidade:5}} e
+  {{nome:'Croissant', quantidade:3, observacao:'backup'}}. Backup conta como
   uma variacao do mesmo produto — NAO procure 'Croissant Backup' no
   catalogo, use o nome base.
 - Pra mudar_status_pedido, se o usuario nao mencionar id explicitamente
