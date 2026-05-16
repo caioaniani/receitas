@@ -431,8 +431,11 @@
                 if (!sel.value || qtd <= 0) return;
                 var parts = sel.value.split(':');
                 var nomeOpc = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
+                var obsInp = div.querySelector('.copilot-item-obs');
+                var obsVal = obsInp ? (obsInp.value || '').trim() : '';
                 itens.push({
                     quantidade: qtd,
+                    observacao: obsVal || null,
                     resolvido: {tipo: parts[0], id: parseInt(parts[1], 10), nome: nomeOpc},
                 });
             });
