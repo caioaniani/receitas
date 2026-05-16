@@ -38,7 +38,8 @@ TOOL_CRIAR_PEDIDO = {
     "input_schema": {
         "type": "object",
         "properties": {
-            "loja_id": {"type": ["integer", "null"], "description": "ID da loja destinataria. Null se nao mencionada."},
+            "loja_id": {"type": ["integer", "null"], "description": "ID da loja. Null se nao souber o id."},
+            "loja_nome": {"type": ["string", "null"], "description": "Nome da loja (ex: 'Ribeiro do Vale'). SEMPRE passe um dos dois (loja_id OU loja_nome) — o servidor faz fuzzy match. Se o usuario nao mencionou a loja, NAO chame a tool: pergunte primeiro qual loja."},
             "data_entrega": {"type": "string", "description": "Data YYYY-MM-DD. Resolva 'amanha'/'sexta'/etc."},
             "itens": {
                 "type": "array",
