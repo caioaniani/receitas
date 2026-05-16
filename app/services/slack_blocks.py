@@ -65,10 +65,12 @@ def _ctx(texto):
 def _preview_criar_pedido(p, token):
     loja = (p.get('loja_resolvida') or {}).get('nome') or (
         f'id={p["loja_id"]}' if p.get('loja_id') else '(escolher)')
-    itens_txt = '\n'.join(
-        f"- {it.get('quantidade')}x {(it.get('resolvido') or {}).get('nome') or it.get('nome_original') or '?'}"
-        for it in (p.get('itens') or [])
-    ) or '(vazio)'
+    def _fmt_item(it):
+        nome = (it.get('resolvido') or {}).get('nome') or it.get('nome_original') or '?'
+        base = f"- {it.get('quantidade')}x {nome}"
+        obs = (it.get('observacao') or '').strip()
+        return f"{base} _({obs})_" if obs else base
+    itens_txt = '\n'.join(_fmt_item(it) for it in (p.get('itens') or [])) or '(vazio)'
     blocks = [
         _header('Criar pedido'),
         _fields([
