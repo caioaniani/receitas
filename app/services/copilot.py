@@ -876,7 +876,10 @@ def _enriquecer_criar_pedido(tool_input):
             'nome_original': nome, 'quantidade': qtd,
             'matches': matches, 'resolvido': matches[0] if matches else None,
         })
+
+    # Resolve loja por id OU nome (fuzzy). Preview mostra nome real ou "?".
     loja_id = tool_input.get('loja_id')
+    loja_nome_input = (tool_input.get('loja_nome') or '').strip()
     loja_nome = None
     if loja_id:
         l = Loja.query.get(loja_id)
@@ -884,6 +887,13 @@ def _enriquecer_criar_pedido(tool_input):
             loja_nome = l.nome
         else:
             loja_id = None
+    if not loja_id and loja_nome_input:
+        from sqlalchemy import func
+        l = (Loja.query.filter(func.lower(Loja.nome) == loja_nome_input.lower()).first()
+             or Loja.query.filter(Loja.nome.ilike(f'%{loja_nome_input}%')).first())
+        if l:
+            loja_id = l.id
+            loja_nome = l.nome
     return {
         'loja_id': loja_id, 'loja_nome': loja_nome,
         'data_entrega': tool_input.get('data_entrega'),
