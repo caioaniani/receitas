@@ -1909,8 +1909,11 @@ def _resolver_item_qualquer(nome):
 
 
 def _resolver_loja_para_user(loja_id, loja_nome, user):
-    """Resolve loja por id ou nome (fuzzy). Admin e gerente podem escolher
-    qualquer loja. Default e a loja vinculada ao usuario (se houver).
+    """Resolve loja por id ou nome (fuzzy).
+
+    NUNCA cai pra user.loja_id como fallback silencioso — usuario nao tem
+    loja "responsavel". Se nada for especificado, retorna None pro caller
+    pedir explicitamente.
     """
     if loja_id:
         l = Loja.query.get(int(loja_id))
@@ -1924,9 +1927,6 @@ def _resolver_loja_para_user(loja_id, loja_nome, user):
         l = Loja.query.filter(Loja.nome.ilike(f'%{loja_nome}%')).first()
         if l:
             return l
-    # Fallback: loja vinculada ao usuario, se nao explicitou nada
-    if user.loja_id:
-        return Loja.query.get(user.loja_id)
     return None
 
 
