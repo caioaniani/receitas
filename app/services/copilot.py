@@ -630,6 +630,14 @@ REGRAS:
   **NAO chame a tool**: pergunte primeiro "Pra qual loja?" e mostre as
   opcoes do catalogo. So chame a tool quando o usuario falar o nome da
   loja explicitamente — e nesse caso sempre preencha o campo loja_nome.
+- BACKUP — REGRA: em criar_pedido, quando o usuario disser 'X de backup',
+  'X backup' ou 'backup de X', isso significa um item ultra-congelado JA
+  RECHEADO pra reposicao rapida. Preencha `observacao: 'backup'` no item
+  correspondente. Se ele pedir '5 croissants e mais 3 backup', envie 2
+  itens separados: {nome:'Croissant', quantidade:5} e
+  {nome:'Croissant', quantidade:3, observacao:'backup'}. Backup conta como
+  uma variacao do mesmo produto — NAO procure 'Croissant Backup' no
+  catalogo, use o nome base.
 - Pra mudar_status_pedido, se o usuario nao mencionar id explicitamente
   ('marca o pedido de hoje como entregue'), CONSULTE primeiro com
   consultar_pedido pra achar e pergunte 'quer mudar o status do pedido #X?'.
