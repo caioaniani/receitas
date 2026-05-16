@@ -1263,7 +1263,8 @@ def executar_criar_pedido(params, user):
         if not resolvido or not resolvido.get('id'):
             nao_resolvidos.append(item.get('nome_original') or '?')
             continue
-        pi = PedidoItem(pedido_id=pedido.id, quantidade=qtd)
+        obs_item = (item.get('observacao') or '').strip()[:200] or None
+        pi = PedidoItem(pedido_id=pedido.id, quantidade=qtd, observacao=obs_item)
         if resolvido['tipo'] == 'produto':
             pi.produto_id = resolvido['id']
         elif resolvido['tipo'] == 'receita':
