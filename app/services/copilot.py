@@ -887,8 +887,10 @@ def _enriquecer_criar_pedido(tool_input):
         if not nome or qtd <= 0:
             continue
         matches = _resolver_produto(nome)
+        obs_item = (item.get('observacao') or '').strip() or None
         itens_enriq.append({
             'nome_original': nome, 'quantidade': qtd,
+            'observacao': obs_item,
             'matches': matches, 'resolvido': matches[0] if matches else None,
         })
 
