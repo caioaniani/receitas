@@ -94,10 +94,12 @@
                 optHtml += '<option value="' + m.tipo + ':' + m.id + '"' + sel + '>' + escape(m.nome) + '</option>';
             });
             var warn = !item.resolvido ? '<div class="warn">não achei "' + escape(item.nome_original) + '"</div>' : '';
+            var obsVal = item.observacao || '';
             itensHtml += '<div class="copilot-preview-item" data-idx="' + idx + '">' +
                 '<input type="number" min="1" class="form-control form-control-sm qty-input" value="' + item.quantidade + '" style="max-width:60px; text-align:right;">' +
                 '<span style="margin:0 4px;">×</span>' +
                 '<select class="form-control form-control-sm copilot-item-sel">' + optHtml + '</select>' +
+                '<input type="text" class="form-control form-control-sm copilot-item-obs" placeholder="obs (ex: backup)" maxlength="200" value="' + escape(obsVal) + '" style="max-width:140px; margin-left:6px;">' +
                 '<button type="button" class="btn-circle copilot-item-remove" title="Remover" style="width:28px;height:28px;"><i class="bi bi-x"></i></button>' +
                 '</div>' + warn;
         });
