@@ -622,8 +622,12 @@ REGRAS:
 - Use o nome EXATO dos catalogos. Se ambiguo ('100 croissants' com varios tipos),
   escolha o mais provavel e mencione na sua resposta-texto que o usuario confirme.
 - Datas relativas: resolva 'amanha', 'sexta', 'segunda', etc. pra YYYY-MM-DD.
-- Pra criar_pedido sem loja mencionada (admin), use loja_id=null e explique
-  que o usuario precisa escolher no preview.
+- REGRA DA LOJA — CRITICA: NUNCA assuma uma loja "default" do usuario.
+  Cada usuario pode atuar em qualquer loja, nao tem responsavel fixo. Se o
+  usuario nao mencionou a loja em criar_pedido / registrar_desperdicio,
+  **NAO chame a tool**: pergunte primeiro "Pra qual loja?" e mostre as
+  opcoes do catalogo. So chame a tool quando o usuario falar o nome da
+  loja explicitamente — e nesse caso sempre preencha o campo loja_nome.
 - Pra mudar_status_pedido, se o usuario nao mencionar id explicitamente
   ('marca o pedido de hoje como entregue'), CONSULTE primeiro com
   consultar_pedido pra achar e pergunte 'quer mudar o status do pedido #X?'.
