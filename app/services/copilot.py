@@ -48,6 +48,7 @@ TOOL_CRIAR_PEDIDO = {
                     "properties": {
                         "nome": {"type": "string", "description": "Nome EXATO do produto/receita do catalogo."},
                         "quantidade": {"type": "integer", "minimum": 1},
+                        "observacao": {"type": ["string", "null"], "description": "Observacao do item (max 200 chars). Use 'backup' quando o usuario disser 'X de backup' / 'X backup' / 'backup de X' — significa item ultra-congelado ja recheado pra reposicao rapida. Use tambem pra outras notas pontuais ('sem cebola', 'recheio extra'). Default null."},
                     },
                     "required": ["nome", "quantidade"],
                 },
