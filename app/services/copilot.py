@@ -1925,15 +1925,17 @@ def _resolver_item_qualquer(nome):
     m = MateriaPrima.query.filter(func.lower(MateriaPrima.nome) == nome.lower()).first()
     if m:
         return ('mp', m.id, m.nome)
-    r = Receita.query.filter(Receita.nome.ilike(f'%{nome}%')).first()
-    if r:
-        return ('receita', r.id, r.nome)
-    p = Produto.query.filter(Produto.nome.ilike(f'%{nome}%')).first()
-    if p:
-        return ('produto', p.id, p.nome)
-    m = MateriaPrima.query.filter(MateriaPrima.nome.ilike(f'%{nome}%')).first()
-    if m:
-        return ('mp', m.id, m.nome)
+    # Fuzzy: coleta top 10 de cada e desempata por proximidade.
+    cands = []
+    for r in Receita.query.filter(Receita.nome.ilike(f'%{nome}%')).limit(10).all():
+        cands.append(('receita', r.id, r.nome))
+    for p in Produto.query.filter(Produto.nome.ilike(f'%{nome}%')).limit(10).all():
+        cands.append(('produto', p.id, p.nome))
+    for m in MateriaPrima.query.filter(MateriaPrima.nome.ilike(f'%{nome}%')).limit(10).all():
+        cands.append(('mp', m.id, m.nome))
+    if cands:
+        cands.sort(key=lambda c: _score_proximidade(nome, c[2]))
+        return cands[0]
     return None
 
 
