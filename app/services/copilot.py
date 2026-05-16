@@ -1190,15 +1190,13 @@ def executar(tipo_acao, params, user):
 def executar_criar_pedido(params, user):
     from app.models import PedidoLoja, PedidoItem
     loja_id = params.get('loja_id')
-    # Sem responsavel por loja — qualquer um com permissao pra criar_pedido
-    # pode criar em qualquer loja. user.loja_id e apenas fallback default.
-    if not loja_id and user.loja_id:
-        loja_id = user.loja_id
     if not loja_id:
-        return {'ok': False, 'erro': 'Especifique a loja (ex: Anesio, Nebraska, Ribeiro do Vale).'}
+        return {'ok': False, 'erro': ('Loja nao especificada. Diga o nome '
+                                       '(ex: "criar pedido pra loja Ribeiro '
+                                       'do Vale amanha com 50 paes").')}
     loja = Loja.query.get(loja_id)
     if not loja:
-        return {'ok': False, 'erro': f'Loja {loja_id} nao encontrada'}
+        return {'ok': False, 'erro': f'Loja {loja_id} nao encontrada. Verifique o nome.'}
     try:
         data_entrega = datetime.strptime(params.get('data_entrega'), '%Y-%m-%d').date()
     except (ValueError, TypeError):
