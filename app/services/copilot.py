@@ -2046,8 +2046,6 @@ def _read_consultar_desperdicio(params, user):
         if not l:
             return {'texto': f'Loja "{loja_nome}" nao encontrada.'}
         q = q.filter(Desperdicio.loja_id == l.id)
-    elif not user.is_admin() and user.loja_id:
-        q = q.filter(Desperdicio.loja_id == user.loja_id)
 
     registros = q.order_by(Desperdicio.data.desc(), Desperdicio.criado_em.desc()).all()
     if not registros:
