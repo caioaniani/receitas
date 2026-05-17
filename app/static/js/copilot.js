@@ -390,6 +390,7 @@
             else if (d.tipo === 'balanco_congelados') html += previewBalancoCongelados(d.conversa_id, d.params);
             else if (d.tipo === 'entrada_lote_loja') html += previewEntradaLoteLoja(d.conversa_id, d.params);
             else if (d.tipo === 'registrar_desperdicio') html += previewGenerico(d.conversa_id, d.tipo, d.params, 'registrar desperdicio', 'registrar');
+            else if (d.tipo === 'registrar_desperdicio_lote') html += previewRegistrarDesperdicioLote(d.conversa_id, d.params);
         }
         return html;
     }
