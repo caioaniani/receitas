@@ -428,6 +428,40 @@ TOOL_REGISTRAR_DESPERDICIO = {
     },
 }
 
+TOOL_REGISTRAR_DESPERDICIO_LOTE = {
+    "name": "registrar_desperdicio_lote",
+    "description": (
+        "Registra varios itens de desperdicio (sobra do dia/vencido/etc) "
+        "de uma loja de uma vez. Use SEMPRE que o usuario passar uma LISTA "
+        "de itens vencidos/descartados ('anota essas sobras: 2 croissants, "
+        "3 pao frances, 1 nutella...'). Para 1 item so, use registrar_desperdicio. "
+        "Baixa do estoque da loja. NAO executa direto — retorna preview pra aprovar."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "loja_id": {"type": ["integer", "null"]},
+            "loja_nome": {"type": ["string", "null"], "description": "Nome da loja (ex: 'Ribeiro do Vale'). SEMPRE passe loja_nome OU loja_id — fuzzy match no servidor. Se o usuario nao mencionou a loja, NAO chame a tool: pergunte primeiro."},
+            "motivo": {"type": "string", "enum": ["vencido", "estragado", "queimado", "caiu", "outro"], "description": "Motivo unico pro lote inteiro. Default 'vencido'."},
+            "itens": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "nome": {"type": "string", "description": "Nome do item (receita/produto/MP). Fuzzy match no servidor."},
+                        "quantidade": {"type": "integer", "minimum": 1},
+                        "observacao": {"type": ["string", "null"], "description": "Obs especifica desse item (opcional)."},
+                    },
+                    "required": ["nome", "quantidade"],
+                },
+                "minItems": 1,
+            },
+            "observacao": {"type": ["string", "null"], "description": "Obs geral do lote (opcional)."},
+        },
+        "required": ["itens"],
+    },
+}
+
 TOOL_CONSULTAR_DESPERDICIO = {
     "name": "consultar_desperdicio",
     "description": "Lista desperdicios registrados num periodo (default ultimos 7 dias). Filtra por loja opcionalmente.",
