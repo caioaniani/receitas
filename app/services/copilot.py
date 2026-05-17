@@ -819,6 +819,8 @@ def _enriquecer_params(tool_name, tool_input, user):
         return _enriquecer_entrada_lote_loja(tool_input)
     if tool_name == 'registrar_desperdicio':
         return _enriquecer_registrar_desperdicio(tool_input, user)
+    if tool_name == 'registrar_desperdicio_lote':
+        return _enriquecer_registrar_desperdicio_lote(tool_input, user)
     # consultar_pedido / consultar_estoque: passam direto
     return tool_input
 
