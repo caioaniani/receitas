@@ -492,7 +492,8 @@ TOOLS = [
     # Estoque de congelados / loja
     TOOL_BALANCO_CONGELADOS, TOOL_ENTRADA_LOTE_LOJA,
     # Desperdicio (sobra do dia / vencido)
-    TOOL_REGISTRAR_DESPERDICIO, TOOL_CONSULTAR_DESPERDICIO,
+    TOOL_REGISTRAR_DESPERDICIO, TOOL_REGISTRAR_DESPERDICIO_LOTE,
+    TOOL_CONSULTAR_DESPERDICIO,
 ]
 
 # Quais tools requerem preview/aprovacao (writes)
@@ -500,7 +501,8 @@ REQUER_APROVACAO = {
     'criar_pedido', 'receber_mp', 'ajuste_estoque',
     'mudar_status_pedido', 'criar_fornecedor', 'marcar_ponto', 'criar_tarefa',
     'marcar_tarefa_feita', 'balanco_congelados', 'entrada_lote_loja',
-    'registrar_desperdicio', 'anexar_foto_pedido', 'receber_pedido',
+    'registrar_desperdicio', 'registrar_desperdicio_lote',
+    'anexar_foto_pedido', 'receber_pedido',
 }
 
 
