@@ -1994,6 +1994,130 @@ def executar(tipo_acao, params, user):  # noqa: F811
     return _BASE_EXEC(tipo_acao, params, user)
 
 
+def executar_registrar_desperdicio_lote(params, user):
+    """Aplica varios desperdicios de uma loja num so commit.
+
+    Itens sem item resolvido entram em `ignorados`. Quantidade > saldo
+    gera mov 'desperdicio_sem_estoque' igual no executor single.
+    """
+    from app.models import Desperdicio, EstoqueLoja, MovEstoqueLoja
+
+    loja = _resolver_loja_para_user(params.get('loja_id'),
+                                     params.get('loja_nome'), user)
+    if not loja:
+        nome_tentado = params.get('loja_nome') or params.get('loja_id')
+        if nome_tentado:
+            return {'ok': False, 'erro': f'Loja "{nome_tentado}" nao encontrada.'}
+        return {'ok': False, 'erro': 'Especifique a loja.'}
+
+    itens = params.get('itens') or []
+    if not itens:
+        return {'ok': False, 'erro': 'Lista de itens vazia'}
+
+    motivo = (params.get('motivo') or 'vencido').strip() or 'vencido'
+    if motivo not in ('vencido', 'estragado', 'queimado', 'caiu', 'outro'):
+        motivo = 'vencido'
+    obs_lote = (params.get('observacao') or '').strip() or None
+
+    aplicados = []
+    ignorados = []
+
+    for item in itens:
+        nome = (item.get('nome') or '').strip()
+        try:
+            qtd = int(item.get('quantidade') or 0)
+        except (TypeError, ValueError):
+            qtd = 0
+        if not nome or qtd <= 0:
+            ignorados.append({'nome': nome or '?', 'motivo': 'quantidade invalida'})
+            continue
+
+        resolvido = item.get('resolvido')
+        if not resolvido or not resolvido.get('id'):
+            re_resolve = _resolver_item_qualquer(nome)
+            if not re_resolve:
+                ignorados.append({'nome': nome, 'motivo': 'item nao encontrado no cadastro'})
+                continue
+            tipo_item, item_id, nome_ok = re_resolve
+        else:
+            tipo_item = resolvido['tipo']
+            item_id = resolvido['id']
+            nome_ok = resolvido.get('nome') or nome
+
+        filtro = {'loja_id': loja.id}
+        if tipo_item == 'receita':
+            filtro['receita_id'] = item_id
+        elif tipo_item == 'produto':
+            filtro['produto_id'] = item_id
+        else:
+            filtro['materia_prima_id'] = item_id
+
+        el = EstoqueLoja.query.filter_by(**filtro).first()
+        if not el:
+            el = EstoqueLoja(**filtro, quantidade=0)
+            db.session.add(el)
+            db.session.flush()
+
+        saldo = el.quantidade or 0
+        baixa = min(qtd, saldo)
+        el.quantidade = saldo - baixa
+
+        obs_item = (item.get('observacao') or '').strip() or None
+        obs_final = obs_item or obs_lote
+
+        desp = Desperdicio(
+            loja_id=loja.id,
+            receita_id=item_id if tipo_item == 'receita' else None,
+            produto_id=item_id if tipo_item == 'produto' else None,
+            materia_prima_id=item_id if tipo_item == 'mp' else None,
+            quantidade=qtd, motivo=motivo, observacao=obs_final,
+            criado_por_id=user.id,
+        )
+        db.session.add(desp)
+        db.session.flush()
+
+        if baixa > 0:
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el.id, tipo='desperdicio', quantidade=baixa,
+                referencia=f'Desperdicio {motivo}'
+                + (f' — {obs_final}' if obs_final else '')
+                + ' (copilot lote)',
+                usuario_id=user.id,
+            ))
+        if qtd > baixa:
+            falta = qtd - baixa
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el.id, tipo='desperdicio_sem_estoque',
+                quantidade=falta,
+                referencia=f'Desperdicio {motivo} — sem estoque ({falta}) (copilot lote)',
+                usuario_id=user.id,
+            ))
+
+        aplicados.append({
+            'nome': nome_ok, 'tipo': tipo_item,
+            'quantidade': qtd, 'baixado': baixa, 'saldo_anterior': saldo,
+        })
+
+    if not aplicados:
+        db.session.rollback()
+        return {'ok': False, 'erro': f'Nenhum item aplicado. {len(ignorados)} ignorados.',
+                'ignorados': ignorados}
+
+    db.session.commit()
+    return {
+        'ok': True,
+        'loja': loja.nome,
+        'motivo': motivo,
+        'aplicados': aplicados,
+        'ignorados': ignorados,
+        'total_aplicados': len(aplicados),
+        'total_ignorados': len(ignorados),
+        'registro_tipo': 'desperdicio_lote',
+        'registro_id': None,
+        'url': f'/pedidos/desperdicio?loja={loja.id}',
+    }
+
+
 def executar_anexar_foto_pedido(params, user):
     """Salva 1+ fotos como FotoRecebimento no pedido.
 
