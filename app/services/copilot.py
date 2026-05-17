@@ -919,6 +919,90 @@ def _enriquecer_entrada_lote_loja(tool_input):
     }
 
 
+def _enriquecer_registrar_desperdicio_lote(tool_input, user):
+    """Resolve loja + cada item + estoque atual pra preview de lote."""
+    from app.models import EstoqueLoja
+    from sqlalchemy import func
+
+    out = dict(tool_input)
+    loja = None
+    try:
+        loja_id = int(out.get('loja_id') or 0) or None
+    except (TypeError, ValueError):
+        loja_id = None
+    if loja_id:
+        loja = Loja.query.get(loja_id)
+    if not loja:
+        nome = (out.get('loja_nome') or '').strip()
+        if nome:
+            loja = Loja.query.filter(func.lower(Loja.nome) == nome.lower()).first()
+            if not loja:
+                loja = Loja.query.filter(Loja.nome.ilike(f'%{nome}%')).first()
+    loja_id = loja.id if loja else None
+    loja_nome = loja.nome if loja else None
+
+    motivo = (out.get('motivo') or 'vencido').strip() or 'vencido'
+    if motivo not in ('vencido', 'estragado', 'queimado', 'caiu', 'outro'):
+        motivo = 'vencido'
+
+    itens_enriq = []
+    for it in (out.get('itens') or []):
+        nome = (it.get('nome') or '').strip()
+        try:
+            qtd = int(it.get('quantidade') or 0)
+        except (TypeError, ValueError):
+            qtd = 0
+        if not nome or qtd <= 0:
+            itens_enriq.append({'nome': nome or '?', 'quantidade': qtd,
+                                 'erro': 'invalido'})
+            continue
+        resolvido = _resolver_item_qualquer(nome)
+        if not resolvido:
+            itens_enriq.append({'nome': nome, 'quantidade': qtd,
+                                 'observacao': (it.get('observacao') or '').strip() or None,
+                                 'resolvido': None,
+                                 'estoque_atual': None})
+            continue
+        tipo_item, item_id, nome_ok = resolvido
+        estoque_atual = None
+        if loja_id:
+            filtro = {'loja_id': loja_id}
+            if tipo_item == 'receita':
+                filtro['receita_id'] = item_id
+            elif tipo_item == 'produto':
+                filtro['produto_id'] = item_id
+            else:
+                filtro['materia_prima_id'] = item_id
+            el = EstoqueLoja.query.filter_by(**filtro).first()
+            estoque_atual = el.quantidade if el else 0
+        itens_enriq.append({
+            'nome': nome,
+            'quantidade': qtd,
+            'observacao': (it.get('observacao') or '').strip() or None,
+            'resolvido': {'tipo': tipo_item, 'id': item_id, 'nome': nome_ok},
+            'estoque_atual': estoque_atual,
+        })
+
+    n_ok = sum(1 for i in itens_enriq if i.get('resolvido'))
+    n_nao = sum(1 for i in itens_enriq if not i.get('erro') and not i.get('resolvido'))
+    n_err = sum(1 for i in itens_enriq if i.get('erro'))
+    total_qtd = sum(int(i.get('quantidade') or 0) for i in itens_enriq if not i.get('erro'))
+    return {
+        'loja_id': loja_id,
+        'loja_nome': loja_nome,
+        'motivo': motivo,
+        'observacao': (out.get('observacao') or '').strip() or None,
+        'itens': itens_enriq,
+        'totais': {
+            'total_itens': len(itens_enriq),
+            'resolvidos': n_ok,
+            'nao_resolvidos': n_nao,
+            'erros': n_err,
+            'delta_total': total_qtd,
+        },
+    }
+
+
 def _enriquecer_criar_pedido(tool_input):
     itens_enriq = []
     for item in (tool_input.get('itens') or []):
