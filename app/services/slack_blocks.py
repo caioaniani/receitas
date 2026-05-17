@@ -252,6 +252,45 @@ def _preview_registrar_desperdicio(p, token):
     ]
 
 
+def _preview_registrar_desperdicio_lote(p, token):
+    itens = p.get('itens') or []
+    totais = p.get('totais') or {}
+    loja = p.get('loja_nome') or (f'id={p.get("loja_id")}' if p.get('loja_id') else '?')
+    motivo = p.get('motivo') or 'vencido'
+    n_ok = totais.get('resolvidos') or 0
+    n_nao = totais.get('nao_resolvidos') or 0
+    total_qtd = totais.get('delta_total') or 0
+
+    def _fmt(i):
+        nome = (i.get('resolvido') or {}).get('nome') or i.get('nome') or '?'
+        qtd = i.get('quantidade')
+        obs = i.get('observacao')
+        marker = ''
+        if i.get('erro'):
+            marker = ' ⚠'
+        elif not i.get('resolvido'):
+            marker = ' ⚠ (nao encontrado)'
+        base = f"- {qtd}x {nome}{marker}"
+        return f"{base} _({obs})_" if obs else base
+
+    resumo = '\n'.join(_fmt(i) for i in itens[:25])
+    if len(itens) > 25:
+        resumo += f'\n_... +{len(itens) - 25} itens_'
+    return [
+        _header('Registrar desperdicio em lote'),
+        _fields([
+            ('Loja', loja),
+            ('Motivo', motivo),
+            ('Itens com match', n_ok),
+            ('Nao encontrados', n_nao),
+            ('Total a baixar', f'-{total_qtd}'),
+            ('Observacao', p.get('observacao') or '—'),
+        ]),
+        _section(f'*Itens:*\n{resumo[:2500] or "(vazio)"}'),
+        _botoes(token, f'Registrar {n_ok} item(s)', 'Cancelar'),
+    ]
+
+
 _PREVIEW_BUILDERS = {
     'criar_pedido': _preview_criar_pedido,
     'receber_mp': _preview_receber_mp,
@@ -264,6 +303,7 @@ _PREVIEW_BUILDERS = {
     'balanco_congelados': _preview_balanco_congelados,
     'entrada_lote_loja': _preview_entrada_lote_loja,
     'registrar_desperdicio': _preview_registrar_desperdicio,
+    'registrar_desperdicio_lote': _preview_registrar_desperdicio_lote,
     'anexar_foto_pedido': _preview_anexar_foto_pedido,
     'receber_pedido': _preview_receber_pedido,
 }
