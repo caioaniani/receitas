@@ -768,15 +768,45 @@ def interpretar(prompt_text, user, historico=None, images=None):
         logger.exception('Copilot: erro Anthropic')
         return {'tipo': 'erro', 'explicacao': f'Erro Anthropic: {exc}', 'raw': None}
 
-    tool_call = None
-    tool_name = None
+    tool_calls_raw = []
     texto_partes = []
     for block in response.content:
         if block.type == 'tool_use':
-            tool_call = block.input
-            tool_name = block.name
+            tool_calls_raw.append({'name': block.name, 'input': block.input})
         elif block.type == 'text':
             texto_partes.append(block.text)
+
+    # Consolidacao defensiva: se Claude chamar `registrar_desperdicio` mais de
+    # uma vez na mesma resposta (que era o bug antigo — handler so pegava o
+    # ultimo e os outros silenciosamente sumiam), merge em UMA chamada de
+    # `registrar_desperdicio_lote`. Mesma loja e motivo do primeiro.
+    desp_calls = [tc for tc in tool_calls_raw if tc['name'] == 'registrar_desperdicio']
+    if len(desp_calls) >= 2:
+        primeiro = desp_calls[0]['input']
+        itens_merged = []
+        for tc in desp_calls:
+            inp = tc.get('input') or {}
+            itens_merged.append({
+                'nome': inp.get('item_nome') or '',
+                'quantidade': inp.get('quantidade') or 0,
+                'observacao': inp.get('observacao'),
+            })
+        consolidado = {
+            'loja_id': primeiro.get('loja_id'),
+            'loja_nome': primeiro.get('loja_nome'),
+            'motivo': primeiro.get('motivo') or 'vencido',
+            'itens': itens_merged,
+        }
+        tool_name = 'registrar_desperdicio_lote'
+        tool_call = consolidado
+    elif tool_calls_raw:
+        # Caso normal: pega o ultimo (comportamento original)
+        ultima = tool_calls_raw[-1]
+        tool_name = ultima['name']
+        tool_call = ultima['input']
+    else:
+        tool_name = None
+        tool_call = None
 
     explicacao = ' '.join(texto_partes).strip() or '(sem comentario do copilot)'
     raw = {
