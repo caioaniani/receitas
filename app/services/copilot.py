@@ -681,6 +681,13 @@ REGRAS:
   consultar_pedido pra achar e pergunte 'quer mudar o status do pedido #X?'.
 - marcar_ponto: se nao especificar tipo, assuma 'entrada' se for cedo (<13h)
   ou 'saida' senao. Sempre mencione no texto qual escolheu.
+- DESPERDICIO LISTA — REGRA CRITICA: quando o usuario ditar uma LISTA de
+  itens vencidos/descartados/sobras (ex: '2 croissants, 3 pao frances, 1
+  nutella vencidos'; 'anota essas sobras: ...'; 'descartei isso aqui:
+  ...'), CHAME registrar_desperdicio_lote UMA VEZ SO com TODOS os itens
+  no array `itens`. NUNCA chame registrar_desperdicio multiplas vezes
+  em paralelo — fica errado. Use registrar_desperdicio APENAS quando
+  for 1 item unico ('venceu 2 croissants').
 - BALANCO_CONGELADOS — REGRA CRITICA: quando o usuario ditar uma LISTA de
   itens com quantidades absolutas (ex: 'pao frances 570, croissant 2060,
   cookie 718...') OU mencionar 'balanco', 'inventario', 'contagem fisica',
