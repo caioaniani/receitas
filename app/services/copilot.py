@@ -531,6 +531,7 @@ PAPEIS_POR_TOOL = {
     'consultar_desperdicio': {'admin', 'gerente', 'funcionario'},
     'enviar_digest_whatsapp': {'admin'},
     'registrar_desperdicio': {'admin', 'gerente', 'funcionario'},
+    'registrar_desperdicio_lote': {'admin', 'gerente', 'funcionario'},
     'anexar_foto_pedido': {'admin', 'gerente', 'funcionario'},
     'receber_pedido': {'admin', 'gerente', 'funcionario'},
     # Consultas + planejamento — todos
