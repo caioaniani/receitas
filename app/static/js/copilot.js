@@ -287,6 +287,69 @@
             '</div></div>';
     }
 
+    function previewRegistrarDesperdicioLote(conversaId, params) {
+        var itens = params.itens || [];
+        var totais = params.totais || {};
+        var lojaNome = params.loja_nome ? escape(params.loja_nome) : '<span style="color:#dc3545;">(sem loja)</span>';
+        var motivo = escape(params.motivo || 'vencido');
+        var obs = params.observacao ? escape(params.observacao) : '';
+        var n_ok = totais.resolvidos || 0;
+        var n_nao = totais.nao_resolvidos || 0;
+        var n_err = totais.erros || 0;
+        var totalQtd = totais.delta_total;
+
+        var resumo = '<div class="copilot-preview-row" style="font-size:12px;">' +
+            '<span class="badge bg-primary" style="margin-right:4px;">loja: ' + lojaNome + '</span>' +
+            '<span class="badge bg-danger" style="margin-right:4px;">' + motivo + '</span>' +
+            '<span class="badge bg-success" style="margin-right:4px;">' + n_ok + ' com match</span>' +
+            (n_nao ? '<span class="badge bg-warning text-dark" style="margin-right:4px;">' + n_nao + ' nao encontrado(s)</span>' : '') +
+            (n_err ? '<span class="badge bg-secondary" style="margin-right:4px;">' + n_err + ' invalido(s)</span>' : '') +
+            (totalQtd !== undefined && totalQtd !== null
+                ? '<span class="badge bg-info text-dark" style="margin-right:4px;">total -' + totalQtd + '</span>'
+                : '') +
+            (obs ? '<span style="color:var(--text-muted);">obs: ' + obs + '</span>' : '') +
+            '</div>';
+
+        var rows = '';
+        itens.forEach(function(it, idx) {
+            var nome = escape(it.nome || '?');
+            var qtd = it.quantidade !== undefined ? it.quantidade : '';
+            var atual = (it.estoque_atual !== undefined && it.estoque_atual !== null) ? it.estoque_atual : '—';
+            var obsItem = it.observacao ? ' <small style="color:#888;">' + escape(it.observacao) + '</small>' : '';
+            var match;
+            if (it.erro) {
+                match = '<span style="color:#dc3545;">⚠ ' + escape(it.erro) + '</span>';
+            } else if (it.resolvido) {
+                match = escape(it.resolvido.nome) + obsItem;
+            } else {
+                match = '<span style="color:#cc7700;" title="Item nao encontrado no cadastro — sera ignorado">⚠ nao encontrado</span>';
+            }
+            rows += '<tr>' +
+                '<td style="color:#888;">' + (idx + 1) + '</td>' +
+                '<td>' + nome + '</td>' +
+                '<td>' + match + '</td>' +
+                '<td style="text-align:right;">' + atual + '</td>' +
+                '<td style="text-align:right; color:#dc3545; font-weight:600;">-' + qtd + '</td>' +
+                '</tr>';
+        });
+
+        var podeAplicar = n_ok > 0 && params.loja_id;
+        return '<div class="copilot-preview" data-conversa="' + conversaId + '" data-tipo="registrar_desperdicio_lote">' +
+            '<div class="copilot-preview-header">registrar desperdicio em lote</div>' +
+            resumo +
+            '<div style="max-height:280px; overflow-y:auto; margin-top:6px;">' +
+            '<table class="table table-sm table-bordered mb-0" style="font-size:11.5px;">' +
+            '<thead><tr><th>#</th><th>ditado</th><th>match</th>' +
+            '<th style="text-align:right;">atual</th><th style="text-align:right;">baixa</th></tr></thead>' +
+            '<tbody>' + rows + '</tbody></table></div>' +
+            '<div class="copilot-preview-actions">' +
+            '<button type="button" class="btn-pill btn-pill-outline copilot-cancel">cancelar</button>' +
+            '<button type="button" class="btn-pill btn-pill-primary copilot-approve"' +
+            (podeAplicar ? '' : ' disabled') + '>' +
+            'registrar ' + n_ok + ' item(s)</button>' +
+            '</div></div>';
+    }
+
     function previewGenerico(conversaId, tipo, params, titulo, labelAprovar) {
         var rows = '';
         for (var k in params) {
