@@ -50,18 +50,24 @@ def _resolver_usuario(slack_user_id):
 
 
 def _evento_visto(event_id):
-    """True se ja processamos. False caso contrario, marcando como visto."""
+    """True se ja processamos. False caso contrario, marcando como visto.
+
+    Idempotencia atomica via UNIQUE constraint na PK event_id. Race entre
+    workers: o 2o INSERT bate em IntegrityError e a gente considera 'visto'.
+    Outras falhas (DB down, etc) propagam pra Slack retentar — antes a gente
+    engolia tudo silenciosamente e o evento se perdia.
+    """
+    from sqlalchemy.exc import IntegrityError
     from app.models import SlackEventoProcessado
     if not event_id:
         return False
     if SlackEventoProcessado.query.get(event_id):
         return True
+    db.session.add(SlackEventoProcessado(event_id=event_id))
     try:
-        db.session.add(SlackEventoProcessado(event_id=event_id))
         db.session.commit()
-    except Exception:
+    except IntegrityError:
         db.session.rollback()
-        # race: outro worker pegou primeiro
         return True
     return False
 
