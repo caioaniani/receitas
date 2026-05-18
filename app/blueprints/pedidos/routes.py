@@ -738,7 +738,10 @@ def congelados_dashboard():
 @login_required
 @producao_required
 def congelados():
-    itens = EstoqueProducao.query.all()
+    itens = EstoqueProducao.query.options(
+        joinedload(EstoqueProducao.receita),
+        joinedload(EstoqueProducao.produto),
+    ).all()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     from app.services import estoque_congelados as svc_cong
