@@ -1,14 +1,16 @@
 import csv
 import io
+from datetime import date, timedelta
 
-from flask import render_template, Response
+from flask import render_template, Response, request
 from flask_login import login_required
 
 from app.blueprints.relatorios import relatorios_bp
 from app.decorators import admin_required
 from app.extensions import db
-from app.models import MateriaPrima, Receita, ReceitaIngrediente
+from app.models import MateriaPrima, Receita, ReceitaIngrediente, Loja
 from app.services.custos import calcular_custos_receitas
+from app.services.previsao_demanda import prever_demanda, prever_semana
 
 
 @relatorios_bp.route('/custos')
