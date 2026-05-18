@@ -85,7 +85,8 @@ def parsear_lista(texto):
 
 def _carregar_catalogo(loja_id):
     """Catalogo de match: receitas + produtos + materias-primas + orfaos
-    daquela loja (EstoqueLoja com nome_pendente)."""
+    daquela loja (EstoqueLoja com nome_pendente) + apelidos globais
+    confirmados (LojaProdutoMap mapeado)."""
     receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.query.all()]
     produtos = [(p.id, p.nome, _ascii(p.nome)) for p in Produto.query.all()]
     materias = [(m.id, m.nome, _ascii(m.nome)) for m in MateriaPrima.query.all()]
@@ -102,7 +103,25 @@ def _carregar_catalogo(loja_id):
             ).all()
             if ep.nome_pendente
         ]
-    return receitas, produtos, materias, orfaos
+    # Apelidos globais — match exato em LojaProdutoMap confirmado vira atalho.
+    apelidos = []
+    for mp in LojaProdutoMap.query.filter(
+        LojaProdutoMap.confirmado_em.isnot(None),
+        LojaProdutoMap.ignorar.is_(False),
+    ).all():
+        if mp.receita_id:
+            apelidos.append((mp.nome_digitado, _ascii(mp.nome_digitado),
+                              'receita', mp.receita_id,
+                              mp.receita.nome if mp.receita else mp.nome_digitado))
+        elif mp.produto_id:
+            apelidos.append((mp.nome_digitado, _ascii(mp.nome_digitado),
+                              'produto', mp.produto_id,
+                              mp.produto.nome if mp.produto else mp.nome_digitado))
+        elif mp.materia_prima_id:
+            apelidos.append((mp.nome_digitado, _ascii(mp.nome_digitado),
+                              'mp', mp.materia_prima_id,
+                              mp.materia_prima.nome if mp.materia_prima else mp.nome_digitado))
+    return receitas, produtos, materias, orfaos, apelidos
 
 
 def _matches_para(nome, receitas, produtos, materias, orfaos):
