@@ -67,10 +67,11 @@ def test_apelido_global_loja_lote(app, loja):
 def test_apelido_global_compartilhado_congelados(app):
     """Apelido salvo serve tambem em balanco congelados."""
     from app.extensions import db
-    from app.models import Receita, LojaProdutoMap
+    from app.models import LojaProdutoMap
     from app.services import estoque_congelados as svc
+    from tests.conftest import _make_receita
     from datetime import datetime
-    r = Receita(nome='Pao Frances Fermentado', categoria='Paes')
+    r = _make_receita('Pao Frances Fermentado')
     db.session.add(r)
     db.session.flush()
     mp = LojaProdutoMap(nome_digitado='PFR', receita_id=r.id,
