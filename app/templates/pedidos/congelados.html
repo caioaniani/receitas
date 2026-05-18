@@ -72,10 +72,20 @@
             </thead>
             <tbody>
                 {% for ep in pendentes %}
+                {% set sug = sugestoes.get(ep.id) %}
                 <tr class="table-warning">
                     <td class="fw-semibold">
                         <span class="badge bg-warning text-dark me-1" style="font-size:10px;">Pendente</span>
                         {{ ep.nome_item }}
+                        {% if sug %}
+                        <div class="small text-muted mt-1">
+                            <i class="bi bi-magic"></i> sugestão:
+                            <span class="fw-semibold">{{ sug.nome }}</span>
+                            <span class="badge bg-light text-dark border" style="font-size:9px;">
+                                {{ sug.tipo }}{% if sug.match == 'apelido' %} · apelido salvo{% elif sug.match == 'fuzzy' %} · aproximação{% endif %}
+                            </span>
+                        </div>
+                        {% endif %}
                     </td>
                     <td class="text-center fw-bold">{{ ep.quantidade }}</td>
                     <td>
@@ -84,17 +94,23 @@
                             <input type="hidden" name="estoque_id" value="{{ ep.id }}">
                             <select name="alvo_tipo" class="form-select form-select-sm" style="width:90px;"
                                     onchange="atualizarVincular(this)">
-                                <option value="receita">Receita</option>
-                                <option value="produto">Produto</option>
+                                <option value="receita" {% if sug and sug.tipo == 'receita' %}selected{% endif %}>Receita</option>
+                                <option value="produto" {% if sug and sug.tipo == 'produto' %}selected{% endif %}>Produto</option>
                             </select>
                             <select name="alvo_id" class="form-select form-select-sm vinc-item" required>
-                                {% for r in receitas %}
-                                <option value="{{ r.id }}">{{ r.categoria }} — {{ r.nome }}</option>
-                                {% endfor %}
+                                {% if sug and sug.tipo == 'produto' %}
+                                    {% for p in produtos %}
+                                    <option value="{{ p.id }}" {% if p.id == sug.id %}selected{% endif %}>{{ p.nome }}</option>
+                                    {% endfor %}
+                                {% else %}
+                                    {% for r in receitas %}
+                                    <option value="{{ r.id }}" {% if sug and sug.tipo == 'receita' and r.id == sug.id %}selected{% endif %}>{{ r.categoria }} — {{ r.nome }}</option>
+                                    {% endfor %}
+                                {% endif %}
                             </select>
-                            <button type="submit" class="btn btn-sm btn-primary"
+                            <button type="submit" class="btn btn-sm {% if sug %}btn-success{% else %}btn-primary{% endif %}"
                                     onclick="return confirm('Vincular este pendente?')">
-                                <i class="bi bi-link"></i> Vincular
+                                <i class="bi {% if sug %}bi-check2-circle{% else %}bi-link{% endif %}"></i> {% if sug %}Confirmar{% else %}Vincular{% endif %}
                             </button>
                         </form>
                     </td>
