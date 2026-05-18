@@ -65,7 +65,7 @@
 <!-- Modal Entrada -->
 <div class="modal fade" id="modal-entrada" tabindex="-1">
     <div class="modal-dialog">
-        <form method="POST" action="{{ url_for('materias_primas.estoque_entrada') }}">
+        <form method="POST" action="{{ url_for('materias_primas.estoque_entrada') }}" id="form-entrada-mp">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="modal-content">
                 <div class="modal-header bg-success text-white">
@@ -73,6 +73,14 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
+                    <div class="mb-3 p-2 border rounded bg-light">
+                        <label class="form-label small fw-bold mb-1">
+                            <i class="bi bi-camera"></i> Extrair de foto da nota
+                        </label>
+                        <input type="file" id="ocr-nota-input" accept="image/*" class="form-control form-control-sm">
+                        <small id="ocr-status" class="text-muted"></small>
+                        <div id="ocr-resultado" class="mt-2" style="display:none;"></div>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label">Matéria-Prima</label>
                         <select name="mp_id" class="form-select" required>
