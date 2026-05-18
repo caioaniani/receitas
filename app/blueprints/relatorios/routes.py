@@ -94,3 +94,30 @@ def ingredientes():
         .all()
     )
     return render_template('relatorios/ingredientes.html', materias=materias)
+
+
+@relatorios_bp.route('/previsao')
+@login_required
+@admin_required
+def previsao():
+    """Previsao de demanda diaria por (item × loja) com base em media de
+    venda no mesmo dia-da-semana nas ultimas 8 semanas. So vendas PDV/Seru."""
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    # Filtra Industria (nao tem PDV)
+    lojas = [l for l in lojas if l.nome.lower() != 'industria']
+    loja_id = request.args.get('loja', type=int)
+    if not loja_id and lojas:
+        loja_id = lojas[0].id
+    data_param = request.args.get('data')
+    if data_param:
+        try:
+            data_inicio = date.fromisoformat(data_param)
+        except ValueError:
+            data_inicio = date.today() + timedelta(days=1)
+    else:
+        data_inicio = date.today() + timedelta(days=1)
+
+    semana = prever_semana(loja_id, data_inicio) if loja_id else {}
+    return render_template('relatorios/previsao.html', lojas=lojas,
+                           loja_id=loja_id, data_inicio=data_inicio,
+                           semana=semana)
