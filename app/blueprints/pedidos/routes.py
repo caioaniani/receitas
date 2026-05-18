@@ -982,9 +982,15 @@ def estoque_loja():
         if current_user.is_admin() else []
     materias = MateriaPrima.query.order_by(MateriaPrima.nome).all() \
         if current_user.is_admin() else []
+    sugestoes = {}
+    if current_user.is_admin() and itens:
+        from app.services import estoque_loja_lote as svc_lote
+        pendentes = [it for it in itens if it.pendente]
+        sugestoes = svc_lote.sugerir_para_pendentes(pendentes)
     return render_template('pedidos/estoque_loja.html', loja=loja, itens=itens,
                            lojas=lojas, sel_loja=loja_id,
-                           receitas=receitas, produtos=produtos, materias=materias)
+                           receitas=receitas, produtos=produtos, materias=materias,
+                           sugestoes=sugestoes)
 
 
 # ── Entrada em lote no Estoque de Loja ──
