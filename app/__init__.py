@@ -1032,6 +1032,16 @@ def _migrate_postgres(app):
     """)
     _try("CREATE INDEX IF NOT EXISTS idx_lembrete_optout_data ON lembrete_pedido_optout(data_entrega)")
 
+    # Indices em tabelas que crescem por movimentacao — historico de estoque
+    # e itens de pedido sao consultados muito por FK (estoque_loja_id,
+    # estoque_producao_id, pedido_id) e ordenados por data. Sem indice,
+    # cada listagem vira full-scan.
+    _try("CREATE INDEX IF NOT EXISTS idx_mov_estoque_loja_el ON mov_estoque_loja(estoque_loja_id)")
+    _try("CREATE INDEX IF NOT EXISTS idx_mov_estoque_loja_data ON mov_estoque_loja(data)")
+    _try("CREATE INDEX IF NOT EXISTS idx_mov_estoque_producao_ep ON mov_estoque_producao(estoque_producao_id)")
+    _try("CREATE INDEX IF NOT EXISTS idx_mov_estoque_producao_data ON mov_estoque_producao(data)")
+    _try("CREATE INDEX IF NOT EXISTS idx_pedido_item_pedido ON pedido_item(pedido_id)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
