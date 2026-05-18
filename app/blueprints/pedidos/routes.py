@@ -1392,6 +1392,9 @@ def estoque_loja_vincular():
     nome_orfao = orfao.nome_pendente or '?'
     qtd_orfao = orfao.quantidade or 0
 
+    # Salva apelido global pra reusar em lancamentos futuros (qualquer loja).
+    _salvar_apelido_global(nome_orfao, alvo_tipo, alvo_id)
+
     if existente and existente.id != orfao.id:
         anterior = existente.quantidade or 0
         existente.quantidade = anterior + qtd_orfao
