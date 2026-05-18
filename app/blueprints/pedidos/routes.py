@@ -984,7 +984,11 @@ def estoque_loja():
         loja_id = int(sel) if sel else None
 
     loja = Loja.query.get(loja_id) if loja_id else None
-    itens = EstoqueLoja.query.filter_by(loja_id=loja_id).all() if loja_id else []
+    itens = (EstoqueLoja.query.filter_by(loja_id=loja_id)
+             .options(joinedload(EstoqueLoja.receita),
+                      joinedload(EstoqueLoja.produto),
+                      joinedload(EstoqueLoja.materia_prima))
+             .all()) if loja_id else []
     lojas = _lojas_operacionais()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all() \
         if current_user.is_admin() else []
