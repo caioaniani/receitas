@@ -807,11 +807,11 @@ class MovEstoqueLoja(db.Model):
     __tablename__ = 'mov_estoque_loja'
 
     id = db.Column(db.Integer, primary_key=True)
-    estoque_loja_id = db.Column(db.Integer, db.ForeignKey('estoque_loja.id'), nullable=False)
+    estoque_loja_id = db.Column(db.Integer, db.ForeignKey('estoque_loja.id'), nullable=False, index=True)
     # 50 pra caber 'venda_seru_sem_estoque' (22) e futuros tipos.
     tipo = db.Column(db.String(50), nullable=False)
     quantidade = db.Column(db.Integer, nullable=False)
-    data = db.Column(db.DateTime, default=agora)
+    data = db.Column(db.DateTime, default=agora, index=True)
     referencia = db.Column(db.String(200))
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
