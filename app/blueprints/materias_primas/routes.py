@@ -101,6 +101,38 @@ def estoque():
     return render_template('materias_primas/estoque.html', materias=materias, alertas=alertas)
 
 
+@materias_primas_bp.route('/estoque/ocr-nota', methods=['POST'])
+@login_required
+@catalogo_required
+def estoque_ocr_nota():
+    """Recebe upload de imagem de nota/cupom e devolve itens extraidos +
+    sugestao de match com MPs cadastradas. JSON pra ser consumido por JS
+    no /estoque ou na pagina de entrada."""
+    from app.services.ocr_nota import extrair_itens_nota
+    from app.services.copilot import _resolver_mp
+    f = request.files.get('imagem')
+    if not f or not f.filename:
+        return jsonify(ok=False, erro='sem_imagem'), 400
+    mimetype = f.mimetype or 'image/jpeg'
+    if not mimetype.startswith('image/'):
+        return jsonify(ok=False, erro='arquivo_nao_eh_imagem'), 400
+    data = f.read()
+    if len(data) > 8 * 1024 * 1024:
+        return jsonify(ok=False, erro='imagem_muito_grande'), 400
+    dados = extrair_itens_nota(data, mimetype=mimetype)
+    if dados.get('erro'):
+        return jsonify(ok=False, erro=dados['erro'],
+                       raw=dados.get('raw', '')), 422
+    # Enriquece cada item com sugestao de match no cadastro de MPs.
+    for it in dados.get('itens', []) or []:
+        nome = (it.get('nome') or '').strip()
+        if nome:
+            matches = _resolver_mp(nome)
+            it['matches'] = matches
+            it['resolvido'] = matches[0] if matches else None
+    return jsonify(ok=True, dados=dados)
+
+
 @materias_primas_bp.route('/estoque/entrada', methods=['POST'])
 @login_required
 @catalogo_required
