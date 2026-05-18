@@ -199,13 +199,13 @@ def resolver_lista(linhas_parseadas):
 
     Itens sem match nao sao mais 'erro' — entram no balanco como pendentes
     e ganham linha em EstoqueProducao com nome_pendente preenchido."""
-    receitas, produtos, orfaos = _carregar_catalogo()
+    receitas, produtos, orfaos, apelidos = _carregar_catalogo()
     enriq = []
     for item in linhas_parseadas:
         if item.get('erro'):
             enriq.append(item)
             continue
-        matches = _matches_para(item['nome'], receitas, produtos, orfaos)
+        matches = _matches_para(item['nome'], receitas, produtos, orfaos, apelidos)
         resolvido = matches[0] if matches else None
         atual = 0
         if resolvido:
