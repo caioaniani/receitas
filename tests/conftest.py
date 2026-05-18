@@ -32,8 +32,7 @@ def app():
 def admin_user(app):
     from app.extensions import db
     from app.models import Usuario
-    u = Usuario(nome='admin teste', email='admin@test.com',
-                papel='admin', ativo=True)
+    u = Usuario(nome='admin teste', login='admin', papel='admin')
     u.set_senha('123')
     db.session.add(u)
     db.session.commit()
