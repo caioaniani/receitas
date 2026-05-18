@@ -65,10 +65,20 @@
             </thead>
             <tbody>
                 {% for el in pendentes %}
+                {% set sug = sugestoes.get(el.id) %}
                 <tr class="table-warning">
                     <td class="fw-semibold">
                         <span class="badge bg-warning text-dark me-1" style="font-size:10px;">Pendente</span>
                         {{ el.nome_item }}
+                        {% if sug %}
+                        <div class="small text-muted mt-1">
+                            <i class="bi bi-magic"></i> sugestão:
+                            <span class="fw-semibold">{{ sug.nome }}</span>
+                            <span class="badge bg-light text-dark border" style="font-size:9px;">
+                                {{ sug.tipo }}{% if sug.match == 'apelido' %} · apelido salvo{% elif sug.match == 'fuzzy' %} · aproximação{% endif %}
+                            </span>
+                        </div>
+                        {% endif %}
                     </td>
                     <td class="text-center fw-bold">{{ el.quantidade }}</td>
                     <td>
@@ -77,18 +87,32 @@
                             <input type="hidden" name="estoque_id" value="{{ el.id }}">
                             <select name="alvo_tipo" class="form-select form-select-sm" style="width:100px;"
                                     onchange="atualizarVincLoja(this)">
-                                <option value="receita">Receita</option>
-                                <option value="produto">Produto</option>
-                                <option value="mp">MP</option>
+                                <option value="receita" {% if sug and sug.tipo == 'receita' %}selected{% endif %}>Receita</option>
+                                <option value="produto" {% if sug and sug.tipo == 'produto' %}selected{% endif %}>Produto</option>
+                                <option value="mp" {% if sug and sug.tipo == 'mp' %}selected{% endif %}>MP</option>
                             </select>
                             <select name="alvo_id" class="form-select form-select-sm vinc-item-loja" required>
-                                {% for r in receitas %}
-                                <option value="{{ r.id }}">{{ r.categoria }} — {{ r.nome }}</option>
-                                {% endfor %}
+                                {% if sug and sug.tipo == 'receita' %}
+                                    {% for r in receitas %}
+                                    <option value="{{ r.id }}" {% if r.id == sug.id %}selected{% endif %}>{{ r.categoria }} — {{ r.nome }}</option>
+                                    {% endfor %}
+                                {% elif sug and sug.tipo == 'produto' %}
+                                    {% for p in produtos %}
+                                    <option value="{{ p.id }}" {% if p.id == sug.id %}selected{% endif %}>{{ p.nome }}</option>
+                                    {% endfor %}
+                                {% elif sug and sug.tipo == 'mp' %}
+                                    {% for m in materias %}
+                                    <option value="{{ m.id }}" {% if m.id == sug.id %}selected{% endif %}>{{ m.nome }}</option>
+                                    {% endfor %}
+                                {% else %}
+                                    {% for r in receitas %}
+                                    <option value="{{ r.id }}">{{ r.categoria }} — {{ r.nome }}</option>
+                                    {% endfor %}
+                                {% endif %}
                             </select>
-                            <button type="submit" class="btn btn-sm btn-primary"
+                            <button type="submit" class="btn btn-sm {% if sug %}btn-success{% else %}btn-primary{% endif %}"
                                     onclick="return confirm('Vincular este pendente?')">
-                                <i class="bi bi-link"></i> Vincular
+                                <i class="bi {% if sug %}bi-check2-circle{% else %}bi-link{% endif %}"></i> {% if sug %}Confirmar{% else %}Vincular{% endif %}
                             </button>
                         </form>
                     </td>
