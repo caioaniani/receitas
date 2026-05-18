@@ -717,7 +717,7 @@ class PedidoItem(db.Model):
     __tablename__ = 'pedido_item'
 
     id = db.Column(db.Integer, primary_key=True)
-    pedido_id = db.Column(db.Integer, db.ForeignKey('pedido_loja.id'), nullable=False)
+    pedido_id = db.Column(db.Integer, db.ForeignKey('pedido_loja.id'), nullable=False, index=True)
     receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
     produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
     materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'), nullable=True)
