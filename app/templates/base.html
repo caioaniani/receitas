@@ -230,8 +230,12 @@
             Rentabilidade
         </a>
         <a href="{{ url_for('relatorios.custos') }}"
-           class="sidebar-link {% if request.path.startswith('/relatorios') %}active{% endif %}">
+           class="sidebar-link {% if request.path == '/relatorios/custos' %}active{% endif %}">
             Relatórios de Custos
+        </a>
+        <a href="{{ url_for('relatorios.previsao') }}"
+           class="sidebar-link {% if request.path.startswith('/relatorios/previsao') %}active{% endif %}">
+            Previsão de demanda
         </a>
         <a href="{{ url_for('main.todo') }}"
            class="sidebar-link {% if request.path == '/todo' %}active{% endif %}">
