@@ -1094,6 +1094,26 @@ def _score_proximidade(query, nome):
     return (starts_with, diff_len)
 
 
+def _rapidfuzz_top(query, choices, score_cutoff=60, limit=5):
+    """Fallback semantico quando substring nao bate. Usa rapidfuzz
+    token_set_ratio (robusto a ordem de palavras e abreviacoes). Retorna
+    [(idx, score, choice)] ordenado por score desc, so acima do cutoff.
+    choices = lista de strings (nomes).
+    """
+    try:
+        from rapidfuzz import process, fuzz
+    except ImportError:
+        return []
+    if not query or not choices:
+        return []
+    results = process.extract(
+        query, choices, scorer=fuzz.token_set_ratio,
+        limit=limit, score_cutoff=score_cutoff,
+    )
+    # results = [(choice, score, idx), ...]
+    return [(idx, score, choice) for choice, score, idx in results]
+
+
 def _resolver_produto(nome):
     from sqlalchemy import func
     matches = []
@@ -1109,8 +1129,23 @@ def _resolver_produto(nome):
         matches.append({'tipo': 'produto', 'id': p.id, 'nome': p.nome, 'match': 'fuzzy'})
     for r in Receita.query.filter(Receita.nome.ilike(f'%{nome}%')).limit(10).all():
         matches.append({'tipo': 'receita', 'id': r.id, 'nome': r.nome, 'match': 'fuzzy'})
-    matches.sort(key=lambda m: _score_proximidade(nome, m['nome']))
-    return matches[:5]
+    if matches:
+        matches.sort(key=lambda m: _score_proximidade(nome, m['nome']))
+        return matches[:5]
+    # Fallback rapidfuzz — quando nenhuma substring bate (ex: "PFR" vs
+    # "Pao Frances Fermentado", "cro almnd" vs "Croissant Almond").
+    produtos = Produto.query.all()
+    receitas = Receita.query.all()
+    pool = [('produto', p.id, p.nome) for p in produtos] + \
+           [('receita', r.id, r.nome) for r in receitas]
+    if not pool:
+        return []
+    nomes = [n for _, _, n in pool]
+    for idx, score, _ in _rapidfuzz_top(nome, nomes, score_cutoff=60, limit=5):
+        tipo, _id, nome_real = pool[idx]
+        matches.append({'tipo': tipo, 'id': _id, 'nome': nome_real,
+                         'match': 'aproximado'})
+    return matches
 
 
 def _resolver_mp(nome):
@@ -1123,8 +1158,19 @@ def _resolver_mp(nome):
         return matches
     for m in MateriaPrima.query.filter(MateriaPrima.nome.ilike(f'%{nome}%')).limit(10).all():
         matches.append({'id': m.id, 'nome': m.nome, 'unidade': m.unidade, 'match': 'fuzzy'})
-    matches.sort(key=lambda x: _score_proximidade(nome, x['nome']))
-    return matches[:5]
+    if matches:
+        matches.sort(key=lambda x: _score_proximidade(nome, x['nome']))
+        return matches[:5]
+    # Fallback rapidfuzz pra MPs com nome muito diferente do digitado.
+    mps = MateriaPrima.query.all()
+    if not mps:
+        return []
+    nomes = [m.nome for m in mps]
+    for idx, score, _ in _rapidfuzz_top(nome, nomes, score_cutoff=60, limit=5):
+        m = mps[idx]
+        matches.append({'id': m.id, 'nome': m.nome, 'unidade': m.unidade,
+                         'match': 'aproximado'})
+    return matches
 
 
 # ── Executores READ (sem aprovacao) ───────────────────────────────────
