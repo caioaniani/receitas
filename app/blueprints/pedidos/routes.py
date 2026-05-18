@@ -1359,6 +1359,31 @@ def estoque_loja_entrada_lote_aplicar():
     return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
 
 
+def _salvar_apelido_global(nome_digitado, alvo_tipo, alvo_id):
+    """Cria/atualiza LojaProdutoMap (apelido global) ao vincular um pendente.
+
+    Vale pra qualquer loja — apelido 'PFR' vinculado uma vez em Ribeiro
+    serve tambem em Anesio. Confirmado_em preenchido = entrada/saida em
+    lote usa direto sem virar pendente.
+    """
+    nome = (nome_digitado or '').strip()
+    if not nome or nome == '?' or alvo_tipo not in ('receita', 'produto', 'mp'):
+        return
+    from sqlalchemy import func as sa_func
+    mp = LojaProdutoMap.query.filter(
+        sa_func.lower(LojaProdutoMap.nome_digitado) == nome.lower()
+    ).first()
+    if not mp:
+        mp = LojaProdutoMap(nome_digitado=nome)
+        db.session.add(mp)
+    mp.receita_id = alvo_id if alvo_tipo == 'receita' else None
+    mp.produto_id = alvo_id if alvo_tipo == 'produto' else None
+    mp.materia_prima_id = alvo_id if alvo_tipo == 'mp' else None
+    mp.ignorar = False
+    mp.confirmado_em = agora()
+    mp.confirmado_por = current_user.id
+
+
 @pedidos_bp.route('/estoque-loja/vincular', methods=['POST'])
 @login_required
 @admin_required
