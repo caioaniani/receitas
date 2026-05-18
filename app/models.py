@@ -672,10 +672,10 @@ class MovEstoqueProducao(db.Model):
     __tablename__ = 'mov_estoque_producao'
 
     id = db.Column(db.Integer, primary_key=True)
-    estoque_producao_id = db.Column(db.Integer, db.ForeignKey('estoque_producao.id'), nullable=False)
+    estoque_producao_id = db.Column(db.Integer, db.ForeignKey('estoque_producao.id'), nullable=False, index=True)
     tipo = db.Column(db.String(20), nullable=False)
     quantidade = db.Column(db.Integer, nullable=False)
-    data = db.Column(db.DateTime, default=agora)
+    data = db.Column(db.DateTime, default=agora, index=True)
     referencia = db.Column(db.String(200))
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
