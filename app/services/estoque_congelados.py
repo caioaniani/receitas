@@ -144,6 +144,13 @@ def _matches_para(nome, receitas, produtos, orfaos=(), apelidos=()):
         seen.add(key)
         out.append({'tipo': tipo, 'id': _id, 'nome': nome_real, 'match': kind})
 
+    # 0. apelido global confirmado — match exato ascii vira atalho direto
+    for ap_digitado, ap_asc, ap_tipo, ap_id, ap_nome in apelidos:
+        if ap_asc == alvo:
+            add(ap_tipo, ap_id, ap_nome, 'apelido')
+    if out:
+        return out
+
     # 1. exato — orfaos primeiro pra colar nele se for reaplicar o balanco
     for oid, onome, oasc in orfaos:
         if oasc == alvo:
