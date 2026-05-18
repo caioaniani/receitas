@@ -193,6 +193,29 @@ def _matches_para(nome, receitas, produtos, orfaos=(), apelidos=()):
     return out[:10]
 
 
+def sugerir_para_pendentes(estoques_pendentes):
+    """Pra cada EstoqueProducao pendente, retorna {ep_id: melhor_match}.
+
+    Usado em /pedidos/congelados pra pre-selecionar o dropdown do
+    vincular. Match pode ser receita ou produto — MP nao se aplica aqui.
+    """
+    if not estoques_pendentes:
+        return {}
+    receitas, produtos, _, apelidos = _carregar_catalogo()
+    # Filtra apelidos que apontam pra MP (nao aplicavel em congelados).
+    apelidos = [a for a in apelidos if a[2] in ('receita', 'produto')]
+    out = {}
+    for ep in estoques_pendentes:
+        nome = ep.nome_pendente if hasattr(ep, 'nome_pendente') else None
+        if not nome:
+            continue
+        # Nao passa orfaos pra nao sugerir o proprio pendente.
+        matches = _matches_para(nome, receitas, produtos, (), apelidos)
+        if matches:
+            out[ep.id] = matches[0]
+    return out
+
+
 def resolver_lista(linhas_parseadas):
     """Enriquece cada item com matches, resolvido (primeiro match),
     estoque_atual e delta. Itens com 'erro' passam intactos.
