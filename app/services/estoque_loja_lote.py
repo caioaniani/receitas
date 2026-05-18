@@ -209,13 +209,13 @@ def _filtro_para_resolvido(loja_id, resolvido):
 
 
 def resolver_lista(linhas_parseadas, loja_id):
-    receitas, produtos, materias, orfaos = _carregar_catalogo(loja_id)
+    receitas, produtos, materias, orfaos, apelidos = _carregar_catalogo(loja_id)
     enriq = []
     for item in linhas_parseadas:
         if item.get('erro'):
             enriq.append(item)
             continue
-        matches = _matches_para(item['nome'], receitas, produtos, materias, orfaos)
+        matches = _matches_para(item['nome'], receitas, produtos, materias, orfaos, apelidos)
         resolvido = matches[0] if matches else None
         atual = 0
         if resolvido and loja_id:
