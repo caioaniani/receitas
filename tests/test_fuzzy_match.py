@@ -28,11 +28,11 @@ def test_score_proximidade_prefere_mais_curto(app):
 def test_resolver_produto_sourdough(app):
     """Sourdough deve vencer Mini Sourdough."""
     from app.extensions import db
-    from app.models import Receita
     from app.services.copilot import _resolver_produto
+    from tests.conftest import _make_receita
     db.session.add_all([
-        Receita(nome='Mini Sourdough', categoria='Paes'),
-        Receita(nome='Sourdough', categoria='Paes'),
+        _make_receita('Mini Sourdough'),
+        _make_receita('Sourdough'),
     ])
     db.session.commit()
     matches = _resolver_produto('sourdough')
@@ -43,10 +43,11 @@ def test_resolver_produto_sourdough(app):
 def test_apelido_global_loja_lote(app, loja):
     """Apelido salvo em LojaProdutoMap vale na entrada em lote da loja."""
     from app.extensions import db
-    from app.models import Receita, LojaProdutoMap
+    from app.models import LojaProdutoMap
     from app.services import estoque_loja_lote as svc
+    from tests.conftest import _make_receita
     from datetime import datetime
-    r = Receita(nome='Pao Frances Fermentado', categoria='Paes')
+    r = _make_receita('Pao Frances Fermentado')
     db.session.add(r)
     db.session.flush()
     mp = LojaProdutoMap(nome_digitado='PFR', receita_id=r.id,
