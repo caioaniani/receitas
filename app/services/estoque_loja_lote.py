@@ -124,7 +124,7 @@ def _carregar_catalogo(loja_id):
     return receitas, produtos, materias, orfaos, apelidos
 
 
-def _matches_para(nome, receitas, produtos, materias, orfaos):
+def _matches_para(nome, receitas, produtos, materias, orfaos, apelidos=()):
     """Retorna [{tipo, id, nome, match}]. tipo em receita/produto/mp/pendente."""
     alvo = _ascii(nome)
     if not alvo:
@@ -137,6 +137,13 @@ def _matches_para(nome, receitas, produtos, materias, orfaos):
             return
         seen.add(key)
         out.append({'tipo': tipo, 'id': _id, 'nome': nome_real, 'match': kind})
+
+    # 0. apelido global confirmado — match exato no nome digitado vira atalho.
+    for ap_digitado, ap_asc, ap_tipo, ap_id, ap_nome in apelidos:
+        if ap_asc == alvo:
+            add(ap_tipo, ap_id, ap_nome, 'apelido')
+    if out:
+        return out
 
     # 1. exato
     for oid, onome, oasc in orfaos:
