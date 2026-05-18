@@ -912,6 +912,9 @@ def congelados_vincular():
     nome_orfao = orfao.nome_pendente or '?'
     qtd_orfao = orfao.quantidade or 0
 
+    # Apelido global — proximo balanco com o mesmo nome resolve direto.
+    _salvar_apelido_global(nome_orfao, alvo_tipo, alvo_id)
+
     if existente and existente.id != orfao.id:
         anterior = existente.quantidade or 0
         existente.quantidade = anterior + qtd_orfao
