@@ -9,7 +9,30 @@ from app.utils import agora as agora_brt
 from config import Config
 
 
+def _init_sentry():
+    """Opt-in: so inicia se SENTRY_DSN estiver setado. Captura exceptions
+    nao tratadas + breadcrumbs do Flask. PII desligado por default — nao
+    queremos vazar nome de cliente em stack trace."""
+    dsn = os.environ.get('SENTRY_DSN', '').strip()
+    if not dsn:
+        return
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.flask import FlaskIntegration
+        from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+        sentry_sdk.init(
+            dsn=dsn,
+            integrations=[FlaskIntegration(), SqlalchemyIntegration()],
+            traces_sample_rate=float(os.environ.get('SENTRY_TRACES', '0.05')),
+            send_default_pii=False,
+            environment=os.environ.get('SENTRY_ENV', 'production'),
+        )
+    except ImportError:
+        print('⚠️  sentry-sdk nao instalada — `pip install sentry-sdk[flask]`')
+
+
 def create_app(config_class=None):
+    _init_sentry()
     app = Flask(__name__)
     app.config.from_object(config_class or Config)
 
