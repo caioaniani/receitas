@@ -54,10 +54,9 @@ def catalogo(app):
     """Cria 1 receita, 1 produto, 1 MP pra testes que precisam de match."""
     from app.extensions import db
     from app.models import Receita, Produto, MateriaPrima
-    r = Receita(nome='Croissant Tradicional', categoria='Croissants',
-                preco_venda=10.0)
+    r = _make_receita('Croissant Tradicional', categoria='Croissants')
     p = Produto(nome='Pao Frances', ativo=True)
-    mp = MateriaPrima(nome='Farinha', unidade='kg')
+    mp = MateriaPrima(nome='Farinha', unidade='kg', custo_por_kg=5.0)
     db.session.add_all([r, p, mp])
     db.session.commit()
     return {'receita': r, 'produto': p, 'mp': mp}
