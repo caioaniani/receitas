@@ -196,6 +196,46 @@ def _matches_para(nome, receitas, produtos, materias, orfaos, apelidos=()):
     return out[:10]
 
 
+def sugerir_para_pendentes(estoques_pendentes):
+    """Pra cada EstoqueLoja pendente, retorna {ep_id: melhor_match}.
+
+    Usado em /pedidos/estoque-loja pra pre-selecionar o dropdown da
+    vinculacao — admin so confirma com 1 clique em vez de buscar na lista.
+    Retorna {} pra item sem nome_pendente. Match pode ser receita/produto/mp.
+    """
+    if not estoques_pendentes:
+        return {}
+    receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.query.all()]
+    produtos = [(p.id, p.nome, _ascii(p.nome)) for p in Produto.query.all()]
+    materias = [(m.id, m.nome, _ascii(m.nome)) for m in MateriaPrima.query.all()]
+    apelidos = []
+    for mp in LojaProdutoMap.query.filter(
+        LojaProdutoMap.confirmado_em.isnot(None),
+        LojaProdutoMap.ignorar.is_(False),
+    ).all():
+        if mp.receita_id:
+            apelidos.append((mp.nome_digitado, _ascii(mp.nome_digitado),
+                              'receita', mp.receita_id,
+                              mp.receita.nome if mp.receita else mp.nome_digitado))
+        elif mp.produto_id:
+            apelidos.append((mp.nome_digitado, _ascii(mp.nome_digitado),
+                              'produto', mp.produto_id,
+                              mp.produto.nome if mp.produto else mp.nome_digitado))
+        elif mp.materia_prima_id:
+            apelidos.append((mp.nome_digitado, _ascii(mp.nome_digitado),
+                              'mp', mp.materia_prima_id,
+                              mp.materia_prima.nome if mp.materia_prima else mp.nome_digitado))
+    out = {}
+    for ep in estoques_pendentes:
+        nome = ep.nome_pendente if hasattr(ep, 'nome_pendente') else None
+        if not nome:
+            continue
+        matches = _matches_para(nome, receitas, produtos, materias, (), apelidos)
+        if matches:
+            out[ep.id] = matches[0]
+    return out
+
+
 def _filtro_para_resolvido(loja_id, resolvido):
     """Monta o filtro de EstoqueLoja.filter_by() pra um resolvido."""
     filtro = {'loja_id': loja_id}
