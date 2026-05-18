@@ -741,8 +741,12 @@ def congelados():
     itens = EstoqueProducao.query.all()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+    from app.services import estoque_congelados as svc_cong
+    pendentes = [it for it in itens if it.pendente]
+    sugestoes = svc_cong.sugerir_para_pendentes(pendentes) if pendentes else {}
     return render_template('pedidos/congelados.html', itens=itens,
-                           receitas=receitas, produtos=produtos)
+                           receitas=receitas, produtos=produtos,
+                           sugestoes=sugestoes)
 
 
 @pedidos_bp.route('/congelados/historico')
