@@ -28,6 +28,13 @@ def app():
         db.drop_all()
 
 
+def _make_receita(nome, categoria='Paes'):
+    """Cria Receita com defaults validos pra NOT NULLs."""
+    from app.models import Receita
+    return Receita(nome=nome, categoria=categoria, rendimento_qtd=1,
+                   rendimento_unidade='un', peso_base=100.0)
+
+
 @pytest.fixture
 def admin_user(app):
     from app.extensions import db
