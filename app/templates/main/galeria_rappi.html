@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Galeria Rappi → upload{% endblock %}
 {% block content %}
+{# Remove Referer das requisicoes pra evitar 403 do Rappi (que bloqueia
+   hot-link por dominio). Aplica a toda a pagina e a fetch JS. #}
+<meta name="referrer" content="no-referrer">
+<style>img[src*="rappi.com"] { background:#f5f5f5; }</style>
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h1 class="page-title mb-0"><i class="bi bi-images"></i> Galeria Rappi → upload no sistema</h1>
     <a href="{{ url_for('main.cardapio') }}" class="btn btn-sm btn-outline-secondary">Voltar ao cardápio</a>
