@@ -32,7 +32,8 @@ def test_aplicar_vendas_manuais_nao_baixa_estoque(app, admin_user, loja, catalog
 
 
 def test_sugerir_pedido_combina_real_e_manual(app, admin_user, loja, catalogo):
-    """Sugestao soma MovEstoqueLoja venda_vnda + VendaManualLoja."""
+    """Sugestao soma MovEstoqueLoja venda_vnda + VendaManualLoja no
+    intervalo data_inicio..data_fim, e separa por fonte."""
     from app.extensions import db
     from app.models import EstoqueLoja, MovEstoqueLoja, VendaManualLoja
     from app.services import vendas_manuais as svc
@@ -42,22 +43,28 @@ def test_sugerir_pedido_combina_real_e_manual(app, admin_user, loja, catalogo):
     db.session.add(el)
     db.session.flush()
 
-    # 14 dias atras → +7 vendas reais via vnda
+    hoje_ = date.today()
+    inicio = hoje_ - timedelta(days=13)
+    fim = hoje_
+
+    # 7 vendas reais via vnda dentro do periodo
     for i in range(7):
         db.session.add(MovEstoqueLoja(
             estoque_loja_id=el.id, tipo='venda_vnda', quantidade=2,
-            data=datetime.now() - timedelta(days=i + 1),
+            data=datetime.combine(hoje_ - timedelta(days=i + 1),
+                                   datetime.min.time()),
         ))
-    # 7 vendas manuais nos ultimos 7 dias
+    # 7 vendas manuais dentro do periodo
     for i in range(7):
         db.session.add(VendaManualLoja(
             loja_id=loja.id, receita_id=catalogo['receita'].id,
-            data_venda=date.today() - timedelta(days=i),
+            data_venda=hoje_ - timedelta(days=i),
             quantidade=1,
         ))
     db.session.commit()
 
-    out = svc.sugerir_pedido(loja.id, dias_lookback=14, dias_cobertura=7)
+    out = svc.sugerir_pedido(loja.id, data_inicio=inicio,
+                              data_fim=fim, dias_cobertura=7)
     assert len(out) == 1
     item = out[0]
     # Total: 7*2 (vnda) + 7*1 (manual) = 21 vendas / 14 dias = 1.5/dia
@@ -67,6 +74,7 @@ def test_sugerir_pedido_combina_real_e_manual(app, admin_user, loja, catalogo):
     assert item['ideal_cobertura'] == 11
     assert item['qtd_sugerida'] == 6
     assert set(item['fontes']) == {'vnda', 'manual'}
+    assert item['por_fonte'] == {'vnda': 14, 'manual': 7}
 
 
 def test_sugerir_pedido_sem_dados(app, loja):
