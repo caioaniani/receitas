@@ -84,21 +84,49 @@
             statusEl.innerHTML = '<span class="text-warning">sem match</span>';
             return false;
         }
-        statusEl.innerHTML = '<span class="text-muted">baixando...</span>';
+        statusEl.innerHTML = '<span class="text-muted">enviando...</span>';
+
+        // Estrategia 1: usa a <img> ja carregada na pagina + canvas.
+        // Se Rappi servir CORS, canvas.toBlob funciona.
+        var imgEl = card.querySelector('img');
+        var blob = null;
         try {
-            // referrerPolicy 'no-referrer' impede o browser de mandar
-            // Referer pro Rappi (que bloqueia hot-link). mode 'cors' tenta
-            // resposta legivel pra blob.
-            var resp = await fetch(url, {
-                mode: 'cors',
-                referrerPolicy: 'no-referrer',
-                credentials: 'omit',
-            });
-            if (!resp.ok) throw new Error('HTTP ' + resp.status);
-            var blob = await resp.blob();
+            if (imgEl && imgEl.complete && imgEl.naturalWidth > 0) {
+                var canvas = document.createElement('canvas');
+                canvas.width = imgEl.naturalWidth;
+                canvas.height = imgEl.naturalHeight;
+                var ctx = canvas.getContext('2d');
+                ctx.drawImage(imgEl, 0, 0);
+                blob = await new Promise(function(resolve) {
+                    canvas.toBlob(resolve, 'image/jpeg', 0.85);
+                });
+            }
+        } catch(e) {
+            // canvas tainted = Rappi nao serviu CORS — fica com blob=null
+            blob = null;
+        }
+
+        // Estrategia 2 (fallback): fetch direto. Provavelmente bloqueado por CORS.
+        if (!blob) {
+            try {
+                var resp = await fetch(url, {
+                    mode: 'cors',
+                    referrerPolicy: 'no-referrer',
+                    credentials: 'omit',
+                });
+                if (resp.ok) blob = await resp.blob();
+            } catch(e) {}
+        }
+
+        if (!blob) {
+            statusEl.innerHTML = '<span class="text-danger">✗ CORS bloqueou — use o botão Baixar e suba na ficha</span>';
+            return false;
+        }
+
+        try {
             var fd = new FormData();
             fd.append('csrf_token', CSRF);
-            fd.append('imagem_arquivo', blob, 'rappi.png');
+            fd.append('imagem_arquivo', blob, 'rappi.jpg');
             var uploadUrl = '/cardapio-img/' + tipo + '/' + id + '/upload';
             var up = await fetch(uploadUrl, { method: 'POST', body: fd });
             if (up.redirected || up.ok) {
@@ -108,7 +136,7 @@
             }
             throw new Error('upload HTTP ' + up.status);
         } catch(e) {
-            statusEl.innerHTML = '<span class="text-danger">✗ ' + (e.message || 'cors bloqueado — baixe manual') + '</span>';
+            statusEl.innerHTML = '<span class="text-danger">✗ ' + (e.message || 'erro upload') + '</span>';
             return false;
         }
     }
