@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Galeria Rappi → upload{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-images"></i> Galeria Rappi → upload no sistema</h1>
+    <a href="{{ url_for('main.cardapio') }}" class="btn btn-sm btn-outline-secondary">Voltar ao cardápio</a>
+</div>
+
+<div class="alert alert-info small">
+    <strong>Como funciona</strong>: o servidor da padaria não consegue baixar do Rappi (403). Mas o seu browser sim.
+    Esta página carrega cada imagem do Rappi diretamente no seu navegador.
+    Clica <strong>"Salvar no sistema"</strong> e o JS busca a imagem + faz upload pro produto correspondente.
+    Se o Rappi bloquear o fetch via CORS, use o botão <strong>"Baixar"</strong> e suba manualmente na ficha do produto.
+</div>
+
+<div class="d-flex gap-2 mb-3 flex-wrap">
+    <button id="btn-aplicar-todos" class="btn btn-success btn-sm">
+        <i class="bi bi-magic"></i> Salvar todos com match (≥70%)
+    </button>
+    <span id="status-geral" class="small text-muted"></span>
+</div>
+
+<div class="row g-3" id="galeria">
+{% for it in itens %}
+<div class="col-md-3 col-sm-4 col-6">
+    <div class="card h-100" data-url="{{ it.url }}"
+         data-tipo="{{ it.match_tipo or '' }}"
+         data-id="{{ it.match_id or '' }}"
+         data-score="{{ it.match_score or 0 }}">
+        <img src="{{ it.url }}" loading="lazy"
+             onerror="this.parentElement.classList.add('border-danger'); this.style.opacity=.3; this.alt='✗ falhou';"
+             alt="{{ it.nome_ref }}"
+             style="width:100%; aspect-ratio:1; object-fit:cover;">
+        <div class="card-body p-2">
+            <div class="small fw-bold" style="font-size:11px;">{{ it.nome_ref }}</div>
+            {% if it.match_nome %}
+            <div class="small text-muted" style="font-size:10px;">
+                → {{ it.match_nome }}
+                <span class="badge {% if it.match_score >= 90 %}bg-success{% elif it.match_score >= 75 %}bg-warning text-dark{% else %}bg-secondary{% endif %}"
+                      style="font-size:9px;">{{ it.match_score }}%</span>
+            </div>
+            {% if it.ja_tem %}
+            <div class="badge bg-warning text-dark mt-1" style="font-size:9px;">já tem foto</div>
+            {% endif %}
+            <button type="button" class="btn btn-sm btn-success w-100 mt-2 btn-salvar"
+                    style="font-size:11px;">
+                <i class="bi bi-upload"></i> Salvar no sistema
+            </button>
+            <a href="{{ it.url }}" download="{{ it.nome_ref|replace(' ', '_')|lower }}.png"
+               target="_blank" class="btn btn-sm btn-outline-secondary w-100 mt-1"
+               style="font-size:10px;">
+                <i class="bi bi-download"></i> Baixar
+            </a>
+            {% else %}
+            <div class="small text-danger mt-1" style="font-size:10px;">sem match no catálogo</div>
+            <a href="{{ it.url }}" download="{{ it.nome_ref|replace(' ', '_')|lower }}.png"
+               target="_blank" class="btn btn-sm btn-outline-secondary w-100 mt-2"
+               style="font-size:10px;">
+                <i class="bi bi-download"></i> Baixar manual
+            </a>
+            {% endif %}
+            <div class="small mt-1 status-individual" style="font-size:10px;"></div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+</div>
+
+<script>
+(function(){
+    var CSRF = '{{ csrf_token() }}';
+
+    async function salvarCard(card) {
+        var statusEl = card.querySelector('.status-individual');
+        var url = card.dataset.url;
+        var tipo = card.dataset.tipo;
+        var id = card.dataset.id;
+        if (!tipo || !id) {
+            statusEl.innerHTML = '<span class="text-warning">sem match</span>';
+            return false;
+        }
+        statusEl.innerHTML = '<span class="text-muted">baixando...</span>';
+        try {
+            var resp = await fetch(url, { mode: 'cors' });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            var blob = await resp.blob();
+            var fd = new FormData();
+            fd.append('csrf_token', CSRF);
+            fd.append('imagem_arquivo', blob, 'rappi.png');
+            var uploadUrl = '/cardapio-img/' + tipo + '/' + id + '/upload';
+            var up = await fetch(uploadUrl, { method: 'POST', body: fd });
+            if (up.redirected || up.ok) {
+                statusEl.innerHTML = '<span class="text-success">✓ salvo</span>';
+                card.style.background = '#d4edda';
+                return true;
+            }
+            throw new Error('upload HTTP ' + up.status);
+        } catch(e) {
+            statusEl.innerHTML = '<span class="text-danger">✗ ' + (e.message || 'cors bloqueado — baixe manual') + '</span>';
+            return false;
+        }
+    }
+
+    document.querySelectorAll('.btn-salvar').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var card = btn.closest('.card');
+            btn.disabled = true;
+            salvarCard(card).finally(function() { btn.disabled = false; });
+        });
+    });
+
+    document.getElementById('btn-aplicar-todos').addEventListener('click', async function() {
+        var btn = this;
+        var statusGeral = document.getElementById('status-geral');
+        btn.disabled = true;
+        var cards = Array.from(document.querySelectorAll('.card[data-tipo][data-id]'))
+            .filter(c => parseInt(c.dataset.score || 0) >= 70 && c.dataset.id);
+        var ok = 0, fail = 0;
+        for (var i = 0; i < cards.length; i++) {
+            statusGeral.textContent = 'aplicando ' + (i+1) + '/' + cards.length + '...';
+            var r = await salvarCard(cards[i]);
+            if (r) ok++; else fail++;
+            await new Promise(r => setTimeout(r, 200));  // suaviza
+        }
+        statusGeral.textContent = 'concluído: ' + ok + ' ok, ' + fail + ' falhas';
+        btn.disabled = false;
+    });
+})();
+</script>
+{% endblock %}
