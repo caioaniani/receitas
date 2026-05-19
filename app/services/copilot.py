@@ -620,6 +620,9 @@ PAPEIS_POR_TOOL = {
     'enviar_digest_whatsapp': {'admin'},
     'registrar_desperdicio': {'admin', 'gerente', 'funcionario'},
     'registrar_desperdicio_lote': {'admin', 'gerente', 'funcionario'},
+    'criar_cliente_b2b': {'admin'},
+    'criar_venda_b2b': {'admin'},
+    'consultar_cliente_b2b': {'admin', 'gerente'},
     'anexar_foto_pedido': {'admin', 'gerente', 'funcionario'},
     'receber_pedido': {'admin', 'gerente', 'funcionario'},
     # Consultas + planejamento — todos
