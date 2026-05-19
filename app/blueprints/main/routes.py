@@ -268,7 +268,7 @@ def cardapio_img_upload(tipo, id):
         return redirect(url_back)
 
     _db.session.commit()
-    flash('Imagem salva.', 'success')
+    flash(f'Imagem salva ({tamanho_kb} KB apos compressao).', 'success')
     return redirect(url_back)
 
 
