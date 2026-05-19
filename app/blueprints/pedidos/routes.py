@@ -2027,3 +2027,16 @@ def vendas_manuais_upload(loja_id):
         from flask import session
         session['vendas_manuais_ultimos_ignorados'] = resultado['ignorados'][:50]
     return redirect(url_for('pedidos.vendas_manuais', loja_id=loja_id))
+
+
+@pedidos_bp.route('/lojas/<int:loja_id>/vendas-manuais/limpar', methods=['POST'])
+@login_required
+@admin_required
+def vendas_manuais_limpar(loja_id):
+    """Apaga TODAS as vendas manuais de uma loja. Pra refazer upload do
+    zero se subiu errado. Exige confirmacao no front (onsubmit)."""
+    from app.models import VendaManualLoja
+    n = VendaManualLoja.query.filter_by(loja_id=loja_id).delete()
+    db.session.commit()
+    flash(f'{n} venda(s) manual(is) apagada(s). Pode refazer o upload.', 'warning')
+    return redirect(url_for('pedidos.vendas_manuais', loja_id=loja_id))
