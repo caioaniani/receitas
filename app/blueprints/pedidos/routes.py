@@ -1853,13 +1853,46 @@ def vendas_manuais(loja_id):
         parsed = {'data_venda': data_venda.isoformat(),
                   'texto': texto, 'itens': resolvidos}
 
-    historico = (VendaManualLoja.query.filter_by(loja_id=loja_id)
-                 .order_by(VendaManualLoja.data_venda.desc(),
-                           VendaManualLoja.id.desc())
-                 .limit(50).all())
+    # Resumo agregado por data — mostra TODAS as datas com totais, em vez
+    # de uma listagem que cortava em 50 ultimas (confundia: parecia que so
+    # tinha lancado um dia).
+    from sqlalchemy import func as sa_func
+    resumo_q = (db.session.query(
+                    VendaManualLoja.data_venda.label('data'),
+                    sa_func.count(VendaManualLoja.id).label('n_itens'),
+                    sa_func.sum(VendaManualLoja.quantidade).label('qtd_total'),
+                )
+                .filter(VendaManualLoja.loja_id == loja_id)
+                .group_by(VendaManualLoja.data_venda)
+                .order_by(VendaManualLoja.data_venda.desc())
+                .all())
+    resumo_datas = [{'data': r.data, 'n_itens': r.n_itens or 0,
+                     'qtd_total': int(r.qtd_total or 0)}
+                    for r in resumo_q]
+    total_geral = {
+        'n_vendas': sum(r['n_itens'] for r in resumo_datas),
+        'qtd_total': sum(r['qtd_total'] for r in resumo_datas),
+        'n_dias': len(resumo_datas),
+    }
+    # Filtra historico detalhado por uma data especifica se solicitado
+    filtro_data = request.args.get('detalhe_data')
+    detalhe = []
+    if filtro_data:
+        try:
+            d = date.fromisoformat(filtro_data)
+            detalhe = (VendaManualLoja.query
+                       .filter_by(loja_id=loja_id, data_venda=d)
+                       .order_by(VendaManualLoja.id.desc()).all())
+        except ValueError:
+            pass
+
     return render_template('pedidos/vendas_manuais.html', loja=loja,
                             parsed=parsed, resultado=resultado,
-                            historico=historico, hoje=hoje_brt().isoformat())
+                            resumo_datas=resumo_datas,
+                            total_geral=total_geral,
+                            detalhe=detalhe,
+                            filtro_data=filtro_data,
+                            hoje=hoje_brt().isoformat())
 
 
 @pedidos_bp.route('/lojas/<int:loja_id>/sugerir-pedido', methods=['GET', 'POST'])
