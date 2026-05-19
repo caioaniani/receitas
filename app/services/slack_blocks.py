@@ -437,7 +437,7 @@ def build_resultado(resultado, ok=True):
         # mostra a imagem inline pro motorista escanear no celular.
         if resultado.get('qr_png_url'):
             blocks.append(_section(
-                f':qrcode: *QR Code de saida* — motorista escaneia + digita PIN.\n'
+                ':qrcode: *Pedido enviado.* Motorista escaneia o QR abaixo + digita o PIN.\n'
                 f'<{resultado.get("qr_url", "")}|abrir pagina>'
             ))
             blocks.append({
@@ -445,6 +445,12 @@ def build_resultado(resultado, ok=True):
                 'image_url': resultado['qr_png_url'],
                 'alt_text': 'QR Code de saida do pedido',
             })
+            blocks.append(_section(
+                ':information_source: Depois de escanear, o motorista verá um '
+                'botão no celular pra gerar o *QR de entrega*. Quando chegar na '
+                'loja, alguém escaneia esse QR + digita o PIN da loja pra '
+                'finalizar como *recebido* e somar no estoque automaticamente.'
+            ))
         return blocks
     erro = resultado.get('erro') if isinstance(resultado, dict) else str(resultado)
     return [_section(f':warning: Erro: {erro or "desconhecido"}')]
