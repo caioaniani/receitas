@@ -1815,3 +1815,115 @@ def desperdicio_excluir(id):
     db.session.commit()
     flash('Desperdicio excluido e estoque estornado.', 'success')
     return redirect(url_for('pedidos.desperdicio', loja=loja_id))
+
+
+# ── Vendas manuais loja (sem PDV API) + sugestao de pedido ──
+
+@pedidos_bp.route('/lojas/<int:loja_id>/vendas-manuais', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def vendas_manuais(loja_id):
+    """Lanca vendas manuais de uma loja (sem API PDV). Texto colado igual
+    balanco. NAO baixa estoque — so registra pra previsao/sugestao."""
+    from app.services import vendas_manuais as svc
+    from app.models import VendaManualLoja
+    loja = Loja.query.get_or_404(loja_id)
+    parsed = None
+    resultado = None
+
+    if request.method == 'POST':
+        acao = request.form.get('acao')
+        texto = (request.form.get('texto') or '').strip()
+        data_str = (request.form.get('data_venda') or '').strip()
+        try:
+            data_venda = date.fromisoformat(data_str) if data_str else hoje_brt()
+        except ValueError:
+            data_venda = hoje_brt()
+
+        parseados = svc.parsear_lista(texto)
+        resolvidos = svc.resolver_lista(parseados, loja_id) if parseados else []
+
+        if acao == 'aplicar' and resolvidos:
+            resultado = svc.aplicar_vendas_manuais(
+                resolvidos, loja_id, data_venda, current_user,
+            )
+            flash(f'{len(resultado["aplicados"])} venda(s) lançada(s), '
+                  f'{len(resultado["ignorados"])} ignorada(s).', 'success')
+            return redirect(url_for('pedidos.vendas_manuais', loja=loja_id))
+        parsed = {'data_venda': data_venda.isoformat(),
+                  'texto': texto, 'itens': resolvidos}
+
+    historico = (VendaManualLoja.query.filter_by(loja_id=loja_id)
+                 .order_by(VendaManualLoja.data_venda.desc(),
+                           VendaManualLoja.id.desc())
+                 .limit(50).all())
+    return render_template('pedidos/vendas_manuais.html', loja=loja,
+                            parsed=parsed, resultado=resultado,
+                            historico=historico, hoje=hoje_brt().isoformat())
+
+
+@pedidos_bp.route('/lojas/<int:loja_id>/sugerir-pedido', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def sugerir_pedido(loja_id):
+    """Mostra sugestao de pedido baseada em vendas (reais + manuais) +
+    estoque atual. POST cria pedido com as qtds informadas."""
+    from app.services import vendas_manuais as svc
+    loja = Loja.query.get_or_404(loja_id)
+
+    if request.method == 'POST':
+        try:
+            data_entrega = date.fromisoformat(request.form.get('data_entrega') or '')
+        except ValueError:
+            flash('Data invalida.', 'danger')
+            return redirect(url_for('pedidos.sugerir_pedido', loja_id=loja_id))
+        refs = request.form.getlist('item_ref[]')
+        qtds = request.form.getlist('item_qtd[]')
+        itens = []
+        for i, ref in enumerate(refs):
+            ref = (ref or '').strip()
+            if not ref or ':' not in ref:
+                continue
+            tipo, _, sid = ref.partition(':')
+            try:
+                qtd = int(qtds[i])
+            except (IndexError, ValueError):
+                continue
+            if qtd <= 0 or tipo not in ('receita', 'produto', 'mp') or not sid.isdigit():
+                continue
+            itens.append({'tipo': tipo, 'id': int(sid), 'quantidade': qtd})
+        if not itens:
+            flash('Nenhum item com quantidade > 0.', 'warning')
+            return redirect(url_for('pedidos.sugerir_pedido', loja_id=loja_id))
+        pedido = PedidoLoja(loja_id=loja_id, data_entrega=data_entrega,
+                            criado_por=current_user.id, status='pendente')
+        db.session.add(pedido)
+        db.session.flush()
+        for it in itens:
+            pi = PedidoItem(pedido_id=pedido.id, quantidade=it['quantidade'])
+            if it['tipo'] == 'receita':
+                pi.receita_id = it['id']
+            elif it['tipo'] == 'produto':
+                pi.produto_id = it['id']
+            else:
+                pi.materia_prima_id = it['id']
+            db.session.add(pi)
+        db.session.commit()
+        flash(f'Pedido #{pedido.id} criado a partir da sugestao.', 'success')
+        return redirect(url_for('pedidos.detalhe', id=pedido.id))
+
+    try:
+        dias_lookback = int(request.args.get('dias', 14))
+    except ValueError:
+        dias_lookback = 14
+    try:
+        dias_cobertura = int(request.args.get('cobertura', 7))
+    except ValueError:
+        dias_cobertura = 7
+    sugestao = svc.sugerir_pedido(loja_id, dias_lookback=dias_lookback,
+                                    dias_cobertura=dias_cobertura)
+    return render_template('pedidos/sugerir_pedido.html', loja=loja,
+                            sugestao=sugestao,
+                            dias_lookback=dias_lookback,
+                            dias_cobertura=dias_cobertura,
+                            amanha=(hoje_brt() + timedelta(days=1)).isoformat())
