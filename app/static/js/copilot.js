@@ -350,6 +350,66 @@
             '</div></div>';
     }
 
+    function previewCriarVendaB2B(conversaId, params) {
+        var itens = params.itens || [];
+        var parcelas = params.parcelas || [];
+        var cliBadge;
+        if (params.cliente_avulso) {
+            cliBadge = '<span class="badge bg-warning text-dark">avulso</span> ' + escape(params.cliente_nome_resolvido || params.cliente_nome || '?');
+        } else {
+            cliBadge = '<span class="badge bg-info text-dark">cadastrado</span> ' + escape(params.cliente_nome_resolvido || '?');
+            if (params.cliente_desconto) cliBadge += ' <small class="text-muted">(' + params.cliente_desconto + '% desc)</small>';
+        }
+        var data = params.data_venda || 'hoje';
+        var nf = params.nf_numero ? ' · NF ' + escape(params.nf_numero) : '';
+
+        var rows = '';
+        itens.forEach(function(it, idx) {
+            var nome = it.resolvido ? escape(it.resolvido.nome) : '<span class="text-danger">' + escape(it.nome_original) + ' (não achei)</span>';
+            var atual = (it.estoque_atual !== null && it.estoque_atual !== undefined) ? it.estoque_atual : '—';
+            var preco = (it.preco_unitario !== undefined) ? Number(it.preco_unitario).toFixed(2) : '0,00';
+            var subt = (it.subtotal !== undefined) ? Number(it.subtotal).toFixed(2) : '0,00';
+            rows += '<tr>' +
+                '<td>' + nome + '</td>' +
+                '<td class="text-end" style="color:#888;">' + atual + '</td>' +
+                '<td class="text-end">' + it.quantidade + '</td>' +
+                '<td class="text-end">R$ ' + preco + '</td>' +
+                '<td class="text-end fw-bold">R$ ' + subt + '</td>' +
+                '</tr>';
+        });
+
+        var parcelasHtml = '';
+        if (parcelas.length) {
+            parcelasHtml = '<div class="copilot-preview-row mt-2"><span class="label">parcelas</span></div><ul style="font-size:11.5px; margin-bottom:0;">';
+            parcelas.forEach(function(p) {
+                parcelasHtml += '<li>' + escape(p.vencimento || '?') + ' · R$ ' + Number(p.valor || 0).toFixed(2) + (p.forma_pagamento ? ' (' + escape(p.forma_pagamento) + ')' : '') + '</li>';
+            });
+            parcelasHtml += '</ul>';
+        } else {
+            parcelasHtml = '<div class="copilot-preview-row mt-2"><small class="text-muted">sem parcelas — 1 parcela única no dia da venda</small></div>';
+        }
+
+        var nResolv = itens.filter(function(it) { return it.resolvido; }).length;
+        var podeCriar = nResolv > 0 && (params.cliente_nome_resolvido || '').trim();
+
+        return '<div class="copilot-preview" data-conversa="' + conversaId + '" data-tipo="criar_venda_b2b">' +
+            '<div class="copilot-preview-header">criar venda B2B</div>' +
+            '<div class="copilot-preview-row"><span class="label">cliente</span> ' + cliBadge + '</div>' +
+            '<div class="copilot-preview-row"><span class="label">data</span> ' + escape(data) + nf + '</div>' +
+            '<div style="max-height:280px; overflow-y:auto; margin-top:6px;">' +
+            '<table class="table table-sm table-bordered mb-0" style="font-size:11.5px;">' +
+            '<thead><tr><th>item</th><th class="text-end">freezer</th><th class="text-end">qtd</th><th class="text-end">preço</th><th class="text-end">subt.</th></tr></thead>' +
+            '<tbody>' + rows + '</tbody>' +
+            '<tfoot><tr><td colspan="4" class="text-end fw-bold">total</td><td class="text-end fw-bold">R$ ' + Number(params.total || 0).toFixed(2) + '</td></tr></tfoot>' +
+            '</table></div>' +
+            parcelasHtml +
+            '<div class="copilot-preview-actions">' +
+            '<button type="button" class="btn-pill btn-pill-outline copilot-cancel">cancelar</button>' +
+            '<button type="button" class="btn-pill btn-pill-primary copilot-approve"' +
+            (podeCriar ? '' : ' disabled') + '>criar venda</button>' +
+            '</div></div>';
+    }
+
     function previewGenerico(conversaId, tipo, params, titulo, labelAprovar) {
         var rows = '';
         for (var k in params) {
