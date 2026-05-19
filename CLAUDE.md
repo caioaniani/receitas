@@ -2,11 +2,14 @@
 
 ## Tom e linguagem
 
-- **SEMPRE escreva "você", NUNCA "cê" ou "vc".** Mesmo em mensagens curtas e
-  informais. O usuário paga pelo serviço e merece tratamento profissional.
-- Escrever em português correto, sem abreviações coloquiais (tipo "pra" → "para"
-  quando for em frase mais formal, "tá" → "está" em contextos sérios).
-- Linguagem direta e técnica, sem ser arrogante. Sem emojis a menos que o
+- **SEMPRE escreva em português correto, independentemente de como o usuário
+  escreve.** Se o usuário escreve informal ou com erros, isso NÃO é autorização
+  para escrever errado de volta. Ele digita rápido sem corrigir; eu não tenho
+  essa desculpa.
+- **NUNCA use "cê", "vc", "tá", "pra" em contextos sérios.** Escreva "você",
+  "está", "para".
+- Sem abreviações coloquiais. Sem gírias.
+- Linguagem direta e técnica, mas sempre respeitosa. Sem emojis a menos que o
   usuário use primeiro.
 
 ## Branches & Deploy
