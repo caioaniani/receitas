@@ -28,6 +28,25 @@ from app.utils import agora
 csrf.exempt(handshake_bp)
 
 
+@handshake_bp.route('/qr-img/<token>.png')
+def qr_img(token):
+    """Serve o PNG do QR Code direto pelo token. Usado pelo Slack pra
+    embed via image block. Token aqui SO valida que existe — nao consome
+    nem expira o handshake."""
+    import qrcode
+    qr_row = PedidoQRCode.query.filter_by(token=token).first()
+    if not qr_row:
+        abort(404)
+    url = url_for('handshake.handshake', token=token, _external=True)
+    img = qrcode.make(url)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return send_file(buf, mimetype='image/png',
+                      download_name=f'qr-{token[:8]}.png',
+                      max_age=0)
+
+
 @handshake_bp.route('/<token>', methods=['GET', 'POST'])
 def handshake(token):
     qr = PedidoQRCode.query.filter_by(token=token).first()
