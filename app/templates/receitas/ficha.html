@@ -314,6 +314,33 @@
     </div>
 </form>
 
+<!-- Forms de imagem do cardapio — FORA do form principal (HTML nao permite aninhamento) -->
+<div class="card mt-3 mb-3">
+    <div class="card-header py-2"><strong><i class="bi bi-image"></i> Foto do cardápio digital</strong></div>
+    <div class="card-body">
+        {% if receita.imagem_blob %}
+        <div class="mb-2 d-flex align-items-start gap-2">
+            <img src="{{ url_for('main.cardapio_img', tipo='receita', id=receita.id) }}"
+                 alt="" style="max-height:120px;border-radius:6px;border:1px solid #ddd;">
+            <form method="POST" action="{{ url_for('main.cardapio_img_remover', tipo='receita', id=receita.id) }}"
+                  onsubmit="return confirm('Remover imagem?')" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Remover</button>
+            </form>
+        </div>
+        {% endif %}
+        <form method="POST" action="{{ url_for('main.cardapio_img_upload', tipo='receita', id=receita.id) }}"
+              enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="file" name="imagem_arquivo" accept="image/*" class="form-control form-control-sm" required>
+            <button type="submit" class="btn btn-sm btn-primary">
+                <i class="bi bi-upload"></i> {% if receita.imagem_blob %}Trocar foto{% else %}Enviar foto{% endif %}
+            </button>
+        </form>
+        <small class="text-muted d-block mt-1">Comprime pra ~700×700 JPEG. Se subir foto aqui, ignora a URL no campo de cima.</small>
+    </div>
+</div>
+
 <!-- Acoes admin (fora do form principal — HTML nao permite forms aninhados) -->
 {% if current_user.is_authenticated and current_user.is_admin() %}
 <div class="d-flex gap-2 flex-wrap mt-2">
