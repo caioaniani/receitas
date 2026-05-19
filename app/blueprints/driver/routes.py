@@ -14,6 +14,7 @@ from app.extensions import db
 from app.utils import agora, hoje as hoje_brt
 from app.models import (
     AtribuicaoEntrega, Driver, EntregaFoto,
+    PedidoLoja, PedidoQRCode,
 )
 from app.services import vnda
 from app.services import dropbox_storage
