@@ -15,7 +15,7 @@ from decimal import Decimal
 from app.extensions import db
 from app.models import (VendaB2B, VendaB2BItem, VendaB2BParcela,
                         EstoqueProducao, MovEstoqueProducao,
-                        PrecoAtacado, ClienteB2B)
+                        ClienteB2B, Receita, Produto)
 from app.utils import agora, hoje
 
 
