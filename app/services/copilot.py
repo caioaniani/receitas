@@ -2785,7 +2785,37 @@ def _executar_read(tool_name, params, user):  # noqa: F811
         except Exception as exc:  # noqa: BLE001
             logger.exception('enviar_digest_whatsapp falhou')
             return {'erro': str(exc)}
+    if tool_name == 'consultar_cliente_b2b':
+        try:
+            return _read_consultar_cliente_b2b(params, user)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception('consultar_cliente_b2b falhou')
+            return {'erro': str(exc)}
     return _BASE_READ2(tool_name, params, user)
+
+
+def _read_consultar_cliente_b2b(params, user):
+    from app.models import ClienteB2B
+    q = ClienteB2B.query.filter_by(ativo=True)
+    nome = (params.get('nome') or '').strip()
+    if nome:
+        q = q.filter(ClienteB2B.nome.ilike(f'%{nome}%'))
+    clientes = q.order_by(ClienteB2B.nome).limit(20).all()
+    if not clientes:
+        return {'texto': 'Nenhum cliente B2B encontrado' + (f' com "{nome}"' if nome else '.')}
+    linhas = []
+    for c in clientes:
+        partes = [c.nome]
+        if c.cnpj_cpf:
+            partes.append(c.cnpj_cpf)
+        if c.contato:
+            partes.append(f'contato: {c.contato}')
+        if c.telefone:
+            partes.append(c.telefone)
+        if c.desconto_percentual:
+            partes.append(f'{c.desconto_percentual:.0f}% desc')
+        linhas.append('• ' + ' · '.join(partes))
+    return {'texto': '\n'.join(linhas)}
 
 
 def _read_enviar_digest_whatsapp(params, user):
