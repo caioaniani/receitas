@@ -391,6 +391,8 @@
             else if (d.tipo === 'entrada_lote_loja') html += previewEntradaLoteLoja(d.conversa_id, d.params);
             else if (d.tipo === 'registrar_desperdicio') html += previewGenerico(d.conversa_id, d.tipo, d.params, 'registrar desperdicio', 'registrar');
             else if (d.tipo === 'registrar_desperdicio_lote') html += previewRegistrarDesperdicioLote(d.conversa_id, d.params);
+            else if (d.tipo === 'criar_venda_b2b') html += previewCriarVendaB2B(d.conversa_id, d.params);
+            else if (d.tipo === 'criar_cliente_b2b') html += previewGenerico(d.conversa_id, d.tipo, d.params, 'cadastrar cliente B2B', 'cadastrar');
         }
         return html;
     }
