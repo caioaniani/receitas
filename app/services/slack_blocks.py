@@ -401,7 +401,15 @@ def build_resultado(resultado, ok=True):
             if resultado.get(k):
                 partes.append(f'_{k}_: `{resultado[k]}`')
         if resultado.get('url'):
-            partes.append(f"<{resultado['url']}|abrir no sistema>")
+            # Slack mrkdwn exige URL absoluta no <url|texto>. Se vier relativa,
+            # prefixa com APP_BASE_URL (env) ou nome do dominio prod.
+            url = resultado['url']
+            if url.startswith('/'):
+                import os
+                base = (os.environ.get('APP_BASE_URL')
+                        or 'https://gestao.opaopadariaartesanal.com.br').rstrip('/')
+                url = f'{base}{url}'
+            partes.append(f'<{url}|abrir no sistema>')
         blocks = [_section(' · '.join(partes))]
         # Se gerou QR Code (ex: separou pedido → QR saida pro motorista),
         # mostra a imagem inline pro motorista escanear no celular.
