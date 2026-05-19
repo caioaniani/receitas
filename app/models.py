@@ -159,7 +159,9 @@ class Receita(db.Model):
     preco_venda = db.Column(db.Float)
     preco_loja = db.Column(db.Float)
     preco_site = db.Column(db.Float)
-    imagem_url = db.Column(db.String(400))  # URL externa pra cardapio digital
+    imagem_url = db.Column(db.String(400))  # URL externa pra cardapio digital (fallback)
+    imagem_blob = db.Column(db.LargeBinary)  # foto enviada pelo admin (preferida)
+    imagem_mimetype = db.Column(db.String(50))
     rendimento_qtd = db.Column(db.Float, nullable=False)
     rendimento_unidade = db.Column(db.String(30), nullable=False)
     peso_base = db.Column(db.Float, nullable=False)
