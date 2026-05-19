@@ -6,7 +6,7 @@ from flask_login import login_required, current_user
 
 from app.blueprints.main import main_bp
 from app.decorators import admin_required
-from app.extensions import db
+from app.extensions import db, csrf
 from app.models import (MateriaPrima, Receita, ReceitaIngrediente, Produto, ProdutoItem,
                         Funcionario, Atribuicao, AlertaEstoque, PlanejamentoProducao,
                         AuditLog, Usuario, PedidoLoja, PedidoLocal, AtribuicaoEntrega,
