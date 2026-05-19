@@ -253,7 +253,7 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
         por_fonte_item[chave]['manual'] += qtd
 
     if not vendas_por_item:
-        return []
+        return {'itens': [], 'aviso_vnda': aviso_vnda}
 
     # 3. Estoque atual da loja por chave
     estoque_por_item = {}
