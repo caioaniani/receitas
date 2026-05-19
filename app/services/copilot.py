@@ -1916,9 +1916,16 @@ def executar_mudar_status_pedido(params, user):
 
     transicoes = {
         'confirmar': ('pendente', 'confirmado'),
+        # Pode separar a partir de qualquer estado anterior (admin nao
+        # precisa passar por 'confirmar' antes).
         'separar': (('pendente', 'confirmado'), 'separado'),
-        'enviar': ('separado', 'em_transporte'),
-        'receber': ('em_transporte', 'entregue'),
+        # Enviar aceita qualquer estado anterior — sistema "queima" as etapas
+        # intermediarias. Se o usuario disser 'envia o pedido' direto do
+        # pendente, o sistema entende que o admin pulou separacao no copilot.
+        'enviar': (('pendente', 'confirmado', 'separado'), 'em_transporte'),
+        # Receber aceita pular se nao passou por em_transporte (ex: admin
+        # confirma recebimento direto pelo Slack sem QR).
+        'receber': (('separado', 'em_transporte'), 'entregue'),
         'cancelar': (('pendente', 'confirmado', 'separado', 'em_transporte'), 'cancelado'),
     }
     if novo not in transicoes:
