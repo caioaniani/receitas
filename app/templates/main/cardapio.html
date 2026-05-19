@@ -190,6 +190,10 @@ footer {
     <a href="{{ url_for('main.cardapio', tipo='site') }}" class="tipo-btn {% if tipo == 'site' %}active{% endif %}">Site</a>
     <div class="spacer"></div>
     {% if current_user.is_admin() %}
+    <a href="{{ url_for('main.cardapio_img_revisar') }}" class="tipo-btn"
+       style="border-color: var(--accent); color: var(--accent);">
+        <i class="bi bi-check2-square"></i> Revisar fotos
+    </a>
     <a href="{{ url_for('main.galeria_rappi') }}" class="tipo-btn"
        style="border-color: var(--accent); color: var(--accent);">
         <i class="bi bi-images"></i> Galeria Rappi (subir fotos)
