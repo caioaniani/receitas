@@ -27,7 +27,8 @@
          data-tipo="{{ it.match_tipo or '' }}"
          data-id="{{ it.match_id or '' }}"
          data-score="{{ it.match_score or 0 }}">
-        <img src="{{ it.url }}" loading="lazy"
+        <img src="{{ it.url }}" loading="lazy" referrerpolicy="no-referrer"
+             crossorigin="anonymous"
              onerror="this.parentElement.classList.add('border-danger'); this.style.opacity=.3; this.alt='✗ falhou';"
              alt="{{ it.nome_ref }}"
              style="width:100%; aspect-ratio:1; object-fit:cover;">
