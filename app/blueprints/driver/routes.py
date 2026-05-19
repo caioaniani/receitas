@@ -362,3 +362,22 @@ def qr_entrega(token, pedido_id):
     return render_template('driver/qr_entrega.html',
                             driver=driver, pedido=pedido, qr=qr,
                             url=url, qr_png=qr_png)
+
+
+@driver_bp.route('/<token>/pedidos-loja')
+def pedidos_loja(token):
+    """Lista pedidos de loja em transporte pra motorista escolher e
+    gerar QR de entrega. Mostra todos em_transporte (sistema interno,
+    poucos motoristas)."""
+    driver = _driver_por_token(token)
+    if not driver or not driver.ativo:
+        abort(404)
+    if not _autenticado(driver):
+        return render_template('handshake/erro.html',
+                                msg='Faça login no painel do motorista (volte e digite o PIN).'), 401
+    pedidos = (PedidoLoja.query
+               .filter_by(status='em_transporte')
+               .order_by(PedidoLoja.data_entrega.asc())
+               .all())
+    return render_template('driver/pedidos_loja.html',
+                            driver=driver, pedidos=pedidos)
