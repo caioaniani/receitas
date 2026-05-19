@@ -36,14 +36,18 @@ def _agregar_vendas_vnda_api(data_inicio, data_fim):
     e agrega por (tipo, id) via VndaProdutoMap. NAO depende de sync
     previo do cron — funciona retroativo.
 
+    Desempacota cestas: se VndaProdutoMap aponta pra Produto cesta (com
+    ProdutoItens), explode em componentes (mesma logica do vnda_sync).
+    Ex: 34 Family Box (1 unid) × 5 Croissant + 3 Pao Frances + ... vira
+    34*5 croissants + 34*3 pao frances + ... contabilizado.
+
     Retorna (vendas_dict, aviso). vendas_dict = {(tipo, id): qtd_total}.
-    aviso = string com mensagem ou None.
     """
     from app.services import vnda as vnda_api
+    from app.services.vnda_sync import _componentes_de_cesta
     from app.models import VndaProdutoMap
 
     try:
-        # API VNDA busca janela ampla; depois filtramos por data_entrega
         todos = vnda_api._buscar_pedidos_janela(data_inicio, data_fim)
     except vnda_api.VndaUnavailableError as e:
         return {}, f'VNDA indisponivel: {e}'
@@ -71,7 +75,6 @@ def _agregar_vendas_vnda_api(data_inicio, data_fim):
             if not nome or qtd <= 0:
                 continue
             sku = (item.get('sku') or item.get('product_sku') or '').strip() or None
-            # Match contra VndaProdutoMap (so confirmados)
             mp = None
             if sku:
                 mp = VndaProdutoMap.query.filter_by(vnda_sku=sku).first()
@@ -83,6 +86,23 @@ def _agregar_vendas_vnda_api(data_inicio, data_fim):
                 continue
             if mp.estado != 'mapeado':
                 continue
+
+            # Se for Produto cesta, desempacota nos componentes (mesma logica
+            # do vnda_sync._baixar_item). Multiplica qtd vendida pela qtd
+            # de cada componente dentro do produto.
+            componentes = _componentes_de_cesta(mp.produto) if mp.produto_id else []
+            if componentes:
+                for tipo_c, item_id_c, _, qtd_no_item in componentes:
+                    if not item_id_c:
+                        continue
+                    chave_c = (tipo_c if tipo_c != 'mp' else 'mp', item_id_c)
+                    # Soma proporcional. Pra inteiros, arredonda.
+                    qtd_total = int(round(qtd * float(qtd_no_item or 1.0)))
+                    if qtd_total > 0:
+                        vendas[chave_c] += qtd_total
+                continue
+
+            # Nao eh cesta — conta direto
             chave = None
             if mp.receita_id:
                 chave = ('receita', mp.receita_id)
