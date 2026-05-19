@@ -579,6 +579,8 @@ TOOLS = [
     # Desperdicio (sobra do dia / vencido)
     TOOL_REGISTRAR_DESPERDICIO, TOOL_REGISTRAR_DESPERDICIO_LOTE,
     TOOL_CONSULTAR_DESPERDICIO,
+    # B2B (venda industria pra cliente externo)
+    TOOL_CRIAR_CLIENTE_B2B, TOOL_CRIAR_VENDA_B2B, TOOL_CONSULTAR_CLIENTE_B2B,
 ]
 
 # Quais tools requerem preview/aprovacao (writes)
