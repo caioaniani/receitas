@@ -61,6 +61,16 @@
                    value="{{ '%.2f' % produto.preco_site if produto.preco_site else '' }}"
                    step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
         </div>
+        <div class="col-md-12 mt-2">
+            <label class="form-label small text-muted">
+                <i class="bi bi-image"></i> URL da imagem (cardápio digital)
+            </label>
+            <input type="url" name="imagem_url" value="{{ produto.imagem_url or '' }}"
+                   class="form-control form-control-sm input-blue" placeholder="https://...">
+            {% if produto.imagem_url %}
+            <div class="mt-1"><img src="{{ produto.imagem_url }}" alt="" style="max-height:60px;border-radius:6px;"></div>
+            {% endif %}
+        </div>
         <div class="col-md-2">
             <label class="form-label small fw-bold" style="color:#e65100;">Custo Direto (R$/un)</label>
             <input type="number" name="custo_direto" id="custo_direto"
