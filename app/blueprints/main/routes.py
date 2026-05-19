@@ -113,8 +113,17 @@ def rentabilidade():
 @login_required
 def cardapio():
     tipo = request.args.get('tipo', 'atacado')
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
-    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.categoria, Produto.nome).all()
+    # defer(imagem_blob) — listagem nao precisa do blob, so se r.imagem_blob
+    # eh truthy (testado abaixo, e o teste eh barato com lazy load).
+    from sqlalchemy.orm import defer
+    receitas = Receita.query.options(
+        defer(Receita.imagem_blob),
+        defer(Receita.imagem_mimetype),
+    ).order_by(Receita.categoria, Receita.nome).all()
+    produtos = Produto.query.options(
+        defer(Produto.imagem_blob),
+        defer(Produto.imagem_mimetype),
+    ).filter_by(ativo=True).order_by(Produto.categoria, Produto.nome).all()
 
     campo = {'atacado': 'preco_venda', 'loja': 'preco_loja', 'site': 'preco_site'}
     attr = campo.get(tipo, 'preco_venda')
