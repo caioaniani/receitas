@@ -106,19 +106,28 @@ def _chave_item(receita_id=None, produto_id=None, mp_id=None):
     return None
 
 
-def sugerir_pedido(loja_id, dias_lookback=14, dias_cobertura=7):
-    """Calcula sugestao de pedido pra uma loja.
+def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
+                    dias_cobertura=7):
+    """Calcula sugestao de pedido pra uma loja num intervalo de datas.
 
-    Soma vendas reais (Seru/VNDA) + vendas manuais nos ultimos `dias_lookback`,
-    calcula media diaria, olha estoque atual, sugere qtd pra `dias_cobertura`
-    dias.
+    Soma vendas reais (Seru/VNDA via MovEstoqueLoja) + vendas manuais
+    (VendaManualLoja) entre data_inicio e data_fim. Calcula media diaria
+    e sugere qtd pra `dias_cobertura` dias.
 
-    Retorna lista [{tipo, id, nome, media_diaria, estoque_atual, qtd_sugerida,
-                     vendas_periodo, fonte}] ordenada por media decrescente.
+    data_inicio/data_fim sao `date`. Se nao fornecidos, usa ultimos 14 dias.
+    Retorna lista [{tipo, id, nome, media_diaria, estoque_atual,
+                    qtd_sugerida, vendas_periodo, por_fonte}].
+    `por_fonte` = {'vnda': qtd, 'seru': qtd, 'manual': qtd}
     """
     if not loja_id:
         return []
-    desde = hoje() - timedelta(days=dias_lookback)
+    if data_fim is None:
+        data_fim = hoje()
+    if data_inicio is None:
+        data_inicio = data_fim - timedelta(days=14)
+    if data_inicio > data_fim:
+        data_inicio, data_fim = data_fim, data_inicio
+    dias_periodo = max(1, (data_fim - data_inicio).days + 1)
 
     # 1. Vendas reais via MovEstoqueLoja
     vendas_por_item = defaultdict(int)  # (tipo, id) → qtd_total
