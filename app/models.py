@@ -700,7 +700,6 @@ class PedidoLoja(db.Model):
     loja = db.relationship('Loja', backref='pedidos')
     criador = db.relationship('Usuario')
     itens = db.relationship('PedidoItem', backref='pedido', cascade='all, delete-orphan')
-    fotos_recebimento = db.relationship('FotoRecebimento', backref='pedido', cascade='all, delete-orphan')
     qrcodes = db.relationship('PedidoQRCode', back_populates='pedido', cascade='all, delete-orphan')
 
     @property
