@@ -238,6 +238,70 @@ def cardapio_img_upload(tipo, id):
     return redirect(url_back)
 
 
+@main_bp.route('/admin/galeria-rappi')
+@login_required
+def galeria_rappi():
+    """Galeria de todas as URLs Rappi do mapping. O servidor da padaria
+    NAO consegue baixar do Rappi (403 — bloqueio de datacenter), mas o
+    browser do admin no IP residencial consegue. A pagina usa o browser
+    como ponte: fetch+upload via JS pro nosso BLOB.
+    """
+    from flask import abort
+    from app.services.cardapio_imagens import IMAGENS, _achar_match
+    from app.models import Receita, Produto
+    if not current_user.is_admin():
+        abort(403)
+    # Pra cada URL do mapping, sugere uma receita/produto do catalogo (best match)
+    receitas = {r.id: r for r in Receita.query.all()}
+    produtos = {p.id: p for p in Produto.query.filter_by(ativo=True).all()}
+    receitas_por_nome = {_norm(r.nome): r for r in receitas.values()}
+    produtos_por_nome = {_norm(p.nome): p for p in produtos.values()}
+    itens = []
+    for nome_ref, url in IMAGENS.items():
+        n = _norm(nome_ref)
+        # Tenta match exato, senao fuzzy
+        match_tipo, match_id, match_nome, match_score = None, None, None, 0
+        if n in receitas_por_nome:
+            r = receitas_por_nome[n]
+            match_tipo, match_id, match_nome, match_score = 'receita', r.id, r.nome, 100
+        elif n in produtos_por_nome:
+            p = produtos_por_nome[n]
+            match_tipo, match_id, match_nome, match_score = 'produto', p.id, p.nome, 100
+        else:
+            from rapidfuzz import process, fuzz
+            todos = [(t, oid, on) for t, dct in
+                     [('receita', receitas_por_nome), ('produto', produtos_por_nome)]
+                     for on, obj in dct.items() for oid in [obj.id]]
+            nomes_norm = [t[2] for t in todos]
+            if nomes_norm:
+                m = process.extractOne(n, nomes_norm, scorer=fuzz.token_set_ratio)
+                if m and m[1] >= 70:
+                    t = todos[m[2]]
+                    match_tipo, match_id, match_score = t[0], t[1], int(m[1])
+                    obj = receitas[t[1]] if t[0] == 'receita' else produtos[t[1]]
+                    match_nome = obj.nome
+        ja_tem = False
+        if match_tipo == 'receita':
+            ja_tem = bool(receitas[match_id].imagem_blob)
+        elif match_tipo == 'produto':
+            ja_tem = bool(produtos[match_id].imagem_blob)
+        itens.append({
+            'nome_ref': nome_ref, 'url': url,
+            'match_tipo': match_tipo, 'match_id': match_id,
+            'match_nome': match_nome, 'match_score': match_score,
+            'ja_tem': ja_tem,
+        })
+    return render_template('main/galeria_rappi.html', itens=itens)
+
+
+def _norm(s):
+    import unicodedata
+    if not s:
+        return ''
+    nfd = unicodedata.normalize('NFD', s)
+    return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn').lower().strip()
+
+
 @main_bp.route('/admin/limpar-urls-rappi', methods=['POST'])
 @login_required
 def limpar_urls_rappi():
