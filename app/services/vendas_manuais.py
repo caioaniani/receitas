@@ -132,30 +132,42 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
     # 1. Vendas reais via MovEstoqueLoja
     vendas_por_item = defaultdict(int)  # (tipo, id) → qtd_total
     fontes_por_item = defaultdict(set)
+    # MovEstoqueLoja.data eh datetime — filtro pelo range completo (inclui fim)
+    from datetime import datetime, time
+    dt_inicio = datetime.combine(data_inicio, time.min)
+    dt_fim = datetime.combine(data_fim, time.max)
+    por_fonte_item = defaultdict(lambda: defaultdict(int))  # {(tipo,id): {fonte: qtd}}
     movs = (db.session.query(MovEstoqueLoja, EstoqueLoja)
             .join(EstoqueLoja, MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id)
             .filter(EstoqueLoja.loja_id == loja_id,
                     MovEstoqueLoja.tipo.in_(VENDAS_REAIS),
-                    MovEstoqueLoja.data >= desde)
+                    MovEstoqueLoja.data >= dt_inicio,
+                    MovEstoqueLoja.data <= dt_fim)
             .all())
     for mov, el in movs:
         chave = _chave_item(el.receita_id, el.produto_id, el.materia_prima_id)
         if not chave:
             continue
-        vendas_por_item[chave] += int(mov.quantidade or 0)
-        fontes_por_item[chave].add(mov.tipo.split('_')[1])  # seru / vnda
+        qtd = int(mov.quantidade or 0)
+        vendas_por_item[chave] += qtd
+        fonte = mov.tipo.split('_')[1]  # seru / vnda
+        fontes_por_item[chave].add(fonte)
+        por_fonte_item[chave][fonte] += qtd
 
-    # 2. Vendas manuais
+    # 2. Vendas manuais (por data_venda — Date, nao datetime)
     manuais = VendaManualLoja.query.filter(
         VendaManualLoja.loja_id == loja_id,
-        VendaManualLoja.data_venda >= desde,
+        VendaManualLoja.data_venda >= data_inicio,
+        VendaManualLoja.data_venda <= data_fim,
     ).all()
     for vm in manuais:
         chave = _chave_item(vm.receita_id, vm.produto_id, vm.materia_prima_id)
         if not chave:
             continue
-        vendas_por_item[chave] += int(vm.quantidade or 0)
+        qtd = int(vm.quantidade or 0)
+        vendas_por_item[chave] += qtd
         fontes_por_item[chave].add('manual')
+        por_fonte_item[chave]['manual'] += qtd
 
     if not vendas_por_item:
         return []
