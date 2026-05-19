@@ -137,6 +137,7 @@
                         <select name="ingrediente_tipo[]" class="form-select form-select-sm ing-tipo" style="font-size:10px;">
                             <option value="mp" {{ 'selected' if (ing.tipo or 'mp') == 'mp' }}>MP (%)</option>
                             <option value="mp_direto" {{ 'selected' if ing.tipo == 'mp_direto' }}>MP (g)</option>
+                            <option value="mp_un" {{ 'selected' if ing.tipo == 'mp_un' }}>MP (un)</option>
                             <option value="receita" {{ 'selected' if ing.tipo == 'receita' }}>Receita</option>
                         </select>
                     </td>
