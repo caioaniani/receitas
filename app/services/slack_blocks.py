@@ -396,12 +396,26 @@ def build_resultado(resultado, ok=True):
         resultado = {}
     if ok and resultado.get('ok'):
         partes = ['Feito.']
-        for k in ('pedido_id', 'mov_id', 'tarefa_id', 'desperdicio_id', 'fornecedor_id'):
+        for k in ('pedido_id', 'mov_id', 'tarefa_id', 'desperdicio_id',
+                  'fornecedor_id', 'venda_id', 'cliente_id'):
             if resultado.get(k):
                 partes.append(f'_{k}_: `{resultado[k]}`')
         if resultado.get('url'):
             partes.append(f"<{resultado['url']}|abrir no sistema>")
-        return [_section(' · '.join(partes))]
+        blocks = [_section(' · '.join(partes))]
+        # Se gerou QR Code (ex: separou pedido → QR saida pro motorista),
+        # mostra a imagem inline pro motorista escanear no celular.
+        if resultado.get('qr_png_url'):
+            blocks.append(_section(
+                f':qrcode: *QR Code de saida* — motorista escaneia + digita PIN.\n'
+                f'<{resultado.get("qr_url", "")}|abrir pagina>'
+            ))
+            blocks.append({
+                'type': 'image',
+                'image_url': resultado['qr_png_url'],
+                'alt_text': 'QR Code de saida do pedido',
+            })
+        return blocks
     erro = resultado.get('erro') if isinstance(resultado, dict) else str(resultado)
     return [_section(f':warning: Erro: {erro or "desconhecido"}')]
 
