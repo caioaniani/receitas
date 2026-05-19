@@ -333,63 +333,6 @@ def cardapio_img_remover(tipo, id):
     return redirect(url_back)
 
 
-@main_bp.route('/admin/popular-imagens-cardapio', methods=['GET'])
-@login_required
-def popular_imagens_preview():
-    """Mostra tabela com sugestoes de match (nome banco → URL do Rappi)
-    pra admin revisar antes de aplicar. Aceita ?threshold=N (default 70)
-    e ?incluir_ja_tem=1 pra revisar tambem as que ja tem imagem."""
-    if not current_user.is_admin():
-        from flask import abort
-        abort(403)
-    from app.services.cardapio_imagens import preview_matches
-    try:
-        threshold = int(request.args.get('threshold', 70))
-    except ValueError:
-        threshold = 70
-    threshold = max(50, min(100, threshold))
-    incluir_ja_tem = bool(request.args.get('incluir_ja_tem'))
-    todos = preview_matches(threshold=threshold)
-    if not incluir_ja_tem:
-        todos = [it for it in todos if not it['ja_tem']]
-    com_match = [it for it in todos if it.get('url')]
-    sem_match = [it for it in todos if not it.get('url')]
-    return render_template('main/popular_imagens.html',
-                            com_match=com_match, sem_match=sem_match,
-                            threshold=threshold,
-                            incluir_ja_tem=incluir_ja_tem)
-
-
-@main_bp.route('/admin/popular-imagens-cardapio', methods=['POST'])
-@login_required
-def popular_imagens_cardapio():
-    """Aplica imagens APROVADAS no preview. Form passa aprovados[] como
-    'receita:5' / 'produto:12'. Sem checkbox marcado = nao aplica."""
-    if not current_user.is_admin():
-        from flask import abort
-        abort(403)
-    from app.services.cardapio_imagens import popular_imagens
-    from flask import flash, redirect, url_for
-    aprovados_raw = request.form.getlist('aprovados[]')
-    ids_aprovados = set()
-    for ref in aprovados_raw:
-        tipo, _, sid = ref.partition(':')
-        if tipo in ('receita', 'produto') and sid.isdigit():
-            ids_aprovados.add((tipo, int(sid)))
-    try:
-        threshold = int(request.form.get('threshold', 70))
-    except ValueError:
-        threshold = 70
-    resultado = popular_imagens(sobrescrever=False, threshold=threshold,
-                                  ids_aprovados=ids_aprovados or None)
-    flash(
-        f'Imagens populadas: {resultado["receitas_alteradas"]} receita(s) + '
-        f'{resultado["produtos_alterados"]} produto(s).',
-        'success',
-    )
-    return redirect(url_for('main.cardapio'))
-
-
 @main_bp.route('/api/exportar')
 @login_required
 def exportar():
