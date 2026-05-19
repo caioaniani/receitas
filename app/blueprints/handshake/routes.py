@@ -105,9 +105,17 @@ def _handshake_saida(qr, pedido, pin):
     qr.usado_em = agora()
     qr.usado_por_descricao = f'driver:{driver_match.nome}'
     db.session.commit()
+    # Link de proximo passo: motorista vai na loja gerar QR de entrega.
+    # driver_match.token leva pra pagina do motorista; daí ele clica em
+    # 'Pedidos de loja' ou usa o link direto pro pedido.
+    proximo_url = url_for('driver.qr_entrega',
+                           token=driver_match.token,
+                           pedido_id=pedido.id, _external=True)
     return render_template('handshake/sucesso.html',
                             msg=f'Saida confirmada por {driver_match.nome}.',
-                            pedido=pedido)
+                            pedido=pedido,
+                            proximo_label='Quando chegar na loja, gerar QR de entrega',
+                            proximo_url=proximo_url)
 
 
 def _handshake_entrega(qr, pedido, pin):
