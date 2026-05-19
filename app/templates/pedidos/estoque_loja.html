@@ -38,6 +38,14 @@
            title="Mapeamentos dos nomes digitados em Saida em Lote">
             <i class="bi bi-link-45deg"></i> Mapeamentos saida
         </a>
+        <a href="{{ url_for('pedidos.vendas_manuais', loja_id=loja.id) }}" class="btn btn-outline-info btn-sm"
+           title="Lance vendas de loja sem PDV API (so historico, nao baixa estoque)">
+            <i class="bi bi-cash-stack"></i> Vendas manuais
+        </a>
+        <a href="{{ url_for('pedidos.sugerir_pedido', loja_id=loja.id) }}" class="btn btn-success btn-sm"
+           title="Sugere pedido baseado em vendas + estoque atual">
+            <i class="bi bi-magic"></i> Sugerir pedido
+        </a>
         <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modal-ajuste">
             <i class="bi bi-plus-slash-minus"></i> Entrada / Ajuste
         </button>
