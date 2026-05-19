@@ -190,13 +190,10 @@ footer {
     <a href="{{ url_for('main.cardapio', tipo='site') }}" class="tipo-btn {% if tipo == 'site' %}active{% endif %}">Site</a>
     <div class="spacer"></div>
     {% if current_user.is_admin() %}
-    <form method="POST" action="{{ url_for('main.popular_imagens_cardapio') }}" style="display:inline;"
-          onsubmit="return confirm('Popular imagens dos produtos com URLs do Rappi (não sobrescreve existentes)?')">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="tipo-btn" style="border-color: var(--accent); color: var(--accent);">
-            <i class="bi bi-image"></i> Popular imagens
-        </button>
-    </form>
+    <a href="{{ url_for('main.popular_imagens_preview') }}" class="tipo-btn"
+       style="border-color: var(--accent); color: var(--accent);">
+        <i class="bi bi-image"></i> Popular imagens
+    </a>
     {% endif %}
     <a href="javascript:window.print()" class="tipo-btn"><i class="bi bi-printer"></i> Imprimir</a>
 </div>
