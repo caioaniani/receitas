@@ -297,6 +297,41 @@ def _executar_envio_pedido(pedido, user, ref_extra=None):
     return True, 'Pedido em transporte. Estoque da industria baixado.'
 
 
+@pedidos_bp.route('/<int:id>/qr-saida')
+@login_required
+@operacional_pedido_required
+def qr_saida(id):
+    """Gera/recicla token QR pra handshake de saida (separado → em_transporte).
+
+    Mostra QR Code apontando pra /handshake/<token>. Motorista escaneia
+    com o celular, digita PIN, e o status muda. Reutiliza token valido
+    existente pra evitar lixo se admin re-abrir a pagina."""
+    import secrets
+    from datetime import timedelta
+    from app.services.qrcode_svc import gerar_png_data_url
+    pedido = PedidoLoja.query.get_or_404(id)
+    if pedido.status != 'separado':
+        flash(f'Pedido precisa estar separado (atual: {pedido.status}).', 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
+    qr = (PedidoQRCode.query
+          .filter_by(pedido_id=pedido.id, tipo='saida', usado_em=None)
+          .filter(PedidoQRCode.expira_em > agora())
+          .order_by(PedidoQRCode.criado_em.desc()).first())
+    if not qr:
+        qr = PedidoQRCode(
+            token=secrets.token_urlsafe(24),
+            pedido_id=pedido.id, tipo='saida',
+            criado_por_id=current_user.id,
+            expira_em=agora() + timedelta(hours=2),
+        )
+        db.session.add(qr)
+        db.session.commit()
+    url = url_for('handshake.handshake', token=qr.token, _external=True)
+    qr_png = gerar_png_data_url(url)
+    return render_template('pedidos/qr_saida.html',
+                            pedido=pedido, qr=qr, url=url, qr_png=qr_png)
+
+
 @pedidos_bp.route('/<int:id>/receber', methods=['POST'])
 @login_required
 def receber(id):
