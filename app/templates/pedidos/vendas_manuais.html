@@ -109,16 +109,66 @@
 </div>
 {% endif %}
 
-{% if historico %}
-<div class="card">
-    <div class="card-header py-2"><strong>Últimas 50 vendas lançadas</strong></div>
-    <div class="table-responsive">
-        <table class="table table-sm mb-0">
-            <thead class="table-light"><tr><th>Data</th><th>Item</th><th class="text-end">Qtd</th></tr></thead>
+{% if resumo_datas %}
+<div class="d-flex justify-content-between align-items-center mb-2 mt-3">
+    <h6 class="mb-0"><i class="bi bi-bar-chart"></i> Histórico</h6>
+    <form method="POST" action="{{ url_for('pedidos.vendas_manuais_limpar', loja_id=loja.id) }}"
+          onsubmit="return confirm('APAGAR TODAS as {{ total_geral.n_vendas }} vendas manuais desta loja? Não pode desfazer.')"
+          class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-trash"></i> Apagar todas
+        </button>
+    </form>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body py-2 d-flex justify-content-between flex-wrap gap-3">
+        <div><strong>{{ total_geral.n_vendas }}</strong> linha(s) de venda</div>
+        <div><strong>{{ total_geral.qtd_total }}</strong> unidades totais</div>
+        <div><strong>{{ total_geral.n_dias }}</strong> dia(s) com lançamento</div>
+        {% if resumo_datas %}
+        <div>período: <strong>{{ resumo_datas[-1].data.strftime('%d/%m/%Y') }}</strong> → <strong>{{ resumo_datas[0].data.strftime('%d/%m/%Y') }}</strong></div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header py-2"><strong>Resumo por data</strong>
+        <small class="text-muted">— clique numa data pra ver os itens daquele dia</small>
+    </div>
+    <div class="table-responsive" style="max-height:420px;overflow-y:auto;">
+        <table class="table table-sm mb-0 table-hover">
+            <thead class="table-light" style="position:sticky;top:0;">
+                <tr><th>Data</th><th class="text-end">Linhas</th><th class="text-end">Qtd total</th></tr>
+            </thead>
             <tbody>
-            {% for h in historico %}
+            {% for r in resumo_datas %}
+            <tr {% if filtro_data == r.data.isoformat() %}class="table-active"{% endif %}>
+                <td><a href="{{ url_for('pedidos.vendas_manuais', loja_id=loja.id, detalhe_data=r.data.isoformat()) }}">
+                    {{ r.data.strftime('%d/%m/%Y (%a)') }}
+                </a></td>
+                <td class="text-end">{{ r.n_itens }}</td>
+                <td class="text-end fw-bold">{{ r.qtd_total }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if detalhe %}
+<div class="card">
+    <div class="card-header py-2">
+        <strong>Detalhe — {{ filtro_data }}</strong>
+        <a href="{{ url_for('pedidos.vendas_manuais', loja_id=loja.id) }}" class="btn btn-sm btn-outline-secondary float-end">Fechar</a>
+    </div>
+    <div class="table-responsive" style="max-height:520px;overflow-y:auto;">
+        <table class="table table-sm mb-0">
+            <thead class="table-light" style="position:sticky;top:0;"><tr><th>Item</th><th class="text-end">Qtd</th></tr></thead>
+            <tbody>
+            {% for h in detalhe %}
             <tr>
-                <td>{{ h.data_venda.strftime('%d/%m/%Y') }}</td>
                 <td>{{ h.nome_item }}</td>
                 <td class="text-end">{{ h.quantidade }}</td>
             </tr>
@@ -127,5 +177,6 @@
         </table>
     </div>
 </div>
+{% endif %}
 {% endif %}
 {% endblock %}
