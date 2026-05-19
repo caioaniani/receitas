@@ -37,6 +37,9 @@
                     <td>
                         <input type="text" name="loja_telefone[]" value="{{ l.telefone or '' }}" class="form-control form-control-sm input-blue">
                     </td>
+                    <td>
+                        <input type="text" name="loja_pin[]" value="{{ l.pin or '' }}" class="form-control form-control-sm input-blue" maxlength="8" placeholder="ex: 1234" title="PIN da loja pra confirmar entrega via QR">
+                    </td>
                     <td class="text-center">
                         <span class="badge-status"><span class="bullet" style="background:var(--cor-azul);"></span>{{ l.funcionarios | length }}</span>
                     </td>
