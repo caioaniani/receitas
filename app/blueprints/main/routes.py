@@ -238,6 +238,26 @@ def cardapio_img_upload(tipo, id):
     return redirect(url_back)
 
 
+@main_bp.route('/admin/limpar-urls-rappi', methods=['POST'])
+@login_required
+def limpar_urls_rappi():
+    """One-shot: apaga imagem_url onde aponta pra rappi.com (que da 403).
+    NAO mexe em imagem_blob (uploads continuam intactos)."""
+    from flask import abort, flash, redirect, url_for
+    from app.models import Receita, Produto
+    from app.extensions import db as _db
+    if not current_user.is_admin():
+        abort(403)
+    n_r = Receita.query.filter(Receita.imagem_url.ilike('%rappi.com%')).update(
+        {Receita.imagem_url: None}, synchronize_session=False)
+    n_p = Produto.query.filter(Produto.imagem_url.ilike('%rappi.com%')).update(
+        {Produto.imagem_url: None}, synchronize_session=False)
+    _db.session.commit()
+    flash(f'URLs Rappi removidas: {n_r} receita(s) + {n_p} produto(s). '
+          f'Agora sobe foto na ficha de cada um.', 'success')
+    return redirect(url_for('main.cardapio'))
+
+
 @main_bp.route('/cardapio-img/<tipo>/<int:id>/remover', methods=['POST'])
 @login_required
 def cardapio_img_remover(tipo, id):
