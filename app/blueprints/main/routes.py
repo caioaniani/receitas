@@ -113,8 +113,8 @@ def rentabilidade():
 @login_required
 def cardapio():
     tipo = request.args.get('tipo', 'atacado')
-    # defer(imagem_blob) — listagem nao precisa do blob, so se r.imagem_blob
-    # eh truthy (testado abaixo, e o teste eh barato com lazy load).
+    # defer(imagem_blob/mimetype) — listagem nao precisa do blob (pode ter
+    # 100KB+ cada, estoura RAM do worker). IDs com blob vem em query separada.
     from sqlalchemy.orm import defer
     receitas = Receita.query.options(
         defer(Receita.imagem_blob),
@@ -124,6 +124,11 @@ def cardapio():
         defer(Produto.imagem_blob),
         defer(Produto.imagem_mimetype),
     ).filter_by(ativo=True).order_by(Produto.categoria, Produto.nome).all()
+
+    receitas_com_blob = {r[0] for r in db.session.query(Receita.id)
+                         .filter(Receita.imagem_blob.isnot(None)).all()}
+    produtos_com_blob = {p[0] for p in db.session.query(Produto.id)
+                         .filter(Produto.imagem_blob.isnot(None)).all()}
 
     campo = {'atacado': 'preco_venda', 'loja': 'preco_loja', 'site': 'preco_site'}
     attr = campo.get(tipo, 'preco_venda')
@@ -138,7 +143,7 @@ def cardapio():
         cat = r.categoria or 'Outros'
         if cat not in categorias:
             categorias[cat] = []
-        if r.imagem_blob:
+        if r.id in receitas_com_blob:
             img = url_for('main.cardapio_img', tipo='receita', id=r.id)
         else:
             img = r.imagem_url
@@ -160,7 +165,7 @@ def cardapio():
         cat = p.categoria or 'Outros'
         if cat not in categorias:
             categorias[cat] = []
-        if p.imagem_blob:
+        if p.id in produtos_com_blob:
             img = url_for('main.cardapio_img', tipo='produto', id=p.id)
         else:
             img = p.imagem_url
