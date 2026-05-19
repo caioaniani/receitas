@@ -276,6 +276,9 @@ class Loja(db.Model):
     ativa = db.Column(db.Boolean, default=True)
     planta_imagem = db.Column(db.LargeBinary)
     planta_mimetype = db.Column(db.String(100))
+    # PIN 4-6 digitos usado pelo funcionario da loja pra confirmar
+    # recebimento via QR Code (handshake driver → loja).
+    pin = db.Column(db.String(8))
 
     def __repr__(self):
         return f'<Loja {self.nome}>'
