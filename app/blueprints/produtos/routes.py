@@ -99,6 +99,7 @@ def salvar_composicao(id):
     produto.nome = request.form.get('nome', '').strip() or produto.nome
     produto.categoria = request.form.get('categoria', '').strip() or None
     produto.descricao = request.form.get('descricao', '').strip() or None
+    produto.imagem_url = request.form.get('imagem_url', '').strip() or None
 
     produto.preco_atacado = parse_float_br(request.form.get('preco_atacado', ''))
     produto.preco_loja = parse_float_br(request.form.get('preco_loja', ''))
