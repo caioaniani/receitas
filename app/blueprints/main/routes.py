@@ -151,12 +151,16 @@ def cardapio():
         cat = p.categoria or 'Outros'
         if cat not in categorias:
             categorias[cat] = []
+        if p.imagem_blob:
+            img = url_for('main.cardapio_img', tipo='produto', id=p.id)
+        else:
+            img = p.imagem_url
         categorias[cat].append({
             'nome': p.nome,
             'peso_unitario': None,
             'descricao': p.descricao,
             'preco_venda': preco,
-            'imagem_url': p.imagem_url,
+            'imagem_url': img,
         })
 
     return render_template('main/cardapio.html', categorias=categorias, tipo=tipo)
