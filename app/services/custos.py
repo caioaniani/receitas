@@ -102,10 +102,6 @@ def calcular_rendimento(receita, custos_dict=None):
         ing.porcentagem for ing in receita.ingredientes
         if ing.tipo == 'mp_direto'
     )
-    # MP em unidade que tem peso_unidade conta no peso total (rendimento)
-    if custos_dict is not None:
-        # custos_dict eh mp_info aqui pelo uso historico; ignora no rendimento
-        pass
     total_qtd = receita.peso_base * sum_pct / 100 + qtd_direto
     perda = receita.perda_percentual or 0
     peso_pos_perda = total_qtd * (1 - perda / 100)
