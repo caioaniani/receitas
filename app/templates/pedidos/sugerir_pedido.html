@@ -54,6 +54,10 @@
             <input type="date" name="data_entrega" value="{{ amanha }}" class="form-control form-control-sm" required>
         </div>
         <div class="col-sm-8 text-end">
+            <a href="{{ url_for('pedidos.sugerir_pedido_xlsx', loja_id=loja.id, inicio=data_inicio, fim=data_fim, cobertura=dias_cobertura) }}"
+               class="btn btn-outline-success">
+                <i class="bi bi-file-earmark-spreadsheet"></i> Baixar Excel
+            </a>
             <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Criar pedido com essas qtds</button>
         </div>
     </div>
