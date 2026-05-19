@@ -1090,6 +1090,10 @@ def _migrate_postgres(app):
     _try("CREATE INDEX IF NOT EXISTS idx_venda_manual_loja ON venda_manual_loja(loja_id)")
     _try("CREATE INDEX IF NOT EXISTS idx_venda_manual_data ON venda_manual_loja(data_venda)")
 
+    # Cardapio digital: URL externa de imagem em receita + produto
+    _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(400)")
+    _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(400)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
