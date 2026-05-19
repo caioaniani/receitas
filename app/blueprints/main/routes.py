@@ -158,6 +158,102 @@ def cardapio():
     return render_template('main/cardapio.html', categorias=categorias, tipo=tipo)
 
 
+@main_bp.route('/cardapio-img/<tipo>/<int:id>')
+def cardapio_img(tipo, id):
+    """Serve a imagem (BLOB) de uma receita/produto. Publico pra carregar
+    no <img src>. Cache 1h pq imagens trocam pouco."""
+    from flask import abort
+    from app.models import Receita, Produto
+    if tipo == 'receita':
+        obj = Receita.query.get_or_404(id)
+    elif tipo == 'produto':
+        obj = Produto.query.get_or_404(id)
+    else:
+        abort(404)
+    if not obj.imagem_blob:
+        abort(404)
+    return Response(obj.imagem_blob,
+                    mimetype=obj.imagem_mimetype or 'image/jpeg',
+                    headers={'Cache-Control': 'public, max-age=3600'})
+
+
+@main_bp.route('/cardapio-img/<tipo>/<int:id>/upload', methods=['POST'])
+@login_required
+def cardapio_img_upload(tipo, id):
+    """Recebe upload de foto pra receita/produto. Compressao via PIL
+    pra max ~600x600 e converter pra JPEG (economia de banco)."""
+    from flask import abort, flash, redirect, url_for
+    from app.models import Receita, Produto
+    from app.extensions import db as _db
+    if not current_user.is_admin():
+        abort(403)
+    if tipo == 'receita':
+        obj = Receita.query.get_or_404(id)
+        url_back = url_for('receitas.ficha', id=id)
+    elif tipo == 'produto':
+        obj = Produto.query.get_or_404(id)
+        url_back = url_for('produtos.detalhe', id=id)
+    else:
+        abort(404)
+
+    f = request.files.get('imagem_arquivo')
+    if not f or not f.filename:
+        flash('Selecione um arquivo de imagem.', 'danger')
+        return redirect(url_back)
+    if not (f.mimetype or '').startswith('image/'):
+        flash('Arquivo nao eh imagem.', 'danger')
+        return redirect(url_back)
+    data = f.read()
+    if not data or len(data) > 8 * 1024 * 1024:
+        flash('Imagem vazia ou > 8MB.', 'danger')
+        return redirect(url_back)
+
+    # Compressao: usa PIL pra reduzir pra 700x700 max e JPEG quality 80
+    try:
+        from PIL import Image
+        import io as _io
+        img = Image.open(_io.BytesIO(data))
+        img.thumbnail((700, 700), Image.LANCZOS)
+        if img.mode in ('RGBA', 'P'):
+            img = img.convert('RGB')
+        out = _io.BytesIO()
+        img.save(out, format='JPEG', quality=82, optimize=True)
+        obj.imagem_blob = out.getvalue()
+        obj.imagem_mimetype = 'image/jpeg'
+    except Exception:  # noqa: BLE001
+        # Se PIL falhar, salva original mesmo
+        obj.imagem_blob = data
+        obj.imagem_mimetype = f.mimetype
+
+    _db.session.commit()
+    flash('Imagem salva.', 'success')
+    return redirect(url_back)
+
+
+@main_bp.route('/cardapio-img/<tipo>/<int:id>/remover', methods=['POST'])
+@login_required
+def cardapio_img_remover(tipo, id):
+    from flask import abort, flash, redirect, url_for
+    from app.models import Receita, Produto
+    from app.extensions import db as _db
+    if not current_user.is_admin():
+        abort(403)
+    if tipo == 'receita':
+        obj = Receita.query.get_or_404(id)
+        url_back = url_for('receitas.ficha', id=id)
+    elif tipo == 'produto':
+        obj = Produto.query.get_or_404(id)
+        url_back = url_for('produtos.detalhe', id=id)
+    else:
+        abort(404)
+    obj.imagem_blob = None
+    obj.imagem_mimetype = None
+    obj.imagem_url = None
+    _db.session.commit()
+    flash('Imagem removida.', 'info')
+    return redirect(url_back)
+
+
 @main_bp.route('/admin/popular-imagens-cardapio', methods=['GET'])
 @login_required
 def popular_imagens_preview():
