@@ -36,7 +36,7 @@
                         <i class="bi bi-pencil"></i> Ficha
                     </a>
                     <form method="POST" action="{{ url_for('main.cardapio_img_remover', tipo=tipo, id=obj.id) }}"
-                          onsubmit="return confirm('Remover foto de {{ obj.nome|replace(\"'\", \"\\\\'\") }}?')"
+                          onsubmit="return confirm('Remover esta foto?')"
                           class="flex-fill">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="next" value="revisar">
