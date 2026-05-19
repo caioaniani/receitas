@@ -275,213 +275,26 @@ def _norm(s):
 @login_required
 def cardapio_img_revisar():
     """Grid de revisao das fotos atribuidas. Admin ve thumbnail + nome,
-    identifica matches errados e remove com 1 clique."""
+    identifica matches errados e remove com 1 clique. Defer blob pra nao
+    estourar RAM — o thumbnail eh servido pela rota /cardapio-img/<tipo>/<id>."""
     from flask import abort
+    from sqlalchemy.orm import defer
     if not current_user.is_admin():
         abort(403)
     receitas_com_foto = (Receita.query
+                         .options(defer(Receita.imagem_blob),
+                                  defer(Receita.imagem_mimetype))
                          .filter(Receita.imagem_blob.isnot(None))
                          .order_by(Receita.categoria, Receita.nome).all())
     produtos_com_foto = (Produto.query
+                         .options(defer(Produto.imagem_blob),
+                                  defer(Produto.imagem_mimetype))
                          .filter(Produto.ativo.is_(True),
                                  Produto.imagem_blob.isnot(None))
                          .order_by(Produto.categoria, Produto.nome).all())
     return render_template('main/cardapio_revisar.html',
                             receitas=receitas_com_foto,
                             produtos=produtos_com_foto)
-
-
-@main_bp.route('/api/cardapio-img/<tipo>/<int:id>/upload-token', methods=['POST'])
-@csrf.exempt
-def cardapio_img_upload_token(tipo, id):
-    """Endpoint REST pra script Python rodando no Mac do admin subir
-    foto baixada do Rappi. Auth via token assinado (itsdangerous, TTL 24h)
-    em vez de sessao+CSRF. So pra UPLOAD de foto do cardapio."""
-    from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-    from flask import abort, current_app, jsonify, request
-    from app.models import Receita, Produto, Usuario
-    from app.extensions import db as _db, csrf as _csrf
-
-    # CSRF off pra esse endpoint — auth eh via token assinado
-    token = request.form.get('token') or request.headers.get('X-Upload-Token')
-    if not token:
-        return jsonify(ok=False, erro='token ausente'), 401
-    s = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
-    try:
-        data = s.loads(token, max_age=86400, salt='rappi_upload')
-    except SignatureExpired:
-        return jsonify(ok=False, erro='token expirado (24h). Gere outro script.'), 401
-    except BadSignature:
-        return jsonify(ok=False, erro='token invalido'), 401
-
-    if tipo == 'receita':
-        obj = Receita.query.get(id)
-    elif tipo == 'produto':
-        obj = Produto.query.get(id)
-    else:
-        return jsonify(ok=False, erro='tipo invalido'), 400
-    if not obj:
-        return jsonify(ok=False, erro=f'{tipo} #{id} nao encontrado'), 404
-
-    f = request.files.get('imagem_arquivo')
-    if not f:
-        return jsonify(ok=False, erro='sem arquivo'), 400
-    raw = f.read()
-    if not raw or len(raw) > 8 * 1024 * 1024:
-        return jsonify(ok=False, erro='arquivo vazio ou > 8MB'), 400
-
-    try:
-        from PIL import Image
-        import io as _io
-        img = Image.open(_io.BytesIO(raw))
-        img.thumbnail((700, 700), Image.LANCZOS)
-        if img.mode in ('RGBA', 'P'):
-            img = img.convert('RGB')
-        out = _io.BytesIO()
-        img.save(out, format='JPEG', quality=82, optimize=True)
-        obj.imagem_blob = out.getvalue()
-        obj.imagem_mimetype = 'image/jpeg'
-    except Exception:  # noqa: BLE001
-        obj.imagem_blob = raw
-        obj.imagem_mimetype = f.mimetype or 'image/png'
-
-    _db.session.commit()
-    return jsonify(ok=True, tipo=tipo, id=id, nome=obj.nome)
-
-
-@main_bp.route('/admin/galeria-rappi/script')
-@login_required
-def galeria_rappi_script():
-    """Gera script Python pro admin rodar no Mac dele. Embed: URLs Rappi
-    + ID resolvido + token assinado de 24h. Script baixa Rappi (IP
-    residencial do admin) e faz POST pro endpoint /api/cardapio-img."""
-    from flask import abort, current_app, Response, request
-    from itsdangerous import URLSafeTimedSerializer
-    from app.services.cardapio_imagens import IMAGENS, _achar_match
-    from app.models import Receita, Produto
-
-    if not current_user.is_admin():
-        abort(403)
-
-    s = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
-    token = s.dumps({'uid': current_user.id, 'p': 'rappi_upload'},
-                     salt='rappi_upload')
-    base_url = request.host_url.rstrip('/')
-
-    # Resolve cada URL pra (tipo, id) via fuzzy
-    receitas = {_norm(r.nome): r for r in Receita.query.all()}
-    produtos = {_norm(p.nome): p for p in Produto.query.filter_by(ativo=True).all()}
-    items = []
-    for nome_ref, url in IMAGENS.items():
-        n = _norm(nome_ref)
-        tipo, oid, ja_tem = None, None, False
-        if n in receitas:
-            r = receitas[n]
-            tipo, oid, ja_tem = 'receita', r.id, bool(r.imagem_blob)
-        elif n in produtos:
-            p = produtos[n]
-            tipo, oid, ja_tem = 'produto', p.id, bool(p.imagem_blob)
-        else:
-            from rapidfuzz import process, fuzz
-            todos = ([('receita', r.id, n) for n, r in receitas.items()] +
-                     [('produto', p.id, n) for n, p in produtos.items()])
-            nomes_norm = [t[2] for t in todos]
-            if nomes_norm:
-                m = process.extractOne(n, nomes_norm, scorer=fuzz.token_set_ratio)
-                if m and m[1] >= 75:
-                    t = todos[m[2]]
-                    tipo, oid = t[0], t[1]
-                    obj = (Receita.query.get(oid) if tipo == 'receita'
-                           else Produto.query.get(oid))
-                    ja_tem = bool(obj.imagem_blob) if obj else False
-        if tipo and oid and not ja_tem:
-            items.append({'nome': nome_ref, 'url': url, 'tipo': tipo, 'id': oid})
-
-    script_py = _SCRIPT_TEMPLATE.format(
-        base_url=base_url,
-        token=token,
-        items_repr=repr(items),
-        total=len(items),
-    )
-    return Response(script_py, mimetype='text/x-python',
-                    headers={'Content-Disposition':
-                              'attachment; filename=popular_imagens_rappi.py'})
-
-
-_SCRIPT_TEMPLATE = '''#!/usr/bin/env python3
-"""Baixa fotos do Rappi (IP residencial do admin, sem 403) e sobe pro
-sistema da padaria via API com token assinado (24h).
-
-Uso:
-  pip3 install requests
-  python3 popular_imagens_rappi.py
-"""
-import sys
-import time
-
-try:
-    import requests
-except ImportError:
-    sys.exit('Instala primeiro: pip3 install requests')
-
-BASE = {base_url!r}
-TOKEN = {token!r}
-ITEMS = {items_repr}
-
-print(f'Vai processar {{len(ITEMS)}} imagem(ns). Base: {{BASE}}')
-print('Token valido por 24h. Comeca em 2s...')
-time.sleep(2)
-
-ok, fail = 0, 0
-for i, item in enumerate(ITEMS, 1):
-    label = f'[{{i:2d}}/{{len(ITEMS)}}] {{item["nome"]:.40s}}'
-    try:
-        r = requests.get(item['url'], timeout=20, headers={{
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        }})
-        if not r.ok:
-            print(f'{{label}} ✗ rappi HTTP {{r.status_code}}')
-            fail += 1
-            continue
-        up = requests.post(
-            f'{{BASE}}/api/cardapio-img/{{item["tipo"]}}/{{item["id"]}}/upload-token',
-            files={{'imagem_arquivo': ('rappi.png', r.content, r.headers.get('Content-Type', 'image/png'))}},
-            data={{'token': TOKEN}},
-            timeout=30,
-        )
-        if up.ok:
-            print(f'{{label}} ✓')
-            ok += 1
-        else:
-            print(f'{{label}} ✗ upload HTTP {{up.status_code}} {{up.text[:100]}}')
-            fail += 1
-    except Exception as e:
-        print(f'{{label}} ✗ erro: {{e}}')
-        fail += 1
-    time.sleep(0.3)
-
-print(f'\\nConcluido: {{ok}} ok, {{fail}} falha(s).')
-'''
-
-
-@main_bp.route('/admin/limpar-urls-rappi', methods=['POST'])
-@login_required
-def limpar_urls_rappi():
-    """One-shot: apaga imagem_url onde aponta pra rappi.com (que da 403).
-    NAO mexe em imagem_blob (uploads continuam intactos)."""
-    from flask import abort, flash, redirect, url_for
-    from app.models import Receita, Produto
-    from app.extensions import db as _db
-    if not current_user.is_admin():
-        abort(403)
-    n_r = Receita.query.filter(Receita.imagem_url.ilike('%rappi.com%')).update(
-        {Receita.imagem_url: None}, synchronize_session=False)
-    n_p = Produto.query.filter(Produto.imagem_url.ilike('%rappi.com%')).update(
-        {Produto.imagem_url: None}, synchronize_session=False)
-    _db.session.commit()
-    flash(f'URLs Rappi removidas: {n_r} receita(s) + {n_p} produto(s). '
-          f'Agora sobe foto na ficha de cada um.', 'success')
-    return redirect(url_for('main.cardapio'))
 
 
 @main_bp.route('/cardapio-img/<tipo>/<int:id>/remover', methods=['POST'])
