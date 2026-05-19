@@ -272,6 +272,7 @@ def create_app(config_class=None):
     from app.blueprints.comprovante import comprovante_bp
     from app.blueprints.projetos import projetos_bp
     from app.blueprints.b2b import b2b_bp
+    from app.blueprints.handshake import handshake_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(materias_primas_bp, url_prefix='/materias-primas')
