@@ -173,3 +173,31 @@ def excluir(id):
     db.session.commit()
     flash(f'"{nome}" excluido!', 'success')
     return redirect(url_for('produtos.lista'))
+
+
+@produtos_bp.route('/cestas')
+@login_required
+def cestas():
+    """Lista produtos compostos (cestas) com diagnóstico de componentes.
+
+    Cestas configuradas: produto com >=1 ProdutoItem. Aparece com a lista
+    resumida dos componentes.
+    Sem componentes: produto ativo sem nenhum ProdutoItem — pode ser uma
+    cesta esquecida OU um produto simples. Admin decide.
+    """
+    from sqlalchemy.orm import joinedload
+    produtos = (Produto.query
+                .filter_by(ativo=True)
+                .options(joinedload(Produto.itens))
+                .order_by(Produto.categoria, Produto.nome).all())
+    com_componentes = []
+    sem_componentes = []
+    for p in produtos:
+        n = len(p.itens) if p.itens else 0
+        if n > 0:
+            com_componentes.append({'produto': p, 'n_componentes': n})
+        else:
+            sem_componentes.append({'produto': p})
+    return render_template('produtos/cestas.html',
+                            com_componentes=com_componentes,
+                            sem_componentes=sem_componentes)
