@@ -136,8 +136,13 @@ def create_app(config_class=None):
 
         # ── Receitas + categorias (cache 60s) ──
         def _carrega_receitas_globais():
+            # defer(imagem_blob/mimetype) — sidebar nao usa essas colunas e elas
+            # podem ter 100KB+ cada, estourando memoria do worker.
+            from sqlalchemy.orm import defer
             recs = Receita.query.options(
-                db.joinedload(Receita.ingredientes)
+                db.joinedload(Receita.ingredientes),
+                defer(Receita.imagem_blob),
+                defer(Receita.imagem_mimetype),
             ).order_by(Receita.categoria, Receita.nome).all()
             cats = {}
             for r in recs:
