@@ -1065,6 +1065,14 @@ def _migrate_postgres(app):
     _try("CREATE INDEX IF NOT EXISTS idx_mov_estoque_producao_data ON mov_estoque_producao(data)")
     _try("CREATE INDEX IF NOT EXISTS idx_pedido_item_pedido ON pedido_item(pedido_id)")
 
+    # B2B — venda da industria pra clientes externos. db.create_all cria as
+    # tabelas no boot; aqui so adicionamos indices uteis e migracoes futuras.
+    _try("CREATE INDEX IF NOT EXISTS idx_venda_b2b_data ON venda_b2b(data_venda)")
+    _try("CREATE INDEX IF NOT EXISTS idx_venda_b2b_cliente ON venda_b2b(cliente_id)")
+    _try("CREATE INDEX IF NOT EXISTS idx_venda_b2b_item_venda ON venda_b2b_item(venda_id)")
+    _try("CREATE INDEX IF NOT EXISTS idx_venda_b2b_parcela_venda ON venda_b2b_parcela(venda_id)")
+    _try("CREATE INDEX IF NOT EXISTS idx_venda_b2b_parcela_venc ON venda_b2b_parcela(vencimento)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
