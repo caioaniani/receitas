@@ -1093,6 +1093,11 @@ def _migrate_postgres(app):
     # Cardapio digital: URL externa de imagem em receita + produto
     _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(400)")
     _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(400)")
+    # BLOB upload (Rappi 403 forced this — admin sobe a foto direto)
+    _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS imagem_blob BYTEA")
+    _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS imagem_mimetype VARCHAR(50)")
+    _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS imagem_blob BYTEA")
+    _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS imagem_mimetype VARCHAR(50)")
 
     # Backfill de tokens em drivers existentes (sem token)
     try:
