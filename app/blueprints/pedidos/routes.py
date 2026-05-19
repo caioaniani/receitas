@@ -2040,3 +2040,40 @@ def vendas_manuais_limpar(loja_id):
     db.session.commit()
     flash(f'{n} venda(s) manual(is) apagada(s). Pode refazer o upload.', 'warning')
     return redirect(url_for('pedidos.vendas_manuais', loja_id=loja_id))
+
+
+@pedidos_bp.route('/lojas/<int:loja_id>/sugerir-pedido/xlsx')
+@login_required
+@admin_required
+def sugerir_pedido_xlsx(loja_id):
+    """Baixa a sugestao de pedido em xlsx. Mesmos params da tela
+    (?inicio=YYYY-MM-DD&fim=YYYY-MM-DD&cobertura=N)."""
+    from app.services import vendas_manuais as svc
+    from flask import send_file
+    import io
+    loja = Loja.query.get_or_404(loja_id)
+
+    di_str = request.args.get('inicio') or ''
+    df_str = request.args.get('fim') or ''
+    try:
+        data_inicio = date.fromisoformat(di_str) if di_str else hoje_brt() - timedelta(days=14)
+    except ValueError:
+        data_inicio = hoje_brt() - timedelta(days=14)
+    try:
+        data_fim = date.fromisoformat(df_str) if df_str else hoje_brt()
+    except ValueError:
+        data_fim = hoje_brt()
+    try:
+        dias_cobertura = int(request.args.get('cobertura', 7))
+    except ValueError:
+        dias_cobertura = 7
+
+    res = svc.sugerir_pedido(loja_id, data_inicio=data_inicio,
+                              data_fim=data_fim,
+                              dias_cobertura=dias_cobertura)
+    itens = res.get('itens', [])
+    blob = svc.exportar_sugestao_xlsx(loja, itens, data_inicio, data_fim,
+                                        dias_cobertura)
+    nome = f'sugestao_{loja.nome.lower().replace(" ", "_")}_{data_inicio}_{data_fim}.xlsx'
+    return send_file(io.BytesIO(blob), as_attachment=True, download_name=nome,
+                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
