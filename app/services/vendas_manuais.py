@@ -197,15 +197,18 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
     # 1. Vendas reais via MovEstoqueLoja
     vendas_por_item = defaultdict(int)  # (tipo, id) → qtd_total
     fontes_por_item = defaultdict(set)
-    # MovEstoqueLoja.data eh datetime — filtro pelo range completo (inclui fim)
+    # 1. Seru via MovEstoqueLoja (sync funciona historico via cron). VNDA
+    # NAO vem daqui — buscamos direto da API embaixo (cron VNDA so processa
+    # o dia corrente, entao MovEstoqueLoja nao tem retroativo).
     from datetime import datetime, time
     dt_inicio = datetime.combine(data_inicio, time.min)
     dt_fim = datetime.combine(data_fim, time.max)
     por_fonte_item = defaultdict(lambda: defaultdict(int))  # {(tipo,id): {fonte: qtd}}
+    SERU_TIPOS = ('venda_seru', 'venda_seru_sem_estoque')
     movs = (db.session.query(MovEstoqueLoja, EstoqueLoja)
             .join(EstoqueLoja, MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id)
             .filter(EstoqueLoja.loja_id == loja_id,
-                    MovEstoqueLoja.tipo.in_(VENDAS_REAIS),
+                    MovEstoqueLoja.tipo.in_(SERU_TIPOS),
                     MovEstoqueLoja.data >= dt_inicio,
                     MovEstoqueLoja.data <= dt_fim)
             .all())
@@ -215,9 +218,24 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
             continue
         qtd = int(mov.quantidade or 0)
         vendas_por_item[chave] += qtd
-        fonte = mov.tipo.split('_')[1]  # seru / vnda
-        fontes_por_item[chave].add(fonte)
-        por_fonte_item[chave][fonte] += qtd
+        fontes_por_item[chave].add('seru')
+        por_fonte_item[chave]['seru'] += qtd
+
+    # 1b. VNDA via API direta (pega historico real, retroativo). So usa
+    # essa fonte se essa loja for a "loja_vnda" configurada — nao faz
+    # sentido somar vendas VNDA pra outras lojas.
+    aviso_vnda = None
+    try:
+        from app.services.vnda_sync import loja_vnda as _loja_vnda_cfg
+        loja_vnda_obj = _loja_vnda_cfg()
+        if loja_vnda_obj and loja_vnda_obj.id == loja_id:
+            vnda_dict, aviso_vnda = _agregar_vendas_vnda_api(data_inicio, data_fim)
+            for chave, qtd in vnda_dict.items():
+                vendas_por_item[chave] += qtd
+                fontes_por_item[chave].add('vnda')
+                por_fonte_item[chave]['vnda'] += qtd
+    except Exception as e:  # noqa: BLE001
+        aviso_vnda = f'Erro inesperado VNDA: {type(e).__name__}: {str(e)[:200]}'
 
     # 2. Vendas manuais (por data_venda — Date, nao datetime)
     manuais = VendaManualLoja.query.filter(
