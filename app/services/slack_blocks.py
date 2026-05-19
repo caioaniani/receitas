@@ -360,6 +360,8 @@ _PREVIEW_BUILDERS = {
     'entrada_lote_loja': _preview_entrada_lote_loja,
     'registrar_desperdicio': _preview_registrar_desperdicio,
     'registrar_desperdicio_lote': _preview_registrar_desperdicio_lote,
+    'criar_venda_b2b': _preview_criar_venda_b2b,
+    'criar_cliente_b2b': _preview_criar_cliente_b2b,
     'anexar_foto_pedido': _preview_anexar_foto_pedido,
     'receber_pedido': _preview_receber_pedido,
 }
