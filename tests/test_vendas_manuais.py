@@ -63,8 +63,9 @@ def test_sugerir_pedido_combina_real_e_manual(app, admin_user, loja, catalogo):
         ))
     db.session.commit()
 
-    out = svc.sugerir_pedido(loja.id, data_inicio=inicio,
+    res = svc.sugerir_pedido(loja.id, data_inicio=inicio,
                               data_fim=fim, dias_cobertura=7)
+    out = res['itens']
     assert len(out) == 1
     item = out[0]
     # Total: 7*2 (vnda) + 7*1 (manual) = 21 vendas / 14 dias = 1.5/dia
