@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Sugerir pedido — {{ loja.nome }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-magic"></i> Sugerir pedido — {{ loja.nome }}</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('pedidos.vendas_manuais', loja_id=loja.id) }}" class="btn btn-sm btn-outline-secondary">Lançar vendas manuais</a>
+        <a href="{{ url_for('pedidos.estoque_loja', loja=loja.id) }}" class="btn btn-sm btn-outline-secondary">Estoque</a>
+    </div>
+</div>
+
+<form method="GET" class="row g-2 mb-3 align-items-end">
+    <div class="col-sm-3">
+        <label class="form-label small mb-0">Janela (dias de venda)</label>
+        <input type="number" name="dias" value="{{ dias_lookback }}" min="3" max="60" class="form-control form-control-sm">
+    </div>
+    <div class="col-sm-3">
+        <label class="form-label small mb-0">Cobertura (dias do pedido)</label>
+        <input type="number" name="cobertura" value="{{ dias_cobertura }}" min="1" max="14" class="form-control form-control-sm">
+    </div>
+    <div class="col-sm-2">
+        <button type="submit" class="btn btn-sm btn-outline-primary">Recalcular</button>
+    </div>
+</form>
+
+{% if not sugestao %}
+<div class="alert alert-warning">
+    Sem vendas registradas nos últimos {{ dias_lookback }} dias pra essa loja.
+    Lance algumas em <a href="{{ url_for('pedidos.vendas_manuais', loja_id=loja.id) }}">vendas manuais</a>
+    ou aguarde sync VNDA/Seru.
+</div>
+{% else %}
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row g-2 mb-3 align-items-end">
+        <div class="col-sm-4">
+            <label class="form-label small mb-0">Data da entrega</label>
+            <input type="date" name="data_entrega" value="{{ amanha }}" class="form-control form-control-sm" required>
+        </div>
+        <div class="col-sm-8 text-end">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Criar pedido com essas qtds</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header py-2 d-flex justify-content-between">
+            <strong>Sugestão</strong>
+            <small class="text-muted">média / dia (últimos {{ dias_lookback }}d) × {{ dias_cobertura }}d − estoque atual</small>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Item</th>
+                        <th>Fontes</th>
+                        <th class="text-end">Vendas ({{ dias_lookback }}d)</th>
+                        <th class="text-end">Média/dia</th>
+                        <th class="text-end">Estoque</th>
+                        <th class="text-end">Ideal</th>
+                        <th class="text-end" style="width:110px;">Pedir</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for s in sugestao %}
+                <tr>
+                    <td>{{ s.nome }}</td>
+                    <td>
+                        {% for f in s.fontes %}
+                        <span class="badge bg-light text-dark border" style="font-size:10px;">{{ f }}</span>
+                        {% endfor %}
+                    </td>
+                    <td class="text-end">{{ s.vendas_periodo }}</td>
+                    <td class="text-end">{{ '%.1f'|format(s.media_diaria) }}</td>
+                    <td class="text-end {% if s.estoque_atual < s.media_diaria %}text-danger{% endif %}">{{ s.estoque_atual }}</td>
+                    <td class="text-end text-muted">{{ s.ideal_cobertura }}</td>
+                    <td class="text-end">
+                        <input type="hidden" name="item_ref[]" value="{{ s.tipo }}:{{ s.id }}">
+                        <input type="number" name="item_qtd[]" value="{{ s.qtd_sugerida }}" min="0"
+                               class="form-control form-control-sm text-end fw-bold"
+                               style="background:{% if s.qtd_sugerida > 0 %}#e8f5e9{% else %}#f8f9fa{% endif %};">
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</form>
+{% endif %}
+{% endblock %}
