@@ -1,0 +1,13 @@
+{% extends 'handshake/_base_mobile.html' %}
+{% block title %}Confirmado{% endblock %}
+{% block content %}
+<div class="card card-soft p-4 mt-4 text-center">
+    <div style="font-size:48px; color:#198754;"><i class="bi bi-check-circle-fill"></i></div>
+    <h1 class="h1-mini mt-2 mb-2" style="font-size:20px;">Confirmado</h1>
+    <p class="kv mb-2">{{ msg }}</p>
+    {% if pedido %}
+    <p class="kv mb-0">Pedido <strong>#{{ pedido.id }}</strong> · {{ pedido.loja.nome }}<br>
+    Status atual: <span class="status-pill bg-success text-white">{{ pedido.status }}</span></p>
+    {% endif %}
+</div>
+{% endblock %}
