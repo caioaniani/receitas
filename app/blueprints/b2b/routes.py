@@ -20,7 +20,7 @@ from sqlalchemy.orm import joinedload
 from app.blueprints.b2b import b2b_bp
 from app.decorators import admin_required
 from app.extensions import db
-from app.models import (ClienteB2B, PrecoAtacado, VendaB2B, VendaB2BItem,
+from app.models import (ClienteB2B, VendaB2B, VendaB2BItem,
                         VendaB2BParcela, Receita, Produto, EstoqueProducao)
 from app.services import vendas_b2b as svc
 from app.utils import hoje
