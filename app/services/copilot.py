@@ -2392,6 +2392,143 @@ def executar_registrar_desperdicio_lote(params, user):
     }
 
 
+def executar_criar_cliente_b2b(params, user):
+    """Cadastra novo ClienteB2B. Idempotente por nome — se ja existir,
+    retorna o existente sem erro."""
+    from app.models import ClienteB2B
+    nome = (params.get('nome') or '').strip()
+    if not nome:
+        return {'ok': False, 'erro': 'Nome obrigatorio.'}
+    existente = ClienteB2B.query.filter_by(nome=nome).first()
+    if existente:
+        return {'ok': True, 'cliente_id': existente.id, 'nome': existente.nome,
+                'duplicado': True,
+                'registro_tipo': 'cliente_b2b', 'registro_id': existente.id,
+                'url': f'/b2b/clientes'}
+    try:
+        desc = float(params.get('desconto_percentual') or 0)
+    except (TypeError, ValueError):
+        desc = 0
+    c = ClienteB2B(
+        nome=nome,
+        cnpj_cpf=(params.get('cnpj_cpf') or '').strip() or None,
+        telefone=(params.get('telefone') or '').strip() or None,
+        email=(params.get('email') or '').strip() or None,
+        endereco=(params.get('endereco') or '').strip() or None,
+        contato=(params.get('contato') or '').strip() or None,
+        desconto_percentual=desc,
+        observacao=(params.get('observacao') or '').strip() or None,
+    )
+    db.session.add(c)
+    db.session.commit()
+    return {'ok': True, 'cliente_id': c.id, 'nome': c.nome,
+            'registro_tipo': 'cliente_b2b', 'registro_id': c.id,
+            'url': f'/b2b/clientes'}
+
+
+def executar_criar_venda_b2b(params, user):
+    """Cria venda B2B + itens + parcelas + baixa estoque do freezer.
+
+    Itens chegam ja resolvidos (ou re-resolve se vier sem). Sem fallback
+    silencioso: item nao resolvido aborta com erro claro.
+    """
+    from datetime import date
+    from app.services import vendas_b2b as svc
+
+    cliente_id = params.get('cliente_id')
+    cliente_nome = params.get('cliente_nome') or params.get('cliente_nome_resolvido')
+    cliente_avulso = params.get('cliente_avulso', cliente_id is None)
+    if not cliente_id and not (cliente_nome or '').strip():
+        return {'ok': False, 'erro': 'cliente obrigatorio.'}
+    # Se a Claude marcou avulso, manda so cliente_nome (vai como avulso)
+    if cliente_avulso:
+        cliente_id = None
+
+    data_str = (params.get('data_venda') or '').strip()
+    try:
+        data_venda = date.fromisoformat(data_str) if data_str else None
+    except ValueError:
+        data_venda = None
+
+    itens_in = params.get('itens') or []
+    itens_payload = []
+    nao_resolvidos = []
+    for it in itens_in:
+        if it.get('erro'):
+            nao_resolvidos.append(it.get('nome_original') or it.get('nome') or '?')
+            continue
+        resolvido = it.get('resolvido')
+        if not resolvido or not resolvido.get('id'):
+            # Tenta re-resolver pelo nome_original (caso venha do Claude direto)
+            nome = (it.get('nome_original') or it.get('nome') or '').strip()
+            matches = _resolver_produto(nome) if nome else []
+            if not matches:
+                nao_resolvidos.append(nome or '?')
+                continue
+            resolvido = matches[0]
+        try:
+            qtd = int(it.get('quantidade') or 0)
+        except (TypeError, ValueError):
+            qtd = 0
+        if qtd <= 0:
+            continue
+        itens_payload.append({
+            'tipo': resolvido['tipo'],
+            'id': resolvido['id'],
+            'quantidade': qtd,
+            'preco_unitario': float(it.get('preco_unitario') or 0),
+            'desconto_percentual': float(it.get('desconto_percentual') or 0),
+        })
+
+    if not itens_payload:
+        return {'ok': False,
+                'erro': f'Nenhum item valido. Nao achei: {", ".join(nao_resolvidos) or "—"}'}
+
+    parcelas_in = params.get('parcelas') or []
+    parcelas_payload = []
+    for p in parcelas_in:
+        venc = p.get('vencimento')
+        try:
+            valor = float(p.get('valor') or 0)
+        except (TypeError, ValueError):
+            valor = 0
+        if not venc or valor <= 0:
+            continue
+        parcelas_payload.append({
+            'vencimento': venc,
+            'valor': valor,
+            'forma_pagamento': (p.get('forma_pagamento') or '').strip() or None,
+        })
+
+    try:
+        venda = svc.criar_venda(
+            cliente_id=cliente_id,
+            cliente_nome=cliente_nome if not cliente_id else None,
+            data_venda=data_venda,
+            itens=itens_payload,
+            parcelas=parcelas_payload or None,
+            observacao=(params.get('observacao') or '').strip() or None,
+            nf_numero=(params.get('nf_numero') or '').strip() or None,
+            user=user,
+        )
+    except ValueError as exc:
+        db.session.rollback()
+        return {'ok': False, 'erro': str(exc)}
+
+    return {
+        'ok': True,
+        'venda_id': venda.id,
+        'cliente': venda.cliente_display,
+        'valor_total': venda.valor_total,
+        'itens_salvos': len(venda.itens),
+        'parcelas': len(venda.parcelas),
+        'nao_resolvidos': nao_resolvidos,
+        'registro_tipo': 'venda_b2b',
+        'registro_id': venda.id,
+        'url': f'/b2b/vendas/{venda.id}',
+    }
+
+
 def executar_anexar_foto_pedido(params, user):
     """Salva 1+ fotos como FotoRecebimento no pedido.
 
