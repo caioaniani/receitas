@@ -346,6 +346,7 @@ def salvar_lojas():
     nomes = request.form.getlist('loja_nome[]')
     enderecos = request.form.getlist('loja_endereco[]')
     telefones = request.form.getlist('loja_telefone[]')
+    pins = request.form.getlist('loja_pin[]')
 
     for i in range(len(nomes)):
         nome = nomes[i].strip()
@@ -353,6 +354,7 @@ def salvar_lojas():
             continue
         endereco = enderecos[i].strip() if i < len(enderecos) else ''
         telefone = telefones[i].strip() if i < len(telefones) else ''
+        pin = pins[i].strip() if i < len(pins) else ''
         lid = ids[i].strip() if i < len(ids) else ''
 
         if lid:
@@ -361,11 +363,13 @@ def salvar_lojas():
                 loja.nome = nome
                 loja.endereco = endereco or None
                 loja.telefone = telefone or None
+                loja.pin = pin or None
         else:
             db.session.add(Loja(
                 nome=nome,
                 endereco=endereco or None,
                 telefone=telefone or None,
+                pin=pin or None,
             ))
 
     db.session.commit()
