@@ -399,7 +399,10 @@ def build_resultado(resultado, ok=True):
         STATUS_LABEL = {
             'pendente': 'pedido feito',
             'confirmado': 'pedido feito',
-            'separado': 'pedido feito',
+            # 'separado' = momento em que o QR Code é gerado pro motorista.
+            # Pro usuario isso eh 'enviado' (saiu da industria, motorista
+            # ja tem o QR pra apresentar na loja).
+            'separado': 'enviado',
             'em_transporte': 'enviado',
             'entregue': 'recebido',
             'cancelado': 'cancelado',
