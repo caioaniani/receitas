@@ -128,12 +128,15 @@ def venda_nova():
     clientes = ClienteB2B.query.filter_by(ativo=True).order_by(ClienteB2B.nome).all()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+    # Preco atacado vem do cadastro: Receita.preco_venda, Produto.preco_atacado
+    # (mesma logica de /cardapio?tipo=atacado).
     precos_map = {}
-    for p in PrecoAtacado.query.all():
-        if p.receita_id:
-            precos_map[f'receita:{p.receita_id}'] = p.preco_unitario
-        elif p.produto_id:
-            precos_map[f'produto:{p.produto_id}'] = p.preco_unitario
+    for r in receitas:
+        if r.preco_venda:
+            precos_map[f'receita:{r.id}'] = r.preco_venda
+    for p in produtos:
+        if p.preco_atacado:
+            precos_map[f'produto:{p.id}'] = p.preco_atacado
     # Estoque atual por item (pra UI mostrar saldo)
     estoque_map = {}
     for ep in EstoqueProducao.query.all():
