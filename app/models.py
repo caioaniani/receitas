@@ -1717,7 +1717,7 @@ class PedidoQRCode(db.Model):
     usado_em = db.Column(db.DateTime, nullable=True)
     usado_por_descricao = db.Column(db.String(100))  # 'driver:Joao' | 'loja:Anesio'
 
-    pedido = db.relationship('PedidoLoja')
+    pedido = db.relationship('PedidoLoja', back_populates='qrcodes')
     criado_por = db.relationship('Usuario')
 
     @property
