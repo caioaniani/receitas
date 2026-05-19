@@ -1085,6 +1085,11 @@ def _migrate_postgres(app):
     _try("CREATE INDEX IF NOT EXISTS idx_pedido_qrcode_token ON pedido_qrcode(token)")
     _try("CREATE INDEX IF NOT EXISTS idx_pedido_qrcode_pedido ON pedido_qrcode(pedido_id)")
 
+    # Vendas manuais pra lojas sem API (Anesio): so alimenta previsao /
+    # sugestao de pedido. db.create_all cria a tabela; aqui so indices.
+    _try("CREATE INDEX IF NOT EXISTS idx_venda_manual_loja ON venda_manual_loja(loja_id)")
+    _try("CREATE INDEX IF NOT EXISTS idx_venda_manual_data ON venda_manual_loja(data_venda)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
