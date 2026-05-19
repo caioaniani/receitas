@@ -129,12 +129,16 @@ def cardapio():
         cat = r.categoria or 'Outros'
         if cat not in categorias:
             categorias[cat] = []
+        if r.imagem_blob:
+            img = url_for('main.cardapio_img', tipo='receita', id=r.id)
+        else:
+            img = r.imagem_url
         categorias[cat].append({
             'nome': r.nome,
             'peso_unitario': r.peso_unitario,
             'descricao': None,
             'preco_venda': preco,
-            'imagem_url': r.imagem_url,
+            'imagem_url': img,
         })
 
     # Produtos cadastrados (cestas, kits, etc.)
