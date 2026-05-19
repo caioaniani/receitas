@@ -304,9 +304,6 @@ def receber(id):
     loja_id = _loja_do_usuario()
     if loja_id and pedido.loja_id != loja_id:
         abort(403)
-    if pedido.status != 'em_transporte':
-        flash('Pedido precisa estar em transporte para ser recebido.', 'warning')
-        return redirect(url_for('pedidos.detalhe', id=id))
 
     recebidos = {}
     for key, val in request.form.items():
@@ -316,69 +313,104 @@ def receber(id):
             except ValueError:
                 continue
 
+    fotos_payload = []
+    for f in request.files.getlist('fotos'):
+        if not f or not f.filename:
+            continue
+        content = f.read()
+        if not content:
+            continue
+        fotos_payload.append({'imagem': content,
+                              'mimetype': f.mimetype or 'image/jpeg'})
+
     try:
-        divergencias = []
-        for item in pedido.itens:
-            qtd_rec = recebidos.get(item.id, item.quantidade)
-            item.quantidade_recebida = qtd_rec
-            if qtd_rec != item.quantidade:
-                divergencias.append(f'{item.nome_item}: pedido {item.quantidade}, recebido {qtd_rec}')
-
-            if qtd_rec <= 0:
-                continue
-
-            el = EstoqueLoja.query.filter_by(
-                loja_id=pedido.loja_id,
-                receita_id=item.receita_id,
-                produto_id=item.produto_id,
-                materia_prima_id=item.materia_prima_id,
-            ).first()
-            if not el:
-                el = EstoqueLoja(loja_id=pedido.loja_id,
-                                 receita_id=item.receita_id,
-                                 produto_id=item.produto_id,
-                                 materia_prima_id=item.materia_prima_id)
-                db.session.add(el)
-                db.session.flush()
-            el.quantidade += qtd_rec
-            ref_div = ' (divergente)' if qtd_rec != item.quantidade else ''
-            db.session.add(MovEstoqueLoja(
-                estoque_loja_id=el.id, tipo='entrada_pedido',
-                quantidade=qtd_rec,
-                referencia=f'Pedido #{pedido.id}{ref_div}',
-                usuario_id=current_user.id,
-            ))
-
-        pedido.status = 'entregue'
-        if divergencias:
-            nota = 'Divergencias no recebimento: ' + '; '.join(divergencias)
-            pedido.observacao = (pedido.observacao + ' | ' if pedido.observacao else '') + nota
-
-        for f in request.files.getlist('fotos'):
-            if not f or not f.filename:
-                continue
-            content = f.read()
-            if not content:
-                continue
-            db.session.add(FotoRecebimento(
-                pedido_id=pedido.id,
-                imagem=content,
-                mimetype=f.mimetype or 'image/jpeg',
-                enviada_por=current_user.id,
-            ))
-
-        db.session.commit()
+        ok, msg, divergencias = _executar_recebimento_pedido(
+            pedido, current_user, recebidos_map=recebidos,
+            fotos=fotos_payload,
+        )
     except Exception as exc:  # noqa: BLE001
         db.session.rollback()
         current_app.logger.exception('Falha ao receber pedido %s', id)
         flash(f'Erro ao processar recebimento: {exc}. Nada foi alterado.', 'danger')
         return redirect(url_for('pedidos.detalhe', id=id))
 
-    if divergencias:
-        flash('Pedido recebido com divergencias. Detalhes salvos na observacao.', 'warning')
-    else:
-        flash('Pedido recebido integralmente. Estoque da loja atualizado.', 'success')
+    if not ok:
+        flash(msg, 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
+    flash(msg, 'warning' if divergencias else 'success')
     return redirect(url_for('pedidos.detalhe', id=id))
+
+
+def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
+                                  ref_extra=None):
+    """Sobe estoque da loja + status em_transporte → entregue.
+
+    recebidos_map: {item_id: qtd_recebida}. Itens omitidos assumem qtd
+    igual a do pedido (sem divergencia). Usado pra preencher
+    PedidoItem.quantidade_recebida + criar MovEstoqueLoja.
+    fotos: lista de {imagem, mimetype} salvas como FotoRecebimento.
+    ref_extra: texto extra nas movimentacoes (ex: 'via QR / loja X').
+
+    Retorna (ok, msg, divergencias). Exception em caller faz rollback.
+    """
+    if pedido.status != 'em_transporte':
+        return False, f'Pedido precisa estar em transporte (atual: {pedido.status}).', []
+
+    recebidos_map = recebidos_map or {}
+    fotos = fotos or []
+    divergencias = []
+
+    for item in pedido.itens:
+        qtd_rec = recebidos_map.get(item.id, item.quantidade)
+        item.quantidade_recebida = qtd_rec
+        if qtd_rec != item.quantidade:
+            divergencias.append(f'{item.nome_item}: pedido {item.quantidade}, recebido {qtd_rec}')
+        if qtd_rec <= 0:
+            continue
+
+        el = EstoqueLoja.query.filter_by(
+            loja_id=pedido.loja_id,
+            receita_id=item.receita_id,
+            produto_id=item.produto_id,
+            materia_prima_id=item.materia_prima_id,
+        ).first()
+        if not el:
+            el = EstoqueLoja(loja_id=pedido.loja_id,
+                             receita_id=item.receita_id,
+                             produto_id=item.produto_id,
+                             materia_prima_id=item.materia_prima_id)
+            db.session.add(el)
+            db.session.flush()
+        el.quantidade += qtd_rec
+        ref_div = ' (divergente)' if qtd_rec != item.quantidade else ''
+        ref = f'Pedido #{pedido.id}{ref_div}'
+        if ref_extra:
+            ref += f' ({ref_extra})'
+        db.session.add(MovEstoqueLoja(
+            estoque_loja_id=el.id, tipo='entrada_pedido',
+            quantidade=qtd_rec,
+            referencia=ref,
+            usuario_id=getattr(user, 'id', None),
+        ))
+
+    pedido.status = 'entregue'
+    if divergencias:
+        nota = 'Divergencias no recebimento: ' + '; '.join(divergencias)
+        pedido.observacao = (pedido.observacao + ' | ' if pedido.observacao else '') + nota
+
+    for foto in fotos:
+        db.session.add(FotoRecebimento(
+            pedido_id=pedido.id,
+            imagem=foto['imagem'],
+            mimetype=foto.get('mimetype', 'image/jpeg'),
+            enviada_por=getattr(user, 'id', None),
+        ))
+
+    db.session.commit()
+    msg = ('Pedido recebido com divergencias. Detalhes salvos na observacao.'
+           if divergencias else
+           'Pedido recebido integralmente. Estoque da loja atualizado.')
+    return True, msg, divergencias
 
 
 @pedidos_bp.route('/foto/<int:foto_id>')
