@@ -1,0 +1,52 @@
+{% extends 'handshake/_base_mobile.html' %}
+{% block title %}Confirmar — Pedido #{{ pedido.id }}{% endblock %}
+{% block content %}
+<div class="card card-soft p-3 mb-3">
+    <div class="h1-mini">
+        {% if qr.tipo == 'saida' %}
+        <i class="bi bi-truck"></i> Saída da Indústria
+        {% else %}
+        <i class="bi bi-box-arrow-in-down"></i> Entrega na Loja
+        {% endif %}
+    </div>
+    <div class="kv">
+        Pedido <strong>#{{ pedido.id }}</strong> · Loja <strong>{{ pedido.loja.nome }}</strong><br>
+        Data de entrega: <strong>{{ pedido.data_entrega.strftime('%d/%m/%Y') }}</strong><br>
+        Itens: <strong>{{ pedido.itens|length }}</strong>
+    </div>
+</div>
+
+<form method="POST" action="">
+    <div class="card card-soft p-3 mb-3">
+        <label class="form-label">
+            {% if qr.tipo == 'saida' %}
+            PIN do motorista
+            {% else %}
+            PIN da loja
+            {% endif %}
+        </label>
+        <input type="password" name="pin" class="form-control pin-input" inputmode="numeric"
+               autocomplete="off" autofocus maxlength="8" required>
+        <small class="text-muted mt-2">
+            {% if qr.tipo == 'saida' %}
+            Pergunta o PIN ao motorista responsável pela entrega.
+            {% else %}
+            Pergunta o PIN ao gerente da loja {{ pedido.loja.nome }}.
+            {% endif %}
+        </small>
+    </div>
+    <button type="submit" class="btn btn-primary btn-acao">
+        <i class="bi bi-check2-circle"></i>
+        {% if qr.tipo == 'saida' %}Confirmar saída{% else %}Confirmar recebimento{% endif %}
+    </button>
+</form>
+
+<details class="mt-3 small text-muted">
+    <summary>Ver itens do pedido</summary>
+    <ul class="list-unstyled mt-2 mb-0">
+    {% for it in pedido.itens %}
+        <li>· {{ it.quantidade }}× {{ it.nome_item }}{% if it.observacao %} <em class="text-muted">({{ it.observacao }})</em>{% endif %}</li>
+    {% endfor %}
+    </ul>
+</details>
+{% endblock %}
