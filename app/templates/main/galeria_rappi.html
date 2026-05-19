@@ -86,7 +86,14 @@
         }
         statusEl.innerHTML = '<span class="text-muted">baixando...</span>';
         try {
-            var resp = await fetch(url, { mode: 'cors' });
+            // referrerPolicy 'no-referrer' impede o browser de mandar
+            // Referer pro Rappi (que bloqueia hot-link). mode 'cors' tenta
+            // resposta legivel pra blob.
+            var resp = await fetch(url, {
+                mode: 'cors',
+                referrerPolicy: 'no-referrer',
+                credentials: 'omit',
+            });
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             var blob = await resp.blob();
             var fd = new FormData();
