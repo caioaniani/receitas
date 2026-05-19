@@ -141,13 +141,9 @@
         {% endif %}
 
         {% if pedido.status == 'separado' %}
-        <form method="POST" action="{{ url_for('pedidos.enviar', id=pedido.id) }}"
-              onsubmit="return confirm('Saiu para entrega? O estoque da industria sera baixado agora.')">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-sm" style="background:#6f42c1;color:#fff;">
-                <i class="bi bi-truck"></i> Saiu para Entrega
-            </button>
-        </form>
+        <a href="{{ url_for('pedidos.qr_saida', id=pedido.id) }}" class="btn btn-sm" style="background:#6f42c1;color:#fff;">
+            <i class="bi bi-qr-code"></i> Gerar QR Saída
+        </a>
         {% endif %}
     {% endif %}
 
