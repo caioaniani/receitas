@@ -304,3 +304,203 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
         })
     out.sort(key=lambda x: -x['media_diaria'])
     return {'itens': out, 'aviso_vnda': aviso_vnda}
+
+
+# ── Upload / template Excel ──
+
+def gerar_template_xlsx(loja):
+    """Gera planilha modelo pro admin preencher e fazer upload.
+
+    3 colunas: Data, Produto, Quantidade. Inclui linhas de exemplo com
+    receitas do catalogo da padaria pra ele so copiar/preencher.
+    Retorna bytes (xlsx).
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Vendas'
+
+    # Cabecalho
+    headers = ['Data', 'Produto', 'Quantidade']
+    for col_idx, h in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col_idx, value=h)
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor='2c3e50')
+        cell.alignment = Alignment(horizontal='center')
+    ws.column_dimensions['A'].width = 14
+    ws.column_dimensions['B'].width = 38
+    ws.column_dimensions['C'].width = 12
+
+    # Linhas de exemplo: pega ate 20 receitas + 10 produtos
+    exemplos_nomes = [r.nome for r in
+                      Receita.query.order_by(Receita.categoria, Receita.nome).limit(30).all()]
+    if not exemplos_nomes:
+        exemplos_nomes = ['Croissant Tradicional', 'Pao Frances', 'Sourdough']
+
+    data_exemplo = hoje().isoformat()
+    for i, nome in enumerate(exemplos_nomes, start=2):
+        ws.cell(row=i, column=1, value=data_exemplo)
+        ws.cell(row=i, column=2, value=nome)
+        ws.cell(row=i, column=3, value=0)
+        ws.cell(row=i, column=1).number_format = 'YYYY-MM-DD'
+
+    # Aba de instrucoes
+    ws_help = wb.create_sheet('Como usar')
+    instrucoes = [
+        f'Vendas manuais — Loja {loja.nome}',
+        '',
+        '1. Coluna Data: YYYY-MM-DD (ex: 2026-04-15) ou DD/MM/YYYY.',
+        '2. Coluna Produto: nome igual ao catalogo. Apelidos salvos funcionam.',
+        '3. Coluna Quantidade: numero inteiro > 0. Use 0 ou apague a linha pra ignorar.',
+        '4. Pode misturar varias datas e produtos na mesma planilha.',
+        '5. Linhas com quantidade 0 sao ignoradas.',
+        '6. Sistema NAO baixa estoque — so registra historico pra sugerir pedido.',
+        '',
+        'Exemplo:',
+        '2026-04-01  |  Croissant Tradicional  |  25',
+        '2026-04-01  |  Pao Frances  |  80',
+        '2026-04-02  |  Croissant Tradicional  |  30',
+        '...',
+        '',
+        'Apos upload, confira o preview e clique em "Aplicar".',
+    ]
+    for i, linha in enumerate(instrucoes, start=1):
+        ws_help.cell(row=i, column=1, value=linha)
+    ws_help.column_dimensions['A'].width = 80
+
+    out = io.BytesIO()
+    wb.save(out)
+    out.seek(0)
+    return out.read()
+
+
+def parsear_xlsx(file_storage, loja_id):
+    """Le xlsx (file_storage do Flask) e retorna lista de itens parseados
+    pra resolver_lista_xlsx aplicar. Aceita data como string YYYY-MM-DD ou
+    DD/MM/YYYY, ou como datetime/date (Excel as vezes joga assim).
+
+    Retorna [{linha_n, data_venda, nome, quantidade, erro?}].
+    Itens com erro nao bloqueiam — entram em ignorados depois.
+    """
+    from openpyxl import load_workbook
+    try:
+        wb = load_workbook(file_storage, data_only=True, read_only=True)
+    except Exception as exc:  # noqa: BLE001
+        return [{'linha_n': 0, 'erro': f'arquivo invalido: {exc}'}]
+
+    ws = wb.active  # primeira aba
+    rows = ws.iter_rows(min_row=2, values_only=True)  # pula cabecalho
+    out = []
+    for n, row in enumerate(rows, start=2):
+        if not row or all(c is None or c == '' for c in row):
+            continue
+        try:
+            data_raw = row[0]
+            nome_raw = row[1]
+            qtd_raw = row[2]
+        except IndexError:
+            out.append({'linha_n': n, 'erro': 'colunas insuficientes (esperado: Data, Produto, Qtd)'})
+            continue
+
+        # Parse data
+        data_venda = None
+        if isinstance(data_raw, (datetime, date)):
+            data_venda = data_raw.date() if isinstance(data_raw, datetime) else data_raw
+        elif isinstance(data_raw, str):
+            data_str = data_raw.strip()
+            for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d/%m/%y'):
+                try:
+                    data_venda = datetime.strptime(data_str, fmt).date()
+                    break
+                except ValueError:
+                    continue
+        if not data_venda:
+            out.append({'linha_n': n, 'data_raw': data_raw,
+                         'erro': 'data invalida (use YYYY-MM-DD ou DD/MM/YYYY)'})
+            continue
+
+        nome = (str(nome_raw) if nome_raw is not None else '').strip()
+        if not nome:
+            out.append({'linha_n': n, 'erro': 'nome vazio'})
+            continue
+
+        try:
+            qtd = int(float(qtd_raw)) if qtd_raw is not None else 0
+        except (TypeError, ValueError):
+            out.append({'linha_n': n, 'nome': nome,
+                         'erro': f'quantidade invalida: {qtd_raw}'})
+            continue
+        if qtd <= 0:
+            continue  # linhas com 0 sao silenciosamente puladas
+
+        out.append({'linha_n': n, 'data_venda': data_venda,
+                     'nome': nome, 'quantidade': qtd})
+    return out
+
+
+def aplicar_vendas_xlsx(itens_parseados, loja_id, user):
+    """Resolve cada nome via fuzzy + apelidos, cria VendaManualLoja.
+
+    itens_parseados vem de parsear_xlsx (lista com data_venda + nome + qtd).
+    Resolve uma vez por nome unico (cacheado) pra economizar query.
+
+    Retorna {aplicados: [...], ignorados: [...], total_linhas, datas_unicas}.
+    """
+    if not loja_id:
+        return {'aplicados': [], 'ignorados': [], 'total_linhas': 0,
+                'datas_unicas': []}
+
+    # Pre-resolve cada nome unico de uma vez
+    nomes_unicos = sorted({it['nome'] for it in itens_parseados if it.get('nome')})
+    parseados_p_resolver = [{'linha': nome, 'nome': nome, 'quantidade': 1}
+                            for nome in nomes_unicos]
+    resolvidos_lista = svc_lote.resolver_lista(parseados_p_resolver, loja_id)
+    resolvidos_por_nome = {r['nome']: r.get('resolvido') for r in resolvidos_lista}
+
+    aplicados = []
+    ignorados = []
+    datas_set = set()
+
+    for it in itens_parseados:
+        if it.get('erro'):
+            ignorados.append({'linha_n': it['linha_n'], 'motivo': it['erro']})
+            continue
+        nome = it['nome']
+        resolvido = resolvidos_por_nome.get(nome)
+        if not resolvido or not resolvido.get('id'):
+            ignorados.append({'linha_n': it['linha_n'], 'nome': nome,
+                                'motivo': 'nao_resolvido'})
+            continue
+        if resolvido['tipo'] == 'pendente':
+            ignorados.append({'linha_n': it['linha_n'], 'nome': nome,
+                                'motivo': 'item_pendente_de_vinculacao'})
+            continue
+
+        vm = VendaManualLoja(
+            loja_id=loja_id, data_venda=it['data_venda'],
+            receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
+            produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
+            materia_prima_id=resolvido['id'] if resolvido['tipo'] == 'mp' else None,
+            quantidade=it['quantidade'],
+            criado_por_id=getattr(user, 'id', None),
+        )
+        db.session.add(vm)
+        aplicados.append({
+            'linha_n': it['linha_n'],
+            'data': it['data_venda'].isoformat(),
+            'nome': resolvido['nome'],
+            'quantidade': it['quantidade'],
+        })
+        datas_set.add(it['data_venda'])
+
+    if aplicados:
+        db.session.commit()
+
+    return {
+        'aplicados': aplicados,
+        'ignorados': ignorados,
+        'total_linhas': len(itens_parseados),
+        'datas_unicas': sorted(datas_set),
+    }

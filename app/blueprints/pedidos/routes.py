@@ -1941,3 +1941,56 @@ def sugerir_pedido(loja_id):
                             dias_periodo=dias_periodo,
                             dias_cobertura=dias_cobertura,
                             amanha=(hoje_brt() + timedelta(days=1)).isoformat())
+
+
+@pedidos_bp.route('/lojas/<int:loja_id>/vendas-manuais/template.xlsx')
+@login_required
+@admin_required
+def vendas_manuais_template(loja_id):
+    """Download da planilha modelo pra preencher e fazer upload depois."""
+    from app.services import vendas_manuais as svc
+    from flask import send_file
+    import io
+    loja = Loja.query.get_or_404(loja_id)
+    blob = svc.gerar_template_xlsx(loja)
+    nome = f'vendas_{loja.nome.lower().replace(" ", "_")}_modelo.xlsx'
+    return send_file(io.BytesIO(blob),
+                      as_attachment=True, download_name=nome,
+                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+@pedidos_bp.route('/lojas/<int:loja_id>/vendas-manuais/upload', methods=['POST'])
+@login_required
+@admin_required
+def vendas_manuais_upload(loja_id):
+    """Recebe upload de xlsx + aplica em lote. Linhas com erro vao pra
+    ignorados (mostra no flash)."""
+    from app.services import vendas_manuais as svc
+    loja = Loja.query.get_or_404(loja_id)
+    f = request.files.get('planilha')
+    if not f or not f.filename:
+        flash('Selecione um arquivo .xlsx.', 'danger')
+        return redirect(url_for('pedidos.vendas_manuais', loja_id=loja_id))
+    if not f.filename.lower().endswith('.xlsx'):
+        flash('So aceita arquivo .xlsx (Excel).', 'danger')
+        return redirect(url_for('pedidos.vendas_manuais', loja_id=loja_id))
+
+    parseados = svc.parsear_xlsx(f, loja_id)
+    resultado = svc.aplicar_vendas_xlsx(parseados, loja_id, current_user)
+
+    n_ok = len(resultado['aplicados'])
+    n_ign = len(resultado['ignorados'])
+    n_datas = len(resultado['datas_unicas'])
+    if n_ok:
+        flash(f'{n_ok} venda(s) lançadas em {n_datas} data(s) distinta(s). '
+              f'{n_ign} linha(s) ignoradas.', 'success')
+    else:
+        flash(f'Nenhuma venda lançada. {n_ign} linha(s) ignoradas. '
+              'Verifique formato (Data, Produto, Qtd) e nomes do catálogo.',
+              'warning')
+
+    # Salva ignorados na session pra mostrar na tela depois (caso queira)
+    if resultado['ignorados']:
+        from flask import session
+        session['vendas_manuais_ultimos_ignorados'] = resultado['ignorados'][:50]
+    return redirect(url_for('pedidos.vendas_manuais', loja_id=loja_id))
