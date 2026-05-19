@@ -1069,6 +1069,9 @@ def _migrate_postgres(app):
 
     # B2B — venda da industria pra clientes externos. db.create_all cria as
     # tabelas no boot; aqui so adicionamos indices uteis e migracoes futuras.
+    # Tabela preco_atacado foi criada por engano (preco ja existe em
+    # Receita.preco_venda e Produto.preco_atacado). Dropa se existir.
+    _try("DROP TABLE IF EXISTS preco_atacado")
     _try("CREATE INDEX IF NOT EXISTS idx_venda_b2b_data ON venda_b2b(data_venda)")
     _try("CREATE INDEX IF NOT EXISTS idx_venda_b2b_cliente ON venda_b2b(cliente_id)")
     _try("CREATE INDEX IF NOT EXISTS idx_venda_b2b_item_venda ON venda_b2b_item(venda_id)")
