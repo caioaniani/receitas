@@ -81,5 +81,5 @@ def test_sugerir_pedido_combina_real_e_manual(app, admin_user, loja, catalogo):
 def test_sugerir_pedido_sem_dados(app, loja):
     """Loja sem vendas: lista vazia."""
     from app.services import vendas_manuais as svc
-    out = svc.sugerir_pedido(loja.id)
-    assert out == []
+    res = svc.sugerir_pedido(loja.id)
+    assert res['itens'] == []
