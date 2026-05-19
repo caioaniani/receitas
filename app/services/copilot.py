@@ -2255,6 +2255,10 @@ def executar(tipo_acao, params, user):  # noqa: F811
         return executar_registrar_desperdicio(params, user)
     if tipo_acao == 'registrar_desperdicio_lote':
         return executar_registrar_desperdicio_lote(params, user)
+    if tipo_acao == 'criar_venda_b2b':
+        return executar_criar_venda_b2b(params, user)
+    if tipo_acao == 'criar_cliente_b2b':
+        return executar_criar_cliente_b2b(params, user)
     if tipo_acao == 'anexar_foto_pedido':
         return executar_anexar_foto_pedido(params, user)
     if tipo_acao == 'receber_pedido':
