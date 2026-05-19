@@ -149,6 +149,19 @@ def _calcular_receita(r, custos, mp_info):
             info = mp_info.get(ing.ingrediente_nome, {})
             custo_total += qtd_g * _custo_por_grama(info)
             qtd_direto += qtd_g
+        elif tipo == 'mp_un':
+            # MP cobrada por unidade (ex: Baton Calebaut). porcentagem =
+            # quantidade de unidades. Custo = qtd × custo_por_unidade.
+            # custo_por_kg da MP unitaria armazena o custo POR UNIDADE.
+            qtd_un = ing.porcentagem
+            info = mp_info.get(ing.ingrediente_nome, {})
+            custo_por_un = info.get('custo_por_kg') or 0
+            custo_total += qtd_un * custo_por_un
+            # Se a MP tem peso_unidade definido, soma ao total de peso pra
+            # contar no rendimento. Senao, ignora no peso (ex: corante).
+            peso_un = info.get('peso_unidade') or 0
+            if peso_un > 0:
+                qtd_direto += qtd_un * peso_un
         else:
             sum_pct += ing.porcentagem
             qtd_g = r.peso_base * ing.porcentagem / 100
