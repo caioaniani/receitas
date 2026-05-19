@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Cestas (produtos compostos){% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-box-seam"></i> Cestas (produtos compostos)</h1>
+    <a href="{{ url_for('produtos.lista') }}" class="btn btn-sm btn-outline-secondary">Voltar a Produtos</a>
+</div>
+
+<div class="alert alert-info small">
+    <i class="bi bi-info-circle"></i>
+    Cestas com componentes são desempacotadas automaticamente nas vendas VNDA — cada componente conta na sugestão de pedido.
+    Cestas <strong>sem componentes</strong> são contadas como produto único (errado se for uma cesta de verdade).
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header bg-success bg-opacity-10 py-2">
+                <strong><i class="bi bi-check-circle"></i> Configuradas ({{ com_componentes|length }})</strong>
+                <small class="text-muted">— com pelo menos 1 componente</small>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Cesta</th>
+                            <th class="text-center" style="width:80px;">Itens</th>
+                            <th>Componentes (preview)</th>
+                            <th style="width:80px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for c in com_componentes %}
+                    {% set p = c.produto %}
+                    <tr>
+                        <td><strong>{{ p.nome }}</strong>{% if p.categoria %}<br><small class="text-muted">{{ p.categoria }}</small>{% endif %}</td>
+                        <td class="text-center"><span class="badge bg-success">{{ c.n_componentes }}</span></td>
+                        <td class="small text-muted">
+                            {% for it in p.itens[:5] %}
+                            {{ it.quantidade|int if it.quantidade == it.quantidade|int else '%.1f'|format(it.quantidade) }}× {{ it.item_nome }}{% if not loop.last %} · {% endif %}
+                            {% endfor %}
+                            {% if p.itens|length > 5 %}<em> · +{{ p.itens|length - 5 }} item(ns)</em>{% endif %}
+                        </td>
+                        <td><a href="{{ url_for('produtos.detalhe', id=p.id) }}" class="btn btn-sm btn-outline-secondary">Editar</a></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="text-muted text-center small">Nenhum produto configurado como cesta.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header bg-warning bg-opacity-10 py-2">
+                <strong><i class="bi bi-exclamation-triangle"></i> Sem componentes ({{ sem_componentes|length }})</strong>
+                <small class="text-muted d-block">Produtos sem ProdutoItem cadastrado. Pode ser cesta esquecida ou produto simples.</small>
+            </div>
+            <div class="table-responsive" style="max-height:600px;overflow-y:auto;">
+                <table class="table table-sm table-hover mb-0 align-middle">
+                    <thead class="table-light" style="position:sticky;top:0;">
+                        <tr>
+                            <th>Produto</th>
+                            <th style="width:80px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for s in sem_componentes %}
+                    <tr>
+                        <td>{{ s.produto.nome }}{% if s.produto.categoria %}<br><small class="text-muted">{{ s.produto.categoria }}</small>{% endif %}</td>
+                        <td><a href="{{ url_for('produtos.detalhe', id=s.produto.id) }}" class="btn btn-sm btn-outline-secondary">Abrir</a></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="2" class="text-muted text-center small">Todos os produtos têm componentes.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
