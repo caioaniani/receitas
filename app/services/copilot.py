@@ -590,6 +590,7 @@ REQUER_APROVACAO = {
     'marcar_tarefa_feita', 'balanco_congelados', 'entrada_lote_loja',
     'registrar_desperdicio', 'registrar_desperdicio_lote',
     'anexar_foto_pedido', 'receber_pedido',
+    'criar_cliente_b2b', 'criar_venda_b2b',
 }
 
 
