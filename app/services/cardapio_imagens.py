@@ -107,35 +107,89 @@ IMAGENS = {
 }
 
 
-def popular_imagens(sobrescrever=False):
-    """Aplica IMAGENS no banco. Match por nome ascii-lowercase, fallback
-    rapidfuzz token_set_ratio (score >= 88).
-
-    sobrescrever=False (default): so seta onde imagem_url eh nulo.
-    Retorna {receitas_alteradas, produtos_alterados, sem_match}.
-    """
+def _achar_match(nome, threshold=70):
+    """Retorna (url, score, nome_referencia) ou None."""
+    if not nome:
+        return None
     nomes_referencia = list(IMAGENS.keys())
     nomes_norm = [_norm(n) for n in nomes_referencia]
+    n = _norm(nome)
+    # 1. exato
+    if n in nomes_norm:
+        ref = nomes_referencia[nomes_norm.index(n)]
+        return (IMAGENS[ref], 100, ref)
+    # 2. fuzzy token_set_ratio (mais permissivo com ordem de palavras)
+    match = process.extractOne(n, nomes_norm, scorer=fuzz.token_set_ratio)
+    if match and match[1] >= threshold:
+        ref = nomes_referencia[match[2]]
+        return (IMAGENS[ref], int(match[1]), ref)
+    return None
 
-    def _achar(nome):
-        n = _norm(nome)
-        # 1. exato
-        if n in nomes_norm:
-            return IMAGENS[nomes_referencia[nomes_norm.index(n)]]
-        # 2. fuzzy
-        match = process.extractOne(n, nomes_norm, scorer=fuzz.token_set_ratio)
-        if match and match[1] >= 88:
-            return IMAGENS[nomes_referencia[match[2]]]
-        return None
 
+def preview_matches(threshold=70):
+    """Retorna [{tipo, id, nome, score, url, ref, ja_tem}] pra admin
+    revisar antes de aplicar. Lista ordenada por score decrescente.
+    `ja_tem` = True se imagem_url ja esta setada (nao sobrescreve).
+    """
+    out = []
+    for r in Receita.query.order_by(Receita.nome).all():
+        m = _achar_match(r.nome, threshold=threshold)
+        if m:
+            url, score, ref = m
+            out.append({
+                'tipo': 'receita', 'id': r.id, 'nome': r.nome,
+                'score': score, 'url': url, 'ref': ref,
+                'ja_tem': bool(r.imagem_url),
+                'imagem_atual': r.imagem_url,
+            })
+        else:
+            out.append({
+                'tipo': 'receita', 'id': r.id, 'nome': r.nome,
+                'score': 0, 'url': None, 'ref': None,
+                'ja_tem': bool(r.imagem_url),
+                'imagem_atual': r.imagem_url,
+            })
+    for p in Produto.query.filter_by(ativo=True).order_by(Produto.nome).all():
+        m = _achar_match(p.nome, threshold=threshold)
+        if m:
+            url, score, ref = m
+            out.append({
+                'tipo': 'produto', 'id': p.id, 'nome': p.nome,
+                'score': score, 'url': url, 'ref': ref,
+                'ja_tem': bool(p.imagem_url),
+                'imagem_atual': p.imagem_url,
+            })
+        else:
+            out.append({
+                'tipo': 'produto', 'id': p.id, 'nome': p.nome,
+                'score': 0, 'url': None, 'ref': None,
+                'ja_tem': bool(p.imagem_url),
+                'imagem_atual': p.imagem_url,
+            })
+    # Com match primeiro, depois ordenado por score desc
+    out.sort(key=lambda x: (-(x['score'] or 0), x['nome']))
+    return out
+
+
+def popular_imagens(sobrescrever=False, threshold=70, ids_aprovados=None):
+    """Aplica IMAGENS no banco. Match por nome ascii-lowercase, fallback
+    rapidfuzz token_set_ratio (score >= threshold).
+
+    sobrescrever=False: so seta onde imagem_url eh nulo.
+    ids_aprovados: dict {('receita', id) | ('produto', id) → True} pra
+                   aplicar so subset selecionado no preview. None = todos.
+    Retorna {receitas_alteradas, produtos_alterados, sem_match}.
+    """
     receitas_alt = 0
     sem_match_r = []
     for r in Receita.query.all():
         if r.imagem_url and not sobrescrever:
             continue
-        url = _achar(r.nome)
-        if url:
-            r.imagem_url = url
+        if ids_aprovados is not None and ('receita', r.id) not in ids_aprovados:
+            continue
+        m = _achar_match(r.nome, threshold=threshold)
+        if m:
+            r.imagem_url = m[0]
             receitas_alt += 1
         else:
             sem_match_r.append(r.nome)
@@ -145,9 +199,11 @@ def popular_imagens(sobrescrever=False):
     for p in Produto.query.all():
         if p.imagem_url and not sobrescrever:
             continue
-        url = _achar(p.nome)
-        if url:
-            p.imagem_url = url
+        if ids_aprovados is not None and ('produto', p.id) not in ids_aprovados:
+            continue
+        m = _achar_match(p.nome, threshold=threshold)
+        if m:
+            p.imagem_url = m[0]
             produtos_alt += 1
         else:
             sem_match_p.append(p.nome)
