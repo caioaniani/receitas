@@ -190,6 +190,10 @@ footer {
     <a href="{{ url_for('main.cardapio', tipo='site') }}" class="tipo-btn {% if tipo == 'site' %}active{% endif %}">Site</a>
     <div class="spacer"></div>
     {% if current_user.is_admin() %}
+    <a href="{{ url_for('main.galeria_rappi') }}" class="tipo-btn"
+       style="border-color: var(--accent); color: var(--accent);">
+        <i class="bi bi-images"></i> Galeria Rappi (subir fotos)
+    </a>
     <form method="POST" action="{{ url_for('main.limpar_urls_rappi') }}" style="display:inline;"
           onsubmit="return confirm('Apagar todas as imagem_url do Rappi (que dão 403)? Não mexe nas fotos que você fez upload.')">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
