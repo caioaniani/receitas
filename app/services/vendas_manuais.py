@@ -1,19 +1,24 @@
 """Vendas manuais de loja (sem API PDV) + sugestao de pedido.
 
-Cenario: loja sem integracao automatica (ex: Anesio). Admin cola texto
-das vendas do dia (igual balanco congelados) → cada item vira uma linha
-em `VendaManualLoja`. NAO baixa estoque — eh so historico pra previsao.
+Cenario: loja sem integracao automatica (ex: Anesio). Admin pode:
+- Colar texto: lista 'Nome: qtd' aplicada numa data unica
+- Upload de planilha Excel: linhas (data, produto, quantidade) cobrindo
+  qualquer periodo, ate um mes inteiro de uma vez.
+
+Em ambos os casos, cria VendaManualLoja sem mexer no estoque. So historico
+pra alimentar previsao + sugestao.
 
 Pra sugerir pedido, junta:
-- Vendas reais (MovEstoqueLoja tipo IN venda_seru/venda_vnda/etc)
-- Vendas manuais (VendaManualLoja) — fundo a fundo
+- Vendas reais via VNDA (puxa direto da API por periodo — retroativo)
+- Vendas reais via Seru (MovEstoqueLoja tipo='venda_seru*')
+- Vendas manuais (VendaManualLoja)
 
-Calcula media diaria nos ultimos N dias + olha estoque atual + sugere
-qtd pra `dias_cobertura` dias.
+Calcula media diaria no periodo + olha estoque atual + sugere qtd.
 """
+import io
 import math
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, time
 
 from app.extensions import db
 from app.models import (VendaManualLoja, MovEstoqueLoja, EstoqueLoja, LojaProdutoMap,
