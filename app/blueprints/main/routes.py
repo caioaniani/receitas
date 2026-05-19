@@ -317,9 +317,9 @@ def galeria_rappi():
                     match_nome = obj.nome
         ja_tem = False
         if match_tipo == 'receita':
-            ja_tem = bool(receitas[match_id].imagem_blob)
+            ja_tem = match_id in ids_receita_com_blob
         elif match_tipo == 'produto':
-            ja_tem = bool(produtos[match_id].imagem_blob)
+            ja_tem = match_id in ids_produto_com_blob
         itens.append({
             'nome_ref': nome_ref, 'url': url,
             'match_tipo': match_tipo, 'match_id': match_id,
