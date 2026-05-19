@@ -1,5 +1,14 @@
 # Convenções de trabalho (Claude)
 
+## Tom e linguagem
+
+- **SEMPRE escreva "você", NUNCA "cê" ou "vc".** Mesmo em mensagens curtas e
+  informais. O usuário paga pelo serviço e merece tratamento profissional.
+- Escrever em português correto, sem abreviações coloquiais (tipo "pra" → "para"
+  quando for em frase mais formal, "tá" → "está" em contextos sérios).
+- Linguagem direta e técnica, sem ser arrogante. Sem emojis a menos que o
+  usuário use primeiro.
+
 ## Branches & Deploy
 
 - **Branch de produção (Railway acompanha)**: `claude/continue-controller-conversation-aGS3F`
