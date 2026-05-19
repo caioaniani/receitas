@@ -131,14 +131,25 @@ def test_receber_pagamento_parcial(app, admin_user, catalogo):
 
 
 def test_preco_sugerido_com_desconto_cliente(app, catalogo):
-    """Cliente com desconto_percentual aplica sobre preco atacado."""
+    """Cliente com desconto_percentual aplica sobre preco atacado.
+    Preco vem de Receita.preco_venda (atacado, igual /cardapio?tipo=atacado)."""
     from app.extensions import db
-    from app.models import PrecoAtacado, ClienteB2B
+    from app.models import ClienteB2B
     from app.services.vendas_b2b import preco_sugerido
 
-    pa = PrecoAtacado(receita_id=catalogo['receita'].id, preco_unitario=10.0)
+    catalogo['receita'].preco_venda = 10.0
     cli = ClienteB2B(nome='X', desconto_percentual=20)
-    db.session.add_all([pa, cli])
+    db.session.add(cli)
     db.session.commit()
     assert preco_sugerido(receita_id=catalogo['receita'].id) == 10.0
     assert preco_sugerido(receita_id=catalogo['receita'].id, cliente=cli) == 8.0
+
+
+def test_preco_sugerido_produto_usa_preco_atacado(app, catalogo):
+    """Pra Produto, le do campo preco_atacado existente."""
+    from app.extensions import db
+    from app.services.vendas_b2b import preco_sugerido
+
+    catalogo['produto'].preco_atacado = 5.5
+    db.session.commit()
+    assert preco_sugerido(produto_id=catalogo['produto'].id) == 5.5
