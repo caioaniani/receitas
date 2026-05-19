@@ -235,7 +235,9 @@ class Produto(db.Model):
     preco_atacado = db.Column(db.Float)
     preco_loja = db.Column(db.Float)
     preco_site = db.Column(db.Float)
-    imagem_url = db.Column(db.String(400))  # URL externa pra cardapio digital
+    imagem_url = db.Column(db.String(400))  # URL externa pra cardapio digital (fallback)
+    imagem_blob = db.Column(db.LargeBinary)  # foto enviada pelo admin (preferida)
+    imagem_mimetype = db.Column(db.String(50))
     custo_direto = db.Column(db.Float)  # custo por unidade para itens simples
     custo_embalagem = db.Column(db.Float, default=0)  # custo embalagem por unidade (R$)
     modo_preparo = db.Column(db.Text)
