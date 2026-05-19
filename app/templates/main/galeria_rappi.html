@@ -159,6 +159,28 @@
         });
     });
 
+    document.getElementById('btn-baixar-todas').addEventListener('click', async function() {
+        var btn = this;
+        var statusGeral = document.getElementById('status-geral');
+        btn.disabled = true;
+        var links = document.querySelectorAll('a[download]');
+        statusGeral.textContent = 'baixando ' + links.length + ' arquivo(s)...';
+        for (var i = 0; i < links.length; i++) {
+            var a = document.createElement('a');
+            a.href = links[i].href;
+            a.download = links[i].download || ('img-' + i + '.png');
+            a.target = '_blank';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            // Pequeno delay pra browser nao bloquear downloads em massa
+            await new Promise(r => setTimeout(r, 200));
+            statusGeral.textContent = 'baixando ' + (i+1) + '/' + links.length;
+        }
+        statusGeral.textContent = '✓ ' + links.length + ' downloads disparados. Confere a pasta Downloads.';
+        btn.disabled = false;
+    });
+
     document.getElementById('btn-aplicar-todos').addEventListener('click', async function() {
         var btn = this;
         var statusGeral = document.getElementById('status-geral');
