@@ -1153,6 +1153,10 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE produto ADD COLUMN custo_embalagem REAL DEFAULT 0")
     if cols_prod and 'imagem_url' not in cols_prod:
         cursor.execute("ALTER TABLE produto ADD COLUMN imagem_url VARCHAR(400)")
+    if cols_prod and 'imagem_blob' not in cols_prod:
+        cursor.execute("ALTER TABLE produto ADD COLUMN imagem_blob BLOB")
+    if cols_prod and 'imagem_mimetype' not in cols_prod:
+        cursor.execute("ALTER TABLE produto ADD COLUMN imagem_mimetype VARCHAR(50)")
     if cols_prod and 'modo_preparo' not in cols_prod:
         cursor.execute("ALTER TABLE produto ADD COLUMN modo_preparo TEXT")
 
