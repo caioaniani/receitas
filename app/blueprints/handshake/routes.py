@@ -13,7 +13,9 @@ Fluxo (entrega loja):
 Tokens tem TTL de 2h e sao single-use (usado_em preenchido). Pin invalido
 mostra erro mas mantem token vivo (pode tentar de novo).
 """
-from flask import render_template, request, redirect, url_for, flash
+import io
+
+from flask import render_template, request, redirect, url_for, flash, send_file, abort
 
 from app.blueprints.handshake import handshake_bp
 from app.extensions import db, csrf
