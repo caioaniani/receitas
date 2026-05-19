@@ -26,6 +26,71 @@ VENDAS_REAIS = ('venda_seru', 'venda_seru_sem_estoque',
                 'venda_vnda', 'venda_vnda_sem_estoque')
 
 
+def _agregar_vendas_vnda_api(data_inicio, data_fim):
+    """Puxa direto da API do VNDA pedidos com data_entrega no intervalo
+    e agrega por (tipo, id) via VndaProdutoMap. NAO depende de sync
+    previo do cron — funciona retroativo.
+
+    Retorna (vendas_dict, aviso). vendas_dict = {(tipo, id): qtd_total}.
+    aviso = string com mensagem ou None.
+    """
+    from app.services import vnda as vnda_api
+    from app.models import VndaProdutoMap
+
+    try:
+        # API VNDA busca janela ampla; depois filtramos por data_entrega
+        todos = vnda_api._buscar_pedidos_janela(data_inicio, data_fim)
+    except vnda_api.VndaUnavailableError as e:
+        return {}, f'VNDA indisponivel: {e}'
+    except Exception as e:  # noqa: BLE001
+        return {}, f'VNDA falhou: {type(e).__name__}: {str(e)[:200]}'
+
+    STATUS_OK_IGNORAR = {'canceled', 'cancelled', 'cancelado'}
+    vendas = defaultdict(int)
+    for order in todos or []:
+        if not isinstance(order, dict):
+            continue
+        de = vnda_api._extrair_data_entrega(order)
+        if not de or de < data_inicio or de > data_fim:
+            continue
+        if (order.get('status') or '').lower() in STATUS_OK_IGNORAR:
+            continue
+        for item in order.get('items') or []:
+            if not isinstance(item, dict):
+                continue
+            nome = (item.get('product_name') or item.get('name') or '').strip()
+            try:
+                qtd = int(round(float(item.get('quantity', 0) or 0)))
+            except (TypeError, ValueError):
+                qtd = 0
+            if not nome or qtd <= 0:
+                continue
+            sku = (item.get('sku') or item.get('product_sku') or '').strip() or None
+            # Match contra VndaProdutoMap (so confirmados)
+            mp = None
+            if sku:
+                mp = VndaProdutoMap.query.filter_by(vnda_sku=sku).first()
+            if not mp:
+                mp = (VndaProdutoMap.query
+                      .filter(VndaProdutoMap.vnda_nome.ilike(nome))
+                      .first())
+            if not mp or mp.ignorar:
+                continue
+            if mp.estado != 'mapeado':
+                continue
+            chave = None
+            if mp.receita_id:
+                chave = ('receita', mp.receita_id)
+            elif mp.produto_id:
+                chave = ('produto', mp.produto_id)
+            elif mp.materia_prima_id:
+                chave = ('mp', mp.materia_prima_id)
+            if not chave:
+                continue
+            vendas[chave] += qtd
+    return dict(vendas), None
+
+
 def parsear_lista(texto):
     """Reusa o parser do estoque_loja_lote (mesmo formato 'Nome: qtd')."""
     return svc_lote.parsear_lista(texto)
