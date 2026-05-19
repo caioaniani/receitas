@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}B2B — Indústria{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-building"></i> Vendas B2B (Indústria)</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('b2b.venda_nova') }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-circle"></i> Nova venda
+        </a>
+        <a href="{{ url_for('b2b.vendas') }}" class="btn btn-outline-secondary btn-sm">Todas as vendas</a>
+        <a href="{{ url_for('b2b.clientes') }}" class="btn btn-outline-secondary btn-sm">Clientes</a>
+        <a href="{{ url_for('b2b.precos') }}" class="btn btn-outline-secondary btn-sm">Preços</a>
+        <a href="{{ url_for('b2b.contas_receber') }}" class="btn btn-outline-warning btn-sm">Contas a receber</a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <h6 class="text-muted">Vendas recentes</h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover bg-white">
+                <thead><tr><th>#</th><th>Data</th><th>Cliente</th><th class="text-end">Valor</th><th class="text-end">Pago</th><th>Status</th></tr></thead>
+                <tbody>
+                {% for v in vendas_recentes %}
+                <tr>
+                    <td><a href="{{ url_for('b2b.venda_detalhe', vid=v.id) }}">#{{ v.id }}</a></td>
+                    <td>{{ v.data_venda.strftime('%d/%m') }}</td>
+                    <td>{{ v.cliente_display }}</td>
+                    <td class="text-end">R$ {{ '%.2f'|format(v.valor_total) }}</td>
+                    <td class="text-end">R$ {{ '%.2f'|format(v.valor_pago) }}</td>
+                    <td>
+                        {% if v.status == 'cancelada' %}<span class="badge bg-secondary">cancelada</span>
+                        {% elif v.valor_aberto > 0 %}<span class="badge bg-warning text-dark">aberta</span>
+                        {% else %}<span class="badge bg-success">quitada</span>{% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-muted text-center small">Sem vendas registradas.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <h6 class="text-muted">Próximos vencimentos</h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover bg-white">
+                <thead><tr><th>Venc.</th><th>Cliente</th><th class="text-end">Saldo</th></tr></thead>
+                <tbody>
+                {% for p in parcelas_abertas %}
+                <tr>
+                    <td>{{ p.vencimento.strftime('%d/%m') }}</td>
+                    <td><a href="{{ url_for('b2b.venda_detalhe', vid=p.venda_id) }}">{{ p.venda.cliente_display }}</a></td>
+                    <td class="text-end">R$ {{ '%.2f'|format(p.saldo) }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="3" class="text-muted text-center small">Nada em aberto.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
