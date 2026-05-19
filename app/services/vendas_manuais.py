@@ -308,6 +308,76 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
 
 # ── Upload / template Excel ──
 
+def exportar_sugestao_xlsx(loja, sugestao_itens, data_inicio, data_fim,
+                            dias_cobertura):
+    """Gera xlsx da tela de sugestao de pedido. 1 aba com tabela completa
+    + cabecalho com periodo. Retorna bytes."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Sugestão'
+
+    # Cabecalho
+    ws['A1'] = f'Sugestão de Pedido — {loja.nome}'
+    ws['A1'].font = Font(bold=True, size=14)
+    ws.merge_cells('A1:I1')
+    ws['A2'] = f'Período: {data_inicio} a {data_fim} ({(data_fim - data_inicio).days + 1} dias) · Cobertura: {dias_cobertura} dia(s)'
+    ws['A2'].font = Font(italic=True, color='666666')
+    ws.merge_cells('A2:I2')
+
+    # Header tabela
+    headers = ['Item', 'PDV manual', 'VNDA', 'Seru', f'Total no período',
+                'Média/dia', 'Estoque atual', 'Ideal cobertura', 'Pedir']
+    for col_idx, h in enumerate(headers, start=1):
+        c = ws.cell(row=4, column=col_idx, value=h)
+        c.font = Font(bold=True, color='FFFFFF')
+        c.fill = PatternFill('solid', fgColor='2c3e50')
+        c.alignment = Alignment(horizontal='center')
+
+    # Linhas
+    for i, s in enumerate(sugestao_itens, start=5):
+        ws.cell(row=i, column=1, value=s['nome'])
+        ws.cell(row=i, column=2, value=s.get('por_fonte', {}).get('manual', 0) or 0)
+        ws.cell(row=i, column=3, value=s.get('por_fonte', {}).get('vnda', 0) or 0)
+        ws.cell(row=i, column=4, value=s.get('por_fonte', {}).get('seru', 0) or 0)
+        ws.cell(row=i, column=5, value=s.get('vendas_periodo', 0)).font = Font(bold=True)
+        ws.cell(row=i, column=6, value=s.get('media_diaria', 0))
+        ws.cell(row=i, column=7, value=s.get('estoque_atual', 0))
+        ws.cell(row=i, column=8, value=s.get('ideal_cobertura', 0))
+        c_pedir = ws.cell(row=i, column=9, value=s.get('qtd_sugerida', 0))
+        c_pedir.font = Font(bold=True)
+        if (s.get('qtd_sugerida') or 0) > 0:
+            c_pedir.fill = PatternFill('solid', fgColor='e8f5e9')
+
+    # Larguras
+    larguras = {'A': 38, 'B': 12, 'C': 10, 'D': 10, 'E': 16, 'F': 12,
+                'G': 14, 'H': 14, 'I': 10}
+    for col, w in larguras.items():
+        ws.column_dimensions[col].width = w
+
+    # Totais no rodape (linha apos os itens)
+    rod = len(sugestao_itens) + 6
+    ws.cell(row=rod, column=1, value='TOTAL').font = Font(bold=True)
+    for col_idx, key in enumerate(
+        [None, 'manual', 'vnda', 'seru', 'vendas_periodo', None,
+         'estoque_atual', 'ideal_cobertura', 'qtd_sugerida'], start=1):
+        if not key:
+            continue
+        if key in ('manual', 'vnda', 'seru'):
+            total = sum((s.get('por_fonte', {}).get(key) or 0) for s in sugestao_itens)
+        else:
+            total = sum((s.get(key) or 0) for s in sugestao_itens)
+        c = ws.cell(row=rod, column=col_idx, value=total)
+        c.font = Font(bold=True)
+
+    out = io.BytesIO()
+    wb.save(out)
+    out.seek(0)
+    return out.read()
+
+
 def gerar_template_xlsx(loja):
     """Gera planilha modelo pro admin preencher e fazer upload.
 
