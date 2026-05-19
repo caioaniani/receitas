@@ -242,45 +242,59 @@ def separar(id):
 @operacional_pedido_required
 def enviar(id):
     pedido = PedidoLoja.query.get_or_404(id)
-    if pedido.status != 'separado':
-        flash('Pedido precisa estar separado para sair pra entrega.', 'warning')
-        return redirect(url_for('pedidos.detalhe', id=id))
-
     try:
-        for item in pedido.itens:
-            if item.materia_prima_id:
-                mp = MateriaPrima.query.get(item.materia_prima_id)
-                if mp:
-                    mp.estoque_atual = max(0, (mp.estoque_atual or 0) - item.quantidade)
-                    db.session.add(MovimentacaoEstoque(
-                        materia_prima_id=mp.id, tipo='saida',
-                        quantidade=item.quantidade,
-                        referencia=f'Pedido #{pedido.id} → {pedido.loja.nome}',
-                        usuario_id=current_user.id,
-                    ))
-                continue
-
-            ep = EstoqueProducao.query.filter_by(
-                receita_id=item.receita_id, produto_id=item.produto_id
-            ).first()
-            if ep:
-                ep.quantidade = max(0, ep.quantidade - item.quantidade)
-                db.session.add(MovEstoqueProducao(
-                    estoque_producao_id=ep.id, tipo='saida_pedido',
-                    quantidade=item.quantidade,
-                    referencia=f'Pedido #{pedido.id} → {pedido.loja.nome}',
-                    usuario_id=current_user.id,
-                ))
-
-        pedido.status = 'em_transporte'
-        db.session.commit()
+        ok, msg = _executar_envio_pedido(pedido, current_user, ref_extra=None)
     except Exception as exc:  # noqa: BLE001
         db.session.rollback()
         current_app.logger.exception('Falha ao enviar pedido %s', id)
         flash(f'Erro ao processar saída do pedido: {exc}. Nada foi alterado.', 'danger')
         return redirect(url_for('pedidos.detalhe', id=id))
-    flash('Pedido em transporte. Estoque da industria baixado.', 'success')
+    flash(msg, 'success' if ok else 'warning')
     return redirect(url_for('pedidos.detalhe', id=id))
+
+
+def _executar_envio_pedido(pedido, user, ref_extra=None):
+    """Baixa estoque da industria + status separado → em_transporte.
+
+    Chamavel por (1) rota /pedidos/<id>/enviar (admin click) ou (2)
+    handshake QR (motorista escaneia + digita PIN). Levanta Exception em
+    falha pra caller fazer rollback. `ref_extra` adiciona texto na
+    referencia do movimento (ex: 'via QR / motorista Joao').
+    """
+    if pedido.status != 'separado':
+        return False, f'Pedido precisa estar separado (atual: {pedido.status}).'
+
+    ref_base = f'Pedido #{pedido.id} → {pedido.loja.nome}'
+    if ref_extra:
+        ref_base += f' ({ref_extra})'
+
+    for item in pedido.itens:
+        if item.materia_prima_id:
+            mp = MateriaPrima.query.get(item.materia_prima_id)
+            if mp:
+                mp.estoque_atual = max(0, (mp.estoque_atual or 0) - item.quantidade)
+                db.session.add(MovimentacaoEstoque(
+                    materia_prima_id=mp.id, tipo='saida',
+                    quantidade=item.quantidade,
+                    referencia=ref_base,
+                    usuario_id=getattr(user, 'id', None),
+                ))
+            continue
+        ep = EstoqueProducao.query.filter_by(
+            receita_id=item.receita_id, produto_id=item.produto_id
+        ).first()
+        if ep:
+            ep.quantidade = max(0, ep.quantidade - item.quantidade)
+            db.session.add(MovEstoqueProducao(
+                estoque_producao_id=ep.id, tipo='saida_pedido',
+                quantidade=item.quantidade,
+                referencia=ref_base,
+                usuario_id=getattr(user, 'id', None),
+            ))
+
+    pedido.status = 'em_transporte'
+    db.session.commit()
+    return True, 'Pedido em transporte. Estoque da industria baixado.'
 
 
 @pedidos_bp.route('/<int:id>/receber', methods=['POST'])
