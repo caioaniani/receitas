@@ -1927,12 +1927,15 @@ def sugerir_pedido(loja_id):
         dias_cobertura = int(request.args.get('cobertura', 7))
     except ValueError:
         dias_cobertura = 7
-    sugestao = svc.sugerir_pedido(loja_id, data_inicio=data_inicio,
-                                    data_fim=data_fim,
-                                    dias_cobertura=dias_cobertura)
+    res = svc.sugerir_pedido(loja_id, data_inicio=data_inicio,
+                              data_fim=data_fim,
+                              dias_cobertura=dias_cobertura)
+    sugestao = res.get('itens', [])
+    aviso_vnda = res.get('aviso_vnda')
     dias_periodo = (data_fim - data_inicio).days + 1
     return render_template('pedidos/sugerir_pedido.html', loja=loja,
                             sugestao=sugestao,
+                            aviso_vnda=aviso_vnda,
                             data_inicio=data_inicio.isoformat(),
                             data_fim=data_fim.isoformat(),
                             dias_periodo=dias_periodo,
