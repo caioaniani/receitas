@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}QR Saída — Pedido #{{ pedido.id }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-qr-code"></i> Saída — Pedido #{{ pedido.id }}</h1>
+    <a href="{{ url_for('pedidos.detalhe', id=pedido.id) }}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card text-center">
+            <div class="card-body">
+                <h6 class="text-muted">Motorista escaneia este QR no celular</h6>
+                {% if qr_png %}
+                <img src="{{ qr_png }}" alt="QR Code" style="max-width:100%; height:auto;">
+                {% else %}
+                <div class="alert alert-warning small">Biblioteca de QR Code não disponível. Use o link abaixo.</div>
+                {% endif %}
+                <p class="small text-muted mt-2 mb-0">
+                    Ou abrir direto: <code style="font-size:10px;">{{ url }}</code>
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-title">Como funciona</h6>
+                <ol class="small mb-3">
+                    <li>Motorista escaneia o QR com a câmera do celular</li>
+                    <li>Abre a página de confirmação</li>
+                    <li>Digita o PIN dele</li>
+                    <li>Status muda automaticamente para <strong>em transporte</strong>, baixa estoque da indústria</li>
+                </ol>
+                <div class="small text-muted">
+                    <i class="bi bi-clock"></i> Válido até <strong>{{ qr.expira_em.strftime('%H:%M de %d/%m') }}</strong><br>
+                    <i class="bi bi-shield-check"></i> Single-use: após escaneado, não pode ser reusado<br>
+                    <i class="bi bi-arrow-clockwise"></i> Esta página gera/reusa o mesmo token enquanto válido
+                </div>
+                <hr>
+                <p class="small text-muted mb-2"><strong>Pedido:</strong> #{{ pedido.id }} → {{ pedido.loja.nome }}</p>
+                <p class="small text-muted mb-2"><strong>Status atual:</strong> {{ pedido.status }}</p>
+                <p class="small text-muted mb-0"><strong>Itens:</strong> {{ pedido.itens|length }}</p>
+                <hr>
+                <details class="small">
+                    <summary>Fallback admin (caso o QR não funcione)</summary>
+                    <form method="POST" action="{{ url_for('pedidos.enviar', id=pedido.id) }}" class="mt-2"
+                          onsubmit="return confirm('Marcar saída SEM handshake fisico do motorista?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline-warning">
+                            Marcar saída manualmente
+                        </button>
+                    </form>
+                </details>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
