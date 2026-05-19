@@ -1554,3 +1554,158 @@ class LembretePedidoOptOut(db.Model):
     __table_args__ = (
         db.UniqueConstraint('loja_id', 'data_entrega', name='uq_lembrete_optout'),
     )
+
+
+# ── B2B (venda da industria pra clientes externos) ──
+
+class ClienteB2B(db.Model):
+    """Cliente B2B recorrente (hotel, restaurante, cafeteria, padaria).
+
+    Cadastro opcional: vendas avulsas usam VendaB2B.cliente_nome em vez de
+    cliente_id. Cliente recorrente eh util pra historico, contas a receber
+    consolidadas e preco diferenciado (campo desconto_percentual).
+    """
+    __tablename__ = 'cliente_b2b'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(150), nullable=False, unique=True)
+    cnpj_cpf = db.Column(db.String(20))
+    telefone = db.Column(db.String(30))
+    email = db.Column(db.String(120))
+    endereco = db.Column(db.String(250))
+    contato = db.Column(db.String(100))  # nome da pessoa que compra
+    desconto_percentual = db.Column(db.Float, default=0)  # % sobre preco atacado
+    observacao = db.Column(db.Text)
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora)
+
+
+class PrecoAtacado(db.Model):
+    """Tabela de preco atacado por receita/produto. Um item tem 1 preco.
+
+    Usado como sugestao no form de venda B2B. Sobrescrita por venda eh
+    permitida (campo preco_unitario em VendaB2BItem).
+    """
+    __tablename__ = 'preco_atacado'
+
+    id = db.Column(db.Integer, primary_key=True)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True, unique=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True, unique=True)
+    preco_unitario = db.Column(db.Float, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
+
+    receita = db.relationship('Receita')
+    produto = db.relationship('Produto')
+
+    @property
+    def nome_item(self):
+        if self.receita:
+            return self.receita.nome
+        if self.produto:
+            return self.produto.nome
+        return '?'
+
+
+class VendaB2B(db.Model):
+    """Venda B2B: cabecalho. Itens vinculados via VendaB2BItem,
+    pagamento parcelado via VendaB2BParcela.
+
+    Estoque eh baixado do EstoqueProducao (industria) ao salvar.
+    Cancelamento estorna automaticamente.
+    """
+    __tablename__ = 'venda_b2b'
+
+    id = db.Column(db.Integer, primary_key=True)
+    data_venda = db.Column(db.Date, nullable=False, default=lambda: agora().date(), index=True)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('cliente_b2b.id'), nullable=True, index=True)
+    cliente_nome = db.Column(db.String(150))  # pra venda avulsa sem cadastro
+    status = db.Column(db.String(20), default='ativa', nullable=False)  # ativa, cancelada
+    valor_total = db.Column(db.Float, nullable=False, default=0)
+    observacao = db.Column(db.Text)
+    nf_numero = db.Column(db.String(50))  # numero da NF se houver
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    criado_em = db.Column(db.DateTime, default=agora)
+    cancelado_em = db.Column(db.DateTime, nullable=True)
+    cancelado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)
+
+    cliente = db.relationship('ClienteB2B')
+    itens = db.relationship('VendaB2BItem', backref='venda', cascade='all, delete-orphan')
+    parcelas = db.relationship('VendaB2BParcela', backref='venda', cascade='all, delete-orphan')
+    criado_por = db.relationship('Usuario', foreign_keys=[criado_por_id])
+
+    @property
+    def cliente_display(self):
+        if self.cliente:
+            return self.cliente.nome
+        return self.cliente_nome or '(avulso)'
+
+    @property
+    def valor_pago(self):
+        return sum(p.valor_pago or 0 for p in self.parcelas)
+
+    @property
+    def valor_aberto(self):
+        return (self.valor_total or 0) - (self.valor_pago or 0)
+
+
+class VendaB2BItem(db.Model):
+    __tablename__ = 'venda_b2b_item'
+
+    id = db.Column(db.Integer, primary_key=True)
+    venda_id = db.Column(db.Integer, db.ForeignKey('venda_b2b.id'), nullable=False, index=True)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
+    quantidade = db.Column(db.Integer, nullable=False)
+    preco_unitario = db.Column(db.Float, nullable=False)
+    desconto_percentual = db.Column(db.Float, default=0)
+
+    receita = db.relationship('Receita')
+    produto = db.relationship('Produto')
+
+    @property
+    def nome_item(self):
+        if self.receita:
+            return self.receita.nome
+        if self.produto:
+            return self.produto.nome
+        return '?'
+
+    @property
+    def valor_total(self):
+        bruto = (self.quantidade or 0) * (self.preco_unitario or 0)
+        desc = bruto * (self.desconto_percentual or 0) / 100.0
+        return round(bruto - desc, 2)
+
+
+class VendaB2BParcela(db.Model):
+    """Cada parcela tem vencimento, valor previsto e valor recebido.
+
+    Pagamento parcial e permitido: valor_pago < valor → fica em aberto pelo
+    saldo. valor_pago == valor → quitada (campo pago_em preenchido).
+    """
+    __tablename__ = 'venda_b2b_parcela'
+
+    id = db.Column(db.Integer, primary_key=True)
+    venda_id = db.Column(db.Integer, db.ForeignKey('venda_b2b.id'), nullable=False, index=True)
+    numero = db.Column(db.Integer, nullable=False)  # 1, 2, 3...
+    vencimento = db.Column(db.Date, nullable=False, index=True)
+    valor = db.Column(db.Float, nullable=False)
+    valor_pago = db.Column(db.Float, default=0)
+    pago_em = db.Column(db.DateTime, nullable=True)
+    forma_pagamento = db.Column(db.String(30))  # pix, dinheiro, boleto, transferencia
+    observacao = db.Column(db.String(200))
+
+    @property
+    def saldo(self):
+        return (self.valor or 0) - (self.valor_pago or 0)
+
+    @property
+    def status(self):
+        if self.valor_pago and self.valor_pago >= self.valor:
+            return 'pago'
+        if self.valor_pago and self.valor_pago > 0:
+            return 'parcial'
+        from app.utils import hoje
+        if self.vencimento < hoje():
+            return 'atrasado'
+        return 'aberto'
