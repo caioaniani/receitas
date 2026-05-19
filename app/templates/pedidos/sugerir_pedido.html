@@ -27,10 +27,17 @@
     </div>
     <div class="col-12">
         <small class="text-muted">
-            Período: <strong>{{ dias_periodo }} dia(s)</strong> · soma vendas VNDA, Seru (se houver) e manuais nesse intervalo.
+            Período: <strong>{{ dias_periodo }} dia(s)</strong> · VNDA puxado direto da API (retroativo), Seru via sync, manual via lançamento.
         </small>
     </div>
 </form>
+
+{% if aviso_vnda %}
+<div class="alert alert-warning small">
+    <i class="bi bi-exclamation-triangle"></i> <strong>VNDA:</strong> {{ aviso_vnda }}.
+    Os números abaixo não incluem vendas VNDA do período.
+</div>
+{% endif %}
 
 {% if not sugestao %}
 <div class="alert alert-warning">
