@@ -1078,6 +1078,11 @@ def _migrate_postgres(app):
     _try("CREATE INDEX IF NOT EXISTS idx_venda_b2b_parcela_venda ON venda_b2b_parcela(venda_id)")
     _try("CREATE INDEX IF NOT EXISTS idx_venda_b2b_parcela_venc ON venda_b2b_parcela(vencimento)")
 
+    # Handshake QR Code — PIN da loja + tokens curtos por pedido.
+    _try("ALTER TABLE loja ADD COLUMN IF NOT EXISTS pin VARCHAR(8)")
+    _try("CREATE INDEX IF NOT EXISTS idx_pedido_qrcode_token ON pedido_qrcode(token)")
+    _try("CREATE INDEX IF NOT EXISTS idx_pedido_qrcode_pedido ON pedido_qrcode(pedido_id)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
