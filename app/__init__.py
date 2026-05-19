@@ -1180,6 +1180,8 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE loja ADD COLUMN planta_imagem BLOB")
     if cols_loja and 'planta_mimetype' not in cols_loja:
         cursor.execute("ALTER TABLE loja ADD COLUMN planta_mimetype VARCHAR(100)")
+    if cols_loja and 'pin' not in cols_loja:
+        cursor.execute("ALTER TABLE loja ADD COLUMN pin VARCHAR(8)")
 
     # Migração slot_mapa
     cursor.execute("PRAGMA table_info(slot_mapa)")
