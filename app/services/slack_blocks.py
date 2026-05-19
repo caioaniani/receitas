@@ -395,9 +395,28 @@ def build_resultado(resultado, ok=True):
     if resultado is None:
         resultado = {}
     if ok and resultado.get('ok'):
-        partes = ['Feito.']
-        for k in ('pedido_id', 'mov_id', 'tarefa_id', 'desperdicio_id',
-                  'fornecedor_id', 'venda_id', 'cliente_id'):
+        # Mensagem inicial personalizada por tipo de acao
+        STATUS_LABEL = {
+            'pendente': 'pedido feito',
+            'confirmado': 'pedido feito',
+            'separado': 'pedido feito',
+            'em_transporte': 'enviado',
+            'entregue': 'recebido',
+            'cancelado': 'cancelado',
+        }
+        if resultado.get('pedido_id') and resultado.get('novo_status'):
+            label = STATUS_LABEL.get(resultado['novo_status'], resultado['novo_status'])
+            partes = [f"✓ pedido #{resultado['pedido_id']} marcado como *{label}*."]
+        elif resultado.get('pedido_id'):
+            partes = [f"✓ pedido #{resultado['pedido_id']} criado."]
+        elif resultado.get('venda_id'):
+            partes = [f"✓ venda B2B #{resultado['venda_id']} criada."]
+        elif resultado.get('desperdicio_id') or resultado.get('total_aplicados'):
+            n = resultado.get('total_aplicados') or 1
+            partes = [f"✓ {n} desperdicio(s) registrado(s)."]
+        else:
+            partes = ['Feito.']
+        for k in ('mov_id', 'tarefa_id', 'fornecedor_id', 'cliente_id'):
             if resultado.get(k):
                 partes.append(f'_{k}_: `{resultado[k]}`')
         if resultado.get('url'):
