@@ -213,8 +213,10 @@ def cardapio_img(tipo, id):
 @main_bp.route('/cardapio-img/<tipo>/<int:id>/upload', methods=['POST'])
 @login_required
 def cardapio_img_upload(tipo, id):
-    """Recebe upload de foto pra receita/produto. Compressao via PIL
-    pra max ~600x600 e converter pra JPEG (economia de banco)."""
+    """Recebe upload de foto pra receita/produto. PIL comprime
+    automaticamente: redimensiona pra 700px max + JPEG quality 82.
+    Aceita ate 25MB no upload (celular tira fotos enormes), mas o que
+    fica no banco e ~50-150KB."""
     from flask import abort, flash, redirect, url_for
     from app.models import Receita, Produto
     from app.extensions import db as _db
@@ -237,26 +239,33 @@ def cardapio_img_upload(tipo, id):
         flash('Arquivo nao eh imagem.', 'danger')
         return redirect(url_back)
     data = f.read()
-    if not data or len(data) > 8 * 1024 * 1024:
-        flash('Imagem vazia ou > 8MB.', 'danger')
+    if not data:
+        flash('Arquivo vazio.', 'danger')
+        return redirect(url_back)
+    if len(data) > 25 * 1024 * 1024:
+        flash(f'Imagem muito grande ({len(data)//1024//1024}MB > 25MB). '
+              'Tira de novo com qualidade menor.', 'danger')
         return redirect(url_back)
 
-    # Compressao: usa PIL pra reduzir pra 700x700 max e JPEG quality 80
+    # Compressao: PIL reduz pra 700x700 max e converte pra JPEG quality 82.
+    # Aplica EXIF orientation pra fotos de celular nao virarem deitadas.
     try:
-        from PIL import Image
+        from PIL import Image, ImageOps
         import io as _io
         img = Image.open(_io.BytesIO(data))
-        img.thumbnail((700, 700), Image.LANCZOS)
-        if img.mode in ('RGBA', 'P'):
+        img = ImageOps.exif_transpose(img)  # corrige rotacao de iPhone/Android
+        if img.mode in ('RGBA', 'P', 'LA'):
             img = img.convert('RGB')
+        img.thumbnail((700, 700), Image.LANCZOS)
         out = _io.BytesIO()
-        img.save(out, format='JPEG', quality=82, optimize=True)
-        obj.imagem_blob = out.getvalue()
+        img.save(out, format='JPEG', quality=82, optimize=True, progressive=True)
+        final = out.getvalue()
+        obj.imagem_blob = final
         obj.imagem_mimetype = 'image/jpeg'
-    except Exception:  # noqa: BLE001
-        # Se PIL falhar, salva original mesmo
-        obj.imagem_blob = data
-        obj.imagem_mimetype = f.mimetype
+        tamanho_kb = len(final) // 1024
+    except Exception as e:  # noqa: BLE001
+        flash(f'Erro processando imagem: {e}', 'danger')
+        return redirect(url_back)
 
     _db.session.commit()
     flash('Imagem salva.', 'success')
