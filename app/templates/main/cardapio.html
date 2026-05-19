@@ -266,9 +266,7 @@
             {% for p in produtos %}
             <div class="produto-item">
                 <span class="produto-nome">{{ p.nome }}</span>
-                {% if p.peso_unitario %}
-                <span class="produto-detalhe">{{ p.peso_unitario | int }}g</span>
-                {% elif p.descricao %}
+                {% if p.descricao %}
                 <span class="produto-detalhe">{{ p.descricao }}</span>
                 {% endif %}
                 <span class="produto-dots"></span>
