@@ -291,6 +291,62 @@ def _preview_registrar_desperdicio_lote(p, token):
     ]
 
 
+def _preview_criar_venda_b2b(p, token):
+    itens = p.get('itens') or []
+    parcelas = p.get('parcelas') or []
+    cliente = p.get('cliente_nome_resolvido') or p.get('cliente_nome') or '?'
+    tag_cli = '(avulso)' if p.get('cliente_avulso') else '(cadastrado)'
+    desc = p.get('cliente_desconto') or 0
+    extra = f' · {desc:.0f}% desc' if desc else ''
+
+    def _fmt(it):
+        nome = (it.get('resolvido') or {}).get('nome') or it.get('nome_original') or '?'
+        marker = '' if it.get('resolvido') else ' ⚠'
+        preco = it.get('preco_unitario') or 0
+        subt = it.get('subtotal') or 0
+        return f"- {it.get('quantidade')}x {nome}{marker} · R$ {preco:.2f} = R$ {subt:.2f}"
+
+    itens_txt = '\n'.join(_fmt(i) for i in itens[:25]) or '(vazio)'
+    if len(itens) > 25:
+        itens_txt += f'\n_... +{len(itens) - 25}_'
+
+    parc_txt = ''
+    if parcelas:
+        parc_txt = '\n*Parcelas:*\n' + '\n'.join(
+            f"- {p.get('vencimento')} · R$ {float(p.get('valor') or 0):.2f}"
+            + (f" ({p.get('forma_pagamento')})" if p.get('forma_pagamento') else '')
+            for p in parcelas[:10]
+        )
+
+    return [
+        _header('Criar venda B2B'),
+        _fields([
+            ('Cliente', f'{cliente} {tag_cli}{extra}'),
+            ('Data', p.get('data_venda') or 'hoje'),
+            ('NF', p.get('nf_numero') or '—'),
+            ('Total', f"R$ {p.get('total') or 0:.2f}"),
+            ('Observacao', p.get('observacao') or '—'),
+        ]),
+        _section(f'*Itens (baixa do freezer):*\n{itens_txt[:2500]}{parc_txt[:1000]}'),
+        _botoes(token, 'Criar venda', 'Cancelar'),
+    ]
+
+
+def _preview_criar_cliente_b2b(p, token):
+    return [
+        _header('Cadastrar cliente B2B'),
+        _fields([
+            ('Nome', p.get('nome')),
+            ('CNPJ/CPF', p.get('cnpj_cpf') or '—'),
+            ('Telefone', p.get('telefone') or '—'),
+            ('Contato', p.get('contato') or '—'),
+            ('Desconto', f"{p.get('desconto_percentual') or 0:.0f}%"),
+            ('E-mail', p.get('email') or '—'),
+        ]),
+        _botoes(token, 'Cadastrar', 'Cancelar'),
+    ]
+
+
 _PREVIEW_BUILDERS = {
     'criar_pedido': _preview_criar_pedido,
     'receber_mp': _preview_receber_mp,
