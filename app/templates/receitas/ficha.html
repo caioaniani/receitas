@@ -269,6 +269,18 @@
         </div>
     </div>
 
+    <!-- Imagem pro cardapio digital -->
+    <div class="mb-3">
+        <label class="form-label small text-muted">
+            <i class="bi bi-image"></i> URL da imagem (cardápio digital)
+        </label>
+        <input type="url" name="imagem_url" value="{{ receita.imagem_url or '' }}"
+               class="form-control form-control-sm input-blue" placeholder="https://...">
+        {% if receita.imagem_url %}
+        <div class="mt-1"><img src="{{ receita.imagem_url }}" alt="" style="max-height:60px;border-radius:6px;"></div>
+        {% endif %}
+    </div>
+
     <!-- Modo de Preparo -->
     <div class="mb-3">
         <label class="form-label fw-bold"><i class="bi bi-journal-text"></i> Modo de Preparo</label>
