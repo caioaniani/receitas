@@ -298,4 +298,4 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
             'por_fonte': dict(por_fonte_item.get(chave, {})),
         })
     out.sort(key=lambda x: -x['media_diaria'])
-    return out
+    return {'itens': out, 'aviso_vnda': aviso_vnda}
