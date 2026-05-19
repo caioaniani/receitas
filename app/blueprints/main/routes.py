@@ -183,20 +183,31 @@ def cardapio():
 @main_bp.route('/cardapio-img/<tipo>/<int:id>')
 def cardapio_img(tipo, id):
     """Serve a imagem (BLOB) de uma receita/produto. Publico pra carregar
-    no <img src>. Cache 1h pq imagens trocam pouco."""
-    from flask import abort
+    no <img src>. Suporta ETag + 304 pra evitar reenviar BLOB toda hora."""
+    from flask import abort, request as flask_request, make_response
     from app.models import Receita, Produto
+    from sqlalchemy.orm import load_only
+    import hashlib
     if tipo == 'receita':
-        obj = Receita.query.get_or_404(id)
+        obj = (Receita.query.options(
+            load_only(Receita.imagem_blob, Receita.imagem_mimetype)
+        ).get(id))
     elif tipo == 'produto':
-        obj = Produto.query.get_or_404(id)
+        obj = (Produto.query.options(
+            load_only(Produto.imagem_blob, Produto.imagem_mimetype)
+        ).get(id))
     else:
         abort(404)
-    if not obj.imagem_blob:
+    if not obj or not obj.imagem_blob:
         abort(404)
-    return Response(obj.imagem_blob,
-                    mimetype=obj.imagem_mimetype or 'image/jpeg',
-                    headers={'Cache-Control': 'public, max-age=3600'})
+    etag = hashlib.md5(obj.imagem_blob).hexdigest()[:16]
+    if flask_request.headers.get('If-None-Match') == etag:
+        return ('', 304)
+    resp = make_response(obj.imagem_blob)
+    resp.mimetype = obj.imagem_mimetype or 'image/jpeg'
+    resp.headers['Cache-Control'] = 'public, max-age=86400'
+    resp.headers['ETag'] = etag
+    return resp
 
 
 @main_bp.route('/cardapio-img/<tipo>/<int:id>/upload', methods=['POST'])
