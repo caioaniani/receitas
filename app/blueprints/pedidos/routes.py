@@ -1912,18 +1912,29 @@ def sugerir_pedido(loja_id):
         flash(f'Pedido #{pedido.id} criado a partir da sugestao.', 'success')
         return redirect(url_for('pedidos.detalhe', id=pedido.id))
 
+    # Periodo: default = ultimos 14 dias
+    di_str = request.args.get('inicio') or ''
+    df_str = request.args.get('fim') or ''
     try:
-        dias_lookback = int(request.args.get('dias', 14))
+        data_inicio = date.fromisoformat(di_str) if di_str else hoje_brt() - timedelta(days=14)
     except ValueError:
-        dias_lookback = 14
+        data_inicio = hoje_brt() - timedelta(days=14)
+    try:
+        data_fim = date.fromisoformat(df_str) if df_str else hoje_brt()
+    except ValueError:
+        data_fim = hoje_brt()
     try:
         dias_cobertura = int(request.args.get('cobertura', 7))
     except ValueError:
         dias_cobertura = 7
-    sugestao = svc.sugerir_pedido(loja_id, dias_lookback=dias_lookback,
+    sugestao = svc.sugerir_pedido(loja_id, data_inicio=data_inicio,
+                                    data_fim=data_fim,
                                     dias_cobertura=dias_cobertura)
+    dias_periodo = (data_fim - data_inicio).days + 1
     return render_template('pedidos/sugerir_pedido.html', loja=loja,
                             sugestao=sugestao,
-                            dias_lookback=dias_lookback,
+                            data_inicio=data_inicio.isoformat(),
+                            data_fim=data_fim.isoformat(),
+                            dias_periodo=dias_periodo,
                             dias_cobertura=dias_cobertura,
                             amanha=(hoje_brt() + timedelta(days=1)).isoformat())
