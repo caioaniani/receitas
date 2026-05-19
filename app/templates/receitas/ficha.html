@@ -270,34 +270,22 @@
         </div>
     </div>
 
-    <!-- Imagem pro cardapio digital -->
+    <!-- Imagem pro cardapio digital — apenas o input URL fica DENTRO do form -->
+    <!-- principal (upload/remover sao forms separados depois do </form>) -->
     <div class="mb-3 p-2 border rounded bg-light">
         <label class="form-label small fw-bold mb-1">
             <i class="bi bi-image"></i> Imagem pro cardápio digital
         </label>
         {% if receita.imagem_blob %}
-        <div class="mb-2 d-flex align-items-start gap-2">
+        <div class="mb-2">
             <img src="{{ url_for('main.cardapio_img', tipo='receita', id=receita.id) }}"
                  alt="" style="max-height:120px;border-radius:6px;border:1px solid #ddd;">
-            <form method="POST" action="{{ url_for('main.cardapio_img_remover', tipo='receita', id=receita.id) }}"
-                  onsubmit="return confirm('Remover imagem?')" class="d-inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
-            </form>
         </div>
         {% endif %}
-        <form method="POST" action="{{ url_for('main.cardapio_img_upload', tipo='receita', id=receita.id) }}"
-              enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-2">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="file" name="imagem_arquivo" accept="image/*" class="form-control form-control-sm" required>
-            <button type="submit" class="btn btn-sm btn-primary">
-                <i class="bi bi-upload"></i> {% if receita.imagem_blob %}Trocar{% else %}Enviar{% endif %}
-            </button>
-        </form>
-        <label class="form-label small text-muted mb-0">Ou cole URL externa (fallback)</label>
+        <label class="form-label small text-muted mb-0">URL externa (fallback)</label>
         <input type="url" name="imagem_url" value="{{ receita.imagem_url or '' }}"
                class="form-control form-control-sm input-blue" placeholder="https://...">
-        <small class="text-muted">Foto comprime pra ~700×700 JPEG no upload. Se tiver BLOB, ignora a URL.</small>
+        <small class="text-muted">Pra fazer upload de foto, role pro fim da página.</small>
     </div>
 
     <!-- Modo de Preparo -->
