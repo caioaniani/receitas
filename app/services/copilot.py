@@ -724,8 +724,8 @@ TOOLS DISPONIVEIS — ACOES:
 - criar_pedido: criar encomenda de produtos pra producao entregar numa loja
 - mudar_status_pedido: muda status de um pedido. **APENAS 3 ESTADOS** existem pro usuario:
   1. **pedido feito** — criado, aguardando producao
-  2. **enviado** — saiu da industria; nesse momento o sistema gera QR pro motorista escanear na loja
-  3. **recebido** — loja escaneou o QR de entrega e confirmou recebimento
+  2. **enviado** — saiu da industria; sistema gera QR. Motorista escaneia + PIN. *No celular dele aparece um botao 'gerar QR de entrega' — ele vai usar isso ao chegar na loja.*
+  3. **recebido** — chegando na loja, motorista mostra QR de entrega no celular, alguem da loja escaneia + digita PIN da loja. Sistema finaliza como recebido e soma no estoque.
 
   Mapeamento → novo_status:
   * 'enviar' / 'motorista vai levar' / 'motorista chegou' / 'vai sair' / 'sair' / 'pronto pra sair' / 'separado' / 'pronto pra ir' → **novo_status='separar'** (NAO 'enviar' literal! 'separar' eh o que GERA O QR pro motorista — eh isso que o usuario chama de "enviado")
