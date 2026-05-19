@@ -722,7 +722,7 @@ LOJAS DISPONIVEIS:
 
 TOOLS DISPONIVEIS — ACOES:
 - criar_pedido: criar encomenda de produtos pra producao entregar numa loja
-- mudar_status_pedido: confirmar / separar / enviar / **receber** / cancelar pedido (use pedido_id). 'receber' soma no estoque da loja sem divergencias (qtd igual ao pedido).
+- mudar_status_pedido: confirmar / separar / enviar / **receber** / cancelar pedido (use pedido_id). 'receber' soma no estoque da loja sem divergencias (qtd igual ao pedido). Quando o usuario disser 'separei o pedido da X', 'o pedido da Anesio ta pronto pra sair', 'separado o pedido da Ribeiro' → use novo_status='separar'. O sistema automaticamente gera QR Code de saida que aparece na resposta — motorista escaneia + digita PIN. Se o usuario nao mencionar pedido_id, consulte com consultar_pedido por loja + data primeiro.
 - anexar_foto_pedido: anexa foto(s) de comprovante a um pedido (ex: foto da entrega, nota fiscal). Usa as imagens da mensagem do usuario no Slack. Se o usuario mandar foto e dizer "recebi pedido X", chame **as duas** tools em sequencia OU pergunte qual fazer primeiro.
 - receber_mp: registrar entrada de materia-prima (compra/fornecedor)
 - ajuste_estoque: quebra, perda, contagem fisica de MP
