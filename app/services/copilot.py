@@ -1934,7 +1934,17 @@ def executar_mudar_status_pedido(params, user):
     if isinstance(de, str):
         de = (de,)
     if p.status not in de:
-        return {'ok': False, 'erro': f'Pedido #{pid} esta {p.status}, nao pode {novo}'}
+        STATUS_LABEL = {
+            'pendente': 'pedido feito', 'confirmado': 'pedido feito',
+            'separado': 'pedido feito',
+            'em_transporte': 'enviado', 'entregue': 'recebido',
+            'cancelado': 'cancelado',
+        }
+        ACAO_LABEL = {'enviar': 'enviar', 'receber': 'marcar como recebido',
+                      'separar': 'separar', 'confirmar': 'confirmar',
+                      'cancelar': 'cancelar'}
+        return {'ok': False,
+                'erro': f'Pedido #{pid} ja esta {STATUS_LABEL.get(p.status, p.status)}, nao pode {ACAO_LABEL.get(novo, novo)} novamente.'}
 
     try:
         # ENVIAR: baixa estoque da industria
