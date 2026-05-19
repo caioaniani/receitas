@@ -197,18 +197,20 @@ def receber_pagamento(parcela, valor, forma_pagamento=None, observacao=None):
 
 
 def preco_sugerido(receita_id=None, produto_id=None, cliente=None):
-    """Retorna preco atacado + desconto do cliente aplicado.
+    """Retorna preco atacado do cadastro + desconto do cliente aplicado.
 
-    Retorna float ou None se nao houver preco cadastrado.
+    Receita usa `preco_venda`, Produto usa `preco_atacado` (mesma logica
+    de /cardapio?tipo=atacado). Retorna float ou None se nao houver preco.
     """
-    if not receita_id and not produto_id:
+    preco = None
+    if receita_id:
+        r = Receita.query.get(receita_id)
+        preco = r.preco_venda if r else None
+    elif produto_id:
+        p = Produto.query.get(produto_id)
+        preco = p.preco_atacado if p else None
+    if not preco:
         return None
-    pa = PrecoAtacado.query.filter_by(
-        receita_id=receita_id, produto_id=produto_id,
-    ).first()
-    if not pa:
-        return None
-    preco = pa.preco_unitario
     if cliente and cliente.desconto_percentual:
         preco = preco * (1 - cliente.desconto_percentual / 100.0)
     return round(preco, 2)
