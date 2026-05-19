@@ -1691,6 +1691,44 @@ class VendaB2BParcela(db.Model):
 
 # ── Handshake QR Code (saida industria + entrega loja) ──
 
+class VendaManualLoja(db.Model):
+    """Vendas lancadas manualmente pra lojas sem API de PDV (ex: Anesio).
+
+    NAO baixa estoque — eh so um registro pra alimentar previsao de
+    demanda e sugestao de pedido. Vendas reais via Seru/VNDA continuam
+    em MovEstoqueLoja. Loja com PDV API: usa essas movimentacoes
+    automaticas. Loja sem PDV: admin lanca daqui periodicamente.
+    """
+    __tablename__ = 'venda_manual_loja'
+
+    id = db.Column(db.Integer, primary_key=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False, index=True)
+    data_venda = db.Column(db.Date, nullable=False, index=True)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
+    materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'), nullable=True)
+    quantidade = db.Column(db.Integer, nullable=False)
+    valor_unitario = db.Column(db.Float)  # opcional
+    observacao = db.Column(db.String(200))
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    criado_em = db.Column(db.DateTime, default=agora)
+
+    loja = db.relationship('Loja')
+    receita = db.relationship('Receita')
+    produto = db.relationship('Produto')
+    materia_prima = db.relationship('MateriaPrima')
+
+    @property
+    def nome_item(self):
+        if self.receita:
+            return self.receita.nome
+        if self.produto:
+            return self.produto.nome
+        if self.materia_prima:
+            return self.materia_prima.nome
+        return '?'
+
+
 class PedidoQRCode(db.Model):
     """Token unico pra um handshake fisico via QR Code.
 
