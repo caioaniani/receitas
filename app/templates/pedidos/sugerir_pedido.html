@@ -11,8 +11,12 @@
 
 <form method="GET" class="row g-2 mb-3 align-items-end">
     <div class="col-sm-3">
-        <label class="form-label small mb-0">Janela (dias de venda)</label>
-        <input type="number" name="dias" value="{{ dias_lookback }}" min="3" max="60" class="form-control form-control-sm">
+        <label class="form-label small mb-0">De (data inicial)</label>
+        <input type="date" name="inicio" value="{{ data_inicio }}" class="form-control form-control-sm">
+    </div>
+    <div class="col-sm-3">
+        <label class="form-label small mb-0">Até (data final)</label>
+        <input type="date" name="fim" value="{{ data_fim }}" class="form-control form-control-sm">
     </div>
     <div class="col-sm-3">
         <label class="form-label small mb-0">Cobertura (dias do pedido)</label>
@@ -21,11 +25,16 @@
     <div class="col-sm-2">
         <button type="submit" class="btn btn-sm btn-outline-primary">Recalcular</button>
     </div>
+    <div class="col-12">
+        <small class="text-muted">
+            Período: <strong>{{ dias_periodo }} dia(s)</strong> · soma vendas VNDA, Seru (se houver) e manuais nesse intervalo.
+        </small>
+    </div>
 </form>
 
 {% if not sugestao %}
 <div class="alert alert-warning">
-    Sem vendas registradas nos últimos {{ dias_lookback }} dias pra essa loja.
+    Sem vendas registradas entre {{ data_inicio }} e {{ data_fim }} pra essa loja.
     Lance algumas em <a href="{{ url_for('pedidos.vendas_manuais', loja_id=loja.id) }}">vendas manuais</a>
     ou aguarde sync VNDA/Seru.
 </div>
@@ -34,7 +43,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="row g-2 mb-3 align-items-end">
         <div class="col-sm-4">
-            <label class="form-label small mb-0">Data da entrega</label>
+            <label class="form-label small mb-0">Data da entrega do pedido</label>
             <input type="date" name="data_entrega" value="{{ amanha }}" class="form-control form-control-sm" required>
         </div>
         <div class="col-sm-8 text-end">
@@ -45,15 +54,17 @@
     <div class="card">
         <div class="card-header py-2 d-flex justify-content-between">
             <strong>Sugestão</strong>
-            <small class="text-muted">média / dia (últimos {{ dias_lookback }}d) × {{ dias_cobertura }}d − estoque atual</small>
+            <small class="text-muted">total ÷ {{ dias_periodo }}d × {{ dias_cobertura }}d − estoque</small>
         </div>
         <div class="table-responsive">
             <table class="table table-sm mb-0 align-middle">
                 <thead class="table-light">
                     <tr>
                         <th>Item</th>
-                        <th>Fontes</th>
-                        <th class="text-end">Vendas ({{ dias_lookback }}d)</th>
+                        <th class="text-end" title="Vendas pelo PDV manual no período">PDV manual</th>
+                        <th class="text-end" title="Vendas pelo VNDA (site delivery)">VNDA</th>
+                        <th class="text-end" title="Vendas pelo Seru">Seru</th>
+                        <th class="text-end fw-bold">Total ({{ dias_periodo }}d)</th>
                         <th class="text-end">Média/dia</th>
                         <th class="text-end">Estoque</th>
                         <th class="text-end">Ideal</th>
@@ -64,12 +75,10 @@
                 {% for s in sugestao %}
                 <tr>
                     <td>{{ s.nome }}</td>
-                    <td>
-                        {% for f in s.fontes %}
-                        <span class="badge bg-light text-dark border" style="font-size:10px;">{{ f }}</span>
-                        {% endfor %}
-                    </td>
-                    <td class="text-end">{{ s.vendas_periodo }}</td>
+                    <td class="text-end">{{ s.por_fonte.get('manual', '') or '—' }}</td>
+                    <td class="text-end">{{ s.por_fonte.get('vnda', '') or '—' }}</td>
+                    <td class="text-end">{{ s.por_fonte.get('seru', '') or '—' }}</td>
+                    <td class="text-end fw-bold">{{ s.vendas_periodo }}</td>
                     <td class="text-end">{{ '%.1f'|format(s.media_diaria) }}</td>
                     <td class="text-end {% if s.estoque_atual < s.media_diaria %}text-danger{% endif %}">{{ s.estoque_atual }}</td>
                     <td class="text-end text-muted">{{ s.ideal_cobertura }}</td>
