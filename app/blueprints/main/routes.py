@@ -302,6 +302,26 @@ def _norm(s):
     return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn').lower().strip()
 
 
+@main_bp.route('/cardapio-img/revisar')
+@login_required
+def cardapio_img_revisar():
+    """Grid de revisao das fotos atribuidas. Admin ve thumbnail + nome,
+    identifica matches errados e remove com 1 clique."""
+    from flask import abort
+    if not current_user.is_admin():
+        abort(403)
+    receitas_com_foto = (Receita.query
+                         .filter(Receita.imagem_blob.isnot(None))
+                         .order_by(Receita.categoria, Receita.nome).all())
+    produtos_com_foto = (Produto.query
+                         .filter(Produto.ativo.is_(True),
+                                 Produto.imagem_blob.isnot(None))
+                         .order_by(Produto.categoria, Produto.nome).all())
+    return render_template('main/cardapio_revisar.html',
+                            receitas=receitas_com_foto,
+                            produtos=produtos_com_foto)
+
+
 @main_bp.route('/api/cardapio-img/<tipo>/<int:id>/upload-token', methods=['POST'])
 @csrf.exempt
 def cardapio_img_upload_token(tipo, id):
