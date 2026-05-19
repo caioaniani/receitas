@@ -322,3 +322,43 @@ def api_foto_delete(token, foto_id):
     db.session.delete(foto)
     db.session.commit()
     return jsonify(ok=True)
+
+
+# ── Handshake QR de entrega (motorista gera, loja escaneia) ──
+
+@driver_bp.route('/<token>/pedido/<int:pedido_id>/qr-entrega')
+def qr_entrega(token, pedido_id):
+    """Motorista gera QR pra loja escanear na entrega. Status do pedido
+    deve estar em em_transporte; loja precisa de PIN configurado."""
+    from datetime import timedelta
+    from flask import url_for
+    from app.services.qrcode_svc import gerar_png_data_url
+    driver = _driver_por_token(token)
+    if not driver:
+        abort(404)
+    if not _autenticado(driver):
+        # Motorista nao logado — manda pra index pra logar primeiro
+        return render_template('handshake/erro.html',
+                                msg='Faça login no painel do motorista antes (volte e digite o PIN).'), 401
+    pedido = PedidoLoja.query.get_or_404(pedido_id)
+    if pedido.status != 'em_transporte':
+        return render_template('handshake/erro.html',
+                                msg=f'Pedido #{pedido.id} nao esta em transporte (status: {pedido.status}).'), 409
+
+    qr = (PedidoQRCode.query
+          .filter_by(pedido_id=pedido.id, tipo='entrega', usado_em=None)
+          .filter(PedidoQRCode.expira_em > agora())
+          .order_by(PedidoQRCode.criado_em.desc()).first())
+    if not qr:
+        qr = PedidoQRCode(
+            token=secrets.token_urlsafe(24),
+            pedido_id=pedido.id, tipo='entrega',
+            expira_em=agora() + timedelta(hours=2),
+        )
+        db.session.add(qr)
+        db.session.commit()
+    url = url_for('handshake.handshake', token=qr.token, _external=True)
+    qr_png = gerar_png_data_url(url)
+    return render_template('driver/qr_entrega.html',
+                            driver=driver, pedido=pedido, qr=qr,
+                            url=url, qr_png=qr_png)
