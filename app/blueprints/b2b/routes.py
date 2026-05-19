@@ -105,65 +105,6 @@ def cliente_editar(cid):
     return redirect(url_for('b2b.clientes'))
 
 
-# ── Precos atacado ──
-
-@b2b_bp.route('/precos')
-@login_required
-@admin_required
-def precos():
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
-    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-    precos_map = {}
-    for p in PrecoAtacado.query.all():
-        if p.receita_id:
-            precos_map[('receita', p.receita_id)] = p
-        elif p.produto_id:
-            precos_map[('produto', p.produto_id)] = p
-    return render_template('b2b/precos.html', receitas=receitas,
-                           produtos=produtos, precos_map=precos_map)
-
-
-@b2b_bp.route('/precos/salvar', methods=['POST'])
-@login_required
-@admin_required
-def precos_salvar():
-    """Recebe form com preco[tipo:id] = valor pra cada item."""
-    atualizados = 0
-    for chave, valor in request.form.items():
-        if not chave.startswith('preco['):
-            continue
-        valor = (valor or '').strip().replace(',', '.')
-        if not valor:
-            continue
-        try:
-            v = float(valor)
-        except ValueError:
-            continue
-        # preco[receita:5] = 12.50
-        ref = chave[6:-1]  # "receita:5"
-        tipo, _, sid = ref.partition(':')
-        if tipo not in ('receita', 'produto') or not sid.isdigit():
-            continue
-        item_id = int(sid)
-        filtro = {'receita_id': item_id if tipo == 'receita' else None,
-                  'produto_id': item_id if tipo == 'produto' else None}
-        p = PrecoAtacado.query.filter_by(**filtro).first()
-        if v == 0:
-            if p:
-                db.session.delete(p)
-                atualizados += 1
-            continue
-        if not p:
-            p = PrecoAtacado(**filtro, preco_unitario=v)
-            db.session.add(p)
-        else:
-            p.preco_unitario = v
-        atualizados += 1
-    db.session.commit()
-    flash(f'{atualizados} preco(s) atualizados.', 'success')
-    return redirect(url_for('b2b.precos'))
-
-
 # ── Vendas ──
 
 @b2b_bp.route('/vendas')
