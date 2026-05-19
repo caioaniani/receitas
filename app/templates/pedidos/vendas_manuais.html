@@ -17,7 +17,38 @@
     Vendas reais via Seru/VNDA continuam contando automaticamente.
 </div>
 
-<form method="POST" class="card mb-3">
+<div class="card mb-3 border-success">
+    <div class="card-header bg-success bg-opacity-10 py-2">
+        <strong><i class="bi bi-file-earmark-spreadsheet"></i> Upload de planilha (mês inteiro)</strong>
+        <small class="text-muted ms-2">3 colunas: Data, Produto, Quantidade. Cada linha vira uma venda.</small>
+    </div>
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <a href="{{ url_for('pedidos.vendas_manuais_template', loja_id=loja.id) }}"
+                   class="btn btn-outline-success btn-sm w-100">
+                    <i class="bi bi-download"></i> Baixar planilha modelo
+                </a>
+                <small class="text-muted d-block mt-1">Já vem com receitas pré-preenchidas.</small>
+            </div>
+            <div class="col-md-8">
+                <form method="POST" action="{{ url_for('pedidos.vendas_manuais_upload', loja_id=loja.id) }}"
+                      enctype="multipart/form-data" class="d-flex gap-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="file" name="planilha" accept=".xlsx" class="form-control form-control-sm" required>
+                    <button type="submit" class="btn btn-success btn-sm">
+                        <i class="bi bi-upload"></i> Enviar
+                    </button>
+                </form>
+                <small class="text-muted d-block mt-1">Linhas com erro/qtd 0 são ignoradas (não bloqueia o resto).</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<details class="mb-3">
+    <summary class="small text-muted" style="cursor:pointer;">Ou cole texto (1 dia por vez) →</summary>
+    <form method="POST" class="card mt-2">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="card-body">
         <div class="row g-2 mb-2">
