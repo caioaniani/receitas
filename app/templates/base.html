@@ -237,6 +237,10 @@
            class="sidebar-link {% if request.path.startswith('/relatorios/previsao') %}active{% endif %}">
             Previsão de demanda
         </a>
+        <a href="{{ url_for('b2b.dashboard') }}"
+           class="sidebar-link {% if request.path.startswith('/b2b') %}active{% endif %}">
+            B2B Indústria
+        </a>
         <a href="{{ url_for('main.todo') }}"
            class="sidebar-link {% if request.path == '/todo' %}active{% endif %}">
             TO-DO
