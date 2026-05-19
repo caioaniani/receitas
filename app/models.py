@@ -1686,3 +1686,39 @@ class VendaB2BParcela(db.Model):
         if self.vencimento < hoje():
             return 'atrasado'
         return 'aberto'
+
+
+# ── Handshake QR Code (saida industria + entrega loja) ──
+
+class PedidoQRCode(db.Model):
+    """Token unico pra um handshake fisico via QR Code.
+
+    Cenarios:
+    - tipo='saida': producao gera; motorista escaneia + digita PIN do
+      Driver → status separado → em_transporte.
+    - tipo='entrega': motorista gera no /driver/<token>; funcionario da
+      loja escaneia + digita PIN da Loja → status em_transporte → entregue.
+
+    TTL implicito de 2h (campo expira_em). Apos usado, usado_em e
+    usado_por_id ficam preenchidos pra auditoria.
+    """
+    __tablename__ = 'pedido_qrcode'
+
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(40), unique=True, nullable=False, index=True)
+    pedido_id = db.Column(db.Integer, db.ForeignKey('pedido_loja.id'),
+                           nullable=False, index=True)
+    tipo = db.Column(db.String(10), nullable=False)  # 'saida' | 'entrega'
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    expira_em = db.Column(db.DateTime, nullable=False)
+    usado_em = db.Column(db.DateTime, nullable=True)
+    usado_por_descricao = db.Column(db.String(100))  # 'driver:Joao' | 'loja:Anesio'
+
+    pedido = db.relationship('PedidoLoja')
+    criado_por = db.relationship('Usuario')
+
+    @property
+    def valido(self):
+        """True se nao expirou nem foi usado."""
+        return self.usado_em is None and self.expira_em > agora()
