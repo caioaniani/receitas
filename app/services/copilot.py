@@ -952,8 +952,101 @@ def _enriquecer_params(tool_name, tool_input, user):
         return _enriquecer_registrar_desperdicio(tool_input, user)
     if tool_name == 'registrar_desperdicio_lote':
         return _enriquecer_registrar_desperdicio_lote(tool_input, user)
+    if tool_name == 'criar_venda_b2b':
+        return _enriquecer_criar_venda_b2b(tool_input)
+    if tool_name == 'criar_cliente_b2b':
+        return tool_input  # nada pra resolver
     # consultar_pedido / consultar_estoque: passam direto
     return tool_input
+
+
+def _enriquecer_criar_venda_b2b(tool_input):
+    """Resolve cliente (fuzzy match) + cada item + preco sugerido + saldo
+    do freezer pro preview. Reusa _resolver_produto + preco_sugerido."""
+    from app.models import ClienteB2B, EstoqueProducao
+    from app.services.vendas_b2b import preco_sugerido
+    from sqlalchemy import func
+
+    out = dict(tool_input)
+    nome_cli = (out.get('cliente_nome') or '').strip()
+    cliente = None
+    if nome_cli:
+        cliente = (ClienteB2B.query
+                   .filter(func.lower(ClienteB2B.nome) == nome_cli.lower(),
+                           ClienteB2B.ativo.is_(True))
+                   .first())
+        if not cliente:
+            cliente = (ClienteB2B.query
+                       .filter(ClienteB2B.nome.ilike(f'%{nome_cli}%'),
+                               ClienteB2B.ativo.is_(True))
+                       .first())
+    out['cliente_id'] = cliente.id if cliente else None
+    out['cliente_nome_resolvido'] = cliente.nome if cliente else nome_cli
+    out['cliente_desconto'] = cliente.desconto_percentual if cliente else 0
+    out['cliente_avulso'] = cliente is None
+
+    # Itens
+    itens_enriq = []
+    total = 0.0
+    for it in (out.get('itens') or []):
+        nome = (it.get('nome') or '').strip()
+        try:
+            qtd = int(it.get('quantidade') or 0)
+        except (TypeError, ValueError):
+            qtd = 0
+        if not nome or qtd <= 0:
+            itens_enriq.append({'nome': nome or '?', 'quantidade': qtd,
+                                 'erro': 'invalido'})
+            continue
+        matches = _resolver_produto(nome)
+        resolvido = matches[0] if matches else None
+
+        preco_unit = it.get('preco_unitario')
+        if preco_unit is None and resolvido:
+            preco_unit = preco_sugerido(
+                receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
+                produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
+                cliente=cliente,
+            )
+        if preco_unit is None:
+            preco_unit = 0
+        desc = float(it.get('desconto_percentual') or 0)
+        subtotal = qtd * preco_unit * (1 - desc / 100.0)
+        total += subtotal
+
+        # Saldo no freezer pra UI mostrar
+        estoque_atual = None
+        if resolvido:
+            ep = EstoqueProducao.query.filter_by(
+                receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
+                produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
+            ).first()
+            estoque_atual = ep.quantidade if ep else 0
+
+        itens_enriq.append({
+            'nome_original': nome,
+            'quantidade': qtd,
+            'matches': matches,
+            'resolvido': resolvido,
+            'preco_unitario': round(float(preco_unit), 2),
+            'desconto_percentual': desc,
+            'subtotal': round(subtotal, 2),
+            'estoque_atual': estoque_atual,
+        })
+
+    return {
+        'cliente_nome': out.get('cliente_nome'),
+        'cliente_id': out.get('cliente_id'),
+        'cliente_nome_resolvido': out['cliente_nome_resolvido'],
+        'cliente_desconto': out['cliente_desconto'],
+        'cliente_avulso': out['cliente_avulso'],
+        'data_venda': out.get('data_venda'),
+        'nf_numero': out.get('nf_numero'),
+        'observacao': out.get('observacao'),
+        'itens': itens_enriq,
+        'parcelas': out.get('parcelas') or [],
+        'total': round(total, 2),
+    }
 
 
 def _enriquecer_registrar_desperdicio(tool_input, user):
