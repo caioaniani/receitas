@@ -134,6 +134,7 @@ def cardapio():
             'peso_unitario': r.peso_unitario,
             'descricao': None,
             'preco_venda': preco,
+            'imagem_url': r.imagem_url,
         })
 
     # Produtos cadastrados (cestas, kits, etc.)
@@ -151,9 +152,31 @@ def cardapio():
             'peso_unitario': None,
             'descricao': p.descricao,
             'preco_venda': preco,
+            'imagem_url': p.imagem_url,
         })
 
     return render_template('main/cardapio.html', categorias=categorias, tipo=tipo)
+
+
+@main_bp.route('/admin/popular-imagens-cardapio', methods=['POST'])
+@login_required
+def popular_imagens_cardapio():
+    """One-shot: seta imagem_url pra receitas/produtos baseado em mapping
+    extraido dos cardapios estaticos do admin. Nao sobrescreve URLs ja
+    customizadas."""
+    if not current_user.is_admin():
+        from flask import abort
+        abort(403)
+    from app.services.cardapio_imagens import popular_imagens
+    resultado = popular_imagens(sobrescrever=False)
+    from flask import flash, redirect, url_for
+    flash(
+        f'Imagens populadas: {resultado["receitas_alteradas"]} receita(s) + '
+        f'{resultado["produtos_alterados"]} produto(s). '
+        f'Sem match: {len(resultado["receitas_sem_match"]) + len(resultado["produtos_sem_match"])}.',
+        'success',
+    )
+    return redirect(url_for('main.cardapio'))
 
 
 @main_bp.route('/api/exportar')
