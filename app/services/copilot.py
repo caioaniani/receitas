@@ -15,6 +15,7 @@ Acoes 'read' executam direto e retornam texto."""
 import json
 import logging
 import os
+import secrets
 from datetime import date, datetime, timedelta
 
 from flask import current_app
