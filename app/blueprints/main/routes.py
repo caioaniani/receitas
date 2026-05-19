@@ -276,9 +276,19 @@ def galeria_rappi():
     from app.models import Receita, Produto
     if not current_user.is_admin():
         abort(403)
-    # Pra cada URL do mapping, sugere uma receita/produto do catalogo (best match)
-    receitas = {r.id: r for r in Receita.query.all()}
-    produtos = {p.id: p for p in Produto.query.filter_by(ativo=True).all()}
+    # defer blobs — galeria so precisa de nome/id pra matching
+    from sqlalchemy.orm import defer
+    if not current_user.is_admin():
+        abort(403)
+    receitas = {r.id: r for r in Receita.query.options(
+        defer(Receita.imagem_blob), defer(Receita.imagem_mimetype)).all()}
+    produtos = {p.id: p for p in Produto.query.options(
+        defer(Produto.imagem_blob), defer(Produto.imagem_mimetype)
+    ).filter_by(ativo=True).all()}
+    ids_receita_com_blob = {r[0] for r in db.session.query(Receita.id)
+                            .filter(Receita.imagem_blob.isnot(None)).all()}
+    ids_produto_com_blob = {p[0] for p in db.session.query(Produto.id)
+                            .filter(Produto.imagem_blob.isnot(None)).all()}
     receitas_por_nome = {_norm(r.nome): r for r in receitas.values()}
     produtos_por_nome = {_norm(p.nome): p for p in produtos.values()}
     itens = []
