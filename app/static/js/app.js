@@ -433,6 +433,26 @@ document.addEventListener('DOMContentLoaded', function () {
                 // MP direto não contribui para % padeiro, mas contribui para peso e custo
                 totalQtd += qtd;
                 totalCusto += custoRs;
+            } else if (tipo === 'mp_un') {
+                // MP cobrada por unidade (ex: Baton Calebaut). pct = qtd de unidades.
+                // Custo = qtd × custo_por_unidade (que esta em custo_por_kg pra mp un).
+                var mp = MP_DATA[nome];
+                var custoUn = mp ? mp.custo_por_kg : 0;
+                qtd = pct;  // unidades
+                custoRs = qtd * custoUn;
+
+                var qtdExibir = qtd * multiplicador;
+                var custoExibir = custoRs * multiplicador;
+
+                qtdCell.textContent = qtdExibir > 0 ? formatNum(qtdExibir, 0) + ' un' : '-';
+                custoKgCell.textContent = mp ? formatBRL(custoUn) + '/un' : '-';
+                custoKgCell.className = mp ? 'custo-kg-calc valor-mp text-end' : 'custo-kg-calc text-end text-muted';
+                custoRsCell.textContent = custoExibir > 0 ? formatBRL(custoExibir) : '-';
+
+                // Soma peso se a MP tem peso_unidade definido
+                var pesoUn = (mp && mp.peso_unidade) ? mp.peso_unidade : 0;
+                totalQtd += qtd * pesoUn;
+                totalCusto += custoRs;
             } else {
                 // MP normal: % padeiro
                 qtd = pesoBase * pct / 100;
