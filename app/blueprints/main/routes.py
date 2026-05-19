@@ -531,6 +531,9 @@ def cardapio_img_remover(tipo, id):
         url_back = url_for('produtos.detalhe', id=id)
     else:
         abort(404)
+    # Permite redirect pra revisar (next=revisar) em vez da ficha
+    if request.form.get('next') == 'revisar':
+        url_back = url_for('main.cardapio_img_revisar')
     obj.imagem_blob = None
     obj.imagem_mimetype = None
     obj.imagem_url = None
