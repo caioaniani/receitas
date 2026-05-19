@@ -185,7 +185,7 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
     `por_fonte` = {'vnda': qtd, 'seru': qtd, 'manual': qtd}
     """
     if not loja_id:
-        return []
+        return {'itens': [], 'aviso_vnda': None}
     if data_fim is None:
         data_fim = hoje()
     if data_inicio is None:
