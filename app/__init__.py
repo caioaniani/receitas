@@ -283,6 +283,7 @@ def create_app(config_class=None):
     app.register_blueprint(producao_bp, url_prefix='/producao')
     app.register_blueprint(relatorios_bp, url_prefix='/relatorios')
     app.register_blueprint(b2b_bp, url_prefix='/b2b')
+    app.register_blueprint(handshake_bp, url_prefix='/handshake')
     app.register_blueprint(pedidos_bp)
     app.register_blueprint(entregas_bp, url_prefix='/entregas')
     app.register_blueprint(driver_bp, url_prefix='/driver')
