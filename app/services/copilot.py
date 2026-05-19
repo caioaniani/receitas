@@ -462,6 +462,91 @@ TOOL_REGISTRAR_DESPERDICIO_LOTE = {
     },
 }
 
+TOOL_CRIAR_CLIENTE_B2B = {
+    "name": "criar_cliente_b2b",
+    "description": (
+        "Cadastra um novo cliente B2B (hotel, restaurante, cafeteria). "
+        "Use quando o usuario disser 'cadastra cliente X' ou quando "
+        "tentar criar venda B2B pra cliente novo. NAO executa direto — "
+        "retorna preview pra confirmar."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "nome": {"type": "string", "description": "Nome do cliente (ex: 'Hotel Brisamar', 'Restaurante do Joao')."},
+            "cnpj_cpf": {"type": ["string", "null"]},
+            "telefone": {"type": ["string", "null"]},
+            "email": {"type": ["string", "null"]},
+            "endereco": {"type": ["string", "null"]},
+            "contato": {"type": ["string", "null"], "description": "Nome da pessoa contato."},
+            "desconto_percentual": {"type": ["number", "null"], "minimum": 0, "maximum": 100, "description": "% de desconto sobre preco atacado. Default 0."},
+            "observacao": {"type": ["string", "null"]},
+        },
+        "required": ["nome"],
+    },
+}
+
+TOOL_CRIAR_VENDA_B2B = {
+    "name": "criar_venda_b2b",
+    "description": (
+        "Cria venda B2B (industria → cliente externo). Baixa do estoque "
+        "do FREEZER (EstoqueProducao), nao das lojas. Pode ser cliente "
+        "cadastrado (cliente_nome resolve por fuzzy match) ou avulso. "
+        "Se cliente nao existir, sugira `criar_cliente_b2b` antes OU "
+        "passe so cliente_nome (vira venda avulsa). NAO executa direto "
+        "— preview com itens, total, parcelas. Preco vem do cadastro "
+        "(Receita.preco_venda / Produto.preco_atacado) se nao especificado."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "cliente_nome": {"type": "string", "description": "Nome do cliente. Servidor faz fuzzy match com cadastrados; se nao achar, fica como avulso."},
+            "data_venda": {"type": ["string", "null"], "description": "YYYY-MM-DD. Default hoje."},
+            "nf_numero": {"type": ["string", "null"]},
+            "observacao": {"type": ["string", "null"]},
+            "itens": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "nome": {"type": "string", "description": "Nome EXATO da receita/produto."},
+                        "quantidade": {"type": "integer", "minimum": 1},
+                        "preco_unitario": {"type": ["number", "null"], "description": "Sobrescreve preco do cadastro. Null = usa cadastro."},
+                        "desconto_percentual": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+                    },
+                    "required": ["nome", "quantidade"],
+                },
+                "minItems": 1,
+            },
+            "parcelas": {
+                "type": ["array", "null"],
+                "description": "Parcelas. Null/vazio = 1 parcela unica no dia da venda pelo total.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "vencimento": {"type": "string", "description": "YYYY-MM-DD"},
+                        "valor": {"type": "number", "minimum": 0.01},
+                        "forma_pagamento": {"type": ["string", "null"], "enum": [None, "pix", "boleto", "dinheiro", "transferencia", "cheque"]},
+                    },
+                    "required": ["vencimento", "valor"],
+                },
+            },
+        },
+        "required": ["cliente_nome", "itens"],
+    },
+}
+
+TOOL_CONSULTAR_CLIENTE_B2B = {
+    "name": "consultar_cliente_b2b",
+    "description": "Lista/busca clientes B2B cadastrados. Use pra ver se cliente existe antes de criar venda, ou pra info de contato/desconto. Filtra por nome substring opcional.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "nome": {"type": ["string", "null"], "description": "Filtro por nome (substring). Null = lista todos ativos."},
+        },
+    },
+}
+
 TOOL_CONSULTAR_DESPERDICIO = {
     "name": "consultar_desperdicio",
     "description": "Lista desperdicios registrados num periodo (default ultimos 7 dias). Filtra por loja opcionalmente.",
