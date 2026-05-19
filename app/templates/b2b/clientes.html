@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Clientes B2B{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-people"></i> Clientes B2B</h1>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modal-cliente-novo">
+        <i class="bi bi-plus-circle"></i> Novo cliente
+    </button>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-sm table-hover bg-white">
+        <thead><tr><th>Nome</th><th>Contato</th><th>Telefone</th><th class="text-end">Desconto</th><th></th></tr></thead>
+        <tbody>
+        {% for c in clientes %}
+        <tr {% if not c.ativo %}class="text-muted"{% endif %}>
+            <td>
+                <strong>{{ c.nome }}</strong>
+                {% if c.cnpj_cpf %}<small class="text-muted d-block">{{ c.cnpj_cpf }}</small>{% endif %}
+            </td>
+            <td>{{ c.contato or '—' }}</td>
+            <td>{{ c.telefone or '—' }}</td>
+            <td class="text-end">{{ '%.0f'|format(c.desconto_percentual or 0) }}%</td>
+            <td>
+                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modal-cliente-{{ c.id }}">Editar</button>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-muted text-center small">Nenhum cliente cadastrado.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal novo -->
+<div class="modal fade" id="modal-cliente-novo" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('b2b.cliente_novo') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-content">
+                <div class="modal-header"><h6 class="modal-title">Novo cliente B2B</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="mb-2"><label class="form-label small">Nome *</label><input type="text" name="nome" class="form-control form-control-sm" required></div>
+                    <div class="mb-2"><label class="form-label small">CNPJ/CPF</label><input type="text" name="cnpj_cpf" class="form-control form-control-sm"></div>
+                    <div class="row g-2">
+                        <div class="col-6"><label class="form-label small">Telefone</label><input type="text" name="telefone" class="form-control form-control-sm"></div>
+                        <div class="col-6"><label class="form-label small">Contato</label><input type="text" name="contato" class="form-control form-control-sm"></div>
+                    </div>
+                    <div class="mb-2"><label class="form-label small">E-mail</label><input type="email" name="email" class="form-control form-control-sm"></div>
+                    <div class="mb-2"><label class="form-label small">Endereço</label><input type="text" name="endereco" class="form-control form-control-sm"></div>
+                    <div class="mb-2"><label class="form-label small">Desconto sobre preço atacado (%)</label><input type="number" step="0.01" min="0" max="100" name="desconto_percentual" class="form-control form-control-sm" value="0"></div>
+                    <div class="mb-2"><label class="form-label small">Observação</label><textarea name="observacao" class="form-control form-control-sm" rows="2"></textarea></div>
+                </div>
+                <div class="modal-footer"><button type="submit" class="btn btn-primary btn-sm">Cadastrar</button></div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% for c in clientes %}
+<div class="modal fade" id="modal-cliente-{{ c.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('b2b.cliente_editar', cid=c.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-content">
+                <div class="modal-header"><h6 class="modal-title">Editar {{ c.nome }}</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="mb-2"><label class="form-label small">CNPJ/CPF</label><input type="text" name="cnpj_cpf" class="form-control form-control-sm" value="{{ c.cnpj_cpf or '' }}"></div>
+                    <div class="row g-2">
+                        <div class="col-6"><label class="form-label small">Telefone</label><input type="text" name="telefone" class="form-control form-control-sm" value="{{ c.telefone or '' }}"></div>
+                        <div class="col-6"><label class="form-label small">Contato</label><input type="text" name="contato" class="form-control form-control-sm" value="{{ c.contato or '' }}"></div>
+                    </div>
+                    <div class="mb-2"><label class="form-label small">E-mail</label><input type="email" name="email" class="form-control form-control-sm" value="{{ c.email or '' }}"></div>
+                    <div class="mb-2"><label class="form-label small">Endereço</label><input type="text" name="endereco" class="form-control form-control-sm" value="{{ c.endereco or '' }}"></div>
+                    <div class="mb-2"><label class="form-label small">Desconto sobre preço atacado (%)</label><input type="number" step="0.01" min="0" max="100" name="desconto_percentual" class="form-control form-control-sm" value="{{ c.desconto_percentual or 0 }}"></div>
+                    <div class="mb-2"><label class="form-label small">Observação</label><textarea name="observacao" class="form-control form-control-sm" rows="2">{{ c.observacao or '' }}</textarea></div>
+                    <div class="form-check"><input class="form-check-input" type="checkbox" name="ativo" id="ativo-{{ c.id }}" {% if c.ativo %}checked{% endif %}><label class="form-check-label small" for="ativo-{{ c.id }}">Ativo</label></div>
+                </div>
+                <div class="modal-footer"><button type="submit" class="btn btn-primary btn-sm">Salvar</button></div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
