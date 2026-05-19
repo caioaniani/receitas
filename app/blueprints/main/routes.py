@@ -303,6 +303,7 @@ def _norm(s):
 
 
 @main_bp.route('/api/cardapio-img/<tipo>/<int:id>/upload-token', methods=['POST'])
+@csrf.exempt
 def cardapio_img_upload_token(tipo, id):
     """Endpoint REST pra script Python rodando no Mac do admin subir
     foto baixada do Rappi. Auth via token assinado (itsdangerous, TTL 24h)
