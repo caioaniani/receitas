@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Contas a receber B2B{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-cash-coin"></i> Contas a receber</h1>
+    <div class="fs-5">Total em aberto: <strong class="text-danger">R$ {{ '%.2f'|format(total_aberto) }}</strong></div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-sm table-hover bg-white">
+        <thead><tr><th>Vencimento</th><th>Cliente</th><th>Venda</th><th class="text-end">Valor</th><th class="text-end">Pago</th><th class="text-end">Saldo</th><th>Status</th></tr></thead>
+        <tbody>
+        {% for p in parcelas %}
+        <tr>
+            <td>{{ p.vencimento.strftime('%d/%m/%Y') }}{% if p.vencimento < hoje %} <i class="bi bi-exclamation-triangle text-danger" title="atrasada"></i>{% endif %}</td>
+            <td>{{ p.venda.cliente_display }}</td>
+            <td><a href="{{ url_for('b2b.venda_detalhe', vid=p.venda_id) }}">#{{ p.venda_id }}</a> · parc. {{ p.numero }}</td>
+            <td class="text-end">R$ {{ '%.2f'|format(p.valor) }}</td>
+            <td class="text-end">R$ {{ '%.2f'|format(p.valor_pago or 0) }}</td>
+            <td class="text-end fw-bold">R$ {{ '%.2f'|format(p.saldo) }}</td>
+            <td>
+                {% if p.status == 'atrasado' %}<span class="badge bg-danger">atrasado</span>
+                {% elif p.status == 'parcial' %}<span class="badge bg-warning text-dark">parcial</span>
+                {% else %}<span class="badge bg-info text-dark">aberto</span>{% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-muted text-center small">Nada em aberto.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
