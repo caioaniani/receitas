@@ -1981,9 +1981,41 @@ def executar_mudar_status_pedido(params, user):
         logger.exception('mudar_status_pedido %s falhou', novo)
         return {'ok': False, 'erro': f'Erro: {exc}'}
 
-    return {'ok': True, 'pedido_id': pid, 'novo_status': para,
-            'registro_tipo': 'pedido_loja', 'registro_id': pid,
-            'url': f'/pedidos/{pid}'}
+    resultado = {'ok': True, 'pedido_id': pid, 'novo_status': para,
+                 'registro_tipo': 'pedido_loja', 'registro_id': pid,
+                 'url': f'/pedidos/{pid}'}
+
+    # Se acabou de marcar como separado, ja gera o QR Code de saida e
+    # devolve no resultado pro Slack mostrar pro motorista escanear.
+    if para == 'separado':
+        try:
+            from datetime import timedelta
+            from flask import url_for
+            from app.models import PedidoQRCode
+            qr = PedidoQRCode(
+                token=secrets.token_urlsafe(24),
+                pedido_id=pid, tipo='saida',
+                criado_por_id=getattr(user, 'id', None),
+                expira_em=agora() + timedelta(hours=4),
+            )
+            db.session.add(qr)
+            db.session.commit()
+            try:
+                resultado['qr_url'] = url_for('handshake.handshake',
+                                                token=qr.token, _external=True)
+                resultado['qr_png_url'] = url_for('handshake.qr_img',
+                                                    token=qr.token, _external=True)
+            except RuntimeError:
+                # Sem request context (rodando em thread sem app context)
+                base = os.environ.get('APP_BASE_URL', '').rstrip('/')
+                if base:
+                    resultado['qr_url'] = f'{base}/handshake/{qr.token}'
+                    resultado['qr_png_url'] = f'{base}/handshake/qr-img/{qr.token}.png'
+        except Exception:  # noqa: BLE001
+            logger.exception('falha ao gerar QR pos-separacao')
+            # Status mudou OK, so o QR falhou — admin pode gerar manual
+
+    return resultado
 
 
 def executar_criar_fornecedor(params, user):
