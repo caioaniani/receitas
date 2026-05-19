@@ -198,7 +198,7 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
     out = []
     for chave, total_vendas in vendas_por_item.items():
         tipo, item_id = chave
-        media = total_vendas / dias_lookback
+        media = total_vendas / dias_periodo
         estoque_atual = estoque_por_item.get(chave, 0)
         ideal = math.ceil(media * dias_cobertura)
         qtd_sugerida = max(0, ideal - estoque_atual)
@@ -212,6 +212,7 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
             'ideal_cobertura': ideal,
             'qtd_sugerida': qtd_sugerida,
             'fontes': sorted(fontes_por_item.get(chave, [])),
+            'por_fonte': dict(por_fonte_item.get(chave, {})),
         })
     out.sort(key=lambda x: -x['media_diaria'])
     return out
