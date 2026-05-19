@@ -17,7 +17,7 @@ from app.models import (
     EstoqueProducao, MovEstoqueProducao,
     EstoqueLoja, MovEstoqueLoja,
     PrecoLojaReceita, FotoRecebimento,
-    LojaProdutoMap, Desperdicio,
+    LojaProdutoMap, Desperdicio, PedidoQRCode,
 )
 
 
