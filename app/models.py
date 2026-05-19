@@ -1580,32 +1580,6 @@ class ClienteB2B(db.Model):
     criado_em = db.Column(db.DateTime, default=agora)
 
 
-class PrecoAtacado(db.Model):
-    """Tabela de preco atacado por receita/produto. Um item tem 1 preco.
-
-    Usado como sugestao no form de venda B2B. Sobrescrita por venda eh
-    permitida (campo preco_unitario em VendaB2BItem).
-    """
-    __tablename__ = 'preco_atacado'
-
-    id = db.Column(db.Integer, primary_key=True)
-    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True, unique=True)
-    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True, unique=True)
-    preco_unitario = db.Column(db.Float, nullable=False)
-    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
-
-    receita = db.relationship('Receita')
-    produto = db.relationship('Produto')
-
-    @property
-    def nome_item(self):
-        if self.receita:
-            return self.receita.nome
-        if self.produto:
-            return self.produto.nome
-        return '?'
-
-
 class VendaB2B(db.Model):
     """Venda B2B: cabecalho. Itens vinculados via VendaB2BItem,
     pagamento parcelado via VendaB2BParcela.
