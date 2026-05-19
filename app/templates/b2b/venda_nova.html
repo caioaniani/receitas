@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}Nova venda B2B{% endblock %}
+{% block content %}
+<h1 class="page-title mb-3"><i class="bi bi-plus-circle"></i> Nova venda B2B</h1>
+
+<form method="POST" action="{{ url_for('b2b.venda_criar') }}" id="form-venda">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-5">
+                    <label class="form-label small">Cliente cadastrado</label>
+                    <select name="cliente_id" class="form-select form-select-sm" id="sel-cliente">
+                        <option value="">— avulso —</option>
+                        {% for c in clientes %}
+                        <option value="{{ c.id }}" data-desc="{{ c.desconto_percentual or 0 }}">{{ c.nome }}{% if c.desconto_percentual %} ({{ '%.0f'|format(c.desconto_percentual) }}% desc){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">Ou nome avulso</label>
+                    <input type="text" name="cliente_nome" class="form-control form-control-sm" placeholder="ex: Restaurante X">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Data</label>
+                    <input type="date" name="data_venda" class="form-control form-control-sm" value="{{ hoje }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Nº NF (opcional)</label>
+                    <input type="text" name="nf_numero" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-9">
+                    <label class="form-label small">Observação</label>
+                    <input type="text" name="observacao" class="form-control form-control-sm" placeholder="...">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header py-2 d-flex justify-content-between"><strong>Itens</strong><button type="button" class="btn btn-sm btn-outline-primary" id="btn-add-item"><i class="bi bi-plus"></i> Adicionar item</button></div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0" id="tbl-itens">
+                <thead><tr><th>Item</th><th style="width:90px;" class="text-end">Estoque</th><th style="width:80px;">Qtd</th><th style="width:110px;">Preço unit.</th><th style="width:80px;">Desc %</th><th style="width:110px;" class="text-end">Subtotal</th><th></th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="card-footer text-end fw-bold">
+            Total: <span id="venda-total">R$ 0,00</span>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header py-2 d-flex justify-content-between"><strong>Parcelas</strong><button type="button" class="btn btn-sm btn-outline-primary" id="btn-add-parcela"><i class="bi bi-plus"></i> Adicionar parcela</button></div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0" id="tbl-parcelas">
+                <thead><tr><th style="width:160px;">Vencimento</th><th style="width:140px;">Valor</th><th>Forma</th><th></th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="card-footer small text-muted">Sem parcela = 1 única no dia da venda pelo total.</div>
+    </div>
+
+    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Criar venda + baixar estoque</button>
+    <a href="{{ url_for('b2b.dashboard') }}" class="btn btn-outline-secondary">Cancelar</a>
+</form>
+
+<script>
+(function() {
+    var PRECOS = {{ precos_map|tojson }};
+    var ESTOQUE = {{ estoque_map|tojson }};
+    var RECEITAS = [{% for r in receitas %}{ref:'receita:{{r.id}}', nome:'{{ r.categoria }} — {{ r.nome|replace("'", "\\'") }}'}{% if not loop.last %},{% endif %}{% endfor %}];
+    var PRODUTOS = [{% for p in produtos %}{ref:'produto:{{p.id}}', nome:'{{ p.nome|replace("'", "\\'") }}'}{% if not loop.last %},{% endif %}{% endfor %}];
+    var OPTIONS = '<option value="">—</option>' +
+        '<optgroup label="Receitas">' + RECEITAS.map(r => '<option value="' + r.ref + '">' + r.nome + '</option>').join('') + '</optgroup>' +
+        '<optgroup label="Produtos">' + PRODUTOS.map(p => '<option value="' + p.ref + '">' + p.nome + '</option>').join('') + '</optgroup>';
+
+    var tbody = document.querySelector('#tbl-itens tbody');
+    var parcBody = document.querySelector('#tbl-parcelas tbody');
+    var selCliente = document.getElementById('sel-cliente');
+
+    function getDescCliente() {
+        var opt = selCliente.options[selCliente.selectedIndex];
+        return opt ? parseFloat(opt.dataset.desc || '0') : 0;
+    }
+
+    function rowItem() {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+            '<td><select name="item_ref[]" class="form-select form-select-sm item-ref">' + OPTIONS + '</select></td>' +
+            '<td class="text-end estoque-cel text-muted">—</td>' +
+            '<td><input type="number" name="item_qtd[]" min="1" value="1" class="form-control form-control-sm qtd"></td>' +
+            '<td><input type="number" step="0.01" name="item_preco[]" value="0" class="form-control form-control-sm preco"></td>' +
+            '<td><input type="number" step="0.01" name="item_desc[]" value="" placeholder="0" class="form-control form-control-sm desc"></td>' +
+            '<td class="text-end subt fw-bold">R$ 0,00</td>' +
+            '<td><button type="button" class="btn btn-sm btn-outline-danger remover">×</button></td>';
+        tbody.appendChild(tr);
+        atualizar(tr);
+        tr.querySelector('.item-ref').addEventListener('change', function() {
+            var ref = this.value;
+            var preco = PRECOS[ref] || 0;
+            var desc = getDescCliente();
+            tr.querySelector('.preco').value = preco.toFixed(2);
+            tr.querySelector('.desc').value = desc || '';
+            tr.querySelector('.estoque-cel').textContent = (ESTOQUE[ref] !== undefined) ? ESTOQUE[ref] : '—';
+            atualizar(tr);
+        });
+        ['input', 'change'].forEach(ev => {
+            tr.querySelectorAll('.qtd, .preco, .desc').forEach(i => i.addEventListener(ev, () => atualizar(tr)));
+        });
+        tr.querySelector('.remover').addEventListener('click', function() {
+            tr.remove();
+            recalcTotal();
+        });
+    }
+
+    function atualizar(tr) {
+        var qtd = parseFloat(tr.querySelector('.qtd').value) || 0;
+        var preco = parseFloat(tr.querySelector('.preco').value) || 0;
+        var desc = parseFloat(tr.querySelector('.desc').value) || 0;
+        var subtotal = qtd * preco * (1 - desc / 100);
+        tr.querySelector('.subt').textContent = 'R$ ' + subtotal.toFixed(2).replace('.', ',');
+        recalcTotal();
+    }
+
+    function recalcTotal() {
+        var total = 0;
+        tbody.querySelectorAll('tr').forEach(tr => {
+            var qtd = parseFloat(tr.querySelector('.qtd').value) || 0;
+            var preco = parseFloat(tr.querySelector('.preco').value) || 0;
+            var desc = parseFloat(tr.querySelector('.desc').value) || 0;
+            total += qtd * preco * (1 - desc / 100);
+        });
+        document.getElementById('venda-total').textContent = 'R$ ' + total.toFixed(2).replace('.', ',');
+    }
+
+    function rowParcela() {
+        var tr = document.createElement('tr');
+        var hoje = new Date().toISOString().slice(0, 10);
+        tr.innerHTML =
+            '<td><input type="date" name="parcela_venc[]" class="form-control form-control-sm" value="' + hoje + '"></td>' +
+            '<td><input type="number" step="0.01" name="parcela_valor[]" class="form-control form-control-sm"></td>' +
+            '<td><select name="parcela_forma[]" class="form-select form-select-sm"><option value="">—</option><option>pix</option><option>boleto</option><option>dinheiro</option><option>transferencia</option><option>cheque</option></select></td>' +
+            '<td><button type="button" class="btn btn-sm btn-outline-danger remover">×</button></td>';
+        parcBody.appendChild(tr);
+        tr.querySelector('.remover').addEventListener('click', () => tr.remove());
+    }
+
+    document.getElementById('btn-add-item').addEventListener('click', rowItem);
+    document.getElementById('btn-add-parcela').addEventListener('click', rowParcela);
+    selCliente.addEventListener('change', function() {
+        var desc = getDescCliente();
+        tbody.querySelectorAll('tr').forEach(tr => {
+            tr.querySelector('.desc').value = desc || '';
+            atualizar(tr);
+        });
+    });
+    rowItem();  // 1 linha inicial
+})();
+</script>
+{% endblock %}
