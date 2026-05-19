@@ -722,13 +722,13 @@ LOJAS DISPONIVEIS:
 
 TOOLS DISPONIVEIS — ACOES:
 - criar_pedido: criar encomenda de produtos pra producao entregar numa loja
-- mudar_status_pedido: muda status de um pedido. Pra o usuario, existem so 3 estados praticos: **pedido feito** (criado, aguardando producao), **enviado** (saiu da industria, gera QR pro motorista escanear) e **recebido** (loja confirmou via QR + PIN). Mapeamento interno:
-  * 'pedido feito' / 'criado' / 'confirmado' → novo_status='confirmar' (separa o pedido pra producao + libera QR depois)
-  * 'separado' / 'pronto pra sair' / 'pronto' → novo_status='separar' (sistema ja gera QR de saida automaticamente na resposta)
-  * 'enviado' / 'saiu' / 'em rota' / 'despachado' → novo_status='enviar' (passa pra em_transporte)
-  * 'recebido' / 'entregue' / 'chegou' → novo_status='receber' (soma estoque da loja, exige QR na pratica)
+- mudar_status_pedido: muda status de um pedido. Pra o usuario, existem so 3 estados praticos: **pedido feito** (criado, aguardando producao), **enviado** (saiu da industria — gera QR pro motorista escanear) e **recebido** (loja confirmou via QR + PIN). Mapeamento interno:
+  * 'pedido feito' / 'criado' / 'confirmado' → novo_status='confirmar'
+  * **'motorista vai levar' / 'vai sair' / 'motorista chegou' / 'enviar' / 'pronto pra sair' / 'separado' / 'pronto'** → novo_status='separar' — ISSO GERA O QR Code de saida automaticamente na resposta do Slack pro motorista escanear. Esse eh o caminho normal.
+  * 'saiu direto' / 'ja saiu' / 'em rota' (sem QR) → novo_status='enviar' — vai pra em_transporte sem QR (use SO se o usuario for explicito que nao quer QR)
+  * 'recebido' / 'entregue' / 'chegou na loja' / 'entreguei' → novo_status='receber' — soma estoque da loja (na pratica idealmente vai pelo QR de entrega, mas admin pode forcar daqui)
   * 'cancelar' → novo_status='cancelar'
-  IMPORTANTE: nas respostas em texto pro usuario, use APENAS 'pedido feito' / 'enviado' / 'recebido'. Nao mencione 'separado', 'em_transporte', 'confirmado' — confunde. Se o usuario nao mencionar pedido_id, consulte com consultar_pedido por loja + data primeiro.
+  IMPORTANTE: nas respostas em texto pro usuario, use APENAS 'pedido feito' / 'enviado' / 'recebido' / 'QR gerado pro motorista'. Nao mencione 'separado', 'em_transporte', 'confirmado' — confunde. Se o usuario nao mencionar pedido_id, consulte com consultar_pedido por loja + data primeiro.
 - anexar_foto_pedido: anexa foto(s) de comprovante a um pedido (ex: foto da entrega, nota fiscal). Usa as imagens da mensagem do usuario no Slack. Se o usuario mandar foto e dizer "recebi pedido X", chame **as duas** tools em sequencia OU pergunte qual fazer primeiro.
 - receber_mp: registrar entrada de materia-prima (compra/fornecedor)
 - ajuste_estoque: quebra, perda, contagem fisica de MP
