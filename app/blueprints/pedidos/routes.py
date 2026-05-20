@@ -1176,6 +1176,90 @@ def congelados_balanco_aplicar():
 @pedidos_bp.route('/estoque-loja')
 @login_required
 @gerente_required
+@pedidos_bp.route('/conferencia', methods=['GET', 'POST'])
+@login_required
+@gerente_required
+def conferencia():
+    """Conferencia fisica de estoque da loja.
+
+    Gerente conta cada item, digita a quantidade real, e o sistema:
+    - Mostra a divergencia (sistema - real)
+    - Ao submeter, ajusta o estoque para bater com o fisico
+    - Cria MovEstoqueLoja com tipo='ajuste_conferencia' pra auditoria
+    """
+    loja_id = _loja_do_usuario()
+    if current_user.is_admin():
+        sel = request.args.get('loja')
+        loja_id = int(sel) if sel else None
+
+    loja = Loja.query.get(loja_id) if loja_id else None
+
+    if request.method == 'POST' and loja:
+        # Form: campos 'real_<estoque_id>' com a quantidade contada
+        ajustes = 0
+        for key, val in request.form.items():
+            if not key.startswith('real_') or not val.strip():
+                continue
+            try:
+                estoque_id = int(key.replace('real_', ''))
+                real = int(val)
+            except (TypeError, ValueError):
+                continue
+            if real < 0:
+                continue
+            el = EstoqueLoja.query.get(estoque_id)
+            if not el or el.loja_id != loja.id:
+                continue
+            diff = real - (el.quantidade or 0)
+            if diff == 0:
+                continue
+            # Cria movimento tipando como ajuste manual
+            mov = MovEstoqueLoja(
+                estoque_loja_id=el.id,
+                tipo='ajuste_conferencia',
+                quantidade=abs(diff),
+                referencia=(f'Conferência por {current_user.nome}: '
+                            f'sistema {el.quantidade} → real {real} (diff {diff:+d})'),
+                usuario_id=current_user.id,
+            )
+            if diff < 0:
+                mov.quantidade = -mov.quantidade  # registra saida
+            db.session.add(mov)
+            el.quantidade = real
+            ajustes += 1
+        if ajustes > 0:
+            db.session.commit()
+            flash(f'Conferência aplicada: {ajustes} ajuste(s) registrado(s).', 'success')
+        else:
+            flash('Nenhum ajuste necessário — o estoque já bate.', 'info')
+        return redirect(url_for('pedidos.conferencia', loja=loja.id))
+
+    itens = []
+    if loja_id:
+        itens = (EstoqueLoja.query.filter_by(loja_id=loja_id)
+                 .options(joinedload(EstoqueLoja.receita),
+                          joinedload(EstoqueLoja.produto),
+                          joinedload(EstoqueLoja.materia_prima))
+                 .all())
+        # Filtra orfaos (sem vinculo) — conferencia so faz sentido em itens
+        # com nome resolvido
+        itens = [it for it in itens if not it.pendente]
+        # Ordena: receita > produto > MP, depois por nome
+        def chave(it):
+            if it.receita:
+                return (0, it.receita.categoria or 'ZZZ', it.receita.nome)
+            if it.produto:
+                return (1, it.produto.categoria or 'ZZZ', it.produto.nome)
+            if it.materia_prima:
+                return (2, '', it.materia_prima.nome)
+            return (9, '', '')
+        itens.sort(key=chave)
+
+    lojas = _lojas_operacionais()
+    return render_template('pedidos/conferencia.html', loja=loja, itens=itens,
+                            lojas=lojas, sel_loja=loja_id)
+
+
 def estoque_loja():
     loja_id = _loja_do_usuario()
     if current_user.is_admin():
