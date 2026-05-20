@@ -155,7 +155,15 @@
                 </td>
                 <td class="text-muted">{{ p.id }}</td>
                 <td>{{ p.loja.nome }}</td>
-                <td>{{ p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '—' }}</td>
+                <td>
+                    {{ p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '—' }}
+                    {% if p.data_entrega and p.criado_em and p.data_entrega == p.criado_em.date() %}
+                    <span class="badge-status ms-1" style="background:#fee2e2; color:#dc2626; font-weight:600;"
+                          title="Pedido feito no MESMO dia da entrega — emergência">
+                        <i class="bi bi-exclamation-triangle-fill"></i> emergência
+                    </span>
+                    {% endif %}
+                </td>
                 <td class="text-center">{{ p.itens|length }}</td>
                 <td class="text-center">
                     {% set s = p.status %}
@@ -178,12 +186,19 @@
                     </span>
                     {% endif %}
                 </td>
+                <td class="text-muted" style="font-size:12px;">
+                    {% if motoristas.get(p.id) %}
+                        <i class="bi bi-truck"></i> {{ motoristas[p.id] }}
+                    {% else %}
+                        <span class="text-soft">—</span>
+                    {% endif %}
+                </td>
                 <td class="text-muted" style="font-size:12px;">{{ p.criado_em.strftime('%d/%m %H:%M') if p.criado_em else '—' }}</td>
                 <td class="col-chevron"><i class="bi bi-chevron-right"></i></td>
             </tr>
             {% endfor %}
             {% if not pedidos %}
-            <tr><td colspan="9" class="text-center text-muted py-4">Nenhum pedido encontrado.</td></tr>
+            <tr><td colspan="10" class="text-center text-muted py-4">Nenhum pedido encontrado.</td></tr>
             {% endif %}
         </tbody>
     </table>
