@@ -162,6 +162,12 @@ def processar_evento_mensagem(evento):
         )
         return
 
+    # Interceptar confirmacao/cancelamento POR TEXTO se houver acao pendente.
+    # BUG anterior: Claude alucinava "registrado!" sem executar quando o usuario
+    # respondia "sim" / "confirmadissimo" em vez de clicar no botao.
+    if _tentar_confirmar_por_texto(text, slack_user_id, channel):
+        return
+
     # Carrega contexto
     try:
         sc = _conversa(slack_user_id, channel)
