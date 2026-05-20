@@ -106,8 +106,8 @@ def test_saida_lote_desempacota_cesta(app):
 def test_saida_lote_produto_normal_continua_funcionando(app):
     """Produto sem componentes (nao-cesta) continua descontando normalmente."""
     with app.app_context():
-        loja = Loja(nome='Loja2', ativa=True)
-        usr = Usuario(nome='Admin', login='adm2', papel='admin', is_owner=True)
+        loja = Loja(nome='Loja Normal XYZ', ativa=True)
+        usr = Usuario(nome='Admin Normal', login='adm_normal_test', papel='admin', is_owner=True)
         usr.set_senha('x')
         # Produto sem itens (nao eh cesta)
         sabao = Produto(nome='Sabao em Pedra', categoria='Limpeza',
