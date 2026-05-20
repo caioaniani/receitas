@@ -1680,6 +1680,12 @@ def executar_criar_pedido(params, user):
         db.session.rollback()
         return {'ok': False, 'erro': f'Nenhum item resolvido. Nao achei: {", ".join(nao_resolvidos)}'}
     db.session.commit()
+    # Alerta Slack se for emergencia (criado hoje pra entrega hoje)
+    try:
+        from app.services.slack_resumos import alertar_pedido_emergencia
+        alertar_pedido_emergencia(pedido)
+    except Exception:  # noqa: BLE001
+        logger.exception('Alerta emergencia falhou (copilot)')
     return {'ok': True, 'pedido_id': pedido.id, 'itens_salvos': salvos, 'nao_resolvidos': nao_resolvidos,
             'registro_tipo': 'pedido_loja', 'registro_id': pedido.id, 'url': f'/pedidos/{pedido.id}'}
 
