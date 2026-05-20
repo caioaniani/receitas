@@ -4,178 +4,313 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>O Pão — Padaria Artesanal</title>
+<meta name="description" content="Padaria artesanal no Itaim Bibi. Pão de fermentação natural, croissants, café e mais."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet"/>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"/>
 <style>
 :root {
-    --bg:        #faf8f4;
-    --fg:        #2c2318;
+    --bg:        #fafaf7;
+    --fg:        #1a1410;
     --primary:   #7a4e2a;
-    --secondary: #ede9e0;
-    --accent:    #c8a86e;
-    --border:    #ddd9d0;
-    --card:      #fefdfb;
-    --muted:     #8b7d6b;
-    --tag-bg:    #f0ebe1;
+    --accent:    #b8895a;
+    --border:    #e8e3d7;
+    --card:      #ffffff;
+    --muted:     #6b5d4c;
+    --soft:      #9a8b75;
+    --tag-bg:    #f3eee2;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 body {
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
     background: var(--bg);
     color: var(--fg);
     font-size: 15px;
-    line-height: 1.6;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
 }
+img { max-width: 100%; display: block; }
 
-/* Toolbar admin (oculta no print/PDF) */
+/* ── TOOLBAR (admin, hidden on print) ── */
 .toolbar {
-    position: sticky; top: 0; z-index: 50;
-    background: #1a1a2e; color: #fff;
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(26, 20, 16, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #fff;
     padding: 10px 24px;
-    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
     font-size: 13px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
 }
+.toolbar > span { opacity: 0.8; margin-right: auto; }
 .toolbar .tipo-btn {
-    color: #fff; background: transparent; border: 1px solid rgba(255,255,255,0.3);
-    padding: 4px 12px; border-radius: 999px; text-decoration: none; font-size: 12px;
+    color: rgba(255,255,255,0.85);
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    padding: 5px 12px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 500;
+    transition: background 0.15s, border-color 0.15s;
 }
-.toolbar .tipo-btn.active { background: var(--accent); border-color: var(--accent); color: #1a1a2e; font-weight: 600; }
-.toolbar .spacer { flex: 1; }
+.toolbar .tipo-btn:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.2); }
+.toolbar .tipo-btn.active { background: #fff; border-color: #fff; color: #1a1410; font-weight: 600; }
 @media print { .toolbar { display: none; } }
 
-/* HERO */
+/* ── HERO ── */
 .hero {
     position: relative;
-    min-height: 380px;
+    min-height: 420px;
     overflow: hidden;
     display: flex; align-items: flex-end;
-    background-image: url('https://images.rappi.com.br/restaurants_background/opaohome-1699368330099.png');
+    background-image: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.55) 100%),
+                      url('https://images.rappi.com.br/restaurants_background/opaohome-1699368330099.png');
     background-size: cover; background-position: center;
-}
-.hero::before {
-    content: ''; position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(0,0,0,.2) 0%, rgba(0,0,0,.7) 100%);
 }
 .hero-content {
     position: relative;
-    padding: 0 32px 48px;
-    max-width: 720px; color: #fff;
+    padding: 0 32px 56px;
+    max-width: 760px;
+    color: #fff;
+    width: 100%;
 }
 .hero-tag {
     display: inline-block;
-    font-size: 10px; letter-spacing: 0.3em;
-    text-transform: uppercase; color: rgba(255,255,255,0.7);
-    margin-bottom: 12px;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.7);
+    margin-bottom: 14px;
+    font-weight: 500;
 }
 .hero h1 {
     font-family: 'Playfair Display', Georgia, serif;
-    font-size: clamp(2.2rem, 6vw, 4rem);
-    line-height: 1.05; font-weight: 800; margin-bottom: 16px;
+    font-size: clamp(2.4rem, 7vw, 4.5rem);
+    line-height: 1.0; font-weight: 800;
+    margin-bottom: 18px;
+    letter-spacing: -0.02em;
 }
 .hero p {
-    font-size: 0.95rem; color: rgba(255,255,255,0.8);
-    max-width: 420px;
+    font-size: 0.95rem;
+    color: rgba(255,255,255,0.85);
+    max-width: 440px;
+    line-height: 1.5;
 }
 
-/* CARDAPIO */
-#cardapio {
-    background: color-mix(in srgb, var(--secondary) 40%, var(--bg));
-    padding: 64px 32px;
+/* ── CARDÁPIO ── */
+.cardapio-section {
+    background: var(--bg);
+    padding: 72px 32px 96px;
 }
 .section-label {
     text-align: center;
-    font-size: 10px; letter-spacing: 0.3em;
-    text-transform: uppercase; color: var(--muted);
-    margin-bottom: 12px;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--soft);
+    margin-bottom: 10px;
+    font-weight: 600;
 }
 .section-title {
     text-align: center;
     font-family: 'Playfair Display', Georgia, serif;
-    font-size: clamp(1.6rem, 3.5vw, 2.5rem);
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
     font-weight: 700;
-    margin-bottom: 36px;
+    margin-bottom: 40px;
+    letter-spacing: -0.02em;
+    color: var(--fg);
+}
+
+/* ── PILLS DE CATEGORIA (sticky no scroll) ── */
+.pills-wrap {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: var(--bg);
+    padding: 12px 0;
+    margin: 0 -32px 32px;
+    border-bottom: 1px solid var(--border);
 }
 .pills {
-    display: flex; flex-wrap: wrap; justify-content: center;
-    gap: 8px; margin-bottom: 40px;
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 6px;
+    padding: 0 32px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
+.pills::-webkit-scrollbar { display: none; }
 .pill {
-    border: none;
-    background: var(--tag-bg); color: var(--muted);
-    font-family: inherit; font-size: 12px; font-weight: 500;
-    padding: 8px 18px; border-radius: 999px;
-    cursor: pointer; letter-spacing: 0.02em;
-    transition: background 0.2s, color 0.2s;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
 }
-.pill:hover { background: var(--border); color: var(--fg); }
-.pill.active { background: var(--fg); color: var(--bg); }
+.pill:hover {
+    background: var(--tag-bg);
+    border-color: var(--accent);
+    color: var(--fg);
+}
+.pill.active {
+    background: var(--fg);
+    color: var(--bg);
+    border-color: var(--fg);
+}
 
-.cat-section { display: none; }
+.cat-section { display: none; animation: fadeIn 0.3s ease; }
 .cat-section.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
+/* ── GRID DE CARDS (com foto) ── */
 .menu-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 20px; max-width: 1120px; margin: 0 auto;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    max-width: 1180px;
+    margin: 0 auto;
 }
-.card {
+.product-card {
     background: var(--card);
-    border-radius: 14px; overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
     display: flex; flex-direction: column;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-    transition: transform 0.25s, box-shadow 0.25s;
+    transition: border-color 0.2s, transform 0.2s;
 }
-.card:hover { transform: translateY(-4px); box-shadow: 0 10px 28px rgba(0,0,0,0.1); }
+.product-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
 .card-img {
-    width: 100%; aspect-ratio: 1 / 1;
-    background: var(--secondary); overflow: hidden;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background: var(--tag-bg);
+    overflow: hidden;
     display: flex; align-items: center; justify-content: center;
 }
-.card-img img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.35s; }
-.card:hover .card-img img { transform: scale(1.04); }
+.card-img img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s ease;
+}
+.product-card:hover .card-img img { transform: scale(1.05); }
 .card-img.placeholder {
-    background: linear-gradient(135deg, #f0ebe0 0%, #e4dcd0 100%);
-    font-size: 2.2rem; color: var(--muted);
+    background: linear-gradient(135deg, #f3eee2 0%, #e6dec8 100%);
+    font-size: 2rem;
+    color: var(--soft);
 }
 .card-body {
-    padding: 12px 14px 14px; flex: 1;
-    display: flex; flex-direction: column; justify-content: space-between; gap: 6px;
+    padding: 12px 14px 14px;
+    flex: 1;
+    display: flex; flex-direction: column;
+    justify-content: space-between;
+    gap: 8px;
 }
-.card-name { font-size: 0.8rem; font-weight: 600; line-height: 1.3; }
-.card-desc { font-size: 0.72rem; color: var(--muted); }
-.card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
-.card-price { font-size: 0.82rem; font-weight: 700; color: var(--primary); }
+.card-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--fg);
+}
+.card-desc {
+    font-size: 0.73rem;
+    color: var(--muted);
+    line-height: 1.4;
+}
+.card-price {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--primary);
+    letter-spacing: -0.01em;
+}
 
-/* List items (sem foto — catégorias texto-only ficam mais bonitas) */
+/* ── LISTA (categorias sem foto) ── */
 .list-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 12px; max-width: 1120px; margin: 0 auto;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 8px;
+    max-width: 980px;
+    margin: 0 auto;
 }
 .list-item {
-    background: var(--card); border-radius: 12px;
-    padding: 14px 16px;
-    display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    transition: border-color 0.15s;
 }
-.list-item-name { font-size: 0.82rem; font-weight: 600; }
-.list-item-desc { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
-.list-item-price { font-size: 0.82rem; font-weight: 700; color: var(--primary); white-space: nowrap; }
+.list-item:hover { border-color: var(--accent); }
+.list-item-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--fg);
+}
+.list-item-desc {
+    font-size: 0.76rem;
+    color: var(--muted);
+    margin-top: 3px;
+    line-height: 1.4;
+}
+.list-item-price {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--primary);
+    white-space: nowrap;
+    letter-spacing: -0.01em;
+}
 
+/* ── EMPTY STATE ── */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+/* ── FOOTER ── */
 footer {
     border-top: 1px solid var(--border);
-    padding: 32px; text-align: center;
-    font-size: 0.8rem; color: var(--muted);
+    padding: 40px 32px;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--soft);
+    background: var(--bg);
 }
+footer p { margin: 0; }
 
-@media (max-width: 480px) {
-    .hero-content { padding: 0 20px 32px; }
-    #cardapio { padding: 48px 16px; }
-    .menu-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+/* ── MOBILE ── */
+@media (max-width: 640px) {
+    .hero { min-height: 320px; }
+    .hero-content { padding: 0 20px 36px; }
+    .cardapio-section { padding: 48px 20px 64px; }
+    .pills-wrap { margin: 0 -20px 24px; }
+    .pills { padding: 0 20px; }
+    .section-title { margin-bottom: 28px; }
+    .menu-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
     .list-grid { grid-template-columns: 1fr; }
+    .card-body { padding: 10px 12px 12px; }
+    .card-name { font-size: 0.8rem; }
+    .card-price { font-size: 0.85rem; }
 }
 </style>
 </head>
@@ -184,14 +319,12 @@ footer {
 {% set tipos_label = {'atacado': 'Atacado', 'loja': 'Loja', 'site': 'Site/Delivery'} %}
 
 <div class="toolbar">
-    <span>Cardápio · <strong>{{ tipos_label.get(tipo, 'Atacado') }}</strong></span>
+    <span>{{ tipos_label.get(tipo, 'Atacado') }}</span>
     <a href="{{ url_for('main.cardapio', tipo='atacado') }}" class="tipo-btn {% if tipo == 'atacado' %}active{% endif %}">Atacado</a>
     <a href="{{ url_for('main.cardapio', tipo='loja') }}" class="tipo-btn {% if tipo == 'loja' %}active{% endif %}">Loja</a>
     <a href="{{ url_for('main.cardapio', tipo='site') }}" class="tipo-btn {% if tipo == 'site' %}active{% endif %}">Site</a>
-    <div class="spacer"></div>
     {% if current_user.is_admin() %}
-    <a href="{{ url_for('main.cardapio_img_revisar') }}" class="tipo-btn"
-       style="border-color: var(--accent); color: var(--accent);">
+    <a href="{{ url_for('main.cardapio_img_revisar') }}" class="tipo-btn">
         <i class="bi bi-check2-square"></i> Revisar fotos
     </a>
     {% endif %}
@@ -206,15 +339,17 @@ footer {
     </div>
 </section>
 
-<section id="cardapio">
+<section class="cardapio-section">
     <p class="section-label">Cardápio</p>
-    <h2 class="section-title">Escolha sua categoria.</h2>
+    <h2 class="section-title">Escolha sua categoria</h2>
 
     {% if categorias %}
-    <div class="pills">
-        {% for cat in categorias.keys() %}
-        <button class="pill {% if loop.first %}active{% endif %}" onclick="showCat('{{ loop.index0 }}', this)">{{ cat }}</button>
-        {% endfor %}
+    <div class="pills-wrap">
+        <div class="pills">
+            {% for cat in categorias.keys() %}
+            <button class="pill {% if loop.first %}active{% endif %}" onclick="showCat('{{ loop.index0 }}', this)">{{ cat }}</button>
+            {% endfor %}
+        </div>
     </div>
 
     {% for cat, itens in categorias.items() %}
@@ -223,22 +358,23 @@ footer {
         {% if tem_foto %}
         <div class="menu-grid">
             {% for it in itens %}
-            <div class="card">
+            <article class="product-card">
                 {% if it.imagem_url %}
-                <div class="card-img"><img src="{{ it.imagem_url }}" alt="{{ it.nome }}" loading="lazy" onerror="this.parentElement.classList.add('placeholder');this.remove();this.parentElement.innerHTML='🍞';"/></div>
+                <div class="card-img">
+                    <img src="{{ it.imagem_url }}" alt="{{ it.nome }}" loading="lazy"
+                         onerror="this.parentElement.classList.add('placeholder');this.remove();this.parentElement.innerHTML='&#127844;';"/>
+                </div>
                 {% else %}
-                <div class="card-img placeholder">🍞</div>
+                <div class="card-img placeholder">&#127844;</div>
                 {% endif %}
                 <div class="card-body">
                     <div>
                         <div class="card-name">{{ it.nome }}</div>
                         {% if it.descricao %}<div class="card-desc">{{ it.descricao }}</div>{% endif %}
                     </div>
-                    <div class="card-footer">
-                        <span class="card-price">R$ {{ ('%.2f' % it.preco_venda) | replace('.', ',') }}</span>
-                    </div>
+                    <span class="card-price">R$ {{ ('%.2f' % it.preco_venda) | replace('.', ',') }}</span>
                 </div>
-            </div>
+            </article>
             {% endfor %}
         </div>
         {% else %}
@@ -258,7 +394,9 @@ footer {
     {% endfor %}
 
     {% else %}
-    <p style="text-align:center;color:var(--muted);">Nenhum item cadastrado com preço para "{{ tipos_label.get(tipo, tipo) }}".</p>
+    <div class="empty-state">
+        Nenhum item cadastrado com preço para <strong>{{ tipos_label.get(tipo, tipo) }}</strong>.
+    </div>
     {% endif %}
 </section>
 
@@ -272,6 +410,8 @@ function showCat(idx, btn) {
     document.querySelectorAll('.pill').forEach(b => b.classList.remove('active'));
     document.getElementById('cat-' + idx).classList.add('active');
     btn.classList.add('active');
+    // Scroll suave para a posição da pill (mobile)
+    btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
 }
 </script>
 </body>
