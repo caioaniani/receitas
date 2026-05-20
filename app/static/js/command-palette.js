@@ -9,6 +9,7 @@
         { categoria: 'Navegar', titulo: 'Início', url: '/', icon: 'house' },
         { categoria: 'Navegar', titulo: 'Pedidos', url: '/pedidos/', icon: 'cart' },
         { categoria: 'Navegar', titulo: 'Estoque da loja', url: '/pedidos/estoque-loja', icon: 'box' },
+        { categoria: 'Navegar', titulo: 'Conferência de estoque', url: '/pedidos/conferencia', icon: 'clipboard-check' },
         { categoria: 'Navegar', titulo: 'Histórico de estoque', url: '/pedidos/estoque-loja/historico', icon: 'clock-history' },
         { categoria: 'Navegar', titulo: 'Desperdício', url: '/pedidos/desperdicio', icon: 'trash' },
         { categoria: 'Navegar', titulo: 'Produção', url: '/producao/', icon: 'tools' },
