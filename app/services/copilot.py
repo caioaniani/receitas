@@ -1400,8 +1400,16 @@ def _read_consultar_pedido(params, user):
         return {'texto': _formatar_pedido(p)}
     if params.get('loja_id') and user.is_admin():
         q = q.filter_by(loja_id=params['loja_id'])
-    if params.get('status'):
-        q = q.filter_by(status=params['status'])
+    status_filtro = params.get('status')
+    if status_filtro:
+        # Quando o usuario passa status especifico, respeita (mesmo que seja
+        # 'entregue' ou 'cancelado').
+        q = q.filter_by(status=status_filtro)
+    elif not params.get('incluir_finalizados'):
+        # Sem status especifico → exclui entregue e cancelado por default.
+        # Pedidos "finalizados" sumindo evita confundir Claude quando o usuario
+        # pergunta "o que ainda precisa entregar".
+        q = q.filter(~PedidoLoja.status.in_(['entregue', 'cancelado']))
     try:
         if params.get('data_de'):
             q = q.filter(PedidoLoja.data_entrega >= datetime.strptime(params['data_de'], '%Y-%m-%d').date())
@@ -1411,10 +1419,16 @@ def _read_consultar_pedido(params, user):
         pass
     pedidos = q.order_by(PedidoLoja.data_entrega.desc()).limit(15).all()
     if not pedidos:
-        return {'texto': 'Nenhum pedido encontrado com esses filtros.'}
+        return {'texto': 'Nenhum pedido pendente encontrado com esses filtros.'}
+    STATUS_LABEL = {
+        'pendente': 'pedido feito', 'confirmado': 'pedido feito',
+        'separado': 'enviado', 'em_transporte': 'enviado',
+        'entregue': 'recebido', 'cancelado': 'cancelado',
+    }
     linhas = [f'**{len(pedidos)} pedido(s) encontrado(s):**']
     for p in pedidos:
-        linhas.append(f'- #{p.id} · {p.loja.nome} · {p.data_entrega.strftime("%d/%m/%Y") if p.data_entrega else "—"} · {p.status} · {len(p.itens)} itens')
+        label = STATUS_LABEL.get(p.status, p.status)
+        linhas.append(f'- #{p.id} · {p.loja.nome} · {p.data_entrega.strftime("%d/%m/%Y") if p.data_entrega else "—"} · {label} · {len(p.itens)} itens')
     return {'texto': '\n'.join(linhas)}
 
 
