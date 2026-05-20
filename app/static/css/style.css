@@ -2246,11 +2246,14 @@ h6 { font-weight: 600; text-transform: lowercase; }
     background: var(--bg-card-hover);
     border: 1px solid var(--border-color);
     border-radius: 4px;
-    padding: 2px 6px;
-    font-size: 11px;
+    padding: 2px 8px;
+    font-size: 12px;
     font-family: var(--font-sans);
     color: var(--text-muted);
     font-weight: 500;
+    min-width: 24px;
+    text-align: center;
+    line-height: 1.4;
 }
 
 #cmdk-results {
