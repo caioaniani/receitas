@@ -63,7 +63,15 @@ TOOL_CRIAR_PEDIDO = {
 
 TOOL_CONSULTAR_PEDIDO = {
     "name": "consultar_pedido",
-    "description": ("Consulta pedidos por loja, data, status ou ID. Retorna lista de pedidos. "
+    "description": ("Consulta pedidos por loja, data, status ou ID. "
+                    "formato='lista' (default): linhas resumidas com #ID/loja/data/status. "
+                    "formato='detalhe': cada pedido com seus itens listados. "
+                    "formato='agregado': resumo igual ao do canal #producao das 04h — "
+                    "total do dia somado por item + breakdown por loja. "
+                    "Use 'agregado' quando o usuario perguntar 'quanto a industria precisa "
+                    "produzir', 'resumo de producao do dia', 'pedidos consolidados'. "
+                    "Use 'detalhe' quando ele pedir 'pode detalhar', 'mostra os itens', "
+                    "'o que tem em cada pedido'. "
                     "Por padrao EXCLUI pedidos entregues e cancelados — passe "
                     "incluir_finalizados=true se o usuario pediu pra ver TODOS, "
                     "ou passe status='entregue'/'cancelado' explicitamente pra ver so esses."),
@@ -77,6 +85,8 @@ TOOL_CONSULTAR_PEDIDO = {
             "pedido_id": {"type": ["integer", "null"]},
             "incluir_finalizados": {"type": ["boolean", "null"],
                 "description": "Default false. Se true, inclui pedidos entregue + cancelado. Use SO quando o usuario pedir explicitamente pra ver tudo."},
+            "formato": {"type": ["string", "null"], "enum": [None, "lista", "detalhe", "agregado"],
+                "description": "Default 'lista'. 'detalhe' = itens de cada pedido. 'agregado' = total do dia + por loja (estilo resumo 04h)."},
         },
     },
 }
