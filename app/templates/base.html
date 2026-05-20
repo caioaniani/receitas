@@ -395,8 +395,14 @@
     <!-- MP data para JavaScript -->
     <script>const MP_DATA = {{ mp_json | safe }};</script>
     <script>const CSRF_TOKEN = "{{ csrf_token() }}";</script>
+    {% if current_user.is_authenticated %}
+    <script>const RECEITA_NOMES = {{ receita_nomes|tojson }};</script>
+    {% endif %}
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}?v={{ static_v['js/app.js'] }}"></script>
+    {% if current_user.is_authenticated %}
+    <script src="{{ url_for('static', filename='js/command-palette.js') }}"></script>
+    {% endif %}
     {% if current_user.is_authenticated and current_user.is_admin() %}
     <script src="{{ url_for('static', filename='js/copilot.js') }}?v={{ static_v.get('js/copilot.js', '0') }}"></script>
     {% endif %}
