@@ -111,8 +111,70 @@ def _baixar_item(loja_id, mapping_produto, qtd, seru_pedido_id, user_id):
     formar inteiros. Ex: fator=0.2, qtd=4 → debito acumulado=0.8, nao
     baixa nada. Proxima venda de 1 com fator=0.2 → debito=1.0 → baixa 1.
 
+    Se o mapping aponta pra Produto-cesta, desempacota em componentes e
+    baixa cada um (loja so tem componentes em estoque, nao a cesta).
+
     Retorna {baixado: bool, faltou: float}.
     """
+    # CESTA: se mapping aponta pra Produto com itens, desempacota e baixa
+    # cada componente individualmente.
+    if mapping_produto.produto_id:
+        from app.services.cestas import componentes_de_cesta
+        from app.models import Produto
+        produto = Produto.query.get(mapping_produto.produto_id)
+        componentes = componentes_de_cesta(produto)
+        if componentes:
+            fator = float(mapping_produto.fator_quantidade or 1.0)
+            qtd_cestas_float = float(qtd) * fator
+            qtd_cestas = int(qtd_cestas_float + 1e-9)
+            if qtd_cestas <= 0:
+                # Acumula no debito da cesta (fracao)
+                debito = SeruDebito.query.filter_by(
+                    loja_id=loja_id, seru_produto_map_id=mapping_produto.id).first()
+                if not debito:
+                    debito = SeruDebito(loja_id=loja_id,
+                                          seru_produto_map_id=mapping_produto.id,
+                                          fracao_pendente=0.0)
+                    db.session.add(debito)
+                debito.fracao_pendente = (debito.fracao_pendente or 0.0) + qtd_cestas_float
+                return {'baixado': False, 'faltou': 0, 'acumulado': debito.fracao_pendente}
+
+            faltou_total = 0
+            for col, item_id, nome_comp, qtd_por_cesta in componentes:
+                qtd_baixar = int(round(qtd_cestas * qtd_por_cesta))
+                if qtd_baixar <= 0:
+                    continue
+                filtro_c = {'loja_id': loja_id, col: item_id}
+                el_c = EstoqueLoja.query.filter_by(**filtro_c).first()
+                if not el_c:
+                    el_c = EstoqueLoja(**filtro_c, quantidade=0)
+                    db.session.add(el_c)
+                    db.session.flush()
+                atual_c = el_c.quantidade or 0
+                real_c = min(qtd_baixar, atual_c)
+                falta_c = qtd_baixar - real_c
+                el_c.quantidade = atual_c - real_c
+                if real_c > 0:
+                    db.session.add(MovEstoqueLoja(
+                        estoque_loja_id=el_c.id,
+                        tipo='venda_seru',
+                        quantidade=real_c,
+                        referencia=(f'Seru #{seru_pedido_id} '
+                                    f'[{produto.nome} → cesta] {nome_comp}'),
+                        usuario_id=user_id,
+                    ))
+                if falta_c > 0:
+                    faltou_total += falta_c
+                    db.session.add(MovEstoqueLoja(
+                        estoque_loja_id=el_c.id,
+                        tipo='venda_seru_sem_estoque',
+                        quantidade=falta_c,
+                        referencia=(f'Seru #{seru_pedido_id} '
+                                    f'[{produto.nome} → cesta] {nome_comp} — faltou'),
+                        usuario_id=user_id,
+                    ))
+            return {'baixado': True, 'faltou': faltou_total}
+
     filtro = {'loja_id': loja_id}
     if mapping_produto.receita_id:
         filtro['receita_id'] = mapping_produto.receita_id
