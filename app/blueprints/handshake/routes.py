@@ -161,11 +161,14 @@ def _handshake_entrega(qr, pedido, pin):
     from app.blueprints.pedidos.routes import _executar_recebimento_pedido
     loja = pedido.loja
     if not loja or not loja.pin:
+        _audit(qr.token, pedido, qr.tipo, 'erro_loja_sem_pin', f'loja:{loja.nome if loja else "?"}')
         return render_template('handshake/erro.html',
                                 msg=f'Loja {loja.nome if loja else "?"} sem PIN cadastrado. Admin precisa definir em /rh/lojas.'), 409
     if pin != loja.pin:
+        _audit(qr.token, pedido, qr.tipo, 'pin_fail', f'loja:{loja.nome} pin_tentado:{pin[:2]}***')
         flash('PIN invalido. Confirme com o gerente da loja.', 'danger')
         return render_template('handshake/confirmar.html', qr=qr, pedido=pedido), 401
+    _audit(qr.token, pedido, qr.tipo, 'pin_ok', f'loja:{loja.nome}')
     try:
         ok, msg, divergencias = _executar_recebimento_pedido(
             pedido, user=None,
@@ -174,13 +177,16 @@ def _handshake_entrega(qr, pedido, pin):
         )
     except Exception as exc:  # noqa: BLE001
         db.session.rollback()
+        _audit(qr.token, pedido, qr.tipo, 'erro_executor', str(exc)[:500])
         return render_template('handshake/erro.html',
                                 msg=f'Erro ao processar: {exc}'), 500
     if not ok:
+        _audit(qr.token, pedido, qr.tipo, 'erro_executor', msg[:500])
         return render_template('handshake/erro.html', msg=msg), 409
     qr.usado_em = agora()
     qr.usado_por_descricao = f'loja:{loja.nome}'
     db.session.commit()
+    _audit(qr.token, pedido, qr.tipo, 'sucesso', f'loja:{loja.nome}')
     return render_template('handshake/sucesso.html',
                             msg=f'Entrega confirmada em {loja.nome}.',
                             pedido=pedido)
