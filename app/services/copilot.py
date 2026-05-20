@@ -63,7 +63,10 @@ TOOL_CRIAR_PEDIDO = {
 
 TOOL_CONSULTAR_PEDIDO = {
     "name": "consultar_pedido",
-    "description": "Consulta pedidos por loja, data, status ou ID. Retorna lista de pedidos.",
+    "description": ("Consulta pedidos por loja, data, status ou ID. Retorna lista de pedidos. "
+                    "Por padrao EXCLUI pedidos entregues e cancelados — passe "
+                    "incluir_finalizados=true se o usuario pediu pra ver TODOS, "
+                    "ou passe status='entregue'/'cancelado' explicitamente pra ver so esses."),
     "input_schema": {
         "type": "object",
         "properties": {
@@ -72,6 +75,8 @@ TOOL_CONSULTAR_PEDIDO = {
             "data_ate": {"type": ["string", "null"], "description": "Data final YYYY-MM-DD."},
             "status": {"type": ["string", "null"], "enum": [None, "pendente", "confirmado", "separado", "em_transporte", "entregue", "cancelado"]},
             "pedido_id": {"type": ["integer", "null"]},
+            "incluir_finalizados": {"type": ["boolean", "null"],
+                "description": "Default false. Se true, inclui pedidos entregue + cancelado. Use SO quando o usuario pedir explicitamente pra ver tudo."},
         },
     },
 }
