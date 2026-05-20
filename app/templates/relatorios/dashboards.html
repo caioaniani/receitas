@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% block title %}Dashboards{% endblock %}
+{% block content %}
+<style>
+.dash-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+.dash-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    box-shadow: var(--shadow-xs);
+}
+.dash-card h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-main);
+    margin: 0 0 4px;
+}
+.dash-card .subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 18px;
+}
+.dash-card canvas {
+    max-height: 260px;
+}
+.dash-card .empty {
+    height: 260px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-soft);
+    font-size: 13px;
+}
+.kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 8px;
+}
+.kpi {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 16px 18px;
+}
+.kpi-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.kpi-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-main);
+    line-height: 1;
+}
+.kpi-trend {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 6px;
+}
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-bar-chart"></i> Dashboards</h1>
+    <span class="text-muted small">Últimos 30 dias</span>
+</div>
+
+<div class="kpi-row" id="kpi-row">
+    <div class="kpi">
+        <div class="kpi-label">Pedidos PDV</div>
+        <div class="kpi-value" id="kpi-pedidos">—</div>
+        <div class="kpi-trend">Soma do período</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Margem média</div>
+        <div class="kpi-value" id="kpi-margem">—</div>
+        <div class="kpi-trend">Atacado vs custo</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Desperdício</div>
+        <div class="kpi-value" id="kpi-desperdicio">—</div>
+        <div class="kpi-trend">Unidades</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Estoque baixo</div>
+        <div class="kpi-value" id="kpi-estoque">—</div>
+        <div class="kpi-trend">Itens com ≤ 5 un</div>
+    </div>
+</div>
+
+<div class="dash-grid">
+    <div class="dash-card">
+        <h3>Pedidos por dia</h3>
+        <p class="subtitle">Volume diário (Seru PDV + vendas manuais)</p>
+        <canvas id="chart-vendas"></canvas>
+    </div>
+
+    <div class="dash-card">
+        <h3>Margem média por categoria</h3>
+        <p class="subtitle">Preço atacado vs custo unitário (%)</p>
+        <canvas id="chart-margem"></canvas>
+    </div>
+
+    <div class="dash-card">
+        <h3>Top receitas vendidas</h3>
+        <p class="subtitle">Mais vendidas no período (vendas manuais)</p>
+        <canvas id="chart-top"></canvas>
+    </div>
+
+    <div class="dash-card">
+        <h3>Desperdício por motivo</h3>
+        <p class="subtitle">Unidades registradas no período</p>
+        <canvas id="chart-desperdicio"></canvas>
+    </div>
+
+    <div class="dash-card">
+        <h3>Estoque baixo por loja</h3>
+        <p class="subtitle">Itens com ≤ 5 unidades</p>
+        <canvas id="chart-estoque"></canvas>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    const cor = {
+        principal: getComputedStyle(document.documentElement).getPropertyValue('--text-main').trim() || '#0a0a0a',
+        muted: getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#71717a',
+        verde: '#16a34a',
+        amarelo: '#eab308',
+        vermelho: '#dc2626',
+        azul: '#0891b2',
+        bordas: getComputedStyle(document.documentElement).getPropertyValue('--border-color').trim() || '#e4e4e7',
+    };
+
+    Chart.defaults.font.family = "Inter, system-ui, sans-serif";
+    Chart.defaults.font.size = 11;
+    Chart.defaults.color = cor.muted;
+    Chart.defaults.borderColor = cor.bordas;
+
+    async function carregar(url) {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(url + ' falhou: ' + r.status);
+        return r.json();
+    }
+
+    function vazio(canvasId, mensagem) {
+        const canvas = document.getElementById(canvasId);
+        const wrap = document.createElement('div');
+        wrap.className = 'empty';
+        wrap.textContent = mensagem || 'Sem dados no período';
+        canvas.parentNode.replaceChild(wrap, canvas);
+    }
+
+    // Pedidos por dia
+    carregar('/relatorios/dashboards/api/vendas-por-dia').then((d) => {
+        document.getElementById('kpi-pedidos').textContent = d.valores.reduce((a, b) => a + b, 0);
+        if (d.valores.every((v) => v === 0)) return vazio('chart-vendas');
+        new Chart(document.getElementById('chart-vendas'), {
+            type: 'line',
+            data: {
+                labels: d.labels,
+                datasets: [{
+                    label: 'Pedidos',
+                    data: d.valores,
+                    borderColor: cor.principal,
+                    backgroundColor: 'rgba(10, 10, 10, 0.05)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0,
+                    pointHoverRadius: 5,
+                    borderWidth: 2,
+                }],
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { precision: 0 } },
+                    x: { grid: { display: false } },
+                },
+            },
+        });
+    }).catch(() => vazio('chart-vendas', 'Erro ao carregar'));
+
+    // Margem por categoria
+    carregar('/relatorios/dashboards/api/margem-categoria').then((d) => {
+        if (d.valores.length === 0) {
+            document.getElementById('kpi-margem').textContent = '—';
+            return vazio('chart-margem');
+        }
+        const media = d.valores.reduce((a, b) => a + b, 0) / d.valores.length;
+        document.getElementById('kpi-margem').textContent = media.toFixed(1) + '%';
+        new Chart(document.getElementById('chart-margem'), {
+            type: 'bar',
+            data: {
+                labels: d.labels,
+                datasets: [{
+                    label: 'Margem (%)',
+                    data: d.valores,
+                    backgroundColor: cor.verde,
+                    borderRadius: 4,
+                }],
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { beginAtZero: true, ticks: { callback: (v) => v + '%' } },
+                    y: { grid: { display: false } },
+                },
+            },
+        });
+    }).catch(() => vazio('chart-margem', 'Erro ao carregar'));
+
+    // Top receitas
+    carregar('/relatorios/dashboards/api/top-receitas').then((d) => {
+        if (d.valores.length === 0) return vazio('chart-top', 'Sem vendas manuais no período');
+        new Chart(document.getElementById('chart-top'), {
+            type: 'bar',
+            data: {
+                labels: d.labels,
+                datasets: [{
+                    label: 'Vendas',
+                    data: d.valores,
+                    backgroundColor: cor.principal,
+                    borderRadius: 4,
+                }],
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { beginAtZero: true, ticks: { precision: 0 } },
+                    y: { grid: { display: false } },
+                },
+            },
+        });
+    }).catch(() => vazio('chart-top', 'Erro ao carregar'));
+
+    // Desperdício
+    carregar('/relatorios/dashboards/api/desperdicio').then((d) => {
+        const total = d.valores.reduce((a, b) => a + b, 0);
+        document.getElementById('kpi-desperdicio').textContent = total;
+        if (total === 0) return vazio('chart-desperdicio');
+        new Chart(document.getElementById('chart-desperdicio'), {
+            type: 'doughnut',
+            data: {
+                labels: d.labels,
+                datasets: [{
+                    data: d.valores,
+                    backgroundColor: [cor.vermelho, cor.amarelo, cor.azul, cor.verde, cor.muted],
+                    borderColor: 'var(--bg-card)',
+                    borderWidth: 2,
+                }],
+            },
+            options: {
+                responsive: true,
+                cutout: '60%',
+                plugins: { legend: { position: 'right', labels: { padding: 12, font: { size: 11 } } } },
+            },
+        });
+    }).catch(() => vazio('chart-desperdicio', 'Erro ao carregar'));
+
+    // Estoque baixo
+    carregar('/relatorios/dashboards/api/estoque-baixo').then((d) => {
+        const total = d.valores.reduce((a, b) => a + b, 0);
+        document.getElementById('kpi-estoque').textContent = total;
+        if (total === 0) return vazio('chart-estoque', 'Todas as lojas com estoque OK');
+        new Chart(document.getElementById('chart-estoque'), {
+            type: 'bar',
+            data: {
+                labels: d.labels,
+                datasets: [{
+                    label: 'Itens com estoque baixo',
+                    data: d.valores,
+                    backgroundColor: cor.amarelo,
+                    borderRadius: 4,
+                }],
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { precision: 0 } },
+                    x: { grid: { display: false } },
+                },
+            },
+        });
+    }).catch(() => vazio('chart-estoque', 'Erro ao carregar'));
+})();
+</script>
+{% endblock %}
