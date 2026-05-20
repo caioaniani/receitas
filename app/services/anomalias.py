@@ -311,7 +311,7 @@ def montar_texto_whatsapp(resumo):
         linhas.append('')
         linhas.append(f'*Vendas atipicas por loja ({len(resumo["lojas"])})*')
         for a in resumo['lojas']:
-            seta = '🔻' if a['direcao'] == 'queda' else '🔺'
+            seta = '↓' if a['direcao'] == 'queda' else '↑'
             linhas.append(
                 f'{seta} *{a["loja_nome"]}*: {a["qtd_hoje"]} un. '
                 f'(esperado ~{a["baseline"]}, {_fmt_pct(a["desvio_pct"])})'
