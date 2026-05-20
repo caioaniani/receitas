@@ -1173,9 +1173,6 @@ def congelados_balanco_aplicar():
 
 # ── Estoque de Loja ──
 
-@pedidos_bp.route('/estoque-loja')
-@login_required
-@gerente_required
 @pedidos_bp.route('/conferencia', methods=['GET', 'POST'])
 @login_required
 @gerente_required
