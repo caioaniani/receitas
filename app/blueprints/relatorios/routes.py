@@ -198,41 +198,25 @@ def api_desperdicio():
 @login_required
 @admin_required
 def api_top_receitas():
-    """Top 10 receitas mais vendidas (Seru + manual) nos últimos 30 dias."""
-    from app.models import (SeruProdutoMap, SeruPedidoProcessado,
-                              VendaManualLoja, Receita)
+    """Top 10 receitas mais vendidas (vendas manuais) nos últimos 30 dias."""
+    from app.models import VendaManualLoja, Receita
     from sqlalchemy import func
-    from collections import Counter
     fim = date.today()
     ini = fim - timedelta(days=30)
 
-    # Vendas manuais (já tem receita_id direto)
-    counter = Counter()
-    manuais = (db.session.query(
+    # Vendas manuais (receita_id direto na tabela)
+    rows = (db.session.query(
             Receita.nome,
             func.sum(VendaManualLoja.quantidade).label('qtd'))
         .join(Receita, VendaManualLoja.receita_id == Receita.id)
         .filter(VendaManualLoja.data >= ini)
-        .group_by(Receita.nome).all())
-    for nome, qtd in manuais:
-        counter[nome] += int(qtd or 0)
+        .group_by(Receita.nome)
+        .order_by(func.sum(VendaManualLoja.quantidade).desc())
+        .limit(10).all())
 
-    # Seru: cada pedido conta como 1 unidade do produto mapeado
-    serus = (db.session.query(
-            Receita.nome,
-            func.count(SeruPedidoProcessado.seru_pedido_id).label('qtd'))
-        .join(SeruProdutoMap, SeruPedidoProcessado.loja_id.is_(SeruProdutoMap.id))  # placeholder join
-        .join(Receita, SeruProdutoMap.receita_id == Receita.id)
-        .filter(SeruPedidoProcessado.processado_em >= ini)
-        .group_by(Receita.nome).limit(50).all())
-    # nota: o schema do SeruPedidoProcessado nao guarda quais itens, so
-    # qual loja. Aproximacao melhor seria via tabela de movimentos.
-    # Pra v1, manuais ja da uma boa amostra.
-
-    top = counter.most_common(10)
     return {
-        'labels': [t[0] for t in top],
-        'valores': [t[1] for t in top],
+        'labels': [r[0] for r in rows],
+        'valores': [int(r[1] or 0) for r in rows],
     }
 
 
