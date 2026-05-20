@@ -198,6 +198,13 @@
     {% endif %}
 
     {% if current_user.is_admin() %}
+    <a href="{{ url_for('pedidos.handshake_audit', id=pedido.id) }}" class="btn btn-outline-info btn-sm"
+       title="Ver histórico de tentativas de QR Code">
+        <i class="bi bi-shield-check"></i> Audit QR
+    </a>
+    {% endif %}
+
+    {% if current_user.is_admin() %}
     <form method="POST" action="{{ url_for('pedidos.excluir', id=pedido.id) }}"
           onsubmit="return confirm('Excluir permanentemente este pedido?')">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
