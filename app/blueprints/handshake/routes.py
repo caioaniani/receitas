@@ -122,8 +122,10 @@ def _handshake_saida(qr, pedido, pin):
     drivers = Driver.query.filter_by(ativo=True).all()
     driver_match = next((d for d in drivers if d.pin and d.pin == pin), None)
     if not driver_match:
+        _audit(qr.token, pedido, qr.tipo, 'pin_fail', f'PIN tentado: {pin[:4]}***')
         flash('PIN invalido. Confirme com o gerente.', 'danger')
         return render_template('handshake/confirmar.html', qr=qr, pedido=pedido), 401
+    _audit(qr.token, pedido, qr.tipo, 'pin_ok', f'driver:{driver_match.nome}')
     try:
         ok, msg = _executar_envio_pedido(
             pedido, user=None,
@@ -131,13 +133,16 @@ def _handshake_saida(qr, pedido, pin):
         )
     except Exception as exc:  # noqa: BLE001
         db.session.rollback()
+        _audit(qr.token, pedido, qr.tipo, 'erro_executor', str(exc)[:500])
         return render_template('handshake/erro.html',
                                 msg=f'Erro ao processar: {exc}'), 500
     if not ok:
+        _audit(qr.token, pedido, qr.tipo, 'erro_executor', msg[:500])
         return render_template('handshake/erro.html', msg=msg), 409
     qr.usado_em = agora()
     qr.usado_por_descricao = f'driver:{driver_match.nome}'
     db.session.commit()
+    _audit(qr.token, pedido, qr.tipo, 'sucesso', f'driver:{driver_match.nome}')
     # Link de proximo passo: motorista vai na loja gerar QR de entrega.
     # driver_match.token leva pra pagina do motorista; daí ele clica em
     # 'Pedidos de loja' ou usa o link direto pro pedido.
