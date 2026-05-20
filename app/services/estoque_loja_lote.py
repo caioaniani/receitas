@@ -403,6 +403,75 @@ def aplicar_saida_lote(itens_resolvidos, loja_id, user, referencia=None):
         if mp.receita_id:
             filtro['receita_id'] = mp.receita_id
         elif mp.produto_id:
+            # Se Produto for cesta (tem ProdutoItens), desempacota e baixa
+            # CADA componente individual em vez do produto inteiro. Loja so
+            # tem os componentes em estoque — nao a cesta montada.
+            produto = Produto.query.get(mp.produto_id)
+            componentes_cesta = []
+            if produto and produto.itens:
+                for pi in produto.itens:
+                    if pi.tipo == 'receita':
+                        r = Receita.query.filter_by(nome=pi.item_nome).first()
+                        if r:
+                            componentes_cesta.append(
+                                ('receita_id', r.id, r.nome, float(pi.quantidade or 1.0)))
+                    elif pi.tipo == 'mp':
+                        m = MateriaPrima.query.filter_by(nome=pi.item_nome).first()
+                        if m:
+                            componentes_cesta.append(
+                                ('materia_prima_id', m.id, m.nome, float(pi.quantidade or 1.0)))
+
+            if componentes_cesta:
+                # Cesta: baixa cada componente, registra mov por componente.
+                # Acumulador 'fracao_pendente' por componente ficaria mais
+                # robusto, mas pra v1 arredondamos: qtd_componente = round(inteiros * qtd_no_item).
+                # Suficiente pra padaria onde componentes sao inteiros (pao, croissant).
+                componentes_baixados = []
+                for col, item_id, nome_comp, qtd_no_item in componentes_cesta:
+                    qtd_baixar = int(round(inteiros * qtd_no_item))
+                    if qtd_baixar <= 0:
+                        continue
+                    filtro_c = {'loja_id': loja_id, col: item_id}
+                    ep_c = EstoqueLoja.query.filter_by(**filtro_c).first()
+                    if not ep_c:
+                        ep_c = EstoqueLoja(**filtro_c, quantidade=0)
+                        db.session.add(ep_c)
+                        db.session.flush()
+                    anterior_c = ep_c.quantidade or 0
+                    real_c = min(qtd_baixar, anterior_c)
+                    falta_c = qtd_baixar - real_c
+                    ep_c.quantidade = anterior_c - real_c
+                    if real_c > 0:
+                        db.session.add(MovEstoqueLoja(
+                            estoque_loja_id=ep_c.id, tipo='saida_lote',
+                            quantidade=real_c,
+                            referencia=(f'{ref} [{mp.nome_digitado} → cesta] '
+                                        f'{nome_comp} (era {anterior_c}, ficou {ep_c.quantidade})'),
+                            usuario_id=getattr(user, 'id', None),
+                        ))
+                    if falta_c > 0:
+                        db.session.add(MovEstoqueLoja(
+                            estoque_loja_id=ep_c.id, tipo='venda_loja_sem_estoque',
+                            quantidade=falta_c,
+                            referencia=(f'{ref} [{mp.nome_digitado} → cesta] '
+                                        f'{nome_comp} — faltou {falta_c}'),
+                            usuario_id=getattr(user, 'id', None),
+                        ))
+                    componentes_baixados.append(
+                        f'{real_c}× {nome_comp}' + (f' ({falta_c} faltou)' if falta_c else ''))
+
+                aplicados.append({
+                    'nome': mp.nome_digitado,
+                    'alvo': f'CESTA: {produto.nome}',
+                    'tipo': 'cesta',
+                    'anterior': '-',
+                    'novo': '-',
+                    'delta': f'desempacotado: {", ".join(componentes_baixados)}',
+                    'faltou': 0,
+                })
+                continue  # ja registrou tudo, pula o fluxo normal abaixo
+
+            # Produto normal (nao cesta) — fluxo padrao
             filtro['produto_id'] = mp.produto_id
         elif mp.materia_prima_id:
             filtro['materia_prima_id'] = mp.materia_prima_id
