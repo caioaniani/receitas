@@ -128,10 +128,10 @@ def api_vendas_por_dia():
 
     # Vendas manuais
     manuais = (db.session.query(
-            VendaManualLoja.data.label('dia'),
+            VendaManualLoja.data_venda.label('dia'),
             func.count(VendaManualLoja.id).label('n'))
-        .filter(VendaManualLoja.data >= ini)
-        .group_by(VendaManualLoja.data).all())
+        .filter(VendaManualLoja.data_venda >= ini)
+        .group_by(VendaManualLoja.data_venda).all())
 
     por_dia = {}
     for s in serus:
@@ -209,7 +209,7 @@ def api_top_receitas():
             Receita.nome,
             func.sum(VendaManualLoja.quantidade).label('qtd'))
         .join(Receita, VendaManualLoja.receita_id == Receita.id)
-        .filter(VendaManualLoja.data >= ini)
+        .filter(VendaManualLoja.data_venda >= ini)
         .group_by(Receita.nome)
         .order_by(func.sum(VendaManualLoja.quantidade).desc())
         .limit(10).all())
