@@ -12,20 +12,42 @@ Fluxo (entrega loja):
 
 Tokens tem TTL de 2h e sao single-use (usado_em preenchido). Pin invalido
 mostra erro mas mantem token vivo (pode tentar de novo).
+
+Toda tentativa eh registrada em HandshakeAudit pra investigar falhas.
 """
 import io
+import logging
 
 from flask import render_template, request, redirect, url_for, flash, send_file, abort
 
 from app.blueprints.handshake import handshake_bp
 from app.extensions import db, csrf
-from app.models import PedidoQRCode, Driver, Loja
+from app.models import PedidoQRCode, Driver, Loja, HandshakeAudit
 from app.utils import agora
+
+logger = logging.getLogger(__name__)
 
 
 # CSRF off: handshake e aberto (mobile, sem login). Atomicidade vem do
 # token unico + PIN; nao precisa de cookie de sessao Flask aqui.
 csrf.exempt(handshake_bp)
+
+
+def _audit(token, pedido, tipo, etapa, detalhe=None):
+    """Registra tentativa de handshake. Nao falha o request se audit der erro."""
+    try:
+        ua = (request.headers.get('User-Agent') or '')[:300]
+        ip = request.headers.get('X-Forwarded-For', request.remote_addr or '')[:45]
+        db.session.add(HandshakeAudit(
+            token=token, pedido_id=pedido.id if pedido else None,
+            tipo=tipo, etapa=etapa, detalhe=(detalhe or '')[:500],
+            status_pedido=pedido.status if pedido else None,
+            ip=ip, user_agent=ua,
+        ))
+        db.session.commit()
+    except Exception:
+        logger.exception('handshake audit falhou')
+        db.session.rollback()
 
 
 @handshake_bp.route('/qr-img/<token>.png')
