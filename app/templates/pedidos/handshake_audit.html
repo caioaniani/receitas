@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Audit handshake — Pedido #{{ pedido.id }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0">
+        <i class="bi bi-shield-check"></i> Histórico de handshake — Pedido #{{ pedido.id }}
+    </h1>
+    <a href="{{ url_for('pedidos.detalhe', id=pedido.id) }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar pro pedido
+    </a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body p-3">
+        <div class="row g-2 small">
+            <div class="col-md-3"><strong>Loja:</strong> {{ pedido.loja.nome if pedido.loja else '—' }}</div>
+            <div class="col-md-3"><strong>Status atual:</strong> {{ pedido.status }}</div>
+            <div class="col-md-3"><strong>Criado:</strong> {{ pedido.criado_em.strftime('%d/%m/%Y %H:%M') if pedido.criado_em else '—' }}</div>
+            <div class="col-md-3"><strong>Entrega prevista:</strong> {{ pedido.data_entrega.strftime('%d/%m/%Y') if pedido.data_entrega else '—' }}</div>
+        </div>
+    </div>
+</div>
+
+{% if eventos %}
+<div class="table-responsive">
+    <table class="table table-sm align-middle">
+        <thead class="thead-padaria">
+            <tr>
+                <th>Quando</th>
+                <th>Tipo</th>
+                <th>Etapa</th>
+                <th>Status do pedido</th>
+                <th>Detalhe</th>
+                <th>Origem</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ev in eventos %}
+            <tr>
+                <td class="small">{{ ev.momento|brt('%d/%m %H:%M:%S') }}</td>
+                <td>
+                    {% if ev.tipo == 'saida' %}<span class="badge bg-primary">saída</span>
+                    {% elif ev.tipo == 'entrega' %}<span class="badge bg-success">entrega</span>
+                    {% else %}<span class="badge bg-secondary">{{ ev.tipo or '—' }}</span>{% endif %}
+                </td>
+                <td>
+                    {% set cores = {
+                        'scan': 'info', 'pin_ok': 'success', 'sucesso': 'success',
+                        'pin_fail': 'danger', 'pin_vazio': 'warning',
+                        'erro_status': 'danger', 'erro_executor': 'danger',
+                        'erro_loja_sem_pin': 'danger', 'scan_falha': 'danger',
+                        'erro_tipo': 'danger',
+                        'forcar_entrega': 'warning',
+                    } %}
+                    <span class="badge bg-{{ cores.get(ev.etapa, 'secondary') }}">{{ ev.etapa }}</span>
+                </td>
+                <td class="small"><code>{{ ev.status_pedido or '—' }}</code></td>
+                <td class="small">{{ ev.detalhe or '' }}</td>
+                <td class="small text-muted">
+                    {{ ev.ip or '—' }}
+                    {% if ev.user_agent %}
+                    <br><span title="{{ ev.user_agent }}">{{ ev.user_agent[:40] }}{% if ev.user_agent|length > 40 %}…{% endif %}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-info">
+    Nenhuma tentativa de handshake registrada para este pedido ainda.
+</div>
+{% endif %}
+
+{% endblock %}
