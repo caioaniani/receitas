@@ -1767,3 +1767,20 @@ class PedidoQRCode(db.Model):
     def valido(self):
         """True se nao expirou nem foi usado."""
         return self.usado_em is None and self.expira_em > agora()
+
+
+class HandshakeAudit(db.Model):
+    """Log de cada tentativa de handshake (scan + PIN), pra diagnosticar
+    pedidos que ficaram "travados" no fluxo. Registra sucesso E falha."""
+    __tablename__ = 'handshake_audit'
+
+    id = db.Column(db.Integer, primary_key=True)
+    momento = db.Column(db.DateTime, default=agora, nullable=False, index=True)
+    token = db.Column(db.String(40), index=True)
+    pedido_id = db.Column(db.Integer, db.ForeignKey('pedido_loja.id'), index=True)
+    tipo = db.Column(db.String(10))  # 'saida' | 'entrega'
+    etapa = db.Column(db.String(20), nullable=False)  # 'scan' | 'pin_ok' | 'pin_fail' | 'erro_status' | 'erro_executor' | 'sucesso'
+    detalhe = db.Column(db.String(500))
+    status_pedido = db.Column(db.String(20))  # status do pedido NA HORA da tentativa
+    ip = db.Column(db.String(45))
+    user_agent = db.Column(db.String(300))
