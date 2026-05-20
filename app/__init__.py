@@ -1107,6 +1107,23 @@ def _migrate_postgres(app):
     _try("ALTER TABLE loja ADD COLUMN IF NOT EXISTS pin VARCHAR(8)")
     _try("CREATE INDEX IF NOT EXISTS idx_pedido_qrcode_token ON pedido_qrcode(token)")
     _try("CREATE INDEX IF NOT EXISTS idx_pedido_qrcode_pedido ON pedido_qrcode(pedido_id)")
+    # Auditoria de tentativas de handshake (scan + PIN) — investigar falhas.
+    _try("""
+    CREATE TABLE IF NOT EXISTS handshake_audit (
+        id SERIAL PRIMARY KEY,
+        momento TIMESTAMP DEFAULT NOW(),
+        token VARCHAR(40),
+        pedido_id INTEGER REFERENCES pedido_loja(id),
+        tipo VARCHAR(10),
+        etapa VARCHAR(20) NOT NULL,
+        detalhe VARCHAR(500),
+        status_pedido VARCHAR(20),
+        ip VARCHAR(45),
+        user_agent VARCHAR(300)
+    )
+    """)
+    _try("CREATE INDEX IF NOT EXISTS idx_handshake_audit_pedido ON handshake_audit(pedido_id)")
+    _try("CREATE INDEX IF NOT EXISTS idx_handshake_audit_momento ON handshake_audit(momento)")
 
     # Vendas manuais pra lojas sem API (Anesio): so alimenta previsao /
     # sugestao de pedido. db.create_all cria a tabela; aqui so indices.
