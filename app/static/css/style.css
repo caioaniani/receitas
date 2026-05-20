@@ -1563,71 +1563,96 @@ body {
 }
 
 /* ═══════════════════════════════════════════
-   OVERRIDES GLOBAIS — Bootstrap herda visual Olist
+   OVERRIDES GLOBAIS — Notion/Linear-inspired
    Aplicado automaticamente em TODOS os templates,
    sem precisar editar HTML.
    ═══════════════════════════════════════════ */
 
-/* Botões Bootstrap → pill por padrão */
+/* Botões — radius médio (não pill total), borda sutil */
 .btn {
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-md);
     font-weight: 500;
-    padding: 7px 16px;
+    padding: 7px 14px;
+    font-size: 13px;
     transition: all var(--transition);
+    border: 1px solid transparent;
+    line-height: 1.4;
 }
 .btn-sm {
-    padding: 5px 14px;
-    font-size: 13px;
+    padding: 5px 11px;
+    font-size: 12px;
 }
 .btn-lg {
-    padding: 10px 24px;
-    font-size: 15px;
+    padding: 10px 20px;
+    font-size: 14px;
 }
 
-/* Outline buttons usam border + accent color */
-.btn-outline-primary { border-color: var(--cor-azul); color: var(--cor-azul); }
-.btn-outline-primary:hover { background: var(--cor-azul); border-color: var(--cor-azul); color: #fff; }
-.btn-outline-secondary { border-color: var(--border-strong); color: var(--text-main); }
-.btn-outline-secondary:hover { background: var(--bg-card-hover); border-color: var(--border-strong); color: var(--text-main); }
-.btn-outline-success { border-color: var(--cor-verde); color: var(--cor-verde); }
-.btn-outline-success:hover { background: var(--cor-verde); border-color: var(--cor-verde); color: #fff; }
-.btn-outline-danger { border-color: var(--cor-vermelho); color: var(--cor-vermelho); }
-.btn-outline-danger:hover { background: var(--cor-vermelho); border-color: var(--cor-vermelho); color: #fff; }
-.btn-outline-warning { border-color: var(--cor-amarelo-borda); color: var(--cor-amarelo-borda); }
-.btn-outline-warning:hover { background: var(--cor-amarelo-borda); border-color: var(--cor-amarelo-borda); color: #fff; }
-.btn-outline-info { border-color: var(--cor-azul); color: var(--cor-azul); }
+/* Primary = preto Notion-style com sombra sutil */
+.btn-primary {
+    background: var(--cor-preto);
+    border-color: var(--cor-preto);
+    color: #fff;
+    box-shadow: var(--shadow-xs);
+}
+.btn-primary:hover {
+    background: #18181b;
+    border-color: #18181b;
+    color: #fff;
+    box-shadow: var(--shadow-sm);
+}
+.btn-primary:focus,
+.btn-primary:focus-visible {
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
+    border-color: var(--cor-preto);
+}
 
-.btn-success { background: var(--cor-verde); border-color: var(--cor-verde); }
-.btn-success:hover { background: #15803d; border-color: #15803d; }
-.btn-danger { background: var(--cor-vermelho); border-color: var(--cor-vermelho); }
-.btn-danger:hover { background: #b91c1c; border-color: #b91c1c; }
+/* Outline buttons — borda + neutro, hover sutil */
+.btn-outline-primary { border-color: var(--border-input); color: var(--text-main); background: var(--bg-card); }
+.btn-outline-primary:hover { background: var(--bg-card-hover); border-color: var(--border-strong); color: var(--text-main); }
+.btn-outline-secondary { border-color: var(--border-input); color: var(--text-muted); background: var(--bg-card); }
+.btn-outline-secondary:hover { background: var(--bg-card-hover); border-color: var(--border-strong); color: var(--text-main); }
+.btn-outline-success { border-color: var(--cor-verde); color: var(--cor-verde); background: var(--bg-card); }
+.btn-outline-success:hover { background: var(--cor-verde); border-color: var(--cor-verde); color: #fff; }
+.btn-outline-danger { border-color: var(--cor-vermelho); color: var(--cor-vermelho); background: var(--bg-card); }
+.btn-outline-danger:hover { background: var(--cor-vermelho); border-color: var(--cor-vermelho); color: #fff; }
+.btn-outline-warning { border-color: var(--cor-amarelo-borda); color: var(--cor-amarelo-borda); background: var(--bg-card); }
+.btn-outline-warning:hover { background: var(--cor-amarelo-borda); border-color: var(--cor-amarelo-borda); color: #fff; }
+.btn-outline-info { border-color: var(--border-input); color: var(--text-main); background: var(--bg-card); }
+.btn-outline-info:hover { background: var(--bg-card-hover); border-color: var(--border-strong); color: var(--text-main); }
+
+.btn-secondary { background: var(--bg-card); border-color: var(--border-input); color: var(--text-main); }
+.btn-secondary:hover { background: var(--bg-card-hover); border-color: var(--border-strong); color: var(--text-main); }
+.btn-success { background: var(--cor-verde); border-color: var(--cor-verde); color: #fff; }
+.btn-success:hover { background: #15803d; border-color: #15803d; color: #fff; }
+.btn-danger { background: var(--cor-vermelho); border-color: var(--cor-vermelho); color: #fff; }
+.btn-danger:hover { background: #b91c1c; border-color: #b91c1c; color: #fff; }
 .btn-warning { background: var(--cor-amarelo-borda); border-color: var(--cor-amarelo-borda); color: #fff; }
 .btn-warning:hover { background: #d97706; border-color: #d97706; color: #fff; }
-.btn-info { background: var(--cor-azul); border-color: var(--cor-azul); color: #fff; }
-.btn-info:hover { background: var(--cor-azul-strong); border-color: var(--cor-azul-strong); }
+.btn-info { background: var(--cor-preto); border-color: var(--cor-preto); color: #fff; }
+.btn-info:hover { background: #18181b; border-color: #18181b; color: #fff; }
 
-/* btn-link continua flat, sem pill */
+/* btn-link continua flat */
 .btn-link {
     border-radius: var(--radius-sm);
-    color: var(--cor-azul);
+    color: var(--text-main);
     text-decoration: none;
+    border: none;
 }
-.btn-link:hover { color: var(--cor-azul-strong); text-decoration: underline; }
+.btn-link:hover { color: var(--cor-preto); text-decoration: underline; }
 
-/* Badges Bootstrap → pill por padrão, lowercase */
+/* Badges — radius pequeno, mais compactos */
 .badge {
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     font-weight: 500;
-    padding: 4px 10px;
+    padding: 3px 8px;
     font-size: 11px;
-    text-transform: lowercase;
     letter-spacing: 0;
 }
-.badge.bg-primary { background-color: var(--cor-azul) !important; }
+.badge.bg-primary { background-color: var(--cor-preto) !important; }
 .badge.bg-success { background-color: var(--cor-verde) !important; }
 .badge.bg-danger { background-color: var(--cor-vermelho) !important; }
 .badge.bg-warning { background-color: var(--cor-amarelo-borda) !important; color: #fff !important; }
-.badge.bg-info { background-color: #06b6d4 !important; }
+.badge.bg-info { background-color: #0891b2 !important; }
 .badge.bg-secondary { background-color: var(--text-soft) !important; }
 .badge.bg-light { background-color: var(--bg-chip) !important; color: var(--text-main) !important; }
 .badge.bg-dark { background-color: var(--text-main) !important; color: var(--bg-card) !important; }
