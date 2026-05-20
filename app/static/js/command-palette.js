@@ -84,13 +84,13 @@
                     <i class="bi bi-search" aria-hidden="true"></i>
                     <input type="text" id="cmdk-input" placeholder="Buscar… (ex: novo pedido, fornecedores, sourdough)"
                            autocomplete="off" spellcheck="false">
-                    <kbd>esc</kbd>
+                    <kbd>Esc</kbd>
                 </div>
                 <div id="cmdk-results" role="listbox"></div>
                 <div id="cmdk-footer">
-                    <span><kbd>↑</kbd><kbd>↓</kbd> navegar</span>
-                    <span><kbd>↵</kbd> abrir</span>
-                    <span><kbd>esc</kbd> fechar</span>
+                    <span><kbd>&uarr;</kbd><kbd>&darr;</kbd> navegar</span>
+                    <span><kbd>Enter</kbd> abrir</span>
+                    <span><kbd>Esc</kbd> fechar</span>
                 </div>
             </div>
         `;
