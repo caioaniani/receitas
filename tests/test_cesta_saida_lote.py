@@ -31,8 +31,9 @@ def test_saida_lote_desempacota_cesta(app):
     """Cesta com 5 pao + 3 croissant → vender 1 cesta baixa 5 pao + 3 croissant."""
     with app.app_context():
         # Setup: cria loja, usuario, receitas (componentes), produto cesta
-        loja = Loja(nome='Loja Test', ativa=True)
-        usr = Usuario(nome='Admin', login='adm', papel='admin', is_owner=True)
+        # Nomes unicos pra nao conflitar com seed da padaria
+        loja = Loja(nome='Loja Test Cesta XYZ', ativa=True)
+        usr = Usuario(nome='Admin Cesta', login='adm_cesta_test', papel='admin', is_owner=True)
         usr.set_senha('x')
         pao = Receita(nome='Pao Tradicional', categoria='Paes', preco_venda=5.0)
         croi = Receita(nome='Croissant', categoria='Viennoiserie', preco_venda=8.0)
