@@ -180,8 +180,15 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
+    # Digest WhatsApp de anomalias do dia — 23:00 BRT (apos fechamento)
+    _scheduler.add_job(
+        lambda app=app: _run_zapi_digest_anomalias(app),
+        'cron', hour=23, minute=0, id='zapi-digest-anomalias',
+        max_instances=1, coalesce=True,
+    )
+
     _scheduler.start()
-    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h · zapi 07:00')
+    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h · zapi tarefas 07:00 · zapi anomalias 23:00')
 
 
 def _run_slack_resumo_diario(app):
