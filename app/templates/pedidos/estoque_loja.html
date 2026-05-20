@@ -30,6 +30,10 @@
         <a href="{{ url_for('pedidos.estoque_loja_saida_lote', loja=loja.id) }}" class="btn btn-outline-warning btn-sm">
             <i class="bi bi-box-arrow-up"></i> Saida em lote
         </a>
+        <a href="{{ url_for('pedidos.conferencia', loja=loja.id) }}" class="btn btn-outline-warning btn-sm"
+           title="Bater o estoque físico com o sistema">
+            <i class="bi bi-clipboard-check"></i> Conferência
+        </a>
         <a href="{{ url_for('pedidos.estoque_loja_historico', loja=loja.id) }}" class="btn btn-outline-secondary btn-sm"
            title="Todas as movimentacoes desta loja">
             <i class="bi bi-clock-history"></i> Historico
