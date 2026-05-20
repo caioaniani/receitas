@@ -231,6 +231,24 @@ def create_app(config_class=None):
         """Endpoint leve para uptime checkers (pinga aqui pra evitar cold start)."""
         return 'ok', 200
 
+    @app.route('/manifest.webmanifest')
+    def pwa_manifest():
+        """PWA manifest na raiz (browsers procuram aqui por convenção)."""
+        from flask import send_from_directory
+        return send_from_directory(app.static_folder, 'manifest.webmanifest',
+                                    mimetype='application/manifest+json')
+
+    @app.route('/sw.js')
+    def pwa_service_worker():
+        """Service worker precisa estar na raiz para ter escopo / (Service Workers
+        só controlam URLs no mesmo path ou abaixo de onde foram registrados)."""
+        from flask import send_from_directory
+        resp = send_from_directory(app.static_folder, 'sw.js',
+                                    mimetype='application/javascript')
+        resp.headers['Service-Worker-Allowed'] = '/'
+        resp.headers['Cache-Control'] = 'no-cache'
+        return resp
+
     @app.after_request
     def add_security_headers(response):
         response.headers['X-Robots-Tag'] = 'noindex, nofollow'
