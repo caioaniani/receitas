@@ -36,6 +36,7 @@
         { categoria: 'RH', titulo: 'Ponto', url: '/rh/ponto', icon: 'fingerprint' },
         { categoria: 'RH', titulo: 'Férias / folgas', url: '/rh/ferias', icon: 'umbrella' },
 
+        { categoria: 'Sistema', titulo: 'Dashboards', url: '/relatorios/dashboards', icon: 'bar-chart-line' },
         { categoria: 'Sistema', titulo: 'Caixa diário', url: '/caixa', icon: 'piggy-bank' },
         { categoria: 'Sistema', titulo: 'Rentabilidade', url: '/rentabilidade', icon: 'currency-dollar' },
         { categoria: 'Sistema', titulo: 'Relatórios de custos', url: '/relatorios/custos', icon: 'bar-chart' },
