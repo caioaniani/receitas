@@ -237,6 +237,21 @@ def separar(id):
     return redirect(url_for('pedidos.detalhe', id=id))
 
 
+@pedidos_bp.route('/<int:id>/handshake-audit')
+@login_required
+@admin_required
+def handshake_audit(id):
+    """Mostra historico de tentativas de handshake QR pra este pedido.
+    Util pra diagnosticar entregas que travaram."""
+    from app.models import HandshakeAudit
+    pedido = PedidoLoja.query.get_or_404(id)
+    eventos = (HandshakeAudit.query
+               .filter_by(pedido_id=pedido.id)
+               .order_by(HandshakeAudit.momento.desc()).all())
+    return render_template('pedidos/handshake_audit.html',
+                            pedido=pedido, eventos=eventos)
+
+
 @pedidos_bp.route('/<int:id>/forcar-entrega', methods=['POST'])
 @login_required
 @admin_required
