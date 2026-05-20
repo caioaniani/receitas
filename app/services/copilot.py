@@ -2383,6 +2383,51 @@ def executar_registrar_desperdicio_lote(params, user):
             item_id = resolvido['id']
             nome_ok = resolvido.get('nome') or nome
 
+        obs_item = (item.get('observacao') or '').strip() or None
+        obs_final = obs_item or obs_lote
+
+        # CESTA: se for produto-cesta, baixa componentes
+        componentes_cesta = []
+        if tipo_item == 'produto':
+            from app.services.cestas import componentes_de_cesta
+            from app.models import Produto
+            produto_obj = Produto.query.get(item_id)
+            componentes_cesta = componentes_de_cesta(produto_obj)
+
+        desp = Desperdicio(
+            loja_id=loja.id,
+            receita_id=item_id if tipo_item == 'receita' else None,
+            produto_id=item_id if tipo_item == 'produto' else None,
+            materia_prima_id=item_id if tipo_item == 'mp' else None,
+            quantidade=qtd, motivo=motivo, observacao=obs_final,
+            criado_por_id=user.id,
+        )
+        db.session.add(desp)
+        db.session.flush()
+
+        if componentes_cesta:
+            for col, comp_id, nome_comp, qtd_por_cesta in componentes_cesta:
+                qtd_baixar = int(round(qtd * qtd_por_cesta))
+                if qtd_baixar <= 0:
+                    continue
+                filtro_c = {'loja_id': loja.id, col: comp_id}
+                el_c = EstoqueLoja.query.filter_by(**filtro_c).first()
+                if not el_c:
+                    el_c = EstoqueLoja(**filtro_c, quantidade=0)
+                    db.session.add(el_c)
+                    db.session.flush()
+                saldo_c = el_c.quantidade or 0
+                baixa_c = min(qtd_baixar, saldo_c)
+                el_c.quantidade = saldo_c - baixa_c
+                db.session.add(MovEstoqueLoja(
+                    estoque_loja_id=el_c.id, tipo='desperdicio', quantidade=baixa_c,
+                    referencia=(f'Desperdicio {motivo} cesta '
+                                f'[{produto_obj.nome}] {nome_comp} (copilot lote)'),
+                    usuario_id=user.id,
+                ))
+            aplicados.append({'nome': nome_ok, 'tipo': 'cesta', 'quantidade': qtd})
+            continue  # ja registrou tudo
+
         filtro = {'loja_id': loja.id}
         if tipo_item == 'receita':
             filtro['receita_id'] = item_id
@@ -2400,20 +2445,6 @@ def executar_registrar_desperdicio_lote(params, user):
         saldo = el.quantidade or 0
         baixa = min(qtd, saldo)
         el.quantidade = saldo - baixa
-
-        obs_item = (item.get('observacao') or '').strip() or None
-        obs_final = obs_item or obs_lote
-
-        desp = Desperdicio(
-            loja_id=loja.id,
-            receita_id=item_id if tipo_item == 'receita' else None,
-            produto_id=item_id if tipo_item == 'produto' else None,
-            materia_prima_id=item_id if tipo_item == 'mp' else None,
-            quantidade=qtd, motivo=motivo, observacao=obs_final,
-            criado_por_id=user.id,
-        )
-        db.session.add(desp)
-        db.session.flush()
 
         if baixa > 0:
             db.session.add(MovEstoqueLoja(
