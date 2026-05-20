@@ -1694,25 +1694,29 @@ table .thead-padaria th {
 /* tabelas dentro de cards: remove borda dupla */
 .card .table { margin-bottom: 0; }
 
-/* Form controls */
+/* Form controls — Notion-style sharp inputs */
 .form-control,
 .form-select {
     background-color: var(--bg-input);
-    border-color: var(--border-input);
+    border: 1px solid var(--border-input);
     color: var(--text-main);
     border-radius: var(--radius-sm);
-    font-size: 14px;
-    transition: all var(--transition);
+    font-size: 13.5px;
+    padding: 6px 10px;
+    transition: border-color var(--transition), box-shadow var(--transition);
+    box-shadow: var(--shadow-xs);
 }
 .form-control:focus,
 .form-select:focus {
     background-color: var(--bg-input);
-    border-color: var(--cor-azul);
-    box-shadow: 0 0 0 3px var(--accent-light);
+    border-color: var(--cor-preto);
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
     color: var(--text-main);
+    outline: none;
 }
 .form-control::placeholder { color: var(--text-soft); }
-.form-control-sm, .form-select-sm { font-size: 13px; }
+.form-control-sm, .form-select-sm { font-size: 12.5px; padding: 4px 8px; }
+.form-control-lg, .form-select-lg { font-size: 15px; padding: 8px 14px; }
 
 .form-label {
     font-size: 13px;
