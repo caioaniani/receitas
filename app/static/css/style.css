@@ -2330,3 +2330,193 @@ h6 { font-weight: 600; text-transform: lowercase; }
     #cmdk-overlay { padding-top: 4vh; }
     #cmdk-panel { width: calc(100% - 16px); max-height: 92vh; }
 }
+
+/* ═══════════════════════════════════════════
+   AGRUPAMENTO POR DIA (historicos colapsaveis)
+   <details class="dia-grupo"><summary>...</summary>...</details>
+   ═══════════════════════════════════════════ */
+
+.dia-grupo {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin-bottom: 8px;
+    background: var(--bg-card);
+    overflow: hidden;
+}
+.dia-grupo summary {
+    cursor: pointer;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 600;
+    list-style: none;
+    user-select: none;
+    transition: background var(--transition);
+}
+.dia-grupo summary::-webkit-details-marker { display: none; }
+.dia-grupo summary::before {
+    content: '›';
+    font-size: 18px;
+    color: var(--text-muted);
+    transition: transform 0.15s ease;
+    display: inline-block;
+    width: 12px;
+    line-height: 1;
+}
+.dia-grupo[open] summary::before { transform: rotate(90deg); }
+.dia-grupo summary:hover { background: var(--bg-card-hover); }
+.dia-data {
+    font-size: 14px;
+    color: var(--text-main);
+    min-width: 130px;
+}
+.dia-resumo {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 400;
+    flex: 1;
+}
+.dia-total {
+    background: var(--bg-card-hover);
+    color: var(--text-main);
+    padding: 2px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.dia-total.dia-total-warn {
+    background: var(--cor-amarelo);
+    color: #92400e;
+}
+.dia-corpo { border-top: 1px solid var(--border-color); }
+.dia-corpo > .table-responsive,
+.dia-corpo > table { margin-bottom: 0; }
+
+@media (max-width: 640px) {
+    .dia-grupo summary { padding: 10px 12px; gap: 8px; }
+    .dia-data { min-width: 110px; font-size: 13px; }
+    .dia-resumo { font-size: 11px; }
+    .dia-total { font-size: 11px; padding: 2px 8px; }
+}
+
+
+/* ═══════════════════════════════════════════
+   MOBILE FIXES — scroll horizontal em tabelas, paddings reduzidos,
+   sidebar virando drawer.
+   ═══════════════════════════════════════════ */
+
+/* Scroll horizontal em qualquer tabela densa quando estourar viewport */
+.table-dense,
+.table-responsive {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Cards que envolvem tabelas: permitir scroll horizontal em vez de cortar */
+.card:has(.table-dense),
+.card:has(> table) {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Sombra sutil indicando que tem conteudo pra rolar */
+@media (max-width: 768px) {
+    .card:has(.table-dense),
+    .card:has(> table),
+    .table-responsive {
+        background-image:
+            linear-gradient(to right, var(--bg-card), var(--bg-card)),
+            linear-gradient(to right, var(--bg-card), var(--bg-card)),
+            linear-gradient(to right, rgba(0,0,0,0.08), rgba(255,255,255,0)),
+            linear-gradient(to left, rgba(0,0,0,0.08), rgba(255,255,255,0));
+        background-position: left center, right center, left center, right center;
+        background-repeat: no-repeat;
+        background-size: 20px 100%, 20px 100%, 12px 100%, 12px 100%;
+        background-attachment: local, local, scroll, scroll;
+    }
+}
+
+/* page-actions: botões em fileira que estouram em mobile */
+@media (max-width: 768px) {
+    .page-actions,
+    .d-flex.gap-2.flex-wrap {
+        flex-wrap: wrap !important;
+    }
+
+    .page-header {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    /* Botoes secundarios no header de pagina viram menores */
+    .page-actions .btn,
+    .page-actions .btn-pill {
+        font-size: 12px;
+        padding: 5px 10px;
+    }
+}
+
+/* Sidebar como drawer no mobile */
+@media (max-width: 768px) {
+    .sidebar {
+        position: fixed;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        width: 280px;
+        box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+    }
+    .sidebar.aberta {
+        transform: translateX(0);
+    }
+    .main-content {
+        margin-left: 0 !important;
+        padding: 16px;
+        padding-top: 60px;  /* espaço pro botão hamburger */
+    }
+    /* Botao hamburger fixo no topo */
+    .mobile-menu-toggle {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        z-index: 99;
+        width: 40px;
+        height: 40px;
+        border-radius: var(--radius-md);
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: var(--shadow-sm);
+    }
+    /* Overlay quando drawer aberto */
+    .sidebar-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.4);
+        z-index: 99;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
+    }
+    .sidebar-overlay.visible {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+/* Esconde botao hamburger no desktop */
+@media (min-width: 769px) {
+    .mobile-menu-toggle, .sidebar-overlay { display: none !important; }
+}
+
+/* Reduz padding de cards no mobile */
+@media (max-width: 640px) {
+    .card-body { padding: 12px; }
+    .card-header { padding: 10px 12px; }
+    h1.page-title { font-size: 1.1rem; }
+    .form-control, .form-select { font-size: 16px; }  /* evita zoom do iOS no focus */
+}
+
