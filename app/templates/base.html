@@ -414,6 +414,38 @@
     </script>
     {% block scripts %}{% endblock %}
 
+    <!-- PWA: registra service worker + botão de instalação -->
+    <script>
+    (function() {
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                    .catch(function(err) { console.log('SW falha:', err); });
+            });
+        }
+
+        // Salva o evento do "Add to Home Screen" para mostrar o nosso botão depois
+        let promptInstalacao = null;
+        window.addEventListener('beforeinstallprompt', function(e) {
+            e.preventDefault();
+            promptInstalacao = e;
+            var btn = document.getElementById('pwa-install-btn');
+            if (btn) btn.style.display = 'inline-flex';
+        });
+
+        // Botão "Instalar app" (criar na sidebar/header — opcional)
+        window.instalarApp = function() {
+            if (!promptInstalacao) return;
+            promptInstalacao.prompt();
+            promptInstalacao.userChoice.then(function() {
+                promptInstalacao = null;
+                var btn = document.getElementById('pwa-install-btn');
+                if (btn) btn.style.display = 'none';
+            });
+        };
+    })();
+    </script>
+
     <!-- Datalists globais para autocomplete -->
     <datalist id="mp-list">
         {% for nome in mp_nomes %}
