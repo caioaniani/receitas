@@ -410,29 +410,46 @@ def build_resultado(resultado, ok=True):
         if resultado.get('pedido_id') and resultado.get('novo_status'):
             label = STATUS_LABEL.get(resultado['novo_status'], resultado['novo_status'])
             partes = [f"✓ pedido #{resultado['pedido_id']} marcado como *{label}*."]
+            label_botao = 'Abrir pedido'
         elif resultado.get('pedido_id'):
             partes = [f"✓ pedido #{resultado['pedido_id']} criado."]
+            label_botao = 'Abrir pedido'
         elif resultado.get('venda_id'):
             partes = [f"✓ venda B2B #{resultado['venda_id']} criada."]
+            label_botao = 'Abrir venda'
         elif resultado.get('desperdicio_id') or resultado.get('total_aplicados'):
             n = resultado.get('total_aplicados') or 1
-            partes = [f"✓ {n} desperdicio(s) registrado(s)."]
+            loja_nome = resultado.get('loja') or ''
+            sufixo = f' em {loja_nome}' if loja_nome else ''
+            partes = [f"✓ {n} desperdicio(s) registrado(s){sufixo}."]
+            label_botao = 'Ver desperdícios'
         else:
             partes = ['Feito.']
+            label_botao = 'Abrir no sistema'
         for k in ('mov_id', 'tarefa_id', 'fornecedor_id', 'cliente_id'):
             if resultado.get(k):
                 partes.append(f'_{k}_: `{resultado[k]}`')
+
+        blocks = [_section(' · '.join(partes))]
+
+        # Botao "abrir no sistema" — mais visivel que link inline, principalmente
+        # no mobile do Slack.
         if resultado.get('url'):
-            # Slack mrkdwn exige URL absoluta no <url|texto>. Se vier relativa,
-            # prefixa com APP_BASE_URL (env) ou nome do dominio prod.
             url = resultado['url']
             if url.startswith('/'):
                 import os
                 base = (os.environ.get('APP_BASE_URL')
                         or 'https://gestao.opaopadariaartesanal.com.br').rstrip('/')
                 url = f'{base}{url}'
-            partes.append(f'<{url}|abrir no sistema>')
-        blocks = [_section(' · '.join(partes))]
+            blocks.append({
+                'type': 'actions',
+                'elements': [{
+                    'type': 'button',
+                    'text': {'type': 'plain_text', 'text': label_botao},
+                    'url': url,
+                    'style': 'primary',
+                }],
+            })
         # Se gerou QR Code (ex: separou pedido → QR saida pro motorista),
         # mostra a imagem inline pro motorista escanear no celular.
         if resultado.get('qr_png_url'):
