@@ -2729,23 +2729,13 @@ def executar_registrar_desperdicio(params, user):
         motivo = 'vencido'
     observacao = (params.get('observacao') or '').strip() or None
 
-    filtro = {'loja_id': loja.id}
-    if tipo_item == 'receita':
-        filtro['receita_id'] = item_id
-    elif tipo_item == 'produto':
-        filtro['produto_id'] = item_id
-    else:
-        filtro['materia_prima_id'] = item_id
-
-    el = EstoqueLoja.query.filter_by(**filtro).first()
-    if not el:
-        el = EstoqueLoja(**filtro, quantidade=0)
-        db.session.add(el)
-        db.session.flush()
-
-    saldo = el.quantidade or 0
-    baixa = min(qtd, saldo)
-    el.quantidade = saldo - baixa
+    # CESTA: se for produto-cesta, baixa componentes
+    componentes_cesta = []
+    if tipo_item == 'produto':
+        from app.services.cestas import componentes_de_cesta
+        from app.models import Produto
+        produto_obj = Produto.query.get(item_id)
+        componentes_cesta = componentes_de_cesta(produto_obj)
 
     desp = Desperdicio(
         loja_id=loja.id,
@@ -2757,22 +2747,63 @@ def executar_registrar_desperdicio(params, user):
     )
     db.session.add(desp)
 
-    if baixa > 0:
-        db.session.add(MovEstoqueLoja(
-            estoque_loja_id=el.id, tipo='desperdicio', quantidade=baixa,
-            referencia=f'Desperdicio {motivo}'
-            + (f' — {observacao}' if observacao else '')
-            + ' (copilot)',
-            usuario_id=user.id,
-        ))
-    if qtd > baixa:
-        falta = qtd - baixa
-        db.session.add(MovEstoqueLoja(
-            estoque_loja_id=el.id, tipo='desperdicio_sem_estoque',
-            quantidade=falta,
-            referencia=f'Desperdicio {motivo} — registrado sem estoque ({falta}) (copilot)',
-            usuario_id=user.id,
-        ))
+    if componentes_cesta:
+        # Loja so estoca componentes; desconta cada um
+        for col, comp_id, nome_comp, qtd_por_cesta in componentes_cesta:
+            qtd_baixar = int(round(qtd * qtd_por_cesta))
+            if qtd_baixar <= 0:
+                continue
+            filtro_c = {'loja_id': loja.id, col: comp_id}
+            el_c = EstoqueLoja.query.filter_by(**filtro_c).first()
+            if not el_c:
+                el_c = EstoqueLoja(**filtro_c, quantidade=0)
+                db.session.add(el_c)
+                db.session.flush()
+            saldo_c = el_c.quantidade or 0
+            baixa_c = min(qtd_baixar, saldo_c)
+            el_c.quantidade = saldo_c - baixa_c
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el_c.id, tipo='desperdicio', quantidade=baixa_c,
+                referencia=(f'Desperdicio {motivo} cesta [{produto_obj.nome}] '
+                            f'{nome_comp} (copilot)'),
+                usuario_id=user.id,
+            ))
+        baixa = 0  # nao tem baixa "cabeca", ja foi nos componentes
+    else:
+        filtro = {'loja_id': loja.id}
+        if tipo_item == 'receita':
+            filtro['receita_id'] = item_id
+        elif tipo_item == 'produto':
+            filtro['produto_id'] = item_id
+        else:
+            filtro['materia_prima_id'] = item_id
+
+        el = EstoqueLoja.query.filter_by(**filtro).first()
+        if not el:
+            el = EstoqueLoja(**filtro, quantidade=0)
+            db.session.add(el)
+            db.session.flush()
+
+        saldo = el.quantidade or 0
+        baixa = min(qtd, saldo)
+        el.quantidade = saldo - baixa
+
+        if baixa > 0:
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el.id, tipo='desperdicio', quantidade=baixa,
+                referencia=f'Desperdicio {motivo}'
+                + (f' — {observacao}' if observacao else '')
+                + ' (copilot)',
+                usuario_id=user.id,
+            ))
+        if qtd > baixa:
+            falta = qtd - baixa
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el.id, tipo='desperdicio_sem_estoque',
+                quantidade=falta,
+                referencia=f'Desperdicio {motivo} — registrado sem estoque ({falta}) (copilot)',
+                usuario_id=user.id,
+            ))
 
     db.session.commit()
     return {'ok': True, 'desperdicio_id': desp.id,
