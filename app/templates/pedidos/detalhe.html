@@ -187,6 +187,16 @@
     </form>
     {% endif %}
 
+    {% if current_user.is_admin() and pedido.status != 'entregue' and pedido.status != 'cancelado' %}
+    <form method="POST" action="{{ url_for('pedidos.forcar_entrega', id=pedido.id) }}"
+          onsubmit="return confirm('Forçar este pedido como ENTREGUE? Isso vai baixar estoque industria (se ainda não baixou) E subir estoque da loja. Use só se o QR de entrega falhou e a entrega realmente foi feita.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-warning btn-sm" title="Destrava pedido cuja entrega não foi confirmada via QR">
+            <i class="bi bi-lightning-charge"></i> Forçar entrega
+        </button>
+    </form>
+    {% endif %}
+
     {% if current_user.is_admin() %}
     <form method="POST" action="{{ url_for('pedidos.excluir', id=pedido.id) }}"
           onsubmit="return confirm('Excluir permanentemente este pedido?')">
