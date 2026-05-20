@@ -8,3 +8,12 @@ dist/
 build/
 .venv/
 venv/
+
+# Servidor de casa — dados locais
+deploy/backups/*
+!deploy/backups/.gitkeep
+deploy/data/
+deploy/logs/
+deploy/cloudflared/cert.pem
+deploy/cloudflared/*.json
+*.tar.gz
