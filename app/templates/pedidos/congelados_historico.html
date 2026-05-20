@@ -72,43 +72,98 @@
 </div>
 {% endif %}
 
-<div class="card">
-    <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-list-ul"></i> Movimentacoes</span>
-        <small class="text-muted fw-normal">{{ linhas|length }} registro{{ '' if linhas|length == 1 else 's' }} (max 500)</small>
-    </div>
-    {% if linhas %}
-    <div class="table-responsive">
-        <table class="table table-sm table-hover mb-0">
-            <thead class="thead-padaria">
-                <tr>
-                    <th style="width:140px;">Data</th>
-                    {% if not item_sel %}<th>Item</th>{% endif %}
-                    <th class="text-center" style="width:80px;">Qtd</th>
-                    <th style="width:160px;">Tipo</th>
-                    <th>Referencia</th>
-                    <th style="width:120px;" class="text-muted small">Usuario</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for l in linhas %}
-                {% set label, color = TIPOS_LABEL.get(l.mov.tipo, (l.mov.tipo, 'secondary')) %}
-                <tr>
-                    <td class="small">{{ l.mov.data.strftime('%d/%m/%Y %H:%M') if l.mov.data else '—' }}</td>
-                    {% if not item_sel %}<td>{{ l.item_nome }}</td>{% endif %}
-                    <td class="text-center fw-bold">{{ l.mov.quantidade }}</td>
-                    <td><span class="badge bg-{{ color }}">{{ label }}</span></td>
-                    <td class="text-muted small">{{ l.mov.referencia or '' }}</td>
-                    <td class="text-muted small">{{ l.usuario.nome if l.usuario else '—' }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <div class="card-body text-center text-muted py-4">
-        Nenhuma movimentacao encontrada com esses filtros.
-    </div>
-    {% endif %}
+<style>
+.dia-grupo { border: 1px solid var(--border-color); border-radius: var(--radius-md); margin-bottom: 8px; background: var(--bg-card); overflow: hidden; }
+.dia-grupo summary {
+    cursor: pointer; padding: 12px 16px;
+    display: flex; align-items: center; gap: 12px;
+    font-weight: 600; list-style: none; user-select: none;
+    transition: background var(--transition);
+}
+.dia-grupo summary::-webkit-details-marker { display: none; }
+.dia-grupo summary::before {
+    content: '›'; font-size: 18px; color: var(--text-muted);
+    transition: transform 0.15s ease; display: inline-block; width: 12px;
+}
+.dia-grupo[open] summary::before { transform: rotate(90deg); }
+.dia-grupo summary:hover { background: var(--bg-card-hover); }
+.dia-data { font-size: 14px; color: var(--text-main); min-width: 180px; }
+.dia-resumo { font-size: 12px; color: var(--text-muted); font-weight: 400; flex: 1; }
+.dia-total {
+    background: var(--bg-card-hover); color: var(--text-main);
+    padding: 2px 10px; border-radius: var(--radius-pill);
+    font-size: 12px; font-weight: 600;
+}
+.dia-corpo { border-top: 1px solid var(--border-color); }
+.dia-corpo table { margin-bottom: 0; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-2 mt-3">
+    <h5 class="mb-0"><i class="bi bi-list-ul"></i> Movimentações</h5>
+    <small class="text-muted">{{ linhas|length }} registro{{ '' if linhas|length == 1 else 's' }} (max 500)</small>
 </div>
+
+{% if linhas %}
+{% set ns = namespace(grupos={}, ordem=[]) %}
+{% for l in linhas %}
+    {% set chave = l.mov.data.strftime('%Y-%m-%d') if l.mov.data else 'sem-data' %}
+    {% if chave not in ns.grupos %}
+        {% set _ = ns.ordem.append(chave) %}
+        {% set _ = ns.grupos.update({chave: []}) %}
+    {% endif %}
+    {% set _ = ns.grupos[chave].append(l) %}
+{% endfor %}
+{% set dias_pt = {0:'segunda', 1:'terça', 2:'quarta', 3:'quinta', 4:'sexta', 5:'sábado', 6:'domingo'} %}
+
+{% for chave in ns.ordem %}
+    {% set lista_dia = ns.grupos[chave] %}
+    {% set data_obj = lista_dia[0].mov.data %}
+    {% set total_qtd = lista_dia | sum(attribute='mov.quantidade') %}
+    <details class="dia-grupo" {% if loop.first %}open{% endif %}>
+        <summary>
+            <span class="dia-data">
+                <strong>{{ data_obj.strftime('%d/%m/%Y') if data_obj else 'Sem data' }}</strong>
+                {% if data_obj %}· <span class="text-muted">{{ dias_pt.get(data_obj.weekday(), '') }}</span>{% endif %}
+            </span>
+            <span class="dia-resumo">
+                {{ lista_dia|length }} movimentação{{ '' if lista_dia|length == 1 else 'es' }}
+            </span>
+            <span class="dia-total">{{ total_qtd }} un total</span>
+        </summary>
+        <div class="dia-corpo table-responsive">
+            <table class="table table-sm mb-0">
+                <thead class="thead-padaria">
+                    <tr>
+                        <th style="width:80px;">Hora</th>
+                        {% if not item_sel %}<th>Item</th>{% endif %}
+                        <th class="text-center" style="width:80px;">Qtd</th>
+                        <th style="width:160px;">Tipo</th>
+                        <th>Referência</th>
+                        <th style="width:120px;" class="text-muted small">Usuário</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for l in lista_dia %}
+                    {% set label, color = TIPOS_LABEL.get(l.mov.tipo, (l.mov.tipo, 'secondary')) %}
+                    <tr>
+                        <td class="small text-muted">{{ l.mov.data.strftime('%H:%M') if l.mov.data else '—' }}</td>
+                        {% if not item_sel %}<td>{{ l.item_nome }}</td>{% endif %}
+                        <td class="text-center fw-bold">{{ l.mov.quantidade }}</td>
+                        <td><span class="badge bg-{{ color }}">{{ label }}</span></td>
+                        <td class="text-muted small">{{ l.mov.referencia or '' }}</td>
+                        <td class="text-muted small">{{ l.usuario.nome if l.usuario else '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+{% endfor %}
+{% else %}
+<div class="card">
+    <div class="card-body text-center text-muted py-4">
+        Nenhuma movimentação encontrada com esses filtros.
+    </div>
+</div>
+{% endif %}
 {% endblock %}
