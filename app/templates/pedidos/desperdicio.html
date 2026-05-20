@@ -124,7 +124,7 @@
                 · <span class="text-muted">{{ (lista_dia | map(attribute='loja.nome') | unique | list | length) }} loja(s)</span>
                 {% endif %}
             </span>
-            <span class="dia-total">{{ total_qtd }} un</span>
+            <span class="dia-total dia-total-warn">{{ total_qtd }} un</span>
         </summary>
         <div class="dia-corpo table-responsive">
             <table class="table table-sm mb-0">
