@@ -34,10 +34,8 @@ def test_saida_lote_desempacota_cesta(app):
         loja = Loja(nome='Loja Test', ativa=True)
         usr = Usuario(nome='Admin', login='adm', papel='admin', is_owner=True)
         usr.set_senha('x')
-        pao = Receita(nome='Pao Tradicional', categoria='Paes',
-                       custo_unitario=2.0, preco_venda=5.0)
-        croi = Receita(nome='Croissant', categoria='Viennoiserie',
-                        custo_unitario=3.0, preco_venda=8.0)
+        pao = Receita(nome='Pao Tradicional', categoria='Paes', preco_venda=5.0)
+        croi = Receita(nome='Croissant', categoria='Viennoiserie', preco_venda=8.0)
         db.session.add_all([loja, usr, pao, croi])
         db.session.flush()
 
