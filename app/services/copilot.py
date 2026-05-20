@@ -1412,13 +1412,8 @@ def _read_consultar_pedido(params, user):
         q = q.filter_by(loja_id=params['loja_id'])
     status_filtro = params.get('status')
     if status_filtro:
-        # Quando o usuario passa status especifico, respeita (mesmo que seja
-        # 'entregue' ou 'cancelado').
         q = q.filter_by(status=status_filtro)
     elif not params.get('incluir_finalizados'):
-        # Sem status especifico → exclui entregue e cancelado por default.
-        # Pedidos "finalizados" sumindo evita confundir Claude quando o usuario
-        # pergunta "o que ainda precisa entregar".
         q = q.filter(~PedidoLoja.status.in_(['entregue', 'cancelado']))
     try:
         if params.get('data_de'):
@@ -1427,9 +1422,18 @@ def _read_consultar_pedido(params, user):
             q = q.filter(PedidoLoja.data_entrega <= datetime.strptime(params['data_ate'], '%Y-%m-%d').date())
     except ValueError:
         pass
-    pedidos = q.order_by(PedidoLoja.data_entrega.desc()).limit(15).all()
+
+    formato = (params.get('formato') or 'lista').lower()
+    limit = 50 if formato in ('detalhe', 'agregado') else 15
+    pedidos = q.order_by(PedidoLoja.data_entrega.desc()).limit(limit).all()
     if not pedidos:
         return {'texto': 'Nenhum pedido pendente encontrado com esses filtros.'}
+
+    if formato == 'agregado':
+        return {'texto': _formatar_pedidos_agregado(pedidos)}
+    if formato == 'detalhe':
+        return {'texto': _formatar_pedidos_detalhe(pedidos)}
+
     STATUS_LABEL = {
         'pendente': 'pedido feito', 'confirmado': 'pedido feito',
         'separado': 'enviado', 'em_transporte': 'enviado',
@@ -1440,6 +1444,79 @@ def _read_consultar_pedido(params, user):
         label = STATUS_LABEL.get(p.status, p.status)
         linhas.append(f'- #{p.id} · {p.loja.nome} · {p.data_entrega.strftime("%d/%m/%Y") if p.data_entrega else "—"} · {label} · {len(p.itens)} itens')
     return {'texto': '\n'.join(linhas)}
+
+
+def _formatar_pedidos_detalhe(pedidos):
+    """Lista cada pedido com seus itens (sem agregar)."""
+    from collections import defaultdict
+    STATUS_LABEL = {
+        'pendente': 'pedido feito', 'confirmado': 'pedido feito',
+        'separado': 'enviado', 'em_transporte': 'enviado',
+        'entregue': 'recebido', 'cancelado': 'cancelado',
+    }
+    # Agrupa por data, depois por loja
+    por_data = defaultdict(list)
+    for p in pedidos:
+        por_data[p.data_entrega].append(p)
+
+    linhas = [f'**{len(pedidos)} pedido(s):**']
+    for data in sorted(por_data.keys(), reverse=True):
+        if data:
+            linhas.append(f'\n*Entrega {data.strftime("%d/%m/%Y")}*')
+        for p in sorted(por_data[data], key=lambda x: (x.loja.nome if x.loja else '')):
+            loja = p.loja.nome if p.loja else '?'
+            label = STATUS_LABEL.get(p.status, p.status)
+            linhas.append(f'\n**#{p.id} · {loja} · {label}**')
+            for it in p.itens:
+                linhas.append(f'  - {it.quantidade}× {it.nome_item}')
+    return '\n'.join(linhas)
+
+
+def _formatar_pedidos_agregado(pedidos):
+    """Estilo resumo Slack 04h: total do dia agregado por item + breakdown por loja.
+
+    Se ha mais de uma data nos pedidos, agrupa por data.
+    """
+    from collections import defaultdict
+    por_data = defaultdict(list)
+    for p in pedidos:
+        por_data[p.data_entrega].append(p)
+
+    blocos = []
+    for data in sorted(por_data.keys(), reverse=True):
+        peds_data = por_data[data]
+        data_label = data.strftime('%d/%m/%Y') if data else 'sem data'
+
+        # Agrega por loja e total
+        por_loja = defaultdict(lambda: defaultdict(int))  # loja → item → qtd
+        total_item = defaultdict(int)
+        for p in peds_data:
+            loja = p.loja.nome if p.loja else '?'
+            for it in p.itens:
+                por_loja[loja][it.nome_item] += it.quantidade
+                total_item[it.nome_item] += it.quantidade
+
+        n = len(peds_data)
+        qtd_total = sum(total_item.values())
+        linhas = [f'**Entrega {data_label} — {n} pedido(s) · {qtd_total} unidades**']
+
+        # Total do dia
+        if total_item:
+            linhas.append('\n*Producao total do dia:*')
+            for nome, qtd in sorted(total_item.items(), key=lambda x: -x[1]):
+                linhas.append(f'  • {qtd}× {nome}')
+
+        # Por loja
+        for loja in sorted(por_loja.keys()):
+            itens_loja = por_loja[loja]
+            n_itens = len(itens_loja)
+            linhas.append(f'\n*{loja}* ({n_itens} {"itens" if n_itens != 1 else "item"})')
+            for nome, qtd in sorted(itens_loja.items()):
+                linhas.append(f'  • {qtd}× {nome}')
+
+        blocos.append('\n'.join(linhas))
+
+    return '\n\n---\n\n'.join(blocos)
 
 
 def _formatar_pedido(p):
