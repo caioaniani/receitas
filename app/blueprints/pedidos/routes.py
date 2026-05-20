@@ -200,6 +200,12 @@ def novo():
             current_app.logger.exception('Falha ao criar pedido')
             flash(f'Erro ao criar pedido: {exc}', 'danger')
             return redirect(url_for('pedidos.novo'))
+        # Alerta Slack se for emergencia (criado hoje pra entrega hoje)
+        try:
+            from app.services.slack_resumos import alertar_pedido_emergencia
+            alertar_pedido_emergencia(pedido)
+        except Exception:  # noqa: BLE001
+            current_app.logger.exception('Alerta emergencia falhou')
         flash('Pedido criado!', 'success')
         return redirect(url_for('pedidos.detalhe', id=pedido.id))
 
