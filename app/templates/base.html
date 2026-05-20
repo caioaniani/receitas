@@ -248,6 +248,10 @@
            class="sidebar-link {% if request.path == '/rentabilidade' %}active{% endif %}">
             Rentabilidade
         </a>
+        <a href="{{ url_for('relatorios.dashboards') }}"
+           class="sidebar-link {% if request.path == '/relatorios/dashboards' %}active{% endif %}">
+            Dashboards
+        </a>
         <a href="{{ url_for('relatorios.custos') }}"
            class="sidebar-link {% if request.path == '/relatorios/custos' %}active{% endif %}">
             Relatórios de Custos
