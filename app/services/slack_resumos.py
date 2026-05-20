@@ -312,3 +312,69 @@ def enviar_resumo_pedidos_dia():
             logger.warning('slack_resumos: falha ao postar: %s', res.get('erro'))
     except Exception:
         logger.exception('slack_resumos: erro gerando/enviando resumo')
+
+
+def alertar_pedido_emergencia(pedido):
+    """Posta alerta no Slack quando um pedido eh feito no MESMO dia da entrega.
+    Pedido emergencia = `criado_em.date() == data_entrega`. Notifica o canal
+    SLACK_CANAL_PEDIDOS para producao saber e correr.
+    """
+    from app.services import slack as slack_api
+
+    if not pedido or not pedido.data_entrega or not pedido.criado_em:
+        return
+    if pedido.data_entrega != pedido.criado_em.date():
+        return  # nao eh emergencia
+
+    canal = (current_app.config.get('SLACK_CANAL_PEDIDOS') or '').strip()
+    if not canal:
+        return
+    if not slack_api.disponivel():
+        return
+
+    base_url = (current_app.config.get('PUBLIC_BASE_URL')
+                or 'https://gestao.opaopadariaartesanal.com.br').rstrip('/')
+
+    loja_nome = pedido.loja.nome if pedido.loja else '?'
+    n_itens = len(pedido.itens) if pedido.itens else 0
+    qtd_total = sum(i.quantidade for i in (pedido.itens or []))
+    url_pedido = f'{base_url}/pedidos/{pedido.id}'
+
+    # Lista os primeiros itens pra producao ver o que precisa fazer
+    itens_lista = []
+    for it in (pedido.itens or [])[:8]:
+        nome = (it.receita.nome if it.receita
+                else it.produto.nome if it.produto
+                else it.materia_prima.nome if it.materia_prima
+                else '?')
+        itens_lista.append(f'• {it.quantidade}× {nome}')
+    if len(pedido.itens or []) > 8:
+        itens_lista.append(f'... e mais {len(pedido.itens) - 8} item(ns)')
+
+    blocks = [
+        {'type': 'header',
+         'text': {'type': 'plain_text',
+                  'text': f'🚨 PEDIDO EMERGÊNCIA — {loja_nome}'}},
+        {'type': 'section',
+         'text': {'type': 'mrkdwn',
+                  'text': (f'Pedido *#{pedido.id}* feito *hoje* para entregar *hoje*.\n'
+                            f'• Loja: *{loja_nome}*\n'
+                            f'• Itens: *{n_itens}* SKUs / *{qtd_total}* unidades total\n'
+                            f'• Criado: {pedido.criado_em.strftime("%H:%M")} BRT\n\n'
+                            'Não é o fluxo normal — produção precisa correr.')}},
+        {'type': 'section',
+         'text': {'type': 'mrkdwn',
+                  'text': '\n'.join(itens_lista) or '_sem itens_'}},
+        {'type': 'actions',
+         'elements': [
+             {'type': 'button', 'style': 'primary',
+              'text': {'type': 'plain_text', 'text': 'Ver pedido'},
+              'url': url_pedido},
+         ]},
+    ]
+    try:
+        slack_api.post_message(canal,
+                                text=f'🚨 Emergência: pedido #{pedido.id} hoje pra {loja_nome}',
+                                blocks=blocks)
+    except Exception:
+        logger.exception('alertar_pedido_emergencia falhou')
