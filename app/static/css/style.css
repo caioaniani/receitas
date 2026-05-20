@@ -1127,22 +1127,24 @@ body {
     margin-right: 0.4rem;
 }
 
-/* Header escuro padronizado para tabelas */
+/* Header padronizado para tabelas — Notion-style limpo */
 .thead-padaria {
-    background: #37474f;
+    background: var(--bg-table-head);
 }
 .thead-padaria > tr > th {
-    color: #fff;
+    color: var(--text-muted);
     font-size: 11px;
     text-transform: uppercase;
-    font-weight: 600;
-    border-color: #4a5a62;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+    border-bottom: 1px solid var(--border-color);
+    padding: 10px 12px;
 }
 [data-theme="dark"] .thead-padaria {
-    background: #0f3460;
+    background: var(--bg-table-head);
 }
 [data-theme="dark"] .thead-padaria > tr > th {
-    border-color: #2a3a5c;
+    border-color: var(--border-color);
 }
 
 /* Status badges padronizados (pedidos da loja) */
