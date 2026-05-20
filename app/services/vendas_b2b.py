@@ -94,7 +94,48 @@ def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
         db.session.add(vi)
         total += vi.valor_total
 
-        # Baixa do EstoqueProducao
+        # CESTA: se Produto tem componentes, baixa cada um do EstoqueProducao
+        # em vez do produto inteiro (industria so estoca componentes).
+        componentes_cesta = []
+        if tipo == 'produto':
+            from app.services.cestas import componentes_de_cesta
+            produto_obj = Produto.query.get(item_id)
+            componentes_cesta = componentes_de_cesta(produto_obj)
+
+        if componentes_cesta:
+            for col, comp_id, nome_comp, qtd_por_cesta in componentes_cesta:
+                qtd_baixar = int(round(qtd * qtd_por_cesta))
+                if qtd_baixar <= 0:
+                    continue
+                ep_c = _get_or_create_estoque(
+                    receita_id=comp_id if col == 'receita_id' else None,
+                    produto_id=None,  # so receita/mp na producao
+                )
+                saldo_c = ep_c.quantidade or 0
+                baixa_c = min(qtd_baixar, saldo_c)
+                ep_c.quantidade = saldo_c - baixa_c
+                if baixa_c > 0:
+                    db.session.add(MovEstoqueProducao(
+                        estoque_producao_id=ep_c.id,
+                        tipo='venda_b2b',
+                        quantidade=baixa_c,
+                        referencia=(f'Venda B2B #{venda.id} '
+                                    f'[{produto_obj.nome} → cesta] {nome_comp}'),
+                        usuario_id=getattr(user, 'id', None),
+                    ))
+                if qtd_baixar > baixa_c:
+                    falta_c = qtd_baixar - baixa_c
+                    db.session.add(MovEstoqueProducao(
+                        estoque_producao_id=ep_c.id,
+                        tipo='venda_b2b_sem_estoque',
+                        quantidade=falta_c,
+                        referencia=(f'Venda B2B #{venda.id} '
+                                    f'[{produto_obj.nome} → cesta] {nome_comp} — faltou {falta_c}'),
+                        usuario_id=getattr(user, 'id', None),
+                    ))
+            continue  # ja registrou; pula a baixa normal
+
+        # Baixa do EstoqueProducao (produto/receita normal)
         ep = _get_or_create_estoque(
             receita_id=item_id if tipo == 'receita' else None,
             produto_id=item_id if tipo == 'produto' else None,
