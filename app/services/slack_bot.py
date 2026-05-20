@@ -102,6 +102,73 @@ def _salvar_historico(sc, historico):
     db.session.commit()
 
 
+_CONFIRMACOES_TEXTO = {
+    # afirmativas
+    'sim', 's', 'simm', 'simmm', 'siim', 'siiim',
+    'ok', 'okay', 'okk', 'okey', 'oke', 'okay!',
+    'confirma', 'confirmar', 'confirmado', 'confirmadissimo', 'confirmadíssimo',
+    'pode', 'pode mandar', 'pode ir', 'pode sim', 'pode confirmar', 'pode registrar',
+    'manda', 'manda ver', 'vai', 'vai sim', 'fechou', 'fechado',
+    'isso', 'isso mesmo', 'exato', 'exatamente', 'perfeito',
+    'beleza', 'blz', 'show', 'top',
+    'yes', 'y', 'yep', 'yeah',
+    '👍', '✅', '👌',
+}
+_CANCELAMENTOS_TEXTO = {
+    'nao', 'não', 'n', 'naum', 'nope',
+    'cancela', 'cancelar', 'cancelado',
+    'esquece', 'esquecer', 'deixa', 'deixa pra la', 'deixa pra lá',
+    'para', 'pare', 'pera',
+    'no', 'no!',
+    '❌', '🚫',
+}
+
+
+def _tentar_confirmar_por_texto(text, slack_user_id, channel_id):
+    """Se o usuario tem acao pendente recente e o texto parece confirmacao
+    ('sim', 'confirmadissimo', 'ok', '👍', etc), executa a acao como se ele
+    tivesse clicado o botao. Retorna True se interceptou."""
+    from app.models import SlackAcaoPendente
+    from app.services import slack as slack_api
+    from app.services import slack_blocks
+
+    texto_norm = text.lower().strip().rstrip('!?.').strip()
+    # Curto + match exato em uma das listas (evita matchar "sim, pode mandar" como
+    # "manda" e perder palavras adicionais — mas tudo curto vale)
+    if len(texto_norm) > 30:
+        return False
+
+    confirma = texto_norm in _CONFIRMACOES_TEXTO
+    cancela = texto_norm in _CANCELAMENTOS_TEXTO
+    if not (confirma or cancela):
+        return False
+
+    # Busca acao pendente mais recente do user nesse canal, ultimos 10 min
+    limite = agora() - timedelta(minutes=10)
+    acao = (SlackAcaoPendente.query
+            .filter_by(slack_user_id=slack_user_id,
+                        slack_channel_id=channel_id,
+                        executado_em=None, cancelado_em=None)
+            .filter(SlackAcaoPendente.criado_em >= limite)
+            .order_by(SlackAcaoPendente.criado_em.desc())
+            .first())
+    if not acao:
+        return False
+
+    action_id = 'copilot_confirmar' if confirma else 'copilot_cancelar'
+    # Executa como se fosse o clique do botao
+    try:
+        processar_interacao_botao(
+            action_id, acao.token, slack_user_id, channel_id,
+            acao.slack_message_ts or '',
+        )
+    except Exception:
+        logger.exception('slack_bot: confirmar por texto falhou')
+        slack_api.post_message(channel_id,
+                                text=':warning: erro confirmando — tenta clicar no botao Confirmar.')
+    return True
+
+
 def _canal_permitido(channel_id, channel_type):
     """Retorna True se o bot deve responder neste canal.
 
