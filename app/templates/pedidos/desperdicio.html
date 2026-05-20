@@ -88,44 +88,6 @@
 <p class="text-muted">Selecione uma loja para registrar desperdicios.</p>
 {% endif %}
 
-<style>
-.dia-grupo { border: 1px solid var(--border-color); border-radius: var(--radius-md); margin-bottom: 8px; background: var(--bg-card); overflow: hidden; }
-.dia-grupo summary {
-    cursor: pointer;
-    padding: 12px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-weight: 600;
-    list-style: none;
-    user-select: none;
-    transition: background var(--transition);
-}
-.dia-grupo summary::-webkit-details-marker { display: none; }
-.dia-grupo summary::before {
-    content: '›';
-    font-size: 18px;
-    color: var(--text-muted);
-    transition: transform 0.15s ease;
-    display: inline-block;
-    width: 12px;
-}
-.dia-grupo[open] summary::before { transform: rotate(90deg); }
-.dia-grupo summary:hover { background: var(--bg-card-hover); }
-.dia-data { font-size: 14px; color: var(--text-main); min-width: 130px; }
-.dia-resumo { font-size: 12px; color: var(--text-muted); font-weight: 400; flex: 1; }
-.dia-total {
-    background: var(--cor-amarelo);
-    color: #92400e;
-    padding: 2px 10px;
-    border-radius: var(--radius-pill);
-    font-size: 12px;
-    font-weight: 600;
-}
-.dia-corpo { border-top: 1px solid var(--border-color); }
-.dia-corpo table { margin-bottom: 0; }
-</style>
-
 <div class="d-flex justify-content-between align-items-center mb-2 mt-3">
     <h5 class="mb-0"><i class="bi bi-clock-history"></i> Histórico — últimos 30 dias</h5>
     <small class="text-muted">{{ registros|length }} registro{{ '' if registros|length == 1 else 's' }}</small>
