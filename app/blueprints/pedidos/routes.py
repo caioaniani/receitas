@@ -83,6 +83,7 @@ def lista():
     query = PedidoLoja.query.options(
         joinedload(PedidoLoja.loja),
         selectinload(PedidoLoja.itens),
+        selectinload(PedidoLoja.qrcodes),
     ).order_by(PedidoLoja.criado_em.desc())
     if loja_id:
         # nao-admin: sempre filtra pela propria loja, ignora ?loja= do form
@@ -95,9 +96,18 @@ def lista():
             except (TypeError, ValueError):
                 pass
     pedidos = query.limit(100).all()
+    # Constroi mapa pedido_id → nome do motorista (do QR de saida usado)
+    motoristas = {}
+    for p in pedidos:
+        for qr in p.qrcodes:
+            if qr.tipo == 'saida' and qr.usado_por_descricao:
+                # formato: 'driver:Nome' → extrai o nome
+                motoristas[p.id] = qr.usado_por_descricao.replace('driver:', '', 1)
+                break
     lojas = _lojas_operacionais()
     return render_template('pedidos/lista.html', pedidos=pedidos, lojas=lojas,
-                           filtro_loja=request.args.get('loja', ''))
+                           filtro_loja=request.args.get('loja', ''),
+                           motoristas=motoristas)
 
 
 @pedidos_bp.route('/novo', methods=['GET', 'POST'])
