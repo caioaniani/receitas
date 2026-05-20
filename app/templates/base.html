@@ -40,6 +40,19 @@
     <!-- Overlay para fechar sidebar no mobile -->
     <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
+    <!-- Mobile menu toggle -->
+    {% if current_user.is_authenticated %}
+    <button type="button" class="mobile-menu-toggle" id="mobile-menu-toggle"
+            onclick="document.getElementById('sidebar').classList.toggle('aberta');
+                     document.getElementById('sidebar-overlay').classList.toggle('visible');"
+            aria-label="Abrir menu">
+        <i class="bi bi-list" style="font-size:20px;"></i>
+    </button>
+    <div class="sidebar-overlay" id="sidebar-overlay"
+         onclick="document.getElementById('sidebar').classList.remove('aberta');
+                  this.classList.remove('visible');"></div>
+    {% endif %}
+
     <!-- Sidebar -->
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">
