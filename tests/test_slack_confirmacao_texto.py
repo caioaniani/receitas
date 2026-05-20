@@ -79,6 +79,7 @@ def test_acao_velha_nao_intercepta(app, admin_user):
     from app.extensions import db
     from app.models import SlackAcaoPendente
     from app.services.slack_bot import _tentar_confirmar_por_texto
+    from app.utils import agora
 
     acao = SlackAcaoPendente(
         token='tok-velha',
@@ -87,7 +88,7 @@ def test_acao_velha_nao_intercepta(app, admin_user):
         tipo_acao='registrar_desperdicio',
         params_json='{}',
         usuario_id=admin_user.id,
-        criado_em=datetime.now() - timedelta(minutes=15),
+        criado_em=agora() - timedelta(minutes=15),
     )
     db.session.add(acao)
     db.session.commit()
