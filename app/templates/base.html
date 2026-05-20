@@ -63,6 +63,13 @@
         {% endif %}
 
         {% if current_user.is_authenticated %}
+        <button type="button" onclick="window.abrirCommandPalette && window.abrirCommandPalette()"
+                class="sidebar-link" style="border:0; background:transparent; text-align:left; width:100%;
+                       justify-content:space-between; color:var(--text-muted);">
+            <span><i class="bi bi-search"></i> Buscar…</span>
+            <kbd style="font-size:10px; padding:1px 5px; border:1px solid var(--border-color);
+                       border-radius:3px; background:var(--bg-card-hover); color:var(--text-soft);">⌘K</kbd>
+        </button>
         <a href="{{ url_for('main.index') }}"
            class="sidebar-link {% if request.path == '/' %}active{% endif %}">
             Início
