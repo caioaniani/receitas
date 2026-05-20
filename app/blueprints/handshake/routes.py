@@ -73,28 +73,38 @@ def qr_img(token):
 def handshake(token):
     qr = PedidoQRCode.query.filter_by(token=token).first()
     if not qr:
+        _audit(token, None, None, 'scan_falha', 'token nao encontrado')
         return render_template('handshake/erro.html',
                                 msg='Token nao encontrado. Pode ja ter sido usado ou estar errado.'), 404
     if not qr.valido:
         motivo = 'expirado' if qr.expira_em <= agora() else 'ja usado'
+        _audit(token, qr.pedido, qr.tipo, 'scan_falha', f'qr {motivo}')
         return render_template('handshake/erro.html',
                                 msg=f'Este QR Code esta {motivo}.'), 410
 
     pedido = qr.pedido
     # Validacao de estado: garante que pedido ainda esta no status certo
     if qr.tipo == 'saida' and pedido.status != 'separado':
+        _audit(token, pedido, qr.tipo, 'erro_status',
+               f'esperava separado, achou {pedido.status}')
         return render_template('handshake/erro.html',
-                                msg=f'Pedido #{pedido.id} nao esta mais aguardando saida (status: {pedido.status}).'), 409
+                                msg=f'Pedido #{pedido.id} nao esta mais aguardando saida (status: {pedido.status}). '
+                                    'Peca pro admin recolocar como separado, ou usar "Forcar entrega" na ficha do pedido.'), 409
     if qr.tipo == 'entrega' and pedido.status != 'em_transporte':
+        _audit(token, pedido, qr.tipo, 'erro_status',
+               f'esperava em_transporte, achou {pedido.status}')
         return render_template('handshake/erro.html',
-                                msg=f'Pedido #{pedido.id} nao esta em transporte (status: {pedido.status}).'), 409
+                                msg=f'Pedido #{pedido.id} nao esta em transporte (status: {pedido.status}). '
+                                    'Peca pro admin executar o QR de saida antes, ou usar "Forcar entrega" na ficha do pedido.'), 409
 
     if request.method == 'GET':
+        _audit(token, pedido, qr.tipo, 'scan', 'pagina aberta')
         return render_template('handshake/confirmar.html', qr=qr, pedido=pedido)
 
     # POST: valida PIN, executa
     pin_enviado = (request.form.get('pin') or '').strip()
     if not pin_enviado:
+        _audit(token, pedido, qr.tipo, 'pin_vazio')
         flash('Digite o PIN.', 'danger')
         return render_template('handshake/confirmar.html', qr=qr, pedido=pedido), 400
 
@@ -102,6 +112,7 @@ def handshake(token):
         return _handshake_saida(qr, pedido, pin_enviado)
     if qr.tipo == 'entrega':
         return _handshake_entrega(qr, pedido, pin_enviado)
+    _audit(token, pedido, qr.tipo, 'erro_tipo')
     return render_template('handshake/erro.html', msg='Tipo de QR invalido.'), 400
 
 
