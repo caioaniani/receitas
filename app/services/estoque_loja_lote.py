@@ -406,20 +406,9 @@ def aplicar_saida_lote(itens_resolvidos, loja_id, user, referencia=None):
             # Se Produto for cesta (tem ProdutoItens), desempacota e baixa
             # CADA componente individual em vez do produto inteiro. Loja so
             # tem os componentes em estoque — nao a cesta montada.
+            from app.services.cestas import componentes_de_cesta
             produto = Produto.query.get(mp.produto_id)
-            componentes_cesta = []
-            if produto and produto.itens:
-                for pi in produto.itens:
-                    if pi.tipo == 'receita':
-                        r = Receita.query.filter_by(nome=pi.item_nome).first()
-                        if r:
-                            componentes_cesta.append(
-                                ('receita_id', r.id, r.nome, float(pi.quantidade or 1.0)))
-                    elif pi.tipo == 'mp':
-                        m = MateriaPrima.query.filter_by(nome=pi.item_nome).first()
-                        if m:
-                            componentes_cesta.append(
-                                ('materia_prima_id', m.id, m.nome, float(pi.quantidade or 1.0)))
+            componentes_cesta = componentes_de_cesta(produto)
 
             if componentes_cesta:
                 # Cesta: baixa cada componente, registra mov por componente.
