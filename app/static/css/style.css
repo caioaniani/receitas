@@ -399,12 +399,14 @@ body {
 
 .tabela-ficha thead th {
     background: var(--bg-table-head);
-    color: #fff;
+    color: var(--text-muted);
     font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 8px;
+    letter-spacing: 0.05em;
+    padding: 10px 8px;
     text-align: center;
+    font-weight: 500;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .tabela-ficha tbody td {
@@ -413,7 +415,7 @@ body {
 }
 
 .ingrediente-row[data-base="1"] {
-    background-color: #fff8e1 !important;
+    background-color: var(--cor-amarelo) !important;
 }
 
 /* ── Tabela de MP ── */
@@ -423,10 +425,13 @@ body {
 
 .tabela-mp thead th {
     background: var(--bg-table-head-mp);
-    color: #fff;
+    color: var(--text-muted);
     font-size: 11px;
     text-transform: uppercase;
-    padding: 8px;
+    letter-spacing: 0.05em;
+    padding: 10px 8px;
+    font-weight: 500;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .tabela-mp tbody td {
