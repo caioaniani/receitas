@@ -1257,6 +1257,9 @@ def conferencia():
                             lojas=lojas, sel_loja=loja_id)
 
 
+@pedidos_bp.route('/estoque-loja')
+@login_required
+@gerente_required
 def estoque_loja():
     loja_id = _loja_do_usuario()
     if current_user.is_admin():
