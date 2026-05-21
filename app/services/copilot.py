@@ -1942,8 +1942,15 @@ def _read_consultar_vendas_itens(params, user):
     dias_ate_hoje = max(0, (hoje - fim).days) if fim < hoje else 0
     dias_extra = min(dias_ate_hoje, 7)
     try:
-        data = vendas_itens.agregar_itens(ini, fim, loja_seru=loja,
-                                          expandir_dias_frente=dias_extra)
+        if loja:
+            # Filtro por loja Seru — versao crua, so Seru
+            data = vendas_itens.agregar_itens(ini, fim, loja_seru=loja,
+                                              expandir_dias_frente=dias_extra)
+            fonte_label = 'PDV/Seru'
+        else:
+            # Sem filtro de loja → consolida Seru + VNDA
+            data = vendas_itens.agregar_itens_consolidado(ini, fim)
+            fonte_label = 'PDV/Seru + e-commerce/VNDA'
     except Exception as e:
         logger.exception('consultar_vendas_itens falhou')
         return {'erro': f'{type(e).__name__}: {str(e)[:300]}'}
@@ -1952,28 +1959,41 @@ def _read_consultar_vendas_itens(params, user):
         sufixo = f' na loja "{loja}"' if loja else ''
         return {'texto': f'Nenhuma venda encontrada de {ini.strftime("%d/%m")} a {fim.strftime("%d/%m")}{sufixo}.'}
 
-    cab = f'**Vendas {ini.strftime("%d/%m")} → {fim.strftime("%d/%m")}**'
+    cab = f'**Vendas {ini.strftime("%d/%m")} → {fim.strftime("%d/%m")}** ({fonte_label})'
     if loja:
         cab += f' · {loja}'
-    cab += f' · {data["total_pedidos"]} pedido(s) · R$ {data["faturamento_total"]:.2f}'
+    if 'total_pedidos' in data:
+        cab += f' · {data["total_pedidos"]} pedido(s)'
+    cab += f' · R$ {data["faturamento_total"]:.2f}'
+    if data.get('faturamento_fonte') == 'seru_apenas':
+        cab += ' _(faturamento so Seru)_'
 
     linhas = [cab, '']
     for i, p in enumerate(data['produtos'][:top], 1):
         match_str = ''
-        if p['match']:
+        if p.get('match'):
             kind = ' (fuzzy)' if p['match']['kind'] == 'fuzzy' else ''
             match_str = f' ↔ {p["match"]["nome"]}{kind}'
         else:
             match_str = ' ⚠ sem match no sistema'
+        fonte = p.get('fonte', 'seru')
+        fonte_tag = ''
+        if fonte == 'seru+vnda':
+            fonte_tag = f' [Seru {int(p.get("qtd_seru", 0))} + VNDA {int(p.get("qtd_vnda", 0))}]'
+        elif fonte == 'vnda':
+            fonte_tag = ' [só VNDA]'
         linhas.append(
-            f'{i}. **{p["nome"]}** — {int(p["qtd"])} un · R$ {p["faturamento"]:.2f} ({p["pct_faturamento"]:.0f}%){match_str}'
+            f'{i}. **{p["nome"]}** — {int(p["qtd"])} un{fonte_tag} · R$ {p.get("faturamento", 0):.2f}{match_str}'
         )
-    if data['sem_match_count']:
+    if data.get('sem_match_count'):
         linhas.append('')
         linhas.append(f'_{data["sem_match_count"]} produto(s) Seru sem match no cadastro._')
-    if not loja and data['lojas_no_intervalo']:
+    if data.get('vnda_aviso'):
         linhas.append('')
-        linhas.append('Lojas no intervalo: ' + ', '.join(data['lojas_no_intervalo']))
+        linhas.append(f'_Aviso VNDA: {data["vnda_aviso"]}_')
+    if not loja and data.get('lojas_no_intervalo'):
+        linhas.append('')
+        linhas.append('Lojas Seru no intervalo: ' + ', '.join(data['lojas_no_intervalo']))
     return {'texto': '\n'.join(linhas)}
 
 
