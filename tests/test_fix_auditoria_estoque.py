@@ -174,6 +174,80 @@ def test_b3_cancelar_b2b_parcial_nao_infla(app, admin_user, catalogo):
 
 
 # ──────────────────────────────────────────────────────────────────────
+# B4 — Parcela quita com 3 pagamentos de R$ 33,33
+# ──────────────────────────────────────────────────────────────────────
+
+def test_b4_tres_parcelas_de_33_33_quitam_100_reais(app, admin_user, catalogo):
+    """R$ 100 dividido em 3 parcelas vira 33.33 × 3 = 99.99 (perde 1 centavo
+    em float). Antes do fix, a comparacao `>= 100` falhava e a ultima
+    parcela ficava 'eternamente em aberto'. Tolerancia de meio centavo
+    corrige isso.
+    """
+    from app.extensions import db
+    from app.models import EstoqueProducao, VendaB2BParcela
+    from app.services import vendas_b2b as svc
+    from datetime import date
+
+    ep = EstoqueProducao(receita_id=catalogo['receita'].id, quantidade=10)
+    db.session.add(ep)
+    db.session.commit()
+
+    venda = svc.criar_venda(
+        cliente_nome='Hotel',
+        itens=[{'tipo': 'receita', 'id': catalogo['receita'].id,
+                'quantidade': 1, 'preco_unitario': 100.0}],
+        parcelas=[
+            {'vencimento': date(2026, 6, 1), 'valor': 33.33,
+             'forma_pagamento': 'pix'},
+            {'vencimento': date(2026, 7, 1), 'valor': 33.33,
+             'forma_pagamento': 'pix'},
+            {'vencimento': date(2026, 8, 1), 'valor': 33.34,
+             'forma_pagamento': 'pix'},
+        ],
+        user=admin_user,
+    )
+    assert len(venda.parcelas) == 3
+
+    # Cliente paga em 3 parcelas de 33.33 (mesmo a ultima sendo 33.34,
+    # vamos receber 33.33 e ver se a tolerancia de meio centavo aceita)
+    for p in venda.parcelas:
+        svc.receber_pagamento(p, 33.33, forma_pagamento='pix')
+
+    db.session.expire_all()
+    parcelas = VendaB2BParcela.query.filter_by(venda_id=venda.id).all()
+    pagas = [p for p in parcelas if p.pago_em is not None]
+    assert len(pagas) == 3, (
+        f'so {len(pagas)} de 3 parcelas quitaram — tolerancia nao pegou'
+    )
+
+
+def test_b4_pagamento_curto_nao_quita_sem_querer(app, admin_user, catalogo):
+    """Tolerancia eh de meio centavo. Pagamento R$ 0,02 abaixo NAO quita."""
+    from app.extensions import db
+    from app.models import EstoqueProducao
+    from app.services import vendas_b2b as svc
+    from datetime import date
+
+    ep = EstoqueProducao(receita_id=catalogo['receita'].id, quantidade=10)
+    db.session.add(ep)
+    db.session.commit()
+
+    venda = svc.criar_venda(
+        cliente_nome='Hotel',
+        itens=[{'tipo': 'receita', 'id': catalogo['receita'].id,
+                'quantidade': 1, 'preco_unitario': 100.0}],
+        parcelas=[{'vencimento': date(2026, 6, 1), 'valor': 100.0}],
+        user=admin_user,
+    )
+    parcela = venda.parcelas[0]
+    svc.receber_pagamento(parcela, 99.98)  # falta 2 centavos
+    db.session.refresh(parcela)
+    assert parcela.pago_em is None, (
+        'parcela quitou com falta de 2 centavos — tolerancia muito permissiva'
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────
 # B6 — Upload duplicado nao dobra VendaManualLoja
 # ──────────────────────────────────────────────────────────────────────
 
