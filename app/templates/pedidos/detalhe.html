@@ -141,9 +141,47 @@
         {% endif %}
 
         {% if pedido.status == 'separado' %}
+        <div class="w-100 mb-2">
+            <label class="form-label fw-semibold" style="font-size:13px;">
+                <i class="bi bi-truck"></i> Motorista responsavel
+                {% if pedido.driver %}
+                    <span class="badge bg-info text-dark">Atual: {{ pedido.driver.nome }}</span>
+                {% else %}
+                    <span class="badge bg-warning text-dark">Obrigatorio antes do QR</span>
+                {% endif %}
+            </label>
+            <form method="POST" action="{{ url_for('pedidos.atribuir_motorista', id=pedido.id) }}"
+                  class="d-flex gap-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <select name="driver_id" class="form-select form-select-sm" required>
+                    <option value="">— Selecionar motorista —</option>
+                    {% for d in drivers %}
+                    <option value="{{ d.id }}" {% if pedido.driver_id == d.id %}selected{% endif %}>
+                        {{ d.nome }}{% if not d.telefone %} (sem telefone){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-sm btn-primary">
+                    <i class="bi bi-send"></i> Atribuir + Avisar
+                </button>
+            </form>
+            {% if pedido.driver_id %}
+            <small class="text-muted">
+                Clicar de novo reatribui (envia outra mensagem). Atribuir libera o botao do QR abaixo.
+            </small>
+            {% endif %}
+        </div>
+
+        {% if pedido.driver_id %}
         <a href="{{ url_for('pedidos.qr_saida', id=pedido.id) }}" class="btn btn-sm" style="background:#6f42c1;color:#fff;">
             <i class="bi bi-qr-code"></i> Gerar QR Saída
         </a>
+        {% else %}
+        <button type="button" class="btn btn-sm" style="background:#aaa;color:#fff;" disabled
+                title="Atribua o motorista primeiro">
+            <i class="bi bi-qr-code"></i> Gerar QR Saída
+        </button>
+        {% endif %}
         {% endif %}
     {% endif %}
 
