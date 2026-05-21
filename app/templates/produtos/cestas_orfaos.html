@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Componentes de cesta sem vinculo{% endblock %}
+
+{% block content %}
+<h1 class="page-title mb-3">
+    <i class="bi bi-link-45deg"></i> Componentes de cesta sem vinculo
+</h1>
+
+<div class="alert alert-warning mb-3">
+    <strong>Por que essa tela existe:</strong> alguns componentes de cestas
+    estao registrados por nome (`item_nome`) mas nao tem vinculo direto com
+    uma Receita ou Materia-Prima do catalogo. Quando uma cesta dessas eh
+    vendida, esses componentes <strong>nao baixam estoque</strong>.<br>
+    Isso geralmente acontece quando uma receita eh renomeada ou excluida
+    sem atualizar a cesta. Vincule cada item ao alvo certo abaixo (ou
+    remova se nao deveria estar na cesta).
+</div>
+
+{% if not orfaos %}
+<div class="alert alert-success">
+    <i class="bi bi-check-circle"></i> Nenhum componente orfao. Todas as
+    cestas tem componentes vinculados corretamente.
+</div>
+{% else %}
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead>
+                <tr>
+                    <th>Cesta (Produto)</th>
+                    <th>Componente registrado</th>
+                    <th>Tipo</th>
+                    <th>Qtd</th>
+                    <th>Vincular a</th>
+                    <th>Ou remover</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pi in orfaos %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('produtos.detalhe', id=pi.produto_id) }}">
+                            #{{ pi.produto_id }}
+                        </a>
+                    </td>
+                    <td><code>{{ pi.item_nome }}</code></td>
+                    <td>
+                        <span class="badge bg-{{ 'info' if pi.tipo == 'receita' else 'secondary' }}">
+                            {{ pi.tipo }}
+                        </span>
+                    </td>
+                    <td>{{ pi.quantidade }}</td>
+                    <td>
+                        <form method="POST"
+                              action="{{ url_for('produtos.vincular_orfao', id=pi.id) }}"
+                              class="d-flex gap-1">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <select name="alvo" class="form-select form-select-sm" required>
+                                <option value="">— escolher —</option>
+                                <optgroup label="Receitas">
+                                    {% for r in receitas %}
+                                    <option value="receita:{{ r.id }}"
+                                            {% if r.nome == pi.item_nome %}selected{% endif %}>
+                                        {{ r.nome }}
+                                    </option>
+                                    {% endfor %}
+                                </optgroup>
+                                <optgroup label="Materias-primas">
+                                    {% for m in mps %}
+                                    <option value="mp:{{ m.id }}"
+                                            {% if m.nome == pi.item_nome %}selected{% endif %}>
+                                        {{ m.nome }}
+                                    </option>
+                                    {% endfor %}
+                                </optgroup>
+                            </select>
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                <i class="bi bi-check"></i>
+                            </button>
+                        </form>
+                    </td>
+                    <td>
+                        <form method="POST"
+                              action="{{ url_for('produtos.excluir_orfao', id=pi.id) }}"
+                              onsubmit="return confirm('Remover este componente da cesta?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-outline-danger btn-sm">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
