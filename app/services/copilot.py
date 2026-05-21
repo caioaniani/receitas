@@ -724,7 +724,8 @@ def _lojas_texto(user):
 
 
 def _build_system_prompt(user):
-    hoje = date.today().isoformat()
+    from app.utils import hoje as _hoje_brt
+    hoje = _hoje_brt().isoformat()
     return f"""Voce e' um assistente de gestao de uma padaria. Interpreta comandos em
 linguagem natural e estrutura acoes pra o usuario confirmar.
 
