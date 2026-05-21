@@ -39,8 +39,8 @@ def ficha(id):
 
     return render_template('receitas/ficha.html', receita=receita, mp_dict=mp_dict,
                            funcionarios=funcionarios,
-                           receita_custos_json=json.dumps(resultado['custos'], ensure_ascii=False),
-                           receita_pesos_json=json.dumps(resultado['pesos'], ensure_ascii=False))
+                           receita_custos=resultado['custos'],
+                           receita_pesos=resultado['pesos'])
 
 
 @receitas_bp.route('/padeiro')
