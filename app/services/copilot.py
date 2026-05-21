@@ -1403,6 +1403,7 @@ def _executar_read(tool_name, params, user):
 
 def _read_consultar_pedido(params, user):
     from app.models import PedidoLoja
+    from app.constants import STATUS_PEDIDO_FINALIZADOS
     q = PedidoLoja.query
     if params.get('pedido_id'):
         p = q.filter_by(id=params['pedido_id']).first()
@@ -1415,7 +1416,7 @@ def _read_consultar_pedido(params, user):
     if status_filtro:
         q = q.filter_by(status=status_filtro)
     elif not params.get('incluir_finalizados'):
-        q = q.filter(~PedidoLoja.status.in_(['entregue', 'cancelado']))
+        q = q.filter(~PedidoLoja.status.in_(STATUS_PEDIDO_FINALIZADOS))
     try:
         if params.get('data_de'):
             q = q.filter(PedidoLoja.data_entrega >= datetime.strptime(params['data_de'], '%Y-%m-%d').date())
