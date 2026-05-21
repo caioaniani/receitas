@@ -63,8 +63,13 @@ def _ctx(texto):
 
 
 def _preview_criar_pedido(p, token):
-    loja = (p.get('loja_resolvida') or {}).get('nome') or (
-        f'id={p["loja_id"]}' if p.get('loja_id') else '(escolher)')
+    loja = (p.get('loja_resolvida') or {}).get('nome')
+    if not loja and p.get('loja_id'):
+        from app.models import Loja
+        lobj = Loja.query.get(p['loja_id'])
+        loja = lobj.nome if lobj else f'id={p["loja_id"]}'
+    if not loja:
+        loja = '(escolher)'
     def _fmt_item(it):
         nome = (it.get('resolvido') or {}).get('nome') or it.get('nome_original') or '?'
         base = f"- {it.get('quantidade')}x {nome}"
