@@ -123,10 +123,10 @@ class VendaB2BParcela(db.Model):
 
     @property
     def status(self):
-        # Tolerancia de meio centavo: erros de arredondamento em divisao
+        # Tolerancia de 1 centavo: erros de arredondamento em divisao
         # (R$ 100 / 3 = R$ 33.33 × 3 = 99.99) nao deixam ultima parcela
-        # "eternamente atrasada".
-        if self.valor_pago and self.valor_pago >= (self.valor or 0) - 0.005:
+        # "eternamente atrasada". Falta de 2+ centavos ainda fica em aberto.
+        if self.valor_pago and self.valor_pago >= (self.valor or 0) - 0.01:
             return 'pago'
         if self.valor_pago and self.valor_pago > 0:
             return 'parcial'
