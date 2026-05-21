@@ -202,10 +202,15 @@ class ProdutoItem(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=False)
-    tipo = db.Column(db.String(10), nullable=False)  # 'receita' ou 'mp'
+    tipo = db.Column(db.String(10), nullable=False)  # 'receita' | 'produto' | 'mp'
     # FK do alvo (mutuamente exclusivas). NULL = orfao — precisa
-    # vinculacao manual em /pedidos/produto-itens-orfaos.
+    # vinculacao manual em /produtos/cestas/orfaos.
     receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True, index=True)
+    # produto_componente_id eh o Produto-componente da cesta (NAO confundir com
+    # produto_id acima, que eh a cesta pai). Ex: cesta "Family Box" tem como
+    # componente o Produto "Iogurte 200ml" (comprado pronto, sem receita).
+    produto_componente_id = db.Column(db.Integer, db.ForeignKey('produto.id'),
+                                       nullable=True, index=True)
     materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'),
                                   nullable=True, index=True)
     # Mantido por compat e como nome humano-legivel quando FK estiver NULL.
@@ -213,6 +218,7 @@ class ProdutoItem(db.Model):
     quantidade = db.Column(db.Float, nullable=False, default=1)
 
     receita = db.relationship('Receita', foreign_keys=[receita_id])
+    produto_componente = db.relationship('Produto', foreign_keys=[produto_componente_id])
     materia_prima = db.relationship('MateriaPrima', foreign_keys=[materia_prima_id])
 
     @property
@@ -220,6 +226,8 @@ class ProdutoItem(db.Model):
         """Nome via FK (autoritativo). Fallback pra item_nome se orfao."""
         if self.tipo == 'receita' and self.receita:
             return self.receita.nome
+        if self.tipo == 'produto' and self.produto_componente:
+            return self.produto_componente.nome
         if self.tipo == 'mp' and self.materia_prima:
             return self.materia_prima.nome
         return self.item_nome  # orfao
@@ -229,6 +237,8 @@ class ProdutoItem(db.Model):
         """True se nao tem FK setada — precisa vinculacao manual."""
         if self.tipo == 'receita':
             return self.receita_id is None
+        if self.tipo == 'produto':
+            return self.produto_componente_id is None
         if self.tipo == 'mp':
             return self.materia_prima_id is None
         return True
