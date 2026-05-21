@@ -73,7 +73,7 @@ def test_usuarios_admin_ok(cliente, admin_user):
 def test_novo_usuario_funcionario_403(cliente, funcionario):
     """POST de criar usuario bloqueado pra funcionario."""
     _login(cliente, 'joao', 'joao123')
-    r = cliente.post('/usuarios/novo',
+    r = cliente.post('/auth/usuarios/novo',
                       data={'nome': 'X', 'login': 'x', 'senha': 'x',
                             'papel': 'funcionario'},
                       follow_redirects=False)
