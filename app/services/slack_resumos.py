@@ -7,6 +7,7 @@ from collections import defaultdict
 
 from flask import current_app
 
+from app.constants import STATUS_PEDIDO_FINALIZADOS
 from app.utils import hoje as hoje_brt
 
 logger = logging.getLogger(__name__)
