@@ -85,7 +85,7 @@ def test_novo_usuario_funcionario_403(cliente, funcionario):
 
 def test_painel_funcionario_403(cliente, funcionario):
     _login(cliente, 'joao', 'joao123')
-    r = cliente.get('/painel', follow_redirects=False)
+    r = cliente.get('/auth/painel', follow_redirects=False)
     assert r.status_code == 403
 
 
