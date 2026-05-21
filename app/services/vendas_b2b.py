@@ -257,9 +257,10 @@ def receber_pagamento(parcela, valor, forma_pagamento=None, observacao=None):
     if observacao:
         parcela.observacao = observacao
 
-    # Tolerancia: meio centavo abaixo do valor ja conta como quitado.
-    # Cobre erros de arredondamento em divisao (R$100 / 3 = R$33.33).
-    alvo = Decimal(str(parcela.valor or 0)) - Decimal('0.005')
+    # Tolerancia: 1 centavo abaixo do valor ja conta como quitado.
+    # Cobre erros de arredondamento em divisao (R$100 / 3 = R$33.33 × 3 =
+    # R$99.99, falta 1 centavo). Falta de 2+ centavos ainda nao quita.
+    alvo = Decimal(str(parcela.valor or 0)) - Decimal('0.01')
     if pago_novo >= alvo:
         parcela.pago_em = agora()
     db.session.commit()
