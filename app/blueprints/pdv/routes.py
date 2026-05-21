@@ -19,7 +19,7 @@ from app.services import seru
 @login_required
 @admin_required
 def index():
-    return render_template('pdv/index.html', hoje=date.today().isoformat())
+    return render_template('pdv/index.html', hoje=hoje_brt().isoformat())
 
 
 @pdv_bp.route('/reprocessar', methods=['POST'])
@@ -125,7 +125,7 @@ def itens_vendidos():
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     cron_status = seru_cron.status()
     return render_template('pdv/itens_vendidos.html',
-                           hoje=date.today().isoformat(),
+                           hoje=hoje_brt().isoformat(),
                            receitas=receitas, produtos=produtos,
                            cron_status=cron_status)
 
@@ -180,7 +180,7 @@ def _api_vendas_impl():
 
     ?inicio=YYYY-MM-DD&fim=YYYY-MM-DD
     """
-    inicio_str = request.args.get('inicio') or date.today().isoformat()
+    inicio_str = request.args.get('inicio') or hoje_brt().isoformat()
     fim_str = request.args.get('fim') or inicio_str
     try:
         inicio = datetime.strptime(inicio_str, '%Y-%m-%d').date()
@@ -196,7 +196,7 @@ def _api_vendas_impl():
     # Ainda filtramos por createdAt local. Cada dia adicional eh +1 chamada
     # Seru, entao limitamos pra evitar timeout do gunicorn (60s).
     MAX_DIAS_EXTRA = 7
-    hoje = date.today()
+    hoje = hoje_brt()
     dias_ate_hoje = max(0, (hoje - fim).days) if fim < hoje else 0
     dias_extra = min(dias_ate_hoje, MAX_DIAS_EXTRA)
     consulta_limitada = dias_ate_hoje > MAX_DIAS_EXTRA
@@ -435,7 +435,7 @@ def pdv_sync():
         dias = max(1, min(int(request.form.get('dias') or 1), 30))
     except ValueError:
         dias = 1
-    fim = date.today()
+    fim = hoje_brt()
     inicio = fim - timedelta(days=dias - 1)
     try:
         stats = seru_sync.processar_pedidos(inicio, fim, user=current_user)
