@@ -72,7 +72,14 @@
                         </a>
                     </li>
                     {% endif %}
-                    {% if not alertas_estoque and not producoes_pendentes and not atribuicoes_pendentes %}
+                    {% if cestas_orfaos and cestas_orfaos > 0 %}
+                    <li class="mb-2">
+                        <a href="{{ url_for('produtos.cestas_orfaos') }}" class="text-danger text-decoration-none">
+                            <i class="bi bi-link-45deg"></i> <strong>{{ cestas_orfaos }}</strong> componente{{ 's' if cestas_orfaos > 1 }} de cesta sem vinculo (NAO baixa estoque na venda) — resolver
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if not alertas_estoque and not producoes_pendentes and not atribuicoes_pendentes and not cestas_orfaos %}
                     <li class="text-muted"><i class="bi bi-check-circle text-success"></i> Nenhum alerta no momento</li>
                     {% endif %}
                 </ul>
