@@ -43,3 +43,23 @@ def para_brt(dt):
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(BRT).replace(tzinfo=None)
+
+
+def resolver_loja_por_nome(nome, *, somente_ativas=False):
+    """Fuzzy match de Loja por nome: case-insensitive exata, depois ilike.
+
+    Retorna Loja ou None. Centraliza o padrao que estava duplicado em
+    varios services (copilot, etc).
+    """
+    from sqlalchemy import func
+    from app.models import Loja
+    nome = (nome or '').strip()
+    if not nome:
+        return None
+    q_base = Loja.query
+    if somente_ativas:
+        q_base = q_base.filter(Loja.ativa.is_(True))
+    loja = q_base.filter(func.lower(Loja.nome) == nome.lower()).first()
+    if loja:
+        return loja
+    return q_base.filter(Loja.nome.ilike(f'%{nome}%')).first()
