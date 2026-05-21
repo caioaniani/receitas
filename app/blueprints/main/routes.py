@@ -48,7 +48,7 @@ def dashboard():
     producoes_pendentes = PlanejamentoProducao.query.filter_by(status='rascunho').count()
     atribuicoes_pendentes = Atribuicao.query.filter_by(status='pendente').count()
 
-    hoje = date.today()
+    hoje = hoje_brt()
     aniversariantes = [f for f in funcionarios_ativos
                        if f.data_nascimento and f.data_nascimento.month == hoje.month]
 
@@ -522,11 +522,11 @@ def caixa():
     from datetime import date, timedelta
     from sqlalchemy import func as sqlfunc
 
-    data_str = request.args.get('data', date.today().isoformat())
+    data_str = request.args.get('data', hoje_brt().isoformat())
     try:
         data_alvo = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
-        data_alvo = date.today()
+        data_alvo = hoje_brt()
 
     ontem = data_alvo - timedelta(days=1)
     semana_atras = data_alvo - timedelta(days=7)
