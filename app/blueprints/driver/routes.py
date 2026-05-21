@@ -393,9 +393,15 @@ def pedidos_loja(token):
     if not _autenticado(driver):
         return render_template('handshake/erro.html',
                                 msg='Faça login no painel do motorista (volte e digite o PIN).'), 401
+    # So pedidos coletados POR ESTE motorista (handshake de saida amarra
+    # PedidoLoja.driver_id). Compat retroativa: pedidos antigos sem
+    # driver_id continuam aparecendo pra todos os motoristas ate alguem
+    # processar — uma vez processados pelo novo fluxo, ficam amarrados.
     pedidos = (PedidoLoja.query
                .filter_by(status='em_transporte')
+               .filter((PedidoLoja.driver_id == driver.id) |
+                        (PedidoLoja.driver_id.is_(None)))
                .order_by(PedidoLoja.data_entrega.asc())
                .all())
     return render_template('driver/pedidos_loja.html',
-                            driver=driver, pedidos=pedidos)
+                            driver=driver, pedidos=pedidos, token=token)
