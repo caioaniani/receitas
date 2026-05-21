@@ -483,6 +483,9 @@ def qr_saida(id):
     if pedido.status != 'separado':
         flash(f'Pedido precisa estar separado (atual: {pedido.status}).', 'warning')
         return redirect(url_for('pedidos.detalhe', id=id))
+    if not pedido.driver_id:
+        flash('Atribua o motorista responsavel antes de gerar o QR.', 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
     qr = (PedidoQRCode.query
           .filter_by(pedido_id=pedido.id, tipo='saida', usado_em=None)
           .filter(PedidoQRCode.expira_em > agora())
