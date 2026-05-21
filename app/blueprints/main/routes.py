@@ -65,6 +65,12 @@ def dashboard():
     producoes_pendentes = PlanejamentoProducao.query.filter_by(status='rascunho').count()
     atribuicoes_pendentes = Atribuicao.query.filter_by(status='pendente').count()
 
+    # ProdutoItem orfaos: cestas com componente sem FK vinculada.
+    # Esses componentes NAO baixam estoque na venda — owner precisa
+    # vincular manualmente em /cestas/orfaos.
+    from app.services.cestas import contar_produto_itens_orfaos
+    cestas_orfaos = contar_produto_itens_orfaos() if current_user.is_owner else 0
+
     hoje = hoje_brt()
     aniversariantes = [f for f in funcionarios_ativos
                        if f.data_nascimento and f.data_nascimento.month == hoje.month]
@@ -77,6 +83,7 @@ def dashboard():
                            alertas_estoque=alertas_estoque,
                            producoes_pendentes=producoes_pendentes,
                            atribuicoes_pendentes=atribuicoes_pendentes,
+                           cestas_orfaos=cestas_orfaos,
                            aniversariantes=aniversariantes,
                            total_funcionarios=len(funcionarios_ativos))
 
