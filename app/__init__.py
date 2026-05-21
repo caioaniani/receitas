@@ -417,33 +417,43 @@ def _criar_admin():
 
 
 def _alembic_stamp_se_necessario(app):
-    """Auto-stamp da baseline do Alembic na primeira execucao apos a adocao.
+    """Sincroniza Alembic com o banco no startup.
 
-    Detecta: tem tabela `usuario` (sinal que banco esta populado) mas nao
-    tem `alembic_version` (sinal que Alembic nunca foi inicializado nesse
-    banco). Nesse caso, faz `stamp head` programaticamente — marca o
-    banco como ja estando na baseline, sem executar nenhum DDL.
+    Duas fases:
+    1) Stamp baseline (uma vez): se ha tabela `usuario` mas nao
+       `alembic_version`, eh o primeiro startup apos adocao do Alembic
+       em schema legado. Marca como ja estando na baseline.
+    2) Upgrade (sempre): aplica migrations pendentes. Se Alembic ja esta
+       na head, eh no-op rapido. Se houve migration nova (ex: B9 SeruDebitoMov),
+       cria a tabela aqui em prod.
 
-    Idempotente: se `alembic_version` ja existir (ja foi stampado, ou ja
-    rodou alguma migration), nao faz nada. Pode rodar em todo startup.
+    Em testes (SQLite in-memory), `db.create_all()` ja deixou tudo no
+    estado mais novo — `upgrade` detecta que esta na head e nao faz nada.
 
-    Em ambiente de testes (SQLite in-memory recem-criado), pula —
-    `db.create_all()` ja deixou o banco no estado mais novo dos modelos,
-    nao ha schema legado pra stampar.
+    Idempotente. Race-safe em multi-worker porque Alembic usa UPDATE
+    atomico do `alembic_version` dentro de transacao.
     """
     from sqlalchemy import inspect
     try:
         insp = inspect(db.engine)
         tabelas = set(insp.get_table_names())
         if 'usuario' not in tabelas:
-            return  # banco novo/vazio — nao precisa stamp
-        if 'alembic_version' in tabelas:
-            return  # ja stampado, nada a fazer
-        # Caso de transicao: schema legado existe, Alembic nunca foi inicializado.
-        from flask_migrate import stamp
-        stamp(directory='migrations', revision='head')
-        logger.warning('Alembic: baseline marcada (stamp head) — schema legado adotado.')
+            return  # banco novo/vazio
+        # Fase 1: stamp baseline se Alembic nunca foi inicializado
+        if 'alembic_version' not in tabelas:
+            from flask_migrate import stamp
+            stamp(directory='migrations', revision='head')
+            logger.warning(
+                'Alembic: baseline marcada (stamp head) — schema legado adotado.'
+            )
+            return  # primeira execucao: nao roda upgrade alem do stamp
+        # Fase 2: aplica migrations pendentes
+        from flask_migrate import upgrade as _upgrade
+        _upgrade(directory='migrations')
     except Exception:  # noqa: BLE001
-        logger.exception('Alembic stamp falhou (nao critico — pode rodar manual)')
+        logger.exception(
+            'Alembic stamp/upgrade falhou. Verificar manualmente com '
+            '`railway run flask db current` e `flask db upgrade`.'
+        )
 
 
