@@ -1921,9 +1921,9 @@ def _read_consultar_caixa(params, user):
 
 def _read_consultar_vendas_itens(params, user):
     """Agrega itens vendidos da Seru no intervalo (e loja opcional)."""
-    from datetime import date as _date
+    from app.utils import hoje as _hoje_brt
     from app.services import vendas_itens
-    hoje = _date.today()
+    hoje = _hoje_brt()
     try:
         ini = datetime.strptime(params['inicio'], '%Y-%m-%d').date() if params.get('inicio') else hoje
     except (ValueError, TypeError):
