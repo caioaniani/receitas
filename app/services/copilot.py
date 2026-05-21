@@ -1078,9 +1078,8 @@ def _enriquecer_criar_venda_b2b(tool_input):
 
 def _enriquecer_registrar_desperdicio(tool_input, user):
     """Resolve loja_nome + item_nome no banco antes do preview."""
-    from sqlalchemy import func
+    from app.utils import resolver_loja_por_nome
     out = dict(tool_input)
-    # Loja: tenta id, depois nome
     loja = None
     try:
         loja_id = int(out.get('loja_id') or 0) or None
@@ -1089,15 +1088,10 @@ def _enriquecer_registrar_desperdicio(tool_input, user):
     if loja_id:
         loja = Loja.query.get(loja_id)
     if not loja:
-        nome = (out.get('loja_nome') or '').strip()
-        if nome:
-            loja = Loja.query.filter(func.lower(Loja.nome) == nome.lower()).first()
-            if not loja:
-                loja = Loja.query.filter(Loja.nome.ilike(f'%{nome}%')).first()
+        loja = resolver_loja_por_nome(out.get('loja_nome'))
     if loja:
         out['loja_id'] = loja.id
         out['loja_nome'] = loja.nome
-    # Item: ja resolvido em executor via _resolver_item_qualquer
     return out
 
 
