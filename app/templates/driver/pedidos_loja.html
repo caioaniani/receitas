@@ -48,7 +48,7 @@ body { background:#f6f7fb; font-family:-apple-system, BlinkMacSystemFont, 'Segoe
             {% endif %}
         </ul>
         <a href="{{ url_for('driver.qr_entrega', token=token, pedido_id=p.id) }}" class="btn btn-success btn-acao">
-            <i class="bi bi-qr-code"></i> Gerar QR Entrega
+            <i class="bi bi-qr-code"></i> Entregar agora
         </a>
     </div>
     {% endfor %}
