@@ -34,7 +34,7 @@ def novo():
         try:
             data_plan = datetime.strptime(data_str, '%Y-%m-%d').date()
         except ValueError:
-            data_plan = date.today()
+            data_plan = hoje_brt()
 
         plano = PlanejamentoProducao(
             data=data_plan,
@@ -60,7 +60,7 @@ def novo():
         return redirect(url_for('producao.detalhe', id=plano.id))
 
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
-    return render_template('producao/novo.html', receitas=receitas, hoje=date.today())
+    return render_template('producao/novo.html', receitas=receitas, hoje=hoje_brt())
 
 
 @producao_bp.route('/<int:id>')
