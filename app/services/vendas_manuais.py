@@ -302,7 +302,8 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
         from app.services.vnda_sync import loja_vnda as _loja_vnda_cfg
         loja_vnda_obj = _loja_vnda_cfg()
         if loja_vnda_obj and loja_vnda_obj.id == loja_id:
-            vnda_dict, aviso_vnda = _agregar_vendas_vnda_api(data_inicio, data_fim)
+            vnda_dict, aviso_vnda = _agregar_vendas_vnda_api(
+                data_inicio, data_fim, _loja_id=loja_id)
             for chave, qtd in vnda_dict.items():
                 vendas_por_item[chave] += qtd
                 fontes_por_item[chave].add('vnda')
