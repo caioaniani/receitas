@@ -1167,7 +1167,7 @@ def _enriquecer_entrada_lote_loja(tool_input):
 def _enriquecer_registrar_desperdicio_lote(tool_input, user):
     """Resolve loja + cada item + estoque atual pra preview de lote."""
     from app.models import EstoqueLoja
-    from sqlalchemy import func
+    from app.utils import resolver_loja_por_nome
 
     out = dict(tool_input)
     loja = None
@@ -1178,11 +1178,7 @@ def _enriquecer_registrar_desperdicio_lote(tool_input, user):
     if loja_id:
         loja = Loja.query.get(loja_id)
     if not loja:
-        nome = (out.get('loja_nome') or '').strip()
-        if nome:
-            loja = Loja.query.filter(func.lower(Loja.nome) == nome.lower()).first()
-            if not loja:
-                loja = Loja.query.filter(Loja.nome.ilike(f'%{nome}%')).first()
+        loja = resolver_loja_por_nome(out.get('loja_nome'))
     loja_id = loja.id if loja else None
     loja_nome = loja.nome if loja else None
 
