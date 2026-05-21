@@ -6,7 +6,7 @@ from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
 from app.blueprints.main import main_bp
-from app.decorators import admin_required
+from app.decorators import admin_required, owner_required
 from app.extensions import db
 from app.models import (
     AlertaEstoque,
@@ -628,3 +628,143 @@ def caixa():
                            semana_data=semana_atras,
                            delta_locais=delta_pct(hoje_m['valor_locais'], ontem_m['valor_locais']),
                            delta_entregas=delta_pct(hoje_m['n_entregas'], ontem_m['n_entregas']))
+
+
+@main_bp.route('/admin/debug-schema')
+@owner_required
+def debug_schema():
+    """Diagnostico de schema/migrations Alembic. Owner-only."""
+
+    from sqlalchemy import inspect, text
+
+    info = {
+        'alembic_current': None,
+        'alembic_heads': [],
+        'pendentes': [],
+        'erro_alembic': None,
+        'colunas': [],
+        'erro_colunas': None,
+        'last_upgrade_log': request.args.get('log'),
+        'last_upgrade_ok': request.args.get('ok'),
+    }
+
+    # 1. Alembic current vs heads
+    try:
+        from alembic.config import Config
+        from alembic.runtime.migration import MigrationContext
+        from alembic.script import ScriptDirectory
+
+        cfg = Config('migrations/alembic.ini')
+        cfg.set_main_option('script_location', 'migrations')
+        script = ScriptDirectory.from_config(cfg)
+        info['alembic_heads'] = list(script.get_heads())
+
+        with db.engine.connect() as conn:
+            ctx = MigrationContext.configure(conn)
+            current = ctx.get_current_revision()
+            info['alembic_current'] = current
+
+        if info['alembic_current'] and info['alembic_heads']:
+            heads = set(info['alembic_heads'])
+            visitados = set()
+            for rev in script.walk_revisions(base='base', head='heads'):
+                visitados.add(rev.revision)
+                if rev.revision == info['alembic_current']:
+                    break
+            pendentes_revs = []
+            for rev in script.walk_revisions(base='base', head='heads'):
+                if rev.revision in visitados:
+                    continue
+                pendentes_revs.append({
+                    'revision': rev.revision,
+                    'down': rev.down_revision,
+                    'doc': (rev.doc or '')[:120],
+                })
+            info['pendentes'] = list(reversed(pendentes_revs))
+    except Exception as e:  # noqa: BLE001
+        info['erro_alembic'] = f'{type(e).__name__}: {e}'
+
+    # 2. Colunas criticas (resultado das migrations B4/B5)
+    try:
+        insp = inspect(db.engine)
+
+        def col_info(tabela, coluna):
+            try:
+                cols = {c['name']: c for c in insp.get_columns(tabela)}
+                if coluna not in cols:
+                    return {'tabela': tabela, 'coluna': coluna, 'existe': False,
+                            'tipo': None, 'nullable': None}
+                c = cols[coluna]
+                return {'tabela': tabela, 'coluna': coluna, 'existe': True,
+                        'tipo': str(c.get('type')), 'nullable': c.get('nullable')}
+            except Exception as e:  # noqa: BLE001
+                return {'tabela': tabela, 'coluna': coluna, 'existe': None,
+                        'tipo': f'ERRO: {type(e).__name__}: {e}',
+                        'nullable': None}
+
+        info['colunas'] = [
+            col_info('produto_item', 'receita_id'),
+            col_info('produto_item', 'materia_prima_id'),
+            col_info('produto_item', 'item_nome'),
+            col_info('venda_b2b', 'valor_total'),
+            col_info('venda_b2b_item', 'preco_unitario'),
+            col_info('venda_b2b_parcela', 'valor'),
+            col_info('venda_b2b_parcela', 'valor_pago'),
+            col_info('venda_manual_loja', 'valor_unitario'),
+            col_info('seru_debito_mov', 'fracao'),
+        ]
+    except Exception as e:  # noqa: BLE001
+        info['erro_colunas'] = f'{type(e).__name__}: {e}'
+
+    # 3. Contagem rapida de orfaos (so se B5 ja aplicou)
+    info['orfaos'] = None
+    try:
+        cols_pi = {c['name'] for c in inspect(db.engine).get_columns('produto_item')}
+        if 'receita_id' in cols_pi:
+            with db.engine.connect() as conn:
+                o_r = conn.execute(text(
+                    "SELECT COUNT(*) FROM produto_item "
+                    "WHERE tipo = 'receita' AND receita_id IS NULL"
+                )).scalar() or 0
+                o_m = conn.execute(text(
+                    "SELECT COUNT(*) FROM produto_item "
+                    "WHERE tipo = 'mp' AND materia_prima_id IS NULL"
+                )).scalar() or 0
+                info['orfaos'] = {'receita': o_r, 'mp': o_m}
+    except Exception as e:  # noqa: BLE001
+        info['orfaos'] = {'erro': f'{type(e).__name__}: {e}'}
+
+    return render_template('main/debug_schema.html', info=info)
+
+
+@main_bp.route('/admin/debug-schema/upgrade', methods=['POST'])
+@owner_required
+def debug_schema_upgrade():
+    """Aplica migrations pendentes manualmente. Owner-only."""
+    import io
+    import logging
+    import traceback as _tb
+
+    log_buf = io.StringIO()
+    handler = logging.StreamHandler(log_buf)
+    handler.setLevel(logging.INFO)
+    root = logging.getLogger()
+    root.addHandler(handler)
+    original_level = root.level
+    root.setLevel(logging.INFO)
+
+    ok = '1'
+    try:
+        from flask_migrate import upgrade as _upgrade
+        _upgrade(directory='migrations')
+        log_buf.write('\nOK: upgrade concluido sem exception.')
+    except Exception:  # noqa: BLE001
+        ok = '0'
+        log_buf.write('\n--- TRACEBACK ---\n')
+        log_buf.write(_tb.format_exc())
+    finally:
+        root.removeHandler(handler)
+        root.setLevel(original_level)
+
+    return redirect(url_for('main.debug_schema',
+                            log=log_buf.getvalue()[-3000:], ok=ok))
