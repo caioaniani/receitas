@@ -630,6 +630,43 @@ def caixa():
                            delta_entregas=delta_pct(hoje_m['n_entregas'], ontem_m['n_entregas']))
 
 
+@main_bp.route('/admin/debug-papeis')
+@owner_required
+def debug_papeis():
+    """Lista usuarios + papel + tools que o copilot vai oferecer pra cada um.
+
+    Usado pra diagnostico quando alguem reclama 'copilot disse que nao
+    posso fazer X'. Owner-only.
+    """
+    from app.models import SlackVinculo, Usuario
+    from app.services.copilot import papel_efetivo, tools_permitidas
+
+    users = Usuario.query.order_by(Usuario.papel, Usuario.nome).all()
+    vinculos = {v.usuario_id: v for v in SlackVinculo.query
+                .filter_by(ativo=True).all()}
+
+    linhas = []
+    for u in users:
+        papel = papel_efetivo(u)
+        tools = sorted([t['name'] for t in tools_permitidas(u)])
+        vinc = vinculos.get(u.id)
+        linhas.append({
+            'id': u.id,
+            'nome': u.nome,
+            'login': u.login,
+            'papel_db': u.papel,
+            'is_owner': bool(getattr(u, 'is_owner', False)),
+            'papel_efetivo': papel,
+            'loja_id': u.loja_id,
+            'tools_count': len(tools),
+            'tem_criar_pedido': 'criar_pedido' in tools,
+            'tem_receber_mp': 'receber_mp' in tools,
+            'tem_registrar_desperdicio': 'registrar_desperdicio' in tools,
+            'slack_user_id': vinc.slack_user_id if vinc else None,
+        })
+    return render_template('main/debug_papeis.html', linhas=linhas)
+
+
 @main_bp.route('/admin/debug-schema')
 @owner_required
 def debug_schema():
