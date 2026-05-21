@@ -29,8 +29,18 @@ if [ "$DELETADOS" -gt 0 ]; then
     echo "[$(date)] $DELETADOS backup(s) antigo(s) removido(s)"
 fi
 
-# Opcional: upload para Backblaze B2 / S3 / Dropbox se configurado.
-# Descomente e ajuste se quiser backup offsite:
-# rclone copy "$ARQUIVO" backblaze:padaria-backups/
+# Upload offsite pro Dropbox (best-effort — nao falha o backup local se cair).
+# Requer DROPBOX_APP_KEY + DROPBOX_APP_SECRET + DROPBOX_REFRESH_TOKEN no env.
+# Pasta destino: $DROPBOX_BACKUP_PASTA (default /backups-postgres).
+if [ -n "${DROPBOX_APP_KEY:-}${DROPBOX_ACCESS_TOKEN:-}" ]; then
+    echo "[$(date)] Subindo pro Dropbox..."
+    if python3 deploy/upload_dropbox.py "$ARQUIVO"; then
+        echo "[$(date)] Upload Dropbox OK"
+    else
+        echo "[$(date)] ⚠ Upload Dropbox falhou (backup local preservado)"
+    fi
+else
+    echo "[$(date)] Dropbox nao configurado (pular upload offsite)"
+fi
 
 echo "[$(date)] OK"
