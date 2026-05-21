@@ -247,7 +247,9 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
     dt_inicio = datetime.combine(data_inicio, time.min)
     dt_fim = datetime.combine(data_fim, time.max)
     por_fonte_item = defaultdict(lambda: defaultdict(int))  # {(tipo,id): {fonte: qtd}}
-    SERU_TIPOS = ('venda_seru', 'venda_seru_sem_estoque')
+    # Inclui `venda_seru_estorno` pra subtrair pedidos cancelados — senao
+    # a media diaria fica inflada por vendas grandes que foram estornadas.
+    SERU_TIPOS = ('venda_seru', 'venda_seru_sem_estoque', 'venda_seru_estorno')
     movs = (db.session.query(MovEstoqueLoja, EstoqueLoja)
             .join(EstoqueLoja, MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id)
             .filter(EstoqueLoja.loja_id == loja_id,
@@ -260,6 +262,10 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
         if not chave:
             continue
         qtd = int(mov.quantidade or 0)
+        # Estornos subtraem do total — a venda original ja contou positivo,
+        # o estorno cancela essa contribuicao.
+        if mov.tipo == 'venda_seru_estorno':
+            qtd = -qtd
         vendas_por_item[chave] += qtd
         fontes_por_item[chave].add('seru')
         por_fonte_item[chave]['seru'] += qtd
