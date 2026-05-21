@@ -186,15 +186,8 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
-    # Magic link diario dos motoristas — 05:00 BRT
-    _scheduler.add_job(
-        lambda app=app: _run_driver_magic(app),
-        'cron', hour=5, minute=0, id='driver-magic-diario',
-        max_instances=1, coalesce=True,
-    )
-
     _scheduler.start()
-    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h · zapi tarefas 07:00 · zapi anomalias 23:00 · driver magic 05:00')
+    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h · zapi tarefas 07:00 · zapi anomalias 23:00')
 
 
 def _run_slack_resumo_diario(app):
