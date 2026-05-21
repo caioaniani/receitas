@@ -1727,6 +1727,8 @@ def api_debug():
     except http_requests.RequestException as e:
         info['erro_conexao'] = str(e)
 
+    return jsonify(info)
+
 
 @entregas_bp.route('/drivers/magic')
 @login_required
