@@ -641,6 +641,8 @@ document.addEventListener('DOMContentLoaded', function () {
         function getCustoItem(tipo, nome) {
             if (tipo === 'receita') {
                 return (typeof RECEITA_CUSTOS !== 'undefined' && RECEITA_CUSTOS[nome]) || 0;
+            } else if (tipo === 'produto') {
+                return (typeof PRODUTO_CUSTOS !== 'undefined' && PRODUTO_CUSTOS[nome]) || 0;
             } else {
                 var mp = _findMp(nome);
                 if (!mp) return 0;
