@@ -183,10 +183,11 @@ def test_b4_tres_parcelas_de_33_33_quitam_100_reais(app, admin_user, catalogo):
     parcela ficava 'eternamente em aberto'. Tolerancia de meio centavo
     corrige isso.
     """
+    from datetime import date
+
     from app.extensions import db
     from app.models import EstoqueProducao, VendaB2BParcela
     from app.services import vendas_b2b as svc
-    from datetime import date
 
     ep = EstoqueProducao(receita_id=catalogo['receita'].id, quantidade=10)
     db.session.add(ep)
@@ -223,10 +224,11 @@ def test_b4_tres_parcelas_de_33_33_quitam_100_reais(app, admin_user, catalogo):
 
 def test_b4_pagamento_curto_nao_quita_sem_querer(app, admin_user, catalogo):
     """Tolerancia eh de meio centavo. Pagamento R$ 0,02 abaixo NAO quita."""
+    from datetime import date
+
     from app.extensions import db
     from app.models import EstoqueProducao
     from app.services import vendas_b2b as svc
-    from datetime import date
 
     ep = EstoqueProducao(receita_id=catalogo['receita'].id, quantidade=10)
     db.session.add(ep)
