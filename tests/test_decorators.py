@@ -129,7 +129,7 @@ def test_concluir_atribuicao_de_outro_bloqueia(cliente, app, funcionario):
     aid = a.id
 
     _login(cliente, 'joao', 'joao123')
-    resp = cliente.post(f'/atribuicao/{aid}/concluir', follow_redirects=False)
+    resp = cliente.post(f'/auth/atribuicao/{aid}/concluir', follow_redirects=False)
     # Eh redirect pra minhas_fichas com flash de erro — nao status 200 sucesso
     assert resp.status_code == 302
     db.session.expire_all()
