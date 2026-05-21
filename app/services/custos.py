@@ -144,21 +144,34 @@ def _custo_por_grama(info):
     return 0
 
 
-def _calcular_receita(r, custos, mp_info):
-    """Calcula custo de uma receita. Retorna (custo_un, rendimento) ou None se dependência faltante."""
+def _calcular_receita(r, custos, custos_norm, mp_info, mp_info_norm):
+    """Calcula custo de uma receita. Retorna (custo_un, rendimento) ou None se dependência faltante.
+
+    Lookup de sub-receita e MP eh tolerante a case/espaco — divergencia
+    entre grafia da receita-pai (`ReceitaIngrediente.ingrediente_nome`) e
+    da receita-filha (`Receita.nome`) era causa silenciosa de custo zero
+    em cestas.
+    """
     custo_total = 0
     sum_pct = 0
     qtd_direto = 0
 
+    def _get_mp_info(nome):
+        return mp_info.get(nome) or mp_info_norm.get(_norm(nome), {})
+
     for ing in r.ingredientes:
         tipo = ing.tipo or 'mp'
         if tipo == 'receita':
-            if ing.ingrediente_nome not in custos:
+            # Lookup tolerante: tenta exato, depois normalizado.
+            sub_custo = custos.get(ing.ingrediente_nome)
+            if sub_custo is None:
+                sub_custo = custos_norm.get(_norm(ing.ingrediente_nome))
+            if sub_custo is None:
                 return None  # dependência não resolvida ainda
-            custo_total += custos[ing.ingrediente_nome] * ing.porcentagem
+            custo_total += sub_custo * ing.porcentagem
         elif tipo == 'mp_direto':
             qtd_g = ing.porcentagem
-            info = mp_info.get(ing.ingrediente_nome, {})
+            info = _get_mp_info(ing.ingrediente_nome)
             custo_total += qtd_g * _custo_por_grama(info)
             qtd_direto += qtd_g
         elif tipo == 'mp_un':
@@ -166,7 +179,7 @@ def _calcular_receita(r, custos, mp_info):
             # quantidade de unidades. Custo = qtd × custo_por_unidade.
             # custo_por_kg da MP unitaria armazena o custo POR UNIDADE.
             qtd_un = ing.porcentagem
-            info = mp_info.get(ing.ingrediente_nome, {})
+            info = _get_mp_info(ing.ingrediente_nome)
             custo_por_un = info.get('custo_por_kg') or 0
             custo_total += qtd_un * custo_por_un
             # Se a MP tem peso_unidade definido, soma ao total de peso pra
@@ -177,7 +190,7 @@ def _calcular_receita(r, custos, mp_info):
         else:
             sum_pct += ing.porcentagem
             qtd_g = r.peso_base * ing.porcentagem / 100
-            info = mp_info.get(ing.ingrediente_nome, {})
+            info = _get_mp_info(ing.ingrediente_nome)
             custo_total += qtd_g * _custo_por_grama(info)
 
     total_qtd = r.peso_base * sum_pct / 100 + qtd_direto
