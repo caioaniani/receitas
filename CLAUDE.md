@@ -12,6 +12,31 @@
 - Linguagem direta e técnica, mas sempre respeitosa. Sem emojis a menos que o
   usuário use primeiro.
 
+## Verificação antes de afirmar
+
+Esta regra é obrigatória e se aplica a TODA conversa.
+
+- **Antes de afirmar que um trecho do código tem ou não tem um problema,
+  verifique com `grep`/`Read` o arquivo real.** Hipóteses ("e se isso estivesse
+  errado") são úteis pra raciocinar, mas precisam ser marcadas explicitamente
+  como hipótese e validadas antes de virar afirmação ou recomendação.
+- **Toda afirmação técnica deve vir acompanhada de `arquivo:linha`**, exceto
+  quando é claramente teórica/conceitual. Sem citação = é suposição, e deve
+  ser dita como tal.
+- **Quando o usuário pedir uma solução pra um problema específico, audite
+  primeiro o código que toca o ponto, depois proponha.** Liste o que achou
+  com `arquivo:linha` antes da proposta. O usuário não consegue distinguir
+  "Claude analisou e achou X" de "Claude supôs que talvez exista X" — então
+  sempre deixe claro qual dos dois é.
+- **Quando duas implementações divergem** (constantes duplicadas, filtros
+  copiados, lógica replicada), tratar como dívida real: ou centralizar
+  (`app/constants.py`, helpers em `app/utils.py`), ou explicar por que a
+  duplicação é intencional. Não fingir que não viu.
+- **Se notar um bug enquanto resolve outra coisa, mencione-o.** O usuário
+  pediu A; se você achou B no caminho, é responsabilidade reportar B. Cada
+  vez que isso falha (eu menciono risco hipotético em vez de ir conferir o
+  código real), é um problema concreto, não estilo.
+
 ## Branches & Deploy
 
 - **Branch de produção (Railway acompanha)**: `claude/continue-controller-conversation-aGS3F`
