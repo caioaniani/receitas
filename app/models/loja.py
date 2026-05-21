@@ -4,11 +4,8 @@ Faz parte de `app.models` (split em multiplos arquivos por dominio
 em 2026-05-21). Importar via `from app.models import X` continua
 funcionando porque `app/models/__init__.py` re-exporta tudo.
 """
-from flask_login import UserMixin
-from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.extensions import db
-from app.utils import agora, hoje
 
 
 class Loja(db.Model):
