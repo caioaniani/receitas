@@ -6,7 +6,13 @@ from flask_login import current_user, login_required
 from app.blueprints.producao import producao_bp
 from app.decorators import producao_required
 from app.extensions import db
-from app.models import MateriaPrima, MovimentacaoEstoque, PlanejamentoItem, PlanejamentoProducao, Receita
+from app.models import (
+    MateriaPrima,
+    MovimentacaoEstoque,
+    PlanejamentoItem,
+    PlanejamentoProducao,
+    Receita,
+)
 from app.services.producao import consolidar_lista_compras
 from app.utils import hoje as hoje_brt
 
