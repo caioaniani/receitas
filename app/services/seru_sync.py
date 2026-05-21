@@ -27,6 +27,7 @@ from app.models import (
     Loja,
     MovEstoqueLoja,
     SeruDebito,
+    SeruDebitoMov,
     SeruLojaMap,
     SeruPedidoProcessado,
     SeruProdutoMap,
@@ -204,6 +205,18 @@ def _baixar_item(loja_id, mapping_produto, qtd, seru_pedido_id, user_id):
     # Floor com tolerancia pra erros de float (0.9999... vira 1)
     inteiros = int(debito_total + 1e-9)
     debito.fracao_pendente = max(0.0, round(debito_total - inteiros, 6))
+
+    # Rastreio pra estorno: registra a contribuicao BRUTA deste pedido
+    # (a_baixar_float). Quando o pedido eh cancelado, _estornar_pedido
+    # subtrai isso do acumulador. So registra se ha fator < 1 — sem
+    # fator, a baixa eh inteira e o estorno via MovEstoqueLoja basta.
+    if fator != 1.0:
+        db.session.add(SeruDebitoMov(
+            loja_id=loja_id,
+            seru_produto_map_id=mapping_produto.id,
+            seru_pedido_id=str(seru_pedido_id),
+            fracao=a_baixar_float,
+        ))
 
     if inteiros <= 0:
         # Tudo acumulado — nada baixa ainda
