@@ -54,12 +54,11 @@ def detalhe(id):
     receita_custos = resultado['custos']
     mp_info = resultado['mp_info']
 
-    # Indice de custo por nome de Produto-componente (custo_direto eh o
-    # custo por unidade comprada pronta; ex: iogurte 200ml = R$ 3,80/un).
-    produto_custos = {
-        p.nome: float(p.custo_direto or 0)
-        for p in Produto.query.filter(Produto.ativo.is_(True)).all()
-    }
+    # Indice de custo de cada Produto. Considera composicao: se o produto
+    # tem ProdutoItens (cesta), soma componentes; se nao tem, usa custo_direto.
+    # Suporta cesta-dentro-de-cesta via iteracao.
+    from app.services.custos import calcular_custos_produtos
+    produto_custos = calcular_custos_produtos(receita_custos, mp_info)
 
     # Lookups normalizados (case/espaco-tolerant) pra evitar custo zero
     # quando grafia do item_nome divergir do cadastro (ex: "Iogurte 200ml"
