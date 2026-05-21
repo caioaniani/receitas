@@ -73,4 +73,34 @@
         <li>Funcionario NAO pode: <code>criar_pedido</code>, <code>receber_mp</code>, <code>ajuste_estoque</code>, <code>criar_fornecedor</code>, <code>criar_venda_b2b</code>.</li>
     </ul>
 </div>
+
+<h2 class="h5 mt-4">Todos os vinculos Slack ativos</h2>
+<p class="text-muted small">
+    Cada linha mostra qual <code>slack_user_id</code> aponta pra qual usuario.
+    Se um vinculo aponta pra usuario errado (ex: slack do Kelvin apontando pra
+    um funcionario), a resposta do copilot vai vir com o papel desse outro user.
+    Gerencie em <a href="{{ url_for('slack.install') if url_for else '/slack/install' }}">/slack/install</a>.
+</p>
+<div class="table-responsive">
+    <table class="table table-sm">
+        <thead class="table-light">
+            <tr>
+                <th>slack_user_id</th>
+                <th>→ aponta pra usuario_id</th>
+                <th>nome do alvo</th>
+                <th>papel do alvo</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for v in todos_vinculos %}
+            <tr>
+                <td><code>{{ v.slack_user_id }}</code></td>
+                <td>#{{ v.usuario_id }}</td>
+                <td><strong>{{ v.alvo_nome }}</strong></td>
+                <td><code>{{ v.alvo_papel }}</code></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
 {% endblock %}
