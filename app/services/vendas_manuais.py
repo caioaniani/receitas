@@ -171,11 +171,24 @@ def aplicar_vendas_manuais(itens_resolvidos, loja_id, data_venda, user):
                                 'motivo': 'item_pendente_de_vinculacao'})
             continue
 
+        rid = resolvido['id'] if resolvido['tipo'] == 'receita' else None
+        pid = resolvido['id'] if resolvido['tipo'] == 'produto' else None
+        mid = resolvido['id'] if resolvido['tipo'] == 'mp' else None
+
+        # Dedupe — evita upload duplicado virar venda em dobro
+        existente = VendaManualLoja.query.filter_by(
+            loja_id=loja_id, data_venda=data_venda,
+            receita_id=rid, produto_id=pid, materia_prima_id=mid,
+        ).first()
+        if existente:
+            ignorados.append({'linha': item.get('linha', '?'),
+                                'nome': resolvido['nome'],
+                                'motivo': 'duplicata_ja_lancada'})
+            continue
+
         vm = VendaManualLoja(
             loja_id=loja_id, data_venda=data_venda,
-            receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
-            produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
-            materia_prima_id=resolvido['id'] if resolvido['tipo'] == 'mp' else None,
+            receita_id=rid, produto_id=pid, materia_prima_id=mid,
             quantidade=qtd,
             criado_por_id=getattr(user, 'id', None),
         )
