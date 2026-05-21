@@ -177,11 +177,8 @@ def reset_senha(id):
 
 @auth_bp.route('/atribuir/<int:receita_id>', methods=['POST'])
 @login_required
+@admin_required
 def atribuir(receita_id):
-    if not current_user.is_admin():
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('auth.minhas_fichas'))
-
     receita = Receita.query.get_or_404(receita_id)
     usuario_id = request.form.get('usuario_id')
     if not usuario_id:
