@@ -133,3 +133,82 @@ def excluir(id):
     db.session.commit()
     flash('Plano excluído.', 'success')
     return redirect(url_for('producao.lista'))
+
+
+@producao_bp.route('/painel')
+@login_required
+@producao_required
+def painel():
+    """Painel TV da producao — 4 zonas pra exibicao continua.
+
+    Zonas:
+      1. Alertas urgentes (atrasados, orfaos, estoque negativo)
+      2. Produzir HOJE (sugestao agregada de todas as lojas)
+      3. Saindo HOJE (pedidos pra entregar hoje, com QR)
+      4. Fermentar pra amanha (so 17h-22h: o que precisa estar pronto amanha)
+    """
+    from datetime import timedelta
+
+    from app.constants import STATUS_PEDIDO_FINALIZADOS
+    from app.models import PedidoLoja
+    from app.services.cestas import contar_produto_itens_orfaos
+    from app.services.previsao_producao import sugerir_producao
+
+    hoje_d = hoje_brt()
+    amanha = hoje_d + timedelta(days=1)
+    agora_hora = datetime.now().hour
+
+    try:
+        horizonte = int(request.args.get('horizonte', 7))
+    except ValueError:
+        horizonte = 7
+    horizonte = max(1, min(horizonte, 14))
+
+    # Zona 1 — alertas
+    pedidos_atrasados = (PedidoLoja.query
+                         .filter(PedidoLoja.data_entrega < hoje_d,
+                                 ~PedidoLoja.status.in_(STATUS_PEDIDO_FINALIZADOS))
+                         .order_by(PedidoLoja.data_entrega).all())
+    cestas_orfaos = contar_produto_itens_orfaos()
+
+    # Zona 2 — produzir hoje (sugestao agregada)
+    sugestao = sugerir_producao(horizonte_dias=horizonte)
+
+    # Zona 3 — saindo hoje
+    saindo_hoje = (PedidoLoja.query
+                   .filter(PedidoLoja.data_entrega == hoje_d,
+                           ~PedidoLoja.status.in_(STATUS_PEDIDO_FINALIZADOS))
+                   .order_by(PedidoLoja.loja_id, PedidoLoja.id).all())
+
+    # Zona 4 — fermentar pra amanha (so aparece no fim do dia/noite)
+    mostrar_fermentar = agora_hora >= 16 or agora_hora < 6
+    fermentar = None
+    if mostrar_fermentar:
+        # Pedidos com entrega amanha que tem receitas — producao precisa
+        # tirar pra fermentar/descongelar agora pra estar pronto amanha cedo.
+        pedidos_amanha = (PedidoLoja.query
+                          .filter(PedidoLoja.data_entrega == amanha,
+                                  ~PedidoLoja.status.in_(STATUS_PEDIDO_FINALIZADOS))
+                          .all())
+        fermentar_qtd = {}  # {receita_id: {'nome': str, 'qtd': int}}
+        for p in pedidos_amanha:
+            for it in p.itens:
+                if it.receita_id and it.receita:
+                    key = it.receita_id
+                    e = fermentar_qtd.setdefault(
+                        key, {'nome': it.receita.nome, 'qtd': 0})
+                    e['qtd'] += int(it.quantidade or 0)
+        fermentar = sorted(fermentar_qtd.values(),
+                            key=lambda x: -x['qtd'])
+
+    return render_template('producao/painel.html',
+                           hoje=hoje_d,
+                           amanha=amanha,
+                           agora_hora=agora_hora,
+                           horizonte=horizonte,
+                           pedidos_atrasados=pedidos_atrasados,
+                           cestas_orfaos=cestas_orfaos,
+                           sugestao=sugestao,
+                           saindo_hoje=saindo_hoje,
+                           mostrar_fermentar=mostrar_fermentar,
+                           fermentar=fermentar)
