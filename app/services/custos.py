@@ -145,13 +145,20 @@ def _custo_por_grama(info):
     return 0
 
 
-def _calcular_receita(r, custos, custos_norm, mp_info, mp_info_norm):
+def _calcular_receita(r, custos, custos_norm, pesos, pesos_norm,
+                       mp_info, mp_info_norm):
     """Calcula custo de uma receita. Retorna (custo_un, rendimento) ou None se dependência faltante.
 
     Lookup de sub-receita e MP eh tolerante a case/espaco — divergencia
     entre grafia da receita-pai (`ReceitaIngrediente.ingrediente_nome`) e
     da receita-filha (`Receita.nome`) era causa silenciosa de custo zero
     em cestas.
+
+    Sub-receita contribui pro custo E pro peso (qtd_direto) — antes nao
+    contribuia pro peso, o que zerava o rendimento de receitas que misturam
+    MP direta com sub-receita (ex: "Croissant Nutella com Morango" tem
+    200g de MPs + 1 unidade de Croissant Tradicional, peso_unitario=290g —
+    sem o peso da sub-receita o rendimento dava 0 e o custo virava 0).
     """
     custo_total = 0
     sum_pct = 0
@@ -170,6 +177,12 @@ def _calcular_receita(r, custos, custos_norm, mp_info, mp_info_norm):
             if sub_custo is None:
                 return None  # dependência não resolvida ainda
             custo_total += sub_custo * ing.porcentagem
+            # Sub-receita contribui pro peso total (mesma logica do JS na
+            # ficha): peso = unidades × peso_unitario_da_sub.
+            sub_peso = pesos.get(ing.ingrediente_nome)
+            if sub_peso is None:
+                sub_peso = pesos_norm.get(_norm(ing.ingrediente_nome), 0)
+            qtd_direto += ing.porcentagem * (sub_peso or 0)
         elif tipo == 'mp_direto':
             qtd_g = ing.porcentagem
             info = _get_mp_info(ing.ingrediente_nome)
