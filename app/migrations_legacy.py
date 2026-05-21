@@ -99,6 +99,7 @@ def _migrate_postgres(app):
                 'custo_embalagem': 'ALTER TABLE produto ADD COLUMN custo_embalagem REAL DEFAULT 0',
                 'modo_preparo': 'ALTER TABLE produto ADD COLUMN modo_preparo TEXT',
                 'observacao': 'ALTER TABLE produto ADD COLUMN observacao TEXT',
+                'reaproveitavel': 'ALTER TABLE produto ADD COLUMN reaproveitavel BOOLEAN NOT NULL DEFAULT FALSE',
             }
             for col, sql in migrações_produto.items():
                 if col not in cols_prod:
