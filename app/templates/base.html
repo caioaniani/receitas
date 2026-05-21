@@ -123,10 +123,12 @@
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Produção</div>
 
+        {% if current_user.is_admin() %}
         <a href="{{ url_for('producao.painel') }}"
            class="sidebar-link {% if '/producao/painel' in request.path %}active{% endif %}">
-            <i class="bi bi-display"></i> Painel TV
+            <i class="bi bi-clipboard-data"></i> Planejamento (admin)
         </a>
+        {% endif %}
         <a href="{{ url_for('producao.lista') }}"
            class="sidebar-link {% if request.path.startswith('/producao') and '/painel' not in request.path %}active{% endif %}">
             Plano de Produção
