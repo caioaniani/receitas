@@ -193,7 +193,8 @@ def pedidos_hoje_pendentes(data=None):
     status diferente de 'entregue', 'recebido' e 'cancelado'.
 
     Status 'entregue' e 'recebido' existem por historico (site usava
-    'entregue', copilot recente usa 'recebido') — filtramos ambos.
+    'entregue', copilot recente usa 'recebido') — filtramos ambos via
+    STATUS_PEDIDO_FINALIZADOS.
 
     Retorna dict {loja_id: {'loja': Loja, 'pedidos': [PedidoLoja, ...]}}.
     """
@@ -202,7 +203,7 @@ def pedidos_hoje_pendentes(data=None):
         data = hoje_brt()
     pedidos = (PedidoLoja.query
                .filter(PedidoLoja.data_entrega == data)
-               .filter(~PedidoLoja.status.in_(['entregue', 'recebido', 'cancelado']))
+               .filter(~PedidoLoja.status.in_(STATUS_PEDIDO_FINALIZADOS))
                .order_by(PedidoLoja.criado_em)
                .all())
     por_loja = {}
