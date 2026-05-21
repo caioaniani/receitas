@@ -194,25 +194,35 @@ def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
 
 
 def cancelar_venda(venda, user=None):
-    """Estorna estoque e marca venda como cancelada. Idempotente."""
+    """Estorna estoque e marca venda como cancelada. Idempotente.
+
+    Le as `MovEstoqueProducao` reais geradas em `criar_venda` (filtra por
+    `referencia LIKE 'Venda B2B #{id}%'` e `tipo=='venda_b2b'`) e restaura
+    EXATAMENTE o que foi baixado. Cobre 3 cenarios que a versao anterior
+    quebrava:
+      1) Cesta — baixa foi nos componentes; antes buscava `produto_id=cesta`
+         e nao achava, deixando estoque baixado para sempre.
+      2) Falta de estoque parcial — antes somava `vi.quantidade` (total),
+         gerando estoque do nada quando havia `venda_b2b_sem_estoque`.
+      3) `venda_b2b_sem_estoque` puro — nao toca, nao deve criar nada.
+    """
     if venda.status == 'cancelada':
         return venda
-    for vi in venda.itens:
-        receita_id = vi.receita_id
-        produto_id = vi.produto_id
-        if not (receita_id or produto_id):
-            continue
-        ep = EstoqueProducao.query.filter_by(
-            receita_id=receita_id, produto_id=produto_id,
-        ).first()
+
+    movs = MovEstoqueProducao.query.filter(
+        MovEstoqueProducao.tipo == 'venda_b2b',
+        MovEstoqueProducao.referencia.like(f'Venda B2B #{venda.id}%'),
+    ).all()
+    for m in movs:
+        ep = EstoqueProducao.query.get(m.estoque_producao_id)
         if not ep:
             continue
-        ep.quantidade = (ep.quantidade or 0) + vi.quantidade
+        ep.quantidade = (ep.quantidade or 0) + m.quantidade
         db.session.add(MovEstoqueProducao(
             estoque_producao_id=ep.id,
             tipo='venda_b2b_estorno',
-            quantidade=vi.quantidade,
-            referencia=f'Estorno venda B2B #{venda.id}',
+            quantidade=m.quantidade,
+            referencia=f'Estorno venda B2B #{venda.id} (cancelada)',
             usuario_id=getattr(user, 'id', None),
         ))
     venda.status = 'cancelada'
