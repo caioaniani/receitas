@@ -2902,7 +2902,16 @@ def executar_registrar_desperdicio(params, user):
     )
     db.session.add(desp)
 
-    if componentes_cesta:
+    if reaproveita:
+        # Item marcado como reaproveitavel + motivo=validade: registra
+        # desperdicio pra historico mas NAO baixa estoque (item vai virar
+        # outra coisa). Anota na observacao do desperdicio pra rastreio.
+        if not (desp.observacao or '').strip():
+            desp.observacao = '[reaproveitavel — nao baixou estoque]'
+        else:
+            desp.observacao = desp.observacao + ' [reaproveitavel]'
+        baixa = 0
+    elif componentes_cesta:
         # Loja so estoca componentes; desconta cada um
         for col, comp_id, nome_comp, qtd_por_cesta in componentes_cesta:
             qtd_baixar = int(round(qtd * qtd_por_cesta))
