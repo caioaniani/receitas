@@ -361,6 +361,9 @@
                 class="sidebar-link" style="display:none; border:0; background:transparent; text-align:left; width:100%;">
             <i class="bi bi-download"></i> Instalar como app
         </button>
+        <a href="{{ url_for('auth.minha_senha') }}" class="sidebar-link">
+            <i class="bi bi-key"></i> Trocar minha senha
+        </a>
         <a href="{{ url_for('auth.logout') }}" class="sidebar-link" style="color:var(--cor-vermelho);">
             Sair
         </a>
