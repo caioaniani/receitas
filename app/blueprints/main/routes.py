@@ -466,10 +466,24 @@ def importar():
             db.session.flush()
 
             for item_data in p_data.get('itens', []):
+                # Resolve FK por nome — item orfao (sem match) entra com
+                # FK NULL e admin resolve em /cestas/orfaos.
+                tipo_item = item_data['tipo']
+                nome_item = item_data['item_nome']
+                receita_id = None
+                materia_prima_id = None
+                if tipo_item == 'receita':
+                    r = Receita.query.filter_by(nome=nome_item).first()
+                    receita_id = r.id if r else None
+                elif tipo_item == 'mp':
+                    m = MateriaPrima.query.filter_by(nome=nome_item).first()
+                    materia_prima_id = m.id if m else None
                 item = ProdutoItem(
                     produto_id=produto.id,
-                    tipo=item_data['tipo'],
-                    item_nome=item_data['item_nome'],
+                    tipo=tipo_item,
+                    item_nome=nome_item,
+                    receita_id=receita_id,
+                    materia_prima_id=materia_prima_id,
                     quantidade=item_data['quantidade'],
                 )
                 db.session.add(item)
