@@ -2941,3 +2941,64 @@ def _read_enviar_digest_whatsapp(params, user):
     if res.get('ok'):
         return {'texto': f':white_check_mark: {rotulo.capitalize()} enviada pra {numero}.\n\n_Preview:_\n```\n{texto[:800]}\n```'}
     return {'texto': f':warning: Falha ao enviar: {res.get("erro", "?")}'}
+
+
+# ─── Dispatch tables ──────────────────────────────────────────────────
+# Roteamento unico de todas as tools. Adicionar nova tool = 1 linha aqui.
+
+_READ_HANDLERS = {
+    'consultar_pedido': _read_consultar_pedido,
+    'consultar_estoque': _read_consultar_estoque,
+    'consultar_fornecedores': _read_consultar_fornecedores,
+    'consultar_margem': _read_consultar_margem,
+    'consultar_funcionario': _read_consultar_funcionario,
+    'consultar_caixa': _read_consultar_caixa,
+    'consultar_vendas_itens': _read_consultar_vendas_itens,
+    'consultar_foco': _read_consultar_foco,
+    'consultar_tarefas': _read_consultar_tarefas,
+    'consultar_desperdicio': _read_consultar_desperdicio,
+    'enviar_digest_whatsapp': _read_enviar_digest_whatsapp,
+    'consultar_cliente_b2b': _read_consultar_cliente_b2b,
+}
+
+_EXEC_HANDLERS = {
+    'criar_pedido': executar_criar_pedido,
+    'receber_mp': executar_receber_mp,
+    'ajuste_estoque': executar_ajuste_estoque,
+    'mudar_status_pedido': executar_mudar_status_pedido,
+    'criar_fornecedor': executar_criar_fornecedor,
+    'marcar_ponto': executar_marcar_ponto,
+    'criar_tarefa': executar_criar_tarefa,
+    'marcar_tarefa_feita': executar_marcar_tarefa_feita,
+    'balanco_congelados': executar_balanco_congelados,
+    'entrada_lote_loja': executar_entrada_lote_loja,
+    'registrar_desperdicio': executar_registrar_desperdicio,
+    'registrar_desperdicio_lote': executar_registrar_desperdicio_lote,
+    'criar_venda_b2b': executar_criar_venda_b2b,
+    'criar_cliente_b2b': executar_criar_cliente_b2b,
+    'anexar_foto_pedido': executar_anexar_foto_pedido,
+}
+
+
+def _executar_read(tool_name, params, user):
+    """Dispatch unico das tools de leitura."""
+    handler = _READ_HANDLERS.get(tool_name)
+    if not handler:
+        return {'erro': f'tool de leitura desconhecida: {tool_name}'}
+    try:
+        return handler(params, user)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('Copilot read tool %s falhou', tool_name)
+        return {'erro': str(exc)}
+
+
+def executar(tipo_acao, params, user):
+    """Dispatch unico das tools de escrita. Chamado apos aprovacao."""
+    # receber_pedido reusa o executor de mudar_status_pedido
+    if tipo_acao == 'receber_pedido':
+        return executar_mudar_status_pedido(
+            {**params, 'novo_status': 'receber'}, user)
+    handler = _EXEC_HANDLERS.get(tipo_acao)
+    if not handler:
+        return {'ok': False, 'erro': f'tipo de acao desconhecido: {tipo_acao}'}
+    return handler(params, user)
