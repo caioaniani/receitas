@@ -231,6 +231,33 @@ def excluir_atribuicao(id):
     return redirect(url_for('auth.painel'))
 
 
+@auth_bp.route('/minha-senha', methods=['GET', 'POST'])
+@login_required
+def minha_senha():
+    """Permite o usuario logado trocar a propria senha. Exige senha atual."""
+    if request.method == 'POST':
+        atual = request.form.get('senha_atual', '')
+        nova = request.form.get('nova_senha', '').strip()
+        confirma = request.form.get('confirma_senha', '').strip()
+
+        if not current_user.check_senha(atual):
+            flash('Senha atual incorreta.', 'danger')
+            return redirect(url_for('auth.minha_senha'))
+        if len(nova) < 8:
+            flash('Nova senha precisa ter pelo menos 8 caracteres.', 'warning')
+            return redirect(url_for('auth.minha_senha'))
+        if nova != confirma:
+            flash('Confirmacao nao bate com a nova senha.', 'warning')
+            return redirect(url_for('auth.minha_senha'))
+
+        current_user.set_senha(nova)
+        db.session.commit()
+        flash('Senha alterada com sucesso.', 'success')
+        return redirect(url_for('main.index'))
+
+    return render_template('auth/minha_senha.html')
+
+
 @auth_bp.route('/painel')
 @login_required
 @admin_required
