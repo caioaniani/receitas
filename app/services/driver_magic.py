@@ -95,6 +95,69 @@ def enviar_whatsapp(mt):
     return ok, res.get('erro') if not ok else 'ok'
 
 
+def magic_ativo(driver):
+    """Retorna DriverMagicToken valido do driver (ou None)."""
+    return (DriverMagicToken.query
+            .filter_by(driver_id=driver.id, revogado=False)
+            .filter(DriverMagicToken.expira_em > agora())
+            .order_by(DriverMagicToken.criado_em.desc())
+            .first())
+
+
+def criar_se_necessario(driver):
+    """Garante que o motorista tem magic link valido do dia.
+    Retorna (DriverMagicToken, criado_novo: bool)."""
+    mt = magic_ativo(driver)
+    if mt:
+        return mt, False
+    return gerar_token(driver), True
+
+
+def notificar_pedido(driver, pedido):
+    """On-demand: avisa motorista que tem pedido pra retirar.
+
+    - Se nao tem magic link valido: cria + envia mensagem completa com link.
+    - Se ja tem: envia mensagem curta lembrando do painel.
+
+    Retorna (ok, msg, mt). `mt` eh o token usado (novo ou existente).
+    """
+    from app.services import zapi
+
+    if not driver.telefone:
+        return False, f'{driver.nome} sem telefone cadastrado', None
+    if not zapi.disponivel():
+        return False, 'Z-API nao configurada', None
+
+    mt, criado_novo = criar_se_necessario(driver)
+    url = url_for('driver.index', token=mt.token, _external=True)
+    loja_nome = pedido.loja.nome if pedido.loja else '?'
+    data_entrega = (pedido.data_entrega.strftime('%d/%m')
+                     if pedido.data_entrega else '?')
+    n_itens = len(pedido.itens or [])
+
+    if criado_novo:
+        texto = (
+            f'Bom dia, {driver.nome}! ☀️\n\n'
+            f'Pedido #{pedido.id} de {loja_nome} pronto pra retirar '
+            f'({n_itens} item{"ns" if n_itens != 1 else ""}, '
+            f'entrega {data_entrega}).\n\n'
+            f'Seu painel de entregas de hoje:\n{url}\n\n'
+            f'Link valido ate meia-noite.'
+        )
+    else:
+        texto = (
+            f'{driver.nome}, pedido #{pedido.id} de {loja_nome} '
+            f'pronto pra retirar ({n_itens} item{"ns" if n_itens != 1 else ""}).\n'
+            f'Veja no seu painel: {url}'
+        )
+    res = zapi.enviar_texto(driver.telefone, texto)
+    ok = bool(res and res.get('ok'))
+    mt.enviado_em = agora()
+    mt.enviado_ok = ok
+    db.session.commit()
+    return ok, res.get('erro') if not ok else 'ok', mt
+
+
 def rotacionar_e_enviar():
     """Cron diario: pra cada Driver ativo, gera novo token e envia.
     Retorna lista de dicts {driver, ok, erro?}."""
