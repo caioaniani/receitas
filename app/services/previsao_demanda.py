@@ -40,7 +40,7 @@ def prever_demanda(loja_id, data_alvo, semanas_lookback=8):
     movs = (db.session.query(MovEstoqueLoja)
             .join(EstoqueLoja, MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id)
             .filter(EstoqueLoja.loja_id == loja_id,
-                    MovEstoqueLoja.tipo.in_(VENDA_TIPOS),
+                    MovEstoqueLoja.tipo.in_(VENDA_TIPOS_LOJA),
                     MovEstoqueLoja.data >= desde,
                     MovEstoqueLoja.data < data_alvo)
             .all())
