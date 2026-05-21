@@ -230,11 +230,20 @@ def create_app(config_class=None):
             except Exception:  # noqa: BLE001
                 logger.debug('inject_sidebar: falha ao contar cestas orfas', exc_info=True)
 
+        # ── Produtos nomes (cache 60s, pra datalist em criar cesta) ──
+        def _carrega_produto_nomes():
+            from app.models import Produto
+            return [p.nome for p in Produto.query
+                    .filter(Produto.ativo.is_(True))
+                    .order_by(Produto.nome).all()]
+        produto_nomes = _cache('produto_nomes', 60, _carrega_produto_nomes)
+
         return dict(
             sidebar_categorias=categorias,
             mp_info=mp_data['info'],
             mp_nomes=mp_data['nomes'],
             receita_nomes=receita_nomes,
+            produto_nomes=produto_nomes,
             funcionarios=funcionarios,
             proj_atrasadas=proj_atrasadas,
             proj_fazendo=proj_fazendo,
