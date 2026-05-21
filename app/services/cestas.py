@@ -34,13 +34,18 @@ def componentes_de_cesta(produto):
     """Se produto eh cesta (tem ProdutoItens), retorna lista de
     `(coluna_estoque, id, nome, quantidade_por_unidade_de_cesta)`.
 
-    A coluna_estoque eh 'receita_id' ou 'materia_prima_id' — pronta pra
-    usar como filtro de EstoqueLoja/EstoqueProducao.
+    A coluna_estoque eh 'receita_id', 'produto_id' ou 'materia_prima_id'
+    — pronta pra usar como filtro de EstoqueLoja/EstoqueProducao.
+
+    Tipo 'produto' = componente eh outro Produto (ex: iogurte 200ml comprado
+    pronto). Loja estoca o produto diretamente. NAO eh expandido recursivamente
+    mesmo se o produto-componente tambem fosse cesta — o produto e atomico
+    no estoque.
 
     Se nao for cesta, retorna [].
 
     ProdutoItem orfao (FK NULL) eh logado e ignorado — admin resolve
-    em /cestas/orfaos.
+    em /produtos/cestas/orfaos.
     """
     if not produto or not produto.itens:
         return []
@@ -54,7 +59,17 @@ def componentes_de_cesta(produto):
                 logger.warning(
                     'ProdutoItem #%s orfao (tipo=receita, item_nome=%r, '
                     'sem receita_id). Componente IGNORADO na baixa de estoque. '
-                    'Resolver em /cestas/orfaos.',
+                    'Resolver em /produtos/cestas/orfaos.',
+                    pi.id, pi.item_nome,
+                )
+        elif pi.tipo == 'produto':
+            if pi.produto_componente_id and pi.produto_componente:
+                out.append(('produto_id', pi.produto_componente_id,
+                            pi.produto_componente.nome, qtd))
+            else:
+                logger.warning(
+                    'ProdutoItem #%s orfao (tipo=produto, item_nome=%r, '
+                    'sem produto_componente_id). Componente IGNORADO na baixa.',
                     pi.id, pi.item_nome,
                 )
         elif pi.tipo == 'mp':
