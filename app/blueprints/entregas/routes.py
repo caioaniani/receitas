@@ -18,7 +18,7 @@ from app.services import vnda, rotas as rotas_svc, dropbox_storage
 @entrega_access_required
 def index():
     resp = current_app.make_response(
-        render_template('entregas/index.html', hoje=date.today().isoformat())
+        render_template('entregas/index.html', hoje=hoje_brt().isoformat())
     )
     # Evita cache do HTML (Safari teima muito com inline JS)
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
@@ -50,11 +50,11 @@ def _carregar_overrides_full():
 @entrega_access_required
 def api_pedidos():
     import traceback
-    data_str = request.args.get('data', date.today().isoformat())
+    data_str = request.args.get('data', hoje_brt().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
-        target = date.today()
+        target = hoje_brt()
 
     try:
         overrides_full = _carregar_overrides_full()
@@ -128,7 +128,7 @@ def api_calendario():
         parts = mes_str.split('-')
         year, month = int(parts[0]), int(parts[1])
     except (ValueError, IndexError):
-        year, month = date.today().year, date.today().month
+        year, month = hoje_brt().year, hoje_brt().month
 
     overrides = _carregar_overrides_data()
     dias = vnda.contar_pedidos_por_dia(year, month, overrides=overrides)
@@ -767,9 +767,9 @@ def atribuir_lote():
                     data_str = it['data_entrega']
                     break
         try:
-            data_lote = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else date.today()
+            data_lote = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else hoje_brt()
         except ValueError:
-            data_lote = date.today()
+            data_lote = hoje_brt()
         janelas = criar.get('janelas') or []
         if not isinstance(janelas, list):
             janelas = []
@@ -890,11 +890,11 @@ def listar_lotes():
     """Lista lotes de uma data (?data=YYYY-MM-DD).
     Retorna metadados + contadores por status."""
     import json as _json
-    data_str = request.args.get('data', date.today().isoformat())
+    data_str = request.args.get('data', hoje_brt().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
-        target = date.today()
+        target = hoje_brt()
     lotes = LoteSaida.query.filter_by(data_entrega=target).order_by(LoteSaida.criado_em).all()
 
     # Conta atribuicoes por lote em 1 query
@@ -985,11 +985,11 @@ def api_produtos():
     """Agrega itens dos pedidos do dia. Retorna duas listas:
     - 'vendidos': como veio do VNDA (cestas como produto unico)
     - 'producao': cestas explodidas em componentes (usa Produto+ProdutoItem do banco)"""
-    data_str = request.args.get('data', date.today().isoformat())
+    data_str = request.args.get('data', hoje_brt().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
-        target = date.today()
+        target = hoje_brt()
 
     janelas = [j for j in request.args.getlist('janela') if j]
 
@@ -1136,11 +1136,11 @@ def api_produtos():
 @entrega_access_required
 def api_atribuidos():
     """Lista pedidos do dia agrupados por driver atribuido + secao 'sem driver'."""
-    data_str = request.args.get('data', date.today().isoformat())
+    data_str = request.args.get('data', hoje_brt().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
-        target = date.today()
+        target = hoje_brt()
 
     overrides = _carregar_overrides_data()
     resultado = _injetar_pedidos_locais(target, vnda.buscar_pedidos_do_dia(target, overrides=overrides))
@@ -1228,11 +1228,11 @@ def api_atribuidos():
 def api_rotas():
     """Distribui pedidos entre drivers nominais (cadastrados em /api/drivers).
     Pedidos com atribuicao salva (AtribuicaoEntrega) preservam o driver."""
-    data_str = request.args.get('data', date.today().isoformat())
+    data_str = request.args.get('data', hoje_brt().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
-        target = date.today()
+        target = hoje_brt()
 
     janelas = [j for j in request.args.getlist('janela') if j]
 
@@ -1474,8 +1474,8 @@ def api_debug_pedido(code):
             de = _extrair_data_entrega(order)
             info['data_entrega_extraida'] = de.isoformat() if de else None
             info['periodo_extraido'] = _extrair_periodo(order)
-            info['hoje'] = date.today().isoformat()
-            info['entrega_e_hoje'] = (de == date.today()) if de else False
+            info['hoje'] = hoje_brt().isoformat()
+            info['entrega_e_hoje'] = (de == hoje_brt()) if de else False
         else:
             info['body'] = resp.text[:500]
     except http_requests.RequestException as e:
