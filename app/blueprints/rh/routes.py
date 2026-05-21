@@ -12,7 +12,7 @@ from app.extensions import db
 from flask import jsonify
 from app.models import (Funcionario, Loja, FolhaPagamento, Feedback, Posicao,
                         Atestado, SlotMapa, funcionario_loja, Ferias, RegistroPonto, Cargo)
-from app.utils import parse_float_br
+from app.utils import agora, hoje as hoje_brt, parse_float_br
 
 ALLOWED_MIMETYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'}
 
