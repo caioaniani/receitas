@@ -35,7 +35,10 @@ def dashboard():
     custo_mp_total = sum(custos_map.values())
     receita_estimada = sum((r.preco_venda or 0) for r in receitas if r.preco_venda)
 
-    funcionarios_ativos = Funcionario.query.filter_by(ativo=True).all()
+    # Eager load do cargo evita N+1 — `custo_total()` acessa `self.cargo.salario_base`.
+    funcionarios_ativos = (Funcionario.query
+                            .options(joinedload(Funcionario.cargo))
+                            .filter_by(ativo=True).all())
     custo_mao_obra = sum(f.custo_total() for f in funcionarios_ativos)
 
     margem_geral = 0
