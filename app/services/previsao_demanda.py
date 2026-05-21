@@ -97,7 +97,8 @@ def prever_demanda(loja_id, data_alvo, semanas_lookback=8):
 def prever_semana(loja_id, data_inicio=None):
     """Retorna {data: [itens previstos]} pros proximos 7 dias."""
     if data_inicio is None:
-        data_inicio = date.today() + timedelta(days=1)  # amanha
+        from app.utils import hoje as _hoje_brt
+        data_inicio = _hoje_brt() + timedelta(days=1)  # amanha
     elif isinstance(data_inicio, str):
         data_inicio = date.fromisoformat(data_inicio)
     out = {}
