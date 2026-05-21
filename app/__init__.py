@@ -337,6 +337,7 @@ def create_app(config_class=None):
     with app.app_context():
         db.create_all()
         _migrate(app)
+        _alembic_stamp_se_necessario(app)
 
         # Seed só roda localmente (SQLite) — em produção os dados já existem
         if app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite'):
