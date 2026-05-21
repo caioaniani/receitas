@@ -140,6 +140,8 @@ def _agregar_vendas_vnda_api(data_inicio, data_fim, _loja_id=None):
             if not chave:
                 continue
             vendas[chave] += qtd
+            n_processados += 1
+    ULTIMA_CONSULTA_VNDA[stats_key]['n_processados'] = n_processados
     return dict(vendas), None
 
 
