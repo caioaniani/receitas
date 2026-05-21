@@ -858,7 +858,7 @@ def api_alocar():
 @rh_required
 def ferias():
     from datetime import date
-    hoje = date.today()
+    hoje = hoje_brt()
     mes = int(request.args.get('mes', hoje.month))
     ano = int(request.args.get('ano', hoje.year))
 
@@ -920,7 +920,7 @@ def ferias_excluir(id):
 @rh_required
 def ponto():
     from datetime import date
-    hoje = date.today()
+    hoje = hoje_brt()
     dia = request.args.get('dia', hoje.strftime('%Y-%m-%d'))
 
     try:
@@ -991,7 +991,7 @@ def ponto_registrar():
 @rh_required
 def ponto_resumo():
     from datetime import date
-    hoje = date.today()
+    hoje = hoje_brt()
     mes = int(request.args.get('mes', hoje.month))
     ano = int(request.args.get('ano', hoje.year))
 
