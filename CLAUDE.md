@@ -116,22 +116,20 @@ Tres armadilhas que ja me pegaram:
 
 ## Pendentes da auditoria (2026-05-21)
 
-Da auditoria continuada de estoque/dinheiro, ficaram pra outra sessao:
-
-- **B5 — FK em ProdutoItem em vez de string.** `cestas.py:41,45` e
-  `vnda_sync.py:71` fazem `Receita.query.filter_by(nome=pi.item_nome)`.
-  Case-sensitive, sem fuzzy. Renomear receita sem atualizar `item_nome`
-  da cesta faz o componente sumir silenciosamente da baixa de estoque.
-  Fix: adicionar `receita_id`/`materia_prima_id` em `ProdutoItem`,
-  backfill por nome (resolvendo colisoes manualmente), remover
-  `item_nome` depois. Esforco: migration + backfill cuidadoso (~1d).
-
-Fechados nessa sessao (2026-05-21 madrugada):
+Auditoria continuada (estoque/dinheiro) — TODOS fechados nesta sessao
+(2026-05-21):
 
 - ✓ **B4 — Decimal pra dinheiro.** Colunas `valor_total`, `valor`,
   `valor_pago`, `preco_unitario`, `valor_unitario` migradas pra
   `Numeric(10, 2)` via Alembic (`643bd66e89c3`). Properties e service
   usam `Decimal`. Sem tolerancia hack — precisao exata.
+
+- ✓ **B5 — FK em ProdutoItem.** Colunas `receita_id` e `materia_prima_id`
+  adicionadas em `ProdutoItem` via migration `efb6e5837fd0`. Backfill
+  por nome exato no `upgrade()`. Orfaos (sem FK) sao logados WARNING +
+  contados no dashboard do owner com link `/cestas/orfaos` pra
+  vincular manualmente. `item_nome` mantido por compat — usado apenas
+  como fallback humano-legivel quando FK eh NULL.
 
 - ✓ **B9 — Fracao inestornavel.** Modelo `SeruDebitoMov` registra
   cada contribuicao por pedido. `_estornar_pedido` reverte fracao:
