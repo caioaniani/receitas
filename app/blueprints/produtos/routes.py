@@ -122,12 +122,18 @@ def salvar_composicao(id):
         qtd = float(qtd_str) if qtd_str else 1
 
         # Resolve FK por nome exato — se nao bater, item fica orfao
-        # e admin precisa vincular em /cestas/orfaos.
+        # e admin precisa vincular em /produtos/cestas/orfaos.
         receita_id = None
+        produto_componente_id = None
         materia_prima_id = None
         if tipo == 'receita':
             r = Receita.query.filter_by(nome=nome).first()
             receita_id = r.id if r else None
+        elif tipo == 'produto':
+            p = Produto.query.filter_by(nome=nome).first()
+            # Nao deixa cesta apontar pra ela mesma (loop infinito).
+            if p and p.id != produto.id:
+                produto_componente_id = p.id
         elif tipo == 'mp':
             m = MateriaPrima.query.filter_by(nome=nome).first()
             materia_prima_id = m.id if m else None
@@ -137,6 +143,7 @@ def salvar_composicao(id):
             tipo=tipo,
             item_nome=nome,
             receita_id=receita_id,
+            produto_componente_id=produto_componente_id,
             materia_prima_id=materia_prima_id,
             quantidade=qtd,
         )
