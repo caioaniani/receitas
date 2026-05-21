@@ -23,11 +23,13 @@ def test_vnda_api_desempacota_cesta(app, admin_user, loja, catalogo):
     db.session.flush()
     db.session.add_all([
         ProdutoItem(produto_id=cesta.id, tipo='receita',
-                    item_nome=catalogo['receita'].nome, quantidade=2),  # 2 Croissant
+                    item_nome=catalogo['receita'].nome,
+                    receita_id=catalogo['receita'].id, quantidade=2),
         ProdutoItem(produto_id=cesta.id, tipo='receita',
-                    item_nome=pao.nome, quantidade=4),  # 4 Pao
+                    item_nome=pao.nome, receita_id=pao.id, quantidade=4),
         ProdutoItem(produto_id=cesta.id, tipo='mp',
-                    item_nome=catalogo['mp'].nome, quantidade=1),  # 1 MP
+                    item_nome=catalogo['mp'].nome,
+                    materia_prima_id=catalogo['mp'].id, quantidade=1),
     ])
     # Mapeia VNDA → Family Box
     db.session.add(VndaProdutoMap(
