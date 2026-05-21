@@ -60,8 +60,8 @@ def padeiro(id):
     receita = Receita.query.get_or_404(id)
     resultado = calcular_custos_receitas()
     return render_template('receitas/padeiro.html', receita=receita,
-                           receita_custos_json=json.dumps(resultado['custos'], ensure_ascii=False),
-                           receita_pesos_json=json.dumps(resultado['pesos'], ensure_ascii=False))
+                           receita_custos=resultado['custos'],
+                           receita_pesos=resultado['pesos'])
 
 
 @receitas_bp.route('/<int:id>/salvar', methods=['POST'])
