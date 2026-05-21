@@ -61,18 +61,31 @@ def detalhe(id):
         for p in Produto.query.filter(Produto.ativo.is_(True)).all()
     }
 
+    # Lookups normalizados (case/espaco-tolerant) pra evitar custo zero
+    # quando grafia do item_nome divergir do cadastro (ex: "Iogurte 200ml"
+    # vs "iogurte 200ml ").
+    def _norm(s):
+        return (s or '').strip().casefold()
+    receita_custos_n = {_norm(k): v for k, v in receita_custos.items()}
+    produto_custos_n = {_norm(k): v for k, v in produto_custos.items()}
+    mp_info_n = {_norm(k): v for k, v in mp_info.items()}
+
     # Custo de cada item para exibir no template
     itens_data = []
     for item in produto.itens:
         info = {}
         if item.tipo == 'receita':
-            custo_un = receita_custos.get(item.item_nome, 0)
+            custo_un = receita_custos.get(item.item_nome)
+            if custo_un is None:
+                custo_un = receita_custos_n.get(_norm(item.item_nome), 0)
             unidade = 'un'
         elif item.tipo == 'produto':
-            custo_un = produto_custos.get(item.item_nome, 0)
+            custo_un = produto_custos.get(item.item_nome)
+            if custo_un is None:
+                custo_un = produto_custos_n.get(_norm(item.item_nome), 0)
             unidade = 'un'
         else:
-            info = mp_info.get(item.item_nome, {})
+            info = mp_info.get(item.item_nome) or mp_info_n.get(_norm(item.item_nome), {})
             custo_kg = info.get('custo_por_kg', 0)
             unidade = info.get('unidade', 'un')
             if unidade in ('g', 'ml'):
