@@ -12,8 +12,18 @@ if DATABASE_URL.startswith('postgres://'):
 
 
 class Config:
-    import secrets
-    SECRET_KEY = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+    _env_secret = os.environ.get('SECRET_KEY')
+    if _env_secret:
+        SECRET_KEY = _env_secret
+    elif DATABASE_URL.startswith('postgresql'):
+        raise RuntimeError(
+            'SECRET_KEY obrigatoria em producao (Postgres detectado). '
+            "Gere com: python3 -c 'import secrets; print(secrets.token_hex(32))' "
+            'e defina como env var no Railway.'
+        )
+    else:
+        import secrets as _secrets
+        SECRET_KEY = _secrets.token_hex(32)  # so dev/SQLite local
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB upload (atestados)
