@@ -254,7 +254,7 @@ def detectar_pedidos_travados(data_alvo=None):
 
     pedidos = (PedidoLoja.query
                .filter(PedidoLoja.data_entrega < data_alvo)
-               .filter(~PedidoLoja.status.in_(STATUS_TERMINAIS))
+               .filter(~PedidoLoja.status.in_(STATUS_PEDIDO_FINALIZADOS))
                .order_by(PedidoLoja.data_entrega.asc())
                .limit(TOP_N_PEDIDOS_TRAVADOS)
                .all())
