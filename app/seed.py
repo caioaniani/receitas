@@ -13,6 +13,28 @@ from app.models import (
 )
 
 
+def _add_produto_item(produto_id, tipo, item_nome, qtd):
+    """Adiciona ProdutoItem com FK resolvida por nome.
+
+    Se nao bater, fica orfao (FK NULL) — admin precisa vincular em
+    /cestas/orfaos. Em dev local com seed, todos os nomes batem
+    porque sao criados na mesma rodada do seed.
+    """
+    receita_id = None
+    materia_prima_id = None
+    if tipo == 'receita':
+        r = Receita.query.filter_by(nome=item_nome).first()
+        receita_id = r.id if r else None
+    elif tipo == 'mp':
+        m = MateriaPrima.query.filter_by(nome=item_nome).first()
+        materia_prima_id = m.id if m else None
+    db.session.add(ProdutoItem(
+        produto_id=produto_id, tipo=tipo, item_nome=item_nome,
+        receita_id=receita_id, materia_prima_id=materia_prima_id,
+        quantidade=qtd,
+    ))
+
+
 def seed_database():
     """Popula o banco com dados reais da padaria."""
     if MateriaPrima.query.first() is not None:
@@ -332,8 +354,7 @@ def seed_cardapio():
         db.session.add(p)
         db.session.flush()
         for tipo, item_nome, qtd in itens:
-            db.session.add(ProdutoItem(
-                produto_id=p.id, tipo=tipo, item_nome=item_nome, quantidade=qtd))
+            _add_produto_item(p.id, tipo, item_nome, qtd)
         return p
 
     # ── Cafés e Bebidas Quentes (custo_direto dos insumos) ──
@@ -641,8 +662,7 @@ def seed_update_v2():
             continue
         ProdutoItem.query.filter_by(produto_id=p.id).delete()
         for tipo, item_nome, qtd in itens:
-            db.session.add(ProdutoItem(
-                produto_id=p.id, tipo=tipo, item_nome=item_nome, quantidade=qtd))
+            _add_produto_item(p.id, tipo, item_nome, qtd)
 
     # ── 4. Setar custo_direto nos produtos simples ──
     custos_diretos = {
@@ -805,8 +825,7 @@ def seed_site_products():
         db.session.add(p)
         db.session.flush()
         for tipo, item_nome, qtd in itens:
-            db.session.add(ProdutoItem(
-                produto_id=p.id, tipo=tipo, item_nome=item_nome, quantidade=qtd))
+            _add_produto_item(p.id, tipo, item_nome, qtd)
         existentes_prod.add(nome)
 
     add_cesta('Family Box', 437.00, [
