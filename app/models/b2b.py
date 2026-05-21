@@ -44,7 +44,9 @@ class VendaB2B(db.Model):
     cliente_id = db.Column(db.Integer, db.ForeignKey('cliente_b2b.id'), nullable=True, index=True)
     cliente_nome = db.Column(db.String(150))  # pra venda avulsa sem cadastro
     status = db.Column(db.String(20), default='ativa', nullable=False)  # ativa, cancelada
-    valor_total = db.Column(db.Float, nullable=False, default=0)
+    # Numeric(10, 2): precisao exata em centavos. Float dava erro de
+    # arredondamento em soma de parcelas (R$33,33 × 3 != R$100,00).
+    valor_total = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     observacao = db.Column(db.Text)
     nf_numero = db.Column(db.String(50))  # numero da NF se houver
     criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
