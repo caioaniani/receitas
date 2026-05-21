@@ -54,13 +54,23 @@ def detalhe(id):
     receita_custos = resultado['custos']
     mp_info = resultado['mp_info']
 
+    # Indice de custo por nome de Produto-componente (custo_direto eh o
+    # custo por unidade comprada pronta; ex: iogurte 200ml = R$ 3,80/un).
+    produto_custos = {
+        p.nome: float(p.custo_direto or 0)
+        for p in Produto.query.filter(Produto.ativo.is_(True)).all()
+    }
+
     # Custo de cada item para exibir no template
     itens_data = []
     for item in produto.itens:
+        info = {}
         if item.tipo == 'receita':
             custo_un = receita_custos.get(item.item_nome, 0)
             unidade = 'un'
-            info = {}
+        elif item.tipo == 'produto':
+            custo_un = produto_custos.get(item.item_nome, 0)
+            unidade = 'un'
         else:
             info = mp_info.get(item.item_nome, {})
             custo_kg = info.get('custo_por_kg', 0)
@@ -84,7 +94,8 @@ def detalhe(id):
                            produto=produto,
                            itens_data=itens_data,
                            custo_total=custo_total,
-                           receita_custos=receita_custos)
+                           receita_custos=receita_custos,
+                           produto_custos=produto_custos)
 
 
 @produtos_bp.route('/<int:id>/salvar', methods=['POST'])
