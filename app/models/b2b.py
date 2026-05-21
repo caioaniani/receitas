@@ -97,9 +97,15 @@ class VendaB2BItem(db.Model):
 
     @property
     def valor_total(self):
-        bruto = (self.quantidade or 0) * (self.preco_unitario or 0)
-        desc = bruto * (self.desconto_percentual or 0) / 100.0
-        return round(bruto - desc, 2)
+        # Decimal: preco_unitario eh Numeric (vem como Decimal do SQLA).
+        # quantidade eh int, desconto_percentual eh float — convertemos.
+        from decimal import ROUND_HALF_UP, Decimal
+        qtd = Decimal(int(self.quantidade or 0))
+        preco = Decimal(self.preco_unitario or 0)
+        bruto = qtd * preco
+        desc_pct = Decimal(str(self.desconto_percentual or 0))
+        desc = bruto * desc_pct / Decimal('100')
+        return (bruto - desc).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
 class VendaB2BParcela(db.Model):
     """Cada parcela tem vencimento, valor previsto e valor recebido.
