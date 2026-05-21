@@ -303,12 +303,20 @@ def aplicar_balanco(itens_resolvidos, user, referencia=None):
             if not nome_digitado:
                 ignorados.append({'linha': item.get('linha', '?'), 'motivo': 'sem_nome'})
                 continue
-            ep = EstoqueProducao(
+            # Reusa linha pendente existente com mesmo nome — evita
+            # fragmentar em multiplas linhas no balanco repetido. Consistente
+            # com o tratamento de itens resolvidos (sobrescreve quantidade).
+            ep = EstoqueProducao.query.filter_by(
                 nome_pendente=nome_digitado,
-                quantidade=0,
-            )
-            db.session.add(ep)
-            db.session.flush()
+                receita_id=None, produto_id=None, materia_prima_id=None,
+            ).first()
+            if not ep:
+                ep = EstoqueProducao(
+                    nome_pendente=nome_digitado,
+                    quantidade=0,
+                )
+                db.session.add(ep)
+                db.session.flush()
             tipo_resultado = 'pendente'
             nome_resultado = nome_digitado
 
