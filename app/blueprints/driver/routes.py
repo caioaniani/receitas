@@ -3,7 +3,6 @@
 Acesso por URL /driver/<token>. PIN exigido na primeira vez e armazenado em
 session pra nao pedir de novo.
 """
-import io
 import secrets
 from datetime import datetime
 
@@ -13,13 +12,12 @@ from flask import (
     jsonify,
     render_template,
     request,
-    send_file,
     session,
     url_for,
 )
 
 from app.blueprints.driver import driver_bp
-from app.extensions import csrf, db
+from app.extensions import db
 from app.models import (
     AtribuicaoEntrega,
     Driver,
@@ -339,21 +337,13 @@ def api_foto_delete(token, foto_id):
 
 @driver_bp.route('/<token>/pedido/<int:pedido_id>/qr-entrega')
 def qr_entrega(token, pedido_id):
-    """Conferencia + QR de entrega (motorista → loja).
+    """QR de entrega pro motorista mostrar pra loja.
 
-    Motorista tira foto de CADA SKU. Apos todas, QR eh gerado. Loja
-    escaneia + PIN → status 'entregue'."""
+    Motorista so exibe o QR. Conferencia com foto eh feita pela LOJA
+    na pagina do handshake apos escanear (ver handshake.routes)."""
     from datetime import timedelta
 
-    from flask import url_for
-
-    from app.services.conferencia import (
-        conferencia_completa,
-        faltam_fotos,
-        fotos_presentes,
-    )
     from app.services.qrcode_svc import gerar_png_data_url
-
     driver = _driver_por_token(token)
     if not driver:
         abort(404)
@@ -365,84 +355,23 @@ def qr_entrega(token, pedido_id):
         return render_template('handshake/erro.html',
                                 msg=f'Pedido #{pedido.id} nao esta em transporte (status: {pedido.status}).'), 409
 
-    fotos = fotos_presentes(pedido, 'entrega')
-    pronto = conferencia_completa(pedido, 'entrega')
-    qr = None
-    qr_png = None
-    url = None
-    if pronto:
-        qr = (PedidoQRCode.query
-              .filter_by(pedido_id=pedido.id, tipo='entrega', usado_em=None)
-              .filter(PedidoQRCode.expira_em > agora())
-              .order_by(PedidoQRCode.criado_em.desc()).first())
-        if not qr:
-            qr = PedidoQRCode(
-                token=secrets.token_urlsafe(24),
-                pedido_id=pedido.id, tipo='entrega',
-                expira_em=agora() + timedelta(hours=2),
-            )
-            db.session.add(qr)
-            db.session.commit()
-        url = url_for('handshake.handshake', token=qr.token, _external=True)
-        qr_png = gerar_png_data_url(url)
+    qr = (PedidoQRCode.query
+          .filter_by(pedido_id=pedido.id, tipo='entrega', usado_em=None)
+          .filter(PedidoQRCode.expira_em > agora())
+          .order_by(PedidoQRCode.criado_em.desc()).first())
+    if not qr:
+        qr = PedidoQRCode(
+            token=secrets.token_urlsafe(24),
+            pedido_id=pedido.id, tipo='entrega',
+            expira_em=agora() + timedelta(hours=2),
+        )
+        db.session.add(qr)
+        db.session.commit()
+    url = url_for('handshake.handshake', token=qr.token, _external=True)
+    qr_png = gerar_png_data_url(url)
     return render_template('driver/qr_entrega.html',
                             driver=driver, pedido=pedido, qr=qr,
-                            url=url, qr_png=qr_png, token=token,
-                            fotos=fotos, pronto=pronto,
-                            n_falta=len(faltam_fotos(pedido, 'entrega')))
-
-
-@driver_bp.route('/<token>/pedido/<int:pedido_id>/conferencia/entrega/foto/<int:item_id>',
-                  methods=['POST'])
-@csrf.exempt
-def conferencia_entrega_upload(token, pedido_id, item_id):
-    """Motorista envia foto de um item especifico (etapa entrega).
-    Autenticado por _driver_por_token + PIN."""
-    from flask import jsonify
-
-    from app.models import PedidoItem
-    from app.services.conferencia import salvar_foto
-
-    driver = _driver_por_token(token)
-    if not driver:
-        return jsonify(ok=False, erro='token invalido'), 404
-    if not _autenticado(driver):
-        return jsonify(ok=False, erro='nao autenticado (falta PIN)'), 401
-    pedido = PedidoLoja.query.get_or_404(pedido_id)
-    item = PedidoItem.query.get_or_404(item_id)
-    if item.pedido_id != pedido.id:
-        return jsonify(ok=False, erro='item nao pertence ao pedido'), 400
-    if pedido.status != 'em_transporte':
-        return jsonify(ok=False, erro=f'pedido nao esta em transporte (status: {pedido.status})'), 409
-    file = request.files.get('foto')
-    if not file:
-        return jsonify(ok=False, erro='campo foto ausente'), 400
-    foto, erro = salvar_foto(item.id, 'entrega', file,
-                              criado_por_driver_id=driver.id)
-    if erro:
-        return jsonify(ok=False, erro=erro), 400
-    return jsonify(ok=True, foto_id=foto.id,
-                   url=url_for('driver.conferencia_entrega_foto_serve',
-                                token=token, pedido_id=pedido.id,
-                                foto_id=foto.id))
-
-
-@driver_bp.route('/<token>/pedido/<int:pedido_id>/conferencia/foto/<int:foto_id>.jpg')
-def conferencia_entrega_foto_serve(token, pedido_id, foto_id):
-    """Serve a imagem inline (motorista autenticado)."""
-    from app.models import PedidoItemFoto
-    driver = _driver_por_token(token)
-    if not driver:
-        abort(404)
-    if not _autenticado(driver):
-        abort(401)
-    foto = PedidoItemFoto.query.get_or_404(foto_id)
-    # Confere que a foto eh do pedido reivindicado
-    if foto.pedido_item.pedido_id != pedido_id:
-        abort(404)
-    return send_file(io.BytesIO(foto.imagem),
-                      mimetype=foto.mimetype or 'image/jpeg',
-                      max_age=0)
+                            url=url, qr_png=qr_png)
 
 
 @driver_bp.route('/<token>/pedidos-loja')
