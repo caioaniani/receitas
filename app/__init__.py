@@ -439,15 +439,17 @@ def _alembic_stamp_se_necessario(app):
         tabelas = set(insp.get_table_names())
         if 'usuario' not in tabelas:
             return  # banco novo/vazio
-        # Fase 1: stamp baseline se Alembic nunca foi inicializado
+        # Fase 1: stamp BASELINE (nao head!) se Alembic nunca foi inicializado.
+        # Stampar 'head' pularia migrations posteriores que devem ser aplicadas
+        # no banco prod (ex: B4 muda Float pra Numeric, B5 adiciona FKs).
         if 'alembic_version' not in tabelas:
             from flask_migrate import stamp
-            stamp(directory='migrations', revision='head')
+            stamp(directory='migrations', revision='69d82afed149')
             logger.warning(
-                'Alembic: baseline marcada (stamp head) — schema legado adotado.'
+                'Alembic: baseline marcada — schema legado adotado. '
+                'Upgrade pra head vai rodar a seguir.'
             )
-            return  # primeira execucao: nao roda upgrade alem do stamp
-        # Fase 2: aplica migrations pendentes
+        # Fase 2: aplica migrations pendentes ate head
         from flask_migrate import upgrade as _upgrade
         _upgrade(directory='migrations')
     except Exception:  # noqa: BLE001
