@@ -135,7 +135,8 @@ def itens_vendidos():
 @admin_required
 def api_itens_vendidos():
     from app.services import vendas_itens
-    inicio_str = request.args.get('inicio') or date.today().isoformat()
+    from app.utils import hoje as _hoje_brt
+    inicio_str = request.args.get('inicio') or _hoje_brt().isoformat()
     fim_str = request.args.get('fim') or inicio_str
     loja = (request.args.get('loja') or '').strip() or None
     try:
@@ -146,7 +147,7 @@ def api_itens_vendidos():
     if (fim - inicio).days > 92:
         return jsonify(ok=False, erro='intervalo maximo de 92 dias'), 400
 
-    hoje = date.today()
+    hoje = _hoje_brt()
     dias_ate_hoje = max(0, (hoje - fim).days) if fim < hoje else 0
     dias_extra = min(dias_ate_hoje, 7)
     try:
