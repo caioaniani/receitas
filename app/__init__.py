@@ -213,13 +213,10 @@ def create_app(config_class=None):
             except Exception:
                 pass
 
-        mp_json = mp_data['json']
-        mp_nomes = mp_data['nomes']
-
         return dict(
             sidebar_categorias=categorias,
-            mp_json=mp_json,
-            mp_nomes=mp_nomes,
+            mp_dict=mp_data['dict'],
+            mp_nomes=mp_data['nomes'],
             receita_nomes=receita_nomes,
             funcionarios=funcionarios,
             proj_atrasadas=proj_atrasadas,
