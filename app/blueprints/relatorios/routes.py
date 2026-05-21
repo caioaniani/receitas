@@ -246,9 +246,9 @@ def api_estoque_baixo():
 def previsao():
     """Previsao de demanda diaria por (item × loja) com base em media de
     venda no mesmo dia-da-semana nas ultimas 8 semanas. So vendas PDV/Seru."""
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
-    # Filtra Industria (nao tem PDV)
-    lojas = [l for l in lojas if l.nome.lower() != 'industria']
+    lojas = (Loja.query
+             .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
+             .order_by(Loja.nome).all())
     loja_id = request.args.get('loja', type=int)
     if not loja_id and lojas:
         loja_id = lojas[0].id
