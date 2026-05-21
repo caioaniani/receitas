@@ -1,0 +1,41 @@
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+exclude = [
+    "migrations/",       # gerado pelo Alembic
+    "deploy/backups/",
+    ".venv/", "venv/",
+    "__pycache__/",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "F",     # pyflakes
+    "W",     # pycodestyle warnings
+    "I",     # isort
+    "B",     # bugbear (common mistakes)
+    "UP",    # pyupgrade (modernize syntax)
+    "SIM",   # simplifications
+    "BLE",   # avoid bare except
+]
+ignore = [
+    "E501",  # line too long — temos linhas longas em queries e templates
+    "B008",  # function calls in defaults — Flask usa `request.args.get` em defaults as vezes
+    "SIM108", # ternario forcado — `if/else` explicito eh mais legivel as vezes
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/services/copilot.py" = ["E402"]   # imports tardios pra evitar circular
+"app/__init__.py" = ["E402"]            # idem
+"tests/*.py" = ["BLE001"]               # testes podem capturar Exception largo
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "config"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::sqlalchemy.exc.LegacyAPIWarning",
+]
