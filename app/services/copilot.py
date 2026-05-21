@@ -1270,9 +1270,8 @@ def _enriquecer_criar_pedido(tool_input):
         else:
             loja_id = None
     if not loja_id and loja_nome_input:
-        from sqlalchemy import func
-        l = (Loja.query.filter(func.lower(Loja.nome) == loja_nome_input.lower()).first()
-             or Loja.query.filter(Loja.nome.ilike(f'%{loja_nome_input}%')).first())
+        from app.utils import resolver_loja_por_nome
+        l = resolver_loja_por_nome(loja_nome_input)
         if l:
             loja_id = l.id
             loja_nome = l.nome
