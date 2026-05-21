@@ -23,12 +23,12 @@ from datetime import date, datetime, timedelta, time
 from app.extensions import db
 from app.models import (VendaManualLoja, MovEstoqueLoja, EstoqueLoja, LojaProdutoMap,
                         Loja, Receita, Produto, MateriaPrima)
+from app.constants import VENDA_TIPOS_LOJA
 from app.services import estoque_loja_lote as svc_lote
 from app.utils import agora, hoje
 
 
-VENDAS_REAIS = ('venda_seru', 'venda_seru_sem_estoque',
-                'venda_vnda', 'venda_vnda_sem_estoque')
+VENDAS_REAIS = VENDA_TIPOS_LOJA
 
 
 def _agregar_vendas_vnda_api(data_inicio, data_fim):
