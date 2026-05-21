@@ -23,9 +23,10 @@ def test_desperdicio_cesta_via_copilot(app, admin_user, loja, catalogo):
     db.session.flush()
     db.session.add_all([
         ProdutoItem(produto_id=cesta.id, tipo='receita',
-                     item_nome=pao.nome, quantidade=5),
+                     item_nome=pao.nome, receita_id=pao.id, quantidade=5),
         ProdutoItem(produto_id=cesta.id, tipo='receita',
-                     item_nome=catalogo['receita'].nome, quantidade=2),
+                     item_nome=catalogo['receita'].nome,
+                     receita_id=catalogo['receita'].id, quantidade=2),
     ])
     # Estoque inicial: 30 pao, 8 croissant
     db.session.add(EstoqueLoja(loja_id=loja.id, receita_id=pao.id, quantidade=30))
