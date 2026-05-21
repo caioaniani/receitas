@@ -638,11 +638,46 @@ document.addEventListener('DOMContentLoaded', function () {
             return null;
         }
 
+        function _norm(s) {
+            return (s || '').trim().toLowerCase();
+        }
+
+        // Indices normalizados (case/espaco-tolerantes), construidos uma vez
+        // por render. Evita custo zero quando grafia divergir (ex: "Croissant
+        // Tradicional" vs "Croissant Tradicional ").
+        var _RECEITA_CUSTOS_N = null;
+        var _PRODUTO_CUSTOS_N = null;
+        var _MP_DATA_N = null;
+        function _receitaCustoN() {
+            if (_RECEITA_CUSTOS_N) return _RECEITA_CUSTOS_N;
+            _RECEITA_CUSTOS_N = {};
+            if (typeof RECEITA_CUSTOS !== 'undefined') {
+                Object.keys(RECEITA_CUSTOS).forEach(function (k) {
+                    _RECEITA_CUSTOS_N[_norm(k)] = RECEITA_CUSTOS[k];
+                });
+            }
+            return _RECEITA_CUSTOS_N;
+        }
+        function _produtoCustoN() {
+            if (_PRODUTO_CUSTOS_N) return _PRODUTO_CUSTOS_N;
+            _PRODUTO_CUSTOS_N = {};
+            if (typeof PRODUTO_CUSTOS !== 'undefined') {
+                Object.keys(PRODUTO_CUSTOS).forEach(function (k) {
+                    _PRODUTO_CUSTOS_N[_norm(k)] = PRODUTO_CUSTOS[k];
+                });
+            }
+            return _PRODUTO_CUSTOS_N;
+        }
+
         function getCustoItem(tipo, nome) {
             if (tipo === 'receita') {
-                return (typeof RECEITA_CUSTOS !== 'undefined' && RECEITA_CUSTOS[nome]) || 0;
+                if (typeof RECEITA_CUSTOS === 'undefined') return 0;
+                if (RECEITA_CUSTOS[nome]) return RECEITA_CUSTOS[nome];
+                return _receitaCustoN()[_norm(nome)] || 0;
             } else if (tipo === 'produto') {
-                return (typeof PRODUTO_CUSTOS !== 'undefined' && PRODUTO_CUSTOS[nome]) || 0;
+                if (typeof PRODUTO_CUSTOS === 'undefined') return 0;
+                if (PRODUTO_CUSTOS[nome]) return PRODUTO_CUSTOS[nome];
+                return _produtoCustoN()[_norm(nome)] || 0;
             } else {
                 var mp = _findMp(nome);
                 if (!mp) return 0;
