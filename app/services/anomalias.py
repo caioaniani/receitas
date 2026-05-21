@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 
 from flask import current_app
 
-from app.constants import STATUS_PEDIDO_FINALIZADOS, VENDA_TIPOS_LOJA
+from app.constants import STATUS_PEDIDO_FINALIZADOS, VENDA_TIPOS_LOJA_LOJA
 from app.utils import hoje as hoje_brt
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ def _vendas_loja_no_dia(data_alvo):
                              db.func.coalesce(db.func.sum(MovEstoqueLoja.quantidade), 0))
             .join(MovEstoqueLoja,
                   MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id)
-            .filter(MovEstoqueLoja.tipo.in_(VENDA_TIPOS),
+            .filter(MovEstoqueLoja.tipo.in_(VENDA_TIPOS_LOJA),
                     MovEstoqueLoja.data >= ini,
                     MovEstoqueLoja.data < fim)
             .group_by(EstoqueLoja.loja_id)
@@ -75,7 +75,7 @@ def _vendas_item_periodo(data_ini, data_fim):
                              db.func.coalesce(db.func.sum(MovEstoqueLoja.quantidade), 0))
             .join(MovEstoqueLoja,
                   MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id)
-            .filter(MovEstoqueLoja.tipo.in_(VENDA_TIPOS),
+            .filter(MovEstoqueLoja.tipo.in_(VENDA_TIPOS_LOJA),
                     MovEstoqueLoja.data >= ini,
                     MovEstoqueLoja.data < fim)
             .group_by(EstoqueLoja.id)
