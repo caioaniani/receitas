@@ -2857,14 +2857,36 @@ def executar_registrar_desperdicio(params, user):
     if qtd <= 0:
         return {'ok': False, 'erro': 'Quantidade deve ser > 0.'}
 
-    motivo = (params.get('motivo') or 'vencido').strip() or 'vencido'
-    if motivo not in ('vencido', 'estragado', 'queimado', 'caiu', 'outro'):
-        motivo = 'vencido'
+    from app.constants import (
+        DESPERDICIO_MOTIVO_REAPROVEITAVEL,
+        DESPERDICIO_MOTIVOS,
+    )
+    motivo = (params.get('motivo') or 'validade').strip().lower()
+    # Compat retroativa: 'vencido' (motivo antigo) eh sinonimo de 'validade'.
+    # 'estragado' (antigo) → 'estragou'. 'queimado' → 'queimou'.
+    motivo = {'vencido': 'validade', 'estragado': 'estragou',
+              'queimado': 'queimou'}.get(motivo, motivo)
+    if motivo not in DESPERDICIO_MOTIVOS:
+        motivo = 'validade'
     observacao = (params.get('observacao') or '').strip() or None
+
+    # REAPROVEITAVEL: se motivo='validade' E item marcado como reaproveitavel,
+    # registra o Desperdicio (pra historico/rastreabilidade) mas NAO baixa
+    # o estoque — o item vencido vira outra coisa.
+    reaproveita = False
+    if motivo == DESPERDICIO_MOTIVO_REAPROVEITAVEL:
+        if tipo_item == 'receita':
+            from app.models import Receita
+            obj = Receita.query.get(item_id)
+            reaproveita = bool(obj and obj.reaproveitavel)
+        elif tipo_item == 'produto':
+            from app.models import Produto
+            obj = Produto.query.get(item_id)
+            reaproveita = bool(obj and obj.reaproveitavel)
 
     # CESTA: se for produto-cesta, baixa componentes
     componentes_cesta = []
-    if tipo_item == 'produto':
+    if tipo_item == 'produto' and not reaproveita:
         from app.models import Produto
         from app.services.cestas import componentes_de_cesta
         produto_obj = Produto.query.get(item_id)
