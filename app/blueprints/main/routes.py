@@ -715,7 +715,42 @@ def debug_schema():
     except Exception as e:  # noqa: BLE001
         info['erro_colunas'] = f'{type(e).__name__}: {e}'
 
-    # 3. Contagem rapida de orfaos (so se B5 ja aplicou)
+    # 3. Detecta estado misto: DDL aplicado parcialmente mas alembic_version
+    # atrasado. Usado pra sugerir stamp manual antes de tentar upgrade.
+    info['estado_misto'] = None
+    try:
+        insp = inspect(db.engine)
+        tabelas = set(insp.get_table_names())
+        cols_pi = {c['name'] for c in insp.get_columns('produto_item')}
+        cols_vb2b = {c['name']: c for c in insp.get_columns('venda_b2b')}
+        vt = cols_vb2b.get('valor_total', {})
+        vt_tipo = str(vt.get('type', '')) if vt else ''
+
+        b9_ddl = 'seru_debito_mov' in tabelas
+        b4_ddl = 'NUMERIC' in vt_tipo.upper()
+        b5_ddl = 'receita_id' in cols_pi
+
+        # Calcula qual e a revision mais avancada que ja teve seu DDL aplicado
+        ddl_avancado_em = '69d82afed149'  # baseline
+        if b9_ddl:
+            ddl_avancado_em = 'ac57b6648ec4'  # B9
+        if b9_ddl and b4_ddl:
+            ddl_avancado_em = '643bd66e89c3'  # B4
+        if b9_ddl and b4_ddl and b5_ddl:
+            ddl_avancado_em = 'efb6e5837fd0'  # B5 (head)
+
+        if info['alembic_current'] != ddl_avancado_em:
+            info['estado_misto'] = {
+                'alembic_diz': info['alembic_current'],
+                'ddl_real': ddl_avancado_em,
+                'b9_ddl': b9_ddl,
+                'b4_ddl': b4_ddl,
+                'b5_ddl': b5_ddl,
+            }
+    except Exception as e:  # noqa: BLE001
+        info['estado_misto'] = {'erro': f'{type(e).__name__}: {e}'}
+
+    # 4. Contagem rapida de orfaos (so se B5 ja aplicou)
     info['orfaos'] = None
     try:
         cols_pi = {c['name'] for c in inspect(db.engine).get_columns('produto_item')}
