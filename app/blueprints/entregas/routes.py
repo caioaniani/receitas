@@ -1727,4 +1727,63 @@ def api_debug():
     except http_requests.RequestException as e:
         info['erro_conexao'] = str(e)
 
-    return jsonify(info)
+
+@entregas_bp.route('/drivers/magic')
+@login_required
+@entrega_access_required
+def drivers_magic_status():
+    """Status dos magic tokens diarios de cada motorista ativo.
+
+    Mostra ultimo token, quando criado/expira, se foi enviado, se Z-API
+    confirmou ok. Permite regerar+reenviar pra um motorista especifico
+    (ex: ele perdeu o link / trocou de celular)."""
+    from app.models import Driver, DriverMagicToken
+    from app.services import driver_magic
+    from app.services import zapi as zapi_svc
+
+    drivers = Driver.query.filter_by(ativo=True).order_by(Driver.nome).all()
+    rows = []
+    for d in drivers:
+        mt = (DriverMagicToken.query
+              .filter_by(driver_id=d.id, revogado=False)
+              .filter(DriverMagicToken.expira_em > agora())
+              .order_by(DriverMagicToken.criado_em.desc())
+              .first())
+        ultimo = (DriverMagicToken.query
+                  .filter_by(driver_id=d.id)
+                  .order_by(DriverMagicToken.criado_em.desc())
+                  .first())
+        rows.append({
+            'driver': d,
+            'ativo': mt,
+            'ultimo': ultimo,
+        })
+    zapi_ok = zapi_svc.disponivel()
+    whitelist = sorted(driver_magic.telefones_drivers_ativos())
+    return render_template('entregas/drivers_magic.html',
+                            rows=rows, zapi_ok=zapi_ok, whitelist=whitelist)
+
+
+@entregas_bp.route('/drivers/magic/<int:did>/regerar', methods=['POST'])
+@login_required
+@entrega_access_required
+def drivers_magic_regerar(did):
+    """Forca regerar+reenviar magic link pra um motorista (botao na UI)."""
+    from flask import flash, redirect, url_for
+
+    from app.models import Driver
+    from app.services import driver_magic
+    d = Driver.query.get_or_404(did)
+    if not d.ativo:
+        flash(f'{d.nome} esta inativo. Reative antes.', 'warning')
+        return redirect(url_for('entregas.drivers_magic_status'))
+    try:
+        mt = driver_magic.gerar_token(d)
+        ok, msg = driver_magic.enviar_whatsapp(mt)
+        if ok:
+            flash(f'Link enviado pra {d.nome}.', 'success')
+        else:
+            flash(f'Token gerado mas falha no envio: {msg}', 'warning')
+    except Exception as exc:  # noqa: BLE001
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('entregas.drivers_magic_status'))
