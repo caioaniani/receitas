@@ -457,7 +457,7 @@ TOOL_REGISTRAR_DESPERDICIO_LOTE = {
         "properties": {
             "loja_id": {"type": ["integer", "null"]},
             "loja_nome": {"type": ["string", "null"], "description": "Nome da loja (ex: 'Ribeiro do Vale'). SEMPRE passe loja_nome OU loja_id — fuzzy match no servidor. Se o usuario nao mencionou a loja, NAO chame a tool: pergunte primeiro."},
-            "motivo": {"type": "string", "enum": ["vencido", "estragado", "queimado", "caiu", "outro"], "description": "Motivo unico pro lote inteiro. Default 'vencido'."},
+            "motivo": {"type": "string", "enum": ["validade", "estragou", "caiu", "queimou", "outro"], "description": "Motivo unico pro lote inteiro. Default 'validade'. Itens marcados como reaproveitaveis no cadastro NAO baixam estoque quando motivo='validade' (item vence mas vira outra coisa)."},
             "itens": {
                 "type": "array",
                 "items": {
