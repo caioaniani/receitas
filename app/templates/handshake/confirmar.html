@@ -4,7 +4,7 @@
 <div class="card card-soft p-3 mb-3">
     <div class="h1-mini">
         {% if qr.tipo == 'saida' %}
-        <i class="bi bi-truck"></i> Saída da Indústria
+        <i class="bi bi-truck"></i> Saida da Industria
         {% else %}
         <i class="bi bi-box-arrow-in-down"></i> Entrega na Loja
         {% endif %}
@@ -16,37 +16,96 @@
     </div>
 </div>
 
+<div class="alert {% if n_falta == 0 %}alert-success{% else %}alert-warning{% endif %} small mb-3">
+    {% if n_falta == 0 %}
+    <i class="bi bi-check-circle-fill"></i> Todas as fotos OK. Digite o PIN e confirme.
+    {% else %}
+    <i class="bi bi-camera-fill"></i>
+    Tire foto de <strong>cada item</strong>. Faltam <strong>{{ n_falta }}</strong>.
+    {% endif %}
+</div>
+
+<div class="card card-soft p-0 mb-3">
+    <ul class="list-group list-group-flush">
+        {% for it in pedido.itens %}
+        {% set foto = fotos.get(it.id) %}
+        <li class="list-group-item d-flex align-items-center gap-2 flex-wrap">
+            <div class="flex-grow-1">
+                <strong>{{ it.quantidade }}× {{ it.nome_item if it.nome_item else '?' }}</strong>
+                {% if it.observacao %}
+                <div class="text-muted small">obs: {{ it.observacao }}</div>
+                {% endif %}
+            </div>
+            {% if foto %}
+            <img src="{{ url_for('handshake.foto_serve', token=qr.token, foto_id=foto.id) }}"
+                 alt="foto" style="width:48px;height:48px;object-fit:cover;border-radius:.25rem;">
+            <span class="badge bg-success"><i class="bi bi-check"></i></span>
+            {% endif %}
+            <form class="conf-foto-form" data-item-id="{{ it.id }}" enctype="multipart/form-data">
+                <label class="btn btn-sm {% if foto %}btn-outline-secondary{% else %}btn-primary{% endif %} mb-0">
+                    <i class="bi bi-camera"></i>
+                    {% if foto %}Re-tirar{% else %}Foto{% endif %}
+                    <input type="file" name="foto" accept="image/*" capture="environment"
+                           style="display:none;" onchange="enviarFoto(this)">
+                </label>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
 <form method="POST" action="">
     <div class="card card-soft p-3 mb-3">
         <label class="form-label">
-            {% if qr.tipo == 'saida' %}
-            PIN do motorista
-            {% else %}
-            PIN da loja
-            {% endif %}
+            {% if qr.tipo == 'saida' %}PIN do motorista{% else %}PIN da loja{% endif %}
         </label>
         <input type="password" name="pin" class="form-control pin-input" inputmode="numeric"
-               autocomplete="off" autofocus maxlength="8" required>
+               autocomplete="off" autofocus maxlength="8" required {% if n_falta > 0 %}disabled{% endif %}>
         <small class="text-muted mt-2">
             {% if qr.tipo == 'saida' %}
-            Pergunta o PIN ao motorista responsável pela entrega.
+            Pergunte o PIN ao motorista responsavel pela entrega.
             {% else %}
-            Pergunta o PIN ao gerente da loja {{ pedido.loja.nome }}.
+            Pergunte o PIN ao gerente da loja {{ pedido.loja.nome }}.
             {% endif %}
         </small>
     </div>
-    <button type="submit" class="btn btn-primary btn-acao">
+    <button type="submit" class="btn btn-primary btn-acao" {% if n_falta > 0 %}disabled{% endif %}>
         <i class="bi bi-check2-circle"></i>
-        {% if qr.tipo == 'saida' %}Confirmar saída{% else %}Confirmar recebimento{% endif %}
+        {% if qr.tipo == 'saida' %}Confirmar saida{% else %}Confirmar recebimento{% endif %}
     </button>
+    {% if n_falta > 0 %}
+    <p class="kv mt-2 text-center text-muted">Tire as fotos pra liberar o PIN.</p>
+    {% endif %}
 </form>
 
-<details class="mt-3 small text-muted">
-    <summary>Ver itens do pedido</summary>
-    <ul class="list-unstyled mt-2 mb-0">
-    {% for it in pedido.itens %}
-        <li>· {{ it.quantidade }}× {{ it.nome_item }}{% if it.observacao %} <em class="text-muted">({{ it.observacao }})</em>{% endif %}</li>
-    {% endfor %}
-    </ul>
-</details>
+<script>
+const UPLOAD_BASE = "{{ url_for('handshake.upload_foto', token=qr.token, item_id=0) }}".replace('/0', '');
+function enviarFoto(input) {
+    const form = input.closest('form');
+    const itemId = form.dataset.itemId;
+    const file = input.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('foto', file);
+    const btn = form.querySelector('.btn');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Enviando...';
+    btn.classList.add('disabled');
+    fetch(UPLOAD_BASE + '/' + itemId, {
+        method: 'POST', body: fd, credentials: 'same-origin',
+    }).then(r => r.json()).then(j => {
+        if (j.ok) {
+            window.location.reload();
+        } else {
+            alert('Erro: ' + (j.erro || 'falha no upload'));
+            btn.innerHTML = orig;
+            btn.classList.remove('disabled');
+        }
+    }).catch(e => {
+        alert('Erro de rede: ' + e);
+        btn.innerHTML = orig;
+        btn.classList.remove('disabled');
+    });
+}
+</script>
 {% endblock %}
