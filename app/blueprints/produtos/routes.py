@@ -211,3 +211,85 @@ def cestas():
     return render_template('produtos/cestas.html',
                             com_componentes=com_componentes,
                             sem_componentes=sem_componentes)
+
+
+@produtos_bp.route('/cestas/orfaos')
+@login_required
+@catalogo_required
+def cestas_orfaos():
+    """Lista ProdutoItems sem FK vinculada (tipo definido mas receita_id /
+    materia_prima_id NULL). Esses componentes NAO baixam estoque na venda.
+
+    Owner ve isso destacado no dashboard. Admin pode vincular manualmente
+    aqui — selecionar Receita/MP do dropdown ou marcar como `removido`
+    (caso o componente nao deveria estar na cesta).
+    """
+    from sqlalchemy import or_
+    orfaos = (ProdutoItem.query
+              .filter(or_(
+                  (ProdutoItem.tipo == 'receita') & (ProdutoItem.receita_id.is_(None)),
+                  (ProdutoItem.tipo == 'mp') & (ProdutoItem.materia_prima_id.is_(None)),
+              ))
+              .all())
+    receitas = Receita.query.order_by(Receita.nome).all()
+    mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    return render_template('produtos/cestas_orfaos.html',
+                            orfaos=orfaos, receitas=receitas, mps=mps)
+
+
+@produtos_bp.route('/cestas/orfaos/<int:id>/vincular', methods=['POST'])
+@login_required
+@catalogo_required
+def vincular_orfao(id):
+    """Vincula um ProdutoItem orfao a uma Receita ou MateriaPrima."""
+    pi = ProdutoItem.query.get_or_404(id)
+    alvo = (request.form.get('alvo') or '').strip()
+    if not alvo or ':' not in alvo:
+        flash('Selecione um item.', 'warning')
+        return redirect(url_for('produtos.cestas_orfaos'))
+    tipo, id_str = alvo.split(':', 1)
+    try:
+        target_id = int(id_str)
+    except ValueError:
+        flash('ID invalido.', 'warning')
+        return redirect(url_for('produtos.cestas_orfaos'))
+
+    if tipo == 'receita':
+        r = Receita.query.get(target_id)
+        if not r:
+            flash('Receita nao encontrada.', 'warning')
+            return redirect(url_for('produtos.cestas_orfaos'))
+        pi.tipo = 'receita'
+        pi.receita_id = r.id
+        pi.materia_prima_id = None
+        pi.item_nome = r.nome
+    elif tipo == 'mp':
+        m = MateriaPrima.query.get(target_id)
+        if not m:
+            flash('MP nao encontrada.', 'warning')
+            return redirect(url_for('produtos.cestas_orfaos'))
+        pi.tipo = 'mp'
+        pi.materia_prima_id = m.id
+        pi.receita_id = None
+        pi.item_nome = m.nome
+    else:
+        flash('Tipo invalido.', 'warning')
+        return redirect(url_for('produtos.cestas_orfaos'))
+
+    db.session.commit()
+    flash(f'Componente vinculado a "{pi.nome_resolvido}".', 'success')
+    return redirect(url_for('produtos.cestas_orfaos'))
+
+
+@produtos_bp.route('/cestas/orfaos/<int:id>/excluir', methods=['POST'])
+@login_required
+@catalogo_required
+def excluir_orfao(id):
+    """Remove um ProdutoItem orfao da cesta (caso o componente nao deveria
+    estar la — ex: receita que foi deletada do catalogo)."""
+    pi = ProdutoItem.query.get_or_404(id)
+    nome = pi.item_nome
+    db.session.delete(pi)
+    db.session.commit()
+    flash(f'Componente "{nome}" removido da cesta.', 'success')
+    return redirect(url_for('produtos.cestas_orfaos'))
