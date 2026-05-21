@@ -16,10 +16,16 @@ def lista():
     resultado = calcular_custos_receitas()
     fabricados = resultado['fabricados']
 
-    # Calcular custo de cada cesta
+    # Calcular custo de cada cesta — passa dict de produto_custos pra
+    # resolver componentes tipo='produto' (cesta-de-cesta).
+    from app.services.custos import calcular_custos_produtos
+    produto_custos_idx = calcular_custos_produtos(resultado['custos'],
+                                                    resultado['mp_info'])
     cestas = []
     for p in produtos:
-        custo = calcular_custo_produto(p, resultado['custos'], resultado['mp_info'])
+        custo = calcular_custo_produto(p, resultado['custos'],
+                                        resultado['mp_info'],
+                                        produto_custos_idx)
         cestas.append({
             'id': p.id,
             'nome': p.nome,
