@@ -1,5 +1,10 @@
 """Sugestao de producao agregada — quanto produzir nos proximos N dias.
 
+Cache: o resultado eh cacheado por 60s em memoria do processo pra evitar
+que cada refresh do painel TV refaca chamadas VNDA pesadas (VNDA paga
+quando nao tem cache). Cache key inclui horizonte_dias, lookback_dias.
+
+
 Producao precisa estar na frente das lojas. Como o historico de pedidos
 e ralo, usamos vendas reais (Seru + VNDA + manuais) — historico bom — como
 proxy de demanda. Reusa `vendas_manuais.sugerir_pedido` (que ja agrega
