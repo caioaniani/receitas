@@ -2295,26 +2295,6 @@ def executar_balanco_congelados(params, user):
             'url': '/pedidos/congelados'}
 
 
-# Re-defino os roteadores pra incluir as novas tools.
-# Como _executar_read e executar foram redefinidos com `# noqa: F811`,
-# preciso adicionar mais um nivel.
-
-_BASE_READ = _executar_read
-_BASE_EXEC = executar
-
-
-def _executar_read(tool_name, params, user):  # noqa: F811
-    try:
-        if tool_name == 'consultar_foco':
-            return _read_consultar_foco(params, user)
-        if tool_name == 'consultar_tarefas':
-            return _read_consultar_tarefas(params, user)
-    except Exception as exc:  # noqa: BLE001
-        logger.exception('Copilot read tool falhou')
-        return {'erro': str(exc)}
-    return _BASE_READ(tool_name, params, user)
-
-
 def executar_entrada_lote_loja(params, user):
     """Aplica entrada em lote no estoque de uma loja. Resolve nomes se preciso."""
     from app.services import estoque_loja_lote as svc
