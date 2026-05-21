@@ -2333,30 +2333,6 @@ def executar_entrada_lote_loja(params, user):
             'url': f'/pedidos/estoque-loja?loja={loja_id}'}
 
 
-def executar(tipo_acao, params, user):  # noqa: F811
-    if tipo_acao == 'marcar_tarefa_feita':
-        return executar_marcar_tarefa_feita(params, user)
-    if tipo_acao == 'balanco_congelados':
-        return executar_balanco_congelados(params, user)
-    if tipo_acao == 'entrada_lote_loja':
-        return executar_entrada_lote_loja(params, user)
-    if tipo_acao == 'registrar_desperdicio':
-        return executar_registrar_desperdicio(params, user)
-    if tipo_acao == 'registrar_desperdicio_lote':
-        return executar_registrar_desperdicio_lote(params, user)
-    if tipo_acao == 'criar_venda_b2b':
-        return executar_criar_venda_b2b(params, user)
-    if tipo_acao == 'criar_cliente_b2b':
-        return executar_criar_cliente_b2b(params, user)
-    if tipo_acao == 'anexar_foto_pedido':
-        return executar_anexar_foto_pedido(params, user)
-    if tipo_acao == 'receber_pedido':
-        # Reusa o executor de mudar_status_pedido com novo_status='receber'
-        return executar_mudar_status_pedido(
-            {**params, 'novo_status': 'receber'}, user)
-    return _BASE_EXEC(tipo_acao, params, user)
-
-
 def executar_registrar_desperdicio_lote(params, user):
     """Aplica varios desperdicios de uma loja num so commit.
 
