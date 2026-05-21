@@ -58,15 +58,16 @@ def _get(endpoint, params=None):
         return None
 
 
-def _get_strict(endpoint, params=None):
+def _get_strict(endpoint, params=None, timeout=5):
     """Como `_get` mas LEVANTA a exception em vez de engolir.
 
     Caller usa quando quer mensagem de erro especifica (status code, corpo)
     em vez de None opaco. Util em telas pro admin debugar configuracao do
-    token VNDA, rate limit, etc.
+    token VNDA, rate limit, etc. Timeout default mais curto (5s vs 10s)
+    pra nao travar paginas que consomem isso sincronamente.
     """
     url = f'{_base_url()}{endpoint}'
-    resp = requests.get(url, headers=_headers(), params=params, timeout=10)
+    resp = requests.get(url, headers=_headers(), params=params, timeout=timeout)
     resp.raise_for_status()
     return resp
 
