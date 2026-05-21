@@ -80,11 +80,14 @@ def calcular_custos_receitas():
     }
 
 
-def calcular_custo_produto(produto, receita_custos, mp_info):
+def calcular_custo_produto(produto, receita_custos, mp_info, produto_custos=None):
     """Calcula custo total de um produto/cesta.
 
     Para MPs com unidade 'g' ou 'ml', quantidade está em gramas/ml.
     Para MPs com unidade 'un', quantidade é unidades e custo é direto.
+    Para componentes do tipo 'produto', usa produto_custos[nome] (dict de
+    custos ja resolvidos) — se nao fornecido ou nao achar, usa
+    `Produto.custo_direto`.
     """
     embalagem = produto.custo_embalagem or 0
     if produto.itens:
@@ -92,6 +95,16 @@ def calcular_custo_produto(produto, receita_custos, mp_info):
         for item in produto.itens:
             if item.tipo == 'receita':
                 custo += receita_custos.get(item.item_nome, 0) * item.quantidade
+            elif item.tipo == 'produto':
+                # Resolve via dict ja calculado (suporta cesta-de-cesta).
+                # Fallback: custo_direto do produto-componente.
+                if produto_custos is not None:
+                    custo_componente = produto_custos.get(item.item_nome, 0)
+                else:
+                    custo_componente = 0
+                    if item.produto_componente_id and item.produto_componente:
+                        custo_componente = item.produto_componente.custo_direto or 0
+                custo += custo_componente * item.quantidade
             else:
                 info = mp_info.get(item.item_nome, {})
                 custo_kg = info.get('custo_por_kg', 0)
@@ -103,6 +116,45 @@ def calcular_custo_produto(produto, receita_custos, mp_info):
     elif produto.custo_direto:
         return produto.custo_direto + embalagem
     return embalagem
+
+
+def calcular_custos_produtos(receita_custos, mp_info):
+    """Calcula {nome_produto: custo} pra todos os produtos ativos.
+
+    Lida com produto-de-produto (cesta dentro de cesta) por resolucao
+    iterativa, mesma logica do `calcular_custos_receitas`. Produtos sem
+    composicao usam `custo_direto`. Produtos com itens somam os componentes.
+    """
+    from app.models import Produto
+    produtos = Produto.query.filter(Produto.ativo.is_(True)).all()
+
+    custos = {}
+    # Primeira passada: produtos sem dependencia de outro produto.
+    # Iterativo pra suportar cesta dentro de cesta (max 5 niveis).
+    remaining = list(produtos)
+    for _ in range(MAX_PASSES):
+        still_remaining = []
+        for p in remaining:
+            # Se algum item tipo='produto' aponta pra produto que ainda
+            # nao calculamos, espera proxima passada.
+            depende_pendente = False
+            for item in (p.itens or []):
+                if item.tipo == 'produto' and item.item_nome not in custos:
+                    # Tenta tambem normalizado
+                    if _norm(item.item_nome) not in {_norm(k) for k in custos}:
+                        depende_pendente = True
+                        break
+            if depende_pendente:
+                still_remaining.append(p)
+                continue
+            custos[p.nome] = calcular_custo_produto(p, receita_custos, mp_info, custos)
+        remaining = still_remaining
+        if not remaining:
+            break
+    # Sobras (referencia circular ou nao-resolviveis): usa custo_direto
+    for p in remaining:
+        custos[p.nome] = float(p.custo_direto or 0) + (p.custo_embalagem or 0)
+    return custos
 
 
 def calcular_rendimento(receita, custos_dict=None):
