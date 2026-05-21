@@ -81,8 +81,8 @@ class VendaB2BItem(db.Model):
     receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
     produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
     quantidade = db.Column(db.Integer, nullable=False)
-    preco_unitario = db.Column(db.Float, nullable=False)
-    desconto_percentual = db.Column(db.Float, default=0)
+    preco_unitario = db.Column(db.Numeric(10, 2), nullable=False)
+    desconto_percentual = db.Column(db.Float, default=0)  # %, nao R$
 
     receita = db.relationship('Receita')
     produto = db.relationship('Produto')
