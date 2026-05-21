@@ -745,7 +745,10 @@ document.addEventListener('DOMContentLoaded', function () {
             if (e.target.classList.contains('item-tipo')) {
                 var row = e.target.closest('tr');
                 var nomeInput = row.querySelector('.item-nome');
-                nomeInput.setAttribute('list', e.target.value === 'receita' ? 'receita-list' : 'mp-list');
+                var listId = 'mp-list';
+                if (e.target.value === 'receita') listId = 'receita-list';
+                else if (e.target.value === 'produto') listId = 'produto-list';
+                nomeInput.setAttribute('list', listId);
                 nomeInput.value = '';
                 recalcularCesta();
             }
