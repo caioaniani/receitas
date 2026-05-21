@@ -224,11 +224,18 @@ def _handshake_saida(qr, pedido, pin):
     # aqui, nao faz sentido pedir de novo.
     if driver_match.pin:
         session[f'driver_auth_{driver_match.id}'] = True
-    # Link de proximo passo: motorista vai na loja gerar QR de entrega.
-    # driver_match.token leva pra pagina do motorista; daí ele clica em
-    # 'Pedidos de loja' ou usa o link direto pro pedido.
+    # Link de proximo passo: prefere magic token do dia (rotativo) se
+    # existir; cai pra Driver.token legado caso ainda nao tenha
+    # rodado o cron diario.
+    from app.models import DriverMagicToken
+    mt = (DriverMagicToken.query
+          .filter_by(driver_id=driver_match.id, revogado=False)
+          .filter(DriverMagicToken.expira_em > agora())
+          .order_by(DriverMagicToken.criado_em.desc())
+          .first())
+    tok = mt.token if mt else driver_match.token
     proximo_url = url_for('driver.qr_entrega',
-                           token=driver_match.token,
+                           token=tok,
                            pedido_id=pedido.id, _external=True)
     return render_template('handshake/sucesso.html',
                             msg=f'Saida confirmada por {driver_match.nome}.',
