@@ -11,6 +11,7 @@ from app.extensions import db
 from app.models import MateriaPrima, Receita, ReceitaIngrediente, Loja
 from app.services.custos import calcular_custos_receitas
 from app.services.previsao_demanda import prever_demanda, prever_semana
+from app.utils import hoje as hoje_brt
 
 
 @relatorios_bp.route('/custos')
