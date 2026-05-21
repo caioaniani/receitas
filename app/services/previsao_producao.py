@@ -198,9 +198,11 @@ def sugerir_producao(horizonte_dias=7, lookback_dias=14, usar_cache=True):
     # esta coberto mas tem demanda alta (visibilidade).
     itens.sort(key=lambda x: (-x['qtd_a_produzir'], -x['qtd_total_lojas']))
 
-    return {
+    resultado = {
         'itens': itens,
         'horizonte_dias': horizonte_dias,
         'lookback_dias': lookback_dias,
         'avisos_vnda': avisos_vnda,
     }
+    _SUG_CACHE[cache_key] = {'t': time.time(), 'data': resultado}
+    return resultado
