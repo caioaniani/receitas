@@ -58,6 +58,19 @@ def _get(endpoint, params=None):
         return None
 
 
+def _get_strict(endpoint, params=None):
+    """Como `_get` mas LEVANTA a exception em vez de engolir.
+
+    Caller usa quando quer mensagem de erro especifica (status code, corpo)
+    em vez de None opaco. Util em telas pro admin debugar configuracao do
+    token VNDA, rate limit, etc.
+    """
+    url = f'{_base_url()}{endpoint}'
+    resp = requests.get(url, headers=_headers(), params=params, timeout=10)
+    resp.raise_for_status()
+    return resp
+
+
 def _is_entrega_expressa(order):
     """Detecta pedidos com frete expresso (entrega em 1 hora)."""
     candidatos = [
