@@ -1,10 +1,9 @@
 import logging
 import os
-from datetime import datetime
 
 from flask import Flask, Response, render_template, request
 
-from app.extensions import db, csrf, login_manager, limiter, migrate
+from app.extensions import csrf, db, limiter, login_manager, migrate
 from app.utils import agora as agora_brt
 from config import Config
 
@@ -83,8 +82,8 @@ def create_app(config_class=None):
         """Versionamento de arquivos estaticos para cache busting.
         Usa hash MD5 do conteudo (8 chars) — muda sempre que arquivo muda,
         independente de mtime (Railway deploy nao preserva mtime original)."""
-        import os
         import hashlib
+        import os
         versions = {}
         for rel in ('js/projetos.js', 'js/app.js', 'js/entregas.js', 'js/copilot.js', 'css/style.css'):
             try:
@@ -117,7 +116,8 @@ def create_app(config_class=None):
 
     # ── Auto-invalidação: limpa o cache quando algum modelo cacheado muda ──
     from sqlalchemy import event as _sa_event
-    from app.models import Receita, MateriaPrima, Usuario, TarefaProjeto
+
+    from app.models import MateriaPrima, Receita, TarefaProjeto, Usuario
     _MODELOS_CACHEADOS = (Receita, MateriaPrima, Usuario, TarefaProjeto)
 
     @_sa_event.listens_for(db.session, 'before_commit')
@@ -131,7 +131,8 @@ def create_app(config_class=None):
     @app.context_processor
     def inject_sidebar():
         from flask_login import current_user
-        from app.models import Receita, MateriaPrima, Usuario, Atribuicao
+
+        from app.models import Atribuicao, MateriaPrima, Receita, Usuario
 
         # Sem queries para usuários não autenticados (ex: página de login)
         if not current_user.is_authenticated:
@@ -288,21 +289,21 @@ def create_app(config_class=None):
         return render_template('errors/500.html'), 500
 
     # ── Blueprints ──
+    from app.blueprints.auth import auth_bp
+    from app.blueprints.b2b import b2b_bp
+    from app.blueprints.comprovante import comprovante_bp
+    from app.blueprints.driver import driver_bp
+    from app.blueprints.entregas import entregas_bp
+    from app.blueprints.handshake import handshake_bp
     from app.blueprints.main import main_bp
     from app.blueprints.materias_primas import materias_primas_bp
-    from app.blueprints.receitas import receitas_bp
-    from app.blueprints.produtos import produtos_bp
-    from app.blueprints.auth import auth_bp
-    from app.blueprints.rh import rh_bp
-    from app.blueprints.producao import producao_bp
-    from app.blueprints.relatorios import relatorios_bp
     from app.blueprints.pedidos import pedidos_bp
-    from app.blueprints.entregas import entregas_bp
-    from app.blueprints.driver import driver_bp
-    from app.blueprints.comprovante import comprovante_bp
+    from app.blueprints.producao import producao_bp
+    from app.blueprints.produtos import produtos_bp
     from app.blueprints.projetos import projetos_bp
-    from app.blueprints.b2b import b2b_bp
-    from app.blueprints.handshake import handshake_bp
+    from app.blueprints.receitas import receitas_bp
+    from app.blueprints.relatorios import relatorios_bp
+    from app.blueprints.rh import rh_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(materias_primas_bp, url_prefix='/materias-primas')
@@ -341,7 +342,7 @@ def create_app(config_class=None):
 
         # Seed só roda localmente (SQLite) — em produção os dados já existem
         if app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite'):
-            from app.seed import seed_database, seed_cardapio, seed_update_v2
+            from app.seed import seed_cardapio, seed_database, seed_update_v2
             seed_database()
             seed_cardapio()
             seed_update_v2()
@@ -443,8 +444,9 @@ def _alembic_stamp_se_necessario(app):
 def _migrate_postgres(app):
     """Adiciona colunas novas no PostgreSQL. Cada ALTER em commit isolado
     para que falhas pontuais não abortem migrations seguintes."""
-    from sqlalchemy import text
     import logging
+
+    from sqlalchemy import text
     log = logging.getLogger(__name__)
 
     def _try(stmt):
@@ -1194,6 +1196,7 @@ def _migrate_postgres(app):
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
+
         from app.models import Driver
         sem_token = Driver.query.filter(
             (Driver.token == None) | (Driver.token == '')  # noqa: E711
