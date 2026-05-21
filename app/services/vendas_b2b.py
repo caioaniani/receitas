@@ -235,9 +235,8 @@ def cancelar_venda(venda, user=None):
 def receber_pagamento(parcela, valor, forma_pagamento=None, observacao=None):
     """Soma valor ao valor_pago da parcela. Marca pago_em se quitar.
 
-    Usa Decimal pra calculo + tolerancia na comparacao de quitacao.
-    Sem isso, 3 parcelas de R$ 33,33 cobrindo R$ 100,00 deixavam a
-    ultima sem quitar (0.999... < 1.000 em float).
+    Numeric(10, 2) no banco garante precisao exata em centavos —
+    sem necessidade de tolerancia de arredondamento.
     """
     from decimal import Decimal, InvalidOperation
     try:
@@ -247,21 +246,15 @@ def receber_pagamento(parcela, valor, forma_pagamento=None, observacao=None):
     if v <= 0:
         raise ValueError('valor deve ser > 0')
 
-    pago_atual = Decimal(str(parcela.valor_pago or 0))
-    pago_novo = pago_atual + v
-    # Arredonda em 2 casas pra salvar como Float sem propagar imprecisao
-    parcela.valor_pago = float(round(pago_novo, 2))
+    pago_atual = Decimal(parcela.valor_pago or 0)
+    parcela.valor_pago = pago_atual + v
 
     if forma_pagamento:
         parcela.forma_pagamento = forma_pagamento
     if observacao:
         parcela.observacao = observacao
 
-    # Tolerancia: 1 centavo abaixo do valor ja conta como quitado.
-    # Cobre erros de arredondamento em divisao (R$100 / 3 = R$33.33 × 3 =
-    # R$99.99, falta 1 centavo). Falta de 2+ centavos ainda nao quita.
-    alvo = Decimal(str(parcela.valor or 0)) - Decimal('0.01')
-    if pago_novo >= alvo:
+    if parcela.valor_pago >= Decimal(parcela.valor or 0):
         parcela.pago_em = agora()
     db.session.commit()
     return parcela
