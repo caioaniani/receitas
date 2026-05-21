@@ -35,8 +35,13 @@ from app.utils import hoje
 
 VENDAS_REAIS = VENDA_TIPOS_LOJA
 
+# Stats da ultima chamada VNDA (por chave loja_id) — usado pra confirmar
+# no painel TV se VNDA realmente foi consultada. Cada chamada de
+# `_agregar_vendas_vnda_api` sobrescreve a entrada do caller atual.
+ULTIMA_CONSULTA_VNDA = {}
 
-def _agregar_vendas_vnda_api(data_inicio, data_fim):
+
+def _agregar_vendas_vnda_api(data_inicio, data_fim, _loja_id=None):
     """Puxa direto da API do VNDA pedidos com data_entrega no intervalo
     e agrega por (tipo, id) via VndaProdutoMap. NAO depende de sync
     previo do cron — funciona retroativo.
@@ -46,21 +51,37 @@ def _agregar_vendas_vnda_api(data_inicio, data_fim):
     Ex: 34 Family Box (1 unid) × 5 Croissant + 3 Pao Frances + ... vira
     34*5 croissants + 34*3 pao frances + ... contabilizado.
 
+    Atualiza `ULTIMA_CONSULTA_VNDA[_loja_id or 0]` com stats da chamada
+    pra debugar no painel sem mexer no contrato de retorno.
+
     Retorna (vendas_dict, aviso). vendas_dict = {(tipo, id): qtd_total}.
     """
     from app.models import VndaProdutoMap
     from app.services import vnda as vnda_api
     from app.services.vnda_sync import _componentes_de_cesta
 
+    stats_key = _loja_id or 0
+    ULTIMA_CONSULTA_VNDA[stats_key] = {
+        'tentou_em': datetime.now(),
+        'n_orders_recebidos': 0,
+        'n_processados': 0,
+        'erro': None,
+    }
+
     try:
         todos = vnda_api._buscar_pedidos_janela(data_inicio, data_fim)
     except vnda_api.VndaUnavailableError as e:
+        ULTIMA_CONSULTA_VNDA[stats_key]['erro'] = f'VNDA indisponivel: {e}'
         return {}, f'VNDA indisponivel: {e}'
     except Exception as e:  # noqa: BLE001
+        ULTIMA_CONSULTA_VNDA[stats_key]['erro'] = f'VNDA falhou: {type(e).__name__}: {str(e)[:200]}'
         return {}, f'VNDA falhou: {type(e).__name__}: {str(e)[:200]}'
+
+    ULTIMA_CONSULTA_VNDA[stats_key]['n_orders_recebidos'] = len(todos or [])
 
     STATUS_OK_IGNORAR = {'canceled', 'cancelled', 'cancelado'}
     vendas = defaultdict(int)
+    n_processados = 0
     for order in todos or []:
         if not isinstance(order, dict):
             continue
