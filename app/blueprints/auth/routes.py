@@ -167,9 +167,18 @@ def alterar_loja(id):
 @admin_required
 def reset_senha(id):
     u = Usuario.query.get_or_404(id)
+    # Owner nao pode ter senha resetada por admin nao-owner. Owner trocando
+    # a propria senha usa /auth/minha-senha (que exige senha atual).
+    if u.is_owner and not current_user.is_owner:
+        flash('So o owner pode trocar a senha do owner.', 'danger')
+        return redirect(url_for('auth.usuarios'))
+
     nova_senha = request.form.get('nova_senha', '').strip()
     if not nova_senha:
         flash('Preencha a nova senha.', 'warning')
+        return redirect(url_for('auth.usuarios'))
+    if len(nova_senha) < 8:
+        flash('Senha precisa ter pelo menos 8 caracteres.', 'warning')
         return redirect(url_for('auth.usuarios'))
 
     u.set_senha(nova_senha)
