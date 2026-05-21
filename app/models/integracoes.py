@@ -156,6 +156,33 @@ class SeruDebito(db.Model):
                                onupdate=agora)
 
 
+class SeruDebitoMov(db.Model):
+    """Rastreio de cada contribuicao individual ao SeruDebito.fracao_pendente.
+
+    Necessario pra estornar fracoes quando um pedido com fator < 1 eh
+    cancelado antes de virar inteiro. Sem isso, a fracao contribuida pelo
+    pedido fica "presa" no acumulador (bug B9 da auditoria de 2026-05-21).
+    """
+    __tablename__ = 'seru_debito_mov'
+
+    id = db.Column(db.Integer, primary_key=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
+    seru_produto_map_id = db.Column(db.Integer,
+                                     db.ForeignKey('seru_produto_map.id'),
+                                     nullable=False)
+    seru_pedido_id = db.Column(db.String(64), nullable=False, index=True)
+    # Contribuicao bruta desse pedido pra acumulador (= qtd * fator).
+    # Pode ser fracionaria (0.2) ou misturada (1.4 = 1 inteiro + 0.4 fracao).
+    fracao = db.Column(db.Float, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False)
+    estornado_em = db.Column(db.DateTime, nullable=True)
+
+    __table_args__ = (
+        db.Index('ix_seru_debito_mov_pedido_status',
+                  'seru_pedido_id', 'estornado_em'),
+    )
+
+
 # ── Integracao VNDA (site/e-commerce): mapeamentos + idempotencia ──
 # Sempre baixa da loja fixa (Loja Anesio Pinto Rosa). Baixa acontece no
 # dia da entrega (expected_delivery_date), nao quando pago/entregue.
