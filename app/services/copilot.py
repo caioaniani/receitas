@@ -2458,9 +2458,14 @@ def executar_registrar_desperdicio_lote(params, user):
     if not itens:
         return {'ok': False, 'erro': 'Lista de itens vazia'}
 
-    motivo = (params.get('motivo') or 'vencido').strip() or 'vencido'
-    if motivo not in ('vencido', 'estragado', 'queimado', 'caiu', 'outro'):
-        motivo = 'vencido'
+    from app.constants import (
+        DESPERDICIO_MOTIVOS,
+    )
+    motivo = (params.get('motivo') or 'validade').strip().lower()
+    motivo = {'vencido': 'validade', 'estragado': 'estragou',
+              'queimado': 'queimou'}.get(motivo, motivo)
+    if motivo not in DESPERDICIO_MOTIVOS:
+        motivo = 'validade'
     obs_lote = (params.get('observacao') or '').strip() or None
 
     aplicados = []
