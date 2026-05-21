@@ -28,15 +28,19 @@ def resumo_pedidos_dia(data=None):
                .filter(PedidoLoja.status.in_(['pendente', 'confirmado']))
                .all())
 
-    por_loja = defaultdict(list)  # loja_nome -> [{item, qtd, pedido_id, status}]
+    por_loja = defaultdict(list)  # loja_nome -> [{item, qtd, pedido_id, status, item_obs, pedido_obs}]
     por_item = defaultdict(int)   # nome -> qtd total
+    obs_por_loja = defaultdict(list)  # loja_nome -> [(pedido_id, obs)]
     for p in pedidos:
         nome_loja = p.loja.nome if p.loja else '?'
+        if (p.observacao or '').strip():
+            obs_por_loja[nome_loja].append((p.id, p.observacao.strip()))
         for it in p.itens:
             nome_item = it.nome_item if hasattr(it, 'nome_item') else _nome_item(it)
             por_loja[nome_loja].append({
                 'item': nome_item, 'qtd': it.quantidade,
                 'pedido_id': p.id, 'status': p.status,
+                'item_obs': (getattr(it, 'observacao', None) or '').strip() or None,
             })
             por_item[nome_item] += it.quantidade
 
@@ -45,6 +49,7 @@ def resumo_pedidos_dia(data=None):
         'n_pedidos': len(pedidos),
         'por_loja': dict(por_loja),
         'por_item': dict(por_item),
+        'obs_por_loja': dict(obs_por_loja),
     }
 
 
