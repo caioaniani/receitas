@@ -3,6 +3,7 @@ from datetime import date
 
 from flask import redirect, url_for, jsonify, request, Response, render_template
 from flask_login import login_required, current_user
+from sqlalchemy.orm import joinedload
 
 from app.blueprints.main import main_bp
 from app.decorators import admin_required
