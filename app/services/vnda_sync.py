@@ -56,18 +56,25 @@ def _resolver_produto(vnda_nome, vnda_sku):
     return mp
 
 
+_COL_PRA_TIPO = {
+    'receita_id': 'receita',
+    'produto_id': 'produto',
+    'materia_prima_id': 'mp',
+}
+
+
 def _componentes_de_cesta(produto):
     """Wrapper sobre `cestas.componentes_de_cesta` adaptando o tipo curto.
 
     Retorna [(tipo_curto, id, item_nome, quantidade_no_item)] com
-    tipo_curto = 'receita' | 'mp'. A funcao canonica retorna o nome da
-    coluna ('receita_id' | 'materia_prima_id'); convertemos pra evitar
-    quebrar o caller `_baixar_item` que ja consome o tipo curto.
+    tipo_curto = 'receita' | 'produto' | 'mp'. A funcao canonica retorna
+    o nome da coluna; convertemos pra evitar quebrar `_baixar_item` que
+    ja consome o tipo curto.
     """
     from app.services.cestas import componentes_de_cesta
     out = []
     for col, item_id, nome, qtd in componentes_de_cesta(produto):
-        tipo_curto = 'receita' if col == 'receita_id' else 'mp'
+        tipo_curto = _COL_PRA_TIPO.get(col, 'mp')
         out.append((tipo_curto, item_id, nome, qtd))
     return out
 
