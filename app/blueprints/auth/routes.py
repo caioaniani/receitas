@@ -104,6 +104,9 @@ def excluir_usuario(id):
     if u.id == current_user.id:
         flash('Voce nao pode excluir a si mesmo.', 'warning')
         return redirect(url_for('auth.usuarios'))
+    if u.is_owner and not current_user.is_owner:
+        flash('So o owner pode excluir o owner.', 'danger')
+        return redirect(url_for('auth.usuarios'))
 
     Atribuicao.query.filter_by(usuario_id=u.id).delete()
     db.session.delete(u)
