@@ -167,7 +167,8 @@ def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
                 usuario_id=getattr(user, 'id', None),
             ))
 
-    venda.valor_total = round(total, 2)
+    from decimal import ROUND_HALF_UP
+    venda.valor_total = total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
     # Parcelas
     if not parcelas:
