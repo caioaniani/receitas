@@ -173,7 +173,11 @@ class HandshakeAudit(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     momento = db.Column(db.DateTime, default=agora, nullable=False, index=True)
     token = db.Column(db.String(40), index=True)
-    pedido_id = db.Column(db.Integer, db.ForeignKey('pedido_loja.id'), index=True)
+    # ondelete='SET NULL' pra preservar audit como historico quando o
+    # pedido eh deletado (admin excluindo via /pedidos/<id>/excluir).
+    pedido_id = db.Column(db.Integer,
+                           db.ForeignKey('pedido_loja.id', ondelete='SET NULL'),
+                           index=True)
     tipo = db.Column(db.String(10))  # 'saida' | 'entrega'
     etapa = db.Column(db.String(20), nullable=False)  # 'scan' | 'pin_ok' | 'pin_fail' | 'erro_status' | 'erro_executor' | 'sucesso'
     detalhe = db.Column(db.String(500))
