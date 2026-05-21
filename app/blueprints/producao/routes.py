@@ -175,27 +175,6 @@ def painel():
                            ~PedidoLoja.status.in_(STATUS_PEDIDO_FINALIZADOS))
                    .order_by(PedidoLoja.loja_id, PedidoLoja.id).all())
 
-    # Zona 4 — fermentar pra amanha (so aparece no fim do dia/noite)
-    mostrar_fermentar = agora_hora >= 16 or agora_hora < 6
-    fermentar = None
-    if mostrar_fermentar:
-        # Pedidos com entrega amanha que tem receitas — producao precisa
-        # tirar pra fermentar/descongelar agora pra estar pronto amanha cedo.
-        pedidos_amanha = (PedidoLoja.query
-                          .filter(PedidoLoja.data_entrega == amanha,
-                                  ~PedidoLoja.status.in_(STATUS_PEDIDO_FINALIZADOS))
-                          .all())
-        fermentar_qtd = {}  # {receita_id: {'nome': str, 'qtd': int}}
-        for p in pedidos_amanha:
-            for it in p.itens:
-                if it.receita_id and it.receita:
-                    key = it.receita_id
-                    e = fermentar_qtd.setdefault(
-                        key, {'nome': it.receita.nome, 'qtd': 0})
-                    e['qtd'] += int(it.quantidade or 0)
-        fermentar = sorted(fermentar_qtd.values(),
-                            key=lambda x: -x['qtd'])
-
     return render_template('producao/painel.html',
                            hoje=hoje_d,
                            amanha=amanha,
@@ -204,6 +183,4 @@ def painel():
                            pedidos_atrasados=pedidos_atrasados,
                            cestas_orfaos=cestas_orfaos,
                            sugestao=sugestao,
-                           saindo_hoje=saindo_hoje,
-                           mostrar_fermentar=mostrar_fermentar,
-                           fermentar=fermentar)
+                           saindo_hoje=saindo_hoje)
