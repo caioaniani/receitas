@@ -1,7 +1,7 @@
 """Previsao de demanda diaria por item × loja.
 
 Versao MVP: media das ultimas 4 ocorrencias do mesmo dia-da-semana,
-baseado em MovEstoqueLoja.tipo IN ('venda_seru', 'venda_seru_sem_estoque').
+baseado em MovEstoqueLoja com tipos de venda de loja (Seru + VNDA).
 Sem ARIMA/Prophet — pra 30 SKUs, media por dow ja captura sazonalidade
 semanal e e auditavel (admin entende como o numero saiu).
 
@@ -13,8 +13,7 @@ Roadmap se precisar evoluir:
 from collections import defaultdict
 from datetime import date, timedelta
 
-
-VENDA_TIPOS = ('venda_seru', 'venda_seru_sem_estoque')
+from app.constants import VENDA_TIPOS_LOJA
 
 
 def prever_demanda(loja_id, data_alvo, semanas_lookback=8):
