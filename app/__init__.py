@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from datetime import datetime
 
@@ -7,6 +8,8 @@ from flask import Flask, Response, render_template, request
 from app.extensions import db, csrf, login_manager, limiter
 from app.utils import agora as agora_brt
 from config import Config
+
+logger = logging.getLogger(__name__)
 
 
 def _init_sentry():
