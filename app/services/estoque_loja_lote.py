@@ -551,9 +551,16 @@ def aplicar_entrada_lote(itens_resolvidos, loja_id, user, referencia=None):
             if not nome_digitado:
                 ignorados.append({'linha': item.get('linha', '?'), 'motivo': 'sem_nome'})
                 continue
-            ep = EstoqueLoja(loja_id=loja_id, nome_pendente=nome_digitado, quantidade=0)
-            db.session.add(ep)
-            db.session.flush()
+            # Reusa linha pendente ja existente com o mesmo nome — evita
+            # fragmentar o estoque em multiplas linhas com mesmo `nome_pendente`.
+            ep = EstoqueLoja.query.filter_by(
+                loja_id=loja_id, nome_pendente=nome_digitado,
+                receita_id=None, produto_id=None, materia_prima_id=None,
+            ).first()
+            if not ep:
+                ep = EstoqueLoja(loja_id=loja_id, nome_pendente=nome_digitado, quantidade=0)
+                db.session.add(ep)
+                db.session.flush()
             tipo_resultado = 'pendente'
             nome_resultado = nome_digitado
 
