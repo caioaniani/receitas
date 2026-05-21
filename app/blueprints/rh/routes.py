@@ -42,10 +42,10 @@ def dashboard():
             'custo': sum(f.custo_total() for f in funcs_loja),
         }
 
-    hoje = datetime.now()
+    h = agora()
     aniversariantes = [
         f for f in funcionarios
-        if f.data_nascimento and f.data_nascimento.month == hoje.month
+        if f.data_nascimento and f.data_nascimento.month == h.month
     ]
     aniversarios_casa = [
         f for f in funcionarios
