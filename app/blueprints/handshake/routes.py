@@ -245,7 +245,10 @@ def _handshake_entrega(qr, pedido, pin):
     if pin != loja.pin:
         _audit(qr.token, pedido, qr.tipo, 'pin_fail', f'loja:{loja.nome} pin_tentado:{pin[:2]}***')
         flash('PIN invalido. Confirme com o gerente da loja.', 'danger')
-        return render_template('handshake/confirmar.html', qr=qr, pedido=pedido), 401
+        from app.services.conferencia import faltam_fotos, fotos_presentes
+        return render_template('handshake/confirmar.html', qr=qr, pedido=pedido,
+                                fotos=fotos_presentes(pedido, qr.tipo),
+                                n_falta=len(faltam_fotos(pedido, qr.tipo))), 401
     _audit(qr.token, pedido, qr.tipo, 'pin_ok', f'loja:{loja.nome}')
     try:
         ok, msg, divergencias = _executar_recebimento_pedido(
