@@ -19,7 +19,7 @@ from flask import (
 )
 
 from app.blueprints.driver import driver_bp
-from app.extensions import db
+from app.extensions import csrf, db
 from app.models import (
     AtribuicaoEntrega,
     Driver,
@@ -394,6 +394,7 @@ def qr_entrega(token, pedido_id):
 
 @driver_bp.route('/<token>/pedido/<int:pedido_id>/conferencia/entrega/foto/<int:item_id>',
                   methods=['POST'])
+@csrf.exempt
 def conferencia_entrega_upload(token, pedido_id, item_id):
     """Motorista envia foto de um item especifico (etapa entrega).
     Autenticado por _driver_por_token + PIN."""
