@@ -46,6 +46,9 @@ def create_app(config_class=None):
     csrf.init_app(app)
     login_manager.init_app(app)
     limiter.init_app(app)
+    # Flask-Migrate (Alembic). Coexiste com _migrate_postgres/_migrate_sqlite
+    # legados ate todas as mudancas futuras de schema irem pela Alembic.
+    migrate.init_app(app, db)
 
     @login_manager.user_loader
     def load_user(user_id):
