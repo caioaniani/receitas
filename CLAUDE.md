@@ -128,7 +128,7 @@ Da auditoria 1, ainda pendentes:
 ## Stack
 
 Flask 3 + SQLAlchemy + Bootstrap 5 + Postgres em prod / SQLite local.
-Padaria Opão: receitas, pedidos, entregas, PDV, estoque, RH, copilot (Claude Haiku 4.5).
+Padaria Opão: receitas, pedidos, entregas, PDV, estoque, RH, copilot (Claude Sonnet 4.6).
 
 ## Schema migrations
 
