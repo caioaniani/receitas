@@ -146,7 +146,8 @@ def _extrair_data_entrega(order):
 
     # 2. shipping_label com data explicita ou keyword de feriado
     # (formato novo de checkout que nao preenche extra.DataDeEntrega)
-    ref = _parse_iso_date(order.get('confirmed_at')) or _parse_iso_date(order.get('paid_at')) or date.today()
+    from app.utils import hoje as _hoje_brt
+    ref = _parse_iso_date(order.get('confirmed_at')) or _parse_iso_date(order.get('paid_at')) or _hoje_brt()
     label_data = _extrair_data_de_label(order.get('shipping_label', ''), ref.year)
     if label_data:
         return label_data
