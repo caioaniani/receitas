@@ -139,7 +139,7 @@ def create_app(config_class=None):
         if not current_user.is_authenticated:
             return dict(
                 sidebar_categorias={}, mp_info={}, mp_nomes=[],
-                receita_nomes=[], funcionarios=[],
+                receita_nomes=[], produto_nomes=[], funcionarios=[],
             )
 
         # ── Receitas + categorias (cache 60s) ──
