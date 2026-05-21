@@ -415,8 +415,8 @@ def folha():
 @login_required
 @owner_required
 def gerar_folha():
-    mes = int(request.form.get('mes', datetime.now().month))
-    ano = int(request.form.get('ano', datetime.now().year))
+    mes = int(request.form.get('mes', agora().month))
+    ano = int(request.form.get('ano', agora().year))
 
     existente = FolhaPagamento.query.filter_by(mes=mes, ano=ano).first()
     if existente:
