@@ -2887,8 +2887,8 @@ def executar_registrar_desperdicio(params, user):
         return {'ok': False, 'erro': 'Quantidade deve ser > 0.'}
 
     from app.constants import (
-        DESPERDICIO_MOTIVO_REAPROVEITAVEL,
         DESPERDICIO_MOTIVOS,
+        DESPERDICIO_MOTIVOS_REAPROVEITAVEIS,
     )
     motivo = (params.get('motivo') or 'validade').strip().lower()
     # Compat retroativa: 'vencido' (motivo antigo) eh sinonimo de 'validade'.
@@ -2899,11 +2899,11 @@ def executar_registrar_desperdicio(params, user):
         motivo = 'validade'
     observacao = (params.get('observacao') or '').strip() or None
 
-    # REAPROVEITAVEL: se motivo='validade' E item marcado como reaproveitavel,
-    # registra o Desperdicio (pra historico/rastreabilidade) mas NAO baixa
-    # o estoque — o item vencido vira outra coisa.
+    # REAPROVEITAVEL: se motivo='validade' OU 'nao_vendeu' E item marcado
+    # como reaproveitavel, registra Desperdicio (pra historico) mas NAO
+    # baixa estoque — o item vai virar outra coisa.
     reaproveita = False
-    if motivo == DESPERDICIO_MOTIVO_REAPROVEITAVEL:
+    if motivo in DESPERDICIO_MOTIVOS_REAPROVEITAVEIS:
         if tipo_item == 'receita':
             from app.models import Receita
             obj = Receita.query.get(item_id)
