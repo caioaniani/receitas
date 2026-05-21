@@ -253,12 +253,26 @@ def create_app(config_class=None):
         resp.headers['Cache-Control'] = 'no-cache'
         return resp
 
+    @app.before_request
+    def assign_request_id():
+        """Atribui ID curto por request pra correlacionar logs.
+        Se o cliente mandou X-Request-ID (proxy / load balancer), usa esse."""
+        import uuid
+        from flask import g
+        rid = (request.headers.get('X-Request-ID') or '').strip()
+        if not rid or len(rid) > 64:
+            rid = uuid.uuid4().hex[:12]
+        g.request_id = rid
+
     @app.after_request
     def add_security_headers(response):
+        from flask import g
         response.headers['X-Robots-Tag'] = 'noindex, nofollow'
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'DENY'
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        if hasattr(g, 'request_id'):
+            response.headers['X-Request-ID'] = g.request_id
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
             "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
