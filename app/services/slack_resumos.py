@@ -86,9 +86,10 @@ def _formatar_blocks(resumo):
         {'type': 'divider'},
     ]
 
-    # Total geral pra producao
+    # Total geral pra producao — ORDEM ALFABETICA (A-Z) por nome.
     if resumo['por_item']:
-        linhas = sorted(resumo['por_item'].items(), key=lambda x: -x[1])
+        linhas = sorted(resumo['por_item'].items(),
+                         key=lambda x: x[0].lower())
         texto = '*ENTREGA TOTAL DO DIA:*\n' + '\n'.join(
             f'• {qtd}x {nome}' for nome, qtd in linhas[:30]
         )
@@ -98,15 +99,33 @@ def _formatar_blocks(resumo):
                        'text': {'type': 'mrkdwn', 'text': texto[:2900]}})
         blocks.append({'type': 'divider'})
 
-    # Por loja
-    for nome_loja, itens in sorted(resumo['por_loja'].items()):
+    # Por loja — ALFABETICA. Cada loja: itens A-Z + observacoes.
+    obs_por_loja = resumo.get('obs_por_loja') or {}
+    for nome_loja, itens in sorted(resumo['por_loja'].items(),
+                                     key=lambda x: x[0].lower()):
         # Agrega por item dentro da loja (caso tenha 2 pedidos com mesmo item)
         agreg = defaultdict(int)
+        obs_itens = defaultdict(list)
         for it in itens:
             agreg[it['item']] += it['qtd']
-        linhas_loja = '\n'.join(f'  • {qtd}x {nome}'
-                                 for nome, qtd in sorted(agreg.items()))
+            if it.get('item_obs'):
+                obs_itens[it['item']].append(it['item_obs'])
+
+        linhas_loja = []
+        for nome, qtd in sorted(agreg.items(), key=lambda x: x[0].lower()):
+            obs_str = ''
+            if obs_itens.get(nome):
+                obs_str = f' _({" / ".join(obs_itens[nome])})_'
+            linhas_loja.append(f'  • {qtd}x {nome}{obs_str}')
+        linhas_loja = '\n'.join(linhas_loja)
         texto = f'*{nome_loja}* ({len(itens)} {"itens" if len(itens) != 1 else "item"})\n{linhas_loja}'
+        # Observacoes do pedido (cabeca) da loja
+        if obs_por_loja.get(nome_loja):
+            obs_pedido = '\n'.join(
+                f'  _obs pedido #{pid}: {txt}_'
+                for pid, txt in obs_por_loja[nome_loja]
+            )
+            texto += '\n' + obs_pedido
         blocks.append({'type': 'section',
                        'text': {'type': 'mrkdwn', 'text': texto[:2900]}})
 
