@@ -456,7 +456,7 @@
 
 <!-- Dados de custos de receitas para JS -->
 <script>
-const RECEITA_CUSTOS = {{ receita_custos_json | safe }};
-const RECEITA_PESOS = {{ receita_pesos_json | safe }};
+const RECEITA_CUSTOS = {{ receita_custos | tojson }};
+const RECEITA_PESOS = {{ receita_pesos | tojson }};
 </script>
 {% endblock %}
