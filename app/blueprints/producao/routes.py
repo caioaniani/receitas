@@ -4,7 +4,7 @@ from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.blueprints.producao import producao_bp
-from app.decorators import producao_required
+from app.decorators import admin_required, producao_required
 from app.extensions import db
 from app.models import (
     MateriaPrima,
@@ -137,16 +137,11 @@ def excluir(id):
 
 @producao_bp.route('/painel')
 @login_required
-@producao_required
+@admin_required
 def painel():
-    """Painel TV da producao — 4 zonas pra exibicao continua.
-
-    Zonas:
-      1. Alertas urgentes (atrasados, orfaos, estoque negativo)
-      2. Produzir HOJE (sugestao agregada de todas as lojas)
-      3. Saindo HOJE (pedidos pra entregar hoje, com QR)
-      4. Fermentar pra amanha (so 17h-22h: o que precisa estar pronto amanha)
-    """
+    """Painel de planejamento — visao consolidada de demanda das lojas vs
+    estoque industria. **Admin-only**: admin ve os dados e decide o que
+    enviar pra producao executar (nao eh a producao que ve direto)."""
     from datetime import timedelta
 
     from app.constants import STATUS_PEDIDO_FINALIZADOS
