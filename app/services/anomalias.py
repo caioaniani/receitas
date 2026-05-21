@@ -109,7 +109,8 @@ def detectar_anomalias_loja(data_alvo=None):
         for loja_id, qtd in _vendas_loja_no_dia(d).items():
             baselines[loja_id].append(qtd)
 
-    lojas = {l.id: l for l in Loja.query.filter(Loja.nome != 'Industria').all()}
+    lojas = {l.id: l for l in Loja.query.filter(
+        Loja.ativa.is_(True), Loja.nome != 'Industria').all()}
 
     anomalias = []
     for loja_id, amostras in baselines.items():
