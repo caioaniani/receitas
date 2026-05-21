@@ -24,14 +24,24 @@ git add -- "$rel_path" 2>/dev/null || exit 0
 # Nothing actually changed (e.g., Edit was a no-op).
 git diff --cached --quiet -- "$rel_path" && exit 0
 
-# Auto-fix de lint pra arquivos Python — evita commit quebrando CI.
-# Se ruff conseguir fixar, re-stage. Se nao, prossegue (commita assim
-# mesmo e o CI sinaliza — melhor do que abortar e o usuario nao saber).
+# Lint pra arquivos Python — evita commit quebrando CI.
+# Estrategia em 3 fases:
+#  1) ruff --fix em silencio (organiza imports, remove nao-usados)
+#  2) ruff check (sem --fix) pra detectar bugs REAIS que sobraram
+#     (F821 var nao definida, etc) — imprime no stderr pro hook do
+#     Claude Code propagar pro usuario
+#  3) Se sobrar erro, ABORTA o commit. Melhor o Claude saber agora
+#     (e consertar) do que descobrir 3 min depois no CI do GitHub.
 case "$rel_path" in
   *.py)
     if command -v ruff >/dev/null 2>&1; then
-      ruff check --fix --quiet "$rel_path" 2>/dev/null || true
+      ruff check --fix --quiet "$rel_path" >/dev/null 2>&1
       git add -- "$rel_path" 2>/dev/null || true
+      if ! ruff check "$rel_path" >&2; then
+        echo "auto-commit: ruff acusou erro nao-fixable em $rel_path" >&2
+        echo "auto-commit: commit ABORTADO — corrigir antes de tentar de novo" >&2
+        exit 2
+      fi
     fi
     ;;
 esac
