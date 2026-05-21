@@ -61,8 +61,32 @@ Padaria Opão: receitas, pedidos, entregas, PDV, estoque, RH, copilot (Claude Ha
 
 ## Schema migrations
 
-Sem Alembic — `app/__init__.py` tem `_migrate_postgres()` e `_migrate_sqlite()` chamados
-após `db.create_all()`. Adicione `ALTER TABLE IF NOT EXISTS` ali quando criar coluna nova.
+**Alembic adotado em 21/05/2026** (Flask-Migrate). Coexiste com os helpers legados
+`_migrate_postgres()` e `_migrate_sqlite()` em `app/__init__.py` por compatibilidade.
+
+### Procedimento para mudança de schema (NOVO)
+
+1. Edita o modelo em `app/models.py` (adiciona coluna, tabela, índice, etc.)
+2. Roda local: `FLASK_APP=run.py flask db migrate -m "descricao curta"`
+3. Revisa o arquivo gerado em `migrations/versions/` — Alembic pode errar (especialmente
+   com índices nomeados manualmente e tipos SQLite ↔ Postgres). Edite se necessário.
+4. Testa local: `FLASK_APP=run.py flask db upgrade`
+5. Commit e push. Railway aplica automaticamente (com o entrypoint configurado pra
+   rodar `flask db upgrade` antes do gunicorn — ver `Procfile`/`railway.json`).
+
+### Procedimento aplicado UMA VEZ na adoção (já feito)
+
+No Railway, com o banco já existente populado pelos helpers `_migrate_*`:
+```bash
+railway run flask db stamp head
+```
+Isso marca o banco como já estando na baseline, sem executar nada. **Não rode novamente.**
+
+### Helpers legados `_migrate_postgres`/`_migrate_sqlite`
+
+Continuam ativos no startup do app. Pode ainda adicionar `ALTER TABLE IF NOT EXISTS`
+ali em paralelo até migrar tudo pra Alembic; idealmente, **prefira sempre Alembic**
+pra novas mudanças.
 
 ## Convenções de codigo
 
