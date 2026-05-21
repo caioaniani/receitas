@@ -610,8 +610,27 @@ REQUER_APROVACAO = {
 
 
 # ── PERMISSOES POR TOOL ────────────────────────────────────────────────
-# Tres papeis: 'admin' (tudo), 'gerente' (loja), 'funcionario' (limitado).
-# Cada tool lista quais papeis podem usar. Default (nao listado) = so admin.
+#
+# Esta matriz governa quem pode invocar cada tool do copilot. Ela eh
+# SEPARADA dos decorators de rota (admin_required, gerente_required, etc.)
+# em `app/decorators.py` que protegem URLs HTTP — o copilot pode ser
+# chamado de qualquer rota autenticada, entao precisa do proprio gate.
+#
+# Tres papeis canonicos (`papel_efetivo()`):
+# - 'admin'       : ve/faz tudo (inclui owner)
+# - 'gerente'     : operacao de loja (pedidos, estoque, vendas, ajustes)
+# - 'funcionario' : tarefas, consultas basicas, registrar desperdicio
+#
+# Default (nao listado em PAPEIS_POR_TOOL) = SO ADMIN. Princípio do
+# menor privilegio — se voce esquecer de mapear uma tool nova, ela
+# fica restrita ao admin por seguranca.
+#
+# Pra adicionar tool nova:
+#   1. Definir TOOL_X = {...}
+#   2. Adicionar handler em _READ_HANDLERS / _EXEC_HANDLERS
+#   3. Adicionar entrada em PAPEIS_POR_TOOL (mesmo que seja so admin —
+#      explicitar evita confusao)
+#   4. Adicionar teste em tests/test_copilot_permissoes.py (cobre regressao)
 PAPEIS_POR_TOOL = {
     # Operacao geral — admin + gerente
     'criar_pedido': {'admin', 'gerente'},
