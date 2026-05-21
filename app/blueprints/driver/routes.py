@@ -39,8 +39,16 @@ def _gerar_proof_hash():
 
 
 def _driver_por_token(token):
+    """Resolve token → Driver. Aceita:
+    - Magic token diario (DriverMagicToken valido) — modelo novo, rotaciona 5h BRT.
+    - Driver.token legado (compat com URLs antigas que ja estao circulando).
+    """
     if not token:
         return None
+    from app.services.driver_magic import driver_por_magic_token
+    drv = driver_por_magic_token(token)
+    if drv:
+        return drv
     return Driver.query.filter_by(token=token).first()
 
 
