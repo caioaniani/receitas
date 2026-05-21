@@ -235,20 +235,23 @@ def cestas_orfaos():
     orfaos = (ProdutoItem.query
               .filter(or_(
                   (ProdutoItem.tipo == 'receita') & (ProdutoItem.receita_id.is_(None)),
+                  (ProdutoItem.tipo == 'produto') & (ProdutoItem.produto_componente_id.is_(None)),
                   (ProdutoItem.tipo == 'mp') & (ProdutoItem.materia_prima_id.is_(None)),
               ))
               .all())
     receitas = Receita.query.order_by(Receita.nome).all()
+    produtos = Produto.query.filter(Produto.ativo.is_(True)).order_by(Produto.nome).all()
     mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
     return render_template('produtos/cestas_orfaos.html',
-                            orfaos=orfaos, receitas=receitas, mps=mps)
+                            orfaos=orfaos, receitas=receitas,
+                            produtos=produtos, mps=mps)
 
 
 @produtos_bp.route('/cestas/orfaos/<int:id>/vincular', methods=['POST'])
 @login_required
 @catalogo_required
 def vincular_orfao(id):
-    """Vincula um ProdutoItem orfao a uma Receita ou MateriaPrima."""
+    """Vincula um ProdutoItem orfao a uma Receita, Produto ou MateriaPrima."""
     pi = ProdutoItem.query.get_or_404(id)
     alvo = (request.form.get('alvo') or '').strip()
     if not alvo or ':' not in alvo:
@@ -268,8 +271,22 @@ def vincular_orfao(id):
             return redirect(url_for('produtos.cestas_orfaos'))
         pi.tipo = 'receita'
         pi.receita_id = r.id
+        pi.produto_componente_id = None
         pi.materia_prima_id = None
         pi.item_nome = r.nome
+    elif tipo == 'produto':
+        p = Produto.query.get(target_id)
+        if not p:
+            flash('Produto nao encontrado.', 'warning')
+            return redirect(url_for('produtos.cestas_orfaos'))
+        if p.id == pi.produto_id:
+            flash('Cesta nao pode conter ela mesma como componente.', 'warning')
+            return redirect(url_for('produtos.cestas_orfaos'))
+        pi.tipo = 'produto'
+        pi.produto_componente_id = p.id
+        pi.receita_id = None
+        pi.materia_prima_id = None
+        pi.item_nome = p.nome
     elif tipo == 'mp':
         m = MateriaPrima.query.get(target_id)
         if not m:
@@ -278,6 +295,7 @@ def vincular_orfao(id):
         pi.tipo = 'mp'
         pi.materia_prima_id = m.id
         pi.receita_id = None
+        pi.produto_componente_id = None
         pi.item_nome = m.nome
     else:
         flash('Tipo invalido.', 'warning')
