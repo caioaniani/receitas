@@ -66,7 +66,8 @@ def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
     db.session.add(venda)
     db.session.flush()
 
-    total = 0.0
+    from decimal import Decimal
+    total = Decimal('0')
     for it in itens:
         tipo = it.get('tipo')
         item_id = it.get('id')
