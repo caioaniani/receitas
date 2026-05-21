@@ -71,6 +71,22 @@ após `db.create_all()`. Adicione `ALTER TABLE IF NOT EXISTS` ali quando criar c
   normal.
 - **Forms aninhados**: HTML não permite. Em `ficha.html` (receitas), os botões
   Duplicar/Excluir/Atribuir ficam como `<form>` **fora** do form principal de salvar.
+- **Constantes de domínio**: use `app/constants.py` para listas compartilhadas
+  entre services — `VENDA_TIPOS_LOJA` (Seru + VNDA, baixam de `EstoqueLoja`),
+  `VENDA_TIPOS_PRODUCAO` (B2B, baixa de `EstoqueProducao`),
+  `STATUS_PEDIDO_FINALIZADOS` (`entregue`/`recebido`/`cancelado` — os dois
+  primeiros coexistem por histórico, sempre filtre os 3 juntos),
+  `STATUS_PEDIDO_LABEL` (labels amigáveis pra UI/copilot). NUNCA duplique
+  essas listas em arquivos individuais — quando divergem, geram bugs sutis
+  (já aconteceu com `previsao_demanda` e `vendas_itens` ignorando VNDA, e
+  com `consultar_pedido` esquecendo de filtrar `recebido`).
+- **Fuzzy de loja por nome**: use `resolver_loja_por_nome()` em `app/utils.py`,
+  não reimplemente o padrão `func.lower() / ilike` em cada service.
+- **Timezone (CRÍTICO)**: SEMPRE use `app.utils.hoje()` (retorna `date` em BRT)
+  e `app.utils.agora()` (retorna `datetime` em BRT naive). NUNCA use
+  `date.today()` ou `datetime.now()` direto — no Postgres-Railway eles
+  retornam UTC, e a partir das 21h BRT viram D+1 (causa bugs do copilot
+  achando que é "amanhã" às 22h, lembretes de hoje sumindo, etc.).
 
 ## Estoque pendente (congelados + loja)
 
