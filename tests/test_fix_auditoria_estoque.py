@@ -178,10 +178,12 @@ def test_b3_cancelar_b2b_parcial_nao_infla(app, admin_user, catalogo):
 # ──────────────────────────────────────────────────────────────────────
 
 def test_b4_tres_parcelas_de_33_33_quitam_100_reais(app, admin_user, catalogo):
-    """R$ 100 dividido em 3 parcelas vira 33.33 × 3 = 99.99 (perde 1 centavo
-    em float). Antes do fix, a comparacao `>= 100` falhava e a ultima
-    parcela ficava 'eternamente em aberto'. Tolerancia de meio centavo
-    corrige isso.
+    """R$ 100 em 3 parcelas: 33.33 + 33.33 + 33.34. Cliente paga o valor
+    EXATO de cada parcela. Todas tem que quitar.
+
+    Antes do Numeric: a comparacao `>= 100` falhava por imprecisao de
+    float na SOMA dos pagamentos. Agora com Decimal eh exato — nao
+    precisa tolerancia.
     """
     from datetime import date
 
@@ -209,8 +211,7 @@ def test_b4_tres_parcelas_de_33_33_quitam_100_reais(app, admin_user, catalogo):
     )
     assert len(venda.parcelas) == 3
 
-    # Cliente paga em 3 parcelas de 33.33 (mesmo a ultima sendo 33.34,
-    # vamos receber 33.33 e ver se a tolerancia de meio centavo aceita)
+    # Cliente paga o valor EXATO de cada parcela
     for p in venda.parcelas:
         svc.receber_pagamento(p, 33.33, forma_pagamento='pix')
 
