@@ -44,7 +44,7 @@ def _login(cliente, login_val, senha):
 
 def test_usuarios_sem_login_redireciona(cliente):
     """Anonimo na /usuarios vai pra login (Flask-Login)."""
-    r = cliente.get('/usuarios', follow_redirects=False)
+    r = cliente.get('/auth/usuarios', follow_redirects=False)
     assert r.status_code in (301, 302, 308)
     assert '/auth/login' in r.headers.get('Location', '')
 
@@ -52,21 +52,21 @@ def test_usuarios_sem_login_redireciona(cliente):
 def test_usuarios_funcionario_403(cliente, funcionario):
     """Funcionario logado nao pode ver /usuarios (403)."""
     _login(cliente, 'joao', 'joao123')
-    r = cliente.get('/usuarios', follow_redirects=False)
+    r = cliente.get('/auth/usuarios', follow_redirects=False)
     assert r.status_code == 403
 
 
 def test_usuarios_gerente_403(cliente, gerente):
     """Gerente nao eh admin — /usuarios bloqueia."""
     _login(cliente, 'maria', 'maria123')
-    r = cliente.get('/usuarios', follow_redirects=False)
+    r = cliente.get('/auth/usuarios', follow_redirects=False)
     assert r.status_code == 403
 
 
 def test_usuarios_admin_ok(cliente, admin_user):
     """Admin acessa /usuarios normal."""
     _login(cliente, 'admin', '123')
-    r = cliente.get('/usuarios', follow_redirects=False)
+    r = cliente.get('/auth/usuarios', follow_redirects=False)
     assert r.status_code == 200
 
 
