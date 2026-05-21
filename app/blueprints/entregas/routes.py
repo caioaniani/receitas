@@ -775,9 +775,9 @@ def atribuir_lote():
             janelas = []
         nome = (criar.get('nome') or '').strip()
         if not nome:
-            agora = datetime.now()
+            ag = agora()
             jan_str = ' + '.join(j or '(sem janela)' for j in janelas) if janelas else 'todas as janelas'
-            nome = data_lote.strftime('%d/%m') + ' ' + agora.strftime('%H:%M') + ' · ' + jan_str
+            nome = data_lote.strftime('%d/%m') + ' ' + ag.strftime('%H:%M') + ' · ' + jan_str
         novo = LoteSaida(
             nome=nome[:120],
             data_entrega=data_lote,
