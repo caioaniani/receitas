@@ -88,6 +88,7 @@ def salvar(id):
     receita.custo_embalagem = parse_float_br(request.form.get('custo_embalagem', ''), default=0)
     receita.modo_preparo = request.form.get('modo_preparo', '').strip() or None
     receita.observacao = request.form.get('observacao', '').strip() or None
+    receita.reaproveitavel = bool(request.form.get('reaproveitavel'))
     receita.imagem_url = request.form.get('imagem_url', '').strip() or None
 
     # Atualiza ingredientes
