@@ -24,6 +24,18 @@ git add -- "$rel_path" 2>/dev/null || exit 0
 # Nothing actually changed (e.g., Edit was a no-op).
 git diff --cached --quiet -- "$rel_path" && exit 0
 
+# Auto-fix de lint pra arquivos Python — evita commit quebrando CI.
+# Se ruff conseguir fixar, re-stage. Se nao, prossegue (commita assim
+# mesmo e o CI sinaliza — melhor do que abortar e o usuario nao saber).
+case "$rel_path" in
+  *.py)
+    if command -v ruff >/dev/null 2>&1; then
+      ruff check --fix --quiet "$rel_path" 2>/dev/null || true
+      git add -- "$rel_path" 2>/dev/null || true
+    fi
+    ;;
+esac
+
 tool_name=$(printf '%s' "$input" | jq -r '.tool_name // "edit"')
 case "$tool_name" in
   Write) action="add" ;;
