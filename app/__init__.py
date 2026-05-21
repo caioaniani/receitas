@@ -182,10 +182,10 @@ def create_app(config_class=None):
         # ── MP data (cache 60s) ──
         def _carrega_mp_data():
             mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
-            mp_dict = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade,
+            mp_info = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade,
                                   'peso_unidade': mp.peso_unidade} for mp in mps}
             return {
-                'dict': mp_dict,
+                'info': mp_info,
                 'nomes': [mp.nome for mp in mps],
             }
         mp_data = _cache('mps', 60, _carrega_mp_data)
