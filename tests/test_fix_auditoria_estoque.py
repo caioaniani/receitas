@@ -504,8 +504,8 @@ def test_b9_estorno_idempotente(app, admin_user, loja, catalogo):
     from app.services.seru_sync import _baixar_item, _estornar_pedido
 
     mapping = SeruProdutoMap(
-        seru_nome='X', estado='mapeado',
-        receita_id=catalogo['receita'].id, fator_quantidade=0.2,
+        seru_nome='X', receita_id=catalogo['receita'].id,
+        fator_quantidade=0.2,
     )
     db.session.add(mapping)
     db.session.commit()
