@@ -54,6 +54,17 @@ Esta regra é obrigatória e se aplica a TODA conversa.
 PostToolUse no Write|Edit faz `git add <file>` + commit "auto: update X" + push pro branch
 atual. Em sessao nova, o hook ja esta ativo no startup.
 
+**Risco zero em prod**: o hook so dispara via PostToolUse do Claude Code CLI.
+Railway/gunicorn nunca chama esses scripts — sao especificos do ambiente de
+desenvolvimento com Claude Code. O `.claude/` esta commitado pra outras sessoes
+de desenvolvimento manterem o mesmo comportamento, mas o arquivo `.sh` em prod
+fica dormente (nada o invoca).
+
+**Limitacao conhecida**: o hook so pega arquivos modificados via Write/Edit do
+Claude. Comandos shell que escrevem direto (ex: `ruff --fix`, `flask db init`,
+ou um pip install que cria arquivos) precisam de `git add` + commit manual.
+O Stop hook global avisa quando isso acontece (saida nao commitada).
+
 ## Stack
 
 Flask 3 + SQLAlchemy + Bootstrap 5 + Postgres em prod / SQLite local.
