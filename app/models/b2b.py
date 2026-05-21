@@ -156,7 +156,7 @@ class VendaManualLoja(db.Model):
     produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
     materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'), nullable=True)
     quantidade = db.Column(db.Integer, nullable=False)
-    valor_unitario = db.Column(db.Float)  # opcional
+    valor_unitario = db.Column(db.Numeric(10, 2))  # opcional
     observacao = db.Column(db.String(200))
     criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
     criado_em = db.Column(db.DateTime, default=agora)
