@@ -20,10 +20,10 @@ class Usuario(UserMixin, db.Model):
     loja = db.relationship('Loja', backref='usuarios')
 
     def set_senha(self, senha):
-        # Argon2id eh resistente a GPU (vs pbkdf2 que eh quebravel rapido em
+        # scrypt eh resistente a GPU (vs pbkdf2 que eh quebravel rapido em
         # placa moderna). Senhas antigas em pbkdf2:sha256 continuam validas
         # — Werkzeug detecta o metodo pelo prefixo do hash em check_senha.
-        self.senha_hash = generate_password_hash(senha, method='argon2')
+        self.senha_hash = generate_password_hash(senha, method='scrypt')
 
     def check_senha(self, senha):
         return check_password_hash(self.senha_hash, senha)
