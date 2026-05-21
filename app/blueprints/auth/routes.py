@@ -135,10 +135,8 @@ def alterar_papel(id):
 
 @auth_bp.route('/usuarios/<int:id>/alterar-loja', methods=['POST'])
 @login_required
+@admin_required
 def alterar_loja(id):
-    if not current_user.is_admin():
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('auth.minhas_fichas'))
     u = Usuario.query.get_or_404(id)
     raw = (request.form.get('loja_id') or '').strip()
     if raw == '':
