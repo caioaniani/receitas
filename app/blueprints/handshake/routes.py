@@ -213,6 +213,9 @@ def _handshake_saida(qr, pedido, pin):
         return render_template('handshake/erro.html', msg=msg), 409
     qr.usado_em = agora()
     qr.usado_por_descricao = f'driver:{driver_match.nome}'
+    # Amarra pedido ao motorista que pegou: painel /driver/<token>
+    # filtra por driver_id pra cada motorista so ver os pedidos que coletou.
+    pedido.driver_id = driver_match.id
     db.session.commit()
     _audit(qr.token, pedido, qr.tipo, 'sucesso', f'driver:{driver_match.nome}')
     # Marca o motorista autenticado na session do navegador dele.
