@@ -1894,14 +1894,14 @@ def _read_consultar_funcionario(params, user):
 
 
 def _read_consultar_caixa(params, user):
-    from datetime import date as _date
+    from app.utils import hoje as _hoje
     from app.models import PedidoLocal, AtribuicaoEntrega, MovimentacaoEstoque
     from sqlalchemy import func as sqlfunc
     data_str = params.get('data')
     try:
-        d = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else _date.today()
+        d = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else _hoje()
     except ValueError:
-        d = _date.today()
+        d = _hoje()
     locais = PedidoLocal.query.filter(PedidoLocal.data_entrega == d).all()
     valor_locais = sum(p.valor_total for p in locais)
     atribs = AtribuicaoEntrega.query.filter(AtribuicaoEntrega.data_entrega == d).all()
