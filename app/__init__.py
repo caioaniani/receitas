@@ -436,7 +436,10 @@ def _alembic_stamp_se_necessario(app):
     # Pula em testes: conftest faz db.create_all() que ja cria tudo no
     # estado final dos modelos. Alembic em SQLite :memory: ainda abre
     # conexao propria que nao ve as tabelas do create_all — incompativel.
-    if app.config.get('TESTING'):
+    # `TESTING` ainda nao tem nesse ponto do create_app; usamos a URI
+    # `:memory:` como marker (so vem de teste).
+    uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
+    if app.config.get('TESTING') or ':memory:' in uri:
         return
     from sqlalchemy import inspect
     try:
