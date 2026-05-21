@@ -108,6 +108,26 @@
                 </span>
             </div>
             <div class="zona-corpo p-0">
+                {# Confirmacao positiva ou erro: stats explicitos de cada
+                   fonte que tentou puxar dados. Cinza = nao tentou
+                   (cache hit no service por loja). Verde = OK. Vermelho = erro. #}
+                <div class="small m-2" style="border-left:3px solid #dee2e6;padding-left:.6rem;color:#6c757d;">
+                    <strong>Lookback:</strong> {{ sugestao.get('data_inicio') }} → {{ sugestao.get('data_fim') }}.
+                    {% set vstats = sugestao.get('vnda_stats') or [] %}
+                    {% if vstats %}
+                    <strong>VNDA:</strong>
+                        {% for st in vstats %}
+                            {% if st.erro %}
+                            <span class="text-danger">{{ st.loja_nome }} — ERRO ({{ st.erro|truncate(80) }})</span>
+                            {% else %}
+                            <span class="text-success">{{ st.loja_nome }} — {{ st.n_orders_recebidos }} pedidos recebidos, {{ st.n_processados }} processados</span>
+                            {% endif %}
+                            {% if not loop.last %}<br>{% endif %}
+                        {% endfor %}
+                    {% else %}
+                    <span class="text-muted">VNDA: nao tentado (resultado de cache de 60s — atualiza no proximo refresh sem cache).</span>
+                    {% endif %}
+                </div>
                 {% if sugestao['avisos_vnda'] %}
                 <div class="alert alert-warning small mb-0 m-2">
                     {% for a in sugestao['avisos_vnda'] %}<div>{{ a }}</div>{% endfor %}
