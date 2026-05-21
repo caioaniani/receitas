@@ -927,12 +927,21 @@ def interpretar(prompt_text, user, historico=None, images=None):
     if not tools_filtradas:
         return {'tipo': 'erro', 'explicacao': 'Sem permissao pra usar o copilot.', 'raw': None}
 
+    # Cache breakpoint na ULTIMA tool: marca todo o bloco de tools (schema
+    # gigante, ~5-10KB) como cacheable. Junto com o cache do system_prompt,
+    # cobre ~95% dos tokens de input em conversas comuns — custo cai ~90%
+    # depois do primeiro request da janela de 5min.
+    tools_com_cache = [dict(t) for t in tools_filtradas]
+    if tools_com_cache:
+        tools_com_cache[-1] = {**tools_com_cache[-1],
+                                'cache_control': {'type': 'ephemeral'}}
+
     try:
         response = client.messages.create(
-            model='claude-haiku-4-5',
+            model='claude-sonnet-4-6',
             max_tokens=4000,
             system=[{'type': 'text', 'text': system, 'cache_control': {'type': 'ephemeral'}}],
-            tools=tools_filtradas,
+            tools=tools_com_cache,
             messages=messages,
         )
     except Exception as exc:  # noqa: BLE001
