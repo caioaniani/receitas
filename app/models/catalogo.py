@@ -164,6 +164,9 @@ class Produto(db.Model):
     custo_embalagem = db.Column(db.Float, default=0)  # custo embalagem por unidade (R$)
     modo_preparo = db.Column(db.Text)
     observacao = db.Column(db.Text)
+    # Quando True, desperdicio com motivo='validade' NAO baixa estoque
+    # (mesma logica de Receita.reaproveitavel).
+    reaproveitavel = db.Column(db.Boolean, default=False, nullable=False)
     ativo = db.Column(db.Boolean, default=True)
 
     itens = db.relationship(
