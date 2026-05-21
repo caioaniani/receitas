@@ -54,9 +54,25 @@ def _lojas_operacionais_ids():
     ]
 
 
-def sugerir_producao(horizonte_dias=7, lookback_dias=14):
+# Cache em memoria do processo. TTL = 60s (bate com refresh do painel TV).
+# Key inclui horizonte+lookback. Em multi-worker (gunicorn 2 workers),
+# cada worker tem seu cache — aceitavel pra esse caso.
+_SUG_CACHE = {}
+_SUG_CACHE_TTL = 60  # segundos
+
+
+def invalidar_sugestao_cache():
+    """Chamar quando algo critico mudar (pedido criado, sync VNDA, etc) —
+    forca recalculo no proximo request."""
+    _SUG_CACHE.clear()
+
+
+def sugerir_producao(horizonte_dias=7, lookback_dias=14, usar_cache=True):
     """Agrega previsao de demanda das lojas operacionais e retorna
     quanto produzir nos proximos `horizonte_dias`.
+
+    Cache de 60s in-memory pra evitar refazer chamadas VNDA a cada
+    refresh. `usar_cache=False` ignora.
 
     Retorna {'itens': [...], 'horizonte_dias': N, 'avisos_vnda': [...]}.
     Cada item:
@@ -65,6 +81,13 @@ def sugerir_producao(horizonte_dias=7, lookback_dias=14):
       breakdown_por_loja {loja_id: {nome, qtd_lojas}},
       stockout (bool)
     """
+    import time
+
+    cache_key = (int(horizonte_dias), int(lookback_dias))
+    if usar_cache:
+        entrada = _SUG_CACHE.get(cache_key)
+        if entrada and (time.time() - entrada['t']) < _SUG_CACHE_TTL:
+            return entrada['data']
     from app.services.vendas_manuais import sugerir_pedido as _sug_loja
 
     horizonte_dias = max(1, min(int(horizonte_dias or 7), 14))
