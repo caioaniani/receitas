@@ -211,15 +211,15 @@ def test_b4_tres_parcelas_de_33_33_quitam_100_reais(app, admin_user, catalogo):
     )
     assert len(venda.parcelas) == 3
 
-    # Cliente paga o valor EXATO de cada parcela
-    for p in venda.parcelas:
-        svc.receber_pagamento(p, 33.33, forma_pagamento='pix')
+    # Cliente paga o valor EXATO de cada parcela (33.33, 33.33, 33.34)
+    for p in sorted(venda.parcelas, key=lambda x: x.numero):
+        svc.receber_pagamento(p, float(p.valor), forma_pagamento='pix')
 
     db.session.expire_all()
     parcelas = VendaB2BParcela.query.filter_by(venda_id=venda.id).all()
     pagas = [p for p in parcelas if p.pago_em is not None]
     assert len(pagas) == 3, (
-        f'so {len(pagas)} de 3 parcelas quitaram — tolerancia nao pegou'
+        f'so {len(pagas)} de 3 parcelas quitaram'
     )
 
 
