@@ -105,7 +105,7 @@ def test_concluir_atribuicao_dono(cliente, funcionario):
     aid = a.id
 
     _login(cliente, 'joao', 'joao123')
-    resp = cliente.post(f'/atribuicao/{aid}/concluir', follow_redirects=False)
+    resp = cliente.post(f'/auth/atribuicao/{aid}/concluir', follow_redirects=False)
     assert resp.status_code == 302
 
     db.session.expire_all()
