@@ -102,7 +102,8 @@ def _extrair_data_de_label(label, ref_year=None):
         return None
     label_lower = label.lower()
     if not ref_year:
-        ref_year = date.today().year
+        from app.utils import hoje as _hoje_brt
+        ref_year = _hoje_brt().year
 
     # 1. DD/MM/YYYY explicito
     m = re.search(r'(\d{1,2})/(\d{1,2})/(\d{4})', label)
