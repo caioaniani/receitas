@@ -28,13 +28,27 @@ def _normalizar_numero(numero):
 
 
 def _whitelist_numeros():
-    """Numeros permitidos (set). Vazio = recusa tudo (fail-closed)."""
+    """Numeros permitidos (set). Vazio = recusa tudo (fail-closed).
+
+    Inclui automaticamente telefones de motoristas ativos
+    (`driver_magic.telefones_drivers_ativos()`) — admin nao precisa
+    manter lista manual em paralelo com `/entregas/drivers`."""
     raw = (current_app.config.get('ZAPI_NUMEROS_PERMITIDOS') or '').strip()
     permitidos = {_normalizar_numero(n) for n in raw.split(',') if n.strip()}
     # Inclui o destino padrao do digest tambem (atalho)
     destino = _normalizar_numero(current_app.config.get('ZAPI_NUMERO_DESTINO') or '')
     if destino:
         permitidos.add(destino)
+    # Inclui motoristas ativos (pra magic link diario funcionar sem
+    # admin precisar adicionar manualmente cada telefone).
+    try:
+        from app.services.driver_magic import telefones_drivers_ativos
+        permitidos |= telefones_drivers_ativos()
+    except Exception:  # noqa: BLE001
+        # Servico podia nao estar disponivel em alguns contextos
+        # (ex: scripts standalone). Falha silenciosa nao trava o envio
+        # pra numeros ja na whitelist manual.
+        pass
     return {n for n in permitidos if n}
 
 
