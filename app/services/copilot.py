@@ -2460,6 +2460,7 @@ def executar_registrar_desperdicio_lote(params, user):
 
     from app.constants import (
         DESPERDICIO_MOTIVOS,
+        DESPERDICIO_MOTIVOS_REAPROVEITAVEIS,
     )
     motivo = (params.get('motivo') or 'validade').strip().lower()
     motivo = {'vencido': 'validade', 'estragado': 'estragou',
