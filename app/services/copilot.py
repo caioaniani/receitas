@@ -2892,32 +2892,6 @@ def _read_consultar_desperdicio(params, user):
     return {'texto': '\n'.join(linhas)}
 
 
-# Roteador read final — inclui consultar_desperdicio + enviar_digest_whatsapp
-_BASE_READ2 = _executar_read
-
-
-def _executar_read(tool_name, params, user):  # noqa: F811
-    if tool_name == 'consultar_desperdicio':
-        try:
-            return _read_consultar_desperdicio(params, user)
-        except Exception as exc:  # noqa: BLE001
-            logger.exception('consultar_desperdicio falhou')
-            return {'erro': str(exc)}
-    if tool_name == 'enviar_digest_whatsapp':
-        try:
-            return _read_enviar_digest_whatsapp(params, user)
-        except Exception as exc:  # noqa: BLE001
-            logger.exception('enviar_digest_whatsapp falhou')
-            return {'erro': str(exc)}
-    if tool_name == 'consultar_cliente_b2b':
-        try:
-            return _read_consultar_cliente_b2b(params, user)
-        except Exception as exc:  # noqa: BLE001
-            logger.exception('consultar_cliente_b2b falhou')
-            return {'erro': str(exc)}
-    return _BASE_READ2(tool_name, params, user)
-
-
 def _read_consultar_cliente_b2b(params, user):
     from app.models import ClienteB2B
     q = ClienteB2B.query.filter_by(ativo=True)
