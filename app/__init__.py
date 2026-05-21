@@ -134,7 +134,7 @@ def create_app(config_class=None):
         # Sem queries para usuários não autenticados (ex: página de login)
         if not current_user.is_authenticated:
             return dict(
-                sidebar_categorias={}, mp_json='{}', mp_nomes=[],
+                sidebar_categorias={}, mp_dict={}, mp_nomes=[],
                 receita_nomes=[], funcionarios=[],
             )
 
