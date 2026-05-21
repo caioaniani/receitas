@@ -1,17 +1,30 @@
 import json
-from datetime import date
+from datetime import datetime, timedelta
 
-from flask import redirect, url_for, jsonify, request, Response, render_template
-from flask_login import login_required, current_user
+from flask import Response, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
 from app.blueprints.main import main_bp
 from app.decorators import admin_required
-from app.extensions import db, csrf
-from app.models import (MateriaPrima, Receita, ReceitaIngrediente, Produto, ProdutoItem,
-                        Funcionario, Atribuicao, AlertaEstoque, PlanejamentoProducao,
-                        AuditLog, Usuario, PedidoLoja, PedidoLocal, AtribuicaoEntrega,
-                        MovimentacaoEstoque, Driver, Loja, Fornecedor, HistoricoPrecoMP)
+from app.extensions import db
+from app.models import (
+    AlertaEstoque,
+    Atribuicao,
+    AtribuicaoEntrega,
+    AuditLog,
+    Funcionario,
+    MateriaPrima,
+    MovimentacaoEstoque,
+    PedidoLocal,
+    PedidoLoja,
+    PlanejamentoProducao,
+    Produto,
+    ProdutoItem,
+    Receita,
+    ReceitaIngrediente,
+    Usuario,
+)
 from app.services.custos import calcular_custos_receitas, calcular_rendimento
 from app.utils import hoje as hoje_brt
 
@@ -189,10 +202,13 @@ def cardapio():
 def cardapio_img(tipo, id):
     """Serve a imagem (BLOB) de uma receita/produto. Publico pra carregar
     no <img src>. Suporta ETag + 304 pra evitar reenviar BLOB toda hora."""
-    from flask import abort, request as flask_request, make_response
-    from app.models import Receita, Produto
-    from sqlalchemy.orm import load_only
     import hashlib
+
+    from flask import abort, make_response
+    from flask import request as flask_request
+    from sqlalchemy.orm import load_only
+
+    from app.models import Produto, Receita
     if tipo == 'receita':
         obj = (Receita.query.options(
             load_only(Receita.imagem_blob, Receita.imagem_mimetype)
@@ -223,8 +239,9 @@ def cardapio_img_upload(tipo, id):
     Aceita ate 25MB no upload (celular tira fotos enormes), mas o que
     fica no banco e ~50-150KB."""
     from flask import abort, flash, redirect, url_for
-    from app.models import Receita, Produto
+
     from app.extensions import db as _db
+    from app.models import Produto, Receita
     if not current_user.is_admin():
         abort(403)
     if tipo == 'receita':
@@ -255,8 +272,9 @@ def cardapio_img_upload(tipo, id):
     # Compressao: PIL reduz pra 700x700 max e converte pra JPEG quality 82.
     # Aplica EXIF orientation pra fotos de celular nao virarem deitadas.
     try:
-        from PIL import Image, ImageOps
         import io as _io
+
+        from PIL import Image, ImageOps
         img = Image.open(_io.BytesIO(data))
         img = ImageOps.exif_transpose(img)  # corrige rotacao de iPhone/Android
         if img.mode in ('RGBA', 'P', 'LA'):
@@ -315,8 +333,9 @@ def cardapio_img_revisar():
 @login_required
 def cardapio_img_remover(tipo, id):
     from flask import abort, flash, redirect, url_for
-    from app.models import Receita, Produto
+
     from app.extensions import db as _db
+    from app.models import Produto, Receita
     if not current_user.is_admin():
         abort(403)
     if tipo == 'receita':
@@ -523,7 +542,8 @@ def caixa():
     """Dashboard de caixa diario: agrega dados LOCAIS do banco.
     Vendas PDV (Seru) NAO entram aqui pra evitar chamadas externas
     lentas — use /pdv pra esse detalhe."""
-    from datetime import date, timedelta
+    from datetime import timedelta
+
     from sqlalchemy import func as sqlfunc
 
     data_str = request.args.get('data', hoje_brt().isoformat())
