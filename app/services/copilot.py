@@ -1436,14 +1436,10 @@ def _read_consultar_pedido(params, user):
     if formato == 'detalhe':
         return {'texto': _formatar_pedidos_detalhe(pedidos)}
 
-    STATUS_LABEL = {
-        'pendente': 'pedido feito', 'confirmado': 'pedido feito',
-        'separado': 'enviado', 'em_transporte': 'enviado',
-        'entregue': 'recebido', 'cancelado': 'cancelado',
-    }
+    from app.constants import STATUS_PEDIDO_LABEL
     linhas = [f'**{len(pedidos)} pedido(s) encontrado(s):**']
     for p in pedidos:
-        label = STATUS_LABEL.get(p.status, p.status)
+        label = STATUS_PEDIDO_LABEL.get(p.status, p.status)
         linhas.append(f'- #{p.id} · {p.loja.nome} · {p.data_entrega.strftime("%d/%m/%Y") if p.data_entrega else "—"} · {label} · {len(p.itens)} itens')
     return {'texto': '\n'.join(linhas)}
 
@@ -1451,12 +1447,7 @@ def _read_consultar_pedido(params, user):
 def _formatar_pedidos_detalhe(pedidos):
     """Lista cada pedido com seus itens (sem agregar)."""
     from collections import defaultdict
-    STATUS_LABEL = {
-        'pendente': 'pedido feito', 'confirmado': 'pedido feito',
-        'separado': 'enviado', 'em_transporte': 'enviado',
-        'entregue': 'recebido', 'cancelado': 'cancelado',
-    }
-    # Agrupa por data, depois por loja
+    from app.constants import STATUS_PEDIDO_LABEL
     por_data = defaultdict(list)
     for p in pedidos:
         por_data[p.data_entrega].append(p)
@@ -1467,7 +1458,7 @@ def _formatar_pedidos_detalhe(pedidos):
             linhas.append(f'\n*Entrega {data.strftime("%d/%m/%Y")}*')
         for p in sorted(por_data[data], key=lambda x: (x.loja.nome if x.loja else '')):
             loja = p.loja.nome if p.loja else '?'
-            label = STATUS_LABEL.get(p.status, p.status)
+            label = STATUS_PEDIDO_LABEL.get(p.status, p.status)
             linhas.append(f'\n**#{p.id} · {loja} · {label}**')
             for it in p.itens:
                 linhas.append(f'  - {it.quantidade}× {it.nome_item}')
