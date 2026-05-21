@@ -433,6 +433,11 @@ def _alembic_stamp_se_necessario(app):
     Idempotente. Race-safe em multi-worker porque Alembic usa UPDATE
     atomico do `alembic_version` dentro de transacao.
     """
+    # Pula em testes: conftest faz db.create_all() que ja cria tudo no
+    # estado final dos modelos. Alembic em SQLite :memory: ainda abre
+    # conexao propria que nao ve as tabelas do create_all — incompativel.
+    if app.config.get('TESTING'):
+        return
     from sqlalchemy import inspect
     try:
         insp = inspect(db.engine)
