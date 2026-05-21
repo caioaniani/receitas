@@ -12,6 +12,35 @@
 - Linguagem direta e técnica, mas sempre respeitosa. Sem emojis a menos que o
   usuário use primeiro.
 
+## Versão canônica, nunca o atalho
+
+Esta regra existe porque eu (Claude) caí na tentação de "pragmático" varias
+vezes em areas de risco (dinheiro, estoque, hooks de seguranca) e o usuario
+identificou o padrao. Em **toda** decisao de implementacao:
+
+- **Default = versao canonica/correta**, mesmo que seja mais cara
+  (migration, refactor maior, mais arquivos).
+- **NUNCA escolher unilateralmente "pragmatico/menos invasivo"** quando ha
+  trade-off de correcao. Se a versao canonica eh muito cara, **PERGUNTAR
+  explicitamente o trade-off ao usuario** antes de cortar caminho.
+- **NUNCA silenciar erros** com `|| true`, `2>/dev/null`, `--quiet`,
+  `# noqa` sem justificativa documentada no codigo. Lint/test/hook que
+  acusa problema tem que aparecer pro usuario.
+- **Dinheiro e estoque tem peso especial.** Qualquer mudanca em
+  `VendaB2B*`, `EstoqueLoja`, `EstoqueProducao`, `Mov*Estoque*` exige
+  versao canonica. Se vier tentacao de "tolerancia de centavos", "filtro
+  com `1e-9`", "aceitar como erro conhecido" — esta errado, perguntar
+  primeiro.
+
+Exemplos de violacoes recentes (2026-05-21, todos identificados pelo
+usuario, nao por mim espontaneamente):
+- Auto-commit hook com `ruff check --fix --quiet 2>/dev/null || true`
+  silenciava erros nao-fixaveis. Corrigido pra abortar commit.
+- B4 (Decimal pra dinheiro) feito com tolerancia de 1 centavo em vez
+  de migrar colunas pra `Numeric(10,2)`. Refeito da forma canonica.
+- B9 (fracao inestornavel) marcado como "aceitar" sem perguntar.
+  Refeito com `SeruDebitoMov` proper.
+
 ## Verificação antes de afirmar
 
 Esta regra é obrigatória e se aplica a TODA conversa.
