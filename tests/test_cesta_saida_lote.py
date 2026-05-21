@@ -28,9 +28,10 @@ def test_saida_lote_desempacota_cesta(app, admin_user, loja, catalogo):
     db.session.flush()
     db.session.add_all([
         ProdutoItem(produto_id=cesta.id, tipo='receita',
-                     item_nome=pao.nome, quantidade=5),
+                     item_nome=pao.nome, receita_id=pao.id, quantidade=5),
         ProdutoItem(produto_id=cesta.id, tipo='receita',
-                     item_nome=catalogo['receita'].nome, quantidade=3),
+                     item_nome=catalogo['receita'].nome,
+                     receita_id=catalogo['receita'].id, quantidade=3),
     ])
 
     # Estoque inicial: 20 paes, 10 croissants
