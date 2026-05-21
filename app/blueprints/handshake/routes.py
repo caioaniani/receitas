@@ -193,7 +193,10 @@ def _handshake_saida(qr, pedido, pin):
     if not driver_match:
         _audit(qr.token, pedido, qr.tipo, 'pin_fail', f'PIN tentado: {pin[:4]}***')
         flash('PIN invalido. Confirme com o gerente.', 'danger')
-        return render_template('handshake/confirmar.html', qr=qr, pedido=pedido), 401
+        from app.services.conferencia import faltam_fotos, fotos_presentes
+        return render_template('handshake/confirmar.html', qr=qr, pedido=pedido,
+                                fotos=fotos_presentes(pedido, qr.tipo),
+                                n_falta=len(faltam_fotos(pedido, qr.tipo))), 401
     _audit(qr.token, pedido, qr.tipo, 'pin_ok', f'driver:{driver_match.nome}')
     try:
         ok, msg = _executar_envio_pedido(
