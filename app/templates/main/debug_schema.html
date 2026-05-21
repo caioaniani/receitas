@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Debug schema{% endblock %}
+{% block content %}
+<h1 class="page-title"><i class="bi bi-bug"></i> Debug schema / migrations</h1>
+
+{% if info.last_upgrade_log %}
+<div class="card mb-3">
+    <div class="card-header py-2">
+        <strong>Resultado do ultimo upgrade</strong>
+        {% if info.last_upgrade_ok == '1' %}
+        <span class="badge bg-success">OK</span>
+        {% else %}
+        <span class="badge bg-danger">FALHOU</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <pre class="mb-0 small" style="white-space:pre-wrap;max-height:400px;overflow:auto;">{{ info.last_upgrade_log }}</pre>
+    </div>
+</div>
+{% endif %}
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header py-2"><strong>Alembic state</strong></div>
+            <div class="card-body">
+                {% if info.erro_alembic %}
+                <div class="alert alert-danger small mb-2">{{ info.erro_alembic }}</div>
+                {% endif %}
+                <table class="table table-sm mb-2">
+                    <tbody>
+                        <tr><th>Revision atual (banco)</th><td><code>{{ info.alembic_current or '—' }}</code></td></tr>
+                        <tr><th>Head(s) no codigo</th><td>
+                            {% for h in info.alembic_heads %}<code>{{ h }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+                            {% if not info.alembic_heads %}—{% endif %}
+                        </td></tr>
+                        <tr><th>Pendentes</th><td>
+                            {% if info.pendentes %}
+                            <span class="badge bg-danger">{{ info.pendentes|length }}</span>
+                            {% else %}
+                            <span class="badge bg-success">0 (na head)</span>
+                            {% endif %}
+                        </td></tr>
+                    </tbody>
+                </table>
+                {% if info.pendentes %}
+                <div class="small">
+                    <strong>Migrations pendentes:</strong>
+                    <ul class="mb-2">
+                    {% for p in info.pendentes %}
+                        <li><code>{{ p.revision }}</code> — {{ p.doc }}</li>
+                    {% endfor %}
+                    </ul>
+                    <form method="POST" action="{{ url_for('main.debug_schema_upgrade') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-danger"
+                                onclick="return confirm('Aplicar migrations pendentes em PROD?');">
+                            <i class="bi bi-play-fill"></i> Aplicar upgrade
+                        </button>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header py-2"><strong>Orfaos ProdutoItem</strong></div>
+            <div class="card-body">
+                {% if info.orfaos %}
+                    {% if info.orfaos.erro %}
+                    <div class="alert alert-warning small mb-0">{{ info.orfaos.erro }}</div>
+                    {% else %}
+                    <p class="mb-1">Receita sem FK: <strong>{{ info.orfaos.receita }}</strong></p>
+                    <p class="mb-0">MP sem FK: <strong>{{ info.orfaos.mp }}</strong></p>
+                    {% endif %}
+                {% else %}
+                <p class="text-muted small mb-0">B5 ainda nao aplicada (colunas FK nao existem).</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header py-2"><strong>Colunas criticas</strong></div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Tabela</th>
+                    <th>Coluna</th>
+                    <th>Existe?</th>
+                    <th>Tipo atual</th>
+                    <th>Nullable</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for c in info.colunas %}
+                <tr>
+                    <td><code>{{ c.tabela }}</code></td>
+                    <td><code>{{ c.coluna }}</code></td>
+                    <td>
+                        {% if c.existe is sameas true %}
+                        <span class="badge bg-success">SIM</span>
+                        {% elif c.existe is sameas false %}
+                        <span class="badge bg-danger">NAO</span>
+                        {% else %}
+                        <span class="badge bg-warning">erro</span>
+                        {% endif %}
+                    </td>
+                    <td><code>{{ c.tipo }}</code></td>
+                    <td>{{ c.nullable }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="alert alert-info small mt-3 mb-0">
+    <strong>Esperado apos B4 + B5:</strong>
+    <ul class="mb-0">
+        <li><code>produto_item.receita_id</code>, <code>materia_prima_id</code>: existem (INTEGER)</li>
+        <li><code>venda_b2b.valor_total</code>, <code>venda_b2b_item.preco_unitario</code>, <code>venda_b2b_parcela.valor</code>: tipo <code>NUMERIC(10, 2)</code></li>
+        <li>Alembic na head <code>efb6e5837fd0</code></li>
+    </ul>
+</div>
+{% endblock %}
