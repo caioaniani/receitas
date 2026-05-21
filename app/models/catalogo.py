@@ -163,6 +163,7 @@ class Produto(db.Model):
 
     itens = db.relationship(
         'ProdutoItem',
+        foreign_keys='ProdutoItem.produto_id',
         backref='produto',
         lazy=True,
         cascade='all, delete-orphan',
