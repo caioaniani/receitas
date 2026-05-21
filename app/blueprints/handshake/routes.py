@@ -197,6 +197,20 @@ def _handshake_saida(qr, pedido, pin):
         return render_template('handshake/confirmar.html', qr=qr, pedido=pedido,
                                 fotos=fotos_presentes(pedido, qr.tipo),
                                 n_falta=len(faltam_fotos(pedido, qr.tipo))), 401
+    # So o motorista atribuido pode escanear. Se outro motorista tentar,
+    # recusa com mensagem clara — produção deve reatribuir antes.
+    if pedido.driver_id and pedido.driver_id != driver_match.id:
+        nome_atrib = pedido.driver.nome if pedido.driver else f'id={pedido.driver_id}'
+        _audit(qr.token, pedido, qr.tipo, 'driver_errado',
+               f'tentou:{driver_match.nome} esperado:{nome_atrib}')
+        flash(
+            f'Este pedido foi atribuido a {nome_atrib}, nao a voce '
+            f'({driver_match.nome}). Peca pra producao reatribuir antes.',
+            'danger')
+        from app.services.conferencia import faltam_fotos, fotos_presentes
+        return render_template('handshake/confirmar.html', qr=qr, pedido=pedido,
+                                fotos=fotos_presentes(pedido, qr.tipo),
+                                n_falta=len(faltam_fotos(pedido, qr.tipo))), 403
     _audit(qr.token, pedido, qr.tipo, 'pin_ok', f'driver:{driver_match.nome}')
     try:
         ok, msg = _executar_envio_pedido(
