@@ -3,7 +3,6 @@ auditoria continuada (B1, B2, B3, B6, B7, B8, B10).
 
 Cada teste verifica o cenario exato que escapava antes do fix.
 """
-import pytest
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -17,7 +16,7 @@ def test_b1_estorno_seru_com_fator(app, admin_user, loja, catalogo):
     sem reverter. Estoque baixado para sempre.
     """
     from app.extensions import db
-    from app.models import (EstoqueLoja, MovEstoqueLoja, SeruPedidoProcessado)
+    from app.models import EstoqueLoja, MovEstoqueLoja, SeruPedidoProcessado
     from app.services.seru_sync import _estornar_pedido
 
     el = EstoqueLoja(loja_id=loja.id, receita_id=catalogo['receita'].id,
@@ -181,7 +180,7 @@ def test_b3_cancelar_b2b_parcial_nao_infla(app, admin_user, catalogo):
 def test_b6_upload_duplicado_nao_dobra(app, admin_user, loja, catalogo):
     """Aplicar o MESMO xlsx 2x nao cria 2 linhas em VendaManualLoja."""
     from datetime import date
-    from app.extensions import db
+
     from app.models import VendaManualLoja
     from app.services import vendas_manuais as svc
 
@@ -213,7 +212,6 @@ def test_b6_upload_duplicado_nao_dobra(app, admin_user, loja, catalogo):
 def test_b7_entrada_pendente_reusa_linha(app, admin_user, loja):
     """Entrada em lote com mesmo nome pendente 2x tem que reusar a mesma
     linha de EstoqueLoja, nao criar duas."""
-    from app.extensions import db
     from app.models import EstoqueLoja
     from app.services import estoque_loja_lote as svc
 
@@ -240,7 +238,6 @@ def test_b7_entrada_pendente_reusa_linha(app, admin_user, loja):
 def test_b7_balanco_congelados_pendente_reusa_linha(app, admin_user):
     """Balanco repetido com mesmo nome pendente reusa linha (sobrescreve
     quantidade, como faz pra itens resolvidos)."""
-    from app.extensions import db
     from app.models import EstoqueProducao
     from app.services import estoque_congelados as svc
 
@@ -273,6 +270,7 @@ def test_b10_sugestao_subtrai_estornos(app, admin_user, loja, catalogo):
     negativo (cancela a contribuicao da venda original).
     """
     from datetime import date, datetime, timedelta
+
     from app.extensions import db
     from app.models import EstoqueLoja, MovEstoqueLoja
     from app.services.vendas_manuais import sugerir_pedido
