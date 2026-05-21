@@ -181,7 +181,7 @@ def create_app(config_class=None):
             mp_dict = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade,
                                   'peso_unidade': mp.peso_unidade} for mp in mps}
             return {
-                'json': json.dumps(mp_dict, ensure_ascii=False),
+                'dict': mp_dict,
                 'nomes': [mp.nome for mp in mps],
             }
         mp_data = _cache('mps', 60, _carrega_mp_data)
