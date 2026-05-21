@@ -134,6 +134,46 @@ class FotoRecebimento(db.Model):
 
     pedido = db.relationship('PedidoLoja', backref=db.backref('fotos', cascade='all, delete-orphan'))
 
+
+class PedidoItemFoto(db.Model):
+    """Foto de conferencia por SKU de um pedido, em uma etapa do fluxo.
+
+    Obrigatoria pra:
+    - **saida** (industria → motorista): industria tira foto de cada item
+      antes do QR de saida ser gerado. Sem foto de todos, nao gera QR.
+    - **entrega** (motorista → loja): motorista tira foto de cada item
+      antes do QR de entrega ser gerado. Sem foto de todos, loja nao recebe.
+
+    Foto eh por SKU, nao por unidade — 1 foto cobre as 90 unidades de
+    croissant tradicional, etc. Re-anexar substitui (delete + insert
+    via UI; backend so insere/atualiza por API).
+    """
+    __tablename__ = 'pedido_item_foto'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_item_id = db.Column(db.Integer, db.ForeignKey('pedido_item.id'),
+                                nullable=False, index=True)
+    etapa = db.Column(db.String(10), nullable=False)  # 'saida' | 'entrega'
+    imagem = db.Column(db.LargeBinary, nullable=False)
+    mimetype = db.Column(db.String(100))
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
+                               nullable=True)
+    # Pra quando o motorista (sem Usuario.id no sistema) tirar foto:
+    # capturamos o Driver.id em criado_por_driver_id.
+    criado_por_driver_id = db.Column(db.Integer, db.ForeignKey('driver_entrega.id'),
+                                       nullable=True)
+
+    pedido_item = db.relationship('PedidoItem',
+                                    backref=db.backref('fotos_conferencia',
+                                                       cascade='all, delete-orphan'))
+
+    __table_args__ = (
+        # 1 foto unica por (item, etapa) — re-upload substitui.
+        db.UniqueConstraint('pedido_item_id', 'etapa',
+                             name='uq_pedidoitemfoto_item_etapa'),
+    )
+
 class MovEstoqueLoja(db.Model):
     __tablename__ = 'mov_estoque_loja'
 
