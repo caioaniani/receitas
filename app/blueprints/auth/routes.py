@@ -233,12 +233,9 @@ def excluir_atribuicao(id):
 
 @auth_bp.route('/painel')
 @login_required
+@admin_required
 def painel():
     """Painel do admin — ver todas as atribuições."""
-    if not current_user.is_admin():
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('auth.minhas_fichas'))
-
     atribuicoes = Atribuicao.query.order_by(
         Atribuicao.status, Atribuicao.data_atribuicao.desc()
     ).all()
