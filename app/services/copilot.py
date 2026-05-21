@@ -1378,18 +1378,6 @@ def _resolver_mp(nome):
 
 # ── Executores READ (sem aprovacao) ───────────────────────────────────
 
-def _executar_read(tool_name, params, user):
-    try:
-        if tool_name == 'consultar_pedido':
-            return _read_consultar_pedido(params, user)
-        if tool_name == 'consultar_estoque':
-            return _read_consultar_estoque(params, user)
-    except Exception as exc:  # noqa: BLE001
-        logger.exception('Copilot read tool falhou')
-        return {'erro': str(exc)}
-    return {'erro': f'tool nao implementada: {tool_name}'}
-
-
 def _read_consultar_pedido(params, user):
     from app.models import PedidoLoja
     from app.constants import STATUS_PEDIDO_FINALIZADOS
