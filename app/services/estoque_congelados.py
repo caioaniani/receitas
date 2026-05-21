@@ -306,9 +306,10 @@ def aplicar_balanco(itens_resolvidos, user, referencia=None):
             # Reusa linha pendente existente com mesmo nome — evita
             # fragmentar em multiplas linhas no balanco repetido. Consistente
             # com o tratamento de itens resolvidos (sobrescreve quantidade).
+            # EstoqueProducao so tem receita_id e produto_id (sem MP).
             ep = EstoqueProducao.query.filter_by(
                 nome_pendente=nome_digitado,
-                receita_id=None, produto_id=None, materia_prima_id=None,
+                receita_id=None, produto_id=None,
             ).first()
             if not ep:
                 ep = EstoqueProducao(
