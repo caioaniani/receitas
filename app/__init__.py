@@ -433,13 +433,11 @@ def _alembic_stamp_se_necessario(app):
     Idempotente. Race-safe em multi-worker porque Alembic usa UPDATE
     atomico do `alembic_version` dentro de transacao.
     """
-    # Pula em testes: conftest faz db.create_all() que ja cria tudo no
-    # estado final dos modelos. Alembic em SQLite :memory: ainda abre
-    # conexao propria que nao ve as tabelas do create_all — incompativel.
-    # `TESTING` ainda nao tem nesse ponto do create_app; usamos a URI
-    # `:memory:` como marker (so vem de teste).
-    uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
-    if app.config.get('TESTING') or ':memory:' in uri:
+    # Pula em testes: conftest seta PYTEST_RUNNING. Em pytest com SQLite
+    # :memory:, Alembic abre conexao propria e nao ve as tabelas criadas
+    # por `db.create_all()`. Como conftest ja faz create_all no estado
+    # final, nao precisa do upgrade.
+    if os.environ.get('PYTEST_RUNNING'):
         return
     from sqlalchemy import inspect
     try:
