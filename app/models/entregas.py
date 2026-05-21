@@ -65,6 +65,33 @@ class Driver(db.Model):
 
     atribuicoes = db.relationship('AtribuicaoEntrega', backref='driver', lazy='dynamic')
 
+
+class DriverMagicToken(db.Model):
+    """Magic link diario do motorista. Cron 05:00 BRT gera token novo
+    pra cada Driver ativo + envia via WhatsApp. Velhos viram revogados.
+
+    Acesso: /driver/<token> aceita tanto Driver.token legado quanto
+    qualquer DriverMagicToken nao-revogado e nao-expirado.
+    """
+    __tablename__ = 'driver_magic_token'
+
+    id = db.Column(db.Integer, primary_key=True)
+    driver_id = db.Column(db.Integer, db.ForeignKey('driver_entrega.id'),
+                           nullable=False, index=True)
+    token = db.Column(db.String(64), nullable=False, unique=True, index=True)
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False)
+    expira_em = db.Column(db.DateTime, nullable=False)
+    revogado = db.Column(db.Boolean, default=False, nullable=False)
+    enviado_em = db.Column(db.DateTime, nullable=True)
+    enviado_ok = db.Column(db.Boolean, nullable=True)
+
+    driver = db.relationship('Driver', backref='magic_tokens')
+
+    @property
+    def valido(self):
+        return (not self.revogado) and (self.expira_em > agora())
+
+
 class LoteSaida(db.Model):
     """Pacote nomeado de uma rodada de distribuicao.
     Cada vez que o usuario clica 'Distribuir' (ou cria manualmente), gera 1 lote.
