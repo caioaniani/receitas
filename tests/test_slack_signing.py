@@ -9,7 +9,6 @@ import time
 
 import pytest
 
-
 SIGNING_SECRET = 'test-signing-secret-abcdef123456'
 
 

@@ -4,10 +4,9 @@ import os
 from flask import Flask, Response, render_template, request
 
 from app.extensions import csrf, db, limiter, login_manager, migrate
+from app.migrations_legacy import _migrate
 from app.utils import agora as agora_brt
 from config import Config
-
-from app.migrations_legacy import _migrate
 
 logger = logging.getLogger(__name__)
 
@@ -260,6 +259,7 @@ def create_app(config_class=None):
         """Atribui ID curto por request pra correlacionar logs.
         Se o cliente mandou X-Request-ID (proxy / load balancer), usa esse."""
         import uuid
+
         from flask import g
         rid = (request.headers.get('X-Request-ID') or '').strip()
         if not rid or len(rid) > 64:

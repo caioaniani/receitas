@@ -5,7 +5,6 @@ Garante que:
 - pode_usar() respeita o mapeamento
 - Default (tool sem mapeamento) = so admin
 """
-import pytest
 
 
 def _tools_definidas():
