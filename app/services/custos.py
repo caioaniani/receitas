@@ -7,6 +7,11 @@ from app.models import MateriaPrima, Receita
 MAX_PASSES = 5  # máximo de passadas para resolver sub-receitas
 
 
+def _norm(nome):
+    """Normaliza nome para lookup case/whitespace-insensitive."""
+    return (nome or '').strip().casefold()
+
+
 def calcular_custos_receitas():
     """Calcula custo unitário de cada receita com suporte a sub-receitas.
 
@@ -25,6 +30,8 @@ def calcular_custos_receitas():
     mp_dict = {mp.nome: mp.custo_por_kg for mp in mps}
     mp_info = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade,
                           'peso_unidade': mp.peso_unidade} for mp in mps}
+    # Indice normalizado pra lookup case/whitespace-tolerant em MP.
+    mp_info_norm = {_norm(k): v for k, v in mp_info.items()}
 
     custos = {}
     pesos = {}
@@ -32,9 +39,14 @@ def calcular_custos_receitas():
 
     remaining = list(receitas)
     for _ in range(MAX_PASSES):
+        # Indice normalizado de custos ja resolvidos — usado pra casar
+        # nome de sub-receita mesmo se a grafia (espacos/maiusculas) diverge
+        # entre Receita.nome e ReceitaIngrediente.ingrediente_nome.
+        custos_norm = {_norm(k): v for k, v in custos.items()}
         still_remaining = []
         for r in remaining:
-            resultado = _calcular_receita(r, custos, mp_info)
+            resultado = _calcular_receita(r, custos, custos_norm,
+                                           mp_info, mp_info_norm)
             if resultado is None:
                 still_remaining.append(r)
                 continue
