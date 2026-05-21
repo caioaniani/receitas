@@ -28,7 +28,9 @@ jobs:
         run: ruff check app/ tests/
 
       - name: Pytest
-        run: pytest -q --tb=short
+        # `python -m pytest` adiciona cwd ao sys.path (vs `pytest` direto
+        # que nao adiciona). Sem isso, `from app import ...` falha no CI.
+        run: python -m pytest -q --tb=short
         env:
           # SECRET_KEY obrigatorio em prod (Postgres). Como CI usa SQLite
           # in-memory via conftest.py, o fallback dev gera SECRET_KEY
