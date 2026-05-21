@@ -58,12 +58,9 @@ def minhas_fichas():
 
 @auth_bp.route('/usuarios')
 @login_required
+@admin_required
 def usuarios():
     """Gerenciar usuários — só admin."""
-    if not current_user.is_admin():
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('auth.minhas_fichas'))
-
     from app.models import Loja
     usuarios = Usuario.query.order_by(Usuario.papel, Usuario.nome).all()
     lojas = (Loja.query.filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
@@ -73,11 +70,8 @@ def usuarios():
 
 @auth_bp.route('/usuarios/novo', methods=['POST'])
 @login_required
+@admin_required
 def novo_usuario():
-    if not current_user.is_admin():
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('auth.minhas_fichas'))
-
     nome = request.form.get('nome', '').strip()
     login_val = request.form.get('login', '').strip()
     senha = request.form.get('senha', '').strip()
