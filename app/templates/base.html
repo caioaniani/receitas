@@ -383,6 +383,20 @@
             {% endif %}
         {% endwith %}
 
+        {% if cestas_orfaos_count and cestas_orfaos_count > 0 %}
+        <div class="alert alert-danger d-flex align-items-center justify-content-between mb-3" role="alert"
+             style="border-left:4px solid #b02a37;">
+            <div>
+                <i class="bi bi-exclamation-octagon-fill"></i>
+                <strong>{{ cestas_orfaos_count }} componente{{ 's' if cestas_orfaos_count > 1 }} de cesta sem vinculo.</strong>
+                Vendas/desperdicios dessas cestas <strong>NAO baixam estoque</strong> — corrigir agora.
+            </div>
+            <a href="{{ url_for('produtos.cestas_orfaos') }}" class="btn btn-sm btn-danger">
+                <i class="bi bi-tools"></i> Resolver
+            </a>
+        </div>
+        {% endif %}
+
         {% block content %}{% endblock %}
     </main>
 
