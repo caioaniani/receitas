@@ -1,11 +1,62 @@
 {% extends 'base.html' %}
-{% block title %}QR Saída — Pedido #{{ pedido.id }}{% endblock %}
+{% block title %}Saida — Pedido #{{ pedido.id }}{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="page-title mb-0"><i class="bi bi-qr-code"></i> Saída — Pedido #{{ pedido.id }}</h1>
+    <h1 class="page-title mb-0"><i class="bi bi-qr-code"></i> Saida — Pedido #{{ pedido.id }}</h1>
     <a href="{{ url_for('pedidos.detalhe', id=pedido.id) }}" class="btn btn-sm btn-outline-secondary">Voltar</a>
 </div>
 
+<div class="alert {% if pronto %}alert-success{% else %}alert-warning{% endif %} small mb-3">
+    {% if pronto %}
+    <i class="bi bi-check-circle-fill"></i>
+    <strong>Conferencia OK.</strong> Todas as fotos tiradas. QR pronto pro motorista escanear.
+    {% else %}
+    <i class="bi bi-camera-fill"></i>
+    <strong>Conferencia incompleta.</strong> Faltam <strong>{{ n_falta }}</strong> foto(s).
+    Tire foto de cada SKU antes do motorista sair com o pedido.
+    {% endif %}
+</div>
+
+<div class="card mb-3">
+    <div class="card-header py-2">
+        <strong>Itens do pedido #{{ pedido.id }} → {{ pedido.loja.nome }}</strong>
+    </div>
+    <ul class="list-group list-group-flush">
+        {% for it in pedido.itens %}
+        {% set foto = fotos.get(it.id) %}
+        <li class="list-group-item d-flex align-items-center gap-3 flex-wrap">
+            <div class="flex-grow-1">
+                <strong>{{ it.quantidade }}× {{ it.nome_item if it.nome_item else '?' }}</strong>
+                {% if it.observacao %}
+                <div class="text-muted small">obs: {{ it.observacao }}</div>
+                {% endif %}
+            </div>
+            {% if foto %}
+            <a href="{{ url_for('pedidos.conferencia_foto_serve', foto_id=foto.id) }}"
+               target="_blank" title="Ver foto">
+                <img src="{{ url_for('pedidos.conferencia_foto_serve', foto_id=foto.id) }}"
+                     alt="foto" style="width:60px;height:60px;object-fit:cover;border-radius:.25rem;">
+            </a>
+            <span class="badge bg-success"><i class="bi bi-check"></i></span>
+            {% else %}
+            <span class="badge bg-secondary">sem foto</span>
+            {% endif %}
+            <form class="conf-foto-form d-inline-block" data-item-id="{{ it.id }}"
+                  enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label class="btn btn-sm {% if foto %}btn-outline-secondary{% else %}btn-primary{% endif %} mb-0">
+                    <i class="bi bi-camera"></i>
+                    {% if foto %}Re-tirar{% else %}Tirar foto{% endif %}
+                    <input type="file" name="foto" accept="image/*" capture="environment"
+                           style="display:none;" onchange="enviarFoto(this)">
+                </label>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+{% if pronto %}
 <div class="row g-3">
     <div class="col-md-6">
         <div class="card text-center">
@@ -14,7 +65,7 @@
                 {% if qr_png %}
                 <img src="{{ qr_png }}" alt="QR Code" style="max-width:100%; height:auto;">
                 {% else %}
-                <div class="alert alert-warning small">Biblioteca de QR Code não disponível. Use o link abaixo.</div>
+                <div class="alert alert-warning small">Biblioteca de QR Code nao disponivel. Use o link abaixo.</div>
                 {% endif %}
                 <p class="small text-muted mt-2 mb-0">
                     Ou abrir direto: <code style="font-size:10px;">{{ url }}</code>
@@ -27,28 +78,24 @@
             <div class="card-body">
                 <h6 class="card-title">Como funciona</h6>
                 <ol class="small mb-3">
-                    <li>Motorista escaneia o QR com a câmera do celular</li>
-                    <li>Abre a página de confirmação</li>
+                    <li>Motorista escaneia o QR com a camera do celular</li>
+                    <li>Abre a pagina de confirmacao</li>
                     <li>Digita o PIN dele</li>
-                    <li>Status muda automaticamente para <strong>em transporte</strong>, baixa estoque da indústria</li>
+                    <li>Status muda para <strong>em transporte</strong>, baixa estoque da industria</li>
                 </ol>
                 <div class="small text-muted">
-                    <i class="bi bi-clock"></i> Válido até <strong>{{ qr.expira_em.strftime('%H:%M de %d/%m') }}</strong><br>
-                    <i class="bi bi-shield-check"></i> Single-use: após escaneado, não pode ser reusado<br>
-                    <i class="bi bi-arrow-clockwise"></i> Esta página gera/reusa o mesmo token enquanto válido
+                    <i class="bi bi-clock"></i> Valido ate <strong>{{ qr.expira_em.strftime('%H:%M de %d/%m') }}</strong><br>
+                    <i class="bi bi-shield-check"></i> Single-use: apos escaneado, nao pode ser reusado<br>
+                    <i class="bi bi-arrow-clockwise"></i> Esta pagina gera/reusa o mesmo token enquanto valido
                 </div>
                 <hr>
-                <p class="small text-muted mb-2"><strong>Pedido:</strong> #{{ pedido.id }} → {{ pedido.loja.nome }}</p>
-                <p class="small text-muted mb-2"><strong>Status atual:</strong> {{ pedido.status }}</p>
-                <p class="small text-muted mb-0"><strong>Itens:</strong> {{ pedido.itens|length }}</p>
-                <hr>
                 <details class="small">
-                    <summary>Fallback admin (caso o QR não funcione)</summary>
+                    <summary>Fallback admin (caso o QR nao funcione)</summary>
                     <form method="POST" action="{{ url_for('pedidos.enviar', id=pedido.id) }}" class="mt-2"
-                          onsubmit="return confirm('Marcar saída SEM handshake fisico do motorista?')">
+                          onsubmit="return confirm('Marcar saida SEM handshake fisico do motorista?')">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm btn-outline-warning">
-                            Marcar saída manualmente
+                            Marcar saida manualmente
                         </button>
                     </form>
                 </details>
@@ -56,4 +103,37 @@
         </div>
     </div>
 </div>
+{% endif %}
+
+<script>
+const UPLOAD_BASE = "{{ url_for('pedidos.conferencia_saida_upload', id=pedido.id, item_id=0) }}".replace('/0', '');
+function enviarFoto(input) {
+    const form = input.closest('form');
+    const itemId = form.dataset.itemId;
+    const file = input.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('foto', file);
+    fd.append('csrf_token', form.querySelector('[name=csrf_token]').value);
+    const btn = form.querySelector('.btn');
+    const origText = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise spin"></i> Enviando...';
+    btn.classList.add('disabled');
+    fetch(UPLOAD_BASE + '/' + itemId, {
+        method: 'POST', body: fd, credentials: 'same-origin',
+    }).then(r => r.json()).then(j => {
+        if (j.ok) {
+            window.location.reload();
+        } else {
+            alert('Erro: ' + (j.erro || 'falha no upload'));
+            btn.innerHTML = origText;
+            btn.classList.remove('disabled');
+        }
+    }).catch(e => {
+        alert('Erro de rede: ' + e);
+        btn.innerHTML = origText;
+        btn.classList.remove('disabled');
+    });
+}
+</script>
 {% endblock %}
