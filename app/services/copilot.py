@@ -2808,11 +2808,8 @@ def _resolver_loja_para_user(loja_id, loja_nome, user):
         if l:
             return l
     if loja_nome:
-        from sqlalchemy import func
-        l = Loja.query.filter(func.lower(Loja.nome) == loja_nome.lower()).first()
-        if l:
-            return l
-        l = Loja.query.filter(Loja.nome.ilike(f'%{loja_nome}%')).first()
+        from app.utils import resolver_loja_por_nome
+        l = resolver_loja_por_nome(loja_nome)
         if l:
             return l
     return None
