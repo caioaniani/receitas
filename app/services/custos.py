@@ -39,13 +39,14 @@ def calcular_custos_receitas():
 
     remaining = list(receitas)
     for _ in range(MAX_PASSES):
-        # Indice normalizado de custos ja resolvidos — usado pra casar
-        # nome de sub-receita mesmo se a grafia (espacos/maiusculas) diverge
-        # entre Receita.nome e ReceitaIngrediente.ingrediente_nome.
+        # Indices normalizados de custos/pesos ja resolvidos — pra casar
+        # nome de sub-receita mesmo se a grafia diverge (espacos/maiusculas).
         custos_norm = {_norm(k): v for k, v in custos.items()}
+        pesos_norm = {_norm(k): v for k, v in pesos.items()}
         still_remaining = []
         for r in remaining:
             resultado = _calcular_receita(r, custos, custos_norm,
+                                           pesos, pesos_norm,
                                            mp_info, mp_info_norm)
             if resultado is None:
                 still_remaining.append(r)
