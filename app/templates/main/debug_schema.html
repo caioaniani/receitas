@@ -65,6 +65,36 @@
     </div>
 
     <div class="col-md-6">
+        {% if info.estado_misto and not info.estado_misto.erro %}
+        {% if info.estado_misto.alembic_diz != info.estado_misto.ddl_real %}
+        <div class="card border-warning mb-2">
+            <div class="card-header py-2 bg-warning text-dark"><strong>Estado misto detectado</strong></div>
+            <div class="card-body small">
+                <p class="mb-1"><strong>alembic_version</strong> diz: <code>{{ info.estado_misto.alembic_diz or '(vazio)' }}</code></p>
+                <p class="mb-1"><strong>DDL real</strong> ja avancou ate: <code>{{ info.estado_misto.ddl_real }}</code></p>
+                <p class="mb-2">
+                    B9 (seru_debito_mov): {% if info.estado_misto.b9_ddl %}<span class="badge bg-success">aplicada</span>{% else %}<span class="badge bg-secondary">nao</span>{% endif %}
+                    B4 (Numeric): {% if info.estado_misto.b4_ddl %}<span class="badge bg-success">aplicada</span>{% else %}<span class="badge bg-secondary">nao</span>{% endif %}
+                    B5 (FK): {% if info.estado_misto.b5_ddl %}<span class="badge bg-success">aplicada</span>{% else %}<span class="badge bg-secondary">nao</span>{% endif %}
+                </p>
+                <p class="mb-2">
+                    Antes de aplicar upgrade, realinhe o controle: <strong>Stamp</strong>
+                    marca o alembic_version sem rodar DDL. Apos stamp, o upgrade so vai
+                    aplicar o que falta de verdade.
+                </p>
+                <form method="POST" action="{{ url_for('main.debug_schema_stamp') }}" class="mb-0">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="revision" value="{{ info.estado_misto.ddl_real }}">
+                    <button type="submit" class="btn btn-sm btn-warning"
+                            onclick="return confirm('Stampar alembic_version em {{ info.estado_misto.ddl_real }} (sem rodar DDL)?');">
+                        <i class="bi bi-bookmark-check"></i> Stamp em {{ info.estado_misto.ddl_real }}
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+        {% endif %}
+
         <div class="card">
             <div class="card-header py-2"><strong>Orfaos ProdutoItem</strong></div>
             <div class="card-body">
