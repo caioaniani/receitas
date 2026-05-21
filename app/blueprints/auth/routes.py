@@ -161,11 +161,8 @@ def alterar_loja(id):
 
 @auth_bp.route('/usuarios/<int:id>/reset-senha', methods=['POST'])
 @login_required
+@admin_required
 def reset_senha(id):
-    if not current_user.is_admin():
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('auth.minhas_fichas'))
-
     u = Usuario.query.get_or_404(id)
     nova_senha = request.form.get('nova_senha', '').strip()
     if not nova_senha:
