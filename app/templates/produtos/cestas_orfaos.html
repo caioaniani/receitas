@@ -59,7 +59,7 @@
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <select name="alvo" class="form-select form-select-sm" required>
                                 <option value="">— escolher —</option>
-                                <optgroup label="Receitas">
+                                <optgroup label="Receitas (feitas internamente)">
                                     {% for r in receitas %}
                                     <option value="receita:{{ r.id }}"
                                             {% if r.nome == pi.item_nome %}selected{% endif %}>
@@ -67,7 +67,15 @@
                                     </option>
                                     {% endfor %}
                                 </optgroup>
-                                <optgroup label="Materias-primas">
+                                <optgroup label="Produtos (comprados prontos)">
+                                    {% for p in produtos %}
+                                    <option value="produto:{{ p.id }}"
+                                            {% if p.nome == pi.item_nome %}selected{% endif %}>
+                                        {{ p.nome }}
+                                    </option>
+                                    {% endfor %}
+                                </optgroup>
+                                <optgroup label="Materias-primas (insumos)">
                                     {% for m in mps %}
                                     <option value="mp:{{ m.id }}"
                                             {% if m.nome == pi.item_nome %}selected{% endif %}>
