@@ -3,38 +3,114 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>QR Entrega — Pedido #{{ pedido.id }}</title>
+<title>Entrega — Pedido #{{ pedido.id }}</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
 <style>
 body { background:#f6f7fb; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-.wrap { max-width: 480px; margin: 0 auto; padding: 16px 14px 40px; text-align:center; }
+.wrap { max-width: 540px; margin: 0 auto; padding: 16px 14px 40px; }
 .qr-img { max-width: 100%; height: auto; background:#fff; padding:12px; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
 .h1-mini { font-size:18px; font-weight:700; margin:0 0 8px; }
 .kv { font-size:13px; color:#555; }
 .btn-acao { width:100%; padding:14px; font-size:15px; border-radius:10px; }
+.thumb { width:54px;height:54px;object-fit:cover;border-radius:.35rem; }
 </style>
 </head>
 <body>
 <div class="wrap">
     <h1 class="h1-mini"><i class="bi bi-qr-code"></i> Entrega — Pedido #{{ pedido.id }}</h1>
-    <p class="kv">Loja <strong>{{ pedido.loja.nome }}</strong></p>
-    <p class="kv mb-3">Mostre este QR ao funcionário da loja, ele escaneia e digita o PIN da loja.</p>
+    <p class="kv">Loja <strong>{{ pedido.loja.nome }}</strong> · {{ pedido.itens|length }} item(s)</p>
 
-    {% if qr_png %}
-    <img src="{{ qr_png }}" alt="QR Code de entrega" class="qr-img">
-    {% else %}
-    <div class="alert alert-warning small">Biblioteca de QR Code não disponível.</div>
+    <div class="alert {% if pronto %}alert-success{% else %}alert-warning{% endif %} small mb-3">
+        {% if pronto %}
+        <i class="bi bi-check-circle-fill"></i>
+        <strong>Conferencia OK.</strong> Mostre o QR pro funcionario da loja.
+        {% else %}
+        <i class="bi bi-camera-fill"></i>
+        <strong>Tire foto de cada item</strong> antes de entregar.
+        Faltam <strong>{{ n_falta }}</strong>.
+        {% endif %}
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header py-2 small">Itens do pedido</div>
+        <ul class="list-group list-group-flush">
+            {% for it in pedido.itens %}
+            {% set foto = fotos.get(it.id) %}
+            <li class="list-group-item d-flex align-items-center gap-2 flex-wrap">
+                <div class="flex-grow-1">
+                    <strong>{{ it.quantidade }}× {{ it.nome_item if it.nome_item else '?' }}</strong>
+                    {% if it.observacao %}
+                    <div class="text-muted small">obs: {{ it.observacao }}</div>
+                    {% endif %}
+                </div>
+                {% if foto %}
+                <img src="{{ url_for('driver.conferencia_entrega_foto_serve', token=token, pedido_id=pedido.id, foto_id=foto.id) }}"
+                     alt="foto" class="thumb">
+                <span class="badge bg-success"><i class="bi bi-check"></i></span>
+                {% endif %}
+                <form class="conf-foto-form d-inline-block" data-item-id="{{ it.id }}"
+                      enctype="multipart/form-data">
+                    <label class="btn btn-sm {% if foto %}btn-outline-secondary{% else %}btn-primary{% endif %} mb-0">
+                        <i class="bi bi-camera"></i>
+                        {% if foto %}Re-tirar{% else %}Foto{% endif %}
+                        <input type="file" name="foto" accept="image/*" capture="environment"
+                               style="display:none;" onchange="enviarFoto(this)">
+                    </label>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    {% if pronto %}
+    <div class="text-center">
+        {% if qr_png %}
+        <img src="{{ qr_png }}" alt="QR Code de entrega" class="qr-img">
+        {% else %}
+        <div class="alert alert-warning small">Biblioteca de QR Code nao disponivel.</div>
+        {% endif %}
+        <p class="small text-muted mt-3">
+            <i class="bi bi-clock"></i> Valido ate {{ qr.expira_em.strftime('%H:%M') }}<br>
+            Apos escaneado, sera marcado como <strong>entregue</strong>.
+        </p>
+    </div>
     {% endif %}
-
-    <p class="small text-muted mt-3">
-        <i class="bi bi-clock"></i> Válido até {{ qr.expira_em.strftime('%H:%M') }}<br>
-        Após escaneado, será marcado como <strong>entregue</strong>.
-    </p>
 
     <a href="{{ url_for('driver.index', token=driver.token) }}" class="btn btn-outline-secondary btn-acao mt-2">
         <i class="bi bi-arrow-left"></i> Voltar
     </a>
 </div>
+
+<script>
+const UPLOAD_BASE = "{{ url_for('driver.conferencia_entrega_upload', token=token, pedido_id=pedido.id, item_id=0) }}".replace('/0', '');
+function enviarFoto(input) {
+    const form = input.closest('form');
+    const itemId = form.dataset.itemId;
+    const file = input.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('foto', file);
+    const btn = form.querySelector('.btn');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Enviando...';
+    btn.classList.add('disabled');
+    fetch(UPLOAD_BASE + '/' + itemId, {
+        method: 'POST', body: fd, credentials: 'same-origin',
+    }).then(r => r.json()).then(j => {
+        if (j.ok) {
+            window.location.reload();
+        } else {
+            alert('Erro: ' + (j.erro || 'falha no upload'));
+            btn.innerHTML = orig;
+            btn.classList.remove('disabled');
+        }
+    }).catch(e => {
+        alert('Erro de rede: ' + e);
+        btn.innerHTML = orig;
+        btn.classList.remove('disabled');
+    });
+}
+</script>
 </body>
 </html>
