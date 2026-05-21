@@ -154,16 +154,28 @@ def handshake(token):
                                 msg=f'Pedido #{pedido.id} nao esta em transporte (status: {pedido.status}). '
                                     'Peca pro admin executar o QR de saida antes, ou usar "Forcar entrega" na ficha do pedido.'), 409
 
+    from app.services.conferencia import faltam_fotos, fotos_presentes
+    fotos = fotos_presentes(pedido, qr.tipo)
+    n_falta = len(faltam_fotos(pedido, qr.tipo))
+
     if request.method == 'GET':
         _audit(token, pedido, qr.tipo, 'scan', 'pagina aberta')
-        return render_template('handshake/confirmar.html', qr=qr, pedido=pedido)
+        return render_template('handshake/confirmar.html', qr=qr, pedido=pedido,
+                                fotos=fotos, n_falta=n_falta)
 
-    # POST: valida PIN, executa
+    # POST: precisa de TODAS as fotos antes do PIN
+    if n_falta > 0:
+        _audit(token, pedido, qr.tipo, 'pin_sem_fotos', f'faltam {n_falta}')
+        flash(f'Tire foto dos {n_falta} item(ns) que falta(m) antes do PIN.', 'danger')
+        return render_template('handshake/confirmar.html', qr=qr, pedido=pedido,
+                                fotos=fotos, n_falta=n_falta), 400
+
     pin_enviado = (request.form.get('pin') or '').strip()
     if not pin_enviado:
         _audit(token, pedido, qr.tipo, 'pin_vazio')
         flash('Digite o PIN.', 'danger')
-        return render_template('handshake/confirmar.html', qr=qr, pedido=pedido), 400
+        return render_template('handshake/confirmar.html', qr=qr, pedido=pedido,
+                                fotos=fotos, n_falta=n_falta), 400
 
     if qr.tipo == 'saida':
         return _handshake_saida(qr, pedido, pin_enviado)
