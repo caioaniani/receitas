@@ -573,11 +573,27 @@ def aplicar_vendas_xlsx(itens_parseados, loja_id, user):
                                 'motivo': 'item_pendente_de_vinculacao'})
             continue
 
+        rid = resolvido['id'] if resolvido['tipo'] == 'receita' else None
+        pid = resolvido['id'] if resolvido['tipo'] == 'produto' else None
+        mid = resolvido['id'] if resolvido['tipo'] == 'mp' else None
+
+        # Dedupe: se ja existe lancamento exato pra (loja, data, item),
+        # nao cria de novo. Cobre upload duplicado do mesmo xlsx.
+        existente = VendaManualLoja.query.filter_by(
+            loja_id=loja_id, data_venda=it['data_venda'],
+            receita_id=rid, produto_id=pid, materia_prima_id=mid,
+        ).first()
+        if existente:
+            ignorados.append({
+                'linha_n': it['linha_n'], 'nome': resolvido['nome'],
+                'motivo': 'duplicata_ja_lancada',
+                'detalhe': f'qtd existente: {existente.quantidade}',
+            })
+            continue
+
         vm = VendaManualLoja(
             loja_id=loja_id, data_venda=it['data_venda'],
-            receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
-            produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
-            materia_prima_id=resolvido['id'] if resolvido['tipo'] == 'mp' else None,
+            receita_id=rid, produto_id=pid, materia_prima_id=mid,
             quantidade=it['quantidade'],
             criado_por_id=getattr(user, 'id', None),
         )
