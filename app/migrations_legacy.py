@@ -336,6 +336,63 @@ def _migrate_postgres(app):
             )
         """))
 
+        # pedido_loja.driver_id — quem pegou via handshake de saida
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'pedido_loja'"
+        ))
+        cols_pl = {row[0] for row in result}
+        if cols_pl and 'driver_id' not in cols_pl:
+            conn.execute(text(
+                'ALTER TABLE pedido_loja ADD COLUMN driver_id INTEGER '
+                'REFERENCES driver_entrega(id) ON DELETE SET NULL'
+            ))
+            conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_pedido_loja_driver_id '
+                'ON pedido_loja(driver_id)'
+            ))
+
+        # pedido_item_foto — foto de conferencia por SKU
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS pedido_item_foto (
+                id SERIAL PRIMARY KEY,
+                pedido_item_id INTEGER NOT NULL REFERENCES pedido_item(id),
+                etapa VARCHAR(10) NOT NULL,
+                imagem BYTEA NOT NULL,
+                mimetype VARCHAR(100),
+                criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                criado_por_id INTEGER REFERENCES usuario(id),
+                criado_por_driver_id INTEGER REFERENCES driver_entrega(id),
+                CONSTRAINT uq_pedidoitemfoto_item_etapa UNIQUE (pedido_item_id, etapa)
+            )
+        """))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_pedido_item_foto_pedido_item_id "
+            "ON pedido_item_foto(pedido_item_id)"
+        ))
+
+        # driver_magic_token — magic link diario do motorista
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS driver_magic_token (
+                id SERIAL PRIMARY KEY,
+                driver_id INTEGER NOT NULL REFERENCES driver_entrega(id),
+                token VARCHAR(64) NOT NULL UNIQUE,
+                criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                expira_em TIMESTAMP NOT NULL,
+                revogado BOOLEAN NOT NULL DEFAULT FALSE,
+                enviado_em TIMESTAMP,
+                enviado_ok BOOLEAN
+            )
+        """))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_driver_magic_token_driver_id "
+            "ON driver_magic_token(driver_id)"
+        ))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_driver_magic_token_token "
+            "ON driver_magic_token(token)"
+        ))
+
         # estoque_producao.nome_pendente (balanco aceita itens sem cadastro previo)
         result = conn.execute(text(
             "SELECT column_name FROM information_schema.columns "
