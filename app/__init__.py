@@ -409,6 +409,37 @@ def _migrate(app):
         _migrate_postgres(app)
 
 
+def _alembic_stamp_se_necessario(app):
+    """Auto-stamp da baseline do Alembic na primeira execucao apos a adocao.
+
+    Detecta: tem tabela `usuario` (sinal que banco esta populado) mas nao
+    tem `alembic_version` (sinal que Alembic nunca foi inicializado nesse
+    banco). Nesse caso, faz `stamp head` programaticamente — marca o
+    banco como ja estando na baseline, sem executar nenhum DDL.
+
+    Idempotente: se `alembic_version` ja existir (ja foi stampado, ou ja
+    rodou alguma migration), nao faz nada. Pode rodar em todo startup.
+
+    Em ambiente de testes (SQLite in-memory recem-criado), pula —
+    `db.create_all()` ja deixou o banco no estado mais novo dos modelos,
+    nao ha schema legado pra stampar.
+    """
+    from sqlalchemy import inspect
+    try:
+        insp = inspect(db.engine)
+        tabelas = set(insp.get_table_names())
+        if 'usuario' not in tabelas:
+            return  # banco novo/vazio — nao precisa stamp
+        if 'alembic_version' in tabelas:
+            return  # ja stampado, nada a fazer
+        # Caso de transicao: schema legado existe, Alembic nunca foi inicializado.
+        from flask_migrate import stamp
+        stamp(directory='migrations', revision='head')
+        logger.warning('Alembic: baseline marcada (stamp head) — schema legado adotado.')
+    except Exception:  # noqa: BLE001
+        logger.exception('Alembic stamp falhou (nao critico — pode rodar manual)')
+
+
 def _migrate_postgres(app):
     """Adiciona colunas novas no PostgreSQL. Cada ALTER em commit isolado
     para que falhas pontuais não abortem migrations seguintes."""
