@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 
 from flask import current_app
 
-from app.constants import STATUS_PEDIDO_FINALIZADOS, VENDA_TIPOS_LOJA_LOJA
+from app.constants import STATUS_PEDIDO_FINALIZADOS, VENDA_TIPOS_LOJA
 from app.utils import hoje as hoje_brt
 
 logger = logging.getLogger(__name__)
