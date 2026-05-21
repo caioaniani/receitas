@@ -204,11 +204,27 @@ def sugerir_producao(horizonte_dias=7, lookback_dias=14, usar_cache=True):
     # esta coberto mas tem demanda alta (visibilidade).
     itens.sort(key=lambda x: (-x['qtd_a_produzir'], -x['qtd_total_lojas']))
 
+    # Stats VNDA: pra cada loja_id que tentou consultar VNDA, capta status.
+    vnda_stats = []
+    for loja_id_k, st in ULTIMA_CONSULTA_VNDA.items():
+        loja_obj = lojas_por_id.get(loja_id_k)
+        vnda_stats.append({
+            'loja_id': loja_id_k,
+            'loja_nome': loja_obj.nome if loja_obj else '?',
+            'n_orders_recebidos': st.get('n_orders_recebidos', 0),
+            'n_processados': st.get('n_processados', 0),
+            'erro': st.get('erro'),
+            'tentou_em': st.get('tentou_em'),
+        })
+
     resultado = {
         'itens': itens,
         'horizonte_dias': horizonte_dias,
         'lookback_dias': lookback_dias,
         'avisos_vnda': avisos_vnda,
+        'vnda_stats': vnda_stats,
+        'data_inicio': data_inicio.isoformat(),
+        'data_fim': data_fim.isoformat(),
     }
     _SUG_CACHE[cache_key] = {'t': time.time(), 'data': resultado}
     return resultado
