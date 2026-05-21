@@ -85,6 +85,46 @@ Tres armadilhas que ja me pegaram:
    no shell — passou na minha cabeca, falhou no GitHub. Pra workflow novo,
    reproduzir cada step do YAML em sequencia antes de subir.
 
+## Pendentes da auditoria (2026-05-21)
+
+Da auditoria continuada de estoque/dinheiro, ficaram pra outra sessao:
+
+- **B4 — Decimal pra dinheiro.** `vendas_b2b.py` usa `float` em
+  `valor_total`, `valor_pago`, `valor` de parcela. Pagamento parcial em
+  3 parcelas de R$ 33,33 acumula `0.999...` e a terceira nunca quita.
+  Fix: migrar colunas pra `Numeric(10,2)`, usar `Decimal(str(v))` na
+  entrada, comparar com tolerancia `>= valor - Decimal('0.005')`.
+  Esforco: migration Alembic + revisao do banco prod (~1d).
+
+- **B5 — FK em ProdutoItem em vez de string.** `cestas.py:41,45` e
+  `vnda_sync.py:71` fazem `Receita.query.filter_by(nome=pi.item_nome)`.
+  Case-sensitive, sem fuzzy. Renomear receita sem atualizar `item_nome`
+  da cesta faz o componente sumir silenciosamente da baixa de estoque.
+  Fix: adicionar `receita_id`/`materia_prima_id` em `ProdutoItem`,
+  backfill por nome (resolvendo colisoes manualmente), remover
+  `item_nome` depois. Esforco: migration + backfill cuidadoso (~1d).
+
+- **B9 — Fracao acumulada inestornavel.** `SeruDebito.fracao_pendente`
+  acumula contribuicoes de varias vendas sem rastreio de qual veio de
+  qual pedido. Se uma venda com fator < 1 eh cancelada antes do
+  acumulado virar inteiro, nao da pra reverter. ACEITAR como erro
+  conhecido — discrepancia em centesimos. Redesenho serio levaria
+  1-2d e nao vale.
+
+Da auditoria 1, ainda pendentes:
+
+- **M6 — Mover BLOBs pro Dropbox.** `Receita.imagem_blob`, `Produto.imagem_blob`,
+  `Loja.planta_imagem`, `Atestado.arquivo`, `FotoRecebimento.imagem`,
+  `EntregaFoto.imagem` no Postgres. Reduz tamanho do banco e backup.
+  `app/services/dropbox_storage.py` ja tem o cliente. Esforco: ~1 semana
+  (migration de dados + retrofit de leitura/escrita em multiplos templates).
+
+- **B7 — CSP nonces.** Atualmente CSP tem `'unsafe-inline'` em scripts
+  pra suportar `<script>` inline nos templates. Trocar por `nonce`
+  por request (`secrets.token_urlsafe(16)` em context processor,
+  anexar em cada `<script>`). Esforco: 1-2d, mexe em todos os
+  templates com inline JS.
+
 ## Stack
 
 Flask 3 + SQLAlchemy + Bootstrap 5 + Postgres em prod / SQLite local.
