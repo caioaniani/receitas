@@ -103,6 +103,7 @@ def contar_produto_itens_orfaos():
     return ProdutoItem.query.filter(
         or_(
             (ProdutoItem.tipo == 'receita') & (ProdutoItem.receita_id.is_(None)),
+            (ProdutoItem.tipo == 'produto') & (ProdutoItem.produto_componente_id.is_(None)),
             (ProdutoItem.tipo == 'mp') & (ProdutoItem.materia_prima_id.is_(None)),
         )
     ).count()
