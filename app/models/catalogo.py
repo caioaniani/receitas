@@ -189,20 +189,58 @@ class Produto(db.Model):
         return f'<Produto {self.nome}>'
 
 class ProdutoItem(db.Model):
+    """Componente de uma cesta (Produto que agrupa outros itens).
+
+    O vinculo eh por FK (receita_id ou materia_prima_id) — `item_nome` eh
+    mantido por compat e como fallback humano-legivel, mas a baixa de
+    estoque usa SEMPRE a FK. Renomear a receita NAO quebra a cesta.
+
+    Antes da migration B5, era `item_nome` string e renomear receita
+    fazia o componente sumir silenciosamente da baixa.
+    """
     __tablename__ = 'produto_item'
 
     id = db.Column(db.Integer, primary_key=True)
     produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=False)
     tipo = db.Column(db.String(10), nullable=False)  # 'receita' ou 'mp'
+    # FK do alvo (mutuamente exclusivas). NULL = orfao — precisa
+    # vinculacao manual em /pedidos/produto-itens-orfaos.
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True, index=True)
+    materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'),
+                                  nullable=True, index=True)
+    # Mantido por compat e como nome humano-legivel quando FK estiver NULL.
     item_nome = db.Column(db.String(150), nullable=False)
     quantidade = db.Column(db.Float, nullable=False, default=1)
+
+    receita = db.relationship('Receita', foreign_keys=[receita_id])
+    materia_prima = db.relationship('MateriaPrima', foreign_keys=[materia_prima_id])
+
+    @property
+    def nome_resolvido(self):
+        """Nome via FK (autoritativo). Fallback pra item_nome se orfao."""
+        if self.tipo == 'receita' and self.receita:
+            return self.receita.nome
+        if self.tipo == 'mp' and self.materia_prima:
+            return self.materia_prima.nome
+        return self.item_nome  # orfao
+
+    @property
+    def orfao(self):
+        """True se nao tem FK setada — precisa vinculacao manual."""
+        if self.tipo == 'receita':
+            return self.receita_id is None
+        if self.tipo == 'mp':
+            return self.materia_prima_id is None
+        return True
 
     def to_dict(self):
         return {
             'tipo': self.tipo,
             'item_nome': self.item_nome,
+            'nome_resolvido': self.nome_resolvido,
+            'orfao': self.orfao,
             'quantidade': self.quantidade,
         }
 
     def __repr__(self):
-        return f'<ProdutoItem {self.item_nome} x{self.quantidade}>'
+        return f'<ProdutoItem {self.nome_resolvido} x{self.quantidade}>'
