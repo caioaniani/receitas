@@ -310,5 +310,5 @@
 </div>
 
 <!-- Dados para JS -->
-<script>const RECEITA_CUSTOS = {{ receita_custos_json | safe }};</script>
+<script>const RECEITA_CUSTOS = {{ receita_custos | tojson }};</script>
 {% endblock %}
