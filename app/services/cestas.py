@@ -8,15 +8,26 @@ DEVE descontar cada componente individualmente — porque a loja so estoca
 componentes (ela monta a cesta na hora da venda).
 
 Este helper centraliza a logica que era duplicada em varios servicos:
-- vnda_sync.py (ja usava _componentes_de_cesta)
+- vnda_sync.py (delega aqui)
 - estoque_loja_lote.py::aplicar_saida_lote
-- seru_sync.py (faltava)
-- copilot.py::executar_registrar_desperdicio (faltava)
-- pedidos/routes.py::desperdicio (faltava)
-- pedidos/routes.py::_executar_recebimento_pedido (faltava)
-- pedidos/routes.py::_executar_envio_pedido (faltava)
+- seru_sync.py
+- copilot.py::executar_registrar_desperdicio
+- pedidos/routes.py::desperdicio
+- pedidos/routes.py::_executar_recebimento_pedido
+- pedidos/routes.py::_executar_envio_pedido
+
+DESDE A MIGRATION B5 (efb6e5837fd0): vinculo eh via FK
+(`ProdutoItem.receita_id` / `materia_prima_id`). `item_nome` continua
+existindo por compat e como fallback humano-legivel. Renomear a receita
+NAO quebra mais a cesta — a FK eh estavel.
+
+Itens orfaos (FK NULL — backfill nao resolveu, ou cesta criada via UI
+antiga) sao logados com WARNING e ignorados. Admin resolve em
+/cestas/orfaos.
 """
-from app.models import MateriaPrima, Receita
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def componentes_de_cesta(produto):
@@ -28,9 +39,8 @@ def componentes_de_cesta(produto):
 
     Se nao for cesta, retorna [].
 
-    Itens com nome que nao bate exato em Receita/MateriaPrima sao
-    silenciosamente ignorados — o admin precisa garantir consistencia
-    de nomes via ProdutoItem.item_nome.
+    ProdutoItem orfao (FK NULL) eh logado e ignorado — admin resolve
+    em /cestas/orfaos.
     """
     if not produto or not produto.itens:
         return []
@@ -38,16 +48,46 @@ def componentes_de_cesta(produto):
     for pi in produto.itens:
         qtd = float(pi.quantidade or 1.0)
         if pi.tipo == 'receita':
-            r = Receita.query.filter_by(nome=pi.item_nome).first()
-            if r:
-                out.append(('receita_id', r.id, r.nome, qtd))
+            if pi.receita_id and pi.receita:
+                out.append(('receita_id', pi.receita_id, pi.receita.nome, qtd))
+            else:
+                logger.warning(
+                    'ProdutoItem #%s orfao (tipo=receita, item_nome=%r, '
+                    'sem receita_id). Componente IGNORADO na baixa de estoque. '
+                    'Resolver em /cestas/orfaos.',
+                    pi.id, pi.item_nome,
+                )
         elif pi.tipo == 'mp':
-            m = MateriaPrima.query.filter_by(nome=pi.item_nome).first()
-            if m:
-                out.append(('materia_prima_id', m.id, m.nome, qtd))
+            if pi.materia_prima_id and pi.materia_prima:
+                out.append(('materia_prima_id', pi.materia_prima_id,
+                            pi.materia_prima.nome, qtd))
+            else:
+                logger.warning(
+                    'ProdutoItem #%s orfao (tipo=mp, item_nome=%r, '
+                    'sem materia_prima_id). Componente IGNORADO na baixa.',
+                    pi.id, pi.item_nome,
+                )
     return out
 
 
 def eh_cesta(produto):
     """True se Produto tem componentes (eh cesta)."""
     return bool(produto and produto.itens)
+
+
+def contar_produto_itens_orfaos():
+    """Conta ProdutoItems orfaos (tipo definido mas FK NULL).
+
+    Usado no dashboard pra mostrar alerta ao owner quando ha cestas
+    com componentes nao vinculados — esses componentes nao baixam
+    estoque, comportamento detectavel mas silencioso.
+    """
+    from sqlalchemy import or_
+
+    from app.models import ProdutoItem
+    return ProdutoItem.query.filter(
+        or_(
+            (ProdutoItem.tipo == 'receita') & (ProdutoItem.receita_id.is_(None)),
+            (ProdutoItem.tipo == 'mp') & (ProdutoItem.materia_prima_id.is_(None)),
+        )
+    ).count()
