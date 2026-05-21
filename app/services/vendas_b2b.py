@@ -187,7 +187,7 @@ def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
             db.session.add(VendaB2BParcela(
                 venda_id=venda.id, numero=n,
                 vencimento=venc,
-                valor=float(p.get('valor') or 0),
+                valor=Decimal(str(p.get('valor') or 0)),
                 forma_pagamento=(p.get('forma_pagamento') or '').strip() or None,
             ))
 
