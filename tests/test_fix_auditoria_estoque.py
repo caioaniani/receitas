@@ -385,3 +385,156 @@ def test_b10_sugestao_subtrai_estornos(app, admin_user, loja, catalogo):
                 f'estorno nao subtraiu: vendas_periodo={it["vendas_periodo"]}'
             )
             break
+
+
+# ──────────────────────────────────────────────────────────────────────
+# B9 — Estorno de venda fracionada reverte contribuicao no acumulador
+# ──────────────────────────────────────────────────────────────────────
+
+def test_b9_estorno_fracao_sem_inteiro_baixado(app, admin_user, loja, catalogo):
+    """Pedido contribuiu 0.2 (fator), acumulador foi pra 0.2, NADA baixou
+    de estoque. Cancelamento tem que zerar a contribuicao do acumulador.
+
+    Antes do B9: fracao_pendente ficava em 0.2 pra sempre.
+    """
+    from app.extensions import db
+    from app.models import SeruDebito, SeruDebitoMov, SeruPedidoProcessado, SeruProdutoMap
+    from app.services.seru_sync import _baixar_componente, _estornar_pedido
+
+    mapping = SeruProdutoMap(
+        seru_nome='NOZES COM MANTEIGA',
+        estado='mapeado',
+        receita_id=catalogo['receita'].id,
+        fator_quantidade=0.2,
+    )
+    db.session.add(mapping)
+    db.session.commit()
+
+    # Baixa: 1 venda × fator 0.2 = 0.2 → fica tudo no acumulador
+    res = _baixar_componente(loja.id, mapping, 'self', 'receita',
+                              catalogo['receita'].id,
+                              a_baixar_float=0.2,
+                              vnda_code='X1', user_id=admin_user.id,
+                              label=' (fator 0.2)')
+    db.session.commit()
+    assert res['baixado'] is False, 'nao deveria baixar inteiro ainda'
+
+    debito = SeruDebito.query.filter_by(
+        loja_id=loja.id, seru_produto_map_id=mapping.id).first()
+    assert abs(debito.fracao_pendente - 0.2) < 1e-6
+
+    fm = SeruDebitoMov.query.filter_by(seru_pedido_id='X1').first()
+    assert fm is not None, 'SeruDebitoMov nao foi gravado'
+    assert abs(fm.fracao - 0.2) < 1e-6
+
+    # Cancela e estorna
+    reg = SeruPedidoProcessado(seru_pedido_id='X1', loja_id=loja.id)
+    db.session.add(reg)
+    db.session.commit()
+    _estornar_pedido(reg, [loja], admin_user.id)
+    db.session.commit()
+
+    db.session.refresh(debito)
+    assert abs(debito.fracao_pendente) < 1e-6, (
+        f'fracao deveria voltar a 0, esta em {debito.fracao_pendente}'
+    )
+    db.session.refresh(fm)
+    assert fm.estornado_em is not None
+    assert reg.estornado_em is not None
+
+
+def test_b9_estorno_apos_acumulador_zerar_devolve_inteiro(app, admin_user, loja, catalogo):
+    """Pedido X1 contribui 0.4. Depois, pedido X2 contribui 0.7 → acumulador
+    vai pra 1.1, baixa 1 inteiro, fica 0.1.
+
+    Se X1 eh cancelado AGORA: fracao_pendente (0.1) - contribuicao (0.4)
+    = -0.3 → devolve 1 inteiro ao estoque, fracao_pendente fica 0.7.
+    """
+    from app.extensions import db
+    from app.models import EstoqueLoja, SeruDebito, SeruPedidoProcessado, SeruProdutoMap
+    from app.services.seru_sync import _baixar_componente, _estornar_pedido
+
+    el = EstoqueLoja(loja_id=loja.id, receita_id=catalogo['receita'].id,
+                     quantidade=10)
+    db.session.add(el)
+
+    mapping = SeruProdutoMap(
+        seru_nome='X', estado='mapeado',
+        receita_id=catalogo['receita'].id, fator_quantidade=0.4,
+    )
+    db.session.add(mapping)
+    db.session.commit()
+
+    # Pedido X1: contribui 0.4
+    _baixar_componente(loja.id, mapping, 'self', 'receita',
+                       catalogo['receita'].id, a_baixar_float=0.4,
+                       vnda_code='X1', user_id=admin_user.id,
+                       label=' (fator 0.4)')
+    db.session.commit()
+
+    # Pedido X2: contribui 0.7 → total 1.1 → baixa 1 inteiro, fica 0.1
+    _baixar_componente(loja.id, mapping, 'self', 'receita',
+                       catalogo['receita'].id, a_baixar_float=0.7,
+                       vnda_code='X2', user_id=admin_user.id,
+                       label=' (fator 0.4)')
+    db.session.commit()
+
+    db.session.refresh(el)
+    assert el.quantidade == 9, f'devia ter baixado 1 inteiro: {el.quantidade}'
+
+    debito = SeruDebito.query.filter_by(
+        loja_id=loja.id, seru_produto_map_id=mapping.id).first()
+    assert abs(debito.fracao_pendente - 0.1) < 1e-6
+
+    # Cancela X1
+    reg = SeruPedidoProcessado(seru_pedido_id='X1', loja_id=loja.id)
+    db.session.add(reg)
+    db.session.commit()
+    _estornar_pedido(reg, [loja], admin_user.id)
+    db.session.commit()
+
+    # Esperado: estoque devolveu 1 (foi pra 10), fracao_pendente = 0.7
+    db.session.refresh(el)
+    db.session.refresh(debito)
+    assert el.quantidade == 10, (
+        f'estoque deveria voltar a 10 (devolveu 1 inteiro): {el.quantidade}'
+    )
+    assert abs(debito.fracao_pendente - 0.7) < 1e-6, (
+        f'fracao residual deveria ser 0.7: {debito.fracao_pendente}'
+    )
+
+
+def test_b9_estorno_idempotente(app, admin_user, loja, catalogo):
+    """Rodar _estornar_pedido 2x nao duplica devolucao."""
+    from app.extensions import db
+    from app.models import SeruDebito, SeruPedidoProcessado, SeruProdutoMap
+    from app.services.seru_sync import _baixar_componente, _estornar_pedido
+
+    mapping = SeruProdutoMap(
+        seru_nome='X', estado='mapeado',
+        receita_id=catalogo['receita'].id, fator_quantidade=0.2,
+    )
+    db.session.add(mapping)
+    db.session.commit()
+
+    _baixar_componente(loja.id, mapping, 'self', 'receita',
+                       catalogo['receita'].id, a_baixar_float=0.2,
+                       vnda_code='X1', user_id=admin_user.id,
+                       label=' (fator 0.2)')
+    db.session.commit()
+
+    reg = SeruPedidoProcessado(seru_pedido_id='X1', loja_id=loja.id)
+    db.session.add(reg)
+    db.session.commit()
+
+    _estornar_pedido(reg, [loja], admin_user.id)
+    db.session.commit()
+    _estornar_pedido(reg, [loja], admin_user.id)  # 2a vez
+    db.session.commit()
+
+    debito = SeruDebito.query.filter_by(
+        loja_id=loja.id, seru_produto_map_id=mapping.id).first()
+    # Acumulador deveria continuar em 0 (nao ficou negativo)
+    assert abs(debito.fracao_pendente) < 1e-6, (
+        f'estorno duplo bagunçou acumulador: {debito.fracao_pendente}'
+    )
