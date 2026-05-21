@@ -197,10 +197,10 @@ def create_app(config_class=None):
             try:
                 def _carrega_proj_count():
                     from app.models import TarefaProjeto
-                    from datetime import date as _date
+                    from app.utils import hoje as _hoje_brt
                     a = TarefaProjeto.query.filter(
                         TarefaProjeto.prazo.isnot(None),
-                        TarefaProjeto.prazo < _date.today(),
+                        TarefaProjeto.prazo < _hoje_brt(),
                         ~TarefaProjeto.status.in_(['feito', 'cancelado']),
                     ).count()
                     f = TarefaProjeto.query.filter_by(status='fazendo').count()
