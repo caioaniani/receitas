@@ -826,6 +826,12 @@ def cancelar(id):
 @admin_required
 def excluir(id):
     pedido = PedidoLoja.query.get_or_404(id)
+    # HandshakeAudit referencia pedido_id sem ondelete cascade — em Postgres
+    # bloqueia o delete com FK violation. Limpa antes (audits viram orfaos
+    # com pedido_id=NULL).
+    from app.models import HandshakeAudit
+    HandshakeAudit.query.filter_by(pedido_id=pedido.id).update(
+        {'pedido_id': None})
     db.session.delete(pedido)
     db.session.commit()
     flash('Pedido excluído.', 'success')
