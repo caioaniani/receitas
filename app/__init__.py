@@ -213,8 +213,8 @@ def create_app(config_class=None):
                     f = TarefaProjeto.query.filter_by(status='fazendo').count()
                     return (a, f)
                 proj_atrasadas, proj_fazendo = _cache('proj_count', 10, _carrega_proj_count)
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001
+                logger.debug('inject_sidebar: falha ao contar projetos', exc_info=True)
 
         return dict(
             sidebar_categorias=categorias,
