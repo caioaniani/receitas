@@ -802,3 +802,38 @@ def debug_schema_upgrade():
 
     return redirect(url_for('main.debug_schema',
                             log=log_buf.getvalue()[-3000:], ok=ok))
+
+
+@main_bp.route('/admin/debug-schema/stamp', methods=['POST'])
+@owner_required
+def debug_schema_stamp():
+    """Marca alembic_version pra revision indicada SEM aplicar DDL.
+
+    Uso: quando DDL ja foi aplicado por outro caminho (ex: tabela
+    seru_debito_mov foi criada mas alembic_version voltou pra baseline
+    por algum reset). Stamp realinha o controle sem executar migration.
+    """
+    import io
+    import traceback as _tb
+
+    revision = (request.form.get('revision') or '').strip()
+    log_buf = io.StringIO()
+    log_buf.write(f'Stamp pedido: revision={revision!r}\n')
+
+    if not revision or len(revision) > 32 or not revision.replace('_', '').isalnum():
+        log_buf.write('ERRO: revision invalida (precisa ser ID alfanumerico).')
+        return redirect(url_for('main.debug_schema',
+                                log=log_buf.getvalue(), ok='0'))
+
+    ok = '1'
+    try:
+        from flask_migrate import stamp as _stamp
+        _stamp(directory='migrations', revision=revision)
+        log_buf.write(f'OK: alembic_version stampada em {revision}.\n')
+    except Exception:  # noqa: BLE001
+        ok = '0'
+        log_buf.write('\n--- TRACEBACK ---\n')
+        log_buf.write(_tb.format_exc())
+
+    return redirect(url_for('main.debug_schema',
+                            log=log_buf.getvalue()[-3000:], ok=ok))
