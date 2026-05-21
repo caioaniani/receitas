@@ -31,7 +31,7 @@ def _init_sentry():
             environment=os.environ.get('SENTRY_ENV', 'production'),
         )
     except ImportError:
-        print('⚠️  sentry-sdk nao instalada — `pip install sentry-sdk[flask]`')
+        logger.warning('sentry-sdk nao instalada — `pip install sentry-sdk[flask]`')
 
 
 def create_app(config_class=None):
@@ -40,7 +40,8 @@ def create_app(config_class=None):
     app.config.from_object(config_class or Config)
 
     if not os.environ.get('SECRET_KEY'):
-        print('⚠️  SECRET_KEY não definida. Sessões expiram a cada restart. Defina no Railway.')
+        # Em prod o config.py ja levanta RuntimeError. Aqui so avisa em dev.
+        logger.warning('SECRET_KEY nao definida — sessoes expiram a cada restart.')
 
     db.init_app(app)
     csrf.init_app(app)
