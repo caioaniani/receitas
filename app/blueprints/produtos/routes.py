@@ -4,7 +4,7 @@ from flask_login import login_required
 from app.blueprints.produtos import produtos_bp
 from app.decorators import catalogo_required
 from app.extensions import db
-from app.models import MateriaPrima, Produto, ProdutoItem
+from app.models import MateriaPrima, Produto, ProdutoItem, Receita
 from app.services.custos import calcular_custo_produto, calcular_custos_receitas
 from app.utils import parse_float_br
 
@@ -121,10 +121,23 @@ def salvar_composicao(id):
         qtd_str = qtds[i].replace(',', '.').strip() if i < len(qtds) else '1'
         qtd = float(qtd_str) if qtd_str else 1
 
+        # Resolve FK por nome exato — se nao bater, item fica orfao
+        # e admin precisa vincular em /cestas/orfaos.
+        receita_id = None
+        materia_prima_id = None
+        if tipo == 'receita':
+            r = Receita.query.filter_by(nome=nome).first()
+            receita_id = r.id if r else None
+        elif tipo == 'mp':
+            m = MateriaPrima.query.filter_by(nome=nome).first()
+            materia_prima_id = m.id if m else None
+
         item = ProdutoItem(
             produto_id=produto.id,
             tipo=tipo,
             item_nome=nome,
+            receita_id=receita_id,
+            materia_prima_id=materia_prima_id,
             quantidade=qtd,
         )
         db.session.add(item)
