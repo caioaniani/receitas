@@ -177,3 +177,104 @@ def agregar_itens(data_inicial, data_final, loja_seru=None,
         'pendentes_count': pendentes,
         'lojas_no_intervalo': sorted(lojas_vistas),
     }
+
+
+def _resolver_nome_item(tipo, item_id):
+    if tipo == 'receita':
+        r = Receita.query.get(item_id)
+        return r.nome if r else None
+    if tipo == 'produto':
+        p = Produto.query.get(item_id)
+        return p.nome if p else None
+    if tipo == 'mp':
+        from app.models import MateriaPrima
+        m = MateriaPrima.query.get(item_id)
+        return f'{m.nome} (MP)' if m else None
+    return None
+
+
+def agregar_itens_consolidado(data_inicial, data_final):
+    """Versao 'consolidada' Seru + VNDA pra uso do copilot/tools.
+
+    Diferente de `agregar_itens`: nao recebe filtro de loja Seru (consolida
+    por item agregado entre todas as lojas) e soma vendas VNDA (e-commerce)
+    via mapeamento por (tipo, id). Itens VNDA sem correspondente Seru
+    aparecem como linhas novas (fonte='vnda').
+
+    Faturamento ainda eh so do Seru (a fonte VNDA disponivel via
+    `_agregar_vendas_vnda_api` so retorna qtd). A resposta sinaliza isso
+    em `faturamento_fonte`.
+
+    NAO substitui `agregar_itens` — a tela /pdv/itens-vendidos continua
+    usando a versao crua porque depende dos campos de mapeamento Seru.
+    """
+    from app.services.vendas_manuais import _agregar_vendas_vnda_api
+
+    seru_data = agregar_itens(data_inicial, data_final)
+    vendas_vnda, vnda_aviso = _agregar_vendas_vnda_api(data_inicial, data_final)
+
+    seru_por_chave = {}
+    seru_orfaos = []
+    for p in seru_data['produtos']:
+        m = p.get('match')
+        if m and m.get('id') and m.get('tipo') in ('receita', 'produto'):
+            chave = (m['tipo'], m['id'])
+            existing = seru_por_chave.get(chave)
+            if not existing or p['qtd'] > existing['qtd']:
+                seru_por_chave[chave] = p
+        else:
+            seru_orfaos.append(p)
+
+    linhas = []
+    chaves_vnda_usadas = set()
+    for chave, p in seru_por_chave.items():
+        qtd_vnda = vendas_vnda.get(chave, 0)
+        chaves_vnda_usadas.add(chave)
+        p = dict(p)  # copia rasa pra nao mutar seru_data
+        p['qtd_seru'] = p['qtd']
+        p['qtd_vnda'] = qtd_vnda
+        p['qtd'] = p['qtd_seru'] + qtd_vnda
+        p['fonte'] = 'seru+vnda' if qtd_vnda > 0 else 'seru'
+        linhas.append(p)
+
+    for chave, qtd in vendas_vnda.items():
+        if chave in chaves_vnda_usadas or qtd <= 0:
+            continue
+        tipo_v, id_v = chave
+        nome = _resolver_nome_item(tipo_v, id_v)
+        if not nome:
+            continue
+        linhas.append({
+            'nome': nome,
+            'sku': None,
+            'qtd': qtd,
+            'qtd_seru': 0,
+            'qtd_vnda': qtd,
+            'faturamento': 0,
+            'pct_faturamento': 0,
+            'n_pedidos': 0,
+            'fonte': 'vnda',
+            'estado_map': 'vnda_only',
+            'mapeado_para': {'tipo': tipo_v, 'id': id_v, 'nome': nome},
+            'match': {'tipo': tipo_v, 'id': id_v, 'nome': nome, 'kind': 'exato'},
+        })
+
+    for p in seru_orfaos:
+        p = dict(p)
+        p['qtd_seru'] = p['qtd']
+        p['qtd_vnda'] = 0
+        p['fonte'] = 'seru'
+        linhas.append(p)
+
+    linhas.sort(key=lambda x: -x['qtd'])
+
+    return {
+        'inicio': data_inicial.isoformat(),
+        'fim': data_final.isoformat(),
+        'total_pedidos_seru': seru_data['total_pedidos'],
+        'faturamento_total': seru_data['faturamento_total'],
+        'faturamento_fonte': 'seru_apenas',
+        'produtos': linhas,
+        'vnda_aviso': vnda_aviso,
+        'lojas_no_intervalo': seru_data['lojas_no_intervalo'],
+    }
