@@ -98,11 +98,8 @@ def novo_usuario():
 
 @auth_bp.route('/usuarios/<int:id>/excluir', methods=['POST'])
 @login_required
+@admin_required
 def excluir_usuario(id):
-    if not current_user.is_admin():
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('auth.minhas_fichas'))
-
     u = Usuario.query.get_or_404(id)
     if u.id == current_user.id:
         flash('Voce nao pode excluir a si mesmo.', 'warning')
