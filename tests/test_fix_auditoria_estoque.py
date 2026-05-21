@@ -455,8 +455,8 @@ def test_b9_estorno_apos_acumulador_zerar_devolve_inteiro(app, admin_user, loja,
     db.session.add(el)
 
     mapping = SeruProdutoMap(
-        seru_nome='X', estado='mapeado',
-        receita_id=catalogo['receita'].id, fator_quantidade=0.4,
+        seru_nome='X', receita_id=catalogo['receita'].id,
+        fator_quantidade=0.4,
     )
     db.session.add(mapping)
     db.session.commit()
