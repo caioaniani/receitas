@@ -8,6 +8,7 @@ from app.decorators import producao_required
 from app.extensions import db
 from app.models import PlanejamentoProducao, PlanejamentoItem, Receita, MateriaPrima, MovimentacaoEstoque
 from app.services.producao import consolidar_lista_compras
+from app.utils import hoje as hoje_brt
 
 
 @producao_bp.route('/')
