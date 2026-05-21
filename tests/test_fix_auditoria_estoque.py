@@ -1,5 +1,5 @@
 """Testes de regressao pros bugs de estoque/dinheiro descobertos na
-auditoria continuada (B1, B2, B3, B4, B6, B7, B8, B9, B10).
+auditoria continuada (B1, B2, B3, B4, B5, B6, B7, B8, B9, B10).
 
 Cada teste verifica o cenario exato que escapava antes do fix.
 """
