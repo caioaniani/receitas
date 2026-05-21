@@ -118,13 +118,6 @@ Tres armadilhas que ja me pegaram:
 
 Da auditoria continuada de estoque/dinheiro, ficaram pra outra sessao:
 
-- **B4 — Decimal pra dinheiro.** `vendas_b2b.py` usa `float` em
-  `valor_total`, `valor_pago`, `valor` de parcela. Pagamento parcial em
-  3 parcelas de R$ 33,33 acumula `0.999...` e a terceira nunca quita.
-  Fix: migrar colunas pra `Numeric(10,2)`, usar `Decimal(str(v))` na
-  entrada, comparar com tolerancia `>= valor - Decimal('0.005')`.
-  Esforco: migration Alembic + revisao do banco prod (~1d).
-
 - **B5 — FK em ProdutoItem em vez de string.** `cestas.py:41,45` e
   `vnda_sync.py:71` fazem `Receita.query.filter_by(nome=pi.item_nome)`.
   Case-sensitive, sem fuzzy. Renomear receita sem atualizar `item_nome`
@@ -133,12 +126,17 @@ Da auditoria continuada de estoque/dinheiro, ficaram pra outra sessao:
   backfill por nome (resolvendo colisoes manualmente), remover
   `item_nome` depois. Esforco: migration + backfill cuidadoso (~1d).
 
-- **B9 — Fracao acumulada inestornavel.** `SeruDebito.fracao_pendente`
-  acumula contribuicoes de varias vendas sem rastreio de qual veio de
-  qual pedido. Se uma venda com fator < 1 eh cancelada antes do
-  acumulado virar inteiro, nao da pra reverter. ACEITAR como erro
-  conhecido — discrepancia em centesimos. Redesenho serio levaria
-  1-2d e nao vale.
+Fechados nessa sessao (2026-05-21 madrugada):
+
+- ✓ **B4 — Decimal pra dinheiro.** Colunas `valor_total`, `valor`,
+  `valor_pago`, `preco_unitario`, `valor_unitario` migradas pra
+  `Numeric(10, 2)` via Alembic (`643bd66e89c3`). Properties e service
+  usam `Decimal`. Sem tolerancia hack — precisao exata.
+
+- ✓ **B9 — Fracao inestornavel.** Modelo `SeruDebitoMov` registra
+  cada contribuicao por pedido. `_estornar_pedido` reverte fracao:
+  se acumulador fica negativo, devolve inteiros ao estoque. Migration
+  `ac57b6648ec4`.
 
 Da auditoria 1, ainda pendentes:
 
