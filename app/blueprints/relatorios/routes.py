@@ -116,7 +116,7 @@ def api_vendas_por_dia():
     from app.models import SeruPedidoProcessado, VendaManualLoja
     from sqlalchemy import func
     from datetime import datetime
-    fim = date.today()
+    fim = hoje_brt()
     ini = fim - timedelta(days=30)
 
     # Seru: 1 venda por seru_pedido_id, na data processado_em
@@ -183,7 +183,7 @@ def api_desperdicio():
     """Desperdício dos últimos 30 dias agrupado por motivo."""
     from app.models import Desperdicio
     from sqlalchemy import func
-    fim = date.today()
+    fim = hoje_brt()
     ini = fim - timedelta(days=30)
     rows = (db.session.query(
             Desperdicio.motivo,
@@ -202,7 +202,7 @@ def api_top_receitas():
     """Top 10 receitas mais vendidas (vendas manuais) nos últimos 30 dias."""
     from app.models import VendaManualLoja, Receita
     from sqlalchemy import func
-    fim = date.today()
+    fim = hoje_brt()
     ini = fim - timedelta(days=30)
 
     # Vendas manuais (receita_id direto na tabela)
@@ -258,9 +258,9 @@ def previsao():
         try:
             data_inicio = date.fromisoformat(data_param)
         except ValueError:
-            data_inicio = date.today() + timedelta(days=1)
+            data_inicio = hoje_brt() + timedelta(days=1)
     else:
-        data_inicio = date.today() + timedelta(days=1)
+        data_inicio = hoje_brt() + timedelta(days=1)
 
     semana = prever_semana(loja_id, data_inicio) if loja_id else {}
     return render_template('relatorios/previsao.html', lojas=lojas,
