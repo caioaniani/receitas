@@ -91,7 +91,8 @@ def index(token):
     driver = _driver_por_token(token)
     if not driver or not driver.ativo:
         abort(404)
-    return render_template('driver/index.html', driver=driver, hoje=hoje_brt().isoformat())
+    return render_template('driver/index.html', driver=driver,
+                            token=token, hoje=hoje_brt().isoformat())
 
 
 @driver_bp.route('/api/<token>/login', methods=['POST'])
