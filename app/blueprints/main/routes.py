@@ -664,22 +664,21 @@ def debug_schema():
             current = ctx.get_current_revision()
             info['alembic_current'] = current
 
-        if info['alembic_current'] and info['alembic_heads']:
-            heads = set(info['alembic_heads'])
-            visitados = set()
-            for rev in script.walk_revisions(base='base', head='heads'):
-                visitados.add(rev.revision)
-                if rev.revision == info['alembic_current']:
-                    break
+        if info['alembic_heads']:
+            # walk_revisions vai de HEAD pra BASE. Pendentes = tudo desde
+            # head ate (exclusive) o current. Se current=None, tudo eh
+            # pendente. Se current=head, nada.
             pendentes_revs = []
             for rev in script.walk_revisions(base='base', head='heads'):
-                if rev.revision in visitados:
-                    continue
+                if rev.revision == info['alembic_current']:
+                    break
                 pendentes_revs.append({
                     'revision': rev.revision,
                     'down': rev.down_revision,
                     'doc': (rev.doc or '')[:120],
                 })
+            # walk vai do head pra base, mas queremos mostrar a ordem de
+            # aplicacao (base → head): inverte.
             info['pendentes'] = list(reversed(pendentes_revs))
     except Exception as e:  # noqa: BLE001
         info['erro_alembic'] = f'{type(e).__name__}: {e}'
