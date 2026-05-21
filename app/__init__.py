@@ -118,8 +118,8 @@ def create_app(config_class=None):
     # ── Auto-invalidação: limpa o cache quando algum modelo cacheado muda ──
     from sqlalchemy import event as _sa_event
 
-    from app.models import MateriaPrima, Receita, TarefaProjeto, Usuario
-    _MODELOS_CACHEADOS = (Receita, MateriaPrima, Usuario, TarefaProjeto)
+    from app.models import MateriaPrima, Produto, Receita, TarefaProjeto, Usuario
+    _MODELOS_CACHEADOS = (Receita, MateriaPrima, Produto, Usuario, TarefaProjeto)
 
     @_sa_event.listens_for(db.session, 'before_commit')
     def _invalidate_on_change(session):
