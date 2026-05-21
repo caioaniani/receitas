@@ -219,7 +219,7 @@ def create_app(config_class=None):
 
         return dict(
             sidebar_categorias=categorias,
-            mp_dict=mp_data['dict'],
+            mp_info=mp_data['info'],
             mp_nomes=mp_data['nomes'],
             receita_nomes=receita_nomes,
             funcionarios=funcionarios,
