@@ -2496,13 +2496,31 @@ def executar_registrar_desperdicio_lote(params, user):
         obs_item = (item.get('observacao') or '').strip() or None
         obs_final = obs_item or obs_lote
 
-        # CESTA: se for produto-cesta, baixa componentes
+        # REAPROVEITAVEL: se motivo='validade'/'nao_vendeu' E item marcado,
+        # registra desperdicio mas NAO baixa estoque.
+        reaproveita = False
+        if motivo in DESPERDICIO_MOTIVOS_REAPROVEITAVEIS:
+            if tipo_item == 'receita':
+                from app.models import Receita
+                _obj = Receita.query.get(item_id)
+                reaproveita = bool(_obj and _obj.reaproveitavel)
+            elif tipo_item == 'produto':
+                from app.models import Produto
+                _obj = Produto.query.get(item_id)
+                reaproveita = bool(_obj and _obj.reaproveitavel)
+
+        # CESTA: se for produto-cesta E nao reaproveita, baixa componentes
         componentes_cesta = []
-        if tipo_item == 'produto':
+        if tipo_item == 'produto' and not reaproveita:
             from app.models import Produto
             from app.services.cestas import componentes_de_cesta
             produto_obj = Produto.query.get(item_id)
             componentes_cesta = componentes_de_cesta(produto_obj)
+
+        if reaproveita and not (obs_final or '').strip():
+            obs_final = '[reaproveitavel — nao baixou estoque]'
+        elif reaproveita:
+            obs_final = obs_final + ' [reaproveitavel]'
 
         desp = Desperdicio(
             loja_id=loja.id,
@@ -2514,6 +2532,11 @@ def executar_registrar_desperdicio_lote(params, user):
         )
         db.session.add(desp)
         db.session.flush()
+
+        if reaproveita:
+            aplicados.append({'nome': nome_ok, 'tipo': tipo_item,
+                              'quantidade': qtd, 'reaproveitavel': True})
+            continue
 
         if componentes_cesta:
             for col, comp_id, nome_comp, qtd_por_cesta in componentes_cesta:

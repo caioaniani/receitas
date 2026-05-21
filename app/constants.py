@@ -43,18 +43,20 @@ STATUS_PEDIDO_LABEL = {
 
 # ─── Motivos de desperdicio ────────────────────────────────────────────
 #
-# `validade` eh especial: se o item (Receita/Produto) tem `reaproveitavel=True`,
-# o desperdicio com esse motivo NAO baixa do estoque — o item vence mas
-# vira outra coisa (croissant tradicional vira almond, sourdough vira chapa).
-# Os outros motivos sempre baixam.
+# Itens (Receita/Produto) com `reaproveitavel=True` NAO baixam estoque
+# quando o motivo eh um dos REAPROVEITAVEIS abaixo — vencimento e sobra
+# do dia: o item vira outra coisa em vez de virar lixo (croissant tradicional
+# vira almond, sourdough vira chapa). Os outros motivos sempre baixam.
 
-DESPERDICIO_MOTIVOS = ('validade', 'estragou', 'caiu', 'queimou', 'outro')
+DESPERDICIO_MOTIVOS = ('validade', 'nao_vendeu', 'estragou', 'caiu',
+                       'queimou', 'outro')
 
-# Apenas esse motivo respeita a flag `reaproveitavel` do item.
-DESPERDICIO_MOTIVO_REAPROVEITAVEL = 'validade'
+# Motivos que respeitam a flag `reaproveitavel` do item.
+DESPERDICIO_MOTIVOS_REAPROVEITAVEIS = ('validade', 'nao_vendeu')
 
 DESPERDICIO_MOTIVO_LABEL = {
     'validade': 'venceu',
+    'nao_vendeu': 'nao vendeu / sobra do dia',
     'estragou': 'estragou',
     'caiu': 'caiu',
     'queimou': 'queimou',
