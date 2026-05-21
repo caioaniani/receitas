@@ -113,8 +113,8 @@ class VendaB2BParcela(db.Model):
     venda_id = db.Column(db.Integer, db.ForeignKey('venda_b2b.id'), nullable=False, index=True)
     numero = db.Column(db.Integer, nullable=False)  # 1, 2, 3...
     vencimento = db.Column(db.Date, nullable=False, index=True)
-    valor = db.Column(db.Float, nullable=False)
-    valor_pago = db.Column(db.Float, default=0)
+    valor = db.Column(db.Numeric(10, 2), nullable=False)
+    valor_pago = db.Column(db.Numeric(10, 2), default=0)
     pago_em = db.Column(db.DateTime, nullable=True)
     forma_pagamento = db.Column(db.String(30))  # pix, dinheiro, boleto, transferencia
     observacao = db.Column(db.String(200))
