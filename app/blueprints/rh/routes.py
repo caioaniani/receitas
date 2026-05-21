@@ -1,18 +1,28 @@
 from datetime import datetime
 from urllib.parse import quote
 
-from flask import render_template, redirect, url_for, flash, request, Response, abort
-from flask_login import login_required, current_user
+from flask import Response, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 from sqlalchemy.orm import defer, joinedload, selectinload
 from werkzeug.utils import secure_filename
 
 from app.blueprints.rh import rh_bp
-from app.decorators import admin_required, owner_required, rh_required
+from app.decorators import owner_required, rh_required
 from app.extensions import db
-from flask import jsonify
-from app.models import (Funcionario, Loja, FolhaPagamento, Feedback, Posicao,
-                        Atestado, SlotMapa, funcionario_loja, Ferias, RegistroPonto, Cargo)
-from app.utils import agora, hoje as hoje_brt, parse_float_br
+from app.models import (
+    Atestado,
+    Cargo,
+    Feedback,
+    Ferias,
+    FolhaPagamento,
+    Funcionario,
+    Loja,
+    Posicao,
+    RegistroPonto,
+    SlotMapa,
+)
+from app.utils import agora, parse_float_br
+from app.utils import hoje as hoje_brt
 
 ALLOWED_MIMETYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'}
 
@@ -49,7 +59,7 @@ def dashboard():
     ]
     aniversarios_casa = [
         f for f in funcionarios
-        if f.data_admissao and f.data_admissao.month == hoje.month
+        if f.data_admissao and f.data_admissao.month == h.month
     ]
 
     atestados_recentes = (
@@ -857,7 +867,6 @@ def api_alocar():
 @login_required
 @rh_required
 def ferias():
-    from datetime import date
     hoje = hoje_brt()
     mes = int(request.args.get('mes', hoje.month))
     ano = int(request.args.get('ano', hoje.year))
@@ -919,7 +928,6 @@ def ferias_excluir(id):
 @login_required
 @rh_required
 def ponto():
-    from datetime import date
     hoje = hoje_brt()
     dia = request.args.get('dia', hoje.strftime('%Y-%m-%d'))
 
@@ -982,7 +990,7 @@ def ponto_registrar():
     reg.horas_extras = max(0, reg.horas_trabalhadas - 8)
 
     db.session.commit()
-    flash(f'Ponto registrado.', 'success')
+    flash('Ponto registrado.', 'success')
     return redirect(url_for('rh.ponto', dia=dia_str))
 
 
@@ -990,7 +998,6 @@ def ponto_registrar():
 @login_required
 @rh_required
 def ponto_resumo():
-    from datetime import date
     hoje = hoje_brt()
     mes = int(request.args.get('mes', hoje.month))
     ano = int(request.args.get('ano', hoje.year))
