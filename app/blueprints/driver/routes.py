@@ -380,7 +380,7 @@ def qr_entrega(token, pedido_id):
     qr_png = gerar_png_data_url(url)
     return render_template('driver/qr_entrega.html',
                             driver=driver, pedido=pedido, qr=qr,
-                            url=url, qr_png=qr_png)
+                            url=url, qr_png=qr_png, token=token)
 
 
 @driver_bp.route('/<token>/pedidos-loja')
