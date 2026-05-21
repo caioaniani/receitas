@@ -1974,29 +1974,6 @@ def _read_consultar_vendas_itens(params, user):
     return {'texto': '\n'.join(linhas)}
 
 
-# Roteador read estendido
-def _executar_read(tool_name, params, user):  # noqa: F811
-    try:
-        if tool_name == 'consultar_pedido':
-            return _read_consultar_pedido(params, user)
-        if tool_name == 'consultar_estoque':
-            return _read_consultar_estoque(params, user)
-        if tool_name == 'consultar_fornecedores':
-            return _read_consultar_fornecedores(params, user)
-        if tool_name == 'consultar_margem':
-            return _read_consultar_margem(params, user)
-        if tool_name == 'consultar_funcionario':
-            return _read_consultar_funcionario(params, user)
-        if tool_name == 'consultar_caixa':
-            return _read_consultar_caixa(params, user)
-        if tool_name == 'consultar_vendas_itens':
-            return _read_consultar_vendas_itens(params, user)
-    except Exception as exc:  # noqa: BLE001
-        logger.exception('Copilot read tool falhou')
-        return {'erro': str(exc)}
-    return {'erro': f'tool nao implementada: {tool_name}'}
-
-
 # ───── Tools WRITE novas ───────────────────────────────────────────────
 
 def executar_mudar_status_pedido(params, user):
