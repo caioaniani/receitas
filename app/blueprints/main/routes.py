@@ -642,14 +642,17 @@ def debug_papeis():
     from app.services.copilot import papel_efetivo, tools_permitidas
 
     users = Usuario.query.order_by(Usuario.papel, Usuario.nome).all()
-    vinculos = {v.usuario_id: v for v in SlackVinculo.query
-                .filter_by(ativo=True).all()}
+    # Indexa vinculos por usuario_id — pode haver MAIS DE UM por user, em
+    # tese (slack_user_id diferentes). Lista pra ver todos.
+    vinculos_por_user = {}
+    for v in SlackVinculo.query.filter_by(ativo=True).all():
+        vinculos_por_user.setdefault(v.usuario_id, []).append(v.slack_user_id)
 
     linhas = []
     for u in users:
         papel = papel_efetivo(u)
         tools = sorted([t['name'] for t in tools_permitidas(u)])
-        vinc = vinculos.get(u.id)
+        slacks = vinculos_por_user.get(u.id, [])
         linhas.append({
             'id': u.id,
             'nome': u.nome,
@@ -662,9 +665,24 @@ def debug_papeis():
             'tem_criar_pedido': 'criar_pedido' in tools,
             'tem_receber_mp': 'receber_mp' in tools,
             'tem_registrar_desperdicio': 'registrar_desperdicio' in tools,
-            'slack_user_id': vinc.slack_user_id if vinc else None,
+            'slack_user_ids': slacks,
         })
-    return render_template('main/debug_papeis.html', linhas=linhas)
+
+    # Tabela secundaria: TODOS os vinculos slack ativos com slack_user_id
+    # e quem cada um aponta. Util pra detectar vinculo apontando pra
+    # usuario errado (ex: slack do Kelvin vinculado a um funcionario).
+    todos_vinculos = []
+    user_por_id = {u.id: u for u in users}
+    for v in SlackVinculo.query.filter_by(ativo=True).order_by(SlackVinculo.slack_user_id).all():
+        alvo = user_por_id.get(v.usuario_id)
+        todos_vinculos.append({
+            'slack_user_id': v.slack_user_id,
+            'usuario_id': v.usuario_id,
+            'alvo_nome': alvo.nome if alvo else '(usuario nao encontrado!)',
+            'alvo_papel': alvo.papel if alvo else '?',
+        })
+    return render_template('main/debug_papeis.html', linhas=linhas,
+                           todos_vinculos=todos_vinculos)
 
 
 @main_bp.route('/admin/debug-schema')
