@@ -302,13 +302,12 @@ def test_b10_sugestao_subtrai_estornos(app, admin_user, loja, catalogo):
         data_fim=date(2026, 5, 7),
     )
 
-    # Total de vendas reais (50 - 50) = 0 → nao tem venda → sem sugestao
+    # Vendas reais (50 - 50) = 0. A chave pode aparecer com qtd 0 ou nao
+    # aparecer; o que NAO pode acontecer eh aparecer com qtd > 0.
     chave = ('receita', catalogo['receita'].id)
-    itens_dict = {(it['tipo'], it['item_id']): it
-                  for it in res.get('itens', [])}
-    if chave in itens_dict:
-        it = itens_dict[chave]
-        # Pelo menos a venda original (50) deve ter sido cancelada pelo
-        # estorno (-50). Permite chave existir com qtd 0.
-        qtd_total = it.get('qtd_vendida', it.get('total_vendido', 0))
-        assert qtd_total == 0, f'estorno nao subtraiu: qtd={qtd_total}'
+    for it in res.get('itens', []):
+        if (it['tipo'], it['id']) == chave:
+            assert it['vendas_periodo'] == 0, (
+                f'estorno nao subtraiu: vendas_periodo={it["vendas_periodo"]}'
+            )
+            break
