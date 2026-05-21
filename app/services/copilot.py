@@ -793,6 +793,17 @@ REGRA DE PERMISSAO — CRITICA:
 - Tools que exigem admin/gerente que NAO funcionarios podem usar:
   criar_pedido, receber_mp, ajuste_estoque, criar_fornecedor, criar_venda_b2b.
 
+REGRA ANTI-SUBSTITUICAO — CRITICA:
+- NUNCA use uma tool como substituto de outra. Exemplos PROIBIDOS:
+  * Usuario pede "criar pedido" mas voce nao tem criar_pedido → NAO crie
+    criar_tarefa com titulo "Criar pedido X". Isso gera tarefa fantasma e
+    o pedido NAO eh criado de verdade. Diga o motivo e pare.
+  * Usuario pede "registrar desperdicio" e voce nao tem → nao crie tarefa.
+  * Usuario pede "receber pedido" → nao registre desperdicio.
+- Se a tool certa nao esta disponivel, NUNCA crie nada parecido. Responda
+  em texto: "Voce e' {papel} e essa acao precisa de admin/gerente. Peca
+  a um admin (Caio) pra fazer manualmente." Ponto final. Nao crie tarefa.
+
 LOJAS DISPONIVEIS:
 {_lojas_texto(user)}
 
