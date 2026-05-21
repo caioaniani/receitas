@@ -18,7 +18,7 @@ Toda tentativa eh registrada em HandshakeAudit pra investigar falhas.
 import io
 import logging
 
-from flask import abort, flash, render_template, request, send_file, url_for
+from flask import abort, flash, render_template, request, send_file, session, url_for
 
 from app.blueprints.handshake import handshake_bp
 from app.extensions import csrf, db
@@ -143,6 +143,12 @@ def _handshake_saida(qr, pedido, pin):
     qr.usado_por_descricao = f'driver:{driver_match.nome}'
     db.session.commit()
     _audit(qr.token, pedido, qr.tipo, 'sucesso', f'driver:{driver_match.nome}')
+    # Marca o motorista autenticado na session do navegador dele.
+    # Sem isso, o proximo passo (/driver/<token>/pedido/<id>/qr-entrega)
+    # cairia em "Faça login no painel do motorista" — o PIN ja foi validado
+    # aqui, nao faz sentido pedir de novo.
+    if driver_match.pin:
+        session[f'driver_auth_{driver_match.id}'] = True
     # Link de proximo passo: motorista vai na loja gerar QR de entrega.
     # driver_match.token leva pra pagina do motorista; daí ele clica em
     # 'Pedidos de loja' ou usa o link direto pro pedido.
