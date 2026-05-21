@@ -103,6 +103,10 @@ def sugerir_producao(horizonte_dias=7, lookback_dias=14, usar_cache=True):
              .order_by(Loja.nome).all())
     lojas_por_id = {l.id: l for l in lojas}
 
+    # Limpa stats VNDA da chamada anterior pra capturar so o que rodou agora.
+    from app.services.vendas_manuais import ULTIMA_CONSULTA_VNDA
+    ULTIMA_CONSULTA_VNDA.clear()
+
     # 1. Agrega sugestao por (tipo, id), guardando breakdown por loja
     qtd_lojas = defaultdict(int)        # {(tipo, id): qtd}
     breakdown = defaultdict(dict)        # {(tipo, id): {loja_id: qtd}}
