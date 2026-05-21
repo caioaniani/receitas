@@ -529,3 +529,95 @@ def test_b9_estorno_idempotente(app, admin_user, loja, catalogo):
     assert abs(debito.fracao_pendente) < 1e-6, (
         f'estorno duplo bagunçou acumulador: {debito.fracao_pendente}'
     )
+
+
+# ──────────────────────────────────────────────────────────────────────
+# B5 — ProdutoItem com FK em vez de item_nome string
+# ──────────────────────────────────────────────────────────────────────
+
+def test_b5_renomear_receita_nao_quebra_cesta(app, admin_user, catalogo):
+    """Renomear a receita usada em uma cesta NAO deve fazer o componente
+    sumir da baixa de estoque. Antes do B5, o lookup era por nome — se
+    voce renomeasse a receita sem atualizar item_nome, componente sumia.
+    """
+    from app.extensions import db
+    from app.models import Produto, ProdutoItem
+    from app.services.cestas import componentes_de_cesta
+
+    receita = catalogo['receita']
+    nome_original = receita.nome
+    cesta = Produto(nome='Box Teste', ativo=True)
+    db.session.add(cesta)
+    db.session.flush()
+
+    pi = ProdutoItem(produto_id=cesta.id, tipo='receita',
+                     item_nome=nome_original, receita_id=receita.id,
+                     quantidade=3)
+    db.session.add(pi)
+    db.session.commit()
+
+    # Cesta funciona normal
+    comps = componentes_de_cesta(cesta)
+    assert len(comps) == 1
+    assert comps[0][1] == receita.id
+
+    # AGORA renomeia a receita — antes isso quebrava
+    receita.nome = 'Sourdough Tradicional Premium'
+    db.session.commit()
+
+    # Cesta CONTINUA funcionando — FK eh estavel
+    comps_depois = componentes_de_cesta(cesta)
+    assert len(comps_depois) == 1, (
+        f'cesta quebrou apos rename: {comps_depois}'
+    )
+    assert comps_depois[0][1] == receita.id
+    assert comps_depois[0][2] == 'Sourdough Tradicional Premium'  # nome novo
+
+
+def test_b5_orfao_loga_warning_e_ignora(app, admin_user, catalogo, caplog):
+    """ProdutoItem com tipo='receita' mas receita_id=NULL eh ignorado
+    com log WARNING."""
+    import logging
+
+    from app.extensions import db
+    from app.models import Produto, ProdutoItem
+    from app.services.cestas import componentes_de_cesta
+
+    cesta = Produto(nome='Box', ativo=True)
+    db.session.add(cesta)
+    db.session.flush()
+    pi = ProdutoItem(produto_id=cesta.id, tipo='receita',
+                     item_nome='Fantasma', receita_id=None, quantidade=1)
+    db.session.add(pi)
+    db.session.commit()
+
+    with caplog.at_level(logging.WARNING, logger='app.services.cestas'):
+        comps = componentes_de_cesta(cesta)
+    assert comps == [], 'orfao nao deveria entrar nos componentes'
+    assert any('orfao' in r.message.lower() for r in caplog.records), (
+        'WARNING nao foi logado'
+    )
+
+
+def test_b5_contagem_orfaos(app, admin_user, catalogo):
+    """`contar_produto_itens_orfaos` retorna count correto pra owner ver
+    no dashboard."""
+    from app.extensions import db
+    from app.models import Produto, ProdutoItem
+    from app.services.cestas import contar_produto_itens_orfaos
+
+    base = contar_produto_itens_orfaos()
+    cesta = Produto(nome='Box', ativo=True)
+    db.session.add(cesta)
+    db.session.flush()
+    # 1 vinculado, 2 orfaos
+    db.session.add(ProdutoItem(produto_id=cesta.id, tipo='receita',
+                                item_nome='X', receita_id=catalogo['receita'].id,
+                                quantidade=1))
+    db.session.add(ProdutoItem(produto_id=cesta.id, tipo='receita',
+                                item_nome='Y', receita_id=None, quantidade=1))
+    db.session.add(ProdutoItem(produto_id=cesta.id, tipo='mp',
+                                item_nome='Z', materia_prima_id=None,
+                                quantidade=1))
+    db.session.commit()
+    assert contar_produto_itens_orfaos() == base + 2
