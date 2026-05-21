@@ -266,6 +266,10 @@ def create_app(config_class=None):
             "font-src 'self' https://cdn.jsdelivr.net; "
             "img-src 'self' data:;"
         )
+        if request.is_secure:
+            response.headers['Strict-Transport-Security'] = (
+                'max-age=31536000; includeSubDomains'
+            )
         # Cache agressivo para assets estaticos (CSS/JS/fonts/imagens)
         if request.path.startswith('/static/'):
             response.headers['Cache-Control'] = 'public, max-age=86400, stale-while-revalidate=604800'
