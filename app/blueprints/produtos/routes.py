@@ -81,13 +81,12 @@ def detalhe(id):
         })
 
     custo_total = sum(i['custo_un'] * i['quantidade'] for i in itens_data)
-    receita_custos_json = json.dumps(receita_custos, ensure_ascii=False)
 
     return render_template('produtos/detalhe.html',
                            produto=produto,
                            itens_data=itens_data,
                            custo_total=custo_total,
-                           receita_custos_json=receita_custos_json)
+                           receita_custos=receita_custos)
 
 
 @produtos_bp.route('/<int:id>/salvar', methods=['POST'])
