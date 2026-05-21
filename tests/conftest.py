@@ -14,9 +14,9 @@ import pytest
 
 @pytest.fixture
 def app():
-    # DATABASE_URL eh o que config.py le (nao SQLALCHEMY_DATABASE_URI).
-    # PYTEST_RUNNING avisa o app pra pular o auto-upgrade do Alembic.
-    os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
+    # Banco LOCAL (nao :memory:) porque varios helpers usam conexao propria
+    # do sqlite3 que nao ve um in-memory db. Drop+create_all garante isolamento.
+    os.environ['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'  # historico, ignorado
     os.environ['SECRET_KEY'] = 'test-secret'
     os.environ['PYTEST_RUNNING'] = '1'
     from app import create_app
