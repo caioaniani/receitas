@@ -132,9 +132,11 @@ def sugerir_producao(horizonte_dias=7, lookback_dias=14, usar_cache=True):
                 stockout_por_chave[chave] = True
 
     if not qtd_lojas:
-        return {'itens': [], 'horizonte_dias': horizonte_dias,
-                'lookback_dias': lookback_dias,
-                'avisos_vnda': avisos_vnda}
+        resultado = {'itens': [], 'horizonte_dias': horizonte_dias,
+                     'lookback_dias': lookback_dias,
+                     'avisos_vnda': avisos_vnda}
+        _SUG_CACHE[cache_key] = {'t': time.time(), 'data': resultado}
+        return resultado
 
     # 2. Quanto ja esta em pedido em aberto pras lojas dessas chaves
     em_pedidos = defaultdict(int)
