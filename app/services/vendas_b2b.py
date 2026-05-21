@@ -80,13 +80,13 @@ def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
         if tipo not in ('receita', 'produto') or not item_id:
             continue
         try:
-            preco = float(it.get('preco_unitario') or 0)
+            preco = Decimal(str(it.get('preco_unitario') or 0))
         except (TypeError, ValueError):
-            preco = 0
+            preco = Decimal('0')
         try:
             desc = float(it.get('desconto_percentual') or 0)
         except (TypeError, ValueError):
-            desc = 0
+            desc = 0.0
 
         vi = VendaB2BItem(
             venda_id=venda.id,
