@@ -5,7 +5,6 @@ Regressoes que cobrimos:
 - 'pain au chocolat' nao deve resolver pra 'Pain au Chocolat Bicolor'
 - Apelido salvo em LojaProdutoMap vale globalmente
 """
-import pytest
 
 
 def test_score_proximidade_prefere_starts_with(app):
@@ -42,11 +41,12 @@ def test_resolver_produto_sourdough(app):
 
 def test_apelido_global_loja_lote(app, loja):
     """Apelido salvo em LojaProdutoMap vale na entrada em lote da loja."""
+    from datetime import datetime
+
     from app.extensions import db
     from app.models import LojaProdutoMap
     from app.services import estoque_loja_lote as svc
     from tests.conftest import _make_receita
-    from datetime import datetime
     r = _make_receita('Pao Frances Fermentado')
     db.session.add(r)
     db.session.flush()
@@ -66,11 +66,12 @@ def test_apelido_global_loja_lote(app, loja):
 
 def test_apelido_global_compartilhado_congelados(app):
     """Apelido salvo serve tambem em balanco congelados."""
+    from datetime import datetime
+
     from app.extensions import db
     from app.models import LojaProdutoMap
     from app.services import estoque_congelados as svc
     from tests.conftest import _make_receita
-    from datetime import datetime
     r = _make_receita('Pao Frances Fermentado')
     db.session.add(r)
     db.session.flush()

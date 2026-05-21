@@ -6,14 +6,14 @@ sem realmente executar a tool. Fix: detectar texto de confirmacao e
 acionar a SlackAcaoPendente como se fosse clique do botao.
 """
 import json
-from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from datetime import timedelta
+from unittest.mock import patch
 
 
 def test_texto_confirmacao_dispara_acao_pendente(app, admin_user):
     """Usuario tem SlackAcaoPendente e responde 'sim' → executor roda."""
     from app.extensions import db
-    from app.models import SlackVinculo, SlackAcaoPendente
+    from app.models import SlackAcaoPendente, SlackVinculo
     from app.services.slack_bot import _tentar_confirmar_por_texto
 
     # Vincula admin ao slack_uid

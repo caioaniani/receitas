@@ -4,21 +4,22 @@ Acesso por URL /driver/<token>. PIN exigido na primeira vez e armazenado em
 session pra nao pedir de novo.
 """
 import secrets
-from datetime import date, datetime
+from datetime import datetime
 
-from flask import (
-    Blueprint, current_app, jsonify, render_template, request, session, abort
-)
+from flask import abort, current_app, jsonify, render_template, request, session
 
-from app.extensions import db
-from app.utils import agora, hoje as hoje_brt
-from app.models import (
-    AtribuicaoEntrega, Driver, EntregaFoto,
-    PedidoLoja, PedidoQRCode,
-)
-from app.services import vnda
-from app.services import dropbox_storage
 from app.blueprints.driver import driver_bp
+from app.extensions import db
+from app.models import (
+    AtribuicaoEntrega,
+    Driver,
+    EntregaFoto,
+    PedidoLoja,
+    PedidoQRCode,
+)
+from app.services import dropbox_storage, vnda
+from app.utils import agora
+from app.utils import hoje as hoje_brt
 
 
 def _gerar_token():
@@ -331,7 +332,9 @@ def qr_entrega(token, pedido_id):
     """Motorista gera QR pra loja escanear na entrega. Status do pedido
     deve estar em em_transporte; loja precisa de PIN configurado."""
     from datetime import timedelta
+
     from flask import url_for
+
     from app.services.qrcode_svc import gerar_png_data_url
     driver = _driver_por_token(token)
     if not driver:

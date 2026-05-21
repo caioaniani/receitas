@@ -13,8 +13,7 @@ cada componente individualmente.
 def test_saida_lote_desempacota_cesta(app, admin_user, loja, catalogo):
     """Cesta com 5 pao + 3 croissant → vender 2 cestas baixa 10 pao + 6 croissant."""
     from app.extensions import db
-    from app.models import (Receita, Produto, ProdutoItem,
-                              EstoqueLoja, LojaProdutoMap)
+    from app.models import EstoqueLoja, LojaProdutoMap, Produto, ProdutoItem, Receita
     from app.services.estoque_loja_lote import aplicar_saida_lote
 
     # Cria 1 nova receita (alem do catalogo) pra ser componente
@@ -80,10 +79,11 @@ def test_saida_lote_desempacota_cesta(app, admin_user, loja, catalogo):
 
 def test_saida_lote_produto_normal_continua_funcionando(app, admin_user, loja, catalogo):
     """Produto sem componentes (nao-cesta) continua descontando normalmente."""
+    from datetime import datetime
+
     from app.extensions import db
     from app.models import EstoqueLoja, LojaProdutoMap
     from app.services.estoque_loja_lote import aplicar_saida_lote
-    from datetime import datetime
 
     # Produto sem itens (nao eh cesta) — usa o produto do catalogo
     produto = catalogo['produto']

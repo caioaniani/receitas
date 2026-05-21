@@ -11,20 +11,18 @@ Rotas:
 Baixa do estoque ocorre em vendas_b2b.criar_venda (service).
 Cancelamento estorna automaticamente.
 """
-from datetime import date, timedelta
+from datetime import date
 
-from flask import render_template, redirect, url_for, flash, request, abort, jsonify
-from flask_login import login_required, current_user
+from flask import flash, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
 from app.blueprints.b2b import b2b_bp
 from app.decorators import admin_required
 from app.extensions import db
-from app.models import (ClienteB2B, VendaB2B, VendaB2BItem,
-                        VendaB2BParcela, Receita, Produto, EstoqueProducao)
+from app.models import ClienteB2B, EstoqueProducao, Produto, Receita, VendaB2B, VendaB2BParcela
 from app.services import vendas_b2b as svc
 from app.utils import hoje
-
 
 # ── Dashboard ──
 

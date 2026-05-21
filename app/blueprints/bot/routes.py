@@ -6,15 +6,15 @@ projetada pra ser chamada por workflows externos.
 CSRF desabilitado pra esses endpoints (sao read-only e protegidos por token).
 """
 import secrets as _secrets
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from functools import wraps
 
 from flask import current_app, jsonify, request
 
 from app.blueprints.bot import bot_bp
 from app.extensions import csrf
-from app.utils import hoje as hoje_brt
 from app.services import seru
+from app.utils import hoje as hoje_brt
 
 
 def _normalizar_telefone(s):

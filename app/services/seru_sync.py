@@ -20,14 +20,19 @@ e registra MovEstoqueLoja(tipo='venda_seru_sem_estoque') com a falta.
 import logging
 import re
 import unicodedata
-from datetime import datetime
 
 from app.extensions import db
-from app.utils import agora
-from app.models import (Loja, EstoqueLoja, MovEstoqueLoja,
-                        SeruProdutoMap, SeruLojaMap, SeruPedidoProcessado,
-                        SeruDebito)
+from app.models import (
+    EstoqueLoja,
+    Loja,
+    MovEstoqueLoja,
+    SeruDebito,
+    SeruLojaMap,
+    SeruPedidoProcessado,
+    SeruProdutoMap,
+)
 from app.services import seru
+from app.utils import agora
 
 logger = logging.getLogger(__name__)
 
@@ -119,8 +124,8 @@ def _baixar_item(loja_id, mapping_produto, qtd, seru_pedido_id, user_id):
     # CESTA: se mapping aponta pra Produto com itens, desempacota e baixa
     # cada componente individualmente.
     if mapping_produto.produto_id:
-        from app.services.cestas import componentes_de_cesta
         from app.models import Produto
+        from app.services.cestas import componentes_de_cesta
         produto = Produto.query.get(mapping_produto.produto_id)
         componentes = componentes_de_cesta(produto)
         if componentes:

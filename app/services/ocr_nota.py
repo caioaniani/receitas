@@ -11,7 +11,6 @@ import json
 import os
 import re
 
-
 SYSTEM_PROMPT = (
     "Voce e um extrator de notas fiscais e cupons. Recebe foto de uma "
     "nota/cupom e devolve APENAS um JSON valido (sem markdown, sem "

@@ -10,9 +10,9 @@ Regressoes cobertas:
 
 def test_desperdicio_lote_basico(app, admin_user, loja, catalogo):
     """Lote: 2 itens validos sao gravados, 1 ignorado."""
-    from app.services import copilot
-    from app.models import Desperdicio, EstoqueLoja
     from app.extensions import db
+    from app.models import Desperdicio, EstoqueLoja
+    from app.services import copilot
 
     # Stock inicial: 10 croissants
     el = EstoqueLoja(loja_id=loja.id, receita_id=catalogo['receita'].id,

@@ -18,11 +18,11 @@ Toda tentativa eh registrada em HandshakeAudit pra investigar falhas.
 import io
 import logging
 
-from flask import render_template, request, redirect, url_for, flash, send_file, abort
+from flask import abort, flash, render_template, request, send_file, url_for
 
 from app.blueprints.handshake import handshake_bp
-from app.extensions import db, csrf
-from app.models import PedidoQRCode, Driver, Loja, HandshakeAudit
+from app.extensions import csrf, db
+from app.models import Driver, HandshakeAudit, PedidoQRCode
 from app.utils import agora
 
 logger = logging.getLogger(__name__)

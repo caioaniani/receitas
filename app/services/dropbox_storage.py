@@ -18,7 +18,6 @@ import logging
 import threading
 import time
 import uuid
-from datetime import datetime
 
 import requests
 from flask import current_app

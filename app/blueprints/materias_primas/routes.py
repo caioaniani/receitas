@@ -1,12 +1,11 @@
-from datetime import datetime
 
-from flask import render_template, redirect, url_for, flash, request, jsonify
-from flask_login import login_required, current_user
+from flask import flash, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 
 from app.blueprints.materias_primas import materias_primas_bp
-from app.decorators import admin_required, catalogo_required
+from app.decorators import catalogo_required
 from app.extensions import db
-from app.models import MateriaPrima, ReceitaIngrediente, MovimentacaoEstoque, AlertaEstoque
+from app.models import AlertaEstoque, MateriaPrima, MovimentacaoEstoque, ReceitaIngrediente
 
 
 @materias_primas_bp.route('/')
@@ -108,8 +107,8 @@ def estoque_ocr_nota():
     """Recebe upload de imagem de nota/cupom e devolve itens extraidos +
     sugestao de match com MPs cadastradas. JSON pra ser consumido por JS
     no /estoque ou na pagina de entrada."""
-    from app.services.ocr_nota import extrair_itens_nota
     from app.services.copilot import _resolver_mp
+    from app.services.ocr_nota import extrair_itens_nota
     f = request.files.get('imagem')
     if not f or not f.filename:
         return jsonify(ok=False, erro='sem_imagem'), 400

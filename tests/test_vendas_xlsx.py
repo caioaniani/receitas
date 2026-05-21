@@ -19,8 +19,9 @@ def _gerar_xlsx_em_memoria(linhas):
 
 def test_template_xlsx_inclui_receitas(app, loja, catalogo):
     """Template gera xlsx valido com header + linhas de exemplo."""
-    from app.services.vendas_manuais import gerar_template_xlsx
     from openpyxl import load_workbook
+
+    from app.services.vendas_manuais import gerar_template_xlsx
     blob = gerar_template_xlsx(loja)
     wb = load_workbook(io.BytesIO(blob))
     ws = wb['Vendas']
@@ -34,9 +35,8 @@ def test_template_xlsx_inclui_receitas(app, loja, catalogo):
 
 def test_upload_xlsx_grava_multiplas_datas(app, admin_user, loja, catalogo):
     """Upload com 3 datas distintas cria 3 VendaManualLoja."""
-    from app.extensions import db
     from app.models import VendaManualLoja
-    from app.services.vendas_manuais import parsear_xlsx, aplicar_vendas_xlsx
+    from app.services.vendas_manuais import aplicar_vendas_xlsx, parsear_xlsx
 
     hoje_ = date.today()
     buf = _gerar_xlsx_em_memoria([
@@ -59,7 +59,7 @@ def test_upload_xlsx_grava_multiplas_datas(app, admin_user, loja, catalogo):
 
 def test_upload_xlsx_aceita_data_dd_mm_yyyy(app, admin_user, loja, catalogo):
     """Parser aceita data como string DD/MM/YYYY."""
-    from app.services.vendas_manuais import parsear_xlsx, aplicar_vendas_xlsx
+    from app.services.vendas_manuais import parsear_xlsx
 
     buf = _gerar_xlsx_em_memoria([
         ('15/04/2026', 'Croissant Tradicional', 5),
@@ -75,7 +75,7 @@ def test_upload_xlsx_aceita_data_dd_mm_yyyy(app, admin_user, loja, catalogo):
 def test_upload_xlsx_ignora_linhas_invalidas(app, admin_user, loja, catalogo):
     """Linhas com data ruim, qtd zero, nome vazio sao ignoradas
     sem bloquear linhas validas."""
-    from app.services.vendas_manuais import parsear_xlsx, aplicar_vendas_xlsx
+    from app.services.vendas_manuais import aplicar_vendas_xlsx, parsear_xlsx
 
     buf = _gerar_xlsx_em_memoria([
         (date.today(), 'Croissant Tradicional', 5),  # OK

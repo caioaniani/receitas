@@ -9,11 +9,10 @@ SERU_AUTO_SYNC=0 antes do startup.
 """
 import logging
 import os
-from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import text
 
-from app.utils import BRT, hoje as hoje_brt
+from app.utils import hoje as hoje_brt
 
 logger = logging.getLogger(__name__)
 

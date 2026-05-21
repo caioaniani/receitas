@@ -2,15 +2,15 @@ import csv
 import io
 from datetime import date, timedelta
 
-from flask import render_template, Response, request
+from flask import Response, render_template, request
 from flask_login import login_required
 
 from app.blueprints.relatorios import relatorios_bp
 from app.decorators import admin_required
 from app.extensions import db
-from app.models import MateriaPrima, Receita, ReceitaIngrediente, Loja
+from app.models import Loja, MateriaPrima, Receita, ReceitaIngrediente
 from app.services.custos import calcular_custos_receitas
-from app.services.previsao_demanda import prever_demanda, prever_semana
+from app.services.previsao_demanda import prever_semana
 from app.utils import hoje as hoje_brt
 
 
@@ -113,9 +113,10 @@ def dashboards():
 def api_vendas_por_dia():
     """Total de vendas (R$) e quantidade de pedidos por dia nos últimos 30 dias.
     Soma Seru (PDV) + VNDA (site) + pedidos manuais."""
-    from app.models import SeruPedidoProcessado, VendaManualLoja
+
     from sqlalchemy import func
-    from datetime import datetime
+
+    from app.models import SeruPedidoProcessado, VendaManualLoja
     fim = hoje_brt()
     ini = fim - timedelta(days=30)
 
@@ -181,8 +182,9 @@ def api_margem_categoria():
 @admin_required
 def api_desperdicio():
     """Desperdício dos últimos 30 dias agrupado por motivo."""
-    from app.models import Desperdicio
     from sqlalchemy import func
+
+    from app.models import Desperdicio
     fim = hoje_brt()
     ini = fim - timedelta(days=30)
     rows = (db.session.query(
@@ -200,8 +202,9 @@ def api_desperdicio():
 @admin_required
 def api_top_receitas():
     """Top 10 receitas mais vendidas (vendas manuais) nos últimos 30 dias."""
-    from app.models import VendaManualLoja, Receita
     from sqlalchemy import func
+
+    from app.models import Receita, VendaManualLoja
     fim = hoje_brt()
     ini = fim - timedelta(days=30)
 
@@ -226,8 +229,9 @@ def api_top_receitas():
 @admin_required
 def api_estoque_baixo():
     """Itens com estoque abaixo do mínimo nas lojas."""
-    from app.models import EstoqueLoja, Loja, Receita, Produto
     from sqlalchemy import func
+
+    from app.models import EstoqueLoja, Loja
     # Conta por loja itens com estoque <= 5 (ad hoc threshold; pode virar setting)
     rows = (db.session.query(
             Loja.nome,

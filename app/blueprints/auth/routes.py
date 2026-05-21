@@ -1,13 +1,13 @@
 from urllib.parse import urlparse
 
-from flask import render_template, redirect, url_for, flash, request
-from flask_login import login_user, logout_user, login_required, current_user
+from flask import flash, redirect, render_template, request, url_for
+from flask_login import current_user, login_required, login_user, logout_user
 
 from app.blueprints.auth import auth_bp
 from app.decorators import admin_required
 from app.extensions import db, limiter
+from app.models import Atribuicao, Receita, Usuario
 from app.utils import agora
-from app.models import Usuario, Atribuicao, Receita
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
@@ -205,7 +205,7 @@ def atribuir(receita_id):
         receita_id=receita_id, usuario_id=int(usuario_id)
     ).first()
     if existente:
-        flash(f'Esta ficha ja foi atribuida a este funcionario.', 'warning')
+        flash('Esta ficha ja foi atribuida a este funcionario.', 'warning')
         return redirect(url_for('receitas.ficha', id=receita_id))
 
     atrib = Atribuicao(receita_id=receita_id, usuario_id=int(usuario_id))
@@ -221,7 +221,6 @@ def atribuir(receita_id):
 @login_required
 def concluir(id):
     """Funcionário marca ficha como concluída."""
-    from datetime import datetime
     atrib = Atribuicao.query.get_or_404(id)
 
     if not current_user.is_admin() and atrib.usuario_id != current_user.id:

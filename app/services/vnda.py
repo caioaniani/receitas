@@ -2,7 +2,7 @@
 
 import logging
 import re
-from datetime import datetime, date, timedelta
+from datetime import date, datetime, timedelta
 
 import requests
 from flask import current_app

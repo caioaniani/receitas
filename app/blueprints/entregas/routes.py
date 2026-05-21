@@ -1,16 +1,28 @@
-from datetime import date, datetime
-
-from flask import render_template, request, jsonify, abort, current_app
-from flask_login import login_required, current_user
+from datetime import datetime
 
 import requests as http_requests
+from flask import abort, current_app, jsonify, render_template, request
+from flask_login import current_user, login_required
 
 from app.blueprints.entregas import entregas_bp
 from app.decorators import entrega_access_required
 from app.extensions import db
-from app.utils import agora, hoje as hoje_brt
-from app.models import CartinhaEntrega, OverrideEntrega, Driver, AtribuicaoEntrega, LoteSaida, EntregaFoto, PedidoLocal, PedidoLocalItem, Produto, MateriaPrima
-from app.services import vnda, rotas as rotas_svc, dropbox_storage
+from app.models import (
+    AtribuicaoEntrega,
+    CartinhaEntrega,
+    Driver,
+    EntregaFoto,
+    LoteSaida,
+    MateriaPrima,
+    OverrideEntrega,
+    PedidoLocal,
+    PedidoLocalItem,
+    Produto,
+)
+from app.services import dropbox_storage, vnda
+from app.services import rotas as rotas_svc
+from app.utils import agora
+from app.utils import hoje as hoje_brt
 
 
 @entregas_bp.route('/')
@@ -389,7 +401,7 @@ def tile_proxy(z, x, y):
 
     Cache no proxy + browser pra reduzir trafego."""
     import requests as r
-    from flask import Response, abort
+    from flask import Response
     if z < 0 or z > 19 or x < 0 or y < 0:
         abort(400)
     try:

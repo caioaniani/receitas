@@ -315,7 +315,7 @@ def montar_texto_whatsapp(resumo):
     # Quedas de item
     if resumo['quedas']:
         linhas.append('')
-        linhas.append(f'*Itens em queda forte (7d vs 7d)*')
+        linhas.append('*Itens em queda forte (7d vs 7d)*')
         for q in resumo['quedas']:
             linhas.append(
                 f'• *{q["nome_item"]}* em _{q["loja_nome"]}_: '
@@ -337,7 +337,7 @@ def montar_texto_whatsapp(resumo):
     # Pedidos travados
     if resumo['pedidos_travados']:
         linhas.append('')
-        linhas.append(f'*Pedidos travados (entrega passou)*')
+        linhas.append('*Pedidos travados (entrega passou)*')
         for p in resumo['pedidos_travados']:
             linhas.append(
                 f'• Pedido *#{p["pedido_id"]}* {p["loja_nome"]} '

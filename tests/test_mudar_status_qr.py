@@ -6,7 +6,7 @@ def test_mudar_status_separar_gera_qr(app, admin_user, loja, catalogo):
     """Status confirmado → separar deve criar PedidoQRCode tipo='saida' +
     incluir qr_url/qr_png_url no resultado pro Slack mostrar."""
     from app.extensions import db
-    from app.models import PedidoLoja, PedidoItem, PedidoQRCode
+    from app.models import PedidoItem, PedidoLoja, PedidoQRCode
     from app.services import copilot
 
     p = PedidoLoja(loja_id=loja.id, status='confirmado',
@@ -37,7 +37,7 @@ def test_mudar_status_separar_gera_qr(app, admin_user, loja, catalogo):
 def test_mudar_status_outro_nao_gera_qr(app, admin_user, loja, catalogo):
     """Confirmar nao gera QR (so separar gera)."""
     from app.extensions import db
-    from app.models import PedidoLoja, PedidoItem, PedidoQRCode
+    from app.models import PedidoItem, PedidoLoja, PedidoQRCode
     from app.services import copilot
 
     p = PedidoLoja(loja_id=loja.id, status='pendente',

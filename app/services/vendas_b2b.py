@@ -9,13 +9,17 @@ Estoque sai do EstoqueProducao (industria/freezer). Quando falta saldo,
 registra MovEstoqueProducao tipo='venda_b2b_sem_estoque' (igual logica
 das vendas Seru) — sai mesmo assim e fica como auditoria.
 """
-from datetime import datetime, timedelta
-from decimal import Decimal
 
 from app.extensions import db
-from app.models import (VendaB2B, VendaB2BItem, VendaB2BParcela,
-                        EstoqueProducao, MovEstoqueProducao,
-                        ClienteB2B, Receita, Produto)
+from app.models import (
+    EstoqueProducao,
+    MovEstoqueProducao,
+    Produto,
+    Receita,
+    VendaB2B,
+    VendaB2BItem,
+    VendaB2BParcela,
+)
 from app.utils import agora, hoje
 
 

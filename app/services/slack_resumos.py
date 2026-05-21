@@ -112,7 +112,8 @@ def lojas_sem_pedido_amanha():
     """Retorna lista de Loja operacional que NAO tem pedido pra amanha
     (data_entrega = hoje + 1) e NAO foi marcada como opt-out."""
     from datetime import timedelta
-    from app.models import Loja, PedidoLoja, LembretePedidoOptOut
+
+    from app.models import LembretePedidoOptOut, Loja, PedidoLoja
 
     amanha = hoje_brt() + timedelta(days=1)
 

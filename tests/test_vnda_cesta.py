@@ -1,6 +1,6 @@
 """Smoke test desempacotamento de cesta no calculo de sugestao de pedido
 via VNDA API direta. Mock da API VNDA pra nao depender de rede."""
-from datetime import date, timedelta
+from datetime import date
 from unittest.mock import patch
 
 
@@ -8,7 +8,7 @@ def test_vnda_api_desempacota_cesta(app, admin_user, loja, catalogo):
     """Family Box × 5 (com 3 receitas dentro: 2 Croissant + 4 Pao + 1 MP)
     via VNDA deve gerar: 10 Croissant + 20 Pao + 5 MP (multiplicado)."""
     from app.extensions import db
-    from app.models import Produto, ProdutoItem, VndaProdutoMap, Receita, MateriaPrima
+    from app.models import Produto, ProdutoItem, Receita, VndaProdutoMap
     from app.services.vendas_manuais import _agregar_vendas_vnda_api
 
     # Cria mais 2 receitas (alem da receita do catalogo)
@@ -69,10 +69,11 @@ def test_vnda_api_desempacota_cesta(app, admin_user, loja, catalogo):
 
 def test_vnda_api_produto_simples_nao_explode(app, admin_user, loja, catalogo):
     """Produto sem componentes vai como produto direto (nao explode)."""
+    from unittest.mock import patch
+
     from app.extensions import db
     from app.models import Produto, VndaProdutoMap
     from app.services.vendas_manuais import _agregar_vendas_vnda_api
-    from unittest.mock import patch
 
     simples = Produto(nome='Granola 500g', ativo=True)
     db.session.add(simples)

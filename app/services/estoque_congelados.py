@@ -11,7 +11,6 @@ import unicodedata
 from app.extensions import db
 from app.models import EstoqueProducao, MovEstoqueProducao, Produto, Receita
 
-
 # Abreviacoes comuns que aparecem em listas manuscritas — expandidas
 # antes do fuzzy match. Tudo minusculo, sem acento.
 EXPANSOES = {

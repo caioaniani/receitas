@@ -8,6 +8,7 @@ Sem dependencia de Anthropic API: testes mockam tool_call ou chamam
 diretamente os enrichers/executores.
 """
 import os
+
 import pytest
 
 
@@ -60,7 +61,7 @@ def loja(app):
 def catalogo(app):
     """Cria 1 receita, 1 produto, 1 MP pra testes que precisam de match."""
     from app.extensions import db
-    from app.models import Receita, Produto, MateriaPrima
+    from app.models import MateriaPrima, Produto
     r = _make_receita('Croissant Tradicional', categoria='Croissants')
     p = Produto(nome='Pao Frances', ativo=True)
     mp = MateriaPrima(nome='Farinha', unidade='kg', custo_por_kg=5.0)

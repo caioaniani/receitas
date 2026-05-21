@@ -58,6 +58,7 @@ def _evento_visto(event_id):
     engolia tudo silenciosamente e o evento se perdia.
     """
     from sqlalchemy.exc import IntegrityError
+
     from app.models import SlackEventoProcessado
     if not event_id:
         return False
@@ -130,7 +131,6 @@ def _tentar_confirmar_por_texto(text, slack_user_id, channel_id):
     tivesse clicado o botao. Retorna True se interceptou."""
     from app.models import SlackAcaoPendente
     from app.services import slack as slack_api
-    from app.services import slack_blocks
 
     texto_norm = text.lower().strip().rstrip('!?.').strip()
     # Curto + match exato em uma das listas (evita matchar "sim, pode mandar" como
@@ -189,9 +189,9 @@ def processar_evento_mensagem(evento):
     Disparado async via ThreadPoolExecutor — o handler de /slack/events
     so dispara isso e responde 200 imediatamente.
     """
+    from app.services import copilot as copilot_svc
     from app.services import slack as slack_api
     from app.services import slack_blocks
-    from app.services import copilot as copilot_svc
 
     slack_user_id = evento.get('user')
     channel = evento.get('channel')
@@ -377,9 +377,9 @@ def processar_interacao_botao(action_id, token, slack_user_id, channel_id,
                                 message_ts):
     """Clique em Confirmar/Cancelar. Chamado async via /slack/interact."""
     from app.models import SlackAcaoPendente
+    from app.services import copilot as copilot_svc
     from app.services import slack as slack_api
     from app.services import slack_blocks
-    from app.services import copilot as copilot_svc
 
     acao = SlackAcaoPendente.query.filter_by(token=token).first()
     if not acao:
@@ -475,9 +475,9 @@ def _processar_lembrete_receber_pedido(valor, slack_user_id, vinc,
     """Clique no botao 'Marcar #X como recebido' na mensagem de lembrete
     de pedidos hoje. value = '<pedido_id>'.
     """
-    from app.models import Usuario, PedidoLoja
-    from app.services import slack as slack_api
+    from app.models import PedidoLoja, Usuario
     from app.services import copilot as copilot_svc
+    from app.services import slack as slack_api
 
     try:
         pedido_id = int(valor)
@@ -544,6 +544,7 @@ def processar_interacao_lembrete(action_id, valor, slack_user_id, channel_id,
     - 'lembrete_receber_pedido': value = '<pedido_id>'
     """
     from datetime import datetime
+
     from app.models import LembretePedidoOptOut, Loja, SlackVinculo
     from app.services import slack as slack_api
 

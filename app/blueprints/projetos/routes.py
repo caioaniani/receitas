@@ -1,16 +1,15 @@
 from datetime import date, datetime, timedelta
 
-from flask import render_template, request, jsonify, redirect, url_for, flash, abort
-from flask_login import login_required, current_user
-
-from app.blueprints.projetos import projetos_bp
-from app.decorators import admin_required, owner_required
-from app.extensions import db
-from app.utils import agora, hoje as hoje_brt
+from flask import abort, flash, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload, selectinload
 
-from app.models import (ProjetoArea, Projeto, TarefaProjeto, Usuario, WeeklyReview)
-
+from app.blueprints.projetos import projetos_bp
+from app.decorators import owner_required
+from app.extensions import db
+from app.models import Projeto, ProjetoArea, TarefaProjeto, Usuario, WeeklyReview
+from app.utils import agora
+from app.utils import hoje as hoje_brt
 
 WIP_LIMIT = 3
 TIPOS_AREA = ('empresa', 'igreja', 'vida')
@@ -111,7 +110,7 @@ def _data_relativa(prazo):
     if delta < 7:
         return f'Em {delta} dias'
     if delta < 14:
-        return f'Em 1 semana'
+        return 'Em 1 semana'
     if delta < 30:
         return f'Em {delta // 7} semanas'
     return prazo.strftime('%d/%m/%Y')
@@ -155,8 +154,9 @@ def _projetos_para_select():
 def painel():
     """Dashboard: cards de projetos agrupados por area, ordenados por urgencia."""
     import traceback
-    from flask import current_app
     from collections import defaultdict
+
+    from flask import current_app
     try:
         from app.models import ProjetoTemplate
 
@@ -916,7 +916,9 @@ def weekly():
 def forcar_migrate():
     """Endpoint de emergencia para forcar migrations das colunas novas."""
     import traceback
+
     from flask import current_app
+
     from app import _migrate
     try:
         _migrate(current_app)
@@ -925,7 +927,7 @@ def forcar_migrate():
             '<p>Sem erros. <a href="/projetos/">Voltar pro dashboard</a></p>',
             200
         )
-    except Exception as e:
+    except Exception:
         return (
             '<h1>Erro ao migrar</h1>'
             f'<pre>{traceback.format_exc()}</pre>'

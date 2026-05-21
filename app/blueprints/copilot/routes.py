@@ -8,9 +8,9 @@ from flask_login import current_user, login_required
 
 from app.blueprints.copilot import copilot_bp
 from app.extensions import csrf, db
-from app.utils import agora
 from app.models import CopilotConversa
 from app.services import copilot as copilot_svc
+from app.utils import agora
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +163,6 @@ def aprovar(conversa_id):
         db.session.commit()
         return jsonify(ok=False, erro=resultado.get('erro')), 400
 
-    from datetime import datetime
     conversa.status = 'executado'
     conversa.executado_em = agora()
     conversa.registro_tipo = resultado.get('registro_tipo')

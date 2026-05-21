@@ -7,14 +7,22 @@ estorno automatico.
 Idempotencia: VndaPedidoProcessado por `code` (codigo do pedido VNDA).
 """
 import logging
-from datetime import date, datetime, timedelta
+from datetime import timedelta
 
 from app.extensions import db
-from app.utils import agora
-from app.models import (Loja, EstoqueLoja, MovEstoqueLoja, Receita, MateriaPrima,
-                        VndaProdutoMap, VndaPedidoProcessado, VndaDebito,
-                        AppConfig)
+from app.models import (
+    AppConfig,
+    EstoqueLoja,
+    Loja,
+    MateriaPrima,
+    MovEstoqueLoja,
+    Receita,
+    VndaDebito,
+    VndaPedidoProcessado,
+    VndaProdutoMap,
+)
 from app.services import vnda
+from app.utils import agora
 
 logger = logging.getLogger(__name__)
 

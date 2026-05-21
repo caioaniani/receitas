@@ -12,15 +12,11 @@ vinculacoes — vincula um nome uma vez, vale pra sempre. Espelha SeruProdutoMap
 """
 import re
 import unicodedata
-from datetime import datetime
 
 from sqlalchemy import func
 
 from app.extensions import db
-from app.models import (EstoqueLoja, MovEstoqueLoja,
-                        Receita, Produto, MateriaPrima,
-                        LojaProdutoMap, LojaDebito)
-
+from app.models import EstoqueLoja, LojaDebito, LojaProdutoMap, MateriaPrima, MovEstoqueLoja, Produto, Receita
 
 EXPANSOES = {
     'cro': 'croissant',

@@ -1,18 +1,27 @@
 """Vendas PDV via integracao Seru. Sob demanda — sem cache local."""
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
-from flask import render_template, request, jsonify, current_app, redirect, url_for, flash
-from flask_login import login_required, current_user
+from flask import current_app, flash, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 
 from app.blueprints.pdv import pdv_bp
 from app.decorators import admin_required
 from app.extensions import db
-from app.utils import agora, hoje as hoje_brt
-from app.models import (Loja, Receita, Produto,
-                        SeruProdutoMap, SeruLojaMap, SeruPedidoProcessado,
-                        VndaProdutoMap, VndaPedidoProcessado, MovEstoqueLoja,
-                        AppConfig)
+from app.models import (
+    AppConfig,
+    Loja,
+    MovEstoqueLoja,
+    Produto,
+    Receita,
+    SeruLojaMap,
+    SeruPedidoProcessado,
+    SeruProdutoMap,
+    VndaPedidoProcessado,
+    VndaProdutoMap,
+)
 from app.services import seru
+from app.utils import agora
+from app.utils import hoje as hoje_brt
 
 
 @pdv_bp.route('/')
@@ -32,9 +41,10 @@ def reprocessar():
     Apaga SeruPedidoProcessado dos pedidos de hoje que NAO baixaram nada
     e re-roda processar_pedidos. Pedidos com baixados>0 nao sao apagados
     (zero risco de duplo desconto). Cancelados/estornados tambem nao."""
+    from sqlalchemy import or_
+
     from app.services import seru_sync
     from app.services.seru_cron import hoje_brt
-    from sqlalchemy import or_
 
     hoje = hoje_brt()
     # Inicio do dia BRT em UTC: 00:00 BRT = 03:00 UTC
@@ -97,7 +107,7 @@ def historico_sync():
     refs_like = [r + '%' for r in refs]
     movs_por_pedido = {}
     if pedidos:
-        from sqlalchemy import or_, func as sqlfunc
+        from sqlalchemy import or_
         # Busca todas as movs que comecam com 'Seru #<id>' pros pedidos listados
         clauses = [MovEstoqueLoja.referencia.like(r + '%') for r in refs]
         all_movs = MovEstoqueLoja.query.filter(or_(*clauses)).all()
@@ -706,9 +716,10 @@ def vnda_reprocessar():
     Safety identica a do Seru: nao apaga os ja-baixados.
     Tambem limpa MovEstoqueLoja antigas dos pedidos sendo reprocessados
     pra evitar duplicacao visual no historico."""
+    from sqlalchemy import or_
+
     from app.services import vnda_sync as svc
     from app.services.seru_cron import hoje_brt
-    from sqlalchemy import or_
     hoje = hoje_brt()
     inicio_dia_utc = datetime.combine(hoje, datetime.min.time()) + timedelta(hours=3)
     alvo_q = VndaPedidoProcessado.query.filter(

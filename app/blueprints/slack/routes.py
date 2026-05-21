@@ -8,14 +8,13 @@
 import json
 import logging
 
-from flask import request, jsonify, render_template, redirect, url_for, flash, current_app
-from flask_login import login_required, current_user
+from flask import flash, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 
 from app.blueprints.slack import slack_bp
 from app.decorators import admin_required
-from app.extensions import db, csrf, limiter
-from app.utils import agora
-from app.models import SlackVinculo, Usuario, SlackAcaoPendente
+from app.extensions import csrf, db, limiter
+from app.models import SlackVinculo, Usuario
 from app.services import slack as slack_api
 from app.services import slack_bot
 

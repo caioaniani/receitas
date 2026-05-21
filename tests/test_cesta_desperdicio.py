@@ -3,14 +3,12 @@
 Mesmo bug do estoque_loja_lote: registrar desperdicio de cesta deve baixar
 componentes individualmente do estoque da loja.
 """
-from datetime import datetime
 
 
 def test_desperdicio_cesta_via_copilot(app, admin_user, loja, catalogo):
     """Registrar desperdicio de 1 cesta deve baixar componentes."""
     from app.extensions import db
-    from app.models import (Receita, Produto, ProdutoItem, EstoqueLoja,
-                              MovEstoqueLoja, Desperdicio)
+    from app.models import Desperdicio, EstoqueLoja, Produto, ProdutoItem, Receita
     from app.services.copilot import executar_registrar_desperdicio
 
     # Receita componente

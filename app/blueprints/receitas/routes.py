@@ -1,10 +1,10 @@
-from flask import render_template, redirect, url_for, flash, request, abort, jsonify
-from flask_login import login_required, current_user
+from flask import abort, flash, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 
 from app.blueprints.receitas import receitas_bp
-from app.decorators import admin_required, catalogo_required
+from app.decorators import catalogo_required
 from app.extensions import db
-from app.models import MateriaPrima, Receita, ReceitaIngrediente, Atribuicao
+from app.models import Atribuicao, MateriaPrima, Receita, ReceitaIngrediente
 from app.services.custos import calcular_custos_receitas
 from app.utils import parse_float_br
 

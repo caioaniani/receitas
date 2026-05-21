@@ -2,23 +2,33 @@ import io
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
-from flask import render_template, redirect, url_for, flash, request, abort, send_file, current_app
-from flask_login import login_required, current_user
+from flask import abort, current_app, flash, redirect, render_template, request, send_file, url_for
+from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.blueprints.pedidos import pedidos_bp
-from app.decorators import (admin_required, gerente_required, producao_required,
-                              operacional_pedido_required)
+from app.decorators import admin_required, gerente_required, operacional_pedido_required, producao_required
 from app.extensions import db
-from app.utils import agora, hoje as hoje_brt
 from app.models import (
-    Loja, Receita, Produto, MateriaPrima, MovimentacaoEstoque,
-    PedidoLoja, PedidoItem,
-    EstoqueProducao, MovEstoqueProducao,
-    EstoqueLoja, MovEstoqueLoja,
-    PrecoLojaReceita, FotoRecebimento,
-    LojaProdutoMap, Desperdicio, PedidoQRCode,
+    Desperdicio,
+    EstoqueLoja,
+    EstoqueProducao,
+    FotoRecebimento,
+    Loja,
+    LojaProdutoMap,
+    MateriaPrima,
+    MovEstoqueLoja,
+    MovEstoqueProducao,
+    MovimentacaoEstoque,
+    PedidoItem,
+    PedidoLoja,
+    PedidoQRCode,
+    PrecoLojaReceita,
+    Produto,
+    Receita,
 )
+from app.utils import agora
+from app.utils import hoje as hoje_brt
 
 
 def _parse_item_id(value):
@@ -426,6 +436,7 @@ def qr_saida(id):
     existente pra evitar lixo se admin re-abrir a pagina."""
     import secrets
     from datetime import timedelta
+
     from app.services.qrcode_svc import gerar_png_data_url
     pedido = PedidoLoja.query.get_or_404(id)
     if pedido.status != 'separado':
@@ -1383,7 +1394,6 @@ def estoque_loja_mapeamentos():
 @admin_required
 def estoque_loja_mapeamentos_vincular(map_id):
     """Vincula/ignora/desfaz uma entrada do LojaProdutoMap."""
-    from datetime import datetime
     mp = LojaProdutoMap.query.get_or_404(map_id)
     acao = (request.form.get('acao') or '').strip()
     alvo_tipo = (request.form.get('alvo_tipo') or '').strip()
@@ -1912,8 +1922,8 @@ def desperdicio():
         # CESTA: se for produto-cesta, baixa componentes em vez do produto
         componentes_cesta = []
         if tipo_item == 'produto':
-            from app.services.cestas import componentes_de_cesta
             from app.models import Produto as _Produto
+            from app.services.cestas import componentes_de_cesta
             produto = _Produto.query.get(item_id)
             componentes_cesta = componentes_de_cesta(produto)
 
@@ -2060,8 +2070,8 @@ def desperdicio_excluir(id):
 def vendas_manuais(loja_id):
     """Lanca vendas manuais de uma loja (sem API PDV). Texto colado igual
     balanco. NAO baixa estoque — so registra pra previsao/sugestao."""
-    from app.services import vendas_manuais as svc
     from app.models import VendaManualLoja
+    from app.services import vendas_manuais as svc
     loja = Loja.query.get_or_404(loja_id)
     parsed = None
     resultado = None
@@ -2216,9 +2226,11 @@ def sugerir_pedido(loja_id):
 @admin_required
 def vendas_manuais_template(loja_id):
     """Download da planilha modelo pra preencher e fazer upload depois."""
-    from app.services import vendas_manuais as svc
-    from flask import send_file
     import io
+
+    from flask import send_file
+
+    from app.services import vendas_manuais as svc
     loja = Loja.query.get_or_404(loja_id)
     blob = svc.gerar_template_xlsx(loja)
     nome = f'vendas_{loja.nome.lower().replace(" ", "_")}_modelo.xlsx'
@@ -2283,9 +2295,11 @@ def vendas_manuais_limpar(loja_id):
 def sugerir_pedido_xlsx(loja_id):
     """Baixa a sugestao de pedido em xlsx. Mesmos params da tela
     (?inicio=YYYY-MM-DD&fim=YYYY-MM-DD&cobertura=N)."""
-    from app.services import vendas_manuais as svc
-    from flask import send_file
     import io
+
+    from flask import send_file
+
+    from app.services import vendas_manuais as svc
     loja = Loja.query.get_or_404(loja_id)
 
     di_str = request.args.get('inicio') or ''

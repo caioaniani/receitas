@@ -18,7 +18,7 @@ def montar_digest_tarefas(user):
     diferente de feito/cancelado, visiveis ao user (owner ve todas; admins
     veem so empresa).
     """
-    from app.models import TarefaProjeto, Projeto, ProjetoArea
+    from app.models import Projeto, ProjetoArea, TarefaProjeto
 
     h = hoje()
     q = (TarefaProjeto.query
@@ -36,7 +36,7 @@ def montar_digest_tarefas(user):
     tarefas = q.order_by(TarefaProjeto.prazo, TarefaProjeto.ordem).all()
 
     if not tarefas:
-        return f'*Bom dia!*\n\nNenhuma tarefa com prazo pra hoje ou atrasada. :)'
+        return '*Bom dia!*\n\nNenhuma tarefa com prazo pra hoje ou atrasada. :)'
 
     # Separa hoje vs atrasadas
     hoje_lst = [t for t in tarefas if t.prazo == h]

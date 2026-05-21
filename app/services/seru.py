@@ -8,7 +8,7 @@ memória do processo (com pequeno safety margin) e renovamos sob demanda.
 import base64
 import logging
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 import requests
 from flask import current_app
@@ -34,7 +34,7 @@ def data_local(iso_utc):
         s = iso_utc.replace('Z', '+00:00')
         dt = datetime.fromisoformat(s)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt.astimezone(BRT).date()
     except (ValueError, TypeError):
         return None
@@ -104,7 +104,7 @@ def _iso_dia(data, fim=False):
         dt_brt = datetime.combine(data, datetime.max.time().replace(microsecond=0), tzinfo=BRT)
     else:
         dt_brt = datetime.combine(data, datetime.min.time(), tzinfo=BRT)
-    return dt_brt.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    return dt_brt.astimezone(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 def listar_pedidos(data_inicial, data_final, page=1, limit=100, hasCanceledItem=None,
@@ -139,7 +139,7 @@ def listar_pedidos_completo(data_inicial, data_final, expandir_dias_frente=0, de
     Caller deve filtrar pelo createdAt depois pra precisao.
     """
     from concurrent.futures import ThreadPoolExecutor
-    from datetime import timedelta
+
     from flask import current_app
     app = current_app._get_current_object()
 

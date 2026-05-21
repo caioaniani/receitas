@@ -1,11 +1,11 @@
-from flask import render_template, redirect, url_for, flash, request, jsonify
+from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import login_required
 
 from app.blueprints.produtos import produtos_bp
-from app.decorators import admin_required, catalogo_required
+from app.decorators import catalogo_required
 from app.extensions import db
-from app.models import Produto, ProdutoItem, Receita, MateriaPrima
-from app.services.custos import calcular_custos_receitas, calcular_custo_produto
+from app.models import MateriaPrima, Produto, ProdutoItem
+from app.services.custos import calcular_custo_produto, calcular_custos_receitas
 from app.utils import parse_float_br
 
 

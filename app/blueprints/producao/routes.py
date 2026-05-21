@@ -1,12 +1,12 @@
-from datetime import date, datetime
+from datetime import datetime
 
-from flask import render_template, redirect, url_for, flash, request
-from flask_login import login_required, current_user
+from flask import flash, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 
 from app.blueprints.producao import producao_bp
 from app.decorators import producao_required
 from app.extensions import db
-from app.models import PlanejamentoProducao, PlanejamentoItem, Receita, MateriaPrima, MovimentacaoEstoque
+from app.models import MateriaPrima, MovimentacaoEstoque, PlanejamentoItem, PlanejamentoProducao, Receita
 from app.services.producao import consolidar_lista_compras
 from app.utils import hoje as hoje_brt
 

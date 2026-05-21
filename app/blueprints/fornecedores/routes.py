@@ -1,13 +1,12 @@
 """CRUD de Fornecedores + historico de preco de MP por fornecedor."""
-from datetime import datetime
 
-from flask import render_template, redirect, url_for, flash, request, abort, jsonify, current_app
-from flask_login import login_required, current_user
+from flask import current_app, flash, redirect, render_template, request, url_for
+from flask_login import login_required
 
 from app.blueprints.fornecedores import fornecedores_bp
-from app.decorators import admin_required, catalogo_required
+from app.decorators import catalogo_required
 from app.extensions import db
-from app.models import Fornecedor, HistoricoPrecoMP, MateriaPrima, MovimentacaoEstoque
+from app.models import Fornecedor, HistoricoPrecoMP, MateriaPrima
 
 
 @fornecedores_bp.route('/')

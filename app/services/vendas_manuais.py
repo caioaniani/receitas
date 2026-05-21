@@ -18,15 +18,20 @@ Calcula media diaria no periodo + olha estoque atual + sugere qtd.
 import io
 import math
 from collections import defaultdict
-from datetime import date, datetime, timedelta, time
+from datetime import date, datetime, time, timedelta
 
-from app.extensions import db
-from app.models import (VendaManualLoja, MovEstoqueLoja, EstoqueLoja, LojaProdutoMap,
-                        Loja, Receita, Produto, MateriaPrima)
 from app.constants import VENDA_TIPOS_LOJA
+from app.extensions import db
+from app.models import (
+    EstoqueLoja,
+    MateriaPrima,
+    MovEstoqueLoja,
+    Produto,
+    Receita,
+    VendaManualLoja,
+)
 from app.services import estoque_loja_lote as svc_lote
-from app.utils import agora, hoje
-
+from app.utils import hoje
 
 VENDAS_REAIS = VENDA_TIPOS_LOJA
 
@@ -43,9 +48,9 @@ def _agregar_vendas_vnda_api(data_inicio, data_fim):
 
     Retorna (vendas_dict, aviso). vendas_dict = {(tipo, id): qtd_total}.
     """
+    from app.models import VndaProdutoMap
     from app.services import vnda as vnda_api
     from app.services.vnda_sync import _componentes_de_cesta
-    from app.models import VndaProdutoMap
 
     try:
         todos = vnda_api._buscar_pedidos_janela(data_inicio, data_fim)
@@ -225,7 +230,7 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
     # 1. Seru via MovEstoqueLoja (sync funciona historico via cron). VNDA
     # NAO vem daqui — buscamos direto da API embaixo (cron VNDA so processa
     # o dia corrente, entao MovEstoqueLoja nao tem retroativo).
-    from datetime import datetime, time
+    from datetime import datetime
     dt_inicio = datetime.combine(data_inicio, time.min)
     dt_fim = datetime.combine(data_fim, time.max)
     por_fonte_item = defaultdict(lambda: defaultdict(int))  # {(tipo,id): {fonte: qtd}}
@@ -333,7 +338,7 @@ def exportar_sugestao_xlsx(loja, sugestao_itens, data_inicio, data_fim,
     """Gera xlsx da tela de sugestao de pedido. 1 aba com tabela completa
     + cabecalho com periodo. Retorna bytes."""
     from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.styles import Alignment, Font, PatternFill
 
     wb = Workbook()
     ws = wb.active
@@ -348,7 +353,7 @@ def exportar_sugestao_xlsx(loja, sugestao_itens, data_inicio, data_fim,
     ws.merge_cells('A2:I2')
 
     # Header tabela
-    headers = ['Item', 'PDV manual', 'VNDA', 'Seru', f'Total no período',
+    headers = ['Item', 'PDV manual', 'VNDA', 'Seru', 'Total no período',
                 'Média/dia', 'Estoque atual', 'Ideal cobertura', 'Pedir']
     for col_idx, h in enumerate(headers, start=1):
         c = ws.cell(row=4, column=col_idx, value=h)
@@ -406,7 +411,7 @@ def gerar_template_xlsx(loja):
     Retorna bytes (xlsx).
     """
     from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.styles import Alignment, Font, PatternFill
 
     wb = Workbook()
     ws = wb.active

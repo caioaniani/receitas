@@ -10,7 +10,7 @@ from datetime import date, timedelta
 def _criar_pedido_separado(catalogo, loja):
     """Helper: cria pedido com status=separado pronto pra handshake de saida."""
     from app.extensions import db
-    from app.models import PedidoLoja, PedidoItem, EstoqueProducao
+    from app.models import EstoqueProducao, PedidoItem, PedidoLoja
     p = PedidoLoja(loja_id=loja.id, status='separado',
                    data_entrega=date.today() + timedelta(days=1))
     db.session.add(p)
@@ -26,9 +26,9 @@ def _criar_pedido_separado(catalogo, loja):
 
 def test_executar_envio_pedido_baixa_industria(app, admin_user, loja, catalogo):
     """Direct call: status separado → em_transporte + baixa EstoqueProducao."""
+    from app.blueprints.pedidos.routes import _executar_envio_pedido
     from app.extensions import db
     from app.models import EstoqueProducao, MovEstoqueProducao
-    from app.blueprints.pedidos.routes import _executar_envio_pedido
     p = _criar_pedido_separado(catalogo, loja)
     ep = EstoqueProducao.query.filter_by(receita_id=catalogo['receita'].id).first()
     assert ep.quantidade == 20
@@ -45,9 +45,9 @@ def test_executar_envio_pedido_baixa_industria(app, admin_user, loja, catalogo):
 
 def test_executar_envio_pedido_rejeita_status_errado(app, admin_user, loja, catalogo):
     """Pedido pendente nao pode ser enviado."""
+    from app.blueprints.pedidos.routes import _executar_envio_pedido
     from app.extensions import db
     from app.models import PedidoLoja
-    from app.blueprints.pedidos.routes import _executar_envio_pedido
     p = PedidoLoja(loja_id=loja.id, status='pendente',
                    data_entrega=date.today())
     db.session.add(p)
@@ -59,9 +59,9 @@ def test_executar_envio_pedido_rejeita_status_errado(app, admin_user, loja, cata
 
 def test_executar_recebimento_pedido_sobe_loja(app, admin_user, loja, catalogo):
     """Recebimento sem divergencia sobe EstoqueLoja + status entregue."""
-    from app.extensions import db
-    from app.models import PedidoLoja, PedidoItem, EstoqueLoja
     from app.blueprints.pedidos.routes import _executar_recebimento_pedido
+    from app.extensions import db
+    from app.models import EstoqueLoja, PedidoItem, PedidoLoja
     p = PedidoLoja(loja_id=loja.id, status='em_transporte',
                    data_entrega=date.today())
     db.session.add(p)
@@ -95,7 +95,6 @@ def test_qrcode_helper_gera_data_url(app):
 
 def test_pedido_qrcode_validade(app, admin_user, loja, catalogo):
     """PedidoQRCode.valido = False quando expirado ou usado."""
-    from datetime import datetime
     from app.extensions import db
     from app.models import PedidoQRCode
     from app.utils import agora

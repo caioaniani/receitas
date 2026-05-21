@@ -25,7 +25,7 @@ def prever_demanda(loja_id, data_alvo, semanas_lookback=8):
     N domingos / segundas / etc (dependendo do dow do data_alvo).
     """
     from app.extensions import db
-    from app.models import MovEstoqueLoja, EstoqueLoja, Receita, Produto, MateriaPrima
+    from app.models import EstoqueLoja, MovEstoqueLoja
 
     if not loja_id:
         return []

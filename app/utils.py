@@ -1,5 +1,5 @@
 """Utilitários compartilhados."""
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 
 
 def parse_float_br(value, default=None):
@@ -41,7 +41,7 @@ def para_brt(dt):
     if dt is None:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt.astimezone(BRT).replace(tzinfo=None)
 
 
@@ -52,6 +52,7 @@ def resolver_loja_por_nome(nome, *, somente_ativas=False):
     varios services (copilot, etc).
     """
     from sqlalchemy import func
+
     from app.models import Loja
     nome = (nome or '').strip()
     if not nome:

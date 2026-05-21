@@ -1,7 +1,16 @@
 from datetime import date
 
 from app.extensions import db
-from app.models import MateriaPrima, Receita, ReceitaIngrediente, Produto, ProdutoItem, Loja, Funcionario, Posicao
+from app.models import (
+    Funcionario,
+    Loja,
+    MateriaPrima,
+    Posicao,
+    Produto,
+    ProdutoItem,
+    Receita,
+    ReceitaIngrediente,
+)
 
 
 def seed_database():
@@ -1284,7 +1293,8 @@ def seed_rh_escala():
 def seed_projetos():
     """Seed inicial de Areas / Projetos / Tarefas (PARA + 12 Week Year)."""
     from datetime import date as _date
-    from app.models import ProjetoArea, Projeto, TarefaProjeto
+
+    from app.models import Projeto, ProjetoArea, TarefaProjeto
 
     if ProjetoArea.query.first():
         return  # ja seeded

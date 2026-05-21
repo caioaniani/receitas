@@ -16,7 +16,7 @@ Este helper centraliza a logica que era duplicada em varios servicos:
 - pedidos/routes.py::_executar_recebimento_pedido (faltava)
 - pedidos/routes.py::_executar_envio_pedido (faltava)
 """
-from app.models import Receita, MateriaPrima
+from app.models import MateriaPrima, Receita
 
 
 def componentes_de_cesta(produto):

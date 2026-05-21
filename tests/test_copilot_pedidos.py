@@ -9,8 +9,8 @@ Regressoes cobertas:
 
 def test_criar_pedido_basico(app, admin_user, loja, catalogo):
     """End-to-end: enriquece + executa criar pedido com 1 item."""
+    from app.models import PedidoItem, PedidoLoja
     from app.services import copilot
-    from app.models import PedidoLoja, PedidoItem
 
     tool_input = {
         'loja_id': loja.id,
@@ -35,8 +35,8 @@ def test_criar_pedido_basico(app, admin_user, loja, catalogo):
 
 def test_criar_pedido_com_backup(app, admin_user, loja, catalogo):
     """Item com observacao='backup' eh persistido no PedidoItem."""
-    from app.services import copilot
     from app.models import PedidoItem
+    from app.services import copilot
 
     tool_input = {
         'loja_id': loja.id,

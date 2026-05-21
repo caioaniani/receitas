@@ -50,7 +50,7 @@ def verify_signing(headers, body):
         logger.warning('slack signing: timestamp fora da janela (replay)')
         return False
 
-    base = f'v0:{ts}:{body}'.encode('utf-8')
+    base = f'v0:{ts}:{body}'.encode()
     digest = hmac.new(secret.encode('utf-8'), base, hashlib.sha256).hexdigest()
     esperado = f'v0={digest}'
     return hmac.compare_digest(esperado, sig)

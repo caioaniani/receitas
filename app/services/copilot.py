@@ -12,7 +12,6 @@ Tools suportadas:
 
 Toda acao 'write' retorna preview pra aprovacao manual antes de executar.
 Acoes 'read' executam direto e retornam texto."""
-import json
 import logging
 import os
 import secrets
@@ -21,8 +20,8 @@ from datetime import date, datetime, timedelta
 from flask import current_app
 
 from app.extensions import db
+from app.models import Loja, MateriaPrima, Produto, Receita
 from app.utils import agora, hoje
-from app.models import Loja, Produto, Receita, MateriaPrima
 
 logger = logging.getLogger(__name__)
 
@@ -1015,9 +1014,10 @@ def _enriquecer_params(tool_name, tool_input, user):
 def _enriquecer_criar_venda_b2b(tool_input):
     """Resolve cliente (fuzzy match) + cada item + preco sugerido + saldo
     do freezer pro preview. Reusa _resolver_produto + preco_sugerido."""
+    from sqlalchemy import func
+
     from app.models import ClienteB2B, EstoqueProducao
     from app.services.vendas_b2b import preco_sugerido
-    from sqlalchemy import func
 
     out = dict(tool_input)
     nome_cli = (out.get('cliente_nome') or '').strip()
@@ -1329,7 +1329,7 @@ def _rapidfuzz_top(query, choices, score_cutoff=60, limit=5):
     choices = lista de strings (nomes).
     """
     try:
-        from rapidfuzz import process, fuzz
+        from rapidfuzz import fuzz, process
     except ImportError:
         return []
     if not query or not choices:
@@ -1404,8 +1404,8 @@ def _resolver_mp(nome):
 # ── Executores READ (sem aprovacao) ───────────────────────────────────
 
 def _read_consultar_pedido(params, user):
-    from app.models import PedidoLoja
     from app.constants import STATUS_PEDIDO_FINALIZADOS
+    from app.models import PedidoLoja
     q = PedidoLoja.query
     if params.get('pedido_id'):
         p = q.filter_by(id=params['pedido_id']).first()
@@ -1449,6 +1449,7 @@ def _read_consultar_pedido(params, user):
 def _formatar_pedidos_detalhe(pedidos):
     """Lista cada pedido com seus itens (sem agregar)."""
     from collections import defaultdict
+
     from app.constants import STATUS_PEDIDO_LABEL
     por_data = defaultdict(list)
     for p in pedidos:
@@ -1515,7 +1516,6 @@ def _formatar_pedidos_agregado(pedidos):
 
 
 def _formatar_pedido(p):
-    from app.models import PedidoItem
     linhas = [f'**Pedido #{p.id}** — {p.loja.nome}']
     linhas.append(f'Data: {p.data_entrega.strftime("%d/%m/%Y") if p.data_entrega else "—"}')
     linhas.append(f'Status: {p.status}')
@@ -1584,7 +1584,7 @@ def _consultar_estoque_todas_lojas(item_nome):
                if item_nome else 'Nenhuma loja com saldo positivo.')
         return {'texto': msg}
 
-    cabecalho = (f'**Estoque por loja' + (f' (filtro "{item_nome}")' if item_nome else '')
+    cabecalho = ('**Estoque por loja' + (f' (filtro "{item_nome}")' if item_nome else '')
                   + f' — total {total_geral} un:**')
     return {'texto': cabecalho + '\n\n' + '\n\n'.join(bloco)}
 
@@ -1713,8 +1713,9 @@ def _consultar_estoque_loja(loja_nome, item_nome, user):
 
 
 def _calcular_saldo_mp(mp_id):
-    from app.models import MovimentacaoEstoque
     from sqlalchemy import func as sqlfunc
+
+    from app.models import MovimentacaoEstoque
     entradas = db.session.query(sqlfunc.coalesce(sqlfunc.sum(MovimentacaoEstoque.quantidade), 0)) \
         .filter_by(materia_prima_id=mp_id, tipo='entrada').scalar() or 0
     saidas = db.session.query(sqlfunc.coalesce(sqlfunc.sum(MovimentacaoEstoque.quantidade), 0)) \
@@ -1725,7 +1726,7 @@ def _calcular_saldo_mp(mp_id):
 # ── Executores WRITE (aprovacao obrigatoria) ──────────────────────────
 
 def executar_criar_pedido(params, user):
-    from app.models import PedidoLoja, PedidoItem
+    from app.models import PedidoItem, PedidoLoja
     loja_id = params.get('loja_id')
     if not loja_id:
         return {'ok': False, 'erro': ('Loja nao especificada. Diga o nome '
@@ -1737,7 +1738,7 @@ def executar_criar_pedido(params, user):
     try:
         data_entrega = datetime.strptime(params.get('data_entrega'), '%Y-%m-%d').date()
     except (ValueError, TypeError):
-        return {'ok': False, 'erro': f'Data invalida'}
+        return {'ok': False, 'erro': 'Data invalida'}
     itens = params.get('itens') or []
     if not itens:
         return {'ok': False, 'erro': 'Pedido sem itens'}
@@ -1896,9 +1897,10 @@ def _read_consultar_funcionario(params, user):
 
 
 def _read_consultar_caixa(params, user):
-    from app.utils import hoje as _hoje
-    from app.models import PedidoLocal, AtribuicaoEntrega, MovimentacaoEstoque
     from sqlalchemy import func as sqlfunc
+
+    from app.models import AtribuicaoEntrega, MovimentacaoEstoque, PedidoLocal
+    from app.utils import hoje as _hoje
     data_str = params.get('data')
     try:
         d = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else _hoje()
@@ -1923,8 +1925,8 @@ def _read_consultar_caixa(params, user):
 
 def _read_consultar_vendas_itens(params, user):
     """Agrega itens vendidos da Seru no intervalo (e loja opcional)."""
-    from app.utils import hoje as _hoje_brt
     from app.services import vendas_itens
+    from app.utils import hoje as _hoje_brt
     hoje = _hoje_brt()
     try:
         ini = datetime.strptime(params['inicio'], '%Y-%m-%d').date() if params.get('inicio') else hoje
@@ -2002,9 +2004,15 @@ def _read_consultar_vendas_itens(params, user):
 # ───── Tools WRITE novas ───────────────────────────────────────────────
 
 def executar_mudar_status_pedido(params, user):
-    from app.models import (PedidoLoja, MateriaPrima, EstoqueProducao,
-                             MovEstoqueProducao, EstoqueLoja, MovEstoqueLoja,
-                             MovimentacaoEstoque)
+    from app.models import (
+        EstoqueLoja,
+        EstoqueProducao,
+        MateriaPrima,
+        MovEstoqueLoja,
+        MovEstoqueProducao,
+        MovimentacaoEstoque,
+        PedidoLoja,
+    )
     pid = params.get('pedido_id')
     novo = params.get('novo_status')
     p = PedidoLoja.query.get(pid)
@@ -2110,7 +2118,9 @@ def executar_mudar_status_pedido(params, user):
     if para == 'separado':
         try:
             from datetime import timedelta
+
             from flask import url_for
+
             from app.models import PedidoQRCode
             qr = PedidoQRCode(
                 token=secrets.token_urlsafe(24),
@@ -2161,7 +2171,7 @@ def executar_criar_fornecedor(params, user):
 
 
 def executar_marcar_ponto(params, user):
-    from app.models import Funcionario, RegistroPonto
+    from app.models import Funcionario
     nome = (params.get('funcionario_nome') or '').strip()
     tipo = params.get('tipo')
     if not nome or not tipo:
@@ -2191,7 +2201,7 @@ def executar_criar_tarefa(params, user):
     if not titulo:
         return {'ok': False, 'erro': 'Titulo obrigatorio'}
     try:
-        from app.models import TarefaProjeto, Projeto
+        from app.models import Projeto, TarefaProjeto
     except ImportError:
         return {'ok': False, 'erro': 'Modelo TarefaProjeto/Projeto nao existe'}
 
@@ -2224,7 +2234,7 @@ def executar_criar_tarefa(params, user):
 
 def _read_consultar_foco(params, user):
     """Lista projetos foco_12s + tarefas pendentes deles."""
-    from app.models import Projeto, TarefaProjeto
+    from app.models import Projeto
     projetos = (Projeto.query.filter_by(foco_12s=True)
                 .order_by(Projeto.prioridade.desc(), Projeto.nome).all())
     if not projetos:
@@ -2247,8 +2257,8 @@ def _read_consultar_foco(params, user):
 
 
 def _read_consultar_tarefas(params, user):
+
     from app.models import Projeto, TarefaProjeto
-    from sqlalchemy import and_
     q = TarefaProjeto.query.join(Projeto)
     if params.get('apenas_pendentes', True):
         q = q.filter(TarefaProjeto.status.notin_(['feito', 'cancelado']))
@@ -2414,8 +2424,8 @@ def executar_registrar_desperdicio_lote(params, user):
         # CESTA: se for produto-cesta, baixa componentes
         componentes_cesta = []
         if tipo_item == 'produto':
-            from app.services.cestas import componentes_de_cesta
             from app.models import Produto
+            from app.services.cestas import componentes_de_cesta
             produto_obj = Produto.query.get(item_id)
             componentes_cesta = componentes_de_cesta(produto_obj)
 
@@ -2525,7 +2535,7 @@ def executar_criar_cliente_b2b(params, user):
         return {'ok': True, 'cliente_id': existente.id, 'nome': existente.nome,
                 'duplicado': True,
                 'registro_tipo': 'cliente_b2b', 'registro_id': existente.id,
-                'url': f'/b2b/clientes'}
+                'url': '/b2b/clientes'}
     try:
         desc = float(params.get('desconto_percentual') or 0)
     except (TypeError, ValueError):
@@ -2544,7 +2554,7 @@ def executar_criar_cliente_b2b(params, user):
     db.session.commit()
     return {'ok': True, 'cliente_id': c.id, 'nome': c.nome,
             'registro_tipo': 'cliente_b2b', 'registro_id': c.id,
-            'url': f'/b2b/clientes'}
+            'url': '/b2b/clientes'}
 
 
 def executar_criar_venda_b2b(params, user):
@@ -2553,7 +2563,6 @@ def executar_criar_venda_b2b(params, user):
     Itens chegam ja resolvidos (ou re-resolve se vier sem). Sem fallback
     silencioso: item nao resolvido aborta com erro claro.
     """
-    from datetime import date
     from app.services import vendas_b2b as svc
 
     cliente_id = params.get('cliente_id')
@@ -2657,7 +2666,8 @@ def executar_anexar_foto_pedido(params, user):
     quando o usuario anexou imagens na msg que originou a acao.
     """
     import base64
-    from app.models import PedidoLoja, FotoRecebimento
+
+    from app.models import FotoRecebimento, PedidoLoja
 
     pid = params.get('pedido_id')
     p = PedidoLoja.query.get(pid)
@@ -2785,8 +2795,8 @@ def executar_registrar_desperdicio(params, user):
     # CESTA: se for produto-cesta, baixa componentes
     componentes_cesta = []
     if tipo_item == 'produto':
-        from app.services.cestas import componentes_de_cesta
         from app.models import Produto
+        from app.services.cestas import componentes_de_cesta
         produto_obj = Produto.query.get(item_id)
         componentes_cesta = componentes_de_cesta(produto_obj)
 
@@ -2944,8 +2954,8 @@ def _read_consultar_cliente_b2b(params, user):
 def _read_enviar_digest_whatsapp(params, user):
     """Envia WhatsApp pro ZAPI_NUMERO_DESTINO. Se texto_custom, manda esse;
     senao, monta o digest de tarefas."""
-    from app.services import zapi_resumos
     from app.services import zapi as zapi_svc
+    from app.services import zapi_resumos
 
     if not zapi_svc.disponivel():
         return {'texto': ':warning: Z-API nao configurado. Defina ZAPI_INSTANCE_ID + ZAPI_TOKEN no Railway.'}

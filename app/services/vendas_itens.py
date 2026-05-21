@@ -10,10 +10,9 @@ Para cada produto vendido num intervalo, calcula:
 Filtros: intervalo de datas BRT e (opcional) nome da loja Seru
 (o campo 'company.name' do pedido — que e o que a Seru chama de loja).
 """
-import re
 import unicodedata
 
-from app.models import Receita, Produto, SeruProdutoMap
+from app.models import Produto, Receita, SeruProdutoMap
 from app.services import seru
 
 

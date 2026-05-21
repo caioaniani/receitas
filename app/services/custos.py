@@ -2,7 +2,7 @@
 
 from sqlalchemy.orm import selectinload
 
-from app.models import Receita, MateriaPrima, Produto
+from app.models import MateriaPrima, Receita
 
 MAX_PASSES = 5  # máximo de passadas para resolver sub-receitas
 
