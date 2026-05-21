@@ -233,19 +233,34 @@ def cancelar_venda(venda, user=None):
 
 
 def receber_pagamento(parcela, valor, forma_pagamento=None, observacao=None):
-    """Soma valor ao valor_pago da parcela. Marca pago_em se quitar."""
+    """Soma valor ao valor_pago da parcela. Marca pago_em se quitar.
+
+    Usa Decimal pra calculo + tolerancia na comparacao de quitacao.
+    Sem isso, 3 parcelas de R$ 33,33 cobrindo R$ 100,00 deixavam a
+    ultima sem quitar (0.999... < 1.000 em float).
+    """
+    from decimal import Decimal, InvalidOperation
     try:
-        v = float(valor)
-    except (TypeError, ValueError):
+        v = Decimal(str(valor))
+    except (TypeError, ValueError, InvalidOperation):
         raise ValueError('valor invalido')
     if v <= 0:
         raise ValueError('valor deve ser > 0')
-    parcela.valor_pago = (parcela.valor_pago or 0) + v
+
+    pago_atual = Decimal(str(parcela.valor_pago or 0))
+    pago_novo = pago_atual + v
+    # Arredonda em 2 casas pra salvar como Float sem propagar imprecisao
+    parcela.valor_pago = float(round(pago_novo, 2))
+
     if forma_pagamento:
         parcela.forma_pagamento = forma_pagamento
     if observacao:
         parcela.observacao = observacao
-    if parcela.valor_pago >= parcela.valor:
+
+    # Tolerancia: meio centavo abaixo do valor ja conta como quitado.
+    # Cobre erros de arredondamento em divisao (R$100 / 3 = R$33.33).
+    alvo = Decimal(str(parcela.valor or 0)) - Decimal('0.005')
+    if pago_novo >= alvo:
         parcela.pago_em = agora()
     db.session.commit()
     return parcela
