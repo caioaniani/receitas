@@ -36,6 +36,7 @@ known-first-party = ["app", "config"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::sqlalchemy.exc.LegacyAPIWarning",
