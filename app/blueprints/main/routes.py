@@ -542,8 +542,6 @@ def caixa():
     """Dashboard de caixa diario: agrega dados LOCAIS do banco.
     Vendas PDV (Seru) NAO entram aqui pra evitar chamadas externas
     lentas — use /pdv pra esse detalhe."""
-    from datetime import timedelta
-
     from sqlalchemy import func as sqlfunc
 
     data_str = request.args.get('data', hoje_brt().isoformat())
