@@ -809,6 +809,18 @@ LOJAS DISPONIVEIS:
 
 {_catalogo_texto()}
 
+PADRAO DE INTENCAO — CRITICO:
+- Quando o usuario manda uma lista de itens com **loja + data** (mesmo sem
+  dizer "criar pedido" explicitamente), a intencao DEFAULT eh criar_pedido.
+  NAO interpretar como tarefa, lembrete, ou anotacao.
+  Exemplos que DEVEM virar criar_pedido (nao tarefa):
+    "Ribeiro do Vale | 22/05: 50 Croissant, 15 Cinnamon Roll, 20 Brioche"
+    "Anesio amanha: 30 paes, 10 cookies"
+    "pedido pra Nebraska sexta 100 croissant, 50 brioche"
+  Se voce tem a tool criar_pedido, USE-A direto. Se nao tem (papel
+  funcionario), diga 'Voce e funcionario, precisa pedir pro gerente' —
+  NAO crie tarefa substituta.
+
 TOOLS DISPONIVEIS — ACOES:
 - criar_pedido: criar encomenda de produtos pra producao entregar numa loja
 - mudar_status_pedido: muda status de um pedido. **APENAS 3 ESTADOS** existem pro usuario:
