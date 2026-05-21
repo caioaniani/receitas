@@ -20,9 +20,15 @@ class PedidoLoja(db.Model):
     observacao = db.Column(db.Text)
     criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
     criado_em = db.Column(db.DateTime, default=agora)
+    # Motorista que pegou esse pedido na industria (handshake de saida).
+    # Painel /driver/<token> filtra por isso pra cada motorista so ver os
+    # pedidos que ele coletou.
+    driver_id = db.Column(db.Integer, db.ForeignKey('driver_entrega.id'),
+                           nullable=True, index=True)
 
     loja = db.relationship('Loja', backref='pedidos')
     criador = db.relationship('Usuario')
+    driver = db.relationship('Driver', foreign_keys=[driver_id])
     itens = db.relationship('PedidoItem', backref='pedido', cascade='all, delete-orphan')
     qrcodes = db.relationship('PedidoQRCode', back_populates='pedido', cascade='all, delete-orphan')
 
