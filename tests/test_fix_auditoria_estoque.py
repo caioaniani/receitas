@@ -117,7 +117,9 @@ def test_b2_cancelar_b2b_de_cesta_restaura_componentes(app, admin_user, catalogo
     db.session.flush()
     db.session.add(ProdutoItem(
         produto_id=cesta.id, tipo='receita',
-        item_nome=catalogo['receita'].nome, quantidade=2,
+        item_nome=catalogo['receita'].nome,
+        receita_id=catalogo['receita'].id,  # FK vinculada (pos-B5)
+        quantidade=2,
     ))
     # Estoque do componente (receita)
     ep = EstoqueProducao(receita_id=catalogo['receita'].id, quantidade=20)
