@@ -17,20 +17,14 @@ Detectores:
 """
 import logging
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 from flask import current_app
 
-from app.utils import agora, hoje as hoje_brt
+from app.constants import STATUS_PEDIDO_FINALIZADOS, VENDA_TIPOS_LOJA
+from app.utils import hoje as hoje_brt
 
 logger = logging.getLogger(__name__)
-
-
-VENDA_TIPOS = ('venda_seru', 'venda_seru_sem_estoque',
-               'venda_vnda', 'venda_vnda_sem_estoque',
-               'venda_b2b', 'venda_b2b_sem_estoque')
-
-STATUS_TERMINAIS = ('entregue', 'recebido', 'cancelado')
 
 # Thresholds
 DESVIO_LOJA_PCT = 0.30
