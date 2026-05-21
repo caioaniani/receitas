@@ -677,10 +677,21 @@ def tools_permitidas(user):
     return [t for t in TOOLS if pode_usar(t['name'], user)]
 
 
+# Cache do catalogo (5 queries) — TTL curto pra absorver picos de uso do
+# copilot sem refazer queries a cada chamada. 60s eh suficiente: o catalogo
+# raramente muda, e novo produto/receita aparece pro copilot em ate 1 min.
+_CATALOGO_CACHE = {'texto': None, 'expira_em': 0.0}
+_CATALOGO_TTL = 60  # segundos
+
+
 def _catalogo_texto():
     """Lista produtos + receitas + MPs + fornecedores + funcionarios
-    formatados pra contexto do LLM. Crescera com o sistema; cache de
-    prompt da Anthropic mantem custo baixo."""
+    formatados pra contexto do LLM. Cacheado por _CATALOGO_TTL segundos."""
+    import time
+    now = time.time()
+    if _CATALOGO_CACHE['texto'] and _CATALOGO_CACHE['expira_em'] > now:
+        return _CATALOGO_CACHE['texto']
+
     from app.models import Fornecedor, Funcionario
     linhas = ["PRODUTOS (use o nome exato):"]
     for p in Produto.query.order_by(Produto.nome).all():
@@ -696,20 +707,34 @@ def _catalogo_texto():
         linhas.append(f"  - {m.nome} ({unidade})")
     linhas.append("")
     linhas.append("FORNECEDORES ATIVOS:")
-    for f in Fornecedor.query.filter_by(ativo=True).order_by(Fornecedor.nome).all():
-        linhas.append(f"  - {f.nome}")
-    if not Fornecedor.query.filter_by(ativo=True).first():
+    fornecedores = Fornecedor.query.filter_by(ativo=True).order_by(Fornecedor.nome).all()
+    if fornecedores:
+        for f in fornecedores:
+            linhas.append(f"  - {f.nome}")
+    else:
         linhas.append("  (nenhum cadastrado)")
     linhas.append("")
     linhas.append("FUNCIONARIOS ATIVOS:")
     funcs = (Funcionario.query.filter_by(ativo=True)
              .order_by(Funcionario.nome).limit(80).all())
-    for f in funcs:
-        funcao = f.funcao or f.funcao_operacional or '?'
-        linhas.append(f"  - {f.nome} ({funcao})")
-    if not funcs:
+    if funcs:
+        for f in funcs:
+            funcao = f.funcao or f.funcao_operacional or '?'
+            linhas.append(f"  - {f.nome} ({funcao})")
+    else:
         linhas.append("  (nenhum cadastrado)")
-    return "\n".join(linhas)
+
+    texto = "\n".join(linhas)
+    _CATALOGO_CACHE['texto'] = texto
+    _CATALOGO_CACHE['expira_em'] = now + _CATALOGO_TTL
+    return texto
+
+
+def invalidar_catalogo_cache():
+    """Invalida cache do catalogo. Chamar quando produto/receita/MP/fornecedor
+    /funcionario for criado/editado/desativado."""
+    _CATALOGO_CACHE['texto'] = None
+    _CATALOGO_CACHE['expira_em'] = 0.0
 
 
 def _lojas_texto(user):
