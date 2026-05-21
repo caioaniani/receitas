@@ -202,6 +202,22 @@
                   placeholder="Descreva o passo a passo do preparo...">{{ produto.modo_preparo or '' }}</textarea>
     </div>
 
+    <!-- Reaproveitavel -->
+    <div class="mb-4">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="reaproveitavel" id="reaproveitavel-produto"
+                   value="1" {% if produto.reaproveitavel %}checked{% endif %}>
+            <label class="form-check-label" for="reaproveitavel-produto">
+                <strong>Reaproveitavel quando vence / nao vende</strong>
+                <div class="text-muted small">
+                    Marca quando esse produto vencido ou nao vendido <strong>vira outra coisa</strong>
+                    em vez de ir pro lixo. Ex: sourdough tradicional vira chapa.
+                    Desperdicio registrado com motivo "validade" ou "nao_vendeu" NAO baixa do estoque.
+                </div>
+            </label>
+        </div>
+    </div>
+
     <!-- Observações / Pendências -->
     <div class="mb-4">
         <label class="form-label fw-bold"><i class="bi bi-exclamation-triangle text-warning"></i> Observações / Pendências</label>
