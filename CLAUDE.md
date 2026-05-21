@@ -234,7 +234,10 @@ Desligar: env `SERU_AUTO_SYNC=0` (default `1`).
 
 ## Copilot
 
-`app/services/copilot.py` orquestra tools com Claude Haiku 4.5 (Anthropic API).
+`app/services/copilot.py` orquestra tools com Claude Sonnet 4.6 (Anthropic API).
+Prompt caching ativo: `system` + ultima tool com `cache_control: ephemeral`
+(cache breakpoint cobre ~95% dos tokens de input — custo cai ~90% apos o
+primeiro request da janela de 5min).
 Tools: criar_pedido, receber_mp, ajuste_estoque, mudar_status_pedido, criar_fornecedor,
 marcar_ponto, criar_tarefa, marcar_tarefa_feita, balanco_congelados, entrada_lote_loja,
 registrar_desperdicio,
