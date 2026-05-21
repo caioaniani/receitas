@@ -188,31 +188,6 @@
             </div>
         </div>
 
-        <!-- Zona 4: Fermentar pra amanha (so 17h-22h) -->
-        {% if mostrar_fermentar %}
-        <div class="col-12">
-            <div class="zona-titulo" style="background:#6f42c1;">
-                <h2><i class="bi bi-snow2"></i> Tirar pra fermentar — pra entrega AMANHA ({{ amanha.strftime('%d/%m') }})</h2>
-                <span class="badge bg-light text-dark badge-grande">{{ fermentar|length if fermentar else 0 }}</span>
-            </div>
-            <div class="zona-corpo">
-                {% if not fermentar %}
-                <p class="zona-vazio mb-0">Nenhum pedido pra amanha ainda.</p>
-                {% else %}
-                <div class="row g-2">
-                    {% for f in fermentar %}
-                    <div class="col-md-4">
-                        <div class="alerta-card" style="background:#e7d5ff;border-color:#6f42c1;color:#000;">
-                            <div style="font-size:1.4rem;font-weight:700;">{{ f.qtd }}</div>
-                            <div>{{ f.nome }}</div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
     </div>
 </div>
 
