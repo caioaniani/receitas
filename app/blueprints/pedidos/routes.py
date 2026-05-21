@@ -428,6 +428,40 @@ def _executar_envio_pedido(pedido, user, ref_extra=None):
     return True, 'Pedido em transporte. Estoque da industria baixado.'
 
 
+@pedidos_bp.route('/<int:id>/atribuir-motorista', methods=['POST'])
+@login_required
+@operacional_pedido_required
+def atribuir_motorista(id):
+    """Define qual motorista vai pegar o pedido. Obrigatorio antes do QR.
+
+    Quando atribuido, dispara envio WhatsApp pro motorista com magic link
+    do dia (cria se nao existir) + descricao do pedido."""
+    from app.models import Driver
+    pedido = PedidoLoja.query.get_or_404(id)
+    drv_id = request.form.get('driver_id', type=int)
+    if not drv_id:
+        flash('Selecione um motorista.', 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
+    drv = Driver.query.get(drv_id)
+    if not drv or not drv.ativo:
+        flash('Motorista inativo ou inexistente.', 'danger')
+        return redirect(url_for('pedidos.detalhe', id=id))
+    pedido.driver_id = drv.id
+    db.session.commit()
+    flash(f'Motorista {drv.nome} atribuido ao pedido #{pedido.id}.', 'success')
+    # Envia WhatsApp on-demand
+    try:
+        from app.services import driver_magic
+        ok, msg, _ = driver_magic.notificar_pedido(drv, pedido)
+        if ok:
+            flash(f'WhatsApp enviado pra {drv.nome}.', 'info')
+        else:
+            flash(f'Atribuicao OK mas WhatsApp falhou: {msg}', 'warning')
+    except Exception as exc:  # noqa: BLE001
+        flash(f'WhatsApp erro: {exc}', 'warning')
+    return redirect(url_for('pedidos.detalhe', id=id))
+
+
 @pedidos_bp.route('/<int:id>/qr-saida')
 @login_required
 @operacional_pedido_required
@@ -435,7 +469,11 @@ def qr_saida(id):
     """QR de saida pra industria mostrar pro motorista.
 
     Producao so exibe o QR. Conferencia com foto eh feita pelo motorista
-    na pagina do handshake apos escanear (ver handshake.routes)."""
+    na pagina do handshake apos escanear (ver handshake.routes).
+
+    Exige motorista atribuido em `pedido.driver_id` — sem isso, redireciona
+    pra ficha do pedido. Handshake da saida tambem so aceita o PIN desse
+    motorista especifico (nenhum outro pode escanear)."""
     import secrets
     from datetime import timedelta
 
