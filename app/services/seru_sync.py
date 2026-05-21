@@ -242,11 +242,27 @@ def _baixar_item(loja_id, mapping_produto, qtd, seru_pedido_id, user_id):
 
 
 def _estornar_pedido(reg, lojas_ativas, user_id):
-    """Reverte baixas de um pedido cancelado. Lojas/mapeamento ja conhecidos."""
+    """Reverte baixas de um pedido cancelado. Lojas/mapeamento ja conhecidos.
+
+    Usa `LIKE 'Seru #{id}%'` pra cobrir as 4 variacoes de referencia
+    geradas em `_baixar_item`:
+      - 'Seru #123'                         (item simples, fator=1)
+      - 'Seru #123 (fator 0.2)'             (com fator < 1)
+      - 'Seru #123 [Cesta → cesta] X'       (componente de cesta)
+      - 'Seru #123 ... — sem estoque ...'   (qualquer das acima sem saldo)
+
+    Versao antiga usava `==` exato, deixando estorno em branco em todos
+    os casos exceto o simples.
+    """
     movs = MovEstoqueLoja.query.filter(
         MovEstoqueLoja.tipo == 'venda_seru',
-        MovEstoqueLoja.referencia == f'Seru #{reg.seru_pedido_id}',
+        MovEstoqueLoja.referencia.like(f'Seru #{reg.seru_pedido_id}%'),
     ).all()
+    if not movs:
+        # Nenhuma mov real pra reverter (pedido foi tudo `venda_seru_sem_estoque`
+        # ou nunca chegou a baixar). Nao marca estornado_em mentindo —
+        # deixa None pra distinguir de "estornado mas sem efeito".
+        return
     for m in movs:
         el = EstoqueLoja.query.get(m.estoque_loja_id)
         if el:
