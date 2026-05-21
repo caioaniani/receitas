@@ -141,6 +141,9 @@ def alterar_papel(id):
 @admin_required
 def alterar_loja(id):
     u = Usuario.query.get_or_404(id)
+    if u.is_owner and not current_user.is_owner:
+        flash('So o owner pode mexer no owner.', 'danger')
+        return redirect(url_for('auth.usuarios'))
     raw = (request.form.get('loja_id') or '').strip()
     if raw == '':
         u.loja_id = None
