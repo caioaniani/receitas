@@ -420,7 +420,7 @@
     </div>
 
     <!-- MP data para JavaScript -->
-    <script>const MP_DATA = {{ mp_dict | tojson }};</script>
+    <script>const MP_DATA = {{ mp_info | tojson }};</script>
     <script>const CSRF_TOKEN = "{{ csrf_token() }}";</script>
     {% if current_user.is_authenticated %}
     <script>const RECEITA_NOMES = {{ receita_nomes|tojson }};</script>
