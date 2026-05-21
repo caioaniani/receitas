@@ -2273,7 +2273,8 @@ def _read_consultar_tarefas(params, user):
     if params.get('apenas_pendentes', True):
         q = q.filter(TarefaProjeto.status.notin_(['feito', 'cancelado']))
     if params.get('apenas_atrasadas'):
-        q = q.filter(TarefaProjeto.prazo.isnot(None), TarefaProjeto.prazo < date.today())
+        from app.utils import hoje as _hoje_brt
+        q = q.filter(TarefaProjeto.prazo.isnot(None), TarefaProjeto.prazo < _hoje_brt())
     if params.get('apenas_foco'):
         q = q.filter(Projeto.foco_12s == True)
     proj_nome = (params.get('projeto_nome') or '').strip()
