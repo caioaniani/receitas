@@ -564,10 +564,17 @@ body {
         font-size: 1rem;
     }
 
-    /* Tabelas: scroll horizontal */
+    /* Tabelas: scroll horizontal global em mobile.
+       max-content faz a table crescer alem do container; o .table-responsive
+       captura o overflow e gera scroll-x. Sem isso, Bootstrap forca table
+       a 100% do container e espreme tudo (texto fica ilegivel ou quebra). */
     .table-responsive {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
+    }
+    .table-responsive > .table,
+    .table-responsive > table {
+        min-width: max-content;
     }
 
     .tabela-ficha,
