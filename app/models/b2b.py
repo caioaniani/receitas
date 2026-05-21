@@ -67,11 +67,16 @@ class VendaB2B(db.Model):
 
     @property
     def valor_pago(self):
-        return sum(p.valor_pago or 0 for p in self.parcelas)
+        from decimal import Decimal
+        total = Decimal('0')
+        for p in self.parcelas:
+            total += Decimal(p.valor_pago or 0)
+        return total
 
     @property
     def valor_aberto(self):
-        return (self.valor_total or 0) - (self.valor_pago or 0)
+        from decimal import Decimal
+        return Decimal(self.valor_total or 0) - self.valor_pago
 
 class VendaB2BItem(db.Model):
     __tablename__ = 'venda_b2b_item'
