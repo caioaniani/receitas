@@ -14,8 +14,11 @@ import pytest
 
 @pytest.fixture
 def app():
-    os.environ['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    # DATABASE_URL eh o que config.py le (nao SQLALCHEMY_DATABASE_URI).
+    # PYTEST_RUNNING avisa o app pra pular o auto-upgrade do Alembic.
+    os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
     os.environ['SECRET_KEY'] = 'test-secret'
+    os.environ['PYTEST_RUNNING'] = '1'
     from app import create_app
     from app.extensions import db
     app = create_app()
