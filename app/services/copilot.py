@@ -2195,25 +2195,6 @@ def executar_criar_tarefa(params, user):
             'registro_tipo': 'tarefa_projeto', 'registro_id': t.id}
 
 
-# Roteador write estendido
-def executar(tipo_acao, params, user):  # noqa: F811
-    if tipo_acao == 'criar_pedido':
-        return executar_criar_pedido(params, user)
-    if tipo_acao == 'receber_mp':
-        return executar_receber_mp(params, user)
-    if tipo_acao == 'ajuste_estoque':
-        return executar_ajuste_estoque(params, user)
-    if tipo_acao == 'mudar_status_pedido':
-        return executar_mudar_status_pedido(params, user)
-    if tipo_acao == 'criar_fornecedor':
-        return executar_criar_fornecedor(params, user)
-    if tipo_acao == 'marcar_ponto':
-        return executar_marcar_ponto(params, user)
-    if tipo_acao == 'criar_tarefa':
-        return executar_criar_tarefa(params, user)
-    return {'ok': False, 'erro': f'tipo de acao desconhecido: {tipo_acao}'}
-
-
 # ───── Tools de Planejamento — READ ────────────────────────────────────
 
 def _read_consultar_foco(params, user):
