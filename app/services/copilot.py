@@ -1699,17 +1699,6 @@ def _calcular_saldo_mp(mp_id):
 
 # ── Executores WRITE (aprovacao obrigatoria) ──────────────────────────
 
-def executar(tipo_acao, params, user):
-    """Roteador dos executores write. Chamado apos aprovacao no preview."""
-    if tipo_acao == 'criar_pedido':
-        return executar_criar_pedido(params, user)
-    if tipo_acao == 'receber_mp':
-        return executar_receber_mp(params, user)
-    if tipo_acao == 'ajuste_estoque':
-        return executar_ajuste_estoque(params, user)
-    return {'ok': False, 'erro': f'tipo de acao desconhecido: {tipo_acao}'}
-
-
 def executar_criar_pedido(params, user):
     from app.models import PedidoLoja, PedidoItem
     loja_id = params.get('loja_id')
