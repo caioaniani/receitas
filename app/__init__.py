@@ -370,16 +370,29 @@ def create_app(config_class=None):
 
 
 def _criar_admin():
-    """Cria usuário admin padrão se não existir nenhum."""
+    """Cria usuário admin padrão se não existir nenhum.
+
+    Se ADMIN_PASSWORD nao estiver no env, gera senha aleatoria e a
+    imprime no log uma unica vez (no primeiro start). Anote no momento —
+    nao ha como recuperar depois sem reset manual.
+    """
     from app.models import Usuario
     if not Usuario.query.filter_by(papel='admin').first():
-        senha = os.environ.get('ADMIN_PASSWORD', 'admin')
+        senha_env = os.environ.get('ADMIN_PASSWORD')
+        if senha_env:
+            senha = senha_env
+        else:
+            import secrets as _secrets
+            senha = _secrets.token_urlsafe(16)
+            logger.warning('=' * 60)
+            logger.warning('ADMIN criado com senha aleatoria: %s', senha)
+            logger.warning('ANOTE AGORA — nao sera mostrada de novo.')
+            logger.warning('Pra controlar, defina ADMIN_PASSWORD no env antes do 1o start.')
+            logger.warning('=' * 60)
         admin = Usuario(nome='Admin', login='admin', papel='admin', is_owner=True)
         admin.set_senha(senha)
         db.session.add(admin)
         db.session.commit()
-        if senha == 'admin':
-            print('⚠️  Admin criado com senha padrão. Defina ADMIN_PASSWORD no Railway.')
 
 
 def _migrate(app):
