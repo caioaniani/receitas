@@ -399,8 +399,8 @@ def excluir_loja(id):
 @login_required
 @owner_required
 def folha():
-    mes = request.args.get('mes', type=int, default=datetime.now().month)
-    ano = request.args.get('ano', type=int, default=datetime.now().year)
+    mes = request.args.get('mes', type=int, default=agora().month)
+    ano = request.args.get('ano', type=int, default=agora().year)
 
     folhas = FolhaPagamento.query.filter_by(mes=mes, ano=ano).all()
     funcionarios_ativos = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
