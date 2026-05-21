@@ -403,7 +403,6 @@ def test_b9_estorno_fracao_sem_inteiro_baixado(app, admin_user, loja, catalogo):
 
     mapping = SeruProdutoMap(
         seru_nome='NOZES COM MANTEIGA',
-        estado='mapeado',
         receita_id=catalogo['receita'].id,
         fator_quantidade=0.2,
     )
