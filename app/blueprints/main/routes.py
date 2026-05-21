@@ -12,6 +12,7 @@ from app.models import (MateriaPrima, Receita, ReceitaIngrediente, Produto, Prod
                         AuditLog, Usuario, PedidoLoja, PedidoLocal, AtribuicaoEntrega,
                         MovimentacaoEstoque, Driver, Loja, Fornecedor, HistoricoPrecoMP)
 from app.services.custos import calcular_custos_receitas, calcular_rendimento
+from app.utils import hoje as hoje_brt
 
 
 @main_bp.route('/')
