@@ -217,6 +217,19 @@ def create_app(config_class=None):
             except Exception:  # noqa: BLE001
                 logger.debug('inject_sidebar: falha ao contar projetos', exc_info=True)
 
+        # ── Cestas orfas (cache 60s, admin+owner) ──
+        # Sinal critico: ProdutoItem com FK NULL nao baixa estoque na venda
+        # da cesta. Banner global em base.html consome este contador.
+        cestas_orfaos_count = 0
+        if current_user.is_admin():
+            try:
+                def _carrega_cestas_orfaos():
+                    from app.services.cestas import contar_produto_itens_orfaos
+                    return contar_produto_itens_orfaos()
+                cestas_orfaos_count = _cache('cestas_orfaos', 60, _carrega_cestas_orfaos)
+            except Exception:  # noqa: BLE001
+                logger.debug('inject_sidebar: falha ao contar cestas orfas', exc_info=True)
+
         return dict(
             sidebar_categorias=categorias,
             mp_info=mp_data['info'],
@@ -225,6 +238,7 @@ def create_app(config_class=None):
             funcionarios=funcionarios,
             proj_atrasadas=proj_atrasadas,
             proj_fazendo=proj_fazendo,
+            cestas_orfaos_count=cestas_orfaos_count,
         )
 
     @app.route('/robots.txt')
