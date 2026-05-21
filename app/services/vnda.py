@@ -382,6 +382,12 @@ class VndaUnavailableError(Exception):
 def _buscar_pedidos_janela(start_date, end_date):
     """Busca todos os pedidos numa janela de datas (com paginacao).
     Levanta VndaUnavailableError se a 1a pagina falhar (rede/timeout)."""
+    # Valida token antes — sem token, mensagem clara em vez de 401 opaco.
+    if not current_app.config.get('VNDA_API_TOKEN'):
+        raise VndaUnavailableError(
+            'VNDA_API_TOKEN nao configurado no ambiente. '
+            'Defina em Settings → Variables no Railway.'
+        )
     todos = []
     page = 1
     per_page = 100
@@ -392,13 +398,30 @@ def _buscar_pedidos_janela(start_date, end_date):
             'start': start_date.isoformat(),
             'finish': end_date.isoformat(),
         }
-        resp = _get('/orders', params=params)
-        if not resp:
-            if page == 1:
-                # Falha na 1a pagina = VNDA fora do ar. Propaga em vez de
-                # retornar lista vazia silenciosamente.
-                raise VndaUnavailableError('Falha ao consultar Vnda /orders')
-            break
+        if page == 1:
+            # Primeira pagina: levanta exception especifica (status code,
+            # corpo da resposta) em vez de mascarar como None. Paginas
+            # seguintes: tolerantes (vide _get abaixo).
+            try:
+                resp = _get_strict('/orders', params=params)
+            except requests.HTTPError as e:
+                status = getattr(e.response, 'status_code', '?')
+                body = ''
+                try:
+                    body = (e.response.text or '')[:200]
+                except Exception:  # noqa: BLE001
+                    pass
+                raise VndaUnavailableError(
+                    f'HTTP {status} em /orders. Resposta: {body}'
+                ) from e
+            except requests.RequestException as e:
+                raise VndaUnavailableError(
+                    f'{type(e).__name__}: {e}'
+                ) from e
+        else:
+            resp = _get('/orders', params=params)
+            if not resp:
+                break
         try:
             data = resp.json()
         except ValueError:
