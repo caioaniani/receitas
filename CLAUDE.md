@@ -65,6 +65,26 @@ Claude. Comandos shell que escrevem direto (ex: `ruff --fix`, `flask db init`,
 ou um pip install que cria arquivos) precisam de `git add` + commit manual.
 O Stop hook global avisa quando isso acontece (saida nao commitada).
 
+## CI / GitHub Actions
+
+`.github/workflows/ci.yml` roda `ruff check` + `pytest` em cada push.
+Tres armadilhas que ja me pegaram:
+
+1. **`python -m pytest`, nao `pytest` direto**. `pytest` puro nao adiciona
+   o cwd ao `sys.path` — o CI da `ModuleNotFoundError: No module named 'app'`.
+   `python -m pytest` adiciona. Localmente sempre rodei via `python -m`,
+   entao escapou na primeira validacao.
+
+2. **Rodar `ruff check app/ tests/` antes de cada push grande**. O `--fix`
+   so passa uma vez; se eu modifico arquivo via Edit depois, posso
+   introduzir novo problema. Antes de fechar uma rodada de mudancas,
+   rodar `ruff check` mesmo se "tudo parece OK".
+
+3. **Validar workflow novo localmente com a mesma sequencia exata**.
+   Quando adicionei o CI, nao tinha rodado `pytest` direto (sem `python -m`)
+   no shell — passou na minha cabeca, falhou no GitHub. Pra workflow novo,
+   reproduzir cada step do YAML em sequencia antes de subir.
+
 ## Stack
 
 Flask 3 + SQLAlchemy + Bootstrap 5 + Postgres em prod / SQLite local.
