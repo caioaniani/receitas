@@ -158,7 +158,7 @@ def _handshake_saida(qr, pedido, pin):
     return render_template('handshake/sucesso.html',
                             msg=f'Saida confirmada por {driver_match.nome}.',
                             pedido=pedido,
-                            proximo_label='Quando chegar na loja, gerar QR de entrega',
+                            proximo_label='Conferir e entregar na loja',
                             proximo_url=proximo_url)
 
 
