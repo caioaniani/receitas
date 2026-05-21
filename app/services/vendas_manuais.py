@@ -118,6 +118,7 @@ def _agregar_vendas_vnda_api(data_inicio, data_fim, _loja_id=None):
             # de cada componente dentro do produto.
             componentes = _componentes_de_cesta(mp.produto) if mp.produto_id else []
             if componentes:
+                n_processados += 1
                 for tipo_c, item_id_c, _, qtd_no_item in componentes:
                     if not item_id_c:
                         continue
