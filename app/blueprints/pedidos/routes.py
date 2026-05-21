@@ -231,11 +231,14 @@ def novo():
 @login_required
 @gerente_required
 def detalhe(id):
+    from app.models import Driver
     pedido = PedidoLoja.query.get_or_404(id)
     loja_id = _loja_do_usuario()
     if loja_id and pedido.loja_id != loja_id:
         abort(403)
-    return render_template('pedidos/detalhe.html', pedido=pedido)
+    drivers = Driver.query.filter_by(ativo=True).order_by(Driver.nome).all()
+    return render_template('pedidos/detalhe.html', pedido=pedido,
+                            drivers=drivers)
 
 
 @pedidos_bp.route('/<int:id>/confirmar', methods=['POST'])
