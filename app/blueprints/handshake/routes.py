@@ -69,6 +69,63 @@ def qr_img(token):
                       max_age=0)
 
 
+def _qr_ativo(token, etapa_esperada=None):
+    """Resolve token + valida (existe, nao expirou, nao usado, etapa bate).
+    Retorna (qr, pedido, erro_msg). Em erro, qr/pedido=None."""
+    qr = PedidoQRCode.query.filter_by(token=token).first()
+    if not qr:
+        return None, None, 'Token nao encontrado.'
+    if not qr.valido:
+        motivo = 'expirado' if qr.expira_em <= agora() else 'ja usado'
+        return None, None, f'QR Code esta {motivo}.'
+    if etapa_esperada and qr.tipo != etapa_esperada:
+        return None, None, f'QR de tipo {qr.tipo}, esperava {etapa_esperada}.'
+    return qr, qr.pedido, None
+
+
+@handshake_bp.route('/<token>/foto/<int:item_id>', methods=['POST'])
+def upload_foto(token, item_id):
+    """Upload de foto de conferencia por SKU, autenticado por QR token.
+
+    Quem usa:
+    - SAIDA: motorista (apos escanear QR de saida).
+    - ENTREGA: loja (apos escanear QR de entrega).
+
+    Substitui foto anterior do mesmo item+etapa se existir."""
+    from app.models import PedidoItem
+    from app.services.conferencia import salvar_foto
+    qr, pedido, erro = _qr_ativo(token)
+    if erro:
+        return {'ok': False, 'erro': erro}, 400
+    item = PedidoItem.query.get_or_404(item_id)
+    if item.pedido_id != pedido.id:
+        return {'ok': False, 'erro': 'item nao pertence ao pedido'}, 400
+    file = request.files.get('foto')
+    if not file:
+        return {'ok': False, 'erro': 'campo foto ausente'}, 400
+    foto, erro_salvar = salvar_foto(item.id, qr.tipo, file)
+    if erro_salvar:
+        return {'ok': False, 'erro': erro_salvar}, 400
+    return {'ok': True, 'foto_id': foto.id,
+            'url': url_for('handshake.foto_serve',
+                            token=token, foto_id=foto.id)}
+
+
+@handshake_bp.route('/<token>/foto/<int:foto_id>.jpg')
+def foto_serve(token, foto_id):
+    """Serve a imagem associada a um QR token ativo."""
+    from app.models import PedidoItemFoto
+    qr, pedido, erro = _qr_ativo(token)
+    if erro:
+        abort(404)
+    foto = PedidoItemFoto.query.get_or_404(foto_id)
+    if foto.pedido_item.pedido_id != pedido.id:
+        abort(404)
+    return send_file(io.BytesIO(foto.imagem),
+                      mimetype=foto.mimetype or 'image/jpeg',
+                      max_age=0)
+
+
 @handshake_bp.route('/<token>', methods=['GET', 'POST'])
 def handshake(token):
     qr = PedidoQRCode.query.filter_by(token=token).first()
