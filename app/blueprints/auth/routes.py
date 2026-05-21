@@ -222,11 +222,8 @@ def concluir(id):
 
 @auth_bp.route('/atribuicao/<int:id>/excluir', methods=['POST'])
 @login_required
+@admin_required
 def excluir_atribuicao(id):
-    if not current_user.is_admin():
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('auth.minhas_fichas'))
-
     atrib = Atribuicao.query.get_or_404(id)
     db.session.delete(atrib)
     db.session.commit()
