@@ -769,10 +769,29 @@ def _lojas_texto(user):
 def _build_system_prompt(user):
     from app.utils import hoje as _hoje_brt
     hoje = _hoje_brt().isoformat()
+    papel = papel_efetivo(user) or 'desconhecido'
+    nome_user = getattr(user, 'nome', None) or getattr(user, 'login', '?')
+    # Lista de tools que ESTE user pode usar — Claude ja recebe filtrado,
+    # mas dizer explicitamente evita alucinacao tipo "essa tool nao esta
+    # disponivel pra mim" quando na verdade eh permissao do usuario.
+    tools_do_user = sorted([t['name'] for t in tools_permitidas(user)])
     return f"""Voce e' um assistente de gestao de uma padaria. Interpreta comandos em
 linguagem natural e estrutura acoes pra o usuario confirmar.
 
 Hoje e' {hoje}.
+
+USUARIO LOGADO: {nome_user} (papel: {papel}).
+TOOLS QUE ESTE USUARIO PODE USAR: {', '.join(tools_do_user) if tools_do_user else '(nenhuma)'}.
+
+REGRA DE PERMISSAO — CRITICA:
+- Se uma acao que o usuario pediu NAO esta na lista acima, NAO INVENTE
+  "limitacao do meu acesso", "tool nao disponivel pra mim", "estou offline",
+  ou similares — isso confunde o usuario.
+- Diga claramente: "Voce e' {papel}. A acao [criar_pedido / etc] precisa
+  de papel admin ou gerente. Peca a um admin do sistema (ex: Caio) pra
+  fazer, ou pedir que ele altere seu papel pra gerente em /auth/usuarios."
+- Tools que exigem admin/gerente que NAO funcionarios podem usar:
+  criar_pedido, receber_mp, ajuste_estoque, criar_fornecedor, criar_venda_b2b.
 
 LOJAS DISPONIVEIS:
 {_lojas_texto(user)}
