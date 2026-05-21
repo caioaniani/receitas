@@ -49,7 +49,11 @@
                 </td>
                 <td>{% if r.is_owner %}<i class="bi bi-star-fill text-warning"></i>{% endif %}</td>
                 <td class="text-muted">{{ r.loja_id or '—' }}</td>
-                <td class="small">{{ r.slack_user_id or '—' }}</td>
+                <td class="small">
+                    {% for sid in r.slack_user_ids %}
+                    <code>{{ sid }}</code>{% if not loop.last %}<br>{% endif %}
+                    {% else %}—{% endfor %}
+                </td>
                 <td>{{ r.tools_count }}</td>
                 <td>{% if r.tem_criar_pedido %}<span class="text-success">SIM</span>{% else %}<span class="text-danger">NAO</span>{% endif %}</td>
                 <td>{% if r.tem_receber_mp %}<span class="text-success">SIM</span>{% else %}<span class="text-danger">NAO</span>{% endif %}</td>
