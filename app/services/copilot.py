@@ -436,7 +436,7 @@ TOOL_REGISTRAR_DESPERDICIO = {
             "loja_nome": {"type": ["string", "null"], "description": "Nome da loja. Use loja_id quando souber."},
             "item_nome": {"type": "string", "description": "Nome da receita, produto ou MP descartado."},
             "quantidade": {"type": "integer", "minimum": 1},
-            "motivo": {"type": "string", "enum": ["validade", "estragou", "caiu", "queimou", "outro"], "description": "Default 'validade'. Itens marcados como reaproveitaveis no cadastro NAO baixam estoque quando motivo='validade' (vence mas vira outra coisa, ex: croissant tradicional vencido vira almond). Aceita sinonimos antigos: 'vencido'=validade, 'estragado'=estragou, 'queimado'=queimou."},
+            "motivo": {"type": "string", "enum": ["validade", "nao_vendeu", "estragou", "caiu", "queimou", "outro"], "description": "Default 'validade'. Use 'nao_vendeu' quando o usuario disser 'sobra do dia', 'sobrou', 'nao vendeu'. Itens marcados como reaproveitaveis no cadastro NAO baixam estoque quando motivo='validade' OU 'nao_vendeu' (vence/sobra mas vira outra coisa: croissant tradicional vencido vira almond, sourdough tradicional sobra vira chapa). Outros motivos sempre baixam. Sinonimos: 'vencido'=validade, 'estragado'=estragou, 'queimado'=queimou."},
             "observacao": {"type": ["string", "null"]},
         },
         "required": ["item_nome", "quantidade"],
