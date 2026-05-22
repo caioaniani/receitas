@@ -101,7 +101,7 @@
         <tbody>
             {% for item in pedido.itens %}
             <tr>
-                <td>{{ item.nome_item }}</td>
+                <td>{{ item.nome_item_com_estado }}</td>
                 <td class="text-center fw-bold">{{ item.quantidade }}</td>
                 {% if pedido.status == 'em_transporte' %}
                 <td>
