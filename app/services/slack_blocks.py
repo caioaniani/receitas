@@ -91,6 +91,61 @@ def _preview_criar_pedido(p, token):
     return blocks
 
 
+def _preview_editar_pedido(p, token):
+    from app.constants import render_item_com_estado
+    pid = p.get('pedido_id') or '?'
+    atual = p.get('pedido_atual') or {}
+    loja = atual.get('loja_nome') or '?'
+    status = atual.get('status') or '?'
+
+    # Diff de data
+    data_at = atual.get('data_entrega') or '?'
+    data_nova = p.get('data_entrega')
+    data_txt = data_at if not data_nova or data_nova == data_at else f'{data_at} → *{data_nova}*'
+
+    # Diff de obs
+    obs_at = atual.get('observacao') or '—'
+    obs_nova_raw = p.get('observacao')
+    if obs_nova_raw is None:
+        obs_txt = obs_at
+    else:
+        obs_norm = (obs_nova_raw or '').strip() or '—'
+        obs_txt = obs_at if obs_norm == obs_at else f'{obs_at} → *{obs_norm}*'
+
+    # Itens: se itens_novos veio, mostra novos. Senao mostra atuais.
+    itens_novos = p.get('itens')
+    if itens_novos is not None:
+        def _fmt_novo(it):
+            nome_base = (it.get('resolvido') or {}).get('nome') or it.get('nome_original') or '?'
+            nome = render_item_com_estado(nome_base, it.get('estado'))
+            base = f"- {it.get('quantidade')}x {nome}"
+            obs = (it.get('observacao') or '').strip()
+            return f"{base} _({obs})_" if obs else base
+        itens_txt = '\n'.join(_fmt_novo(it) for it in itens_novos) or '(vazio)'
+        itens_header = '*Itens NOVOS (substituem os atuais):*'
+    else:
+        def _fmt_atual(it):
+            nome = render_item_com_estado(it.get('nome') or '?', it.get('estado'))
+            base = f"- {it.get('quantidade')}x {nome}"
+            obs = (it.get('observacao') or '').strip()
+            return f"{base} _({obs})_" if obs else base
+        itens_txt = '\n'.join(_fmt_atual(it) for it in (atual.get('itens') or [])) or '(vazio)'
+        itens_header = '*Itens (sem alteracao):*'
+
+    blocks = [
+        _header(f'Editar pedido #{pid}'),
+        _fields([
+            ('Loja', loja),
+            ('Status', status),
+            ('Data entrega', data_txt),
+            ('Observacao', obs_txt),
+        ]),
+        _section(f'{itens_header}\n{itens_txt[:2000]}'),
+        _botoes(token, 'Salvar alteracoes', 'Cancelar'),
+    ]
+    return blocks
+
+
 def _preview_receber_mp(p, token):
     mp_nome = (p.get('mp_resolvida') or {}).get('nome') or p.get('mp_nome') or '?'
     blocks = [
