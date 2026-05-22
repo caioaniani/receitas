@@ -75,6 +75,9 @@ class Receita(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(150), nullable=False)
     categoria = db.Column(db.String(50))
+    # Familia define quais estados (assado/backup/cru) sao validos pra essa
+    # receita. Ver app/constants.py:FAMILIAS_RECEITA. NULL = pao_sourdough.
+    familia = db.Column(db.String(30), nullable=True, index=True)
     preco_venda = db.Column(db.Float)
     preco_loja = db.Column(db.Float)
     preco_site = db.Column(db.Float)
