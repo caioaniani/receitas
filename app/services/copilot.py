@@ -61,6 +61,43 @@ TOOL_CRIAR_PEDIDO = {
     },
 }
 
+TOOL_EDITAR_PEDIDO = {
+    "name": "editar_pedido",
+    "description": (
+        "Edita um pedido existente. APENAS status 'pendente' ou 'confirmado' — "
+        "depois disso (separado/em_transporte/entregue) o estoque ja foi tocado "
+        "e a edicao e bloqueada. NAO muda loja nem driver (pra isso cancele e recrie). "
+        "Se for mexer em itens, mande a LISTA COMPLETA — REPLACE total. Use "
+        "consultar_pedido antes pra saber a composicao atual."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "pedido_id": {"type": "integer", "description": "ID do pedido a editar."},
+            "data_entrega": {"type": ["string", "null"], "description": "Nova data YYYY-MM-DD, ou null pra manter a atual."},
+            "observacao": {"type": ["string", "null"], "description": "Nova observacao do pedido. String vazia limpa; null mantem."},
+            "itens": {
+                "type": ["array", "null"],
+                "description": ("Se enviado, SUBSTITUI todos os itens do pedido. Pra alterar 1 item, "
+                                 "envie TODOS (os atuais + as mudancas). Se omitido ou null, mantem os atuais. "
+                                 "Mesmo schema dos itens de criar_pedido."),
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "nome": {"type": "string", "description": "Nome EXATO do produto/receita do catalogo."},
+                        "quantidade": {"type": "integer", "minimum": 1},
+                        "estado": {"type": ["string", "null"], "enum": [None, "backup", "assado"], "description": "Mesmos gatilhos de criar_pedido: 'backup'/'fermentado e congelado'/'pre-fermentado' = backup; 'assado(s)' = assado; 'congelado'/'cru'/sem qualificador = null."},
+                        "observacao": {"type": ["string", "null"]},
+                    },
+                    "required": ["nome", "quantidade"],
+                },
+            },
+        },
+        "required": ["pedido_id"],
+    },
+}
+
+
 TOOL_CONSULTAR_PEDIDO = {
     "name": "consultar_pedido",
     "description": ("Consulta pedidos por loja, data, status ou ID. "
