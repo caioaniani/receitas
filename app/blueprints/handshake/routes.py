@@ -113,7 +113,13 @@ def upload_foto(token, item_id):
 
 @handshake_bp.route('/<token>/foto/<int:foto_id>.jpg')
 def foto_serve(token, foto_id):
-    """Serve a imagem associada a um QR token ativo."""
+    """Serve a imagem associada a um QR token ativo.
+
+    Pos-M6: se a foto ja foi migrada pro Dropbox (imagem_url preenchido),
+    redireciona pro CDN do Dropbox. Senao serve BLOB legado do banco.
+    """
+    from flask import redirect
+
     from app.models import PedidoItemFoto
     qr, pedido, erro = _qr_ativo(token)
     if erro:
@@ -121,9 +127,13 @@ def foto_serve(token, foto_id):
     foto = PedidoItemFoto.query.get_or_404(foto_id)
     if foto.pedido_item.pedido_id != pedido.id:
         abort(404)
-    return send_file(io.BytesIO(foto.imagem),
-                      mimetype=foto.mimetype or 'image/jpeg',
-                      max_age=0)
+    if foto.imagem_url:
+        return redirect(foto.imagem_url, code=302)
+    if foto.imagem:
+        return send_file(io.BytesIO(foto.imagem),
+                          mimetype=foto.mimetype or 'image/jpeg',
+                          max_age=0)
+    abort(404)
 
 
 @handshake_bp.route('/<token>', methods=['GET', 'POST'])
