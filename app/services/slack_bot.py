@@ -435,6 +435,9 @@ def processar_interacao_botao(action_id, token, slack_user_id, channel_id,
         except (ValueError, TypeError):
             params = {}
 
+        # Sinaliza ao listener de audit quem eh o usuario real (webhook
+        # Slack nao tem Flask-Login). Ver app/services/audit.py:_current_user_id.
+        db.session.info['audit_user_id'] = user.id
         try:
             resultado = copilot_svc.executar(acao.tipo_acao, params, user)
         except Exception as exc:  # noqa: BLE001
@@ -448,6 +451,7 @@ def processar_interacao_botao(action_id, token, slack_user_id, channel_id,
             acao.cancelado_em = agora()
         db.session.add(acao)
         db.session.commit()
+        db.session.info.pop('audit_user_id', None)
 
         slack_api.update_message(channel_id, message_ts,
                                   blocks=slack_blocks.build_resultado(resultado, ok=ok),
