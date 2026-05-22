@@ -711,6 +711,8 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
         nota = 'Divergencias no recebimento: ' + '; '.join(divergencias)
         pedido.observacao = (pedido.observacao + ' | ' if pedido.observacao else '') + nota
 
+    import time as _time
+
     from app.services import dropbox_storage
     from app.utils import comprimir_imagem
     for foto in fotos:
@@ -720,7 +722,7 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
             try:
                 comprimida = comprimir_imagem(foto['imagem'])
                 path = (f'/recebimento/{pedido.id}/'
-                        f'{int(__import__("time").time() * 1000)}.jpg')
+                        f'{int(_time.time() * 1000)}.jpg')
                 info = dropbox_storage.upload_publico(
                     comprimida, path, mode='add', autorename=True)
                 url = info['url']
