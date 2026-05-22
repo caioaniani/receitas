@@ -46,16 +46,22 @@ def conferencia_completa(pedido, etapa):
 
 def salvar_foto(pedido_item_id, etapa, file_storage,
                 criado_por_id=None, criado_por_driver_id=None):
-    """Salva foto pra um item. Substitui foto anterior se existir.
+    """Salva foto pra um item, sobe pro Dropbox. Substitui foto anterior.
+
+    Pos-M6: imagem vai pro Dropbox (~150KB apos compressao PIL 700px JPEG).
+    Banco guarda url + storage_path. Coluna `imagem` BLOB so popula em
+    fotos legadas pre-migracao.
 
     Retorna (PedidoItemFoto, erro). Em erro, primeiro item eh None.
     """
+    from app.services import dropbox_storage
+    from app.utils import comprimir_imagem
+
     if etapa not in ETAPAS:
         return None, f'etapa invalida: {etapa}'
     if not file_storage or not getattr(file_storage, 'filename', None):
         return None, 'arquivo vazio'
 
-    # Le os bytes
     blob = file_storage.read()
     if not blob:
         return None, 'imagem vazia'
@@ -65,18 +71,35 @@ def salvar_foto(pedido_item_id, etapa, file_storage,
     if not mimetype.startswith('image/'):
         return None, f'mimetype invalido: {mimetype}'
 
-    # Confere existencia do item
     item = PedidoItem.query.get(pedido_item_id)
     if not item:
         return None, 'pedido_item nao encontrado'
 
-    # Substitui foto anterior (mesma chave (item, etapa))
+    if not dropbox_storage.disponivel():
+        return None, 'storage de fotos nao configurado'
+
+    # Comprime + sobe Dropbox. Path deterministico (overwrite ao re-tirar).
+    try:
+        comprimida = comprimir_imagem(blob)
+    except ValueError as e:
+        return None, f'erro comprimindo: {e}'
+
+    path = f'/conferencia/{item.pedido_id}/{pedido_item_id}_{etapa}.jpg'
+    try:
+        info = dropbox_storage.upload_publico(
+            comprimida, path, mode='overwrite', autorename=False)
+    except RuntimeError as e:
+        return None, f'upload Dropbox falhou: {e}'
+
+    # Substitui registro anterior se existir (mesma chave (item, etapa))
     existente = (PedidoItemFoto.query
                  .filter_by(pedido_item_id=pedido_item_id, etapa=etapa)
                  .first())
     if existente:
-        existente.imagem = blob
-        existente.mimetype = mimetype
+        existente.imagem = None  # libera BLOB legado se tinha
+        existente.imagem_url = info['url']
+        existente.imagem_storage_path = info['storage_path']
+        existente.mimetype = 'image/jpeg'  # comprimir_imagem sempre devolve JPEG
         if criado_por_id is not None:
             existente.criado_por_id = criado_por_id
         if criado_por_driver_id is not None:
@@ -87,8 +110,10 @@ def salvar_foto(pedido_item_id, etapa, file_storage,
     foto = PedidoItemFoto(
         pedido_item_id=pedido_item_id,
         etapa=etapa,
-        imagem=blob,
-        mimetype=mimetype,
+        imagem=None,
+        imagem_url=info['url'],
+        imagem_storage_path=info['storage_path'],
+        mimetype='image/jpeg',
         criado_por_id=criado_por_id,
         criado_por_driver_id=criado_por_driver_id,
     )
