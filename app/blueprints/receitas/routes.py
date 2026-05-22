@@ -255,8 +255,26 @@ def imagens_upload():
             continue
 
         with zf.open(info) as f:
-            r.imagem_blob = f.read()
-        r.imagem_mimetype = EXT_OK[ext]
+            raw_bytes = f.read()
+        from app.services import dropbox_storage
+        from app.utils import comprimir_imagem
+        if dropbox_storage.disponivel():
+            try:
+                comprimida = comprimir_imagem(raw_bytes)
+                path = f'/cardapio/receita/{r.id}.jpg'
+                upload_info = dropbox_storage.upload_publico(
+                    comprimida, path, mode='overwrite', autorename=False)
+                r.imagem_dropbox_url = upload_info['url']
+                r.imagem_storage_path = upload_info['storage_path']
+                r.imagem_blob = None
+                r.imagem_mimetype = 'image/jpeg'
+            except (ValueError, RuntimeError):
+                # Fallback BLOB se Dropbox falhar
+                r.imagem_blob = raw_bytes
+                r.imagem_mimetype = EXT_OK[ext]
+        else:
+            r.imagem_blob = raw_bytes
+            r.imagem_mimetype = EXT_OK[ext]
         casados.append((nome_base, r))
         atualizadas += 1
 
