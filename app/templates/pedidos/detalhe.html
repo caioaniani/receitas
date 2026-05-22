@@ -63,6 +63,15 @@
                 <span>{{ pedido.criador.nome if pedido.criador else '-' }}</span>
             </div>
         </div>
+        {% if pedido.modificado_em %}
+        <div class="mt-2 text-muted" style="font-size:12px;">
+            Ultima edicao: {{ pedido.modificado_em.strftime('%d/%m/%Y %H:%M') }}
+            {% if pedido.modificado_por %}por {{ pedido.modificado_por.nome }}{% endif %}
+            {% if current_user.papel in ('admin', 'gerente') %}
+            — <a href="{{ url_for('main.audit', tabela='pedido_loja', registro_id=pedido.id) }}">historico completo</a>
+            {% endif %}
+        </div>
+        {% endif %}
         {% if pedido.observacao %}
         <div class="mt-2">
             <small class="text-muted d-block">Observacao</small>
