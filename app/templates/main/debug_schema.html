@@ -163,7 +163,7 @@
             Backup automatico roda diariamente as <strong>04:00 BRT</strong>.
             Destino: pasta <code>/backups-postgres/</code> no Dropbox.
             {% if info.backup_status.ultimo_run %}
-            <br>Ultima execucao: <code>{{ info.backup_status.ultimo_run|brt if info.backup_status.ultimo_run else '—' }}</code>
+            <br>Ultima execucao: <code>{{ info.backup_status.ultimo_run|brt }}</code>
             {% else %}
             <br><span class="text-muted">Sem execucao registrada nesta sessao do app.</span>
             {% endif %}
