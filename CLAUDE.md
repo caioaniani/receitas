@@ -184,11 +184,27 @@ Fechado 2026-05-22:
 
 Da auditoria 1, ainda pendentes:
 
-- **M6 — Mover BLOBs pro Dropbox.** `Receita.imagem_blob`, `Produto.imagem_blob`,
-  `Loja.planta_imagem`, `Atestado.arquivo`, `FotoRecebimento.imagem`,
-  `EntregaFoto.imagem` no Postgres. Reduz tamanho do banco e backup.
-  `app/services/dropbox_storage.py` ja tem o cliente. Esforco: ~1 semana
-  (migration de dados + retrofit de leitura/escrita em multiplos templates).
+- **M6 — Mover BLOBs pro Dropbox** (parcial, 4 de 6 migrados em 22/05/2026):
+  - ✅ Migrados pra Dropbox: `Receita.imagem_blob`, `Produto.imagem_blob`,
+    `FotoRecebimento.imagem`, `PedidoItemFoto.imagem`, `EntregaFoto.imagem`.
+  - ✗ Mantidos BLOB no Postgres por seguranca (PII):
+    `Atestado.arquivo` (atestado medico), `Loja.planta_imagem`.
+  - ⏳ **Pendente Commit D**: dropar as colunas BLOB ja-vazias dos 4
+    modelos migrados. Hoje todas as linhas tem `imagem*=NULL` e
+    `imagem_url/imagem_dropbox_url` preenchido. Drop libera espaco
+    de disco. Padrao por modelo: `ALTER TABLE <t> DROP COLUMN IF EXISTS
+    <coluna>` em `_migrate_postgres()` + remover do modelo + remover
+    fallback BLOB nas serve routes (`cardapio_img`, `pedidos.foto`,
+    `handshake.foto_serve`) + atualizar `_render_fotos` no
+    `app/services/relatorio.py` (que ja prioriza URL).
+  - Backfill rotas em `/admin/debug-schema` (card "Migracao BLOB").
+    Idempotentes — podem ser re-rodadas a qualquer momento.
+  - Servico: `app/services/blob_migrator.py`. Helper compressao:
+    `app.utils.comprimir_imagem(bytes, max_size=700, quality=82)`.
+  - URL Dropbox usa `?raw=1` (CDN raw bytes), nao `?dl=0` (preview HTML).
+    `dropbox_storage._converter_para_raw()` normaliza via `urllib.parse`.
+  - **CSP**: `img-src` precisa incluir `https://*.dropbox.com` e
+    `https://*.dropboxusercontent.com` (corrigido em `app/__init__.py`).
 
 - **B7 — CSP nonces.** Atualmente CSP tem `'unsafe-inline'` em scripts
   pra suportar `<script>` inline nos templates. Trocar por `nonce`
