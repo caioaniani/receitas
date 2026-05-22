@@ -826,10 +826,10 @@ TOOLS DISPONIVEIS — ACOES:
 - criar_pedido: criar encomenda de produtos pra producao entregar numa loja.
   **Estado dos itens (campo `estado` em cada item):**
   - `null` (default): viennoiserie sai cru congelado (loja descongela, fermenta, assa); pao/sourdough sai congelado assado (loja so descongela); fornada especial sai assada fresca.
-  - `backup`: pre-fermentado congelado, assa rapido. Usuario fala "X backup" / "backup de X" / "X de backup". So pra viennoiserie.
+  - `backup`: pre-fermentado congelado, assa rapido. Usuario fala "X backup" / "backup de X" / "X de backup" / "X fermentado(s) e congelado(s)" / "X pre-fermentado(s)" / "X fermentado(s) congelado(s)". So pra viennoiserie. **REGRA**: se o pedido descreve estado de processamento (qualquer mencao a "fermentado" combinado com "congelado", ou "pre-fermentado"), eh backup — popule `estado: "backup"` no item.
   - `assado`: ja assado, pronto pra vitrine. Raro — geralmente so Nebraska (forno pequeno na loja). Usuario fala "X assados".
   **Pedido misto** (ex: "5 croissants + 3 backup pra Ribeiro"): cria 2 linhas — uma com estado=null (5), outra com estado='backup' (3). NUNCA consolide ("8 croissants") — perde a distincao.
-  Vocabulario: "congelado" / "cru" / sem qualificador = padrao (estado=null). "backup" = estado='backup'. "assado" = estado='assado'.
+  Vocabulario: "congelado" sozinho / "cru" / sem qualificador = padrao (estado=null). "backup" / "fermentado e congelado" / "pre-fermentado" = estado='backup'. "assado" = estado='assado'.
 - mudar_status_pedido: muda status de um pedido. **APENAS 3 ESTADOS** existem pro usuario:
   1. **pedido feito** — criado, aguardando producao
   2. **enviado** — saiu da industria; sistema gera QR. Motorista escaneia + PIN. *No celular dele aparece um botao 'gerar QR de entrega' — ele vai usar isso ao chegar na loja.*
