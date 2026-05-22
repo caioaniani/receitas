@@ -303,7 +303,8 @@ def create_app(config_class=None):
             "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
             "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
             "font-src 'self' https://cdn.jsdelivr.net; "
-            "img-src 'self' data:;"
+            "img-src 'self' data: https://*.dropbox.com "
+            "https://*.dropboxusercontent.com;"
         )
         if request.is_secure:
             response.headers['Strict-Transport-Security'] = (
