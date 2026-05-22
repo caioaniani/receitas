@@ -114,6 +114,7 @@ document.getElementById('btn-add-item').addEventListener('click', function() {
     tr.innerHTML =
         '<td><select name="item_id[]" class="form-select form-select-sm item-sel" required>' + itemOpts + '</select></td>' +
         '<td><input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1"></td>' +
+        '<td><select name="item_estado[]" class="form-select form-select-sm"><option value="">Padrão</option><option value="backup">Backup</option><option value="assado">Assado</option></select></td>' +
         '<td><input type="text" name="item_obs[]" class="form-control form-control-sm" placeholder=""></td>' +
         '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-item" onclick="this.closest(\'tr\').remove()"><i class="bi bi-x"></i></button></td>';
     tbody.appendChild(tr);
