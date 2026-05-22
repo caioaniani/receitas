@@ -369,9 +369,15 @@ def cardapio_img_remover(tipo, id):
     # Permite redirect pra revisar (next=revisar) em vez da ficha
     if request.form.get('next') == 'revisar':
         url_back = url_for('main.cardapio_img_revisar')
+    # Delete Dropbox file best-effort antes de limpar refs
+    if obj.imagem_storage_path:
+        from app.services import dropbox_storage
+        dropbox_storage.deletar(obj.imagem_storage_path)
     obj.imagem_blob = None
     obj.imagem_mimetype = None
     obj.imagem_url = None
+    obj.imagem_dropbox_url = None
+    obj.imagem_storage_path = None
     _db.session.commit()
     flash('Imagem removida.', 'info')
     return redirect(url_back)
