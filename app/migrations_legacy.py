@@ -415,6 +415,26 @@ def _migrate_postgres(app):
                 'ALTER TABLE pedido_item_foto ALTER COLUMN imagem DROP NOT NULL'
             ))
 
+        # M6: mesmas colunas em foto_recebimento (criada via db.create_all)
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'foto_recebimento'"
+        ))
+        cols_fr = {row[0] for row in result}
+        if cols_fr and 'imagem_url' not in cols_fr:
+            conn.execute(text(
+                'ALTER TABLE foto_recebimento ADD COLUMN imagem_url VARCHAR(500)'
+            ))
+        if cols_fr and 'imagem_storage_path' not in cols_fr:
+            conn.execute(text(
+                'ALTER TABLE foto_recebimento '
+                'ADD COLUMN imagem_storage_path VARCHAR(500)'
+            ))
+        if cols_fr and 'imagem' in cols_fr:
+            conn.execute(text(
+                'ALTER TABLE foto_recebimento ALTER COLUMN imagem DROP NOT NULL'
+            ))
+
         # driver_magic_token — magic link diario do motorista
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS driver_magic_token (
