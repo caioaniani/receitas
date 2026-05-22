@@ -204,13 +204,19 @@ def _criar_shared_link(token, path):
 
 
 def _converter_para_raw(url):
-    """Converte URL ?dl=0 do Dropbox em ?raw=1 que serve o arquivo direto."""
+    """Converte URL ?dl=0 do Dropbox em ?raw=1 que serve o arquivo direto.
+
+    URLs modernas do Dropbox (formato /scl/fi/...) podem ter dl=0 em
+    qualquer posicao (`?dl=0` ou `&dl=0` apos rlkey). Substitui em
+    qualquer lugar, sem deixar dl=X coexistindo com raw=1 (Dropbox da
+    precedencia ao dl=0 e serve HTML preview em vez do arquivo).
+    """
     if not url:
         return url
-    if '?dl=0' in url:
-        return url.replace('?dl=0', '?raw=1')
-    if '?dl=1' in url:
-        return url.replace('?dl=1', '?raw=1')
+    if 'dl=0' in url:
+        return url.replace('dl=0', 'raw=1')
+    if 'dl=1' in url:
+        return url.replace('dl=1', 'raw=1')
     sep = '&' if '?' in url else '?'
     return f"{url}{sep}raw=1"
 
