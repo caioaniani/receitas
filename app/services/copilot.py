@@ -672,6 +672,7 @@ REQUER_APROVACAO = {
 PAPEIS_POR_TOOL = {
     # Operacao geral — admin + gerente
     'criar_pedido': {'admin', 'gerente'},
+    'editar_pedido': {'admin', 'gerente'},
     'mudar_status_pedido': {'admin', 'gerente', 'producao'},
     'receber_mp': {'admin', 'gerente'},
     'ajuste_estoque': {'admin', 'gerente'},
