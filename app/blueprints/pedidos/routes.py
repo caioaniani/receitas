@@ -711,11 +711,29 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
         nota = 'Divergencias no recebimento: ' + '; '.join(divergencias)
         pedido.observacao = (pedido.observacao + ' | ' if pedido.observacao else '') + nota
 
+    from app.services import dropbox_storage
+    from app.utils import comprimir_imagem
     for foto in fotos:
+        url = None
+        storage_path = None
+        if dropbox_storage.disponivel() and foto.get('imagem'):
+            try:
+                comprimida = comprimir_imagem(foto['imagem'])
+                path = (f'/recebimento/{pedido.id}/'
+                        f'{int(__import__("time").time() * 1000)}.jpg')
+                info = dropbox_storage.upload_publico(
+                    comprimida, path, mode='add', autorename=True)
+                url = info['url']
+                storage_path = info['storage_path']
+            except (ValueError, RuntimeError):
+                current_app.logger.exception(
+                    'foto_recebimento dropbox falhou — fallback BLOB')
         db.session.add(FotoRecebimento(
             pedido_id=pedido.id,
-            imagem=foto['imagem'],
-            mimetype=foto.get('mimetype', 'image/jpeg'),
+            imagem=None if url else foto['imagem'],
+            imagem_url=url,
+            imagem_storage_path=storage_path,
+            mimetype='image/jpeg' if url else foto.get('mimetype', 'image/jpeg'),
             enviada_por=getattr(user, 'id', None),
         ))
 
