@@ -113,12 +113,25 @@ class EstoqueLoja(db.Model):
     # Nome digitado em entrada-em-lote quando nao houve match com nenhum
     # cadastro. Mesma logica do EstoqueProducao.nome_pendente.
     nome_pendente = db.Column(db.String(200), nullable=True)
+    # Estado do item (assado/backup/NULL=padrao). Loja pode ter 3 estados
+    # ao mesmo tempo pra mesma receita: assado (vitrine) + backup (freezer
+    # pra emergencia) + NULL (cru, raro).
+    estado = db.Column(db.String(20), nullable=True)
 
     loja = db.relationship('Loja')
     receita = db.relationship('Receita')
     produto = db.relationship('Produto')
     materia_prima = db.relationship('MateriaPrima')
     movimentacoes = db.relationship('MovEstoqueLoja', backref='estoque', cascade='all, delete-orphan')
+
+    __table_args__ = (
+        # Uma linha por (loja, receita, estado) — permite multiplos
+        # estados simultaneos.
+        db.Index('ix_estoque_loja_loja_receita_estado',
+                  'loja_id', 'receita_id', 'estado'),
+        db.Index('ix_estoque_loja_loja_produto_estado',
+                  'loja_id', 'produto_id', 'estado'),
+    )
 
     @property
     def nome_item(self):
