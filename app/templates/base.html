@@ -168,6 +168,18 @@
            class="sidebar-link {% if request.path == '/cardapio' %}active{% endif %}">
             Cardápio PDF
         </a>
+        <a href="{{ url_for('receitas.precos') }}"
+           class="sidebar-link {% if request.path == '/receitas/precos' %}active{% endif %}">
+            Preços (bulk)
+        </a>
+        <a href="{{ url_for('receitas.reaproveitavel') }}"
+           class="sidebar-link {% if request.path == '/receitas/reaproveitavel' %}active{% endif %}">
+            Reaproveitável (bulk)
+        </a>
+        <a href="{{ url_for('receitas.imagens_upload') }}"
+           class="sidebar-link {% if request.path.startswith('/receitas/imagens') %}active{% endif %}">
+            Imagens (zip)
+        </a>
         {% endif %}
 
         {# ── 3. VENDAS & ENTREGAS ── #}
