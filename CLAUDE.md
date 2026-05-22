@@ -146,6 +146,19 @@ Auditoria continuada (estoque/dinheiro) — TODOS fechados nesta sessao
   se acumulador fica negativo, devolve inteiros ao estoque. Migration
   `ac57b6648ec4`.
 
+Fechado 2026-05-22:
+
+- ✓ **Audit log de edicao de pedido.** Colunas `modificado_em` /
+  `modificado_por_id` em `PedidoLoja` (ALTER em
+  `_migrate_postgres()`). Setadas na rota web (`/pedidos/<id>/editar`)
+  e no executor copilot (`editar_pedido`). AuditLog automatico
+  (`app/services/audit.py`) ja capturava as mudancas; fix em
+  `_current_user_id()` pra ler `db.session.info['audit_user_id']` —
+  caminho Slack/async sem Flask-Login. Handler Slack em
+  `slack_bot.py:438` seta isso antes do `executar`. Filtro
+  `registro_id` no `/audit`. Link "historico completo" no detalhe do
+  pedido (so admin/gerente).
+
 Da auditoria 1, ainda pendentes:
 
 - **M6 — Mover BLOBs pro Dropbox.** `Receita.imagem_blob`, `Produto.imagem_blob`,
