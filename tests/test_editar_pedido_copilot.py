@@ -91,11 +91,11 @@ def test_editar_pedido_replace_itens_preserva_estado(app, admin_user, loja, cata
 
 
 def test_editar_pedido_replace_apaga_antigos(app, admin_user, loja, catalogo):
-    """Pedido com 1 item; manda 2 novos; banco fica com 2 (antigo sumiu)."""
+    """Pedido com 1 item (qtd=10); manda 2 novos (qtd=5 e 3).
+    O antigo (qtd=10) some — verificacao por qtd ja que SQLite reusa ROWIDs."""
     from app.models import PedidoItem
     from app.services import copilot
     p = _pedido_pendente(loja, admin_user, catalogo)
-    item_antigo_id = PedidoItem.query.filter_by(pedido_id=p.id).first().id
 
     params = copilot._enriquecer_editar_pedido({
         'pedido_id': p.id,
@@ -108,8 +108,8 @@ def test_editar_pedido_replace_apaga_antigos(app, admin_user, loja, catalogo):
     assert out['ok'] is True
 
     itens = PedidoItem.query.filter_by(pedido_id=p.id).all()
-    assert len(itens) == 2
-    assert PedidoItem.query.get(item_antigo_id) is None
+    qtds = sorted(it.quantidade for it in itens)
+    assert qtds == [3, 5]  # item antigo (qtd=10) sumiu, restaram os 2 novos
 
 
 def test_editar_pedido_status_separado_bloqueia(app, admin_user, loja, catalogo):
