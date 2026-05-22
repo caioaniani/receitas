@@ -3321,6 +3321,7 @@ _READ_HANDLERS = {
 
 _EXEC_HANDLERS = {
     'criar_pedido': executar_criar_pedido,
+    'editar_pedido': executar_editar_pedido,
     'receber_mp': executar_receber_mp,
     'ajuste_estoque': executar_ajuste_estoque,
     'mudar_status_pedido': executar_mudar_status_pedido,
