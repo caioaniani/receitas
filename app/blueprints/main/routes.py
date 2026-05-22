@@ -959,7 +959,28 @@ def backup_debug_env():
 
     info['locais_listagem'] = '\n\n'.join(locais)
 
-    from flask import jsonify
+    # Onde fotos de entrega DEVERIAM estar indo
+    from flask import current_app, jsonify
+
+    from app.models import EntregaFoto
+    info['dropbox_pasta_base_config'] = (
+        current_app.config.get('DROPBOX_PASTA_BASE') or '(usando default /Apps/Receitas-Entregas)'
+    )
+    info['dropbox_backup_pasta_config'] = (
+        current_app.config.get('DROPBOX_BACKUP_PASTA') or '(usando default /backups-postgres)'
+    )
+    info['entrega_foto_count'] = EntregaFoto.query.count()
+    foto_recente = EntregaFoto.query.order_by(EntregaFoto.id.desc()).first()
+    if foto_recente:
+        info['entrega_foto_amostra'] = {
+            'id': foto_recente.id,
+            'storage_path': foto_recente.storage_path,
+            'url': foto_recente.url,
+            'tirada_em': str(foto_recente.tirada_em),
+        }
+    else:
+        info['entrega_foto_amostra'] = '(sem fotos no banco)'
+
     return jsonify(info)
 
 
