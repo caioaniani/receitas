@@ -160,7 +160,10 @@ class FotoRecebimento(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     pedido_id = db.Column(db.Integer, db.ForeignKey('pedido_loja.id'), nullable=False)
-    imagem = db.Column(db.LargeBinary, nullable=False)
+    # Storage: ver PedidoItemFoto pro padrao M6 (Dropbox preferido, BLOB legado).
+    imagem = db.Column(db.LargeBinary, nullable=True)  # legado, nullable apos M6
+    imagem_url = db.Column(db.String(500))  # shared link Dropbox
+    imagem_storage_path = db.Column(db.String(500))
     mimetype = db.Column(db.String(100))
     enviada_em = db.Column(db.DateTime, default=agora)
     enviada_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
