@@ -411,6 +411,7 @@ def _preview_criar_cliente_b2b(p, token):
 
 _PREVIEW_BUILDERS = {
     'criar_pedido': _preview_criar_pedido,
+    'editar_pedido': _preview_editar_pedido,
     'receber_mp': _preview_receber_mp,
     'ajuste_estoque': _preview_ajuste_estoque,
     'mudar_status_pedido': _preview_mudar_status_pedido,
