@@ -98,23 +98,29 @@ def _invalidar_cache():
         _token_cache['expira_em'] = 0
 
 
-def upload_foto(file_bytes, atribuicao_id, ext='jpg'):
-    """Faz upload da foto e retorna {'url': str, 'storage_path': str, 'tamanho': int}.
+def upload_publico(file_bytes, dropbox_path, *, mode='add', autorename=True):
+    """Sobe bytes pro Dropbox e cria shared link publico (URL retornada).
 
-    Levanta RuntimeError se nao configurado ou se a API falhar.
+    Use pra fotos/imagens que o app precisa servir via `<img src=...>`.
+    Diferente de `upload_arquivo` (que nao cria link).
+
+    - `mode='add'` + `autorename=True`: se path ja existe, Dropbox sufixa
+      `(1)`, `(2)`. Default seguro.
+    - `mode='overwrite'`: substitui arquivo existente (pra cardapio onde
+      a foto representa o item atual).
+
+    Retorna {'url', 'storage_path', 'tamanho'}.
+    Levanta RuntimeError se nao configurado ou API falhar.
     """
     if not file_bytes:
         raise RuntimeError('Arquivo vazio')
-
-    # Caminho organizado por data + atribuicao + uuid pra evitar colisao
-    hoje = _agora_brt().strftime('%Y-%m-%d')
-    nome = f"{atribuicao_id}_{uuid.uuid4().hex[:8]}.{ext}"
-    path = f"{_pasta_base()}/{hoje}/{nome}"
+    if not dropbox_path or not dropbox_path.startswith('/'):
+        raise RuntimeError('dropbox_path deve comecar com /')
 
     api_args = {
-        'path': path,
-        'mode': 'add',
-        'autorename': True,
+        'path': dropbox_path,
+        'mode': mode,
+        'autorename': autorename,
         'mute': True,
     }
 
@@ -134,7 +140,7 @@ def upload_foto(file_bytes, atribuicao_id, ext='jpg'):
         )
 
     r = _do_upload()
-    if r.status_code == 401:  # token expirado mid-request
+    if r.status_code == 401:
         _invalidar_cache()
         r = _do_upload()
     if r.status_code != 200:
@@ -142,7 +148,7 @@ def upload_foto(file_bytes, atribuicao_id, ext='jpg'):
         raise RuntimeError(f'Upload Dropbox falhou: {r.status_code}')
 
     meta = r.json()
-    storage_path = meta.get('path_lower') or path
+    storage_path = meta.get('path_lower') or dropbox_path
     url = _criar_shared_link(_token(), storage_path)
 
     return {
@@ -150,6 +156,20 @@ def upload_foto(file_bytes, atribuicao_id, ext='jpg'):
         'storage_path': storage_path,
         'tamanho': meta.get('size') or len(file_bytes),
     }
+
+
+def upload_foto(file_bytes, atribuicao_id, ext='jpg'):
+    """Compat: upload de foto de entrega (EntregaFoto). Delega pra upload_publico.
+
+    Mantida por compat com o codigo existente em
+    `app/blueprints/driver/routes.py:309`.
+    """
+    hoje = _agora_brt().strftime('%Y-%m-%d')
+    nome = f"{atribuicao_id}_{uuid.uuid4().hex[:8]}.{ext}"
+    path = f"{_pasta_base()}/{hoje}/{nome}"
+    return upload_publico(path=None, dropbox_path=path, file_bytes=file_bytes,
+                          mode='add', autorename=True) if False else \
+           upload_publico(file_bytes, path, mode='add', autorename=True)
 
 
 def _criar_shared_link(token, path):
