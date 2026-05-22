@@ -901,6 +901,57 @@ def debug_schema_stamp():
                             log=log_buf.getvalue()[-3000:], ok=ok))
 
 
+@main_bp.route('/admin/backup/debug-env')
+@owner_required
+def backup_debug_env():
+    """Diagnostico do ambiente — mostra PATH, locais com pg_dump, versao.
+
+    Usado quando backup falha com "pg_dump nao encontrado" pra entender se
+    o nixpacks.toml aplicou ou se o binario esta noutro lugar.
+    """
+    import os as _os
+    import shutil
+    import subprocess
+
+    info = {
+        'PATH': _os.environ.get('PATH', ''),
+        'which_pg_dump': shutil.which('pg_dump'),
+    }
+
+    # Procura pg_dump em locais comuns
+    locais = []
+    for caminho in ['/usr/bin', '/usr/local/bin', '/nix/store', '/usr/lib/postgresql']:
+        try:
+            r = subprocess.run(['bash', '-c', f'ls -la {caminho} 2>/dev/null | grep -i pg_'],
+                               capture_output=True, text=True, timeout=5)
+            if r.stdout:
+                locais.append(f'{caminho}:\n{r.stdout}')
+        except Exception as e:  # noqa: BLE001
+            locais.append(f'{caminho}: ERRO {e}')
+
+    # Procura recursiva no /nix/store (Nixpacks instala la)
+    try:
+        r = subprocess.run(['bash', '-c', 'find /nix/store -name pg_dump 2>/dev/null | head -5'],
+                           capture_output=True, text=True, timeout=15)
+        info['find_nix_pg_dump'] = r.stdout or '(nada encontrado)'
+    except Exception as e:  # noqa: BLE001
+        info['find_nix_pg_dump'] = f'ERRO: {e}'
+
+    # Tenta executar
+    try:
+        r = subprocess.run(['pg_dump', '--version'], capture_output=True, text=True, timeout=5)
+        info['pg_dump_version'] = r.stdout or r.stderr
+    except FileNotFoundError:
+        info['pg_dump_version'] = '(nao encontrado no PATH)'
+    except Exception as e:  # noqa: BLE001
+        info['pg_dump_version'] = f'ERRO: {e}'
+
+    info['locais_listagem'] = '\n\n'.join(locais)
+
+    from flask import jsonify
+    return jsonify(info)
+
+
 @main_bp.route('/admin/backup/run', methods=['POST'])
 @owner_required
 def backup_run():
