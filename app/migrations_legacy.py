@@ -192,6 +192,8 @@ def _migrate_postgres(app):
             conn.execute(text("ALTER TABLE pedido_item ADD COLUMN quantidade_recebida INTEGER"))
         if cols_pi and 'materia_prima_id' not in cols_pi:
             conn.execute(text("ALTER TABLE pedido_item ADD COLUMN materia_prima_id INTEGER REFERENCES materia_prima(id)"))
+        if cols_pi and 'estado' not in cols_pi:
+            conn.execute(text("ALTER TABLE pedido_item ADD COLUMN estado VARCHAR(20)"))
 
         # estoque_loja.materia_prima_id + nome_pendente
         result = conn.execute(text(
