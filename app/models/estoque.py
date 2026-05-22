@@ -53,10 +53,20 @@ class EstoqueProducao(db.Model):
     # Permite registrar a contagem fisica mesmo sem cadastro previo;
     # depois o admin vincula a uma receita/produto e isso volta a NULL.
     nome_pendente = db.Column(db.String(200), nullable=True)
+    # Estado do item (apenas `backup` ou NULL=cru/padrao). Industria nao
+    # mantem estoque assado (assa pra cumprir pedido e despacha).
+    estado = db.Column(db.String(20), nullable=True)
 
     receita = db.relationship('Receita')
     produto = db.relationship('Produto')
     movimentacoes = db.relationship('MovEstoqueProducao', backref='estoque', cascade='all, delete-orphan')
+
+    __table_args__ = (
+        # Uma linha por (receita, estado) e por (produto, estado).
+        # NULL no estado conta como estado distinto pra fins de linha.
+        db.Index('ix_estoque_producao_receita_estado', 'receita_id', 'estado'),
+        db.Index('ix_estoque_producao_produto_estado', 'produto_id', 'estado'),
+    )
 
     @property
     def nome_item(self):
@@ -67,6 +77,11 @@ class EstoqueProducao(db.Model):
         if self.nome_pendente:
             return self.nome_pendente
         return '?'
+
+    @property
+    def nome_item_com_estado(self):
+        from app.constants import render_item_com_estado
+        return render_item_com_estado(self.nome_item, self.estado)
 
     @property
     def pendente(self):
