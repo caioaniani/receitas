@@ -178,6 +178,27 @@
     </div>
 </div>
 
+<div class="card mt-3">
+    <div class="card-header py-2"><strong>Migracao BLOB → Dropbox (M6)</strong></div>
+    <div class="card-body">
+        <p class="small mb-2">
+            Migra fotos antigas guardadas como BLOB no Postgres pra Dropbox.
+            Idempotente — pode rodar varias vezes (só processa pendentes).
+            Comprime cada foto pra ~150KB (700px JPEG 82) antes de subir.
+        </p>
+        <form method="POST"
+              action="{{ url_for('main.blobs_migrar', modelo='pedido_item_foto') }}"
+              class="mb-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-warning"
+                    onclick="return confirm('Migrar TODAS as fotos de conferencia (PedidoItemFoto) do banco pro Dropbox? Pode demorar varios minutos.');">
+                <i class="bi bi-arrow-up-right-square"></i>
+                Migrar PedidoItemFoto (conferencia saida/entrega)
+            </button>
+        </form>
+    </div>
+</div>
+
 <div class="alert alert-info small mt-3 mb-0">
     <strong>Esperado apos B4 + B5:</strong>
     <ul class="mb-0">
