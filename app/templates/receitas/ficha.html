@@ -345,7 +345,8 @@
 <div class="card mt-3 mb-3">
     <div class="card-header py-2"><strong><i class="bi bi-image"></i> Foto do cardápio digital</strong></div>
     <div class="card-body">
-        {% if receita.imagem_blob %}
+        {% set tem_foto = receita.imagem_blob or receita.imagem_dropbox_url %}
+        {% if tem_foto %}
         <div class="mb-2 d-flex align-items-start gap-2">
             <img src="{{ url_for('main.cardapio_img', tipo='receita', id=receita.id) }}"
                  alt="" style="max-height:120px;border-radius:6px;border:1px solid #ddd;">
@@ -361,7 +362,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="file" name="imagem_arquivo" accept="image/*" class="form-control form-control-sm" required>
             <button type="submit" class="btn btn-sm btn-primary">
-                <i class="bi bi-upload"></i> {% if receita.imagem_blob %}Trocar foto{% else %}Enviar foto{% endif %}
+                <i class="bi bi-upload"></i> {% if tem_foto %}Trocar foto{% else %}Enviar foto{% endif %}
             </button>
         </form>
         <small class="text-muted d-block mt-1">Comprime pra ~700×700 JPEG. Se subir foto aqui, ignora a URL no campo de cima.</small>
