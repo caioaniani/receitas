@@ -263,6 +263,8 @@ def editar(id):
         try:
             pedido.data_entrega = data_entrega
             pedido.observacao = obs or None
+            pedido.modificado_em = agora()
+            pedido.modificado_por_id = current_user.id
 
             # REPLACE total dos itens
             PedidoItem.query.filter_by(pedido_id=pedido.id).delete()
