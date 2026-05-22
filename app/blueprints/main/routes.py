@@ -696,6 +696,8 @@ def debug_schema():
 
     from sqlalchemy import inspect, text
 
+    from app.services import seru_cron
+
     info = {
         'alembic_current': None,
         'alembic_heads': [],
@@ -705,6 +707,7 @@ def debug_schema():
         'erro_colunas': None,
         'last_upgrade_log': request.args.get('log'),
         'last_upgrade_ok': request.args.get('ok'),
+        'backup_status': seru_cron.status_backup(),
     }
 
     # 1. Alembic current vs heads
