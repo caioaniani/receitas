@@ -109,29 +109,17 @@ def _baixar_componente(loja_id, mp, componente_key, tipo, item_id,
     if inteiros <= 0:
         return {'baixado': False, 'faltou': 0}
 
-    el = EstoqueLoja.query.filter_by(**filtro).first()
-    if not el:
-        el = EstoqueLoja(**filtro, quantidade=0)
-        db.session.add(el)
-        db.session.flush()
-
-    atual = el.quantidade or 0
-    real = min(inteiros, atual)
-    falta = inteiros - real
-
-    if real > 0:
-        el.quantidade = atual - real
-        db.session.add(MovEstoqueLoja(
-            estoque_loja_id=el.id, tipo='venda_vnda', quantidade=real,
-            referencia=f'VNDA #{vnda_code}{label}', usuario_id=user_id,
-        ))
-    if falta > 0:
-        db.session.add(MovEstoqueLoja(
-            estoque_loja_id=el.id, tipo='venda_vnda_sem_estoque', quantidade=falta,
-            referencia=f'VNDA #{vnda_code}{label} — sem estoque suficiente',
-            usuario_id=user_id,
-        ))
-    return {'baixado': real > 0, 'faltou': falta}
+    # Baixa respeitando prioridade de estado: assado → backup → NULL.
+    from app.services.estoque_helpers import baixar_loja_por_prioridade
+    res = baixar_loja_por_prioridade(
+        filtro_base=filtro,
+        inteiros=inteiros,
+        tipo_mov='venda_vnda',
+        referencia=f'VNDA #{vnda_code}{label}',
+        sem_estoque_tipo='venda_vnda_sem_estoque',
+        usuario_id=user_id,
+    )
+    return {'baixado': res['baixado'] > 0, 'faltou': res['faltou']}
 
 
 def _baixar_item(loja_id, mp, qtd, vnda_code, user_id):
