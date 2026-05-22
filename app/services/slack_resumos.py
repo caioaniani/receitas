@@ -28,15 +28,19 @@ def resumo_pedidos_dia(data=None):
                .filter(PedidoLoja.status.in_(['pendente', 'confirmado']))
                .all())
 
-    por_loja = defaultdict(list)  # loja_nome -> [{item, qtd, pedido_id, status, item_obs, pedido_obs}]
-    por_item = defaultdict(int)   # nome -> qtd total
+    from app.constants import render_item_com_estado
+    por_loja = defaultdict(list)  # loja_nome -> [{item, qtd, pedido_id, status, item_obs}]
+    por_item = defaultdict(int)   # nome_com_estado -> qtd total
     obs_por_loja = defaultdict(list)  # loja_nome -> [(pedido_id, obs)]
     for p in pedidos:
         nome_loja = p.loja.nome if p.loja else '?'
         if (p.observacao or '').strip():
             obs_por_loja[nome_loja].append((p.id, p.observacao.strip()))
         for it in p.itens:
-            nome_item = it.nome_item if hasattr(it, 'nome_item') else _nome_item(it)
+            nome_base = it.nome_item if hasattr(it, 'nome_item') else _nome_item(it)
+            # Inclui [BACKUP] / [ASSADO] no nome se estado != NULL.
+            # Item de mesmo nome com estados distintos vira linhas separadas.
+            nome_item = render_item_com_estado(nome_base, getattr(it, 'estado', None))
             por_loja[nome_loja].append({
                 'item': nome_item, 'qtd': it.quantidade,
                 'pedido_id': p.id, 'status': p.status,
