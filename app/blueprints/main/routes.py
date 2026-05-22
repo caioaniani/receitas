@@ -973,6 +973,36 @@ def backup_debug_env():
     return jsonify(info)
 
 
+@main_bp.route('/admin/blobs/migrar/<modelo>', methods=['POST'])
+@owner_required
+def blobs_migrar(modelo):
+    """Backfill de BLOBs antigos pra Dropbox (M6). Owner-only.
+
+    Modelos suportados: pedido_item_foto.
+    Idempotente. Processa em batches, advisory lock single-worker.
+    """
+    from flask import flash
+
+    from app.services import blob_migrator
+
+    if modelo == 'pedido_item_foto':
+        resultado = blob_migrator.migrar_pedido_item_foto()
+    else:
+        flash(f'Modelo invalido: {modelo}', 'danger')
+        return redirect(url_for('main.debug_schema'))
+
+    if not resultado.get('ok'):
+        flash(f'Migracao falhou: {resultado.get("motivo")}', 'danger')
+    else:
+        msg = (f'Migracao {modelo}: {resultado["migradas"]}/{resultado["total"]} '
+               f'migradas, {resultado["erros"]} erros')
+        if resultado.get('detalhes'):
+            msg += '. Primeiros detalhes: ' + ' | '.join(resultado['detalhes'][:3])
+        cat = 'success' if resultado['erros'] == 0 else 'warning'
+        flash(msg, cat)
+    return redirect(url_for('main.debug_schema'))
+
+
 @main_bp.route('/admin/backup/run', methods=['POST'])
 @owner_required
 def backup_run():
