@@ -13,7 +13,7 @@ import logging
 from datetime import date, datetime
 from decimal import Decimal
 
-from flask import g, has_request_context, request
+from flask import has_request_context, request
 from flask_login import current_user
 from sqlalchemy import event, inspect
 
@@ -68,15 +68,16 @@ def _request_meta():
     return ip, ua
 
 
-def _current_user_id():
+def _current_user_id(session=None):
+    # Caminho Slack (thread async, so app_context): handler seta
+    # session.info['audit_user_id'] = Usuario.id antes do commit.
+    if session is not None:
+        sess_uid = session.info.get('audit_user_id')
+        if sess_uid:
+            return sess_uid
+    # Caminho web: pega Flask-Login.
     if not has_request_context():
         return None
-    # Caminho do Slack: handler resolve Usuario via SlackVinculo e seta
-    # g.audit_user_id antes de chamar copilot_svc.executar. Sem isso o
-    # webhook fica anonimo (sem session Flask-Login).
-    uid = getattr(g, 'audit_user_id', None)
-    if uid:
-        return uid
     try:
         if current_user and current_user.is_authenticated:
             return current_user.id
@@ -92,7 +93,7 @@ def _registrar(session, obj, acao, antes=None, depois=None):
         return
     ip, ua = _request_meta()
     log = AuditLog(
-        usuario_id=_current_user_id(),
+        usuario_id=_current_user_id(session),
         tabela=tabela,
         registro_id=getattr(obj, 'id', None),
         acao=acao,
