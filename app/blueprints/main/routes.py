@@ -327,19 +327,22 @@ def cardapio_img_revisar():
     identifica matches errados e remove com 1 clique. Defer blob pra nao
     estourar RAM — o thumbnail eh servido pela rota /cardapio-img/<tipo>/<id>."""
     from flask import abort
+    from sqlalchemy import or_
     from sqlalchemy.orm import defer
     if not current_user.is_admin():
         abort(403)
     receitas_com_foto = (Receita.query
                          .options(defer(Receita.imagem_blob),
                                   defer(Receita.imagem_mimetype))
-                         .filter(Receita.imagem_blob.isnot(None))
+                         .filter(or_(Receita.imagem_blob.isnot(None),
+                                     Receita.imagem_dropbox_url.isnot(None)))
                          .order_by(Receita.categoria, Receita.nome).all())
     produtos_com_foto = (Produto.query
                          .options(defer(Produto.imagem_blob),
                                   defer(Produto.imagem_mimetype))
-                         .filter(Produto.ativo.is_(True),
-                                 Produto.imagem_blob.isnot(None))
+                         .filter(Produto.ativo.is_(True))
+                         .filter(or_(Produto.imagem_blob.isnot(None),
+                                     Produto.imagem_dropbox_url.isnot(None)))
                          .order_by(Produto.categoria, Produto.nome).all())
     return render_template('main/cardapio_revisar.html',
                             receitas=receitas_com_foto,
