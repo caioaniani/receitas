@@ -60,14 +60,38 @@ def gerar_token(driver):
     return mt
 
 
-def enviar_whatsapp(mt):
+def driver_tem_pedido_pendente(driver):
+    """True se o motorista tem pelo menos 1 PedidoLoja atribuido com status
+    nao-finalizado (entregue/recebido/cancelado). Usado pra guardar envio
+    automatico de magic link — sem pedido, nao manda spam."""
+    from app.constants import STATUS_PEDIDO_FINALIZADOS
+    from app.models import PedidoLoja
+    return db.session.query(PedidoLoja.id).filter(
+        PedidoLoja.driver_id == driver.id,
+        ~PedidoLoja.status.in_(STATUS_PEDIDO_FINALIZADOS),
+    ).first() is not None
+
+
+def enviar_whatsapp(mt, *, forcar=False):
     """Envia o magic link via Z-API pro telefone do driver.
-    Marca enviado_em/enviado_ok no token. Retorna (ok, msg)."""
+    Marca enviado_em/enviado_ok no token. Retorna (ok, msg).
+
+    Por padrao, pula envio se o motorista nao tem nenhum pedido pendente
+    atribuido — evita spam ao cadastrar driver novo ou rodar cron diario
+    pra quem nao tem entrega do dia. `forcar=True` ignora essa guarda
+    (uso: botao manual de regerar pelo admin)."""
     from app.services import zapi
 
     drv = mt.driver
     if not drv.telefone:
         msg = f'Driver {drv.nome} sem telefone — pula envio.'
+        mt.enviado_em = agora()
+        mt.enviado_ok = False
+        db.session.commit()
+        return False, msg
+
+    if not forcar and not driver_tem_pedido_pendente(drv):
+        msg = f'Driver {drv.nome} sem pedido pendente — pula envio.'
         mt.enviado_em = agora()
         mt.enviado_ok = False
         db.session.commit()
