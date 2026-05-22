@@ -1,3 +1,6 @@
+import difflib
+import io
+import zipfile
 
 from flask import abort, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -5,7 +8,7 @@ from flask_login import current_user, login_required
 from app.blueprints.receitas import receitas_bp
 from app.decorators import catalogo_required
 from app.extensions import db
-from app.models import Atribuicao, MateriaPrima, Receita, ReceitaIngrediente
+from app.models import Atribuicao, MateriaPrima, Produto, Receita, ReceitaIngrediente
 from app.services.custos import calcular_custos_receitas
 from app.utils import parse_float_br
 
@@ -105,6 +108,162 @@ def padeiro(id):
     return render_template('receitas/padeiro.html', receita=receita,
                            receita_custos=resultado['custos'],
                            receita_pesos=resultado['pesos'])
+
+
+@receitas_bp.route('/precos', methods=['GET', 'POST'])
+@login_required
+@catalogo_required
+def precos():
+    """Tela bulk pra editar preco_loja/preco_site/preco_venda de todas as receitas.
+
+    GET: agrupa por categoria. POST: parseia preco_loja_<id>/preco_site_<id>/preco_venda_<id>
+    e salva so o que mudou."""
+    if request.method == 'POST':
+        atualizados = 0
+        for r in Receita.query.all():
+            antes = (r.preco_loja, r.preco_site, r.preco_venda)
+            r.preco_loja = parse_float_br(request.form.get(f'preco_loja_{r.id}', ''))
+            r.preco_site = parse_float_br(request.form.get(f'preco_site_{r.id}', ''))
+            r.preco_venda = parse_float_br(request.form.get(f'preco_venda_{r.id}', ''))
+            depois = (r.preco_loja, r.preco_site, r.preco_venda)
+            if antes != depois:
+                atualizados += 1
+        if atualizados:
+            db.session.commit()
+            flash(f'{atualizados} receita(s) com preço atualizado.', 'success')
+        else:
+            flash('Nenhuma mudança.', 'info')
+        return redirect(url_for('receitas.precos'))
+
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    categorias = {}
+    for r in receitas:
+        cat = r.categoria or 'Outros'
+        categorias.setdefault(cat, []).append(r)
+    return render_template('receitas/precos.html', categorias=categorias)
+
+
+@receitas_bp.route('/reaproveitavel', methods=['GET', 'POST'])
+@login_required
+@catalogo_required
+def reaproveitavel():
+    """Tela bulk pra marcar Receita.reaproveitavel e Produto.reaproveitavel.
+
+    Item reaproveitavel: desperdicio com motivo='validade' nao baixa estoque
+    (vira outra coisa — ex: croissant vencido vira croissant amande)."""
+    if request.method == 'POST':
+        atualizados_r = 0
+        atualizados_p = 0
+        marcados_r = {int(k[len('reap_r_'):]) for k in request.form.keys()
+                      if k.startswith('reap_r_')}
+        marcados_p = {int(k[len('reap_p_'):]) for k in request.form.keys()
+                      if k.startswith('reap_p_')}
+        for r in Receita.query.all():
+            novo = r.id in marcados_r
+            if bool(r.reaproveitavel) != novo:
+                r.reaproveitavel = novo
+                atualizados_r += 1
+        for p in Produto.query.all():
+            novo = p.id in marcados_p
+            if bool(p.reaproveitavel) != novo:
+                p.reaproveitavel = novo
+                atualizados_p += 1
+        if atualizados_r or atualizados_p:
+            db.session.commit()
+            flash(f'{atualizados_r} receita(s) + {atualizados_p} produto(s) atualizados.',
+                  'success')
+        else:
+            flash('Nenhuma mudança.', 'info')
+        return redirect(url_for('receitas.reaproveitavel'))
+
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    produtos = Produto.query.order_by(Produto.categoria, Produto.nome).all()
+    receitas_por_cat = {}
+    for r in receitas:
+        cat = r.categoria or 'Outros'
+        receitas_por_cat.setdefault(cat, []).append(r)
+    produtos_por_cat = {}
+    for p in produtos:
+        cat = p.categoria or 'Outros'
+        produtos_por_cat.setdefault(cat, []).append(p)
+    return render_template('receitas/reaproveitavel.html',
+                           receitas_por_cat=receitas_por_cat,
+                           produtos_por_cat=produtos_por_cat)
+
+
+@receitas_bp.route('/imagens/upload', methods=['GET', 'POST'])
+@login_required
+@catalogo_required
+def imagens_upload():
+    """Upload em massa de fotos de receita via .zip.
+
+    Cada arquivo .jpg/.png/.webp no zip eh casado contra Receita.nome
+    (exato case-insensitive, fallback fuzzy via difflib). Casou -> popula
+    imagem_blob + imagem_mimetype. Nao casou -> aparece no relatorio.
+    """
+    if request.method == 'GET':
+        return render_template('receitas/imagens_upload.html')
+
+    arquivo = request.files.get('zipfile')
+    if not arquivo or not arquivo.filename:
+        flash('Selecione um arquivo .zip.', 'warning')
+        return redirect(url_for('receitas.imagens_upload'))
+
+    EXT_OK = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+              '.png': 'image/png', '.webp': 'image/webp'}
+    MAX_IMG = 5 * 1024 * 1024  # 5 MB por imagem
+
+    receitas = Receita.query.order_by(Receita.nome).all()
+    por_nome_lower = {r.nome.lower(): r for r in receitas}
+    nomes_lower = list(por_nome_lower.keys())
+
+    casados = []        # [(nome_arquivo, receita)]
+    nao_casados = []    # [(nome_arquivo, motivo)]
+    atualizadas = 0
+
+    try:
+        bruto = arquivo.read()
+        zf = zipfile.ZipFile(io.BytesIO(bruto))
+    except zipfile.BadZipFile:
+        flash('Arquivo invalido — nao parece ser um .zip.', 'danger')
+        return redirect(url_for('receitas.imagens_upload'))
+
+    import os as _os
+    for info in zf.infolist():
+        if info.is_dir():
+            continue
+        nome_base = _os.path.basename(info.filename)
+        if not nome_base or nome_base.startswith('.') or nome_base.startswith('__'):
+            continue  # .DS_Store, __MACOSX/
+        raiz, ext = _os.path.splitext(nome_base)
+        ext = ext.lower()
+        if ext not in EXT_OK:
+            nao_casados.append((nome_base, f'extensao {ext or "sem"} nao suportada'))
+            continue
+        if info.file_size > MAX_IMG:
+            nao_casados.append((nome_base, f'arquivo > 5 MB ({info.file_size // 1024} KB)'))
+            continue
+
+        raiz_l = raiz.lower().strip()
+        r = por_nome_lower.get(raiz_l)
+        if not r:
+            sugest = difflib.get_close_matches(raiz_l, nomes_lower, n=1, cutoff=0.85)
+            if sugest:
+                r = por_nome_lower[sugest[0]]
+        if not r:
+            nao_casados.append((nome_base, 'nao casou com nenhuma receita'))
+            continue
+
+        with zf.open(info) as f:
+            r.imagem_blob = f.read()
+        r.imagem_mimetype = EXT_OK[ext]
+        casados.append((nome_base, r))
+        atualizadas += 1
+
+    db.session.commit()
+    return render_template('receitas/imagens_relatorio.html',
+                           casados=casados, nao_casados=nao_casados,
+                           atualizadas=atualizadas)
 
 
 @receitas_bp.route('/<int:id>/salvar', methods=['POST'])
