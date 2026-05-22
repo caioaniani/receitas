@@ -946,6 +946,17 @@ def backup_debug_env():
     except Exception as e:  # noqa: BLE001
         info['pg_dump_version'] = f'ERRO: {e}'
 
+    # Diagnostico extra: identifica se imagem eh Dockerfile-based ou Nixpacks
+    try:
+        r = subprocess.run(['bash', '-c',
+                            'ls -la / 2>&1 | head -30; echo ---; '
+                            'cat /etc/os-release 2>&1 | head -5; echo ---; '
+                            'dpkg -l 2>/dev/null | grep -iE "postgres|libpq" || echo "(sem dpkg ou sem postgres)"'],
+                           capture_output=True, text=True, timeout=10)
+        info['ambiente'] = r.stdout
+    except Exception as e:  # noqa: BLE001
+        info['ambiente'] = f'ERRO: {e}'
+
     info['locais_listagem'] = '\n\n'.join(locais)
 
     from flask import jsonify
