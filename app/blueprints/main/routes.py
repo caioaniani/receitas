@@ -284,12 +284,22 @@ def cardapio_img_upload(tipo, id):
               'Tira de novo com qualidade menor.', 'danger')
         return redirect(url_back)
 
+    from app.services import dropbox_storage
+    from app.utils import comprimir_imagem
     try:
-        from app.utils import comprimir_imagem
         final = comprimir_imagem(data)
-        obj.imagem_blob = final
-        obj.imagem_mimetype = 'image/jpeg'
         tamanho_kb = len(final) // 1024
+        if dropbox_storage.disponivel():
+            # Path deterministico — overwrite ao re-upload do mesmo item.
+            path = f'/cardapio/{tipo}/{obj.id}.jpg'
+            info = dropbox_storage.upload_publico(
+                final, path, mode='overwrite', autorename=False)
+            obj.imagem_dropbox_url = info['url']
+            obj.imagem_storage_path = info['storage_path']
+            obj.imagem_blob = None  # libera legado
+        else:
+            obj.imagem_blob = final
+        obj.imagem_mimetype = 'image/jpeg'
     except Exception as e:  # noqa: BLE001
         flash(f'Erro processando imagem: {e}', 'danger')
         return redirect(url_back)
