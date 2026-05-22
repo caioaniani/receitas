@@ -8,14 +8,23 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Dependências de sistema mínimas (psycopg2-binary, Pillow, qrcode)
-# postgresql-client traz pg_dump pro job de backup diario (app/services/backup.py)
+# Dependências de sistema mínimas (psycopg2-binary, Pillow, qrcode).
+# postgresql-client-18 vem do repo pgdg (apt.postgresql.org) — server Railway
+# eh PG 18.3 e pg_dump precisa ser >= versao do servidor. O repo padrao do
+# Debian 13 (trixie) so tem postgresql-client-17, daria mismatch.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    postgresql-client \
-    libjpeg62-turbo \
-    libpng16-16 \
-    curl \
+        curl \
+        ca-certificates \
+        gnupg \
+        libpq5 \
+        libjpeg62-turbo \
+        libpng16-16 \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+       | gpg --dearmor -o /usr/share/keyrings/postgresql.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] https://apt.postgresql.org/pub/repos/apt trixie-pgdg main" \
+       > /etc/apt/sources.list.d/postgresql.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-18 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
