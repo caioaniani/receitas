@@ -1363,9 +1363,12 @@ def _enriquecer_criar_pedido(tool_input):
             continue
         matches = _resolver_produto(nome)
         obs_item = (item.get('observacao') or '').strip() or None
+        estado_item = (item.get('estado') or '').strip().lower() or None
+        if estado_item not in (None, 'backup', 'assado'):
+            estado_item = None
         itens_enriq.append({
             'nome_original': nome, 'quantidade': qtd,
-            'observacao': obs_item,
+            'observacao': obs_item, 'estado': estado_item,
             'matches': matches, 'resolvido': matches[0] if matches else None,
         })
 
