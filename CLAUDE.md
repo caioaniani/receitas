@@ -250,6 +250,35 @@ Adicionar ao `railway.json` um `releaseCommand: "flask db upgrade"`. Risco:
 se a primeira migration falhar, deploy nao sobe. Validar localmente com
 banco snapshot de prod antes. Esforco: ~45min + validacao.
 
+## Backup automatico do banco (2026-05-22)
+
+Backup diario do Postgres pro Dropbox. Implementado em 22/05/2026.
+
+- **Job**: APScheduler em `app/services/seru_cron.py::_run_backup_diario`,
+  cron 04:00 BRT, advisory lock `LOCK_KEY_BACKUP = 7731`. Desligavel via
+  env var `BACKUP_AUTO=0`.
+- **Servico**: `app/services/backup.py::executar_backup()`. Roda
+  `pg_dump --format=custom --no-owner --no-acl` via subprocess (senha
+  via env `PGPASSWORD`, nunca em argv), comprime com gzip, sobe pro
+  Dropbox.
+- **Upload**: `app/services/dropbox_storage.py::upload_arquivo(bytes, path)`.
+  Generic, com fallback chunked >140MB (limite Dropbox API simples).
+- **Destino**: pasta `/backups-postgres/` no Dropbox da app
+  `Receitas-Entregas`. Nome: `padaria_YYYY-MM-DD_HHMM.dump.gz`.
+- **Rota manual**: `POST /admin/backup/run` (owner-only). Botao no
+  `/admin/debug-schema` (card "Backup do Postgres → Dropbox").
+- **Restore**: `pg_restore -d test_restore --no-owner --no-acl
+  padaria_*.dump.gz`. **Importante**: dump custom format precisa de
+  pg_restore (nao psql).
+
+**Versao do pg_dump**: o Dockerfile instala `postgresql-client-18`
+do repo pgdg porque o server Railway eh PG 18 e pg_dump precisa ser
+>= versao do server. Quando server upgradear, atualizar Dockerfile.
+
+**Retencao**: sem limpeza automatica — Dropbox acumula. Custo
+baixo (~$0.10/mes pra ~100 dumps de ~100MB). Quando virar problema,
+adicionar limpeza no servico.
+
 ## Convenções de codigo
 
 - **Lojas operacionais**: SEMPRE use `_lojas_operacionais()` em `pedidos/routes.py` —
