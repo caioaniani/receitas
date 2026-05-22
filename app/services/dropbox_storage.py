@@ -198,6 +198,57 @@ def _converter_para_raw(url):
     return f"{url}{sep}raw=1"
 
 
+def upload_arquivo(file_bytes, dropbox_path):
+    """Faz upload generico de bytes pra um caminho Dropbox arbitrario.
+
+    Diferente de upload_foto, nao cria shared link nem prefixa pasta base.
+    Usado pra backups, exports, qualquer arquivo que so o admin acessa.
+
+    Levanta RuntimeError se nao configurado ou se a API falhar.
+    Retorna {'storage_path': str, 'tamanho': int}.
+    """
+    if not file_bytes:
+        raise RuntimeError('Arquivo vazio')
+    if not dropbox_path or not dropbox_path.startswith('/'):
+        raise RuntimeError('dropbox_path deve comecar com /')
+
+    api_args = {
+        'path': dropbox_path,
+        'mode': 'overwrite',
+        'autorename': False,
+        'mute': True,
+    }
+
+    def _do_upload():
+        token = _token()
+        if not token:
+            raise RuntimeError('Dropbox nao configurado')
+        return requests.post(
+            'https://content.dropboxapi.com/2/files/upload',
+            headers={
+                'Authorization': f'Bearer {token}',
+                'Dropbox-API-Arg': json.dumps(api_args),
+                'Content-Type': 'application/octet-stream',
+            },
+            data=file_bytes,
+            timeout=120,  # backup pode ser grande
+        )
+
+    r = _do_upload()
+    if r.status_code == 401:
+        _invalidar_cache()
+        r = _do_upload()
+    if r.status_code != 200:
+        logger.warning('Dropbox upload_arquivo falhou: %s %s', r.status_code, r.text[:200])
+        raise RuntimeError(f'Upload Dropbox falhou: {r.status_code}')
+
+    meta = r.json()
+    return {
+        'storage_path': meta.get('path_lower') or dropbox_path,
+        'tamanho': meta.get('size') or len(file_bytes),
+    }
+
+
 def deletar(storage_path):
     """Best-effort: deleta arquivo do Dropbox. Usado quando admin remove foto."""
     token = _token()
