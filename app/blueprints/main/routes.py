@@ -896,3 +896,24 @@ def debug_schema_stamp():
 
     return redirect(url_for('main.debug_schema',
                             log=log_buf.getvalue()[-3000:], ok=ok))
+
+
+@main_bp.route('/admin/backup/run', methods=['POST'])
+@owner_required
+def backup_run():
+    """Dispara backup manual do Postgres pro Dropbox. Owner-only.
+
+    Uso: pra testar a configuracao e gerar dump on-demand. O job
+    automatico roda diariamente as 04:00 BRT via APScheduler.
+    """
+    from flask import flash
+
+    from app.services import backup as backup_svc
+
+    resultado = backup_svc.executar_backup(forcar=True)
+    if resultado['ok']:
+        mb = resultado['tamanho'] / 1024 / 1024
+        flash(f'Backup OK: {mb:.2f} MB em {resultado["arquivo"]}', 'success')
+    else:
+        flash(f'Backup falhou: {resultado.get("motivo") or "ver logs"}', 'danger')
+    return redirect(url_for('main.debug_schema'))
