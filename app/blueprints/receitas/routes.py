@@ -77,6 +77,11 @@ def salvar(id):
 
     receita.nome = request.form.get('nome', receita.nome).strip()
     receita.categoria = request.form.get('categoria', '').strip() or None
+    fam = (request.form.get('familia') or '').strip().lower() or None
+    if fam in ('viennoiserie', 'pao_sourdough', 'fornada_especial'):
+        receita.familia = fam
+    elif fam is None or fam == '':
+        receita.familia = None
     receita.preco_venda = parse_float_br(request.form.get('preco_venda', ''))
     receita.preco_loja = parse_float_br(request.form.get('preco_loja', ''))
     receita.preco_site = parse_float_br(request.form.get('preco_site', ''))
