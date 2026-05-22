@@ -1839,7 +1839,12 @@ def executar_criar_pedido(params, user):
             nao_resolvidos.append(item.get('nome_original') or '?')
             continue
         obs_item = (item.get('observacao') or '').strip()[:200] or None
-        pi = PedidoItem(pedido_id=pedido.id, quantidade=qtd, observacao=obs_item)
+        # Estado vem da Claude (`backup`/`assado`) ou null = padrao da familia.
+        estado_item = (item.get('estado') or '').strip().lower() or None
+        if estado_item not in (None, 'backup', 'assado'):
+            estado_item = None
+        pi = PedidoItem(pedido_id=pedido.id, quantidade=qtd,
+                         observacao=obs_item, estado=estado_item)
         if resolvido['tipo'] == 'produto':
             pi.produto_id = resolvido['id']
         elif resolvido['tipo'] == 'receita':
