@@ -21,7 +21,7 @@
         <span style="font-size:13px;">A quantidade recebida pela loja foi diferente da separada pela industria. Detalhes:</span>
         <ul class="mb-0 mt-1" style="font-size:13px;">
             {% for i in pedido.itens_divergentes %}
-            <li><strong>{{ i.nome_item }}</strong>: pedido <strong>{{ i.quantidade }}</strong>, recebido <strong>{{ i.quantidade_recebida }}</strong>
+            <li><strong>{{ i.nome_item_com_estado }}</strong>: pedido <strong>{{ i.quantidade }}</strong>, recebido <strong>{{ i.quantidade_recebida }}</strong>
                 <span class="text-muted">({{ 'faltou' if i.quantidade_recebida < i.quantidade else 'sobrou' }} {{ (i.quantidade - i.quantidade_recebida)|abs }})</span>
             </li>
             {% endfor %}
