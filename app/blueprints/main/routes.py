@@ -1067,6 +1067,39 @@ def blobs_migrar(modelo):
     return redirect(url_for('main.debug_schema'))
 
 
+@main_bp.route('/admin/blobs/fix-urls-dropbox', methods=['POST'])
+@owner_required
+def blobs_fix_urls():
+    """One-shot: substitui dl=0 por raw=1 em URLs Dropbox ja populadas.
+
+    Bug originalmente em `_converter_para_raw` deixou URLs com formato
+    `...?rlkey=X&dl=0&raw=1`. Dropbox prioriza dl=0 e serve HTML preview.
+    Esta rota corrige UPDATE direto no banco — sem precisar reupload.
+    """
+    from flask import flash
+    from sqlalchemy import text
+
+    from app.extensions import db as _db
+
+    tabelas = [
+        ('pedido_item_foto', 'imagem_url'),
+        ('foto_recebimento', 'imagem_url'),
+        ('receita', 'imagem_dropbox_url'),
+        ('produto', 'imagem_dropbox_url'),
+    ]
+    resumo = []
+    with _db.engine.begin() as conn:
+        for tabela, coluna in tabelas:
+            r = conn.execute(text(
+                f"UPDATE {tabela} SET {coluna} = "
+                f"REPLACE({coluna}, 'dl=0', 'raw=1') "
+                f"WHERE {coluna} LIKE '%dl=0%'"
+            ))
+            resumo.append(f'{tabela}.{coluna}: {r.rowcount}')
+    flash('URLs Dropbox corrigidas: ' + ' · '.join(resumo), 'success')
+    return redirect(url_for('main.debug_schema'))
+
+
 @main_bp.route('/admin/backup/run', methods=['POST'])
 @owner_required
 def backup_run():
