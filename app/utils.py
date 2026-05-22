@@ -45,6 +45,36 @@ def para_brt(dt):
     return dt.astimezone(BRT).replace(tzinfo=None)
 
 
+def comprimir_imagem(file_bytes, *, max_size=700, quality=82):
+    """Comprime imagem via PIL: resize proporcional + JPEG quality.
+
+    Aplica EXIF transpose (corrige rotacao de iPhone/Android) e converte
+    pra RGB (descarta canal alpha de PNG). Resultado: JPEG progressivo
+    otimizado.
+
+    - `max_size`: maior lado (proporcional). Default 700.
+    - `quality`: 1-95. Default 82 (~50-150KB pra fotos comuns).
+
+    Retorna `bytes` (sempre JPEG). Levanta `ValueError` se file_bytes
+    vazio ou imagem invalida.
+    """
+    import io
+
+    from PIL import Image, ImageOps
+
+    if not file_bytes:
+        raise ValueError('Arquivo vazio')
+
+    img = Image.open(io.BytesIO(file_bytes))
+    img = ImageOps.exif_transpose(img)
+    if img.mode in ('RGBA', 'P', 'LA'):
+        img = img.convert('RGB')
+    img.thumbnail((max_size, max_size), Image.LANCZOS)
+    out = io.BytesIO()
+    img.save(out, format='JPEG', quality=quality, optimize=True, progressive=True)
+    return out.getvalue()
+
+
 def resolver_loja_por_nome(nome, *, somente_ativas=False):
     """Fuzzy match de Loja por nome: case-insensitive exata, depois ilike.
 
