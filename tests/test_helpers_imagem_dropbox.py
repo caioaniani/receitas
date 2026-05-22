@@ -105,6 +105,25 @@ def test_upload_publico_arquivo_vazio(app):
             dropbox_storage.upload_publico(b'', '/foo.jpg')
 
 
+def test_converter_para_raw_remove_dl_e_normaliza():
+    """URL Dropbox com dl=0 e/ou raw=1 vira sempre `&raw=1` unico, sem dl."""
+    from app.services.dropbox_storage import _converter_para_raw
+
+    casos = [
+        # (input, esperado-parcial-no-output)
+        ('https://www.dropbox.com/s/abc/foo.jpg?dl=0', 'raw=1'),
+        ('https://www.dropbox.com/scl/fi/x/foo.jpg?rlkey=k&dl=0', 'raw=1'),
+        ('https://www.dropbox.com/scl/fi/x/foo.jpg?rlkey=k&dl=0&raw=1', 'raw=1'),
+        ('https://www.dropbox.com/scl/fi/x/foo.jpg?rlkey=k&raw=1&raw=1', 'raw=1'),
+        ('https://www.dropbox.com/s/abc/foo.jpg', 'raw=1'),  # sem dl, adiciona
+    ]
+    for entrada, esperado in casos:
+        out = _converter_para_raw(entrada)
+        assert 'dl=' not in out, f'dl ainda em {out}'
+        assert out.count('raw=1') == 1, f'raw=1 duplicado em {out}'
+        assert esperado in out
+
+
 def test_upload_foto_delega_pra_upload_publico(app):
     """upload_foto (compat) deve chamar upload_publico com path correto."""
     from app.services import dropbox_storage
