@@ -113,6 +113,82 @@ def migrar_pedido_item_foto(batch_size=20, max_batches=None):
     return _com_lock(_job)
 
 
+def _migrar_catalogo(modelo_cls, tipo, batch_size=20, max_batches=None):
+    """Migra Receita.imagem_blob ou Produto.imagem_blob pra Dropbox.
+
+    `modelo_cls`: classe SQLAlchemy (Receita ou Produto).
+    `tipo`: 'receita' ou 'produto' (vai no path Dropbox).
+    """
+    import time as _time
+
+    def _job():
+        total_pendentes = (modelo_cls.query
+                           .filter(modelo_cls.imagem_dropbox_url.is_(None))
+                           .filter(modelo_cls.imagem_blob.isnot(None))
+                           .count())
+
+        migradas = 0
+        erros = 0
+        detalhes = []
+        batches_feitas = 0
+
+        while True:
+            if max_batches and batches_feitas >= max_batches:
+                break
+
+            objs = (modelo_cls.query
+                    .filter(modelo_cls.imagem_dropbox_url.is_(None))
+                    .filter(modelo_cls.imagem_blob.isnot(None))
+                    .order_by(modelo_cls.id)
+                    .limit(batch_size)
+                    .all())
+            if not objs:
+                break
+
+            for obj in objs:
+                try:
+                    # Foto de cardapio ja vem do upload comprimida (PIL 700px),
+                    # mas re-comprimir eh seguro e idempotente.
+                    comprimida = comprimir_imagem(obj.imagem_blob)
+                    path = f'/cardapio/{tipo}/{obj.id}.jpg'
+                    info = dropbox_storage.upload_publico(
+                        comprimida, path,
+                        mode='overwrite', autorename=False)
+                    obj.imagem_dropbox_url = info['url']
+                    obj.imagem_storage_path = info['storage_path']
+                    obj.imagem_blob = None
+                    obj.imagem_mimetype = 'image/jpeg'
+                    migradas += 1
+                except Exception as e:  # noqa: BLE001
+                    detalhes.append(f'{tipo} #{obj.id}: {type(e).__name__}: {e}')
+                    erros += 1
+                    logger.exception('[blob_migrator] %s #%s falhou', tipo, obj.id)
+
+            db.session.commit()
+            batches_feitas += 1
+            _time.sleep(0.1)
+
+        return {
+            'ok': True,
+            'total': total_pendentes,
+            'migradas': migradas,
+            'erros': erros,
+            'detalhes': detalhes[:50],
+        }
+
+    return _com_lock(_job)
+
+
+def migrar_receita_imagem(batch_size=20, max_batches=None):
+    from app.models import Receita
+    return _migrar_catalogo(Receita, 'receita', batch_size, max_batches)
+
+
+def migrar_produto_imagem(batch_size=20, max_batches=None):
+    from app.models import Produto
+    return _migrar_catalogo(Produto, 'produto', batch_size, max_batches)
+
+
 def migrar_foto_recebimento(batch_size=20, max_batches=None):
     """Migra FotoRecebimento.imagem (BLOB) pra Dropbox.
 
