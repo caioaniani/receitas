@@ -48,7 +48,8 @@ TOOL_CRIAR_PEDIDO = {
                     "properties": {
                         "nome": {"type": "string", "description": "Nome EXATO do produto/receita do catalogo."},
                         "quantidade": {"type": "integer", "minimum": 1},
-                        "observacao": {"type": ["string", "null"], "description": "Observacao do item (max 200 chars). Use 'backup' quando o usuario disser 'X de backup' / 'X backup' / 'backup de X' — significa item ultra-congelado ja recheado pra reposicao rapida. Use tambem pra outras notas pontuais ('sem cebola', 'recheio extra'). Default null."},
+                        "estado": {"type": ["string", "null"], "enum": [None, "backup", "assado"], "description": "Estado do item: null = padrao da familia (cru congelado pra viennoiserie / congelado assado pra pao); 'backup' = pre-fermentado congelado (assa rapido pra repor vitrine); 'assado' = ja assado (raro, so se a loja pediu explicitamente). Pedido misto (ex: '5 croissants + 3 backup') vira 2 linhas — uma com estado=null, outra com estado='backup'. NUNCA consolide quantidades de estados distintos."},
+                        "observacao": {"type": ["string", "null"], "description": "Observacao livre do item (max 200 chars): 'sem cebola', 'recheio extra'. NAO use pra estado — use o campo `estado` acima. Default null."},
                     },
                     "required": ["nome", "quantidade"],
                 },
