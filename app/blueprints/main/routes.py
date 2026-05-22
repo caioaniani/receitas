@@ -555,7 +555,8 @@ def audit():
     usuarios = Usuario.query.order_by(Usuario.nome).all()
     return render_template("main/audit.html", rows=rows, tabelas=sorted(tabelas),
                            usuarios=usuarios, filtros={"tabela": tabela_f,
-                           "usuario_id": usuario_f, "acao": acao_f})
+                           "usuario_id": usuario_f, "acao": acao_f,
+                           "registro_id": registro_f})
 
 
 
