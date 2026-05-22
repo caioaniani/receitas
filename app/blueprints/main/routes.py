@@ -1087,15 +1087,26 @@ def blobs_fix_urls():
         ('receita', 'imagem_dropbox_url'),
         ('produto', 'imagem_dropbox_url'),
     ]
+    # Normalizacao: itera linhas com URL Dropbox e aplica
+    # _converter_para_raw (robusto a dl=0, raw=1 duplicado, etc).
+    from app.services.dropbox_storage import _converter_para_raw
     resumo = []
-    with _db.engine.begin() as conn:
-        for tabela, coluna in tabelas:
-            r = conn.execute(text(
-                f"UPDATE {tabela} SET {coluna} = "
-                f"REPLACE({coluna}, 'dl=0', 'raw=1') "
-                f"WHERE {coluna} LIKE '%dl=0%'"
-            ))
-            resumo.append(f'{tabela}.{coluna}: {r.rowcount}')
+    for tabela, coluna in tabelas:
+        with _db.engine.begin() as conn:
+            rows = conn.execute(text(
+                f"SELECT id, {coluna} FROM {tabela} "
+                f"WHERE {coluna} IS NOT NULL"
+            )).fetchall()
+            corrigidas = 0
+            for row in rows:
+                nova_url = _converter_para_raw(row[1])
+                if nova_url != row[1]:
+                    conn.execute(
+                        text(f"UPDATE {tabela} SET {coluna} = :u "
+                             f"WHERE id = :i"),
+                        {'u': nova_url, 'i': row[0]})
+                    corrigidas += 1
+            resumo.append(f'{tabela}.{coluna}: {corrigidas}/{len(rows)}')
     flash('URLs Dropbox corrigidas: ' + ' · '.join(resumo), 'success')
     return redirect(url_for('main.debug_schema'))
 
