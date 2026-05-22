@@ -204,21 +204,28 @@ def _criar_shared_link(token, path):
 
 
 def _converter_para_raw(url):
-    """Converte URL ?dl=0 do Dropbox em ?raw=1 que serve o arquivo direto.
+    """Normaliza URL Dropbox pra servir arquivo raw.
 
-    URLs modernas do Dropbox (formato /scl/fi/...) podem ter dl=0 em
-    qualquer posicao (`?dl=0` ou `&dl=0` apos rlkey). Substitui em
-    qualquer lugar, sem deixar dl=X coexistindo com raw=1 (Dropbox da
-    precedencia ao dl=0 e serve HTML preview em vez do arquivo).
+    URLs modernas do Dropbox (formato /scl/fi/...) chegam com `&dl=0` por
+    default — preview HTML, nao serve o arquivo. Trocar por `raw=1` serve
+    bytes diretos via CDN.
+
+    Robusto contra: dl em qualquer posicao, raw=1 ja presente, duplicatas.
     """
     if not url:
         return url
-    if 'dl=0' in url:
-        return url.replace('dl=0', 'raw=1')
-    if 'dl=1' in url:
-        return url.replace('dl=1', 'raw=1')
-    sep = '&' if '?' in url else '?'
-    return f"{url}{sep}raw=1"
+    from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
+    parsed = urlparse(url)
+    params = parse_qsl(parsed.query, keep_blank_values=True)
+    # Remove qualquer dl=X (Dropbox prioriza dl sobre raw — se houver dl=0
+    # com raw=1, Dropbox serve preview HTML).
+    params = [(k, v) for k, v in params if k != 'dl']
+    # Remove raw existente (pra evitar duplicatas) e garante exatamente 1.
+    params = [(k, v) for k, v in params if k != 'raw']
+    params.append(('raw', '1'))
+    new_query = urlencode(params)
+    return urlunparse(parsed._replace(query=new_query))
 
 
 _UPLOAD_LIMITE_SIMPLES = 140 * 1024 * 1024  # acima disso, usa upload_session
