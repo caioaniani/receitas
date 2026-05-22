@@ -198,12 +198,32 @@
         </form>
         <form method="POST"
               action="{{ url_for('main.blobs_migrar', modelo='foto_recebimento') }}"
-              class="mb-0">
+              class="mb-2">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-sm btn-warning"
                     onclick="return confirm('Migrar TODAS as fotos de recebimento (FotoRecebimento) do banco pro Dropbox?');">
                 <i class="bi bi-arrow-up-right-square"></i>
                 Migrar FotoRecebimento (loja apos receber)
+            </button>
+        </form>
+        <form method="POST"
+              action="{{ url_for('main.blobs_migrar', modelo='receita') }}"
+              class="mb-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-warning"
+                    onclick="return confirm('Migrar TODAS as imagens de Receita pro Dropbox?');">
+                <i class="bi bi-arrow-up-right-square"></i>
+                Migrar Receita.imagem_blob (cardapio)
+            </button>
+        </form>
+        <form method="POST"
+              action="{{ url_for('main.blobs_migrar', modelo='produto') }}"
+              class="mb-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-warning"
+                    onclick="return confirm('Migrar TODAS as imagens de Produto pro Dropbox?');">
+                <i class="bi bi-arrow-up-right-square"></i>
+                Migrar Produto.imagem_blob (cardapio)
             </button>
         </form>
     </div>
