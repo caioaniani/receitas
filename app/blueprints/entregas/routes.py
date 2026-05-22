@@ -1789,3 +1789,56 @@ def drivers_magic_regerar(did):
     except Exception as exc:  # noqa: BLE001
         flash(f'Erro: {exc}', 'danger')
     return redirect(url_for('entregas.drivers_magic_status'))
+
+
+@entregas_bp.route('/drivers/bulk', methods=['GET', 'POST'])
+@login_required
+@entrega_access_required
+def drivers_bulk():
+    """Edicao em massa de drivers: telefone, pin, capacidade, ativo.
+
+    O regerar+enviar magic link continua em rota propria (botao por linha
+    aciona /drivers/magic/<did>/regerar)."""
+    from flask import flash, redirect, url_for
+
+    if request.method == 'POST':
+        atualizados = 0
+        erros = []
+        for d in Driver.query.all():
+            tel = (request.form.get(f'telefone_{d.id}', '') or '').strip() or None
+            pin = (request.form.get(f'pin_{d.id}', '') or '').strip() or None
+            cap_raw = (request.form.get(f'capacidade_{d.id}', '') or '').strip()
+            ativo = bool(request.form.get(f'ativo_{d.id}'))
+
+            if pin is not None and not (pin.isdigit() and 4 <= len(pin) <= 6):
+                erros.append(f'{d.nome}: PIN deve ter 4-6 digitos')
+                continue
+            try:
+                cap = max(1, int(cap_raw)) if cap_raw else (d.capacidade or 999)
+            except ValueError:
+                erros.append(f'{d.nome}: capacidade invalida')
+                continue
+
+            antes = (d.telefone, d.pin, d.capacidade, d.ativo)
+            d.telefone = tel
+            d.pin = pin
+            d.capacidade = cap
+            d.ativo = ativo
+            if (d.telefone, d.pin, d.capacidade, d.ativo) != antes:
+                atualizados += 1
+
+        if erros:
+            db.session.rollback()
+            for e in erros:
+                flash(e, 'danger')
+            return redirect(url_for('entregas.drivers_bulk'))
+
+        if atualizados:
+            db.session.commit()
+            flash(f'{atualizados} motorista(s) atualizado(s).', 'success')
+        else:
+            flash('Nenhuma mudança.', 'info')
+        return redirect(url_for('entregas.drivers_bulk'))
+
+    drivers = Driver.query.order_by(Driver.ativo.desc(), Driver.nome).all()
+    return render_template('entregas/drivers_bulk.html', drivers=drivers)
