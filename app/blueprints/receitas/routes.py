@@ -52,6 +52,50 @@ def padeiro_lista():
     return render_template('receitas/padeiro_lista.html', categorias=categorias)
 
 
+@receitas_bp.route('/familias', methods=['GET', 'POST'])
+@login_required
+@catalogo_required
+def familias():
+    """Tela bulk pra atribuir Receita.familia em lote.
+
+    GET: lista todas as receitas com dropdown de familia, agrupadas por
+    categoria. Botoes "Aplicar X a todos da categoria" pra rapido.
+    POST: salva todas as familias enviadas (input name=`familia_<id>`).
+    Familia vazia = limpa (NULL).
+    """
+    if request.method == 'POST':
+        atualizados = 0
+        permitidos = {'viennoiserie', 'pao_sourdough', 'fornada_especial'}
+        for key, val in request.form.items():
+            if not key.startswith('familia_'):
+                continue
+            try:
+                rid = int(key[len('familia_'):])
+            except ValueError:
+                continue
+            r = Receita.query.get(rid)
+            if not r:
+                continue
+            v = (val or '').strip().lower() or None
+            nova = v if v in permitidos else None
+            if r.familia != nova:
+                r.familia = nova
+                atualizados += 1
+        if atualizados:
+            db.session.commit()
+            flash(f'{atualizados} receita(s) atualizada(s).', 'success')
+        else:
+            flash('Nenhuma mudança.', 'info')
+        return redirect(url_for('receitas.familias'))
+
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    categorias = {}
+    for r in receitas:
+        cat = r.categoria or 'Outros'
+        categorias.setdefault(cat, []).append(r)
+    return render_template('receitas/familias.html', categorias=categorias)
+
+
 @receitas_bp.route('/<int:id>/padeiro')
 @login_required
 def padeiro(id):
