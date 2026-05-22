@@ -1781,7 +1781,8 @@ def drivers_magic_regerar(did):
         return redirect(url_for('entregas.drivers_magic_status'))
     try:
         mt = driver_magic.gerar_token(d)
-        ok, msg = driver_magic.enviar_whatsapp(mt)
+        # forcar=True: admin clicou manualmente, ignora guarda de pedido pendente
+        ok, msg = driver_magic.enviar_whatsapp(mt, forcar=True)
         if ok:
             flash(f'Link enviado pra {d.nome}.', 'success')
         else:
