@@ -81,11 +81,34 @@ Esta regra é obrigatória e se aplica a TODA conversa.
 - **Branch de produção (Railway acompanha)**: `claude/continue-controller-conversation-aGS3F`
 - **URL publica de prod**: https://gestao.opaopadariaartesanal.com.br/
 - **Auto-deploy** no Railway (Auto deploys ON, Wait for CI OFF). Push = build + deploy
-  automatico em ~2-3 min.
+  automatico em ~2-3 min (Dockerfile pode demorar 5min se mexer no apt).
 - **Workflow**: **SEMPRE commit direto no branch de producao**. Nao abrir PR — o auto-commit
   hook ja faz commit+push pro branch atual, e o usuario nao quer mergear nada manualmente.
   Se a mudanca for grande, ainda assim vai direto em prod (auto-commit acumula varios commits).
 - **Nunca** force-push nem `--no-verify` sem autorização explícita.
+
+### Railway usa Dockerfile (nao Nixpacks)
+
+**ATENCAO**: o `railway.json` diz `"builder": "NIXPACKS"`, mas Railway IGNORA
+isso e usa o `Dockerfile` na raiz (detectou e priorizou). Confirmado em
+2026-05-22 ao debugar `pg_dump nao encontrado` — `/nix/store/` vazio,
+`/etc/os-release` retorna Debian trixie, `/app` com owner `padaria` (bate
+com `USER padaria` do Dockerfile).
+
+**Consequencias**:
+- `nixpacks.toml` na raiz **e ignorado**. Nao adicione.
+- Env var `NIXPACKS_APT_PKGS` no Railway **e ignorada**.
+- Pra instalar pacotes apt em prod, **edite o Dockerfile** (linha do
+  `RUN apt-get install`).
+- Pacotes Postgres precisam vir do repo pgdg (`apt.postgresql.org`),
+  nao do Debian main — Debian 13 (trixie) so tem ate `postgresql-client-17`
+  e o server Railway eh PG 18. Padrao: ver bloco do `Dockerfile` que
+  adiciona o keyring GPG + sources.list.d antes de instalar
+  `postgresql-client-18`.
+
+**Rota debug**: `/admin/backup/debug-env` (owner-only) mostra PATH,
+`which pg_dump`, conteudo de `/`, `/etc/os-release`, e pacotes apt
+relevantes. Util quando suspeitar que algo nao subiu no build.
 
 ## Auto-commit hook ativo
 
