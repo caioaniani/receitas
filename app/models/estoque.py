@@ -146,6 +146,11 @@ class EstoqueLoja(db.Model):
         return '?'
 
     @property
+    def nome_item_com_estado(self):
+        from app.constants import render_item_com_estado
+        return render_item_com_estado(self.nome_item, self.estado)
+
+    @property
     def pendente(self):
         return (self.receita_id is None and self.produto_id is None
                 and self.materia_prima_id is None and bool(self.nome_pendente))
