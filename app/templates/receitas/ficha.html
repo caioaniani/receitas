@@ -287,7 +287,7 @@
         <label class="form-label small fw-bold mb-1">
             <i class="bi bi-image"></i> Imagem pro cardápio digital
         </label>
-        {% if receita.imagem_blob %}
+        {% if receita.imagem_blob or receita.imagem_dropbox_url %}
         <div class="mb-2">
             <img src="{{ url_for('main.cardapio_img', tipo='receita', id=receita.id) }}"
                  alt="" style="max-height:120px;border-radius:6px;border:1px solid #ddd;">
