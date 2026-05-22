@@ -2038,6 +2038,8 @@ def executar_editar_pedido(params, user):
     if not mudancas:
         return {'ok': False, 'erro': 'Nada pra mudar (params iguais ao atual).'}
 
+    pedido.modificado_em = agora()
+    pedido.modificado_por_id = user.id
     db.session.commit()
     return {'ok': True, 'pedido_id': pedido.id, 'mudancas': mudancas,
             'nao_resolvidos': nao_resolvidos,
