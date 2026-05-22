@@ -276,20 +276,9 @@ def cardapio_img_upload(tipo, id):
               'Tira de novo com qualidade menor.', 'danger')
         return redirect(url_back)
 
-    # Compressao: PIL reduz pra 700x700 max e converte pra JPEG quality 82.
-    # Aplica EXIF orientation pra fotos de celular nao virarem deitadas.
     try:
-        import io as _io
-
-        from PIL import Image, ImageOps
-        img = Image.open(_io.BytesIO(data))
-        img = ImageOps.exif_transpose(img)  # corrige rotacao de iPhone/Android
-        if img.mode in ('RGBA', 'P', 'LA'):
-            img = img.convert('RGB')
-        img.thumbnail((700, 700), Image.LANCZOS)
-        out = _io.BytesIO()
-        img.save(out, format='JPEG', quality=82, optimize=True, progressive=True)
-        final = out.getvalue()
+        from app.utils import comprimir_imagem
+        final = comprimir_imagem(data)
         obj.imagem_blob = final
         obj.imagem_mimetype = 'image/jpeg'
         tamanho_kb = len(final) // 1024
