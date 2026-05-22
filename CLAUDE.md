@@ -40,6 +40,16 @@ usuario, nao por mim espontaneamente):
   de migrar colunas pra `Numeric(10,2)`. Refeito da forma canonica.
 - B9 (fracao inestornavel) marcado como "aceitar" sem perguntar.
   Refeito com `SeruDebitoMov` proper.
+- 2026-05-22: adicionei colunas `modificado_em`/`modificado_por_id` em
+  `PedidoLoja` direto no modelo, sem ALTER explicito em
+  `_migrate_postgres()`. Auto-commit pushou pra prod, Railway deployou,
+  Postgres nao tinha as colunas, qualquer `SELECT pedido_loja.*` virou
+  500. Causa raiz dupla: (1) confiei no CLAUDE.md que afirmava
+  "Railway aplica Alembic automaticamente" sem verificar (era falso —
+  ver "Schema migrations" abaixo, ja corrigido), (2) nao auditei o
+  caminho de aplicacao de schema antes de mudar modelo. Procedimento
+  correto: commit 1 = ALTER no helper legado + push + aguardar deploy;
+  commit 2 = modelo + logica.
 
 ## Verificação antes de afirmar
 
