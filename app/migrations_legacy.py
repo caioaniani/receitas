@@ -406,6 +406,8 @@ def _migrate_postgres(app):
         cols_ep = {row[0] for row in result}
         if cols_ep and 'nome_pendente' not in cols_ep:
             conn.execute(text("ALTER TABLE estoque_producao ADD COLUMN nome_pendente VARCHAR(200)"))
+        if cols_ep and 'estado' not in cols_ep:
+            conn.execute(text("ALTER TABLE estoque_producao ADD COLUMN estado VARCHAR(20)"))
 
         # vnda_debito.componente_key (cestas: PK composta para 1 acumulador por componente)
         result = conn.execute(text(
