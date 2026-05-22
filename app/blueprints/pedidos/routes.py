@@ -576,22 +576,29 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
         if qtd_rec <= 0:
             continue
 
+        # Linha de estoque eh por (loja, item, ESTADO). Mesmo pedido com 2
+        # estados gera 2 linhas distintas.
         el = EstoqueLoja.query.filter_by(
             loja_id=pedido.loja_id,
             receita_id=item.receita_id,
             produto_id=item.produto_id,
             materia_prima_id=item.materia_prima_id,
+            estado=item.estado,
         ).first()
         if not el:
             el = EstoqueLoja(loja_id=pedido.loja_id,
                              receita_id=item.receita_id,
                              produto_id=item.produto_id,
-                             materia_prima_id=item.materia_prima_id)
+                             materia_prima_id=item.materia_prima_id,
+                             estado=item.estado)
             db.session.add(el)
             db.session.flush()
         el.quantidade += qtd_rec
         ref_div = ' (divergente)' if qtd_rec != item.quantidade else ''
-        ref = f'Pedido #{pedido.id}{ref_div}'
+        # Tag de estado na referencia pra auditoria
+        from app.constants import estado_label
+        ref_estado = estado_label(item.estado)
+        ref = f'Pedido #{pedido.id}{ref_div} {ref_estado}'.rstrip()
         if ref_extra:
             ref += f' ({ref_extra})'
         db.session.add(MovEstoqueLoja(
