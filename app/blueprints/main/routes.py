@@ -525,6 +525,7 @@ def audit():
     tabela_f = request.args.get("tabela") or None
     usuario_f = request.args.get("usuario_id", type=int)
     acao_f = request.args.get("acao") or None
+    registro_f = request.args.get("registro_id", type=int)
     q = AuditLog.query
     if tabela_f:
         q = q.filter_by(tabela=tabela_f)
@@ -532,6 +533,8 @@ def audit():
         q = q.filter_by(usuario_id=usuario_f)
     if acao_f in ("insert", "update", "delete"):
         q = q.filter_by(acao=acao_f)
+    if registro_f:
+        q = q.filter_by(registro_id=registro_f)
     logs = q.order_by(AuditLog.criado_em.desc()).limit(200).all()
     # Parse JSON dos campos antes/depois pra exibir formatado
     rows = []
