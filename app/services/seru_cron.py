@@ -188,8 +188,16 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
+    # Backup do Postgres pro Dropbox — 04:00 BRT diario
+    if os.environ.get('BACKUP_AUTO', '1') != '0':
+        _scheduler.add_job(
+            lambda app=app: _run_backup_diario(app),
+            'cron', hour=4, minute=0, id='backup-diario',
+            max_instances=1, coalesce=True,
+        )
+
     _scheduler.start()
-    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h · zapi tarefas 07:00 · zapi anomalias 23:00')
+    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h · zapi tarefas 07:00 · zapi anomalias 23:00 · backup 04:00')
 
 
 def _run_slack_resumo_diario(app):
@@ -294,6 +302,48 @@ def _run_zapi_digest_anomalias(app):
         except Exception:
             logger.exception('zapi digest anomalias falhou')
 
+
+
+def _run_backup_diario(app):
+    """Job: backup do Postgres pro Dropbox (04:00 BRT). Advisory lock pra
+    garantir 1 execucao entre workers gunicorn."""
+    global _ult_run_backup
+    from app.extensions import db
+    from app.services import backup
+    from app.utils import agora as _agora
+
+    with app.app_context():
+        uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
+        is_pg = 'postgresql' in uri
+        if not is_pg:
+            return  # backup nao roda em SQLite local
+
+        try:
+            with db.engine.connect() as c:
+                got = c.execute(text('SELECT pg_try_advisory_lock(:k)'),
+                                {'k': LOCK_KEY_BACKUP}).scalar()
+                if not got:
+                    return
+            try:
+                resultado = backup.executar_backup()
+                _ult_run_backup = _agora()
+                if not resultado['ok']:
+                    logger.warning('backup diario falhou: %s', resultado.get('motivo'))
+            finally:
+                with db.engine.connect() as c:
+                    c.execute(text('SELECT pg_advisory_unlock(:k)'),
+                              {'k': LOCK_KEY_BACKUP})
+                    c.commit()
+        except Exception:
+            logger.exception('backup diario falhou (exception)')
+
+
+def status_backup():
+    """Status do job backup pra UI."""
+    return {
+        'ativo': _scheduler is not None and _scheduler.running,
+        'ultimo_run': _ult_run_backup,
+    }
 
 
 def _run_slack_lembretes_pedidos_hoje(app):
