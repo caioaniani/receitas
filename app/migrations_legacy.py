@@ -391,6 +391,30 @@ def _migrate_postgres(app):
             "ON pedido_item_foto(pedido_item_id)"
         ))
 
+        # M6: migracao BLOB → Dropbox em pedido_item_foto.
+        # Adiciona colunas Dropbox e relaxa NOT NULL do BLOB pra novas fotos
+        # ja subirem direto sem blob. Backfill popula URLs depois.
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'pedido_item_foto'"
+        ))
+        cols_pif = {row[0] for row in result}
+        if cols_pif and 'imagem_url' not in cols_pif:
+            conn.execute(text(
+                'ALTER TABLE pedido_item_foto ADD COLUMN imagem_url VARCHAR(500)'
+            ))
+        if cols_pif and 'imagem_storage_path' not in cols_pif:
+            conn.execute(text(
+                'ALTER TABLE pedido_item_foto '
+                'ADD COLUMN imagem_storage_path VARCHAR(500)'
+            ))
+        if cols_pif and 'imagem' in cols_pif:
+            # Best-effort: drop NOT NULL. Em PG, eh idempotente em coluna ja
+            # nullable. Se ja foi feito, este DDL ainda eh OK (no-op).
+            conn.execute(text(
+                'ALTER TABLE pedido_item_foto ALTER COLUMN imagem DROP NOT NULL'
+            ))
+
         # driver_magic_token — magic link diario do motorista
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS driver_magic_token (
