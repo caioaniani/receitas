@@ -170,29 +170,49 @@ Padaria Opão: receitas, pedidos, entregas, PDV, estoque, RH, copilot (Claude So
 **Alembic adotado em 21/05/2026** (Flask-Migrate). Coexiste com os helpers legados
 `_migrate_postgres()` e `_migrate_sqlite()` em `app/__init__.py` por compatibilidade.
 
-### Procedimento para mudança de schema (NOVO)
+### Procedimento para mudança de schema (REAL — Alembic NAO roda em prod)
 
-1. Edita o modelo em `app/models.py` (adiciona coluna, tabela, índice, etc.)
-2. Roda local: `FLASK_APP=run.py flask db migrate -m "descricao curta"`
-3. Revisa o arquivo gerado em `migrations/versions/` — Alembic pode errar (especialmente
-   com índices nomeados manualmente e tipos SQLite ↔ Postgres). Edite se necessário.
-4. Testa local: `FLASK_APP=run.py flask db upgrade`
-5. Commit e push. Railway aplica automaticamente (com o entrypoint configurado pra
-   rodar `flask db upgrade` antes do gunicorn — ver `Procfile`/`railway.json`).
+**ATENCAO**: o `Procfile` e `railway.json` rodam apenas `gunicorn run:app ...` —
+NAO ha `release: flask db upgrade`. Migrations Alembic em prod estao dormentes.
+Mudancas de schema em prod hoje sao aplicadas pelos helpers legados
+`_migrate_postgres()`/`_migrate_sqlite()` em `app/migrations_legacy.py`, que
+rodam no startup de cada worker gunicorn (idempotentes).
 
-### Procedimento aplicado UMA VEZ na adoção (já feito)
+**Procedimento canonico (2 commits)**:
 
-No Railway, com o banco já existente populado pelos helpers `_migrate_*`:
+1. Adiciona `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...` em
+   `app/migrations_legacy.py::_migrate_postgres()` (e `_migrate_sqlite()` se
+   necessario). Padrao: ver bloco da linha 344 (driver_id) — sondar
+   `information_schema.columns`, condicional no nome.
+2. Commit + push. Aguardar Railway deploy (~2-3min). Confirmar deploy aplicou
+   antes de prosseguir (peca ao usuario; sem acesso ao Railway logs).
+3. Edita o modelo em `app/models/<arquivo>.py` (adiciona coluna, relationship).
+4. Commit + push. Modelo agora bate com schema real.
+
+**Por que dois commits**: se o modelo for pushado antes do ALTER ter aplicado,
+qualquer `SELECT` no modelo quebra com "column does not exist" e a UI fica em
+500 (ja aconteceu em 2026-05-22 — ver "Versao canonica" acima).
+
+### Alembic (local apenas, por enquanto)
+
+Continua util pra:
+- Versionar migrations no `migrations/versions/` (documenta historico).
+- Testar local: `FLASK_APP=run.py flask db migrate -m "descricao"` +
+  `flask db upgrade`.
+- No futuro, se configurarmos `release: flask db upgrade` no Railway, todas as
+  migrations versionadas viram aplicadas automaticamente.
+
+Procedimento aplicado UMA VEZ na adocao (ja feito):
 ```bash
 railway run flask db stamp head
 ```
-Isso marca o banco como já estando na baseline, sem executar nada. **Não rode novamente.**
+Marca o banco como ja em baseline. **Nao rode novamente.**
 
-### Helpers legados `_migrate_postgres`/`_migrate_sqlite`
+### Configurar Alembic em prod (pendente)
 
-Continuam ativos no startup do app. Pode ainda adicionar `ALTER TABLE IF NOT EXISTS`
-ali em paralelo até migrar tudo pra Alembic; idealmente, **prefira sempre Alembic**
-pra novas mudanças.
+Adicionar ao `railway.json` um `releaseCommand: "flask db upgrade"`. Risco:
+se a primeira migration falhar, deploy nao sobe. Validar localmente com
+banco snapshot de prod antes. Esforco: ~45min + validacao.
 
 ## Convenções de codigo
 
