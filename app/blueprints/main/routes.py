@@ -987,6 +987,8 @@ def blobs_migrar(modelo):
 
     if modelo == 'pedido_item_foto':
         resultado = blob_migrator.migrar_pedido_item_foto()
+    elif modelo == 'foto_recebimento':
+        resultado = blob_migrator.migrar_foto_recebimento()
     else:
         flash(f'Modelo invalido: {modelo}', 'danger')
         return redirect(url_for('main.debug_schema'))
