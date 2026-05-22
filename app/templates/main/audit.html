@@ -26,7 +26,11 @@
         <option value="update" {% if filtros.acao == 'update' %}selected{% endif %}>update (editar)</option>
         <option value="delete" {% if filtros.acao == 'delete' %}selected{% endif %}>delete (excluir)</option>
     </select>
-    {% if filtros.tabela or filtros.usuario_id or filtros.acao %}
+    <input type="number" name="registro_id" class="form-control form-control-sm"
+           style="max-width:120px;" placeholder="id do registro"
+           value="{{ filtros.registro_id or '' }}">
+    <button type="submit" class="btn btn-sm btn-secondary">filtrar</button>
+    {% if filtros.tabela or filtros.usuario_id or filtros.acao or filtros.registro_id %}
     <a href="{{ url_for('main.audit') }}" class="btn-link btn-sm" style="text-decoration:none;">limpar filtros</a>
     {% endif %}
 </form>
