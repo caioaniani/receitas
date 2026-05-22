@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% block title %}Preços em massa{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-tag"></i> Preços em massa</h1>
+    <a href="{{ url_for('receitas.padeiro_lista') }}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+</div>
+
+<div class="alert alert-info small mb-3">
+    Edite <strong>preço loja</strong>, <strong>preço site</strong> e <strong>preço venda</strong> de várias receitas
+    de uma vez. O botão <em>aplicar +%</em> em cada categoria multiplica o preço já preenchido.
+    Linhas com campo vazio ficam sem preço (NULL).
+</div>
+
+<form method="POST" action="{{ url_for('receitas.precos') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {% for categoria, lista in categorias.items() %}
+    <div class="card card-padaria mb-3">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <strong>{{ categoria }}</strong>
+            <div class="d-flex gap-1 align-items-center">
+                <span class="small text-muted me-2">Categoria:</span>
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        onclick="aplicarMargem('{{ categoria|e }}', 'preco_loja')">
+                    +% em loja
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        onclick="aplicarMargem('{{ categoria|e }}', 'preco_site')">
+                    +% em site
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        onclick="sincronizar('{{ categoria|e }}')">
+                    site = loja
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Receita</th>
+                        <th style="width:140px">Preço loja</th>
+                        <th style="width:140px">Preço site</th>
+                        <th style="width:140px">Preço venda</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for r in lista %}
+                    <tr data-categoria="{{ r.categoria or 'Outros' }}">
+                        <td>{{ r.nome }}</td>
+                        <td>
+                            <input type="text" name="preco_loja_{{ r.id }}"
+                                   value="{{ '%.2f'|format(r.preco_loja) if r.preco_loja is not none else '' }}"
+                                   class="form-control form-control-sm text-end preco-input"
+                                   data-campo="preco_loja"
+                                   inputmode="decimal" autocomplete="off">
+                        </td>
+                        <td>
+                            <input type="text" name="preco_site_{{ r.id }}"
+                                   value="{{ '%.2f'|format(r.preco_site) if r.preco_site is not none else '' }}"
+                                   class="form-control form-control-sm text-end preco-input"
+                                   data-campo="preco_site"
+                                   inputmode="decimal" autocomplete="off">
+                        </td>
+                        <td>
+                            <input type="text" name="preco_venda_{{ r.id }}"
+                                   value="{{ '%.2f'|format(r.preco_venda) if r.preco_venda is not none else '' }}"
+                                   class="form-control form-control-sm text-end preco-input"
+                                   data-campo="preco_venda"
+                                   inputmode="decimal" autocomplete="off">
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+
+    <div class="d-flex gap-2 sticky-bottom bg-white border-top py-2" style="position:sticky;bottom:0;z-index:10;">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg"></i> Salvar todos
+        </button>
+        <a href="{{ url_for('receitas.padeiro_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+    </div>
+</form>
+
+<script>
+function parseBr(v) {
+    if (!v) return null;
+    var n = parseFloat(String(v).replace(',', '.'));
+    return isNaN(n) ? null : n;
+}
+function fmt(n) {
+    return n.toFixed(2);
+}
+function aplicarMargem(categoria, campo) {
+    var pct = prompt('Aplicar quantos % de aumento (use negativo pra desconto):', '10');
+    if (pct === null || pct === '') return;
+    var f = parseFloat(String(pct).replace(',', '.'));
+    if (isNaN(f)) { alert('Numero invalido.'); return; }
+    var mult = 1 + (f / 100);
+    var alteradas = 0;
+    document.querySelectorAll('tr[data-categoria]').forEach(function(tr) {
+        if (tr.dataset.categoria !== categoria) return;
+        var inp = tr.querySelector('input.preco-input[data-campo="' + campo + '"]');
+        if (!inp) return;
+        var v = parseBr(inp.value);
+        if (v === null) return;
+        inp.value = fmt(v * mult);
+        alteradas++;
+    });
+    alert(alteradas + ' linha(s) atualizada(s) em ' + categoria + '. Salve pra persistir.');
+}
+function sincronizar(categoria) {
+    if (!confirm('Copiar preço loja → preço site nesta categoria?')) return;
+    document.querySelectorAll('tr[data-categoria]').forEach(function(tr) {
+        if (tr.dataset.categoria !== categoria) return;
+        var src = tr.querySelector('input.preco-input[data-campo="preco_loja"]');
+        var dst = tr.querySelector('input.preco-input[data-campo="preco_site"]');
+        if (src && dst) dst.value = src.value;
+    });
+}
+</script>
+{% endblock %}
