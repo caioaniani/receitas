@@ -357,6 +357,21 @@ def _migrate_postgres(app):
                 'ON pedido_loja(driver_id)'
             ))
 
+        # pedido_loja.modificado_em / modificado_por_id — quem editou e quando
+        if cols_pl and 'modificado_em' not in cols_pl:
+            conn.execute(text(
+                'ALTER TABLE pedido_loja ADD COLUMN modificado_em TIMESTAMP'
+            ))
+        if cols_pl and 'modificado_por_id' not in cols_pl:
+            conn.execute(text(
+                'ALTER TABLE pedido_loja ADD COLUMN modificado_por_id INTEGER '
+                'REFERENCES usuario(id) ON DELETE SET NULL'
+            ))
+            conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_pedido_loja_modificado_por_id '
+                'ON pedido_loja(modificado_por_id)'
+            ))
+
         # pedido_item_foto — foto de conferencia por SKU
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS pedido_item_foto (
