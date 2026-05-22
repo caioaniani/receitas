@@ -161,15 +161,12 @@ def upload_publico(file_bytes, dropbox_path, *, mode='add', autorename=True):
 def upload_foto(file_bytes, atribuicao_id, ext='jpg'):
     """Compat: upload de foto de entrega (EntregaFoto). Delega pra upload_publico.
 
-    Mantida por compat com o codigo existente em
-    `app/blueprints/driver/routes.py:309`.
+    Mantida por compat com `app/blueprints/driver/routes.py:309`.
     """
     hoje = _agora_brt().strftime('%Y-%m-%d')
     nome = f"{atribuicao_id}_{uuid.uuid4().hex[:8]}.{ext}"
     path = f"{_pasta_base()}/{hoje}/{nome}"
-    return upload_publico(path=None, dropbox_path=path, file_bytes=file_bytes,
-                          mode='add', autorename=True) if False else \
-           upload_publico(file_bytes, path, mode='add', autorename=True)
+    return upload_publico(file_bytes, path, mode='add', autorename=True)
 
 
 def _criar_shared_link(token, path):
