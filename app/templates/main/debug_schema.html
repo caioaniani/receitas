@@ -149,6 +149,35 @@
     </div>
 </div>
 
+<div class="card mt-3">
+    <div class="card-header py-2">
+        <strong>Backup do Postgres → Dropbox</strong>
+        {% if info.backup_status.ativo %}
+        <span class="badge bg-success">scheduler ativo</span>
+        {% else %}
+        <span class="badge bg-secondary">scheduler off</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <p class="small mb-2">
+            Backup automatico roda diariamente as <strong>04:00 BRT</strong>.
+            Destino: pasta <code>/backups-postgres/</code> no Dropbox.
+            {% if info.backup_status.ultimo_run %}
+            <br>Ultima execucao: <code>{{ info.backup_status.ultimo_run|brt if info.backup_status.ultimo_run else '—' }}</code>
+            {% else %}
+            <br><span class="text-muted">Sem execucao registrada nesta sessao do app.</span>
+            {% endif %}
+        </p>
+        <form method="POST" action="{{ url_for('main.backup_run') }}" class="mb-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-primary"
+                    onclick="return confirm('Rodar backup agora? Pode demorar alguns segundos.');">
+                <i class="bi bi-cloud-arrow-up"></i> Rodar backup agora
+            </button>
+        </form>
+    </div>
+</div>
+
 <div class="alert alert-info small mt-3 mb-0">
     <strong>Esperado apos B4 + B5:</strong>
     <ul class="mb-0">
