@@ -182,6 +182,7 @@ def novo():
             ids = request.form.getlist('item_id[]')
             qtds = request.form.getlist('item_qtd[]')
             notas = request.form.getlist('item_obs[]')
+            estados = request.form.getlist('item_estado[]')
 
             for i in range(len(ids)):
                 if not ids[i] or not qtds[i]:
@@ -195,12 +196,17 @@ def novo():
                     continue
                 if qtd <= 0:
                     continue
+                est = (estados[i].strip().lower()
+                        if i < len(estados) else '') or None
+                if est not in (None, 'backup', 'assado'):
+                    est = None
                 item = PedidoItem(
                     pedido_id=pedido.id,
                     receita_id=item_id if tipo == 'receita' else None,
                     materia_prima_id=item_id if tipo == 'mp' else None,
                     quantidade=qtd,
                     observacao=notas[i].strip() if i < len(notas) else None,
+                    estado=est,
                 )
                 db.session.add(item)
 
