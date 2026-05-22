@@ -13,7 +13,7 @@ import logging
 from datetime import date, datetime
 from decimal import Decimal
 
-from flask import has_request_context, request
+from flask import g, has_request_context, request
 from flask_login import current_user
 from sqlalchemy import event, inspect
 
@@ -71,6 +71,12 @@ def _request_meta():
 def _current_user_id():
     if not has_request_context():
         return None
+    # Caminho do Slack: handler resolve Usuario via SlackVinculo e seta
+    # g.audit_user_id antes de chamar copilot_svc.executar. Sem isso o
+    # webhook fica anonimo (sem session Flask-Login).
+    uid = getattr(g, 'audit_user_id', None)
+    if uid:
+        return uid
     try:
         if current_user and current_user.is_authenticated:
             return current_user.id
