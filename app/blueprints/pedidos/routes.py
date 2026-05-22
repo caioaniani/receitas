@@ -753,7 +753,11 @@ def foto(foto_id):
     loja_id = _loja_do_usuario()
     if loja_id and f.pedido.loja_id != loja_id:
         abort(403)
-    return send_file(io.BytesIO(f.imagem), mimetype=f.mimetype or 'image/jpeg')
+    if f.imagem_url:
+        return redirect(f.imagem_url, code=302)
+    if f.imagem:
+        return send_file(io.BytesIO(f.imagem), mimetype=f.mimetype or 'image/jpeg')
+    abort(404)
 
 
 @pedidos_bp.route('/lojas/<int:loja_id>/precos', methods=['GET', 'POST'])
