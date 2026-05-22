@@ -9,8 +9,10 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Dependências de sistema mínimas (psycopg2-binary, Pillow, qrcode)
+# postgresql-client traz pg_dump pro job de backup diario (app/services/backup.py)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    postgresql-client \
     libjpeg62-turbo \
     libpng16-16 \
     curl \
