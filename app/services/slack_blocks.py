@@ -71,7 +71,9 @@ def _preview_criar_pedido(p, token):
     if not loja:
         loja = '(escolher)'
     def _fmt_item(it):
-        nome = (it.get('resolvido') or {}).get('nome') or it.get('nome_original') or '?'
+        from app.constants import render_item_com_estado
+        nome_base = (it.get('resolvido') or {}).get('nome') or it.get('nome_original') or '?'
+        nome = render_item_com_estado(nome_base, it.get('estado'))
         base = f"- {it.get('quantidade')}x {nome}"
         obs = (it.get('observacao') or '').strip()
         return f"{base} _({obs})_" if obs else base
