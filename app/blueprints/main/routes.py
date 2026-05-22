@@ -1010,6 +1010,10 @@ def blobs_migrar(modelo):
         resultado = blob_migrator.migrar_pedido_item_foto()
     elif modelo == 'foto_recebimento':
         resultado = blob_migrator.migrar_foto_recebimento()
+    elif modelo == 'receita':
+        resultado = blob_migrator.migrar_receita_imagem()
+    elif modelo == 'produto':
+        resultado = blob_migrator.migrar_produto_imagem()
     else:
         flash(f'Modelo invalido: {modelo}', 'danger')
         return redirect(url_for('main.debug_schema'))
