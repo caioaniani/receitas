@@ -62,3 +62,74 @@ DESPERDICIO_MOTIVO_LABEL = {
     'queimou': 'queimou',
     'outro': 'outro',
 }
+
+
+# ─── Estados de produto (familia + estado por item/estoque) ─────────────
+#
+# Uma Receita pertence a uma familia (`Receita.familia`). A familia
+# define quais estados sao possiveis pra essa receita em pedidos/estoque.
+# NULL no campo `estado` = "estado padrao da familia" (sem rotulo na UI).
+#
+# Resumo:
+# - viennoiserie: cru (NULL, padrao) / backup (pre-fermentado congelado) /
+#   assado (raro — so Nebraska, forno pequeno na loja).
+# - pao_sourdough: congelado assado (NULL, unico estado).
+# - fornada_especial: assado fresco (NULL, unico estado — focaccia, brioche, etc).
+
+FAMILIAS_RECEITA = ('viennoiserie', 'pao_sourdough', 'fornada_especial')
+
+FAMILIA_LABEL = {
+    'viennoiserie': 'Viennoiserie',
+    'pao_sourdough': 'Pão / Sourdough',
+    'fornada_especial': 'Fornada especial',
+}
+
+# Estados validos por familia (alem de NULL = padrao da familia).
+# A familia define o que pode aparecer em PedidoItem.estado / EstoqueLoja.estado.
+# Pra EstoqueProducao, `assado` nunca eh persistido (industria nao mantem
+# vitrine — assa pra cumprir pedido e despacha direto).
+ESTADOS_PERMITIDOS = {
+    'viennoiserie': ('backup', 'assado'),
+    'pao_sourdough': (),
+    'fornada_especial': (),
+}
+
+# Estados permitidos no EstoqueProducao (subset do ESTADOS_PERMITIDOS).
+# Backup eh persistido pra rastreio; assado nao (sai direto).
+ESTADOS_PRODUCAO_PERMITIDOS = {
+    'viennoiserie': ('backup',),
+    'pao_sourdough': (),
+    'fornada_especial': (),
+}
+
+# Labels amigaveis. Estado NULL renderiza sem tag.
+ESTADO_LABEL = {
+    'backup': 'BACKUP',
+    'assado': 'ASSADO',
+}
+
+
+def familia_default():
+    """Familia default pra Receita sem familia setada — assume `pao_sourdough`
+    (estado unico, NULL, sem complicacao)."""
+    return 'pao_sourdough'
+
+
+def estados_permitidos_familia(familia):
+    """Retorna tupla de estados nao-NULL permitidos pra familia."""
+    return ESTADOS_PERMITIDOS.get(familia or familia_default(), ())
+
+
+def estado_label(estado):
+    """Rotulo pra UI/Slack. None ou '' retorna ''. Estado conhecido retorna
+    `[TAG]`. Desconhecido retorna `[ESTADO]` cru."""
+    if not estado:
+        return ''
+    return f'[{ESTADO_LABEL.get(estado, estado.upper())}]'
+
+
+def render_item_com_estado(nome, estado):
+    """Concatena nome do item com tag de estado (se houver).
+    Ex: ('Croissant Francês', 'backup') -> 'Croissant Francês [BACKUP]'."""
+    tag = estado_label(estado)
+    return f'{nome} {tag}'.rstrip()
