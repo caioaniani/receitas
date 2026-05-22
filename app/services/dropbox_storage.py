@@ -198,11 +198,17 @@ def _converter_para_raw(url):
     return f"{url}{sep}raw=1"
 
 
+_UPLOAD_LIMITE_SIMPLES = 140 * 1024 * 1024  # acima disso, usa upload_session
+_CHUNK_SIZE = 100 * 1024 * 1024
+
+
 def upload_arquivo(file_bytes, dropbox_path):
     """Faz upload generico de bytes pra um caminho Dropbox arbitrario.
 
     Diferente de upload_foto, nao cria shared link nem prefixa pasta base.
     Usado pra backups, exports, qualquer arquivo que so o admin acessa.
+
+    Acima de 140MB, usa upload_session em chunks de 100MB (limite da API).
 
     Levanta RuntimeError se nao configurado ou se a API falhar.
     Retorna {'storage_path': str, 'tamanho': int}.
@@ -212,6 +218,19 @@ def upload_arquivo(file_bytes, dropbox_path):
     if not dropbox_path or not dropbox_path.startswith('/'):
         raise RuntimeError('dropbox_path deve comecar com /')
 
+    tamanho = len(file_bytes)
+    if tamanho <= _UPLOAD_LIMITE_SIMPLES:
+        meta = _upload_simples(file_bytes, dropbox_path)
+    else:
+        meta = _upload_session(file_bytes, dropbox_path)
+
+    return {
+        'storage_path': meta.get('path_lower') or dropbox_path,
+        'tamanho': meta.get('size') or tamanho,
+    }
+
+
+def _upload_simples(file_bytes, dropbox_path):
     api_args = {
         'path': dropbox_path,
         'mode': 'overwrite',
@@ -231,7 +250,7 @@ def upload_arquivo(file_bytes, dropbox_path):
                 'Content-Type': 'application/octet-stream',
             },
             data=file_bytes,
-            timeout=120,  # backup pode ser grande
+            timeout=120,
         )
 
     r = _do_upload()
@@ -239,14 +258,82 @@ def upload_arquivo(file_bytes, dropbox_path):
         _invalidar_cache()
         r = _do_upload()
     if r.status_code != 200:
-        logger.warning('Dropbox upload_arquivo falhou: %s %s', r.status_code, r.text[:200])
+        logger.warning('Dropbox upload falhou: %s %s', r.status_code, r.text[:200])
         raise RuntimeError(f'Upload Dropbox falhou: {r.status_code}')
+    return r.json()
 
-    meta = r.json()
-    return {
-        'storage_path': meta.get('path_lower') or dropbox_path,
-        'tamanho': meta.get('size') or len(file_bytes),
-    }
+
+def _upload_session(file_bytes, dropbox_path):
+    """Upload em chunks pra arquivos > 140MB."""
+    token = _token()
+    if not token:
+        raise RuntimeError('Dropbox nao configurado')
+
+    tamanho = len(file_bytes)
+    # 1. start (primeiro chunk)
+    primeiro = file_bytes[:_CHUNK_SIZE]
+    r = requests.post(
+        'https://content.dropboxapi.com/2/files/upload_session/start',
+        headers={
+            'Authorization': f'Bearer {token}',
+            'Dropbox-API-Arg': json.dumps({'close': False}),
+            'Content-Type': 'application/octet-stream',
+        },
+        data=primeiro,
+        timeout=300,
+    )
+    if r.status_code != 200:
+        logger.warning('upload_session/start falhou: %s %s', r.status_code, r.text[:200])
+        raise RuntimeError(f'Upload Dropbox falhou: {r.status_code}')
+    session_id = r.json()['session_id']
+    offset = len(primeiro)
+
+    # 2. append + finish
+    while offset < tamanho:
+        chunk = file_bytes[offset:offset + _CHUNK_SIZE]
+        ultimo = (offset + len(chunk)) >= tamanho
+        if not ultimo:
+            r = requests.post(
+                'https://content.dropboxapi.com/2/files/upload_session/append_v2',
+                headers={
+                    'Authorization': f'Bearer {token}',
+                    'Dropbox-API-Arg': json.dumps({
+                        'cursor': {'session_id': session_id, 'offset': offset},
+                        'close': False,
+                    }),
+                    'Content-Type': 'application/octet-stream',
+                },
+                data=chunk,
+                timeout=300,
+            )
+            if r.status_code != 200:
+                logger.warning('upload_session/append falhou: %s %s', r.status_code, r.text[:200])
+                raise RuntimeError(f'Upload Dropbox falhou: {r.status_code}')
+            offset += len(chunk)
+        else:
+            r = requests.post(
+                'https://content.dropboxapi.com/2/files/upload_session/finish',
+                headers={
+                    'Authorization': f'Bearer {token}',
+                    'Dropbox-API-Arg': json.dumps({
+                        'cursor': {'session_id': session_id, 'offset': offset},
+                        'commit': {
+                            'path': dropbox_path,
+                            'mode': 'overwrite',
+                            'autorename': False,
+                            'mute': True,
+                        },
+                    }),
+                    'Content-Type': 'application/octet-stream',
+                },
+                data=chunk,
+                timeout=300,
+            )
+            if r.status_code != 200:
+                logger.warning('upload_session/finish falhou: %s %s', r.status_code, r.text[:200])
+                raise RuntimeError(f'Upload Dropbox falhou: {r.status_code}')
+            return r.json()
+    raise RuntimeError('upload_session: chunks acabaram sem finish?')
 
 
 def deletar(storage_path):
