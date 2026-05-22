@@ -207,8 +207,12 @@
         {% endif %}
         {% if current_user.is_admin() %}
         <a href="{{ url_for('entregas.index') }}"
-           class="sidebar-link {% if request.path.startswith('/entregas') %}active{% endif %}">
+           class="sidebar-link {% if request.path.startswith('/entregas') and '/drivers/bulk' not in request.path %}active{% endif %}">
             Entregas Site
+        </a>
+        <a href="{{ url_for('entregas.drivers_bulk') }}"
+           class="sidebar-link {% if request.path == '/entregas/drivers/bulk' %}active{% endif %}">
+            Motoristas (bulk)
         </a>
         {% endif %}
         {% if current_user.pode_lojas() %}
