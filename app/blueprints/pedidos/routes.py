@@ -233,6 +233,96 @@ def novo():
                            amanha=amanha, loja_id=loja_id)
 
 
+@pedidos_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
+@login_required
+@operacional_pedido_required
+def editar(id):
+    """Edita pedido em status pendente/confirmado.
+
+    Permite mexer em data_entrega, observacao do pedido, e itens
+    (qtd/estado/obs/adicionar/remover). NAO toca em loja_id (muda rota
+    fisica, melhor cancelar+recriar) nem em status/driver_id. Itens vao
+    via REPLACE total — DELETE + INSERT da lista nova."""
+    pedido = PedidoLoja.query.get_or_404(id)
+    if pedido.status not in ('pendente', 'confirmado'):
+        flash(f'Pedido {pedido.status} nao pode ser editado. Cancele e recrie.', 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
+
+    if request.method == 'POST':
+        amanha = hoje_brt() + timedelta(days=1)
+        data_str = request.form.get('data_entrega', '')
+        obs = request.form.get('observacao', '').strip()
+        try:
+            data_entrega = datetime.strptime(data_str, '%Y-%m-%d').date()
+        except ValueError:
+            data_entrega = pedido.data_entrega
+        if data_entrega < amanha:
+            flash('A data de entrega deve ser a partir de amanha.', 'warning')
+            return redirect(url_for('pedidos.editar', id=id))
+
+        try:
+            pedido.data_entrega = data_entrega
+            pedido.observacao = obs or None
+
+            # REPLACE total dos itens
+            PedidoItem.query.filter_by(pedido_id=pedido.id).delete()
+            db.session.flush()
+
+            ids = request.form.getlist('item_id[]')
+            qtds = request.form.getlist('item_qtd[]')
+            notas = request.form.getlist('item_obs[]')
+            estados = request.form.getlist('item_estado[]')
+
+            salvos = 0
+            for i in range(len(ids)):
+                if not ids[i] or not qtds[i]:
+                    continue
+                tipo, item_id = _parse_item_id(ids[i])
+                if not tipo:
+                    continue
+                try:
+                    qtd = int(qtds[i])
+                except (TypeError, ValueError):
+                    continue
+                if qtd <= 0:
+                    continue
+                est = (estados[i].strip().lower()
+                       if i < len(estados) else '') or None
+                if est not in (None, 'backup', 'assado'):
+                    est = None
+                item = PedidoItem(
+                    pedido_id=pedido.id,
+                    receita_id=item_id if tipo == 'receita' else None,
+                    materia_prima_id=item_id if tipo == 'mp' else None,
+                    quantidade=qtd,
+                    observacao=notas[i].strip() if i < len(notas) else None,
+                    estado=est,
+                )
+                db.session.add(item)
+                salvos += 1
+
+            if salvos == 0:
+                db.session.rollback()
+                flash('Pedido precisa ter pelo menos 1 item.', 'warning')
+                return redirect(url_for('pedidos.editar', id=id))
+
+            db.session.commit()
+        except Exception as exc:  # noqa: BLE001
+            db.session.rollback()
+            current_app.logger.exception('Falha ao editar pedido')
+            flash(f'Erro ao editar pedido: {exc}', 'danger')
+            return redirect(url_for('pedidos.editar', id=id))
+
+        flash('Pedido atualizado.', 'success')
+        return redirect(url_for('pedidos.detalhe', id=pedido.id))
+
+    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    amanha = hoje_brt() + timedelta(days=1)
+    return render_template('pedidos/editar.html', pedido=pedido,
+                           receitas=receitas, materias=materias, amanha=amanha)
+
+
 @pedidos_bp.route('/<int:id>')
 @login_required
 @gerente_required
