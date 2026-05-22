@@ -1114,6 +1114,8 @@ def _enriquecer_params(tool_name, tool_input, user):
     """Adiciona matches do banco aos params pra o preview poder mostrar opcoes."""
     if tool_name == 'criar_pedido':
         return _enriquecer_criar_pedido(tool_input)
+    if tool_name == 'editar_pedido':
+        return _enriquecer_editar_pedido(tool_input)
     if tool_name in ('receber_mp', 'ajuste_estoque'):
         nome = (tool_input.get('mp_nome') or '').strip()
         matches = _resolver_mp(nome) if nome else []
@@ -1430,6 +1432,61 @@ def _enriquecer_criar_pedido(tool_input):
         'loja_id': loja_id, 'loja_nome': loja_nome,
         'data_entrega': tool_input.get('data_entrega'),
         'itens': itens_enriq, 'observacao': tool_input.get('observacao'),
+    }
+
+
+def _enriquecer_editar_pedido(tool_input):
+    """Adiciona ao tool_input: snapshot do pedido atual + itens resolvidos
+    (se vieram novos) pra preview montar o diff."""
+    from app.models import PedidoLoja
+    pid = tool_input.get('pedido_id')
+    pedido = PedidoLoja.query.get(pid) if pid else None
+
+    pedido_atual = None
+    if pedido:
+        pedido_atual = {
+            'id': pedido.id,
+            'loja_nome': pedido.loja.nome if pedido.loja else '?',
+            'data_entrega': pedido.data_entrega.strftime('%Y-%m-%d') if pedido.data_entrega else None,
+            'observacao': pedido.observacao or '',
+            'status': pedido.status,
+            'itens': [
+                {
+                    'nome': it.nome_item,
+                    'quantidade': it.quantidade,
+                    'estado': it.estado,
+                    'observacao': it.observacao or '',
+                }
+                for it in pedido.itens
+            ],
+        }
+
+    itens_input = tool_input.get('itens')
+    itens_enriq = None
+    if itens_input is not None:
+        itens_enriq = []
+        for item in itens_input:
+            nome = (item.get('nome') or '').strip()
+            qtd = int(item.get('quantidade') or 0)
+            if not nome or qtd <= 0:
+                continue
+            matches = _resolver_produto(nome)
+            obs_item = (item.get('observacao') or '').strip() or None
+            estado_item = (item.get('estado') or '').strip().lower() or None
+            if estado_item not in (None, 'backup', 'assado'):
+                estado_item = None
+            itens_enriq.append({
+                'nome_original': nome, 'quantidade': qtd,
+                'observacao': obs_item, 'estado': estado_item,
+                'matches': matches, 'resolvido': matches[0] if matches else None,
+            })
+
+    return {
+        'pedido_id': pid,
+        'pedido_atual': pedido_atual,
+        'data_entrega': tool_input.get('data_entrega'),
+        'observacao': tool_input.get('observacao'),
+        'itens': itens_enriq,  # None = mantem; lista = REPLACE
     }
 
 
