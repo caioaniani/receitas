@@ -222,36 +222,21 @@ def _baixar_item(loja_id, mapping_produto, qtd, seru_pedido_id, user_id):
         # Tudo acumulado — nada baixa ainda
         return {'baixado': False, 'faltou': 0, 'acumulado': debito.fracao_pendente}
 
-    el = EstoqueLoja.query.filter_by(**filtro).first()
-    if not el:
-        el = EstoqueLoja(**filtro, quantidade=0)
-        db.session.add(el)
-        db.session.flush()
-
-    atual = el.quantidade or 0
-    real = min(inteiros, atual)
-    falta = inteiros - real
-
-    # Referencia: se houver fator, anota
+    # Baixa respeitando prioridade de estado: assado → backup → NULL.
+    # Ver `app/services/estoque_helpers.py`.
+    from app.services.estoque_helpers import baixar_loja_por_prioridade
     ref_extra = '' if fator == 1.0 else f' (fator {fator})'
-    if real > 0:
-        el.quantidade = atual - real
-        db.session.add(MovEstoqueLoja(
-            estoque_loja_id=el.id,
-            tipo='venda_seru',
-            quantidade=real,
-            referencia=f'Seru #{seru_pedido_id}{ref_extra}',
-            usuario_id=user_id,
-        ))
-    if falta > 0:
-        db.session.add(MovEstoqueLoja(
-            estoque_loja_id=el.id,
-            tipo='venda_seru_sem_estoque',
-            quantidade=falta,
-            referencia=f'Seru #{seru_pedido_id}{ref_extra} — sem estoque suficiente',
-            usuario_id=user_id,
-        ))
-    return {'baixado': real > 0, 'faltou': falta, 'acumulado': debito.fracao_pendente}
+    res = baixar_loja_por_prioridade(
+        filtro_base=filtro,
+        inteiros=inteiros,
+        tipo_mov='venda_seru',
+        referencia=f'Seru #{seru_pedido_id}{ref_extra}',
+        sem_estoque_tipo='venda_seru_sem_estoque',
+        usuario_id=user_id,
+    )
+    return {'baixado': res['baixado'] > 0,
+            'faltou': res['faltou'],
+            'acumulado': debito.fracao_pendente}
 
 
 def _estornar_pedido(reg, lojas_ativas, user_id):
