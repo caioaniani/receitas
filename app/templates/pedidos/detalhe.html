@@ -122,6 +122,12 @@
 
 <div class="d-flex gap-2 mt-3 flex-wrap">
     {% if current_user.is_admin() %}
+        {% if pedido.status in ('pendente', 'confirmado') %}
+        <a href="{{ url_for('pedidos.editar', id=pedido.id) }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-pencil"></i> Editar
+        </a>
+        {% endif %}
+
         {% if pedido.status == 'pendente' %}
         <form method="POST" action="{{ url_for('pedidos.confirmar', id=pedido.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
