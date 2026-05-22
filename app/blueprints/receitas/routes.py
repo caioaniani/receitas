@@ -1,5 +1,6 @@
 import difflib
 import io
+import os
 import zipfile
 
 from flask import abort, flash, jsonify, redirect, render_template, request, url_for
@@ -228,14 +229,13 @@ def imagens_upload():
         flash('Arquivo invalido — nao parece ser um .zip.', 'danger')
         return redirect(url_for('receitas.imagens_upload'))
 
-    import os as _os
     for info in zf.infolist():
         if info.is_dir():
             continue
-        nome_base = _os.path.basename(info.filename)
+        nome_base = os.path.basename(info.filename)
         if not nome_base or nome_base.startswith('.') or nome_base.startswith('__'):
             continue  # .DS_Store, __MACOSX/
-        raiz, ext = _os.path.splitext(nome_base)
+        raiz, ext = os.path.splitext(nome_base)
         ext = ext.lower()
         if ext not in EXT_OK:
             nao_casados.append((nome_base, f'extensao {ext or "sem"} nao suportada'))
