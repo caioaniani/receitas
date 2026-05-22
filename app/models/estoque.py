@@ -187,7 +187,13 @@ class PedidoItemFoto(db.Model):
     pedido_item_id = db.Column(db.Integer, db.ForeignKey('pedido_item.id'),
                                 nullable=False, index=True)
     etapa = db.Column(db.String(10), nullable=False)  # 'saida' | 'entrega'
-    imagem = db.Column(db.LargeBinary, nullable=False)
+    # Storage da imagem — duas opcoes:
+    # 1. Dropbox (preferido, novos uploads): imagem_url + imagem_storage_path.
+    # 2. BLOB legado (fotos pre-migracao M6): imagem.
+    # Serve route prioriza URL Dropbox quando preenchido.
+    imagem = db.Column(db.LargeBinary, nullable=True)  # legado, nullable apos M6
+    imagem_url = db.Column(db.String(500))  # shared link Dropbox
+    imagem_storage_path = db.Column(db.String(500))  # path no Dropbox pra deletar
     mimetype = db.Column(db.String(100))
     criado_em = db.Column(db.DateTime, default=agora, nullable=False)
     criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
