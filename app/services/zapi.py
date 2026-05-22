@@ -85,7 +85,8 @@ def enviar_texto(numero, mensagem):
         headers['Client-Token'] = client_token
 
     try:
-        r = requests.post(url, json={'phone': numero_norm, 'message': mensagem or ''},
+        r = requests.post(url, json={'phone': numero_norm, 'message': mensagem or '',
+                                      'linkPreview': True},
                           headers=headers, timeout=15)
         if r.status_code not in (200, 201):
             logger.warning('zapi send-text %s: %s', r.status_code, r.text[:200])
