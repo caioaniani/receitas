@@ -1000,6 +1000,34 @@ def backup_debug_env():
     else:
         info['entrega_foto_amostra'] = '(sem fotos no banco)'
 
+    # M6 debug: URL de uma receita migrada
+    from app.models import Produto, Receita
+    r = (Receita.query
+         .filter(Receita.imagem_dropbox_url.isnot(None))
+         .order_by(Receita.id.desc()).first())
+    if r:
+        info['receita_amostra'] = {
+            'id': r.id, 'nome': r.nome,
+            'imagem_dropbox_url': r.imagem_dropbox_url,
+            'imagem_storage_path': r.imagem_storage_path,
+            'tem_blob': r.imagem_blob is not None,
+        }
+    else:
+        info['receita_amostra'] = '(nenhuma receita migrada)'
+
+    p = (Produto.query
+         .filter(Produto.imagem_dropbox_url.isnot(None))
+         .order_by(Produto.id.desc()).first())
+    if p:
+        info['produto_amostra'] = {
+            'id': p.id, 'nome': p.nome,
+            'imagem_dropbox_url': p.imagem_dropbox_url,
+            'imagem_storage_path': p.imagem_storage_path,
+            'tem_blob': p.imagem_blob is not None,
+        }
+    else:
+        info['produto_amostra'] = '(nenhum produto migrado)'
+
     return jsonify(info)
 
 
