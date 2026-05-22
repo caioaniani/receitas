@@ -73,6 +73,7 @@ def _migrate_postgres(app):
             'modo_preparo': 'ALTER TABLE receita ADD COLUMN modo_preparo TEXT',
             'observacao': 'ALTER TABLE receita ADD COLUMN observacao TEXT',
             'reaproveitavel': 'ALTER TABLE receita ADD COLUMN reaproveitavel BOOLEAN NOT NULL DEFAULT FALSE',
+            'familia': 'ALTER TABLE receita ADD COLUMN familia VARCHAR(30)',
         }
         for col, sql in migrações_receita.items():
             if col not in colunas:
