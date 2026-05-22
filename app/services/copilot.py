@@ -1969,6 +1969,81 @@ def executar_criar_pedido(params, user):
             'registro_tipo': 'pedido_loja', 'registro_id': pedido.id, 'url': f'/pedidos/{pedido.id}'}
 
 
+def executar_editar_pedido(params, user):
+    """Edita pedido existente. Aceita data_entrega, observacao, e itens (REPLACE
+    total). NAO mexe em loja/driver/status. Bloqueia se status fora de
+    pendente/confirmado."""
+    from app.models import PedidoItem, PedidoLoja
+    pid = params.get('pedido_id')
+    if not pid:
+        return {'ok': False, 'erro': 'pedido_id obrigatorio'}
+    pedido = PedidoLoja.query.get(pid)
+    if not pedido:
+        return {'ok': False, 'erro': f'Pedido {pid} nao encontrado.'}
+    if pedido.status not in ('pendente', 'confirmado'):
+        return {'ok': False, 'erro': f'Pedido {pid} em status "{pedido.status}" — nao pode ser editado. Cancele e recrie.'}
+
+    mudancas = []
+
+    nova_data = params.get('data_entrega')
+    if nova_data:
+        try:
+            d = datetime.strptime(nova_data, '%Y-%m-%d').date()
+            if d != pedido.data_entrega:
+                pedido.data_entrega = d
+                mudancas.append('data_entrega')
+        except (ValueError, TypeError):
+            return {'ok': False, 'erro': f'Data invalida: {nova_data}'}
+
+    nova_obs = params.get('observacao')
+    if nova_obs is not None:
+        novo_val = (nova_obs or '').strip() or None
+        if novo_val != pedido.observacao:
+            pedido.observacao = novo_val
+            mudancas.append('observacao')
+
+    itens_novos = params.get('itens')
+    nao_resolvidos = []
+    if itens_novos is not None:
+        # REPLACE total
+        PedidoItem.query.filter_by(pedido_id=pedido.id).delete()
+        db.session.flush()
+        salvos = 0
+        for item in itens_novos:
+            qtd = int(item.get('quantidade') or 0)
+            if qtd <= 0:
+                continue
+            resolvido = item.get('resolvido')
+            if not resolvido or not resolvido.get('id'):
+                nao_resolvidos.append(item.get('nome_original') or '?')
+                continue
+            obs_item = (item.get('observacao') or '').strip()[:200] or None
+            estado_item = (item.get('estado') or '').strip().lower() or None
+            if estado_item not in (None, 'backup', 'assado'):
+                estado_item = None
+            pi = PedidoItem(pedido_id=pedido.id, quantidade=qtd,
+                            observacao=obs_item, estado=estado_item)
+            if resolvido['tipo'] == 'produto':
+                pi.produto_id = resolvido['id']
+            elif resolvido['tipo'] == 'receita':
+                pi.receita_id = resolvido['id']
+            db.session.add(pi)
+            salvos += 1
+        if salvos == 0:
+            db.session.rollback()
+            return {'ok': False, 'erro': f'Nenhum item resolvido. Nao achei: {", ".join(nao_resolvidos)}'}
+        mudancas.append(f'itens ({salvos})')
+
+    if not mudancas:
+        return {'ok': False, 'erro': 'Nada pra mudar (params iguais ao atual).'}
+
+    db.session.commit()
+    return {'ok': True, 'pedido_id': pedido.id, 'mudancas': mudancas,
+            'nao_resolvidos': nao_resolvidos,
+            'registro_tipo': 'pedido_loja', 'registro_id': pedido.id,
+            'url': f'/pedidos/{pedido.id}'}
+
+
 def executar_receber_mp(params, user):
     from app.models import MovimentacaoEstoque
     resolvida = params.get('mp_resolvida')
