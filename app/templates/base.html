@@ -321,6 +321,12 @@
            class="sidebar-link {% if request.path == '/receitas/padeiro' %}active{% endif %}">
             Modo Padeiro
         </a>
+        {% if current_user.is_authenticated and current_user.is_admin() %}
+        <a href="{{ url_for('receitas.familias') }}"
+           class="sidebar-link {% if request.path == '/receitas/familias' %}active{% endif %}">
+            Famílias (bulk)
+        </a>
+        {% endif %}
 
         <!-- Busca de receitas -->
         <div class="px-3 pb-2">
