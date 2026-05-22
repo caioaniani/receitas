@@ -17,6 +17,17 @@
                 <label class="form-label small text-muted">Categoria</label>
                 <input type="text" name="categoria" value="{{ receita.categoria or '' }}" class="form-control form-control-sm input-blue">
             </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted" title="Define quais estados (backup/assado) a receita aceita em pedidos/estoque.">
+                    Família
+                </label>
+                <select name="familia" class="form-select form-select-sm input-blue">
+                    <option value="" {% if not receita.familia %}selected{% endif %}>— Padrão (pão / sourdough) —</option>
+                    <option value="viennoiserie" {% if receita.familia == 'viennoiserie' %}selected{% endif %}>Viennoiserie (3 estados)</option>
+                    <option value="pao_sourdough" {% if receita.familia == 'pao_sourdough' %}selected{% endif %}>Pão / Sourdough</option>
+                    <option value="fornada_especial" {% if receita.familia == 'fornada_especial' %}selected{% endif %}>Fornada especial</option>
+                </select>
+            </div>
             <div class="col">
                 <label class="form-label small text-muted">Preco Atacado (R$)</label>
                 <input type="number" name="preco_venda" value="{{ '%.2f' % receita.preco_venda if receita.preco_venda else '' }}"
