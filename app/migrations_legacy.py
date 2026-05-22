@@ -435,6 +435,26 @@ def _migrate_postgres(app):
                 'ALTER TABLE foto_recebimento ALTER COLUMN imagem DROP NOT NULL'
             ))
 
+        # M6: imagem_dropbox_url + imagem_storage_path em receita e produto.
+        # Aqui usamos nome diferente do imagem_url legado (URL externa de
+        # fallback pra cardapio digital) que NAO eh substituido.
+        for tabela in ('receita', 'produto'):
+            result = conn.execute(text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = :t"
+            ), {'t': tabela})
+            cols = {row[0] for row in result}
+            if cols and 'imagem_dropbox_url' not in cols:
+                conn.execute(text(
+                    f'ALTER TABLE {tabela} '
+                    f'ADD COLUMN imagem_dropbox_url VARCHAR(500)'
+                ))
+            if cols and 'imagem_storage_path' not in cols:
+                conn.execute(text(
+                    f'ALTER TABLE {tabela} '
+                    f'ADD COLUMN imagem_storage_path VARCHAR(500)'
+                ))
+
         # driver_magic_token — magic link diario do motorista
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS driver_magic_token (
