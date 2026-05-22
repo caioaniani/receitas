@@ -25,10 +25,14 @@ class PedidoLoja(db.Model):
     # pedidos que ele coletou.
     driver_id = db.Column(db.Integer, db.ForeignKey('driver_entrega.id'),
                            nullable=True, index=True)
+    modificado_em = db.Column(db.DateTime, nullable=True)
+    modificado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
+                                   nullable=True, index=True)
 
     loja = db.relationship('Loja', backref='pedidos')
-    criador = db.relationship('Usuario')
+    criador = db.relationship('Usuario', foreign_keys=[criado_por])
     driver = db.relationship('Driver', foreign_keys=[driver_id])
+    modificado_por = db.relationship('Usuario', foreign_keys=[modificado_por_id])
     itens = db.relationship('PedidoItem', backref='pedido', cascade='all, delete-orphan')
     qrcodes = db.relationship('PedidoQRCode', back_populates='pedido', cascade='all, delete-orphan')
 
