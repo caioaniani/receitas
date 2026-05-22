@@ -188,12 +188,22 @@
         </p>
         <form method="POST"
               action="{{ url_for('main.blobs_migrar', modelo='pedido_item_foto') }}"
-              class="mb-0">
+              class="mb-2">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-sm btn-warning"
                     onclick="return confirm('Migrar TODAS as fotos de conferencia (PedidoItemFoto) do banco pro Dropbox? Pode demorar varios minutos.');">
                 <i class="bi bi-arrow-up-right-square"></i>
                 Migrar PedidoItemFoto (conferencia saida/entrega)
+            </button>
+        </form>
+        <form method="POST"
+              action="{{ url_for('main.blobs_migrar', modelo='foto_recebimento') }}"
+              class="mb-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-warning"
+                    onclick="return confirm('Migrar TODAS as fotos de recebimento (FotoRecebimento) do banco pro Dropbox?');">
+                <i class="bi bi-arrow-up-right-square"></i>
+                Migrar FotoRecebimento (loja apos receber)
             </button>
         </form>
     </div>
