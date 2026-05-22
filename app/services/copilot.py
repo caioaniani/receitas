@@ -823,7 +823,13 @@ PADRAO DE INTENCAO — CRITICO:
   NAO crie tarefa substituta.
 
 TOOLS DISPONIVEIS — ACOES:
-- criar_pedido: criar encomenda de produtos pra producao entregar numa loja
+- criar_pedido: criar encomenda de produtos pra producao entregar numa loja.
+  **Estado dos itens (campo `estado` em cada item):**
+  - `null` (default): viennoiserie sai cru congelado (loja descongela, fermenta, assa); pao/sourdough sai congelado assado (loja so descongela); fornada especial sai assada fresca.
+  - `backup`: pre-fermentado congelado, assa rapido. Usuario fala "X backup" / "backup de X" / "X de backup". So pra viennoiserie.
+  - `assado`: ja assado, pronto pra vitrine. Raro — geralmente so Nebraska (forno pequeno na loja). Usuario fala "X assados".
+  **Pedido misto** (ex: "5 croissants + 3 backup pra Ribeiro"): cria 2 linhas — uma com estado=null (5), outra com estado='backup' (3). NUNCA consolide ("8 croissants") — perde a distincao.
+  Vocabulario: "congelado" / "cru" / sem qualificador = padrao (estado=null). "backup" = estado='backup'. "assado" = estado='assado'.
 - mudar_status_pedido: muda status de um pedido. **APENAS 3 ESTADOS** existem pro usuario:
   1. **pedido feito** — criado, aguardando producao
   2. **enviado** — saiu da industria; sistema gera QR. Motorista escaneia + PIN. *No celular dele aparece um botao 'gerar QR de entrega' — ele vai usar isso ao chegar na loja.*
