@@ -81,8 +81,10 @@ class Receita(db.Model):
     preco_venda = db.Column(db.Float)
     preco_loja = db.Column(db.Float)
     preco_site = db.Column(db.Float)
-    imagem_url = db.Column(db.String(400))  # URL externa pra cardapio digital (fallback)
-    imagem_blob = db.Column(db.LargeBinary)  # foto enviada pelo admin (preferida)
+    imagem_url = db.Column(db.String(400))  # URL externa de fallback (legado)
+    imagem_blob = db.Column(db.LargeBinary)  # legado: foto admin pre-M6
+    imagem_dropbox_url = db.Column(db.String(500))  # shared link Dropbox (M6+)
+    imagem_storage_path = db.Column(db.String(500))  # path Dropbox pra deletar
     imagem_mimetype = db.Column(db.String(50))
     rendimento_qtd = db.Column(db.Float, nullable=False)
     rendimento_unidade = db.Column(db.String(30), nullable=False)
