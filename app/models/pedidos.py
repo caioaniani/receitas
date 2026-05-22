@@ -57,6 +57,10 @@ class PedidoItem(db.Model):
     quantidade = db.Column(db.Integer, nullable=False)
     quantidade_recebida = db.Column(db.Integer, nullable=True)
     observacao = db.Column(db.String(200))
+    # Estado do item (assado/backup) ou NULL = estado padrao da familia
+    # da receita (cru pra viennoiserie, congelado assado pra pao_sourdough,
+    # assado fresco pra fornada_especial). Ver app/constants.py.
+    estado = db.Column(db.String(20), nullable=True)
 
     receita = db.relationship('Receita')
     produto = db.relationship('Produto')
@@ -71,6 +75,13 @@ class PedidoItem(db.Model):
         if self.materia_prima:
             return self.materia_prima.nome + ' (MP)'
         return '?'
+
+    @property
+    def nome_item_com_estado(self):
+        """Nome do item + tag de estado, se estado nao-NULL.
+        Ex: 'Croissant Francês [BACKUP]' ou 'Sourdough' (sem tag)."""
+        from app.constants import render_item_com_estado
+        return render_item_com_estado(self.nome_item, self.estado)
 
 
 # ── Estoque de Loja ──
