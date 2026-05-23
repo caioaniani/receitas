@@ -105,12 +105,14 @@ def resumo():
                         + produtos_pendentes_vnda + pedidos_sem_loja)
 
     return {
-        'seru_ultimo_run': st_seru.get('ultimo_run'),
+        'seru_ultimo_run': seru_run,
         'seru_ativo': st_seru.get('ativo'),
         'seru_atrasado': (min_seru is None) or (min_seru > _ATRASO_MIN),
-        'vnda_ultimo_run': st_vnda.get('ultimo_run'),
+        'seru_baixados_hoje': seru_baixados_hoje,
+        'vnda_ultimo_run': vnda_run,
         'vnda_ativo': st_vnda.get('ativo'),
         'vnda_atrasado': (min_vnda is None) or (min_vnda > _ATRASO_MIN),
+        'vnda_baixados_hoje': vnda_baixados_hoje,
         'lojas_pendentes': lojas_pendentes,
         'produtos_pendentes_seru': produtos_pendentes_seru,
         'produtos_pendentes_vnda': produtos_pendentes_vnda,
