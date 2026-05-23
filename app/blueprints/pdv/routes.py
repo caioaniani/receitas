@@ -464,6 +464,26 @@ def saude():
     return render_template('pdv/saude.html', s=pdv_saude.resumo())
 
 
+@pdv_bp.route('/reconciliacao')
+@login_required
+@admin_required
+def reconciliacao():
+    """Reconciliacao: vendido no Seru vs baixado no estoque, no periodo."""
+    from app.services import pdv_saude
+    fim = hoje_brt()
+    inicio = fim - timedelta(days=6)  # ultimos 7 dias
+    try:
+        di = datetime.strptime(request.args['inicio'], '%Y-%m-%d').date()
+        df = datetime.strptime(request.args['fim'], '%Y-%m-%d').date()
+        if di <= df:
+            inicio, fim = di, df
+    except (KeyError, ValueError):
+        pass
+    dados = pdv_saude.reconciliar(inicio, fim)
+    return render_template('pdv/reconciliacao.html', d=dados,
+                           inicio=inicio.isoformat(), fim=fim.isoformat())
+
+
 @pdv_bp.route('/mapeamentos')
 @login_required
 @admin_required
