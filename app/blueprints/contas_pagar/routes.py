@@ -7,11 +7,11 @@ import json
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.blueprints.contas_pagar import contas_pagar_bp
-from app.decorators import admin_required
+from app.decorators import admin_required, owner_required
 from app.extensions import db
 from app.models import ContaPagar, Fornecedor
 from app.utils import agora
@@ -131,6 +131,30 @@ def pagar(id):
     db.session.commit()
     flash('Conta marcada como paga.', 'success')
     return redirect(url_for('contas_pagar.detalhe', id=id))
+
+
+@contas_pagar_bp.route('/importar-historico', methods=['POST'])
+@login_required
+@owner_required
+def importar_historico():
+    """Varre os ultimos 30 dias dos canais de NF e cria as contas. Roda em
+    background (a IA por imagem demora). As contas aparecem aos poucos."""
+    import threading
+
+    from app.services import conta_pagar_slack
+
+    app_obj = current_app._get_current_object()
+
+    def _runner():
+        try:
+            conta_pagar_slack.importar_historico(app_obj, dias=30)
+        except Exception:
+            app_obj.logger.exception('importar_historico falhou')
+
+    threading.Thread(target=_runner, daemon=True).start()
+    flash('Importacao do historico (30 dias) iniciada. As contas vao aparecer '
+          'aqui conforme forem processadas.', 'info')
+    return redirect(url_for('contas_pagar.lista'))
 
 
 @contas_pagar_bp.route('/<int:id>/status', methods=['POST'])
