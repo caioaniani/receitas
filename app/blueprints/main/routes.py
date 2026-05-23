@@ -71,6 +71,16 @@ def dashboard():
     from app.services.cestas import contar_produto_itens_orfaos
     cestas_orfaos = contar_produto_itens_orfaos() if current_user.is_owner else 0
 
+    # Pendencias do sync PDV (lojas/produtos nao mapeados travam baixa de
+    # estoque na venda). So owner ve — link pro painel /pdv/saude.
+    pdv_pendencias = 0
+    if current_user.is_owner:
+        try:
+            from app.services import pdv_saude
+            pdv_pendencias = pdv_saude.contar_pendencias()
+        except Exception:  # noqa: BLE001
+            pdv_pendencias = 0
+
     hoje = hoje_brt()
     aniversariantes = [f for f in funcionarios_ativos
                        if f.data_nascimento and f.data_nascimento.month == hoje.month]
