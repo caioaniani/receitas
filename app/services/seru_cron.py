@@ -16,6 +16,20 @@ from app.utils import hoje as hoje_brt
 
 logger = logging.getLogger(__name__)
 
+
+def _catchup_dias():
+    """Quantos dias pra tras o sync reprocessa (catch-up).
+
+    Default 2 (hoje + ontem + anteontem). Cobre falhas de sync de ate ~2 dias
+    sem perder vendas. Idempotencia (PK de *PedidoProcessado) garante que
+    pedidos ja baixados sao pulados — sem dupla-baixa. Configuravel via env
+    SYNC_CATCHUP_DIAS.
+    """
+    try:
+        return max(0, int(os.environ.get('SYNC_CATCHUP_DIAS', '2')))
+    except (TypeError, ValueError):
+        return 2
+
 _scheduler = None
 _ult_run = None
 _ult_run_vnda = None
