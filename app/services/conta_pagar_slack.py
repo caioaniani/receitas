@@ -33,8 +33,10 @@ def canal_de_nf(channel_id):
 
 
 def _ja_processado(file_id):
-    return bool(file_id) and db.session.query(
-        ContaPagar.query.filter_by(slack_file_id=file_id).exists()).scalar()
+    if not file_id:
+        return False
+    return (ContaPagar.query
+            .filter_by(slack_file_id=file_id).first() is not None)
 
 
 def _nome_enviante(slack_user_id):
