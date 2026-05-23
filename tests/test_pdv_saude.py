@@ -1,5 +1,5 @@
 """Testes do painel de saude + reconciliacao do sync PDV."""
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import patch
 
 
@@ -68,7 +68,6 @@ def test_reconciliar_separa_pendentes_vendidos(app):
     from app.extensions import db
     from app.models import EstoqueLoja, MovEstoqueLoja
     from app.services import pdv_saude
-    from app.utils import agora
 
     agg_fake = {
         'total_pedidos': 10,
@@ -85,8 +84,9 @@ def test_reconciliar_separa_pendentes_vendidos(app):
         el = EstoqueLoja(loja_id=1, receita_id=1, quantidade=0)
         db.session.add(el)
         db.session.flush()
+        # Data dentro do periodo reconciliado (2026-05-05).
         db.session.add(MovEstoqueLoja(estoque_loja_id=el.id, tipo='venda_seru',
-                                      quantidade=30, data=agora()))
+                                      quantidade=30, data=datetime(2026, 5, 5, 10, 0)))
         db.session.commit()
         with patch('app.services.vendas_itens.agregar_itens', return_value=agg_fake):
             r = pdv_saude.reconciliar(date(2026, 5, 1), date(2026, 5, 7))
