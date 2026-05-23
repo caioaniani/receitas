@@ -162,10 +162,20 @@ def importar_historico(app, dias=30):
         total = 0
         for canal in canais:
             cursor = None
-            while True:
+            parar = False
+            while not parar:
                 msgs, cursor = slack_api.historico_canal(canal, oldest=oldest,
                                                          cursor=cursor)
                 for m in msgs:
+                    # Salvaguarda: msgs vem da mais nova pra mais antiga. Se
+                    # cruzar o limite, para (a API as vezes ignora `oldest` na
+                    # paginacao por cursor).
+                    try:
+                        if float(m.get('ts', 0)) < oldest:
+                            parar = True
+                            break
+                    except (TypeError, ValueError):
+                        pass
                     if not m.get('files'):
                         continue
                     evento = {
