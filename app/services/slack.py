@@ -98,6 +98,27 @@ def info_usuario(slack_user_id):
         return None
 
 
+def historico_canal(channel_id, oldest=None, cursor=None, limit=200):
+    """conversations.history paginado. Retorna (messages, next_cursor).
+
+    `oldest`: epoch (str/float) — so mensagens a partir desse instante.
+    Requer scope channels:history + bot membro do canal.
+    """
+    try:
+        kwargs = {'channel': channel_id, 'limit': limit}
+        if oldest:
+            kwargs['oldest'] = str(oldest)
+        if cursor:
+            kwargs['cursor'] = cursor
+        resp = _client().conversations_history(**kwargs)
+        msgs = resp.get('messages') or []
+        next_cursor = (resp.get('response_metadata') or {}).get('next_cursor') or None
+        return msgs, next_cursor
+    except Exception:
+        logger.exception('slack historico_canal falhou')
+        return [], None
+
+
 def baixar_arquivo(file_info, tamanho_max=10 * 1024 * 1024):
     """Baixa um arquivo do Slack usando o bot token.
 
