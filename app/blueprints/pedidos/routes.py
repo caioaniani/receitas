@@ -89,22 +89,45 @@ def _loja_do_usuario():
 @login_required
 @gerente_required
 def lista():
+    from sqlalchemy import func
+
+    from app.constants import STATUS_PEDIDO_ABAS
+
     loja_id = _loja_do_usuario()
+    filtro_loja_arg = None
+    if not loja_id:
+        filtro_loja_arg = request.args.get('loja')
+
+    # Aba selecionada (grupo de status). Default: pendentes.
+    grupos = {slug: sts for slug, _, sts in STATUS_PEDIDO_ABAS}
+    aba = request.args.get('aba', 'pendentes')
+    if aba not in grupos:
+        aba = 'pendentes'
+    status_da_aba = grupos[aba]
+
+    def _aplica_loja(q):
+        if loja_id:
+            return q.filter(PedidoLoja.loja_id == loja_id)
+        if filtro_loja_arg:
+            try:
+                return q.filter(PedidoLoja.loja_id == int(filtro_loja_arg))
+            except (TypeError, ValueError):
+                pass
+        return q
+
+    # Contagem por status (1 query) → soma por grupo de aba pros badges.
+    cont_q = _aplica_loja(db.session.query(PedidoLoja.status, func.count()))
+    cont_por_status = dict(cont_q.group_by(PedidoLoja.status).all())
+    contagens = {slug: sum(cont_por_status.get(s, 0) for s in sts)
+                 for slug, _, sts in STATUS_PEDIDO_ABAS}
+
     query = PedidoLoja.query.options(
         joinedload(PedidoLoja.loja),
         selectinload(PedidoLoja.itens),
         selectinload(PedidoLoja.qrcodes),
-    ).order_by(PedidoLoja.criado_em.desc())
-    if loja_id:
-        # nao-admin: sempre filtra pela propria loja, ignora ?loja= do form
-        query = query.filter_by(loja_id=loja_id)
-    else:
-        filtro = request.args.get('loja')
-        if filtro:
-            try:
-                query = query.filter_by(loja_id=int(filtro))
-            except (TypeError, ValueError):
-                pass
+    ).filter(PedidoLoja.status.in_(status_da_aba)).order_by(
+        PedidoLoja.criado_em.desc())
+    query = _aplica_loja(query)
     pedidos = query.limit(100).all()
     # Constroi mapa pedido_id → nome do motorista (do QR de saida usado)
     motoristas = {}
@@ -117,7 +140,9 @@ def lista():
     lojas = _lojas_operacionais()
     return render_template('pedidos/lista.html', pedidos=pedidos, lojas=lojas,
                            filtro_loja=request.args.get('loja', ''),
-                           motoristas=motoristas)
+                           motoristas=motoristas,
+                           abas=STATUS_PEDIDO_ABAS, aba_atual=aba,
+                           contagens=contagens)
 
 
 @pedidos_bp.route('/novo', methods=['GET', 'POST'])
