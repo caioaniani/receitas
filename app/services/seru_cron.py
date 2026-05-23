@@ -9,6 +9,7 @@ SERU_AUTO_SYNC=0 antes do startup.
 """
 import logging
 import os
+from datetime import timedelta
 
 from sqlalchemy import text
 
@@ -74,10 +75,13 @@ def _run_sync(app):
                 if not got:
                     return  # outro worker esta executando
             try:
-                # Processa SO o dia de HOJE (BRT). Vendas de ontem ou
-                # anteriores nao sao tocadas — preferencia do usuario.
+                # Catch-up: processa de D-N ate hoje (BRT). Se o sync ficou
+                # fora do ar, retenta os dias perdidos. Idempotencia
+                # (SeruPedidoProcessado PK) pula ja-processados — sem
+                # dupla-baixa. So pega faltantes + estorna cancelados.
                 hoje = hoje_brt()
-                stats = seru_sync.processar_pedidos(hoje, hoje, user=None)
+                inicio = hoje - timedelta(days=_catchup_dias())
+                stats = seru_sync.processar_pedidos(inicio, hoje, user=None)
                 _ult_run = _agora()
                 ativas = any(stats.get(k, 0) for k in (
                     'pedidos_novos', 'itens_baixados',
