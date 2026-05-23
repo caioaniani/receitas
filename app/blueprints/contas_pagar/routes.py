@@ -80,7 +80,8 @@ def lista():
                         ContaPagar.criado_em.desc())
               .limit(200).all())
     return render_template('contas_pagar/lista.html', contas=contas,
-                           abas=ABAS, aba_atual=aba, contagens=contagens)
+                           abas=ABAS, aba_atual=aba, contagens=contagens,
+                           canais_nome=_mapa_canais(contas))
 
 
 @contas_pagar_bp.route('/<int:id>')
