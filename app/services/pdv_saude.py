@@ -91,6 +91,74 @@ def resumo():
     }
 
 
+def reconciliar(inicio, fim):
+    """Compara vendido no Seru vs baixado no estoque, no periodo [inicio, fim].
+
+    `inicio`/`fim`: date (BRT).
+
+    ATENCAO: nao bate 1:1 por design — produtos com `fator_quantidade` < 1
+    (compostos/fatias) e cestas baixam quantidade diferente da vendida. O
+    valor real desta tela eh destacar **produtos pendentes vendidos** (esses
+    NAO baixaram nada) e dar os totais como ordem de grandeza.
+
+    Retorna dict (ou {'erro': ...} se a API Seru falhar).
+    """
+    from datetime import datetime, time
+
+    from sqlalchemy import func
+
+    from app.constants import VENDA_TIPOS_LOJA
+    from app.models import MovEstoqueLoja
+    from app.services import vendas_itens
+
+    try:
+        agg = vendas_itens.agregar_itens(inicio, fim)
+    except Exception as e:  # noqa: BLE001
+        logger.exception('reconciliar: agregar_itens falhou')
+        return {'erro': f'{type(e).__name__}: {str(e)[:200]}'}
+
+    produtos = agg.get('produtos', [])
+    # Produtos vendidos que NAO baixam (pendentes ou nunca vistos numa sync).
+    pendentes_vendidos = [p for p in produtos
+                          if p['estado_map'] in ('pendente', 'sem_map')]
+    qtd_pendente = sum(p['qtd'] for p in pendentes_vendidos)
+
+    # Baixado no estoque (MovEstoqueLoja) no mesmo periodo.
+    ini_dt = datetime.combine(inicio, time.min)
+    fim_dt = datetime.combine(fim, time.max)
+    movs = (db_query_baixas(ini_dt, fim_dt, func, MovEstoqueLoja,
+                            VENDA_TIPOS_LOJA))
+    baixado_efetivo = (movs.get('venda_seru', 0) or 0) + (movs.get('venda_vnda', 0) or 0)
+    sem_estoque = ((movs.get('venda_seru_sem_estoque', 0) or 0)
+                   + (movs.get('venda_vnda_sem_estoque', 0) or 0))
+
+    return {
+        'inicio': inicio,
+        'fim': fim,
+        'seru_total_pedidos': agg.get('total_pedidos', 0),
+        'seru_total_itens': agg.get('total_itens_vendidos', 0),
+        'seru_faturamento': agg.get('faturamento_total', 0),
+        'pendentes_vendidos': pendentes_vendidos,
+        'qtd_pendente': qtd_pendente,
+        'baixado_efetivo': baixado_efetivo,
+        'sem_estoque': sem_estoque,
+        'movs_por_tipo': movs,
+    }
+
+
+def db_query_baixas(ini_dt, fim_dt, func, MovEstoqueLoja, tipos):
+    """Soma MovEstoqueLoja.quantidade por tipo no periodo. Retorna {tipo: total}."""
+    rows = (MovEstoqueLoja.query
+            .filter(MovEstoqueLoja.tipo.in_(tipos))
+            .filter(MovEstoqueLoja.data >= ini_dt)
+            .filter(MovEstoqueLoja.data <= fim_dt)
+            .with_entities(MovEstoqueLoja.tipo,
+                           func.sum(MovEstoqueLoja.quantidade))
+            .group_by(MovEstoqueLoja.tipo)
+            .all())
+    return {tipo: int(total or 0) for tipo, total in rows}
+
+
 def contar_pendencias():
     """So o total de pendencias acionaveis — pro card do dashboard.
 
