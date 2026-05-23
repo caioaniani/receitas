@@ -153,6 +153,14 @@ def reconciliar(inicio, fim):
                           if p['estado_map'] in ('pendente', 'sem_map')]
     qtd_pendente = sum(p['qtd'] for p in pendentes_vendidos)
 
+    # Produtos com auto-baixa ATIVA (mapeados que venderam no periodo). O
+    # sync baixa estoque deles automaticamente. Se o dono tambem baixa
+    # algum manualmente (ex: PDV sem API), isso eh DUPLA-BAIXA — ele deve
+    # revisar e Ignorar os que controla na mao. Ordena por qtd desc.
+    mapeados_vendidos = sorted(
+        [p for p in produtos if p['estado_map'] == 'mapeado'],
+        key=lambda x: x['qtd'], reverse=True)
+
     # Baixado no estoque (MovEstoqueLoja) no mesmo periodo, agregado por tipo.
     ini_dt = datetime.combine(inicio, time.min)
     fim_dt = datetime.combine(fim, time.max)
