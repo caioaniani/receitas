@@ -141,6 +141,9 @@ def _run_vnda_sync(app):
                         logger.info('vnda auto-sync %s (com mudancas): %s',
                                     dia, stats)
                 _ult_run_vnda = _agora()
+                from app.models import AppConfig
+                AppConfig.set('vnda_ultimo_sync', _ult_run_vnda.isoformat())
+                db.session.commit()
             except Exception:
                 logger.exception('vnda auto-sync falhou')
             finally:
