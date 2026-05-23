@@ -146,7 +146,7 @@
                 .then(function(r){ return r.json(); })
                 .then(function(j){
                     if (j.ok) {
-                        tr.querySelector('td:nth-child(5)').innerHTML =
+                        tr.querySelector('.recon-acao-cell').innerHTML =
                             '<span class="badge bg-success">' +
                             (acao === 'ignorar' ? 'ignorado' : 'vinculado') + '</span>';
                     } else {
