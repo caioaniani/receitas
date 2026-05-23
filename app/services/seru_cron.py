@@ -121,15 +121,22 @@ def _run_vnda_sync(app):
                 if not got:
                     return
             try:
+                # Catch-up: VNDA processa por data de entrega (1 data por
+                # chamada), entao itera de hoje ate D-N. Idempotencia
+                # (VndaPedidoProcessado PK) evita dupla-baixa.
                 hoje = hoje_brt()
-                stats = vnda_sync.processar_pedidos(hoje, user=None)
+                for d in range(_catchup_dias() + 1):
+                    dia = hoje - timedelta(days=d)
+                    stats = vnda_sync.processar_pedidos(dia, user=None)
+                    if stats.get('erro'):
+                        logger.warning('vnda auto-sync erro (%s): %s',
+                                       dia, stats['erro'])
+                    elif any(stats.get(k, 0) for k in (
+                            'pedidos_novos', 'itens_baixados',
+                            'pedidos_cancelados_estornados')):
+                        logger.info('vnda auto-sync %s (com mudancas): %s',
+                                    dia, stats)
                 _ult_run_vnda = _agora()
-                if stats.get('erro'):
-                    logger.warning('vnda auto-sync erro: %s', stats['erro'])
-                elif any(stats.get(k, 0) for k in (
-                        'pedidos_novos', 'itens_baixados',
-                        'pedidos_cancelados_estornados')):
-                    logger.info('vnda auto-sync (com mudancas): %s', stats)
             except Exception:
                 logger.exception('vnda auto-sync falhou')
             finally:
