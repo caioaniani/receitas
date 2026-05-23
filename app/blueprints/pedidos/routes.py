@@ -796,6 +796,25 @@ def foto(foto_id):
     abort(404)
 
 
+@pedidos_bp.route('/conferencia-foto/<int:foto_id>')
+@login_required
+@gerente_required
+def conferencia_foto(foto_id):
+    """Serve foto de conferencia por SKU (PedidoItemFoto) pro detalhe do
+    pedido. Gate por loja. Prioriza Dropbox; fallback BLOB legado."""
+    from app.models import PedidoItemFoto
+    f = PedidoItemFoto.query.get_or_404(foto_id)
+    loja_id = _loja_do_usuario()
+    pedido = f.pedido_item.pedido if f.pedido_item else None
+    if loja_id and (not pedido or pedido.loja_id != loja_id):
+        abort(403)
+    if f.imagem_url:
+        return redirect(f.imagem_url, code=302)
+    if f.imagem:
+        return send_file(io.BytesIO(f.imagem), mimetype=f.mimetype or 'image/jpeg')
+    abort(404)
+
+
 @pedidos_bp.route('/lojas/<int:loja_id>/precos', methods=['GET', 'POST'])
 @login_required
 @admin_required
