@@ -27,7 +27,7 @@
                 <p class="text-muted mb-0">Sem imagem.</p>
                 {% endif %}
                 <p class="small text-muted mt-2 mb-0">
-                    Origem: {{ canais_nome.get(conta.origem_canal, conta.origem_canal) or '—' }}
+                    Loja: {{ loja_nome or '—' }}
                     {% if conta.enviado_por %}· por {{ conta.enviado_por }}{% endif %}
                     {% if conta.criado_em %}· {{ conta.criado_em.strftime('%d/%m/%Y %H:%M') }}{% endif %}
                 </p>
