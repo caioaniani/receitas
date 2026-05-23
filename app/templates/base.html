@@ -108,6 +108,10 @@
            class="sidebar-link {% if request.path == '/pedidos/estoque-loja' %}active{% endif %}">
             Estoque Loja
         </a>
+        <a href="{{ url_for('pedidos.estoque_loja_diario') }}"
+           class="sidebar-link {% if request.path == '/pedidos/estoque-loja/diario' %}active{% endif %}">
+            Movimento do Dia
+        </a>
         <a href="{{ url_for('pedidos.estoque_loja_historico') }}"
            class="sidebar-link {% if request.path == '/pedidos/estoque-loja/historico' %}active{% endif %}">
             Histórico Estoque
