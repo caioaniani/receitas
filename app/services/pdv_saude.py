@@ -213,6 +213,10 @@ def reconciliar_vnda(inicio, fim):
     pendentes_vendidos = [p for p in produtos
                           if p['estado_map'] in ('pendente', 'sem_map')]
     qtd_pendente = sum(p['qtd'] for p in pendentes_vendidos)
+    ignorados_vendidos = sorted(
+        [p for p in produtos if p['estado_map'] == 'ignorado'],
+        key=lambda x: x['qtd'], reverse=True)
+    qtd_ignorada = sum(p['qtd'] for p in ignorados_vendidos)
 
     ini_dt = datetime.combine(inicio, time.min)
     fim_dt = datetime.combine(fim, time.max)
