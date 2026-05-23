@@ -133,3 +133,40 @@ def test_slack_bot_intercepta_canal_nf(app):
             slack_bot.processar_evento_mensagem(_evento(channel='C_NF'))
             proc.assert_called_once()
             interp.assert_not_called()
+
+
+def test_webhook_deixa_passar_canal_nf(app):
+    """REGRESSAO: /slack/events nao pode barrar canal de NF no filtro de
+    canal (ele nao esta em SLACK_CANAIS_PERMITIDOS, mas em SLACK_CANAIS_NF)."""
+    import hashlib
+    import hmac
+    import json
+    import time
+
+    secret = 'sig-secret-teste'
+    app.config['SLACK_SIGNING_SECRET'] = secret
+    app.config['SLACK_CANAIS_PERMITIDOS'] = ''       # canal NF NAO esta aqui
+    app.config['SLACK_CANAIS_NF'] = 'C_NF'
+
+    body = json.dumps({
+        'type': 'event_callback',
+        'event_id': 'Ev_nf_teste_1',
+        'event': {
+            'type': 'message', 'subtype': 'file_share',
+            'channel': 'C_NF', 'channel_type': 'channel', 'user': 'U1',
+            'ts': '123.45',
+            'files': [{'id': 'Fweb', 'mimetype': 'image/jpeg'}],
+        },
+    })
+    ts = str(int(time.time()))
+    sig = 'v0=' + hmac.new(secret.encode(), f'v0:{ts}:{body}'.encode(),
+                           hashlib.sha256).hexdigest()
+
+    c = app.test_client()
+    with patch('app.services.slack_bot.disparar_evento') as disparar:
+        r = c.post('/slack/events', data=body,
+                   headers={'X-Slack-Request-Timestamp': ts,
+                            'X-Slack-Signature': sig,
+                            'Content-Type': 'application/json'})
+    assert r.status_code == 200
+    disparar.assert_called_once()  # passou pelo filtro
