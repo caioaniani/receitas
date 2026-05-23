@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}Conta a Pagar #{{ conta.id }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-receipt"></i> Conta a Pagar #{{ conta.id }}</h1>
+    <a href="{{ url_for('contas_pagar.lista', aba=conta.status) }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<div class="row g-3">
+    <!-- Documento (Dropbox) -->
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header py-2"><strong>Documento</strong>
+                <span class="badge bg-light text-dark">{{ conta.tipo_documento }}</span>
+            </div>
+            <div class="card-body text-center">
+                {% if conta.imagem_url %}
+                <a href="{{ conta.imagem_url }}" target="_blank" rel="noopener">
+                    <img src="{{ conta.imagem_url }}" alt="NF/boleto"
+                         style="max-width:100%; max-height:520px; border:1px solid var(--border-color); border-radius:6px;">
+                </a>
+                {% else %}
+                <p class="text-muted mb-0">Sem imagem.</p>
+                {% endif %}
+                <p class="small text-muted mt-2 mb-0">
+                    Origem: {{ conta.origem_canal or '—' }}
+                    {% if conta.enviado_por %}· por {{ conta.enviado_por }}{% endif %}
+                    {% if conta.criado_em %}· {{ conta.criado_em.strftime('%d/%m/%Y %H:%M') }}{% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dados (editaveis) -->
+    <div class="col-md-7">
+        <div class="card mb-3">
+            <div class="card-header py-2">
+                <strong>Dados</strong>
+                <span class="badge {% if conta.status == 'pago' %}bg-success{% elif conta.status == 'ignorado' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">{{ conta.status }}</span>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('contas_pagar.editar', id=conta.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row g-2">
+                        <div class="col-12">
+                            <label class="form-label small mb-0">Fornecedor (texto da NF)</label>
+                            <input name="fornecedor_nome" value="{{ conta.fornecedor_nome or '' }}" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-0">Vincular a fornecedor cadastrado</label>
+                            <select name="fornecedor_id" class="form-select form-select-sm">
+                                <option value="">— nenhum —</option>
+                                {% for f in fornecedores %}
+                                <option value="{{ f.id }}" {% if conta.fornecedor_id == f.id %}selected{% endif %}>{{ f.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small mb-0">Tipo</label>
+                            <select name="tipo_documento" class="form-select form-select-sm">
+                                {% for t in ['nota_fiscal', 'boleto', 'desconhecido'] %}
+                                <option value="{{ t }}" {% if conta.tipo_documento == t %}selected{% endif %}>{{ t }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small mb-0">Valor total (R$)</label>
+                            <input name="valor_total" type="number" step="0.01" value="{{ '%.2f'|format(conta.valor_total) if conta.valor_total is not none else '' }}" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small mb-0">Vencimento</label>
+                            <input name="vencimento" type="date" value="{{ conta.vencimento.isoformat() if conta.vencimento else '' }}" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small mb-0">NF número</label>
+                            <input name="nf_numero" value="{{ conta.nf_numero or '' }}" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-0">Código de barras (boleto)</label>
+                            <input name="codigo_barras" value="{{ conta.codigo_barras or '' }}" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-0">Linha digitável (boleto)</label>
+                            <input name="linha_digitavel" value="{{ conta.linha_digitavel or '' }}" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-0">Info de pagamento (pix, etc)</label>
+                            <textarea name="info_pagamento" rows="2" class="form-control form-control-sm">{{ conta.info_pagamento or '' }}</textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-0">Vincular outro documento (NF ↔ boleto)</label>
+                            <select name="relacionado_id" class="form-select form-select-sm">
+                                <option value="">— nenhum —</option>
+                                {% for r in relacionaveis %}
+                                <option value="{{ r.id }}" {% if conta.relacionado_id == r.id %}selected{% endif %}>
+                                    #{{ r.id }} · {{ r.tipo_documento }} · {{ r.fornecedor_nome or 's/ fornecedor' }}
+                                    {% if r.valor_total %}· R$ {{ '%.2f'|format(r.valor_total) }}{% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary mt-3"><i class="bi bi-save"></i> Salvar</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Acoes de status -->
+        <div class="card">
+            <div class="card-body d-flex flex-wrap gap-2 align-items-center">
+                {% if conta.status != 'pago' %}
+                <form method="POST" action="{{ url_for('contas_pagar.pagar', id=conta.id) }}" class="d-flex gap-2 align-items-center mb-0">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <select name="forma_pagamento" class="form-select form-select-sm" style="max-width:150px;">
+                        <option value="">forma...</option>
+                        {% for fp in ['pix', 'boleto', 'transferencia', 'dinheiro', 'cartao'] %}
+                        <option value="{{ fp }}">{{ fp }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> Marcar pago</button>
+                </form>
+                {% endif %}
+                {% for novo, label, cls in [('aberto','Reabrir','btn-outline-secondary'), ('ignorado','Ignorar','btn-outline-danger')] %}
+                {% if conta.status != novo %}
+                <form method="POST" action="{{ url_for('contas_pagar.mudar_status', id=conta.id) }}" class="mb-0">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="status" value="{{ novo }}">
+                    <button type="submit" class="btn btn-sm {{ cls }}">{{ label }}</button>
+                </form>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        {% if itens %}
+        <div class="card mt-3">
+            <div class="card-header py-2"><strong>Itens (extraídos da NF)</strong></div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light"><tr><th>Item</th><th class="text-end">Qtd</th><th class="text-end">Vl unit</th><th class="text-end">Total</th></tr></thead>
+                    <tbody>
+                        {% for it in itens %}
+                        <tr>
+                            <td>{{ it.get('nome', '—') }}</td>
+                            <td class="text-end">{{ it.get('quantidade', '') }}</td>
+                            <td class="text-end">{{ it.get('valor_unitario', '') }}</td>
+                            <td class="text-end">{{ it.get('valor_total', '') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
