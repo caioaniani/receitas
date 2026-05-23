@@ -134,6 +134,57 @@ def editar(id):
     return redirect(url_for('contas_pagar.detalhe', id=id))
 
 
+@contas_pagar_bp.route('/<int:id>/reextrair', methods=['POST'])
+@login_required
+@admin_required
+def reextrair(id):
+    """Re-le o documento com a IA (rebaixa a imagem do Dropbox). Sobrescreve
+    os campos de leitura; preserva decisoes humanas (status, pago, vinculo,
+    fornecedor cadastrado). Util pra corrigir leitura errada (ex: data)."""
+    import requests
+
+    from app.services import conta_pagar_ia, conta_pagar_slack
+
+    conta = ContaPagar.query.get_or_404(id)
+    if not conta.imagem_url:
+        flash('Sem imagem pra reprocessar.', 'warning')
+        return redirect(url_for('contas_pagar.detalhe', id=id))
+    try:
+        resp = requests.get(conta.imagem_url, timeout=30)
+        resp.raise_for_status()
+    except Exception:
+        flash('Nao consegui baixar a imagem do Dropbox.', 'danger')
+        return redirect(url_for('contas_pagar.detalhe', id=id))
+
+    dados = conta_pagar_ia.extrair_documento(
+        resp.content, resp.headers.get('Content-Type') or 'image/jpeg')
+    if dados.get('erro'):
+        flash(f"IA nao conseguiu reler: {dados['erro']}", 'warning')
+        return redirect(url_for('contas_pagar.detalhe', id=id))
+
+    conta.tipo_documento = dados.get('tipo_documento') or conta.tipo_documento
+    conta.fornecedor_nome = dados.get('fornecedor') or conta.fornecedor_nome
+    if dados.get('valor_total') is not None:
+        conta.valor_total = dados['valor_total']
+    venc = conta_pagar_slack._parse_vencimento(dados)
+    if venc:
+        conta.vencimento = venc
+    if dados.get('nf_numero'):
+        conta.nf_numero = str(dados['nf_numero'])
+    conta.codigo_barras = dados.get('codigo_barras') or conta.codigo_barras
+    conta.linha_digitavel = dados.get('linha_digitavel') or conta.linha_digitavel
+    conta.info_pagamento = dados.get('info_pagamento') or conta.info_pagamento
+    if dados.get('itens'):
+        conta.itens_json = json.dumps(dados['itens'], ensure_ascii=False)
+    conta.dados_ia_json = json.dumps(dados, ensure_ascii=False)[:8000]
+    conta.editado_em = agora()
+    conta.editado_por_id = current_user.id
+    db.session.commit()
+    flash('Documento relido pela IA. Confira os campos, principalmente o '
+          'vencimento.', 'success')
+    return redirect(url_for('contas_pagar.detalhe', id=id))
+
+
 @contas_pagar_bp.route('/<int:id>/pagar', methods=['POST'])
 @login_required
 @admin_required
