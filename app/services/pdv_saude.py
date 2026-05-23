@@ -185,6 +185,7 @@ def reconciliar(inicio, fim):
         'seru_faturamento': agg.get('faturamento_total', 0),
         'pendentes_vendidos': pendentes_vendidos,
         'qtd_pendente': qtd_pendente,
+        'mapeados_vendidos': mapeados_vendidos,
         'baixado_efetivo': baixado_efetivo,
         'sem_estoque': sem_estoque,
         'movs_por_tipo': movs,
