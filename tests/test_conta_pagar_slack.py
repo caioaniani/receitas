@@ -100,6 +100,29 @@ def test_ia_falha_ainda_cria_conta_com_doc(app):
         assert c.tipo_documento == 'desconhecido'
 
 
+def test_importar_historico(app):
+    """Varre 2 mensagens com files do historico → cria 2 contas."""
+    from app.models import ContaPagar
+    from app.services import conta_pagar_slack
+    p1, p2, p3, p4 = _patches()
+    msgs = [
+        {'ts': '100.1', 'user': 'U1', 'files': [
+            {'id': 'H1', 'mimetype': 'image/jpeg', 'name': 'a.jpg',
+             'url_private_download': 'u', 'size': 10}]},
+        {'ts': '100.2', 'user': 'U2', 'files': [
+            {'id': 'H2', 'mimetype': 'image/jpeg', 'name': 'b.jpg',
+             'url_private_download': 'u', 'size': 10}]},
+        {'ts': '100.3', 'user': 'U3'},  # sem files — ignora
+    ]
+    with app.app_context(), p1, p2, p3, p4:
+        app.config['SLACK_CANAIS_NF'] = 'C_NF'
+        with patch('app.services.slack.historico_canal',
+                   return_value=(msgs, None)):
+            n = conta_pagar_slack.importar_historico(app, dias=30)
+        assert n == 2
+        assert ContaPagar.query.count() == 2
+
+
 def test_slack_bot_intercepta_canal_nf(app):
     """slack_bot roteia canal de NF pro handler e NAO chama copilot."""
     from app.services import slack_bot
