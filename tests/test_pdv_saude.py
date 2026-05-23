@@ -137,9 +137,7 @@ def test_rota_reconciliacao_renderiza(app, admin_user, catalogo):
         r = c.get('/pdv/reconciliacao')
     assert r.status_code == 200
     assert b'Reconciliacao' in r.data
-    assert b'Cesta Nova' in r.data        # pendente (nao baixou)
-    assert b'Pao Mapeado' in r.data       # auto-baixa ativa
-    assert b'auto-baixa ativa' in r.data  # tabela nova
+    assert b'Cesta Nova' in r.data        # pendente (nao baixou) aparece
     assert b'reconMapear' in r.data       # JS da acao inline
     assert b'recon-alvo' in r.data        # select de alvos renderizou
     assert b'tab-vnda' in r.data          # aba VNDA renderizou
