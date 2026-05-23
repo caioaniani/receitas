@@ -106,3 +106,32 @@ def test_reconciliar_api_falha_retorna_erro(app):
             r = pdv_saude.reconciliar(date(2026, 5, 1), date(2026, 5, 7))
     assert 'erro' in r
     assert 'seru fora' in r['erro']
+
+
+def test_rota_saude_renderiza(app, admin_user):
+    """Smoke: /pdv/saude renderiza 200 (template + url_for OK)."""
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
+    r = c.get('/pdv/saude')
+    assert r.status_code == 200
+    assert b'Saude do Sync' in r.data
+
+
+def test_rota_reconciliacao_renderiza(app, admin_user):
+    """Smoke: /pdv/reconciliacao renderiza 200 (mock da API Seru)."""
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
+    agg = {'total_pedidos': 0, 'total_itens_vendidos': 0,
+           'faturamento_total': 0, 'produtos': []}
+    with patch('app.services.vendas_itens.agregar_itens', return_value=agg):
+        r = c.get('/pdv/reconciliacao')
+    assert r.status_code == 200
+    assert b'Reconciliacao' in r.data
+
+
+def test_dashboard_renderiza_com_card_pdv(app, admin_user):
+    """Smoke: /dashboard renderiza com pdv_pendencias sem quebrar."""
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
+    r = c.get('/dashboard')
+    assert r.status_code == 200
