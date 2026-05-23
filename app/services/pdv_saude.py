@@ -180,9 +180,9 @@ def reconciliar(inicio, fim):
     return {
         'inicio': inicio,
         'fim': fim,
-        'seru_total_pedidos': agg.get('total_pedidos', 0),
-        'seru_total_itens': agg.get('total_itens_vendidos', 0),
-        'seru_faturamento': agg.get('faturamento_total', 0),
+        'total_pedidos': agg.get('total_pedidos', 0),
+        'total_itens': agg.get('total_itens_vendidos', 0),
+        'faturamento': agg.get('faturamento_total', 0),
         'pendentes_vendidos': pendentes_vendidos,
         'qtd_pendente': qtd_pendente,
         'mapeados_vendidos': mapeados_vendidos,
