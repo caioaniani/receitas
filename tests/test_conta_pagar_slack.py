@@ -161,6 +161,51 @@ def test_slack_bot_intercepta_canal_nf(app):
             interp.assert_not_called()
 
 
+def test_parse_vencimento_br_prioriza_texto_cru():
+    """Data DD/MM/AAAA do documento manda — mesmo se a IA inverter no ISO."""
+    from datetime import date
+
+    from app.services import conta_pagar_slack as cps
+
+    # IA inverteu (08/05 virou 2026-08-05), mas o texto cru salva o dia certo
+    d = cps._parse_vencimento({'vencimento': '2026-08-05',
+                               'vencimento_texto': '08/05/2026'})
+    assert d == date(2026, 5, 8)  # 8 de maio, nao 5 de agosto
+
+    # Dia > 12: nao ha ambiguidade
+    d2 = cps._parse_vencimento({'vencimento_texto': '25/12/2026'})
+    assert d2 == date(2026, 12, 25)
+
+    # Sem texto cru: cai no ISO
+    d3 = cps._parse_vencimento({'vencimento': '2026-03-10'})
+    assert d3 == date(2026, 3, 10)
+
+    # Ano com 2 digitos
+    d4 = cps._parse_vencimento({'vencimento_texto': '01/02/26'})
+    assert d4 == date(2026, 2, 1)
+
+    # Nada
+    assert cps._parse_vencimento({}) is None
+
+
+def test_processar_usa_vencimento_br(app):
+    """Captura via Slack respeita DD/MM/AAAA do documento."""
+    from datetime import date
+
+    from app.models import ContaPagar
+    from app.services import conta_pagar_slack
+    p1, p2, p3, _ = _patches()
+    p_ia = patch('app.services.conta_pagar_ia.extrair_documento',
+                 return_value={'tipo_documento': 'boleto', 'fornecedor': 'X',
+                               'valor_total': 10.0, 'codigo_barras': '1',
+                               'vencimento': '2026-08-05',  # IA inverteu
+                               'vencimento_texto': '08/05/2026'})
+    with app.app_context(), p1, p2, p3, p_ia:
+        conta_pagar_slack.processar(_evento(file_id='Fvenc'))
+        c = ContaPagar.query.filter_by(slack_file_id='Fvenc').first()
+        assert c.vencimento == date(2026, 5, 8)
+
+
 def test_webhook_deixa_passar_canal_nf(app):
     """REGRESSAO: /slack/events nao pode barrar canal de NF no filtro de
     canal (ele nao esta em SLACK_CANAIS_PERMITIDOS, mas em SLACK_CANAIS_NF)."""
