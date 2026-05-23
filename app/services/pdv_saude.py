@@ -204,9 +204,6 @@ def reconciliar_vnda(inicio, fim):
     pendentes_vendidos = [p for p in produtos
                           if p['estado_map'] in ('pendente', 'sem_map')]
     qtd_pendente = sum(p['qtd'] for p in pendentes_vendidos)
-    mapeados_vendidos = sorted(
-        [p for p in produtos if p['estado_map'] == 'mapeado'],
-        key=lambda x: x['qtd'], reverse=True)
 
     ini_dt = datetime.combine(inicio, time.min)
     fim_dt = datetime.combine(fim, time.max)
@@ -228,7 +225,6 @@ def reconciliar_vnda(inicio, fim):
         'total_itens': agg.get('total_itens', 0),
         'pendentes_vendidos': pendentes_vendidos,
         'qtd_pendente': qtd_pendente,
-        'mapeados_vendidos': mapeados_vendidos,
         'baixado_efetivo': movs.get('venda_vnda', 0),
         'sem_estoque': movs.get('venda_vnda_sem_estoque', 0),
         'movs_por_tipo': movs,
