@@ -126,6 +126,13 @@ def processar(evento):
         except Exception:  # noqa: BLE001
             db.session.rollback()
             logger.exception('conta_pagar_slack: commit falhou (file %s)', file_id)
+            continue
+        # Junta automaticamente com a NF/boleto do mesmo recebimento, se houver.
+        try:
+            from app.services import conta_pagar as cp_dominio
+            cp_dominio.tentar_agrupar(conta)
+        except Exception:  # noqa: BLE001
+            logger.exception('conta_pagar_slack: agrupamento falhou (file %s)', file_id)
 
     return criadas
 
