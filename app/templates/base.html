@@ -204,6 +204,14 @@
            class="sidebar-link {% if '/pdv/vnda/' in request.path %}active{% endif %}">
             Mapeamentos VNDA
         </a>
+        <a href="{{ url_for('pdv.saude') }}"
+           class="sidebar-link {% if '/pdv/saude' in request.path %}active{% endif %}">
+            Saude do Sync
+        </a>
+        <a href="{{ url_for('pdv.reconciliacao') }}"
+           class="sidebar-link {% if '/pdv/reconciliacao' in request.path %}active{% endif %}">
+            Reconciliacao
+        </a>
         {% endif %}
         {% if current_user.is_admin() %}
         <a href="{{ url_for('entregas.index') }}"
