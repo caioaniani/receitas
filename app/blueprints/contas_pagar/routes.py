@@ -230,12 +230,16 @@ def reextrair(id):
 @admin_required
 def pagar(id):
     conta = ContaPagar.query.get_or_404(id)
-    conta.status = 'pago'
-    conta.valor_pago = conta.valor_total
-    conta.pago_em = agora()
-    conta.forma_pagamento = (request.form.get('forma_pagamento') or '').strip() or None
-    conta.editado_em = agora()
-    conta.editado_por_id = current_user.id
+    forma = (request.form.get('forma_pagamento') or '').strip() or None
+    agora_ts = agora()
+    # Marca o grupo inteiro (NF + boleto sao a mesma obrigacao).
+    for alvo in [conta, *conta.ligados]:
+        alvo.status = 'pago'
+        alvo.valor_pago = alvo.valor_total
+        alvo.pago_em = agora_ts
+        alvo.forma_pagamento = forma
+        alvo.editado_em = agora_ts
+        alvo.editado_por_id = current_user.id
     db.session.commit()
     flash('Conta marcada como paga.', 'success')
     return redirect(url_for('contas_pagar.detalhe', id=id))
