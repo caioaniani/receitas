@@ -99,6 +99,32 @@ def test_ignorar_e_reabrir(app, admin_user):
         assert db.session.get(ContaPagar, cid).status == 'aberto'
 
 
+def test_vinculo_bidirecional_no_detalhe(app, admin_user):
+    """Vincula boleto→NF; abrir a NF tambem mostra o boleto (backref)."""
+    from app.extensions import db
+    with app.app_context():
+        nf = _conta(db, tipo_documento='nota_fiscal', nf_numero='555')
+        boleto = _conta(db, tipo_documento='boleto')
+        nf_id, boleto_id = nf.id, boleto.id
+
+    c = app.test_client()
+    _login(c)
+    # vincula a partir do boleto
+    c.post(f'/contas-pagar/{boleto_id}/editar',
+           data={'relacionado_id': str(nf_id), 'valor_total': '100'},
+           follow_redirects=True)
+
+    # detalhe do boleto mostra a NF ligada
+    r1 = c.get(f'/contas-pagar/{boleto_id}')
+    assert b'Documento(s) ligado(s)' in r1.data
+    # detalhe da NF tambem mostra o boleto (lado que nao setou — via backref)
+    r2 = c.get(f'/contas-pagar/{nf_id}')
+    assert b'Documento(s) ligado(s)' in r2.data
+    # lista marca vinculo
+    r3 = c.get('/contas-pagar/?aba=aberto')
+    assert b'bi-link-45deg' in r3.data
+
+
 def test_nao_admin_barrado(app, loja):
     """Funcionario comum nao acessa contas a pagar."""
     from app.extensions import db
