@@ -85,12 +85,13 @@
         </p>
         <table class="table table-sm mb-0">
             <thead class="table-light">
-                <tr><th>Produto (Seru)</th><th class="text-end">Qtd vendida</th><th class="text-end">Faturamento</th><th>Estado</th></tr>
+                <tr><th>Produto (Seru)</th><th>SKU</th><th class="text-end">Qtd vendida</th><th class="text-end">Faturamento</th><th>Estado</th></tr>
             </thead>
             <tbody>
                 {% for p in d.pendentes_vendidos %}
                 <tr>
                     <td>{{ p.nome }}</td>
+                    <td><code>{{ p.sku or '—' }}</code></td>
                     <td class="text-end">{{ p.qtd | round(0,'floor') | int }}</td>
                     <td class="text-end">R$ {{ '%.2f'|format(p.faturamento) }}</td>
                     <td><span class="badge bg-warning text-dark">{{ p.estado_map }}</span></td>
