@@ -41,6 +41,90 @@ def loja_vnda():
     return Loja.query.filter_by(nome=LOJA_VNDA_NOME_DEFAULT).first()
 
 
+def agregar_vendas(data_inicial, data_final):
+    """Agrega vendas VNDA por produto no periodo (por data de ENTREGA).
+
+    Espelha `vendas_itens.agregar_itens` (que eh do Seru) pra alimentar a
+    reconciliacao. Retorna {produtos: [...], total_pedidos, total_itens,
+    loja} ou {erro: ...} se a API VNDA falhar.
+    """
+    loja = loja_vnda()
+    start = data_inicial - timedelta(days=60)
+    end = data_final + timedelta(days=3)
+    try:
+        todos = vnda._buscar_pedidos_janela(start, end)
+    except vnda.VndaUnavailableError as e:
+        return {'erro': f'vnda_indisponivel: {e}'}
+    except Exception as e:  # noqa: BLE001
+        logger.exception('agregar_vendas vnda falhou')
+        return {'erro': f'{type(e).__name__}: {str(e)[:200]}'}
+
+    agg = {}
+    total_pedidos = 0
+    for order in todos:
+        if not isinstance(order, dict):
+            continue
+        de = vnda._extrair_data_entrega(order)
+        if not de or not (data_inicial <= de <= data_final):
+            continue
+        if (order.get('status') or '').lower() in STATUS_CANCELADO:
+            continue
+        code = (order.get('code') or '').strip()
+        contou = False
+        for item in order.get('items') or []:
+            if not isinstance(item, dict):
+                continue
+            nome = (item.get('product_name') or item.get('name') or '').strip()
+            try:
+                qtd = float(item.get('quantity', 0) or 0)
+            except (TypeError, ValueError):
+                qtd = 0.0
+            if not nome or qtd <= 0:
+                continue
+            sku = (item.get('sku') or item.get('product_sku') or '').strip() or None
+            e = agg.setdefault(nome, {'qtd': 0.0, 'sku': sku, 'pedidos': set()})
+            e['qtd'] += qtd
+            if sku and not e['sku']:
+                e['sku'] = sku
+            e['pedidos'].add(code)
+            contou = True
+        if contou:
+            total_pedidos += 1
+
+    maps = {}
+    if agg:
+        maps = {m.vnda_nome: m for m in VndaProdutoMap.query.filter(
+            VndaProdutoMap.vnda_nome.in_(list(agg.keys()))).all()}
+
+    produtos = []
+    for nome, v in agg.items():
+        m = maps.get(nome)
+        if m:
+            estado = m.estado
+            mapeado_para = {
+                'tipo': 'receita' if m.receita_id else ('produto' if m.produto_id else None),
+                'id': m.receita_id or m.produto_id,
+                'nome': m.alvo_nome,
+            } if estado == 'mapeado' else None
+            fator = float(m.fator_quantidade or 1.0)
+        else:
+            estado = 'sem_map'
+            mapeado_para = None
+            fator = 1.0
+        produtos.append({
+            'nome': nome, 'sku': v['sku'], 'qtd': v['qtd'],
+            'n_pedidos': len(v['pedidos']), 'estado_map': estado,
+            'mapeado_para': mapeado_para, 'fator': fator,
+        })
+    produtos.sort(key=lambda x: x['qtd'], reverse=True)
+    return {
+        'produtos': produtos,
+        'total_pedidos': total_pedidos,
+        'total_itens': sum(p['qtd'] for p in produtos),
+        'loja': loja.nome if loja else None,
+    }
+
+
 def _resolver_produto(vnda_nome, vnda_sku):
     """Pega/cria VndaProdutoMap. Pendente na primeira aparicao."""
     if not vnda_nome:
