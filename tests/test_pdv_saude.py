@@ -117,16 +117,24 @@ def test_rota_saude_renderiza(app, admin_user):
     assert b'Saude do Sync' in r.data
 
 
-def test_rota_reconciliacao_renderiza(app, admin_user):
-    """Smoke: /pdv/reconciliacao renderiza 200 (mock da API Seru)."""
+def test_rota_reconciliacao_renderiza(app, admin_user, catalogo):
+    """Smoke: /pdv/reconciliacao renderiza 200 com pendente + select de alvos."""
     c = app.test_client()
     c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
-    agg = {'total_pedidos': 0, 'total_itens_vendidos': 0,
-           'faturamento_total': 0, 'produtos': []}
+    agg = {
+        'total_pedidos': 5, 'total_itens_vendidos': 5, 'faturamento_total': 50.0,
+        'produtos': [
+            {'nome': 'Cesta Nova', 'sku': '99', 'qtd': 5, 'faturamento': 50.0,
+             'estado_map': 'sem_map'},
+        ],
+    }
     with patch('app.services.vendas_itens.agregar_itens', return_value=agg):
         r = c.get('/pdv/reconciliacao')
     assert r.status_code == 200
     assert b'Reconciliacao' in r.data
+    assert b'Cesta Nova' in r.data
+    assert b'reconMapear' in r.data  # JS da acao inline
+    assert b'recon-alvo' in r.data   # select de alvos renderizou
 
 
 def test_dashboard_renderiza_com_card_pdv(app, admin_user):
