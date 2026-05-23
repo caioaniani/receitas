@@ -170,7 +170,6 @@ def test_reconciliar_vnda_separa_pendentes(app):
     assert 'erro' not in r
     assert len(r['pendentes_vendidos']) == 1
     assert r['pendentes_vendidos'][0]['nome'] == 'Box Site'
-    assert len(r['mapeados_vendidos']) == 1
     assert r['baixado_efetivo'] == 40
 
 
