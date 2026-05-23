@@ -66,10 +66,12 @@
         {% for c in contas %}
         <tr>
             <td>
-                <span class="badge bg-light text-dark">{{ c.tipo_documento }}</span>
+                {% set extras = grupo_docs.get(c.id, []) %}
+                {% set tipos = ([c.tipo_documento] + (extras | map(attribute='tipo_documento') | list)) | unique | list %}
+                {% for t in tipos %}<span class="badge bg-light text-dark">{{ t }}</span> {% endfor %}
                 {% if c.nf_numero %}<span class="small text-muted">NF {{ c.nf_numero }}</span>{% endif %}
-                {% if c.relacionado_id or c.id in apontados %}
-                <i class="bi bi-link-45deg text-primary" title="Ligado a outro documento (NF ↔ boleto)"></i>
+                {% if extras %}
+                <i class="bi bi-link-45deg text-primary" title="NF + boleto juntos ({{ extras|length + 1 }} documentos)"></i>
                 {% endif %}
             </td>
             <td>{{ c.fornecedor_nome or '—' }}</td>
