@@ -19,6 +19,7 @@
 
 {% if current_user.is_admin() %}
 <form method="GET" class="mb-3">
+    <input type="hidden" name="aba" value="{{ aba_atual }}">
     <select name="loja" class="form-select form-select-sm chip-filter" style="max-width:260px; appearance:auto;" onchange="this.form.submit()">
         <option value="">todas as lojas</option>
         {% for l in lojas %}
@@ -27,6 +28,21 @@
     </select>
 </form>
 {% endif %}
+
+<!-- Abas por status -->
+<ul class="nav nav-tabs mb-3" role="tablist">
+    {% for slug, label, _ in abas %}
+    <li class="nav-item">
+        <a class="nav-link {% if slug == aba_atual %}active{% endif %}"
+           href="{{ url_for('pedidos.lista', aba=slug, loja=(filtro_loja or None)) }}">
+            {{ label }}
+            {% if contagens.get(slug) %}
+            <span class="badge rounded-pill {% if slug == aba_atual %}bg-primary{% else %}bg-secondary{% endif %}">{{ contagens[slug] }}</span>
+            {% endif %}
+        </a>
+    </li>
+    {% endfor %}
+</ul>
 
 <!-- Bulk action bar -->
 <div id="pedidos-bulk-bar" class="d-none mb-3 p-2 d-flex flex-wrap gap-2 align-items-center"
