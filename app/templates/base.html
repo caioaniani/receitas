@@ -164,6 +164,12 @@
            class="sidebar-link {% if request.path.startswith('/fornecedores') %}active{% endif %}">
             Fornecedores
         </a>
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('contas_pagar.lista') }}"
+           class="sidebar-link {% if request.path.startswith('/contas-pagar') %}active{% endif %}">
+            Contas a Pagar
+        </a>
+        {% endif %}
         <a href="{{ url_for('produtos.lista') }}"
            class="sidebar-link {% if request.path.startswith('/produtos') %}active{% endif %}">
             Produtos / Cestas
