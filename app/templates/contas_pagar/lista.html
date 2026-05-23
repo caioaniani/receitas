@@ -43,6 +43,9 @@
             <td>
                 <span class="badge bg-light text-dark">{{ c.tipo_documento }}</span>
                 {% if c.nf_numero %}<span class="small text-muted">NF {{ c.nf_numero }}</span>{% endif %}
+                {% if c.relacionado_id or c.id in apontados %}
+                <i class="bi bi-link-45deg text-primary" title="Ligado a outro documento (NF ↔ boleto)"></i>
+                {% endif %}
             </td>
             <td>{{ c.fornecedor_nome or '—' }}</td>
             <td class="text-end {% if not c.valor_total %}text-danger{% endif %}">
