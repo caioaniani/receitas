@@ -153,8 +153,8 @@ def reconciliar(inicio, fim):
                           if p['estado_map'] in ('pendente', 'sem_map')]
     qtd_pendente = sum(p['qtd'] for p in pendentes_vendidos)
 
-    # Itens IGNORADOS vendidos: marcados pra nao auto-baixar (o dono baixa
-    # manual, ex: PDV sem API). Mostra o volume vendido pra ele conferir.
+    # Itens IGNORADOS vendidos: marcados como "nao mapear por enquanto" —
+    # o sync nao baixa estoque deles. Listados so pra conferencia.
     ignorados_vendidos = sorted(
         [p for p in produtos if p['estado_map'] == 'ignorado'],
         key=lambda x: x['qtd'], reverse=True)
