@@ -354,14 +354,25 @@ def editar(id):
 @login_required
 @gerente_required
 def detalhe(id):
-    from app.models import Driver
+    from app.models import Driver, PedidoItemFoto
     pedido = PedidoLoja.query.get_or_404(id)
     loja_id = _loja_do_usuario()
     if loja_id and pedido.loja_id != loja_id:
         abort(403)
     drivers = Driver.query.filter_by(ativo=True).order_by(Driver.nome).all()
+
+    # Fotos de conferencia (saida = industria/motorista, entrega = loja),
+    # por SKU. Agrupa por etapa pra exibir no detalhe.
+    item_ids = [it.id for it in pedido.itens]
+    fotos_conf = {'saida': [], 'entrega': []}
+    if item_ids:
+        for f in (PedidoItemFoto.query
+                  .filter(PedidoItemFoto.pedido_item_id.in_(item_ids))
+                  .all()):
+            if f.etapa in fotos_conf:
+                fotos_conf[f.etapa].append(f)
     return render_template('pedidos/detalhe.html', pedido=pedido,
-                            drivers=drivers)
+                            drivers=drivers, fotos_conf=fotos_conf)
 
 
 @pedidos_bp.route('/<int:id>/confirmar', methods=['POST'])
