@@ -70,6 +70,10 @@ class Config:
     # Canais publicos onde o bot responde a @mention (CSV de IDs C123...).
     # Vazio = so DM.
     SLACK_CANAIS_PERMITIDOS = os.environ.get('SLACK_CANAIS_PERMITIDOS', '')
+    # Canais de recebimento de mercadoria (NF/boleto). O bot SO LE: cada
+    # imagem/PDF postada vira uma Conta a Pagar (IA extrai os dados). Nunca
+    # responde nesses canais. CSV de IDs C123... Vazio = desligado.
+    SLACK_CANAIS_NF = os.environ.get('SLACK_CANAIS_NF', '')
     # Canal onde o bot posta o resumo diario as 04:00 BRT de pedidos pra
     # entregar hoje. Vazio = desligado. Ex: C0ABC1234.
     SLACK_CANAL_RESUMO_DIARIO = os.environ.get('SLACK_CANAL_RESUMO_DIARIO', '')
