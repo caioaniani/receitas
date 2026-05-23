@@ -284,4 +284,23 @@
     {% endfor %}
 </div>
 {% endif %}
+
+{# Fotos de conferencia por SKU: saida (industria/motorista) e entrega (loja) #}
+{% for etapa, titulo in [('saida', 'Conferência na saída (indústria → motorista)'), ('entrega', 'Conferência na entrega (motorista → loja)')] %}
+{% if fotos_conf[etapa] %}
+<h6 class="fw-bold mt-4 mb-2"><i class="bi bi-camera2"></i> {{ titulo }}</h6>
+<div class="d-flex flex-wrap gap-2">
+    {% for f in fotos_conf[etapa] %}
+    <a href="{{ url_for('pedidos.conferencia_foto', foto_id=f.id) }}" target="_blank" rel="noopener"
+       title="{{ f.pedido_item.nome_item }} — {{ f.criado_em.strftime('%d/%m/%Y %H:%M') if f.criado_em else '' }}">
+        <div style="text-align:center;">
+            <img src="{{ url_for('pedidos.conferencia_foto', foto_id=f.id) }}" alt="Foto de conferência"
+                 style="max-height:160px; max-width:200px; border:1px solid var(--border-color); border-radius:6px; object-fit:cover;">
+            <div class="small text-muted" style="max-width:200px;">{{ f.pedido_item.nome_item }}</div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+{% endfor %}
 {% endblock %}
