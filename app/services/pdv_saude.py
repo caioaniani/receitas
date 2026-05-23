@@ -238,6 +238,8 @@ def reconciliar_vnda(inicio, fim):
         'total_itens': agg.get('total_itens', 0),
         'pendentes_vendidos': pendentes_vendidos,
         'qtd_pendente': qtd_pendente,
+        'ignorados_vendidos': ignorados_vendidos,
+        'qtd_ignorada': qtd_ignorada,
         'baixado_efetivo': movs.get('venda_vnda', 0),
         'sem_estoque': movs.get('venda_vnda_sem_estoque', 0),
         'movs_por_tipo': movs,
