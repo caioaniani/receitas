@@ -94,6 +94,7 @@ def dashboard():
                            producoes_pendentes=producoes_pendentes,
                            atribuicoes_pendentes=atribuicoes_pendentes,
                            cestas_orfaos=cestas_orfaos,
+                           pdv_pendencias=pdv_pendencias,
                            aniversariantes=aniversariantes,
                            total_funcionarios=len(funcionarios_ativos))
 
