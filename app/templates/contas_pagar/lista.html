@@ -50,49 +50,36 @@
     {% endfor %}
 </ul>
 
-<div class="table-responsive">
-<table class="table table-sm align-middle">
-    <thead class="table-light">
-        <tr>
-            <th>Documento</th>
-            <th>Fornecedor</th>
-            <th class="text-end">Valor</th>
-            <th>Vencimento</th>
-            <th>Loja</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for c in contas %}
-        <tr>
-            <td>
-                {% set extras = grupo_docs.get(c.id, []) %}
-                {% set tipos = ([c.tipo_documento] + (extras | map(attribute='tipo_documento') | list)) | unique | list %}
-                {% for t in tipos %}<span class="badge bg-light text-dark">{{ t }}</span> {% endfor %}
-                {% if c.nf_numero %}<span class="small text-muted">NF {{ c.nf_numero }}</span>{% endif %}
-                {% if extras %}
-                <i class="bi bi-link-45deg text-primary" title="NF + boleto juntos ({{ extras|length + 1 }} documentos)"></i>
-                {% endif %}
-            </td>
-            <td>{{ c.fornecedor_nome or '—' }}</td>
-            <td class="text-end {% if not c.valor_total %}text-danger{% endif %}">
-                {% if c.valor_total %}R$ {{ '%.2f'|format(c.valor_total) }}{% else %}<i>sem valor</i>{% endif %}
-            </td>
-            <td>
-                {% if c.vencimento %}
-                <span class="{% if c.atrasado %}text-danger fw-bold{% endif %}">{{ c.vencimento.strftime('%d/%m/%Y') }}</span>
-                {% if c.atrasado %}<i class="bi bi-exclamation-triangle text-danger" title="Vencido"></i>{% endif %}
-                {% else %}—{% endif %}
-            </td>
-            <td class="small text-muted">{{ mapa_lojas.get(c.origem_canal, c.origem_canal) or '—' }}</td>
-            <td class="text-end">
-                <a href="{{ url_for('contas_pagar.detalhe', id=c.id) }}" class="btn btn-sm btn-outline-primary">Abrir</a>
-            </td>
-        </tr>
-        {% else %}
-        <tr><td colspan="6" class="text-muted text-center py-3">Nenhuma conta nesta aba.</td></tr>
-        {% endfor %}
-    </tbody>
-</table>
+<div class="list-group">
+    {% for c in contas %}
+    {% set extras = grupo_docs.get(c.id, []) %}
+    {% set tipos = ([c.tipo_documento] + (extras | map(attribute='tipo_documento') | list)) | unique | list %}
+    <a href="{{ url_for('contas_pagar.detalhe', id=c.id) }}"
+       class="list-group-item list-group-item-action py-2">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+            <div class="flex-grow-1" style="min-width:0">
+                <div class="fw-semibold text-truncate">{{ c.fornecedor_nome or 'Sem fornecedor' }}</div>
+                <div class="small mt-1">
+                    {% for t in tipos %}<span class="badge bg-light text-dark">{{ t }}</span> {% endfor %}
+                    {% if extras %}<i class="bi bi-link-45deg text-primary" title="NF + boleto juntos ({{ extras|length + 1 }} documentos)"></i>{% endif %}
+                    {% if c.nf_numero %}<span class="text-muted">NF {{ c.nf_numero }}</span>{% endif %}
+                </div>
+                <div class="small text-muted mt-1">
+                    {% if c.vencimento %}
+                    <span class="{% if c.atrasado %}text-danger fw-bold{% endif %}"><i class="bi bi-calendar-event"></i> {{ c.vencimento.strftime('%d/%m/%Y') }}{% if c.atrasado %} <i class="bi bi-exclamation-triangle"></i>{% endif %}</span>
+                    {% else %}<span class="text-warning">sem vencimento</span>{% endif %}
+                    · {{ mapa_lojas.get(c.origem_canal, c.origem_canal) or '—' }}
+                </div>
+            </div>
+            <div class="text-end flex-shrink-0">
+                <span class="fw-bold {% if not c.valor_total %}text-danger small{% endif %}">
+                    {% if c.valor_total %}R$ {{ '%.2f'|format(c.valor_total) }}{% else %}sem valor{% endif %}
+                </span>
+            </div>
+        </div>
+    </a>
+    {% else %}
+    <div class="list-group-item text-muted text-center py-3">Nenhuma conta nesta aba.</div>
+    {% endfor %}
 </div>
 {% endblock %}
