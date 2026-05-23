@@ -2,66 +2,35 @@
 
 {% block title %}Reconciliacao PDV{% endblock %}
 
-{% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="page-title mb-0"><i class="bi bi-clipboard-check"></i> Reconciliacao venda vs estoque</h1>
-    <a href="{{ url_for('pdv.saude') }}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-heart-pulse"></i> Saude do sync
-    </a>
-</div>
-
-<form method="get" class="row g-2 align-items-end mb-3">
-    <div class="col-auto">
-        <label class="form-label small mb-0">De</label>
-        <input type="date" name="inicio" value="{{ inicio }}" class="form-control form-control-sm">
-    </div>
-    <div class="col-auto">
-        <label class="form-label small mb-0">Ate</label>
-        <input type="date" name="fim" value="{{ fim }}" class="form-control form-control-sm">
-    </div>
-    <div class="col-auto">
-        <button type="submit" class="btn btn-sm btn-primary">Atualizar</button>
-    </div>
-</form>
-
-{% if d.erro %}
+{% macro secao(dd, fonte) %}
+{% if dd.erro %}
 <div class="alert alert-danger">
-    Nao consegui buscar vendas do Seru: <code>{{ d.erro }}</code>
+    Nao consegui buscar vendas: <code>{{ dd.erro }}</code>
 </div>
 {% else %}
-
-<div class="alert alert-warning" style="font-size:13px;">
-    <i class="bi bi-exclamation-triangle"></i>
-    <strong>Leia antes:</strong> "vendido" e "baixado" <strong>nao batem 1:1 por
-    design</strong> — produtos compostos (fator &lt; 1, ex: fatias) e cestas baixam
-    quantidade diferente da vendida. O que importa aqui eh a tabela de
-    <strong>produtos vendidos que nao baixaram</strong> abaixo: se estiver vazia, toda
-    venda mapeada baixou estoque.
-</div>
-
 <div class="row g-3 mb-2">
     <div class="col-md-3 col-6">
         <div class="card text-center h-100"><div class="card-body py-3">
-            <div class="h4 mb-0">{{ d.seru_total_pedidos }}</div>
-            <div class="small text-muted">pedidos Seru</div>
+            <div class="h4 mb-0">{{ dd.total_pedidos }}</div>
+            <div class="small text-muted">pedidos</div>
         </div></div>
     </div>
     <div class="col-md-3 col-6">
         <div class="card text-center h-100"><div class="card-body py-3">
-            <div class="h4 mb-0">{{ d.seru_total_itens | round(0, 'floor') | int }}</div>
-            <div class="small text-muted">itens vendidos (Seru)</div>
+            <div class="h4 mb-0">{{ dd.total_itens | round(0, 'floor') | int }}</div>
+            <div class="small text-muted">itens vendidos</div>
         </div></div>
     </div>
     <div class="col-md-3 col-6">
         <div class="card text-center h-100"><div class="card-body py-3">
-            <div class="h4 mb-0 text-success">{{ d.baixado_efetivo }}</div>
-            <div class="small text-muted">unidades baixadas do estoque</div>
+            <div class="h4 mb-0 text-success">{{ dd.baixado_efetivo }}</div>
+            <div class="small text-muted">unidades baixadas</div>
         </div></div>
     </div>
     <div class="col-md-3 col-6">
         <div class="card text-center h-100"><div class="card-body py-3">
-            <div class="h4 mb-0 {% if d.sem_estoque %}text-danger{% endif %}">{{ d.sem_estoque }}</div>
-            <div class="small text-muted">vendas sem estoque (faltou)</div>
+            <div class="h4 mb-0 {% if dd.sem_estoque %}text-danger{% endif %}">{{ dd.sem_estoque }}</div>
+            <div class="small text-muted">vendas sem estoque</div>
         </div></div>
     </div>
 </div>
@@ -69,37 +38,28 @@
 <div class="card">
     <div class="card-header py-2">
         <strong>Produtos vendidos que NAO baixaram estoque</strong>
-        {% if d.pendentes_vendidos %}
-        <span class="badge bg-danger">{{ d.pendentes_vendidos|length }} produto(s), {{ d.qtd_pendente | round(0,'floor') | int }} un</span>
+        {% if dd.pendentes_vendidos %}
+        <span class="badge bg-danger">{{ dd.pendentes_vendidos|length }} produto(s), {{ dd.qtd_pendente | round(0,'floor') | int }} un</span>
         {% else %}
         <span class="badge bg-success">nenhum</span>
         {% endif %}
     </div>
     <div class="card-body">
-        {% if d.pendentes_vendidos %}
-        <p class="small text-muted mb-2">
-            Esses produtos foram vendidos no Seru mas nao tem mapeamento — a
-            venda <strong>nao baixou estoque</strong>. Mapeie em
-            <a href="{{ url_for('pdv.itens_vendidos') }}">Itens Vendidos</a>
-            (produtos novos / <code>sem_map</code> so aparecem la, nao na tela
-            de Mapeamentos). Um mesmo produto pode ter 2 cadastros no Seru
-            (nomes/SKUs diferentes) — basta vincular cada um ao mesmo alvo.
-        </p>
+        {% if dd.pendentes_vendidos %}
         <div class="alert alert-light border small py-2 mb-2">
             <i class="bi bi-lightbulb"></i>
-            <strong>Vincular</strong>: o sync passa a baixar automatico esse produto.
+            <strong>Vincular</strong>: o sync passa a baixar automatico.
             <strong>Ignorar</strong>: use quando voce ja da <strong>baixa manual</strong>
-            desse item (evita dupla-baixa). Mapear corrige <em>daqui pra frente</em> —
-            a venda ja feita nao baixa retroativo (re-sincronize se precisar).
+            desse item (evita dupla-baixa). Corrige daqui pra frente.
         </div>
         <table class="table table-sm mb-0 align-middle">
             <thead class="table-light">
-                <tr><th>Produto (Seru)</th><th>SKU</th><th class="text-end">Qtd</th><th>Vincular a</th><th style="width:170px;">Acao</th></tr>
+                <tr><th>Produto</th><th>SKU</th><th class="text-end">Qtd</th><th>Vincular a</th><th style="width:170px;">Acao</th></tr>
             </thead>
             <tbody>
-                {% for p in d.pendentes_vendidos %}
-                <tr data-nome="{{ p.nome }}">
-                    <td>{{ p.nome }}<br><span class="small text-muted">R$ {{ '%.2f'|format(p.faturamento) }}</span></td>
+                {% for p in dd.pendentes_vendidos %}
+                <tr data-nome="{{ p.nome }}" data-fonte="{{ fonte }}">
+                    <td>{{ p.nome }}</td>
                     <td><code>{{ p.sku or '—' }}</code></td>
                     <td class="text-end">{{ p.qtd | round(0,'floor') | int }}</td>
                     <td>
@@ -132,28 +92,26 @@
     </div>
 </div>
 
-<!-- Produtos com auto-baixa ativa (risco de dupla-baixa se baixados manual) -->
 <div class="card mt-3">
     <div class="card-header py-2">
         <strong>Produtos com auto-baixa ativa</strong>
-        <span class="badge bg-secondary">{{ d.mapeados_vendidos|length }}</span>
+        <span class="badge bg-secondary">{{ dd.mapeados_vendidos|length }}</span>
     </div>
     <div class="card-body">
         <div class="alert alert-warning small py-2 mb-2">
             <i class="bi bi-exclamation-triangle"></i>
-            O sync <strong>baixa estoque automatico</strong> destes produtos quando
-            vendem no PDV (Seru). <strong>Se voce baixa algum deles manualmente</strong>
-            (ex: PDV sem API, planilha), clique <strong>Ignorar</strong> — senao o
-            estoque cai em dobro (sync + manual).
+            O sync <strong>baixa estoque automatico</strong> destes. <strong>Se voce
+            baixa algum manualmente</strong> (PDV sem API, planilha), clique
+            <strong>Ignorar</strong> — senao o estoque cai em dobro.
         </div>
-        {% if d.mapeados_vendidos %}
+        {% if dd.mapeados_vendidos %}
         <table class="table table-sm mb-0 align-middle">
             <thead class="table-light">
-                <tr><th>Produto (Seru)</th><th>Baixa em</th><th class="text-end">Fator</th><th class="text-end">Qtd vendida</th><th style="width:110px;">Acao</th></tr>
+                <tr><th>Produto</th><th>Baixa em</th><th class="text-end">Fator</th><th class="text-end">Qtd</th><th style="width:110px;">Acao</th></tr>
             </thead>
             <tbody>
-                {% for p in d.mapeados_vendidos %}
-                <tr data-nome="{{ p.nome }}">
+                {% for p in dd.mapeados_vendidos %}
+                <tr data-nome="{{ p.nome }}" data-fonte="{{ fonte }}">
                     <td>{{ p.nome }}<br><span class="small text-muted"><code>{{ p.sku or '—' }}</code></span></td>
                     <td>{% if p.mapeado_para %}{{ p.mapeado_para.nome }}
                         <span class="badge bg-light text-dark">{{ p.mapeado_para.tipo }}</span>{% else %}—{% endif %}</td>
@@ -174,17 +132,62 @@
 </div>
 
 <p class="small text-muted mt-2">
-    Baixas por tipo no periodo: {% for tipo, total in d.movs_por_tipo.items() %}
+    Baixas por tipo no periodo: {% for tipo, total in dd.movs_por_tipo.items() %}
     <code>{{ tipo }}={{ total }}</code>{% if not loop.last %} · {% endif %}{% else %}(nenhuma){% endfor %}
 </p>
+{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-clipboard-check"></i> Reconciliacao venda vs estoque</h1>
+    <a href="{{ url_for('pdv.saude') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-heart-pulse"></i> Saude do sync
+    </a>
+</div>
+
+<form method="get" class="row g-2 align-items-end mb-3">
+    <div class="col-auto">
+        <label class="form-label small mb-0">De</label>
+        <input type="date" name="inicio" value="{{ inicio }}" class="form-control form-control-sm">
+    </div>
+    <div class="col-auto">
+        <label class="form-label small mb-0">Ate</label>
+        <input type="date" name="fim" value="{{ fim }}" class="form-control form-control-sm">
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Atualizar</button>
+    </div>
+</form>
+
+<div class="alert alert-warning" style="font-size:13px;">
+    <i class="bi bi-exclamation-triangle"></i>
+    <strong>Leia antes:</strong> "vendido" e "baixado" <strong>nao batem 1:1 por
+    design</strong> — produtos compostos (fator &lt; 1) e cestas baixam quantidade
+    diferente da vendida. O que importa eh a tabela de <strong>produtos que nao
+    baixaram</strong> (vendas perdidas) e a de <strong>auto-baixa ativa</strong>
+    (risco de dupla-baixa se voce baixa manual).
+</div>
+
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-seru" type="button">PDV (Seru)</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-vnda" type="button">Site (VNDA){% if dv.loja %} · {{ dv.loja }}{% endif %}</button></li>
+</ul>
+<div class="tab-content">
+    <div class="tab-pane fade show active" id="tab-seru">{{ secao(d, 'seru') }}</div>
+    <div class="tab-pane fade" id="tab-vnda">{{ secao(dv, 'vnda') }}</div>
+</div>
 
 <script>
 function reconMapear(btn, acao) {
     var tr = btn.closest('tr');
     var nome = tr.getAttribute('data-nome');
+    var fonte = tr.getAttribute('data-fonte') || 'seru';
+    var url = (fonte === 'vnda') ? '/pdv/api/vnda-mapear' : '/pdv/api/mapear';
+    var campoNome = (fonte === 'vnda') ? 'vnda_nome' : 'seru_nome';
     var fd = new FormData();
     fd.append('csrf_token', CSRF_TOKEN);
-    fd.append('seru_nome', nome);
+    fd.append(campoNome, nome);
     fd.append('acao', acao);
     if (acao === 'vincular') {
         var alvo = tr.querySelector('.recon-alvo').value;
@@ -195,7 +198,7 @@ function reconMapear(btn, acao) {
         fd.append('fator', '1');
     }
     tr.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
-    fetch('/pdv/api/mapear', {method: 'POST', body: fd, credentials: 'same-origin'})
+    fetch(url, {method: 'POST', body: fd, credentials: 'same-origin'})
         .then(function(r){ return r.json(); })
         .then(function(j){
             if (j.ok) {
@@ -213,5 +216,4 @@ function reconMapear(btn, acao) {
         });
 }
 </script>
-{% endif %}
 {% endblock %}
