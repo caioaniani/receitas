@@ -31,6 +31,15 @@
                     {% if conta.enviado_por %}· por {{ conta.enviado_por }}{% endif %}
                     {% if conta.criado_em %}· {{ conta.criado_em.strftime('%d/%m/%Y %H:%M') }}{% endif %}
                 </p>
+                {% if conta.imagem_url %}
+                <form method="POST" action="{{ url_for('contas_pagar.reextrair', id=conta.id) }}" class="mt-2 mb-0"
+                      onsubmit="return confirm('Reler o documento com a IA? Os campos extraídos (valor, vencimento, etc) serão reescritos com a nova leitura. Status, pagamento e vínculos são mantidos.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-arrow-repeat"></i> Re-ler com IA
+                    </button>
+                </form>
+                {% endif %}
             </div>
         </div>
 
