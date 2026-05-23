@@ -123,14 +123,21 @@ def reconciliar(inicio, fim):
                           if p['estado_map'] in ('pendente', 'sem_map')]
     qtd_pendente = sum(p['qtd'] for p in pendentes_vendidos)
 
-    # Baixado no estoque (MovEstoqueLoja) no mesmo periodo.
+    # Baixado no estoque (MovEstoqueLoja) no mesmo periodo, agregado por tipo.
     ini_dt = datetime.combine(inicio, time.min)
     fim_dt = datetime.combine(fim, time.max)
-    movs = (db_query_baixas(ini_dt, fim_dt, func, MovEstoqueLoja,
-                            VENDA_TIPOS_LOJA))
-    baixado_efetivo = (movs.get('venda_seru', 0) or 0) + (movs.get('venda_vnda', 0) or 0)
-    sem_estoque = ((movs.get('venda_seru_sem_estoque', 0) or 0)
-                   + (movs.get('venda_vnda_sem_estoque', 0) or 0))
+    rows = (MovEstoqueLoja.query
+            .filter(MovEstoqueLoja.tipo.in_(VENDA_TIPOS_LOJA))
+            .filter(MovEstoqueLoja.data >= ini_dt)
+            .filter(MovEstoqueLoja.data <= fim_dt)
+            .with_entities(MovEstoqueLoja.tipo,
+                           func.sum(MovEstoqueLoja.quantidade))
+            .group_by(MovEstoqueLoja.tipo)
+            .all())
+    movs = {tipo: int(total or 0) for tipo, total in rows}
+    baixado_efetivo = movs.get('venda_seru', 0) + movs.get('venda_vnda', 0)
+    sem_estoque = (movs.get('venda_seru_sem_estoque', 0)
+                   + movs.get('venda_vnda_sem_estoque', 0))
 
     return {
         'inicio': inicio,
