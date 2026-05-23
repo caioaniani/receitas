@@ -74,6 +74,13 @@ class Config:
     # imagem/PDF postada vira uma Conta a Pagar (IA extrai os dados). Nunca
     # responde nesses canais. CSV de IDs C123... Vazio = desligado.
     SLACK_CANAIS_NF = os.environ.get('SLACK_CANAIS_NF', '')
+    # Cada canal de NF = uma loja. Mapa "id=Nome da Loja" separado por ';'
+    # (usado pra filtrar Contas a Pagar por loja). Configuravel por env.
+    SLACK_CANAIS_NF_NOMES = os.environ.get(
+        'SLACK_CANAIS_NF_NOMES',
+        'C09BJCYGQ4U=Matriz - Ribeiro do Vale;'
+        'C09BTQ58QLR=Filial - Anésio Pinto Rosa;'
+        'C0AMH3SQYFP=Filial - Nebraska')
     # Canal onde o bot posta o resumo diario as 04:00 BRT de pedidos pra
     # entregar hoje. Vazio = desligado. Ex: C0ABC1234.
     SLACK_CANAL_RESUMO_DIARIO = os.environ.get('SLACK_CANAL_RESUMO_DIARIO', '')
