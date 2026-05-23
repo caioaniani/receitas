@@ -1480,6 +1480,42 @@ def estoque_loja():
                            sugestoes=sugestoes)
 
 
+@pedidos_bp.route('/estoque-loja/diario')
+@login_required
+@gerente_required
+def estoque_loja_diario():
+    """Movimento do dia por loja: estoque ontem | entradas | baixas | atual.
+    Le dos movimentos ja registrados (MovEstoqueLoja). Detalhe por fonte
+    ao expandir cada item."""
+    from app.services import estoque_diario
+
+    loja_id = _loja_do_usuario()
+    if current_user.is_admin():
+        sel = request.args.get('loja')
+        loja_id = int(sel) if sel else None
+
+    dia = hoje_brt()
+    sel_dia = request.args.get('dia')
+    if sel_dia:
+        try:
+            dia = datetime.strptime(sel_dia, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+
+    loja = Loja.query.get(loja_id) if loja_id else None
+    linhas = estoque_diario.relatorio_diario(loja_id, dia) if loja_id else []
+    totais = {
+        'inicio': sum(x['estoque_inicio'] for x in linhas),
+        'entradas': sum(x['entradas'] for x in linhas),
+        'baixas': sum(x['baixas'] for x in linhas),
+        'atual': sum(x['estoque_atual'] for x in linhas),
+    }
+    return render_template('pedidos/estoque_loja_diario.html',
+                           loja=loja, linhas=linhas, totais=totais,
+                           lojas=_lojas_operacionais(), sel_loja=loja_id,
+                           dia=dia.isoformat())
+
+
 # ── Entrada em lote no Estoque de Loja ──
 
 @pedidos_bp.route('/estoque-loja/entrada-lote', methods=['GET', 'POST'])
