@@ -46,6 +46,18 @@ def _parse_data(raw):
         return None
 
 
+def _mapa_canais(contas):
+    """{id_canal: '#nome'} pros canais distintos das contas. Cacheado no
+    cliente Slack; fallback pro ID se nao resolver."""
+    from app.services import slack as slack_api
+    mapa = {}
+    for c in contas:
+        cid = c.origem_canal
+        if cid and cid not in mapa:
+            mapa[cid] = slack_api.nome_canal(cid)
+    return mapa
+
+
 @contas_pagar_bp.route('/')
 @login_required
 @admin_required
