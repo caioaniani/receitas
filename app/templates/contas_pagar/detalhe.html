@@ -33,6 +33,37 @@
                 </p>
             </div>
         </div>
+
+        {% if conta.ligados %}
+        <div class="card mt-3 border-primary">
+            <div class="card-header py-2 bg-primary-subtle">
+                <i class="bi bi-link-45deg"></i> <strong>Documento(s) ligado(s)</strong>
+            </div>
+            <div class="card-body">
+                {% for l in conta.ligados %}
+                <div class="d-flex gap-2 align-items-center {% if not loop.last %}border-bottom pb-2 mb-2{% endif %}">
+                    {% if l.imagem_url %}
+                    <a href="{{ l.imagem_url }}" target="_blank" rel="noopener">
+                        <img src="{{ l.imagem_url }}" alt="doc ligado"
+                             style="width:64px; height:64px; object-fit:cover; border:1px solid var(--border-color); border-radius:4px;">
+                    </a>
+                    {% endif %}
+                    <div class="flex-grow-1 small">
+                        <span class="badge bg-light text-dark">{{ l.tipo_documento }}</span>
+                        {% if l.nf_numero %}NF {{ l.nf_numero }}{% endif %}<br>
+                        {{ l.fornecedor_nome or 'sem fornecedor' }}<br>
+                        {% if l.valor_total %}R$ {{ '%.2f'|format(l.valor_total) }}{% endif %}
+                        {% if l.vencimento %}· vence {{ l.vencimento.strftime('%d/%m/%Y') }}{% endif %}
+                    </div>
+                    <a href="{{ url_for('contas_pagar.detalhe', id=l.id) }}" class="btn btn-sm btn-outline-primary">Abrir</a>
+                </div>
+                {% endfor %}
+                <p class="small text-muted mb-0 mt-2">
+                    <i class="bi bi-info-circle"></i> NF e boleto do mesmo recebimento — pague apenas uma vez (o boleto quita a NF).
+                </p>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Dados (editaveis) -->
