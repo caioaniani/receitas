@@ -103,7 +103,7 @@ def processar(evento):
             tipo_documento=dados.get('tipo_documento') or 'desconhecido',
             fornecedor_nome=dados.get('fornecedor'),
             valor_total=dados.get('valor_total'),
-            vencimento=_data_iso(dados.get('vencimento')),
+            vencimento=_parse_vencimento(dados),
             nf_numero=str(dados.get('nf_numero')) if dados.get('nf_numero') else None,
             codigo_barras=dados.get('codigo_barras'),
             linha_digitavel=dados.get('linha_digitavel'),
