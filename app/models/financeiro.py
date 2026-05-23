@@ -65,8 +65,25 @@ class ContaPagar(db.Model):
                                 nullable=True)
 
     fornecedor = db.relationship('Fornecedor')
+    # Self-FK: 'relacionado' = doc pra onde aponta; 'relacionado_por' = docs
+    # que apontam pra este. Juntos dao o par NF<->boleto nos dois sentidos.
+    relacionado = db.relationship('ContaPagar', remote_side=[id],
+                                  foreign_keys=[relacionado_id],
+                                  backref='relacionado_por')
 
     @property
     def atrasado(self):
         return (self.status == 'aberto' and self.vencimento is not None
                 and self.vencimento < hoje())
+
+    @property
+    def ligados(self):
+        """Documentos ligados a este (bidirecional). Mostra o par mesmo que
+        so um lado tenha setado o vinculo."""
+        out = []
+        if self.relacionado is not None:
+            out.append(self.relacionado)
+        for o in (self.relacionado_por or []):
+            if o is not None and o.id != self.id and o not in out:
+                out.append(o)
+        return out
