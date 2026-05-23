@@ -435,6 +435,67 @@ def api_mapear():
     return jsonify(ok=True, estado=mp.estado, alvo_nome=mp.alvo_nome, map_id=mp.id)
 
 
+@pdv_bp.route('/api/vnda-mapear', methods=['POST'])
+@login_required
+@admin_required
+def api_vnda_mapear():
+    """Cria/atualiza VndaProdutoMap inline (espelha api_mapear do Seru).
+
+    Usado pela reconciliacao pra Vincular/Ignorar produtos VNDA na hora,
+    inclusive os que ainda nao tem map (sem_map → cria pendente e resolve).
+    """
+    data = request.json if request.is_json else request.form
+    nome = (data.get('vnda_nome') or '').strip()
+    if not nome:
+        return jsonify(ok=False, erro='vnda_nome obrigatorio'), 400
+    acao = data.get('acao')
+    mp = VndaProdutoMap.query.filter_by(vnda_nome=nome).first()
+    if not mp:
+        mp = VndaProdutoMap(vnda_nome=nome)
+        db.session.add(mp)
+        db.session.flush()
+    if acao == 'vincular':
+        tipo = data.get('alvo_tipo')
+        try:
+            alvo_id = int(data.get('alvo_id') or 0)
+        except (TypeError, ValueError):
+            alvo_id = 0
+        if tipo == 'receita' and alvo_id:
+            mp.receita_id = alvo_id
+            mp.produto_id = None
+        elif tipo == 'produto' and alvo_id:
+            mp.produto_id = alvo_id
+            mp.receita_id = None
+        else:
+            return jsonify(ok=False, erro='alvo_tipo/alvo_id invalidos'), 400
+        try:
+            fator = float(data.get('fator') or 1.0)
+            if fator <= 0:
+                fator = 1.0
+        except (TypeError, ValueError):
+            fator = 1.0
+        mp.fator_quantidade = fator
+        mp.ignorar = False
+        mp.confirmado_em = agora()
+        mp.confirmado_por = current_user.id
+    elif acao == 'ignorar':
+        mp.ignorar = True
+        mp.receita_id = None
+        mp.produto_id = None
+        mp.confirmado_em = agora()
+        mp.confirmado_por = current_user.id
+    elif acao == 'desfazer':
+        mp.ignorar = False
+        mp.receita_id = None
+        mp.produto_id = None
+        mp.confirmado_em = None
+        mp.confirmado_por = None
+    else:
+        return jsonify(ok=False, erro='acao desconhecida'), 400
+    db.session.commit()
+    return jsonify(ok=True, estado=mp.estado, alvo_nome=mp.alvo_nome, map_id=mp.id)
+
+
 @pdv_bp.route('/sync', methods=['POST'])
 @login_required
 @admin_required
