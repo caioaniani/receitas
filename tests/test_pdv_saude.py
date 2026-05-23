@@ -126,15 +126,20 @@ def test_rota_reconciliacao_renderiza(app, admin_user, catalogo):
         'produtos': [
             {'nome': 'Cesta Nova', 'sku': '99', 'qtd': 5, 'faturamento': 50.0,
              'estado_map': 'sem_map'},
+            {'nome': 'Pao Mapeado', 'sku': '1', 'qtd': 80, 'faturamento': 400.0,
+             'estado_map': 'mapeado', 'fator': 1.0,
+             'mapeado_para': {'tipo': 'produto', 'id': 1, 'nome': 'Pao Frances'}},
         ],
     }
     with patch('app.services.vendas_itens.agregar_itens', return_value=agg):
         r = c.get('/pdv/reconciliacao')
     assert r.status_code == 200
     assert b'Reconciliacao' in r.data
-    assert b'Cesta Nova' in r.data
-    assert b'reconMapear' in r.data  # JS da acao inline
-    assert b'recon-alvo' in r.data   # select de alvos renderizou
+    assert b'Cesta Nova' in r.data        # pendente (nao baixou)
+    assert b'Pao Mapeado' in r.data       # auto-baixa ativa
+    assert b'auto-baixa ativa' in r.data  # tabela nova
+    assert b'reconMapear' in r.data       # JS da acao inline
+    assert b'recon-alvo' in r.data        # select de alvos renderizou
 
 
 def test_dashboard_renderiza_com_card_pdv(app, admin_user):
