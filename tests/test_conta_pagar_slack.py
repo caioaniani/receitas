@@ -102,17 +102,20 @@ def test_ia_falha_ainda_cria_conta_com_doc(app):
 
 def test_importar_historico(app):
     """Varre 2 mensagens com files do historico → cria 2 contas."""
+    import time
+
     from app.models import ContaPagar
     from app.services import conta_pagar_slack
     p1, p2, p3, p4 = _patches()
+    recente = str(time.time() - 86400)  # 1 dia atras (dentro dos 30)
     msgs = [
-        {'ts': '100.1', 'user': 'U1', 'files': [
+        {'ts': recente, 'user': 'U1', 'files': [
             {'id': 'H1', 'mimetype': 'image/jpeg', 'name': 'a.jpg',
              'url_private_download': 'u', 'size': 10}]},
-        {'ts': '100.2', 'user': 'U2', 'files': [
+        {'ts': recente, 'user': 'U2', 'files': [
             {'id': 'H2', 'mimetype': 'image/jpeg', 'name': 'b.jpg',
              'url_private_download': 'u', 'size': 10}]},
-        {'ts': '100.3', 'user': 'U3'},  # sem files — ignora
+        {'ts': recente, 'user': 'U3'},  # sem files — ignora
     ]
     with app.app_context(), p1, p2, p3, p4:
         app.config['SLACK_CANAIS_NF'] = 'C_NF'
@@ -121,6 +124,29 @@ def test_importar_historico(app):
             n = conta_pagar_slack.importar_historico(app, dias=30)
         assert n == 2
         assert ContaPagar.query.count() == 2
+
+
+def test_importar_historico_para_em_30_dias(app):
+    """REGRESSAO: msgs mais antigas que `dias` sao ignoradas mesmo se a API
+    devolver (paginacao por cursor as vezes ignora `oldest`)."""
+    import time
+
+    from app.models import ContaPagar
+    from app.services import conta_pagar_slack
+    p1, p2, p3, p4 = _patches()
+    antiga = str(time.time() - 60 * 86400)  # 60 dias atras (fora dos 30)
+    msgs = [
+        {'ts': antiga, 'user': 'U1', 'files': [
+            {'id': 'Hvelha', 'mimetype': 'image/jpeg', 'name': 'a.jpg',
+             'url_private_download': 'u', 'size': 10}]},
+    ]
+    with app.app_context(), p1, p2, p3, p4:
+        app.config['SLACK_CANAIS_NF'] = 'C_NF'
+        with patch('app.services.slack.historico_canal',
+                   return_value=(msgs, None)):
+            n = conta_pagar_slack.importar_historico(app, dias=30)
+        assert n == 0
+        assert ContaPagar.query.count() == 0
 
 
 def test_slack_bot_intercepta_canal_nf(app):
