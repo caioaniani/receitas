@@ -79,9 +79,12 @@ def lista():
                         ContaPagar.vencimento.asc(),
                         ContaPagar.criado_em.desc())
               .limit(200).all())
+    # IDs apontados por algum vinculo — pra marcar na lista quem tem par.
+    apontados = {r[0] for r in db.session.query(ContaPagar.relacionado_id)
+                 .filter(ContaPagar.relacionado_id.isnot(None)).distinct()}
     return render_template('contas_pagar/lista.html', contas=contas,
                            abas=ABAS, aba_atual=aba, contagens=contagens,
-                           canais_nome=_mapa_canais(contas))
+                           canais_nome=_mapa_canais(contas), apontados=apontados)
 
 
 @contas_pagar_bp.route('/<int:id>')
