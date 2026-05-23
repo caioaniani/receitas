@@ -147,6 +147,57 @@ def test_vinculo_bidirecional_no_detalhe(app, admin_user):
     assert b'bi-link-45deg' in r3.data
 
 
+def test_lista_colapsa_grupo_e_pagar_propaga(app, admin_user):
+    """NF+boleto agrupados = 1 linha; pagar o principal paga o grupo todo."""
+    from datetime import date
+
+    from app.extensions import db
+    from app.models import ContaPagar
+    from app.services import conta_pagar as cp
+    with app.app_context():
+        _conta(db, tipo_documento='nota_fiscal', origem_canal='C_RIB',
+               valor_total=Decimal('141.31'), vencimento=date(2026, 5, 7))
+        _conta(db, tipo_documento='boleto', origem_canal='C_RIB',
+               valor_total=Decimal('141.31'), vencimento=date(2026, 5, 7))
+        cp.agrupar_automatico()
+        principal = ContaPagar.query.filter(ContaPagar.relacionado_id.is_(None)).first()
+        pid = principal.id
+
+    c = app.test_client()
+    _login(c)
+    # lista mostra UMA linha (o principal); badge de grupo presente
+    r = c.get('/contas-pagar/?aba=aberto')
+    assert r.status_code == 200
+    assert r.data.count(b'/contas-pagar/') >= 1
+    assert b'bi-link-45deg' in r.data  # marca de grupo
+
+    # pagar o principal marca os dois
+    c.post(f'/contas-pagar/{pid}/pagar', data={'forma_pagamento': 'pix'},
+           follow_redirects=True)
+    with app.app_context():
+        todos = ContaPagar.query.all()
+        assert all(x.status == 'pago' for x in todos)
+        assert len(todos) == 2
+
+
+def test_juntar_automatico_rota(app, admin_user):
+    from datetime import date
+
+    from app.extensions import db
+    from app.models import ContaPagar
+    with app.app_context():
+        _conta(db, tipo_documento='nota_fiscal', origem_canal='C_RIB',
+               valor_total=Decimal('50.00'), vencimento=date(2026, 6, 1))
+        _conta(db, tipo_documento='boleto', origem_canal='C_RIB',
+               valor_total=Decimal('50.00'), vencimento=date(2026, 6, 1))
+    c = app.test_client()
+    _login(c)
+    c.post('/contas-pagar/juntar-automatico', follow_redirects=True)
+    with app.app_context():
+        sec = ContaPagar.query.filter(ContaPagar.relacionado_id.isnot(None)).count()
+        assert sec == 1
+
+
 def test_nao_admin_barrado(app, loja):
     """Funcionario comum nao acessa contas a pagar."""
     from app.extensions import db
