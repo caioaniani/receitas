@@ -383,6 +383,37 @@ Tools de write requerem aprovacao (preview HTML no chat). Frontend em
 `app/static/js/copilot.js` — modal lateral com textarea, Enter envia, Shift+Enter
 quebra linha.
 
+## Contas a Pagar (NF/boleto via Slack → IA → Dropbox → banco)
+
+Feature de 2026-05-23. Funcionarios postam foto de NF/boleto em canais Slack de
+recebimento; o bot **so le** (nunca posta), a IA extrai os dados e cria uma
+`ContaPagar`.
+
+- **Modelo**: `app/models/financeiro.py::ContaPagar` (Numeric(10,2) pra dinheiro;
+  `slack_file_id` unique = idempotencia). `db.create_all` cria a tabela.
+- **Extrator**: `app/services/conta_pagar_ia.py::extrair_documento` — Claude
+  vision, **Sonnet primeiro, Opus no fallback** se faltar campo critico
+  (valor/fornecedor/codigo de barras). Aceita imagem e PDF (document block).
+  Modelos via env `OCR_MODELO_SONNET`/`OCR_MODELO_OPUS`.
+- **Captura**: `app/services/conta_pagar_slack.py::processar` — sobe a imagem pro
+  Dropbox (`upload_publico`) ANTES de extrair (nao perde o doc se a IA falhar).
+  Interceptado em `slack_bot.processar_evento_mensagem` (canal em
+  `SLACK_CANAIS_NF` → handler silencioso, sem vinculo, sem copilot). O webhook
+  `slack/routes.py` foi ajustado pra deixar passar canais de NF (alem dos
+  `SLACK_CANAIS_PERMITIDOS`).
+- **Tela**: `/contas-pagar` (admin) — abas Em aberto/Pagos/Ignorados, detalhe
+  editavel (a IA so chuta; humano corrige), marcar pago, vincular fornecedor e
+  ligar NF↔boleto. Link na sidebar (Catalogo, owner-admin).
+- **Historico**: botao "Importar historico (30d)" (owner) varre
+  `conversations_history` dos canais em background. Idempotente por file_id.
+
+**Config no Slack App (necessaria pra captura funcionar)**:
+- Scopes: `channels:history`, `channels:read`, `files:read` (+ reinstalar app).
+- Event subscription: `message.channels`.
+- Bot **membro** dos 3 canais.
+- Env `SLACK_CANAIS_NF` = CSV dos IDs dos canais. `ANTHROPIC_API_KEY` e Dropbox
+  ja configurados (reusados do copilot/entregas).
+
 ## Slack Bot (copilot via DM/@mention)
 
 Bot reutiliza 100% das tools do copilot. DM direta ou @mention em canal permitido
