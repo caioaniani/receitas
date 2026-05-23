@@ -72,7 +72,7 @@
                 {% if c.atrasado %}<i class="bi bi-exclamation-triangle text-danger" title="Vencido"></i>{% endif %}
                 {% else %}—{% endif %}
             </td>
-            <td class="small text-muted">{{ canais_nome.get(c.origem_canal, c.origem_canal) or '—' }}</td>
+            <td class="small text-muted">{{ mapa_lojas.get(c.origem_canal, c.origem_canal) or '—' }}</td>
             <td class="text-end">
                 <a href="{{ url_for('contas_pagar.detalhe', id=c.id) }}" class="btn btn-sm btn-outline-primary">Abrir</a>
             </td>
