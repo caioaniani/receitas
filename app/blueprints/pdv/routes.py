@@ -455,6 +455,15 @@ def pdv_sync():
     return jsonify(ok=True, **stats)
 
 
+@pdv_bp.route('/saude')
+@login_required
+@admin_required
+def saude():
+    """Painel de saude do sync: ultimo run + pendencias que travam baixas."""
+    from app.services import pdv_saude
+    return render_template('pdv/saude.html', s=pdv_saude.resumo())
+
+
 @pdv_bp.route('/mapeamentos')
 @login_required
 @admin_required
