@@ -480,8 +480,12 @@ def reconciliacao():
     except (KeyError, ValueError):
         pass
     dados = pdv_saude.reconciliar(inicio, fim)
+    # Alvos pra vincular inline (mesma fonte do modal de itens-vendidos).
+    receitas = Receita.query.order_by(Receita.nome).all()
+    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     return render_template('pdv/reconciliacao.html', d=dados,
-                           inicio=inicio.isoformat(), fim=fim.isoformat())
+                           inicio=inicio.isoformat(), fim=fim.isoformat(),
+                           receitas=receitas, produtos=produtos)
 
 
 @pdv_bp.route('/mapeamentos')
