@@ -32,6 +32,8 @@ SYSTEM_PROMPT = (
     '  "fornecedor": str (nome do emitente/cedente, se identificar),\n'
     '  "valor_total": float (valor a pagar, sem "R$"),\n'
     '  "vencimento": str (YYYY-MM-DD, se houver),\n'
+    '  "vencimento_texto": str (a data de vencimento EXATAMENTE como aparece '
+    'no documento, ex "08/05/2026"),\n'
     '  "nf_numero": str (numero da NF, se houver),\n'
     '  "codigo_barras": str (so digitos do codigo de barras do boleto),\n'
     '  "linha_digitavel": str (linha digitavel do boleto, se houver),\n'
@@ -40,6 +42,10 @@ SYSTEM_PROMPT = (
     '"valor_total": float}]\n'
     "}\n"
     "Regras: numeros sem 'R$' nem unidade. Omite chaves que nao conseguir ler. "
+    "DATAS: os documentos sao BRASILEIROS — toda data esta em DD/MM/AAAA (dia "
+    "primeiro, depois mes). Ex: '08/05/2026' = dia 8 de maio = 2026-05-08. "
+    "NUNCA inverta dia e mes. Em 'vencimento' devolva ISO ja convertido "
+    "corretamente; em 'vencimento_texto' copie a data crua do documento. "
     "Boleto: priorize valor, vencimento e codigo de barras/linha digitavel. "
     "Nota fiscal: priorize fornecedor, numero, valor total e itens. "
     "Se nao for documento de compra, retorna {\"erro\": \"nao_reconhecido\"}."
