@@ -153,19 +153,6 @@ def reconciliar(inicio, fim):
     }
 
 
-def db_query_baixas(ini_dt, fim_dt, func, MovEstoqueLoja, tipos):
-    """Soma MovEstoqueLoja.quantidade por tipo no periodo. Retorna {tipo: total}."""
-    rows = (MovEstoqueLoja.query
-            .filter(MovEstoqueLoja.tipo.in_(tipos))
-            .filter(MovEstoqueLoja.data >= ini_dt)
-            .filter(MovEstoqueLoja.data <= fim_dt)
-            .with_entities(MovEstoqueLoja.tipo,
-                           func.sum(MovEstoqueLoja.quantidade))
-            .group_by(MovEstoqueLoja.tipo)
-            .all())
-    return {tipo: int(total or 0) for tipo, total in rows}
-
-
 def contar_pendencias():
     """So o total de pendencias acionaveis — pro card do dashboard.
 
