@@ -25,12 +25,15 @@ ABAS = (
 
 
 def _parse_valor(raw):
+    """Parseia valor do form. Aceita ponto (input number) ou virgula (BR)."""
     if raw is None or str(raw).strip() == '':
         return None
+    s = str(raw).strip()
+    if ',' in s:  # formato BR: tira milhar, troca decimal
+        s = s.replace('.', '').replace(',', '.')
     try:
-        return Decimal(str(raw).replace('.', '').replace(',', '.')) \
-            if ',' in str(raw) else Decimal(str(raw))
-    except (InvalidOperation, ValueError):
+        return Decimal(s)
+    except InvalidOperation:
         return None
 
 
