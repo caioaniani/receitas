@@ -40,6 +40,16 @@ STATUS_PEDIDO_LABEL = {
     'cancelado': 'cancelado',
 }
 
+# Abas da listagem de pedidos, por grupo de status. Ordem = ordem das abas.
+# (slug, label, tupla de status que entram na aba).
+STATUS_PEDIDO_ABAS = (
+    ('pendentes', 'Pendentes/Confirmados', ('pendente', 'confirmado')),
+    ('separados', 'Separados', ('separado',)),
+    ('em_rota', 'Em rota', ('em_transporte',)),
+    ('entregues', 'Entregues', ('entregue', 'recebido')),
+    ('cancelados', 'Cancelados', ('cancelado',)),
+)
+
 
 # ─── Motivos de desperdicio ────────────────────────────────────────────
 #
