@@ -140,6 +140,31 @@ def _data_iso(s):
         return None
 
 
+def _parse_vencimento(dados):
+    """Vencimento dando prioridade ao texto cru do documento em DD/MM/AAAA.
+
+    Documentos brasileiros usam DD/MM/AAAA. A IA as vezes inverte dia/mes ao
+    converter pra ISO. Reparseando o texto cru aqui (BR deterministico)
+    elimina essa inversao; o ISO da IA fica so como fallback.
+    """
+    import re
+    from datetime import date
+
+    txt = dados.get('vencimento_texto')
+    if txt:
+        m = re.match(r'\s*(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})\s*$', str(txt))
+        if m:
+            d, mes, ano = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            if ano < 100:
+                ano += 2000
+            if 1 <= d <= 31 and 1 <= mes <= 12:
+                try:
+                    return date(ano, mes, d)
+                except ValueError:
+                    pass
+    return _data_iso(dados.get('vencimento'))
+
+
 def importar_historico(app, dias=30):
     """Varre o historico dos canais de NF (ultimos `dias`) e processa as
     imagens/PDFs que ainda nao viraram conta. Idempotente por slack_file_id.
