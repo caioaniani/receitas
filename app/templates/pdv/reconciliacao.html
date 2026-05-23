@@ -80,8 +80,10 @@
         <p class="small text-muted mb-2">
             Esses produtos foram vendidos no Seru mas nao tem mapeamento — a
             venda <strong>nao baixou estoque</strong>. Mapeie em
-            <a href="{{ url_for('pdv.mapeamentos') }}">Mapeamentos</a> pra corrigir
-            daqui pra frente.
+            <a href="{{ url_for('pdv.itens_vendidos') }}">Itens Vendidos</a>
+            (produtos novos / <code>sem_map</code> so aparecem la, nao na tela
+            de Mapeamentos). Um mesmo produto pode ter 2 cadastros no Seru
+            (nomes/SKUs diferentes) — basta vincular cada um ao mesmo alvo.
         </p>
         <table class="table table-sm mb-0">
             <thead class="table-light">
