@@ -83,6 +83,10 @@ def _run_sync(app):
                 inicio = hoje - timedelta(days=_catchup_dias())
                 stats = seru_sync.processar_pedidos(inicio, hoje, user=None)
                 _ult_run = _agora()
+                # Persiste timestamp pra sobreviver a deploy (memoria zera).
+                from app.models import AppConfig
+                AppConfig.set('seru_ultimo_sync', _ult_run.isoformat())
+                db.session.commit()
                 ativas = any(stats.get(k, 0) for k in (
                     'pedidos_novos', 'itens_baixados',
                     'pedidos_cancelados_estornados'))
