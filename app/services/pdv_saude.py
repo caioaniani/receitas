@@ -39,13 +39,41 @@ def resumo():
 
     Numeros sao counts persistidos (baratos) — nao chama API externa.
     """
+    from datetime import datetime, time
+
+    from sqlalchemy import func
+
+    from app.constants import VENDA_TIPOS_LOJA
+    from app.models import AppConfig, MovEstoqueLoja
     from app.services import seru_cron
+    from app.utils import hoje as hoje_brt
 
     st_seru = seru_cron.status()
     st_vnda = seru_cron.status_vnda()
 
-    min_seru = _minutos_desde(st_seru.get('ultimo_run'))
-    min_vnda = _minutos_desde(st_vnda.get('ultimo_run'))
+    # Timestamp persistido (sobrevive a deploy); fallback pro de memoria.
+    def _parse_iso(s):
+        try:
+            return datetime.fromisoformat(s) if s else None
+        except (TypeError, ValueError):
+            return None
+
+    seru_run = _parse_iso(AppConfig.get('seru_ultimo_sync')) or st_seru.get('ultimo_run')
+    vnda_run = _parse_iso(AppConfig.get('vnda_ultimo_sync')) or st_vnda.get('ultimo_run')
+
+    min_seru = _minutos_desde(seru_run)
+    min_vnda = _minutos_desde(vnda_run)
+
+    # Itens baixados HOJE (dado real do estoque, por tipo de venda).
+    ini_hoje = datetime.combine(hoje_brt(), time.min)
+    rows = (MovEstoqueLoja.query
+            .filter(MovEstoqueLoja.tipo.in_(VENDA_TIPOS_LOJA))
+            .filter(MovEstoqueLoja.data >= ini_hoje)
+            .with_entities(MovEstoqueLoja.tipo, func.sum(MovEstoqueLoja.quantidade))
+            .group_by(MovEstoqueLoja.tipo).all())
+    baixas_hoje = {tipo: int(total or 0) for tipo, total in rows}
+    seru_baixados_hoje = baixas_hoje.get('venda_seru', 0)
+    vnda_baixados_hoje = baixas_hoje.get('venda_vnda', 0)
 
     # Loja pendente = nao confirmada e nao ignorada. Inclui fuzzy auto-match
     # NAO confirmado — esses NAO baixam estoque ate o admin confirmar.
