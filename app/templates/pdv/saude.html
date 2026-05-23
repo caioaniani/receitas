@@ -48,14 +48,15 @@
             <div class="card-header py-2"><strong>Sync VNDA (site)</strong></div>
             <div class="card-body">
                 {% if s.vnda_atrasado %}
-                <span class="badge bg-danger">atrasado / sem run recente</span>
+                <span class="badge bg-danger">atrasado</span>
                 {% else %}
                 <span class="badge bg-success">em dia</span>
                 {% endif %}
                 <p class="small mb-0 mt-2">
-                    Ultimo run:
-                    {% if s.vnda_ultimo_run %}<code>{{ s.vnda_ultimo_run|brt }}</code>
-                    {% else %}<span class="text-muted">nenhum nesta sessao</span>{% endif %}
+                    Ultimo sync:
+                    {% if s.vnda_ultimo_run %}<code>{{ s.vnda_ultimo_run|brt('%d/%m/%Y %H:%M') }}</code>
+                    {% else %}<span class="text-muted">sem registro</span>{% endif %}
+                    <br>Itens baixados hoje: <strong>{{ s.vnda_baixados_hoje }}</strong>
                     <br>Scheduler: {{ 'ativo' if s.vnda_ativo else 'inativo' }}
                 </p>
             </div>
