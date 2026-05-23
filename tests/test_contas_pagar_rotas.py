@@ -99,6 +99,28 @@ def test_ignorar_e_reabrir(app, admin_user):
         assert db.session.get(ContaPagar, cid).status == 'aberto'
 
 
+def test_filtro_por_loja(app, admin_user):
+    """Pills de loja filtram as contas por canal (loja)."""
+    from app.extensions import db
+    with app.app_context():
+        app.config['SLACK_CANAIS_NF_NOMES'] = (
+            'C_RIB=Ribeiro do Vale;C_NEB=Nebraska')
+        _conta(db, origem_canal='C_RIB', fornecedor_nome='Forn Ribeiro')
+        _conta(db, origem_canal='C_NEB', fornecedor_nome='Forn Nebraska')
+
+    c = app.test_client()
+    _login(c)
+    # sem filtro: mostra as duas + as pills de loja
+    r = c.get('/contas-pagar/')
+    assert b'Ribeiro do Vale' in r.data and b'Nebraska' in r.data
+    assert b'Forn Ribeiro' in r.data and b'Forn Nebraska' in r.data
+
+    # filtro Ribeiro: so a conta do canal C_RIB
+    r2 = c.get('/contas-pagar/?loja=C_RIB')
+    assert b'Forn Ribeiro' in r2.data
+    assert b'Forn Nebraska' not in r2.data
+
+
 def test_vinculo_bidirecional_no_detalhe(app, admin_user):
     """Vincula boleto→NF; abrir a NF tambem mostra o boleto (backref)."""
     from app.extensions import db
