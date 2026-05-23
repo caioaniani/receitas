@@ -46,16 +46,36 @@ def _parse_data(raw):
         return None
 
 
-def _mapa_canais(contas):
-    """{id_canal: '#nome'} pros canais distintos das contas. Cacheado no
-    cliente Slack; fallback pro ID se nao resolver."""
-    from app.services import slack as slack_api
-    mapa = {}
-    for c in contas:
-        cid = c.origem_canal
-        if cid and cid not in mapa:
+def _mapa_lojas_nf():
+    """OrderedDict {canal_id: nome_loja} dos canais de NF. Nome vem do config
+    SLACK_CANAIS_NF_NOMES; canais sem nome no config caem pro nome do canal
+    Slack (e por fim o ID)."""
+    from collections import OrderedDict
+
+    mapa = OrderedDict()
+    raw = (current_app.config.get('SLACK_CANAIS_NF_NOMES') or '').strip()
+    for par in raw.split(';'):
+        par = par.strip()
+        if '=' in par:
+            cid, nome = par.split('=', 1)
+            if cid.strip():
+                mapa[cid.strip()] = nome.strip()
+    ids = (current_app.config.get('SLACK_CANAIS_NF') or '').strip()
+    for cid in (c.strip() for c in ids.split(',') if c.strip()):
+        if cid not in mapa:
+            from app.services import slack as slack_api
             mapa[cid] = slack_api.nome_canal(cid)
     return mapa
+
+
+def _nome_loja(canal_id, mapa_lojas):
+    """Nome amigavel de um canal: config > nome do canal Slack > ID."""
+    if not canal_id:
+        return None
+    if canal_id in mapa_lojas:
+        return mapa_lojas[canal_id]
+    from app.services import slack as slack_api
+    return slack_api.nome_canal(canal_id)
 
 
 @contas_pagar_bp.route('/')
@@ -69,12 +89,23 @@ def lista():
         aba = 'aberto'
     status_filtro = {s: st for s, _, st in ABAS}[aba]
 
-    cont = dict(db.session.query(ContaPagar.status, func.count())
+    mapa_lojas = _mapa_lojas_nf()
+    loja_sel = (request.args.get('loja') or '').strip()
+    if loja_sel and loja_sel not in mapa_lojas:
+        loja_sel = ''
+
+    def _por_loja(q):
+        return q.filter(ContaPagar.origem_canal == loja_sel) if loja_sel else q
+
+    # contagens de status dentro da loja selecionada
+    cont = dict(_por_loja(db.session.query(ContaPagar.status, func.count()))
                 .group_by(ContaPagar.status).all())
     contagens = {slug: cont.get(st, 0) for slug, _, st in ABAS}
+    # total por loja (pra mostrar nas abas de loja)
+    por_loja = dict(db.session.query(ContaPagar.origem_canal, func.count())
+                    .group_by(ContaPagar.origem_canal).all())
 
-    contas = (ContaPagar.query
-              .filter(ContaPagar.status == status_filtro)
+    contas = (_por_loja(ContaPagar.query.filter(ContaPagar.status == status_filtro))
               .order_by(ContaPagar.vencimento.is_(None),
                         ContaPagar.vencimento.asc(),
                         ContaPagar.criado_em.desc())
@@ -84,7 +115,8 @@ def lista():
                  .filter(ContaPagar.relacionado_id.isnot(None)).distinct()}
     return render_template('contas_pagar/lista.html', contas=contas,
                            abas=ABAS, aba_atual=aba, contagens=contagens,
-                           canais_nome=_mapa_canais(contas), apontados=apontados)
+                           mapa_lojas=mapa_lojas, loja_sel=loja_sel,
+                           total_por_loja=por_loja, apontados=apontados)
 
 
 @contas_pagar_bp.route('/<int:id>')
@@ -105,9 +137,10 @@ def detalhe(id):
                      .filter(ContaPagar.status != 'ignorado')
                      .order_by(ContaPagar.criado_em.desc())
                      .limit(50).all())
+    mapa_lojas = _mapa_lojas_nf()
     return render_template('contas_pagar/detalhe.html', conta=conta, itens=itens,
                            fornecedores=fornecedores, relacionaveis=relacionaveis,
-                           canais_nome=_mapa_canais([conta]))
+                           loja_nome=_nome_loja(conta.origem_canal, mapa_lojas))
 
 
 @contas_pagar_bp.route('/<int:id>/editar', methods=['POST'])
