@@ -97,26 +97,33 @@ def lista():
     def _por_loja(q):
         return q.filter(ContaPagar.origem_canal == loja_sel) if loja_sel else q
 
-    # contagens de status dentro da loja selecionada
-    cont = dict(_por_loja(db.session.query(ContaPagar.status, func.count()))
+    # Mostra so os "principais" (relacionado_id NULL). NF+boleto do mesmo
+    # recebimento contam como UMA linha (o secundario aponta pro principal).
+    def _principais(q):
+        return q.filter(ContaPagar.relacionado_id.is_(None))
+
+    cont = dict(_principais(_por_loja(db.session.query(ContaPagar.status, func.count())))
                 .group_by(ContaPagar.status).all())
     contagens = {slug: cont.get(st, 0) for slug, _, st in ABAS}
-    # total por loja (pra mostrar nas abas de loja)
-    por_loja = dict(db.session.query(ContaPagar.origem_canal, func.count())
+    por_loja = dict(_principais(db.session.query(ContaPagar.origem_canal, func.count()))
                     .group_by(ContaPagar.origem_canal).all())
 
-    contas = (_por_loja(ContaPagar.query.filter(ContaPagar.status == status_filtro))
+    contas = (_principais(_por_loja(
+                  ContaPagar.query.filter(ContaPagar.status == status_filtro)))
               .order_by(ContaPagar.vencimento.is_(None),
                         ContaPagar.vencimento.asc(),
                         ContaPagar.criado_em.desc())
               .limit(200).all())
-    # IDs apontados por algum vinculo — pra marcar na lista quem tem par.
-    apontados = {r[0] for r in db.session.query(ContaPagar.relacionado_id)
-                 .filter(ContaPagar.relacionado_id.isnot(None)).distinct()}
+    # Documentos secundarios de cada grupo (pra mostrar "NF + boleto" na linha).
+    ids = [c.id for c in contas]
+    grupo_docs = {}
+    if ids:
+        for s in ContaPagar.query.filter(ContaPagar.relacionado_id.in_(ids)).all():
+            grupo_docs.setdefault(s.relacionado_id, []).append(s)
     return render_template('contas_pagar/lista.html', contas=contas,
                            abas=ABAS, aba_atual=aba, contagens=contagens,
                            mapa_lojas=mapa_lojas, loja_sel=loja_sel,
-                           total_por_loja=por_loja, apontados=apontados)
+                           total_por_loja=por_loja, grupo_docs=grupo_docs)
 
 
 @contas_pagar_bp.route('/<int:id>')
