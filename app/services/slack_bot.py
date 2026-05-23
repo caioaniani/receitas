@@ -202,6 +202,18 @@ def processar_evento_mensagem(evento):
 
     if not slack_user_id or not channel:
         return
+
+    # Canais de recebimento de NF/boleto: o bot SO LE. Cada imagem/PDF vira
+    # uma Conta a Pagar. Nao responde, nao exige vinculo, nao chama copilot.
+    from app.services import conta_pagar_slack
+    if conta_pagar_slack.canal_de_nf(channel):
+        if files:
+            try:
+                conta_pagar_slack.processar(evento)
+            except Exception:
+                logger.exception('conta_pagar_slack: processar falhou')
+        return
+
     if not text and not files:
         return
     if not text:
