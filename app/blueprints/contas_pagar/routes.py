@@ -276,12 +276,29 @@ def mudar_status(id):
     conta = ContaPagar.query.get_or_404(id)
     novo = request.form.get('status')
     if novo in ('aberto', 'pago', 'ignorado'):
-        conta.status = novo
-        if novo != 'pago':
-            conta.pago_em = None
-            conta.valor_pago = 0
-        conta.editado_em = agora()
-        conta.editado_por_id = current_user.id
+        agora_ts = agora()
+        for alvo in [conta, *conta.ligados]:
+            alvo.status = novo
+            if novo != 'pago':
+                alvo.pago_em = None
+                alvo.valor_pago = 0
+            alvo.editado_em = agora_ts
+            alvo.editado_por_id = current_user.id
         db.session.commit()
         flash(f'Status alterado para {novo}.', 'success')
     return redirect(url_for('contas_pagar.detalhe', id=id))
+
+
+@contas_pagar_bp.route('/juntar-automatico', methods=['POST'])
+@login_required
+@admin_required
+def juntar_automatico():
+    """Junta NF + boleto do mesmo recebimento (mesma loja, valor e
+    vencimento). Retroativo e idempotente."""
+    from app.services import conta_pagar as cp_dominio
+    n = cp_dominio.agrupar_automatico()
+    if n:
+        flash(f'{n} documento(s) agrupado(s) ao seu par (NF ↔ boleto).', 'success')
+    else:
+        flash('Nenhum novo par encontrado pra juntar.', 'info')
+    return redirect(url_for('contas_pagar.lista'))
