@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Reconciliacao PDV{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-clipboard-check"></i> Reconciliacao venda vs estoque</h1>
+    <a href="{{ url_for('pdv.saude') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-heart-pulse"></i> Saude do sync
+    </a>
+</div>
+
+<form method="get" class="row g-2 align-items-end mb-3">
+    <div class="col-auto">
+        <label class="form-label small mb-0">De</label>
+        <input type="date" name="inicio" value="{{ inicio }}" class="form-control form-control-sm">
+    </div>
+    <div class="col-auto">
+        <label class="form-label small mb-0">Ate</label>
+        <input type="date" name="fim" value="{{ fim }}" class="form-control form-control-sm">
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Atualizar</button>
+    </div>
+</form>
+
+{% if d.erro %}
+<div class="alert alert-danger">
+    Nao consegui buscar vendas do Seru: <code>{{ d.erro }}</code>
+</div>
+{% else %}
+
+<div class="alert alert-warning" style="font-size:13px;">
+    <i class="bi bi-exclamation-triangle"></i>
+    <strong>Leia antes:</strong> "vendido" e "baixado" <strong>nao batem 1:1 por
+    design</strong> — produtos compostos (fator &lt; 1, ex: fatias) e cestas baixam
+    quantidade diferente da vendida. O que importa aqui eh a tabela de
+    <strong>produtos vendidos que nao baixaram</strong> abaixo: se estiver vazia, toda
+    venda mapeada baixou estoque.
+</div>
+
+<div class="row g-3 mb-2">
+    <div class="col-md-3 col-6">
+        <div class="card text-center h-100"><div class="card-body py-3">
+            <div class="h4 mb-0">{{ d.seru_total_pedidos }}</div>
+            <div class="small text-muted">pedidos Seru</div>
+        </div></div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card text-center h-100"><div class="card-body py-3">
+            <div class="h4 mb-0">{{ d.seru_total_itens | round(0, 'floor') | int }}</div>
+            <div class="small text-muted">itens vendidos (Seru)</div>
+        </div></div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card text-center h-100"><div class="card-body py-3">
+            <div class="h4 mb-0 text-success">{{ d.baixado_efetivo }}</div>
+            <div class="small text-muted">unidades baixadas do estoque</div>
+        </div></div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card text-center h-100"><div class="card-body py-3">
+            <div class="h4 mb-0 {% if d.sem_estoque %}text-danger{% endif %}">{{ d.sem_estoque }}</div>
+            <div class="small text-muted">vendas sem estoque (faltou)</div>
+        </div></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header py-2">
+        <strong>Produtos vendidos que NAO baixaram estoque</strong>
+        {% if d.pendentes_vendidos %}
+        <span class="badge bg-danger">{{ d.pendentes_vendidos|length }} produto(s), {{ d.qtd_pendente | round(0,'floor') | int }} un</span>
+        {% else %}
+        <span class="badge bg-success">nenhum</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        {% if d.pendentes_vendidos %}
+        <p class="small text-muted mb-2">
+            Esses produtos foram vendidos no Seru mas nao tem mapeamento — a
+            venda <strong>nao baixou estoque</strong>. Mapeie em
+            <a href="{{ url_for('pdv.mapeamentos') }}">Mapeamentos</a> pra corrigir
+            daqui pra frente.
+        </p>
+        <table class="table table-sm mb-0">
+            <thead class="table-light">
+                <tr><th>Produto (Seru)</th><th class="text-end">Qtd vendida</th><th class="text-end">Faturamento</th><th>Estado</th></tr>
+            </thead>
+            <tbody>
+                {% for p in d.pendentes_vendidos %}
+                <tr>
+                    <td>{{ p.nome }}</td>
+                    <td class="text-end">{{ p.qtd | round(0,'floor') | int }}</td>
+                    <td class="text-end">R$ {{ '%.2f'|format(p.faturamento) }}</td>
+                    <td><span class="badge bg-warning text-dark">{{ p.estado_map }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-success mb-0"><i class="bi bi-check-circle"></i>
+            Toda venda mapeada do periodo baixou estoque.</p>
+        {% endif %}
+    </div>
+</div>
+
+<p class="small text-muted mt-2">
+    Baixas por tipo no periodo: {% for tipo, total in d.movs_por_tipo.items() %}
+    <code>{{ tipo }}={{ total }}</code>{% if not loop.last %} · {% endif %}{% else %}(nenhuma){% endfor %}
+</p>
+{% endif %}
+{% endblock %}
