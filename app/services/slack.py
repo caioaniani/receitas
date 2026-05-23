@@ -98,6 +98,28 @@ def info_usuario(slack_user_id):
         return None
 
 
+_canal_nome_cache = {}
+
+
+def nome_canal(channel_id):
+    """Resolve ID de canal (C0123) -> '#nome'. Cache em memoria. Requer
+    scope channels:read. Fallback: retorna o proprio ID se nao conseguir."""
+    if not channel_id:
+        return channel_id
+    if channel_id in _canal_nome_cache:
+        return _canal_nome_cache[channel_id]
+    nome = channel_id
+    try:
+        resp = _client().conversations_info(channel=channel_id)
+        bruto = (resp.get('channel') or {}).get('name')
+        if bruto:
+            nome = f'#{bruto}'
+    except Exception:
+        logger.warning('slack nome_canal falhou para %s', channel_id)
+    _canal_nome_cache[channel_id] = nome
+    return nome
+
+
 def historico_canal(channel_id, oldest=None, cursor=None, limit=200):
     """conversations.history paginado. Retorna (messages, next_cursor).
 
