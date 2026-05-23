@@ -138,3 +138,49 @@ def _data_iso(s):
         return datetime.strptime(str(s)[:10], '%Y-%m-%d').date()
     except (ValueError, TypeError):
         return None
+
+
+def importar_historico(app, dias=30):
+    """Varre o historico dos canais de NF (ultimos `dias`) e processa as
+    imagens/PDFs que ainda nao viraram conta. Idempotente por slack_file_id.
+
+    Roda em background (a rota dispara num thread). Retorna nº de contas
+    criadas (tambem loga).
+    """
+    import time as _time
+
+    from app.services import slack as slack_api
+
+    with app.app_context():
+        ids = (app.config.get('SLACK_CANAIS_NF') or '').strip()
+        canais = [c.strip() for c in ids.split(',') if c.strip()]
+        if not canais:
+            logger.info('importar_historico: SLACK_CANAIS_NF vazio')
+            return 0
+
+        oldest = _time.time() - dias * 86400
+        total = 0
+        for canal in canais:
+            cursor = None
+            while True:
+                msgs, cursor = slack_api.historico_canal(canal, oldest=oldest,
+                                                         cursor=cursor)
+                for m in msgs:
+                    if not m.get('files'):
+                        continue
+                    evento = {
+                        'channel': canal,
+                        'user': m.get('user'),
+                        'ts': m.get('ts'),
+                        'files': m.get('files'),
+                    }
+                    try:
+                        total += processar(evento)
+                    except Exception:  # noqa: BLE001
+                        logger.exception('importar_historico: msg %s falhou',
+                                         m.get('ts'))
+                if not cursor:
+                    break
+                _time.sleep(1)  # respeita rate limit Slack/Anthropic
+        logger.info('importar_historico: %d conta(s) criada(s)', total)
+        return total
