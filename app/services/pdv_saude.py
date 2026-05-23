@@ -192,6 +192,58 @@ def reconciliar(inicio, fim):
     }
 
 
+def reconciliar_vnda(inicio, fim):
+    """Reconciliacao do VNDA (site). Espelha `reconciliar` mas usa a fonte
+    VNDA (`vnda_sync.agregar_vendas`) e baixas tipo `venda_vnda`.
+
+    Por data de ENTREGA (igual o sync VNDA). Retorna dict ou {'erro': ...}.
+    """
+    from datetime import datetime, time
+
+    from sqlalchemy import func
+
+    from app.models import MovEstoqueLoja
+    from app.services import vnda_sync
+
+    agg = vnda_sync.agregar_vendas(inicio, fim)
+    if 'erro' in agg:
+        return {'erro': agg['erro']}
+
+    produtos = agg.get('produtos', [])
+    pendentes_vendidos = [p for p in produtos
+                          if p['estado_map'] in ('pendente', 'sem_map')]
+    qtd_pendente = sum(p['qtd'] for p in pendentes_vendidos)
+    mapeados_vendidos = sorted(
+        [p for p in produtos if p['estado_map'] == 'mapeado'],
+        key=lambda x: x['qtd'], reverse=True)
+
+    ini_dt = datetime.combine(inicio, time.min)
+    fim_dt = datetime.combine(fim, time.max)
+    rows = (MovEstoqueLoja.query
+            .filter(MovEstoqueLoja.tipo.in_(('venda_vnda', 'venda_vnda_sem_estoque')))
+            .filter(MovEstoqueLoja.data >= ini_dt)
+            .filter(MovEstoqueLoja.data <= fim_dt)
+            .with_entities(MovEstoqueLoja.tipo,
+                           func.sum(MovEstoqueLoja.quantidade))
+            .group_by(MovEstoqueLoja.tipo)
+            .all())
+    movs = {tipo: int(total or 0) for tipo, total in rows}
+
+    return {
+        'inicio': inicio,
+        'fim': fim,
+        'loja': agg.get('loja'),
+        'total_pedidos': agg.get('total_pedidos', 0),
+        'total_itens': agg.get('total_itens', 0),
+        'pendentes_vendidos': pendentes_vendidos,
+        'qtd_pendente': qtd_pendente,
+        'mapeados_vendidos': mapeados_vendidos,
+        'baixado_efetivo': movs.get('venda_vnda', 0),
+        'sem_estoque': movs.get('venda_vnda_sem_estoque', 0),
+        'movs_por_tipo': movs,
+    }
+
+
 def contar_pendencias():
     """So o total de pendencias acionaveis — pro card do dashboard.
 
