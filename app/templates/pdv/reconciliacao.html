@@ -167,6 +167,47 @@
     </div>
 </div>
 
+<!-- Produtos com auto-baixa ativa (risco de dupla-baixa se baixados manual) -->
+<div class="card mt-3">
+    <div class="card-header py-2">
+        <strong>Produtos com auto-baixa ativa</strong>
+        <span class="badge bg-secondary">{{ d.mapeados_vendidos|length }}</span>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-warning small py-2 mb-2">
+            <i class="bi bi-exclamation-triangle"></i>
+            O sync <strong>baixa estoque automatico</strong> destes produtos quando
+            vendem no PDV (Seru). <strong>Se voce baixa algum deles manualmente</strong>
+            (ex: PDV sem API, planilha), clique <strong>Ignorar</strong> — senao o
+            estoque cai em dobro (sync + manual).
+        </div>
+        {% if d.mapeados_vendidos %}
+        <table class="table table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr><th>Produto (Seru)</th><th>Baixa em</th><th class="text-end">Fator</th><th class="text-end">Qtd vendida</th><th style="width:110px;">Acao</th></tr>
+            </thead>
+            <tbody>
+                {% for p in d.mapeados_vendidos %}
+                <tr data-nome="{{ p.nome }}">
+                    <td>{{ p.nome }}<br><span class="small text-muted"><code>{{ p.sku or '—' }}</code></span></td>
+                    <td>{% if p.mapeado_para %}{{ p.mapeado_para.nome }}
+                        <span class="badge bg-light text-dark">{{ p.mapeado_para.tipo }}</span>{% else %}—{% endif %}</td>
+                    <td class="text-end">{{ p.fator }}</td>
+                    <td class="text-end">{{ p.qtd | round(0,'floor') | int }}</td>
+                    <td class="recon-acao-cell">
+                        <button class="btn btn-sm btn-outline-danger" onclick="reconMapear(this, 'ignorar')"
+                                title="Use se voce baixa este produto manualmente">Ignorar</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted mb-0">Nenhum produto mapeado vendeu no periodo.</p>
+        {% endif %}
+    </div>
+</div>
+
 <p class="small text-muted mt-2">
     Baixas por tipo no periodo: {% for tipo, total in d.movs_por_tipo.items() %}
     <code>{{ tipo }}={{ total }}</code>{% if not loop.last %} · {% endif %}{% else %}(nenhuma){% endfor %}
