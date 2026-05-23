@@ -11,11 +11,26 @@
     primeira leitura — confira e edite cada conta antes de pagar.
 </div>
 
+{% if mapa_lojas %}
+<div class="mb-2 d-flex flex-wrap gap-2 align-items-center">
+    <span class="small text-muted me-1">Loja:</span>
+    <a class="btn btn-sm {% if not loja_sel %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+       href="{{ url_for('contas_pagar.lista', aba=aba_atual) }}">Todas</a>
+    {% for cid, nome in mapa_lojas.items() %}
+    <a class="btn btn-sm {% if loja_sel == cid %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+       href="{{ url_for('contas_pagar.lista', aba=aba_atual, loja=cid) }}">
+        {{ nome }}
+        {% if total_por_loja.get(cid) %}<span class="badge rounded-pill bg-light text-dark">{{ total_por_loja[cid] }}</span>{% endif %}
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
 <ul class="nav nav-tabs mb-3" role="tablist">
     {% for slug, label, _ in abas %}
     <li class="nav-item">
         <a class="nav-link {% if slug == aba_atual %}active{% endif %}"
-           href="{{ url_for('contas_pagar.lista', aba=slug) }}">
+           href="{{ url_for('contas_pagar.lista', aba=slug, loja=loja_sel) }}">
             {{ label }}
             {% if contagens.get(slug) %}
             <span class="badge rounded-pill {% if slug == aba_atual %}bg-primary{% else %}bg-secondary{% endif %}">{{ contagens[slug] }}</span>
