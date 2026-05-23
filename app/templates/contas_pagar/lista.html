@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Contas a Pagar{% endblock %}
+
+{% block content %}
+<h1 class="page-title mb-3"><i class="bi bi-receipt"></i> Contas a Pagar</h1>
+
+<div class="alert alert-light border small py-2">
+    <i class="bi bi-info-circle"></i>
+    Geradas a partir das fotos de NF/boleto enviadas no Slack. A IA faz a
+    primeira leitura — confira e edite cada conta antes de pagar.
+</div>
+
+<ul class="nav nav-tabs mb-3" role="tablist">
+    {% for slug, label, _ in abas %}
+    <li class="nav-item">
+        <a class="nav-link {% if slug == aba_atual %}active{% endif %}"
+           href="{{ url_for('contas_pagar.lista', aba=slug) }}">
+            {{ label }}
+            {% if contagens.get(slug) %}
+            <span class="badge rounded-pill {% if slug == aba_atual %}bg-primary{% else %}bg-secondary{% endif %}">{{ contagens[slug] }}</span>
+            {% endif %}
+        </a>
+    </li>
+    {% endfor %}
+</ul>
+
+<div class="table-responsive">
+<table class="table table-sm align-middle">
+    <thead class="table-light">
+        <tr>
+            <th>Documento</th>
+            <th>Fornecedor</th>
+            <th class="text-end">Valor</th>
+            <th>Vencimento</th>
+            <th>Origem</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for c in contas %}
+        <tr>
+            <td>
+                <span class="badge bg-light text-dark">{{ c.tipo_documento }}</span>
+                {% if c.nf_numero %}<span class="small text-muted">NF {{ c.nf_numero }}</span>{% endif %}
+            </td>
+            <td>{{ c.fornecedor_nome or '—' }}</td>
+            <td class="text-end {% if not c.valor_total %}text-danger{% endif %}">
+                {% if c.valor_total %}R$ {{ '%.2f'|format(c.valor_total) }}{% else %}<i>sem valor</i>{% endif %}
+            </td>
+            <td>
+                {% if c.vencimento %}
+                <span class="{% if c.atrasado %}text-danger fw-bold{% endif %}">{{ c.vencimento.strftime('%d/%m/%Y') }}</span>
+                {% if c.atrasado %}<i class="bi bi-exclamation-triangle text-danger" title="Vencido"></i>{% endif %}
+                {% else %}—{% endif %}
+            </td>
+            <td class="small text-muted">{{ c.origem_canal or '—' }}</td>
+            <td class="text-end">
+                <a href="{{ url_for('contas_pagar.detalhe', id=c.id) }}" class="btn btn-sm btn-outline-primary">Abrir</a>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted text-center py-3">Nenhuma conta nesta aba.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}
