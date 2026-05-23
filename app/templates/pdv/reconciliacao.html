@@ -125,41 +125,6 @@
                 {% endfor %}
             </tbody>
         </table>
-        <script>
-        function reconMapear(btn, acao) {
-            var tr = btn.closest('tr');
-            var nome = tr.getAttribute('data-nome');
-            var fd = new FormData();
-            fd.append('csrf_token', CSRF_TOKEN);
-            fd.append('seru_nome', nome);
-            fd.append('acao', acao);
-            if (acao === 'vincular') {
-                var alvo = tr.querySelector('.recon-alvo').value;
-                if (!alvo) { alert('Escolha um produto/receita pra vincular.'); return; }
-                var partes = alvo.split(':');
-                fd.append('alvo_tipo', partes[0]);
-                fd.append('alvo_id', partes[1]);
-                fd.append('fator', '1');
-            }
-            tr.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
-            fetch('/pdv/api/mapear', {method: 'POST', body: fd, credentials: 'same-origin'})
-                .then(function(r){ return r.json(); })
-                .then(function(j){
-                    if (j.ok) {
-                        tr.querySelector('.recon-acao-cell').innerHTML =
-                            '<span class="badge bg-success">' +
-                            (acao === 'ignorar' ? 'ignorado' : 'vinculado') + '</span>';
-                    } else {
-                        alert('Erro: ' + (j.erro || 'desconhecido'));
-                        tr.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
-                    }
-                })
-                .catch(function(){
-                    alert('Falha de rede.');
-                    tr.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
-                });
-        }
-        </script>
         {% else %}
         <p class="text-success mb-0"><i class="bi bi-check-circle"></i>
             Toda venda mapeada do periodo baixou estoque.</p>
