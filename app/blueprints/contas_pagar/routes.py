@@ -103,7 +103,8 @@ def detalhe(id):
                      .order_by(ContaPagar.criado_em.desc())
                      .limit(50).all())
     return render_template('contas_pagar/detalhe.html', conta=conta, itens=itens,
-                           fornecedores=fornecedores, relacionaveis=relacionaveis)
+                           fornecedores=fornecedores, relacionaveis=relacionaveis,
+                           canais_nome=_mapa_canais([conta]))
 
 
 @contas_pagar_bp.route('/<int:id>/editar', methods=['POST'])
