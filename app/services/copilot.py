@@ -2261,8 +2261,10 @@ def _read_consultar_vendas_itens(params, user):
             fonte_tag = f' [Seru {int(p.get("qtd_seru", 0))} + VNDA {int(p.get("qtd_vnda", 0))}]'
         elif fonte == 'vnda':
             fonte_tag = ' [só VNDA]'
+        fat = p.get('faturamento') or 0
+        fat_str = f' · R$ {fat:.2f}' if fat else ''
         linhas.append(
-            f'{i}. **{p["nome"]}** — {int(p["qtd"])} un{fonte_tag} · R$ {p.get("faturamento", 0):.2f}{match_str}'
+            f'{i}. **{p["nome"]}** — {int(p["qtd"])} un{fonte_tag}{fat_str}{match_str}'
         )
     if data.get('sem_match_count'):
         linhas.append('')
