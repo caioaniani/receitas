@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}Saida em Lote — Estoque de Loja{% endblock %}
+{% block title %}Saída em Lote — Estoque de Loja{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h1 class="page-title mb-0"><i class="bi bi-box-arrow-up"></i> Saida em Lote — Estoque de Loja</h1>
+    <h1 class="page-title mb-0"><i class="bi bi-box-arrow-up"></i> Saída em Lote — Estoque de Loja</h1>
     <div class="d-flex gap-2">
         <a href="{{ url_for('pedidos.estoque_loja_mapeamentos') }}" class="btn btn-sm btn-outline-primary">
             <i class="bi bi-link-45deg"></i> Mapeamentos
@@ -126,7 +126,7 @@
                         <th>Mapeado para</th>
                         <th class="text-center" style="width:90px;">Estado</th>
                         <th class="text-end" style="width:80px;">Atual</th>
-                        <th class="text-end" style="width:80px;">Saida</th>
+                        <th class="text-end" style="width:80px;">Saída</th>
                         <th class="text-end" style="width:90px;">Novo</th>
                         <th class="text-end" style="width:80px;">Faltou</th>
                     </tr>
@@ -201,7 +201,7 @@
             <input type="hidden" name="loja_id" value="{{ sel_loja or '' }}">
             <input type="hidden" name="referencia" value="{{ referencia|e }}">
             <button type="submit" class="btn btn-warning" {% if not n_mapeado %}disabled{% endif %}>
-                <i class="bi bi-check-circle"></i> Aplicar Saida ({{ n_mapeado }} item(ns))
+                <i class="bi bi-check-circle"></i> Aplicar Saída ({{ n_mapeado }} item(ns))
             </button>
         </form>
     </div>
