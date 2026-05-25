@@ -19,3 +19,15 @@
     <i class="bi bi-arrow-left"></i> {{ texto }}
 </a>
 {% endmacro %}
+
+
+{% macro page_header(titulo, icone='', sub='') %}
+{# Cabecalho padrao das telas de listagem: titulo (icone + subtitulo opcionais)
+   a esquerda, acoes a direita (vindas pelo corpo do {% raw %}{% call %}{% endraw %}).
+   Espelha o padrao d-flex ja usado na maioria das telas. Uso:
+     {% raw %}{% call page_header('Contas a Pagar', 'bi-receipt') %}<button>...</button>{% endcall %}{% endraw %} #}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0">{% if icone %}<i class="bi {{ icone }}"></i> {% endif %}{{ titulo }}{% if sub %} <small class="text-muted" style="font-size:11px;font-weight:normal;">{{ sub }}</small>{% endif %}</h1>
+    <div class="d-flex gap-2 flex-wrap">{{ caller() }}</div>
+</div>
+{% endmacro %}
