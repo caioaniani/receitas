@@ -328,6 +328,33 @@ def _parse_fator(raw):
         return None
 
 
+def _aplicar_acao_mapa(m):
+    """Aplica a acao do form (vincular/ignorar/desfazer) num ContaPagarItemMap.
+    Compartilhado entre a tela de mapeamentos e o vinculo no detalhe da conta."""
+    acao = request.form.get('acao')
+    if acao == 'ignorar':
+        m.ignorar = True
+        m.materia_prima_id = None
+        m.confirmado_em = None
+    elif acao == 'desfazer':
+        m.materia_prima_id = None
+        m.confirmado_em = None
+        m.confirmado_por = None
+        m.ignorar = False
+    else:  # vincular
+        mid = request.form.get('materia_prima_id')
+        m.materia_prima_id = int(mid) if mid and mid.isdigit() else None
+        m.unidade_compra = (request.form.get('unidade_compra') or '').strip() or None
+        fator = _parse_fator(request.form.get('fator_conversao'))
+        m.fator_conversao = fator if (fator and fator > 0) else 1.0
+        m.ignorar = False
+        if m.materia_prima_id:
+            m.confirmado_em = agora()
+            m.confirmado_por = current_user.id
+        else:
+            m.confirmado_em = None
+
+
 # ── Vinculo canal -> loja (cada canal = 1 empresa = 1 estoque) ──
 
 @contas_pagar_bp.route('/canais')
