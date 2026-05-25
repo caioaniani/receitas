@@ -277,27 +277,11 @@ def _run_slack_resumo_diario(app):
 
 def _run_slack_lembretes_amanha(app):
     """Job: posta lembretes pra lojas sem pedido pra amanha (9/12/16/19h BRT)."""
-    from app.extensions import db
     from app.services import slack_resumos
 
     with app.app_context():
-        uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
-        is_pg = 'postgresql' in uri
-        try:
-            if is_pg:
-                with db.engine.connect() as c:
-                    got = c.execute(text("SELECT pg_try_advisory_lock(7726)")).scalar()
-                    if not got:
-                        return
-            try:
-                slack_resumos.enviar_lembretes_pedido_amanha()
-            finally:
-                if is_pg:
-                    with db.engine.connect() as c:
-                        c.execute(text("SELECT pg_advisory_unlock(7726)"))
-                        c.commit()
-        except Exception:
-            logger.exception('slack lembrete pedido amanha falhou')
+        _com_lock(7726, slack_resumos.enviar_lembretes_pedido_amanha,
+                  'slack lembrete pedido amanha')
 
 
 def _run_zapi_digest_tarefas(app):
