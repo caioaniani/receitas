@@ -269,27 +269,10 @@ def _run_slack_resumo_diario(app):
 
     Usa pg_advisory_lock pra garantir 1x entre workers gunicorn.
     """
-    from app.extensions import db
     from app.services import slack_resumos
 
     with app.app_context():
-        uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
-        is_pg = 'postgresql' in uri
-        try:
-            if is_pg:
-                with db.engine.connect() as c:
-                    got = c.execute(text("SELECT pg_try_advisory_lock(7725)")).scalar()
-                    if not got:
-                        return  # outro worker pegou
-            try:
-                slack_resumos.enviar_resumo_pedidos_dia()
-            finally:
-                if is_pg:
-                    with db.engine.connect() as c:
-                        c.execute(text("SELECT pg_advisory_unlock(7725)"))
-                        c.commit()
-        except Exception:
-            logger.exception('slack resumo diario falhou')
+        _com_lock(7725, slack_resumos.enviar_resumo_pedidos_dia, 'slack resumo diario')
 
 
 def _run_slack_lembretes_amanha(app):
