@@ -40,6 +40,38 @@ LOCK_KEY_VNDA = 7724  # advisory lock pro VNDA
 LOCK_KEY_BACKUP = 7731  # advisory lock pro backup diario
 
 
+def _com_lock(key, fn, label='job'):
+    """Roda fn() protegida por advisory lock de sessao, com lock E unlock na
+    MESMA conexao. Critico: advisory lock e por sessao — se o unlock roda
+    noutra conexao do pool (bug antigo), o lock fica PRESO e os jobs seguintes
+    pulam pra sempre. Em SQLite/nao-pg roda direto. Se outro worker ja tem o
+    lock, pula silenciosamente."""
+    from app.extensions import db
+    if db.engine.dialect.name != 'postgresql':
+        try:
+            fn()
+        except Exception:
+            logger.exception('%s falhou', label)
+        return
+    conn = db.engine.connect()
+    try:
+        got = bool(conn.execute(text('SELECT pg_try_advisory_lock(:k)'),
+                                {'k': key}).scalar())
+        if not got:
+            return
+        try:
+            fn()
+        except Exception:
+            logger.exception('%s falhou', label)
+        finally:
+            try:
+                conn.execute(text('SELECT pg_advisory_unlock(:k)'), {'k': key})
+            except Exception:
+                pass
+    finally:
+        conn.close()
+
+
 def status():
     """Retorna info do scheduler pra UI mostrar (Seru).
     `ultimo_run` e um datetime UTC (pra template aplicar filtro |brt)."""
