@@ -346,7 +346,7 @@ def canais():
 @login_required
 @admin_required
 def canal_vincular(canal_id):
-    from app.services.conta_pagar_estoque import resolver_canal_map
+    from app.services.conta_pagar_estoque import normalizar_item_nome, resolver_canal_map
     m = resolver_canal_map(canal_id)
     acao = request.form.get('acao')
     if acao == 'ignorar':
@@ -358,10 +358,21 @@ def canal_vincular(canal_id):
         m.ignorar = False
         m.confirmado_em = None
         m.confirmado_por = None
-    else:  # vincular
-        lid = request.form.get('loja_id')
-        m.loja_id = int(lid) if lid and lid.isdigit() else None
-        m.eh_industria = bool(request.form.get('eh_industria'))
+    else:  # vincular — seletor unico: 'ind' (estoque global) ou id de loja
+        destino = (request.form.get('destino') or '').strip()
+        if destino == 'ind':
+            m.eh_industria = True
+            m.loja_id = None
+        elif destino.isdigit():
+            m.loja_id = int(destino)
+            loja = db.session.get(Loja, m.loja_id)
+            # Loja "Industria" sempre roteia pro estoque global, nunca EstoqueLoja.
+            m.eh_industria = bool(loja and normalizar_item_nome(loja.nome) == 'industria')
+            if m.eh_industria:
+                m.loja_id = None
+        else:
+            m.eh_industria = False
+            m.loja_id = None
         m.ignorar = False
         m.auto_match = False
         if m.loja_id or m.eh_industria:
