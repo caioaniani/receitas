@@ -232,7 +232,7 @@ def importar_historico(app, dias=30):
                         'files': m.get('files'),
                     }
                     try:
-                        total += processar(evento)
+                        total += processar(evento, aovivo=False)
                     except Exception:  # noqa: BLE001
                         logger.exception('importar_historico: msg %s falhou',
                                          m.get('ts'))
