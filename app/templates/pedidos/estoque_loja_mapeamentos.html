@@ -1,23 +1,23 @@
 {% extends "base.html" %}
 
-{% block title %}Mapeamentos — Saida em Lote{% endblock %}
+{% block title %}Mapeamentos — Saída em Lote{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h1 class="page-title mb-0"><i class="bi bi-link-45deg"></i> Mapeamentos — Saida em Lote</h1>
+    <h1 class="page-title mb-0"><i class="bi bi-link-45deg"></i> Mapeamentos — Saída em Lote</h1>
     <div class="d-flex gap-2">
         <a href="{{ url_for('pedidos.estoque_loja_historico_saida_lote') }}" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-clock-history"></i> Historico
         </a>
         <a href="{{ url_for('pedidos.estoque_loja_saida_lote') }}" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-arrow-left"></i> Voltar a Saida em Lote
+            <i class="bi bi-arrow-left"></i> Voltar a Saída em Lote
         </a>
     </div>
 </div>
 
 <div class="alert alert-info" style="font-size:13px;">
     <i class="bi bi-info-circle"></i>
-    <strong>Como funciona:</strong> nomes que voce digita em "Saida em Lote" entram aqui.
+    <strong>Como funciona:</strong> nomes que voce digita em "Saída em Lote" entram aqui.
     Vincule a uma <strong>Receita / Produto / Materia-Prima</strong> e ele lembra pra sempre.
     Ou clique <strong>Ignorar</strong> pra nunca processar (ex: cafe, bala). Pendentes nao baixam estoque.
 </div>
@@ -152,7 +152,7 @@
     </div>
     {% else %}
     <div class="card-body text-muted text-center py-3">
-        Nenhum nome registrado ainda. Use "Saida em Lote" — ao colar a lista,
+        Nenhum nome registrado ainda. Use "Saída em Lote" — ao colar a lista,
         cada nome novo aparece aqui automaticamente como <strong>pendente</strong>.
     </div>
     {% endif %}
