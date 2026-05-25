@@ -3,7 +3,16 @@
 {% block title %}Itens NF → Matéria-prima{% endblock %}
 
 {% block content %}
-<h1 class="page-title mb-3"><i class="bi bi-link-45deg"></i> Itens de NF → Matéria-prima</h1>
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h1 class="page-title mb-0"><i class="bi bi-link-45deg"></i> Itens de NF → Matéria-prima</h1>
+  {% if current_user.is_owner %}
+  <form method="POST" action="{{ url_for('contas_pagar.mapeamentos_limpar_nomes') }}" class="mb-0"
+        onsubmit="return confirm('Juntar itens duplicados (mesmo produto com lote/validade diferentes) e limpar os nomes? Os vínculos já confirmados são preservados.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-sm btn-outline-dark"><i class="bi bi-stars"></i> Limpar e juntar duplicados</button>
+  </form>
+  {% endif %}
+</div>
 
 <div class="alert alert-light border small py-2">
   <i class="bi bi-info-circle"></i>
