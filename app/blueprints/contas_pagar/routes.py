@@ -328,14 +328,17 @@ def _parse_fator(raw):
 @login_required
 @admin_required
 def canais():
-    from app.services.conta_pagar_estoque import resolver_canal_map
+    from app.services.conta_pagar_estoque import normalizar_item_nome, resolver_canal_map
     mapa_lojas = _mapa_lojas_nf()
     linhas = []
     for cid, nome in mapa_lojas.items():
         m = resolver_canal_map(cid)
         linhas.append({'canal_id': cid, 'nome_canal': nome, 'mapa': m})
     db.session.commit()  # persiste mapas criados (auto-fuzzy) na 1a visita
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    # Industria nao entra na lista: e escolhida pela opcao dedicada do seletor
+    # (estoque global de producao), nunca como uma EstoqueLoja.
+    lojas = [lj for lj in Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+             if normalizar_item_nome(lj.nome) != 'industria']
     return render_template('contas_pagar/canais.html', linhas=linhas, lojas=lojas)
 
 
