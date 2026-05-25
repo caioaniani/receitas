@@ -35,6 +35,17 @@ def test_tela_canais_e_vincular(app, admin_user):
         m = SlackCanalLojaMap.query.filter_by(canal_id='C_LOJA').first()
         assert m.loja_id == rib_id and m.confirmado_em is not None
 
+    # Furo de roteamento fechado: escolher a loja "Industria" pelo id roteia
+    # pro estoque global (eh_industria), nunca pra uma EstoqueLoja.
+    with app.app_context():
+        ind_id = Loja.query.filter_by(nome='Industria').first().id
+    c.post('/contas-pagar/canais/C_LOJA',
+           data={'acao': 'vincular', 'destino': str(ind_id)},
+           follow_redirects=True)
+    with app.app_context():
+        m = SlackCanalLojaMap.query.filter_by(canal_id='C_LOJA').first()
+        assert m.eh_industria is True and m.loja_id is None
+
 
 def test_tela_mapeamentos_e_vincular(app, admin_user):
     from app.extensions import db
