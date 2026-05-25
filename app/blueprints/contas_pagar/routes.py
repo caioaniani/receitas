@@ -445,28 +445,7 @@ def mapeamentos():
 @admin_required
 def mapeamento_vincular(id):
     m = ContaPagarItemMap.query.get_or_404(id)
-    acao = request.form.get('acao')
-    if acao == 'ignorar':
-        m.ignorar = True
-        m.materia_prima_id = None
-        m.confirmado_em = None
-    elif acao == 'desfazer':
-        m.materia_prima_id = None
-        m.confirmado_em = None
-        m.confirmado_por = None
-        m.ignorar = False
-    else:  # vincular
-        mid = request.form.get('materia_prima_id')
-        m.materia_prima_id = int(mid) if mid and mid.isdigit() else None
-        m.unidade_compra = (request.form.get('unidade_compra') or '').strip() or None
-        fator = _parse_fator(request.form.get('fator_conversao'))
-        m.fator_conversao = fator if (fator and fator > 0) else 1.0
-        m.ignorar = False
-        if m.materia_prima_id:
-            m.confirmado_em = agora()
-            m.confirmado_por = current_user.id
-        else:
-            m.confirmado_em = None
+    _aplicar_acao_mapa(m)
     db.session.commit()
     flash('Mapeamento atualizado.', 'success')
     return redirect(url_for('contas_pagar.mapeamentos',
