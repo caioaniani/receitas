@@ -149,6 +149,31 @@ def test_importar_historico_para_em_30_dias(app):
         assert ContaPagar.query.count() == 0
 
 
+def test_importar_historico_filtra_por_canal(app):
+    """canais=[...] varre so os canais pedidos (e so os que estao em
+    SLACK_CANAIS_NF); None varre todos os configurados."""
+    from app.services import conta_pagar_slack
+    with app.app_context():
+        app.config['SLACK_CANAIS_NF'] = 'C_IND,C_LOJA'
+        chamados = []
+
+        def fake_hist(canal, oldest=None, cursor=None):
+            chamados.append(canal)
+            return [], None
+
+        with patch('app.services.slack.historico_canal', side_effect=fake_hist):
+            conta_pagar_slack.importar_historico(app, dias=30, canais=['C_IND'])
+            assert chamados == ['C_IND']  # so a industria
+
+            chamados.clear()
+            conta_pagar_slack.importar_historico(app, dias=30, canais=['C_FORA'])
+            assert chamados == []  # canal fora da config e ignorado
+
+            chamados.clear()
+            conta_pagar_slack.importar_historico(app, dias=30)
+            assert sorted(chamados) == ['C_IND', 'C_LOJA']  # None = todos
+
+
 def test_slack_bot_intercepta_canal_nf(app):
     """slack_bot roteia canal de NF pro handler e NAO chama copilot."""
     from app.services import slack_bot
