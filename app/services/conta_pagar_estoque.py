@@ -61,6 +61,44 @@ def normalizar_item_nome(nome):
     return re.sub(r'\s+', ' ', base).strip()
 
 
+def migrar_nomes_itens():
+    """One-shot: re-normaliza os ContaPagarItemMap com a regra nova (ignora
+    validade/lote) e MESCLA os que passam a colidir, preservando os vinculos
+    confirmados. Idempotente. Retorna stats.
+
+    Grupos com mais de uma MP confirmada distinta sao deixados como estao
+    (conflito real — humano revisa); nunca apaga um vinculo confirmado."""
+    grupos = {}
+    for m in ContaPagarItemMap.query.all():
+        novo = normalizar_item_nome(m.item_nome_exemplo or '')
+        if not novo:
+            continue
+        grupos.setdefault(novo, []).append(m)
+    stats = {'grupos': 0, 'mesclados': 0, 'atualizados': 0, 'conflitos': 0}
+    for novo_norm, grupo in grupos.items():
+        mps_conf = {m.materia_prima_id for m in grupo
+                    if m.confirmado_em and m.materia_prima_id}
+        if len(mps_conf) > 1:
+            stats['conflitos'] += 1
+            logger.warning('migrar_nomes_itens: conflito em "%s" (MPs %s) — '
+                           'mantido sem mesclar', novo_norm, mps_conf)
+            continue
+        stats['grupos'] += 1
+        # vencedor: confirmado primeiro, senao o de menor id
+        grupo.sort(key=lambda m: (0 if (m.confirmado_em and m.materia_prima_id)
+                                  else 1, m.id))
+        vencedor = grupo[0]
+        for perdedor in grupo[1:]:
+            db.session.delete(perdedor)
+            stats['mesclados'] += 1
+        db.session.flush()  # aplica deletes antes de reescrever a chave unica
+        vencedor.item_nome_norm = novo_norm
+        vencedor.item_nome_exemplo = limpar_nome_item(vencedor.item_nome_exemplo or '')
+        stats['atualizados'] += 1
+    db.session.commit()
+    return stats
+
+
 def sugerir_para_item(nome):
     """Sugestoes de MateriaPrima pra um nome de item (pra UI de mapeamento).
 
