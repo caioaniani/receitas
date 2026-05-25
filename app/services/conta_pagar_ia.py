@@ -61,6 +61,9 @@ SYSTEM_PROMPT = (
     "No boleto, o campo 'No documento'/'Numero do documento' costuma ser o "
     "numero da nota fiscal que ele cobra — extraia em 'nf_numero' pra casar o "
     "boleto com a NF. "
+    "NUMEROS: transcreva o numero da NF/documento digito a digito, EXATAMENTE "
+    "como impresso (confira o ULTIMO digito); ignore ponto de milhar; NUNCA "
+    "arredonde nem complete. Ex: 'No 454.898' -> '454898'. "
     "Nota fiscal: priorize fornecedor, numero, valor total e itens. "
     "Se nao for documento de compra, retorna {\"erro\": \"nao_reconhecido\"}."
 )
