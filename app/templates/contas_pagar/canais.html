@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Canais → Loja{% endblock %}
+
+{% block content %}
+<h1 class="page-title mb-3"><i class="bi bi-diagram-3"></i> Canais de NF → Loja</h1>
+
+<div class="alert alert-light border small py-2">
+  <i class="bi bi-info-circle"></i>
+  Cada canal de recebimento de NF corresponde a uma empresa. A entrada de estoque
+  das NFs de um canal vai pro estoque dessa empresa. <b>Enquanto o vínculo não for
+  confirmado, as NFs ficam aguardando (não dão entrada).</b>
+  Marque <b>Indústria</b> quando a entrada deve ir pro estoque global de produção
+  (de onde a fábrica baixa ao produzir) em vez do estoque de uma loja.
+</div>
+
+{% for ln in linhas %}
+{% set m = ln.mapa %}
+<form method="POST" action="{{ url_for('contas_pagar.canal_vincular', canal_id=ln.canal_id) }}"
+      class="card mb-2">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="card-body py-2 d-flex flex-wrap gap-2 align-items-center">
+    <div class="flex-grow-1" style="min-width:200px">
+      <b>{{ ln.nome_canal }}</b>
+      <span class="text-muted small">({{ ln.canal_id }})</span>
+      {% if m.estado == 'mapeado' %}
+        <span class="badge bg-success">confirmado</span>
+      {% elif m.estado == 'ignorado' %}
+        <span class="badge bg-secondary">ignorado</span>
+      {% else %}
+        <span class="badge bg-warning text-dark">pendente</span>
+      {% endif %}
+      {% if m.auto_match and not m.confirmado_em %}
+        <span class="badge bg-info text-dark" title="sugestão automática pelo nome">auto</span>
+      {% endif %}
+    </div>
+    <select name="loja_id" class="form-select form-select-sm" style="max-width:240px">
+      <option value="">— escolha a loja —</option>
+      {% for lj in lojas %}
+      <option value="{{ lj.id }}" {% if m.loja_id == lj.id %}selected{% endif %}>{{ lj.nome }}</option>
+      {% endfor %}
+    </select>
+    <div class="form-check" title="Entrada vai pro estoque global de produção">
+      <input class="form-check-input" type="checkbox" name="eh_industria" value="1"
+             id="ind-{{ m.id }}" {% if m.eh_industria %}checked{% endif %}>
+      <label class="form-check-label small" for="ind-{{ m.id }}">Indústria</label>
+    </div>
+    <button class="btn btn-sm btn-primary" name="acao" value="vincular">Confirmar</button>
+    <button class="btn btn-sm btn-outline-secondary" name="acao" value="ignorar">Ignorar</button>
+    {% if m.confirmado_em or m.ignorar %}
+    <button class="btn btn-sm btn-outline-danger" name="acao" value="desfazer">Desfazer</button>
+    {% endif %}
+  </div>
+</form>
+{% else %}
+<p class="text-muted">Nenhum canal configurado em <code>SLACK_CANAIS_NF</code>.</p>
+{% endfor %}
+{% endblock %}
