@@ -263,8 +263,14 @@ def reextrair(id):
     conta.editado_em = agora()
     conta.editado_por_id = current_user.id
     db.session.commit()
-    flash('Documento relido pela IA. Confira os campos, principalmente o '
-          'vencimento.', 'success')
+    # A re-leitura pode ter preenchido o numero do documento (boleto) — tenta
+    # juntar ao par (NF <-> boleto) automaticamente.
+    from app.services import conta_pagar as cp_dominio
+    if cp_dominio.tentar_agrupar(conta):
+        flash('Documento relido e vinculado ao seu par (NF ↔ boleto).', 'success')
+    else:
+        flash('Documento relido pela IA. Confira os campos, principalmente o '
+              'vencimento.', 'success')
     return redirect(url_for('contas_pagar.detalhe', id=id))
 
 
