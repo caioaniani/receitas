@@ -252,12 +252,17 @@ def processar_conta(conta, user_id=None, aovivo=True):
         fator = mapa.fator_conversao or 1.0
         if fator <= 0:
             fator = 1.0
-        preco_por_compra = vtot / qtd_nf
-        custo_base = preco_por_compra / fator
-        qtd_estoque = qtd_nf * fator
-
         mp = mapa.materia_prima
         custo_anterior = mp.custo_por_kg
+        preco_por_compra = vtot / qtd_nf
+        qtd_estoque = qtd_nf * fator
+        # custo_por_kg guarda custo por KG (unidade g/kg/ml) ou por UNIDADE ('un').
+        # O fator esta na unidade de ESTOQUE da MP; pra g/ml ela e 1000x menor
+        # que o kg, entao converte o fator pra kg SO no custo (o estoque continua
+        # na unidade da MP — gramas/ml). Ex: acai 10000 g/cx -> custo por kg usa 10.
+        unid = (mp.unidade or '').lower()
+        fator_custo = fator / 1000.0 if unid in ('g', 'ml') else fator
+        custo_base = preco_por_compra / fator_custo if fator_custo else preco_por_compra
 
         forn = _resolver_ou_criar_fornecedor(conta.fornecedor_nome)
         if forn and not conta.fornecedor_id:
