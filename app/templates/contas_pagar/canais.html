@@ -16,9 +16,7 @@
 
 {% for ln in linhas %}
 {% set m = ln.mapa %}
-<form method="POST" action="{{ url_for('contas_pagar.canal_vincular', canal_id=ln.canal_id) }}"
-      class="card mb-2">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<div class="card mb-2">
   <div class="card-body py-2 d-flex flex-wrap gap-2 align-items-center">
     <div class="flex-grow-1" style="min-width:200px">
       <b>{{ ln.nome_canal }}</b>
@@ -34,21 +32,33 @@
         <span class="badge bg-info text-dark" title="sugestão automática pelo nome">auto</span>
       {% endif %}
     </div>
-    <select name="destino" class="form-select form-select-sm" style="max-width:300px"
-            title="Para onde vai a entrada de estoque das NFs deste canal">
-      <option value="">— destino do estoque —</option>
-      <option value="ind" {% if m.eh_industria %}selected{% endif %}>Indústria (estoque global de produção)</option>
-      {% for lj in lojas %}
-      <option value="{{ lj.id }}" {% if not m.eh_industria and m.loja_id == lj.id %}selected{% endif %}>{{ lj.nome }}</option>
-      {% endfor %}
-    </select>
-    <button class="btn btn-sm btn-primary" name="acao" value="vincular">Confirmar</button>
-    <button class="btn btn-sm btn-outline-secondary" name="acao" value="ignorar">Ignorar</button>
-    {% if m.confirmado_em or m.ignorar %}
-    <button class="btn btn-sm btn-outline-danger" name="acao" value="desfazer">Desfazer</button>
-    {% endif %}
+    <form method="POST" action="{{ url_for('contas_pagar.canal_vincular', canal_id=ln.canal_id) }}"
+          class="d-flex flex-wrap gap-2 align-items-center mb-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <select name="destino" class="form-select form-select-sm" style="max-width:300px"
+              title="Para onde vai a entrada de estoque das NFs deste canal">
+        <option value="">— destino do estoque —</option>
+        <option value="ind" {% if m.eh_industria %}selected{% endif %}>Indústria (estoque global de produção)</option>
+        {% for lj in lojas %}
+        <option value="{{ lj.id }}" {% if not m.eh_industria and m.loja_id == lj.id %}selected{% endif %}>{{ lj.nome }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-sm btn-primary" name="acao" value="vincular">Confirmar</button>
+      <button class="btn btn-sm btn-outline-secondary" name="acao" value="ignorar">Ignorar</button>
+      {% if m.confirmado_em or m.ignorar %}
+      <button class="btn btn-sm btn-outline-danger" name="acao" value="desfazer">Desfazer</button>
+      {% endif %}
+    </form>
+    <form method="POST" action="{{ url_for('contas_pagar.importar_historico') }}" class="mb-0"
+          onsubmit="return confirm('Importar os últimos 30 dias de NF/boleto SÓ deste canal? É idempotente (não duplica o que já existe) e não mexe no estoque — só cria as contas e os itens a vincular.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="canal_id" value="{{ ln.canal_id }}">
+      <button class="btn btn-sm btn-outline-dark" title="Importar NFs dos últimos 30 dias só deste canal">
+        <i class="bi bi-clock-history"></i> Importar 30d
+      </button>
+    </form>
   </div>
-</form>
+</div>
 {% else %}
 <p class="text-muted">Nenhum canal configurado em <code>SLACK_CANAIS_NF</code>.</p>
 {% endfor %}
