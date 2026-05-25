@@ -34,7 +34,7 @@ SYSTEM_PROMPT = (
     '  "vencimento": str (YYYY-MM-DD, se houver),\n'
     '  "vencimento_texto": str (a data de vencimento EXATAMENTE como aparece '
     'no documento, ex "08/05/2026"),\n'
-    '  "nf_numero": str (numero da NF, se houver),\n'
+    '  "nf_numero": str (numero da NF; no boleto, o "No documento" que casa com a NF),\n'
     '  "codigo_barras": str (so digitos do codigo de barras do boleto),\n'
     '  "linha_digitavel": str (linha digitavel do boleto, se houver),\n'
     '  "info_pagamento": str (pix/instrucoes, se houver),\n'
