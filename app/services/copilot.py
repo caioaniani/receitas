@@ -2213,10 +2213,19 @@ def _read_consultar_vendas_itens(params, user):
     dias_extra = min(dias_ate_hoje, 7)
     try:
         if loja:
-            # Filtro por loja Seru — versao crua, so Seru
-            data = vendas_itens.agregar_itens(ini, fim, loja_seru=loja,
-                                              expandir_dias_frente=dias_extra)
-            fonte_label = 'PDV/Seru'
+            from app.services.vnda_sync import loja_vnda
+            from app.utils import resolver_loja_por_nome
+            loja_obj = resolver_loja_por_nome(loja)
+            lv = loja_vnda()
+            if loja_obj and lv and loja_obj.id == lv.id:
+                # Loja do site (Anesio): nao tem PDV Seru — vendas vem do VNDA.
+                data = vendas_itens.vendas_vnda_loja(ini, fim)
+                fonte_label = 'e-commerce/VNDA'
+            else:
+                # Filtro por loja Seru — versao crua, so Seru
+                data = vendas_itens.agregar_itens(ini, fim, loja_seru=loja,
+                                                  expandir_dias_frente=dias_extra)
+                fonte_label = 'PDV/Seru'
         else:
             # Sem filtro de loja → consolida Seru + VNDA
             data = vendas_itens.agregar_itens_consolidado(ini, fim)
