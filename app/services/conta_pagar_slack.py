@@ -139,6 +139,16 @@ def processar(evento, aovivo=True):
         except Exception:  # noqa: BLE001
             logger.exception('conta_pagar_slack: agrupamento falhou (file %s)', file_id)
 
+        # Preco + entrada de estoque dos itens ja mapeados+confirmados. Itens
+        # novos viram mapeamentos pendentes (nao bloqueiam). aovivo=False so
+        # cria os pendentes, sem tocar no estoque.
+        try:
+            from app.services import conta_pagar_estoque
+            conta_pagar_estoque.processar_conta(conta, aovivo=aovivo)
+        except Exception:  # noqa: BLE001
+            logger.exception('conta_pagar_slack: processar estoque falhou (file %s)',
+                             file_id)
+
     return criadas
 
 
