@@ -176,23 +176,64 @@
             </div>
         </div>
 
-        {% if itens %}
+        {% if itens_vinc %}
         <div class="card mt-3">
-            <div class="card-header py-2"><strong>Itens (extraídos da NF)</strong></div>
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                <strong>Itens da NF → matéria-prima</strong>
+                <a href="{{ url_for('contas_pagar.mapeamentos') }}" class="small">ver todos os vínculos</a>
+            </div>
             <div class="card-body">
-                <table class="table table-sm mb-0">
-                    <thead class="table-light"><tr><th>Item</th><th class="text-end">Qtd</th><th class="text-end">Vl unit</th><th class="text-end">Total</th></tr></thead>
-                    <tbody>
-                        {% for it in itens %}
-                        <tr>
-                            <td>{{ it.get('nome', '—') }}</td>
-                            <td class="text-end">{{ it.get('quantidade', '') }}</td>
-                            <td class="text-end">{{ it.get('valor_unitario', '') }}</td>
-                            <td class="text-end">{{ it.get('valor_total', '') }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <p class="small text-muted">Confira cada item conforme a nota e vincule à matéria-prima. No <b>fator</b>, diga quanto <b>1 unidade de compra</b> da NF representa na unidade da MP (ex.: 1 caixa = <b>300</b> un). O vínculo vale pra todas as NFs com esse mesmo item.</p>
+                {% for iv in itens_vinc %}
+                {% set it = iv.item %}
+                {% set m = iv.mapa %}
+                <div class="border rounded p-2 mb-2">
+                    <div class="d-flex flex-wrap justify-content-between gap-2">
+                        <div style="min-width:160px">
+                            <b>{{ it.get('nome', '—') }}</b>
+                            {% if m and m.estado == 'mapeado' %}
+                                <span class="badge bg-success" title="vinculado">{{ m.alvo_nome }}</span>
+                            {% elif m and m.estado == 'ignorado' %}
+                                <span class="badge bg-secondary">ignorado</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">a vincular</span>
+                            {% endif %}
+                        </div>
+                        <div class="small text-muted">
+                            qtd <b>{{ it.get('quantidade', '—') }}</b>{% if it.get('unidade') %} {{ it.get('unidade') }}{% endif %}
+                            · unit R$ {{ it.get('valor_unitario', '—') }}
+                            · total R$ {{ it.get('valor_total', '—') }}
+                        </div>
+                    </div>
+                    <form method="POST" action="{{ url_for('contas_pagar.item_vincular', id=conta.id, indice=iv.indice) }}"
+                          class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <select name="materia_prima_id" class="form-select form-select-sm" style="max-width:220px">
+                            <option value="">— matéria-prima —</option>
+                            {% for mp in mps %}
+                            <option value="{{ mp.id }}"
+                              {% if (m and m.materia_prima_id == mp.id) or (not m and iv.sugestoes and iv.sugestoes[0].id == mp.id) %}selected{% endif %}>
+                              {{ mp.nome }} ({{ mp.unidade }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <input type="text" name="unidade_compra" class="form-control form-control-sm" style="max-width:100px"
+                               placeholder="un compra" value="{{ (m.unidade_compra if m else '') or it.get('unidade') or '' }}"
+                               title="unidade de compra (cx, fardo, kg...)">
+                        <input type="number" step="any" name="fator_conversao" class="form-control form-control-sm" style="max-width:100px"
+                               placeholder="fator" value="{{ m.fator_conversao if (m and m.materia_prima_id) else (it.get('fator_embalagem') or '') }}"
+                               title="quantas unidades-base há em 1 unidade de compra">
+                        <button class="btn btn-sm btn-primary" name="acao" value="vincular">Vincular</button>
+                        <button class="btn btn-sm btn-outline-secondary" name="acao" value="ignorar">Ignorar</button>
+                        {% if m and (m.confirmado_em or m.ignorar) %}
+                        <button class="btn btn-sm btn-outline-danger" name="acao" value="desfazer">Desfazer</button>
+                        {% endif %}
+                    </form>
+                    {% if iv.sugestoes %}
+                    <div class="small text-muted mt-1">Sugestões: {% for s in iv.sugestoes %}<span class="badge bg-light text-dark border">{{ s.nome }}</span> {% endfor %}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
             </div>
         </div>
         {% endif %}
