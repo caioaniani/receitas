@@ -28,7 +28,7 @@ def test_tela_canais_e_vincular(app, admin_user):
         assert ind is not None and ind.eh_industria is True
 
     r2 = c.post('/contas-pagar/canais/C_LOJA',
-                data={'acao': 'vincular', 'loja_id': str(rib_id)},
+                data={'acao': 'vincular', 'destino': str(rib_id)},
                 follow_redirects=True)
     assert r2.status_code == 200
     with app.app_context():
