@@ -13,7 +13,10 @@ from flask_login import current_user, login_required
 from app.blueprints.contas_pagar import contas_pagar_bp
 from app.decorators import admin_required, owner_required
 from app.extensions import db
-from app.models import ContaPagar, Fornecedor
+from app.models import (
+    ContaPagar,
+    Fornecedor,
+)
 from app.utils import agora
 
 # Abas por status (slug, label, status no banco).
