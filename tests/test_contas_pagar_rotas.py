@@ -42,7 +42,7 @@ def test_botao_importar_historico_owner_only(app, admin_user):
     from app.extensions import db
     from app.models import Usuario
     with app.app_context():
-        dono = Usuario(nome='dono teste', login='dono', papel='owner')
+        dono = Usuario(nome='dono teste', login='dono', papel='admin', is_owner=True)
         dono.set_senha('123')
         db.session.add(dono)
         db.session.commit()
