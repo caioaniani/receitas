@@ -43,6 +43,15 @@
         {% elif m.estado == 'ignorado' %}
           <span class="badge bg-secondary">ignorado</span>
         {% endif %}
+        {% set ex = exemplos.get(m.item_nome_norm) %}
+        {% if ex %}
+        <div class="small text-muted">
+          NF: qtd <b>{{ ex.quantidade if ex.quantidade is not none else '—' }}</b>{% if ex.unidade %} {{ ex.unidade }}{% endif %}
+          · unit R$ {{ ex.valor_unitario if ex.valor_unitario is not none else '—' }}
+          · total R$ {{ ex.valor_total if ex.valor_total is not none else '—' }}
+          {% if ex.n_notas and ex.n_notas > 1 %}· em {{ ex.n_notas }} notas{% endif %}
+        </div>
+        {% endif %}
       </div>
       <select name="materia_prima_id" class="form-select form-select-sm" style="max-width:240px">
         <option value="">— matéria-prima —</option>
