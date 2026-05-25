@@ -54,22 +54,41 @@ def _parse_data(raw):
 
 
 def _mapa_lojas_nf():
-    """OrderedDict {canal_id: nome_loja} dos canais de NF. Nome vem do config
-    SLACK_CANAIS_NF_NOMES; canais sem nome no config caem pro nome do canal
-    Slack (e por fim o ID)."""
+    """OrderedDict {canal_id: nome_loja} dos canais de NF. Prioriza o vinculo
+    confirmado na tela Canais -> Loja (SlackCanalLojaMap); senao o nome do
+    config SLACK_CANAIS_NF_NOMES; senao o nome do canal no Slack (e por fim o ID)."""
     from collections import OrderedDict
 
-    mapa = OrderedDict()
+    from app.models import SlackCanalLojaMap
+
+    cfg = {}
     raw = (current_app.config.get('SLACK_CANAIS_NF_NOMES') or '').strip()
     for par in raw.split(';'):
         par = par.strip()
         if '=' in par:
             cid, nome = par.split('=', 1)
             if cid.strip():
-                mapa[cid.strip()] = nome.strip()
+                cfg[cid.strip()] = nome.strip()
+
+    vinc = {}
+    for m in SlackCanalLojaMap.query.all():
+        if m.eh_industria:
+            vinc[m.canal_id] = 'Indústria'
+        elif m.loja_id and m.loja:
+            vinc[m.canal_id] = m.loja.nome
+
+    mapa = OrderedDict()
     ids = (current_app.config.get('SLACK_CANAIS_NF') or '').strip()
-    for cid in (c.strip() for c in ids.split(',') if c.strip()):
-        if cid not in mapa:
+    canais = [c.strip() for c in ids.split(',') if c.strip()]
+    for cid in cfg:                  # canais que so estao no config tambem entram
+        if cid not in canais:
+            canais.append(cid)
+    for cid in canais:
+        if cid in vinc:
+            mapa[cid] = vinc[cid]
+        elif cid in cfg:
+            mapa[cid] = cfg[cid]
+        else:
             from app.services import slack as slack_api
             mapa[cid] = slack_api.nome_canal(cid)
     return mapa
