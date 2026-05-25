@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Itens NF → Matéria-prima{% endblock %}
+
+{% block content %}
+<h1 class="page-title mb-3"><i class="bi bi-link-45deg"></i> Itens de NF → Matéria-prima</h1>
+
+<div class="alert alert-light border small py-2">
+  <i class="bi bi-info-circle"></i>
+  Vincule o nome do item como aparece na NF a uma matéria-prima cadastrada, e diga
+  quanto <b>1 unidade de compra</b> representa na unidade da matéria-prima
+  (ex.: 1 caixa = <b>300</b> unidades; 1 fardo = <b>25</b> kg). A IA sugere — você
+  confirma. Depois de confirmado, as próximas NFs atualizam preço e estoque
+  automaticamente.
+</div>
+
+<ul class="nav nav-tabs mb-3">
+  {% for slug, label in [('pendente','Pendentes'),('mapeado','Vinculados'),('ignorado','Ignorados')] %}
+  <li class="nav-item">
+    <a class="nav-link {% if estado == slug %}active{% endif %}"
+       href="{{ url_for('contas_pagar.mapeamentos', estado=slug) }}">
+      {{ label }}
+      {% if contagens.get(slug) %}
+      <span class="badge rounded-pill {% if estado == slug %}bg-primary{% else %}bg-secondary{% endif %}">{{ contagens[slug] }}</span>
+      {% endif %}
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+
+{% for m in maps %}
+{% set sug = sugestoes.get(m.id) %}
+<form method="POST" action="{{ url_for('contas_pagar.mapeamento_vincular', id=m.id) }}"
+      class="card mb-2">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="estado" value="{{ estado }}">
+  <div class="card-body py-2">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <div class="flex-grow-1" style="min-width:180px">
+        <b>{{ m.item_nome_exemplo }}</b>
+        {% if m.estado == 'mapeado' %}
+          <span class="badge bg-success">{{ m.alvo_nome }}</span>
+        {% elif m.estado == 'ignorado' %}
+          <span class="badge bg-secondary">ignorado</span>
+        {% endif %}
+      </div>
+      <select name="materia_prima_id" class="form-select form-select-sm" style="max-width:240px">
+        <option value="">— matéria-prima —</option>
+        {% for mp in mps %}
+        <option value="{{ mp.id }}"
+          {% if m.materia_prima_id == mp.id or (not m.materia_prima_id and sug and sug[0].id == mp.id) %}selected{% endif %}>
+          {{ mp.nome }} ({{ mp.unidade }})
+        </option>
+        {% endfor %}
+      </select>
+      <input type="text" name="unidade_compra" class="form-control form-control-sm"
+             style="max-width:110px" placeholder="un compra"
+             value="{{ m.unidade_compra or m.ia_unidade_sugerida or '' }}"
+             title="unidade de compra (cx, fardo, kg...)">
+      <input type="number" step="any" name="fator_conversao" class="form-control form-control-sm"
+             style="max-width:110px" placeholder="fator"
+             value="{{ m.fator_conversao if m.materia_prima_id else (m.ia_fator_sugerido or '') }}"
+             title="quantas unidades-base há em 1 unidade de compra">
+      <button class="btn btn-sm btn-primary" name="acao" value="vincular">Confirmar</button>
+      <button class="btn btn-sm btn-outline-secondary" name="acao" value="ignorar">Ignorar</button>
+      {% if m.confirmado_em or m.ignorar %}
+      <button class="btn btn-sm btn-outline-danger" name="acao" value="desfazer">Desfazer</button>
+      {% endif %}
+    </div>
+    {% if sug %}
+    <div class="small text-muted mt-1">
+      Sugestões: {% for s in sug %}<span class="badge bg-light text-dark border">{{ s.nome }} ({{ s.unidade }})</span> {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</form>
+{% else %}
+<p class="text-muted">Nenhum item nesta aba.</p>
+{% endfor %}
+{% endblock %}
