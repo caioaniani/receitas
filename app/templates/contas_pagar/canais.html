@@ -34,17 +34,14 @@
         <span class="badge bg-info text-dark" title="sugestão automática pelo nome">auto</span>
       {% endif %}
     </div>
-    <select name="loja_id" class="form-select form-select-sm" style="max-width:240px">
-      <option value="">— escolha a loja —</option>
+    <select name="destino" class="form-select form-select-sm" style="max-width:300px"
+            title="Para onde vai a entrada de estoque das NFs deste canal">
+      <option value="">— destino do estoque —</option>
+      <option value="ind" {% if m.eh_industria %}selected{% endif %}>Indústria (estoque global de produção)</option>
       {% for lj in lojas %}
-      <option value="{{ lj.id }}" {% if m.loja_id == lj.id %}selected{% endif %}>{{ lj.nome }}</option>
+      <option value="{{ lj.id }}" {% if not m.eh_industria and m.loja_id == lj.id %}selected{% endif %}>{{ lj.nome }}</option>
       {% endfor %}
     </select>
-    <div class="form-check" title="Entrada vai pro estoque global de produção">
-      <input class="form-check-input" type="checkbox" name="eh_industria" value="1"
-             id="ind-{{ m.id }}" {% if m.eh_industria %}checked{% endif %}>
-      <label class="form-check-label small" for="ind-{{ m.id }}">Indústria</label>
-    </div>
     <button class="btn btn-sm btn-primary" name="acao" value="vincular">Confirmar</button>
     <button class="btn btn-sm btn-outline-secondary" name="acao" value="ignorar">Ignorar</button>
     {% if m.confirmado_em or m.ignorar %}
