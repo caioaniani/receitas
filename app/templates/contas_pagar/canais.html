@@ -49,6 +49,7 @@
       <button class="btn btn-sm btn-outline-danger" name="acao" value="desfazer">Desfazer</button>
       {% endif %}
     </form>
+    {% if current_user.is_owner %}
     <form method="POST" action="{{ url_for('contas_pagar.importar_historico') }}" class="mb-0"
           onsubmit="return confirm('Importar os últimos 30 dias de NF/boleto SÓ deste canal? É idempotente (não duplica o que já existe) e não mexe no estoque — só cria as contas e os itens a vincular.');">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -57,6 +58,7 @@
         <i class="bi bi-clock-history"></i> Importar 30d
       </button>
     </form>
+    {% endif %}
   </div>
 </div>
 {% else %}
