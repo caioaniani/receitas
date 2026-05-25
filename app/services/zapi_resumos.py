@@ -91,7 +91,8 @@ def enviar_digest_tarefas():
         return
 
     texto = montar_digest_tarefas(user)
-    res = zapi.enviar_texto(numero, texto)
+    from app.services.whatsapp import notificar
+    res = notificar(numero, texto, 'digest_tarefas')
     if res.get('ok'):
         logger.info('zapi_resumos: digest enviado pra %s', numero)
     else:
