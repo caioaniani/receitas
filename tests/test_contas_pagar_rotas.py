@@ -36,36 +36,36 @@ def test_lista_abas(app, admin_user):
     assert r2.status_code == 200
 
 
-def test_botao_importar_historico_owner_only(app):
-    """O botao 'Importar historico' (rota owner-only) aparece pra owner e some
-    pra admin comum. Logins proprios pra nao colidir com o admin do startup."""
+def test_botao_importar_historico_aparece_pro_owner(app):
+    """O botao 'Importar historico' (rota owner-only) aparece pro owner."""
     from app.extensions import db
     from app.models import Usuario
     with app.app_context():
         dono = Usuario(nome='dono teste', login='dono_cp', papel='admin', is_owner=True)
         dono.set_senha('123')
+        db.session.add(dono)
+        db.session.commit()
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'dono_cp', 'senha': '123'})
+    r = c.get('/contas-pagar/')
+    assert r.status_code == 200
+    assert 'Importar histórico'.encode() in r.data
+
+
+def test_botao_importar_historico_oculto_pro_admin(app):
+    """Admin comum (nao-owner) nao ve o botao de importar historico."""
+    from app.extensions import db
+    from app.models import Usuario
+    with app.app_context():
         comum = Usuario(nome='admin comum', login='admin_cp', papel='admin', is_owner=False)
         comum.set_senha('123')
-        db.session.add_all([dono, comum])
+        db.session.add(comum)
         db.session.commit()
-
-    co = app.test_client()
-    co.post('/auth/login', data={'login': 'dono_cp', 'senha': '123'})
-    ro = co.get('/contas-pagar/')
-    assert ro.status_code == 200
-    assert 'Importar histórico'.encode() in ro.data
-
-    ca = app.test_client()
-    rl = ca.post('/auth/login', data={'login': 'admin_cp', 'senha': '123'})
-    with ca.session_transaction() as s:
-        print('DEBUG sessao ca', dict(s))
-    with app.app_context():
-        from app.models import Usuario
-        print('DEBUG usuarios', [(u.id, u.login, u.is_owner) for u in Usuario.query.all()])
-    ra = ca.get('/contas-pagar/')
-    assert ra.status_code == 200
-    print('DEBUG login_status', rl.status_code)
-    assert 'Importar histórico'.encode() not in ra.data
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'admin_cp', 'senha': '123'})
+    r = c.get('/contas-pagar/')
+    assert r.status_code == 200
+    assert 'Importar histórico'.encode() not in r.data
 
 
 def test_detalhe_e_editar(app, admin_user):
