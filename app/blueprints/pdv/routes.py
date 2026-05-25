@@ -24,6 +24,21 @@ from app.utils import agora
 from app.utils import hoje as hoje_brt
 
 
+def _erro_externo(e):
+    """Mensagem amigavel pra falha ao chamar servico externo (Seru/VNDA),
+    sem expor o stacktrace tecnico (HTTPSConnectionPool...) ao usuario."""
+    import requests
+    s = str(e)
+    servico = ('Seru' if 'plataformaseru' in s
+               else 'VNDA' if 'vnda' in s.lower()
+               else 'serviço externo')
+    if isinstance(e, requests.exceptions.Timeout):
+        return f'O {servico} demorou para responder (timeout). Tente de novo em instantes.'
+    if isinstance(e, requests.exceptions.ConnectionError):
+        return f'Não consegui conectar ao {servico} agora. Tente de novo em instantes.'
+    return f'Falha ao consultar o {servico} ({type(e).__name__}). Tente de novo em instantes.'
+
+
 @pdv_bp.route('/')
 @login_required
 @admin_required
