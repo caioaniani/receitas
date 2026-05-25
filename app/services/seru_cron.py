@@ -260,8 +260,15 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
+    # Automacoes WhatsApp configuraveis (mensagens agendadas) — checa a cada 5 min
+    _scheduler.add_job(
+        lambda app=app: _run_automacoes_whatsapp(app),
+        'cron', minute='*/5', id='automacoes-whatsapp',
+        max_instances=1, coalesce=True,
+    )
+
     _scheduler.start()
-    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h · zapi tarefas 07:00 · zapi anomalias 23:00 · backup 04:00')
+    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h · zapi tarefas 07:00 · zapi anomalias 23:00 · backup 04:00 · automacoes whatsapp 5min')
 
 
 def _run_slack_resumo_diario(app):
@@ -298,6 +305,15 @@ def _run_zapi_digest_anomalias(app):
 
     with app.app_context():
         _com_lock(7730, anomalias.enviar_digest_whatsapp, 'zapi digest anomalias')
+
+
+def _run_automacoes_whatsapp(app):
+    """Job: dispara as automacoes WhatsApp agendadas que estao no horario
+    (checa a cada 5 min). Idempotente por dia via ultimo_disparo_em."""
+    from app.services import whatsapp
+
+    with app.app_context():
+        _com_lock(7732, whatsapp.disparar_automacoes_devidas, 'automacoes whatsapp')
 
 
 
