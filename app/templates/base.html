@@ -164,28 +164,6 @@
            class="sidebar-link {% if request.path.startswith('/fornecedores') %}active{% endif %}">
             Fornecedores
         </a>
-        {% if current_user.is_admin() %}
-        <a href="{{ url_for('contas_pagar.lista') }}"
-           class="sidebar-link {% if request.path == '/contas-pagar/' or request.path == '/contas-pagar' %}active{% endif %}">
-            Contas a Pagar
-        </a>
-        <a href="{{ url_for('contas_pagar.canais') }}"
-           class="sidebar-link ps-4 small {% if request.path.startswith('/contas-pagar/canais') %}active{% endif %}">
-            Canais → Loja
-        </a>
-        <a href="{{ url_for('contas_pagar.mapeamentos') }}"
-           class="sidebar-link ps-4 small {% if request.path.startswith('/contas-pagar/mapeamentos') %}active{% endif %}">
-            Itens NF → MP
-        </a>
-        <a href="{{ url_for('contas_pagar.variacoes') }}"
-           class="sidebar-link ps-4 small {% if request.path.startswith('/contas-pagar/variacoes') %}active{% endif %}">
-            Variações de Preço
-        </a>
-        <a href="{{ url_for('notificacoes.index') }}"
-           class="sidebar-link {% if request.path.startswith('/notificacoes') %}active{% endif %}">
-            Notificações WhatsApp
-        </a>
-        {% endif %}
         <a href="{{ url_for('produtos.lista') }}"
            class="sidebar-link {% if request.path.startswith('/produtos') %}active{% endif %}">
             Produtos / Cestas
