@@ -187,9 +187,13 @@ def _parse_vencimento(dados):
     return _data_iso(dados.get('vencimento'))
 
 
-def importar_historico(app, dias=30):
+def importar_historico(app, dias=30, canais=None):
     """Varre o historico dos canais de NF (ultimos `dias`) e processa as
     imagens/PDFs que ainda nao viraram conta. Idempotente por slack_file_id.
+
+    `canais` (lista de ids): importa so esses, desde que estejam em
+    SLACK_CANAIS_NF (botao por canal na tela /canais). None = todos os
+    canais configurados.
 
     Roda em background (a rota dispara num thread). Retorna nº de contas
     criadas (tambem loga).
@@ -200,9 +204,15 @@ def importar_historico(app, dias=30):
 
     with app.app_context():
         ids = (app.config.get('SLACK_CANAIS_NF') or '').strip()
-        canais = [c.strip() for c in ids.split(',') if c.strip()]
+        configurados = [c.strip() for c in ids.split(',') if c.strip()]
+        if canais:
+            alvo = set(canais)
+            canais = [c for c in configurados if c in alvo]
+        else:
+            canais = configurados
         if not canais:
-            logger.info('importar_historico: SLACK_CANAIS_NF vazio')
+            logger.info('importar_historico: nenhum canal alvo '
+                        '(SLACK_CANAIS_NF vazio ou filtro sem match)')
             return 0
 
         oldest = _time.time() - dias * 86400
