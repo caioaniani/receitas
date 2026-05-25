@@ -36,6 +36,23 @@ def test_lista_abas(app, admin_user):
     assert r2.status_code == 200
 
 
+def test_filtro_mostra_loja_vinculada_nao_id(app):
+    """O filtro de loja usa o vinculo cadastrado em Canais->Loja (ex: Industria),
+    nao o ID do canal, mesmo sem nome no SLACK_CANAIS_NF_NOMES."""
+    from app.blueprints.contas_pagar.routes import _mapa_lojas_nf
+    from app.extensions import db
+    from app.models import SlackCanalLojaMap
+    from app.utils import agora
+    app.config['SLACK_CANAIS_NF'] = 'C0AGL4U2GPL'
+    app.config['SLACK_CANAIS_NF_NOMES'] = ''
+    with app.app_context():
+        db.session.add(SlackCanalLojaMap(canal_id='C0AGL4U2GPL', eh_industria=True,
+                                         confirmado_em=agora()))
+        db.session.commit()
+        mapa = _mapa_lojas_nf()
+        assert mapa.get('C0AGL4U2GPL') == 'Indústria'
+
+
 def test_botao_importar_historico_aparece_pro_owner(app):
     """O botao 'Importar historico' (rota owner-only) aparece pro owner."""
     from app.extensions import db
