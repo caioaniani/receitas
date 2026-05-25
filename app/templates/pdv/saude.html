@@ -30,6 +30,7 @@
             <div class="card-body">
                 {% if s.seru_atrasado %}
                 <span class="badge bg-danger">atrasado</span>
+                <div class="small text-danger mt-1">O sync não roda há mais de 40min — vendas recentes podem ainda não ter baixado. Se continuar assim, rode a sincronização manual ou avise.</div>
                 {% else %}
                 <span class="badge bg-success">em dia</span>
                 {% endif %}
