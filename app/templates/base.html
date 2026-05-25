@@ -181,6 +181,10 @@
            class="sidebar-link ps-4 small {% if request.path.startswith('/contas-pagar/variacoes') %}active{% endif %}">
             Variações de Preço
         </a>
+        <a href="{{ url_for('notificacoes.index') }}"
+           class="sidebar-link {% if request.path.startswith('/notificacoes') %}active{% endif %}">
+            Notificações WhatsApp
+        </a>
         {% endif %}
         <a href="{{ url_for('produtos.lista') }}"
            class="sidebar-link {% if request.path.startswith('/produtos') %}active{% endif %}">
