@@ -114,7 +114,7 @@ def test_rota_saude_renderiza(app, admin_user):
     c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
     r = c.get('/pdv/saude')
     assert r.status_code == 200
-    assert b'Saude do Sync' in r.data
+    assert 'Saúde do Sync'.encode() in r.data
 
 
 def test_rota_reconciliacao_renderiza(app, admin_user, catalogo):
