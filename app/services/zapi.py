@@ -22,6 +22,30 @@ def disponivel():
                 and (cfg.get('ZAPI_TOKEN') or '').strip())
 
 
+def status_instancia():
+    """Consulta o status da instancia no Z-API (conectada ao WhatsApp?).
+    Retorna {'ok': bool, 'conectado': bool, 'detalhe': str}."""
+    cfg = current_app.config
+    instance_id = (cfg.get('ZAPI_INSTANCE_ID') or '').strip()
+    token = (cfg.get('ZAPI_TOKEN') or '').strip()
+    client_token = (cfg.get('ZAPI_CLIENT_TOKEN') or '').strip()
+    if not instance_id or not token:
+        return {'ok': False, 'conectado': False, 'detalhe': 'Z-API nao configurado'}
+    url = f'{BASE}/instances/{instance_id}/token/{token}/status'
+    headers = {'Client-Token': client_token} if client_token else {}
+    try:
+        r = requests.get(url, headers=headers, timeout=10)
+        if r.status_code not in (200, 201):
+            return {'ok': False, 'conectado': False, 'detalhe': f'HTTP {r.status_code}'}
+        data = r.json() if r.text else {}
+        conectado = bool(data.get('connected'))
+        detalhe = data.get('error') or ('conectado' if conectado else 'desconectado')
+        return {'ok': True, 'conectado': conectado, 'detalhe': detalhe}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('zapi status falhou')
+        return {'ok': False, 'conectado': False, 'detalhe': str(exc)}
+
+
 def _normalizar_numero(numero):
     """Mantem so digitos. '+55 11 99999-9999' → '5511999999999'."""
     return ''.join(c for c in (numero or '') if c.isdigit())
