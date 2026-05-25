@@ -293,3 +293,45 @@ def test_historico_nao_mexe_estoque(app):
     assert mp.custo_por_kg == 0.50                  # custo inalterado
     assert ContaPagarItemProcessado.query.count() == 0
     assert VariacaoPrecoMP.query.count() == 0
+
+
+def test_normalizar_ignora_validade_lote():
+    """Mesmo produto com validade/lote diferentes -> mesma chave de vinculo."""
+    n = svc.normalizar_item_nome
+    a = n('FARINHA DE TRIGO FRANCE SA BAGATELLE T45 VAL 1 7/12/2026 LOTE GXB12603 17A')
+    b = n('FARINHA DE TRIGO FRANCE SA BAGATELLE T45 VAL 3 0/10/2026 LOTE:GXB12601 30A')
+    assert a and a == b
+    assert 'lote' not in a and 'val' not in a.split()
+    # variacao so de pontuacao no lote tambem junta
+    assert n('X TIPO 150 LOTE BP22512311B') == n('X TIPO 150 LOTE:BP22512311B')
+
+
+def test_limpar_nome_item_legivel():
+    assert (svc.limpar_nome_item('FARINHA FRANCE BAGATELLE T45 VAL 30/09/2026 LOTE GXB12603')
+            == 'FARINHA FRANCE BAGATELLE T45')
+
+
+def test_migrar_junta_duplicados_preserva_confirmado(app):
+    from app.models import ContaPagarItemMap
+    with app.app_context():
+        mp = _mp('Farinha Bagatelle T45', unidade='kg')
+        mp_id = mp.id
+        m1 = ContaPagarItemMap(
+            item_nome_norm='velho1', materia_prima_id=mp_id,
+            confirmado_em=agora(), fator_conversao=1.0,
+            item_nome_exemplo='FARINHA BAGATELLE T45 VAL 1/2026 LOTE A1')
+        m2 = ContaPagarItemMap(
+            item_nome_norm='velho2',
+            item_nome_exemplo='FARINHA BAGATELLE T45 VAL 2/2026 LOTE:B2')
+        m3 = ContaPagarItemMap(
+            item_nome_norm='velho3', item_nome_exemplo='ACUCAR CRISTAL UNIAO')
+        db.session.add_all([m1, m2, m3])
+        db.session.commit()
+
+        stats = svc.migrar_nomes_itens()
+        assert stats['mesclados'] == 1          # m2 mesclado no m1 (confirmado)
+        assert stats['conflitos'] == 0
+        assert ContaPagarItemMap.query.count() == 2     # farinha + acucar
+        farinha = ContaPagarItemMap.query.filter_by(materia_prima_id=mp_id).first()
+        assert farinha is not None and farinha.confirmado_em is not None
+        assert farinha.item_nome_exemplo == 'FARINHA BAGATELLE T45'
