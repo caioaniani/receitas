@@ -51,8 +51,13 @@ def _nome_enviante(slack_user_id):
         return None
 
 
-def processar(evento):
-    """Processa uma mensagem de canal de NF. Retorna nº de contas criadas."""
+def processar(evento, aovivo=True):
+    """Processa uma mensagem de canal de NF. Retorna nº de contas criadas.
+
+    `aovivo=True` (captura ao vivo) processa preco/estoque dos itens ja
+    mapeados+confirmados. `aovivo=False` (importacao de historico) so cria os
+    mapeamentos pendentes — nao mexe no estoque (decisao do usuario).
+    """
     from app.services import conta_pagar_ia, dropbox_storage
     from app.services import slack as slack_api
     from app.utils import agora as _agora
