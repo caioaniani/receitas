@@ -58,6 +58,9 @@ SYSTEM_PROMPT = (
     "NUNCA inverta dia e mes. Em 'vencimento' devolva ISO ja convertido "
     "corretamente; em 'vencimento_texto' copie a data crua do documento. "
     "Boleto: priorize valor, vencimento e codigo de barras/linha digitavel. "
+    "No boleto, o campo 'No documento'/'Numero do documento' costuma ser o "
+    "numero da nota fiscal que ele cobra — extraia em 'nf_numero' pra casar o "
+    "boleto com a NF. "
     "Nota fiscal: priorize fornecedor, numero, valor total e itens. "
     "Se nao for documento de compra, retorna {\"erro\": \"nao_reconhecido\"}."
 )
