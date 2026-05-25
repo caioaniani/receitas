@@ -137,6 +137,7 @@ def lista():
 @login_required
 @admin_required
 def detalhe(id):
+    from app.services.conta_pagar_estoque import normalizar_item_nome, sugerir_para_item
     conta = ContaPagar.query.get_or_404(id)
     itens = []
     if conta.itens_json:
@@ -144,6 +145,21 @@ def detalhe(id):
             itens = json.loads(conta.itens_json)
         except (json.JSONDecodeError, TypeError):
             itens = []
+    # Anexa o vinculo (ContaPagarItemMap por nome) a cada item, pra vincular a
+    # MP direto aqui, vendo a nota. Sugestao da IA so pros ainda nao mapeados.
+    norms = [normalizar_item_nome(it.get('nome') or '') for it in itens]
+    mapas = {}
+    presentes = [n for n in norms if n]
+    if presentes:
+        for m in ContaPagarItemMap.query.filter(
+                ContaPagarItemMap.item_nome_norm.in_(presentes)).all():
+            mapas[m.item_nome_norm] = m
+    itens_vinc = []
+    for i, (it, n) in enumerate(zip(itens, norms)):
+        mp_map = mapas.get(n)
+        sug = sugerir_para_item(it.get('nome') or '')[:3] if (n and not mp_map) else []
+        itens_vinc.append({'indice': i, 'item': it, 'mapa': mp_map, 'sugestoes': sug})
+    mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
     fornecedores = Fornecedor.query.filter_by(ativo=True).order_by(Fornecedor.nome).all()
     # Candidatos pra vincular (mesmo... outro documento ainda nao relacionado)
     relacionaveis = (ContaPagar.query
@@ -153,6 +169,7 @@ def detalhe(id):
                      .limit(50).all())
     mapa_lojas = _mapa_lojas_nf()
     return render_template('contas_pagar/detalhe.html', conta=conta, itens=itens,
+                           itens_vinc=itens_vinc, mps=mps,
                            fornecedores=fornecedores, relacionaveis=relacionaveis,
                            loja_nome=_nome_loja(conta.origem_canal, mapa_lojas))
 
