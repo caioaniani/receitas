@@ -41,6 +41,68 @@ def loja_vnda():
     return Loja.query.filter_by(nome=LOJA_VNDA_NOME_DEFAULT).first()
 
 
+def faturamento_por_dia(data_inicial, data_final):
+    """Faturamento VNDA (site) por DATA DE VENDA, espelhando a semantica do
+    Seru (que conta pela data do `createdAt`/venda).
+
+    Diferente de `agregar_vendas` (que agrupa por data de ENTREGA, pra estoque):
+    aqui a chave eh a data de venda = `confirmed_at`/`paid_at` convertido pra
+    BRT via `seru.data_local` (reuso — evita o bug do `_parse_iso_date`, que
+    devolve a data UTC). Faturamento = soma de `item['subtotal']` (receita de
+    produto; EXCLUI frete e descontos de pedido), pra comparar com o PDV/Seru
+    que nao tem frete. Trocar por `order['total']` se um dia quiser com frete.
+
+    Janela da API folgada (+/- 2 dias) porque o filtro start/finish da VNDA eh
+    por data de criacao do pedido e a borda UTC/BRT pode jogar a venda pro dia
+    vizinho; o filtro fino fica no Python (por data de venda BRT).
+
+    Retorna {'total': float, 'n_pedidos': int, 'por_dia': {date: float}}.
+    Levanta `vnda.VndaUnavailableError` se a API falhar (o caller decide se
+    trata como best-effort).
+    """
+    from app.services import seru
+
+    todos = vnda._buscar_pedidos_janela(
+        data_inicial - timedelta(days=2), data_final + timedelta(days=2))
+
+    total = 0.0
+    por_dia = {}
+    n_pedidos = 0
+    for order in todos:
+        if not isinstance(order, dict):
+            continue
+        if (order.get('status') or '').lower() in STATUS_CANCELADO:
+            continue
+        dv = seru.data_local(order.get('confirmed_at') or order.get('paid_at'))
+        if not dv or not (data_inicial <= dv <= data_final):
+            continue
+        val_pedido = 0.0
+        for item in order.get('items') or []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                sub = float(item.get('subtotal') or 0)
+            except (TypeError, ValueError):
+                sub = 0.0
+            if sub <= 0:  # fallback: preco unitario x quantidade
+                try:
+                    sub = float(item.get('price') or 0) * float(item.get('quantity') or 0)
+                except (TypeError, ValueError):
+                    sub = 0.0
+            if sub > 0:
+                val_pedido += sub
+        if val_pedido <= 0:
+            continue
+        total += val_pedido
+        por_dia[dv] = por_dia.get(dv, 0.0) + val_pedido
+        n_pedidos += 1
+    return {
+        'total': round(total, 2),
+        'n_pedidos': n_pedidos,
+        'por_dia': {d: round(v, 2) for d, v in por_dia.items()},
+    }
+
+
 def agregar_vendas(data_inicial, data_final):
     """Agrega vendas VNDA por produto no periodo (por data de ENTREGA).
 
