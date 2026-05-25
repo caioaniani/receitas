@@ -106,7 +106,7 @@ def faturamento():
         current_app.logger.exception('bot/faturamento: Seru falhou')
         return jsonify(ok=False, erro=f'falha ao buscar Seru: {type(e).__name__}'), 502
 
-    total = 0.0
+    total_pdv = 0.0
     por_loja = {}
     qtd = 0
     for p in pedidos:
@@ -118,11 +118,32 @@ def faturamento():
         if seru.data_local(p.get('createdAt')) != target:
             continue
         valor = float(p.get('total') or 0)
-        total += valor
+        total_pdv += valor
         qtd += 1
         comp = p.get('company') or {}
         nome = (comp.get('name') if isinstance(comp, dict) else None) or '—'
         por_loja[nome] = por_loja.get(nome, 0) + valor
+
+    # Site (VNDA) — best-effort: se a API do site cair, NAO derruba o endpoint;
+    # devolve so o PDV com um aviso. Faturamento por data de venda (espelha o Seru).
+    total_site = 0.0
+    qtd_site = 0
+    site_aviso = None
+    try:
+        from app.services import vnda_sync
+        fat_site = vnda_sync.faturamento_por_dia(target, target)
+        total_site = fat_site['total']
+        qtd_site = fat_site['n_pedidos']
+        if total_site > 0:
+            loja_v = vnda_sync.loja_vnda()
+            nome_site = (loja_v.nome if loja_v else 'Site') + ' (site)'
+            por_loja[nome_site] = por_loja.get(nome_site, 0) + total_site
+    except Exception as e:  # noqa: BLE001
+        current_app.logger.warning('bot/faturamento: VNDA indisponivel: %s', e)
+        site_aviso = 'site indisponível, total só PDV'
+
+    total = total_pdv + total_site
+    qtd_total = qtd + qtd_site
 
     # Mensagem WhatsApp (markdown leve, com *bold*)
     data_fmt = target.strftime('%d/%m/%Y')
@@ -134,9 +155,11 @@ def faturamento():
             linhas.append(f'• {nome}: R$ {_fmt_brl(por_loja[nome])}')
         linhas.append('')
         linhas.append(f'*Total: R$ {_fmt_brl(total)}*')
-        linhas.append(f'_{qtd} venda(s)_')
+        linhas.append(f'_{qtd_total} venda(s)_')
         mensagem = '\n'.join(linhas)
 
+    if site_aviso:
+        mensagem = mensagem + f'\n_({site_aviso})_'
     if fallback_aplicado:
         mensagem = (f'_(Não entendi a data "{data_raw}", mostrando hoje)_\n\n' + mensagem)
 
@@ -144,7 +167,9 @@ def faturamento():
         ok=True,
         data=target.isoformat(),
         total=round(total, 2),
-        qtd_pedidos=qtd,
+        total_pdv=round(total_pdv, 2),
+        total_site=round(total_site, 2),
+        qtd_pedidos=qtd_total,
         por_loja={k: round(v, 2) for k, v in por_loja.items()},
         mensagem=mensagem,
     )
