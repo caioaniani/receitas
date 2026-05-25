@@ -267,13 +267,78 @@ def agregar_itens_consolidado(data_inicial, data_final):
 
     linhas.sort(key=lambda x: -x['qtd'])
 
+    # Faturamento VNDA por data de venda (mesma base do /api/bot/faturamento),
+    # pra o "faturamento total" do copilot bater com o atalho do celular.
+    # Best-effort: se o site cair, mantem so o Seru (vnda_aviso ja sinaliza).
+    from app.services import vnda_sync
+    fat_vnda = 0.0
+    try:
+        fat_vnda = vnda_sync.faturamento_por_dia(data_inicial, data_final)['total']
+    except Exception:  # noqa: BLE001
+        fat_vnda = 0.0
+
+    fat_seru = seru_data['faturamento_total'] or 0
     return {
         'inicio': data_inicial.isoformat(),
         'fim': data_final.isoformat(),
         'total_pedidos_seru': seru_data['total_pedidos'],
-        'faturamento_total': seru_data['faturamento_total'],
-        'faturamento_fonte': 'seru_apenas',
+        'faturamento_total': round(fat_seru + fat_vnda, 2),
+        'faturamento_seru': round(fat_seru, 2),
+        'faturamento_vnda': round(fat_vnda, 2),
+        'faturamento_fonte': 'seru+vnda' if fat_vnda > 0 else 'seru_apenas',
         'produtos': linhas,
         'vnda_aviso': vnda_aviso,
         'lojas_no_intervalo': seru_data['lojas_no_intervalo'],
     }
+
+
+def vendas_vnda_loja(data_inicial, data_final):
+    """Vendas do site (VNDA → loja Anesio) por produto, no formato que o
+    `consultar_vendas_itens` do copilot espera.
+
+    Usado quando o usuario filtra a venda pela loja do site: essa loja nao tem
+    PDV Seru (e manual), entao as vendas vem do VNDA. Qty por produto vem de
+    `vnda_sync.agregar_vendas` (por data de entrega); `faturamento_total` vem de
+    `vnda_sync.faturamento_por_dia` (por data de venda — mesma base do
+    /api/bot/faturamento). O faturamento NAO eh quebrado por produto aqui.
+    """
+    from app.services import vnda_sync
+
+    base = {
+        'inicio': data_inicial.isoformat(),
+        'fim': data_final.isoformat(),
+        'total_pedidos': 0,
+        'faturamento_total': 0.0,
+        'faturamento_fonte': 'vnda',
+        'produtos': [],
+        'vnda_aviso': None,
+        'lojas_no_intervalo': [],
+    }
+
+    vd = vnda_sync.agregar_vendas(data_inicial, data_final)
+    if vd.get('erro'):
+        base['vnda_aviso'] = vd['erro']
+        return base
+
+    fat = 0.0
+    try:
+        fat = vnda_sync.faturamento_por_dia(data_inicial, data_final)['total']
+    except Exception:  # noqa: BLE001
+        fat = 0.0
+
+    produtos = []
+    for vp in vd.get('produtos', []):
+        mp = vp.get('mapeado_para')
+        match = ({'tipo': mp.get('tipo'), 'id': mp.get('id'),
+                  'nome': mp.get('nome'), 'kind': 'exato'} if mp else None)
+        produtos.append({
+            'nome': vp['nome'], 'sku': vp.get('sku'),
+            'qtd': vp['qtd'], 'qtd_seru': 0, 'qtd_vnda': vp['qtd'],
+            'faturamento': 0, 'fonte': 'vnda', 'match': match,
+        })
+
+    base['total_pedidos'] = vd.get('total_pedidos', 0)
+    base['faturamento_total'] = round(fat, 2)
+    base['produtos'] = produtos
+    base['lojas_no_intervalo'] = [vd['loja']] if vd.get('loja') else []
+    return base
