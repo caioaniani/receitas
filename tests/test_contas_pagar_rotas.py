@@ -36,6 +36,29 @@ def test_lista_abas(app, admin_user):
     assert r2.status_code == 200
 
 
+def test_botao_importar_historico_owner_only(app, admin_user):
+    """O botao 'Importar historico' (rota owner-only) aparece pra owner e some
+    pra admin comum."""
+    from app.extensions import db
+    from app.models import Usuario
+    with app.app_context():
+        dono = Usuario(nome='dono teste', login='dono', papel='owner')
+        dono.set_senha('123')
+        db.session.add(dono)
+        db.session.commit()
+
+    co = app.test_client()
+    co.post('/auth/login', data={'login': 'dono', 'senha': '123'})
+    ro = co.get('/contas-pagar/')
+    assert ro.status_code == 200
+    assert 'Importar histórico'.encode() in ro.data
+
+    ca = app.test_client()
+    _login(ca)
+    ra = ca.get('/contas-pagar/')
+    assert 'Importar histórico'.encode() not in ra.data
+
+
 def test_detalhe_e_editar(app, admin_user):
     from app.extensions import db
     from app.models import ContaPagar
