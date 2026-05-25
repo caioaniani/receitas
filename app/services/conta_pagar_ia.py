@@ -38,7 +38,7 @@ SYSTEM_PROMPT = (
     '  "codigo_barras": str (so digitos do codigo de barras do boleto),\n'
     '  "linha_digitavel": str (linha digitavel do boleto, se houver),\n'
     '  "info_pagamento": str (pix/instrucoes, se houver),\n'
-    '  "itens": [{"nome": str, "quantidade": float, "valor_unitario": float, '
+    '  "itens": [{"nome": str (SO o nome do produto/marca, SEM validade/lote/data), "quantidade": float, "valor_unitario": float, '
     '"valor_total": float, "unidade": str (unidade de compra como aparece: '
     'un/kg/g/ml/cx/fardo), "unidade_base_sugerida": "un"|"kg"|"g"|"ml", '
     '"fator_embalagem": float (quantas unidades-base ha em 1 unidade de '
