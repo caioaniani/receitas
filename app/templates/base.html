@@ -384,6 +384,10 @@
            class="sidebar-link {% if request.path.startswith('/slack') %}active{% endif %}">
             Slack Bot
         </a>
+        <a href="{{ url_for('notificacoes.index') }}"
+           class="sidebar-link {% if request.path.startswith('/notificacoes') %}active{% endif %}">
+            Notificações WhatsApp
+        </a>
         {% endif %}
 
         {% if not current_user.is_admin() %}
