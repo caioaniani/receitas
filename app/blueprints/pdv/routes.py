@@ -84,7 +84,7 @@ def reprocessar():
         stats = seru_sync.processar_pedidos(hoje, hoje, user=current_user)
     except Exception as e:
         current_app.logger.exception('reprocessar falhou')
-        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502
+        return jsonify(ok=False, erro=_erro_externo(e)), 502
     stats['n_apagados'] = n_apagados
     return jsonify(ok=True, **stats)
 
@@ -180,7 +180,7 @@ def api_itens_vendidos():
                                           expandir_dias_frente=dias_extra)
     except Exception as e:
         current_app.logger.exception('itens-vendidos falhou')
-        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502
+        return jsonify(ok=False, erro=_erro_externo(e)), 502
     return jsonify(ok=True, **data)
 
 
@@ -230,7 +230,7 @@ def _api_vendas_impl():
         pedidos = seru.listar_pedidos_completo(inicio, fim, expandir_dias_frente=dias_extra)
     except Exception as e:
         current_app.logger.exception('Seru listar_pedidos falhou')
-        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502
+        return jsonify(ok=False, erro=_erro_externo(e)), 502
 
     # A API filtra por updatedAt, mas o usuario quer ver vendas POR DATA DE
     # CRIACAO (quando a venda aconteceu). Filtramos localmente pelo createdAt
@@ -527,7 +527,7 @@ def pdv_sync():
         stats = seru_sync.processar_pedidos(inicio, fim, user=current_user)
     except Exception as e:
         current_app.logger.exception('seru_sync falhou')
-        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502
+        return jsonify(ok=False, erro=_erro_externo(e)), 502
     return jsonify(ok=True, **stats)
 
 
@@ -812,7 +812,7 @@ def vnda_sync():
         stats = svc.processar_pedidos(hoje, user=current_user)
     except Exception as e:
         current_app.logger.exception('vnda_sync falhou')
-        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502
+        return jsonify(ok=False, erro=_erro_externo(e)), 502
     if stats.get('erro'):
         return jsonify(ok=False, erro=stats['erro']), 502
     return jsonify(ok=True, **stats)
@@ -850,7 +850,7 @@ def vnda_reprocessar():
         stats = svc.processar_pedidos(hoje, user=current_user)
     except Exception as e:
         current_app.logger.exception('vnda_reprocessar falhou')
-        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502
+        return jsonify(ok=False, erro=_erro_externo(e)), 502
     if stats.get('erro'):
         return jsonify(ok=False, erro=stats['erro']), 502
     stats['n_apagados'] = n_apagados
