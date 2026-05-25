@@ -38,10 +38,27 @@ from app.utils import resolver_loja_por_nome
 logger = logging.getLogger(__name__)
 
 
+def limpar_nome_item(nome):
+    """Nome do produto SEM validade/lote/datas — pra exibir e agrupar. Tudo a
+    partir do primeiro marcador (VAL/LOTE/...) e descartado, pois muda a cada
+    compra e fragmentaria o mesmo produto em varios vinculos.
+    Ex: 'FARINHA ... T45 VAL 1/2026 LOTE GXB12603' -> 'FARINHA ... T45'."""
+    import re
+    nome = (nome or '').strip()
+    nome = re.sub(r'\b(?:VAL|VALIDADE|VENC(?:IMENTO)?|LOTE|FAB|FABR)\b.*$', '',
+                  nome, flags=re.IGNORECASE | re.DOTALL)
+    return re.sub(r'\s+', ' ', nome).strip(' .:;,-/')
+
+
 def normalizar_item_nome(nome):
-    """ascii/lower/strip — chave de reuso do mapeamento item->MP."""
+    """Chave de reuso do mapeamento item->MP: nome limpo (sem validade/lote),
+    sem acento/pontuacao, minusculo. Mesmo produto -> mesma chave."""
+    import re
+
     from app.services.estoque_loja_lote import _ascii
-    return _ascii(nome)
+    base = _ascii(limpar_nome_item(nome))
+    base = re.sub(r'[^\w\s]', ' ', base)
+    return re.sub(r'\s+', ' ', base).strip()
 
 
 def sugerir_para_item(nome):
