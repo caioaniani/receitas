@@ -39,9 +39,16 @@ SYSTEM_PROMPT = (
     '  "linha_digitavel": str (linha digitavel do boleto, se houver),\n'
     '  "info_pagamento": str (pix/instrucoes, se houver),\n'
     '  "itens": [{"nome": str, "quantidade": float, "valor_unitario": float, '
-    '"valor_total": float}]\n'
+    '"valor_total": float, "unidade": str (unidade de compra como aparece: '
+    'un/kg/g/ml/cx/fardo), "unidade_base_sugerida": "un"|"kg"|"g"|"ml", '
+    '"fator_embalagem": float (quantas unidades-base ha em 1 unidade de '
+    'compra, SE a descricao indicar)}]\n'
     "}\n"
     "Regras: numeros sem 'R$' nem unidade. Omite chaves que nao conseguir ler. "
+    "Nos itens, se a descricao trouxer a contagem da embalagem (ex '300UN', "
+    "'C/300', '12X1L', 'SC 25KG'), preencha 'fator_embalagem' com esse numero "
+    "e 'unidade_base_sugerida' com a unidade do conteudo; senao OMITA ambos. "
+    "Esses dois campos sao apenas sugestao (o humano confirma). "
     "DATAS: os documentos sao BRASILEIROS — toda data esta em DD/MM/AAAA (dia "
     "primeiro, depois mes). Ex: '08/05/2026' = dia 8 de maio = 2026-05-08. "
     "NUNCA inverta dia e mes. Em 'vencimento' devolva ISO ja convertido "
