@@ -295,6 +295,32 @@ def test_historico_nao_mexe_estoque(app):
     assert VariacaoPrecoMP.query.count() == 0
 
 
+def test_conversao_mp_em_gramas_custo_por_kg(app):
+    """MP em gramas (ex: acai 10L/cx, usado em g): fator em g por compra.
+    Estoque entra em gramas; custo_por_kg sai por KG (nao por grama)."""
+    from app.models import ContaPagar, ContaPagarItemMap, MateriaPrima
+    with app.app_context():
+        _industria()  # canal C_IND confirmado -> estoque global
+        mp = _mp('Acai polpa', unidade='g', custo=0)
+        mp_id = mp.id
+        db.session.add(ContaPagarItemMap(
+            item_nome_norm=svc.normalizar_item_nome('ACAI NATURAL 10L'),
+            item_nome_exemplo='ACAI NATURAL 10L', materia_prima_id=mp_id,
+            confirmado_em=agora(), fator_conversao=10000.0))
+        conta = ContaPagar(
+            tipo_documento='nota_fiscal', fornecedor_nome='Distribuidora', status='aberto',
+            origem_canal='C_IND',
+            itens_json=json.dumps([{'nome': 'ACAI NATURAL 10L', 'quantidade': 6,
+                                    'valor_total': 906.0}]))
+        db.session.add(conta)
+        db.session.commit()
+        stats = svc.processar_conta(conta, aovivo=True)
+        assert stats['processados'] == 1
+        mp = db.session.get(MateriaPrima, mp_id)
+        assert mp.estoque_atual == 60000          # 6 cx x 10000 g
+        assert abs(mp.custo_por_kg - 15.10) < 1e-6   # 906 / 60 kg, NAO /60000 g
+
+
 def test_normalizar_ignora_validade_lote():
     """Mesmo produto com validade/lote diferentes -> mesma chave de vinculo."""
     n = svc.normalizar_item_nome
