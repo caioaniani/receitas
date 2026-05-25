@@ -136,7 +136,7 @@ def test_rota_reconciliacao_renderiza(app, admin_user, catalogo):
          patch('app.services.vnda_sync.agregar_vendas', return_value=vnda_agg):
         r = c.get('/pdv/reconciliacao')
     assert r.status_code == 200
-    assert b'Reconciliacao' in r.data
+    assert 'Reconciliação'.encode() in r.data
     assert b'Cesta Nova' in r.data        # pendente (nao baixou) aparece
     assert b'reconMapear' in r.data       # JS da acao inline
     assert b'recon-alvo' in r.data        # select de alvos renderizou
