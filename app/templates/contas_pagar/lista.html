@@ -5,13 +5,24 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="page-title mb-0"><i class="bi bi-receipt"></i> Contas a Pagar</h1>
-    <form method="POST" action="{{ url_for('contas_pagar.juntar_automatico') }}" class="mb-0"
-          onsubmit="return confirm('Juntar NF + boleto do mesmo recebimento (mesma loja, valor e vencimento)?');">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-sm btn-outline-primary">
-            <i class="bi bi-link-45deg"></i> Juntar NF + boleto
-        </button>
-    </form>
+    <div class="d-flex gap-2">
+        {% if current_user.is_owner %}
+        <form method="POST" action="{{ url_for('contas_pagar.importar_historico') }}" class="mb-0"
+              onsubmit="return confirm('Importar os últimos 30 dias de NF/boleto de todos os canais configurados? É idempotente (não duplica o que já existe) e não mexe no estoque — só cria as contas e os itens a vincular.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-clock-history"></i> Importar histórico (30d)
+            </button>
+        </form>
+        {% endif %}
+        <form method="POST" action="{{ url_for('contas_pagar.juntar_automatico') }}" class="mb-0"
+              onsubmit="return confirm('Juntar NF + boleto do mesmo recebimento (mesma loja, valor e vencimento)?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-link-45deg"></i> Juntar NF + boleto
+            </button>
+        </form>
+    </div>
 </div>
 
 <div class="alert alert-light border small py-2">
