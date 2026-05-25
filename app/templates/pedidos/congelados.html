@@ -9,8 +9,11 @@
         <a href="{{ url_for('pedidos.congelados_dashboard') }}" class="btn btn-sm btn-outline-success">
             <i class="bi bi-grid-3x3-gap"></i> Visão Geral (Indústria × Lojas)
         </a>
-        <a href="{{ url_for('pedidos.congelados_balanco') }}" class="btn btn-sm btn-outline-primary">
-            <i class="bi bi-clipboard-check"></i> Fazer Balanço (contagem física)
+        <a href="{{ url_for('pedidos.congelados_conferencia') }}" class="btn btn-sm btn-primary">
+            <i class="bi bi-clipboard-check"></i> Conferir contagem (sistema × físico)
+        </a>
+        <a href="{{ url_for('pedidos.congelados_balanco') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-card-text"></i> Balanço por texto
         </a>
         <a href="{{ url_for('pedidos.congelados_historico') }}" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-clock-history"></i> Histórico
