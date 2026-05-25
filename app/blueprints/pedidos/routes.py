@@ -1219,7 +1219,8 @@ def congelados_historico():
     except ValueError:
         ate = None
 
-    tipos_disp = ['entrada', 'saida_pedido', 'ajuste', 'balanco', 'desperdicio']
+    tipos_disp = ['entrada', 'saida_pedido', 'ajuste', 'ajuste_conferencia',
+                  'balanco', 'desperdicio']
 
     q = db.session.query(MovEstoqueProducao, EstoqueProducao).join(
         EstoqueProducao, MovEstoqueProducao.estoque_producao_id == EstoqueProducao.id
