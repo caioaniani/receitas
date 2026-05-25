@@ -15,7 +15,11 @@ from app.decorators import admin_required, owner_required
 from app.extensions import db
 from app.models import (
     ContaPagar,
+    ContaPagarItemMap,
     Fornecedor,
+    Loja,
+    MateriaPrima,
+    VariacaoPrecoMP,
 )
 from app.utils import agora
 
@@ -305,3 +309,152 @@ def juntar_automatico():
     else:
         flash('Nenhum novo par encontrado pra juntar.', 'info')
     return redirect(url_for('contas_pagar.lista'))
+
+
+def _parse_fator(raw):
+    """Fator de conversao do form (aceita virgula BR). Retorna float ou None."""
+    if raw is None or str(raw).strip() == '':
+        return None
+    s = str(raw).strip().replace(',', '.')
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+# ── Vinculo canal -> loja (cada canal = 1 empresa = 1 estoque) ──
+
+@contas_pagar_bp.route('/canais')
+@login_required
+@admin_required
+def canais():
+    from app.services.conta_pagar_estoque import resolver_canal_map
+    mapa_lojas = _mapa_lojas_nf()
+    linhas = []
+    for cid, nome in mapa_lojas.items():
+        m = resolver_canal_map(cid)
+        linhas.append({'canal_id': cid, 'nome_canal': nome, 'mapa': m})
+    db.session.commit()  # persiste mapas criados (auto-fuzzy) na 1a visita
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    return render_template('contas_pagar/canais.html', linhas=linhas, lojas=lojas)
+
+
+@contas_pagar_bp.route('/canais/<canal_id>', methods=['POST'])
+@login_required
+@admin_required
+def canal_vincular(canal_id):
+    from app.services.conta_pagar_estoque import resolver_canal_map
+    m = resolver_canal_map(canal_id)
+    acao = request.form.get('acao')
+    if acao == 'ignorar':
+        m.ignorar = True
+        m.confirmado_em = None
+    elif acao == 'desfazer':
+        m.loja_id = None
+        m.eh_industria = False
+        m.ignorar = False
+        m.confirmado_em = None
+        m.confirmado_por = None
+    else:  # vincular
+        lid = request.form.get('loja_id')
+        m.loja_id = int(lid) if lid and lid.isdigit() else None
+        m.eh_industria = bool(request.form.get('eh_industria'))
+        m.ignorar = False
+        m.auto_match = False
+        if m.loja_id or m.eh_industria:
+            m.confirmado_em = agora()
+            m.confirmado_por = current_user.id
+        else:
+            m.confirmado_em = None
+    db.session.commit()
+    flash('Vinculo do canal atualizado.', 'success')
+    return redirect(url_for('contas_pagar.canais'))
+
+
+# ── Mapeamento item de NF -> materia-prima ──
+
+@contas_pagar_bp.route('/mapeamentos')
+@login_required
+@admin_required
+def mapeamentos():
+    from app.services.conta_pagar_estoque import sugerir_para_item
+    estado = request.args.get('estado', 'pendente')
+    todos = ContaPagarItemMap.query.order_by(ContaPagarItemMap.item_nome_exemplo).all()
+    contagens = {'pendente': 0, 'mapeado': 0, 'ignorado': 0}
+    for m in todos:
+        contagens[m.estado] = contagens.get(m.estado, 0) + 1
+    maps = [m for m in todos if m.estado == estado] if estado in contagens else todos
+    sugestoes = {}
+    for m in maps:
+        if m.estado == 'pendente':
+            sugestoes[m.id] = sugerir_para_item(m.item_nome_exemplo)[:3]
+    mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    return render_template('contas_pagar/mapeamentos.html', maps=maps, mps=mps,
+                           estado=estado, contagens=contagens, sugestoes=sugestoes)
+
+
+@contas_pagar_bp.route('/mapeamentos/<int:id>', methods=['POST'])
+@login_required
+@admin_required
+def mapeamento_vincular(id):
+    m = ContaPagarItemMap.query.get_or_404(id)
+    acao = request.form.get('acao')
+    if acao == 'ignorar':
+        m.ignorar = True
+        m.materia_prima_id = None
+        m.confirmado_em = None
+    elif acao == 'desfazer':
+        m.materia_prima_id = None
+        m.confirmado_em = None
+        m.confirmado_por = None
+        m.ignorar = False
+    else:  # vincular
+        mid = request.form.get('materia_prima_id')
+        m.materia_prima_id = int(mid) if mid and mid.isdigit() else None
+        m.unidade_compra = (request.form.get('unidade_compra') or '').strip() or None
+        fator = _parse_fator(request.form.get('fator_conversao'))
+        m.fator_conversao = fator if (fator and fator > 0) else 1.0
+        m.ignorar = False
+        if m.materia_prima_id:
+            m.confirmado_em = agora()
+            m.confirmado_por = current_user.id
+        else:
+            m.confirmado_em = None
+    db.session.commit()
+    flash('Mapeamento atualizado.', 'success')
+    return redirect(url_for('contas_pagar.mapeamentos',
+                            estado=request.form.get('estado') or 'pendente'))
+
+
+# ── Avisos de variacao de preco ──
+
+@contas_pagar_bp.route('/variacoes')
+@login_required
+@admin_required
+def variacoes():
+    from sqlalchemy import func
+    filtro = request.args.get('f', 'todos')
+    q = VariacaoPrecoMP.query.filter_by(status='novo')
+    if filtro == 'subiu':
+        q = q.filter(VariacaoPrecoMP.variacao_pct > 0)
+    elif filtro == 'caiu':
+        q = q.filter(VariacaoPrecoMP.variacao_pct < 0)
+    itens = q.order_by(func.abs(VariacaoPrecoMP.variacao_pct).desc()).limit(200).all()
+    novos = VariacaoPrecoMP.query.filter_by(status='novo').count()
+    return render_template('contas_pagar/variacoes.html', itens=itens,
+                           filtro=filtro, novos=novos)
+
+
+@contas_pagar_bp.route('/variacoes/<int:id>', methods=['POST'])
+@login_required
+@admin_required
+def variacao_acao(id):
+    v = VariacaoPrecoMP.query.get_or_404(id)
+    acao = request.form.get('acao')
+    if acao in ('aprovar', 'ignorar'):
+        v.status = 'aprovado' if acao == 'aprovar' else 'ignorado'
+        v.revisado_em = agora()
+        v.revisado_por_id = current_user.id
+        db.session.commit()
+        flash('Variacao revisada.', 'success')
+    return redirect(url_for('contas_pagar.variacoes', f=request.form.get('f') or 'todos'))
