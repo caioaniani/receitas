@@ -257,7 +257,38 @@
         {% endif %}
         {% endif %}
 
-        {# ── 4. RH ── #}
+        {# ── 5. FINANCEIRO (admin) ── #}
+        {% if current_user.is_admin() %}
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">Financeiro</div>
+
+        <a href="{{ url_for('contas_pagar.lista') }}"
+           class="sidebar-link {% if request.path == '/contas-pagar/' or request.path == '/contas-pagar' %}active{% endif %}">
+            Contas a Pagar
+        </a>
+        <a href="{{ url_for('contas_pagar.canais') }}"
+           class="sidebar-link ps-4 small {% if request.path.startswith('/contas-pagar/canais') %}active{% endif %}">
+            Canais → Loja
+        </a>
+        <a href="{{ url_for('contas_pagar.mapeamentos') }}"
+           class="sidebar-link ps-4 small {% if request.path.startswith('/contas-pagar/mapeamentos') %}active{% endif %}">
+            Itens NF → MP
+        </a>
+        <a href="{{ url_for('contas_pagar.variacoes') }}"
+           class="sidebar-link ps-4 small {% if request.path.startswith('/contas-pagar/variacoes') %}active{% endif %}">
+            Variações de Preço
+        </a>
+        <a href="{{ url_for('main.caixa') }}"
+           class="sidebar-link {% if request.path == '/caixa' %}active{% endif %}">
+            Caixa Diário
+        </a>
+        <a href="{{ url_for('main.rentabilidade') }}"
+           class="sidebar-link {% if request.path == '/rentabilidade' %}active{% endif %}">
+            Rentabilidade
+        </a>
+        {% endif %}
+
+        {# ── 6. RH ── #}
         {% if current_user.pode_rh() %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">RH</div>
