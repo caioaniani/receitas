@@ -437,6 +437,35 @@ def canal_vincular(canal_id):
 
 # ── Mapeamento item de NF -> materia-prima ──
 
+def _exemplos_itens_nf():
+    """{nome_norm: {quantidade, valor_unitario, valor_total, unidade, n_notas}}
+    dos itens_json de todas as contas — pra mostrar na tela de mapeamentos os
+    dados que vieram da nota (ajuda a bater o fator). Exemplo = nota mais recente."""
+    from app.services.conta_pagar_estoque import normalizar_item_nome
+    ex = {}
+    contas = (ContaPagar.query
+              .filter(ContaPagar.itens_json.isnot(None))
+              .order_by(ContaPagar.criado_em.desc()).all())
+    for c in contas:
+        try:
+            itens = json.loads(c.itens_json or '[]')
+        except (json.JSONDecodeError, TypeError):
+            continue
+        for it in itens:
+            if not isinstance(it, dict):
+                continue
+            norm = normalizar_item_nome(it.get('nome') or '')
+            if not norm:
+                continue
+            if norm not in ex:
+                ex[norm] = {'quantidade': it.get('quantidade'),
+                            'valor_unitario': it.get('valor_unitario'),
+                            'valor_total': it.get('valor_total'),
+                            'unidade': it.get('unidade'), 'n_notas': 0}
+            ex[norm]['n_notas'] += 1
+    return ex
+
+
 @contas_pagar_bp.route('/mapeamentos')
 @login_required
 @admin_required
