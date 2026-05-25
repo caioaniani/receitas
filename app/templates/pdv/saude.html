@@ -50,6 +50,7 @@
             <div class="card-body">
                 {% if s.vnda_atrasado %}
                 <span class="badge bg-danger">atrasado</span>
+                <div class="small text-danger mt-1">O sync do site não roda há mais de 40min — vendas recentes podem ainda não ter baixado.</div>
                 {% else %}
                 <span class="badge bg-success">em dia</span>
                 {% endif %}
