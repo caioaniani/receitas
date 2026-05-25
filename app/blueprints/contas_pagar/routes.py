@@ -257,23 +257,29 @@ def pagar(id):
 @owner_required
 def importar_historico():
     """Varre os ultimos 30 dias dos canais de NF e cria as contas. Roda em
-    background (a IA por imagem demora). As contas aparecem aos poucos."""
+    background (a IA por imagem demora). As contas aparecem aos poucos.
+
+    Com `canal_id` no form, importa so aquele canal (botao por canal na tela
+    /canais); sem, importa todos os canais configurados."""
     import threading
 
     from app.services import conta_pagar_slack
 
     app_obj = current_app._get_current_object()
+    canal_id = (request.form.get('canal_id') or '').strip() or None
+    canais = [canal_id] if canal_id else None
 
     def _runner():
         try:
-            conta_pagar_slack.importar_historico(app_obj, dias=30)
+            conta_pagar_slack.importar_historico(app_obj, dias=30, canais=canais)
         except Exception:
             app_obj.logger.exception('importar_historico falhou')
 
     threading.Thread(target=_runner, daemon=True).start()
-    flash('Importacao do historico (30 dias) iniciada. As contas vao aparecer '
-          'aqui conforme forem processadas.', 'info')
-    return redirect(url_for('contas_pagar.lista'))
+    alvo = 'deste canal' if canal_id else 'de todos os canais'
+    flash(f'Importacao do historico (30 dias) {alvo} iniciada. As contas vao '
+          'aparecer conforme forem processadas.', 'info')
+    return redirect(url_for('contas_pagar.canais' if canal_id else 'contas_pagar.lista'))
 
 
 @contas_pagar_bp.route('/<int:id>/status', methods=['POST'])
