@@ -482,8 +482,10 @@ def mapeamentos():
         if m.estado == 'pendente':
             sugestoes[m.id] = sugerir_para_item(m.item_nome_exemplo)[:3]
     mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    exemplos = _exemplos_itens_nf()
     return render_template('contas_pagar/mapeamentos.html', maps=maps, mps=mps,
-                           estado=estado, contagens=contagens, sugestoes=sugestoes)
+                           estado=estado, contagens=contagens, sugestoes=sugestoes,
+                           exemplos=exemplos)
 
 
 @contas_pagar_bp.route('/mapeamentos/<int:id>', methods=['POST'])
