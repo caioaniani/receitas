@@ -36,26 +36,29 @@ def test_lista_abas(app, admin_user):
     assert r2.status_code == 200
 
 
-def test_botao_importar_historico_owner_only(app, admin_user):
+def test_botao_importar_historico_owner_only(app):
     """O botao 'Importar historico' (rota owner-only) aparece pra owner e some
-    pra admin comum."""
+    pra admin comum. Logins proprios pra nao colidir com o admin do startup."""
     from app.extensions import db
     from app.models import Usuario
     with app.app_context():
-        dono = Usuario(nome='dono teste', login='dono', papel='admin', is_owner=True)
+        dono = Usuario(nome='dono teste', login='dono_cp', papel='admin', is_owner=True)
         dono.set_senha('123')
-        db.session.add(dono)
+        comum = Usuario(nome='admin comum', login='admin_cp', papel='admin', is_owner=False)
+        comum.set_senha('123')
+        db.session.add_all([dono, comum])
         db.session.commit()
 
     co = app.test_client()
-    co.post('/auth/login', data={'login': 'dono', 'senha': '123'})
+    co.post('/auth/login', data={'login': 'dono_cp', 'senha': '123'})
     ro = co.get('/contas-pagar/')
     assert ro.status_code == 200
     assert 'Importar histórico'.encode() in ro.data
 
     ca = app.test_client()
-    _login(ca)
+    ca.post('/auth/login', data={'login': 'admin_cp', 'senha': '123'})
     ra = ca.get('/contas-pagar/')
+    assert ra.status_code == 200
     assert 'Importar histórico'.encode() not in ra.data
 
 
