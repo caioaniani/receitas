@@ -1416,6 +1416,102 @@ def congelados_balanco_aplicar():
     return redirect(url_for('pedidos.congelados'))
 
 
+@pedidos_bp.route('/congelados/conferencia', methods=['GET', 'POST'])
+@login_required
+@producao_required
+def congelados_conferencia():
+    """Conferencia fisica do estoque da industria (EstoqueProducao): conta cada
+    item, digita a quantidade real, ve a divergencia e ajusta pra bater (com
+    auditoria em MovEstoqueProducao). Espelha a conferencia de loja. Permite
+    adicionar item que apareceu no fisico mas ainda nao tem linha de estoque."""
+    if request.method == 'POST':
+        ajustes = 0
+        # 1) ajusta os itens existentes (campos real_<id>)
+        for key, val in request.form.items():
+            if not key.startswith('real_') or not val.strip():
+                continue
+            try:
+                ep_id = int(key[len('real_'):])
+                real = int(val)
+            except (TypeError, ValueError):
+                continue
+            if real < 0:
+                continue
+            ep = EstoqueProducao.query.get(ep_id)
+            if not ep:
+                continue
+            diff = real - (ep.quantidade or 0)
+            if diff == 0:
+                continue
+            db.session.add(MovEstoqueProducao(
+                estoque_producao_id=ep.id, tipo='ajuste_conferencia', quantidade=diff,
+                referencia=(f'Conferência por {current_user.nome}: '
+                            f'sistema {ep.quantidade} → real {real} (diff {diff:+d})'),
+                usuario_id=current_user.id))
+            ep.quantidade = real
+            ajustes += 1
+        # 2) adiciona itens novos (receita/produto sem linha): novo_alvo[] + novo_qtd[]
+        alvos = request.form.getlist('novo_alvo')
+        qtds = request.form.getlist('novo_qtd')
+        for alvo, qtd_raw in zip(alvos, qtds):
+            if not alvo or not (qtd_raw or '').strip():
+                continue
+            try:
+                qtd = int(qtd_raw)
+            except (TypeError, ValueError):
+                continue
+            if qtd <= 0:
+                continue
+            tipo, _, rid = alvo.partition(':')
+            if tipo not in ('receita', 'produto') or not rid.isdigit():
+                continue
+            filtro = ({'receita_id': int(rid)} if tipo == 'receita'
+                      else {'produto_id': int(rid)})
+            ep = EstoqueProducao.query.filter_by(estado=None, **filtro).first()
+            if not ep:
+                ep = EstoqueProducao(quantidade=0, estado=None, **filtro)
+                db.session.add(ep)
+                db.session.flush()
+            diff = qtd - (ep.quantidade or 0)
+            if diff == 0:
+                continue
+            db.session.add(MovEstoqueProducao(
+                estoque_producao_id=ep.id, tipo='ajuste_conferencia', quantidade=diff,
+                referencia=f'Conferência (item adicionado) por {current_user.nome}: → {qtd}',
+                usuario_id=current_user.id))
+            ep.quantidade = qtd
+            ajustes += 1
+        if ajustes:
+            db.session.commit()
+            flash(f'Conferência aplicada: {ajustes} ajuste(s) registrado(s).', 'success')
+        else:
+            flash('Nenhum ajuste necessário — o estoque já bate.', 'info')
+        return redirect(url_for('pedidos.congelados_conferencia'))
+
+    itens = (EstoqueProducao.query
+             .options(joinedload(EstoqueProducao.receita),
+                      joinedload(EstoqueProducao.produto))
+             .all())
+    itens = [it for it in itens if not it.pendente]
+
+    def _chave(it):
+        if it.receita:
+            return (0, it.receita.categoria or 'ZZZ', it.receita.nome)
+        if it.produto:
+            return (1, it.produto.categoria or 'ZZZ', it.produto.nome)
+        return (9, '', it.nome_item)
+    itens.sort(key=_chave)
+
+    com_rec = {it.receita_id for it in itens if it.receita_id}
+    com_prod = {it.produto_id for it in itens if it.produto_id}
+    receitas_add = [r for r in Receita.query.order_by(Receita.categoria, Receita.nome).all()
+                    if r.id not in com_rec]
+    produtos_add = [p for p in Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+                    if p.id not in com_prod]
+    return render_template('pedidos/congelados_conferencia.html', itens=itens,
+                           receitas_add=receitas_add, produtos_add=produtos_add)
+
+
 # ── Estoque de Loja ──
 
 @pedidos_bp.route('/conferencia', methods=['GET', 'POST'])
