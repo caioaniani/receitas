@@ -61,3 +61,17 @@ def test_catchup_dias_default_e_invalido(app):
         assert seru_cron._catchup_dias() == 0
     with patch.dict(os.environ, {'SYNC_CATCHUP_DIAS': '5'}):
         assert seru_cron._catchup_dias() == 5
+
+
+def test_com_lock_roda_fn_e_captura_excecao(app):
+    """_com_lock roda a fn (em SQLite, sem advisory lock real) e captura
+    excecao sem propagar — um job que falha nao derruba o scheduler."""
+    from app.services import seru_cron
+    with app.app_context():
+        chamadas = []
+        seru_cron._com_lock(9999, lambda: chamadas.append('ok'), 'teste')
+        assert chamadas == ['ok']
+
+        def explode():
+            raise ValueError('boom')
+        seru_cron._com_lock(9999, explode, 'teste')  # nao deve propagar
