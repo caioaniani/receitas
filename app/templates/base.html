@@ -197,24 +197,24 @@
             Vendas PDV
         </a>
         <a href="{{ url_for('pdv.itens_vendidos') }}"
-           class="sidebar-link {% if '/pdv/itens-vendidos' in request.path %}active{% endif %}">
+           class="sidebar-link ps-4 small {% if '/pdv/itens-vendidos' in request.path %}active{% endif %}">
             Itens Vendidos
         </a>
         <a href="{{ url_for('pdv.mapeamentos') }}"
-           class="sidebar-link {% if '/pdv/mapeamentos' in request.path %}active{% endif %}">
+           class="sidebar-link ps-4 small {% if '/pdv/mapeamentos' in request.path %}active{% endif %}">
             Mapeamentos Seru
         </a>
         <a href="{{ url_for('pdv.vnda_mapeamentos') }}"
-           class="sidebar-link {% if '/pdv/vnda/' in request.path %}active{% endif %}">
+           class="sidebar-link ps-4 small {% if '/pdv/vnda/' in request.path %}active{% endif %}">
             Mapeamentos VNDA
         </a>
         <a href="{{ url_for('pdv.saude') }}"
-           class="sidebar-link {% if '/pdv/saude' in request.path %}active{% endif %}">
-            Saude do Sync
+           class="sidebar-link ps-4 small {% if '/pdv/saude' in request.path %}active{% endif %}">
+            Saúde do Sync
         </a>
         <a href="{{ url_for('pdv.reconciliacao') }}"
-           class="sidebar-link {% if '/pdv/reconciliacao' in request.path %}active{% endif %}">
-            Reconciliacao
+           class="sidebar-link ps-4 small {% if '/pdv/reconciliacao' in request.path %}active{% endif %}">
+            Reconciliação
         </a>
         {% endif %}
         {% if current_user.is_admin() %}
