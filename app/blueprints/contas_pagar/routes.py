@@ -488,6 +488,23 @@ def mapeamentos():
                            exemplos=exemplos)
 
 
+@contas_pagar_bp.route('/mapeamentos/limpar-nomes', methods=['POST'])
+@login_required
+@owner_required
+def mapeamentos_limpar_nomes():
+    """Re-normaliza os nomes dos itens (ignora validade/lote) e junta os
+    vinculos duplicados. Preserva os confirmados."""
+    from app.services.conta_pagar_estoque import migrar_nomes_itens
+    stats = migrar_nomes_itens()
+    msg = (f"{stats['mesclados']} duplicado(s) juntado(s), "
+           f"{stats['atualizados']} nome(s) limpo(s).")
+    if stats['conflitos']:
+        msg += (f" {stats['conflitos']} grupo(s) com vinculos divergentes "
+                "ficaram sem mesclar (revise).")
+    flash(msg, 'success')
+    return redirect(url_for('contas_pagar.mapeamentos'))
+
+
 @contas_pagar_bp.route('/mapeamentos/<int:id>', methods=['POST'])
 @login_required
 @admin_required
