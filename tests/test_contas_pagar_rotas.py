@@ -57,11 +57,14 @@ def test_botao_importar_historico_owner_only(app):
 
     ca = app.test_client()
     rl = ca.post('/auth/login', data={'login': 'admin_cp', 'senha': '123'})
+    with ca.session_transaction() as s:
+        print('DEBUG sessao ca', dict(s))
+    with app.app_context():
+        from app.models import Usuario
+        print('DEBUG usuarios', [(u.id, u.login, u.is_owner) for u in Usuario.query.all()])
     ra = ca.get('/contas-pagar/')
     assert ra.status_code == 200
-    idx = ra.data.find('Importar'.encode())
-    print('DEBUG login_status', rl.status_code, 'loc', rl.headers.get('Location'))
-    print('DEBUG idx', idx, 'ctx', ra.data[max(0, idx - 80):idx + 80] if idx >= 0 else 'N/A')
+    print('DEBUG login_status', rl.status_code)
     assert 'Importar histórico'.encode() not in ra.data
 
 
