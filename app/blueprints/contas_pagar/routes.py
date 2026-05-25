@@ -452,6 +452,37 @@ def mapeamento_vincular(id):
                             estado=request.form.get('estado') or 'pendente'))
 
 
+@contas_pagar_bp.route('/<int:id>/item/<int:indice>/vincular', methods=['POST'])
+@login_required
+@admin_required
+def item_vincular(id, indice):
+    """Vincula/ignora um item de NF a uma MP direto da tela de detalhe da conta
+    (vendo a nota). Cria o ContaPagarItemMap por nome se ainda nao existir; o
+    vinculo vale pra todas as NFs com o mesmo nome de item."""
+    from app.services.conta_pagar_estoque import normalizar_item_nome
+    conta = ContaPagar.query.get_or_404(id)
+    try:
+        itens = json.loads(conta.itens_json or '[]')
+    except (json.JSONDecodeError, TypeError):
+        itens = []
+    if not (0 <= indice < len(itens)):
+        flash('Item nao encontrado.', 'warning')
+        return redirect(url_for('contas_pagar.detalhe', id=id))
+    nome = (itens[indice].get('nome') or '').strip()
+    norm = normalizar_item_nome(nome)
+    if not norm:
+        flash('Item sem nome — nao da pra vincular.', 'warning')
+        return redirect(url_for('contas_pagar.detalhe', id=id))
+    m = ContaPagarItemMap.query.filter_by(item_nome_norm=norm).first()
+    if not m:
+        m = ContaPagarItemMap(item_nome_norm=norm, item_nome_exemplo=nome)
+        db.session.add(m)
+    _aplicar_acao_mapa(m)
+    db.session.commit()
+    flash('Item atualizado.', 'success')
+    return redirect(url_for('contas_pagar.detalhe', id=id))
+
+
 # ── Avisos de variacao de preco ──
 
 @contas_pagar_bp.route('/variacoes')
