@@ -42,6 +42,10 @@ class Usuario(UserMixin, db.Model):
     def is_producao(self):
         return self.papel == 'producao'
 
+    def is_padeiro(self):
+        """Chao de fabrica: tela touchscreen (separar + gerar QR de saida)."""
+        return self.papel == 'padeiro'
+
     def is_rh(self):
         return self.papel == 'rh'
 
