@@ -346,3 +346,38 @@ def aplicar_balanco(itens_resolvidos, user, referencia=None):
         db.session.commit()
 
     return {'aplicados': aplicados, 'ignorados': ignorados}
+
+
+def entrada_producao(*, receita_id=None, produto_id=None, estado=None,
+                     quantidade, usuario_id, referencia='Entrada de produção'):
+    """Soma `quantidade` ao congelado da industria (EstoqueProducao) e registra
+    um MovEstoqueProducao(tipo='producao'). Caminho canonico de ENTRADA — usado
+    pela rota /congelados/entrada e pelo painel Produzir da TV do padeiro.
+
+    Acha/cria a linha por (receita_id|produto_id, estado) de forma EXPLICITA:
+    `estado=None` mira a linha cru (padrao); assim nunca soma na linha 'backup'
+    por engano. Entrada pura — NAO baixa materia-prima (intencional, igual a
+    entrada manual de producao). Nao commita: quem chama controla a transacao.
+    """
+    if (receita_id is None) == (produto_id is None):
+        raise ValueError('Informe exatamente um de receita_id/produto_id.')
+    try:
+        quantidade = int(quantidade)
+    except (TypeError, ValueError):
+        raise ValueError('quantidade invalida.') from None
+    if quantidade <= 0:
+        raise ValueError('quantidade deve ser positiva.')
+
+    ep = EstoqueProducao.query.filter_by(
+        receita_id=receita_id, produto_id=produto_id, estado=estado).first()
+    if not ep:
+        ep = EstoqueProducao(receita_id=receita_id, produto_id=produto_id,
+                             estado=estado, quantidade=0)
+        db.session.add(ep)
+        db.session.flush()
+
+    ep.quantidade = (ep.quantidade or 0) + quantidade
+    db.session.add(MovEstoqueProducao(
+        estoque_producao_id=ep.id, tipo='producao', quantidade=quantidade,
+        referencia=referencia, usuario_id=usuario_id))
+    return ep
