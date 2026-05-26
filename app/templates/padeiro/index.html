@@ -135,7 +135,7 @@
     <div class="card">
       <p class="loja">{{ p.loja.nome if p.loja else '—' }}</p>
       <p class="meta">Pedido #{{ p.id }}{% if p.data_entrega %} · entrega {{ p.data_entrega.strftime('%d/%m') }}{% endif %}</p>
-      <p class="itens">{% for it in p.itens %}{{ it.quantidade }}× {{ it.nome_item }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+      <p class="itens">{% for it in p.itens %}{{ it.quantidade }}× {{ it.nome_item_com_estado }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
       <form method="POST" action="{{ url_for('padeiro.separar', id=p.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="data" value="{{ dia.isoformat() }}">
@@ -155,7 +155,7 @@
     <div class="card sep">
       <p class="loja">{{ p.loja.nome if p.loja else '—' }}</p>
       <p class="meta">Pedido #{{ p.id }}{% if p.data_entrega %} · entrega {{ p.data_entrega.strftime('%d/%m') }}{% endif %}</p>
-      <p class="itens">{% for it in p.itens %}{{ it.quantidade }}× {{ it.nome_item }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+      <p class="itens">{% for it in p.itens %}{{ it.quantidade }}× {{ it.nome_item_com_estado }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
       {% if drivers %}
       <div class="drivers">
         <div class="lbl">Motorista chegou? Toque no nome → gera o QR:</div>
