@@ -54,7 +54,6 @@ def _dados_listas(dia, eh_hoje):
     aguardando. Helper compartilhado entre a tela cheia (`index`) e o refresh
     parcial (`listas_html`). Loja baixa estoque da loja no recebimento; o B2B
     ja baixou do freezer na venda — aqui e so producao/separacao (sem estoque)."""
-    from app.models import VendaB2B
     hj = hoje()
     q = PedidoLoja.query.filter(
         PedidoLoja.status.in_(('pendente', 'confirmado', 'separado')))
