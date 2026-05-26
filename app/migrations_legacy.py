@@ -891,6 +891,11 @@ def _migrate_postgres(app):
     _try("CREATE INDEX IF NOT EXISTS idx_venda_b2b_parcela_venda ON venda_b2b_parcela(venda_id)")
     _try("CREATE INDEX IF NOT EXISTS idx_venda_b2b_parcela_venc ON venda_b2b_parcela(vencimento)")
 
+    # Remove o status intermediario 'pendente': pedido nasce 'confirmado'.
+    # 'pendente' e 'confirmado' sempre foram o mesmo estado (mesmo rotulo/aba/
+    # transicoes — ver app/constants.py). Idempotente.
+    _try("UPDATE pedido_loja SET status = 'confirmado' WHERE status = 'pendente'")
+
     # Handshake QR Code — PIN da loja + tokens curtos por pedido.
     _try("ALTER TABLE loja ADD COLUMN IF NOT EXISTS pin VARCHAR(8)")
     _try("CREATE INDEX IF NOT EXISTS idx_pedido_qrcode_token ON pedido_qrcode(token)")
