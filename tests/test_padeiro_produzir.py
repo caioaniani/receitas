@@ -146,6 +146,24 @@ def test_produzir_invalido_nao_grava(app, admin_user, catalogo, cliente):
     assert EstoqueProducao.query.count() == antes  # nada gravado
 
 
+def test_congelados_entrada_route_mira_cru(app, admin_user, catalogo, cliente):
+    """A rota antiga /pedidos/congelados/entrada agora usa o mesmo helper: soma
+    na linha cru mesmo havendo linha backup (regressao do bug do .first())."""
+    from app.extensions import db
+    from app.models import EstoqueProducao
+    rid = catalogo['receita'].id
+    db.session.add(EstoqueProducao(receita_id=rid, estado='backup', quantidade=100))
+    db.session.commit()
+    _login(cliente)
+    r = cliente.post('/pedidos/congelados/entrada',
+                     data={'tipo': 'receita', 'item_id': rid, 'quantidade': 6})
+    assert r.status_code == 302
+    assert EstoqueProducao.query.filter_by(
+        receita_id=rid, estado='backup').one().quantidade == 100
+    assert EstoqueProducao.query.filter_by(
+        receita_id=rid, estado=None).one().quantidade == 6
+
+
 def test_produzir_nao_autorizado(app, catalogo, cliente):
     from app.extensions import db
     from app.models import Usuario
