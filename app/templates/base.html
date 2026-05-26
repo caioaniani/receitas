@@ -87,6 +87,10 @@
            class="sidebar-link {% if request.path == '/' %}active{% endif %}">
             Início
         </a>
+        <a href="{{ url_for('avisos.index') }}"
+           class="sidebar-link {% if request.path.startswith('/avisos') %}active{% endif %}">
+            Avisos à produção
+        </a>
         {% if current_user.is_owner %}
         <a href="{{ url_for('projetos.painel') }}"
            class="sidebar-link {% if request.path.startswith('/projetos') %}active{% endif %}">
