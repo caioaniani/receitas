@@ -118,3 +118,35 @@ def gerar_qr(id):
 
     return render_template('padeiro/qr.html', pedido=pedido, drv=drv,
                            qr=qr, url=url, qr_png=qr_png, voltar_data=data_str)
+
+
+@padeiro_bp.route('/juntar-repetidos', methods=['POST'])
+@login_required
+@padeiro_required
+def juntar_repetidos():
+    """Limpeza retroativa: junta pedidos duplicados (mesma loja+status+data) do
+    dia visto num so; os absorvidos viram 'cancelado'. (A criacao nova ja junta
+    sozinha; isto eh pros que ja existiam antes do recurso.)"""
+    from app.services.pedido_merge import STATUS_MESCLAVEL, consolidar_loja_data
+    data_str = (request.form.get('data') or '').strip() or None
+    hj = hoje()
+    dia = _parse_dia(data_str) or hj
+    q = PedidoLoja.query.filter(PedidoLoja.status.in_(STATUS_MESCLAVEL))
+    if dia == hj:
+        q = q.filter((PedidoLoja.data_entrega <= hj)
+                     | (PedidoLoja.data_entrega.is_(None)))
+    else:
+        q = q.filter(PedidoLoja.data_entrega == dia)
+    grupos = {ch for ch, c in
+              Counter((p.loja_id, p.status, p.data_entrega) for p in q.all()).items()
+              if c > 1}
+    juntados = 0
+    for loja_id, status, d_ent in grupos:
+        _alvo, absorvidos = consolidar_loja_data(loja_id, d_ent, status, current_user.id)
+        juntados += absorvidos
+    if juntados:
+        db.session.commit()
+        flash(f'{juntados} pedido(s) repetido(s) juntado(s) no mais antigo.', 'success')
+    else:
+        flash('Nenhum pedido repetido pra juntar.', 'info')
+    return redirect(url_for('padeiro.index', data=data_str))
