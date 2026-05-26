@@ -97,6 +97,7 @@
         <form method="POST" action="{{ url_for('padeiro.gerar_qr', id=p.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="driver_id" value="{{ d.id }}">
+          <input type="hidden" name="data" value="{{ dia.isoformat() }}">
           <button class="btn btn-mot" type="submit">{{ d.nome }}</button>
         </form>
         {% endfor %}
