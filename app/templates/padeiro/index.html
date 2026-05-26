@@ -206,7 +206,9 @@
     if (!avisosAtivos.length) { bar.style.display = 'none'; pararLoop(); return; }
     bar.style.display = 'block';
     document.getElementById('aviso-ticker-txt').innerHTML =
-      avisosAtivos.map(function (a) { return '📢 ' + esc(a.texto); }).join('     •     ');
+      avisosAtivos.map(function (a) {
+        return '📢 ' + esc(a.texto) + (a.por ? ' (' + esc(a.por) + ')' : '');
+      }).join('     •     ');
     document.getElementById('aviso-botoes').innerHTML =
       avisosAtivos.map(function (a) {
         return '<button class="aviso-li" onclick="confirmarAviso(' + a.id + ')">✓ Li: '
