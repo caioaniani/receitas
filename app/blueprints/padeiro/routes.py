@@ -204,3 +204,32 @@ def avisos_24h_json():
         'quando': a.criado_em.strftime('%d/%m %H:%M') if a.criado_em else '',
         'confirmado': a.confirmado,
     } for a in avisos])
+
+
+@padeiro_bp.route('/preparar.json')
+@login_required
+@padeiro_required
+def preparar_json():
+    """Itens [BACKUP]/[ASSADO] dos pedidos do DIA SEGUINTE (ao dia visto), pra
+    a producao adiantar o pre-preparo na vespera. Agrega por item+estado."""
+    from collections import defaultdict
+
+    from flask import jsonify
+
+    from app.constants import ESTADO_LABEL, STATUS_PEDIDO_FINALIZADOS
+    from app.models import PedidoItem
+    dia = _parse_dia(request.args.get('data')) or hoje()
+    alvo = dia + timedelta(days=1)
+    itens = (PedidoItem.query.join(PedidoLoja)
+             .filter(PedidoLoja.data_entrega == alvo,
+                     ~PedidoLoja.status.in_(STATUS_PEDIDO_FINALIZADOS),
+                     PedidoItem.estado.in_(('assado', 'backup')))
+             .all())
+    agg = defaultdict(int)
+    for it in itens:
+        agg[(it.nome_item, it.estado)] += (it.quantidade or 0)
+    linhas = [{'nome': n, 'estado': e,
+               'estado_label': ESTADO_LABEL.get(e, e.upper()), 'qtd': q}
+              for (n, e), q in agg.items()]
+    linhas.sort(key=lambda x: (x['estado_label'], -x['qtd'], x['nome']))
+    return jsonify(dia=alvo.strftime('%d/%m'), itens=linhas)
