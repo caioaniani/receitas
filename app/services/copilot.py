@@ -3004,6 +3004,7 @@ def executar_criar_venda_b2b(params, user):
             cliente_id=cliente_id,
             cliente_nome=cliente_nome if not cliente_id else None,
             data_venda=data_venda,
+            data_entrega=data_entrega,
             itens=itens_payload,
             parcelas=parcelas_payload or None,
             observacao=(params.get('observacao') or '').strip() or None,
