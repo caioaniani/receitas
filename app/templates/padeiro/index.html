@@ -331,8 +331,10 @@
     if (Date.now() - ultimoToque < 4000) return;
     var hist = document.getElementById('hist-drawer');
     var prep = document.getElementById('prep-drawer');
+    var prod = document.getElementById('prod-drawer');
     if ((hist && hist.classList.contains('aberto'))
-        || (prep && prep.classList.contains('aberto'))) return;
+        || (prep && prep.classList.contains('aberto'))
+        || (prod && prod.classList.contains('aberto'))) return;
     fetch('{{ url_for("padeiro.listas_html") }}?data={{ dia.isoformat() }}')
       .then(function (r) {
         if (r.redirected || !r.ok) return null;  // sessao caiu/erro: nao injeta lixo
