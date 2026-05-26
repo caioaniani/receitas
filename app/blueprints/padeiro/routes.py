@@ -8,7 +8,7 @@ Reusa a logica existente: status 'separado' (igual `pedidos.separar`), helper
 `handshake_qr.gerar_qr_saida` e o handshake em `/handshake/<token>`.
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -37,32 +37,40 @@ def _parse_dia(valor):
 @padeiro_required
 def index():
     hj = hoje()
-    # Pedidos do dia + atrasados ainda nao despachados (nada se perde).
-    pedidos = (PedidoLoja.query
-               .filter(PedidoLoja.status.in_(('pendente', 'confirmado', 'separado')))
-               .filter((PedidoLoja.data_entrega <= hj)
-                       | (PedidoLoja.data_entrega.is_(None)))
-               .order_by(PedidoLoja.data_entrega)
-               .all())
+    dia = _parse_dia(request.args.get('data')) or hj
+    eh_hoje = (dia == hj)
+    q = PedidoLoja.query.filter(
+        PedidoLoja.status.in_(('pendente', 'confirmado', 'separado')))
+    if eh_hoje:
+        # Hoje inclui atrasados nao despachados (nada se perde).
+        q = q.filter((PedidoLoja.data_entrega <= hj)
+                     | (PedidoLoja.data_entrega.is_(None)))
+    else:
+        q = q.filter(PedidoLoja.data_entrega == dia)
+    pedidos = q.order_by(PedidoLoja.data_entrega).all()
     a_separar = [p for p in pedidos if p.status in _A_SEPARAR]
     aguardando = [p for p in pedidos if p.status == 'separado']
     drivers = Driver.query.filter_by(ativo=True).order_by(Driver.nome).all()
-    return render_template('padeiro/index.html', a_separar=a_separar,
-                           aguardando=aguardando, drivers=drivers, hoje=hj)
+    return render_template(
+        'padeiro/index.html', a_separar=a_separar, aguardando=aguardando,
+        drivers=drivers, dia=dia, eh_hoje=eh_hoje,
+        dia_anterior=(dia - timedelta(days=1)).isoformat(),
+        dia_seguinte=(dia + timedelta(days=1)).isoformat())
 
 
 @padeiro_bp.route('/<int:id>/separar', methods=['POST'])
 @login_required
 @padeiro_required
 def separar(id):
+    data_str = (request.form.get('data') or '').strip() or None
     pedido = PedidoLoja.query.get_or_404(id)
     if pedido.status not in _A_SEPARAR:
         flash(f'Pedido #{pedido.id} nao esta mais aguardando separacao.', 'warning')
-        return redirect(url_for('padeiro.index'))
+        return redirect(url_for('padeiro.index', data=data_str))
     pedido.status = 'separado'
     db.session.commit()
     flash(f'Pedido #{pedido.id} separado.', 'success')
-    return redirect(url_for('padeiro.index'))
+    return redirect(url_for('padeiro.index', data=data_str))
 
 
 @padeiro_bp.route('/<int:id>/gerar-qr', methods=['POST'])
@@ -72,17 +80,18 @@ def gerar_qr(id):
     from app.services.handshake_qr import gerar_qr_saida
     from app.services.qrcode_svc import gerar_png_data_url
 
+    data_str = (request.form.get('data') or '').strip() or None
     pedido = PedidoLoja.query.get_or_404(id)
     if pedido.status != 'separado':
         flash(f'Pedido #{pedido.id} precisa estar separado (atual: {pedido.status}).',
               'warning')
-        return redirect(url_for('padeiro.index'))
+        return redirect(url_for('padeiro.index', data=data_str))
 
     drv_id = request.form.get('driver_id', type=int)
     drv = Driver.query.get(drv_id) if drv_id else None
     if not drv or not drv.ativo:
         flash('Escolha um motorista ativo.', 'warning')
-        return redirect(url_for('padeiro.index'))
+        return redirect(url_for('padeiro.index', data=data_str))
 
     try:
         pedido.driver_id = drv.id
@@ -94,7 +103,7 @@ def gerar_qr(id):
         db.session.rollback()
         logger.exception('padeiro.gerar_qr falhou (pedido=%s driver=%s)', id, drv_id)
         flash('Erro ao gerar o QR. O log foi registrado — avise o admin.', 'danger')
-        return redirect(url_for('padeiro.index'))
+        return redirect(url_for('padeiro.index', data=data_str))
 
     # WhatsApp pro motorista (best-effort: nao trava a tela se o Z-API falhar).
     try:
@@ -104,4 +113,4 @@ def gerar_qr(id):
         logger.exception('padeiro.gerar_qr: notificar_pedido falhou (nao bloqueia)')
 
     return render_template('padeiro/qr.html', pedido=pedido, drv=drv,
-                           qr=qr, url=url, qr_png=qr_png)
+                           qr=qr, url=url, qr_png=qr_png, voltar_data=data_str)
