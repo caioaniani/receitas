@@ -258,6 +258,35 @@
       .catch(function () {});
   }
 
+  // Atualiza os cards de pedidos sozinho (a TV nao precisa de ninguem mexendo).
+  // Troca so o #listas via fetch — sem recarregar a pagina, pra nao reiniciar o
+  // audio. Pula quando a aba esta oculta, um painel lateral esta aberto, ou
+  // alguem tocou na tela ha menos de 4s (pra nao mover botao sob o dedo).
+  function atualizarListas() {
+    if (document.hidden) return;
+    if (Date.now() - ultimoToque < 4000) return;
+    var hist = document.getElementById('hist-drawer');
+    var prep = document.getElementById('prep-drawer');
+    if ((hist && hist.classList.contains('aberto'))
+        || (prep && prep.classList.contains('aberto'))) return;
+    fetch('{{ url_for("padeiro.listas_html") }}?data={{ dia.isoformat() }}')
+      .then(function (r) {
+        if (r.redirected || !r.ok) return null;  // sessao caiu/erro: nao injeta lixo
+        return r.text();
+      })
+      .then(function (html) {
+        if (html == null) return;
+        var alvo = document.getElementById('listas');
+        if (alvo) alvo.innerHTML = html;
+        var b = document.getElementById('upd-badge');
+        if (b) {
+          b.textContent = 'atualizado ' + new Date().toLocaleTimeString('pt-BR');
+          b.classList.add('pulse');
+          setTimeout(function () { b.classList.remove('pulse'); }, 600);
+        }
+      }).catch(function () {});
+  }
+
   function fecharDrawers() {
     ['hist-drawer', 'hist-backdrop', 'prep-drawer', 'prep-backdrop'].forEach(function (id) {
       var el = document.getElementById(id);
