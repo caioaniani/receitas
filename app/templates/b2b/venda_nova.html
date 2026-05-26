@@ -73,11 +73,11 @@
 
 <style>
   .ta-wrap { position: relative; }
-  .ta-results { position:absolute; left:0; right:0; top:100%; z-index:1050;
+  .ta-results { position:fixed; z-index:1050;
                 background:var(--bg-card,#fff); color:var(--text-main,#212529);
-                border:1px solid var(--border-color,#ced4da); border-top:none;
-                border-radius:0 0 var(--radius-md,8px) var(--radius-md,8px);
-                max-height:280px; overflow-y:auto; box-shadow:0 6px 14px rgba(0,0,0,.2); }
+                border:1px solid var(--border-color,#ced4da);
+                border-radius:var(--radius-md,8px);
+                max-height:280px; overflow-y:auto; box-shadow:0 6px 14px rgba(0,0,0,.3); }
   .ta-opt { padding:9px 12px; cursor:pointer; font-size:.9rem; }
   .ta-opt:hover { background:var(--bg-card-hover,#f4f4f5); }
 </style>
