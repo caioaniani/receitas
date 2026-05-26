@@ -140,5 +140,80 @@
   <div class="vazio">Nenhum pedido separado aguardando.</div>
   {% endif %}
 </div>
+<script>
+  var CSRF = "{{ csrf_token() }}";
+  var audioCtx = null, somAtivo = false, loopId = null, avisosAtivos = [];
+
+  function ativarSom() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      audioCtx.resume();
+      somAtivo = true;
+      var sb = document.getElementById('som-bar');
+      if (sb) sb.style.display = 'none';
+      tocarCampainha();
+      if (avisosAtivos.length) iniciarLoop();
+    } catch (e) { /* navegador sem Web Audio */ }
+  }
+
+  function tocarCampainha() {
+    if (!somAtivo || !audioCtx) return;
+    var t0 = audioCtx.currentTime;
+    [0, 0.22].forEach(function (off, i) {
+      var osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = (i === 0) ? 880 : 1175;
+      g.gain.setValueAtTime(0.0001, t0 + off);
+      g.gain.exponentialRampToValueAtTime(0.35, t0 + off + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + off + 0.45);
+      osc.connect(g); g.connect(audioCtx.destination);
+      osc.start(t0 + off); osc.stop(t0 + off + 0.45);
+    });
+  }
+
+  function iniciarLoop() {
+    if (loopId || !somAtivo || !avisosAtivos.length) return;
+    tocarCampainha();
+    loopId = setInterval(tocarCampainha, 6000);
+  }
+  function pararLoop() { if (loopId) { clearInterval(loopId); loopId = null; } }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  function renderAvisos(avisos) {
+    avisosAtivos = avisos || [];
+    var bar = document.getElementById('avisos-bar');
+    if (!avisosAtivos.length) { bar.style.display = 'none'; pararLoop(); return; }
+    bar.style.display = 'block';
+    document.getElementById('aviso-ticker-txt').innerHTML =
+      avisosAtivos.map(function (a) { return '📢 ' + esc(a.texto); }).join('     •     ');
+    document.getElementById('aviso-botoes').innerHTML =
+      avisosAtivos.map(function (a) {
+        return '<button class="aviso-li" onclick="confirmarAviso(' + a.id + ')">✓ Li: '
+          + esc(String(a.texto).substring(0, 40)) + '</button>';
+      }).join('');
+    iniciarLoop();
+  }
+
+  function confirmarAviso(id) {
+    fetch('/padeiro/avisos/' + id + '/confirmar', {
+      method: 'POST', headers: { 'X-CSRFToken': CSRF }
+    }).then(function () { carregarAvisos(); }).catch(function () {});
+  }
+
+  function carregarAvisos() {
+    fetch('{{ url_for("padeiro.avisos_json") }}')
+      .then(function (r) { return r.json(); })
+      .then(function (d) { renderAvisos(d.avisos); })
+      .catch(function () {});
+  }
+
+  carregarAvisos();
+  setInterval(carregarAvisos, 15000);
+</script>
 </body>
 </html>
