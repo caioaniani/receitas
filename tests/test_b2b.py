@@ -6,6 +6,18 @@ cancelar venda estorna estoque, receber parcela atualiza valor_pago.
 from datetime import date, timedelta
 
 
+def test_form_nova_venda_tem_typeahead(app, admin_user, catalogo):
+    """Formulario de nova venda B2B renderiza o item como typeahead (input de
+    busca client-side), nao mais um <select> gigante."""
+    cliente = app.test_client()
+    cliente.post('/auth/login', data={'login': 'admin', 'senha': '123'})
+    r = cliente.get('/b2b/vendas/nova')
+    assert r.status_code == 200
+    assert b'ta-input' in r.data          # campo de busca (typeahead)
+    assert b'function norm' in r.data     # normalizacao sem acento
+    assert b'Croissant Tradicional' in r.data  # catalogo disponivel pro filtro JS
+
+
 def test_criar_venda_baixa_estoque(app, admin_user, catalogo):
     """Venda B2B com 1 item baixa do EstoqueProducao corretamente."""
     from app.extensions import db
