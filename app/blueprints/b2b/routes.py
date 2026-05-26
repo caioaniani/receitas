@@ -165,6 +165,9 @@ def venda_criar():
         data_entrega = date.fromisoformat(data_ent_str) if data_ent_str else None
     except ValueError:
         data_entrega = None
+    if not data_entrega:
+        flash('Informe a data de entrega ao padeiro.', 'warning')
+        return redirect(url_for('b2b.venda_nova'))
     nf = (request.form.get('nf_numero') or '').strip() or None
     obs = (request.form.get('observacao') or '').strip() or None
 
