@@ -1538,6 +1538,19 @@ def _rapidfuzz_top(query, choices, score_cutoff=60, limit=5):
     return [(idx, score, choice) for choice, score, idx in results]
 
 
+def _separar_estado(nome):
+    """'Croissant backup' -> ('Croissant', 'backup'); 'X assado' -> ('X','assado');
+    'X cru'/'X' -> ('X', None). Deixa o copilot entender o estado pedido no nome
+    do item da venda B2B (mesma ideia de PedidoItem.estado)."""
+    import re
+    nome = (nome or '').strip()
+    m = re.search(r'\s+(backup|assado|cru)\s*$', nome, re.IGNORECASE)
+    if not m:
+        return nome, None
+    est = m.group(1).lower()
+    return nome[:m.start()].strip(), (None if est == 'cru' else est)
+
+
 def _resolver_produto(nome):
     from sqlalchemy import func
     matches = []
