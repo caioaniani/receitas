@@ -33,13 +33,10 @@ def _parse_dia(valor):
         return None
 
 
-@padeiro_bp.route('/')
-@login_required
-@padeiro_required
-def index():
+def _dados_listas(dia, eh_hoje):
+    """Pedidos a separar + aguardando motorista do dia. Helper compartilhado
+    entre a tela cheia (`index`) e o refresh parcial (`listas_html`)."""
     hj = hoje()
-    dia = _parse_dia(request.args.get('data')) or hj
-    eh_hoje = (dia == hj)
     q = PedidoLoja.query.filter(
         PedidoLoja.status.in_(('pendente', 'confirmado', 'separado')))
     if eh_hoje:
@@ -55,11 +52,35 @@ def index():
     # Repetidos = pedidos a mais por (loja, status, data) que dariam pra juntar.
     grupos = Counter((p.loja_id, p.status, p.data_entrega) for p in a_separar)
     n_repetidos = sum(c - 1 for c in grupos.values() if c > 1)
+    return {'a_separar': a_separar, 'aguardando': aguardando,
+            'drivers': drivers, 'n_repetidos': n_repetidos}
+
+
+@padeiro_bp.route('/')
+@login_required
+@padeiro_required
+def index():
+    hj = hoje()
+    dia = _parse_dia(request.args.get('data')) or hj
+    eh_hoje = (dia == hj)
     return render_template(
-        'padeiro/index.html', a_separar=a_separar, aguardando=aguardando,
-        drivers=drivers, dia=dia, eh_hoje=eh_hoje, n_repetidos=n_repetidos,
+        'padeiro/index.html', dia=dia, eh_hoje=eh_hoje,
         dia_anterior=(dia - timedelta(days=1)).isoformat(),
-        dia_seguinte=(dia + timedelta(days=1)).isoformat())
+        dia_seguinte=(dia + timedelta(days=1)).isoformat(),
+        **_dados_listas(dia, eh_hoje))
+
+
+@padeiro_bp.route('/listas.html')
+@login_required
+@padeiro_required
+def listas_html():
+    """Fragmento HTML das listas pra TV atualizar sozinha sem recarregar a
+    pagina (preserva o audio ja liberado e o estado dos paineis laterais)."""
+    hj = hoje()
+    dia = _parse_dia(request.args.get('data')) or hj
+    eh_hoje = (dia == hj)
+    return render_template('padeiro/_listas.html', dia=dia, eh_hoje=eh_hoje,
+                           **_dados_listas(dia, eh_hoje))
 
 
 @padeiro_bp.route('/<int:id>/separar', methods=['POST'])
