@@ -345,20 +345,16 @@
   function renderPrep() {
     if (!prepItens.length) {
       document.getElementById('prep-lista').innerHTML =
-        '<div class="prep-item">Nenhum item [BACKUP] ou [ASSADO] pro dia seguinte.</div>';
+        '<div class="prep-item"><div class="prep-loja">Nenhum item [BACKUP] ou [ASSADO] pro dia seguinte.</div></div>';
       return;
     }
-    var grupos = {};
-    prepItens.forEach(function (it) {
-      (grupos[it.estado_label] = grupos[it.estado_label] || []).push(it);
-    });
     var html = '';
-    Object.keys(grupos).forEach(function (lbl) {
-      html += '<div class="prep-grupo">[' + esc(lbl) + ']</div>';
-      grupos[lbl].forEach(function (it) {
-        html += '<div class="prep-item"><span class="prep-q">' + it.qtd + '×</span> '
-          + esc(it.nome) + '</div>';
-      });
+    prepItens.forEach(function (it) {
+      html += '<div class="prep-item">'
+        + '<div class="prep-linha"><span class="prep-q">' + it.qtd + '×</span> '
+        + esc(it.nome) + ' [' + esc(it.estado_label) + ']</div>'
+        + '<div class="prep-loja">' + esc(it.loja) + '</div>'
+        + '</div>';
     });
     document.getElementById('prep-lista').innerHTML = html;
   }
