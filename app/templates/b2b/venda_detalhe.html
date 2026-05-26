@@ -29,6 +29,20 @@
                     Data: <strong>{{ venda.data_venda.strftime('%d/%m/%Y') }}</strong>
                     {% if venda.nf_numero %} · NF #{{ venda.nf_numero }}{% endif %}
                 </div>
+                <div class="mt-2">
+                    Entrega (padaria):
+                    <strong>{{ venda.data_entrega.strftime('%d/%m/%Y') if venda.data_entrega else '— (não entra na fila do padeiro)' }}</strong>
+                    {% if venda.data_entrega %}<span class="badge bg-secondary">{{ venda.status_entrega }}</span>{% endif %}
+                </div>
+                {% if venda.status != 'cancelada' %}
+                <form method="POST" action="{{ url_for('b2b.venda_entrega', vid=venda.id) }}" class="d-flex gap-2 align-items-center mt-1">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="date" name="data_entrega" class="form-control form-control-sm" style="max-width:170px;"
+                           value="{{ venda.data_entrega.isoformat() if venda.data_entrega else '' }}">
+                    <button class="btn btn-sm btn-outline-primary" type="submit">Salvar entrega</button>
+                </form>
+                <div class="form-text">Defina a data pra a venda aparecer na tela do padeiro.</div>
+                {% endif %}
                 {% if venda.observacao %}<div class="text-muted mt-1">{{ venda.observacao }}</div>{% endif %}
             </div>
         </div>
