@@ -179,6 +179,15 @@
   </div>
   <div id="hist-lista"></div>
 </div>
+<button id="prep-toggle" onclick="togglePrep()">🥐 Pré-preparo</button>
+<div id="prep-backdrop" onclick="togglePrep()"></div>
+<div id="prep-drawer">
+  <div class="hist-head">
+    <strong>Pré-preparo — <span id="prep-dia"></span> · [BACKUP]/[ASSADO]</strong>
+    <button class="hist-x" onclick="togglePrep()" aria-label="Fechar">×</button>
+  </div>
+  <div id="prep-lista"></div>
+</div>
 <script>
   var CSRF = "{{ csrf_token() }}";
   var audioCtx = null, somAtivo = false, loopId = null, avisosAtivos = [];
