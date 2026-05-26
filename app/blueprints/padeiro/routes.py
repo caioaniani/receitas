@@ -288,7 +288,7 @@ def preparar_json():
     from flask import jsonify
 
     from app.constants import ESTADO_LABEL, STATUS_PEDIDO_FINALIZADOS
-    from app.models import PedidoItem
+    from app.models import PedidoItem, VendaB2BItem
     dia = _parse_dia(request.args.get('data')) or hoje()
     alvo = dia + timedelta(days=1)
     itens = (PedidoItem.query.join(PedidoLoja)
@@ -300,6 +300,16 @@ def preparar_json():
     for it in itens:
         loja = it.pedido.loja.nome if (it.pedido and it.pedido.loja) else '—'
         agg[(loja, it.nome_item, it.estado)] += (it.quantidade or 0)
+    # B2B do dia seguinte com estado [ASSADO]/[BACKUP] entram no mesmo pre-preparo.
+    itens_b2b = (VendaB2BItem.query.join(VendaB2B)
+                 .filter(VendaB2B.data_entrega == alvo,
+                         VendaB2B.status != 'cancelada',
+                         VendaB2B.status_entrega != 'entregue',
+                         VendaB2BItem.estado.in_(('assado', 'backup')))
+                 .all())
+    for it in itens_b2b:
+        cli = ('B2B · ' + it.venda.cliente_display) if it.venda else 'B2B'
+        agg[(cli, it.nome_item, it.estado)] += (it.quantidade or 0)
     linhas = [{'loja': lj, 'nome': n, 'estado': e,
                'estado_label': ESTADO_LABEL.get(e, e.upper()), 'qtd': q}
               for (lj, n, e), q in agg.items()]
