@@ -1294,29 +1294,30 @@ def congelados_historico():
 @login_required
 @producao_required
 def congelados_entrada():
+    # Caminho canonico (mesmo helper do painel Produzir da TV): entrada=soma na
+    # linha cru (estado=None). Antes filtrava sem estado e o .first() podia
+    # somar na linha 'backup' por engano.
+    from app.services.estoque_congelados import entrada_producao
     tipo = request.form.get('tipo', 'receita')
-    item_id = int(request.form['item_id'])
-    qtd = int(request.form['quantidade'])
-
-    ep = EstoqueProducao.query.filter_by(
-        receita_id=item_id if tipo == 'receita' else None,
-        produto_id=item_id if tipo == 'produto' else None,
-    ).first()
-    if not ep:
-        ep = EstoqueProducao(
+    try:
+        item_id = int(request.form['item_id'])
+        qtd = int(request.form['quantidade'])
+        entrada_producao(
             receita_id=item_id if tipo == 'receita' else None,
             produto_id=item_id if tipo == 'produto' else None,
+            estado=None, quantidade=qtd, usuario_id=current_user.id,
+            referencia='Entrada de produção',
         )
-        db.session.add(ep)
-        db.session.flush()
-
-    ep.quantidade += qtd
-    db.session.add(MovEstoqueProducao(
-        estoque_producao_id=ep.id, tipo='producao',
-        quantidade=qtd, referencia='Entrada de produção',
-        usuario_id=current_user.id,
-    ))
-    db.session.commit()
+        db.session.commit()
+    except (KeyError, ValueError):
+        db.session.rollback()
+        flash('Dados invalidos para a entrada de producao.', 'warning')
+        return redirect(url_for('pedidos.congelados'))
+    except Exception:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception('congelados_entrada falhou')
+        flash('Erro ao registrar a entrada. O log foi registrado.', 'danger')
+        return redirect(url_for('pedidos.congelados'))
     flash(f'Entrada de {qtd} unidades registrada.', 'success')
     return redirect(url_for('pedidos.congelados'))
 
