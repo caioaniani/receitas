@@ -194,7 +194,52 @@ def novo():
                                    receitas=receitas, materias=materias,
                                    amanha=amanha, loja_id=loja_id)
 
+        # Monta a lista de itens normalizada antes de decidir merge vs novo.
+        ids = request.form.getlist('item_id[]')
+        qtds = request.form.getlist('item_qtd[]')
+        notas = request.form.getlist('item_obs[]')
+        estados = request.form.getlist('item_estado[]')
+        itens_norm = []
+        for i in range(len(ids)):
+            if not ids[i] or not qtds[i]:
+                continue
+            tipo, item_id = _parse_item_id(ids[i])
+            if not tipo:
+                continue
+            try:
+                qtd = int(qtds[i])
+            except (TypeError, ValueError):
+                continue
+            if qtd <= 0:
+                continue
+            est = (estados[i].strip().lower() if i < len(estados) else '') or None
+            if est not in (None, 'backup', 'assado'):
+                est = None
+            itens_norm.append({
+                'receita_id': item_id if tipo == 'receita' else None,
+                'produto_id': None,
+                'materia_prima_id': item_id if tipo == 'mp' else None,
+                'quantidade': qtd,
+                'observacao': notas[i].strip() if i < len(notas) else None,
+                'estado': est,
+            })
+
         try:
+            from app.services.pedido_merge import (
+                mesclar_itens,
+                pedido_aberto_para_merge,
+            )
+            # Ja existe pedido aberto da loja nessa data? Junta nele em vez de duplicar.
+            alvo = pedido_aberto_para_merge(sel_loja, data_entrega, 'confirmado')
+            if alvo:
+                mesclar_itens(alvo, itens_norm, modificado_por_id=current_user.id)
+                if obs:
+                    alvo.observacao = ((alvo.observacao + ' | ') if alvo.observacao else '') + obs
+                db.session.commit()
+                flash(f'Itens adicionados ao pedido #{alvo.id} — ja existia '
+                      'para esta loja nesta data.', 'success')
+                return redirect(url_for('pedidos.detalhe', id=alvo.id))
+
             pedido = PedidoLoja(
                 loja_id=sel_loja,
                 data_entrega=data_entrega,
@@ -203,38 +248,8 @@ def novo():
             )
             db.session.add(pedido)
             db.session.flush()
-
-            ids = request.form.getlist('item_id[]')
-            qtds = request.form.getlist('item_qtd[]')
-            notas = request.form.getlist('item_obs[]')
-            estados = request.form.getlist('item_estado[]')
-
-            for i in range(len(ids)):
-                if not ids[i] or not qtds[i]:
-                    continue
-                tipo, item_id = _parse_item_id(ids[i])
-                if not tipo:
-                    continue
-                try:
-                    qtd = int(qtds[i])
-                except (TypeError, ValueError):
-                    continue
-                if qtd <= 0:
-                    continue
-                est = (estados[i].strip().lower()
-                        if i < len(estados) else '') or None
-                if est not in (None, 'backup', 'assado'):
-                    est = None
-                item = PedidoItem(
-                    pedido_id=pedido.id,
-                    receita_id=item_id if tipo == 'receita' else None,
-                    materia_prima_id=item_id if tipo == 'mp' else None,
-                    quantidade=qtd,
-                    observacao=notas[i].strip() if i < len(notas) else None,
-                    estado=est,
-                )
-                db.session.add(item)
-
+            for it in itens_norm:
+                db.session.add(PedidoItem(pedido_id=pedido.id, **it))
             db.session.commit()
         except Exception as exc:  # noqa: BLE001
             db.session.rollback()
