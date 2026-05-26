@@ -71,6 +71,33 @@ def test_preparar_inclui_b2b_dia_seguinte(app, admin_user, catalogo, cliente):
                and 'Bruno' in linha['loja'] for linha in j['itens'])
 
 
+def test_form_b2b_salva_data_entrega_e_aparece_amanha(app, admin_user, catalogo, cliente):
+    """Reproduz o fluxo do dono: cria pelo formulario /b2b com entrega amanha e
+    confere que (a) a data foi salva e (b) o card aparece no padeiro de amanha."""
+    from app.models import VendaB2B
+    from app.utils import hoje
+    _login(cliente)
+    amanha = hoje() + timedelta(days=1)
+    rid = catalogo['receita'].id
+    r = cliente.post('/b2b/vendas/nova', data={
+        'cliente_nome': 'Bruno',
+        'data_venda': hoje().isoformat(),
+        'data_entrega': amanha.isoformat(),
+        'item_ref[]': 'receita:%d' % rid,
+        'item_qtd[]': '20',
+        'item_preco[]': '10',
+        'item_desc[]': '',
+        'item_estado[]': 'backup',
+    })
+    assert r.status_code == 302
+    v = VendaB2B.query.filter_by(cliente_nome='Bruno').first()
+    assert v is not None
+    assert v.data_entrega == amanha        # data de entrega persistida
+    assert v.status_entrega == 'pendente'  # default de entrega
+    r2 = cliente.get('/padeiro/?data=' + amanha.isoformat())
+    assert b'Bruno' in r2.data             # card B2B aparece no dia de amanha
+
+
 def test_criar_venda_guarda_data_entrega_e_estado(app, admin_user, catalogo):
     from app.models import VendaB2BItem
     from app.services import vendas_b2b as svc
