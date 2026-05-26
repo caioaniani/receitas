@@ -2555,19 +2555,31 @@ def sugerir_pedido(loja_id):
         if not itens:
             flash('Nenhum item com quantidade > 0.', 'warning')
             return redirect(url_for('pedidos.sugerir_pedido', loja_id=loja_id))
+        itens_norm = [{
+            'receita_id': it['id'] if it['tipo'] == 'receita' else None,
+            'produto_id': it['id'] if it['tipo'] == 'produto' else None,
+            'materia_prima_id': it['id'] if it['tipo'] == 'mp' else None,
+            'quantidade': it['quantidade'], 'estado': None, 'observacao': None,
+        } for it in itens]
+
+        from app.services.pedido_merge import (
+            mesclar_itens,
+            pedido_aberto_para_merge,
+        )
+        alvo = pedido_aberto_para_merge(loja_id, data_entrega, 'confirmado')
+        if alvo:
+            mesclar_itens(alvo, itens_norm, modificado_por_id=current_user.id)
+            db.session.commit()
+            flash(f'Itens adicionados ao pedido #{alvo.id} — ja existia '
+                  'para esta loja nesta data.', 'success')
+            return redirect(url_for('pedidos.detalhe', id=alvo.id))
+
         pedido = PedidoLoja(loja_id=loja_id, data_entrega=data_entrega,
                             criado_por=current_user.id, status='confirmado')
         db.session.add(pedido)
         db.session.flush()
-        for it in itens:
-            pi = PedidoItem(pedido_id=pedido.id, quantidade=it['quantidade'])
-            if it['tipo'] == 'receita':
-                pi.receita_id = it['id']
-            elif it['tipo'] == 'produto':
-                pi.produto_id = it['id']
-            else:
-                pi.materia_prima_id = it['id']
-            db.session.add(pi)
+        for it in itens_norm:
+            db.session.add(PedidoItem(pedido_id=pedido.id, **it))
         db.session.commit()
         flash(f'Pedido #{pedido.id} criado a partir da sugestao.', 'success')
         return redirect(url_for('pedidos.detalhe', id=pedido.id))
