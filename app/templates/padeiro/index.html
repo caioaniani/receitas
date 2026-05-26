@@ -156,6 +156,15 @@
   <div class="vazio">Nenhum pedido separado aguardando.</div>
   {% endif %}
 </div>
+<button id="hist-toggle" onclick="toggleHist()">📋 Avisos 24h</button>
+<div id="hist-backdrop" onclick="toggleHist()"></div>
+<div id="hist-drawer">
+  <div class="hist-head">
+    <strong>Avisos — últimas 24h</strong>
+    <button class="hist-x" onclick="toggleHist()" aria-label="Fechar">×</button>
+  </div>
+  <div id="hist-lista"></div>
+</div>
 <script>
   var CSRF = "{{ csrf_token() }}";
   var audioCtx = null, somAtivo = false, loopId = null, avisosAtivos = [];
