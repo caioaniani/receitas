@@ -1146,5 +1146,11 @@ def _migrate_sqlite(app):
     if cols_spm and 'fator_quantidade' not in cols_spm:
         cursor.execute("ALTER TABLE seru_produto_map ADD COLUMN fator_quantidade REAL NOT NULL DEFAULT 1.0")
 
+    # Status intermediario 'pendente' vira 'confirmado' direto (idempotente).
+    try:
+        cursor.execute("UPDATE pedido_loja SET status='confirmado' WHERE status='pendente'")
+    except sqlite3.OperationalError:
+        pass
+
     conn.commit()
     conn.close()
