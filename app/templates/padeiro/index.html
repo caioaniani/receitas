@@ -239,6 +239,29 @@
       .catch(function () {});
   }
 
+  function toggleHist() {
+    var d = document.getElementById('hist-drawer');
+    var b = document.getElementById('hist-backdrop');
+    var abrindo = !d.classList.contains('aberto');
+    d.classList.toggle('aberto');
+    b.classList.toggle('aberto');
+    if (abrindo) carregarHist();
+  }
+  function carregarHist() {
+    fetch('{{ url_for("padeiro.avisos_24h_json") }}')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var avisos = d.avisos || [];
+        document.getElementById('hist-lista').innerHTML = avisos.length
+          ? avisos.map(function (a) {
+              return '<div class="hist-item"><div class="t">' + esc(a.texto) + '</div>'
+                + '<div class="m">' + esc(a.por) + ' · ' + esc(a.quando)
+                + (a.confirmado ? ' · ✓ lido' : ' · na TV') + '</div></div>';
+            }).join('')
+          : '<div class="hist-item"><div class="m">Nenhum aviso nas últimas 24h.</div></div>';
+      }).catch(function () {});
+  }
+
   carregarAvisos();
   setInterval(carregarAvisos, 15000);
 </script>
