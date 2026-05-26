@@ -32,12 +32,18 @@ from app.utils import hoje as hoje_brt
 
 
 def _parse_item_id(value):
-    """Decodifica 'r_5'/'mp_5'/'5' em ('receita'|'mp', id). Legacy: int puro = receita."""
+    """Decodifica 'r_5'/'p_5'/'mp_5'/'5' em ('receita'|'produto'|'mp', id).
+    Legacy: int puro = receita."""
     if not value:
         return None, None
     if value.startswith('r_'):
         try:
             return 'receita', int(value[2:])
+        except ValueError:
+            return None, None
+    if value.startswith('p_'):
+        try:
+            return 'produto', int(value[2:])
         except ValueError:
             return None, None
     if value.startswith('mp_'):
