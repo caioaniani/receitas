@@ -1208,10 +1208,11 @@ def _enriquecer_criar_venda_b2b(tool_input):
             estoque_atual = ep.quantidade if ep else 0
 
         itens_enriq.append({
-            'nome_original': nome,
+            'nome_original': nome_in,
             'quantidade': qtd,
             'matches': matches,
             'resolvido': resolvido,
+            'estado': est,
             'preco_unitario': round(float(preco_unit), 2),
             'desconto_percentual': desc,
             'subtotal': round(subtotal, 2),
