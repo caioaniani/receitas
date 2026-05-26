@@ -33,9 +33,28 @@ def _parse_dia(valor):
         return None
 
 
+def _card_loja(p):
+    return {'tipo': 'loja', 'id': p.id,
+            'titulo': (p.loja.nome if p.loja else '—'),
+            'data_entrega': p.data_entrega,
+            'itens': [{'qtd': it.quantidade, 'nome': it.nome_item_com_estado}
+                      for it in p.itens]}
+
+
+def _card_b2b(v):
+    return {'tipo': 'b2b', 'id': v.id,
+            'titulo': 'B2B · ' + v.cliente_display,
+            'data_entrega': v.data_entrega,
+            'itens': [{'qtd': it.quantidade, 'nome': it.nome_item_com_estado}
+                      for it in v.itens]}
+
+
 def _dados_listas(dia, eh_hoje):
-    """Pedidos a separar + aguardando motorista do dia. Helper compartilhado
-    entre a tela cheia (`index`) e o refresh parcial (`listas_html`)."""
+    """Pedidos de loja + vendas B2B (com data de entrega) do dia, a separar e
+    aguardando. Helper compartilhado entre a tela cheia (`index`) e o refresh
+    parcial (`listas_html`). Loja baixa estoque da loja no recebimento; o B2B
+    ja baixou do freezer na venda — aqui e so producao/separacao (sem estoque)."""
+    from app.models import VendaB2B
     hj = hoje()
     q = PedidoLoja.query.filter(
         PedidoLoja.status.in_(('pendente', 'confirmado', 'separado')))
@@ -46,11 +65,26 @@ def _dados_listas(dia, eh_hoje):
     else:
         q = q.filter(PedidoLoja.data_entrega == dia)
     pedidos = q.order_by(PedidoLoja.data_entrega).all()
-    a_separar = [p for p in pedidos if p.status in _A_SEPARAR]
-    aguardando = [p for p in pedidos if p.status == 'separado']
+
+    # B2B so entra na fila quando tem data de entrega (senao e venda imediata).
+    qb = VendaB2B.query.filter(
+        VendaB2B.status != 'cancelada',
+        VendaB2B.status_entrega.in_(('pendente', 'separado')),
+        VendaB2B.data_entrega.isnot(None))
+    if eh_hoje:
+        qb = qb.filter(VendaB2B.data_entrega <= hj)
+    else:
+        qb = qb.filter(VendaB2B.data_entrega == dia)
+    vendas = qb.order_by(VendaB2B.data_entrega).all()
+
+    a_separar = ([_card_loja(p) for p in pedidos if p.status in _A_SEPARAR]
+                 + [_card_b2b(v) for v in vendas if v.status_entrega == 'pendente'])
+    aguardando = ([_card_loja(p) for p in pedidos if p.status == 'separado']
+                  + [_card_b2b(v) for v in vendas if v.status_entrega == 'separado'])
     drivers = Driver.query.filter_by(ativo=True).order_by(Driver.nome).all()
-    # Repetidos = pedidos a mais por (loja, status, data) que dariam pra juntar.
-    grupos = Counter((p.loja_id, p.status, p.data_entrega) for p in a_separar)
+    # Repetidos = pedidos de loja a mais por (loja, status, data) pra juntar.
+    grupos = Counter((p.loja_id, p.status, p.data_entrega)
+                     for p in pedidos if p.status in _A_SEPARAR)
     n_repetidos = sum(c - 1 for c in grupos.values() if c > 1)
     return {'a_separar': a_separar, 'aguardando': aguardando,
             'drivers': drivers, 'n_repetidos': n_repetidos}
