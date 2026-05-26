@@ -227,11 +227,12 @@ def preparar_json():
              .all())
     agg = defaultdict(int)
     for it in itens:
-        agg[(it.nome_item, it.estado)] += (it.quantidade or 0)
-    linhas = [{'nome': n, 'estado': e,
+        loja = it.pedido.loja.nome if (it.pedido and it.pedido.loja) else '—'
+        agg[(loja, it.nome_item, it.estado)] += (it.quantidade or 0)
+    linhas = [{'loja': lj, 'nome': n, 'estado': e,
                'estado_label': ESTADO_LABEL.get(e, e.upper()), 'qtd': q}
-              for (n, e), q in agg.items()]
-    linhas.sort(key=lambda x: (x['estado_label'], -x['qtd'], x['nome']))
+              for (lj, n, e), q in agg.items()]
+    linhas.sort(key=lambda x: (x['loja'], x['estado_label'], -x['qtd'], x['nome']))
     # Alerta de pre-preparo: so depois das 18h (BRT) e havendo itens.
     from app.utils import agora
     alertar = bool(linhas) and agora().hour >= 18
