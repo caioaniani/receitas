@@ -503,6 +503,36 @@ def _migrate_postgres(app):
                 "ALTER TABLE vnda_debito ADD PRIMARY KEY (vnda_produto_map_id, componente_key)"
             ))
 
+        # B2B no padeiro (Fase 1): venda_b2b ganha data de entrega + um status
+        # de ENTREGA proprio (pendente/separado/em_transporte/entregue),
+        # separado do status FINANCEIRO (ativa/cancelada) pra nao mexer em
+        # parcelas/faturamento. venda_b2b_item ganha estado (cru/backup/assado),
+        # igual PedidoItem. So ALTER aqui; modelo entra no commit seguinte.
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'venda_b2b'"
+        ))
+        cols_vb = {row[0] for row in result}
+        if cols_vb and 'data_entrega' not in cols_vb:
+            conn.execute(text("ALTER TABLE venda_b2b ADD COLUMN data_entrega DATE"))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_venda_b2b_data_entrega "
+                "ON venda_b2b(data_entrega)"
+            ))
+        if cols_vb and 'status_entrega' not in cols_vb:
+            conn.execute(text(
+                "ALTER TABLE venda_b2b ADD COLUMN status_entrega VARCHAR(20) "
+                "NOT NULL DEFAULT 'pendente'"
+            ))
+
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'venda_b2b_item'"
+        ))
+        cols_vbi = {row[0] for row in result}
+        if cols_vbi and 'estado' not in cols_vbi:
+            conn.execute(text("ALTER TABLE venda_b2b_item ADD COLUMN estado VARCHAR(20)"))
+
         conn.commit()
 
     # Migrações resilientes (cada ALTER em sua própria transação)
