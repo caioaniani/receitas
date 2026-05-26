@@ -1,0 +1,88 @@
+"""B2B na tela do padeiro (Fase 1): vendas B2B com data de entrega aparecem
+junto dos pedidos de loja, com estado por item, e podem ser separadas. B2B sem
+data de entrega (venda imediata) nao entra na fila. Sem mexer em estoque (o B2B
+ja baixou do freezer na venda)."""
+from datetime import timedelta
+
+import pytest
+
+
+@pytest.fixture
+def cliente(app):
+    return app.test_client()
+
+
+def _login(cliente):
+    return cliente.post('/auth/login', data={'login': 'admin', 'senha': '123'})
+
+
+def _venda_b2b(app, admin_user, catalogo, *, data_entrega, estado='backup',
+               status_entrega='pendente'):
+    from app.extensions import db
+    from app.models import VendaB2B, VendaB2BItem
+    v = VendaB2B(cliente_nome='Bruno', data_entrega=data_entrega, status='ativa',
+                 status_entrega=status_entrega, valor_total=0,
+                 criado_por_id=admin_user.id)
+    db.session.add(v)
+    db.session.commit()
+    db.session.add(VendaB2BItem(venda_id=v.id, receita_id=catalogo['receita'].id,
+                                quantidade=20, preco_unitario=0, estado=estado))
+    db.session.commit()
+    return v
+
+
+def test_b2b_com_data_aparece_no_padeiro(app, admin_user, catalogo, cliente):
+    from app.utils import hoje
+    v = _venda_b2b(app, admin_user, catalogo, data_entrega=hoje(), estado='backup')
+    _login(cliente)
+    r = cliente.get('/padeiro/')
+    assert r.status_code == 200
+    assert b'Bruno' in r.data
+    assert b'[BACKUP]' in r.data  # estado do item B2B aparece no card
+    assert ('/padeiro/b2b/%d/separar' % v.id).encode() in r.data  # form separar B2B
+
+
+def test_b2b_sem_data_nao_aparece(app, admin_user, catalogo, cliente):
+    _venda_b2b(app, admin_user, catalogo, data_entrega=None)
+    _login(cliente)
+    r = cliente.get('/padeiro/')
+    assert r.status_code == 200
+    assert b'Bruno' not in r.data  # venda imediata fica fora da fila do padeiro
+
+
+def test_separar_b2b_muda_status(app, admin_user, catalogo, cliente):
+    from app.models import VendaB2B
+    from app.utils import hoje
+    v = _venda_b2b(app, admin_user, catalogo, data_entrega=hoje())
+    _login(cliente)
+    r = cliente.post('/padeiro/b2b/%d/separar' % v.id,
+                     data={'data': hoje().isoformat()})
+    assert r.status_code == 302
+    assert VendaB2B.query.get(v.id).status_entrega == 'separado'
+
+
+def test_preparar_inclui_b2b_dia_seguinte(app, admin_user, catalogo, cliente):
+    from app.utils import hoje
+    amanha = hoje() + timedelta(days=1)
+    _venda_b2b(app, admin_user, catalogo, data_entrega=amanha, estado='assado')
+    _login(cliente)
+    j = cliente.get('/padeiro/preparar.json?data=%s' % hoje().isoformat()).get_json()
+    assert any(linha['estado_label'] == 'ASSADO' and linha['qtd'] == 20
+               and 'Bruno' in linha['loja'] for linha in j['itens'])
+
+
+def test_criar_venda_guarda_data_entrega_e_estado(app, admin_user, catalogo):
+    from app.models import VendaB2BItem
+    from app.services import vendas_b2b as svc
+    from app.utils import hoje
+    amanha = hoje() + timedelta(days=1)
+    venda = svc.criar_venda(
+        cliente_nome='Bruno', data_entrega=amanha,
+        itens=[{'tipo': 'receita', 'id': catalogo['receita'].id,
+                'quantidade': 5, 'preco_unitario': 8.0, 'estado': 'backup'}],
+        user=admin_user,
+    )
+    assert venda.data_entrega == amanha
+    assert venda.status_entrega == 'pendente'  # default de entrega
+    it = VendaB2BItem.query.filter_by(venda_id=venda.id).first()
+    assert it.estado == 'backup'
