@@ -17,7 +17,7 @@ from flask_login import current_user, login_required
 from app.blueprints.padeiro import padeiro_bp
 from app.decorators import padeiro_required
 from app.extensions import db
-from app.models import Driver, PedidoLoja
+from app.models import Driver, PedidoLoja, VendaB2B
 from app.utils import hoje
 
 logger = logging.getLogger(__name__)
@@ -129,6 +129,23 @@ def separar(id):
     pedido.status = 'separado'
     db.session.commit()
     flash(f'Pedido #{pedido.id} separado.', 'success')
+    return redirect(url_for('padeiro.index', data=data_str))
+
+
+@padeiro_bp.route('/b2b/<int:id>/separar', methods=['POST'])
+@login_required
+@padeiro_required
+def separar_b2b(id):
+    """Marca uma venda B2B como separada (status_entrega). Nao mexe em estoque
+    — o B2B ja baixou do freezer na venda; aqui e so producao/separacao."""
+    data_str = (request.form.get('data') or '').strip() or None
+    venda = VendaB2B.query.get_or_404(id)
+    if venda.status == 'cancelada' or venda.status_entrega != 'pendente':
+        flash(f'Venda B2B #{venda.id} nao esta aguardando separacao.', 'warning')
+        return redirect(url_for('padeiro.index', data=data_str))
+    venda.status_entrega = 'separado'
+    db.session.commit()
+    flash(f'Venda B2B #{venda.id} separada.', 'success')
     return redirect(url_for('padeiro.index', data=data_str))
 
 
