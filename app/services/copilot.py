@@ -555,6 +555,7 @@ TOOL_CRIAR_VENDA_B2B = {
         "properties": {
             "cliente_nome": {"type": "string", "description": "Nome do cliente. Servidor faz fuzzy match com cadastrados; se nao achar, fica como avulso."},
             "data_venda": {"type": ["string", "null"], "description": "YYYY-MM-DD. Default hoje."},
+            "data_entrega": {"type": "string", "description": "YYYY-MM-DD. OBRIGATORIO: dia que a venda vai pra fila do padeiro produzir/separar. Pergunte se o usuario nao disser. NAO confundir com loja (B2B nao tem loja)."},
             "nf_numero": {"type": ["string", "null"]},
             "observacao": {"type": ["string", "null"]},
             "itens": {
@@ -562,7 +563,8 @@ TOOL_CRIAR_VENDA_B2B = {
                 "items": {
                     "type": "object",
                     "properties": {
-                        "nome": {"type": "string", "description": "Nome EXATO da receita/produto."},
+                        "nome": {"type": "string", "description": "Nome EXATO da receita/produto, SEM o estado. Ex: 'Croissant Tradicional'."},
+                        "estado": {"type": ["string", "null"], "enum": [None, "cru", "backup", "assado"], "description": "Estado p/ producao. 'Croissant backup' => nome 'Croissant Tradicional' + estado 'backup'. Default cru (null)."},
                         "quantidade": {"type": "integer", "minimum": 1},
                         "preco_unitario": {"type": ["number", "null"], "description": "Sobrescreve preco do cadastro. Null = usa cadastro."},
                         "desconto_percentual": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
