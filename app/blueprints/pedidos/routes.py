@@ -369,10 +369,12 @@ def editar(id):
         return redirect(url_for('pedidos.detalhe', id=pedido.id))
 
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
     amanha = hoje_brt() + timedelta(days=1)
     return render_template('pedidos/editar.html', pedido=pedido,
-                           receitas=receitas, materias=materias, amanha=amanha)
+                           receitas=receitas, produtos=produtos,
+                           materias=materias, amanha=amanha)
 
 
 @pedidos_bp.route('/<int:id>')
