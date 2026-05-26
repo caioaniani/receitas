@@ -316,41 +316,89 @@
       carregarHist();
     }
   }
+  var prepItens = [], prepAlvoIso = '', prepAlertarUltimo = false, prepLoopId = null;
+
   function togglePrep() {
     var abrindo = !document.getElementById('prep-drawer').classList.contains('aberto');
     fecharDrawers();
     if (abrindo) {
       document.getElementById('prep-drawer').classList.add('aberto');
       document.getElementById('prep-backdrop').classList.add('aberto');
-      carregarPrep();
+      renderPrep();
+      atualizarPrep();
     }
   }
-  function carregarPrep() {
+  function atualizarPrep() {
     fetch('{{ url_for("padeiro.preparar_json") }}?data={{ dia.isoformat() }}')
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        document.getElementById('prep-dia').textContent = d.dia || '';
-        var itens = d.itens || [];
-        if (!itens.length) {
-          document.getElementById('prep-lista').innerHTML =
-            '<div class="prep-item">Nenhum item [BACKUP] ou [ASSADO] pro dia seguinte.</div>';
-          return;
-        }
-        var grupos = {};
-        itens.forEach(function (it) {
-          (grupos[it.estado_label] = grupos[it.estado_label] || []).push(it);
-        });
-        var html = '';
-        Object.keys(grupos).forEach(function (lbl) {
-          html += '<div class="prep-grupo">[' + esc(lbl) + ']</div>';
-          grupos[lbl].forEach(function (it) {
-            html += '<div class="prep-item"><span class="prep-q">' + it.qtd + '×</span> '
-              + esc(it.nome) + '</div>';
-          });
-        });
-        document.getElementById('prep-lista').innerHTML = html;
+        prepItens = d.itens || [];
+        prepAlvoIso = d.alvo_iso || '';
+        prepAlertarUltimo = !!d.alertar;
+        var pd = document.getElementById('prep-dia');
+        if (pd) pd.textContent = d.dia || '';
+        if (document.getElementById('prep-drawer').classList.contains('aberto')) renderPrep();
+        tratarAlertaPrep();
       }).catch(function () {});
   }
+  function renderPrep() {
+    if (!prepItens.length) {
+      document.getElementById('prep-lista').innerHTML =
+        '<div class="prep-item">Nenhum item [BACKUP] ou [ASSADO] pro dia seguinte.</div>';
+      return;
+    }
+    var grupos = {};
+    prepItens.forEach(function (it) {
+      (grupos[it.estado_label] = grupos[it.estado_label] || []).push(it);
+    });
+    var html = '';
+    Object.keys(grupos).forEach(function (lbl) {
+      html += '<div class="prep-grupo">[' + esc(lbl) + ']</div>';
+      grupos[lbl].forEach(function (it) {
+        html += '<div class="prep-item"><span class="prep-q">' + it.qtd + '×</span> '
+          + esc(it.nome) + '</div>';
+      });
+    });
+    document.getElementById('prep-lista').innerHTML = html;
+  }
+  function prepDismissado() {
+    try { return localStorage.getItem('prep_ok_' + prepAlvoIso) === '1'; } catch (e) { return false; }
+  }
+  function tratarAlertaPrep() {
+    var banner = document.getElementById('prep-alert');
+    if (prepAlertarUltimo && !prepDismissado()) {
+      if (banner) banner.style.display = 'flex';
+      iniciarPrepLoop();
+    } else {
+      if (banner) banner.style.display = 'none';
+      pararPrepLoop();
+    }
+  }
+  function okPrep() {
+    try { localStorage.setItem('prep_ok_' + prepAlvoIso, '1'); } catch (e) {}
+    var banner = document.getElementById('prep-alert');
+    if (banner) banner.style.display = 'none';
+    pararPrepLoop();
+  }
+  function tocarAlertaPrep() {
+    if (!somAtivo || !audioCtx) return;
+    var t0 = audioCtx.currentTime;
+    [0, 0.25, 0.5].forEach(function (off) {
+      var osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+      osc.type = 'square'; osc.frequency.value = 440;
+      g.gain.setValueAtTime(0.0001, t0 + off);
+      g.gain.exponentialRampToValueAtTime(0.25, t0 + off + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + off + 0.2);
+      osc.connect(g); g.connect(audioCtx.destination);
+      osc.start(t0 + off); osc.stop(t0 + off + 0.2);
+    });
+  }
+  function iniciarPrepLoop() {
+    if (prepLoopId || !somAtivo) return;
+    tocarAlertaPrep();
+    prepLoopId = setInterval(tocarAlertaPrep, 12000);
+  }
+  function pararPrepLoop() { if (prepLoopId) { clearInterval(prepLoopId); prepLoopId = null; } }
   function carregarHist() {
     fetch('{{ url_for("padeiro.avisos_24h_json") }}')
       .then(function (r) { return r.json(); })
