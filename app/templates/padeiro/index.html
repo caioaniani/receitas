@@ -49,13 +49,13 @@
 <body>
 <header>
   <h1>🥖 Pedidos {% if eh_hoje %}de hoje{% endif %}— {{ dia.strftime('%d/%m') }}</h1>
+  <div class="datenav">
+    <a class="dnav" href="{{ url_for('padeiro.index', data=dia_anterior) }}">← Dia anterior</a>
+    {% if not eh_hoje %}<a class="dnav hoje" href="{{ url_for('padeiro.index') }}">Hoje</a>{% endif %}
+    <a class="dnav" href="{{ url_for('padeiro.index', data=dia_seguinte) }}">Dia seguinte →</a>
+  </div>
   <a class="sair" href="{{ url_for('auth.logout') }}">Sair</a>
 </header>
-<div class="datenav">
-  <a class="dnav" href="{{ url_for('padeiro.index', data=dia_anterior) }}">← Dia anterior</a>
-  {% if not eh_hoje %}<a class="dnav hoje" href="{{ url_for('padeiro.index') }}">Hoje</a>{% endif %}
-  <a class="dnav" href="{{ url_for('padeiro.index', data=dia_seguinte) }}">Dia seguinte →</a>
-</div>
 <div class="wrap">
   {% with msgs = get_flashed_messages(with_categories=true) %}
     {% for cat, msg in msgs %}
