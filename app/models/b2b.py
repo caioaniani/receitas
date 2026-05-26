@@ -41,9 +41,16 @@ class VendaB2B(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     data_venda = db.Column(db.Date, nullable=False, default=lambda: agora().date(), index=True)
+    # Data em que a industria precisa entregar/produzir (para a tela do padeiro).
+    # NULL = venda imediata, nao entra na fila de producao do padeiro.
+    data_entrega = db.Column(db.Date, nullable=True, index=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('cliente_b2b.id'), nullable=True, index=True)
     cliente_nome = db.Column(db.String(150))  # pra venda avulsa sem cadastro
     status = db.Column(db.String(20), default='ativa', nullable=False)  # ativa, cancelada
+    # Status de ENTREGA/producao, separado do status FINANCEIRO acima. Espelha
+    # o fluxo do pedido de loja na tela do padeiro: pendente -> separado ->
+    # em_transporte -> entregue. Nao confundir com 'ativa'/'cancelada'.
+    status_entrega = db.Column(db.String(20), nullable=False, default='pendente')
     # Numeric(10, 2): precisao exata em centavos. Float dava erro de
     # arredondamento em soma de parcelas (R$33,33 × 3 != R$100,00).
     valor_total = db.Column(db.Numeric(10, 2), nullable=False, default=0)
