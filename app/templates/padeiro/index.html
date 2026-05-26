@@ -109,6 +109,10 @@
   <div class="aviso-ticker"><span id="aviso-ticker-txt"></span></div>
   <div id="aviso-botoes"></div>
 </div>
+<div id="prep-alert">
+  <span>🥐 Tem itens <u>[BACKUP]/[ASSADO]</u> pra amanhã — comece o pré-preparo!</span>
+  <button onclick="okPrep()">OK, entendi</button>
+</div>
 <div class="wrap">
   {% with msgs = get_flashed_messages(with_categories=true) %}
     {% for cat, msg in msgs %}
