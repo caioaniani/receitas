@@ -144,6 +144,12 @@
                     return '<div class="ta-opt" data-ref="' + o.ref + '" data-nome="' + esc(o.nome) + '">' + esc(o.nome) + '</div>';
                   }).join('')
                 : '<div class="ta-opt text-muted">nenhum item encontrado</div>';
+            // position:fixed posicionado sob o input — escapa do overflow da
+            // tabela (.table-responsive), que cortava o dropdown absoluto.
+            var rect = input.getBoundingClientRect();
+            box.style.left = rect.left + 'px';
+            box.style.top = rect.bottom + 'px';
+            box.style.width = rect.width + 'px';
             box.style.display = 'block';
         });
 
