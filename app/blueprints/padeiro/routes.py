@@ -266,16 +266,27 @@ def preparar_json():
 @login_required
 @padeiro_required
 def buscar_receitas():
-    """Typeahead do painel Produzir: receitas cujo nome contem o texto."""
+    """Typeahead do painel Produzir: receitas cujo nome contem o texto.
+    Acento-insensivel ('pao' acha 'Pão') e case-insensitive; casa todos os
+    termos digitados. Catalogo pequeno, entao filtra em Python (portavel)."""
+    import unicodedata
+
     from flask import jsonify
 
     from app.models import Receita
-    q = (request.args.get('q') or '').strip()
+
+    def _norm(s):
+        s = unicodedata.normalize('NFKD', s or '')
+        return ''.join(c for c in s if not unicodedata.combining(c)).lower()
+
+    q = _norm((request.args.get('q') or '').strip())
     if len(q) < 2:
         return jsonify(receitas=[])
-    rows = (Receita.query.filter(Receita.nome.ilike(f'%{q}%'))
-            .order_by(Receita.nome).limit(20).all())
-    return jsonify(receitas=[{'id': r.id, 'nome': r.nome} for r in rows])
+    termos = q.split()
+    rows = Receita.query.order_by(Receita.nome).all()
+    out = [{'id': r.id, 'nome': r.nome} for r in rows
+           if all(t in _norm(r.nome) for t in termos)]
+    return jsonify(receitas=out[:20])
 
 
 @padeiro_bp.route('/produzir', methods=['POST'])
