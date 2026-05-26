@@ -187,6 +187,30 @@
   </div>
   <div id="prep-lista"></div>
 </div>
+<button id="prod-toggle" onclick="toggleProd()">🍞 Produzir</button>
+<div id="prod-backdrop" onclick="toggleProd()"></div>
+<div id="prod-drawer">
+  <div class="hist-head">
+    <strong>Produzir — entra no congelado</strong>
+    <button class="hist-x" onclick="toggleProd()" aria-label="Fechar">×</button>
+  </div>
+  <div id="prod-rows"></div>
+  <div id="prod-msg"></div>
+  <div class="prod-acoes">
+    <button class="btn btn-cinza" onclick="prodAddRow()">+ Item</button>
+    <button class="btn btn-sep" onclick="prodEnviar()">Enviar</button>
+  </div>
+</div>
+<div id="prod-confirm">
+  <div class="box">
+    <h3>Confirmar produção?</h3>
+    <div id="prod-confirm-lista"></div>
+    <div class="cta">
+      <button class="btn btn-cinza" onclick="prodCancelar()">Voltar</button>
+      <button class="btn btn-sep" id="prod-confirm-ok" onclick="prodConfirmar()">Confirmar</button>
+    </div>
+  </div>
+</div>
 <div id="upd-badge">atualizado —</div>
 <script>
   var CSRF = "{{ csrf_token() }}";
