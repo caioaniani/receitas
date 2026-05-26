@@ -178,10 +178,11 @@ def novo():
             flash('Selecione uma loja valida.', 'warning')
             lojas = _lojas_operacionais()
             receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+            produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
             materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
             return render_template('pedidos/novo.html', lojas=lojas,
-                                   receitas=receitas, materias=materias,
-                                   amanha=amanha, loja_id=loja_id)
+                                   receitas=receitas, produtos=produtos,
+                                   materias=materias, amanha=amanha, loja_id=loja_id)
 
         data_str = request.form.get('data_entrega', '')
         obs = request.form.get('observacao', '').strip()
@@ -195,10 +196,11 @@ def novo():
             flash('A data de entrega deve ser a partir de amanha.', 'warning')
             lojas = _lojas_operacionais()
             receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+            produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
             materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
             return render_template('pedidos/novo.html', lojas=lojas,
-                                   receitas=receitas, materias=materias,
-                                   amanha=amanha, loja_id=loja_id)
+                                   receitas=receitas, produtos=produtos,
+                                   materias=materias, amanha=amanha, loja_id=loja_id)
 
         # Monta a lista de itens normalizada antes de decidir merge vs novo.
         ids = request.form.getlist('item_id[]')
