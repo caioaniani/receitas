@@ -230,7 +230,7 @@ def venda_criar():
     try:
         venda = svc.criar_venda(
             cliente_id=cliente_id, cliente_nome=cliente_nome,
-            data_venda=data_venda, itens=itens,
+            data_venda=data_venda, data_entrega=data_entrega, itens=itens,
             parcelas=parcelas or None, observacao=obs, nf_numero=nf,
             user=current_user,
         )
