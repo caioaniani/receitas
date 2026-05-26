@@ -104,8 +104,13 @@
                 '</div>' + warn;
         });
 
+        var mergeNote = params.merge_pedido_id
+            ? '<div class="copilot-preview-row" style="color:#b45309;font-weight:600;">já existe o pedido #' + params.merge_pedido_id + ' dessa loja nessa data — os itens serão adicionados nele (não cria novo)</div>'
+            : '';
+        var approveLabel = params.merge_pedido_id ? ('adicionar ao #' + params.merge_pedido_id) : 'criar pedido';
+
         return '<div class="copilot-preview" data-conversa="' + conversaId + '" data-tipo="criar_pedido">' +
-            '<div class="copilot-preview-header">criar pedido</div>' +
+            '<div class="copilot-preview-header">criar pedido</div>' + mergeNote +
             '<div class="copilot-preview-row"><span class="label">loja</span></div>' + lojaSel +
             '<div class="copilot-preview-row"><span class="label">data</span></div>' + dataInput +
             '<div class="copilot-preview-row"><span class="label">observação</span></div>' + obsInput +
@@ -113,7 +118,7 @@
             '<div class="copilot-items">' + itensHtml + '</div>' +
             '<div class="copilot-preview-actions">' +
             '<button type="button" class="btn-pill btn-pill-outline copilot-cancel">cancelar</button>' +
-            '<button type="button" class="btn-pill btn-pill-primary copilot-approve">criar pedido</button>' +
+            '<button type="button" class="btn-pill btn-pill-primary copilot-approve">' + approveLabel + '</button>' +
             '</div></div>';
     }
 
