@@ -56,6 +56,7 @@ def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
 
     venda = VendaB2B(
         data_venda=data_venda or hoje(),
+        data_entrega=data_entrega,
         cliente_id=cliente_id,
         cliente_nome=(cliente_nome or '').strip() or None,
         observacao=(observacao or '').strip() or None,
