@@ -150,3 +150,37 @@ def juntar_repetidos():
     else:
         flash('Nenhum pedido repetido pra juntar.', 'info')
     return redirect(url_for('padeiro.index', data=data_str))
+
+
+@padeiro_bp.route('/avisos.json')
+@login_required
+@padeiro_required
+def avisos_json():
+    """Avisos ativos (nao confirmados) pra TV consultar via polling."""
+    from flask import jsonify
+
+    from app.models import Aviso
+    avisos = (Aviso.query.filter(Aviso.confirmado_em.is_(None))
+              .order_by(Aviso.criado_em).all())
+    return jsonify(avisos=[{
+        'id': a.id, 'texto': a.texto,
+        'por': (a.criado_por.nome if a.criado_por else ''),
+        'em': a.criado_em.strftime('%H:%M') if a.criado_em else '',
+    } for a in avisos])
+
+
+@padeiro_bp.route('/avisos/<int:id>/confirmar', methods=['POST'])
+@login_required
+@padeiro_required
+def confirmar_aviso(id):
+    """Marca um aviso como lido (para a campainha)."""
+    from flask import jsonify
+
+    from app.models import Aviso
+    from app.utils import agora
+    a = Aviso.query.get_or_404(id)
+    if a.confirmado_em is None:
+        a.confirmado_em = agora()
+        a.confirmado_por_id = current_user.id
+        db.session.commit()
+    return jsonify(ok=True)
