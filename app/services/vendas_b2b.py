@@ -88,6 +88,9 @@ def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
             desc = float(it.get('desconto_percentual') or 0)
         except (TypeError, ValueError):
             desc = 0.0
+        est = (str(it.get('estado') or '').strip().lower() or None)
+        if est not in (None, 'backup', 'assado'):
+            est = None
 
         vi = VendaB2BItem(
             venda_id=venda.id,
@@ -96,6 +99,7 @@ def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
             quantidade=qtd,
             preco_unitario=preco,
             desconto_percentual=desc,
+            estado=est,
         )
         db.session.add(vi)
         total += vi.valor_total
