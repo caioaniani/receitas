@@ -1429,10 +1429,22 @@ def _enriquecer_criar_pedido(tool_input):
         if l:
             loja_id = l.id
             loja_nome = l.nome
+    # Se ja ha pedido aberto da loja nessa data, o preview avisa que vai juntar
+    # nele (o executor reconfirma na hora de salvar).
+    merge_pedido_id = None
+    if loja_id and tool_input.get('data_entrega'):
+        try:
+            _d = datetime.strptime(tool_input['data_entrega'], '%Y-%m-%d').date()
+            from app.services.pedido_merge import pedido_aberto_para_merge
+            _alvo = pedido_aberto_para_merge(loja_id, _d, 'confirmado')
+            merge_pedido_id = _alvo.id if _alvo else None
+        except (ValueError, TypeError):
+            merge_pedido_id = None
     return {
         'loja_id': loja_id, 'loja_nome': loja_nome,
         'data_entrega': tool_input.get('data_entrega'),
         'itens': itens_enriq, 'observacao': tool_input.get('observacao'),
+        'merge_pedido_id': merge_pedido_id,
     }
 
 
