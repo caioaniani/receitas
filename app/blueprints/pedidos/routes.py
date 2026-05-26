@@ -275,10 +275,11 @@ def novo():
 
     lojas = _lojas_operacionais()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
     return render_template('pedidos/novo.html', lojas=lojas,
-                           receitas=receitas, materias=materias,
-                           amanha=amanha, loja_id=loja_id)
+                           receitas=receitas, produtos=produtos,
+                           materias=materias, amanha=amanha, loja_id=loja_id)
 
 
 @pedidos_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
