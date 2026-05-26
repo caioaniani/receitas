@@ -9,12 +9,12 @@
 <div class="sec-title">Para separar ({{ a_separar|length }})</div>
 {% if a_separar %}
 <div class="grid">
-  {% for p in a_separar %}
-  <div class="card">
-    <p class="loja">{{ p.loja.nome if p.loja else '—' }}</p>
-    <p class="meta">Pedido #{{ p.id }}{% if p.data_entrega %} · entrega {{ p.data_entrega.strftime('%d/%m') }}{% endif %}</p>
-    <p class="itens">{% for it in p.itens %}{{ it.quantidade }}× {{ it.nome_item_com_estado }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
-    <form method="POST" action="{{ url_for('padeiro.separar', id=p.id) }}">
+  {% for c in a_separar %}
+  <div class="card{% if c.tipo == 'b2b' %} b2b{% endif %}">
+    <p class="loja">{{ c.titulo }}</p>
+    <p class="meta">{{ 'Venda B2B' if c.tipo == 'b2b' else 'Pedido' }} #{{ c.id }}{% if c.data_entrega %} · entrega {{ c.data_entrega.strftime('%d/%m') }}{% endif %}</p>
+    <p class="itens">{% for it in c.itens %}{{ it.qtd }}× {{ it.nome }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+    <form method="POST" action="{{ url_for('padeiro.separar_b2b', id=c.id) if c.tipo == 'b2b' else url_for('padeiro.separar', id=c.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="data" value="{{ dia.isoformat() }}">
       <button class="btn btn-sep" type="submit">SEPARAR</button>
@@ -29,16 +29,18 @@
 <div class="sec-title">Separados — aguardando motorista ({{ aguardando|length }})</div>
 {% if aguardando %}
 <div class="grid">
-  {% for p in aguardando %}
-  <div class="card sep">
-    <p class="loja">{{ p.loja.nome if p.loja else '—' }}</p>
-    <p class="meta">Pedido #{{ p.id }}{% if p.data_entrega %} · entrega {{ p.data_entrega.strftime('%d/%m') }}{% endif %}</p>
-    <p class="itens">{% for it in p.itens %}{{ it.quantidade }}× {{ it.nome_item_com_estado }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
-    {% if drivers %}
+  {% for c in aguardando %}
+  <div class="card sep{% if c.tipo == 'b2b' %} b2b{% endif %}">
+    <p class="loja">{{ c.titulo }}</p>
+    <p class="meta">{{ 'Venda B2B' if c.tipo == 'b2b' else 'Pedido' }} #{{ c.id }}{% if c.data_entrega %} · entrega {{ c.data_entrega.strftime('%d/%m') }}{% endif %}</p>
+    <p class="itens">{% for it in c.itens %}{{ it.qtd }}× {{ it.nome }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+    {% if c.tipo == 'b2b' %}
+    <div class="vazio" style="padding:8px 0;">Separado — despacho do B2B em breve.</div>
+    {% elif drivers %}
     <div class="drivers">
       <div class="lbl">Motorista chegou? Toque no nome → gera o QR:</div>
       {% for d in drivers %}
-      <form method="POST" action="{{ url_for('padeiro.gerar_qr', id=p.id) }}">
+      <form method="POST" action="{{ url_for('padeiro.gerar_qr', id=c.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="driver_id" value="{{ d.id }}">
         <input type="hidden" name="data" value="{{ dia.isoformat() }}">
