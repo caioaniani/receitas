@@ -32,6 +32,8 @@ from app.utils import hoje as hoje_brt
 @main_bp.route('/')
 @login_required
 def index():
+    if current_user.is_padeiro():
+        return redirect(url_for('padeiro.index'))
     if not current_user.is_admin():
         return redirect(url_for('auth.minhas_fichas'))
     return render_template('main/home.html')
