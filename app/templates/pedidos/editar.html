@@ -109,6 +109,13 @@
                                 <option value="r_{{ r.id }}" {% if it.receita_id == r.id %}selected{% endif %}>{{ r.nome }}</option>
                             {% endfor %}
                             {% if ns2.cat_atual is not none %}</optgroup>{% endif %}
+                            {% if produtos %}
+                            <optgroup label="Produtos">
+                                {% for p in produtos %}
+                                <option value="p_{{ p.id }}" {% if it.produto_id == p.id %}selected{% endif %}>{{ p.nome }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
                             {% if materias %}
                             <optgroup label="Materias-primas">
                                 {% for mp in materias %}
