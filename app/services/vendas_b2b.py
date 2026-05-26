@@ -38,8 +38,8 @@ def _get_or_create_estoque(receita_id=None, produto_id=None):
 
 
 def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
-                itens, parcelas=None, observacao=None, nf_numero=None,
-                user=None):
+                data_entrega=None, itens, parcelas=None, observacao=None,
+                nf_numero=None, user=None):
     """Cria venda B2B + itens + parcelas + baixa estoque.
 
     itens: lista de {tipo: 'receita'|'produto', id, quantidade,
