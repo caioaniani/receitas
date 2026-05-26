@@ -86,8 +86,15 @@ def _preview_criar_pedido(p, token):
             ('Observacao', p.get('observacao') or '—'),
         ]),
         _section(f'*Itens:*\n{itens_txt[:2000]}'),
-        _botoes(token, 'Criar pedido', 'Cancelar'),
     ]
+    if p.get('merge_pedido_id'):
+        blocks.append(_section(
+            f'⚠️ Ja existe o pedido *#{p["merge_pedido_id"]}* pra essa loja nessa '
+            'data — os itens serao *adicionados nele* (nao cria pedido novo).'))
+        label_ok = f'Adicionar ao #{p["merge_pedido_id"]}'
+    else:
+        label_ok = 'Criar pedido'
+    blocks.append(_botoes(token, label_ok, 'Cancelar'))
     return blocks
 
 
