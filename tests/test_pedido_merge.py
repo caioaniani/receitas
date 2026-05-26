@@ -122,3 +122,52 @@ def test_executar_criar_pedido_mescla(app, admin_user, loja, catalogo):
     assert r2['ok'] and r2.get('mesclado') is True
     assert r2['pedido_id'] == r1['pedido_id']
     assert PedidoLoja.query.filter_by(loja_id=loja.id).count() == 1
+
+
+# ── Consolidacao retroativa (pedidos que ja existiam) ──────────────────
+
+def _seed_dups(loja, admin_user, rid, qtds, d):
+    from app.extensions import db
+    from app.models import PedidoItem, PedidoLoja
+    ids = []
+    for q in qtds:
+        p = PedidoLoja(loja_id=loja.id, data_entrega=d, status='confirmado',
+                       criado_por=admin_user.id)
+        db.session.add(p)
+        db.session.flush()
+        db.session.add(PedidoItem(pedido_id=p.id, receita_id=rid, quantidade=q))
+        ids.append(p.id)
+    db.session.commit()
+    return ids
+
+
+def test_consolidar_loja_data(app, loja, admin_user, catalogo):
+    from app.extensions import db
+    from app.models import PedidoItem, PedidoLoja
+    from app.services.pedido_merge import consolidar_loja_data
+
+    rid = catalogo['receita'].id
+    d = _amanha()
+    ids = _seed_dups(loja, admin_user, rid, (10, 5, 3), d)
+
+    alvo, absorvidos = consolidar_loja_data(loja.id, d, 'confirmado', admin_user.id)
+    db.session.commit()
+
+    assert alvo.id == ids[0] and absorvidos == 2
+    assert PedidoLoja.query.filter_by(loja_id=loja.id, status='confirmado').count() == 1
+    assert PedidoLoja.query.filter_by(loja_id=loja.id, status='cancelado').count() == 2
+    item = PedidoItem.query.filter_by(pedido_id=alvo.id, receita_id=rid).one()
+    assert item.quantidade == 18  # 10 + 5 + 3
+
+
+def test_juntar_repetidos_route(app, admin_user, loja, catalogo, cliente):
+    from app.models import PedidoLoja
+    rid = catalogo['receita'].id
+    d = _amanha()
+    _seed_dups(loja, admin_user, rid, (10, 5), d)
+
+    _login(cliente)
+    cliente.post('/padeiro/juntar-repetidos', data={'data': d.isoformat()})
+
+    assert PedidoLoja.query.filter_by(loja_id=loja.id, status='confirmado').count() == 1
+    assert PedidoLoja.query.filter_by(loja_id=loja.id, status='cancelado').count() == 1
