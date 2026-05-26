@@ -2541,7 +2541,7 @@ def sugerir_pedido(loja_id):
             flash('Nenhum item com quantidade > 0.', 'warning')
             return redirect(url_for('pedidos.sugerir_pedido', loja_id=loja_id))
         pedido = PedidoLoja(loja_id=loja_id, data_entrega=data_entrega,
-                            criado_por=current_user.id, status='pendente')
+                            criado_por=current_user.id, status='confirmado')
         db.session.add(pedido)
         db.session.flush()
         for it in itens:
