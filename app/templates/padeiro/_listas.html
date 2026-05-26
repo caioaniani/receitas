@@ -1,0 +1,57 @@
+{% if n_repetidos %}
+<form method="POST" action="{{ url_for('padeiro.juntar_repetidos') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="data" value="{{ dia.isoformat() }}">
+  <button type="submit" class="btn-juntar">⚠ Juntar {{ n_repetidos }} pedido(s) repetido(s) num só</button>
+</form>
+{% endif %}
+
+<div class="sec-title">Para separar ({{ a_separar|length }})</div>
+{% if a_separar %}
+<div class="grid">
+  {% for p in a_separar %}
+  <div class="card">
+    <p class="loja">{{ p.loja.nome if p.loja else '—' }}</p>
+    <p class="meta">Pedido #{{ p.id }}{% if p.data_entrega %} · entrega {{ p.data_entrega.strftime('%d/%m') }}{% endif %}</p>
+    <p class="itens">{% for it in p.itens %}{{ it.quantidade }}× {{ it.nome_item_com_estado }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+    <form method="POST" action="{{ url_for('padeiro.separar', id=p.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="data" value="{{ dia.isoformat() }}">
+      <button class="btn btn-sep" type="submit">SEPARAR</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="vazio">Nada pra separar agora.</div>
+{% endif %}
+
+<div class="sec-title">Separados — aguardando motorista ({{ aguardando|length }})</div>
+{% if aguardando %}
+<div class="grid">
+  {% for p in aguardando %}
+  <div class="card sep">
+    <p class="loja">{{ p.loja.nome if p.loja else '—' }}</p>
+    <p class="meta">Pedido #{{ p.id }}{% if p.data_entrega %} · entrega {{ p.data_entrega.strftime('%d/%m') }}{% endif %}</p>
+    <p class="itens">{% for it in p.itens %}{{ it.quantidade }}× {{ it.nome_item_com_estado }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+    {% if drivers %}
+    <div class="drivers">
+      <div class="lbl">Motorista chegou? Toque no nome → gera o QR:</div>
+      {% for d in drivers %}
+      <form method="POST" action="{{ url_for('padeiro.gerar_qr', id=p.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="driver_id" value="{{ d.id }}">
+        <input type="hidden" name="data" value="{{ dia.isoformat() }}">
+        <button class="btn btn-mot" type="submit">{{ d.nome }}</button>
+      </form>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="vazio">Nenhum motorista ativo cadastrado.</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="vazio">Nenhum pedido separado aguardando.</div>
+{% endif %}
