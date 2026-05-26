@@ -260,3 +260,65 @@ def preparar_json():
     alertar = bool(linhas) and (ag.hour, ag.minute) >= (17, 50)
     return jsonify(dia=alvo.strftime('%d/%m'), alvo_iso=alvo.isoformat(),
                    itens=linhas, alertar=alertar)
+
+
+@padeiro_bp.route('/buscar-receitas.json')
+@login_required
+@padeiro_required
+def buscar_receitas():
+    """Typeahead do painel Produzir: receitas cujo nome contem o texto."""
+    from flask import jsonify
+
+    from app.models import Receita
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return jsonify(receitas=[])
+    rows = (Receita.query.filter(Receita.nome.ilike(f'%{q}%'))
+            .order_by(Receita.nome).limit(20).all())
+    return jsonify(receitas=[{'id': r.id, 'nome': r.nome} for r in rows])
+
+
+@padeiro_bp.route('/produzir', methods=['POST'])
+@login_required
+@padeiro_required
+def produzir():
+    """Padeiro registra o que produziu -> entrada no congelado (cru) da
+    industria. Corpo JSON {itens:[{receita_id, quantidade}]}; valida tudo
+    ANTES de gravar; aplica numa transacao unica (tudo ou nada)."""
+    from flask import jsonify
+
+    from app.models import Receita
+    from app.services.estoque_congelados import entrada_producao
+
+    dados = request.get_json(silent=True) or {}
+    itens = dados.get('itens') or []
+    if not itens:
+        return jsonify(ok=False, erro='Nenhum item informado.'), 400
+
+    validados = []
+    for i, it in enumerate(itens, 1):
+        try:
+            rid = int(it.get('receita_id'))
+            qtd = int(it.get('quantidade'))
+        except (TypeError, ValueError):
+            return jsonify(ok=False, erro=f'Item {i}: dados invalidos.'), 400
+        if qtd <= 0:
+            return jsonify(ok=False, erro=f'Item {i}: quantidade deve ser positiva.'), 400
+        rec = Receita.query.get(rid)
+        if not rec:
+            return jsonify(ok=False, erro=f'Item {i}: receita nao encontrada.'), 400
+        validados.append((rec, qtd))
+
+    try:
+        resumo = []
+        for rec, qtd in validados:
+            entrada_producao(receita_id=rec.id, estado=None, quantidade=qtd,
+                             usuario_id=current_user.id,
+                             referencia='Produção (TV padeiro)')
+            resumo.append({'nome': rec.nome, 'qtd': qtd})
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception('padeiro.produzir falhou')
+        return jsonify(ok=False, erro='Erro ao registrar produção.'), 500
+    return jsonify(ok=True, resumo=resumo)
