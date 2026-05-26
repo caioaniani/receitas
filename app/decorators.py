@@ -40,7 +40,7 @@ def operacional_pedido_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if not (current_user.is_admin() or current_user.is_gerente()
-                or current_user.is_producao()):
+                or current_user.is_producao() or current_user.is_padeiro()):
             abort(403)
         return f(*args, **kwargs)
     return decorated
