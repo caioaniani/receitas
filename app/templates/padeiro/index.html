@@ -139,7 +139,7 @@
 </head>
 <body>
 <header>
-  <h1>🥖 Pedidos {% if eh_hoje %}de hoje{% endif %}— {{ dia.strftime('%d/%m') }}</h1>
+  <h1>Pedidos {% if eh_hoje %}de hoje{% endif %}— {{ dia.strftime('%d/%m') }}</h1>
   <div class="datenav">
     <a class="dnav" href="{{ url_for('padeiro.index', data=dia_anterior) }}">← Dia anterior</a>
     {% if not eh_hoje %}<a class="dnav hoje" href="{{ url_for('padeiro.index') }}">Hoje</a>{% endif %}
