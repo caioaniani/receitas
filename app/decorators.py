@@ -46,6 +46,17 @@ def operacional_pedido_required(f):
     return decorated
 
 
+def padeiro_required(f):
+    """Tela touchscreen do padeiro (chao de fabrica): padeiro + producao + admin."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not (current_user.is_admin() or current_user.is_padeiro()
+                or current_user.is_producao()):
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
+
 def catalogo_required(f):
     """Permite admin + producao (+ owner) — Receitas/MP/Produtos/Fornecedores."""
     @wraps(f)
