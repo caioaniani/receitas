@@ -184,3 +184,23 @@ def confirmar_aviso(id):
         a.confirmado_por_id = current_user.id
         db.session.commit()
     return jsonify(ok=True)
+
+
+@padeiro_bp.route('/avisos-24h.json')
+@login_required
+@padeiro_required
+def avisos_24h_json():
+    """Avisos das ultimas 24h (lidos e nao lidos) pro painel lateral."""
+    from flask import jsonify
+
+    from app.models import Aviso
+    from app.utils import agora
+    limite = agora() - timedelta(hours=24)
+    avisos = (Aviso.query.filter(Aviso.criado_em >= limite)
+              .order_by(Aviso.criado_em.desc()).all())
+    return jsonify(avisos=[{
+        'id': a.id, 'texto': a.texto,
+        'por': (a.criado_por.nome if a.criado_por else ''),
+        'quando': a.criado_em.strftime('%d/%m %H:%M') if a.criado_em else '',
+        'confirmado': a.confirmado,
+    } for a in avisos])
