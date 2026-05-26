@@ -130,6 +130,9 @@
         var input = tr.querySelector('.ta-input');
         var hidden = tr.querySelector('.item-ref');
         var box = tr.querySelector('.ta-results');
+        // Move o dropdown pro <body>: escapa do overflow da tabela E de qualquer
+        // ancestral com transform/filter (que quebrava o position:fixed).
+        document.body.appendChild(box);
 
         input.addEventListener('input', function() {
             hidden.value = '';  // mudou o texto -> precisa re-selecionar uma opcao
