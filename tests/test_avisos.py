@@ -36,3 +36,20 @@ def test_aviso_vazio_nao_cria(app, admin_user, cliente):
     _login(cliente)
     cliente.post('/avisos/', data={'texto': '   '})
     assert Aviso.query.count() == 0
+
+
+def test_avisos_24h_exclui_antigos(app, admin_user, cliente):
+    from datetime import timedelta
+
+    from app.extensions import db
+    from app.models import Aviso
+    from app.utils import agora
+    db.session.add(Aviso(texto='Recente', criado_por_id=admin_user.id))
+    db.session.add(Aviso(texto='Antigo', criado_por_id=admin_user.id,
+                         criado_em=agora() - timedelta(hours=25)))
+    db.session.commit()
+    _login(cliente)
+    j = cliente.get('/padeiro/avisos-24h.json').get_json()
+    textos = [a['texto'] for a in j['avisos']]
+    assert 'Recente' in textos
+    assert 'Antigo' not in textos
