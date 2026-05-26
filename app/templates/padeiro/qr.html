@@ -29,7 +29,7 @@
 <body>
 <header>
   <h1>QR de saída</h1>
-  <a href="{{ url_for('padeiro.index') }}">← Voltar</a>
+  <a href="{{ url_for('padeiro.index', data=voltar_data) }}">← Voltar</a>
 </header>
 <div class="box">
   <p class="loja">{{ pedido.loja.nome if pedido.loja else '—' }}</p>
@@ -42,7 +42,7 @@
   {% endif %}
   <p class="hint">O motorista escaneia este QR e digita o <strong>PIN dele</strong> pra confirmar a saída.</p>
   <p class="hint" style="font-size:12px; color:#adb5bd; word-break:break-all;">{{ url }}</p>
-  <a class="voltar" href="{{ url_for('padeiro.index') }}">PRONTO</a>
+  <a class="voltar" href="{{ url_for('padeiro.index', data=voltar_data) }}">PRONTO</a>
 </div>
 </body>
 </html>
