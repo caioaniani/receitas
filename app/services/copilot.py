@@ -587,7 +587,7 @@ TOOL_CRIAR_VENDA_B2B = {
                 },
             },
         },
-        "required": ["cliente_nome", "itens"],
+        "required": ["cliente_nome", "data_entrega", "itens"],
     },
 }
 
