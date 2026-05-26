@@ -223,7 +223,7 @@ def novo():
                 est = None
             itens_norm.append({
                 'receita_id': item_id if tipo == 'receita' else None,
-                'produto_id': None,
+                'produto_id': item_id if tipo == 'produto' else None,
                 'materia_prima_id': item_id if tipo == 'mp' else None,
                 'quantidade': qtd,
                 'observacao': notas[i].strip() if i < len(notas) else None,
