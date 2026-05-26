@@ -36,26 +36,33 @@ def _parse_dia(valor):
 @login_required
 @padeiro_required
 def index():
-    hj = hoje()
-    dia = _parse_dia(request.args.get('data')) or hj
-    eh_hoje = (dia == hj)
-    q = PedidoLoja.query.filter(
-        PedidoLoja.status.in_(('pendente', 'confirmado', 'separado')))
-    if eh_hoje:
-        # Hoje inclui atrasados nao despachados (nada se perde).
-        q = q.filter((PedidoLoja.data_entrega <= hj)
-                     | (PedidoLoja.data_entrega.is_(None)))
-    else:
-        q = q.filter(PedidoLoja.data_entrega == dia)
-    pedidos = q.order_by(PedidoLoja.data_entrega).all()
-    a_separar = [p for p in pedidos if p.status in _A_SEPARAR]
-    aguardando = [p for p in pedidos if p.status == 'separado']
-    drivers = Driver.query.filter_by(ativo=True).order_by(Driver.nome).all()
-    return render_template(
-        'padeiro/index.html', a_separar=a_separar, aguardando=aguardando,
-        drivers=drivers, dia=dia, eh_hoje=eh_hoje,
-        dia_anterior=(dia - timedelta(days=1)).isoformat(),
-        dia_seguinte=(dia + timedelta(days=1)).isoformat())
+    import traceback
+    try:
+        hj = hoje()
+        dia = _parse_dia(request.args.get('data')) or hj
+        eh_hoje = (dia == hj)
+        q = PedidoLoja.query.filter(
+            PedidoLoja.status.in_(('pendente', 'confirmado', 'separado')))
+        if eh_hoje:
+            # Hoje inclui atrasados nao despachados (nada se perde).
+            q = q.filter((PedidoLoja.data_entrega <= hj)
+                         | (PedidoLoja.data_entrega.is_(None)))
+        else:
+            q = q.filter(PedidoLoja.data_entrega == dia)
+        pedidos = q.order_by(PedidoLoja.data_entrega).all()
+        a_separar = [p for p in pedidos if p.status in _A_SEPARAR]
+        aguardando = [p for p in pedidos if p.status == 'separado']
+        drivers = Driver.query.filter_by(ativo=True).order_by(Driver.nome).all()
+        return render_template(
+            'padeiro/index.html', a_separar=a_separar, aguardando=aguardando,
+            drivers=drivers, dia=dia, eh_hoje=eh_hoje,
+            dia_anterior=(dia - timedelta(days=1)).isoformat(),
+            dia_seguinte=(dia + timedelta(days=1)).isoformat())
+    except Exception as e:  # noqa: BLE001 - diagnostico temporario
+        logger.exception('padeiro.index falhou')
+        return ('<pre style="font-size:12px;white-space:pre-wrap;padding:16px">'
+                'DIAGNOSTICO PADEIRO (temporario)\n\n'
+                f'{type(e).__name__}: {e}\n\n{traceback.format_exc()}</pre>'), 500
 
 
 @padeiro_bp.route('/<int:id>/separar', methods=['POST'])
