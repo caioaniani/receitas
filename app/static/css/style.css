@@ -1248,7 +1248,11 @@ body {
 /* ── Tables — borda sutil, sem sombra excessiva ── */
 .table-responsive {
     border-radius: var(--radius-md);
-    overflow: hidden;
+    /* overflow-x: auto (nao 'hidden') pra a tabela ROLAR de lado quando for
+       mais larga que o container — antes cortava no mobile. Cantos arredondados
+       seguem clipados; no desktop a tabela cabe e nao mostra barra. */
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     border: 1px solid var(--border-color);
 }
 
