@@ -72,9 +72,9 @@
     var ESTOQUE = {{ estoque_map|tojson }};
     var RECEITAS = [{% for r in receitas %}{ref:'receita:{{r.id}}', nome:'{{ r.categoria }} — {{ r.nome|replace("'", "\\'") }}'}{% if not loop.last %},{% endif %}{% endfor %}];
     var PRODUTOS = [{% for p in produtos %}{ref:'produto:{{p.id}}', nome:'{{ p.nome|replace("'", "\\'") }}'}{% if not loop.last %},{% endif %}{% endfor %}];
-    var OPTIONS = '<option value="">—</option>' +
-        '<optgroup label="Receitas">' + RECEITAS.map(r => '<option value="' + r.ref + '">' + r.nome + '</option>').join('') + '</optgroup>' +
-        '<optgroup label="Produtos">' + PRODUTOS.map(p => '<option value="' + p.ref + '">' + p.nome + '</option>').join('') + '</optgroup>';
+    function norm(s){ return (s==null?'':String(s)).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); }
+    function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+    var TODOS = RECEITAS.concat(PRODUTOS).map(function(o){ return {ref:o.ref, nome:o.nome, q:norm(o.nome)}; });
 
     var tbody = document.querySelector('#tbl-itens tbody');
     var parcBody = document.querySelector('#tbl-parcelas tbody');
