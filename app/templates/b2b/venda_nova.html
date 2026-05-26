@@ -85,10 +85,23 @@
         return opt ? parseFloat(opt.dataset.desc || '0') : 0;
     }
 
+    function aplicarItem(tr, ref) {
+        var preco = PRECOS[ref] || 0;
+        var desc = getDescCliente();
+        tr.querySelector('.preco').value = preco.toFixed(2);
+        tr.querySelector('.desc').value = desc || '';
+        tr.querySelector('.estoque-cel').textContent = (ESTOQUE[ref] !== undefined) ? ESTOQUE[ref] : '—';
+        atualizar(tr);
+    }
+
     function rowItem() {
         var tr = document.createElement('tr');
         tr.innerHTML =
-            '<td><select name="item_ref[]" class="form-select form-select-sm item-ref">' + OPTIONS + '</select></td>' +
+            '<td><div class="ta-wrap">' +
+              '<input type="text" class="form-control form-control-sm ta-input" placeholder="Digite pra buscar (ex: pao)" autocomplete="off">' +
+              '<input type="hidden" name="item_ref[]" class="item-ref">' +
+              '<div class="ta-results" style="display:none;"></div>' +
+            '</div></td>' +
             '<td class="text-end estoque-cel text-muted">—</td>' +
             '<td><input type="number" name="item_qtd[]" min="1" value="1" class="form-control form-control-sm qtd"></td>' +
             '<td><input type="number" step="0.01" name="item_preco[]" value="0" class="form-control form-control-sm preco"></td>' +
@@ -97,15 +110,41 @@
             '<td><button type="button" class="btn btn-sm btn-outline-danger remover">×</button></td>';
         tbody.appendChild(tr);
         atualizar(tr);
-        tr.querySelector('.item-ref').addEventListener('change', function() {
-            var ref = this.value;
-            var preco = PRECOS[ref] || 0;
-            var desc = getDescCliente();
-            tr.querySelector('.preco').value = preco.toFixed(2);
-            tr.querySelector('.desc').value = desc || '';
-            tr.querySelector('.estoque-cel').textContent = (ESTOQUE[ref] !== undefined) ? ESTOQUE[ref] : '—';
-            atualizar(tr);
+
+        var input = tr.querySelector('.ta-input');
+        var hidden = tr.querySelector('.item-ref');
+        var box = tr.querySelector('.ta-results');
+
+        input.addEventListener('input', function() {
+            hidden.value = '';  // mudou o texto -> precisa re-selecionar uma opcao
+            var q = norm(input.value);
+            if (!q) { box.style.display = 'none'; box.innerHTML = ''; return; }
+            var terms = q.split(/\s+/).filter(Boolean);
+            var res = TODOS.filter(function(o) {
+                return terms.every(function(t) { return o.q.indexOf(t) !== -1; });
+            }).slice(0, 30);
+            box.innerHTML = res.length
+                ? res.map(function(o) {
+                    return '<div class="ta-opt" data-ref="' + o.ref + '" data-nome="' + esc(o.nome) + '">' + esc(o.nome) + '</div>';
+                  }).join('')
+                : '<div class="ta-opt text-muted">nenhum item encontrado</div>';
+            box.style.display = 'block';
         });
+
+        // mousedown (nao click) dispara antes do blur do input esconder a lista
+        box.addEventListener('mousedown', function(e) {
+            var opt = e.target.closest('.ta-opt[data-ref]');
+            if (!opt) return;
+            e.preventDefault();
+            hidden.value = opt.getAttribute('data-ref');
+            input.value = opt.getAttribute('data-nome');
+            box.style.display = 'none'; box.innerHTML = '';
+            aplicarItem(tr, hidden.value);
+        });
+        input.addEventListener('blur', function() {
+            setTimeout(function() { box.style.display = 'none'; }, 150);
+        });
+
         ['input', 'change'].forEach(ev => {
             tr.querySelectorAll('.qtd, .preco, .desc').forEach(i => i.addEventListener(ev, () => atualizar(tr)));
         });
