@@ -16,7 +16,7 @@ class PedidoLoja(db.Model):
     loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
     data_pedido = db.Column(db.Date, default=hoje)
     data_entrega = db.Column(db.Date)
-    status = db.Column(db.String(20), default='pendente')
+    status = db.Column(db.String(20), default='confirmado')
     observacao = db.Column(db.Text)
     criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
     criado_em = db.Column(db.DateTime, default=agora)
