@@ -175,3 +175,19 @@ def test_produzir_nao_autorizado(app, catalogo, cliente):
     r = cliente.post('/padeiro/produzir',
                      json={'itens': [{'receita_id': catalogo['receita'].id, 'quantidade': 1}]})
     assert r.status_code == 403
+
+
+def test_buscar_acento_insensivel(app, admin_user, cliente):
+    from app.extensions import db
+    from app.models import Receita
+    db.session.add(Receita(nome='Pão Francês', categoria='Paes',
+                           rendimento_qtd=1, rendimento_unidade='un', peso_base=100.0))
+    db.session.commit()
+    _login(cliente)
+
+    def nomes(qval):
+        return [r['nome'] for r in cliente.get(
+            '/padeiro/buscar-receitas.json', query_string={'q': qval}
+        ).get_json()['receitas']]
+    assert 'Pão Francês' in nomes('pao')          # sem acento acha com acento
+    assert 'Pão Francês' in nomes('pao frances')  # multi-termo, tudo sem acento
