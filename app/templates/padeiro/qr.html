@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>QR de saída — Pedido #{{ pedido.id }}</title>
+<style>
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:#f1f3f5; color:#212529; text-align:center; }
+  header { background:#212529; color:#fff; padding:16px 20px; display:flex;
+           align-items:center; justify-content:space-between; }
+  header h1 { font-size:20px; margin:0; }
+  header a { color:#fff; text-decoration:none; background:#495057; padding:10px 16px;
+             border-radius:10px; font-size:16px; }
+  .box { max-width:520px; margin:0 auto; padding:24px 16px; }
+  .loja { font-size:26px; font-weight:800; margin:6px 0; }
+  .meta { font-size:18px; color:#6c757d; margin-bottom:6px; }
+  .mot { font-size:20px; font-weight:700; color:#0d6efd; margin-bottom:16px; }
+  .qr { background:#fff; border-radius:18px; padding:20px; display:inline-block;
+        box-shadow:0 1px 6px rgba(0,0,0,.12); }
+  .qr img { width:300px; height:300px; max-width:80vw; }
+  .hint { font-size:18px; color:#495057; margin:18px 12px; line-height:1.5; }
+  .erro { color:#842029; font-size:18px; }
+  .voltar { display:inline-block; margin-top:8px; background:#198754; color:#fff;
+            text-decoration:none; padding:18px 36px; border-radius:14px;
+            font-size:22px; font-weight:800; }
+</style>
+</head>
+<body>
+<header>
+  <h1>QR de saída</h1>
+  <a href="{{ url_for('padeiro.index') }}">← Voltar</a>
+</header>
+<div class="box">
+  <p class="loja">{{ pedido.loja.nome if pedido.loja else '—' }}</p>
+  <p class="meta">Pedido #{{ pedido.id }}</p>
+  <p class="mot">Motorista: {{ drv.nome }}</p>
+  {% if qr_png %}
+  <div class="qr"><img src="{{ qr_png }}" alt="QR Code"></div>
+  {% else %}
+  <p class="erro">Não consegui gerar a imagem do QR. Use o link abaixo.</p>
+  {% endif %}
+  <p class="hint">O motorista escaneia este QR e digita o <strong>PIN dele</strong> pra confirmar a saída.</p>
+  <p class="hint" style="font-size:12px; color:#adb5bd; word-break:break-all;">{{ url }}</p>
+  <a class="voltar" href="{{ url_for('padeiro.index') }}">PRONTO</a>
+</div>
+</body>
+</html>
