@@ -196,8 +196,10 @@ def venda_criar():
             desc = float((descs[i] or '0').replace(',', '.'))
         except (IndexError, ValueError):
             desc = 0
+        est = (estados[i].strip().lower() if i < len(estados) else '') or None
         itens.append({'tipo': tipo, 'id': int(sid), 'quantidade': qtd,
-                      'preco_unitario': preco, 'desconto_percentual': desc})
+                      'preco_unitario': preco, 'desconto_percentual': desc,
+                      'estado': est})
     if not itens:
         flash('Adicione pelo menos 1 item.', 'danger')
         return redirect(url_for('b2b.venda_nova'))
