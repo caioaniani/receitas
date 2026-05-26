@@ -8,6 +8,7 @@ Reusa a logica existente: status 'separado' (igual `pedidos.separar`), helper
 `handshake_qr.gerar_qr_saida` e o handshake em `/handshake/<token>`.
 """
 import logging
+from datetime import datetime
 
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -21,6 +22,14 @@ from app.utils import hoje
 logger = logging.getLogger(__name__)
 
 _A_SEPARAR = ('pendente', 'confirmado')
+
+
+def _parse_dia(valor):
+    """Parse 'YYYY-MM-DD' -> date, ou None se invalido/vazio."""
+    try:
+        return datetime.strptime((valor or '').strip(), '%Y-%m-%d').date()
+    except ValueError:
+        return None
 
 
 @padeiro_bp.route('/')
