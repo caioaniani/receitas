@@ -151,6 +151,10 @@
 <script>
   var CSRF = "{{ csrf_token() }}";
   var audioCtx = null, somAtivo = false, loopId = null, avisosAtivos = [];
+  var ultimoToque = 0;
+  function marcarToque() { ultimoToque = Date.now(); }
+  document.addEventListener('click', marcarToque, true);
+  document.addEventListener('touchstart', marcarToque, true);
 
   function _ctx() {
     if (!audioCtx) {
