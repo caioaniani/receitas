@@ -95,6 +95,8 @@ class VendaB2BItem(db.Model):
     quantidade = db.Column(db.Integer, nullable=False)
     preco_unitario = db.Column(db.Numeric(10, 2), nullable=False)
     desconto_percentual = db.Column(db.Float, default=0)  # %, nao R$
+    # Estado do item (cru/backup/assado) p/ producao — mesma regra do PedidoItem.
+    estado = db.Column(db.String(20), nullable=True)
 
     receita = db.relationship('Receita')
     produto = db.relationship('Produto')
@@ -106,6 +108,11 @@ class VendaB2BItem(db.Model):
         if self.produto:
             return self.produto.nome
         return '?'
+
+    @property
+    def nome_item_com_estado(self):
+        from app.constants import render_item_com_estado
+        return render_item_com_estado(self.nome_item, self.estado)
 
     @property
     def valor_total(self):
