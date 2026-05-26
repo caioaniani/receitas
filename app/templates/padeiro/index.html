@@ -346,16 +346,21 @@
   function renderPrep() {
     if (!prepItens.length) {
       document.getElementById('prep-lista').innerHTML =
-        '<div class="prep-item"><div class="prep-loja">Nenhum item [BACKUP] ou [ASSADO] pro dia seguinte.</div></div>';
+        '<div class="prep-item" style="font-weight:400;color:#6c757d;">Nenhum item [BACKUP] ou [ASSADO] pro dia seguinte.</div>';
       return;
     }
-    var html = '';
+    var grupos = {}, ordem = [];
     prepItens.forEach(function (it) {
-      html += '<div class="prep-item">'
-        + '<div class="prep-linha"><span class="prep-q">' + it.qtd + '×</span> '
-        + esc(it.nome) + ' [' + esc(it.estado_label) + ']</div>'
-        + '<div class="prep-loja">' + esc(it.loja) + '</div>'
-        + '</div>';
+      if (!grupos[it.loja]) { grupos[it.loja] = []; ordem.push(it.loja); }
+      grupos[it.loja].push(it);
+    });
+    var html = '';
+    ordem.forEach(function (loja) {
+      html += '<div class="prep-loja-grupo">' + esc(loja) + '</div>';
+      grupos[loja].forEach(function (it) {
+        html += '<div class="prep-item"><span class="prep-q">' + it.qtd + '×</span> '
+          + esc(it.nome) + ' [' + esc(it.estado_label) + ']</div>';
+      });
     });
     document.getElementById('prep-lista').innerHTML = html;
   }
