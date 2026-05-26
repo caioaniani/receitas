@@ -293,13 +293,55 @@
       .catch(function () {});
   }
 
+  function fecharDrawers() {
+    ['hist-drawer', 'hist-backdrop', 'prep-drawer', 'prep-backdrop'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.remove('aberto');
+    });
+  }
   function toggleHist() {
-    var d = document.getElementById('hist-drawer');
-    var b = document.getElementById('hist-backdrop');
-    var abrindo = !d.classList.contains('aberto');
-    d.classList.toggle('aberto');
-    b.classList.toggle('aberto');
-    if (abrindo) carregarHist();
+    var abrindo = !document.getElementById('hist-drawer').classList.contains('aberto');
+    fecharDrawers();
+    if (abrindo) {
+      document.getElementById('hist-drawer').classList.add('aberto');
+      document.getElementById('hist-backdrop').classList.add('aberto');
+      carregarHist();
+    }
+  }
+  function togglePrep() {
+    var abrindo = !document.getElementById('prep-drawer').classList.contains('aberto');
+    fecharDrawers();
+    if (abrindo) {
+      document.getElementById('prep-drawer').classList.add('aberto');
+      document.getElementById('prep-backdrop').classList.add('aberto');
+      carregarPrep();
+    }
+  }
+  function carregarPrep() {
+    fetch('{{ url_for("padeiro.preparar_json") }}?data={{ dia.isoformat() }}')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        document.getElementById('prep-dia').textContent = d.dia || '';
+        var itens = d.itens || [];
+        if (!itens.length) {
+          document.getElementById('prep-lista').innerHTML =
+            '<div class="prep-item">Nenhum item [BACKUP] ou [ASSADO] pro dia seguinte.</div>';
+          return;
+        }
+        var grupos = {};
+        itens.forEach(function (it) {
+          (grupos[it.estado_label] = grupos[it.estado_label] || []).push(it);
+        });
+        var html = '';
+        Object.keys(grupos).forEach(function (lbl) {
+          html += '<div class="prep-grupo">[' + esc(lbl) + ']</div>';
+          grupos[lbl].forEach(function (it) {
+            html += '<div class="prep-item"><span class="prep-q">' + it.qtd + '×</span> '
+              + esc(it.nome) + '</div>';
+          });
+        });
+        document.getElementById('prep-lista').innerHTML = html;
+      }).catch(function () {});
   }
   function carregarHist() {
     fetch('{{ url_for("padeiro.avisos_24h_json") }}')
