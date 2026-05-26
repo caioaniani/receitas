@@ -54,3 +54,20 @@ def test_preparar_vazio_sem_backup_assado(app, admin_user, loja, catalogo, clien
     _login(cliente)
     j = cliente.get(f'/padeiro/preparar.json?data={hoje().isoformat()}').get_json()
     assert j['itens'] == []
+
+
+def test_card_padeiro_mostra_estado(app, admin_user, loja, catalogo, cliente):
+    """O card da tela do padeiro deve exibir a tag de estado ([ASSADO]/[BACKUP])."""
+    from app.extensions import db
+    from app.models import PedidoItem, PedidoLoja
+    from app.utils import hoje
+    p = PedidoLoja(loja_id=loja.id, data_entrega=hoje(), status='confirmado',
+                   criado_por=admin_user.id)
+    db.session.add(p)
+    db.session.commit()
+    db.session.add(PedidoItem(pedido_id=p.id, receita_id=catalogo['receita'].id,
+                              quantidade=2, estado='assado'))
+    db.session.commit()
+    _login(cliente)
+    r = cliente.get('/padeiro/')
+    assert b'[ASSADO]' in r.data
