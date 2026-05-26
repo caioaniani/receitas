@@ -174,11 +174,31 @@
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       audioCtx.resume();
       somAtivo = true;
+      try { localStorage.setItem('padeiro_som', '1'); } catch (e) {}
       var sb = document.getElementById('som-bar');
       if (sb) sb.style.display = 'none';
       tocarCampainha();
       if (avisosAtivos.length) iniciarLoop();
     } catch (e) { /* navegador sem Web Audio */ }
+  }
+
+  // Mantem o som "ativado" entre recarregamentos (trocar de dia, separar, etc).
+  // Depois do 1o toque em "Ativar som" nessa TV, nao mostra mais o botao e ja
+  // arma o audio (em kiosk volta sozinho; senao retoma no 1o toque da tela).
+  function initSom() {
+    var ativado = false;
+    try { ativado = localStorage.getItem('padeiro_som') === '1'; } catch (e) {}
+    if (!ativado) return;
+    var sb = document.getElementById('som-bar');
+    if (sb) sb.style.display = 'none';
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      somAtivo = true;
+      audioCtx.resume();
+    } catch (e) {}
+    var resumir = function () { if (audioCtx) { audioCtx.resume(); } };
+    document.addEventListener('click', resumir);
+    document.addEventListener('touchstart', resumir);
   }
 
   function tocarCampainha() {
