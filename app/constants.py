@@ -51,6 +51,18 @@ STATUS_PEDIDO_ABAS = (
 )
 
 
+# ─── Papeis de usuario ────────────────────────────────────────────────
+# Validos pra Usuario.papel. Centralizado aqui (estava duplicado em
+# auth/routes.py). 'padeiro' = chao de fabrica: tela touchscreen dedicada
+# (separar pedido + gerar QR de saida), sem acesso ao resto do sistema.
+PAPEIS_VALIDOS = ('admin', 'gerente', 'producao', 'padeiro', 'rh', 'funcionario')
+
+PAPEL_LABEL = {
+    'admin': 'Admin', 'gerente': 'Gerente', 'producao': 'Producao',
+    'padeiro': 'Padeiro', 'rh': 'RH', 'funcionario': 'Funcionario',
+}
+
+
 # ─── Motivos de desperdicio ────────────────────────────────────────────
 #
 # Itens (Receita/Produto) com `reaproveitavel=True` NAO baixam estoque
