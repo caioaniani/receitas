@@ -1926,14 +1926,9 @@ def executar_criar_pedido(params, user):
     itens = params.get('itens') or []
     if not itens:
         return {'ok': False, 'erro': 'Pedido sem itens'}
-    pedido = PedidoLoja(
-        loja_id=loja_id, data_entrega=data_entrega,
-        observacao=(params.get('observacao') or '').strip() or None,
-        criado_por=user.id, status='confirmado',
-    )
-    db.session.add(pedido)
-    db.session.flush()
-    salvos = 0
+
+    # Normaliza os itens resolvidos (tipo->FK) — comum pro merge e pro novo.
+    itens_norm = []
     nao_resolvidos = []
     for item in itens:
         qtd = int(item.get('quantidade') or 0)
@@ -1943,22 +1938,41 @@ def executar_criar_pedido(params, user):
         if not resolvido or not resolvido.get('id'):
             nao_resolvidos.append(item.get('nome_original') or '?')
             continue
-        obs_item = (item.get('observacao') or '').strip()[:200] or None
         # Estado vem da Claude (`backup`/`assado`) ou null = padrao da familia.
         estado_item = (item.get('estado') or '').strip().lower() or None
         if estado_item not in (None, 'backup', 'assado'):
             estado_item = None
-        pi = PedidoItem(pedido_id=pedido.id, quantidade=qtd,
-                         observacao=obs_item, estado=estado_item)
-        if resolvido['tipo'] == 'produto':
-            pi.produto_id = resolvido['id']
-        elif resolvido['tipo'] == 'receita':
-            pi.receita_id = resolvido['id']
-        db.session.add(pi)
-        salvos += 1
-    if salvos == 0:
-        db.session.rollback()
+        itens_norm.append({
+            'receita_id': resolvido['id'] if resolvido['tipo'] == 'receita' else None,
+            'produto_id': resolvido['id'] if resolvido['tipo'] == 'produto' else None,
+            'materia_prima_id': None,
+            'quantidade': qtd,
+            'observacao': (item.get('observacao') or '').strip()[:200] or None,
+            'estado': estado_item,
+        })
+    if not itens_norm:
         return {'ok': False, 'erro': f'Nenhum item resolvido. Nao achei: {", ".join(nao_resolvidos)}'}
+
+    # Ja existe pedido aberto da loja nessa data? Junta nele em vez de duplicar.
+    from app.services.pedido_merge import mesclar_itens, pedido_aberto_para_merge
+    alvo = pedido_aberto_para_merge(loja_id, data_entrega, 'confirmado')
+    if alvo:
+        res = mesclar_itens(alvo, itens_norm, modificado_por_id=user.id)
+        db.session.commit()
+        return {'ok': True, 'pedido_id': alvo.id, 'mesclado': True,
+                'itens_salvos': res['adicionados'] + res['somados'],
+                'nao_resolvidos': nao_resolvidos, 'registro_tipo': 'pedido_loja',
+                'registro_id': alvo.id, 'url': f'/pedidos/{alvo.id}'}
+
+    pedido = PedidoLoja(
+        loja_id=loja_id, data_entrega=data_entrega,
+        observacao=(params.get('observacao') or '').strip() or None,
+        criado_por=user.id, status='confirmado',
+    )
+    db.session.add(pedido)
+    db.session.flush()
+    for it in itens_norm:
+        db.session.add(PedidoItem(pedido_id=pedido.id, **it))
     db.session.commit()
     # Alerta Slack se for emergencia (criado hoje pra entrega hoje)
     try:
@@ -1966,8 +1980,9 @@ def executar_criar_pedido(params, user):
         alertar_pedido_emergencia(pedido)
     except Exception:  # noqa: BLE001
         logger.exception('Alerta emergencia falhou (copilot)')
-    return {'ok': True, 'pedido_id': pedido.id, 'itens_salvos': salvos, 'nao_resolvidos': nao_resolvidos,
-            'registro_tipo': 'pedido_loja', 'registro_id': pedido.id, 'url': f'/pedidos/{pedido.id}'}
+    return {'ok': True, 'pedido_id': pedido.id, 'itens_salvos': len(itens_norm),
+            'nao_resolvidos': nao_resolvidos, 'registro_tipo': 'pedido_loja',
+            'registro_id': pedido.id, 'url': f'/pedidos/{pedido.id}'}
 
 
 def executar_editar_pedido(params, user):
