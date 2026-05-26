@@ -1167,13 +1167,19 @@ def _enriquecer_criar_venda_b2b(tool_input):
     itens_enriq = []
     total = 0.0
     for it in (out.get('itens') or []):
-        nome = (it.get('nome') or '').strip()
+        nome_in = (it.get('nome') or '').strip()
+        # "Croissant backup" -> resolve "Croissant" + estado=backup. Estado
+        # explicito do Claude tem prioridade sobre o que veio no nome.
+        nome, est_nome = _separar_estado(nome_in)
+        est = (str(it.get('estado') or '').strip().lower() or None) or est_nome
+        if est not in (None, 'backup', 'assado'):
+            est = None
         try:
             qtd = int(it.get('quantidade') or 0)
         except (TypeError, ValueError):
             qtd = 0
         if not nome or qtd <= 0:
-            itens_enriq.append({'nome': nome or '?', 'quantidade': qtd,
+            itens_enriq.append({'nome': nome_in or '?', 'quantidade': qtd,
                                  'erro': 'invalido'})
             continue
         matches = _resolver_produto(nome)
