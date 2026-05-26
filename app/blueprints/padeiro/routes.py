@@ -232,4 +232,8 @@ def preparar_json():
                'estado_label': ESTADO_LABEL.get(e, e.upper()), 'qtd': q}
               for (n, e), q in agg.items()]
     linhas.sort(key=lambda x: (x['estado_label'], -x['qtd'], x['nome']))
-    return jsonify(dia=alvo.strftime('%d/%m'), itens=linhas)
+    # Alerta de pre-preparo: so depois das 18h (BRT) e havendo itens.
+    from app.utils import agora
+    alertar = bool(linhas) and agora().hour >= 18
+    return jsonify(dia=alvo.strftime('%d/%m'), alvo_iso=alvo.isoformat(),
+                   itens=linhas, alertar=alertar)
