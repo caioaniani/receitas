@@ -255,6 +255,24 @@ def venda_detalhe(vid):
     return render_template('b2b/venda_detalhe.html', venda=venda)
 
 
+@b2b_bp.route('/vendas/<int:vid>/entrega', methods=['POST'])
+@login_required
+@admin_required
+def venda_entrega(vid):
+    """Define/limpa a data de entrega de uma venda B2B (entra/sai da fila do
+    padeiro). Vazio = volta a ser venda imediata (nao aparece no padeiro)."""
+    venda = VendaB2B.query.get_or_404(vid)
+    data_str = (request.form.get('data_entrega') or '').strip()
+    try:
+        venda.data_entrega = date.fromisoformat(data_str) if data_str else None
+    except ValueError:
+        flash('Data invalida.', 'warning')
+        return redirect(url_for('b2b.venda_detalhe', vid=vid))
+    db.session.commit()
+    flash('Data de entrega atualizada.', 'success')
+    return redirect(url_for('b2b.venda_detalhe', vid=vid))
+
+
 @b2b_bp.route('/vendas/<int:vid>/cancelar', methods=['POST'])
 @login_required
 @admin_required
