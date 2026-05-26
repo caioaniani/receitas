@@ -2932,6 +2932,15 @@ def executar_criar_venda_b2b(params, user):
         data_venda = date.fromisoformat(data_str) if data_str else None
     except ValueError:
         data_venda = None
+    # Data de entrega = obrigatoria (vai pra fila do padeiro), igual ao formulario.
+    data_ent_str = (params.get('data_entrega') or '').strip()
+    try:
+        data_entrega = date.fromisoformat(data_ent_str) if data_ent_str else None
+    except ValueError:
+        data_entrega = None
+    if not data_entrega:
+        return {'ok': False,
+                'erro': 'Informe a data de entrega (dia que vai pro padeiro).'}
 
     itens_in = params.get('itens') or []
     itens_payload = []
@@ -2940,15 +2949,21 @@ def executar_criar_venda_b2b(params, user):
         if it.get('erro'):
             nao_resolvidos.append(it.get('nome_original') or it.get('nome') or '?')
             continue
+        est = it.get('estado')  # enriquecido ja traz; senao parseia do nome
         resolvido = it.get('resolvido')
         if not resolvido or not resolvido.get('id'):
-            # Tenta re-resolver pelo nome_original (caso venha do Claude direto)
-            nome = (it.get('nome_original') or it.get('nome') or '').strip()
+            # Re-resolve pelo nome (caso venha do Claude direto), separando estado.
+            nome_raw = (it.get('nome_original') or it.get('nome') or '').strip()
+            nome, est_nome = _separar_estado(nome_raw)
+            if est is None:
+                est = est_nome
             matches = _resolver_produto(nome) if nome else []
             if not matches:
-                nao_resolvidos.append(nome or '?')
+                nao_resolvidos.append(nome_raw or '?')
                 continue
             resolvido = matches[0]
+        if est not in (None, 'backup', 'assado'):
+            est = None
         try:
             qtd = int(it.get('quantidade') or 0)
         except (TypeError, ValueError):
@@ -2961,6 +2976,7 @@ def executar_criar_venda_b2b(params, user):
             'quantidade': qtd,
             'preco_unitario': float(it.get('preco_unitario') or 0),
             'desconto_percentual': float(it.get('desconto_percentual') or 0),
+            'estado': est,
         })
 
     if not itens_payload:
