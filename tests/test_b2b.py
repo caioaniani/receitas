@@ -18,6 +18,16 @@ def test_form_nova_venda_tem_typeahead(app, admin_user, catalogo):
     assert b'Croissant Tradicional' in r.data  # catalogo disponivel pro filtro JS
 
 
+def test_form_nova_venda_tem_estado_e_entrega(app, admin_user, catalogo):
+    """Formulario B2B coleta data de entrega (fila do padeiro) e estado por item."""
+    cliente = app.test_client()
+    cliente.post('/auth/login', data={'login': 'admin', 'senha': '123'})
+    r = cliente.get('/b2b/vendas/nova')
+    assert r.status_code == 200
+    assert b'name="data_entrega"' in r.data
+    assert b'item_estado[]' in r.data
+
+
 def test_criar_venda_baixa_estoque(app, admin_user, catalogo):
     """Venda B2B com 1 item baixa do EstoqueProducao corretamente."""
     from app.extensions import db
