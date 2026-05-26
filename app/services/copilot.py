@@ -1929,7 +1929,7 @@ def executar_criar_pedido(params, user):
     pedido = PedidoLoja(
         loja_id=loja_id, data_entrega=data_entrega,
         observacao=(params.get('observacao') or '').strip() or None,
-        criado_por=user.id, status='pendente',
+        criado_por=user.id, status='confirmado',
     )
     db.session.add(pedido)
     db.session.flush()
