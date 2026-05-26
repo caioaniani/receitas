@@ -44,6 +44,18 @@
   .btn-juntar { display:block; width:100%; border:none; border-radius:14px; padding:18px;
                 font-size:20px; font-weight:800; color:#fff; background:#fd7e14;
                 cursor:pointer; margin-bottom:16px; }
+  #som-bar { text-align:center; padding:8px; background:#fff3cd; }
+  #btn-som { background:#ffc107; color:#212529; border:none; border-radius:10px;
+             padding:12px 20px; font-weight:800; cursor:pointer; font-size:17px; }
+  #avisos-bar { background:#dc3545; color:#fff; padding:12px 16px; }
+  .aviso-ticker { overflow:hidden; white-space:nowrap; }
+  .aviso-ticker span { display:inline-block; padding-left:100%;
+                       animation:aviso-ticker 18s linear infinite;
+                       font-size:24px; font-weight:800; }
+  @keyframes aviso-ticker { from { transform:translateX(0); } to { transform:translateX(-100%); } }
+  #aviso-botoes { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+  .aviso-li { background:#fff; color:#b02a37; border:none; border-radius:10px;
+              padding:12px 18px; font-weight:800; font-size:16px; cursor:pointer; }
 </style>
 </head>
 <body>
