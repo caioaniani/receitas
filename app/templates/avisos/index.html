@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}Avisos à produção{% endblock %}
+{% block content %}
+<h1 class="page-title"><i class="bi bi-megaphone"></i> Avisos à produção</h1>
+<p class="text-muted">O aviso aparece na TV da produção e toca uma campainha até alguém confirmar a leitura no touch.</p>
+
+<form method="POST" action="{{ url_for('avisos.index') }}" class="mb-4" style="max-width:640px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <textarea name="texto" class="form-control mb-2" rows="2" maxlength="500" required
+            placeholder="Ex: Faltou farinha integral — segurar os pães integrais"></textarea>
+  <button type="submit" class="btn btn-primary"><i class="bi bi-send"></i> Enviar pra produção</button>
+</form>
+
+<h2 class="h6 text-muted">Últimos avisos</h2>
+<div class="table-responsive">
+  <table class="table table-sm bg-white align-middle">
+    <thead><tr><th>Aviso</th><th>Por</th><th>Quando</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for a in recentes %}
+      <tr>
+        <td>{{ a.texto }}</td>
+        <td class="small text-muted">{{ a.criado_por.nome if a.criado_por else '—' }}</td>
+        <td class="small text-muted">{{ a.criado_em.strftime('%d/%m %H:%M') }}</td>
+        <td>
+          {% if a.confirmado %}<span class="badge bg-success">lido</span>
+          {% else %}<span class="badge bg-warning text-dark">na TV</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="text-muted">Nenhum aviso ainda.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
