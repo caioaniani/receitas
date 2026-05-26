@@ -68,3 +68,35 @@ def mesclar_itens(pedido, itens, modificado_por_id=None):
     if modificado_por_id:
         pedido.modificado_por_id = modificado_por_id
     return {'adicionados': adicionados, 'somados': somados}
+
+
+def consolidar_loja_data(loja_id, data_entrega, status, modificado_por_id=None):
+    """Junta TODOS os pedidos abertos (mesma loja + data + status) no mais
+    antigo; os demais viram 'cancelado' (itens preservados no historico deles).
+
+    Limpeza retroativa de duplicados que ja existiam antes da junção-na-criacao.
+    NAO commita. Retorna (pedido_alvo|None, n_absorvidos).
+    """
+    if status not in STATUS_MESCLAVEL or not data_entrega:
+        return None, 0
+    pedidos = (PedidoLoja.query
+               .filter_by(loja_id=loja_id, data_entrega=data_entrega, status=status)
+               .order_by(PedidoLoja.id)
+               .all())
+    if len(pedidos) < 2:
+        return (pedidos[0] if pedidos else None), 0
+    alvo = pedidos[0]
+    absorvidos = 0
+    for outro in pedidos[1:]:
+        itens = [{
+            'receita_id': it.receita_id, 'produto_id': it.produto_id,
+            'materia_prima_id': it.materia_prima_id, 'quantidade': it.quantidade,
+            'estado': it.estado, 'observacao': it.observacao,
+        } for it in outro.itens]
+        mesclar_itens(alvo, itens, modificado_por_id=modificado_por_id)
+        outro.status = 'cancelado'
+        outro.modificado_em = agora()
+        if modificado_por_id:
+            outro.modificado_por_id = modificado_por_id
+        absorvidos += 1
+    return alvo, absorvidos
