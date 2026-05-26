@@ -374,6 +374,8 @@ def create_app(config_class=None):
     app.register_blueprint(notificacoes_bp)
     from app.blueprints.slack import slack_bp
     app.register_blueprint(slack_bp)
+    from app.blueprints.padeiro import padeiro_bp
+    app.register_blueprint(padeiro_bp, url_prefix='/padeiro')
 
     # Ativa audit log (listeners SQLAlchemy)
     from app.services.audit import init_audit
