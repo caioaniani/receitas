@@ -76,7 +76,7 @@ def novo_usuario():
     login_val = request.form.get('login', '').strip()
     senha = request.form.get('senha', '').strip()
     papel = request.form.get('papel', 'funcionario')
-    PAPEIS_VALIDOS = {'admin', 'gerente', 'producao', 'rh', 'funcionario'}
+    from app.constants import PAPEIS_VALIDOS
     if papel not in PAPEIS_VALIDOS:
         papel = 'funcionario'
 
@@ -125,7 +125,7 @@ def alterar_papel(id):
         return redirect(url_for('auth.usuarios'))
 
     papel = (request.form.get('papel') or '').strip()
-    PAPEIS_VALIDOS = {'admin', 'gerente', 'producao', 'rh', 'funcionario'}
+    from app.constants import PAPEIS_VALIDOS
     if papel not in PAPEIS_VALIDOS:
         flash('Papel invalido.', 'warning')
         return redirect(url_for('auth.usuarios'))
