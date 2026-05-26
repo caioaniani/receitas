@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Padeiro — Pedidos de hoje</title>
+<style>
+  :root { --verde:#198754; --azul:#0d6efd; --cinza:#6c757d; --amarelo:#ffc107; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:#f1f3f5; color:#212529; padding-bottom:50px; }
+  header { background:#212529; color:#fff; padding:16px 20px; display:flex;
+           align-items:center; justify-content:space-between; position:sticky; top:0; z-index:10; }
+  header h1 { font-size:22px; margin:0; }
+  header .sair { color:#fff; text-decoration:none; font-size:16px; background:#495057;
+                 padding:10px 16px; border-radius:10px; }
+  .wrap { padding:16px; max-width:1100px; margin:0 auto; }
+  .sec-title { font-size:20px; font-weight:800; margin:24px 0 10px; text-transform:uppercase;
+               letter-spacing:.5px; color:#343a40; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
+  .card { background:#fff; border-radius:16px; padding:18px; box-shadow:0 1px 4px rgba(0,0,0,.1);
+          border-left:8px solid var(--cinza); }
+  .card.sep { border-left-color:var(--amarelo); }
+  .card .loja { font-size:24px; font-weight:800; margin:0 0 4px; }
+  .card .meta { font-size:16px; color:#6c757d; margin-bottom:12px; }
+  .card .itens { font-size:15px; color:#495057; margin:0 0 14px; line-height:1.6; }
+  .btn { display:block; width:100%; border:none; border-radius:14px; padding:20px;
+         font-size:22px; font-weight:800; color:#fff; cursor:pointer; margin:0; }
+  .btn-sep { background:var(--verde); }
+  .btn-mot { background:var(--azul); }
+  .drivers { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:10px; }
+  .drivers .lbl { grid-column:1/-1; font-size:16px; font-weight:700; color:#343a40; margin-bottom:2px; }
+  .vazio { color:#868e96; font-size:18px; padding:20px; text-align:center; }
+  .flash { padding:14px 18px; border-radius:12px; margin-bottom:12px; font-size:18px; font-weight:600; }
+  .flash.success { background:#d1e7dd; color:#0f5132; }
+  .flash.warning { background:#fff3cd; color:#664d03; }
+  .flash.danger  { background:#f8d7da; color:#842029; }
+  .flash.info    { background:#cff4fc; color:#055160; }
+  form { margin:0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🥖 Pedidos de hoje — {{ hoje.strftime('%d/%m') }}</h1>
+  <a class="sair" href="{{ url_for('auth.logout') }}">Sair</a>
+</header>
+<div class="wrap">
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in msgs %}
+      <div class="flash {{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="sec-title">Para separar ({{ a_separar|length }})</div>
+  {% if a_separar %}
+  <div class="grid">
+    {% for p in a_separar %}
+    <div class="card">
+      <p class="loja">{{ p.loja.nome if p.loja else '—' }}</p>
+      <p class="meta">Pedido #{{ p.id }}{% if p.data_entrega %} · entrega {{ p.data_entrega.strftime('%d/%m') }}{% endif %}</p>
+      <p class="itens">{% for it in p.itens %}{{ it.quantidade }}× {{ it.nome_item }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+      <form method="POST" action="{{ url_for('padeiro.separar', id=p.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sep" type="submit">SEPARAR</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="vazio">Nada pra separar agora.</div>
+  {% endif %}
+
+  <div class="sec-title">Separados — aguardando motorista ({{ aguardando|length }})</div>
+  {% if aguardando %}
+  <div class="grid">
+    {% for p in aguardando %}
+    <div class="card sep">
+      <p class="loja">{{ p.loja.nome if p.loja else '—' }}</p>
+      <p class="meta">Pedido #{{ p.id }}{% if p.data_entrega %} · entrega {{ p.data_entrega.strftime('%d/%m') }}{% endif %}</p>
+      <p class="itens">{% for it in p.itens %}{{ it.quantidade }}× {{ it.nome_item }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+      {% if drivers %}
+      <div class="drivers">
+        <div class="lbl">Motorista chegou? Toque no nome → gera o QR:</div>
+        {% for d in drivers %}
+        <form method="POST" action="{{ url_for('padeiro.gerar_qr', id=p.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="driver_id" value="{{ d.id }}">
+          <button class="btn btn-mot" type="submit">{{ d.nome }}</button>
+        </form>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="vazio">Nenhum motorista ativo cadastrado.</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="vazio">Nenhum pedido separado aguardando.</div>
+  {% endif %}
+</div>
+</body>
+</html>
