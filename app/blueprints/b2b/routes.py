@@ -159,6 +159,12 @@ def venda_criar():
         data_venda = date.fromisoformat(data_str)
     except ValueError:
         data_venda = hoje()
+    # Data de entrega (opcional): se preenchida, a venda entra na fila do padeiro.
+    data_ent_str = (request.form.get('data_entrega') or '').strip()
+    try:
+        data_entrega = date.fromisoformat(data_ent_str) if data_ent_str else None
+    except ValueError:
+        data_entrega = None
     nf = (request.form.get('nf_numero') or '').strip() or None
     obs = (request.form.get('observacao') or '').strip() or None
 
@@ -167,6 +173,7 @@ def venda_criar():
     qtds = request.form.getlist('item_qtd[]')
     precos = request.form.getlist('item_preco[]')
     descs = request.form.getlist('item_desc[]')
+    estados = request.form.getlist('item_estado[]')
     itens = []
     for i, ref in enumerate(refs):
         ref = (ref or '').strip()
