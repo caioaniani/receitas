@@ -72,6 +72,7 @@
       <p class="itens">{% for it in p.itens %}{{ it.quantidade }}× {{ it.nome_item }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
       <form method="POST" action="{{ url_for('padeiro.separar', id=p.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="data" value="{{ dia.isoformat() }}">
         <button class="btn btn-sep" type="submit">SEPARAR</button>
       </form>
     </div>
