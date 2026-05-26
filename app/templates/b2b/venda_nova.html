@@ -150,8 +150,8 @@
             // position:fixed posicionado sob o input — escapa do overflow da
             // tabela (.table-responsive), que cortava o dropdown absoluto.
             var rect = input.getBoundingClientRect();
-            box.style.left = rect.left + 'px';
-            box.style.top = rect.bottom + 'px';
+            box.style.left = (rect.left + window.pageXOffset) + 'px';
+            box.style.top = (rect.bottom + window.pageYOffset) + 'px';
             box.style.width = rect.width + 'px';
             box.style.display = 'block';
         });
