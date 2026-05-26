@@ -8,6 +8,7 @@ Reusa a logica existente: status 'separado' (igual `pedidos.separar`), helper
 `handshake_qr.gerar_qr_saida` e o handshake em `/handshake/<token>`.
 """
 import logging
+from collections import Counter
 from datetime import datetime, timedelta
 
 from flask import flash, redirect, render_template, request, url_for
@@ -51,9 +52,12 @@ def index():
     a_separar = [p for p in pedidos if p.status in _A_SEPARAR]
     aguardando = [p for p in pedidos if p.status == 'separado']
     drivers = Driver.query.filter_by(ativo=True).order_by(Driver.nome).all()
+    # Repetidos = pedidos a mais por (loja, status, data) que dariam pra juntar.
+    grupos = Counter((p.loja_id, p.status, p.data_entrega) for p in a_separar)
+    n_repetidos = sum(c - 1 for c in grupos.values() if c > 1)
     return render_template(
         'padeiro/index.html', a_separar=a_separar, aguardando=aguardando,
-        drivers=drivers, dia=dia, eh_hoje=eh_hoje,
+        drivers=drivers, dia=dia, eh_hoje=eh_hoje, n_repetidos=n_repetidos,
         dia_anterior=(dia - timedelta(days=1)).isoformat(),
         dia_seguinte=(dia + timedelta(days=1)).isoformat())
 
