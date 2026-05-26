@@ -169,36 +169,47 @@
   var CSRF = "{{ csrf_token() }}";
   var audioCtx = null, somAtivo = false, loopId = null, avisosAtivos = [];
 
-  function ativarSom() {
-    try {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      audioCtx.resume();
-      somAtivo = true;
-      try { localStorage.setItem('padeiro_som', '1'); } catch (e) {}
-      var sb = document.getElementById('som-bar');
-      if (sb) sb.style.display = 'none';
-      tocarCampainha();
-      if (avisosAtivos.length) iniciarLoop();
-    } catch (e) { /* navegador sem Web Audio */ }
+  function _ctx() {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch (e) { audioCtx = null; }
+    }
+    return audioCtx;
   }
 
-  // Mantem o som "ativado" entre recarregamentos (trocar de dia, separar, etc).
-  // Depois do 1o toque em "Ativar som" nessa TV, nao mostra mais o botao e ja
-  // arma o audio (em kiosk volta sozinho; senao retoma no 1o toque da tela).
-  function initSom() {
-    var ativado = false;
-    try { ativado = localStorage.getItem('padeiro_som') === '1'; } catch (e) {}
-    if (!ativado) return;
+  function ativarSom() {
+    if (!_ctx()) return;
+    audioCtx.resume();
+    tocarCampainha();
+    setTimeout(atualizarBotaoSom, 300);
+  }
+
+  // O navegador so libera audio apos um gesto, EXCETO em modo kiosk com autoplay
+  // liberado. Por isso o botao "Ativar som" aparece SO quando o audio esta de
+  // fato bloqueado; com autoplay liberado o botao some e o som toca em toda
+  // recarga (trocar de dia, separar, etc.) sem precisar tocar em nada.
+  function atualizarBotaoSom() {
     var sb = document.getElementById('som-bar');
-    if (sb) sb.style.display = 'none';
-    try {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioCtx) return;
+    if (audioCtx.state === 'running') {
       somAtivo = true;
-      audioCtx.resume();
-    } catch (e) {}
-    var resumir = function () { if (audioCtx) { audioCtx.resume(); } };
+      if (sb) sb.style.display = 'none';
+      if (avisosAtivos.length) iniciarLoop();
+    } else {
+      somAtivo = false;
+      if (sb) sb.style.display = '';
+    }
+  }
+
+  function initSom() {
+    if (!_ctx()) return;
+    audioCtx.resume();  // funciona sozinho em kiosk; senao fica 'suspended'
+    var resumir = function () {
+      if (audioCtx) { audioCtx.resume(); setTimeout(atualizarBotaoSom, 200); }
+    };
     document.addEventListener('click', resumir);
     document.addEventListener('touchstart', resumir);
+    setTimeout(atualizarBotaoSom, 800);
   }
 
   function tocarCampainha() {
