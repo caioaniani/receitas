@@ -468,6 +468,170 @@
       }).catch(function () {});
   }
 
+  // ── Painel Produzir: receita (typeahead) + qtd -> entrada no congelado ──
+  var prodRows = {}, prodSeq = 0, prodEnviando = false, prodPendentes = [];
+
+  function toggleProd() {
+    var abrindo = !document.getElementById('prod-drawer').classList.contains('aberto');
+    fecharDrawers();
+    if (abrindo) {
+      document.getElementById('prod-drawer').classList.add('aberto');
+      document.getElementById('prod-backdrop').classList.add('aberto');
+      if (!Object.keys(prodRows).length) prodAddRow();
+    }
+  }
+
+  function prodAddRow() {
+    if (Object.keys(prodRows).length >= 30) return;
+    var rid = 'R' + (++prodSeq);
+    prodRows[rid] = { receitaId: null, nome: '', results: [], timer: null };
+    var div = document.createElement('div');
+    div.className = 'prod-row';
+    div.id = 'row-' + rid;
+    div.innerHTML =
+      '<div class="prod-nome-wrap">'
+      + '<input class="nome" type="text" placeholder="Buscar receita..." autocomplete="off" '
+      +   'oninput="prodBuscar(\'' + rid + '\', this.value)">'
+      + '<div class="prod-results" id="res-' + rid + '" style="display:none;"></div>'
+      + '</div>'
+      + '<input class="qtd" type="number" inputmode="numeric" min="1" value="1" id="qtd-' + rid + '">'
+      + '<button type="button" class="rm" onclick="prodRemove(\'' + rid + '\')">×</button>';
+    document.getElementById('prod-rows').appendChild(div);
+  }
+
+  function prodRemove(rid) {
+    delete prodRows[rid];
+    var el = document.getElementById('row-' + rid);
+    if (el) el.remove();
+  }
+
+  function prodBuscar(rid, valor) {
+    var row = prodRows[rid];
+    if (!row) return;
+    row.nome = valor;
+    row.receitaId = null;  // mudou o texto: precisa re-selecionar
+    var rowEl = document.getElementById('row-' + rid);
+    if (rowEl) rowEl.classList.remove('sem-receita');
+    if (row.timer) clearTimeout(row.timer);
+    var q = valor.trim();
+    var box = document.getElementById('res-' + rid);
+    if (q.length < 2) { if (box) { box.style.display = 'none'; box.innerHTML = ''; } return; }
+    row.timer = setTimeout(function () {
+      fetch('/padeiro/buscar-receitas.json?q=' + encodeURIComponent(q))
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          // ignora se a linha sumiu ou se o texto mudou desde a busca (resposta obsoleta)
+          if (!d || prodRows[rid] !== row || (row.nome || '').trim() !== q) return;
+          row.results = d.receitas || [];
+          prodRenderResults(rid);
+        }).catch(function () {});
+    }, 250);
+  }
+
+  function prodRenderResults(rid) {
+    var row = prodRows[rid], box = document.getElementById('res-' + rid);
+    if (!box) return;
+    if (!row.results.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.innerHTML = row.results.map(function (r, i) {
+      return '<div class="prod-opt" onclick="prodPick(\'' + rid + '\',' + i + ')">' + esc(r.nome) + '</div>';
+    }).join('');
+    box.style.display = 'block';
+  }
+
+  function prodPick(rid, idx) {
+    var row = prodRows[rid];
+    if (!row || !row.results[idx]) return;
+    var rec = row.results[idx];
+    row.receitaId = rec.id;
+    row.nome = rec.nome;
+    var rowEl = document.getElementById('row-' + rid);
+    if (rowEl) {
+      rowEl.querySelector('input.nome').value = rec.nome;
+      rowEl.classList.remove('sem-receita');
+    }
+    var box = document.getElementById('res-' + rid);
+    if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+  }
+
+  function prodColetar() {
+    var itens = [];
+    Object.keys(prodRows).forEach(function (rid) {
+      var row = prodRows[rid], rowEl = document.getElementById('row-' + rid);
+      var qel = document.getElementById('qtd-' + rid);
+      var qtd = parseInt(qel ? qel.value : '0', 10);
+      if (row.receitaId && qtd > 0) {
+        itens.push({ receita_id: row.receitaId, quantidade: qtd, nome: row.nome });
+        if (rowEl) rowEl.classList.remove('sem-receita');
+      } else if ((row.nome || '').trim() && !row.receitaId && rowEl) {
+        rowEl.classList.add('sem-receita');  // digitou mas nao escolheu no dropdown
+      }
+    });
+    return itens;
+  }
+
+  function prodEnviar() {
+    var msg = document.getElementById('prod-msg');
+    var itens = prodColetar();
+    if (!itens.length) {
+      if (msg) { msg.style.color = ''; msg.textContent =
+        'Escolha ao menos uma receita (toque no resultado) e a quantidade.'; }
+      return;
+    }
+    if (msg) msg.textContent = '';
+    document.getElementById('prod-confirm-lista').innerHTML = itens.map(function (it) {
+      return '<div class="linha"><b>' + it.quantidade + '×</b> ' + esc(it.nome) + '</div>';
+    }).join('');
+    prodPendentes = itens.map(function (it) {
+      return { receita_id: it.receita_id, quantidade: it.quantidade };
+    });
+    document.getElementById('prod-confirm').classList.add('aberto');
+  }
+
+  function prodCancelar() {
+    document.getElementById('prod-confirm').classList.remove('aberto');
+  }
+
+  function prodConfirmar() {
+    if (prodEnviando) return;
+    prodEnviando = true;
+    var btn = document.getElementById('prod-confirm-ok');
+    if (btn) btn.disabled = true;
+    fetch('/padeiro/produzir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ itens: prodPendentes })
+    })
+      .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
+      .then(function (d) {
+        document.getElementById('prod-confirm').classList.remove('aberto');
+        var msg = document.getElementById('prod-msg');
+        if (d && d.ok) {
+          prodReset();
+          if (msg) { msg.style.color = '#0f5132';
+                     msg.textContent = 'Produção registrada no congelado. ✓'; }
+          setTimeout(function () { if (msg) { msg.textContent = ''; msg.style.color = ''; } }, 4000);
+        } else if (msg) {
+          msg.style.color = '';
+          msg.textContent = (d && d.erro) ? d.erro : 'Erro ao registrar. Tente de novo.';
+        }
+      })
+      .catch(function () {
+        document.getElementById('prod-confirm').classList.remove('aberto');
+        var m = document.getElementById('prod-msg');
+        if (m) { m.style.color = ''; m.textContent = 'Falha de rede. Tente de novo.'; }
+      })
+      .finally(function () {
+        prodEnviando = false;
+        if (btn) btn.disabled = false;
+      });
+  }
+
+  function prodReset() {
+    prodRows = {};
+    document.getElementById('prod-rows').innerHTML = '';
+    prodAddRow();
+  }
+
   initSom();
   carregarAvisos();
   setInterval(carregarAvisos, 15000);
