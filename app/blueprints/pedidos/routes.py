@@ -303,14 +303,15 @@ def editar(id):
 
     if request.method == 'POST':
         amanha = hoje_brt() + timedelta(days=1)
+        data_min = hoje_brt() if current_user.is_admin() else amanha
         data_str = request.form.get('data_entrega', '')
         obs = request.form.get('observacao', '').strip()
         try:
             data_entrega = datetime.strptime(data_str, '%Y-%m-%d').date()
         except ValueError:
             data_entrega = pedido.data_entrega
-        if data_entrega < amanha:
-            flash('A data de entrega deve ser a partir de amanha.', 'warning')
+        if data_entrega < data_min:
+            flash(f'A data de entrega deve ser a partir de {data_min.strftime("%d/%m")}.', 'warning')
             return redirect(url_for('pedidos.editar', id=id))
 
         try:
