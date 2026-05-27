@@ -27,6 +27,15 @@
   .card .itens { font-size:15px; color:#495057; margin:0 0 14px; line-height:1.6; }
   .card .itens .obs-item { font-weight:800; color:#b45309; background:#fff3cd;
                            padding:1px 6px; border-radius:6px; }
+  /* Check por item: o padeiro toca pra marcar "já separei". */
+  .card .itens .item-chk { display:block; font-size:16px; padding:8px 10px;
+                           margin:3px 0; border-radius:8px; cursor:pointer;
+                           user-select:none; -webkit-user-select:none; }
+  .card .itens .item-chk .tick::before { content:'\2610'; margin-right:6px; }
+  .card .itens .item-chk.done { color:#9aa0a6; text-decoration:line-through;
+                                background:#e9f7ef; }
+  .card .itens .item-chk.done .tick::before { content:'\2611'; }
+  .card .meta .chk-count { font-weight:800; color:var(--verde,#198754); }
   .btn { display:block; width:100%; border:none; border-radius:14px; padding:20px;
          font-size:22px; font-weight:800; color:#fff; cursor:pointer; margin:0; }
   .btn-sep { background:var(--verde); }
