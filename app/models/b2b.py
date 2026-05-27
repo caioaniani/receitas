@@ -97,6 +97,8 @@ class VendaB2BItem(db.Model):
     desconto_percentual = db.Column(db.Float, default=0)  # %, nao R$
     # Estado do item (cru/backup/assado) p/ producao — mesma regra do PedidoItem.
     estado = db.Column(db.String(20), nullable=True)
+    # Observacao por item (ex: "fatiado", "sem acucar") — aparece pro padeiro.
+    observacao = db.Column(db.String(200))
 
     receita = db.relationship('Receita')
     produto = db.relationship('Produto')
