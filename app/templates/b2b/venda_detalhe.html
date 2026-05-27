@@ -38,7 +38,16 @@
                 <div class="mt-2">
                     Entrega (padaria):
                     <strong>{{ venda.data_entrega.strftime('%d/%m/%Y') if venda.data_entrega else '— (não entra na fila do padeiro)' }}</strong>
-                    {% if venda.data_entrega %}<span class="badge bg-secondary">{{ venda.status_entrega }}</span>{% endif %}
+                    {% if venda.data_entrega %}
+                    <span class="badge bg-secondary">{{ venda.status_entrega }}</span>
+                    {% if venda.status != 'cancelada' and venda.status_entrega != 'pendente' %}
+                    <form method="POST" action="{{ url_for('b2b.venda_status_voltar', vid=venda.id) }}" class="d-inline"
+                          onsubmit="return confirm('Voltar o status de entrega um passo?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-link btn-sm p-0 ms-1" title="Voltar status de entrega"><i class="bi bi-arrow-counterclockwise"></i> voltar</button>
+                    </form>
+                    {% endif %}
+                    {% endif %}
                 </div>
                 {% if venda.status != 'cancelada' %}
                 <form method="POST" action="{{ url_for('b2b.venda_entrega', vid=venda.id) }}" class="d-flex gap-2 align-items-center mt-1">
