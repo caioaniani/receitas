@@ -93,7 +93,7 @@ function enviarFoto(input) {
     btn.classList.add('disabled');
     fetch(UPLOAD_BASE + '/' + itemId, {
         method: 'POST', body: fd, credentials: 'same-origin',
-    }).then(r => r.json()).then(j => {
+    }).then(r => r.json().catch(() => ({ ok: false, erro: 'erro no servidor (HTTP ' + r.status + ')' }))).then(j => {
         if (j.ok) {
             window.location.reload();
         } else {
