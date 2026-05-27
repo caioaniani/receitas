@@ -194,8 +194,8 @@ def novo():
         except ValueError:
             data_entrega = amanha
 
-        if data_entrega < amanha:
-            flash('A data de entrega deve ser a partir de amanha.', 'warning')
+        if data_entrega < data_min:
+            flash(f'A data de entrega deve ser a partir de {data_min.strftime("%d/%m")}.', 'warning')
             lojas = _lojas_operacionais()
             receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
             produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
