@@ -531,7 +531,7 @@
     var row = prodRows[rid];
     if (!row) return;
     row.nome = valor;
-    row.receitaId = null;  // mudou o texto: precisa re-selecionar
+    row.ref = null;  // mudou o texto: precisa re-selecionar
     var rowEl = document.getElementById('row-' + rid);
     if (rowEl) rowEl.classList.remove('sem-receita');
     if (row.timer) clearTimeout(row.timer);
