@@ -220,6 +220,8 @@
   function marcarToque() { ultimoToque = Date.now(); }
   document.addEventListener('click', marcarToque, true);
   document.addEventListener('touchstart', marcarToque, true);
+  document.addEventListener('keydown', marcarToque, true);
+  document.addEventListener('input', marcarToque, true);
 
   function _ctx() {
     if (!audioCtx) {
