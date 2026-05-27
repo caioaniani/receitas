@@ -127,15 +127,22 @@
                 background:#fff; border-top:1px solid #eee; }
   .prod-acoes .btn { margin:0; }
   .btn-cinza { background:#6c757d; }
-  #prod-confirm { display:none; position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.5);
+  .prod-head { display:flex; gap:10px; padding:10px 16px 0; font-size:14px;
+               font-weight:800; color:#6c757d; text-transform:uppercase; letter-spacing:.5px; }
+  .prod-head .ph-nome { flex:1; }
+  .prod-head .ph-qtd { width:130px; }
+  .prod-row.sem-qtd input.qtd { border-color:#dc3545; }
+  #prod-confirm, #prod-hist { display:none; position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.5);
                   align-items:center; justify-content:center; }
-  #prod-confirm.aberto { display:flex; }
-  #prod-confirm .box { background:#fff; border-radius:16px; width:min(520px,92vw);
+  #prod-confirm.aberto, #prod-hist.aberto { display:flex; }
+  #prod-confirm .box, #prod-hist .box { background:#fff; border-radius:16px; width:min(520px,92vw);
                        max-height:86vh; overflow-y:auto; padding:20px; }
-  #prod-confirm h3 { margin:0 0 12px; font-size:22px; }
-  #prod-confirm .linha { font-size:20px; padding:10px 0; border-bottom:1px solid #eee; }
-  #prod-confirm .linha b { color:#0d6efd; }
-  #prod-confirm .cta { display:flex; gap:10px; margin-top:16px; }
+  #prod-confirm h3, #prod-hist h3 { margin:0 0 12px; font-size:22px; }
+  #prod-confirm .linha, #prod-hist .linha { font-size:20px; padding:10px 0; border-bottom:1px solid #eee; }
+  #prod-confirm .linha b, #prod-hist .linha b { color:#0d6efd; }
+  #prod-confirm .cta, #prod-hist .cta { display:flex; gap:10px; margin-top:16px; }
+  #prod-hist .linha .q { color:#198754; font-weight:800; }
+  #prod-hist .linha .qd { color:#6c757d; font-size:15px; }
 </style>
 </head>
 <body>
