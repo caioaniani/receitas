@@ -161,6 +161,8 @@ def novo():
         return redirect(url_for('pedidos.lista'))
 
     amanha = hoje_brt() + timedelta(days=1)
+    # Admin pode entregar no MESMO dia (hoje); demais papeis, so a partir de amanha.
+    data_min = hoje_brt() if current_user.is_admin() else amanha
 
     if request.method == 'POST':
         # Admin e gerente podem escolher qualquer loja no form;
