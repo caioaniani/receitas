@@ -534,7 +534,8 @@
       +   'oninput="prodBuscar(\'' + rid + '\', this.value)">'
       + '<div class="prod-results" id="res-' + rid + '" style="display:none;"></div>'
       + '</div>'
-      + '<input class="qtd" type="number" inputmode="numeric" min="1" value="1" id="qtd-' + rid + '">'
+      + '<input class="qtd" type="number" inputmode="numeric" min="1" placeholder="qtd" '
+      +   'onfocus="this.select()" onclick="this.select()" id="qtd-' + rid + '">'
       + '<button type="button" class="rm" onclick="prodRemove(\'' + rid + '\')">×</button>';
     document.getElementById('prod-rows').appendChild(div);
   }
