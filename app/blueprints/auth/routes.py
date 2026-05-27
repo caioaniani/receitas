@@ -22,7 +22,10 @@ def login():
 
         usuario = Usuario.query.filter_by(login=login_val).first()
         if usuario and usuario.check_senha(senha):
-            login_user(usuario)
+            # remember=True: cookie persistente (Flask-Login, ~1 ano) — a sessao
+            # sobrevive a reiniciar o navegador/PC. Essencial pro kiosk do padeiro
+            # nao ficar pedindo senha toda vez que reabre.
+            login_user(usuario, remember=True)
             next_page = request.args.get('next')
             # Bloqueia redirect para URLs externas
             if next_page and urlparse(next_page).netloc:
