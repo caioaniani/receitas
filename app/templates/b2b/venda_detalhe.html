@@ -7,9 +7,15 @@
     </h1>
     <div>
         {% if venda.status != 'cancelada' %}
+        <a href="{{ url_for('b2b.venda_editar', vid=venda.id) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil"></i> Editar</a>
         <form method="POST" action="{{ url_for('b2b.venda_cancelar', vid=venda.id) }}" class="d-inline" onsubmit="return confirm('Cancelar venda e estornar estoque?')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-outline-danger btn-sm"><i class="bi bi-x-circle"></i> Cancelar venda</button>
+        </form>
+        {% else %}
+        <form method="POST" action="{{ url_for('b2b.venda_reabrir', vid=venda.id) }}" class="d-inline" onsubmit="return confirm('Reabrir venda e baixar o estoque de novo?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-outline-success btn-sm"><i class="bi bi-arrow-counterclockwise"></i> Reabrir venda</button>
         </form>
         {% endif %}
         <a href="{{ url_for('b2b.dashboard') }}" class="btn btn-outline-secondary btn-sm">Voltar</a>
