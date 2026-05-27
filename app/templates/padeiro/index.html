@@ -361,6 +361,22 @@
       if (el) el.classList.remove('aberto');
     });
   }
+  // Auto-recupera a TV: se um painel/pop-up ficar aberto e ninguem tocar na tela
+  // por 60s, fecha sozinho — os botoes da tela principal voltam a funcionar sem
+  // ninguem precisar fazer nada. Nao mexe no som (nenhum toque necessario).
+  function autoFecharOcioso() {
+    if (Date.now() - ultimoToque < 60000) return;
+    var algumAberto = ['hist-drawer', 'prep-drawer', 'prod-drawer'].some(function (id) {
+      var el = document.getElementById(id);
+      return el && el.classList.contains('aberto');
+    });
+    var conf = document.getElementById('prod-confirm');
+    var confAberto = conf && conf.classList.contains('aberto');
+    if (algumAberto || confAberto) {
+      fecharDrawers();
+      if (conf) conf.classList.remove('aberto');
+    }
+  }
   function toggleHist() {
     var abrindo = !document.getElementById('hist-drawer').classList.contains('aberto');
     fecharDrawers();
