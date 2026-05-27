@@ -218,6 +218,6 @@ def test_buscar_acento_insensivel(app, admin_user, cliente):
     def nomes(qval):
         return [r['nome'] for r in cliente.get(
             '/padeiro/buscar-receitas.json', query_string={'q': qval}
-        ).get_json()['receitas']]
+        ).get_json()['itens']]
     assert 'Pão Francês' in nomes('pao')          # sem acento acha com acento
     assert 'Pão Francês' in nomes('pao frances')  # multi-termo, tudo sem acento
