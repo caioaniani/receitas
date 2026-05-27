@@ -103,7 +103,14 @@ def upload_foto(token, item_id):
     file = request.files.get('foto')
     if not file:
         return {'ok': False, 'erro': 'campo foto ausente'}, 400
-    foto, erro_salvar = salvar_foto(item.id, qr.tipo, file)
+    # Blindagem: qualquer erro inesperado vira JSON (nunca 500 HTML, que
+    # quebraria o .json() do app do motorista com "Unexpected token '<'").
+    try:
+        foto, erro_salvar = salvar_foto(item.id, qr.tipo, file)
+    except Exception:  # noqa: BLE001
+        db.session.rollback()
+        logger.exception('handshake.upload_foto falhou (item=%s)', item_id)
+        return {'ok': False, 'erro': 'erro ao salvar a foto. Tente de novo.'}, 500
     if erro_salvar:
         return {'ok': False, 'erro': erro_salvar}, 400
     return {'ok': True, 'foto_id': foto.id,
