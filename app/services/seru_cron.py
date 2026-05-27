@@ -252,6 +252,14 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
+    # Alerta WhatsApp: lojas sem desperdicio lancado ate 20:10 BRT
+    if os.environ.get('DESPERDICIO_ALERTA', '1') != '0':
+        _scheduler.add_job(
+            lambda app=app: _run_desperdicio_alerta(app),
+            'cron', hour=20, minute=10, id='zapi-desperdicio-alerta',
+            max_instances=1, coalesce=True,
+        )
+
     # Backup do Postgres pro Dropbox — 04:00 BRT diario
     if os.environ.get('BACKUP_AUTO', '1') != '0':
         _scheduler.add_job(
@@ -305,6 +313,15 @@ def _run_zapi_digest_anomalias(app):
 
     with app.app_context():
         _com_lock(7730, anomalias.enviar_digest_whatsapp, 'zapi digest anomalias')
+
+
+def _run_desperdicio_alerta(app):
+    """Job: avisa no WhatsApp as lojas sem desperdicio lancado ate 20:10 BRT."""
+    from app.services import desperdicio_alerta
+
+    with app.app_context():
+        _com_lock(7733, desperdicio_alerta.enviar_alerta_desperdicio,
+                  'zapi alerta desperdicio')
 
 
 def _run_automacoes_whatsapp(app):
