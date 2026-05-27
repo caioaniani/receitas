@@ -41,7 +41,9 @@
                  alt="foto" style="width:48px;height:48px;object-fit:cover;border-radius:.25rem;">
             <span class="badge bg-success"><i class="bi bi-check"></i></span>
             {% endif %}
-            <form class="conf-foto-form" data-item-id="{{ it.id }}" enctype="multipart/form-data">
+            <form class="conf-foto-form"
+                  data-upload-url="{{ url_for('handshake.upload_foto', token=qr.token, item_id=it.id) }}"
+                  enctype="multipart/form-data">
                 <label class="btn btn-sm {% if foto %}btn-outline-secondary{% else %}btn-primary{% endif %} mb-0">
                     <i class="bi bi-camera"></i>
                     {% if foto %}Re-tirar{% else %}Foto{% endif %}
