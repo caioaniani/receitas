@@ -101,6 +101,7 @@ def test_executor_item_nao_resolvido_aborta(app, admin_user):
     params = {
         'cliente_nome_resolvido': 'Avulso',
         'cliente_avulso': True,
+        'data_entrega': '2026-05-28',
         'itens': [{'nome_original': 'XYZ inexistente',
                    'quantidade': 1, 'preco_unitario': 5,
                    'desconto_percentual': 0, 'resolvido': None}],
@@ -109,3 +110,44 @@ def test_executor_item_nao_resolvido_aborta(app, admin_user):
     out = copilot.executar_criar_venda_b2b(params, admin_user)
     assert out['ok'] is False
     assert 'XYZ' in out['erro']
+
+
+def test_executor_b2b_entende_estado_no_nome_e_data_entrega(app, admin_user, catalogo):
+    """Cenario do dono: 'Croissant Tradicional backup' -> resolve a receita +
+    estado backup; data_entrega obrigatoria e persistida."""
+    from datetime import timedelta
+
+    from app.extensions import db
+    from app.models import EstoqueProducao, VendaB2B, VendaB2BItem
+    from app.services import copilot
+    from app.utils import hoje
+    db.session.add(EstoqueProducao(receita_id=catalogo['receita'].id, quantidade=50))
+    catalogo['receita'].preco_venda = 9.0
+    db.session.commit()
+    amanha = hoje() + timedelta(days=1)
+    params = copilot._enriquecer_criar_venda_b2b({
+        'cliente_nome': 'Bruno',
+        'data_entrega': amanha.isoformat(),
+        'itens': [{'nome': 'Croissant Tradicional backup', 'quantidade': 20}],
+    })
+    assert params['itens'][0]['resolvido']['id'] == catalogo['receita'].id
+    assert params['itens'][0]['estado'] == 'backup'
+    out = copilot.executar_criar_venda_b2b(params, admin_user)
+    assert out['ok'] is True
+    v = VendaB2B.query.get(out['venda_id'])
+    assert v.data_entrega == amanha
+    it = VendaB2BItem.query.filter_by(venda_id=v.id).first()
+    assert it.estado == 'backup'
+
+
+def test_executor_b2b_sem_data_entrega_pede(app, admin_user, catalogo):
+    """Sem data_entrega o executor recusa com mensagem clara (nao cria)."""
+    from app.services import copilot
+    params = {
+        'cliente_nome_resolvido': 'Bruno', 'cliente_avulso': True,
+        'itens': [{'nome': 'Croissant', 'quantidade': 2,
+                   'resolvido': {'tipo': 'receita', 'id': catalogo['receita'].id}}],
+    }
+    out = copilot.executar_criar_venda_b2b(params, admin_user)
+    assert out['ok'] is False
+    assert 'entrega' in out['erro'].lower()
