@@ -146,6 +146,16 @@ def test_produzir_invalido_nao_grava(app, admin_user, catalogo, cliente):
     assert EstoqueProducao.query.count() == antes  # nada gravado
 
 
+def test_congelados_entrada_tem_typeahead(app, admin_user, catalogo, cliente):
+    """A entrada de producao em /pedidos/congelados usa busca por digitacao
+    (typeahead), igual ao formulario B2B, no lugar do <select> gigante."""
+    _login(cliente)
+    r = cliente.get('/pedidos/congelados')
+    assert r.status_code == 200
+    assert b'entrada-busca' in r.data    # campo de busca
+    assert b'ENTRADA_TODOS' in r.data    # JS do typeahead (receitas+produtos)
+
+
 def test_congelados_entrada_route_mira_cru(app, admin_user, catalogo, cliente):
     """A rota antiga /pedidos/congelados/entrada agora usa o mesmo helper: soma
     na linha cru mesmo havendo linha backup (regressao do bug do .first())."""
