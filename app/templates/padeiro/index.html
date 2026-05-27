@@ -394,10 +394,13 @@
       return el && el.classList.contains('aberto');
     });
     var conf = document.getElementById('prod-confirm');
-    var confAberto = conf && conf.classList.contains('aberto');
-    if (algumAberto || confAberto) {
+    var hist = document.getElementById('prod-hist');
+    var overlayAberto = (conf && conf.classList.contains('aberto'))
+      || (hist && hist.classList.contains('aberto'));
+    if (algumAberto || overlayAberto) {
       fecharDrawers();
       if (conf) conf.classList.remove('aberto');
+      if (hist) hist.classList.remove('aberto');
     }
   }
   function toggleHist() {
