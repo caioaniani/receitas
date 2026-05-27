@@ -532,6 +532,8 @@ def _migrate_postgres(app):
         cols_vbi = {row[0] for row in result}
         if cols_vbi and 'estado' not in cols_vbi:
             conn.execute(text("ALTER TABLE venda_b2b_item ADD COLUMN estado VARCHAR(20)"))
+        if cols_vbi and 'observacao' not in cols_vbi:
+            conn.execute(text("ALTER TABLE venda_b2b_item ADD COLUMN observacao VARCHAR(200)"))
 
         conn.commit()
 
