@@ -29,18 +29,13 @@
     <div class="card-body">
         <form method="POST" action="{{ url_for('pedidos.congelados_entrada') }}" class="row g-2 align-items-end">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="col-md-2">
-                <label class="form-label" style="font-size:12px;">Tipo</label>
-                <select name="tipo" class="form-select form-select-sm" id="entrada-tipo" onchange="atualizarEntrada()">
-                    <option value="receita">Receita</option>
-                    <option value="produto">Produto</option>
-                </select>
-            </div>
-            <div class="col-md-5">
-                <label class="form-label" style="font-size:12px;">Item</label>
-                <select name="item_id" class="form-select form-select-sm" id="entrada-item" required>
-                    <option value="">Selecione...</option>
-                </select>
+            <input type="hidden" name="tipo" id="entrada-tipo">
+            <input type="hidden" name="item_id" id="entrada-item">
+            <div class="col-md-7">
+                <label class="form-label" style="font-size:12px;">Item (digite pra buscar)</label>
+                <input type="text" id="entrada-busca" class="form-control form-control-sm" autocomplete="off"
+                       placeholder="Digite o nome (ex: pao, croissant)...">
+                <div id="entrada-results" class="ent-results" style="display:none;"></div>
             </div>
             <div class="col-md-2">
                 <label class="form-label" style="font-size:12px;">Quantidade</label>
