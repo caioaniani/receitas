@@ -581,10 +581,10 @@
       var row = prodRows[rid], rowEl = document.getElementById('row-' + rid);
       var qel = document.getElementById('qtd-' + rid);
       var qtd = parseInt(qel ? qel.value : '0', 10);
-      if (row.receitaId && qtd > 0) {
-        itens.push({ receita_id: row.receitaId, quantidade: qtd, nome: row.nome });
+      if (row.ref && qtd > 0) {
+        itens.push({ ref: row.ref, quantidade: qtd, nome: row.nome });
         if (rowEl) rowEl.classList.remove('sem-receita');
-      } else if ((row.nome || '').trim() && !row.receitaId && rowEl) {
+      } else if ((row.nome || '').trim() && !row.ref && rowEl) {
         rowEl.classList.add('sem-receita');  // digitou mas nao escolheu no dropdown
       }
     });
