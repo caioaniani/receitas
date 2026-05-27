@@ -133,7 +133,7 @@ def test_executor_b2b_entende_estado_no_nome_e_data_entrega(app, admin_user, cat
     assert params['itens'][0]['resolvido']['id'] == catalogo['receita'].id
     assert params['itens'][0]['estado'] == 'backup'
     out = copilot.executar_criar_venda_b2b(params, admin_user)
-    assert out['ok'] is True
+    assert out['ok'] is True, out
     v = VendaB2B.query.get(out['venda_id'])
     assert v.data_entrega == amanha
     it = VendaB2BItem.query.filter_by(venda_id=v.id).first()
