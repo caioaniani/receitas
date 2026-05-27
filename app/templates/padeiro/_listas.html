@@ -1,3 +1,10 @@
+{% macro lista_itens(c, marcar=false) %}
+{%- if marcar -%}
+<div class="itens">{% for it in c.itens %}<span class="item-chk" data-item="{{ it.id }}" role="button" tabindex="0"><span class="tick"></span> {{ it.qtd }}× {{ it.nome }}{% if it.obs %} <span class="obs-item">→ {{ it.obs }}</span>{% endif %}</span>{% endfor %}</div>
+{%- else -%}
+<p class="itens">{% for it in c.itens %}{{ it.qtd }}× {{ it.nome }}{% if it.obs %} <span class="obs-item">→ {{ it.obs }}</span>{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+{%- endif -%}
+{% endmacro %}
 {% if n_repetidos %}
 <form method="POST" action="{{ url_for('padeiro.juntar_repetidos') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
