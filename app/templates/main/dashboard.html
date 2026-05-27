@@ -140,6 +140,7 @@
             </div>
         </a>
     </div>
+    {% if current_user.is_owner %}
     <div class="col-6 col-md-3">
         <a href="{{ url_for('rh.dashboard') }}" class="card border-0 shadow-sm text-decoration-none text-dark h-100">
             <div class="card-body text-center py-3">
@@ -148,5 +149,6 @@
             </div>
         </a>
     </div>
+    {% endif %}
 </div>
 {% endblock %}
