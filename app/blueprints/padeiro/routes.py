@@ -37,7 +37,8 @@ def _card_loja(p):
     return {'tipo': 'loja', 'id': p.id,
             'titulo': (p.loja.nome if p.loja else '—'),
             'data_entrega': p.data_entrega,
-            'itens': [{'qtd': it.quantidade, 'nome': it.nome_item_com_estado}
+            'itens': [{'qtd': it.quantidade, 'nome': it.nome_item_com_estado,
+                       'obs': it.observacao}
                       for it in p.itens]}
 
 
@@ -45,7 +46,8 @@ def _card_b2b(v):
     return {'tipo': 'b2b', 'id': v.id,
             'titulo': 'B2B · ' + v.cliente_display,
             'data_entrega': v.data_entrega,
-            'itens': [{'qtd': it.quantidade, 'nome': it.nome_item_com_estado}
+            'itens': [{'qtd': it.quantidade, 'nome': it.nome_item_com_estado,
+                       'obs': it.observacao}
                       for it in v.itens]}
 
 
