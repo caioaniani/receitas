@@ -35,7 +35,12 @@
     <p class="meta">{{ 'Venda B2B' if c.tipo == 'b2b' else 'Pedido' }} #{{ c.id }}{% if c.data_entrega %} · entrega {{ c.data_entrega.strftime('%d/%m') }}{% endif %}</p>
     <p class="itens">{% for it in c.itens %}{{ it.qtd }}× {{ it.nome }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
     {% if c.tipo == 'b2b' %}
-    <div class="vazio" style="padding:8px 0;">Separado — despacho do B2B em breve.</div>
+    <form method="POST" action="{{ url_for('padeiro.entregar_b2b', id=c.id) }}"
+          onsubmit="return confirm('Marcar venda B2B #{{ c.id }} como entregue?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="data" value="{{ dia.isoformat() }}">
+      <button class="btn btn-sep" type="submit">✓ Marcar entregue</button>
+    </form>
     {% elif drivers %}
     <div class="drivers">
       <div class="lbl">Motorista chegou? Toque no nome → gera o QR:</div>
