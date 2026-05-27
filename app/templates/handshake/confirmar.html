@@ -81,32 +81,41 @@
 </form>
 
 <script>
-function enviarFoto(input) {
+async function enviarFoto(input) {
     const form = input.closest('form');
     const url = form.dataset.uploadUrl;
     const file = input.files[0];
     if (!file) return;
-    const fd = new FormData();
-    fd.append('foto', file);
     const btn = form.querySelector('.btn');
     const orig = btn.innerHTML;
-    btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Enviando...';
     btn.classList.add('disabled');
-    fetch(url, {
-        method: 'POST', body: fd, credentials: 'same-origin',
-    }).then(r => r.json().catch(() => ({ ok: false, erro: 'erro no servidor (HTTP ' + r.status + ')' }))).then(j => {
-        if (j.ok) {
-            window.location.reload();
-        } else {
+    // O upload sobrescreve pela chave item+etapa (idempotente), entao falha de
+    // REDE (wifi instavel, deploy reiniciando) pode repetir sem risco. Ja erro
+    // com resposta do servidor (4xx/5xx) nao repete — eh erro real do arquivo.
+    const MAX = 4;
+    for (let tentativa = 1; tentativa <= MAX; tentativa++) {
+        btn.innerHTML = tentativa === 1
+            ? '<i class="bi bi-arrow-clockwise"></i> Enviando...'
+            : '<i class="bi bi-arrow-clockwise"></i> Tentativa ' + tentativa + '/' + MAX + '...';
+        const fd = new FormData();
+        fd.append('foto', file);
+        try {
+            const r = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' });
+            const j = await r.json().catch(() => ({ ok: false, erro: 'erro no servidor (HTTP ' + r.status + ')' }));
+            if (j.ok) { window.location.reload(); return; }
             alert('Erro: ' + (j.erro || 'falha no upload'));
-            btn.innerHTML = orig;
-            btn.classList.remove('disabled');
+            break;
+        } catch (e) {
+            if (tentativa < MAX) {
+                await new Promise((s) => setTimeout(s, 1500 * tentativa));
+                continue;
+            }
+            alert('Sem conexao com o servidor apos ' + MAX + ' tentativas. ' +
+                  'Verifique o wifi/4G e toque na foto de novo.');
         }
-    }).catch(e => {
-        alert('Erro de rede: ' + e);
-        btn.innerHTML = orig;
-        btn.classList.remove('disabled');
-    });
+    }
+    btn.innerHTML = orig;
+    btn.classList.remove('disabled');
 }
 </script>
 {% endblock %}
