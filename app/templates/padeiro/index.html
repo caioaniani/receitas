@@ -346,7 +346,7 @@
       }).join('     •     ');
     document.getElementById('aviso-botoes').innerHTML =
       avisosAtivos.map(function (a) {
-        return '<button class="aviso-li" onclick="confirmarAviso(' + a.id + ')">✓ Li: '
+        return '<button class="aviso-li" onclick="confirmarAviso(' + a.id + ')">Li:'
           + esc(String(a.texto).substring(0, 40)) + '</button>';
       }).join('');
     iniciarLoop();
