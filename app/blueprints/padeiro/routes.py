@@ -362,11 +362,11 @@ def buscar_receitas():
 @padeiro_required
 def produzir():
     """Padeiro registra o que produziu -> entrada no congelado (cru) da
-    industria. Corpo JSON {itens:[{receita_id, quantidade}]}; valida tudo
-    ANTES de gravar; aplica numa transacao unica (tudo ou nada)."""
+    industria. Corpo JSON {itens:[{ref:'receita:<id>'|'produto:<id>', quantidade}]};
+    valida tudo ANTES de gravar; aplica numa transacao unica (tudo ou nada)."""
     from flask import jsonify
 
-    from app.models import Receita
+    from app.models import Produto, Receita
     from app.services.estoque_congelados import entrada_producao
 
     dados = request.get_json(silent=True) or {}
@@ -376,25 +376,31 @@ def produzir():
 
     validados = []
     for i, it in enumerate(itens, 1):
+        ref = (it.get('ref') or '').strip()
+        tipo, _, sid = ref.partition(':')
         try:
-            rid = int(it.get('receita_id'))
             qtd = int(it.get('quantidade'))
         except (TypeError, ValueError):
             return jsonify(ok=False, erro=f'Item {i}: dados invalidos.'), 400
+        if tipo not in ('receita', 'produto') or not sid.isdigit():
+            return jsonify(ok=False, erro=f'Item {i}: item invalido.'), 400
         if qtd <= 0:
             return jsonify(ok=False, erro=f'Item {i}: quantidade deve ser positiva.'), 400
-        rec = Receita.query.get(rid)
-        if not rec:
-            return jsonify(ok=False, erro=f'Item {i}: receita nao encontrada.'), 400
-        validados.append((rec, qtd))
+        obj = (Receita.query.get(int(sid)) if tipo == 'receita'
+               else Produto.query.get(int(sid)))
+        if not obj:
+            return jsonify(ok=False, erro=f'Item {i}: item nao encontrado.'), 400
+        validados.append((tipo, obj, qtd))
 
     try:
         resumo = []
-        for rec, qtd in validados:
-            entrada_producao(receita_id=rec.id, estado=None, quantidade=qtd,
-                             usuario_id=current_user.id,
-                             referencia='Produção (TV padeiro)')
-            resumo.append({'nome': rec.nome, 'qtd': qtd})
+        for tipo, obj, qtd in validados:
+            entrada_producao(
+                receita_id=obj.id if tipo == 'receita' else None,
+                produto_id=obj.id if tipo == 'produto' else None,
+                estado=None, quantidade=qtd, usuario_id=current_user.id,
+                referencia='Produção (TV padeiro)')
+            resumo.append({'nome': obj.nome, 'qtd': qtd})
         db.session.commit()
     except Exception:
         db.session.rollback()
