@@ -367,7 +367,10 @@
   // por 60s, fecha sozinho — os botoes da tela principal voltam a funcionar sem
   // ninguem precisar fazer nada. Nao mexe no som (nenhum toque necessario).
   function autoFecharOcioso() {
-    if (Date.now() - ultimoToque < 60000) return;
+    // Nunca fecha enquanto um campo esta em uso (digitando receita/quantidade).
+    var ae = document.activeElement;
+    if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
+    if (Date.now() - ultimoToque < 120000) return;
     var algumAberto = ['hist-drawer', 'prep-drawer', 'prod-drawer'].some(function (id) {
       var el = document.getElementById(id);
       return el && el.classList.contains('aberto');
