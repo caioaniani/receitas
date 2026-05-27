@@ -113,3 +113,19 @@ def test_criar_venda_guarda_data_entrega_e_estado(app, admin_user, catalogo):
     assert venda.status_entrega == 'pendente'  # default de entrega
     it = VendaB2BItem.query.filter_by(venda_id=venda.id).first()
     assert it.estado == 'backup'
+
+
+def test_entregar_b2b_sai_da_fila(app, admin_user, catalogo, cliente):
+    """B2B separado: 'Marcar entregue' -> status_entrega='entregue' e sai do padeiro."""
+    from app.models import VendaB2B
+    from app.utils import hoje
+    v = _venda_b2b(app, admin_user, catalogo, data_entrega=hoje(),
+                   status_entrega='separado')
+    _login(cliente)
+    r0 = cliente.get('/padeiro/?data=' + hoje().isoformat())
+    assert ('/padeiro/b2b/%d/entregue' % v.id).encode() in r0.data  # botao no card
+    r = cliente.post('/padeiro/b2b/%d/entregue' % v.id,
+                     data={'data': hoje().isoformat()})
+    assert r.status_code == 302
+    assert VendaB2B.query.get(v.id).status_entrega == 'entregue'
+    assert b'Bruno' not in cliente.get('/padeiro/?data=' + hoje().isoformat()).data
