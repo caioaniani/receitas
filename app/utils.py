@@ -65,14 +65,22 @@ def comprimir_imagem(file_bytes, *, max_size=700, quality=82):
     if not file_bytes:
         raise ValueError('Arquivo vazio')
 
-    img = Image.open(io.BytesIO(file_bytes))
-    img = ImageOps.exif_transpose(img)
-    if img.mode in ('RGBA', 'P', 'LA'):
-        img = img.convert('RGB')
-    img.thumbnail((max_size, max_size), Image.LANCZOS)
-    out = io.BytesIO()
-    img.save(out, format='JPEG', quality=quality, optimize=True, progressive=True)
-    return out.getvalue()
+    # PIL levanta UnidentifiedImageError/OSError (NAO ValueError) pra formatos
+    # nao suportados (ex: HEIC do iPhone). Converte tudo em ValueError pra quem
+    # chama (salvar_foto) tratar como erro de imagem e devolver JSON, nunca 500.
+    try:
+        img = Image.open(io.BytesIO(file_bytes))
+        img = ImageOps.exif_transpose(img)
+        if img.mode in ('RGBA', 'P', 'LA'):
+            img = img.convert('RGB')
+        img.thumbnail((max_size, max_size), Image.LANCZOS)
+        out = io.BytesIO()
+        img.save(out, format='JPEG', quality=quality, optimize=True, progressive=True)
+        return out.getvalue()
+    except ValueError:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise ValueError(f'imagem invalida ou formato nao suportado ({e})') from e
 
 
 def resolver_loja_por_nome(nome, *, somente_ativas=False):
