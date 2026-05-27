@@ -283,7 +283,8 @@ def novo():
     materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
     return render_template('pedidos/novo.html', lojas=lojas,
                            receitas=receitas, produtos=produtos,
-                           materias=materias, amanha=amanha, loja_id=loja_id)
+                           materias=materias, amanha=amanha,
+                           data_min=data_min, loja_id=loja_id)
 
 
 @pedidos_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
