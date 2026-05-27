@@ -17,10 +17,10 @@
 {% if a_separar %}
 <div class="grid">
   {% for c in a_separar %}
-  <div class="card{% if c.tipo == 'b2b' %} b2b{% endif %}">
+  <div class="card{% if c.tipo == 'b2b' %} b2b{% endif %}" data-order="{{ c.tipo }}-{{ c.id }}">
     <p class="loja">{{ c.titulo }}</p>
-    <p class="meta">{{ 'Venda B2B' if c.tipo == 'b2b' else 'Pedido' }} #{{ c.id }}{% if c.data_entrega %} · entrega {{ c.data_entrega.strftime('%d/%m') }}{% endif %}</p>
-    <p class="itens">{% for it in c.itens %}{{ it.qtd }}× {{ it.nome }}{% if it.obs %} <span class="obs-item">→ {{ it.obs }}</span>{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+    <p class="meta">{{ 'Venda B2B' if c.tipo == 'b2b' else 'Pedido' }} #{{ c.id }}{% if c.data_entrega %} · entrega {{ c.data_entrega.strftime('%d/%m') }}{% endif %} <span class="chk-count" data-chk-count></span></p>
+    {{ lista_itens(c, marcar=true) }}
     <form method="POST" action="{{ url_for('padeiro.separar_b2b', id=c.id) if c.tipo == 'b2b' else url_for('padeiro.separar', id=c.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="data" value="{{ dia.isoformat() }}">
