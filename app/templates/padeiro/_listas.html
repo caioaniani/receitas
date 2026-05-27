@@ -9,7 +9,7 @@
 <form method="POST" action="{{ url_for('padeiro.juntar_repetidos') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="data" value="{{ dia.isoformat() }}">
-  <button type="submit" class="btn-juntar">⚠ Juntar {{ n_repetidos }} pedido(s) repetido(s) num só</button>
+  <button type="submit" class="btn-juntar">Juntar {{ n_repetidos }} pedido(s) repetido(s) num só</button>
 </form>
 {% endif %}
 
