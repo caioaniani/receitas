@@ -50,6 +50,15 @@ def test_comprimir_imagem_vazio_levanta(app):
         comprimir_imagem(b'')
 
 
+def test_comprimir_imagem_formato_invalido_levanta_valueerror(app):
+    """Bytes que nao sao imagem suportada (ex: HEIC do iPhone sem suporte) devem
+    virar ValueError — nao UnidentifiedImageError crua, que viraria 500 HTML e
+    quebraria o upload de foto do motorista."""
+    from app.utils import comprimir_imagem
+    with pytest.raises(ValueError):
+        comprimir_imagem(b'\x00\x01\x02 isto nao e uma imagem valida \xff\xd8zzz')
+
+
 def test_comprimir_imagem_max_size_customizado(app):
     from app.utils import comprimir_imagem
     raw = _fake_image_bytes(size=(2000, 2000))
