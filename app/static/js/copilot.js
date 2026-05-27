@@ -402,6 +402,7 @@
             '<div class="copilot-preview-header">criar venda B2B</div>' +
             '<div class="copilot-preview-row"><span class="label">cliente</span> ' + cliBadge + '</div>' +
             '<div class="copilot-preview-row"><span class="label">data</span> ' + escape(data) + nf + '</div>' +
+            '<div class="copilot-preview-row"><span class="label">entrega</span> ' + escape(params.data_entrega || '⚠ informe') + '</div>' +
             '<div style="max-height:280px; overflow-y:auto; margin-top:6px;">' +
             '<table class="table table-sm table-bordered mb-0" style="font-size:11.5px;">' +
             '<thead><tr><th>item</th><th class="text-end">freezer</th><th class="text-end">qtd</th><th class="text-end">preço</th><th class="text-end">subt.</th></tr></thead>' +
