@@ -506,7 +506,7 @@
   function prodAddRow() {
     if (Object.keys(prodRows).length >= 30) return;
     var rid = 'R' + (++prodSeq);
-    prodRows[rid] = { receitaId: null, nome: '', results: [], timer: null };
+    prodRows[rid] = { ref: null, nome: '', results: [], timer: null };
     var div = document.createElement('div');
     div.className = 'prod-row';
     div.id = 'row-' + rid;
