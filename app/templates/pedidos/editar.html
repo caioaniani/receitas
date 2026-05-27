@@ -25,7 +25,7 @@
         <div class="col-md-3">
             <label class="form-label fw-semibold">Data de Entrega</label>
             <input type="date" name="data_entrega" class="form-control form-control-sm"
-                   value="{{ pedido.data_entrega.strftime('%Y-%m-%d') }}" min="{{ amanha }}" required>
+                   value="{{ pedido.data_entrega.strftime('%Y-%m-%d') }}" min="{{ data_min }}" required>
         </div>
         <div class="col-md-5">
             <label class="form-label fw-semibold">Observação</label>
