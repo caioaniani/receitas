@@ -342,3 +342,97 @@ def test_cancelar_nao_estorna_venda_de_id_com_prefixo(app, admin_user, catalogo)
     db.session.refresh(ep)
     # fix: devolve so os 2 do #1 -> 95. bug ('#1%'): devolveria 2+5 -> 100.
     assert ep.quantidade == 95
+
+
+def test_venda_editar_get_renderiza_form(app, admin_user, catalogo):
+    """GET do form de edicao traz itens preenchidos + campo de observacao."""
+    from app.extensions import db
+    from app.models import EstoqueProducao
+    from app.services import vendas_b2b as svc
+
+    db.session.add(EstoqueProducao(receita_id=catalogo['receita'].id, quantidade=20))
+    db.session.commit()
+    venda = svc.criar_venda(
+        cliente_nome='Restaurante Z',
+        itens=[{'tipo': 'receita', 'id': catalogo['receita'].id,
+                'quantidade': 3, 'preco_unitario': 7.0, 'observacao': 'fatiado'}],
+        user=admin_user,
+    )
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
+    r = c.get(f'/b2b/vendas/{venda.id}/editar')
+    assert r.status_code == 200
+    assert b'item_obs[]' in r.data
+    assert b'Salvar altera' in r.data
+    assert b'fatiado' in r.data
+    assert b'Restaurante Z' in r.data
+
+
+def test_venda_editar_post_altera_estoque_e_obs(app, admin_user, catalogo):
+    """POST de edicao reduz qtd, ajusta estoque e salva nova observacao."""
+    from app.extensions import db
+    from app.models import EstoqueProducao, VendaB2B
+    from app.services import vendas_b2b as svc
+
+    ep = EstoqueProducao(receita_id=catalogo['receita'].id, quantidade=20)
+    db.session.add(ep)
+    db.session.commit()
+    venda = svc.criar_venda(
+        cliente_nome='Z',
+        itens=[{'tipo': 'receita', 'id': catalogo['receita'].id,
+                'quantidade': 5, 'preco_unitario': 10.0}],
+        user=admin_user,
+    )
+    db.session.refresh(ep)
+    assert ep.quantidade == 15
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
+    r = c.post(f'/b2b/vendas/{venda.id}/editar', data={
+        'cliente_nome': 'Z',
+        'data_venda': venda.data_venda.isoformat(),
+        'data_entrega': venda.data_venda.isoformat(),
+        'item_ref[]': f'receita:{catalogo["receita"].id}',
+        'item_qtd[]': '2',
+        'item_preco[]': '10.0',
+        'item_desc[]': '',
+        'item_estado[]': '',
+        'item_obs[]': 'bem fatiado',
+    })
+    assert r.status_code in (302, 303)
+    db.session.expire_all()
+    v = db.session.get(VendaB2B, venda.id)
+    assert len(v.itens) == 1
+    assert v.itens[0].quantidade == 2
+    assert v.itens[0].observacao == 'bem fatiado'
+    assert db.session.get(EstoqueProducao, ep.id).quantidade == 18
+
+
+def test_venda_reabrir_e_status_voltar_routes(app, admin_user, catalogo):
+    """Rotas: reabrir (cancelada->ativa, re-baixa) e voltar status de entrega."""
+    from app.extensions import db
+    from app.models import EstoqueProducao, VendaB2B
+    from app.services import vendas_b2b as svc
+
+    ep = EstoqueProducao(receita_id=catalogo['receita'].id, quantidade=10)
+    db.session.add(ep)
+    db.session.commit()
+    venda = svc.criar_venda(
+        cliente_nome='Z',
+        itens=[{'tipo': 'receita', 'id': catalogo['receita'].id,
+                'quantidade': 2, 'preco_unitario': 5.0}],
+        user=admin_user,
+    )
+    svc.cancelar_venda(venda, user=admin_user)
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
+    c.post(f'/b2b/vendas/{venda.id}/reabrir')
+    db.session.expire_all()
+    assert db.session.get(VendaB2B, venda.id).status == 'ativa'
+    assert db.session.get(EstoqueProducao, ep.id).quantidade == 8  # re-baixou
+
+    v = db.session.get(VendaB2B, venda.id)
+    v.status_entrega = 'separado'
+    db.session.commit()
+    c.post(f'/b2b/vendas/{venda.id}/status-voltar')
+    db.session.expire_all()
+    assert db.session.get(VendaB2B, venda.id).status_entrega == 'pendente'
