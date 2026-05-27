@@ -185,6 +185,9 @@
   <span>🥐 Tem itens <u>[BACKUP]/[ASSADO]</u> pra amanhã — comece o pré-preparo!</span>
   <button onclick="okPrep()">OK, entendi</button>
 </div>
+<div id="prep-ticker" style="display:none;" onclick="togglePrep()" role="button">
+  <div class="prep-ticker-track"><span>🥐 Pedido para preparar para amanhã já disponível</span></div>
+</div>
 <div class="wrap">
   {% with msgs = get_flashed_messages(with_categories=true) %}
     {% for cat, msg in msgs %}
