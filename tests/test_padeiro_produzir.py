@@ -221,3 +221,29 @@ def test_buscar_acento_insensivel(app, admin_user, cliente):
         ).get_json()['itens']]
     assert 'Pão Francês' in nomes('pao')          # sem acento acha com acento
     assert 'Pão Francês' in nomes('pao frances')  # multi-termo, tudo sem acento
+
+
+def test_producao_historico_lista_lancamentos(app, admin_user, catalogo, cliente):
+    """O que foi produzido pelo painel aparece em /padeiro/producao-historico.json."""
+    _login(cliente)
+    rid = catalogo['receita'].id
+    cliente.post('/padeiro/produzir',
+                 json={'itens': [{'ref': 'receita:%d' % rid, 'quantidade': 12}]})
+    j = cliente.get('/padeiro/producao-historico.json').get_json()
+    assert j['historico']
+    linha = j['historico'][0]
+    assert linha['item'] == 'Croissant Tradicional'
+    assert linha['qtd'] == 12
+    assert linha['quando']  # data/hora preenchida
+
+
+def test_produzir_painel_titulos_qtd_e_historico(app, admin_user, catalogo, cliente):
+    """Painel Produzir: titulos de coluna, qtd sem '1' fixo, e botao/overlay de historico."""
+    _login(cliente)
+    r = cliente.get('/padeiro/')
+    assert r.status_code == 200
+    assert b'ph-nome">Produto' in r.data           # titulo coluna Produto
+    assert b'ph-qtd">Quantidade' in r.data          # titulo coluna Quantidade
+    assert b'placeholder="qtd"' in r.data           # qtd começa vazia (sem value="1")
+    assert b'prodHist()' in r.data                  # botao historico
+    assert b'id="prod-hist"' in r.data              # overlay do historico
