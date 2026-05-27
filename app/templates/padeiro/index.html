@@ -544,7 +544,7 @@
         .then(function (d) {
           // ignora se a linha sumiu ou se o texto mudou desde a busca (resposta obsoleta)
           if (!d || prodRows[rid] !== row || (row.nome || '').trim() !== q) return;
-          row.results = d.receitas || [];
+          row.results = d.itens || [];
           prodRenderResults(rid);
         }).catch(function () {});
     }, 250);
