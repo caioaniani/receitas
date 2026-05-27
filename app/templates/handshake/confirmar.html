@@ -81,10 +81,9 @@
 </form>
 
 <script>
-const UPLOAD_BASE = "{{ url_for('handshake.upload_foto', token=qr.token, item_id=0) }}".replace('/0', '');
 function enviarFoto(input) {
     const form = input.closest('form');
-    const itemId = form.dataset.itemId;
+    const url = form.dataset.uploadUrl;
     const file = input.files[0];
     if (!file) return;
     const fd = new FormData();
@@ -93,7 +92,7 @@ function enviarFoto(input) {
     const orig = btn.innerHTML;
     btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Enviando...';
     btn.classList.add('disabled');
-    fetch(UPLOAD_BASE + '/' + itemId, {
+    fetch(url, {
         method: 'POST', body: fd, credentials: 'same-origin',
     }).then(r => r.json().catch(() => ({ ok: false, erro: 'erro no servidor (HTTP ' + r.status + ')' }))).then(j => {
         if (j.ok) {
