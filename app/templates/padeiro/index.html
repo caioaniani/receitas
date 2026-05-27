@@ -376,6 +376,7 @@
         if (html == null) return;
         var alvo = document.getElementById('listas');
         if (alvo) alvo.innerHTML = html;
+        aplicarChecks();  // o rebuild apaga o estado do DOM; re-aplica do localStorage
         var b = document.getElementById('upd-badge');
         if (b) {
           b.textContent = 'atualizado ' + new Date().toLocaleTimeString('pt-BR');
