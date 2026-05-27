@@ -40,7 +40,7 @@
   <div class="card sep{% if c.tipo == 'b2b' %} b2b{% endif %}">
     <p class="loja">{{ c.titulo }}</p>
     <p class="meta">{{ 'Venda B2B' if c.tipo == 'b2b' else 'Pedido' }} #{{ c.id }}{% if c.data_entrega %} · entrega {{ c.data_entrega.strftime('%d/%m') }}{% endif %}</p>
-    <p class="itens">{% for it in c.itens %}{{ it.qtd }}× {{ it.nome }}{% if it.obs %} <span class="obs-item">→ {{ it.obs }}</span>{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+    {{ lista_itens(c) }}
     {% if c.tipo == 'b2b' %}
     <form method="POST" action="{{ url_for('padeiro.entregar_b2b', id=c.id) }}"
           onsubmit="return confirm('Marcar venda B2B #{{ c.id }} como entregue?')">
