@@ -1228,6 +1228,7 @@ def _enriquecer_criar_venda_b2b(tool_input):
         'cliente_desconto': out['cliente_desconto'],
         'cliente_avulso': out['cliente_avulso'],
         'data_venda': out.get('data_venda'),
+        'data_entrega': out.get('data_entrega'),
         'nf_numero': out.get('nf_numero'),
         'observacao': out.get('observacao'),
         'itens': itens_enriq,
