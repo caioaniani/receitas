@@ -202,10 +202,12 @@
     <strong>Produzir — entra no congelado</strong>
     <button class="hist-x" onclick="toggleProd()" aria-label="Fechar">×</button>
   </div>
+  <div class="prod-head"><span class="ph-nome">Produto</span><span class="ph-qtd">Quantidade</span></div>
   <div id="prod-rows"></div>
   <div id="prod-msg"></div>
   <div class="prod-acoes">
     <button class="btn btn-cinza" onclick="prodAddRow()">+ Item</button>
+    <button class="btn btn-cinza" onclick="prodHist()">📋 Histórico</button>
     <button class="btn btn-sep" onclick="prodEnviar()">Enviar</button>
   </div>
 </div>
