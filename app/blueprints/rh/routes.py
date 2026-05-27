@@ -1,7 +1,7 @@
 from datetime import datetime
 from urllib.parse import quote
 
-from flask import Response, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask import Response, abort, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.orm import defer, joinedload, selectinload
 from werkzeug.utils import secure_filename
@@ -25,6 +25,16 @@ from app.utils import agora, parse_float_br
 from app.utils import hoje as hoje_brt
 
 ALLOWED_MIMETYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'}
+
+
+@rh_bp.before_request
+def _rh_restrito_ao_owner():
+    # RH temporariamente acessivel apenas ao owner. Reverter: remover este
+    # guard + trocar is_owner por pode_rh() na sidebar (base.html).
+    if not current_user.is_authenticated:
+        return current_app.login_manager.unauthorized()
+    if not current_user.is_dono():
+        abort(403)
 
 
 @rh_bp.route('/')
