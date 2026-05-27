@@ -203,7 +203,7 @@ def test_produzir_nao_autorizado(app, catalogo, cliente):
     db.session.commit()
     _login(cliente, login='func')
     r = cliente.post('/padeiro/produzir',
-                     json={'itens': [{'receita_id': catalogo['receita'].id, 'quantidade': 1}]})
+                     json={'itens': [{'ref': 'receita:%d' % catalogo['receita'].id, 'quantidade': 1}]})
     assert r.status_code == 403
 
 
