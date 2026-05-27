@@ -119,10 +119,8 @@ def vendas():
                            status_filtro=status)
 
 
-@b2b_bp.route('/vendas/nova')
-@login_required
-@admin_required
-def venda_nova():
+def _catalogo_venda():
+    """Catalogo + precos + estoque compartilhados pelos forms de nova/editar venda."""
     clientes = ClienteB2B.query.filter_by(ativo=True).order_by(ClienteB2B.nome).all()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
@@ -142,10 +140,104 @@ def venda_nova():
             estoque_map[f'receita:{ep.receita_id}'] = ep.quantidade or 0
         elif ep.produto_id:
             estoque_map[f'produto:{ep.produto_id}'] = ep.quantidade or 0
-    return render_template('b2b/venda_nova.html', clientes=clientes,
-                           receitas=receitas, produtos=produtos,
-                           precos_map=precos_map, estoque_map=estoque_map,
-                           hoje=hoje().isoformat())
+    return {'clientes': clientes, 'receitas': receitas, 'produtos': produtos,
+            'precos_map': precos_map, 'estoque_map': estoque_map}
+
+
+def _parse_venda_form():
+    """Le o form de venda (nova/editar). Retorna (campos, itens, parcelas).
+
+    `campos` casa com a assinatura de criar_venda/editar_venda/editar_cabecalho.
+    """
+    cliente_id = request.form.get('cliente_id', type=int) or None
+    cliente_nome = (request.form.get('cliente_nome') or '').strip() or None
+    data_str = request.form.get('data_venda') or hoje().isoformat()
+    try:
+        data_venda = date.fromisoformat(data_str)
+    except ValueError:
+        data_venda = hoje()
+    data_ent_str = (request.form.get('data_entrega') or '').strip()
+    try:
+        data_entrega = date.fromisoformat(data_ent_str) if data_ent_str else None
+    except ValueError:
+        data_entrega = None
+    campos = {
+        'cliente_id': cliente_id,
+        'cliente_nome': cliente_nome,
+        'data_venda': data_venda,
+        'data_entrega': data_entrega,
+        'nf_numero': (request.form.get('nf_numero') or '').strip() or None,
+        'observacao': (request.form.get('observacao') or '').strip() or None,
+    }
+
+    # Itens: item_ref[]="receita:5", item_qtd[], item_preco[], item_desc[],
+    # item_estado[], item_obs[]
+    refs = request.form.getlist('item_ref[]')
+    qtds = request.form.getlist('item_qtd[]')
+    precos = request.form.getlist('item_preco[]')
+    descs = request.form.getlist('item_desc[]')
+    estados = request.form.getlist('item_estado[]')
+    obss = request.form.getlist('item_obs[]')
+    itens = []
+    for i, ref in enumerate(refs):
+        ref = (ref or '').strip()
+        if not ref or ':' not in ref:
+            continue
+        tipo, _, sid = ref.partition(':')
+        if tipo not in ('receita', 'produto') or not sid.isdigit():
+            continue
+        try:
+            qtd = int(qtds[i])
+        except (IndexError, ValueError):
+            continue
+        if qtd <= 0:
+            continue
+        try:
+            preco = float((precos[i] or '0').replace(',', '.'))
+        except (IndexError, ValueError):
+            preco = 0
+        try:
+            desc = float((descs[i] or '0').replace(',', '.'))
+        except (IndexError, ValueError):
+            desc = 0
+        est = (estados[i].strip().lower() if i < len(estados) else '') or None
+        obs = (obss[i].strip() if i < len(obss) else '') or None
+        itens.append({'tipo': tipo, 'id': int(sid), 'quantidade': qtd,
+                      'preco_unitario': preco, 'desconto_percentual': desc,
+                      'estado': est, 'observacao': obs})
+
+    # Parcelas: parcela_venc[], parcela_valor[], parcela_forma[]
+    vencs = request.form.getlist('parcela_venc[]')
+    valores = request.form.getlist('parcela_valor[]')
+    formas = request.form.getlist('parcela_forma[]')
+    parcelas = []
+    for i, v in enumerate(vencs):
+        v = (v or '').strip()
+        if not v:
+            continue
+        try:
+            valor = float((valores[i] or '0').replace(',', '.'))
+        except (IndexError, ValueError):
+            valor = 0
+        if valor <= 0:
+            continue
+        try:
+            venc = date.fromisoformat(v)
+        except ValueError:
+            continue
+        forma = (formas[i] if i < len(formas) else '') or None
+        parcelas.append({'vencimento': venc, 'valor': valor,
+                         'forma_pagamento': forma})
+    return campos, itens, parcelas
+
+
+@b2b_bp.route('/vendas/nova')
+@login_required
+@admin_required
+def venda_nova():
+    return render_template('b2b/venda_nova.html', venda=None,
+                           itens_seed=[], parcelas_seed=[], pago=False,
+                           hoje=hoje().isoformat(), **_catalogo_venda())
 
 
 @b2b_bp.route('/vendas/nova', methods=['POST'])
