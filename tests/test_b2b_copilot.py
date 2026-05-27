@@ -61,8 +61,10 @@ def test_executor_cria_venda_e_baixa_freezer(app, admin_user, catalogo):
     db.session.commit()
 
     # Simula params como vem do enricher
+    from app.utils import hoje
     params = copilot._enriquecer_criar_venda_b2b({
         'cliente_nome': 'Avulso Teste',
+        'data_entrega': hoje().isoformat(),
         'itens': [{'nome': 'Croissant', 'quantidade': 4}],
     })
     resultado = copilot.executar_criar_venda_b2b(params, admin_user)
