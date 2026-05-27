@@ -635,6 +635,29 @@
     document.getElementById('prod-confirm').classList.remove('aberto');
   }
 
+  function prodHist() {
+    var ov = document.getElementById('prod-hist');
+    var lista = document.getElementById('prod-hist-lista');
+    lista.innerHTML = '<div class="linha qd">carregando…</div>';
+    ov.classList.add('aberto');
+    fetch('{{ url_for("padeiro.producao_historico") }}')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        var h = (d && d.historico) || [];
+        lista.innerHTML = h.length
+          ? h.map(function (it) {
+              return '<div class="linha"><span class="q">' + it.qtd + '×</span> '
+                + esc(it.item) + ' <span class="qd">· ' + esc(it.quando) + '</span></div>';
+            }).join('')
+          : '<div class="linha qd">Nada lançado ainda.</div>';
+      }).catch(function () {
+        lista.innerHTML = '<div class="linha qd">Erro ao carregar.</div>';
+      });
+  }
+  function prodHistFechar() {
+    document.getElementById('prod-hist').classList.remove('aberto');
+  }
+
   function prodConfirmar() {
     if (prodEnviando) return;
     prodEnviando = true;
