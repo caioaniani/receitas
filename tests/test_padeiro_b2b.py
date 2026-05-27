@@ -115,6 +115,35 @@ def test_criar_venda_guarda_data_entrega_e_estado(app, admin_user, catalogo):
     assert it.estado == 'backup'
 
 
+def test_item_check_markup_para_separar(app, admin_user, catalogo, cliente):
+    """Item em 'Para separar' vira alvo tocável: data-order no card, item-chk +
+    data-item no item, e o contador data-chk-count."""
+    from app.models import VendaB2BItem
+    from app.utils import hoje
+    v = _venda_b2b(app, admin_user, catalogo, data_entrega=hoje())
+    it = VendaB2BItem.query.filter_by(venda_id=v.id).first()
+    _login(cliente)
+    r = cliente.get('/padeiro/listas.html?data=' + hoje().isoformat())
+    assert r.status_code == 200
+    assert ('data-order="b2b-%d"' % v.id).encode() in r.data
+    assert b'class="item-chk"' in r.data
+    assert ('data-item="%d"' % it.id).encode() in r.data
+    assert b'data-chk-count' in r.data
+
+
+def test_item_check_ausente_em_aguardando(app, admin_user, catalogo, cliente):
+    """Seção 'aguardando motorista' (já separado) não traz check por item — o
+    apoio visual é só durante a separação."""
+    from app.utils import hoje
+    _venda_b2b(app, admin_user, catalogo, data_entrega=hoje(),
+               status_entrega='separado')
+    _login(cliente)
+    r = cliente.get('/padeiro/listas.html?data=' + hoje().isoformat())
+    assert r.status_code == 200
+    assert b'Bruno' in r.data         # card renderizado na seção aguardando
+    assert b'item-chk' not in r.data  # mas sem item tocável (pós-separação)
+
+
 def test_entregar_b2b_sai_da_fila(app, admin_user, catalogo, cliente):
     """B2B separado: 'Marcar entregue' -> status_entrega='entregue' e sai do padeiro."""
     from app.models import VendaB2B
