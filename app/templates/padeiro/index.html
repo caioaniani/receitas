@@ -535,7 +535,7 @@
           ? avisos.map(function (a) {
               return '<div class="hist-item"><div class="t">' + esc(a.texto) + '</div>'
                 + '<div class="m">' + esc(a.por) + ' · ' + esc(a.quando)
-                + (a.confirmado ? ' · ✓ lido' : ' · na TV') + '</div></div>';
+                + (a.confirmado ? ' · lido' : ' · na TV') + '</div></div>';
             }).join('')
           : '<div class="hist-item"><div class="m">Nenhum aviso nas últimas 24h.</div></div>';
       }).catch(function () {});
