@@ -394,6 +394,7 @@ def _preview_criar_venda_b2b(p, token):
         _fields([
             ('Cliente', f'{cliente} {tag_cli}{extra}'),
             ('Data', p.get('data_venda') or 'hoje'),
+            ('Entrega (padaria)', p.get('data_entrega') or '⚠ informe'),
             ('NF', p.get('nf_numero') or '—'),
             ('Total', f"R$ {p.get('total') or 0:.2f}"),
             ('Observacao', p.get('observacao') or '—'),
