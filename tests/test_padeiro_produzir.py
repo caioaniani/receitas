@@ -160,9 +160,9 @@ def test_produzir_invalido_nao_grava(app, admin_user, catalogo, cliente):
     antes = EstoqueProducao.query.count()
     assert cliente.post('/padeiro/produzir', json={'itens': []}).status_code == 400
     assert cliente.post('/padeiro/produzir',
-                        json={'itens': [{'receita_id': rid, 'quantidade': 0}]}).status_code == 400
+                        json={'itens': [{'ref': 'receita:%d' % rid, 'quantidade': 0}]}).status_code == 400
     assert cliente.post('/padeiro/produzir',
-                        json={'itens': [{'receita_id': 999999, 'quantidade': 1}]}).status_code == 400
+                        json={'itens': [{'ref': 'receita:999999', 'quantidade': 1}]}).status_code == 400
     assert EstoqueProducao.query.count() == antes  # nada gravado
 
 
