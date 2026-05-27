@@ -564,7 +564,7 @@
     var row = prodRows[rid];
     if (!row || !row.results[idx]) return;
     var rec = row.results[idx];
-    row.receitaId = rec.id;
+    row.ref = rec.ref;
     row.nome = rec.nome;
     var rowEl = document.getElementById('row-' + rid);
     if (rowEl) {
