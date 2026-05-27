@@ -326,14 +326,15 @@ def preparar_json():
 @login_required
 @padeiro_required
 def buscar_receitas():
-    """Typeahead do painel Produzir: receitas cujo nome contem o texto.
-    Acento-insensivel ('pao' acha 'Pão') e case-insensitive; casa todos os
-    termos digitados. Catalogo pequeno, entao filtra em Python (portavel)."""
+    """Typeahead do painel Produzir: receitas E produtos/cestas cujo nome contem
+    o texto. Acento-insensivel ('pao' acha 'Pão'), case-insensitive, casa todos
+    os termos. Catalogo pequeno -> filtra em Python. Retorna refs
+    'receita:<id>' / 'produto:<id>'."""
     import unicodedata
 
     from flask import jsonify
 
-    from app.models import Receita
+    from app.models import Produto, Receita
 
     def _norm(s):
         s = unicodedata.normalize('NFKD', s or '')
@@ -341,12 +342,19 @@ def buscar_receitas():
 
     q = _norm((request.args.get('q') or '').strip())
     if len(q) < 2:
-        return jsonify(receitas=[])
+        return jsonify(itens=[])
     termos = q.split()
-    rows = Receita.query.order_by(Receita.nome).all()
-    out = [{'id': r.id, 'nome': r.nome} for r in rows
-           if all(t in _norm(r.nome) for t in termos)]
-    return jsonify(receitas=out[:20])
+
+    def _casa(nome):
+        n = _norm(nome)
+        return all(t in n for t in termos)
+
+    out = [{'ref': 'receita:%d' % r.id, 'nome': r.nome}
+           for r in Receita.query.order_by(Receita.nome).all() if _casa(r.nome)]
+    out += [{'ref': 'produto:%d' % p.id, 'nome': p.nome}
+            for p in Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+            if _casa(p.nome)]
+    return jsonify(itens=out[:20])
 
 
 @padeiro_bp.route('/produzir', methods=['POST'])
