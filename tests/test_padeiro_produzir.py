@@ -94,8 +94,16 @@ def test_buscar_substring_e_case_insensitive(app, admin_user, catalogo, cliente)
 
 def test_buscar_query_curta_e_sem_match(app, admin_user, catalogo, cliente):
     _login(cliente)
-    assert cliente.get('/padeiro/buscar-receitas.json?q=c').get_json()['receitas'] == []
-    assert cliente.get('/padeiro/buscar-receitas.json?q=zzz').get_json()['receitas'] == []
+    assert cliente.get('/padeiro/buscar-receitas.json?q=c').get_json()['itens'] == []
+    assert cliente.get('/padeiro/buscar-receitas.json?q=zzz').get_json()['itens'] == []
+
+
+def test_buscar_inclui_produtos(app, admin_user, catalogo, cliente):
+    """A busca do Produzir tambem traz produtos/cestas (ref produto:<id>)."""
+    _login(cliente)
+    refs = [r['ref'] for r in
+            cliente.get('/padeiro/buscar-receitas.json?q=frances').get_json()['itens']]
+    assert ('produto:%d' % catalogo['produto'].id) in refs
 
 
 # ── POST /padeiro/produzir ───────────────────────────────────────────────
