@@ -144,6 +144,16 @@ def test_item_check_ausente_em_aguardando(app, admin_user, catalogo, cliente):
     assert b'item-chk' not in r.data  # mas sem item tocável (pós-separação)
 
 
+def test_prep_ticker_banner_no_markup(app, admin_user, catalogo, cliente):
+    """O banner piscante de pré-preparo existe na página (escondido por padrão; o
+    show/hide é client-side conforme prepItens)."""
+    _login(cliente)
+    r = cliente.get('/padeiro/')
+    assert r.status_code == 200
+    assert b'id="prep-ticker"' in r.data
+    assert 'Pedido para preparar para amanhã já disponível'.encode() in r.data
+
+
 def test_entregar_b2b_sai_da_fila(app, admin_user, catalogo, cliente):
     """B2B separado: 'Marcar entregue' -> status_entrega='entregue' e sai do padeiro."""
     from app.models import VendaB2B
