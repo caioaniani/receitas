@@ -371,6 +371,7 @@
         var rows = '';
         itens.forEach(function(it, idx) {
             var nome = it.resolvido ? escape(it.resolvido.nome) : '<span class="text-danger">' + escape(it.nome_original) + ' (não achei)</span>';
+            if (it.estado) nome += ' <span class="badge bg-secondary">' + escape(String(it.estado).toUpperCase()) + '</span>';
             var atual = (it.estoque_atual !== null && it.estoque_atual !== undefined) ? it.estoque_atual : '—';
             var preco = (it.preco_unitario !== undefined) ? Number(it.preco_unitario).toFixed(2) : '0,00';
             var subt = (it.subtotal !== undefined) ? Number(it.subtotal).toFixed(2) : '0,00';
