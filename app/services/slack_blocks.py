@@ -370,10 +370,12 @@ def _preview_criar_venda_b2b(p, token):
 
     def _fmt(it):
         nome = (it.get('resolvido') or {}).get('nome') or it.get('nome_original') or '?'
+        est = it.get('estado')
+        tag_est = f' [{est.upper()}]' if est else ''
         marker = '' if it.get('resolvido') else ' ⚠'
         preco = it.get('preco_unitario') or 0
         subt = it.get('subtotal') or 0
-        return f"- {it.get('quantidade')}x {nome}{marker} · R$ {preco:.2f} = R$ {subt:.2f}"
+        return f"- {it.get('quantidade')}x {nome}{tag_est}{marker} · R$ {preco:.2f} = R$ {subt:.2f}"
 
     itens_txt = '\n'.join(_fmt(i) for i in itens[:25]) or '(vazio)'
     if len(itens) > 25:
