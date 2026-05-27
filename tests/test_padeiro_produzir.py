@@ -86,7 +86,7 @@ def test_buscar_substring_e_case_insensitive(app, admin_user, catalogo, cliente)
 
     def nomes(q):
         return [r['nome'] for r in
-                cliente.get('/padeiro/buscar-receitas.json?q=' + q).get_json()['receitas']]
+                cliente.get('/padeiro/buscar-receitas.json?q=' + q).get_json()['itens']]
     assert 'Croissant Tradicional' in nomes('crois')
     assert 'Croissant Tradicional' in nomes('trad')      # meio da palavra
     assert 'Croissant Tradicional' in nomes('CROISSANT')  # case-insensitive
