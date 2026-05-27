@@ -78,11 +78,12 @@
     <div class="card-header py-2"><strong>Itens</strong></div>
     <div class="table-responsive">
         <table class="table table-sm mb-0">
-            <thead><tr><th>Item</th><th class="text-end">Qtd</th><th class="text-end">Preço</th><th class="text-end">Desc</th><th class="text-end">Subtotal</th></tr></thead>
+            <thead><tr><th>Item</th><th>Obs.</th><th class="text-end">Qtd</th><th class="text-end">Preço</th><th class="text-end">Desc</th><th class="text-end">Subtotal</th></tr></thead>
             <tbody>
             {% for it in venda.itens %}
             <tr>
-                <td>{{ it.nome_item }}</td>
+                <td>{{ it.nome_item }}{% if it.estado %} <span class="badge bg-light text-dark">{{ it.estado }}</span>{% endif %}</td>
+                <td class="text-muted small">{{ it.observacao or '' }}</td>
                 <td class="text-end">{{ it.quantidade }}</td>
                 <td class="text-end">R$ {{ '%.2f'|format(it.preco_unitario) }}</td>
                 <td class="text-end">{{ '%.0f'|format(it.desconto_percentual or 0) }}%</td>
