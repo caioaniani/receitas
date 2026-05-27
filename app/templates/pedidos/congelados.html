@@ -188,19 +188,52 @@ var produtos = [
     {% endfor %}
 ];
 
-function atualizarEntrada() {
-    var tipo = document.getElementById('entrada-tipo').value;
-    var sel = document.getElementById('entrada-item');
-    sel.innerHTML = '<option value="">Selecione...</option>';
-    var list = tipo === 'receita' ? receitas : produtos;
-    list.forEach(function(item) {
-        var opt = document.createElement('option');
-        opt.value = item.id;
-        opt.textContent = item.cat ? item.cat + ' — ' + item.nome : item.nome;
-        sel.appendChild(opt);
+// Busca por digitacao (typeahead) do item da entrada — igual ao formulario B2B.
+// Uma busca so sobre receitas+produtos, sem acento; ao escolher seta os hidden
+// tipo+item_id. Dropdown vai pro <body> pra nao ser cortado por overflow.
+function _normC(s){ return (s==null?'':String(s)).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); }
+function _escC(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+var ENTRADA_TODOS = receitas.map(function(r){ return {tipo:'receita', id:r.id, label:(r.cat?r.cat+' — '+r.nome:r.nome), q:_normC((r.cat||'')+' '+r.nome)}; })
+    .concat(produtos.map(function(p){ return {tipo:'produto', id:p.id, label:p.nome, q:_normC(p.nome)}; }));
+(function(){
+    var input = document.getElementById('entrada-busca');
+    var hTipo = document.getElementById('entrada-tipo');
+    var hId = document.getElementById('entrada-item');
+    var box = document.getElementById('entrada-results');
+    if (!input || !box) return;
+    document.body.appendChild(box);
+    input.addEventListener('input', function(){
+        hTipo.value = ''; hId.value = '';
+        var q = _normC(input.value);
+        if (!q) { box.style.display='none'; box.innerHTML=''; return; }
+        var terms = q.split(/\s+/).filter(Boolean);
+        var res = ENTRADA_TODOS.filter(function(o){ return terms.every(function(t){ return o.q.indexOf(t)!==-1; }); }).slice(0,30);
+        box._res = res;
+        box.innerHTML = res.length
+            ? res.map(function(o,i){ return '<div class="ent-opt" data-i="'+i+'">'+_escC(o.label)+'</div>'; }).join('')
+            : '<div class="ent-opt text-muted">nenhum item</div>';
+        var rect = input.getBoundingClientRect();
+        box.style.left=(rect.left+window.pageXOffset)+'px';
+        box.style.top=(rect.bottom+window.pageYOffset)+'px';
+        box.style.width=rect.width+'px';
+        box.style.display='block';
     });
-}
-atualizarEntrada();
+    box.addEventListener('mousedown', function(e){
+        var opt = e.target.closest('.ent-opt[data-i]');
+        if (!opt || !box._res) return;
+        e.preventDefault();
+        var o = box._res[parseInt(opt.getAttribute('data-i'),10)];
+        if (!o) return;
+        hTipo.value = o.tipo; hId.value = o.id;
+        input.value = o.label;
+        box.style.display='none'; box.innerHTML='';
+    });
+    input.addEventListener('blur', function(){ setTimeout(function(){ box.style.display='none'; }, 150); });
+    var form = input.closest('form');
+    if (form) form.addEventListener('submit', function(e){
+        if (!hId.value) { e.preventDefault(); input.focus(); }
+    });
+})();
 
 // Troca o segundo select (item) baseado no tipo escolhido no primeiro,
 // dentro do mesmo form de vincular-pendente.
