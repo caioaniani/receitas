@@ -407,3 +407,24 @@ def produzir():
         logger.exception('padeiro.produzir falhou')
         return jsonify(ok=False, erro='Erro ao registrar produção.'), 500
     return jsonify(ok=True, resumo=resumo)
+
+
+@padeiro_bp.route('/producao-historico.json')
+@login_required
+@padeiro_required
+def producao_historico():
+    """Historico do que foi lancado pelo painel Produzir (data/hora + item + qtd).
+    Ultimas ~50 entradas tipo='producao' lancadas por este painel."""
+    from flask import jsonify
+
+    from app.models import MovEstoqueProducao
+    movs = (MovEstoqueProducao.query
+            .filter(MovEstoqueProducao.tipo == 'producao',
+                    MovEstoqueProducao.referencia == 'Produção (TV padeiro)')
+            .order_by(MovEstoqueProducao.data.desc())
+            .limit(50).all())
+    return jsonify(historico=[{
+        'quando': m.data.strftime('%d/%m %H:%M') if m.data else '',
+        'item': m.estoque.nome_item if m.estoque else '?',
+        'qtd': m.quantidade,
+    } for m in movs])
