@@ -604,7 +604,7 @@
       return '<div class="linha"><b>' + it.quantidade + '×</b> ' + esc(it.nome) + '</div>';
     }).join('');
     prodPendentes = itens.map(function (it) {
-      return { receita_id: it.receita_id, quantidade: it.quantidade };
+      return { ref: it.ref, quantidade: it.quantidade };
     });
     document.getElementById('prod-confirm').classList.add('aberto');
   }
