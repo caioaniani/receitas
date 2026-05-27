@@ -377,9 +377,10 @@ def editar(id):
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
     amanha = hoje_brt() + timedelta(days=1)
+    data_min = hoje_brt() if current_user.is_admin() else amanha
     return render_template('pedidos/editar.html', pedido=pedido,
                            receitas=receitas, produtos=produtos,
-                           materias=materias, amanha=amanha)
+                           materias=materias, amanha=amanha, data_min=data_min)
 
 
 @pedidos_bp.route('/<int:id>')
