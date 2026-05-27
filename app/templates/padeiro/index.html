@@ -342,7 +342,7 @@
     bar.style.display = 'block';
     document.getElementById('aviso-ticker-txt').innerHTML =
       avisosAtivos.map(function (a) {
-        return '📢 ' + esc(a.texto) + (a.por ? ' (' + esc(a.por) + ')' : '');
+        return esc(a.texto) + (a.por ? ' (' + esc(a.por) + ')' : '');
       }).join('     •     ');
     document.getElementById('aviso-botoes').innerHTML =
       avisosAtivos.map(function (a) {
