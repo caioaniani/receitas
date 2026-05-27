@@ -244,91 +244,16 @@ def venda_nova():
 @login_required
 @admin_required
 def venda_criar():
-    cliente_id = request.form.get('cliente_id', type=int) or None
-    cliente_nome = (request.form.get('cliente_nome') or '').strip() or None
-    data_str = request.form.get('data_venda') or hoje().isoformat()
-    try:
-        data_venda = date.fromisoformat(data_str)
-    except ValueError:
-        data_venda = hoje()
-    # Data de entrega (opcional): se preenchida, a venda entra na fila do padeiro.
-    data_ent_str = (request.form.get('data_entrega') or '').strip()
-    try:
-        data_entrega = date.fromisoformat(data_ent_str) if data_ent_str else None
-    except ValueError:
-        data_entrega = None
-    if not data_entrega:
+    campos, itens, parcelas = _parse_venda_form()
+    if not campos['data_entrega']:
         flash('Informe a data de entrega ao padeiro.', 'warning')
         return redirect(url_for('b2b.venda_nova'))
-    nf = (request.form.get('nf_numero') or '').strip() or None
-    obs = (request.form.get('observacao') or '').strip() or None
-
-    # Itens: nome no form item_ref[] = "receita:5", item_qtd[], item_preco[]
-    refs = request.form.getlist('item_ref[]')
-    qtds = request.form.getlist('item_qtd[]')
-    precos = request.form.getlist('item_preco[]')
-    descs = request.form.getlist('item_desc[]')
-    estados = request.form.getlist('item_estado[]')
-    itens = []
-    for i, ref in enumerate(refs):
-        ref = (ref or '').strip()
-        if not ref or ':' not in ref:
-            continue
-        tipo, _, sid = ref.partition(':')
-        if tipo not in ('receita', 'produto') or not sid.isdigit():
-            continue
-        try:
-            qtd = int(qtds[i])
-        except (IndexError, ValueError):
-            continue
-        if qtd <= 0:
-            continue
-        try:
-            preco = float((precos[i] or '0').replace(',', '.'))
-        except (IndexError, ValueError):
-            preco = 0
-        try:
-            desc = float((descs[i] or '0').replace(',', '.'))
-        except (IndexError, ValueError):
-            desc = 0
-        est = (estados[i].strip().lower() if i < len(estados) else '') or None
-        itens.append({'tipo': tipo, 'id': int(sid), 'quantidade': qtd,
-                      'preco_unitario': preco, 'desconto_percentual': desc,
-                      'estado': est})
     if not itens:
         flash('Adicione pelo menos 1 item.', 'danger')
         return redirect(url_for('b2b.venda_nova'))
-
-    # Parcelas: parcela_venc[], parcela_valor[], parcela_forma[]
-    vencs = request.form.getlist('parcela_venc[]')
-    valores = request.form.getlist('parcela_valor[]')
-    formas = request.form.getlist('parcela_forma[]')
-    parcelas = []
-    for i, v in enumerate(vencs):
-        v = (v or '').strip()
-        if not v:
-            continue
-        try:
-            valor = float((valores[i] or '0').replace(',', '.'))
-        except (IndexError, ValueError):
-            valor = 0
-        if valor <= 0:
-            continue
-        try:
-            venc = date.fromisoformat(v)
-        except ValueError:
-            continue
-        forma = (formas[i] if i < len(formas) else '') or None
-        parcelas.append({'vencimento': venc, 'valor': valor,
-                         'forma_pagamento': forma})
-
     try:
-        venda = svc.criar_venda(
-            cliente_id=cliente_id, cliente_nome=cliente_nome,
-            data_venda=data_venda, data_entrega=data_entrega, itens=itens,
-            parcelas=parcelas or None, observacao=obs, nf_numero=nf,
-            user=current_user,
-        )
+        venda = svc.criar_venda(**campos, itens=itens,
+                                parcelas=parcelas or None, user=current_user)
     except ValueError as exc:
         db.session.rollback()
         flash(f'Erro: {exc}', 'danger')
@@ -336,6 +261,93 @@ def venda_criar():
 
     flash(f'Venda B2B #{venda.id} criada — R$ {venda.valor_total:.2f}.', 'success')
     return redirect(url_for('b2b.venda_detalhe', vid=venda.id))
+
+
+@b2b_bp.route('/vendas/<int:vid>/editar')
+@login_required
+@admin_required
+def venda_editar(vid):
+    venda = (VendaB2B.query
+             .options(joinedload(VendaB2B.itens), joinedload(VendaB2B.parcelas))
+             .get_or_404(vid))
+    if venda.status == 'cancelada':
+        flash('Venda cancelada — reabra antes de editar.', 'warning')
+        return redirect(url_for('b2b.venda_detalhe', vid=vid))
+    pago = bool(venda.valor_pago and venda.valor_pago > 0)
+    itens_seed = [{
+        'ref': (f'receita:{it.receita_id}' if it.receita_id
+                else f'produto:{it.produto_id}'),
+        'nome': it.nome_item,
+        'qtd': it.quantidade,
+        'estado': it.estado or '',
+        'preco': float(it.preco_unitario or 0),
+        'desc': it.desconto_percentual or 0,
+        'obs': it.observacao or '',
+    } for it in venda.itens]
+    parcelas_seed = [{
+        'venc': p.vencimento.isoformat(),
+        'valor': float(p.valor or 0),
+        'forma': p.forma_pagamento or '',
+    } for p in sorted(venda.parcelas, key=lambda x: x.numero)]
+    return render_template('b2b/venda_nova.html', venda=venda,
+                           itens_seed=itens_seed, parcelas_seed=parcelas_seed,
+                           pago=pago, hoje=hoje().isoformat(), **_catalogo_venda())
+
+
+@b2b_bp.route('/vendas/<int:vid>/editar', methods=['POST'])
+@login_required
+@admin_required
+def venda_editar_post(vid):
+    venda = VendaB2B.query.get_or_404(vid)
+    if venda.status == 'cancelada':
+        flash('Venda cancelada — reabra antes de editar.', 'warning')
+        return redirect(url_for('b2b.venda_detalhe', vid=vid))
+    campos, itens, parcelas = _parse_venda_form()
+    if not campos['data_entrega']:
+        flash('Informe a data de entrega ao padeiro.', 'warning')
+        return redirect(url_for('b2b.venda_editar', vid=vid))
+    # Venda com pagamento: itens travados — atualiza so o cabecalho.
+    if venda.valor_pago and venda.valor_pago > 0:
+        try:
+            svc.editar_cabecalho(venda, **campos)
+        except ValueError as exc:
+            db.session.rollback()
+            flash(f'Erro: {exc}', 'danger')
+            return redirect(url_for('b2b.venda_editar', vid=vid))
+        flash('Cabecalho atualizado (itens travados: venda com pagamento).', 'success')
+        return redirect(url_for('b2b.venda_detalhe', vid=vid))
+    if not itens:
+        flash('Adicione pelo menos 1 item.', 'danger')
+        return redirect(url_for('b2b.venda_editar', vid=vid))
+    try:
+        svc.editar_venda(venda, **campos, itens=itens,
+                         parcelas=parcelas or None, user=current_user)
+    except ValueError as exc:
+        db.session.rollback()
+        flash(f'Erro: {exc}', 'danger')
+        return redirect(url_for('b2b.venda_editar', vid=vid))
+    flash(f'Venda #{vid} atualizada — estoque reajustado.', 'success')
+    return redirect(url_for('b2b.venda_detalhe', vid=vid))
+
+
+@b2b_bp.route('/vendas/<int:vid>/reabrir', methods=['POST'])
+@login_required
+@admin_required
+def venda_reabrir(vid):
+    venda = VendaB2B.query.get_or_404(vid)
+    svc.reabrir_venda(venda, user=current_user)
+    flash(f'Venda #{vid} reaberta — estoque baixado de novo.', 'success')
+    return redirect(url_for('b2b.venda_detalhe', vid=vid))
+
+
+@b2b_bp.route('/vendas/<int:vid>/status-voltar', methods=['POST'])
+@login_required
+@admin_required
+def venda_status_voltar(vid):
+    venda = VendaB2B.query.get_or_404(vid)
+    svc.reverter_status_entrega(venda)
+    flash(f'Status de entrega revertido para "{venda.status_entrega}".', 'info')
+    return redirect(url_for('b2b.venda_detalhe', vid=vid))
 
 
 @b2b_bp.route('/vendas/<int:vid>')
