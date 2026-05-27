@@ -46,7 +46,7 @@
           onsubmit="return confirm('Marcar venda B2B #{{ c.id }} como entregue?')">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="data" value="{{ dia.isoformat() }}">
-      <button class="btn btn-sep" type="submit">✓ Marcar entregue</button>
+      <button class="btn btn-sep" type="submit">Marcar entregue</button>
     </form>
     {% elif drivers %}
     <div class="drivers">
