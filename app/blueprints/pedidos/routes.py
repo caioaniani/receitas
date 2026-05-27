@@ -184,7 +184,8 @@ def novo():
             materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
             return render_template('pedidos/novo.html', lojas=lojas,
                                    receitas=receitas, produtos=produtos,
-                                   materias=materias, amanha=amanha, loja_id=loja_id)
+                                   materias=materias, amanha=amanha,
+                                   data_min=data_min, loja_id=loja_id)
 
         data_str = request.form.get('data_entrega', '')
         obs = request.form.get('observacao', '').strip()
@@ -202,7 +203,8 @@ def novo():
             materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
             return render_template('pedidos/novo.html', lojas=lojas,
                                    receitas=receitas, produtos=produtos,
-                                   materias=materias, amanha=amanha, loja_id=loja_id)
+                                   materias=materias, amanha=amanha,
+                                   data_min=data_min, loja_id=loja_id)
 
         # Monta a lista de itens normalizada antes de decidir merge vs novo.
         ids = request.form.getlist('item_id[]')
