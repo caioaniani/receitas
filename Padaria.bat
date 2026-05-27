@@ -34,20 +34,19 @@ if not exist "%LNK%" (
 REM --- 3) Deixar o teclado de toque pronto em segundo plano ---
 start "" "%CommonProgramFiles%\microsoft shared\ink\TabTip.exe"
 
-REM --- 4) Abrir o Chrome em tela cheia na /padeiro ---
-set "CHROME=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
-if not exist "%CHROME%" set "CHROME=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
-if not exist "%CHROME%" set "CHROME=%LocalAppData%\Google\Chrome\Application\chrome.exe"
+REM --- 4) Abrir o Edge em tela cheia (kiosk) na /padeiro ---
+set "EDGE=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
+if not exist "%EDGE%" set "EDGE=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
 
-if not exist "%CHROME%" (
+if not exist "%EDGE%" (
   echo.
-  echo  [AVISO] Chrome nao encontrado. Abrindo no navegador padrao...
+  echo  [AVISO] Edge nao encontrado. Abrindo no navegador padrao...
   start "" "%URL%"
   goto :fim
 )
 
 echo Abrindo a tela do padeiro...
-start "" "%CHROME%" --kiosk --noerrdialogs --disable-session-crashed-bubble --autoplay-policy=no-user-gesture-required "%URL%"
+start "" "%EDGE%" --kiosk "%URL%" --edge-kiosk-type=fullscreen --kiosk-idle-timeout-minutes=0 --no-first-run --noerrdialogs --disable-session-crashed-bubble --autoplay-policy=no-user-gesture-required
 
 :fim
 exit /b 0
