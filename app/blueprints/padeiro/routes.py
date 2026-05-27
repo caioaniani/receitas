@@ -148,6 +148,24 @@ def separar_b2b(id):
     return redirect(url_for('padeiro.index', data=data_str))
 
 
+@padeiro_bp.route('/b2b/<int:id>/entregue', methods=['POST'])
+@login_required
+@padeiro_required
+def entregar_b2b(id):
+    """Marca uma venda B2B separada como entregue (sai da fila do padeiro).
+    Despacho simples, sem QR/motorista (isso e a Fase 2). Nao mexe em estoque —
+    o B2B ja baixou do freezer na venda."""
+    data_str = (request.form.get('data') or '').strip() or None
+    venda = VendaB2B.query.get_or_404(id)
+    if venda.status == 'cancelada' or venda.status_entrega != 'separado':
+        flash(f'Venda B2B #{venda.id} nao esta aguardando despacho.', 'warning')
+        return redirect(url_for('padeiro.index', data=data_str))
+    venda.status_entrega = 'entregue'
+    db.session.commit()
+    flash(f'Venda B2B #{venda.id} marcada como entregue.', 'success')
+    return redirect(url_for('padeiro.index', data=data_str))
+
+
 @padeiro_bp.route('/<int:id>/gerar-qr', methods=['POST'])
 @login_required
 @padeiro_required
