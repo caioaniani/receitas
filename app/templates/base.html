@@ -270,8 +270,8 @@
         </a>
         {% endif %}
 
-        {# ── 6. RH ── #}
-        {% if current_user.pode_rh() %}
+        {# ── 6. RH ── (temporariamente owner-only) #}
+        {% if current_user.is_owner %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">RH</div>
 
