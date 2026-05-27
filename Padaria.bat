@@ -9,7 +9,9 @@ REM  O que este arquivo faz:
 REM    1. Liga o teclado de toque (o grande, que sobe da barra)
 REM       para aparecer ao tocar em qualquer campo de texto.
 REM    2. Se registra para abrir junto com o Windows.
-REM    3. Abre o Chrome em tela cheia (kiosk) na tela /padeiro.
+REM    3. Abre o Microsoft Edge em tela cheia (kiosk) na /padeiro.
+REM       (Edge porque o Chrome nao chama o teclado de toque
+REM        de forma confiavel; o Edge chama.)
 REM
 REM  Uso: deixe este arquivo numa pasta fixa (ex.: C:\Padaria\)
 REM  e dê dois cliques UMA vez. Depois ele sobe sozinho no boot.
