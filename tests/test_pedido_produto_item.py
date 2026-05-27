@@ -62,3 +62,30 @@ def test_editar_mostra_produto_selecionado(app, admin_user, loja, catalogo, clie
     r = cliente.get(f'/pedidos/{p.id}/editar')
     assert r.status_code == 200
     assert ('p_%d" selected' % pid).encode() in r.data
+
+
+def test_admin_cria_pedido_loja_mesmo_dia(app, admin_user, loja, catalogo, cliente):
+    """Admin pode criar pedido de loja pra entregar HOJE (mesmo dia)."""
+    from app.models import PedidoLoja
+    from app.utils import hoje
+    _login(cliente)
+    r = cliente.post('/pedidos/novo', data={
+        'loja_id': loja.id,
+        'data_entrega': hoje().isoformat(),   # mesmo dia
+        'observacao': '',
+        'item_id[]': 'r_%d' % catalogo['receita'].id,
+        'item_qtd[]': '3',
+        'item_obs[]': '',
+        'item_estado[]': '',
+    })
+    assert r.status_code == 302  # criou, nao bloqueou
+    assert PedidoLoja.query.filter_by(loja_id=loja.id, data_entrega=hoje()).first() is not None
+
+
+def test_form_novo_min_hoje_pra_admin(app, admin_user, loja, catalogo, cliente):
+    """O campo de data do /novo aceita hoje pra admin (min = hoje)."""
+    from app.utils import hoje
+    _login(cliente)
+    r = cliente.get('/pedidos/novo')
+    assert r.status_code == 200
+    assert ('min="%s"' % hoje().isoformat()).encode() in r.data
