@@ -113,7 +113,7 @@ def test_produzir_um_item(app, admin_user, catalogo, cliente):
     _login(cliente)
     rid = catalogo['receita'].id
     r = cliente.post('/padeiro/produzir',
-                     json={'itens': [{'receita_id': rid, 'quantidade': 7}]})
+                     json={'itens': [{'ref': 'receita:%d' % rid, 'quantidade': 7}]})
     assert r.status_code == 200
     j = r.get_json()
     assert j['ok'] is True
@@ -122,6 +122,18 @@ def test_produzir_um_item(app, admin_user, catalogo, cliente):
     assert ep.quantidade == 7
     assert MovEstoqueProducao.query.filter_by(
         estoque_producao_id=ep.id, tipo='producao').count() == 1
+
+
+def test_produzir_produto_cesta(app, admin_user, catalogo, cliente):
+    """Produzir tambem aceita produto/cesta -> entrada em EstoqueProducao."""
+    from app.models import EstoqueProducao
+    _login(cliente)
+    pid = catalogo['produto'].id
+    r = cliente.post('/padeiro/produzir',
+                     json={'itens': [{'ref': 'produto:%d' % pid, 'quantidade': 4}]})
+    assert r.status_code == 200 and r.get_json()['ok'] is True
+    ep = EstoqueProducao.query.filter_by(produto_id=pid, estado=None).one()
+    assert ep.quantidade == 4
 
 
 def test_produzir_multi_item_atomico(app, admin_user, catalogo, cliente):
@@ -133,8 +145,8 @@ def test_produzir_multi_item_atomico(app, admin_user, catalogo, cliente):
     db.session.commit()
     _login(cliente)
     r = cliente.post('/padeiro/produzir', json={'itens': [
-        {'receita_id': catalogo['receita'].id, 'quantidade': 2},
-        {'receita_id': r2.id, 'quantidade': 3},
+        {'ref': 'receita:%d' % catalogo['receita'].id, 'quantidade': 2},
+        {'ref': 'receita:%d' % r2.id, 'quantidade': 3},
     ]})
     assert r.status_code == 200 and r.get_json()['ok'] is True
     assert EstoqueProducao.query.filter_by(estado=None).count() == 2
