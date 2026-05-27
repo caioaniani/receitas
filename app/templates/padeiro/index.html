@@ -458,7 +458,14 @@
         if (pd) pd.textContent = d.dia || '';
         if (document.getElementById('prep-drawer').classList.contains('aberto')) renderPrep();
         tratarAlertaPrep();
+        tratarPrepTicker();
       }).catch(function () {});
+  }
+  // Banner piscante (independente dos avisos): aparece sempre que houver itens
+  // [BACKUP]/[ASSADO] de amanhã pra pré-preparar; some quando não há mais nada.
+  function tratarPrepTicker() {
+    var t = document.getElementById('prep-ticker');
+    if (t) t.style.display = (prepItens && prepItens.length > 0) ? 'block' : 'none';
   }
   function renderPrep() {
     if (!prepItens.length) {
