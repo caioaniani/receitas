@@ -3,7 +3,7 @@ from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.blueprints.materias_primas import materias_primas_bp
-from app.decorators import catalogo_required
+from app.decorators import admin_required, catalogo_required
 from app.extensions import db
 from app.models import AlertaEstoque, MateriaPrima, MovimentacaoEstoque, ReceitaIngrediente
 
@@ -17,7 +17,7 @@ def banco():
 
 @materias_primas_bp.route('/salvar', methods=['POST'])
 @login_required
-@catalogo_required
+@admin_required
 def salvar():
     ids = request.form.getlist('mp_id[]')
     nomes = request.form.getlist('nome[]')
@@ -76,7 +76,7 @@ def salvar():
 
 @materias_primas_bp.route('/excluir/<int:id>', methods=['POST'])
 @login_required
-@catalogo_required
+@admin_required
 def excluir(id):
     mp = MateriaPrima.query.get_or_404(id)
     uso = ReceitaIngrediente.query.filter_by(ingrediente_nome=mp.nome).first()

@@ -109,21 +109,6 @@ def test_admin_nao_pode_excluir_a_si_mesmo(cliente, outro_admin):
     assert a is not None, 'admin se excluiu sozinho'
 
 
-# ─── alterar_loja ──────────────────────────────────────────────────────
-
-def test_admin_nao_owner_nao_altera_loja_do_owner(cliente, owner, outro_admin, loja):
-    _login(cliente, 'admin2', 'senha-admin2')
-    r = cliente.post(f'/auth/usuarios/{owner.id}/alterar-loja',
-                      data={'loja_id': str(loja.id)},
-                      follow_redirects=False)
-    assert r.status_code == 302
-    from app.extensions import db
-    db.session.expire_all()
-    from app.models import Usuario
-    o = Usuario.query.get(owner.id)
-    assert o.loja_id != loja.id, 'admin nao-owner mudou loja do owner!'
-
-
 # ─── alterar_papel (ja existia, mas vale teste) ────────────────────────
 
 def test_owner_nao_pode_ter_papel_alterado(cliente, owner):

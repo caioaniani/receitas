@@ -141,35 +141,6 @@ def alterar_papel(id):
     return redirect(url_for('auth.usuarios'))
 
 
-@auth_bp.route('/usuarios/<int:id>/alterar-loja', methods=['POST'])
-@login_required
-@admin_required
-def alterar_loja(id):
-    u = Usuario.query.get_or_404(id)
-    if u.is_owner and not current_user.is_owner:
-        flash('So o owner pode mexer no owner.', 'danger')
-        return redirect(url_for('auth.usuarios'))
-    raw = (request.form.get('loja_id') or '').strip()
-    if raw == '':
-        u.loja_id = None
-        db.session.commit()
-        flash(f'"{u.nome}" desvinculado de loja.', 'success')
-        return redirect(url_for('auth.usuarios'))
-    try:
-        loja_id = int(raw)
-    except ValueError:
-        flash('Loja invalida.', 'warning')
-        return redirect(url_for('auth.usuarios'))
-    from app.models import Loja
-    if not Loja.query.get(loja_id):
-        flash('Loja nao encontrada.', 'warning')
-        return redirect(url_for('auth.usuarios'))
-    u.loja_id = loja_id
-    db.session.commit()
-    flash(f'"{u.nome}" vinculado a nova loja.', 'success')
-    return redirect(url_for('auth.usuarios'))
-
-
 @auth_bp.route('/usuarios/<int:id>/reset-senha', methods=['POST'])
 @login_required
 @admin_required

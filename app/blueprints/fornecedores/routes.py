@@ -4,7 +4,7 @@ from flask import current_app, flash, redirect, render_template, request, url_fo
 from flask_login import login_required
 
 from app.blueprints.fornecedores import fornecedores_bp
-from app.decorators import catalogo_required
+from app.decorators import admin_required, catalogo_required
 from app.extensions import db
 from app.models import Fornecedor, HistoricoPrecoMP, MateriaPrima
 
@@ -24,7 +24,7 @@ def lista():
 
 @fornecedores_bp.route('/novo', methods=['GET', 'POST'])
 @login_required
-@catalogo_required
+@admin_required
 def novo():
     if request.method == 'POST':
         nome = (request.form.get('nome') or '').strip()
@@ -74,7 +74,7 @@ def detalhe(id):
 
 @fornecedores_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
 @login_required
-@catalogo_required
+@admin_required
 def editar(id):
     f = Fornecedor.query.get_or_404(id)
     if request.method == 'POST':
@@ -103,7 +103,7 @@ def editar(id):
 
 @fornecedores_bp.route('/<int:id>/excluir', methods=['POST'])
 @login_required
-@catalogo_required
+@admin_required
 def excluir(id):
     f = Fornecedor.query.get_or_404(id)
     # Se tiver histórico, só desativa (preserva auditoria)

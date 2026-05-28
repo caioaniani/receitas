@@ -2,7 +2,7 @@ from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import login_required
 
 from app.blueprints.produtos import produtos_bp
-from app.decorators import catalogo_required
+from app.decorators import admin_required, catalogo_required
 from app.extensions import db
 from app.models import MateriaPrima, Produto, ProdutoItem, Receita
 from app.services.custos import calcular_custo_produto, calcular_custos_receitas
@@ -44,7 +44,7 @@ def lista():
 
 @produtos_bp.route('/novo', methods=['POST'])
 @login_required
-@catalogo_required
+@admin_required
 def novo():
     produto = Produto(nome='Nova Cesta', categoria='Cestas')
     db.session.add(produto)
@@ -118,7 +118,7 @@ def detalhe(id):
 
 @produtos_bp.route('/<int:id>/salvar', methods=['POST'])
 @login_required
-@catalogo_required
+@admin_required
 def salvar_composicao(id):
     produto = Produto.query.get_or_404(id)
 
@@ -186,7 +186,7 @@ def salvar_composicao(id):
 
 @produtos_bp.route('/api/nova-mp', methods=['POST'])
 @login_required
-@catalogo_required
+@admin_required
 def nova_mp():
     """Cria matéria-prima via AJAX (sem sair da página da cesta)."""
     nome = request.form.get('mp_nome', '').strip()
@@ -212,7 +212,7 @@ def nova_mp():
 
 @produtos_bp.route('/excluir/<int:id>', methods=['POST'])
 @login_required
-@catalogo_required
+@admin_required
 def excluir(id):
     produto = Produto.query.get_or_404(id)
     nome = produto.nome
@@ -279,7 +279,7 @@ def cestas_orfaos():
 
 @produtos_bp.route('/cestas/orfaos/<int:id>/vincular', methods=['POST'])
 @login_required
-@catalogo_required
+@admin_required
 def vincular_orfao(id):
     """Vincula um ProdutoItem orfao a uma Receita, Produto ou MateriaPrima."""
     pi = ProdutoItem.query.get_or_404(id)
@@ -338,7 +338,7 @@ def vincular_orfao(id):
 
 @produtos_bp.route('/cestas/orfaos/<int:id>/excluir', methods=['POST'])
 @login_required
-@catalogo_required
+@admin_required
 def excluir_orfao(id):
     """Remove um ProdutoItem orfao da cesta (caso o componente nao deveria
     estar la — ex: receita que foi deletada do catalogo)."""

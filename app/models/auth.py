@@ -58,7 +58,9 @@ class Usuario(UserMixin, db.Model):
         return self.is_admin() or self.is_producao()
 
     def pode_catalogo(self):
-        """Receitas, MP, Produtos, Fornecedores (producao = read-only)."""
+        """Acesso ao catalogo: leitura (Receitas/MP/Produtos/Fornecedores) e
+        operacoes de estoque de MP. Producao tem isso; a ESCRITA de definicoes
+        (criar/editar/excluir) eh restrita a admin via @admin_required."""
         return self.is_admin() or self.is_producao()
 
     def pode_rh(self):

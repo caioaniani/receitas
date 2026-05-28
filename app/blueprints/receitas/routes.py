@@ -7,7 +7,7 @@ from flask import abort, flash, jsonify, redirect, render_template, request, url
 from flask_login import current_user, login_required
 
 from app.blueprints.receitas import receitas_bp
-from app.decorators import catalogo_required
+from app.decorators import admin_required
 from app.extensions import db
 from app.models import Atribuicao, MateriaPrima, Produto, Receita, ReceitaIngrediente
 from app.services.custos import calcular_custos_receitas
@@ -59,7 +59,7 @@ def padeiro_lista():
 
 @receitas_bp.route('/familias', methods=['GET', 'POST'])
 @login_required
-@catalogo_required
+@admin_required
 def familias():
     """Tela bulk pra atribuir Receita.familia em lote.
 
@@ -113,7 +113,7 @@ def padeiro(id):
 
 @receitas_bp.route('/precos', methods=['GET', 'POST'])
 @login_required
-@catalogo_required
+@admin_required
 def precos():
     """Tela bulk pra editar preco_loja/preco_site/preco_venda de todas as receitas.
 
@@ -146,7 +146,7 @@ def precos():
 
 @receitas_bp.route('/reaproveitavel', methods=['GET', 'POST'])
 @login_required
-@catalogo_required
+@admin_required
 def reaproveitavel():
     """Tela bulk pra marcar Receita.reaproveitavel e Produto.reaproveitavel.
 
@@ -194,7 +194,7 @@ def reaproveitavel():
 
 @receitas_bp.route('/imagens/upload', methods=['GET', 'POST'])
 @login_required
-@catalogo_required
+@admin_required
 def imagens_upload():
     """Upload em massa de fotos de receita via .zip.
 
@@ -352,7 +352,7 @@ def salvar(id):
 
 @receitas_bp.route('/nova', methods=['POST'])
 @login_required
-@catalogo_required
+@admin_required
 def nova():
     receita = Receita(
         nome='Novo Produto',
@@ -369,7 +369,7 @@ def nova():
 
 @receitas_bp.route('/<int:id>/duplicar', methods=['POST'])
 @login_required
-@catalogo_required
+@admin_required
 def duplicar(id):
     original = Receita.query.get_or_404(id)
     copia = Receita(
@@ -407,7 +407,7 @@ def duplicar(id):
 
 @receitas_bp.route('/<int:id>/excluir', methods=['POST'])
 @login_required
-@catalogo_required
+@admin_required
 def excluir(id):
     receita = Receita.query.get_or_404(id)
     nome = receita.nome
@@ -419,7 +419,7 @@ def excluir(id):
 
 @receitas_bp.route('/api/nova-mp', methods=['POST'])
 @login_required
-@catalogo_required
+@admin_required
 def nova_mp():
     """Cria matéria-prima via AJAX (sem sair da ficha técnica)."""
     nome = request.form.get('mp_nome', '').strip()
