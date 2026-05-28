@@ -231,3 +231,30 @@ def test_post_novo_pedido_ignora_item_sem_id(app, admin_user, loja):
         # só a linha com id válido virou item; a vazia foi ignorada
         assert len(peds[0].itens) == 1
         assert peds[0].itens[0].receita_id == rid
+
+
+def test_post_novo_pedido_sem_itens_nao_cria(app, admin_user, loja):
+    """Submeter sem nenhum item válido não cria pedido vazio. O <select required>
+    antigo barrava isso no cliente; agora o guard server-side cobre."""
+    from app.models import PedidoLoja
+    from app.utils import hoje
+
+    with app.app_context():
+        lid = loja.id
+        data = hoje().isoformat()
+
+    client = app.test_client()
+    _login(client, admin_user)
+    resp = client.post('/pedidos/novo', data={
+        'loja_id': str(lid),
+        'data_entrega': data,
+        'item_id[]': '',
+        'item_qtd[]': '1',
+        'item_estado[]': '',
+        'item_obs[]': '',
+    }, follow_redirects=False)
+    # re-renderiza o form (200), não redireciona pro detalhe
+    assert resp.status_code == 200
+
+    with app.app_context():
+        assert PedidoLoja.query.filter_by(loja_id=lid).count() == 0
