@@ -13,13 +13,13 @@ def _login(client, user):
 
 
 def test_index_admin_home(app, admin_user):
-    """Admin vê home.html (dashboard)."""
+    """Admin vê home.html (hero do copilot), não a landing de cards."""
     client = app.test_client()
     _login(client, admin_user)
     resp = client.get('/')
     assert resp.status_code == 200
-    # home.html tem "Dashboard" ou "Custo"
-    assert b'Dashboard' in resp.data or b'Custo' in resp.data or b'dashboard' in resp.data.lower()
+    assert b'home-copilot-form' in resp.data       # marcador estável do home.html
+    assert b'Fazer novo pedido' not in resp.data    # não é a landing inicio.html
 
 
 def test_index_padeiro_redirect(app):
