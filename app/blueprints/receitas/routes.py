@@ -409,11 +409,21 @@ def duplicar(id):
 @login_required
 @admin_required
 def excluir(id):
+    from sqlalchemy.exc import IntegrityError
     receita = Receita.query.get_or_404(id)
     nome = receita.nome
-    db.session.delete(receita)
-    db.session.commit()
-    flash(f'"{nome}" excluído com sucesso!', 'success')
+    # Delete cru estourava 500 quando a receita era referenciada (pedidos,
+    # estoque, produtos/cestas, mapeamentos de PDV) — FKs sem cascade. Aborta
+    # de forma limpa com mensagem em vez de 500; o historico fica intacto.
+    try:
+        db.session.delete(receita)
+        db.session.commit()
+        flash(f'"{nome}" excluído com sucesso!', 'success')
+    except IntegrityError:
+        db.session.rollback()
+        flash(f'Não é possível excluir "{nome}": há pedidos, estoque, produtos '
+              f'ou mapeamentos de PDV vinculados a ela. Desvincule-os primeiro '
+              f'(ou me peça para arquivar a receita).', 'danger')
     return redirect(url_for('receitas.padeiro_lista'))
 
 
