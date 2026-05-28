@@ -7,7 +7,12 @@ from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.blueprints.pedidos import pedidos_bp
-from app.decorators import admin_required, gerente_required, operacional_pedido_required, producao_required
+from app.decorators import (
+    admin_required,
+    gerente_required,
+    operacional_pedido_required,
+    producao_required,
+)
 from app.extensions import db
 from app.models import (
     Desperdicio,
