@@ -428,7 +428,7 @@
     var ae = document.activeElement;
     if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
     if (Date.now() - ultimoToque < 120000) return;
-    var algumAberto = ['hist-drawer', 'prep-drawer', 'prod-drawer'].some(function (id) {
+    var algumAberto = ['hist-drawer', 'cong-drawer', 'prep-drawer', 'prod-drawer'].some(function (id) {
       var el = document.getElementById(id);
       return el && el.classList.contains('aberto');
     });
