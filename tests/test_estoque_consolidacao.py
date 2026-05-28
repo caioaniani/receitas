@@ -5,8 +5,6 @@ pedido somando estados numa linha, baixa da linha √∫nica, e a rota de consolida√
 """
 import pytest
 
-pytestmark = pytest.mark.usefixtures()  # garante uso do import (raises usado abaixo)
-
 
 def _login(client, user):
     with client.session_transaction() as sess:
