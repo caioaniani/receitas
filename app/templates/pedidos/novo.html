@@ -107,72 +107,86 @@
 }
 </style>
 <script>
-var searchTimeout;
+(function () {
+    var tbody = document.getElementById('itens-body');
+    var timers = new WeakMap();  // debounce por linha (chave = o input)
 
-function setupItemSearch(input, itemId, results) {
-    input.addEventListener('input', function(e) {
-        clearTimeout(searchTimeout);
-        var val = this.value.trim();
+    function rowParts(el) {
+        var td = el.closest('td');
+        return {
+            input: td.querySelector('.item-busca'),
+            hidden: td.querySelector('.item-id'),
+            results: td.querySelector('.item-results'),
+        };
+    }
 
-        if (val.length < 2) {
+    function renderResults(results, itens) {
+        results.innerHTML = '';
+        if (!itens || itens.length === 0) {
             results.style.display = 'none';
             return;
         }
+        itens.forEach(function (item) {
+            var opt = document.createElement('div');
+            opt.className = 'item-result-opt';
+            opt.dataset.id = item.id;
+            opt.textContent = item.nome;  // textContent escapa o nome (sem innerHTML cru)
+            results.appendChild(opt);
+        });
+        results.style.display = 'block';
+    }
 
-        searchTimeout = setTimeout(function() {
+    // Digitar: zera o id antigo (so volta a valer ao escolher) e busca.
+    tbody.addEventListener('input', function (e) {
+        if (!e.target.classList.contains('item-busca')) return;
+        var input = e.target;
+        var parts = rowParts(input);
+        parts.hidden.value = '';
+        var val = input.value.trim();
+
+        clearTimeout(timers.get(input));
+        if (val.length < 2) {
+            parts.results.style.display = 'none';
+            return;
+        }
+        timers.set(input, setTimeout(function () {
             fetch('/pedidos/buscar-itens.json?q=' + encodeURIComponent(val))
-                .then(r => r.json())
-                .then(data => {
-                    if (!data.itens || data.itens.length === 0) {
-                        results.style.display = 'none';
-                        return;
-                    }
-                    results.innerHTML = data.itens.map(item =>
-                        '<div class="item-result-opt" data-id="' + item.id + '">' + item.nome + '</div>'
-                    ).join('');
-                    results.style.display = 'block';
-                });
-        }, 250);
+                .then(function (r) { return r.json(); })
+                .then(function (data) { renderResults(parts.results, data.itens); })
+                .catch(function () { parts.results.style.display = 'none'; });
+        }, 250));
     });
 
-    results.addEventListener('click', function(e) {
-        if (e.target.classList.contains('item-result-opt')) {
-            input.value = e.target.textContent;
-            itemId.value = e.target.getAttribute('data-id');
-            results.style.display = 'none';
-        }
+    // Escolher uma opcao: preenche texto visivel + hidden.
+    tbody.addEventListener('click', function (e) {
+        var opt = e.target.closest('.item-result-opt');
+        if (!opt) return;
+        var parts = rowParts(opt);
+        parts.input.value = opt.textContent;
+        parts.hidden.value = opt.dataset.id;
+        parts.results.style.display = 'none';
     });
 
-    document.addEventListener('click', function(e) {
-        if (!input.closest('td').contains(e.target)) {
-            results.style.display = 'none';
-        }
+    // Clicar fora dos campos de busca fecha os dropdowns abertos.
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('.item-busca') || e.target.closest('.item-result-opt')) return;
+        tbody.querySelectorAll('.item-results').forEach(function (r) {
+            r.style.display = 'none';
+        });
     });
-}
 
-var tbody = document.getElementById('itens-body');
-
-tbody.querySelectorAll('.item-busca').forEach(function(input) {
-    var itemId = input.nextElementSibling;
-    var results = itemId.nextElementSibling;
-    setupItemSearch(input, itemId, results);
-});
-
-document.getElementById('btn-add-item').addEventListener('click', function() {
-    var tr = document.createElement('tr');
-    tr.className = 'item-row';
-    tr.innerHTML =
-        '<td><div style="position: relative;"><input type="text" class="form-control form-control-sm item-busca" placeholder="Digite o nome..." autocomplete="off"><input type="hidden" name="item_id[]" class="item-id"><div class="item-results" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 300px; overflow-y: auto; z-index: 1000; display: none;"></div></div></td>' +
-        '<td><input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1"></td>' +
-        '<td><select name="item_estado[]" class="form-select form-select-sm"><option value="">Padrão</option><option value="backup">Backup</option><option value="assado">Assado</option></select></td>' +
-        '<td><input type="text" name="item_obs[]" class="form-control form-control-sm" placeholder=""></td>' +
-        '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-item" onclick="this.closest(\'tr\').remove()"><i class="bi bi-x"></i></button></td>';
-    tbody.appendChild(tr);
-
-    var input = tr.querySelector('.item-busca');
-    var itemId = tr.querySelector('.item-id');
-    var results = tr.querySelector('.item-results');
-    setupItemSearch(input, itemId, results);
-});
+    // Adicionar linha: so insere o HTML; a delegation acima ja cobre a nova linha.
+    document.getElementById('btn-add-item').addEventListener('click', function () {
+        var tr = document.createElement('tr');
+        tr.className = 'item-row';
+        tr.innerHTML =
+            '<td><div style="position: relative;"><input type="text" class="form-control form-control-sm item-busca" placeholder="Digite o nome..." autocomplete="off"><input type="hidden" name="item_id[]" class="item-id"><div class="item-results" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 300px; overflow-y: auto; z-index: 1000; display: none;"></div></div></td>' +
+            '<td><input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1"></td>' +
+            '<td><select name="item_estado[]" class="form-select form-select-sm"><option value="">Padrão</option><option value="backup">Backup</option><option value="assado">Assado</option></select></td>' +
+            '<td><input type="text" name="item_obs[]" class="form-control form-control-sm" placeholder=""></td>' +
+            '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-item" onclick="this.closest(\'tr\').remove()"><i class="bi bi-x"></i></button></td>';
+        tbody.appendChild(tr);
+    });
+})();
 </script>
 {% endblock %}
