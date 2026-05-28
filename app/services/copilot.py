@@ -691,7 +691,8 @@ PAPEIS_POR_TOOL = {
     'entrada_lote_loja': {'admin'},
     # Consultas operacionais — admin + gerente
     'consultar_fornecedores': {'admin', 'gerente'},
-    'consultar_funcionario': {'admin', 'gerente'},
+    # RH — owner-only (espelha o RH web, restrito ao owner)
+    'consultar_funcionario': {'owner'},
     'consultar_caixa': {'admin', 'gerente'},
     'consultar_vendas_itens': {'admin', 'gerente'},
     'consultar_desperdicio': {'admin', 'gerente', 'funcionario'},
