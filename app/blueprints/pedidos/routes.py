@@ -11,6 +11,7 @@ from app.decorators import (
     admin_required,
     gerente_required,
     operacional_pedido_required,
+    pedidos_required,
     producao_required,
 )
 from app.extensions import db
@@ -98,7 +99,7 @@ def _loja_do_usuario():
 
 @pedidos_bp.route('/')
 @login_required
-@gerente_required
+@pedidos_required
 def lista():
     from sqlalchemy import func
 
