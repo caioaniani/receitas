@@ -187,6 +187,15 @@
         });
     });
 
+    // Reposiciona o dropdown aberto quando a pagina rola (posicao fixed segue o input).
+    window.addEventListener('scroll', function () {
+        tbody.querySelectorAll('.item-results').forEach(function (r) {
+            if (r.style.display === 'block') {
+                positionResults(r.closest('td').querySelector('.item-busca'), r);
+            }
+        });
+    }, true);
+
     // Adicionar linha: so insere o HTML; a delegation acima ja cobre a nova linha.
     document.getElementById('btn-add-item').addEventListener('click', function () {
         var tr = document.createElement('tr');
