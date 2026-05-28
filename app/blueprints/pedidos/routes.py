@@ -97,6 +97,37 @@ def _loja_do_usuario():
     return current_user.loja_id
 
 
+@pedidos_bp.route('/buscar-itens.json')
+@login_required
+@pedidos_required
+def buscar_itens():
+    """Typeahead para novo pedido: receitas + produtos (ativos) + matérias-primas.
+    Acento-insensível, multi-termo, mínimo 2 caracteres.
+    Retorna formato compatível com _parse_item_id: r_<id>, p_<id>, mp_<id>."""
+    from flask import jsonify
+
+    from app.utils import normalizar_busca
+
+    q = normalizar_busca((request.args.get('q') or '').strip())
+    if len(q) < 2:
+        return jsonify(itens=[])
+    termos = q.split()
+
+    def _casa(nome):
+        n = normalizar_busca(nome)
+        return all(t in n for t in termos)
+
+    out = []
+    out += [{'id': f'r_{r.id}', 'nome': r.nome}
+            for r in Receita.query.order_by(Receita.nome).all() if _casa(r.nome)]
+    out += [{'id': f'p_{p.id}', 'nome': p.nome}
+            for p in Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+            if _casa(p.nome)]
+    out += [{'id': f'mp_{m.id}', 'nome': m.nome}
+            for m in MateriaPrima.query.order_by(MateriaPrima.nome).all() if _casa(m.nome)]
+    return jsonify(itens=out[:50])
+
+
 @pedidos_bp.route('/')
 @login_required
 @pedidos_required
