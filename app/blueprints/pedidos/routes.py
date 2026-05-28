@@ -193,7 +193,10 @@ def lista():
 @pedidos_required
 def novo():
     loja_id = _loja_do_usuario()
-    if not current_user.is_admin() and not loja_id:
+    # Admin e gerente escolhem qualquer loja no form; demais papeis sao
+    # forcados pra propria loja e precisam ter uma vinculada.
+    pode_qualquer_loja = current_user.is_admin() or current_user.is_gerente()
+    if not pode_qualquer_loja and not current_user.loja_id:
         flash('Vincule sua conta a uma loja para criar pedidos.', 'warning')
         return redirect(url_for('pedidos.lista'))
 
