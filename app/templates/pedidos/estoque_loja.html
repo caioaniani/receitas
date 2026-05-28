@@ -3,7 +3,15 @@
 {% block title %}Estoque da Loja{% endblock %}
 
 {% block content %}
-<h1 class="page-title mb-3"><i class="bi bi-box-seam"></i> Estoque da Loja</h1>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="page-title mb-0"><i class="bi bi-box-seam"></i> Estoque da Loja</h1>
+  {% if current_user.is_admin() %}
+  <a href="{{ url_for('pedidos.estoque_loja_saude') }}" class="btn btn-outline-dark btn-sm"
+     title="Diagnóstico: órfãos/pendentes, última conferência e saída por loja">
+    <i class="bi bi-heart-pulse"></i> Saúde por loja
+  </a>
+  {% endif %}
+</div>
 
 {% if current_user.is_admin() %}
 <form method="GET" class="mb-3 d-flex align-items-center gap-2">
