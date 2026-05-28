@@ -14,6 +14,7 @@ ADICIONAR COLUNA NOVA: prefira gerar uma migration Alembic
 nao pode esperar revisao de migration.
 """
 import logging
+import os
 
 from app.extensions import db
 
@@ -29,7 +30,11 @@ def _migrate(app):
     elif 'postgresql' in uri:
         _migrate_postgres(app)
 
-    _migrate_estoque_trava(app)
+    # Em testes o conftest faz create_all (schema final) e os testes de
+    # consolidacao precisam inserir duplicatas — a trava rodaria por teste sem
+    # necessidade. O teste dedicado chama `_migrate_estoque_trava` diretamente.
+    if not os.environ.get('PYTEST_RUNNING'):
+        _migrate_estoque_trava(app)
 
 
 def _migrate_estoque_trava(app):
