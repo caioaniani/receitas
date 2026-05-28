@@ -29,6 +29,81 @@ def _migrate(app):
     elif 'postgresql' in uri:
         _migrate_postgres(app)
 
+    _migrate_estoque_trava(app)
+
+
+def _migrate_estoque_trava(app):
+    """Estoque por produto: consolida duplicatas legadas e cria a trava de
+    unicidade. Estado vive so no PEDIDO; o estoque (loja e industria) eh 1 linha
+    por produto. Roda em qualquer dialeto (db.engine), idempotente.
+
+    Sequencia (ordem importa): consolida ANTES de criar o indice unico — senao a
+    criacao falha com duplicatas existentes. Guardada por advisory lock no
+    Postgres (exec unica entre workers) e por checagem de existencia do indice.
+    """
+    from sqlalchemy import text
+    is_pg = 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI']
+
+    def _trava_existe():
+        try:
+            with db.engine.connect() as c:
+                q = ("SELECT 1 FROM pg_indexes WHERE indexname = 'uq_estoque_loja_receita'"
+                     if is_pg else
+                     "SELECT 1 FROM sqlite_master WHERE type='index' "
+                     "AND name='uq_estoque_loja_receita'")
+                return c.execute(text(q)).first() is not None
+        except Exception:
+            return False
+
+    if _trava_existe():
+        return
+
+    ddls = (
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_estoque_loja_receita "
+        "ON estoque_loja(loja_id, receita_id) WHERE receita_id IS NOT NULL",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_estoque_loja_produto "
+        "ON estoque_loja(loja_id, produto_id) WHERE produto_id IS NOT NULL",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_estoque_loja_mp "
+        "ON estoque_loja(loja_id, materia_prima_id) WHERE materia_prima_id IS NOT NULL",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_estoque_producao_receita "
+        "ON estoque_producao(receita_id) WHERE receita_id IS NOT NULL",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_estoque_producao_produto "
+        "ON estoque_producao(produto_id) WHERE produto_id IS NOT NULL",
+    )
+
+    lock_conn = None
+    try:
+        if is_pg:
+            lock_conn = db.engine.connect()
+            if not lock_conn.execute(text('SELECT pg_try_advisory_lock(7740)')).scalar():
+                lock_conn.close()
+                return  # outro worker esta aplicando — sai sem erro
+            if _trava_existe():  # outro worker terminou enquanto esperavamos
+                lock_conn.execute(text('SELECT pg_advisory_unlock(7740)'))
+                lock_conn.close()
+                return
+
+        from app.services.estoque_helpers import consolidar_estoque_duplicado
+        n_loja, n_prod = consolidar_estoque_duplicado()
+        db.session.commit()
+        logger.warning('Estoque consolidado por produto: %s item(ns) de loja, '
+                       '%s de producao.', n_loja, n_prod)
+        for ddl in ddls:
+            with db.engine.connect() as c:
+                c.execute(text(ddl))
+                c.commit()
+        logger.warning('Trava de unicidade de estoque criada.')
+    except Exception as e:
+        db.session.rollback()
+        logger.exception('consolidacao+trava de estoque falhou: %s', e)
+    finally:
+        if lock_conn is not None:
+            try:
+                lock_conn.execute(text('SELECT pg_advisory_unlock(7740)'))
+            except Exception:
+                pass
+            lock_conn.close()
+
 
 def _migrate_postgres(app):
     """Adiciona colunas novas no PostgreSQL. Cada ALTER em commit isolado
