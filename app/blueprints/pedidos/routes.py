@@ -1744,8 +1744,9 @@ def estoque_loja_entrada_lote():
 @gerente_required
 def estoque_loja_saude():
     """Diagnostico de saude do estoque por loja: orfaos/pendentes, dias desde
-    a ultima conferencia e a ultima saida em lote, e nomes ainda nao vinculados
-    (que NAO baixam na saida em lote). Somente leitura."""
+    a ultima conferencia e a ultima saida em lote, nomes ainda nao vinculados
+    (que NAO baixam na saida em lote) e itens DUPLICADOS (mesmo item em 2+ linhas
+    de EstoqueLoja). Somente leitura — nao altera nada."""
     from app.models import EstoqueLoja, LojaProdutoMap, MovEstoqueLoja, SeruLojaMap
     from app.utils import agora
 
@@ -1761,12 +1762,55 @@ def estoque_loja_saude():
              .order_by(MovEstoqueLoja.data.desc()).first())
         return m.data if m else None
 
+    def _chave_logica(it):
+        """Chave do item independente do estado: (tipo, fk_id). None = pendente."""
+        if it.receita_id:
+            return ('receita', it.receita_id)
+        if it.produto_id:
+            return ('produto', it.produto_id)
+        if it.materia_prima_id:
+            return ('mp', it.materia_prima_id)
+        return None
+
     agora_dt = agora()
     linhas = []
     for loja in lojas:
-        itens = EstoqueLoja.query.filter_by(loja_id=loja.id).all()
+        itens = (EstoqueLoja.query.filter_by(loja_id=loja.id)
+                 .options(joinedload(EstoqueLoja.receita),
+                          joinedload(EstoqueLoja.produto),
+                          joinedload(EstoqueLoja.materia_prima))
+                 .all())
         ult_conf = _ultima(loja.id, 'ajuste_conferencia')
         ult_saida = _ultima(loja.id, 'saida_lote')
+
+        # Agrupa linhas vinculadas pela chave logica; 2+ linhas = duplicidade.
+        grupos = defaultdict(list)
+        for it in itens:
+            if it.pendente:
+                continue
+            chave = _chave_logica(it)
+            if chave is not None:
+                grupos[chave].append(it)
+        duplicados = []
+        for grupo in grupos.values():
+            if len(grupo) < 2:
+                continue
+            estados = {(g.estado or None) for g in grupo}
+            duplicados.append({
+                'nome': grupo[0].nome_item,
+                'tipo': _chave_logica(grupo[0])[0],
+                'n_linhas': len(grupo),
+                'total_qtd': sum((g.quantidade or 0) for g in grupo),
+                # Mesmo estado em todas = duplicata pura (merge seguro na etapa 2).
+                # Estados distintos = separacao por estado (backup/assado).
+                'classificacao': 'duplicata_pura' if len(estados) == 1 else 'por_estado',
+                'linhas': sorted(
+                    ({'id': g.id, 'estado': g.estado, 'qtd': g.quantidade or 0}
+                     for g in grupo),
+                    key=lambda x: x['id']),
+            })
+        duplicados.sort(key=lambda d: (-d['n_linhas'], d['nome']))
+
         linhas.append({
             'loja': loja,
             'integrada': loja.id in seru_ids,
@@ -1775,6 +1819,8 @@ def estoque_loja_saude():
             'orfaos': sum(1 for it in itens if it.pendente),
             'dias_conf': (agora_dt - ult_conf).days if ult_conf else None,
             'dias_saida': (agora_dt - ult_saida).days if ult_saida else None,
+            'duplicados': duplicados,
+            'n_duplicados': len(duplicados),
         })
 
     nao_vinculados = (LojaProdutoMap.query
@@ -1784,8 +1830,39 @@ def estoque_loja_saude():
                               LojaProdutoMap.materia_prima_id.is_(None))
                       .order_by(LojaProdutoMap.nome_digitado).all())
 
+    # Cadastros homonimos no catalogo (raiz provavel da duplicidade): nome de
+    # Receita/Produto nao tem unique constraint, entao pode haver cadastros
+    # repetidos, e o mesmo nome pode existir nas duas tabelas.
+    def _agrupar_por_nome(objs):
+        by = defaultdict(list)
+        for o in objs:
+            chave = (o.nome or '').strip().lower()
+            if chave:
+                by[chave].append(o)
+        return by
+
+    rec_by = _agrupar_por_nome(Receita.query.all())
+    prod_by = _agrupar_por_nome(Produto.query.all())
+    receitas_homonimas = sorted(
+        ({'nome': objs[0].nome, 'ids': sorted(o.id for o in objs)}
+         for objs in rec_by.values() if len(objs) > 1),
+        key=lambda d: d['nome'])
+    produtos_homonimos = sorted(
+        ({'nome': objs[0].nome, 'ids': sorted(o.id for o in objs)}
+         for objs in prod_by.values() if len(objs) > 1),
+        key=lambda d: d['nome'])
+    colisoes_rec_prod = sorted(
+        ({'nome': rec_by[k][0].nome,
+          'receita_ids': sorted(o.id for o in rec_by[k]),
+          'produto_ids': sorted(o.id for o in prod_by[k])}
+         for k in (set(rec_by) & set(prod_by))),
+        key=lambda d: d['nome'])
+
     return render_template('pedidos/estoque_loja_saude.html',
-                           linhas=linhas, nao_vinculados=nao_vinculados)
+                           linhas=linhas, nao_vinculados=nao_vinculados,
+                           receitas_homonimas=receitas_homonimas,
+                           produtos_homonimos=produtos_homonimos,
+                           colisoes_rec_prod=colisoes_rec_prod)
 
 
 @pedidos_bp.route('/estoque-loja/saida-lote', methods=['GET', 'POST'])
