@@ -214,11 +214,24 @@ def nova_mp():
 @login_required
 @admin_required
 def excluir(id):
+    from sqlalchemy.exc import IntegrityError
     produto = Produto.query.get_or_404(id)
     nome = produto.nome
-    db.session.delete(produto)
-    db.session.commit()
-    flash(f'"{nome}" excluido!', 'success')
+    # Hard-delete so eh seguro pra produto sem vinculos. Se houver historico
+    # (pedidos, vendas B2B, desperdicio), estoque ou mapeamentos de PDV
+    # apontando pra ele, o FK aborta — nesse caso DESATIVA em vez de excluir
+    # (preserva historico/estoque; o produto some da lista por ficar inativo).
+    try:
+        db.session.delete(produto)
+        db.session.commit()
+        flash(f'"{nome}" excluido!', 'success')
+    except IntegrityError:
+        db.session.rollback()
+        produto.ativo = False
+        db.session.commit()
+        flash(f'"{nome}" tem histórico ou estoque vinculado e foi DESATIVADO '
+              f'(removido do catálogo) em vez de excluído — assim nada do '
+              f'histórico se perde.', 'warning')
     return redirect(url_for('produtos.lista'))
 
 
