@@ -7,8 +7,10 @@ mínimo 2 caracteres, e está protegido por @pedidos_required.
 
 
 def _login(client, user):
+    """Aceita um id (int) ou uma instância Usuario atachada."""
+    uid = user if isinstance(user, int) else user.id
     with client.session_transaction() as sess:
-        sess['_user_id'] = str(user.id)
+        sess['_user_id'] = str(uid)
         sess['_fresh'] = True
 
 
