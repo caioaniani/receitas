@@ -178,9 +178,9 @@ def test_congelados_entrada_tem_typeahead(app, admin_user, catalogo, cliente):
     assert b'ENTRADA_TODOS' in r.data    # JS do typeahead (receitas+produtos)
 
 
-def test_congelados_entrada_route_mira_cru(app, admin_user, catalogo, cliente):
-    """A rota antiga /pedidos/congelados/entrada agora usa o mesmo helper: soma
-    na linha cru mesmo havendo linha backup (regressao do bug do .first())."""
+def test_congelados_entrada_route_consolida(app, admin_user, catalogo, cliente):
+    """A rota /pedidos/congelados/entrada usa o helper por produto: soma na linha
+    unica, consolidando uma linha 'backup' legada (estado vive so no pedido)."""
     from app.extensions import db
     from app.models import EstoqueProducao
     rid = catalogo['receita'].id
@@ -190,10 +190,10 @@ def test_congelados_entrada_route_mira_cru(app, admin_user, catalogo, cliente):
     r = cliente.post('/pedidos/congelados/entrada',
                      data={'tipo': 'receita', 'item_id': rid, 'quantidade': 6})
     assert r.status_code == 302
-    assert EstoqueProducao.query.filter_by(
-        receita_id=rid, estado='backup').one().quantidade == 100
-    assert EstoqueProducao.query.filter_by(
-        receita_id=rid, estado=None).one().quantidade == 6
+    linhas = EstoqueProducao.query.filter_by(receita_id=rid).all()
+    assert len(linhas) == 1
+    assert linhas[0].estado is None
+    assert linhas[0].quantidade == 106  # 100 legado + 6
 
 
 def test_produzir_nao_autorizado(app, catalogo, cliente):
