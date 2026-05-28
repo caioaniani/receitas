@@ -680,7 +680,8 @@ PAPEIS_POR_TOOL = {
     'mudar_status_pedido': {'admin', 'gerente', 'producao'},
     'receber_mp': {'admin', 'gerente'},
     'ajuste_estoque': {'admin', 'gerente'},
-    'marcar_ponto': {'admin', 'gerente'},
+    # RH — owner-only (espelha o RH web, restrito ao owner)
+    'marcar_ponto': {'owner'},
     # Cadastros — so admin
     'criar_fornecedor': {'admin'},
     'consultar_margem': {'admin'},
