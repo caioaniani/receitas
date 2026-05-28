@@ -93,4 +93,113 @@
     {% endif %}
   </div>
 </div>
+
+<div class="card mt-4">
+  <div class="card-header bg-danger bg-opacity-10 fw-bold">
+    <i class="bi bi-files"></i> Itens duplicados no estoque (mesmo item em 2+ linhas)
+  </div>
+  <div class="card-body">
+    <p class="text-muted small mb-3">
+      Cada item abaixo aparece em mais de uma linha de estoque na mesma loja. Isso
+      fragmenta o saldo e faz a conferência <strong>inflar</strong> o estoque.
+      <span class="badge bg-danger">duplicata pura</span> = linhas idênticas (mesmo
+      estado) — podem ser somadas numa só com segurança.
+      <span class="badge bg-info text-dark">por estado</span> = linhas legítimas de
+      backup/assado (não mexer sem decisão).
+    </p>
+    {% set algum = namespace(v=false) %}
+    {% for r in linhas %}
+      {% if r.duplicados %}
+        {% set algum.v = true %}
+        <h6 class="mt-3 mb-2">{{ r.loja.nome }}
+          <span class="badge bg-danger">{{ r.n_duplicados }} item(ns) duplicado(s)</span>
+        </h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered align-middle mb-0">
+            <thead class="thead-padaria">
+              <tr>
+                <th>Item</th>
+                <th class="text-center">Tipo</th>
+                <th class="text-center">Nº linhas</th>
+                <th>Linhas (#id · estado · qtd)</th>
+                <th class="text-center">Total</th>
+                <th>Classificação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in r.duplicados %}
+              <tr>
+                <td><strong>{{ d.nome }}</strong></td>
+                <td class="text-center"><span class="badge bg-secondary">{{ d.tipo }}</span></td>
+                <td class="text-center">{{ d.n_linhas }}</td>
+                <td class="small">
+                  {% for l in d.linhas %}
+                  <span class="badge bg-light text-dark border">#{{ l.id }} · {{ l.estado or 'padrão' }} · {{ l.qtd }}</span>
+                  {% endfor %}
+                </td>
+                <td class="text-center fw-bold">{{ d.total_qtd }}</td>
+                <td>
+                  {% if d.classificacao == 'duplicata_pura' %}
+                  <span class="badge bg-danger">duplicata pura</span>
+                  {% else %}
+                  <span class="badge bg-info text-dark">por estado</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+    {% endfor %}
+    {% if not algum.v %}
+    <p class="text-success mb-0"><i class="bi bi-check-circle"></i> Nenhum item duplicado — cada produto tem uma linha por loja.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card mt-4">
+  <div class="card-header bg-warning bg-opacity-10 fw-bold">
+    <i class="bi bi-exclamation-triangle"></i> Cadastros com nome repetido (catálogo)
+  </div>
+  <div class="card-body">
+    <p class="text-muted small mb-3">
+      O nome de receita/produto não é único no banco. Cadastro repetido aqui é a
+      raiz mais provável da duplicidade — cada cadastro gera sua própria linha de estoque.
+    </p>
+
+    <h6 class="mb-2">Receitas com nome repetido ({{ receitas_homonimas|length }})</h6>
+    {% if receitas_homonimas %}
+    <ul class="small">
+      {% for h in receitas_homonimas %}
+      <li><strong>{{ h.nome }}</strong> — IDs: {{ h.ids|join(', ') }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-success small"><i class="bi bi-check-circle"></i> Nenhuma.</p>
+    {% endif %}
+
+    <h6 class="mb-2 mt-3">Produtos com nome repetido ({{ produtos_homonimos|length }})</h6>
+    {% if produtos_homonimos %}
+    <ul class="small">
+      {% for h in produtos_homonimos %}
+      <li><strong>{{ h.nome }}</strong> — IDs: {{ h.ids|join(', ') }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-success small"><i class="bi bi-check-circle"></i> Nenhum.</p>
+    {% endif %}
+
+    <h6 class="mb-2 mt-3">Mesmo nome em Receita E Produto ({{ colisoes_rec_prod|length }})</h6>
+    {% if colisoes_rec_prod %}
+    <ul class="small mb-0">
+      {% for c in colisoes_rec_prod %}
+      <li><strong>{{ c.nome }}</strong> — receita(s): {{ c.receita_ids|join(', ') }} · produto(s): {{ c.produto_ids|join(', ') }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-success small mb-0"><i class="bi bi-check-circle"></i> Nenhuma colisão.</p>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}
