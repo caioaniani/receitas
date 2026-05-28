@@ -159,7 +159,6 @@ def test_rota_consolidar(app, loja, admin_user):
     assert resp.status_code in (302, 303)
 
     with app.app_context():
-        # obter_linha_loja não cria linha nova se já houver; valida o resultado
-        linhas = EstoqueLoja.query.filter_by(loja_id=loja.id, receita_id=r.id).all()
+        linhas = EstoqueLoja.query.filter_by(loja_id=lid, receita_id=rid).all()
         assert len(linhas) == 1
         assert linhas[0].quantidade == 5
