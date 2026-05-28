@@ -350,6 +350,12 @@
            class="sidebar-link {% if request.path == '/auth/usuarios' %}active{% endif %}">
             Usuários
         </a>
+        {% if current_user.is_owner %}
+        <a href="{{ url_for('main.permissoes_editar') }}"
+           class="sidebar-link {% if request.path == '/admin/permissoes' %}active{% endif %}">
+            Permissões por papel
+        </a>
+        {% endif %}
         <a href="{{ url_for('main.audit') }}"
            class="sidebar-link {% if request.path == '/audit' %}active{% endif %}">
             Audit Log
