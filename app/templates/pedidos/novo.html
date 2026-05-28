@@ -164,7 +164,7 @@
         timers.set(input, setTimeout(function () {
             fetch('/pedidos/buscar-itens.json?q=' + encodeURIComponent(val))
                 .then(function (r) { return r.json(); })
-                .then(function (data) { renderResults(parts.results, data.itens); })
+                .then(function (data) { renderResults(parts.input, parts.results, data.itens); })
                 .catch(function () { parts.results.style.display = 'none'; });
         }, 250));
     });
