@@ -44,8 +44,10 @@ def test_helper_incrementa_linha_cru(app, admin_user, catalogo):
         estoque_producao_id=ep.id, quantidade=3).count() == 1
 
 
-def test_helper_desambigua_estado_backup(app, admin_user, catalogo):
-    """Guarda do bug: entrada cru NAO pode somar na linha backup."""
+def test_helper_consolida_backup_legado(app, admin_user, catalogo):
+    """Producao eh por produto (estado vive so no pedido): uma linha 'backup'
+    legada eh consolidada na linha unica do produto na proxima entrada, somando
+    a quantidade em vez de manter linhas separadas."""
     from app.extensions import db
     from app.models import EstoqueProducao
     from app.services.estoque_congelados import entrada_producao
@@ -54,10 +56,10 @@ def test_helper_desambigua_estado_backup(app, admin_user, catalogo):
     db.session.commit()
     entrada_producao(receita_id=rid, quantidade=4, usuario_id=admin_user.id)
     db.session.commit()
-    backup = EstoqueProducao.query.filter_by(receita_id=rid, estado='backup').one()
-    cru = EstoqueProducao.query.filter_by(receita_id=rid, estado=None).one()
-    assert backup.quantidade == 100  # intacta
-    assert cru.quantidade == 4
+    linhas = EstoqueProducao.query.filter_by(receita_id=rid).all()
+    assert len(linhas) == 1            # 1 linha por produto
+    assert linhas[0].estado is None
+    assert linhas[0].quantidade == 104  # 100 legado + 4
 
 
 def test_helper_rejeita_qtd_invalida(app, admin_user, catalogo):
