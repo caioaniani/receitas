@@ -1739,6 +1739,55 @@ def estoque_loja_entrada_lote():
                            lojas=lojas, loja=loja, sel_loja=loja_id)
 
 
+@pedidos_bp.route('/estoque-loja/saude')
+@login_required
+@gerente_required
+def estoque_loja_saude():
+    """Diagnostico de saude do estoque por loja: orfaos/pendentes, dias desde
+    a ultima conferencia e a ultima saida em lote, e nomes ainda nao vinculados
+    (que NAO baixam na saida em lote). Somente leitura."""
+    from app.models import EstoqueLoja, LojaProdutoMap, MovEstoqueLoja, SeruLojaMap
+    from app.utils import agora
+
+    lojas = _lojas_operacionais()
+    seru_ids = {m.loja_id for m in SeruLojaMap.query.filter(
+        SeruLojaMap.loja_id.isnot(None),
+        SeruLojaMap.confirmado_em.isnot(None)).all()}
+
+    def _ultima(loja_id, tipo):
+        m = (MovEstoqueLoja.query
+             .join(EstoqueLoja, MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id)
+             .filter(EstoqueLoja.loja_id == loja_id, MovEstoqueLoja.tipo == tipo)
+             .order_by(MovEstoqueLoja.data.desc()).first())
+        return m.data if m else None
+
+    agora_dt = agora()
+    linhas = []
+    for loja in lojas:
+        itens = EstoqueLoja.query.filter_by(loja_id=loja.id).all()
+        ult_conf = _ultima(loja.id, 'ajuste_conferencia')
+        ult_saida = _ultima(loja.id, 'saida_lote')
+        linhas.append({
+            'loja': loja,
+            'integrada': loja.id in seru_ids,
+            'total': len(itens),
+            'com_saldo': sum(1 for it in itens if (it.quantidade or 0) > 0),
+            'orfaos': sum(1 for it in itens if it.pendente),
+            'dias_conf': (agora_dt - ult_conf).days if ult_conf else None,
+            'dias_saida': (agora_dt - ult_saida).days if ult_saida else None,
+        })
+
+    nao_vinculados = (LojaProdutoMap.query
+                      .filter(LojaProdutoMap.ignorar.is_(False),
+                              LojaProdutoMap.receita_id.is_(None),
+                              LojaProdutoMap.produto_id.is_(None),
+                              LojaProdutoMap.materia_prima_id.is_(None))
+                      .order_by(LojaProdutoMap.nome_digitado).all())
+
+    return render_template('pedidos/estoque_loja_saude.html',
+                           linhas=linhas, nao_vinculados=nao_vinculados)
+
+
 @pedidos_bp.route('/estoque-loja/saida-lote', methods=['GET', 'POST'])
 @login_required
 @gerente_required
