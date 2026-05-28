@@ -47,12 +47,9 @@
             <tbody id="itens-body">
                 <tr class="item-row">
                     <td>
-                        <div style="position: relative;">
-                            <input type="text" class="form-control form-control-sm item-busca"
-                                   placeholder="Digite o nome..." autocomplete="off">
-                            <input type="hidden" name="item_id[]" class="item-id">
-                            <div class="item-results" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 300px; overflow-y: auto; z-index: 1000; display: none;"></div>
-                        </div>
+                        <input type="text" class="form-control form-control-sm item-busca"
+                               placeholder="Digite o nome..." autocomplete="off">
+                        <input type="hidden" name="item_id[]" class="item-id">
                     </td>
                     <td>
                         <input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1">
@@ -92,15 +89,23 @@
 {% block scripts %}
 <style>
 .item-results {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    background: var(--bg-card);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    max-height: 300px;
+    overflow-y: auto;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    z-index: 3000;
 }
 .item-result-opt {
-    padding: 8px 12px;
+    padding: 10px 12px;
     cursor: pointer;
-    border-bottom: 1px solid #f0f0f0;
+    color: var(--text-main);
+    border-bottom: 1px solid var(--border-color);
 }
 .item-result-opt:hover {
-    background-color: #f5f5f5;
+    background-color: var(--bg-card-hover);
 }
 .item-result-opt:last-child {
     border-bottom: none;
@@ -109,99 +114,92 @@
 <script>
 (function () {
     var tbody = document.getElementById('itens-body');
-    var timers = new WeakMap();  // debounce por linha (chave = o input)
+    var timer;
+    var activeInput = null;
+    var activeHidden = null;
 
-    function rowParts(el) {
-        var td = el.closest('td');
-        return {
-            input: td.querySelector('.item-busca'),
-            hidden: td.querySelector('.item-id'),
-            results: td.querySelector('.item-results'),
-        };
+    // Dropdown unico anexado ao <body>: flutua livre acima de tudo, sem
+    // clipping do .table-responsive nem de contexto de empilhamento.
+    var pop = document.createElement('div');
+    pop.className = 'item-results';
+    pop.style.display = 'none';
+    document.body.appendChild(pop);
+
+    function hidePop() {
+        pop.style.display = 'none';
+        activeInput = null;
+        activeHidden = null;
     }
 
-    // Posiciona o dropdown como FIXED (coords da viewport) pra escapar do
-    // overflow do .table-responsive, que senao corta a lista dentro da celula.
-    function positionResults(input, results) {
+    function positionPop(input) {
         var rect = input.getBoundingClientRect();
-        results.style.position = 'fixed';
-        results.style.top = rect.bottom + 'px';
-        results.style.left = rect.left + 'px';
-        results.style.width = rect.width + 'px';
-        results.style.right = 'auto';
+        pop.style.position = 'fixed';
+        pop.style.top = rect.bottom + 'px';
+        pop.style.left = rect.left + 'px';
+        pop.style.width = rect.width + 'px';
     }
 
-    function renderResults(input, results, itens) {
-        results.innerHTML = '';
-        if (!itens || itens.length === 0) {
-            results.style.display = 'none';
-            return;
-        }
+    function renderPop(input, hidden, itens) {
+        if (!itens || itens.length === 0) { hidePop(); return; }
+        pop.innerHTML = '';
         itens.forEach(function (item) {
             var opt = document.createElement('div');
             opt.className = 'item-result-opt';
             opt.dataset.id = item.id;
-            opt.textContent = item.nome;  // textContent escapa o nome (sem innerHTML cru)
-            results.appendChild(opt);
+            opt.textContent = item.nome;  // textContent escapa o nome
+            pop.appendChild(opt);
         });
-        positionResults(input, results);
-        results.style.display = 'block';
+        activeInput = input;
+        activeHidden = hidden;
+        positionPop(input);
+        pop.style.display = 'block';
     }
 
     // Digitar: zera o id antigo (so volta a valer ao escolher) e busca.
     tbody.addEventListener('input', function (e) {
         if (!e.target.classList.contains('item-busca')) return;
         var input = e.target;
-        var parts = rowParts(input);
-        parts.hidden.value = '';
+        var hidden = input.closest('td').querySelector('.item-id');
+        hidden.value = '';
         var val = input.value.trim();
-
-        clearTimeout(timers.get(input));
-        if (val.length < 2) {
-            parts.results.style.display = 'none';
-            return;
-        }
-        timers.set(input, setTimeout(function () {
+        clearTimeout(timer);
+        if (val.length < 2) { hidePop(); return; }
+        timer = setTimeout(function () {
             fetch('/pedidos/buscar-itens.json?q=' + encodeURIComponent(val))
                 .then(function (r) { return r.json(); })
-                .then(function (data) { renderResults(parts.input, parts.results, data.itens); })
-                .catch(function () { parts.results.style.display = 'none'; });
-        }, 250));
+                .then(function (data) { renderPop(input, hidden, data.itens); })
+                .catch(hidePop);
+        }, 250);
     });
 
-    // Escolher uma opcao: preenche texto visivel + hidden.
-    tbody.addEventListener('click', function (e) {
+    // Escolher uma opcao: preenche o texto visivel + o hidden da linha ativa.
+    pop.addEventListener('click', function (e) {
         var opt = e.target.closest('.item-result-opt');
-        if (!opt) return;
-        var parts = rowParts(opt);
-        parts.input.value = opt.textContent;
-        parts.hidden.value = opt.dataset.id;
-        parts.results.style.display = 'none';
+        if (!opt || !activeInput) return;
+        activeInput.value = opt.textContent;
+        activeHidden.value = opt.dataset.id;
+        hidePop();
     });
 
-    // Clicar fora dos campos de busca fecha os dropdowns abertos.
+    // Clicar fora (nem no campo de busca, nem no dropdown) fecha.
     document.addEventListener('click', function (e) {
-        if (e.target.closest('.item-busca') || e.target.closest('.item-result-opt')) return;
-        tbody.querySelectorAll('.item-results').forEach(function (r) {
-            r.style.display = 'none';
-        });
+        if (e.target.closest('.item-busca') || pop.contains(e.target)) return;
+        hidePop();
     });
 
-    // Reposiciona o dropdown aberto quando a pagina rola (posicao fixed segue o input).
-    window.addEventListener('scroll', function () {
-        tbody.querySelectorAll('.item-results').forEach(function (r) {
-            if (r.style.display === 'block') {
-                positionResults(r.closest('td').querySelector('.item-busca'), r);
-            }
-        });
-    }, true);
+    // Rolagem/redimensionamento: reposiciona o dropdown aberto.
+    function reposition() {
+        if (pop.style.display === 'block' && activeInput) positionPop(activeInput);
+    }
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
 
-    // Adicionar linha: so insere o HTML; a delegation acima ja cobre a nova linha.
+    // Adicionar linha: a delegation no tbody ja cobre a nova linha.
     document.getElementById('btn-add-item').addEventListener('click', function () {
         var tr = document.createElement('tr');
         tr.className = 'item-row';
         tr.innerHTML =
-            '<td><div style="position: relative;"><input type="text" class="form-control form-control-sm item-busca" placeholder="Digite o nome..." autocomplete="off"><input type="hidden" name="item_id[]" class="item-id"><div class="item-results" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 300px; overflow-y: auto; z-index: 1000; display: none;"></div></div></td>' +
+            '<td><input type="text" class="form-control form-control-sm item-busca" placeholder="Digite o nome..." autocomplete="off"><input type="hidden" name="item_id[]" class="item-id"></td>' +
             '<td><input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1"></td>' +
             '<td><select name="item_estado[]" class="form-select form-select-sm"><option value="">Padrão</option><option value="backup">Backup</option><option value="assado">Assado</option></select></td>' +
             '<td><input type="text" name="item_obs[]" class="form-control form-control-sm" placeholder=""></td>' +
