@@ -57,6 +57,58 @@ def obter_linha_loja(loja_id, *, receita_id=None, produto_id=None,
     return canonica
 
 
+def consolidar_estoque_duplicado(usuario_id=None):
+    """Consolida TODAS as linhas duplicadas em 1 por produto (estado ignorado),
+    na loja (EstoqueLoja) e na producao (EstoqueProducao). Reusa
+    `obter_linha_loja`/`obter_linha_producao` (somam, auditam, preservam
+    historico, removem sobras). Idempotente. NAO commita. Usado pela rota de
+    consolidacao e pela migracao que cria a trava de unicidade.
+
+    Retorna (n_loja, n_prod): quantos itens tinham duplicata.
+    """
+    from collections import defaultdict
+
+    from app.models import EstoqueProducao
+    from app.services.estoque_congelados import obter_linha_producao
+
+    col = {'receita': 'receita_id', 'produto': 'produto_id',
+           'mp': 'materia_prima_id'}
+
+    grupos = defaultdict(list)
+    for el in EstoqueLoja.query.all():
+        if el.pendente:
+            continue
+        if el.receita_id:
+            grupos[(el.loja_id, 'receita', el.receita_id)].append(el)
+        elif el.produto_id:
+            grupos[(el.loja_id, 'produto', el.produto_id)].append(el)
+        elif el.materia_prima_id:
+            grupos[(el.loja_id, 'mp', el.materia_prima_id)].append(el)
+    n_loja = 0
+    for (loja_id, tipo, fk_id), linhas in grupos.items():
+        if len(linhas) < 2:
+            continue
+        obter_linha_loja(loja_id, usuario_id=usuario_id, **{col[tipo]: fk_id})
+        n_loja += 1
+
+    grupos_p = defaultdict(list)
+    for ep in EstoqueProducao.query.all():
+        if ep.pendente:
+            continue
+        if ep.receita_id:
+            grupos_p[('receita', ep.receita_id)].append(ep)
+        elif ep.produto_id:
+            grupos_p[('produto', ep.produto_id)].append(ep)
+    n_prod = 0
+    for (tipo, fk_id), linhas in grupos_p.items():
+        if len(linhas) < 2:
+            continue
+        obter_linha_producao(usuario_id=usuario_id, **{col[tipo]: fk_id})
+        n_prod += 1
+
+    return n_loja, n_prod
+
+
 def baixar_loja_por_prioridade(filtro_base, inteiros, *,
                                 tipo_mov, referencia, sem_estoque_tipo,
                                 usuario_id):

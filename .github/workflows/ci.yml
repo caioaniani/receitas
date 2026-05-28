@@ -4,10 +4,18 @@ on:
   push:
   pull_request:
 
+# Cancela runs em andamento do mesmo ref quando chega push novo — o
+# auto-commit empurra varios commits seguidos, entao so o ultimo importa.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # A suite sobe o app inteiro por teste (~16 min). 10 min cortava no meio
+    # ("Cancelled after 10m"); 25 da folga ate otimizarmos o tempo do suite.
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4

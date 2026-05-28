@@ -3,6 +3,7 @@
 Cobre: consolidação de linhas duplicadas (helper), idempotência, recebimento de
 pedido somando estados numa linha, baixa da linha única, e a rota de consolidação.
 """
+import pytest
 
 
 def _login(client, user):
@@ -162,3 +163,36 @@ def test_rota_consolidar(app, loja, admin_user):
         linhas = EstoqueLoja.query.filter_by(loja_id=lid, receita_id=rid).all()
         assert len(linhas) == 1
         assert linhas[0].quantidade == 5
+
+
+def test_migracao_consolida_e_cria_trava(app, loja):
+    """Fluxo da migracao auto-suficiente: consolida duplicatas legadas e cria a
+    trava de unicidade, que passa a bloquear nova duplicata do mesmo produto."""
+    import sqlalchemy
+
+    from app.extensions import db
+    from app.migrations_legacy import _migrate_estoque_trava
+    from app.models import EstoqueLoja
+
+    with app.app_context():
+        r = _receita('Croissant Amêndoa')
+        db.session.add(r)
+        db.session.commit()
+        rid, lid = r.id, loja.id
+        for est, q in ((None, 2), ('backup', 4)):  # duplicata legada por estado
+            db.session.add(EstoqueLoja(loja_id=lid, receita_id=rid,
+                                       estado=est, quantidade=q))
+        db.session.commit()
+
+        _migrate_estoque_trava(app)  # consolida + cria a trava
+
+        linhas = EstoqueLoja.query.filter_by(loja_id=lid, receita_id=rid).all()
+        assert len(linhas) == 1
+        assert linhas[0].quantidade == 6  # 2 + 4
+
+        # Trava ativa: 2a linha do mesmo produto deve falhar no commit.
+        db.session.add(EstoqueLoja(loja_id=lid, receita_id=rid,
+                                   estado=None, quantidade=1))
+        with pytest.raises(sqlalchemy.exc.IntegrityError):
+            db.session.commit()
+        db.session.rollback()
