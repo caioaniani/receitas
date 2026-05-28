@@ -52,11 +52,46 @@ def test_papeis_validos():
         assert not invalidos, f'{tool} tem papel invalido: {invalidos}'
 
 
-def test_admin_pode_qualquer_tool(app, admin_user):
-    """Admin nao deve ser bloqueado de NADA."""
+def test_admin_pode_tudo_menos_owner_only(app, admin_user):
+    """Admin (nao-owner) passa em tudo, exceto nas tools marcadas {'owner'}."""
     from app.services.copilot import PAPEIS_POR_TOOL, pode_usar
+    for tool, papeis in PAPEIS_POR_TOOL.items():
+        esperado = papeis != {'owner'}
+        assert pode_usar(tool, admin_user) == esperado, (
+            f'admin em {tool}: esperado {esperado}, papeis={papeis}')
+
+
+def test_owner_only_tools_de_rh(app):
+    """marcar_ponto e consultar_funcionario sao owner-only: gerente e admin
+    nao-owner sao bloqueados; o owner passa."""
+    from app.extensions import db
+    from app.models import Usuario
+    from app.services.copilot import pode_usar
+    gerente = Usuario(nome='G', login='g_rh', papel='gerente')
+    admin = Usuario(nome='A', login='a_rh', papel='admin')
+    owner = Usuario(nome='O', login='o_rh', papel='admin', is_owner=True)
+    for u in (gerente, admin, owner):
+        u.set_senha('x')
+    db.session.add_all([gerente, admin, owner])
+    db.session.commit()
+
+    for tool in ('marcar_ponto', 'consultar_funcionario'):
+        assert not pode_usar(tool, gerente)
+        assert not pode_usar(tool, admin)
+        assert pode_usar(tool, owner)
+
+
+def test_owner_passa_em_tudo(app):
+    """Owner eh superconjunto de admin: passa em qualquer tool."""
+    from app.extensions import db
+    from app.models import Usuario
+    from app.services.copilot import PAPEIS_POR_TOOL, pode_usar
+    owner = Usuario(nome='O', login='o_all', papel='admin', is_owner=True)
+    owner.set_senha('x')
+    db.session.add(owner)
+    db.session.commit()
     for tool in PAPEIS_POR_TOOL:
-        assert pode_usar(tool, admin_user), f'admin foi bloqueado em {tool}'
+        assert pode_usar(tool, owner), f'owner bloqueado em {tool}'
 
 
 def test_funcionario_bloqueado_em_tools_de_admin(app):
