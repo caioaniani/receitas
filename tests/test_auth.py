@@ -85,13 +85,21 @@ def test_login_next_url_interno_ok(cliente, admin_user):
     assert '/usuarios' in r.headers.get('Location', '')
 
 
-def test_funcionario_nao_vai_pra_admin_index(cliente, funcionario):
-    """Funcionario apos login vai pra minhas_fichas, nao pra /."""
+def test_funcionario_login_vai_pra_landing(cliente, funcionario):
+    """Funcionario apos login cai no index, que renderiza a landing didatica
+    (2 cards) — nao mais minhas_fichas, e nem a home de admin."""
     r = cliente.post('/auth/login',
                      data={'login': 'joao', 'senha': 'senha-joao'},
                      follow_redirects=False)
     assert r.status_code == 302
-    assert 'minhas-fichas' in r.headers.get('Location', '')
+    location = r.headers.get('Location', '')
+    assert 'minhas-fichas' not in location
+    assert '/padeiro' not in location
+    # segue pro index: landing de 2 cards, nao a home de admin (hero do copilot)
+    r2 = cliente.get('/', follow_redirects=False)
+    assert r2.status_code == 200
+    assert b'Fazer novo pedido' in r2.data
+    assert b'home-copilot-form' not in r2.data
 
 
 def test_hash_de_senha_nao_e_o_proprio_texto(app):

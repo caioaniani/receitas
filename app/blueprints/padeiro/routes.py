@@ -371,23 +371,18 @@ def buscar_receitas():
     o texto. Acento-insensivel ('pao' acha 'Pão'), case-insensitive, casa todos
     os termos. Catalogo pequeno -> filtra em Python. Retorna refs
     'receita:<id>' / 'produto:<id>'."""
-    import unicodedata
-
     from flask import jsonify
 
     from app.models import Produto, Receita
+    from app.utils import normalizar_busca
 
-    def _norm(s):
-        s = unicodedata.normalize('NFKD', s or '')
-        return ''.join(c for c in s if not unicodedata.combining(c)).lower()
-
-    q = _norm((request.args.get('q') or '').strip())
+    q = normalizar_busca((request.args.get('q') or '').strip())
     if len(q) < 2:
         return jsonify(itens=[])
     termos = q.split()
 
     def _casa(nome):
-        n = _norm(nome)
+        n = normalizar_busca(nome)
         return all(t in n for t in termos)
 
     out = [{'ref': 'receita:%d' % r.id, 'nome': r.nome}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Início{% endblock %}
+
+{% block content %}
+<h1 class="page-title mb-4">Bem-vindo, {{ current_user.nome }}!</h1>
+
+<div class="row g-3">
+    <div class="col-md-5">
+        <a href="{{ url_for('pedidos.novo') }}" class="card card-link text-decoration-none text-reset h-100">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-cart-plus" style="font-size: 48px; color: #0d6efd;"></i>
+                <h5 class="card-title mt-3">Fazer novo pedido</h5>
+                <p class="card-text text-muted">Crie um novo pedido com receitas, produtos e matérias-primas</p>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-5">
+        <a href="{{ url_for('pedidos.lista') }}" class="card card-link text-decoration-none text-reset h-100">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-list-check" style="font-size: 48px; color: #198754;"></i>
+                <h5 class="card-title mt-3">Pedidos feitos</h5>
+                <p class="card-text text-muted">Acompanhe o status dos seus pedidos</p>
+            </div>
+        </a>
+    </div>
+</div>
+
+<style>
+.card-link {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.card-link:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.card-link .card {
+    border: 1px solid #ddd;
+    cursor: pointer;
+}
+</style>
+{% endblock %}

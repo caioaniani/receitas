@@ -412,7 +412,11 @@ def create_app(config_class=None):
 
     # Cron de auto-sync Seru → EstoqueLoja (15min). Roda dentro de
     # cada worker gunicorn mas usa pg_try_advisory_lock pra deduplicate.
-    if not app.config.get('TESTING'):
+    # Em teste o conftest seta TESTING só DEPOIS de create_app(), então o
+    # scheduler escaparia o guard acima e um job VNDA dispararia no meio da
+    # suite (mutando estado de modulo, deixando test_pdv_saude flaky). Pula
+    # via PYTEST_RUNNING, mesmo padrao de migrations_legacy.py.
+    if not app.config.get('TESTING') and not os.environ.get('PYTEST_RUNNING'):
         try:
             from app.services import seru_cron
             seru_cron.iniciar(app)

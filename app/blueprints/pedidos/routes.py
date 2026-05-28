@@ -7,7 +7,13 @@ from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.blueprints.pedidos import pedidos_bp
-from app.decorators import admin_required, gerente_required, operacional_pedido_required, producao_required
+from app.decorators import (
+    admin_required,
+    gerente_required,
+    operacional_pedido_required,
+    pedidos_required,
+    producao_required,
+)
 from app.extensions import db
 from app.models import (
     Desperdicio,
@@ -91,9 +97,40 @@ def _loja_do_usuario():
     return current_user.loja_id
 
 
+@pedidos_bp.route('/buscar-itens.json')
+@login_required
+@pedidos_required
+def buscar_itens():
+    """Typeahead para novo pedido: receitas + produtos (ativos) + matérias-primas.
+    Acento-insensível, multi-termo, mínimo 2 caracteres.
+    Retorna formato compatível com _parse_item_id: r_<id>, p_<id>, mp_<id>."""
+    from flask import jsonify
+
+    from app.utils import normalizar_busca
+
+    q = normalizar_busca((request.args.get('q') or '').strip())
+    if len(q) < 2:
+        return jsonify(itens=[])
+    termos = q.split()
+
+    def _casa(nome):
+        n = normalizar_busca(nome)
+        return all(t in n for t in termos)
+
+    out = []
+    out += [{'id': f'r_{r.id}', 'nome': r.nome}
+            for r in Receita.query.order_by(Receita.nome).all() if _casa(r.nome)]
+    out += [{'id': f'p_{p.id}', 'nome': p.nome}
+            for p in Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+            if _casa(p.nome)]
+    out += [{'id': f'mp_{m.id}', 'nome': m.nome}
+            for m in MateriaPrima.query.order_by(MateriaPrima.nome).all() if _casa(m.nome)]
+    return jsonify(itens=out[:50])
+
+
 @pedidos_bp.route('/')
 @login_required
-@gerente_required
+@pedidos_required
 def lista():
     from sqlalchemy import func
 
@@ -153,10 +190,13 @@ def lista():
 
 @pedidos_bp.route('/novo', methods=['GET', 'POST'])
 @login_required
-@gerente_required
+@pedidos_required
 def novo():
     loja_id = _loja_do_usuario()
-    if not current_user.is_admin() and not loja_id:
+    # Admin e gerente escolhem qualquer loja no form; demais papeis sao
+    # forcados pra propria loja e precisam ter uma vinculada.
+    pode_qualquer_loja = current_user.is_admin() or current_user.is_gerente()
+    if not pode_qualquer_loja and not current_user.loja_id:
         flash('Vincule sua conta a uma loja para criar pedidos.', 'warning')
         return redirect(url_for('pedidos.lista'))
 
@@ -165,9 +205,6 @@ def novo():
     data_min = hoje_brt() if current_user.is_admin() else amanha
 
     if request.method == 'POST':
-        # Admin e gerente podem escolher qualquer loja no form;
-        # outros papeis sao forcados pra propria loja.
-        pode_qualquer_loja = current_user.is_admin() or current_user.is_gerente()
         try:
             sel_loja = (int(request.form.get('loja_id', 0)) if pode_qualquer_loja
                         else (loja_id or current_user.loja_id))
@@ -235,6 +272,14 @@ def novo():
                 'observacao': notas[i].strip() if i < len(notas) else None,
                 'estado': est,
             })
+
+        # Sem o <select required> antigo, o form pode chegar sem nenhum item
+        # valido (texto digitado sem escolher). Barra aqui pra nao criar pedido vazio.
+        if not itens_norm:
+            flash('Adicione ao menos um item ao pedido.', 'warning')
+            lojas = _lojas_operacionais()
+            return render_template('pedidos/novo.html', lojas=lojas,
+                                   amanha=amanha, data_min=data_min, loja_id=loja_id)
 
         try:
             from app.services.pedido_merge import (

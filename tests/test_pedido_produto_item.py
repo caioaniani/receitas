@@ -16,12 +16,19 @@ def _login(cliente):
     return cliente.post('/auth/login', data={'login': 'admin', 'senha': '123'})
 
 
-def test_picker_do_novo_lista_produtos(app, admin_user, loja, catalogo, cliente):
+def test_picker_do_novo_oferece_produtos(app, admin_user, loja, catalogo, cliente):
+    """O picker do /novo (agora typeahead) oferece produtos, nao so receitas/MP.
+    A pagina traz o campo de busca e o endpoint retorna o produto com id
+    p_<id> (que casa com _parse_item_id no POST)."""
     _login(cliente)
     r = cliente.get('/pedidos/novo')
     assert r.status_code == 200
-    assert b'<optgroup label="Produtos">' in r.data
-    assert ('p_%d' % catalogo['produto'].id).encode() in r.data
+    assert b'item-busca' in r.data  # widget de busca por digitacao presente
+    # o endpoint que alimenta o typeahead acha o produto do catalogo
+    termo = catalogo['produto'].nome.split()[0]
+    busca = cliente.get('/pedidos/buscar-itens.json?q=' + termo)
+    ids = [i['id'] for i in busca.get_json()['itens']]
+    assert ('p_%d' % catalogo['produto'].id) in ids
 
 
 def test_novo_cria_pedido_com_produto(app, admin_user, loja, catalogo, cliente):

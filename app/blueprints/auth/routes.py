@@ -30,12 +30,9 @@ def login():
             # Bloqueia redirect para URLs externas
             if next_page and urlparse(next_page).netloc:
                 next_page = None
-            if usuario.is_admin():
-                return redirect(next_page or url_for('main.index'))
-            elif usuario.is_padeiro():
+            if usuario.is_padeiro():
                 return redirect(url_for('padeiro.index'))
-            else:
-                return redirect(url_for('auth.minhas_fichas'))
+            return redirect(next_page or url_for('main.index'))
         else:
             flash('Login ou senha incorretos.', 'danger')
 
