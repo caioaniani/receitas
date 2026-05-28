@@ -90,20 +90,89 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+.item-results {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.item-result-opt {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+}
+.item-result-opt:hover {
+    background-color: #f5f5f5;
+}
+.item-result-opt:last-child {
+    border-bottom: none;
+}
+</style>
 <script>
-var itemOpts = document.querySelector('.item-row .item-sel').innerHTML;
+var searchTimeout;
+
+function setupItemSearch(input, itemId, results) {
+    input.addEventListener('input', function(e) {
+        clearTimeout(searchTimeout);
+        var val = this.value.trim();
+
+        if (val.length < 2) {
+            results.style.display = 'none';
+            return;
+        }
+
+        searchTimeout = setTimeout(function() {
+            fetch('/pedidos/buscar-itens.json?q=' + encodeURIComponent(val))
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.itens || data.itens.length === 0) {
+                        results.style.display = 'none';
+                        return;
+                    }
+                    results.innerHTML = data.itens.map(item =>
+                        '<div class="item-result-opt" data-id="' + item.id + '">' + item.nome + '</div>'
+                    ).join('');
+                    results.style.display = 'block';
+                });
+        }, 250);
+    });
+
+    results.addEventListener('click', function(e) {
+        if (e.target.classList.contains('item-result-opt')) {
+            input.value = e.target.textContent;
+            itemId.value = e.target.getAttribute('data-id');
+            results.style.display = 'none';
+        }
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!input.closest('td').contains(e.target)) {
+            results.style.display = 'none';
+        }
+    });
+}
+
+var tbody = document.getElementById('itens-body');
+
+tbody.querySelectorAll('.item-busca').forEach(function(input) {
+    var itemId = input.nextElementSibling;
+    var results = itemId.nextElementSibling;
+    setupItemSearch(input, itemId, results);
+});
 
 document.getElementById('btn-add-item').addEventListener('click', function() {
-    var tbody = document.getElementById('itens-body');
     var tr = document.createElement('tr');
     tr.className = 'item-row';
     tr.innerHTML =
-        '<td><select name="item_id[]" class="form-select form-select-sm item-sel" required>' + itemOpts + '</select></td>' +
+        '<td><div style="position: relative;"><input type="text" class="form-control form-control-sm item-busca" placeholder="Digite o nome..." autocomplete="off"><input type="hidden" name="item_id[]" class="item-id"><div class="item-results" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 300px; overflow-y: auto; z-index: 1000; display: none;"></div></div></td>' +
         '<td><input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1"></td>' +
         '<td><select name="item_estado[]" class="form-select form-select-sm"><option value="">Padrão</option><option value="backup">Backup</option><option value="assado">Assado</option></select></td>' +
         '<td><input type="text" name="item_obs[]" class="form-control form-control-sm" placeholder=""></td>' +
         '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-item" onclick="this.closest(\'tr\').remove()"><i class="bi bi-x"></i></button></td>';
     tbody.appendChild(tr);
+
+    var input = tr.querySelector('.item-busca');
+    var itemId = tr.querySelector('.item-id');
+    var results = tr.querySelector('.item-results');
+    setupItemSearch(input, itemId, results);
 });
 </script>
 {% endblock %}
