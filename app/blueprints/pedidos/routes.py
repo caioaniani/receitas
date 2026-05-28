@@ -1859,6 +1859,68 @@ def estoque_loja_saude():
                            colisoes_rec_prod=colisoes_rec_prod)
 
 
+@pedidos_bp.route('/estoque-loja/consolidar', methods=['POST'])
+@login_required
+@admin_required
+def estoque_loja_consolidar():
+    """Consolida linhas duplicadas em 1 por produto (estado ignorado), na loja e
+    na producao. Soma quantidade, audita (`consolidacao_estado`) e remove sobras.
+    Idempotente — rodar de novo com tudo unico nao faz nada. Admin/owner."""
+    from app.services.estoque_congelados import obter_linha_producao
+    from app.services.estoque_helpers import obter_linha_loja
+
+    uid = current_user.id
+    _COL = {'receita': 'receita_id', 'produto': 'produto_id', 'mp': 'materia_prima_id'}
+
+    grupos_loja = defaultdict(list)
+    for el in EstoqueLoja.query.all():
+        if el.pendente:
+            continue
+        if el.receita_id:
+            chave = (el.loja_id, 'receita', el.receita_id)
+        elif el.produto_id:
+            chave = (el.loja_id, 'produto', el.produto_id)
+        elif el.materia_prima_id:
+            chave = (el.loja_id, 'mp', el.materia_prima_id)
+        else:
+            continue
+        grupos_loja[chave].append(el)
+
+    consolidados_loja = 0
+    for (loja_id, tipo, fk_id), linhas_grupo in grupos_loja.items():
+        if len(linhas_grupo) < 2:
+            continue
+        obter_linha_loja(loja_id, usuario_id=uid, **{_COL[tipo]: fk_id})
+        consolidados_loja += 1
+
+    grupos_prod = defaultdict(list)
+    for ep in EstoqueProducao.query.all():
+        if ep.pendente:
+            continue
+        if ep.receita_id:
+            chave = ('receita', ep.receita_id)
+        elif ep.produto_id:
+            chave = ('produto', ep.produto_id)
+        else:
+            continue
+        grupos_prod[chave].append(ep)
+
+    consolidados_prod = 0
+    for (tipo, fk_id), linhas_grupo in grupos_prod.items():
+        if len(linhas_grupo) < 2:
+            continue
+        obter_linha_producao(usuario_id=uid, **{_COL[tipo]: fk_id})
+        consolidados_prod += 1
+
+    db.session.commit()
+    if consolidados_loja or consolidados_prod:
+        flash(f'Consolidação concluída: {consolidados_loja} item(ns) de loja e '
+              f'{consolidados_prod} de produção unificados em 1 linha.', 'success')
+    else:
+        flash('Nada a consolidar — cada produto já tem uma linha única.', 'info')
+    return redirect(url_for('pedidos.estoque_loja_saude'))
+
+
 @pedidos_bp.route('/estoque-loja/saida-lote', methods=['GET', 'POST'])
 @login_required
 @gerente_required
