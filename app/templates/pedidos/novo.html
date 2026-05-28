@@ -120,7 +120,18 @@
         };
     }
 
-    function renderResults(results, itens) {
+    // Posiciona o dropdown como FIXED (coords da viewport) pra escapar do
+    // overflow do .table-responsive, que senao corta a lista dentro da celula.
+    function positionResults(input, results) {
+        var rect = input.getBoundingClientRect();
+        results.style.position = 'fixed';
+        results.style.top = rect.bottom + 'px';
+        results.style.left = rect.left + 'px';
+        results.style.width = rect.width + 'px';
+        results.style.right = 'auto';
+    }
+
+    function renderResults(input, results, itens) {
         results.innerHTML = '';
         if (!itens || itens.length === 0) {
             results.style.display = 'none';
@@ -133,6 +144,7 @@
             opt.textContent = item.nome;  // textContent escapa o nome (sem innerHTML cru)
             results.appendChild(opt);
         });
+        positionResults(input, results);
         results.style.display = 'block';
     }
 
@@ -152,7 +164,7 @@
         timers.set(input, setTimeout(function () {
             fetch('/pedidos/buscar-itens.json?q=' + encodeURIComponent(val))
                 .then(function (r) { return r.json(); })
-                .then(function (data) { renderResults(parts.results, data.itens); })
+                .then(function (data) { renderResults(parts.input, parts.results, data.itens); })
                 .catch(function () { parts.results.style.display = 'none'; });
         }, 250));
     });
@@ -174,6 +186,15 @@
             r.style.display = 'none';
         });
     });
+
+    // Reposiciona o dropdown aberto quando a pagina rola (posicao fixed segue o input).
+    window.addEventListener('scroll', function () {
+        tbody.querySelectorAll('.item-results').forEach(function (r) {
+            if (r.style.display === 'block') {
+                positionResults(r.closest('td').querySelector('.item-busca'), r);
+            }
+        });
+    }, true);
 
     // Adicionar linha: so insere o HTML; a delegation acima ja cobre a nova linha.
     document.getElementById('btn-add-item').addEventListener('click', function () {
