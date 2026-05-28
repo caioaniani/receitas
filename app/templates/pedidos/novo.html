@@ -47,33 +47,12 @@
             <tbody id="itens-body">
                 <tr class="item-row">
                     <td>
-                        <select name="item_id[]" class="form-select form-select-sm item-sel" required>
-                            <option value="">Selecione...</option>
-                            {% set ns = namespace(cat_atual=None) %}
-                            {% for r in receitas %}
-                                {% if r.categoria != ns.cat_atual %}
-                                    {% if ns.cat_atual is not none %}</optgroup>{% endif %}
-                                    <optgroup label="Paes &mdash; {{ r.categoria or 'Outros' }}">
-                                    {% set ns.cat_atual = r.categoria %}
-                                {% endif %}
-                                <option value="r_{{ r.id }}">{{ r.nome }}</option>
-                            {% endfor %}
-                            {% if ns.cat_atual is not none %}</optgroup>{% endif %}
-                            {% if produtos %}
-                            <optgroup label="Produtos">
-                                {% for p in produtos %}
-                                <option value="p_{{ p.id }}">{{ p.nome }}</option>
-                                {% endfor %}
-                            </optgroup>
-                            {% endif %}
-                            {% if materias %}
-                            <optgroup label="Materias-primas">
-                                {% for mp in materias %}
-                                <option value="mp_{{ mp.id }}">{{ mp.nome }}{% if mp.unidade %} ({{ mp.unidade }}){% endif %}</option>
-                                {% endfor %}
-                            </optgroup>
-                            {% endif %}
-                        </select>
+                        <div style="position: relative;">
+                            <input type="text" class="form-control form-control-sm item-busca"
+                                   placeholder="Digite o nome..." autocomplete="off">
+                            <input type="hidden" name="item_id[]" class="item-id">
+                            <div class="item-results" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 300px; overflow-y: auto; z-index: 1000; display: none;"></div>
+                        </div>
                     </td>
                     <td>
                         <input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1">
