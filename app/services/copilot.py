@@ -656,8 +656,10 @@ REQUER_APROVACAO = {
 # em `app/decorators.py` que protegem URLs HTTP — o copilot pode ser
 # chamado de qualquer rota autenticada, entao precisa do proprio gate.
 #
-# Tres papeis canonicos (`papel_efetivo()`):
-# - 'admin'       : ve/faz tudo (inclui owner)
+# Quatro papeis canonicos (`papel_efetivo()`):
+# - 'owner'       : dono unico — superconjunto de admin; unico que usa as
+#                   tools marcadas {'owner'} (RH: ponto, consultar funcionario)
+# - 'admin'       : ve/faz quase tudo (menos as tools {'owner'})
 # - 'gerente'     : operacao de loja (pedidos, estoque, vendas, ajustes)
 # - 'funcionario' : tarefas, consultas basicas, registrar desperdicio
 #
