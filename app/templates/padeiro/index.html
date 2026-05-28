@@ -556,6 +556,28 @@
           : '<div class="hist-item"><div class="m">Nenhum aviso nas últimas 24h.</div></div>';
       }).catch(function () {});
   }
+  function toggleCong() {
+    var abrindo = !document.getElementById('cong-drawer').classList.contains('aberto');
+    fecharDrawers();
+    if (abrindo) {
+      document.getElementById('cong-drawer').classList.add('aberto');
+      document.getElementById('cong-backdrop').classList.add('aberto');
+      carregarCong();
+    }
+  }
+  function carregarCong() {
+    fetch('{{ url_for("padeiro.congelados_json") }}')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var itens = d.itens || [];
+        document.getElementById('cong-lista').innerHTML = itens.length
+          ? itens.map(function (it) {
+              return '<div class="cong-item"><span class="t">' + esc(it.nome)
+                + '</span><span class="q">' + it.qtd + '</span></div>';
+            }).join('')
+          : '<div class="cong-item"><span class="t" style="color:#6c757d;">Nenhum congelado em estoque.</span></div>';
+      }).catch(function () {});
+  }
 
   // ── Painel Produzir: receita (typeahead) + qtd -> entrada no congelado ──
   var prodRows = {}, prodSeq = 0, prodEnviando = false, prodPendentes = [];
