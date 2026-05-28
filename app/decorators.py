@@ -96,3 +96,13 @@ def entrega_access_required(f):
             abort(403)
         return f(*args, **kwargs)
     return decorated
+
+
+def pedidos_required(f):
+    """Permite acesso para usuários não-padeiro (admin, gerente, funcionário, produção, RH)."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if current_user.is_padeiro():
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
