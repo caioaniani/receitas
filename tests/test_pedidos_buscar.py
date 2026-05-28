@@ -156,9 +156,10 @@ def test_buscar_itens_padeiro_bloqueado(app):
                     rendimento_qtd=1, rendimento_unidade='un', peso_base=100.0)
         db.session.add(r)
         db.session.commit()
+        uid = padeiro.id
 
     client = app.test_client()
-    _login(client, padeiro)
+    _login(client, uid)
     # Padeiro não tem acesso
     resp = client.get('/pedidos/buscar-itens.json?q=pao')
     assert resp.status_code == 403
