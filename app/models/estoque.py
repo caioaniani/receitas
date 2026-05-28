@@ -62,10 +62,11 @@ class EstoqueProducao(db.Model):
     movimentacoes = db.relationship('MovEstoqueProducao', backref='estoque', cascade='all, delete-orphan')
 
     __table_args__ = (
-        # Uma linha por (receita, estado) e por (produto, estado).
-        # NULL no estado conta como estado distinto pra fins de linha.
-        db.Index('ix_estoque_producao_receita_estado', 'receita_id', 'estado'),
-        db.Index('ix_estoque_producao_produto_estado', 'produto_id', 'estado'),
+        # Estoque da industria eh 1 linha por produto (estado vive so no pedido).
+        # A trava de unicidade parcial eh criada na migracao
+        # (app/migrations_legacy.py), apos consolidar duplicatas legadas.
+        db.Index('ix_estoque_producao_receita', 'receita_id'),
+        db.Index('ix_estoque_producao_produto', 'produto_id'),
     )
 
     @property
