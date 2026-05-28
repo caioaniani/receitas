@@ -204,5 +204,6 @@ def test_login_redirect_gerente_index(app):
     resp = client.post('/auth/login', data={'login': 'gerente', 'senha': 'senha123'},
                        follow_redirects=False)
     assert resp.status_code in (302, 303)
-    # Gerente vai pra main.index (que renderiza inicio.html)
-    assert resp.location.endswith('/') or '/' in resp.location
+    # Gerente vai pra main.index (que renderiza inicio.html), não pra padeiro/minhas-fichas
+    assert '/padeiro' not in resp.location
+    assert 'minhas-fichas' not in resp.location
