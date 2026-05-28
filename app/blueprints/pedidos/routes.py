@@ -205,9 +205,6 @@ def novo():
     data_min = hoje_brt() if current_user.is_admin() else amanha
 
     if request.method == 'POST':
-        # Admin e gerente podem escolher qualquer loja no form;
-        # outros papeis sao forcados pra propria loja.
-        pode_qualquer_loja = current_user.is_admin() or current_user.is_gerente()
         try:
             sel_loja = (int(request.form.get('loja_id', 0)) if pode_qualquer_loja
                         else (loja_id or current_user.loja_id))
