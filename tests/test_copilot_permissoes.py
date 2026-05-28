@@ -44,9 +44,9 @@ def test_mapeamento_nao_tem_tool_inexistente():
 
 
 def test_papeis_validos():
-    """So existem 3 papeis canonicos no sistema."""
+    """Papeis canonicos do sistema (inclui o tier owner)."""
     from app.services.copilot import PAPEIS_POR_TOOL
-    canonicos = {'admin', 'gerente', 'funcionario', 'producao'}
+    canonicos = {'owner', 'admin', 'gerente', 'funcionario', 'producao'}
     for tool, papeis in PAPEIS_POR_TOOL.items():
         invalidos = papeis - canonicos
         assert not invalidos, f'{tool} tem papel invalido: {invalidos}'
