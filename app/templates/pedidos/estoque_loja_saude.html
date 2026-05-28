@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Saúde do estoque por loja{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="page-title mb-0"><i class="bi bi-heart-pulse"></i> Saúde do estoque por loja</h1>
+  <a href="{{ url_for('pedidos.estoque_loja') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i> Voltar ao estoque
+  </a>
+</div>
+
+<p class="text-muted">
+  Em loja <strong>manual</strong> (sem integração de PDV), o sistema só baixa pelas
+  <em>saídas em lote</em> de produtos <strong>vinculados</strong>. Itens órfãos e nomes
+  não vinculados <strong>não baixam</strong> — e a diferença aparece na conferência.
+  Quanto mais tempo sem conferência ou sem saída, maior o desvio esperado.
+</p>
+
+<div class="table-responsive">
+  <table class="table table-sm table-bordered bg-white align-middle">
+    <thead class="thead-padaria">
+      <tr>
+        <th>Loja</th>
+        <th>Integração</th>
+        <th class="text-center">Itens (c/ saldo / total)</th>
+        <th class="text-center">Órfãos/pendentes</th>
+        <th class="text-center">Última conferência</th>
+        <th class="text-center">Última saída em lote</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in linhas %}
+      <tr>
+        <td><strong>{{ r.loja.nome }}</strong></td>
+        <td>
+          {% if r.integrada %}
+            <span class="badge bg-success">Seru</span>
+          {% else %}
+            <span class="badge bg-secondary">Manual</span>
+          {% endif %}
+        </td>
+        <td class="text-center">{{ r.com_saldo }} / {{ r.total }}</td>
+        <td class="text-center">
+          {% if r.orfaos %}
+            <span class="badge bg-warning text-dark">{{ r.orfaos }}</span>
+          {% else %}
+            <span class="text-muted">0</span>
+          {% endif %}
+        </td>
+        <td class="text-center">
+          {% if r.dias_conf is none %}
+            <span class="text-danger" title="Nunca conferido">— nunca</span>
+          {% else %}
+            <span class="{% if r.dias_conf > 14 %}text-danger fw-bold{% elif r.dias_conf > 7 %}text-warning{% endif %}">há {{ r.dias_conf }} dia(s)</span>
+          {% endif %}
+        </td>
+        <td class="text-center">
+          {% if r.dias_saida is none %}
+            <span class="text-danger" title="Nenhuma saída em lote registrada">— nunca</span>
+          {% else %}
+            <span class="{% if r.dias_saida > 7 %}text-danger fw-bold{% elif r.dias_saida > 3 %}text-warning{% endif %}">há {{ r.dias_saida }} dia(s)</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="text-center text-muted">Nenhuma loja operacional.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card mt-4">
+  <div class="card-header bg-warning bg-opacity-10 fw-bold d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-link-45deg"></i> Nomes não vinculados ({{ nao_vinculados|length }}) — não baixam na saída em lote</span>
+    <a href="{{ url_for('pedidos.estoque_loja_mapeamentos') }}" class="btn btn-sm btn-outline-dark">
+      Vincular nos mapeamentos
+    </a>
+  </div>
+  <div class="card-body">
+    {% if nao_vinculados %}
+    <p class="text-muted small mb-2">
+      Estes nomes já foram digitados em saídas, mas nunca foram ligados a um produto.
+      Enquanto não vincular, toda venda deles é pulada (o estoque não desce).
+    </p>
+    <div class="d-flex flex-wrap gap-2">
+      {% for m in nao_vinculados %}
+      <span class="badge bg-light text-dark border">{{ m.nome_digitado }}</span>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-success mb-0"><i class="bi bi-check-circle"></i> Tudo vinculado — nenhum nome solto.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
