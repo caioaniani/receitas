@@ -342,6 +342,27 @@ def preparar_json():
                    itens=linhas, alertar=alertar)
 
 
+@padeiro_bp.route('/congelados.json')
+@login_required
+@padeiro_required
+def congelados_json():
+    """Estoque de congelados/industria (EstoqueProducao) com saldo > 0, pro
+    painel lateral do padeiro. Somente leitura — a contagem fica em
+    /pedidos/congelados."""
+    from flask import jsonify
+    from sqlalchemy.orm import joinedload
+
+    from app.models import EstoqueProducao
+    itens = (EstoqueProducao.query
+             .options(joinedload(EstoqueProducao.receita),
+                      joinedload(EstoqueProducao.produto))
+             .filter(EstoqueProducao.quantidade > 0).all())
+    linhas = [{'nome': ep.nome_item_com_estado, 'qtd': ep.quantidade}
+              for ep in itens]
+    linhas.sort(key=lambda x: x['nome'].lower())
+    return jsonify(itens=linhas)
+
+
 @padeiro_bp.route('/buscar-receitas.json')
 @login_required
 @padeiro_required
