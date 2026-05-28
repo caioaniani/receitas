@@ -120,7 +120,18 @@
         };
     }
 
-    function renderResults(results, itens) {
+    // Posiciona o dropdown como FIXED (coords da viewport) pra escapar do
+    // overflow do .table-responsive, que senao corta a lista dentro da celula.
+    function positionResults(input, results) {
+        var rect = input.getBoundingClientRect();
+        results.style.position = 'fixed';
+        results.style.top = rect.bottom + 'px';
+        results.style.left = rect.left + 'px';
+        results.style.width = rect.width + 'px';
+        results.style.right = 'auto';
+    }
+
+    function renderResults(input, results, itens) {
         results.innerHTML = '';
         if (!itens || itens.length === 0) {
             results.style.display = 'none';
@@ -133,6 +144,7 @@
             opt.textContent = item.nome;  // textContent escapa o nome (sem innerHTML cru)
             results.appendChild(opt);
         });
+        positionResults(input, results);
         results.style.display = 'block';
     }
 
