@@ -162,10 +162,12 @@ def test_lista_pedido_padeiro_bloqueado(app):
 def test_login_redirect_admin_index(app, admin_user):
     """Ao fazer login, admin vai pra index (que renderiza home.html)."""
     client = app.test_client()
-    resp = client.post('/auth/login', data={'login': admin_user.login, 'senha': 'admin123'},
+    resp = client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
                        follow_redirects=False)
     assert resp.status_code in (302, 303)
-    assert resp.location.endswith('/') or '/' in resp.location
+    # admin cai no index (que renderiza home.html), não em padeiro nem minhas-fichas
+    assert '/padeiro' not in resp.location
+    assert 'minhas-fichas' not in resp.location
 
 
 def test_login_redirect_padeiro_padeiro_index(app):
