@@ -273,6 +273,14 @@ def novo():
                 'estado': est,
             })
 
+        # Sem o <select required> antigo, o form pode chegar sem nenhum item
+        # valido (texto digitado sem escolher). Barra aqui pra nao criar pedido vazio.
+        if not itens_norm:
+            flash('Adicione ao menos um item ao pedido.', 'warning')
+            lojas = _lojas_operacionais()
+            return render_template('pedidos/novo.html', lojas=lojas,
+                                   amanha=amanha, data_min=data_min, loja_id=loja_id)
+
         try:
             from app.services.pedido_merge import (
                 mesclar_itens,
