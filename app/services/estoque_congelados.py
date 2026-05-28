@@ -348,16 +348,53 @@ def aplicar_balanco(itens_resolvidos, user, referencia=None):
     return {'aplicados': aplicados, 'ignorados': ignorados}
 
 
+def obter_linha_producao(*, receita_id=None, produto_id=None, usuario_id=None):
+    """Retorna a UNICA linha de EstoqueProducao do produto (estado ignorado).
+
+    A industria so mantem congelado padrao — backup/assado sao preparados sob
+    demanda, nunca estocados. Consolida linhas legadas duplicadas (qualquer
+    estado) na canonica (menor id), somando quantidade, reatribuindo o historico
+    de movimentos e removendo as sobras. Idempotente. NAO commita.
+    """
+    filtro = {'receita_id': receita_id, 'produto_id': produto_id}
+    linhas = EstoqueProducao.query.filter_by(**filtro).order_by(EstoqueProducao.id).all()
+    if not linhas:
+        nova = EstoqueProducao(**filtro, estado=None, quantidade=0)
+        db.session.add(nova)
+        db.session.flush()
+        return nova
+
+    canonica = linhas[0]
+    for extra in linhas[1:]:
+        qtd = extra.quantidade or 0
+        if qtd:
+            canonica.quantidade = (canonica.quantidade or 0) + qtd
+            tag = f' [{extra.estado}]' if extra.estado else ''
+            db.session.add(MovEstoqueProducao(
+                estoque_producao_id=canonica.id, tipo='consolidacao_estado',
+                quantidade=qtd,
+                referencia=f'Consolidacao da linha #{extra.id}{tag} (+{qtd})',
+                usuario_id=usuario_id))
+        for mov in list(extra.movimentacoes):
+            mov.estoque = canonica
+        db.session.delete(extra)
+
+    if canonica.estado is not None:
+        canonica.estado = None
+    db.session.flush()
+    return canonica
+
+
 def entrada_producao(*, receita_id=None, produto_id=None, estado=None,
                      quantidade, usuario_id, referencia='Entrada de produção'):
     """Soma `quantidade` ao congelado da industria (EstoqueProducao) e registra
     um MovEstoqueProducao(tipo='producao'). Caminho canonico de ENTRADA — usado
     pela rota /congelados/entrada e pelo painel Produzir da TV do padeiro.
 
-    Acha/cria a linha por (receita_id|produto_id, estado) de forma EXPLICITA:
-    `estado=None` mira a linha cru (padrao); assim nunca soma na linha 'backup'
-    por engano. Entrada pura — NAO baixa materia-prima (intencional, igual a
-    entrada manual de producao). Nao commita: quem chama controla a transacao.
+    O estoque da industria eh por PRODUTO (sem estado): o param `estado` eh
+    aceito por compat com chamadores antigos, mas ignorado — a soma vai sempre
+    pra linha unica do produto (via `obter_linha_producao`). Entrada pura — NAO
+    baixa materia-prima (intencional). Nao commita: quem chama controla a transacao.
     """
     if (receita_id is None) == (produto_id is None):
         raise ValueError('Informe exatamente um de receita_id/produto_id.')
@@ -368,14 +405,8 @@ def entrada_producao(*, receita_id=None, produto_id=None, estado=None,
     if quantidade <= 0:
         raise ValueError('quantidade deve ser positiva.')
 
-    ep = EstoqueProducao.query.filter_by(
-        receita_id=receita_id, produto_id=produto_id, estado=estado).first()
-    if not ep:
-        ep = EstoqueProducao(receita_id=receita_id, produto_id=produto_id,
-                             estado=estado, quantidade=0)
-        db.session.add(ep)
-        db.session.flush()
-
+    ep = obter_linha_producao(receita_id=receita_id, produto_id=produto_id,
+                              usuario_id=usuario_id)
     ep.quantidade = (ep.quantidade or 0) + quantidade
     db.session.add(MovEstoqueProducao(
         estoque_producao_id=ep.id, tipo='producao', quantidade=quantidade,
