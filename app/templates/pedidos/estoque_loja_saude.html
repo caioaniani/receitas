@@ -95,8 +95,17 @@
 </div>
 
 <div class="card mt-4">
-  <div class="card-header bg-danger bg-opacity-10 fw-bold">
-    <i class="bi bi-files"></i> Itens duplicados no estoque (mesmo item em 2+ linhas)
+  <div class="card-header bg-danger bg-opacity-10 fw-bold d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span><i class="bi bi-files"></i> Itens duplicados no estoque (mesmo item em 2+ linhas)</span>
+    {% if current_user.is_admin() %}
+    <form method="POST" action="{{ url_for('pedidos.estoque_loja_consolidar') }}" class="m-0"
+          onsubmit="return confirm('Consolidar cada item duplicado numa única linha por produto? As quantidades são somadas e cada ajuste fica registrado na auditoria. Ação idempotente.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-sm btn-danger">
+        <i class="bi bi-arrow-down-up"></i> Consolidar por produto
+      </button>
+    </form>
+    {% endif %}
   </div>
   <div class="card-body">
     <p class="text-muted small mb-3">
