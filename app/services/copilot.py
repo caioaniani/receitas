@@ -727,6 +727,10 @@ def pode_usar(tool_name, user):
     if not papel:
         return False
     permitidos = PAPEIS_POR_TOOL.get(tool_name, {'admin'})
+    # Owner eh superconjunto de admin: passa em tudo que admin passa, mais
+    # as tools marcadas exclusivamente {'owner'} (RH).
+    if papel == 'owner':
+        return 'owner' in permitidos or 'admin' in permitidos
     return papel in permitidos
 
 
