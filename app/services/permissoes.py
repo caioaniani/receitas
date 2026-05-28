@@ -96,17 +96,17 @@ CAP_DEFAULT = {
 }
 
 # ── Cache dos overrides (por worker) ───────────────────────────────────
-# Em teste recarrega sempre (TTL=0) pra nao vazar estado entre testes.
-_TTL = 0.0 if os.environ.get('PYTEST_RUNNING') else 30.0
 _cache_lock = threading.Lock()
 _cache = {'data': None, 'ts': 0.0}
 
 
 def _overrides():
-    """{(papel, capacidade): bool} vindo da tabela. Cache curto por worker."""
+    """{(papel, capacidade): bool} vindo da tabela. Cache curto por worker.
+    Em teste (PYTEST_RUNNING) recarrega sempre — evita vazar estado entre testes."""
+    ttl = 0.0 if os.environ.get('PYTEST_RUNNING') else 30.0
     now = time.time()
     with _cache_lock:
-        if _cache['data'] is not None and (now - _cache['ts']) < _TTL:
+        if _cache['data'] is not None and (now - _cache['ts']) < ttl:
             return _cache['data']
     data = {}
     try:
