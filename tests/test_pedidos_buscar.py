@@ -160,3 +160,74 @@ def test_buscar_itens_padeiro_bloqueado(app):
     # Padeiro não tem acesso
     resp = client.get('/pedidos/buscar-itens.json?q=pao')
     assert resp.status_code == 403
+
+
+def test_post_novo_pedido_cria_com_item_r(app, admin_user, loja):
+    """O typeahead envia item_id[]=r_<id>; o POST cria o pedido (contrato mantido)."""
+    from app.extensions import db
+    from app.models import PedidoLoja, Receita
+    from app.utils import hoje
+
+    with app.app_context():
+        r = Receita(nome='Pão Teste', categoria='Pães', rendimento_qtd=1,
+                    rendimento_unidade='un', peso_base=100.0)
+        db.session.add(r)
+        db.session.commit()
+        rid, lid = r.id, loja.id
+        data = hoje().isoformat()
+
+    client = app.test_client()
+    _login(client, admin_user)
+    resp = client.post('/pedidos/novo', data={
+        'loja_id': str(lid),
+        'data_entrega': data,
+        'item_id[]': f'r_{rid}',
+        'item_qtd[]': '5',
+        'item_estado[]': '',
+        'item_obs[]': '',
+    }, follow_redirects=False)
+    assert resp.status_code in (302, 303)
+
+    with app.app_context():
+        peds = PedidoLoja.query.filter_by(loja_id=lid).all()
+        assert len(peds) == 1
+        assert len(peds[0].itens) == 1
+        assert peds[0].itens[0].receita_id == rid
+        assert peds[0].itens[0].quantidade == 5
+
+
+def test_post_novo_pedido_ignora_item_sem_id(app, admin_user, loja):
+    """Linha com texto mas sem item_id (typeahead sem escolher / id limpo ao
+    reescrever) é ignorada — não vira item fantasma. Rede de segurança do
+    fix de 'id velho' no JS."""
+    from app.extensions import db
+    from app.models import PedidoLoja, Receita
+    from app.utils import hoje
+
+    with app.app_context():
+        r = Receita(nome='Pão Teste', categoria='Pães', rendimento_qtd=1,
+                    rendimento_unidade='un', peso_base=100.0)
+        db.session.add(r)
+        db.session.commit()
+        rid, lid = r.id, loja.id
+        data = hoje().isoformat()
+
+    client = app.test_client()
+    _login(client, admin_user)
+    resp = client.post('/pedidos/novo', data={
+        'loja_id': str(lid),
+        'data_entrega': data,
+        # 2 linhas: uma válida, uma com id vazio (texto digitado sem escolher)
+        'item_id[]': [f'r_{rid}', ''],
+        'item_qtd[]': ['5', '3'],
+        'item_estado[]': ['', ''],
+        'item_obs[]': ['', ''],
+    }, follow_redirects=False)
+    assert resp.status_code in (302, 303)
+
+    with app.app_context():
+        peds = PedidoLoja.query.filter_by(loja_id=lid).all()
+        assert len(peds) == 1
+        # só a linha com id válido virou item; a vazia foi ignorada
+        assert len(peds[0].itens) == 1
+        assert peds[0].itens[0].receita_id == rid
