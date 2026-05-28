@@ -83,6 +83,17 @@ def comprimir_imagem(file_bytes, *, max_size=700, quality=82):
         raise ValueError(f'imagem invalida ou formato nao suportado ({e})') from e
 
 
+def normalizar_busca(s):
+    """Normaliza string para busca: acento-insensível, case-insensitive.
+
+    >>> normalizar_busca('Pão Francês')
+    'pao frances'
+    """
+    import unicodedata
+    s = unicodedata.normalize('NFKD', s or '')
+    return ''.join(c for c in s if not unicodedata.combining(c)).lower()
+
+
 def resolver_loja_por_nome(nome, *, somente_ativas=False):
     """Fuzzy match de Loja por nome: case-insensitive exata, depois ilike.
 
