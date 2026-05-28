@@ -714,6 +714,10 @@ def papel_efetivo(user):
     """Mapeia user → string de papel canonico pra checagem."""
     if not user or not getattr(user, 'is_authenticated', False):
         return None
+    # Owner antes de admin: is_admin() inclui o owner, entao testamos
+    # is_dono() primeiro pra distinguir o tier owner-only (RH).
+    if user.is_dono():
+        return 'owner'
     if user.is_admin():
         return 'admin'
     papel = (getattr(user, 'papel', None) or '').lower()
