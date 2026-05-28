@@ -23,6 +23,9 @@ def obter_linha_loja(loja_id, *, receita_id=None, produto_id=None,
     deletar sem reatribuir apagaria o log) e remove as sobras. Cria a linha se
     nao existir. Idempotente (com 1 linha so retorna). NAO commita.
     """
+    if receita_id is None and produto_id is None and materia_prima_id is None:
+        raise ValueError('obter_linha_loja exige receita_id, produto_id ou '
+                         'materia_prima_id (nao consolida linhas pendentes).')
     filtro = {'loja_id': loja_id, 'receita_id': receita_id,
               'produto_id': produto_id, 'materia_prima_id': materia_prima_id}
     linhas = EstoqueLoja.query.filter_by(**filtro).order_by(EstoqueLoja.id).all()
