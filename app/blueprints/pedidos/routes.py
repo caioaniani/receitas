@@ -744,26 +744,20 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
         if qtd_rec <= 0:
             continue
 
-        # Linha de estoque eh por (loja, item, ESTADO). Mesmo pedido com 2
-        # estados gera 2 linhas distintas.
-        el = EstoqueLoja.query.filter_by(
-            loja_id=pedido.loja_id,
+        # Estoque de loja eh por PRODUTO (sem estado): o estado eh instrucao do
+        # pedido (industria prepara fora do padrao), nao dimensao de estoque.
+        # Soma sempre na linha unica do produto.
+        from app.services.estoque_helpers import obter_linha_loja
+        el = obter_linha_loja(
+            pedido.loja_id,
             receita_id=item.receita_id,
             produto_id=item.produto_id,
             materia_prima_id=item.materia_prima_id,
-            estado=item.estado,
-        ).first()
-        if not el:
-            el = EstoqueLoja(loja_id=pedido.loja_id,
-                             receita_id=item.receita_id,
-                             produto_id=item.produto_id,
-                             materia_prima_id=item.materia_prima_id,
-                             estado=item.estado)
-            db.session.add(el)
-            db.session.flush()
-        el.quantidade += qtd_rec
+            usuario_id=getattr(user, 'id', None),
+        )
+        el.quantidade = (el.quantidade or 0) + qtd_rec
         ref_div = ' (divergente)' if qtd_rec != item.quantidade else ''
-        # Tag de estado na referencia pra auditoria
+        # Tag de estado fica so na referencia (auditoria), nao na linha.
         from app.constants import estado_label
         ref_estado = estado_label(item.estado)
         ref = f'Pedido #{pedido.id}{ref_div} {ref_estado}'.rstrip()
