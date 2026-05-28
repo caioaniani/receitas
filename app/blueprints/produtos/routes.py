@@ -12,7 +12,8 @@ from app.utils import parse_float_br
 @produtos_bp.route('/')
 @login_required
 def lista():
-    produtos = Produto.query.order_by(Produto.categoria, Produto.nome).all()
+    produtos = (Produto.query.filter_by(ativo=True)
+                .order_by(Produto.categoria, Produto.nome).all())
     resultado = calcular_custos_receitas()
     fabricados = resultado['fabricados']
 
