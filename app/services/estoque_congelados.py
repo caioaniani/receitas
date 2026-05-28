@@ -356,6 +356,8 @@ def obter_linha_producao(*, receita_id=None, produto_id=None, usuario_id=None):
     estado) na canonica (menor id), somando quantidade, reatribuindo o historico
     de movimentos e removendo as sobras. Idempotente. NAO commita.
     """
+    if (receita_id is None) == (produto_id is None):
+        raise ValueError('Informe exatamente um de receita_id/produto_id.')
     filtro = {'receita_id': receita_id, 'produto_id': produto_id}
     linhas = EstoqueProducao.query.filter_by(**filtro).order_by(EstoqueProducao.id).all()
     if not linhas:
