@@ -113,23 +113,32 @@ def test_decorator_web_respeita_override(app):
     assert client.get('/pedidos/').status_code == 403
 
 
-def test_pagina_permissoes_owner_only(app):
+def test_pagina_permissoes_gerente_403(app):
+    from app.extensions import db
+    from app.models import Usuario
+    with app.app_context():
+        ger = Usuario(login='g1', nome='G', papel='gerente')
+        ger.set_senha('x')
+        db.session.add(ger)
+        db.session.commit()
+        gid = ger.id
+    client = app.test_client()
+    _login(client, gid)
+    assert client.get('/admin/permissoes').status_code == 403
+
+
+def test_pagina_permissoes_owner_200(app):
     from app.extensions import db
     from app.models import Usuario
     with app.app_context():
         owner = Usuario(login='o1', nome='O', papel='admin', is_owner=True)
         owner.set_senha('x')
-        ger = Usuario(login='g1', nome='G', papel='gerente')
-        ger.set_senha('x')
-        db.session.add_all([owner, ger])
+        db.session.add(owner)
         db.session.commit()
-        oid, gid = owner.id, ger.id
+        oid = owner.id
     client = app.test_client()
-    _login(client, gid)
-    assert client.get('/admin/permissoes').status_code == 403
-    client2 = app.test_client()
-    _login(client2, oid)
-    r = client2.get('/admin/permissoes')
+    _login(client, oid)
+    r = client.get('/admin/permissoes')
     assert r.status_code == 200
     assert b'Permiss' in r.data
 
