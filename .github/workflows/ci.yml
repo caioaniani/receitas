@@ -13,8 +13,9 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    # A suite sobe o app inteiro por teste (~16 min). 10 min cortava no meio
-    # ("Cancelled after 10m"); 25 da folga ate otimizarmos o tempo do suite.
+    # Suite ~12 min apos pular seeds em teste (PYTEST_RUNNING). Com install +
+    # ruff da ~15 min de wall time no runner. 25 mantem margem de seguranca —
+    # falha falsa por timeout travaria deploy (Wait for CI), entao folga > corte.
     timeout-minutes: 25
 
     steps:

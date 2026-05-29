@@ -388,25 +388,31 @@ def create_app(config_class=None):
         _migrate(app)
         _alembic_stamp_se_necessario(app)
 
-        # Seed só roda localmente (SQLite) — em produção os dados já existem
-        if app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite'):
-            from app.seed import seed_cardapio, seed_database, seed_update_v2
-            seed_database()
-            seed_cardapio()
-            seed_update_v2()
+        # Seeds populam catalogo/RH/projetos no startup. Em teste o conftest
+        # faz drop_all+create_all logo apos create_app(), descartando tudo isso
+        # — semear so desperdicaria ~3s por teste (×374 = ~19min de suite). Pula
+        # via PYTEST_RUNNING; cada teste usa as proprias fixtures. Producao nunca
+        # seta PYTEST_RUNNING, entao o comportamento la fica inalterado.
+        if not os.environ.get('PYTEST_RUNNING'):
+            # Seed só roda localmente (SQLite) — em produção os dados já existem
+            if app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite'):
+                from app.seed import seed_cardapio, seed_database, seed_update_v2
+                seed_database()
+                seed_cardapio()
+                seed_update_v2()
 
-        # Produtos do site — roda em todos os ambientes (SQLite + PostgreSQL)
-        from app.seed import seed_site_products
-        seed_site_products()
+            # Produtos do site — roda em todos os ambientes (SQLite + PostgreSQL)
+            from app.seed import seed_site_products
+            seed_site_products()
 
-        # RH: lojas + funcionários — roda em todos os ambientes
-        from app.seed import seed_rh, seed_rh_escala
-        seed_rh()
-        seed_rh_escala()
+            # RH: lojas + funcionários — roda em todos os ambientes
+            from app.seed import seed_rh, seed_rh_escala
+            seed_rh()
+            seed_rh_escala()
 
-        # Gestão de Projetos — seed inicial em todos os ambientes
-        from app.seed import seed_projetos
-        seed_projetos()
+            # Gestão de Projetos — seed inicial em todos os ambientes
+            from app.seed import seed_projetos
+            seed_projetos()
 
         _criar_admin()
 
