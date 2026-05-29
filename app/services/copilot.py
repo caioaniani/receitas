@@ -735,10 +735,16 @@ def pode_usar(tool_name, user):
     if not papel:
         return False
     permitidos = PAPEIS_POR_TOOL.get(tool_name, {'admin'})
-    # Owner eh superconjunto de admin: passa em tudo que admin passa, mais
-    # as tools marcadas exclusivamente {'owner'} (RH).
+    # Owner/admin sempre full — nao entram na matriz editavel (sem lockout).
     if papel == 'owner':
         return 'owner' in permitidos or 'admin' in permitidos
+    if papel == 'admin':
+        return 'admin' in permitidos
+    # Demais papeis: se a tool for editavel, consulta o modelo unificado
+    # (app/services/permissoes.py) pelo PAPEL REAL. Senao, default fixo do codigo.
+    from app.services import permissoes
+    if permissoes.eh_editavel(tool_name):
+        return permissoes.pode((getattr(user, 'papel', '') or 'funcionario'), tool_name)
     return papel in permitidos
 
 

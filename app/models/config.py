@@ -41,3 +41,23 @@ class AppConfig(db.Model):
             row = cls(key=key, value=v)
             db.session.add(row)
         return row
+
+
+class PermissaoPapel(db.Model):
+    """Override editavel de permissao por papel (web + copilot + Slack).
+
+    O CODIGO define o padrao (app/services/permissoes.py::CAP_DEFAULT), que
+    espelha o comportamento legado. Linhas aqui SOBREPOEM esse padrao; a
+    ausencia de linha = usa o padrao. admin/owner ignoram tudo isso (sempre
+    acesso total) — entao nao da pra se trancar fora do sistema.
+    """
+    __tablename__ = 'permissao_papel'
+
+    id = db.Column(db.Integer, primary_key=True)
+    papel = db.Column(db.String(20), nullable=False)
+    capacidade = db.Column(db.String(50), nullable=False)
+    permitido = db.Column(db.Boolean, nullable=False, default=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('papel', 'capacidade', name='uq_permissao_papel_cap'),
+    )

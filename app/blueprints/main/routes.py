@@ -721,6 +721,28 @@ def debug_papeis():
                            todos_vinculos=todos_vinculos)
 
 
+@main_bp.route('/admin/permissoes', methods=['GET', 'POST'])
+@owner_required
+def permissoes_editar():
+    """Matriz editavel papel x capacidade (web + copilot + Slack). Owner-only.
+
+    Admin/owner nao aparecem na matriz (acesso total fixo). Os padroes espelham
+    o comportamento legado — so o que voce mudar aqui passa a valer (na hora)."""
+    from flask import flash
+
+    from app.services import permissoes as perm_svc
+
+    if request.method == 'POST':
+        perm_svc.salvar(request.form)
+        flash('Permissões atualizadas.', 'success')
+        return redirect(url_for('main.permissoes_editar'))
+
+    return render_template('main/permissoes.html',
+                           linhas=perm_svc.estado_atual(),
+                           papeis=perm_svc.PAPEIS_EDITAVEIS,
+                           papel_label=perm_svc.PAPEL_LABEL)
+
+
 @main_bp.route('/admin/debug-schema')
 @owner_required
 def debug_schema():
