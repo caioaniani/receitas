@@ -568,7 +568,8 @@ def audit():
     if registro_f:
         q = q.filter_by(registro_id=registro_f)
     logs = q.order_by(AuditLog.criado_em.desc()).limit(200).all()
-    # Parse JSON dos campos antes/depois pra exibir formatado
+    # Parse JSON dos campos antes/depois + tradução em linguagem natural.
+    from app.services import historico_humano
     rows = []
     for l in logs:
         try:
@@ -579,8 +580,9 @@ def audit():
             depois = _json.loads(l.depois) if l.depois else None
         except Exception:
             depois = None
+        traducao = historico_humano.traduzir_audit(l, antes, depois)
         rows.append({
-            "log": l, "antes": antes, "depois": depois,
+            "log": l, "antes": antes, "depois": depois, "traducao": traducao,
         })
     # Lista de tabelas e usuarios pra filtros
     tabelas = [r[0] for r in db.session.query(AuditLog.tabela).distinct().all()]
