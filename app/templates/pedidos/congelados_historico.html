@@ -2,12 +2,13 @@
 
 {% block title %}Historico Industria{% endblock %}
 
-{% set TIPOS_LABEL = {
-    'entrada': ('Entrada', 'primary'),
-    'saida_pedido': ('Saída (pedido)', 'warning'),
-    'ajuste': ('Ajuste', 'secondary'),
-    'balanco': ('Balanço', 'info'),
-    'desperdicio': ('Desperdicio', 'danger'),
+{# Cores dos badges. Rótulos vêm do serviço central historico_humano. #}
+{% set TIPO_COR = {
+    'entrada': 'primary',
+    'saida_pedido': 'warning',
+    'ajuste': 'secondary',
+    'balanco': 'info',
+    'desperdicio': 'danger',
 } %}
 
 {% block content %}
