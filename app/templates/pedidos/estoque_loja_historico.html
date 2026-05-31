@@ -132,13 +132,13 @@
                 </thead>
                 <tbody>
                     {% for l in lista_dia %}
-                    {% set label, color = TIPOS_LABEL.get(l.mov.tipo, (l.mov.tipo, 'secondary')) %}
+                    {% set color = TIPO_COR.get(l.mov.tipo, 'secondary') %}
                     <tr>
                         <td class="small text-muted">{{ l.mov.data.strftime('%H:%M') if l.mov.data else '—' }}</td>
                         {% if not sel_loja %}<td>{{ l.loja.nome if l.loja else '?' }}</td>{% endif %}
                         <td>{{ l.item_nome }}</td>
                         <td class="text-center fw-bold">{{ l.mov.quantidade }}</td>
-                        <td><span class="badge bg-{{ color }}">{{ label }}</span></td>
+                        <td><span class="badge bg-{{ color }}">{{ historico_humano.mov_loja_label(l.mov.tipo) }}</span></td>
                         <td class="text-muted small">{{ l.mov.referencia or '' }}</td>
                         <td class="text-muted small">{{ l.usuario.nome if l.usuario else '—' }}</td>
                     </tr>
