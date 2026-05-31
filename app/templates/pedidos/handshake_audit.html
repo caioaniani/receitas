@@ -35,24 +35,24 @@
             </tr>
         </thead>
         <tbody>
+            {% set cores = {
+                'scan': 'info', 'pin_ok': 'success', 'sucesso': 'success',
+                'pin_fail': 'danger', 'pin_vazio': 'warning',
+                'erro_status': 'danger', 'erro_executor': 'danger',
+                'erro_loja_sem_pin': 'danger', 'scan_falha': 'danger',
+                'erro_tipo': 'danger',
+                'forcar_entrega': 'warning',
+            } %}
             {% for ev in eventos %}
             <tr>
                 <td class="small">{{ ev.momento|brt('%d/%m %H:%M:%S') }}</td>
                 <td>
-                    {% if ev.tipo == 'saida' %}<span class="badge bg-primary">saída</span>
-                    {% elif ev.tipo == 'entrega' %}<span class="badge bg-success">entrega</span>
-                    {% else %}<span class="badge bg-secondary">{{ ev.tipo or '—' }}</span>{% endif %}
+                    {% if ev.tipo == 'saida' %}<span class="badge bg-primary">{{ historico_humano.handshake_tipo_label(ev.tipo) }}</span>
+                    {% elif ev.tipo == 'entrega' %}<span class="badge bg-success">{{ historico_humano.handshake_tipo_label(ev.tipo) }}</span>
+                    {% else %}<span class="badge bg-secondary">{{ historico_humano.handshake_tipo_label(ev.tipo) or '—' }}</span>{% endif %}
                 </td>
                 <td>
-                    {% set cores = {
-                        'scan': 'info', 'pin_ok': 'success', 'sucesso': 'success',
-                        'pin_fail': 'danger', 'pin_vazio': 'warning',
-                        'erro_status': 'danger', 'erro_executor': 'danger',
-                        'erro_loja_sem_pin': 'danger', 'scan_falha': 'danger',
-                        'erro_tipo': 'danger',
-                        'forcar_entrega': 'warning',
-                    } %}
-                    <span class="badge bg-{{ cores.get(ev.etapa, 'secondary') }}">{{ ev.etapa }}</span>
+                    <span class="badge bg-{{ cores.get(ev.etapa, 'secondary') }}">{{ historico_humano.handshake_etapa_label(ev.etapa) }}</span>
                 </td>
                 <td class="small"><code>{{ ev.status_pedido or '—' }}</code></td>
                 <td class="small">{{ ev.detalhe or '' }}</td>
