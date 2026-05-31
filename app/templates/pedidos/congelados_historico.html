@@ -32,8 +32,7 @@
             <select name="tipo" class="form-select form-select-sm" onchange="this.form.submit()">
                 <option value="">Todos</option>
                 {% for t in tipos_disp %}
-                {% set label = TIPOS_LABEL.get(t, (t, 'secondary'))[0] %}
-                <option value="{{ t }}" {% if tipo_filtro == t %}selected{% endif %}>{{ label }}</option>
+                <option value="{{ t }}" {% if tipo_filtro == t %}selected{% endif %}>{{ historico_humano.mov_producao_label(t) }}</option>
                 {% endfor %}
             </select>
         </div>
