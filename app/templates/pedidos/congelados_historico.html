@@ -56,11 +56,11 @@
 {% if totais %}
 <div class="row g-2 mb-3">
     {% for tipo, info in totais.items() %}
-    {% set label, color = TIPOS_LABEL.get(tipo, (tipo, 'secondary')) %}
+    {% set color = TIPO_COR.get(tipo, 'secondary') %}
     <div class="col-md-3">
         <div class="card border-{{ color }}">
             <div class="card-body py-2 px-3">
-                <small class="text-muted">{{ label }}</small>
+                <small class="text-muted">{{ historico_humano.mov_producao_label(tipo) }}</small>
                 <div class="d-flex justify-content-between">
                     <strong>{{ info.qtd }} un</strong>
                     <span class="text-muted small">{{ info.n }} mov</span>
