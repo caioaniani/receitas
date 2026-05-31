@@ -130,6 +130,13 @@ def create_app(config_class=None):
             _SIDEBAR_CACHE.clear()
 
     @app.context_processor
+    def inject_historico_humano():
+        """Expoe rotulos amigaveis (tipos de mov, etapas de handshake, etc.)
+        pra qualquer template — evita duplicar dicts inline em cada .html."""
+        from app.services import historico_humano
+        return {'historico_humano': historico_humano}
+
+    @app.context_processor
     def inject_sidebar():
         from flask_login import current_user
 
