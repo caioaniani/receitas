@@ -87,13 +87,8 @@
                         <td class="fw-semibold">{{ l.item_nome }}</td>
                         <td class="text-end fw-bold">{{ l.mov.quantidade }}</td>
                         <td>
-                            {% if l.mov.tipo == 'saida_lote' %}
-                                <span class="badge bg-success" style="font-size:10px;">saída em lote</span>
-                            {% elif l.mov.tipo == 'venda_loja_sem_estoque' %}
-                                <span class="badge bg-danger" style="font-size:10px;">sem estoque</span>
-                            {% else %}
-                                <span class="badge bg-secondary" style="font-size:10px;">{{ l.mov.tipo }}</span>
-                            {% endif %}
+                            {% set cor = 'success' if l.mov.tipo == 'saida_lote' else ('danger' if l.mov.tipo == 'venda_loja_sem_estoque' else 'secondary') %}
+                            <span class="badge bg-{{ cor }}" style="font-size:10px;">{{ historico_humano.mov_loja_label(l.mov.tipo) }}</span>
                         </td>
                         <td><small class="text-muted">{{ l.mov.referencia or '—' }}</small></td>
                     </tr>

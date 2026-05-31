@@ -119,7 +119,7 @@
                                             {%- if m.tipo == 'venda_seru' %}#198754
                                             {%- elif m.tipo == 'venda_seru_estorno' %}#fd7e14
                                             {%- elif m.tipo == 'venda_seru_sem_estoque' %}#dc3545
-                                            {%- else %}#6c757d{% endif -%};color:#fff;">{{ m.tipo }}</span>
+                                            {%- else %}#6c757d{% endif -%};color:#fff;">{{ historico_humano.mov_loja_label(m.tipo) }}</span>
                                         <strong>{{ m.quantidade }}</strong>
                                         un de {{ m.estoque.nome_item if m.estoque else '?' }}
                                     </li>

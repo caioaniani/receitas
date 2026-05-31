@@ -2,12 +2,13 @@
 
 {% block title %}Historico Industria{% endblock %}
 
-{% set TIPOS_LABEL = {
-    'entrada': ('Entrada', 'primary'),
-    'saida_pedido': ('Saída (pedido)', 'warning'),
-    'ajuste': ('Ajuste', 'secondary'),
-    'balanco': ('Balanço', 'info'),
-    'desperdicio': ('Desperdicio', 'danger'),
+{# Cores dos badges. Rótulos vêm do serviço central historico_humano. #}
+{% set TIPO_COR = {
+    'entrada': 'primary',
+    'saida_pedido': 'warning',
+    'ajuste': 'secondary',
+    'balanco': 'info',
+    'desperdicio': 'danger',
 } %}
 
 {% block content %}
@@ -31,8 +32,7 @@
             <select name="tipo" class="form-select form-select-sm" onchange="this.form.submit()">
                 <option value="">Todos</option>
                 {% for t in tipos_disp %}
-                {% set label = TIPOS_LABEL.get(t, (t, 'secondary'))[0] %}
-                <option value="{{ t }}" {% if tipo_filtro == t %}selected{% endif %}>{{ label }}</option>
+                <option value="{{ t }}" {% if tipo_filtro == t %}selected{% endif %}>{{ historico_humano.mov_producao_label(t) }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -56,11 +56,11 @@
 {% if totais %}
 <div class="row g-2 mb-3">
     {% for tipo, info in totais.items() %}
-    {% set label, color = TIPOS_LABEL.get(tipo, (tipo, 'secondary')) %}
+    {% set color = TIPO_COR.get(tipo, 'secondary') %}
     <div class="col-md-3">
         <div class="card border-{{ color }}">
             <div class="card-body py-2 px-3">
-                <small class="text-muted">{{ label }}</small>
+                <small class="text-muted">{{ historico_humano.mov_producao_label(tipo) }}</small>
                 <div class="d-flex justify-content-between">
                     <strong>{{ info.qtd }} un</strong>
                     <span class="text-muted small">{{ info.n }} mov</span>
@@ -118,12 +118,12 @@
                 </thead>
                 <tbody>
                     {% for l in lista_dia %}
-                    {% set label, color = TIPOS_LABEL.get(l.mov.tipo, (l.mov.tipo, 'secondary')) %}
+                    {% set color = TIPO_COR.get(l.mov.tipo, 'secondary') %}
                     <tr>
                         <td class="small text-muted">{{ l.mov.data.strftime('%H:%M') if l.mov.data else '—' }}</td>
                         {% if not item_sel %}<td>{{ l.item_nome }}</td>{% endif %}
                         <td class="text-center fw-bold">{{ l.mov.quantidade }}</td>
-                        <td><span class="badge bg-{{ color }}">{{ label }}</span></td>
+                        <td><span class="badge bg-{{ color }}">{{ historico_humano.mov_producao_label(l.mov.tipo) }}</span></td>
                         <td class="text-muted small">{{ l.mov.referencia or '' }}</td>
                         <td class="text-muted small">{{ l.usuario.nome if l.usuario else '—' }}</td>
                     </tr>

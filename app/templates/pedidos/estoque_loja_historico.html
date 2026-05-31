@@ -2,21 +2,23 @@
 
 {% block title %}Historico Estoque Loja{% endblock %}
 
-{% set TIPOS_LABEL = {
-    'entrada_pedido': ('Entrada de pedido', 'success'),
-    'entrada_manual': ('Entrada manual', 'primary'),
-    'ajuste_negativo': ('Ajuste negativo', 'secondary'),
-    'saida_lote': ('Saída em lote', 'warning'),
-    'venda_loja_sem_estoque': ('Saída sem estoque', 'danger'),
-    'venda_seru': ('Venda Seru (PDV)', 'info'),
-    'venda_seru_estorno': ('Estorno Seru', 'secondary'),
-    'venda_seru_sem_estoque': ('Venda Seru sem estoque', 'danger'),
-    'venda_vnda': ('Venda VNDA', 'info'),
-    'venda_vnda_estorno': ('Estorno VNDA', 'secondary'),
-    'venda_vnda_sem_estoque': ('Venda VNDA sem estoque', 'danger'),
-    'desperdicio': ('Desperdicio', 'warning'),
-    'desperdicio_sem_estoque': ('Desperdicio sem estoque', 'danger'),
-    'desperdicio_estorno': ('Estorno desperdicio', 'secondary'),
+{# Cores dos badges. Os rótulos vêm do serviço central historico_humano. #}
+{% set TIPO_COR = {
+    'entrada_pedido': 'success',
+    'entrada_manual': 'primary',
+    'ajuste_negativo': 'secondary',
+    'saida_lote': 'warning',
+    'venda_loja_sem_estoque': 'danger',
+    'venda_seru': 'info',
+    'venda_seru_estorno': 'secondary',
+    'venda_seru_sem_estoque': 'danger',
+    'venda_vnda': 'info',
+    'venda_vnda_estorno': 'secondary',
+    'venda_vnda_sem_estoque': 'danger',
+    'desperdicio': 'warning',
+    'desperdicio_sem_estoque': 'danger',
+    'desperdicio_estorno': 'secondary',
+    'consolidacao_estado': 'secondary',
 } %}
 
 {% block content %}
@@ -40,8 +42,7 @@
             <select name="tipo" class="form-select form-select-sm" onchange="this.form.submit()">
                 <option value="">Todos</option>
                 {% for t in tipos_disp %}
-                {% set label = TIPOS_LABEL.get(t, (t, 'secondary'))[0] %}
-                <option value="{{ t }}" {% if tipo_filtro == t %}selected{% endif %}>{{ label }}</option>
+                <option value="{{ t }}" {% if tipo_filtro == t %}selected{% endif %}>{{ historico_humano.mov_loja_label(t) }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -67,11 +68,11 @@
 {% if totais %}
 <div class="row g-2 mb-3">
     {% for tipo, info in totais.items() %}
-    {% set label, color = TIPOS_LABEL.get(tipo, (tipo, 'secondary')) %}
+    {% set color = TIPO_COR.get(tipo, 'secondary') %}
     <div class="col-md-3">
         <div class="card border-{{ color }}">
             <div class="card-body py-2 px-3">
-                <small class="text-muted">{{ label }}</small>
+                <small class="text-muted">{{ historico_humano.mov_loja_label(tipo) }}</small>
                 <div class="d-flex justify-content-between">
                     <strong>{{ info.qtd }} un</strong>
                     <span class="text-muted small">{{ info.n }} mov</span>
@@ -131,13 +132,13 @@
                 </thead>
                 <tbody>
                     {% for l in lista_dia %}
-                    {% set label, color = TIPOS_LABEL.get(l.mov.tipo, (l.mov.tipo, 'secondary')) %}
+                    {% set color = TIPO_COR.get(l.mov.tipo, 'secondary') %}
                     <tr>
                         <td class="small text-muted">{{ l.mov.data.strftime('%H:%M') if l.mov.data else '—' }}</td>
                         {% if not sel_loja %}<td>{{ l.loja.nome if l.loja else '?' }}</td>{% endif %}
                         <td>{{ l.item_nome }}</td>
                         <td class="text-center fw-bold">{{ l.mov.quantidade }}</td>
-                        <td><span class="badge bg-{{ color }}">{{ label }}</span></td>
+                        <td><span class="badge bg-{{ color }}">{{ historico_humano.mov_loja_label(l.mov.tipo) }}</span></td>
                         <td class="text-muted small">{{ l.mov.referencia or '' }}</td>
                         <td class="text-muted small">{{ l.usuario.nome if l.usuario else '—' }}</td>
                     </tr>
