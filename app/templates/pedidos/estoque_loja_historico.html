@@ -2,21 +2,23 @@
 
 {% block title %}Historico Estoque Loja{% endblock %}
 
-{% set TIPOS_LABEL = {
-    'entrada_pedido': ('Entrada de pedido', 'success'),
-    'entrada_manual': ('Entrada manual', 'primary'),
-    'ajuste_negativo': ('Ajuste negativo', 'secondary'),
-    'saida_lote': ('Saída em lote', 'warning'),
-    'venda_loja_sem_estoque': ('Saída sem estoque', 'danger'),
-    'venda_seru': ('Venda Seru (PDV)', 'info'),
-    'venda_seru_estorno': ('Estorno Seru', 'secondary'),
-    'venda_seru_sem_estoque': ('Venda Seru sem estoque', 'danger'),
-    'venda_vnda': ('Venda VNDA', 'info'),
-    'venda_vnda_estorno': ('Estorno VNDA', 'secondary'),
-    'venda_vnda_sem_estoque': ('Venda VNDA sem estoque', 'danger'),
-    'desperdicio': ('Desperdicio', 'warning'),
-    'desperdicio_sem_estoque': ('Desperdicio sem estoque', 'danger'),
-    'desperdicio_estorno': ('Estorno desperdicio', 'secondary'),
+{# Cores dos badges. Os rótulos vêm do serviço central historico_humano. #}
+{% set TIPO_COR = {
+    'entrada_pedido': 'success',
+    'entrada_manual': 'primary',
+    'ajuste_negativo': 'secondary',
+    'saida_lote': 'warning',
+    'venda_loja_sem_estoque': 'danger',
+    'venda_seru': 'info',
+    'venda_seru_estorno': 'secondary',
+    'venda_seru_sem_estoque': 'danger',
+    'venda_vnda': 'info',
+    'venda_vnda_estorno': 'secondary',
+    'venda_vnda_sem_estoque': 'danger',
+    'desperdicio': 'warning',
+    'desperdicio_sem_estoque': 'danger',
+    'desperdicio_estorno': 'secondary',
+    'consolidacao_estado': 'secondary',
 } %}
 
 {% block content %}
