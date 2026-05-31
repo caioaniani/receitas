@@ -84,11 +84,8 @@
                     <tr>
                         <td class="small text-muted">{{ m.data.strftime('%H:%M') }}</td>
                         <td>
-                            {% if m.tipo == 'entrada' %}
-                            <span class="badge bg-success">Entrada</span>
-                            {% else %}
-                            <span class="badge bg-warning text-dark">Saída</span>
-                            {% endif %}
+                            {% set cor = 'success' if m.tipo == 'entrada' else 'warning text-dark' %}
+                            <span class="badge bg-{{ cor }}">{{ historico_humano.mov_mp_label(m.tipo) }}</span>
                         </td>
                         <td class="text-end">{{ "%.1f"|format(m.quantidade) }}</td>
                         <td class="text-end">{{ ("R$ %.2f"|format(m.preco_unitario)) if m.preco_unitario else '—' }}</td>
