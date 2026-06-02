@@ -284,6 +284,45 @@ def imagens_upload():
                            atualizadas=atualizadas)
 
 
+@receitas_bp.route('/modos-preparo')
+@login_required
+@admin_required
+def modos_preparo():
+    """Tela em lote pra cadastrar o modo de preparo de cada receita.
+
+    Filtros: pendentes (sem texto), preenchidas (com texto), todas.
+    Auto-save por textarea via POST /receitas/modos-preparo/salvar.json.
+    """
+    filtro = request.args.get('filtro', 'pendentes')
+    q = Receita.query
+    vazio = db.or_(Receita.modo_preparo.is_(None), Receita.modo_preparo == '')
+    if filtro == 'pendentes':
+        q = q.filter(vazio)
+    elif filtro == 'preenchidas':
+        q = q.filter(db.not_(vazio))
+    receitas = q.order_by(Receita.categoria, Receita.nome).all()
+    total = Receita.query.count()
+    preenchidas = Receita.query.filter(db.not_(vazio)).count()
+    return render_template('receitas/modos_preparo.html',
+                           receitas=receitas, filtro=filtro,
+                           total=total, preenchidas=preenchidas)
+
+
+@receitas_bp.route('/modos-preparo/salvar.json', methods=['POST'])
+@login_required
+@admin_required
+def modos_preparo_salvar():
+    receita_id = request.form.get('receita_id', type=int)
+    if not receita_id:
+        return jsonify({'ok': False, 'erro': 'receita_id ausente'}), 400
+    receita = Receita.query.get(receita_id)
+    if not receita:
+        return jsonify({'ok': False, 'erro': 'receita não encontrada'}), 404
+    receita.modo_preparo = (request.form.get('texto', '') or '').strip() or None
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
 @receitas_bp.route('/<int:id>/salvar', methods=['POST'])
 @login_required
 def salvar(id):
