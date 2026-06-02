@@ -1635,7 +1635,7 @@ CATALOGO = {
         ('FAZENDA', ['LEITE', 'QUEIJO BRANCO']),
     ],
 
-    'Nebraska': [
+    'Loja Nebraska': [
         ('FORNECEDOR DE CAFE SAINTS', [
             'CAFÉ EM GRÃOS', 'CAFÉ COADO', 'FILTRO', 'NITRO', 'FANTASY',
             'OAT-CHATA', 'ENERGY', 'CHÁ DE CLITÓRIA', 'XAROPE DE BAUNILHA',
