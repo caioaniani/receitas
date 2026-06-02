@@ -40,23 +40,24 @@ def test_index_filtro_pendentes_e_contagem(app, admin_user):
     html = r.data.decode('utf-8')
     # contagem global: 3 total, 1 preenchida
     assert '1</strong> de <strong>3' in html
-    # filtro default = pendentes: aparecem a vazia e a vazia_str, mas NAO a cheia
-    assert 'Pao Frances' in html
-    assert 'Brioche' in html
-    assert 'Croissant' not in html
+    # filtro default = pendentes: textareas SO da vazia e da vazia_str
+    assert f'data-receita-id="{ids["vazia"]}"' in html
+    assert f'data-receita-id="{ids["vazia_str"]}"' in html
+    assert f'data-receita-id="{ids["cheia"]}"' not in html
 
 
 def test_index_filtro_preenchidas(app, admin_user):
-    _criar_receitas(app)
+    ids = _criar_receitas(app)
     client = app.test_client()
     _login(client, admin_user.id)
     r = client.get('/receitas/modos-preparo?filtro=preenchidas')
     assert r.status_code == 200
     html = r.data.decode('utf-8')
-    assert 'Croissant' in html
+    assert f'data-receita-id="{ids["cheia"]}"' in html
     # texto atual aparece dentro do textarea
     assert 'Passo 1: misturar.' in html
-    assert 'Pao Frances' not in html
+    assert f'data-receita-id="{ids["vazia"]}"' not in html
+    assert f'data-receita-id="{ids["vazia_str"]}"' not in html
 
 
 def test_salvar_json_grava_modo_preparo(app, admin_user):
