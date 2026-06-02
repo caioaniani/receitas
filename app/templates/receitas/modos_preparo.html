@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+{% block title %}Modo de preparo (lote){% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0">
+        <i class="bi bi-journal-text"></i> Modo de preparo das receitas
+    </h1>
+    <div class="small text-muted">
+        <strong>{{ preenchidas }}</strong> de <strong>{{ total }}</strong> preenchidas
+    </div>
+</div>
+
+<div class="alert alert-info small mb-3">
+    Digite o passo a passo de cada receita. Salva sozinho ao parar de digitar
+    (ou ao sair do campo). Pra editar ingredientes/preço use o link
+    <em>“Abrir ficha completa”</em>.
+</div>
+
+<div class="mb-3 btn-group" role="group">
+    <a href="{{ url_for('receitas.modos_preparo', filtro='pendentes') }}"
+       class="btn btn-sm {% if filtro == 'pendentes' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+        Pendentes
+    </a>
+    <a href="{{ url_for('receitas.modos_preparo', filtro='preenchidas') }}"
+       class="btn btn-sm {% if filtro == 'preenchidas' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+        Preenchidas
+    </a>
+    <a href="{{ url_for('receitas.modos_preparo', filtro='todas') }}"
+       class="btn btn-sm {% if filtro == 'todas' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+        Todas
+    </a>
+</div>
+
+{% if not receitas %}
+<div class="alert alert-success">
+    {% if filtro == 'pendentes' %}
+    Tudo preenchido! Nenhuma receita pendente.
+    {% else %}
+    Nenhuma receita pra mostrar.
+    {% endif %}
+</div>
+{% else %}
+
+<div class="vstack gap-3">
+    {% for r in receitas %}
+    <div class="card card-padaria">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <strong>{{ r.nome }}</strong>
+                {% if r.categoria %}
+                <span class="text-muted small ms-2">{{ r.categoria }}</span>
+                {% endif %}
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="mp-status small" data-status-for="{{ r.id }}">
+                    {% if r.modo_preparo %}
+                    <span class="text-success"><i class="bi bi-check-circle-fill"></i> Preenchida</span>
+                    {% else %}
+                    <span class="text-muted"><i class="bi bi-circle"></i> Vazia</span>
+                    {% endif %}
+                </span>
+                <a href="{{ url_for('receitas.ficha', id=r.id) }}"
+                   class="small text-decoration-none" target="_blank">
+                    Abrir ficha completa
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <textarea class="form-control input-blue mp-textarea"
+                      data-receita-id="{{ r.id }}"
+                      rows="6"
+                      placeholder="Passo 1: ...&#10;Passo 2: ...">{{ r.modo_preparo or '' }}</textarea>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var URL = '{{ url_for("receitas.modos_preparo_salvar") }}';
+    var CSRF = '{{ csrf_token() }}';
+    var timers = new WeakMap();
+
+    function atualizarStatus(receitaId, preenchido) {
+        var el = document.querySelector('.mp-status[data-status-for="' + receitaId + '"]');
+        if (!el) return;
+        el.innerHTML = preenchido
+            ? '<span class="text-success"><i class="bi bi-check-circle-fill"></i> Preenchida</span>'
+            : '<span class="text-muted"><i class="bi bi-circle"></i> Vazia</span>';
+    }
+
+    function salvar(textarea) {
+        var fd = new FormData();
+        fd.append('csrf_token', CSRF);
+        fd.append('receita_id', textarea.dataset.receitaId);
+        fd.append('texto', textarea.value || '');
+        textarea.classList.remove('is-valid', 'is-invalid');
+        fetch(URL, {
+            method: 'POST', body: fd,
+            headers: {'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': CSRF},
+        }).then(function (r) {
+            if (r.ok) {
+                textarea.classList.add('is-valid');
+                atualizarStatus(textarea.dataset.receitaId, (textarea.value || '').trim().length > 0);
+                setTimeout(function () { textarea.classList.remove('is-valid'); }, 1200);
+            } else {
+                textarea.classList.add('is-invalid');
+            }
+        }).catch(function () {
+            textarea.classList.add('is-invalid');
+        });
+    }
+
+    document.querySelectorAll('.mp-textarea').forEach(function (ta) {
+        ta.addEventListener('input', function () {
+            clearTimeout(timers.get(ta));
+            timers.set(ta, setTimeout(function () { salvar(ta); }, 800));
+        });
+        ta.addEventListener('blur', function () {
+            clearTimeout(timers.get(ta));
+            salvar(ta);
+        });
+    });
+})();
+</script>
+{% endblock %}
