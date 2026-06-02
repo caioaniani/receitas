@@ -1430,7 +1430,7 @@ def _enriquecer_criar_pedido(tool_input):
         qtd = int(item.get('quantidade') or 0)
         if not nome or qtd <= 0:
             continue
-        matches = _resolver_produto(nome)
+        matches = _resolver_item_pedido(nome)
         obs_item = (item.get('observacao') or '').strip() or None
         estado_item = (item.get('estado') or '').strip().lower() or None
         if estado_item not in (None, 'backup', 'assado'):
