@@ -1404,9 +1404,9 @@ logger = logging.getLogger(__name__)
 # Mapeamento "nome da aba da planilha" → nome da Loja no sistema.
 # Estes sao os nomes CANONICOS (nao os apelidos: Brooklin/Loja 2/1851).
 LOJA_POR_ABA = {
-    'Ribeiro do Vale': 'LISTA DE COMPAS LOJA 1',     # Brooklin
-    'Anesio Pinto Rosa': 'LISTA DE COMPRAS LOJA 2',
-    'Nebraska': 'LISTA DE COMPRAS 1851',
+    'Loja Ribeiro do Vale': 'LISTA DE COMPAS LOJA 1',     # Brooklin
+    'Loja Anesio Pinto Rosa': 'LISTA DE COMPRAS LOJA 2',
+    'Loja Nebraska': 'LISTA DE COMPRAS 1851',
     'Industria': 'LISTA INDUSTRIA',
 }
 
