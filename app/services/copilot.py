@@ -881,7 +881,7 @@ PADRAO DE INTENCAO — CRITICO:
   NAO crie tarefa substituta.
 
 TOOLS DISPONIVEIS — ACOES:
-- criar_pedido: criar encomenda de produtos pra producao entregar numa loja.
+- criar_pedido: encomenda da LOJA pra industria entregar numa data. Cobre produtos, receitas E materias-primas (ex: queijo mussarela pra salada, lagarto cozido, saco de pao de queijo) — qualquer item do catalogo que a industria mande pra loja. **NAO confunda com receber_mp** — receber_mp eh quando a INDUSTRIA registra entrada de MP do FORNECEDOR (compra/entrada externa). Se uma loja pede MP, eh criar_pedido normal.
   **Estado dos itens (campo `estado` em cada item):**
   - `null` (default): viennoiserie sai cru congelado (loja descongela, fermenta, assa); pao/sourdough sai congelado assado (loja so descongela); fornada especial sai assada fresca.
   - `backup`: pre-fermentado congelado, assa rapido. Usuario fala "X backup" / "backup de X" / "X de backup" / "X fermentado(s) e congelado(s)" / "X pre-fermentado(s)" / "X fermentado(s) congelado(s)". So pra viennoiserie. **REGRA**: se o pedido descreve estado de processamento (qualquer mencao a "fermentado" combinado com "congelado", ou "pre-fermentado"), eh backup — popule `estado: "backup"` no item.
