@@ -74,9 +74,9 @@ def test_salvar_tenho_e_envio(app):
         # negativo vira 0
         ok, _ = svc.salvar_tenho(sem, item.id, -3)
         assert ok and q.tenho == 0
-        # invalido falha graciosamente
+        # invalido falha graciosamente (mensagem em pt-BR com acento)
         ok, erro = svc.salvar_tenho(sem, item.id, 'abc')
-        assert not ok and 'invalida' in (erro or '').lower()
+        assert not ok and 'inválida' in (erro or '').lower()
 
         # enviar bloqueia novos saves
         ok, _ = svc.enviar_semana(sem, uid)
