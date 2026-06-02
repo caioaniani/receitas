@@ -2122,6 +2122,8 @@ def executar_editar_pedido(params, user):
                 pi.produto_id = resolvido['id']
             elif resolvido['tipo'] == 'receita':
                 pi.receita_id = resolvido['id']
+            elif resolvido['tipo'] == 'mp':
+                pi.materia_prima_id = resolvido['id']
             db.session.add(pi)
             salvos += 1
         if salvos == 0:
