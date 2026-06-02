@@ -1613,6 +1613,32 @@ def _resolver_produto(nome):
     return matches
 
 
+def _resolver_item_pedido(nome):
+    """Resolve nome em qualquer item que cabe num PedidoLoja: Receita,
+    Produto OU MateriaPrima. Loja pede MPs tambem (queijo pra salada, lagarto
+    cozido, saco de pao de queijo), entao tem que cobrir os 3.
+
+    B2B e ajuste_estoque continuam usando `_resolver_produto` (so receita +
+    produto), porque MP nao se aplica naqueles fluxos."""
+    matches = _resolver_produto(nome)
+    for m in _resolver_mp(nome):
+        matches.append({'tipo': 'mp', 'id': m['id'], 'nome': m['nome'],
+                         'match': m.get('match', 'fuzzy')})
+    if not matches:
+        return matches
+    # dedup por (tipo, id) preservando ordem; exato primeiro.
+    matches.sort(key=lambda m: 0 if m.get('match') == 'exato' else 1)
+    vistos = set()
+    out = []
+    for m in matches:
+        chave = (m['tipo'], m['id'])
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        out.append(m)
+    return out[:5]
+
+
 def _resolver_mp(nome):
     from sqlalchemy import func
     matches = []
