@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}Lista de Compras — {{ loja.nome }}{% endblock %}
+
+{% block content %}
+<style>
+/* Mobile-first: tudo grande pra dedo, contraste alto. */
+.lc-wrap { max-width: 720px; margin: 0 auto; }
+.lc-header {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--bg-card); border-bottom: 1px solid var(--border-color);
+    padding: 12px 14px; margin: -12px -14px 12px;
+}
+.lc-titulo { font-size: 18px; font-weight: 700; margin: 0; line-height: 1.2; }
+.lc-sub { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+.lc-grupo {
+    border: 1px solid var(--border-color); border-radius: 10px;
+    margin-bottom: 10px; background: var(--bg-card); overflow: hidden;
+}
+.lc-grupo > summary {
+    padding: 14px 16px; font-weight: 600; font-size: 16px; cursor: pointer;
+    list-style: none; display: flex; justify-content: space-between;
+    align-items: center; -webkit-tap-highlight-color: transparent;
+}
+.lc-grupo > summary::-webkit-details-marker { display: none; }
+.lc-grupo[open] > summary { border-bottom: 1px solid var(--border-color); }
+.lc-grupo > summary::after { content: '▾'; font-size: 14px; color: var(--text-muted); }
+.lc-grupo[open] > summary::after { content: '▴'; }
+.lc-grupo-corpo { padding: 4px 0; }
+.lc-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-top: 1px solid var(--border-color);
+}
+.lc-item:first-child { border-top: none; }
+.lc-item-nome { flex: 1; min-width: 0; }
+.lc-item-titulo { font-size: 15px; line-height: 1.25; }
+.lc-item-hint { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.lc-item-input {
+    width: 80px; padding: 12px 8px; font-size: 20px; text-align: center;
+    border: 1.5px solid var(--border-input); border-radius: 8px;
+    background: var(--bg-input); color: var(--text-main);
+    -moz-appearance: textfield;
+}
+.lc-item-input::-webkit-outer-spin-button,
+.lc-item-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.lc-item-input:focus { outline: 2px solid #0d6efd; border-color: #0d6efd; }
+.lc-item-input.dirty { border-color: #ffc107; }
+.lc-item-input.saved { border-color: #28a745; }
+.lc-item-input.erro  { border-color: #dc3545; }
+.lc-item-input:disabled { background: var(--bg-locked); color: var(--text-muted); }
+.lc-enviar {
+    position: sticky; bottom: 0; left: 0; right: 0; z-index: 50;
+    background: var(--bg-card); border-top: 1px solid var(--border-color);
+    padding: 12px 14px; margin: 16px -14px 0;
+}
+.lc-enviar button {
+    width: 100%; padding: 18px; font-size: 18px; font-weight: 600;
+    border-radius: 10px; border: 0; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.btn-enviar { background: #198754; color: #fff; }
+.btn-readonly { background: var(--bg-card-hover); color: var(--text-muted); cursor: default; }
+.lc-banner-status {
+    padding: 10px 12px; border-radius: 8px; margin-bottom: 12px;
+    font-size: 14px; font-weight: 600; text-align: center;
+}
+.lc-banner-enviada { background: #d1e7dd; color: #0a3622; }
+.lc-banner-fechada { background: #e2e3e5; color: #41464b; }
+</style>
+
+<div class="lc-wrap">
+    <div class="lc-header">
+        <h1 class="lc-titulo">Quanto eu tenho hoje?</h1>
+        <div class="lc-sub">
+            {{ loja.nome }} · semana de {{ semana.data_semana_inicio.strftime('%d/%m/%Y') }}
+        </div>
+        {% if lojas_admin %}
+        <form method="GET" class="mt-2">
+            <select name="loja_id" class="form-select form-select-sm"
+                    onchange="this.form.submit()">
+                {% for l in lojas_admin %}
+                <option value="{{ l.id }}" {% if l.id == loja.id %}selected{% endif %}>{{ l.nome }}</option>
+                {% endfor %}
+            </select>
+        </form>
+        {% endif %}
+    </div>
+
+    {% if semana.status == 'enviada' %}
+    <div class="lc-banner-status lc-banner-enviada">
+        ✓ Lista enviada — esperando o gerente geral fechar
+    </div>
+    {% elif semana.status == 'fechada' %}
+    <div class="lc-banner-status lc-banner-fechada">
+        🔒 Semana fechada — comprada pelo gerente geral
+    </div>
+    {% endif %}
+
+    {% set readonly = semana.status != 'aberta' %}
+
+    {% if not grupos %}
+    <div class="card"><div class="card-body text-muted text-center py-4">
+        Esta loja ainda não tem itens cadastrados na lista.
+        {% if pode_consolidar %}
+        <br><a href="{{ url_for('lista_compras.catalogo', loja_id=loja.id) }}">Cadastrar agora</a>
+        {% endif %}
+    </div></div>
+    {% endif %}
+
+    {% for grupo, itens in grupos %}
+    <details class="lc-grupo" {% if loop.first %}open{% endif %}>
+        <summary>
+            <span>{{ grupo }}</span>
+            <span style="font-size:12px; color:var(--text-muted); font-weight:400;">
+                {{ itens|length }} itens
+            </span>
+        </summary>
+        <div class="lc-grupo-corpo">
+            {% for item in itens %}
+            {% set q = qtds.get(item.id) %}
+            {% set h = historico.get(item.id) %}
+            <div class="lc-item">
+                <div class="lc-item-nome">
+                    <div class="lc-item-titulo">{{ item.nome_item }}</div>
+                    {% if h %}
+                    <div class="lc-item-hint">
+                        Semana passada: tinha {{ h.tenho }} · pediram {{ h.pedido }} · sobrou {{ h.sobrou }}
+                    </div>
+                    {% endif %}
+                </div>
+                <input type="number" inputmode="numeric" min="0" step="1"
+                       class="lc-item-input"
+                       data-item-id="{{ item.id }}"
+                       value="{{ q.tenho if q else 0 }}"
+                       {% if readonly %}disabled{% endif %}>
+            </div>
+            {% endfor %}
+        </div>
+    </details>
+    {% endfor %}
+
+    {% if not readonly and grupos %}
+    <form method="POST" action="{{ url_for('lista_compras.enviar') }}" class="lc-enviar"
+          onsubmit="return confirm('Enviar a lista pro gerente geral? Depois disso você não consegue mais editar.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="semana_id" value="{{ semana.id }}">
+        <button type="submit" class="btn-enviar">✓ Enviar pro gerente</button>
+    </form>
+    {% elif readonly %}
+    <div class="lc-enviar">
+        <button type="button" class="btn-readonly" disabled>
+            {% if semana.status == 'enviada' %}Já enviada{% else %}Semana fechada{% endif %}
+        </button>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if semana.status == 'aberta' %}
+<script>
+(function () {
+    var SEMANA_ID = {{ semana.id }};
+    var URL = '{{ url_for("lista_compras.salvar_json") }}';
+    var CSRF = '{{ csrf_token() }}';
+    var timers = new WeakMap();
+
+    function salvar(input) {
+        input.classList.remove('saved', 'erro');
+        input.classList.add('dirty');
+        var fd = new FormData();
+        fd.append('csrf_token', CSRF);
+        fd.append('semana_id', SEMANA_ID);
+        fd.append('item_id', input.dataset.itemId);
+        fd.append('tenho', input.value || '0');
+        fetch(URL, {
+            method: 'POST', body: fd,
+            headers: {'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': CSRF},
+        }).then(function (r) {
+            input.classList.remove('dirty');
+            input.classList.add(r.ok ? 'saved' : 'erro');
+            setTimeout(function () { input.classList.remove('saved'); }, 1200);
+        }).catch(function () {
+            input.classList.remove('dirty');
+            input.classList.add('erro');
+        });
+    }
+
+    document.querySelectorAll('.lc-item-input').forEach(function (inp) {
+        inp.addEventListener('input', function () {
+            clearTimeout(timers.get(inp));
+            timers.set(inp, setTimeout(function () { salvar(inp); }, 600));
+        });
+        inp.addEventListener('blur', function () {
+            // garante save imediato ao sair do campo
+            clearTimeout(timers.get(inp));
+            salvar(inp);
+        });
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

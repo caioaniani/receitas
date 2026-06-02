@@ -124,6 +124,10 @@
            class="sidebar-link {% if '/pedidos/desperdicio' in request.path %}active{% endif %}">
             Desperdício
         </a>
+        <a href="{{ url_for('lista_compras.index') }}"
+           class="sidebar-link {% if request.path == '/lista-compras' or request.path == '/lista-compras/' %}active{% endif %}">
+            Lista de Compras
+        </a>
         {% endif %}
 
         {# ── 2. PRODUÇÃO (industria) ── #}
@@ -354,6 +358,14 @@
         <a href="{{ url_for('main.permissoes_editar') }}"
            class="sidebar-link {% if request.path == '/admin/permissoes' %}active{% endif %}">
             Permissões por papel
+        </a>
+        <a href="{{ url_for('lista_compras.consolidada') }}"
+           class="sidebar-link {% if request.path == '/lista-compras/consolidada' %}active{% endif %}">
+            Lista de Compras (consolidar)
+        </a>
+        <a href="{{ url_for('lista_compras.catalogo') }}"
+           class="sidebar-link {% if request.path == '/lista-compras/catalogo' %}active{% endif %}">
+            Catálogo Lista de Compras
         </a>
         {% endif %}
         <a href="{{ url_for('main.audit') }}"

@@ -33,6 +33,8 @@ CAPACIDADES = [
     ('Telas (web)', 'web_catalogo', 'Catálogo (receitas / MP / produtos / fornecedores)'),
     ('Telas (web)', 'web_rh', 'RH (ponto / férias / cargos)'),
     ('Telas (web)', 'web_padeiro', 'Tela do padeiro (touchscreen)'),
+    ('Telas (web)', 'web_lista_compras', 'Lista de compras semanal (preencher na loja)'),
+    ('Telas (web)', 'web_lista_compras_consolidar', 'Lista de compras — consolidar (gerente geral)'),
 
     ('Copilot / Slack', 'criar_pedido', 'Criar pedido'),
     ('Copilot / Slack', 'editar_pedido', 'Editar pedido'),
@@ -71,6 +73,11 @@ CAP_DEFAULT = {
     'web_catalogo': {'producao'},                                 # catalogo_required (pode_catalogo)
     'web_rh': {'rh'},                                             # rh_required
     'web_padeiro': {'padeiro', 'producao'},                       # padeiro_required
+    # Lista de compras semanal — gerente da loja preenche 'tenho';
+    # produção tb pode (cobre a Indústria como uma das unidades).
+    'web_lista_compras': {'gerente', 'producao'},
+    # Consolidar/decidir o que pedir: vazio pra editaveis (= so admin/owner).
+    'web_lista_compras_consolidar': set(),
     # ── Copilot/Slack — nivel gerente ──
     'criar_pedido': {'gerente'},
     'editar_pedido': {'gerente'},

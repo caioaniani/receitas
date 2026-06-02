@@ -9,6 +9,7 @@ from app.models.entregas import *  # noqa: F401, F403
 from app.models.estoque import *  # noqa: F401, F403
 from app.models.financeiro import *  # noqa: F401, F403
 from app.models.integracoes import *  # noqa: F401, F403
+from app.models.lista_compras import *  # noqa: F401, F403
 from app.models.loja import *  # noqa: F401, F403
 from app.models.notificacoes import *  # noqa: F401, F403
 from app.models.pedidos import *  # noqa: F401, F403
