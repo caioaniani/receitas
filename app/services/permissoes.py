@@ -33,6 +33,8 @@ CAPACIDADES = [
     ('Telas (web)', 'web_catalogo', 'Catálogo (receitas / MP / produtos / fornecedores)'),
     ('Telas (web)', 'web_rh', 'RH (ponto / férias / cargos)'),
     ('Telas (web)', 'web_padeiro', 'Tela do padeiro (touchscreen)'),
+    ('Telas (web)', 'web_lista_compras', 'Lista de compras semanal (preencher na loja)'),
+    ('Telas (web)', 'web_lista_compras_consolidar', 'Lista de compras — consolidar (gerente geral)'),
 
     ('Copilot / Slack', 'criar_pedido', 'Criar pedido'),
     ('Copilot / Slack', 'editar_pedido', 'Editar pedido'),
