@@ -124,6 +124,10 @@
            class="sidebar-link {% if '/pedidos/desperdicio' in request.path %}active{% endif %}">
             Desperdício
         </a>
+        <a href="{{ url_for('lista_compras.index') }}"
+           class="sidebar-link {% if request.path == '/lista-compras' or request.path == '/lista-compras/' %}active{% endif %}">
+            Lista de Compras
+        </a>
         {% endif %}
 
         {# ── 2. PRODUÇÃO (industria) ── #}
