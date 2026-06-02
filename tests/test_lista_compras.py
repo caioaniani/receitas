@@ -13,7 +13,7 @@ def _setup_loja_com_itens(app, papel='gerente', is_owner=False):
     from app.extensions import db
     from app.models import ItemListaCompras, Loja, Usuario
     with app.app_context():
-        loja = Loja(nome='Ribeiro do Vale', ativa=True)
+        loja = Loja(nome='Loja Ribeiro do Vale', ativa=True)
         db.session.add(loja)
         db.session.flush()
         u = Usuario(login=f'u_{papel}', nome=papel.capitalize(),
