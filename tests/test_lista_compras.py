@@ -165,26 +165,14 @@ def test_rota_index_gerente_ve_propria_loja(app):
     assert b'CANELA EM PO' in r.data or b'CANELA EM P\xc3\x93' in r.data
 
 
-def test_rota_salvar_json_grava_e_bloqueia_outra_loja(app):
-    from app.extensions import db
-    from app.models import ItemListaCompras, ListaComprasSemana, Loja, Usuario
+def test_rota_salvar_json_grava_da_propria_loja(app):
+    from app.models import ItemListaCompras, ListaComprasSemana
     from app.services import lista_compras_svc as svc
     loja_id, uid = _setup_loja_com_itens(app, papel='gerente')
     with app.app_context():
         sem = svc.obter_ou_criar_semana(loja_id)
         item_id = ItemListaCompras.query.filter_by(loja_id=loja_id).first().id
         sem_id = sem.id
-        # cria uma SEGUNDA loja + outro gerente
-        outra = Loja(nome='Outra Loja', ativa=True)
-        db.session.add(outra)
-        db.session.flush()
-        g2 = Usuario(login='outro_gerente', nome='Outro', papel='gerente',
-                     loja_id=outra.id)
-        g2.set_senha('x')
-        db.session.add(g2)
-        db.session.commit()
-        outro_uid = g2.id
-
     client = app.test_client()
     _login(client, uid)
     r = client.post('/lista-compras/salvar.json', data={
@@ -195,13 +183,34 @@ def test_rota_salvar_json_grava_e_bloqueia_outra_loja(app):
         sem_fresh = ListaComprasSemana.query.get(sem_id)
         assert sem_fresh.quantidades[0].tenho == 7
 
-    # gerente da OUTRA loja: 403
-    c2 = app.test_client()
-    _login(c2, outro_uid)
-    r2 = c2.post('/lista-compras/salvar.json', data={
+
+def test_rota_salvar_json_bloqueia_outra_loja(app):
+    """Teste separado pra evitar cache do Flask-Login em g (2 logins num
+    contexto de fixture causa o segundo reusar o user do primeiro)."""
+    from app.extensions import db
+    from app.models import ItemListaCompras, Loja, Usuario
+    from app.services import lista_compras_svc as svc
+    loja_id, _ = _setup_loja_com_itens(app, papel='gerente')
+    with app.app_context():
+        sem = svc.obter_ou_criar_semana(loja_id)
+        item_id = ItemListaCompras.query.filter_by(loja_id=loja_id).first().id
+        sem_id = sem.id
+        # cria SEGUNDA loja + outro gerente (que vai tentar mexer na semana da Ribeiro)
+        outra = Loja(nome='Outra Loja', ativa=True)
+        db.session.add(outra)
+        db.session.flush()
+        g2 = Usuario(login='outro_gerente', nome='Outro', papel='gerente',
+                     loja_id=outra.id)
+        g2.set_senha('x')
+        db.session.add(g2)
+        db.session.commit()
+        outro_uid = g2.id
+    client = app.test_client()
+    _login(client, outro_uid)
+    r = client.post('/lista-compras/salvar.json', data={
         'semana_id': sem_id, 'item_id': item_id, 'tenho': '99',
     })
-    assert r2.status_code == 403
+    assert r.status_code == 403
 
 
 def test_rota_enviar_muda_status(app):
