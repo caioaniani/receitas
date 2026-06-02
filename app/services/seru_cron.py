@@ -252,11 +252,20 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
-    # Alerta WhatsApp: lojas sem desperdicio lancado ate 20:10 BRT
+    # Alerta de desperdicio: escalada Slack (20:10/15/20/25) -> WhatsApp (20:30)
     if os.environ.get('DESPERDICIO_ALERTA', '1') != '0':
+        # 4 ticks no Slack — gerentes veem la e podem resolver antes do WhatsApp
+        for minuto in (10, 15, 20, 25):
+            _scheduler.add_job(
+                lambda app=app: _run_desperdicio_alerta_slack(app),
+                'cron', hour=20, minute=minuto,
+                id=f'slack-desperdicio-alerta-{minuto}',
+                max_instances=1, coalesce=True,
+            )
+        # Escalada final no WhatsApp se ainda houver pendentes as 20:30
         _scheduler.add_job(
             lambda app=app: _run_desperdicio_alerta(app),
-            'cron', hour=20, minute=10, id='zapi-desperdicio-alerta',
+            'cron', hour=20, minute=30, id='zapi-desperdicio-alerta',
             max_instances=1, coalesce=True,
         )
 
@@ -276,7 +285,7 @@ def iniciar(app):
     )
 
     _scheduler.start()
-    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h · zapi tarefas 07:00 · zapi anomalias 23:00 · backup 04:00 · automacoes whatsapp 5min')
+    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h · zapi tarefas 07:00 · zapi anomalias 23:00 · desperdicio slack 20:10/15/20/25 + whatsapp 20:30 · backup 04:00 · automacoes whatsapp 5min')
 
 
 def _run_slack_resumo_diario(app):
@@ -315,8 +324,22 @@ def _run_zapi_digest_anomalias(app):
         _com_lock(7730, anomalias.enviar_digest_whatsapp, 'zapi digest anomalias')
 
 
+def _run_desperdicio_alerta_slack(app):
+    """Job: posta no Slack as lojas sem desperdicio lancado (20:10/15/20/25 BRT).
+
+    Cada tick re-consulta o banco — lojas que lancarem entre os ticks somem
+    do proximo lembrete. Sem envio se nao houver pendentes.
+    """
+    from app.services import desperdicio_alerta
+
+    with app.app_context():
+        _com_lock(7734, desperdicio_alerta.alertar_slack_pendentes,
+                  'slack alerta desperdicio')
+
+
 def _run_desperdicio_alerta(app):
-    """Job: avisa no WhatsApp as lojas sem desperdicio lancado ate 20:10 BRT."""
+    """Job: escalada final no WhatsApp as 20:30 BRT — se ainda houver lojas
+    sem desperdicio lancado depois dos 4 lembretes no Slack."""
     from app.services import desperdicio_alerta
 
     with app.app_context():
