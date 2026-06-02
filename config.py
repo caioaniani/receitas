@@ -87,6 +87,9 @@ class Config:
     # Canal #pedidos — recebe lembretes 9h/12h/16h/19h sobre lojas
     # que nao fizeram pedido pra amanha. Vazio = desligado.
     SLACK_CANAL_PEDIDOS = os.environ.get('SLACK_CANAL_PEDIDOS', '')
+    # Canal #copilot — recebe lembretes 20:10/15/20/25 BRT de lojas que ainda
+    # nao lancaram desperdicio (escalada antes do WhatsApp). Vazio = desligado.
+    SLACK_CANAL_COPILOT = os.environ.get('SLACK_CANAL_COPILOT', '')
 
     # Z-API (WhatsApp) — envia digest diario de tarefas.
     # Cadastro: https://z-api.io/ → cria instancia → copia ID + token.
