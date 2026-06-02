@@ -1413,7 +1413,7 @@ LOJA_POR_ABA = {
 # Catalogo: { nome_da_loja: [ (grupo, [itens, ...]), ... ] }
 # Ordem dos grupos e dos itens dentro do grupo preservada (vira `ordem` na UI).
 CATALOGO = {
-    'Ribeiro do Vale': [
+    'Loja Ribeiro do Vale': [
         ('FORNECEDOR DE CAFÉ SAINTS', [
             'CAFÉ EM GRÃOS', 'CAFÉ COADO', 'FILTRO', 'PRODUTO DE LIMPEZA MÁQUINA',
         ]),
