@@ -60,15 +60,14 @@ def test_mensagem_pendentes_formato(app):
     from app.extensions import db
     from app.models import Loja
     from app.services.desperdicio_alerta import mensagem_pendentes
-    with app.app_context():
-        a = Loja(nome='Nebraska', ativa=True)
-        b = Loja(nome='Anesio', ativa=True)
-        db.session.add_all([a, b])
-        db.session.commit()
-        msg = mensagem_pendentes([a, b])
-        assert 'Nebraska' in msg
-        assert 'Anesio' in msg
-        assert 'desperdício' in msg.lower()
+    a = Loja(nome='Nebraska', ativa=True)
+    b = Loja(nome='Anesio', ativa=True)
+    db.session.add_all([a, b])
+    db.session.commit()
+    msg = mensagem_pendentes([a, b])
+    assert 'Nebraska' in msg
+    assert 'Anesio' in msg
+    assert 'desperdício' in msg.lower()
 
 
 def test_alertar_slack_pendentes_envia_quando_tem_pendencias(app, admin_user, monkeypatch):
