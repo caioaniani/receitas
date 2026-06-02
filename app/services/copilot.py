@@ -2024,7 +2024,7 @@ def executar_criar_pedido(params, user):
         itens_norm.append({
             'receita_id': resolvido['id'] if resolvido['tipo'] == 'receita' else None,
             'produto_id': resolvido['id'] if resolvido['tipo'] == 'produto' else None,
-            'materia_prima_id': None,
+            'materia_prima_id': resolvido['id'] if resolvido['tipo'] == 'mp' else None,
             'quantidade': qtd,
             'observacao': (item.get('observacao') or '').strip()[:200] or None,
             'estado': estado_item,
