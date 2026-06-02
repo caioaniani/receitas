@@ -13,7 +13,7 @@ def _setup_loja_com_itens(app, papel='gerente', is_owner=False):
     from app.extensions import db
     from app.models import ItemListaCompras, Loja, Usuario
     with app.app_context():
-        loja = Loja(nome='Ribeiro do Vale', ativa=True)
+        loja = Loja(nome='Loja Ribeiro do Vale', ativa=True)
         db.session.add(loja)
         db.session.flush()
         u = Usuario(login=f'u_{papel}', nome=papel.capitalize(),
@@ -126,7 +126,8 @@ def test_seed_idempotente(app):
     from app.seed import seed_lista_compras
     # cria as 4 lojas com os nomes que o seed espera
     with app.app_context():
-        for nome in ('Ribeiro do Vale', 'Anesio Pinto Rosa', 'Nebraska', 'Industria'):
+        for nome in ('Loja Ribeiro do Vale', 'Loja Anesio Pinto Rosa',
+                     'Loja Nebraska', 'Industria'):
             db.session.add(Loja(nome=nome, ativa=True))
         db.session.commit()
         r1 = seed_lista_compras()
@@ -146,11 +147,12 @@ def test_seed_loja_faltando_avisa(app):
     from app.models import Loja
     from app.seed import seed_lista_compras
     with app.app_context():
-        db.session.add(Loja(nome='Ribeiro do Vale', ativa=True))
+        db.session.add(Loja(nome='Loja Ribeiro do Vale', ativa=True))
         db.session.commit()
         r = seed_lista_compras()
         # 3 lojas faltam (Anesio, Nebraska, Industria)
-        assert set(r['lojas_faltando']) == {'Anesio Pinto Rosa', 'Nebraska', 'Industria'}
+        assert set(r['lojas_faltando']) == {'Loja Anesio Pinto Rosa',
+                                            'Loja Nebraska', 'Industria'}
         # mas Ribeiro foi criado normalmente
         assert r['criados'] > 0
 

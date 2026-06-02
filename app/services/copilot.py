@@ -46,7 +46,7 @@ TOOL_CRIAR_PEDIDO = {
                 "items": {
                     "type": "object",
                     "properties": {
-                        "nome": {"type": "string", "description": "Nome EXATO do produto/receita do catalogo."},
+                        "nome": {"type": "string", "description": "Nome EXATO do item do catalogo — pode ser produto, receita OU materia-prima (loja pede MPs tambem: queijo, lagarto cozido, saco de pao de queijo, etc)."},
                         "quantidade": {"type": "integer", "minimum": 1},
                         "estado": {"type": ["string", "null"], "enum": [None, "backup", "assado"], "description": "Estado do item: null = padrao da familia (cru congelado pra viennoiserie / congelado assado pra pao); 'backup' = pre-fermentado congelado (assa rapido pra repor vitrine); 'assado' = ja assado (raro, so se a loja pediu explicitamente). Pedido misto (ex: '5 croissants + 3 backup') vira 2 linhas — uma com estado=null, outra com estado='backup'. NUNCA consolide quantidades de estados distintos. Gatilhos pra `backup`: 'backup', 'fermentado e congelado', 'pre-fermentado', 'pre-fermentados congelados', 'fermentados congelados'. Gatilhos pra `assado`: 'assado(s)', 'ja assado'. Gatilhos pra `null`: 'congelado' sozinho, 'cru', sem qualificador."},
                         "observacao": {"type": ["string", "null"], "description": "Observacao livre do item (max 200 chars): 'sem cebola', 'recheio extra'. NAO use pra estado — use o campo `estado` acima. Default null."},
@@ -84,7 +84,7 @@ TOOL_EDITAR_PEDIDO = {
                 "items": {
                     "type": "object",
                     "properties": {
-                        "nome": {"type": "string", "description": "Nome EXATO do produto/receita do catalogo."},
+                        "nome": {"type": "string", "description": "Nome EXATO do item do catalogo — pode ser produto, receita OU materia-prima (loja pede MPs tambem: queijo, lagarto cozido, saco de pao de queijo, etc)."},
                         "quantidade": {"type": "integer", "minimum": 1},
                         "estado": {"type": ["string", "null"], "enum": [None, "backup", "assado"], "description": "Mesmos gatilhos de criar_pedido: 'backup'/'fermentado e congelado'/'pre-fermentado' = backup; 'assado(s)' = assado; 'congelado'/'cru'/sem qualificador = null."},
                         "observacao": {"type": ["string", "null"]},
@@ -881,7 +881,7 @@ PADRAO DE INTENCAO — CRITICO:
   NAO crie tarefa substituta.
 
 TOOLS DISPONIVEIS — ACOES:
-- criar_pedido: criar encomenda de produtos pra producao entregar numa loja.
+- criar_pedido: encomenda da LOJA pra industria entregar numa data. Cobre produtos, receitas E materias-primas (ex: queijo mussarela pra salada, lagarto cozido, saco de pao de queijo) — qualquer item do catalogo que a industria mande pra loja. **NAO confunda com receber_mp** — receber_mp eh quando a INDUSTRIA registra entrada de MP do FORNECEDOR (compra/entrada externa). Se uma loja pede MP, eh criar_pedido normal.
   **Estado dos itens (campo `estado` em cada item):**
   - `null` (default): viennoiserie sai cru congelado (loja descongela, fermenta, assa); pao/sourdough sai congelado assado (loja so descongela); fornada especial sai assada fresca.
   - `backup`: pre-fermentado congelado, assa rapido. Usuario fala "X backup" / "backup de X" / "X de backup" / "X fermentado(s) e congelado(s)" / "X pre-fermentado(s)" / "X fermentado(s) congelado(s)". So pra viennoiserie. **REGRA**: se o pedido descreve estado de processamento (qualquer mencao a "fermentado" combinado com "congelado", ou "pre-fermentado"), eh backup — popule `estado: "backup"` no item.
@@ -1430,7 +1430,7 @@ def _enriquecer_criar_pedido(tool_input):
         qtd = int(item.get('quantidade') or 0)
         if not nome or qtd <= 0:
             continue
-        matches = _resolver_produto(nome)
+        matches = _resolver_item_pedido(nome)
         obs_item = (item.get('observacao') or '').strip() or None
         estado_item = (item.get('estado') or '').strip().lower() or None
         if estado_item not in (None, 'backup', 'assado'):
@@ -1511,7 +1511,7 @@ def _enriquecer_editar_pedido(tool_input):
             qtd = int(item.get('quantidade') or 0)
             if not nome or qtd <= 0:
                 continue
-            matches = _resolver_produto(nome)
+            matches = _resolver_item_pedido(nome)
             obs_item = (item.get('observacao') or '').strip() or None
             estado_item = (item.get('estado') or '').strip().lower() or None
             if estado_item not in (None, 'backup', 'assado'):
@@ -1611,6 +1611,32 @@ def _resolver_produto(nome):
         matches.append({'tipo': tipo, 'id': _id, 'nome': nome_real,
                          'match': 'aproximado'})
     return matches
+
+
+def _resolver_item_pedido(nome):
+    """Resolve nome em qualquer item que cabe num PedidoLoja: Receita,
+    Produto OU MateriaPrima. Loja pede MPs tambem (queijo pra salada, lagarto
+    cozido, saco de pao de queijo), entao tem que cobrir os 3.
+
+    B2B e ajuste_estoque continuam usando `_resolver_produto` (so receita +
+    produto), porque MP nao se aplica naqueles fluxos."""
+    matches = _resolver_produto(nome)
+    for m in _resolver_mp(nome):
+        matches.append({'tipo': 'mp', 'id': m['id'], 'nome': m['nome'],
+                         'match': m.get('match', 'fuzzy')})
+    if not matches:
+        return matches
+    # dedup por (tipo, id) preservando ordem; exato primeiro.
+    matches.sort(key=lambda m: 0 if m.get('match') == 'exato' else 1)
+    vistos = set()
+    out = []
+    for m in matches:
+        chave = (m['tipo'], m['id'])
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        out.append(m)
+    return out[:5]
 
 
 def _resolver_mp(nome):
@@ -1998,7 +2024,7 @@ def executar_criar_pedido(params, user):
         itens_norm.append({
             'receita_id': resolvido['id'] if resolvido['tipo'] == 'receita' else None,
             'produto_id': resolvido['id'] if resolvido['tipo'] == 'produto' else None,
-            'materia_prima_id': None,
+            'materia_prima_id': resolvido['id'] if resolvido['tipo'] == 'mp' else None,
             'quantidade': qtd,
             'observacao': (item.get('observacao') or '').strip()[:200] or None,
             'estado': estado_item,
@@ -2096,6 +2122,8 @@ def executar_editar_pedido(params, user):
                 pi.produto_id = resolvido['id']
             elif resolvido['tipo'] == 'receita':
                 pi.receita_id = resolvido['id']
+            elif resolvido['tipo'] == 'mp':
+                pi.materia_prima_id = resolvido['id']
             db.session.add(pi)
             salvos += 1
         if salvos == 0:

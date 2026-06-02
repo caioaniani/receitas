@@ -1404,16 +1404,16 @@ logger = logging.getLogger(__name__)
 # Mapeamento "nome da aba da planilha" → nome da Loja no sistema.
 # Estes sao os nomes CANONICOS (nao os apelidos: Brooklin/Loja 2/1851).
 LOJA_POR_ABA = {
-    'Ribeiro do Vale': 'LISTA DE COMPAS LOJA 1',     # Brooklin
-    'Anesio Pinto Rosa': 'LISTA DE COMPRAS LOJA 2',
-    'Nebraska': 'LISTA DE COMPRAS 1851',
+    'Loja Ribeiro do Vale': 'LISTA DE COMPAS LOJA 1',     # Brooklin
+    'Loja Anesio Pinto Rosa': 'LISTA DE COMPRAS LOJA 2',
+    'Loja Nebraska': 'LISTA DE COMPRAS 1851',
     'Industria': 'LISTA INDUSTRIA',
 }
 
 # Catalogo: { nome_da_loja: [ (grupo, [itens, ...]), ... ] }
 # Ordem dos grupos e dos itens dentro do grupo preservada (vira `ordem` na UI).
 CATALOGO = {
-    'Ribeiro do Vale': [
+    'Loja Ribeiro do Vale': [
         ('FORNECEDOR DE CAFÉ SAINTS', [
             'CAFÉ EM GRÃOS', 'CAFÉ COADO', 'FILTRO', 'PRODUTO DE LIMPEZA MÁQUINA',
         ]),
@@ -1529,7 +1529,7 @@ CATALOGO = {
         ('OVOS ORGANICOS', ['OVOS ORGÂNICOS']),
     ],
 
-    'Anesio Pinto Rosa': [
+    'Loja Anesio Pinto Rosa': [
         ('FORNECEDOR DE CAFE SAINTS', ['CAFÉ COADO', 'CAFÉ EM GRÃOS', 'FILTRO']),
         ('OSMAR GERMANO', [
             'COPO 240 ML', 'TAMPA 240 ML', 'COPO 300 ML', 'TAMPA 200 ML',
@@ -1635,7 +1635,7 @@ CATALOGO = {
         ('FAZENDA', ['LEITE', 'QUEIJO BRANCO']),
     ],
 
-    'Nebraska': [
+    'Loja Nebraska': [
         ('FORNECEDOR DE CAFE SAINTS', [
             'CAFÉ EM GRÃOS', 'CAFÉ COADO', 'FILTRO', 'NITRO', 'FANTASY',
             'OAT-CHATA', 'ENERGY', 'CHÁ DE CLITÓRIA', 'XAROPE DE BAUNILHA',
