@@ -188,6 +188,10 @@
            class="sidebar-link {% if request.path == '/receitas/reaproveitavel' %}active{% endif %}">
             Reaproveitável (bulk)
         </a>
+        <a href="{{ url_for('receitas.modos_preparo') }}"
+           class="sidebar-link {% if request.path.startswith('/receitas/modos-preparo') %}active{% endif %}">
+            Modo de preparo
+        </a>
         <a href="{{ url_for('receitas.imagens_upload') }}"
            class="sidebar-link {% if request.path.startswith('/receitas/imagens') %}active{% endif %}">
             Imagens (zip)
