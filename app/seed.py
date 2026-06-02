@@ -1529,7 +1529,7 @@ CATALOGO = {
         ('OVOS ORGANICOS', ['OVOS ORGÂNICOS']),
     ],
 
-    'Anesio Pinto Rosa': [
+    'Loja Anesio Pinto Rosa': [
         ('FORNECEDOR DE CAFE SAINTS', ['CAFÉ COADO', 'CAFÉ EM GRÃOS', 'FILTRO']),
         ('OSMAR GERMANO', [
             'COPO 240 ML', 'TAMPA 240 ML', 'COPO 300 ML', 'TAMPA 200 ML',
