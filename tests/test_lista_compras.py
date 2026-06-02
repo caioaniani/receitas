@@ -147,11 +147,12 @@ def test_seed_loja_faltando_avisa(app):
     from app.models import Loja
     from app.seed import seed_lista_compras
     with app.app_context():
-        db.session.add(Loja(nome='Ribeiro do Vale', ativa=True))
+        db.session.add(Loja(nome='Loja Ribeiro do Vale', ativa=True))
         db.session.commit()
         r = seed_lista_compras()
         # 3 lojas faltam (Anesio, Nebraska, Industria)
-        assert set(r['lojas_faltando']) == {'Anesio Pinto Rosa', 'Nebraska', 'Industria'}
+        assert set(r['lojas_faltando']) == {'Loja Anesio Pinto Rosa',
+                                            'Loja Nebraska', 'Industria'}
         # mas Ribeiro foi criado normalmente
         assert r['criados'] > 0
 
