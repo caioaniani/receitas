@@ -423,6 +423,10 @@ def create_app(config_class=None):
             from app.seed import seed_projetos
             seed_projetos()
 
+            # Catalogo da Lista de Compras semanal por loja — idempotente.
+            from app.seed import seed_lista_compras
+            seed_lista_compras()
+
         _criar_admin()
 
     # Cron de auto-sync Seru → EstoqueLoja (15min). Roda dentro de
