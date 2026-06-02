@@ -126,7 +126,8 @@ def test_seed_idempotente(app):
     from app.seed import seed_lista_compras
     # cria as 4 lojas com os nomes que o seed espera
     with app.app_context():
-        for nome in ('Ribeiro do Vale', 'Anesio Pinto Rosa', 'Nebraska', 'Industria'):
+        for nome in ('Loja Ribeiro do Vale', 'Loja Anesio Pinto Rosa',
+                     'Loja Nebraska', 'Industria'):
             db.session.add(Loja(nome=nome, ativa=True))
         db.session.commit()
         r1 = seed_lista_compras()
