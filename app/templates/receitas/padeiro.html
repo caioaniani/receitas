@@ -166,6 +166,14 @@
                       data-receita-id="{{ receita.id }}"
                       rows="10"
                       placeholder="Passo 1: ...&#10;Passo 2: ...">{{ receita.modo_preparo or '' }}</textarea>
+            <div class="d-flex align-items-center justify-content-between mt-2">
+                <span id="mp-feedback" class="small" style="min-height:24px;"></span>
+                <button type="button" id="mp-salvar"
+                        class="btn btn-success"
+                        style="font-size:18px; padding:12px 24px; min-width:160px;">
+                    <i class="bi bi-check-circle"></i> Salvar
+                </button>
+            </div>
         </div>
         {% else %}
         <div class="card-body" style="white-space:pre-wrap;">{{ receita.modo_preparo }}</div>
