@@ -494,6 +494,93 @@ def handshake_audit(id):
                             pedido=pedido, eventos=eventos)
 
 
+@pedidos_bp.route('/<int:id>/forcar-entrega', methods=['POST'])
+@login_required
+@admin_required
+def forcar_entrega(id):
+    """Recuperacao manual: marca pedido como entregue + sobe estoque da loja
+    ignorando o estado atual. Usado quando o handshake QR falhou silenciosamente
+    ou o motorista esqueceu de escanear. Audita a acao em HandshakeAudit."""
+    from app.models import HandshakeAudit
+    pedido = PedidoLoja.query.get_or_404(id)
+    estado_antes = pedido.status
+
+    # Forca o pedido pra em_transporte se necessario, depois marca entregue.
+    # NAO baixa estoque industria de novo se ja foi baixado (evita duplo).
+    ja_baixou_industria = pedido.status in ('em_transporte', 'entregue')
+
+    try:
+        # Se ainda nao saiu da industria, baixa estoque da industria
+        if not ja_baixou_industria:
+            for item in pedido.itens:
+                if item.materia_prima_id:
+                    mp = MateriaPrima.query.get(item.materia_prima_id)
+                    if mp:
+                        mp.estoque_atual = max(0, (mp.estoque_atual or 0) - item.quantidade)
+                        db.session.add(MovimentacaoEstoque(
+                            materia_prima_id=mp.id, tipo='saida',
+                            quantidade=item.quantidade,
+                            referencia=f'Pedido #{pedido.id} (forçar entrega — {current_user.nome})',
+                            usuario_id=current_user.id,
+                        ))
+                    continue
+                ep = EstoqueProducao.query.filter_by(
+                    receita_id=item.receita_id, produto_id=item.produto_id).first()
+                if ep:
+                    ep.quantidade = max(0, ep.quantidade - item.quantidade)
+                    db.session.add(MovEstoqueProducao(
+                        estoque_producao_id=ep.id, tipo='saida_pedido',
+                        quantidade=item.quantidade,
+                        referencia=f'Pedido #{pedido.id} (forçar entrega — {current_user.nome})',
+                        usuario_id=current_user.id,
+                    ))
+
+        # Sobe estoque da loja (se ainda nao foi marcado entregue)
+        if pedido.status != 'entregue':
+            for item in pedido.itens:
+                if item.quantidade <= 0:
+                    continue
+                item.quantidade_recebida = item.quantidade
+                el = EstoqueLoja.query.filter_by(
+                    loja_id=pedido.loja_id,
+                    receita_id=item.receita_id,
+                    produto_id=item.produto_id,
+                    materia_prima_id=item.materia_prima_id,
+                ).first()
+                if not el:
+                    el = EstoqueLoja(loja_id=pedido.loja_id,
+                                      receita_id=item.receita_id,
+                                      produto_id=item.produto_id,
+                                      materia_prima_id=item.materia_prima_id)
+                    db.session.add(el)
+                    db.session.flush()
+                el.quantidade = (el.quantidade or 0) + item.quantidade
+                db.session.add(MovEstoqueLoja(
+                    estoque_loja_id=el.id, tipo='entrada_pedido',
+                    quantidade=item.quantidade,
+                    referencia=f'Pedido #{pedido.id} (forçar entrega — {current_user.nome})',
+                    usuario_id=current_user.id,
+                ))
+
+        pedido.status = 'entregue'
+        # Registra na audit
+        db.session.add(HandshakeAudit(
+            token='manual', pedido_id=pedido.id, tipo='entrega',
+            etapa='forcar_entrega',
+            detalhe=f'admin:{current_user.nome} forcou de {estado_antes} → entregue',
+            status_pedido=estado_antes,
+        ))
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception('Falha ao forcar entrega %s', id)
+        flash(f'Erro: {exc}', 'danger')
+        return redirect(url_for('pedidos.detalhe', id=id))
+
+    flash(f'Pedido #{pedido.id} marcado como entregue (de {estado_antes}). Estoque da loja atualizado.', 'success')
+    return redirect(url_for('pedidos.detalhe', id=id))
+
+
 @pedidos_bp.route('/<int:id>/enviar', methods=['POST'])
 @login_required
 @operacional_pedido_required

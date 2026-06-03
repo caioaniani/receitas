@@ -240,6 +240,8 @@
     </form>
     {% endif %}
 
+    {% if current_user.is_admin() and pedido.status != 'entregue' and pedido.status != 'cancelado' %}{% endif %}
+
     {% if current_user.is_admin() %}
     <a href="{{ url_for('pedidos.handshake_audit', id=pedido.id) }}" class="btn btn-outline-info btn-sm"
        title="Ver histórico de tentativas de QR Code">
