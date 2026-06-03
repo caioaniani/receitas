@@ -1119,6 +1119,14 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE receita ADD COLUMN modo_preparo TEXT")
     if 'observacao' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN observacao TEXT")
+    if 'estado_padrao' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN estado_padrao VARCHAR(20)")
+
+    # Brioche entra no pre-preparo como assado por default (idempotente).
+    cursor.execute(
+        "UPDATE receita SET estado_padrao='assado' "
+        "WHERE LOWER(nome) LIKE '%brioche%' AND estado_padrao IS NULL"
+    )
 
     # Migração produto.observacao
     if cols_prod and 'observacao' not in cols_prod:
