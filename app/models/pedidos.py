@@ -81,11 +81,23 @@ class PedidoItem(db.Model):
         return '?'
 
     @property
+    def estado_efetivo(self):
+        """`estado` explicito do item, ou fallback pra `receita.estado_padrao`.
+
+        Permite a receita definir um padrao (ex: brioche='assado') sem
+        precisar marcar item por item; o item ainda pode sobrescrever."""
+        if self.estado:
+            return self.estado
+        if self.receita_id and self.receita and self.receita.estado_padrao:
+            return self.receita.estado_padrao
+        return None
+
+    @property
     def nome_item_com_estado(self):
-        """Nome do item + tag de estado, se estado nao-NULL.
+        """Nome do item + tag de estado, se houver (explicito ou via receita).
         Ex: 'Croissant Francês [BACKUP]' ou 'Sourdough' (sem tag)."""
         from app.constants import render_item_com_estado
-        return render_item_com_estado(self.nome_item, self.estado)
+        return render_item_com_estado(self.nome_item, self.estado_efetivo)
 
 
 # ── Estoque de Loja ──
