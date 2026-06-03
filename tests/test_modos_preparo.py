@@ -121,3 +121,30 @@ def test_salvar_json_403_pra_nao_admin(app):
         'receita_id': rid, 'texto': 'tentativa',
     })
     assert s.status_code == 403
+
+
+def test_salvar_json_aceita_padeiro(app):
+    """Papel 'padeiro' edita modo_preparo (via tela /receitas/<id>/padeiro)."""
+    from app.extensions import db
+    from app.models import Receita, Usuario
+    with app.app_context():
+        padeiro = Usuario(nome='Padeiro', login='pad', papel='padeiro')
+        padeiro.set_senha('x')
+        r = Receita(nome='Pao Padeiro', categoria='Paes',
+                    rendimento_qtd=1, rendimento_unidade='un',
+                    peso_base=100.0)
+        db.session.add_all([padeiro, r])
+        db.session.commit()
+        pid = padeiro.id
+        rid = r.id
+    client = app.test_client()
+    _login(client, pid)
+    s = client.post('/receitas/modos-preparo/salvar.json', data={
+        'receita_id': rid,
+        'texto': 'Sovar 10min. Forno 220C por 25min.',
+    })
+    assert s.status_code == 200 and s.get_json()['ok']
+    with app.app_context():
+        assert Receita.query.get(rid).modo_preparo == 'Sovar 10min. Forno 220C por 25min.'
+    # Tela em lote (rota GET) continua admin-only — padeiro nao acessa.
+    assert client.get('/receitas/modos-preparo').status_code == 403
