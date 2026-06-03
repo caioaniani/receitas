@@ -11,6 +11,7 @@ from app.decorators import (
     admin_required,
     gerente_required,
     operacional_pedido_required,
+    owner_required,
     pedidos_required,
     producao_required,
 )
@@ -496,11 +497,14 @@ def handshake_audit(id):
 
 @pedidos_bp.route('/<int:id>/forcar-entrega', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def forcar_entrega(id):
     """Recuperacao manual: marca pedido como entregue + sobe estoque da loja
     ignorando o estado atual. Usado quando o handshake QR falhou silenciosamente
-    ou o motorista esqueceu de escanear. Audita a acao em HandshakeAudit."""
+    ou o motorista esqueceu de escanear. Audita a acao em HandshakeAudit.
+
+    Owner-only: contorna validacoes de estoque/transito; restrito ao dono
+    pra evitar uso casual por admins/gerentes."""
     from app.models import HandshakeAudit
     pedido = PedidoLoja.query.get_or_404(id)
     estado_antes = pedido.status
