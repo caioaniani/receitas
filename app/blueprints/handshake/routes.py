@@ -163,13 +163,13 @@ def handshake(token):
                f'esperava separado, achou {pedido.status}')
         return render_template('handshake/erro.html',
                                 msg=f'Pedido #{pedido.id} nao esta mais aguardando saida (status: {pedido.status}). '
-                                    'Peca pro admin recolocar como separado, ou usar "Forcar entrega" na ficha do pedido.'), 409
+                                    'Peca pro admin recolocar como separado.'), 409
     if qr.tipo == 'entrega' and pedido.status != 'em_transporte':
         _audit(token, pedido, qr.tipo, 'erro_status',
                f'esperava em_transporte, achou {pedido.status}')
         return render_template('handshake/erro.html',
                                 msg=f'Pedido #{pedido.id} nao esta em transporte (status: {pedido.status}). '
-                                    'Peca pro admin executar o QR de saida antes, ou usar "Forcar entrega" na ficha do pedido.'), 409
+                                    'Peca pro admin executar o QR de saida antes.'), 409
 
     from app.services.conferencia import faltam_fotos, fotos_presentes
     fotos = fotos_presentes(pedido, qr.tipo)
