@@ -154,10 +154,18 @@ def _migrate_postgres(app):
             'observacao': 'ALTER TABLE receita ADD COLUMN observacao TEXT',
             'reaproveitavel': 'ALTER TABLE receita ADD COLUMN reaproveitavel BOOLEAN NOT NULL DEFAULT FALSE',
             'familia': 'ALTER TABLE receita ADD COLUMN familia VARCHAR(30)',
+            'estado_padrao': 'ALTER TABLE receita ADD COLUMN estado_padrao VARCHAR(20)',
         }
         for col, sql in migrações_receita.items():
             if col not in colunas:
                 conn.execute(text(sql))
+
+        # Brioche entra no pre-preparo como assado por default (idempotente:
+        # so seta se ainda nao houver valor — preserva decisao manual posterior).
+        conn.execute(text(
+            "UPDATE receita SET estado_padrao='assado' "
+            "WHERE LOWER(nome) LIKE '%brioche%' AND estado_padrao IS NULL"
+        ))
 
         # receita_ingrediente
         result = conn.execute(text(
