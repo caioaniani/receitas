@@ -150,6 +150,19 @@
 </div>
 
 <div class="card mt-3">
+    <div class="card-header py-2"><strong>Diagnostico Slack</strong></div>
+    <div class="card-body">
+        <p class="small mb-2">
+            Mostra canais Slack configurados e permite testar envio.
+            Use quando o WhatsApp avisar mas o Slack nao (ex: alerta de desperdicio).
+        </p>
+        <a href="{{ url_for('main.slack_diagnostico') }}" class="btn btn-sm btn-outline-primary">
+            Abrir diagnostico
+        </a>
+    </div>
+</div>
+
+<div class="card mt-3">
     <div class="card-header py-2">
         <strong>Backup do Postgres → Dropbox</strong>
         {% if info.backup_status.ativo %}
