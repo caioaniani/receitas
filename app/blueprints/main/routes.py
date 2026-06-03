@@ -957,6 +957,85 @@ def debug_schema_stamp():
                             log=log_buf.getvalue()[-3000:], ok=ok))
 
 
+@main_bp.route('/admin/slack/diagnostico')
+@owner_required
+def slack_diagnostico():
+    """Diagnostico dos avisos via Slack (canais, envio, alerta de desperdicio).
+
+    Resolve o caso comum: "recebi WhatsApp mas nao vi no Slack".
+    Mostra config + permite disparar alerta na hora pra ler o motivo real.
+    """
+    from flask import current_app
+
+    from app.services import desperdicio_alerta, slack
+
+    cfg = current_app.config
+    canais = [
+        ('Resumo diario (04:00)', 'SLACK_CANAL_RESUMO_DIARIO',
+         (cfg.get('SLACK_CANAL_RESUMO_DIARIO') or '').strip()),
+        ('Lembretes pedido amanha (9/12/16/19h)', 'SLACK_CANAL_PEDIDOS',
+         (cfg.get('SLACK_CANAL_PEDIDOS') or '').strip()),
+        ('Alerta desperdicio (20:10/15/20/25)', 'SLACK_CANAL_COPILOT',
+         (cfg.get('SLACK_CANAL_COPILOT') or '').strip()),
+    ]
+    info = {
+        'bot_token_setado': bool((cfg.get('SLACK_BOT_TOKEN') or '').strip()),
+        'signing_setado': bool((cfg.get('SLACK_SIGNING_SECRET') or '').strip()),
+        'disponivel': slack.disponivel(),
+        'canais': canais,
+        'lojas_sem_desperdicio': desperdicio_alerta.lojas_sem_desperdicio(),
+        'ultimo_resultado': request.args.get('resultado'),
+    }
+    return render_template('main/slack_diagnostico.html', info=info)
+
+
+@main_bp.route('/admin/slack/diagnostico/testar-canal', methods=['POST'])
+@owner_required
+def slack_diagnostico_testar_canal():
+    from flask import flash
+
+    from app.services import slack
+
+    canal = (request.form.get('canal') or '').strip()
+    if not canal:
+        flash('Canal vazio — configure a env var antes.', 'warning')
+        return redirect(url_for('main.slack_diagnostico'))
+    res = slack.post_message(
+        canal, ':test_tube: Teste de envio do diagnostico Slack.')
+    if res.get('ok'):
+        msg = f'OK: mensagem postada no canal {canal} (ts={res.get("ts")}).'
+        nivel = 'success'
+    else:
+        msg = f'FALHA ao postar em {canal}: {res.get("erro")}'
+        nivel = 'danger'
+    flash(msg, nivel)
+    return redirect(url_for('main.slack_diagnostico'))
+
+
+@main_bp.route('/admin/slack/diagnostico/disparar-desperdicio', methods=['POST'])
+@owner_required
+def slack_diagnostico_disparar_desperdicio():
+    """Dispara `alertar_slack_pendentes` na hora e mostra retorno bruto.
+
+    Util pra entender por que o cron 20:10/15/20/25 nao apareceu no canal.
+    """
+    from flask import flash
+
+    from app.services import desperdicio_alerta
+
+    res = desperdicio_alerta.alertar_slack_pendentes()
+    if res.get('enviado'):
+        flash(f'Alerta enviado no Slack ({res.get("pendentes")} loja[s] pendente[s]).',
+              'success')
+    else:
+        motivo = res.get('motivo')
+        erro = res.get('erro')
+        flash(f'NAO enviado. motivo={motivo}'
+              + (f' · erro={erro}' if erro else ''),
+              'warning' if motivo == 'sem_pendencias' else 'danger')
+    return redirect(url_for('main.slack_diagnostico'))
+
+
 @main_bp.route('/admin/backup/debug-env')
 @owner_required
 def backup_debug_env():
