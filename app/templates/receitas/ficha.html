@@ -29,6 +29,16 @@
                 </select>
             </div>
             <div class="col">
+                <label class="form-label small text-muted" title="Vai pra tela de pré-preparo do padeiro automaticamente">
+                    Estado padrão (pré-preparo)
+                </label>
+                <select name="estado_padrao" class="form-select form-select-sm input-blue">
+                    <option value="" {% if not receita.estado_padrao %}selected{% endif %}>— Não vai pro pré-preparo —</option>
+                    <option value="assado" {% if receita.estado_padrao == 'assado' %}selected{% endif %}>Assado</option>
+                    <option value="backup" {% if receita.estado_padrao == 'backup' %}selected{% endif %}>Backup</option>
+                </select>
+            </div>
+            <div class="col">
                 <label class="form-label small text-muted">Preco Atacado (R$)</label>
                 <input type="number" name="preco_venda" value="{{ '%.2f' % receita.preco_venda if receita.preco_venda else '' }}"
                        step="0.01" min="0" class="form-control form-control-sm input-blue" id="preco-venda">
