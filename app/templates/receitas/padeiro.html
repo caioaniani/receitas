@@ -201,51 +201,85 @@ const RECEITA_PESOS = {{ receita_pesos | tojson }};
     var ta = document.getElementById('mp-textarea');
     if (!ta) return;
     var status = document.getElementById('mp-status');
+    var feedback = document.getElementById('mp-feedback');
+    var btn = document.getElementById('mp-salvar');
     var URL = '{{ url_for("receitas.modos_preparo_salvar") }}';
     var CSRF = '{{ csrf_token() }}';
     var timer = null;
+    var sujo = false;
 
-    function mostrar(texto, cor) {
+    function mostrarStatus(texto, cor) {
         if (!status) return;
         status.textContent = texto;
         status.style.color = cor || '';
     }
 
-    function salvar() {
+    function mostrarFeedback(texto, cor) {
+        if (!feedback) return;
+        feedback.textContent = texto;
+        feedback.style.color = cor || '';
+    }
+
+    function salvar(origem) {
         var fd = new FormData();
         fd.append('csrf_token', CSRF);
         fd.append('receita_id', ta.dataset.receitaId);
         fd.append('texto', ta.value || '');
-        mostrar('Salvando...', '#666');
+        mostrarStatus('Salvando...', '#666');
         ta.classList.remove('is-valid', 'is-invalid');
-        fetch(URL, {
+        if (origem === 'botao' && btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Salvando...';
+        }
+        return fetch(URL, {
             method: 'POST', body: fd,
             headers: {'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': CSRF},
         }).then(function (r) {
             if (r.ok) {
+                sujo = false;
                 ta.classList.add('is-valid');
-                mostrar('Salvo', '#198754');
+                mostrarStatus('Salvo', '#198754');
+                if (origem === 'botao') {
+                    mostrarFeedback('Modo de preparo salvo!', '#198754');
+                }
                 setTimeout(function () {
                     ta.classList.remove('is-valid');
-                    mostrar('', '');
-                }, 1500);
+                    mostrarStatus('', '');
+                    if (origem === 'botao') mostrarFeedback('', '');
+                }, 2500);
             } else {
                 ta.classList.add('is-invalid');
-                mostrar('Erro ao salvar', '#dc3545');
+                mostrarStatus('Erro ao salvar', '#dc3545');
+                mostrarFeedback('Erro ao salvar. Tente de novo.', '#dc3545');
             }
         }).catch(function () {
             ta.classList.add('is-invalid');
-            mostrar('Erro de conexão', '#dc3545');
+            mostrarStatus('Erro de conexão', '#dc3545');
+            mostrarFeedback('Sem conexão. Tente de novo.', '#dc3545');
+        }).finally(function () {
+            if (origem === 'botao' && btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-check-circle"></i> Salvar';
+            }
         });
     }
 
     ta.addEventListener('input', function () {
+        sujo = true;
         clearTimeout(timer);
-        timer = setTimeout(salvar, 800);
+        timer = setTimeout(function () { salvar('auto'); }, 1500);
     });
-    ta.addEventListener('blur', function () {
-        clearTimeout(timer);
-        salvar();
+    if (btn) {
+        btn.addEventListener('click', function () {
+            clearTimeout(timer);
+            salvar('botao');
+        });
+    }
+    window.addEventListener('beforeunload', function (ev) {
+        if (sujo) {
+            ev.preventDefault();
+            ev.returnValue = 'Voce tem alteracoes nao salvas no modo de preparo.';
+        }
     });
 })();
 </script>
