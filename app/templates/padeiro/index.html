@@ -745,6 +745,15 @@
   function prodHistFechar() {
     document.getElementById('prod-hist').classList.remove('aberto');
   }
+  function prodHistBackdrop(ev) {
+    if (ev.target === ev.currentTarget) prodHistFechar();
+  }
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape'
+        && document.getElementById('prod-hist').classList.contains('aberto')) {
+      prodHistFechar();
+    }
+  });
 
   function prodConfirmar() {
     if (prodEnviando) return;
