@@ -310,8 +310,11 @@ def modos_preparo():
 
 @receitas_bp.route('/modos-preparo/salvar.json', methods=['POST'])
 @login_required
-@admin_required
 def modos_preparo_salvar():
+    if not (current_user.is_admin()
+            or current_user.is_owner
+            or current_user.is_padeiro()):
+        return jsonify({'ok': False, 'erro': 'sem permissao'}), 403
     receita_id = request.form.get('receita_id', type=int)
     if not receita_id:
         return jsonify({'ok': False, 'erro': 'receita_id ausente'}), 400
