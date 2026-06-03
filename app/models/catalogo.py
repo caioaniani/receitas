@@ -94,6 +94,10 @@ class Receita(db.Model):
     custo_embalagem = db.Column(db.Float, default=0)
     modo_preparo = db.Column(db.Text)
     observacao = db.Column(db.Text)
+    # Estado padrao no pre-preparo do padeiro: 'assado' / 'backup' / NULL.
+    # Quando setado, vale como default pra qualquer PedidoItem dessa receita
+    # cujo `estado` esteja NULL — sem precisar marcar item a item.
+    estado_padrao = db.Column(db.String(20), nullable=True)
     # Quando True, desperdicio com motivo='validade' NAO baixa estoque
     # — o item vencido vira outra coisa (ex: Croissant Tradicional vencido
     # vira Croissant Almond, Sourdough Tradicional vira chapa). Outros
