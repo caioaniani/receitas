@@ -71,3 +71,63 @@ def test_card_padeiro_mostra_estado(app, admin_user, loja, catalogo, cliente):
     _login(cliente)
     r = cliente.get('/padeiro/')
     assert b'[ASSADO]' in r.data
+
+
+# ── estado_padrao da Receita como fallback do PedidoItem.estado ──────────
+
+def test_preparar_usa_estado_padrao_da_receita(app, admin_user, loja, catalogo, cliente):
+    """Brioche com `estado_padrao='assado'` + PedidoItem.estado=None: aparece."""
+    from app.extensions import db
+    from app.models import PedidoItem, PedidoLoja
+    from app.utils import hoje
+    catalogo['receita'].estado_padrao = 'assado'
+    p = PedidoLoja(loja_id=loja.id, data_entrega=hoje() + timedelta(days=1),
+                   status='confirmado', criado_por=admin_user.id)
+    db.session.add(p)
+    db.session.commit()
+    db.session.add(PedidoItem(pedido_id=p.id, receita_id=catalogo['receita'].id,
+                              quantidade=7, estado=None))
+    db.session.commit()
+    _login(cliente)
+    j = cliente.get(f'/padeiro/preparar.json?data={hoje().isoformat()}').get_json()
+    assert len(j['itens']) == 1
+    assert j['itens'][0]['estado'] == 'assado'
+    assert j['itens'][0]['qtd'] == 7
+
+
+def test_pedido_item_estado_explicito_sobrescreve_estado_padrao(
+        app, admin_user, loja, catalogo, cliente):
+    """item.estado='backup' ganha do Receita.estado_padrao='assado'."""
+    from app.extensions import db
+    from app.models import PedidoItem, PedidoLoja
+    from app.utils import hoje
+    catalogo['receita'].estado_padrao = 'assado'
+    p = PedidoLoja(loja_id=loja.id, data_entrega=hoje() + timedelta(days=1),
+                   status='confirmado', criado_por=admin_user.id)
+    db.session.add(p)
+    db.session.commit()
+    db.session.add(PedidoItem(pedido_id=p.id, receita_id=catalogo['receita'].id,
+                              quantidade=4, estado='backup'))
+    db.session.commit()
+    _login(cliente)
+    j = cliente.get(f'/padeiro/preparar.json?data={hoje().isoformat()}').get_json()
+    assert len(j['itens']) == 1
+    assert j['itens'][0]['estado'] == 'backup'
+
+
+def test_pedido_item_estado_efetivo_e_label(app, admin_user, loja, catalogo):
+    """`estado_efetivo` cai pra Receita.estado_padrao + label vem com tag."""
+    from app.extensions import db
+    from app.models import PedidoItem, PedidoLoja
+    from app.utils import hoje
+    catalogo['receita'].estado_padrao = 'assado'
+    p = PedidoLoja(loja_id=loja.id, data_entrega=hoje(), status='confirmado',
+                   criado_por=admin_user.id)
+    db.session.add(p)
+    db.session.commit()
+    it = PedidoItem(pedido_id=p.id, receita_id=catalogo['receita'].id,
+                    quantidade=1, estado=None)
+    db.session.add(it)
+    db.session.commit()
+    assert it.estado_efetivo == 'assado'
+    assert '[ASSADO]' in it.nome_item_com_estado
