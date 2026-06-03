@@ -306,30 +306,40 @@ def preparar_json():
     from collections import defaultdict
 
     from flask import jsonify
+    from sqlalchemy import and_, or_
 
     from app.constants import ESTADO_LABEL, STATUS_PEDIDO_FINALIZADOS
-    from app.models import PedidoItem, VendaB2BItem
+    from app.models import PedidoItem, Receita, VendaB2BItem
     dia = _parse_dia(request.args.get('data')) or hoje()
     alvo = dia + timedelta(days=1)
+    # Item entra no pre-preparo quando `estado` explicito for assado/backup,
+    # OU quando `estado` for NULL e a `Receita.estado_padrao` for assado/backup.
+    _estados_pre = ('assado', 'backup')
     itens = (PedidoItem.query.join(PedidoLoja)
+             .outerjoin(Receita, Receita.id == PedidoItem.receita_id)
              .filter(PedidoLoja.data_entrega == alvo,
                      ~PedidoLoja.status.in_(STATUS_PEDIDO_FINALIZADOS),
-                     PedidoItem.estado.in_(('assado', 'backup')))
+                     or_(PedidoItem.estado.in_(_estados_pre),
+                         and_(PedidoItem.estado.is_(None),
+                              Receita.estado_padrao.in_(_estados_pre))))
              .all())
     agg = defaultdict(int)
     for it in itens:
         loja = it.pedido.loja.nome if (it.pedido and it.pedido.loja) else '—'
-        agg[(loja, it.nome_item, it.estado)] += (it.quantidade or 0)
+        agg[(loja, it.nome_item, it.estado_efetivo)] += (it.quantidade or 0)
     # B2B do dia seguinte com estado [ASSADO]/[BACKUP] entram no mesmo pre-preparo.
     itens_b2b = (VendaB2BItem.query.join(VendaB2B)
+                 .outerjoin(Receita, Receita.id == VendaB2BItem.receita_id)
                  .filter(VendaB2B.data_entrega == alvo,
                          VendaB2B.status != 'cancelada',
                          VendaB2B.status_entrega != 'entregue',
-                         VendaB2BItem.estado.in_(('assado', 'backup')))
+                         or_(VendaB2BItem.estado.in_(_estados_pre),
+                             and_(VendaB2BItem.estado.is_(None),
+                                  Receita.estado_padrao.in_(_estados_pre))))
                  .all())
     for it in itens_b2b:
         cli = ('B2B · ' + it.venda.cliente_display) if it.venda else 'B2B'
-        agg[(cli, it.nome_item, it.estado)] += (it.quantidade or 0)
+        agg[(cli, it.nome_item, it.estado_efetivo)] += (it.quantidade or 0)
     linhas = [{'loja': lj, 'nome': n, 'estado': e,
                'estado_label': ESTADO_LABEL.get(e, e.upper()), 'qtd': q}
               for (lj, n, e), q in agg.items()]
