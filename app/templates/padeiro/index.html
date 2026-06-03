@@ -273,13 +273,13 @@
     </div>
   </div>
 </div>
-<div id="prod-hist">
+<div id="prod-hist" onclick="prodHistBackdrop(event)">
   <div class="box">
-    <h3>Histórico de produção</h3>
-    <div id="prod-hist-lista"></div>
-    <div class="cta">
-      <button class="btn btn-cinza" onclick="prodHistFechar()">Fechar</button>
+    <div class="box-head">
+      <h3>Histórico de produção</h3>
+      <button type="button" class="close-x" onclick="prodHistFechar()" aria-label="Fechar">×</button>
     </div>
+    <div id="prod-hist-lista"></div>
   </div>
 </div>
 <div id="upd-badge">atualizado —</div>
