@@ -149,12 +149,27 @@
     </div>
 </div>
 
-<!-- Modo de Preparo (read-only) -->
-{% if receita.modo_preparo %}
+<!-- Modo de Preparo -->
+{% set pode_editar_mp = current_user.is_admin() or current_user.is_owner or current_user.is_padeiro() %}
+{% if pode_editar_mp or receita.modo_preparo %}
 <div class="mb-3">
-    <h6 class="fw-bold"><i class="bi bi-journal-text"></i> Modo de Preparo</h6>
+    <h6 class="fw-bold d-flex align-items-center gap-2">
+        <i class="bi bi-journal-text"></i> Modo de Preparo
+        {% if pode_editar_mp %}
+        <span id="mp-status" class="small text-muted" style="font-weight:normal;"></span>
+        {% endif %}
+    </h6>
     <div class="card border-0 shadow-sm">
+        {% if pode_editar_mp %}
+        <div class="card-body p-2">
+            <textarea id="mp-textarea" class="form-control input-blue"
+                      data-receita-id="{{ receita.id }}"
+                      rows="10"
+                      placeholder="Passo 1: ...&#10;Passo 2: ...">{{ receita.modo_preparo or '' }}</textarea>
+        </div>
+        {% else %}
         <div class="card-body" style="white-space:pre-wrap;">{{ receita.modo_preparo }}</div>
+        {% endif %}
     </div>
 </div>
 {% endif %}
