@@ -313,6 +313,23 @@ def create_app(config_class=None):
             "img-src 'self' data: https://*.dropbox.com "
             "https://*.dropboxusercontent.com;"
         )
+        # Excecao: o card do CRM (/crm/card) e embutido como iframe DENTRO do
+        # Chatwoot (outro dominio). X-Frame-Options=DENY bloquearia; e
+        # ALLOW-FROM nao whitelista cross-origin de forma confiavel. Usamos
+        # CSP frame-ancestors com a URL do Chatwoot. Sem CHATWOOT_URL setado,
+        # mantemos DENY (card inutilizavel ate configurar).
+        if request.path.startswith('/crm/card'):
+            chatwoot = (app.config.get('CHATWOOT_URL') or '').strip().rstrip('/')
+            if chatwoot:
+                response.headers.pop('X-Frame-Options', None)
+                response.headers['Content-Security-Policy'] = (
+                    "default-src 'self'; "
+                    "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+                    "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+                    "img-src 'self' data: https://*.dropbox.com "
+                    "https://*.dropboxusercontent.com; "
+                    f"frame-ancestors 'self' {chatwoot};"
+                )
         if request.is_secure:
             response.headers['Strict-Transport-Security'] = (
                 'max-age=31536000; includeSubDomains'
