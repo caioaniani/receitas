@@ -103,3 +103,20 @@ class Config:
     # SEGURANCA: o servico recusa enviar pra numeros fora dessa lista.
     # Se vazio, refuse-all (nada e enviado). Inclui o ZAPI_NUMERO_DESTINO.
     ZAPI_NUMEROS_PERMITIDOS = os.environ.get('ZAPI_NUMEROS_PERMITIDOS', '')
+
+    # ── Chatwoot (atendimento omnichannel WhatsApp/IG/FB/site) ──
+    # Chatwoot roda como app self-hosted separado (Railway). O sistema da
+    # padaria so INTEGRA: serve o "card do cliente" (iframe Dashboard App) e
+    # faz backup do banco do Chatwoot junto com o seu.
+    # URL base da instancia Chatwoot (ex: https://atendimento.opaopadaria...).
+    CHATWOOT_URL = os.environ.get('CHATWOOT_URL', '')
+    # API access token (Profile Settings -> Access Token) pra enriquecer contatos.
+    CHATWOOT_API_TOKEN = os.environ.get('CHATWOOT_API_TOKEN', '')
+    # ID da conta no Chatwoot (numero na URL: /app/accounts/<id>/...).
+    CHATWOOT_ACCOUNT_ID = os.environ.get('CHATWOOT_ACCOUNT_ID', '')
+    # Token compartilhado embutido na URL do Dashboard App; valida o iframe do
+    # card. Gerar random longo (secrets.token_urlsafe(32)). Vazio = card 503.
+    CHATWOOT_CARD_TOKEN = os.environ.get('CHATWOOT_CARD_TOKEN', '')
+    # URL do Postgres do Chatwoot (banco SEPARADO) pro job de backup diario.
+    # Vazio = backup do Chatwoot desligado.
+    CHATWOOT_DATABASE_URL = os.environ.get('CHATWOOT_DATABASE_URL', '')
