@@ -47,12 +47,16 @@ def _parse_database_url(url):
     }
 
 
-def executar_backup(forcar=False):
+def executar_backup(forcar=False, db_url=None, prefixo='padaria', pasta=None):
     """Executa 1 ciclo de backup. Retorna dict com {ok, tamanho, arquivo}.
 
     `forcar=True` ignora checagem de SQLite (usado em rota manual de teste).
+    `db_url` aponta pra um banco alternativo (ex: o Postgres do Chatwoot);
+    None = banco do proprio sistema (SQLALCHEMY_DATABASE_URI).
+    `prefixo` nomeia o arquivo (`<prefixo>_<timestamp>.dump.gz`).
+    `pasta` sobrescreve a pasta destino no Dropbox (None = padrao).
     """
-    uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
+    uri = (db_url or current_app.config.get('SQLALCHEMY_DATABASE_URI', '') or '')
     if not uri.startswith(('postgresql', 'postgres')):
         msg = f'Backup ignorado: banco nao eh Postgres (uri={uri[:30]}...)'
         logger.info('[backup] %s', msg)
