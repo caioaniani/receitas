@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cliente</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+           margin: 0; padding: 10px; color: #1f2d3d; font-size: 13px;
+           background: #fff; }
+    h2 { font-size: 14px; margin: 0 0 8px; }
+    .muted { color: #889; }
+    .estado { padding: 16px 8px; text-align: center; color: #889; }
+    .bloco { border: 1px solid #e6e9ef; border-radius: 8px; padding: 10px;
+             margin-bottom: 10px; }
+    .bloco-titulo { font-weight: 700; font-size: 12px; text-transform: uppercase;
+                    letter-spacing: .4px; color: #667; margin-bottom: 6px; }
+    .debito { font-size: 16px; font-weight: 800; }
+    .debito.tem { color: #c0392b; }
+    .debito.zero { color: #27ae60; }
+    .linha { padding: 6px 0; border-top: 1px solid #f1f3f5; }
+    .linha:first-child { border-top: 0; }
+    .linha .top { display: flex; justify-content: space-between; gap: 8px; }
+    .linha .data { color: #889; font-size: 12px; }
+    .linha .valor { font-weight: 700; white-space: nowrap; }
+    .itens { color: #667; font-size: 12px; margin-top: 2px; }
+    .badge { display: inline-block; background: #eef; color: #335; border-radius: 6px;
+             padding: 1px 6px; font-size: 11px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div id="conteudo">
+    <div class="estado">Carregando…</div>
+  </div>
+
+  <script>
+    var TOKEN = {{ token|tojson }};
+    var alvo = document.getElementById('conteudo');
+
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function brl(v) {
+      return 'R$ ' + (Number(v) || 0).toFixed(2).replace('.', ',');
+    }
+    function estado(txt) {
+      alvo.innerHTML = '<div class="estado">' + esc(txt) + '</div>';
+    }
+
+    function extrairTelefone(payload) {
+      var d = (payload && payload.data) || {};
+      var contact = d.contact
+        || (d.conversation && d.conversation.meta && d.conversation.meta.sender)
+        || {};
+      return contact.phone_number || contact.identifier || '';
+    }
+
+    function render(d) {
+      if (!d.encontrado) {
+        estado('Cliente novo — sem histórico de pedido na padaria.');
+        return;
+      }
+      var html = '';
+      if (d.b2b) {
+        var b = d.b2b;
+        var temDebito = (b.debito_aberto || 0) > 0.001;
+        html += '<div class="bloco">';
+        html += '<div class="bloco-titulo">Cliente B2B</div>';
+        html += '<h2>' + esc(b.nome) + '</h2>';
+        if (b.contato) html += '<div class="muted">Contato: ' + esc(b.contato) + '</div>';
+        html += '<div style="margin-top:6px;">Débito em aberto: '
+             + '<span class="debito ' + (temDebito ? 'tem' : 'zero') + '">'
+             + brl(b.debito_aberto) + '</span></div>';
+        if (b.vendas && b.vendas.length) {
+          html += '<div style="margin-top:8px;">';
+          b.vendas.forEach(function (v) {
+            html += '<div class="linha"><div class="top">'
+              + '<span class="data">' + esc(v.data) + ' · venda #' + esc(v.id) + '</span>'
+              + '<span class="valor">' + brl(v.valor_total) + '</span></div>';
+            if ((v.valor_aberto || 0) > 0.001) {
+              html += '<div class="itens">em aberto: ' + brl(v.valor_aberto) + '</div>';
+            }
+            html += '</div>';
+          });
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+      if (d.pedidos_locais && d.pedidos_locais.length) {
+        html += '<div class="bloco">';
+        html += '<div class="bloco-titulo">Pedidos (encomenda) · '
+             + d.pedidos_locais.length + '</div>';
+        d.pedidos_locais.forEach(function (p) {
+          var itens = (p.itens || []).map(function (i) {
+            return i.qtd + '× ' + i.nome;
+          }).join(', ');
+          html += '<div class="linha"><div class="top">'
+            + '<span><span class="badge">' + esc(p.code) + '</span> '
+            + esc(p.destinatario) + '</span>'
+            + '<span class="valor">' + brl(p.total) + '</span></div>'
+            + '<div class="data">' + esc(p.data_entrega) + '</div>';
+          if (itens) html += '<div class="itens">' + esc(itens) + '</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+      alvo.innerHTML = html || '<div class="estado">Sem dados.</div>';
+    }
+
+    function carregar(phone) {
+      if (!phone) { estado('Aguardando contato…'); return; }
+      estado('Carregando histórico…');
+      fetch('{{ url_for("crm.card_json") }}?phone=' + encodeURIComponent(phone)
+            + '&k=' + encodeURIComponent(TOKEN))
+        .then(function (r) {
+          if (r.status === 403) { estado('Acesso negado (token inválido).'); return null; }
+          return r.ok ? r.json() : null;
+        })
+        .then(function (d) { if (d) render(d); else estado('Erro ao carregar.'); })
+        .catch(function () { estado('Erro de conexão.'); });
+    }
+
+    window.addEventListener('message', function (e) {
+      var payload;
+      try { payload = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; }
+      catch (_) { return; }
+      if (!payload || payload.event !== 'appContext') return;
+      carregar(extrairTelefone(payload));
+    });
+
+    // Pede o contexto da conversa ao Chatwoot (handshake do Dashboard App).
+    estado('Aguardando contato…');
+    window.parent.postMessage('chatwoot-dashboard-app:fetch-info', '*');
+  </script>
+</body>
+</html>
