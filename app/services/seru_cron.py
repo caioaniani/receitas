@@ -38,6 +38,7 @@ _ult_run_backup = None
 LOCK_KEY = 7723  # advisory lock pro Seru
 LOCK_KEY_VNDA = 7724  # advisory lock pro VNDA
 LOCK_KEY_BACKUP = 7731  # advisory lock pro backup diario
+LOCK_KEY_BACKUP_CHATWOOT = 7735  # advisory lock pro backup do banco do Chatwoot
 
 
 def _com_lock(key, fn, label='job'):
