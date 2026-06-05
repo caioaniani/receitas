@@ -404,6 +404,8 @@ def create_app(config_class=None):
     app.register_blueprint(padeiro_bp, url_prefix='/padeiro')
     from app.blueprints.avisos import avisos_bp
     app.register_blueprint(avisos_bp)
+    from app.blueprints.crm import crm_bp
+    app.register_blueprint(crm_bp)
 
     # Ativa audit log (listeners SQLAlchemy)
     from app.services.audit import init_audit
