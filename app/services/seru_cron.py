@@ -278,6 +278,16 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
+    # Backup do Postgres do Chatwoot (banco separado) — 04:20 BRT diario.
+    # So agenda se houver CHATWOOT_DATABASE_URL e BACKUP_CHATWOOT != 0.
+    if (os.environ.get('BACKUP_CHATWOOT', '1') != '0'
+            and (app.config.get('CHATWOOT_DATABASE_URL') or '').strip()):
+        _scheduler.add_job(
+            lambda app=app: _run_backup_chatwoot(app),
+            'cron', hour=4, minute=20, id='backup-chatwoot',
+            max_instances=1, coalesce=True,
+        )
+
     # Automacoes WhatsApp configuraveis (mensagens agendadas) — checa a cada 5 min
     _scheduler.add_job(
         lambda app=app: _run_automacoes_whatsapp(app),
@@ -376,6 +386,35 @@ def _run_backup_diario(app):
         if db.engine.dialect.name != 'postgresql':
             return  # backup nao roda em SQLite local
         _com_lock(LOCK_KEY_BACKUP, _fn, 'backup diario')
+
+
+def _run_backup_chatwoot(app):
+    """Job: backup do Postgres do CHATWOOT pro Dropbox (04:20 BRT).
+
+    Banco separado do sistema (CHATWOOT_DATABASE_URL). Reusa o mesmo
+    servico de backup, mudando a URL alvo e o prefixo/pasta do arquivo.
+    Advisory lock proprio (no banco do sistema) pra exec unica entre workers.
+    """
+    from app.extensions import db
+    from app.services import backup
+    from app.utils import agora as _agora
+
+    chatwoot_url = (app.config.get('CHATWOOT_DATABASE_URL') or '').strip()
+    if not chatwoot_url:
+        return
+
+    def _fn():
+        global _ult_run_backup_chatwoot
+        resultado = backup.executar_backup(
+            db_url=chatwoot_url, prefixo='chatwoot', pasta='/backups-chatwoot')
+        _ult_run_backup_chatwoot = _agora()
+        if not resultado['ok']:
+            logger.warning('backup chatwoot falhou: %s', resultado.get('motivo'))
+
+    with app.app_context():
+        if db.engine.dialect.name != 'postgresql':
+            return  # advisory lock exige Postgres
+        _com_lock(LOCK_KEY_BACKUP_CHATWOOT, _fn, 'backup chatwoot')
 
 
 def status_backup():
