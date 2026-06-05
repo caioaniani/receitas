@@ -119,7 +119,8 @@ def executar_backup(forcar=False, db_url=None, prefixo='padaria', pasta=None):
 
     gz_bytes = gzip.compress(dump_bytes, compresslevel=6)
     timestamp = _agora_brt().strftime('%Y-%m-%d_%H%M')
-    dropbox_path = f'{_pasta_destino()}/padaria_{timestamp}.dump.gz'
+    destino = (pasta or _pasta_destino()).rstrip('/')
+    dropbox_path = f'{destino}/{prefixo}_{timestamp}.dump.gz'
 
     try:
         resultado = dropbox_storage.upload_arquivo(gz_bytes, dropbox_path)
