@@ -16,6 +16,37 @@ def parse_float_br(value, default=None):
     return float(cleaned) if cleaned else default
 
 
+def normalizar_telefone(numero):
+    """Mantem so digitos. '+55 11 99999-9999' -> '5511999999999'."""
+    return ''.join(c for c in (numero or '') if c.isdigit())
+
+
+def telefone_chave(numero):
+    """Chave canonica pra casar telefones brasileiros salvos em formatos
+    diferentes (com/sem +55, com/sem o 9o digito de celular).
+
+    O WhatsApp entrega '5511999998888' (13 digitos). Um PedidoLocal pode
+    ter '(11) 99999-8888' -> '11999998888' (11) ou o formato antigo sem o
+    9 -> '1199998888' (10). Esta funcao colapsa os tres no mesmo valor de
+    10 digitos (DDD + 8 digitos do assinante), pra comparacao confiavel.
+
+    Retorna '' se nao houver digitos suficientes pra um match seguro
+    (< 10 digitos = sem DDD; nao tentamos adivinhar).
+    """
+    d = normalizar_telefone(numero)
+    # Tira codigo do pais (55) quando presente em numero longo.
+    if len(d) >= 12 and d.startswith('55'):
+        d = d[2:]
+    # Celular com 9o digito (DD 9 XXXXXXXX = 11 digitos): remove o 9 pra
+    # bater com cadastros antigos sem ele.
+    if len(d) == 11 and d[2] == '9':
+        d = d[:2] + d[3:]
+    if len(d) < 10:
+        return ''
+    # Mantem os ultimos 10 digitos (DDD + 8). Descarta eventual lixo a mais.
+    return d[-10:]
+
+
 # ── Timezone helpers (BRT / America/Sao_Paulo) ─────────────────────────
 # Sistema todo opera em BRT naive. Brasil nao tem DST desde 2019, offset -3 fixo.
 
