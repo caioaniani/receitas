@@ -47,8 +47,11 @@ def status_instancia():
 
 
 def _normalizar_numero(numero):
-    """Mantem so digitos. '+55 11 99999-9999' → '5511999999999'."""
-    return ''.join(c for c in (numero or '') if c.isdigit())
+    """Mantem so digitos. '+55 11 99999-9999' → '5511999999999'.
+
+    Delega pra `app.utils.normalizar_telefone` (fonte canonica unica)."""
+    from app.utils import normalizar_telefone
+    return normalizar_telefone(numero)
 
 
 def _whitelist_numeros():
