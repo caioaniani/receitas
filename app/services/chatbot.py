@@ -63,7 +63,10 @@ TOOLS = [
     },
     {
         'name': 'consultar_pedido',
-        'description': 'Consulta o status de um pedido pelo número informado pelo cliente.',
+        'description': 'Consulta status, itens e a DATA DE ENTREGA real (a '
+                       'agendada) de um pedido pelo número. Use pra dar a data '
+                       'correta quando o cliente tiver dúvida — o site às vezes '
+                       'mostra "entregue hoje" por bug; esta data é a verdadeira.',
         'input_schema': {
             'type': 'object',
             'properties': {'numero': {'type': 'string'}},
