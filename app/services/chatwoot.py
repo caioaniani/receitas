@@ -55,3 +55,92 @@ def atualizar_atributos_contato(contact_id, atributos):
     except Exception as exc:  # noqa: BLE001
         logger.exception('chatwoot atualizar_atributos_contato falhou')
         return {'ok': False, 'erro': str(exc)}
+
+
+# ── Agent Bot (atendimento automatico) ──
+# Usa o token do Agent Bot (CHATWOOT_BOT_TOKEN), nao o de usuario, pra as
+# mensagens aparecerem como do bot. Webhook em app/blueprints/crm/routes.py.
+
+
+def bot_disponivel():
+    cfg = current_app.config
+    return bool((cfg.get('CHATWOOT_URL') or '').strip()
+                and (cfg.get('CHATWOOT_BOT_TOKEN') or '').strip()
+                and (cfg.get('CHATWOOT_ACCOUNT_ID') or '').strip())
+
+
+def _bot_headers():
+    return {'api_access_token': (current_app.config.get('CHATWOOT_BOT_TOKEN') or '').strip(),
+            'Content-Type': 'application/json'}
+
+
+def enviar_mensagem(conversation_id, content):
+    """Posta uma resposta do bot numa conversa. Retorna {'ok': bool}."""
+    if not bot_disponivel():
+        return {'ok': False, 'erro': 'Chatwoot bot nao configurado'}
+    url = f'{_base()}/conversations/{conversation_id}/messages'
+    try:
+        r = requests.post(url, json={'content': content, 'message_type': 'outgoing'},
+                          headers=_bot_headers(), timeout=10)
+        if r.status_code not in (200, 201):
+            logger.warning('chatwoot enviar_mensagem %s: %s', r.status_code, r.text[:200])
+            return {'ok': False, 'erro': f'HTTP {r.status_code}'}
+        return {'ok': True}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('chatwoot enviar_mensagem falhou')
+        return {'ok': False, 'erro': str(exc)}
+
+
+def definir_status(conversation_id, status):
+    """Muda o status da conversa. 'open' = passa pro humano (sai do bot);
+    'pending' = devolve pro bot; 'resolved' = encerra."""
+    if not bot_disponivel():
+        return {'ok': False, 'erro': 'Chatwoot bot nao configurado'}
+    url = f'{_base()}/conversations/{conversation_id}/toggle_status'
+    try:
+        r = requests.post(url, json={'status': status},
+                          headers=_bot_headers(), timeout=10)
+        if r.status_code not in (200, 201):
+            logger.warning('chatwoot definir_status %s: %s', r.status_code, r.text[:200])
+            return {'ok': False, 'erro': f'HTTP {r.status_code}'}
+        return {'ok': True}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('chatwoot definir_status falhou')
+        return {'ok': False, 'erro': str(exc)}
+
+
+def buscar_historico(conversation_id, limite=20):
+    """Mensagens recentes da conversa, em ordem cronologica, mapeadas pra
+    [{'role': 'user'|'assistant', 'content': str}] (pro Claude). Cliente =
+    user (incoming), bot/atendente = assistant (outgoing). Ignora notas
+    internas e eventos."""
+    if not bot_disponivel():
+        return []
+    url = f'{_base()}/conversations/{conversation_id}/messages'
+    try:
+        r = requests.get(url, headers=_bot_headers(), timeout=10)
+        if r.status_code not in (200, 201):
+            return []
+        data = r.json() if r.text else {}
+    except Exception:  # noqa: BLE001
+        logger.exception('chatwoot buscar_historico falhou')
+        return []
+
+    msgs = data.get('payload') if isinstance(data, dict) else data
+    if not isinstance(msgs, list):
+        return []
+    msgs = sorted(msgs, key=lambda m: m.get('created_at') or 0)
+
+    hist = []
+    for m in msgs:
+        if m.get('private'):
+            continue
+        content = (m.get('content') or '').strip()
+        if not content:
+            continue
+        mt = m.get('message_type')
+        if mt in ('incoming', 0):
+            hist.append({'role': 'user', 'content': content})
+        elif mt in ('outgoing', 1):
+            hist.append({'role': 'assistant', 'content': content})
+    return hist[-limite:]
