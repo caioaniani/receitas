@@ -98,8 +98,11 @@ def _carregar_catalogo():
         # Params iguais aos do n8n do cliente (validados em producao por anos):
         # per_page=100, available=true. _parse_produtos ainda marca disponibilidade
         # por variante (catalogo da padaria pequeno; lote unico cabe).
+        # Token de produtos: o token principal nao tem escopo de catalogo (403);
+        # _produtos_token usa VNDA_PRODUTOS_TOKEN se setado, senao o principal.
         resp = vnda._get('/products', params={'available': 'true',
-                                              'per_page': 100, 'page': page})
+                                              'per_page': 100, 'page': page},
+                         token=vnda._produtos_token())
         if not resp:
             logger.warning('catalogo VNDA /products falhou (page=%s)', page)
             if page == 1:
