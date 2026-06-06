@@ -1,22 +1,31 @@
 """Ferramentas do bot de atendimento (Fase 2): consulta de produtos e pedidos
 no VNDA + geracao de links de carrinho/cesta.
 
-As chamadas ao VNDA seguem a doc oficial (developers.vnda.com.br) e reusam o
-cliente de `app.services.vnda`. NAO foram testadas ao vivo aqui (sem token no
-ambiente) — confirmar contra o fluxo do n8n na ativacao, em especial o nome do
-campo de SKU/estoque na resposta de /products/search.
+Catalogo: usamos GET /api/v2/products?available=true (mesmo endpoint que o bot
+antigo no n8n usava) e filtramos o termo localmente — o catalogo da padaria e
+pequeno. ATENCAO ao formato do VNDA: `variants` vem como DICT keyed pelo id da
+variante ({"11": {"sku": "10007", ...}}), NAO como lista. O SKU do link de
+carrinho e SEMPRE variants[].sku (nunca o id do produto nem o id da variante);
+extraimos isso deterministicamente aqui pra o Claude nunca montar SKU na mao.
 
 Entrega/CEP NAO esta aqui de proposito: o endpoint de frete do VNDA
 (/variants/{sku}/shipping_methods) precisa ser validado antes de o bot
 afirmar entrega a cliente. Ate la, o prompt manda o bot passar pro humano.
 """
 import logging
+import time
 
 from app.services import vnda
 
 logger = logging.getLogger(__name__)
 
 SHOP = 'https://www.padariaartesanalonline.com.br'
+
+# Catalogo muda pouco; cache curto evita martelar o VNDA a cada mensagem.
+_CATALOGO_TTL = 300  # segundos
+_catalogo_cache = {}  # {'produtos': [...], 'ts': float}
+_STOPWORDS = {'de', 'da', 'do', 'com', 'sem', 'para', 'pra', 'uma', 'um',
+              'os', 'as', 'que', 'meu', 'minha'}
 
 # Links das paginas das cestas (estaticos, do prompt do cliente).
 LINKS_CESTAS = {
@@ -33,28 +42,24 @@ LINKS_CESTAS = {
 }
 
 
-def consultar_produtos(busca):
-    """Busca produtos no VNDA por texto. Retorna
-    {'produtos': [{nome, sku, preco, disponivel}]} ou {'erro': ...}.
+def _parse_produtos(raw):
+    """Extrai [{nome, sku, preco, disponivel}] da resposta do VNDA.
 
-    SKU vem SEMPRE de variants[].sku — é o que o link de carrinho exige.
-    """
-    resp = vnda._get('/products/search', params={'q': busca, 'per_page': 20})
-    if not resp:
-        return {'erro': 'VNDA indisponível no momento'}
-    try:
-        data = resp.json()
-    except ValueError:
-        return {'erro': 'resposta inválida do VNDA'}
-
-    produtos = data if isinstance(data, list) else (data.get('products') or data.get('results') or [])
+    Tolera `variants` como DICT (formato real do VNDA: {id: {...}}) ou como
+    lista. Uma linha por variante que tenha SKU."""
     out = []
-    for p in produtos:
-        nome_base = p.get('name') or p.get('title') or ''
-        variants = p.get('variants') or []
-        if not variants:
-            continue
-        for v in variants:
+    for p in (raw or []):
+        nome_base = (p.get('name') or p.get('title') or '').strip()
+        variants = p.get('variants')
+        if isinstance(variants, dict):
+            lista_v = list(variants.values())
+        elif isinstance(variants, list):
+            lista_v = variants
+        else:
+            lista_v = []
+        for v in lista_v:
+            if not isinstance(v, dict):
+                continue
             sku = v.get('sku')
             if not sku:
                 continue
@@ -65,13 +70,75 @@ def consultar_produtos(busca):
             disp = v.get('available')
             if disp is None:
                 disp = p.get('available', True)
+            preco = v.get('price')
+            if preco is None:
+                preco = p.get('price')
             out.append({
                 'nome': nome,
                 'sku': str(sku),
-                'preco': v.get('price') or p.get('price'),
+                'preco': preco,
                 'disponivel': bool(disp),
             })
-    return {'produtos': out}
+    return out
+
+
+def _carregar_catalogo():
+    """Catalogo de produtos disponiveis no VNDA, com cache curto em memoria.
+
+    Retorna lista de {nome, sku, preco, disponivel}, ou None se o VNDA estiver
+    fora (1a pagina falhou) — caller trata None como erro e passa pro humano."""
+    agora = time.time()
+    if (_catalogo_cache.get('produtos') is not None
+            and agora - _catalogo_cache.get('ts', 0) < _CATALOGO_TTL):
+        return _catalogo_cache['produtos']
+
+    todos = []
+    page = 1
+    while page <= 10:
+        resp = vnda._get('/products', params={'available': 'true',
+                                              'per_page': 100, 'page': page})
+        if not resp:
+            if page == 1:
+                return None  # VNDA fora -> caller faz handoff (nao inventa)
+            break  # paginas seguintes: tolerantes (catalogo parcial > nada)
+        try:
+            data = resp.json()
+        except ValueError:
+            break
+        lote = data if isinstance(data, list) else (
+            data.get('products') or data.get('results') or [])
+        if not lote:
+            break
+        todos.extend(lote)
+        if len(lote) < 100:
+            break
+        page += 1
+
+    produtos = _parse_produtos(todos)
+    _catalogo_cache['produtos'] = produtos
+    _catalogo_cache['ts'] = agora
+    return produtos
+
+
+def consultar_produtos(busca):
+    """Busca produtos no catalogo do VNDA por texto. Retorna
+    {'produtos': [{nome, sku, preco, disponivel}]} ou {'erro': ...}.
+
+    Carrega o catalogo (/products) e filtra pelos termos da busca. Sem match
+    local, devolve o catalogo (limitado) pro Claude aplicar o mapa de sinonimos
+    do prompt (ex: "amendoas" -> "Almond"). SKU sempre de variants[].sku."""
+    catalogo = _carregar_catalogo()
+    if catalogo is None:
+        return {'erro': 'VNDA indisponível no momento'}
+
+    termos = [t for t in (busca or '').strip().lower().split()
+              if len(t) > 2 and t not in _STOPWORDS]
+    if termos:
+        filtrados = [p for p in catalogo
+                     if any(t in p['nome'].lower() for t in termos)]
+        if filtrados:
+            return {'produtos': filtrados[:40]}
+    return {'produtos': catalogo[:80]}
 
 
 def gerar_link_carrinho(itens):
