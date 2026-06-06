@@ -119,3 +119,48 @@ def test_bot_webhook_token_invalido(app):
     client = app.test_client()
     r = client.post('/crm/bot?k=errado', json={'event': 'message_created'})
     assert r.status_code == 403
+
+
+# ── Fase 2: ferramentas ──
+
+def test_responder_loop_consultar_produtos(app):
+    """Claude chama consultar_produtos, recebe o resultado e responde."""
+    from app.services import chatbot
+    tool_blk = SimpleNamespace(type='tool_use', name='consultar_produtos',
+                               id='t1', input={'busca': 'croissant'})
+    resp1 = SimpleNamespace(content=[tool_blk])
+    resp2 = _resp_texto('🥐 Croissant Almond — R$32,50')
+    with app.app_context():
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        with patch('anthropic.Anthropic') as M, \
+             patch('app.services.bot_tools.consultar_produtos',
+                   return_value={'produtos': [{'nome': 'Croissant Almond', 'sku': '10007',
+                                               'preco': 32.5, 'disponivel': True}]}) as cp:
+            M.return_value.messages.create.side_effect = [resp1, resp2]
+            r = chatbot.responder([{'role': 'user', 'content': 'tem croissant de amêndoas?'}])
+    assert r['acao'] == 'responder'
+    assert 'Croissant' in r['texto']
+    cp.assert_called_once()
+
+
+def test_gerar_link_carrinho():
+    from app.services import bot_tools
+    r = bot_tools.gerar_link_carrinho([{'sku': '10007', 'qtd': 2}, {'sku': '10009', 'qtd': 1}])
+    assert r['link'].endswith('/carrinho?itens=10007:2,10009:1')
+
+
+def test_gerar_link_carrinho_vazio():
+    from app.services import bot_tools
+    assert 'erro' in bot_tools.gerar_link_carrinho([])
+
+
+def test_consultar_produtos_parse(app):
+    from app.services import bot_tools
+    fake = SimpleNamespace(json=lambda: {'products': [
+        {'name': 'Croissant Almond', 'available': True,
+         'variants': [{'sku': '10007', 'price': 32.5, 'available': True}]}]})
+    with app.app_context():
+        with patch('app.services.vnda._get', return_value=fake):
+            r = bot_tools.consultar_produtos('croissant')
+    assert r['produtos'][0]['sku'] == '10007'
+    assert r['produtos'][0]['disponivel'] is True
