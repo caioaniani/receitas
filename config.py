@@ -28,6 +28,10 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB upload (atestados)
     VNDA_API_TOKEN = os.environ.get('VNDA_API_TOKEN', '')
+    # Token dedicado ao catalogo (/products). O VNDA_API_TOKEN pode nao ter o
+    # escopo "Produtos" habilitado (so pedidos -> 403 no /products). Se setado,
+    # o bot usa este pro catalogo; senao, cai no VNDA_API_TOKEN.
+    VNDA_PRODUTOS_TOKEN = os.environ.get('VNDA_PRODUTOS_TOKEN', '')
     VNDA_SHOP_HOST = os.environ.get('VNDA_SHOP_HOST', 'www.padariaartesanalonline.com.br')
     # Coordenadas da loja matriz — origem das rotas de entrega
     ROTA_ORIGEM_LAT = os.environ.get('ROTA_ORIGEM_LAT', '')
