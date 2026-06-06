@@ -120,3 +120,10 @@ class Config:
     # URL do Postgres do Chatwoot (banco SEPARADO) pro job de backup diario.
     # Vazio = backup do Chatwoot desligado.
     CHATWOOT_DATABASE_URL = os.environ.get('CHATWOOT_DATABASE_URL', '')
+    # Bot de atendimento (Agent Bot do Chatwoot). Token de acesso do Agent Bot
+    # (criado em Settings -> Bots) — o bot usa pra enviar mensagem e passar a
+    # conversa pro humano. Vazio = bot desligado.
+    CHATWOOT_BOT_TOKEN = os.environ.get('CHATWOOT_BOT_TOKEN', '')
+    # Segredo na URL do webhook do bot (/crm/bot?k=...). Valida que o evento
+    # veio do nosso Agent Bot. Gerar random longo. Vazio = webhook recusa tudo.
+    CHATWOOT_BOT_SECRET = os.environ.get('CHATWOOT_BOT_SECRET', '')
