@@ -50,15 +50,17 @@ def _base_url():
     return 'https://api.vnda.com.br/api/v2'
 
 
-def _get(endpoint, params=None):
+def _get(endpoint, params=None, token=None):
     """Faz GET no VNDA. Sem retry — chamadas em massa (buscar cliente +
     shipping pra dezenas de pedidos) viram problema rapido se cada uma
     retentar. Falhas individuais sao toleradas pelos callers (pedido
     fica incompleto mas o resto continua). Frontend tem seu proprio
-    retry com cache de 30s pro caso de falha total."""
+    retry com cache de 30s pro caso de falha total.
+
+    `token`: sobrescreve o token padrao (ex: catalogo usa _produtos_token)."""
     url = f'{_base_url()}{endpoint}'
     try:
-        resp = requests.get(url, headers=_headers(), params=params, timeout=10)
+        resp = requests.get(url, headers=_headers(token), params=params, timeout=10)
         resp.raise_for_status()
         return resp
     except requests.RequestException as e:
