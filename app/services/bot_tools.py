@@ -42,24 +42,40 @@ LINKS_CESTAS = {
 }
 
 
+def _iter_variants(variants):
+    """Normaliza o campo `variants` do VNDA, que aparece em 3 formatos:
+      - dict keyed por id:         {"61": {...}}
+      - lista de variantes:        [{...sku...}]
+      - lista de {id: variante}:   [{"61": {...}}]   (formato REAL observado)
+    Devolve a lista dos dicts de variante (com sku/price/etc)."""
+    if isinstance(variants, dict):
+        candidatos = list(variants.values())
+    elif isinstance(variants, list):
+        candidatos = variants
+    else:
+        return []
+    out = []
+    for c in candidatos:
+        if not isinstance(c, dict):
+            continue
+        if 'sku' in c or 'id' in c or 'price' in c:
+            out.append(c)              # variante direta
+        else:
+            for v in c.values():       # wrapper {id: variante}
+                if isinstance(v, dict):
+                    out.append(v)
+    return out
+
+
 def _parse_produtos(raw):
     """Extrai [{nome, sku, preco, disponivel}] da resposta do VNDA.
 
-    Tolera `variants` como DICT (formato real do VNDA: {id: {...}}) ou como
-    lista. Uma linha por variante que tenha SKU."""
+    SKU sempre de variants[].sku; preco prioriza sale_price (o que o cliente
+    paga). Uma linha por variante que tenha SKU."""
     out = []
     for p in (raw or []):
         nome_base = (p.get('name') or p.get('title') or '').strip()
-        variants = p.get('variants')
-        if isinstance(variants, dict):
-            lista_v = list(variants.values())
-        elif isinstance(variants, list):
-            lista_v = variants
-        else:
-            lista_v = []
-        for v in lista_v:
-            if not isinstance(v, dict):
-                continue
+        for v in _iter_variants(p.get('variants')):
             sku = v.get('sku')
             if not sku:
                 continue
@@ -70,7 +86,9 @@ def _parse_produtos(raw):
             disp = v.get('available')
             if disp is None:
                 disp = p.get('available', True)
-            preco = v.get('price')
+            preco = v.get('sale_price')
+            if preco is None:
+                preco = v.get('price')
             if preco is None:
                 preco = p.get('price')
             out.append({
