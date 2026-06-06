@@ -20,6 +20,11 @@ logger = logging.getLogger(__name__)
 MODELO = 'claude-sonnet-4-6'
 MAX_ITERACOES = 6  # teto de idas-e-voltas de ferramenta por mensagem
 _FALLBACK = 'Já te passo para um atendente pra te ajudar melhor. 🙂'
+# Mensagem segura quando a consulta de catalogo falha: NUNCA responder preco
+# de memoria (risco de inventar valor — dinheiro). Passa pro humano.
+_FALLBACK_CATALOGO = ('Tive uma instabilidade pra consultar nosso catálogo '
+                      'agora. Já te passo para um atendente continuar com você, '
+                      'tá? 🙂')
 
 TOOL_HANDOFF = {
     'name': 'transferir_para_humano',
@@ -161,6 +166,10 @@ def responder(historico):
         logger.exception('chatbot: erro criando client')
         return {'acao': 'handoff', 'texto': _FALLBACK, 'motivo': f'client: {exc}'}
 
+    # Rastreia se a ULTIMA consulta de catalogo desta rodada falhou. Se falhou,
+    # o bot NAO pode responder preco/produto (poderia inventar) — forca handoff.
+    produto_falhou = False
+
     for _ in range(MAX_ITERACOES):
         try:
             resp = client.messages.create(
@@ -178,6 +187,13 @@ def responder(historico):
         tool_uses = [b for b in resp.content if getattr(b, 'type', None) == 'tool_use']
 
         if not tool_uses:
+            # Salvaguarda de dinheiro: se a consulta de catalogo falhou nesta
+            # rodada, nao confiamos no texto (pode conter preco inventado).
+            if produto_falhou:
+                logger.warning('crm bot: consultar_produtos falhou -> handoff '
+                               '(evita preco inventado)')
+                return {'acao': 'handoff', 'texto': _FALLBACK_CATALOGO,
+                        'motivo': 'consultar_produtos falhou'}
             texto = '\n'.join(b.text for b in resp.content
                               if getattr(b, 'type', None) == 'text' and b.text).strip()
             if not texto:
@@ -201,6 +217,8 @@ def responder(historico):
         resultados = []
         for b in tool_uses:
             out = _executar_tool(b.name, b.input or {})
+            if b.name == 'consultar_produtos':
+                produto_falhou = bool(isinstance(out, dict) and out.get('erro'))
             resultados.append({
                 'type': 'tool_result',
                 'tool_use_id': b.id,
