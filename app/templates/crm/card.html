@@ -106,6 +106,25 @@
         });
         html += '</div>';
       }
+      if (d.pedidos_site && d.pedidos_site.length) {
+        html += '<div class="bloco">';
+        html += '<div class="bloco-titulo">Pedidos do site · '
+             + d.pedidos_site.length + '</div>';
+        d.pedidos_site.forEach(function (p) {
+          var itens = (p.itens || []).map(function (i) {
+            return i.qtd + '× ' + i.nome;
+          }).join(', ');
+          html += '<div class="linha"><div class="top">'
+            + '<span><span class="badge">' + esc(p.code) + '</span> '
+            + esc(p.destinatario) + '</span>'
+            + '<span class="valor">' + brl(p.total) + '</span></div>'
+            + '<div class="data">' + esc(p.data)
+            + (p.status ? ' · ' + esc(p.status) : '') + '</div>';
+          if (itens) html += '<div class="itens">' + esc(itens) + '</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
       alvo.innerHTML = html || '<div class="estado">Sem dados.</div>';
     }
 
