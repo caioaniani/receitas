@@ -136,3 +136,59 @@ def _buscar_por_telefone(chave):
         'b2b': b2b,
         'pedidos_site': site,
     }
+
+
+# ── Agent Bot (atendimento automatico via Chatwoot) ──
+
+
+def _bot_secret_ok(recebido):
+    esperado = (current_app.config.get('CHATWOOT_BOT_SECRET') or '').strip()
+    if not esperado:
+        return False
+    return secrets.compare_digest(str(recebido or ''), esperado)
+
+
+@crm_bp.route('/bot', methods=['POST'])
+def bot_webhook():
+    """Webhook do Agent Bot do Chatwoot.
+
+    So processa mensagem NOVA do cliente (incoming) em conversa 'pending'
+    (turno do bot). Ignora mensagens do proprio bot/atendente (outgoing) —
+    evita loop infinito — e conversas ja 'open' (humano assumiu). Autentica
+    pelo segredo na URL (CHATWOOT_BOT_SECRET).
+    """
+    if not _bot_secret_ok(request.args.get('k')):
+        return jsonify({'ok': False, 'erro': 'token inválido'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    if payload.get('event') != 'message_created':
+        return jsonify({'ok': True, 'ignorado': 'evento'})
+    if payload.get('message_type') not in ('incoming', 0):
+        return jsonify({'ok': True, 'ignorado': 'nao-incoming'})
+    if payload.get('private'):
+        return jsonify({'ok': True, 'ignorado': 'nota'})
+
+    conv = payload.get('conversation') or {}
+    if (conv.get('status') or '') != 'pending':
+        return jsonify({'ok': True, 'ignorado': 'nao-pending'})
+    conv_id = conv.get('id') or payload.get('conversation_id')
+    if not conv_id:
+        return jsonify({'ok': True, 'ignorado': 'sem-conversa'})
+
+    from app.services import chatbot, chatwoot
+
+    historico = chatwoot.buscar_historico(conv_id)
+    if not historico:
+        content = (payload.get('content') or '').strip()
+        if not content:
+            return jsonify({'ok': True, 'ignorado': 'vazio'})
+        historico = [{'role': 'user', 'content': content}]
+
+    resultado = chatbot.responder(historico)
+    if resultado.get('texto'):
+        chatwoot.enviar_mensagem(conv_id, resultado['texto'])
+    if resultado['acao'] == 'handoff':
+        chatwoot.definir_status(conv_id, 'open')
+        logger.info('crm bot handoff conv=%s motivo=%s', conv_id, resultado.get('motivo'))
+
+    return jsonify({'ok': True, 'acao': resultado['acao']})
