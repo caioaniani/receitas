@@ -922,3 +922,52 @@ def vnda_card_backfill():
           'Roda em segundo plano; os pedidos vao aparecendo no card do cliente '
           'conforme sincronizam.', 'info')
     return redirect(url_for('pdv.vnda_mapeamentos'))
+
+
+@pdv_bp.route('/vnda/diag-produtos')
+@login_required
+@admin_required
+def vnda_diag_produtos():
+    """Diagnostico do consultar_produtos do bot: bate no VNDA de verdade e
+    mostra o resultado cru, pra confirmar (sem chutar) que o catalogo do bot
+    responde certo em producao. Ex: /pdv/vnda/diag-produtos?q=family box"""
+    from app.services import bot_tools, vnda
+    q = (request.args.get('q') or 'family box').strip()
+
+    # 1. Resultado do tool do bot, ja parseado (forca ida ao VNDA, sem cache).
+    bot_tools._catalogo_cache.clear()
+    try:
+        resultado = bot_tools.consultar_produtos(q)
+    except Exception as exc:  # noqa: BLE001
+        resultado = {'erro_excecao': f'{type(exc).__name__}: {exc}'}
+
+    # 2. Chamada crua ao /products pra inspecionar o formato real da resposta.
+    raw_info = {}
+    try:
+        resp = vnda._get('/products', params={'available': 'true', 'per_page': 5})
+        if resp is None:
+            raw_info = {'status': 'None (_get retornou None: 4xx/5xx/timeout)'}
+        else:
+            raw_info['status'] = resp.status_code
+            data = resp.json()
+            lista = data if isinstance(data, list) else (
+                data.get('products') or data.get('results') or [])
+            raw_info['n_produtos'] = len(lista)
+            if lista:
+                p0 = lista[0]
+                raw_info['exemplo_nome'] = p0.get('name') or p0.get('title')
+                variants = p0.get('variants')
+                raw_info['variants_tipo'] = type(variants).__name__
+                if isinstance(variants, dict):
+                    raw_info['variants_amostra'] = list(variants.values())[:1]
+                elif isinstance(variants, list):
+                    raw_info['variants_amostra'] = variants[:1]
+    except Exception as exc:  # noqa: BLE001
+        raw_info = {'erro': f'{type(exc).__name__}: {exc}'}
+
+    return jsonify({
+        'busca': q,
+        'token_vnda_configurado': bool(current_app.config.get('VNDA_API_TOKEN')),
+        'consultar_produtos': resultado,
+        'raw_products': raw_info,
+    })
