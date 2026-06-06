@@ -12,6 +12,14 @@
         <button type="button" id="btn-vnda-sync" class="btn btn-sm btn-success">
             <i class="bi bi-arrow-repeat"></i> Sincronizar VNDA (hoje)
         </button>
+        <form method="POST" action="{{ url_for('pdv.vnda_card_backfill') }}" class="d-inline"
+              onsubmit="return confirm('Importar o histórico de pedidos do site (últimos 12 meses) para o card de cliente do atendimento? Roda em segundo plano e pode levar alguns minutos.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="dias" value="365">
+            <button type="submit" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-person-vcard"></i> Importar histórico p/ card
+            </button>
+        </form>
     </div>
 </div>
 <div id="vnda-sync-status"></div>
