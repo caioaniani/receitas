@@ -138,11 +138,49 @@ def buscar_historico(conversation_id, limite=20):
         if m.get('private'):
             continue
         content = (m.get('content') or '').strip()
-        if not content:
-            continue
         mt = m.get('message_type')
+        imagens = [a.get('data_url') for a in (m.get('attachments') or [])
+                   if a.get('file_type') == 'image' and a.get('data_url')]
+        if not content and not imagens:
+            continue
         if mt in ('incoming', 0):
-            hist.append({'role': 'user', 'content': content})
+            item = {'role': 'user', 'content': content}
+            if imagens:
+                item['imagens'] = imagens
+            hist.append(item)
         elif mt in ('outgoing', 1):
+            if not content:
+                continue  # imagem do bot/atendente nao precisa ir pro Claude
             hist.append({'role': 'assistant', 'content': content})
     return hist[-limite:]
+
+
+def baixar_imagem(url):
+    """Baixa um anexo de imagem do Chatwoot, comprime e devolve
+    (media_type, base64), ou None se nao der (rede, formato nao suportado).
+
+    So imagens — o Claude nao le audio/PDF por aqui. Sempre reencoda pra JPEG
+    via comprimir_imagem (corrige rotacao de celular, limita o tamanho pra nao
+    estourar o limite do Claude e mantem texto legivel em prints)."""
+    if not url:
+        return None
+    if url.startswith('/'):
+        base_url = (current_app.config.get('CHATWOOT_URL') or '').strip().rstrip('/')
+        url = base_url + url
+    try:
+        r = requests.get(url, timeout=15)
+        if r.status_code != 200 or not r.content:
+            return None
+    except Exception:  # noqa: BLE001
+        logger.exception('chatwoot baixar_imagem falhou (download)')
+        return None
+
+    from app.utils import comprimir_imagem
+    try:
+        jpeg = comprimir_imagem(r.content, max_size=1568, quality=82)
+    except ValueError:
+        logger.warning('chatwoot baixar_imagem: formato nao suportado (%s)', url[:80])
+        return None
+
+    import base64
+    return 'image/jpeg', base64.b64encode(jpeg).decode('ascii')
