@@ -111,9 +111,11 @@ def definir_status(conversation_id, status):
 
 def buscar_historico(conversation_id, limite=20):
     """Mensagens recentes da conversa, em ordem cronologica, mapeadas pra
-    [{'role': 'user'|'assistant', 'content': str}] (pro Claude). Cliente =
-    user (incoming), bot/atendente = assistant (outgoing). Ignora notas
-    internas e eventos."""
+    [{'role': 'user'|'assistant', 'content': str, 'imagens'?: [url]}] (pro
+    Claude). Cliente = user (incoming), bot/atendente = assistant (outgoing).
+    Ignora notas internas e eventos. Anexos de imagem do cliente entram em
+    'imagens' (URLs do Chatwoot) — quem monta o prompt baixa via baixar_imagem.
+    Mensagem so-imagem (sem texto) do cliente tambem entra."""
     if not bot_disponivel():
         return []
     url = f'{_base()}/conversations/{conversation_id}/messages'
