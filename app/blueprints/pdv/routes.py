@@ -891,3 +891,34 @@ def vnda_historico_sync():
     return render_template('pdv/vnda_historico_sync.html',
                            pedidos=pedidos, sel_status=status_filtro,
                            movs_por_pedido=movs_por_pedido)
+
+
+@pdv_bp.route('/vnda/card-backfill', methods=['POST'])
+@login_required
+@admin_required
+def vnda_card_backfill():
+    """Importa o historico de pedidos do site (VNDA) pro cache do card de
+    cliente (CRM/Chatwoot). Roda em background — a janela longa pode levar
+    minutos (uma chamada por pedido pra pegar telefone). Idempotente por code."""
+    import threading
+
+    from app.services import vnda_card
+    try:
+        dias = max(1, min(int(request.form.get('dias') or 365), 1095))
+    except (TypeError, ValueError):
+        dias = 365
+    app = current_app._get_current_object()
+
+    def _run():
+        with app.app_context():
+            try:
+                r = vnda_card.backfill(dias=dias)
+                app.logger.info('vnda_card backfill OK: %s', r)
+            except Exception:
+                app.logger.exception('vnda_card backfill falhou')
+
+    threading.Thread(target=_run, daemon=True).start()
+    flash(f'Importacao do historico do site iniciada (ultimos {dias} dias). '
+          'Roda em segundo plano; os pedidos vao aparecendo no card do cliente '
+          'conforme sincronizam.', 'info')
+    return redirect(url_for('pdv.vnda_mapeamentos'))
