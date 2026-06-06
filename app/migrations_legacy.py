@@ -362,6 +362,15 @@ def _migrate_postgres(app):
         except Exception:
             pass
 
+        # mov_estoque_producao.tipo: VARCHAR(20) era curto pra 'venda_b2b_sem_estoque' (21).
+        # Estourava o INSERT quando uma venda B2B nao tinha estoque suficiente,
+        # quebrando o POST de /b2b/vendas/nova com 500 (causa identificada via
+        # log em 06/06/2026). Mesmo motivo do mov_estoque_loja acima.
+        try:
+            conn.execute(text("ALTER TABLE mov_estoque_producao ALTER COLUMN tipo TYPE VARCHAR(50)"))
+        except Exception:
+            pass
+
         # Tabelas VNDA (mapeamento + idempotencia + acumulador fracionario)
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS vnda_produto_map (
