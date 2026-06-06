@@ -944,7 +944,7 @@ def vnda_diag_produtos():
     # 2. Chamada crua ao /products pra inspecionar o formato real da resposta.
     raw_info = {}
     try:
-        resp = vnda._get('/products', params={'available': 'true', 'per_page': 5})
+        resp = vnda._get('/products', params={'per_page': 5})
         if resp is None:
             raw_info = {'status': 'None (_get retornou None: 4xx/5xx/timeout)'}
         else:
