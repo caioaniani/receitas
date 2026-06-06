@@ -168,6 +168,76 @@ def test_gerar_link_carrinho_vazio():
     assert 'erro' in bot_tools.gerar_link_carrinho([])
 
 
+# ── Fase 3: leitura de imagem ──
+
+def test_baixar_imagem_comprime_e_base64(app):
+    import base64
+
+    from app.services import chatwoot
+    app.config['CHATWOOT_URL'] = 'https://cw.exemplo.com'
+    fake = SimpleNamespace(status_code=200, content=b'rawbytes',
+                           headers={'Content-Type': 'image/png'})
+    with app.app_context():
+        with patch('requests.get', return_value=fake), \
+             patch('app.utils.comprimir_imagem', return_value=b'jpegbytes'):
+            r = chatwoot.baixar_imagem('/rails/blob/123')
+    assert r is not None
+    media_type, b64 = r
+    assert media_type == 'image/jpeg'
+    assert base64.b64decode(b64) == b'jpegbytes'
+
+
+def test_baixar_imagem_formato_nao_suportado(app):
+    from app.services import chatwoot
+    fake = SimpleNamespace(status_code=200, content=b'heicbytes', headers={})
+    with app.app_context():
+        with patch('requests.get', return_value=fake), \
+             patch('app.utils.comprimir_imagem', side_effect=ValueError('heic')):
+            r = chatwoot.baixar_imagem('https://cw/x.heic')
+    assert r is None
+
+
+def test_buscar_historico_extrai_imagem(app):
+    from app.services import chatwoot
+    app.config['CHATWOOT_URL'] = 'https://cw.exemplo.com'
+    app.config['CHATWOOT_BOT_TOKEN'] = 'tok'
+    app.config['CHATWOOT_ACCOUNT_ID'] = '1'
+    payload = {'payload': [
+        {'message_type': 'incoming', 'created_at': 1, 'content': '',
+         'attachments': [{'file_type': 'image', 'data_url': 'https://cw/x.png'}]},
+    ]}
+    fake = SimpleNamespace(status_code=200, text='x', json=lambda: payload)
+    with app.app_context():
+        with patch('requests.get', return_value=fake):
+            hist = chatwoot.buscar_historico(7)
+    assert hist[-1]['imagens'] == ['https://cw/x.png']
+    assert hist[-1]['role'] == 'user'
+
+
+def test_build_messages_imagem_so_na_ultima(app):
+    from app.services import chatbot
+    historico = [
+        {'role': 'user', 'content': 'oi', 'imagens': ['https://cw/velha.png']},
+        {'role': 'assistant', 'content': 'olá'},
+        {'role': 'user', 'content': 'olha esse pedido',
+         'imagens': ['https://cw/atual.png']},
+    ]
+    with app.app_context():
+        with patch('app.services.chatwoot.baixar_imagem',
+                   return_value=('image/jpeg', 'BASE64')) as bi:
+            msgs = chatbot._build_messages(historico)
+    # so a ultima mensagem do cliente vira blocos com imagem
+    ult = msgs[-1]
+    assert isinstance(ult['content'], list)
+    tipos = [b['type'] for b in ult['content']]
+    assert 'image' in tipos and 'text' in tipos
+    img_block = next(b for b in ult['content'] if b['type'] == 'image')
+    assert img_block['source']['data'] == 'BASE64'
+    # a 1a mensagem (imagem antiga) fica só texto — baixa 1 imagem só
+    assert isinstance(msgs[0]['content'], str)
+    bi.assert_called_once_with('https://cw/atual.png')
+
+
 def test_consultar_produtos_parse(app):
     from app.services import bot_tools
     bot_tools._catalogo_cache.clear()
