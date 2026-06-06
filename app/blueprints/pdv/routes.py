@@ -972,9 +972,52 @@ def vnda_diag_produtos():
     except Exception as exc:  # noqa: BLE001
         raw_info = {'erro': f'{type(exc).__name__}: {exc}'}
 
+    # 3. Matriz de autenticacao: testa o NOSSO token com variacoes de formato
+    # de Authorization e de X-Shop-Host pra achar empiricamente qual combo o
+    # /products aceita (200). Nunca expoe o token — so o rotulo do formato e o
+    # status. Tambem um controle no /orders (deve dar 200 com o nosso token).
+    import time as _t
+    token = (current_app.config.get('VNDA_API_TOKEN') or '').strip()
+    if token.lower().startswith('bearer '):
+        token = token[7:]
+    host_cfg = (current_app.config.get('VNDA_SHOP_HOST')
+                or 'www.padariaartesanalonline.com.br')
+    host_alt = host_cfg[4:] if host_cfg.startswith('www.') else 'www.' + host_cfg
+    base_h = {'Accept': 'application/json', 'User-Agent': 'OPaoPadaria/1.0'}
+    combos = [
+        (f'Bearer + X-Shop-Host={host_cfg}',
+         {'Authorization': f'Bearer {token}', 'X-Shop-Host': host_cfg}),
+        (f'Bearer + X-Shop-Host={host_alt}',
+         {'Authorization': f'Bearer {token}', 'X-Shop-Host': host_alt}),
+        ('Bearer SEM X-Shop-Host',
+         {'Authorization': f'Bearer {token}'}),
+        (f'token cru + X-Shop-Host={host_cfg}',
+         {'Authorization': token, 'X-Shop-Host': host_cfg}),
+        (f'Token token= + X-Shop-Host={host_cfg}',
+         {'Authorization': f'Token token="{token}"', 'X-Shop-Host': host_cfg}),
+    ]
+    matriz = []
+    for label, h in combos:
+        try:
+            rr = _r.get(f'{vnda._base_url()}/products', headers={**base_h, **h},
+                        params={'per_page': 1}, timeout=10)
+            matriz.append({'config': label, 'status': rr.status_code})
+        except Exception as exc:  # noqa: BLE001
+            matriz.append({'config': label, 'erro': type(exc).__name__})
+        _t.sleep(0.4)
+    try:
+        rc = _r.get(f'{vnda._base_url()}/orders', headers=vnda._headers(),
+                    params={'per_page': 1}, timeout=10)
+        controle_orders = rc.status_code
+    except Exception as exc:  # noqa: BLE001
+        controle_orders = type(exc).__name__
+
     return jsonify({
         'busca': q,
         'token_vnda_configurado': bool(current_app.config.get('VNDA_API_TOKEN')),
+        'x_shop_host_atual': host_cfg,
+        'controle_orders_status': controle_orders,
+        'auth_matrix': matriz,
         'consultar_produtos': resultado,
         'raw_products': raw_info,
     })
