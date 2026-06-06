@@ -118,18 +118,47 @@ def _executar_tool(nome, inp):
 
 
 def _build_messages(historico):
-    messages = []
+    """Converte o historico [{'role','content','imagens'?}] em mensagens da API.
+
+    Imagens (anexos do Chatwoot) entram como blocos de imagem SO na ultima
+    mensagem do cliente — a atual — pra o Claude enxergar o que a pessoa mandou
+    sem inflar custo com fotos antigas da conversa."""
+    raw = []
     for m in (historico or []):
         role = m.get('role')
+        if role not in ('user', 'assistant'):
+            continue
         content = (m.get('content') or '').strip()
-        if role in ('user', 'assistant') and content:
-            messages.append({'role': role, 'content': content})
-    while messages and messages[0]['role'] != 'user':
-        messages = messages[1:]
-    if len(messages) > 20:
-        messages = messages[-20:]
-        while messages and messages[0]['role'] != 'user':
-            messages = messages[1:]
+        imagens = m.get('imagens') or []
+        if not content and not imagens:
+            continue
+        raw.append({'role': role, 'content': content, 'imagens': imagens})
+
+    while raw and raw[0]['role'] != 'user':
+        raw = raw[1:]
+    if len(raw) > 20:
+        raw = raw[-20:]
+        while raw and raw[0]['role'] != 'user':
+            raw = raw[1:]
+
+    idx_ultimo_user = max((i for i, m in enumerate(raw) if m['role'] == 'user'),
+                          default=-1)
+    messages = []
+    for i, m in enumerate(raw):
+        if m['imagens'] and i == idx_ultimo_user:
+            from app.services import chatwoot
+            blocos = []
+            for url in m['imagens'][:4]:
+                img = chatwoot.baixar_imagem(url)
+                if img:
+                    media_type, b64 = img
+                    blocos.append({'type': 'image', 'source': {
+                        'type': 'base64', 'media_type': media_type, 'data': b64}})
+            blocos.append({'type': 'text',
+                           'text': m['content'] or 'O cliente enviou esta imagem.'})
+            messages.append({'role': 'user', 'content': blocos})
+        else:
+            messages.append({'role': m['role'], 'content': m['content']})
     return messages
 
 
