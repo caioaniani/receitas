@@ -157,11 +157,12 @@ def consultar_produtos(busca):
     if catalogo is None:
         return {'erro': 'VNDA indisponível no momento'}
 
-    termos = [t for t in (busca or '').strip().lower().split()
+    from app.utils import normalizar_busca
+    termos = [t for t in normalizar_busca(busca or '').split()
               if len(t) > 2 and t not in _STOPWORDS]
     if termos:
         filtrados = [p for p in catalogo
-                     if any(t in p['nome'].lower() for t in termos)]
+                     if any(t in normalizar_busca(p['nome']) for t in termos)]
         if filtrados:
             return {'produtos': filtrados[:40]}
     return {'produtos': catalogo[:80]}
