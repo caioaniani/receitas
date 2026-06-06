@@ -14,6 +14,7 @@ Match de telefone via `app.utils.telefone_chave` (canônico BR: ignora +55 e
 o 9º dígito de celular), porque o WhatsApp manda '5511999998888' mas o
 cadastro pode ter '(11) 99999-8888'.
 """
+import json
 import logging
 import secrets
 from decimal import Decimal
@@ -66,7 +67,7 @@ def _buscar_por_telefone(chave):
     Volume de PedidoLocal/ClienteB2B é baixo (pedidos manuais + clientes
     recorrentes); se crescer, adicionar coluna normalizada indexada.
     """
-    from app.models import ClienteB2B, PedidoLocal, VendaB2B
+    from app.models import ClienteB2B, PedidoLocal, PedidoSite, VendaB2B
 
     pedidos = []
     for p in (PedidoLocal.query
@@ -106,10 +107,32 @@ def _buscar_por_telefone(chave):
             } for v in vendas[:20]],
         }
 
+    # Pedidos do site (VNDA) — cache local indexado por telefone_chave,
+    # populado por app.services.vnda_card. Lookup direto (rapido).
+    site = []
+    for p in (PedidoSite.query
+              .filter_by(telefone_chave=chave)
+              .order_by(PedidoSite.data_pedido.desc())
+              .limit(20).all()):
+        try:
+            itens = json.loads(p.itens_json) if p.itens_json else []
+        except (ValueError, TypeError):
+            itens = []
+        site.append({
+            'code': p.code,
+            'destinatario': p.destinatario or p.comprador or '',
+            'data': (p.data_pedido or p.data_entrega).strftime('%d/%m/%Y')
+                    if (p.data_pedido or p.data_entrega) else '',
+            'total': float(p.total or 0),
+            'status': p.status_vnda or '',
+            'itens': itens,
+        })
+
     return {
         'ok': True,
-        'encontrado': bool(pedidos or b2b),
+        'encontrado': bool(pedidos or b2b or site),
         'telefone': chave,
         'pedidos_locais': pedidos,
         'b2b': b2b,
+        'pedidos_site': site,
     }
