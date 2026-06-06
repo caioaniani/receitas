@@ -290,6 +290,18 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
+    # Cache de pedidos do site (VNDA) pro card de cliente do CRM/Chatwoot —
+    # janela curta a cada 1h (going-forward). So agenda se houver token VNDA.
+    # Desligavel via env VNDA_CARD_SYNC=0. Historico antigo: botao manual em
+    # /pdv/vnda/mapeamentos.
+    if (os.environ.get('VNDA_CARD_SYNC', '1') != '0'
+            and (app.config.get('VNDA_API_TOKEN') or '').strip()):
+        _scheduler.add_job(
+            lambda app=app: _run_vnda_card_sync(app),
+            'cron', minute=0, id='vnda-card-sync',
+            max_instances=1, coalesce=True,
+        )
+
     # Automacoes WhatsApp configuraveis (mensagens agendadas) — checa a cada 5 min
     _scheduler.add_job(
         lambda app=app: _run_automacoes_whatsapp(app),
@@ -417,6 +429,26 @@ def _run_backup_chatwoot(app):
         if db.engine.dialect.name != 'postgresql':
             return  # advisory lock exige Postgres
         _com_lock(LOCK_KEY_BACKUP_CHATWOOT, _fn, 'backup chatwoot')
+
+
+def _run_vnda_card_sync(app):
+    """Job: atualiza o cache de pedidos do site (VNDA) pro card de cliente
+    do CRM. Janela curta (going-forward). Advisory lock pra exec unica entre
+    workers gunicorn. Falha da API VNDA so loga (nao quebra o scheduler)."""
+    from app.extensions import db
+    from app.services import vnda_card
+
+    def _fn():
+        try:
+            r = vnda_card.sincronizar_recentes(dias=3)
+            logger.info('vnda card sync: %s', r)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning('vnda card sync falhou: %s', exc)
+
+    with app.app_context():
+        if db.engine.dialect.name != 'postgresql':
+            return  # advisory lock exige Postgres
+        _com_lock(LOCK_KEY_VNDA_CARD, _fn, 'vnda card sync')
 
 
 def status_backup():
