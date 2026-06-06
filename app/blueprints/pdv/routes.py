@@ -1015,6 +1015,7 @@ def vnda_diag_produtos():
     return jsonify({
         'busca': q,
         'token_vnda_configurado': bool(current_app.config.get('VNDA_API_TOKEN')),
+        'vnda_produtos_token_setado': bool(vnda._produtos_token()),
         'x_shop_host_atual': host_cfg,
         'controle_orders_status': controle_orders,
         'auth_matrix': matriz,
