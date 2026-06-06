@@ -95,11 +95,11 @@ def _carregar_catalogo():
     todos = []
     page = 1
     while page <= 10:
-        # Sem filtro `available` na URL — o n8n usava esse param mas o valor
-        # exato nao esta documentado e a versao em string foi rejeitada pelo
-        # VNDA. Buscamos tudo e _parse_produtos marca disponibilidade por
-        # variante. Catalogo da padaria e pequeno (< 200), nao pesa.
-        resp = vnda._get('/products', params={'per_page': 50, 'page': page})
+        # Params iguais aos do n8n do cliente (validados em producao por anos):
+        # per_page=100, available=true. _parse_produtos ainda marca disponibilidade
+        # por variante (catalogo da padaria pequeno; lote unico cabe).
+        resp = vnda._get('/products', params={'available': 'true',
+                                              'per_page': 100, 'page': page})
         if not resp:
             logger.warning('catalogo VNDA /products falhou (page=%s)', page)
             if page == 1:
