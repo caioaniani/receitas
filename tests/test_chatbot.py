@@ -17,6 +17,18 @@ def _resp_tool(mensagem_cliente, motivo='quer humano'):
     return SimpleNamespace(content=[blk])
 
 
+class _SyncThread:
+    """Thread fake que roda o target na hora — pro webhook assíncrono virar
+    síncrono no teste."""
+
+    def __init__(self, target=None, daemon=None, **kw):
+        self._target = target
+
+    def start(self):
+        if self._target:
+            self._target()
+
+
 # ── cérebro ──
 
 def test_responder_texto(app):
