@@ -174,21 +174,39 @@ def bot_webhook():
     conv_id = conv.get('id') or payload.get('conversation_id')
     if not conv_id:
         return jsonify({'ok': True, 'ignorado': 'sem-conversa'})
+    content = (payload.get('content') or '').strip()
 
-    from app.services import chatbot, chatwoot
+    # Processa em SEGUNDO PLANO e responde o webhook na hora. O Agent Bot do
+    # Chatwoot tem timeout curto: se a gente fizer Claude + ferramentas antes de
+    # responder, ele marca a conversa como erro e joga pro humano. Devolvemos
+    # 200 imediato; o bot responde via API depois.
+    import threading
 
-    historico = chatwoot.buscar_historico(conv_id)
-    if not historico:
-        content = (payload.get('content') or '').strip()
-        if not content:
-            return jsonify({'ok': True, 'ignorado': 'vazio'})
-        historico = [{'role': 'user', 'content': content}]
+    app = current_app._get_current_object()
 
-    resultado = chatbot.responder(historico)
-    if resultado.get('texto'):
-        chatwoot.enviar_mensagem(conv_id, resultado['texto'])
-    if resultado['acao'] == 'handoff':
-        chatwoot.definir_status(conv_id, 'open')
-        logger.info('crm bot handoff conv=%s motivo=%s', conv_id, resultado.get('motivo'))
+    def _processar():
+        with app.app_context():
+            from app.services import chatbot, chatwoot
+            try:
+                historico = chatwoot.buscar_historico(conv_id)
+                if not historico:
+                    if not content:
+                        return
+                    historico = [{'role': 'user', 'content': content}]
+                resultado = chatbot.responder(historico)
+                if resultado.get('texto'):
+                    chatwoot.enviar_mensagem(conv_id, resultado['texto'])
+                if resultado['acao'] == 'handoff':
+                    chatwoot.definir_status(conv_id, 'open')
+                    logger.info('crm bot handoff conv=%s motivo=%s',
+                                conv_id, resultado.get('motivo'))
+            except Exception:
+                logger.exception('crm bot processamento falhou conv=%s', conv_id)
+                # Nunca deixa o cliente sem resposta: joga pro humano.
+                try:
+                    chatwoot.definir_status(conv_id, 'open')
+                except Exception:
+                    logger.exception('crm bot fallback handoff falhou conv=%s', conv_id)
 
-    return jsonify({'ok': True, 'acao': resultado['acao']})
+    threading.Thread(target=_processar, daemon=True).start()
+    return jsonify({'ok': True})
