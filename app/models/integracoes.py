@@ -254,6 +254,38 @@ class VndaDebito(db.Model):
                                onupdate=agora)
 
 
+class PedidoSite(db.Model):
+    """Cache local de pedidos do site (VNDA) indexado por telefone, para o
+    card de cliente do CRM (Chatwoot).
+
+    Por que existe: a API VNDA filtra pedidos por data de criacao (nao por
+    telefone), e o telefone so aparece apos enriquecer cada pedido
+    (shipping/cliente). Consultar isso on-demand quando o atendente abre a
+    conversa seria lento e bateria demais na API (429). Entao pre-populamos
+    esta tabela, indexada por `telefone_chave` (mesma normalizacao BR de
+    `app.utils.telefone_chave`), e o card faz lookup instantaneo.
+
+    `VndaPedidoProcessado` NAO serve: guarda so o code (idempotencia da baixa
+    de estoque), sem telefone nem itens. Populado por
+    `app.services.vnda_card` (cron incremental + backfill manual do admin).
+    Idempotente por `code`. Tabela criada por `db.create_all()` no deploy.
+    """
+    __tablename__ = 'pedido_site'
+
+    code = db.Column(db.String(100), primary_key=True)
+    telefone = db.Column(db.String(50))
+    telefone_chave = db.Column(db.String(20), index=True)
+    comprador = db.Column(db.String(200))
+    destinatario = db.Column(db.String(200))
+    data_pedido = db.Column(db.Date, index=True)
+    data_entrega = db.Column(db.Date)
+    # Numeric(10,2): dinheiro com precisao exata (regra do projeto).
+    total = db.Column(db.Numeric(10, 2), default=0)
+    status_vnda = db.Column(db.String(40))
+    itens_json = db.Column(db.Text)  # JSON: [{"nome","qtd","preco"}]
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
+
+
 # ── Saida em lote manual (lojas com PDV sem API) ──
 # Mapeia nomes digitados em /pedidos/estoque-loja/saida-lote pra catalogo.
 # Vincular uma vez, lembra pra sempre. Espelha SeruProdutoMap.
