@@ -75,7 +75,8 @@ def _post(client, **payload_over):
 def test_bot_webhook_responde(app):
     app.config['CHATWOOT_BOT_SECRET'] = 'seg'
     client = app.test_client()
-    with patch('app.services.chatwoot.buscar_historico',
+    with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.buscar_historico',
                return_value=[{'role': 'user', 'content': 'oi'}]), \
          patch('app.services.chatbot.responder',
                return_value={'acao': 'responder', 'texto': 'Olá!'}), \
@@ -83,7 +84,7 @@ def test_bot_webhook_responde(app):
          patch('app.services.chatwoot.definir_status', return_value={'ok': True}) as st:
         r = _post(client)
     assert r.status_code == 200
-    assert r.get_json()['acao'] == 'responder'
+    assert r.get_json()['ok'] is True
     env.assert_called_once()
     st.assert_not_called()
 
@@ -91,7 +92,8 @@ def test_bot_webhook_responde(app):
 def test_bot_webhook_handoff_muda_status(app):
     app.config['CHATWOOT_BOT_SECRET'] = 'seg'
     client = app.test_client()
-    with patch('app.services.chatwoot.buscar_historico',
+    with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.buscar_historico',
                return_value=[{'role': 'user', 'content': 'quero humano'}]), \
          patch('app.services.chatbot.responder',
                return_value={'acao': 'handoff', 'texto': 'Chamando atendente', 'motivo': 'x'}), \
@@ -99,7 +101,7 @@ def test_bot_webhook_handoff_muda_status(app):
          patch('app.services.chatwoot.definir_status', return_value={'ok': True}) as st:
         r = _post(client, content='quero humano')
     assert r.status_code == 200
-    assert r.get_json()['acao'] == 'handoff'
+    assert r.get_json()['ok'] is True
     env.assert_called_once()
     st.assert_called_once_with(7, 'open')
 
