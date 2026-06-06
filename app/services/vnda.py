@@ -25,8 +25,9 @@ _PEDIDOS_CACHE_TTL = 300  # 5 minutos — reduz hit no VNDA quando varios usuari
 _PEDIDOS_ERROR_CACHE_TTL = 30  # segundos
 
 
-def _headers():
-    token = current_app.config.get('VNDA_API_TOKEN', '')
+def _headers(token=None):
+    token = token if token is not None else current_app.config.get('VNDA_API_TOKEN', '')
+    token = token or ''
     if token.lower().startswith('bearer '):
         token = token[7:]
     host = current_app.config.get('VNDA_SHOP_HOST', 'www.padariaartesanalonline.com.br')
@@ -36,6 +37,13 @@ def _headers():
         'Accept': 'application/json',
         'User-Agent': 'OPaoPadaria/1.0',
     }
+
+
+def _produtos_token():
+    """Token dedicado ao catalogo (/products). O token principal pode nao ter o
+    escopo 'produtos' habilitado (so pedidos -> 403). Se VNDA_PRODUTOS_TOKEN
+    estiver setado, usa ele; senao retorna None (cai no token principal)."""
+    return (current_app.config.get('VNDA_PRODUTOS_TOKEN') or '').strip() or None
 
 
 def _base_url():
