@@ -157,6 +157,32 @@ def test_responder_loop_consultar_produtos(app):
     cp.assert_called_once()
 
 
+def test_consultar_pedido_retorna_data_agendada(app):
+    """consultar_pedido devolve a data AGENDADA (extra.DataDeEntrega), nunca o
+    expected_delivery_date bugado do VNDA (o do "entregue hoje")."""
+    from app.services import bot_tools
+    order = {
+        'code': 'AB123', 'status': 'paid', 'total': 321.0,
+        'items': [{'product_name': 'Family Box', 'quantity': 1}],
+        'extra': {'DataDeEntrega': '08/06/2026', 'Periodo': '08-09h'},
+        'expected_delivery_date': '2026-06-05',  # bug do VNDA: "hoje"
+    }
+    with app.app_context():
+        with patch('app.services.vnda.buscar_pedido_completo', return_value=order):
+            r = bot_tools.consultar_pedido('AB123')
+    assert r['data_entrega'] == '08/06/2026'   # a agendada, não a bugada
+    assert r['periodo'] == '08-09h'
+    assert r['numero'] == 'AB123'
+
+
+def test_consultar_pedido_nao_encontrado(app):
+    from app.services import bot_tools
+    with app.app_context():
+        with patch('app.services.vnda.buscar_pedido_completo', return_value=None):
+            r = bot_tools.consultar_pedido('XYZ')
+    assert 'erro' in r
+
+
 def test_gerar_link_carrinho():
     from app.services import bot_tools
     r = bot_tools.gerar_link_carrinho([{'sku': '10007', 'qtd': 2}, {'sku': '10009', 'qtd': 1}])
