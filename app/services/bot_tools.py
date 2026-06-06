@@ -160,9 +160,15 @@ def gerar_link_carrinho(itens):
 
 
 def consultar_pedido(numero):
-    """Status de um pedido pelo número (code do VNDA). Retorna dados do
-    pedido mais recente correspondente ou {'erro': ...}. Nunca expõe dados
-    de outro cliente — busca direta pelo code informado."""
+    """Status + DATA DE ENTREGA de um pedido pelo número (code do VNDA).
+
+    A data vem de vnda._extrair_data_entrega, que prioriza a data AGENDADA no
+    checkout (extra.DataDeEntrega) — e NAO o expected_delivery_date do VNDA, que
+    e o campo bugado por tras do "pedido pode ser entregue hoje" no site. Ou
+    seja: esta data e a correta pra desfazer essa confusao com o cliente.
+
+    Retorna dados do pedido ou {'erro': ...}. Nunca expoe dados de outro
+    cliente — busca direta pelo code informado."""
     code = str(numero or '').strip()
     if not code:
         return {'erro': 'informe o número do pedido'}
@@ -171,9 +177,12 @@ def consultar_pedido(numero):
         return {'erro': 'pedido não encontrado'}
     itens = [{'nome': i.get('product_name') or i.get('name') or '',
               'qtd': i.get('quantity', 1)} for i in (order.get('items') or [])]
+    data_entrega = vnda._extrair_data_entrega(order)
     return {
         'numero': order.get('code'),
         'status': order.get('status'),
         'total': order.get('total'),
+        'data_entrega': data_entrega.strftime('%d/%m/%Y') if data_entrega else None,
+        'periodo': vnda._extrair_periodo(order),
         'itens': itens,
     }
