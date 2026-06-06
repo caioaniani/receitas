@@ -294,6 +294,25 @@ def test_consultar_produtos_variants_dict(app):
     assert p['preco'] == 166.0
 
 
+def test_consultar_produtos_variants_lista_de_id(app):
+    """Formato REAL do VNDA: variants = lista de {id: variante}. O parser tem
+    que mergulhar no wrapper e pegar o sku — senão volta catálogo vazio."""
+    from app.services import bot_tools
+    bot_tools._catalogo_cache.clear()
+    fake = SimpleNamespace(json=lambda: {'products': [
+        {'id': 59, 'name': 'Lancheira Especial', 'available': True,
+         'variants': [{'61': {'id': 61, 'sku': '10054', 'sale_price': 57.0,
+                              'price': 57.0, 'available': True, 'name': ''}}]}]})
+    with app.app_context():
+        with patch('app.services.vnda._get', return_value=fake):
+            r = bot_tools.consultar_produtos('lancheira')
+    assert 'erro' not in r
+    assert r['produtos'], 'catálogo não pode vir vazio'
+    p = r['produtos'][0]
+    assert p['sku'] == '10054'   # extraído de dentro do wrapper {id: variante}
+    assert p['preco'] == 57.0    # sale_price
+
+
 def test_consultar_produtos_vnda_fora_retorna_erro(app):
     """VNDA fora -> {'erro'}, pra o bot passar pro humano (nunca inventar)."""
     from app.services import bot_tools
