@@ -941,15 +941,18 @@ def vnda_diag_produtos():
     except Exception as exc:  # noqa: BLE001
         resultado = {'erro_excecao': f'{type(exc).__name__}: {exc}'}
 
-    # 2. Chamada crua ao /products pra inspecionar o formato real da resposta.
+    # 2. Chamada crua via requests pra ver status code + corpo, mesmo em 4xx/5xx
+    # (vnda._get engole esses casos e devolve None — opaco demais pra debug).
+    import requests as _r
     raw_info = {}
     try:
-        resp = vnda._get('/products', params={'per_page': 5})
-        if resp is None:
-            raw_info = {'status': 'None (_get retornou None: 4xx/5xx/timeout)'}
-        else:
-            raw_info['status'] = resp.status_code
-            data = resp.json()
+        url = f'{vnda._base_url()}/products'
+        r = _r.get(url, headers=vnda._headers(),
+                   params={'available': 'true', 'per_page': 5}, timeout=10)
+        raw_info['status_code'] = r.status_code
+        raw_info['url_final'] = r.url
+        try:
+            data = r.json()
             lista = data if isinstance(data, list) else (
                 data.get('products') or data.get('results') or [])
             raw_info['n_produtos'] = len(lista)
@@ -962,6 +965,10 @@ def vnda_diag_produtos():
                     raw_info['variants_amostra'] = list(variants.values())[:1]
                 elif isinstance(variants, list):
                     raw_info['variants_amostra'] = variants[:1]
+            elif r.status_code >= 400:
+                raw_info['corpo_resposta'] = (r.text or '')[:500]
+        except ValueError:
+            raw_info['corpo_resposta'] = (r.text or '')[:500]
     except Exception as exc:  # noqa: BLE001
         raw_info = {'erro': f'{type(exc).__name__}: {exc}'}
 
