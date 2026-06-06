@@ -93,7 +93,9 @@ class MovEstoqueProducao(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     estoque_producao_id = db.Column(db.Integer, db.ForeignKey('estoque_producao.id'), nullable=False, index=True)
-    tipo = db.Column(db.String(20), nullable=False)
+    # 50 pra caber 'venda_b2b_sem_estoque' (21) e futuros tipos. Migrado em
+    # _migrate_postgres() — mesma logica do mov_estoque_loja.tipo.
+    tipo = db.Column(db.String(50), nullable=False)
     quantidade = db.Column(db.Integer, nullable=False)
     data = db.Column(db.DateTime, default=agora, index=True)
     referencia = db.Column(db.String(200))
