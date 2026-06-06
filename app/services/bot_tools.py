@@ -114,7 +114,7 @@ def _carregar_catalogo():
         if not lote:
             break
         todos.extend(lote)
-        if len(lote) < 50:
+        if len(lote) < 100:
             break
         page += 1
 
