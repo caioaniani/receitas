@@ -114,11 +114,12 @@ def _carregar_catalogo():
         if not lote:
             break
         todos.extend(lote)
-        if len(lote) < 100:
+        if len(lote) < 50:
             break
         page += 1
 
     produtos = _parse_produtos(todos)
+    logger.info('catalogo VNDA carregado: %d produto(s) com SKU', len(produtos))
     _catalogo_cache['produtos'] = produtos
     _catalogo_cache['ts'] = agora
     return produtos
