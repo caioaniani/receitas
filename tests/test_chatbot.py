@@ -170,6 +170,7 @@ def test_gerar_link_carrinho_vazio():
 
 def test_consultar_produtos_parse(app):
     from app.services import bot_tools
+    bot_tools._catalogo_cache.clear()
     fake = SimpleNamespace(json=lambda: {'products': [
         {'name': 'Croissant Almond', 'available': True,
          'variants': [{'sku': '10007', 'price': 32.5, 'available': True}]}]})
@@ -178,3 +179,50 @@ def test_consultar_produtos_parse(app):
             r = bot_tools.consultar_produtos('croissant')
     assert r['produtos'][0]['sku'] == '10007'
     assert r['produtos'][0]['disponivel'] is True
+
+
+def test_consultar_produtos_variants_dict(app):
+    """VNDA devolve variants como DICT keyed por id — o parser lê o sku certo,
+    nunca o id do produto nem o id da variante."""
+    from app.services import bot_tools
+    bot_tools._catalogo_cache.clear()
+    fake = SimpleNamespace(json=lambda: {'products': [
+        {'id': 10, 'name': 'Box Mimo', 'available': True,
+         'variants': {'11': {'sku': '10007', 'price': 166.0, 'available': True}}}]})
+    with app.app_context():
+        with patch('app.services.vnda._get', return_value=fake):
+            r = bot_tools.consultar_produtos('box mimo')
+    assert 'erro' not in r
+    p = r['produtos'][0]
+    assert p['sku'] == '10007'   # nunca '10' (produto) nem '11' (variante)
+    assert p['preco'] == 166.0
+
+
+def test_consultar_produtos_vnda_fora_retorna_erro(app):
+    """VNDA fora -> {'erro'}, pra o bot passar pro humano (nunca inventar)."""
+    from app.services import bot_tools
+    bot_tools._catalogo_cache.clear()
+    with app.app_context():
+        with patch('app.services.vnda._get', return_value=None):
+            r = bot_tools.consultar_produtos('cesta')
+    assert 'erro' in r
+
+
+def test_responder_erro_produtos_forca_handoff(app):
+    """Se consultar_produtos falha, o bot NUNCA repassa preço de memória —
+    força handoff (salvaguarda de dinheiro)."""
+    from app.services import chatbot
+    tool_blk = SimpleNamespace(type='tool_use', name='consultar_produtos',
+                               id='t1', input={'busca': 'cesta'})
+    resp1 = SimpleNamespace(content=[tool_blk])
+    # Claude "tentaria" listar preços de memória — o guard tem que barrar.
+    resp2 = _resp_texto('Box Mimo — R$166\nBonjour — R$215')
+    with app.app_context():
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        with patch('anthropic.Anthropic') as M, \
+             patch('app.services.bot_tools.consultar_produtos',
+                   return_value={'erro': 'VNDA indisponível no momento'}):
+            M.return_value.messages.create.side_effect = [resp1, resp2]
+            r = chatbot.responder([{'role': 'user', 'content': 'quero uma cesta'}])
+    assert r['acao'] == 'handoff'
+    assert 'R$' not in r['texto']   # não vaza preço inventado
