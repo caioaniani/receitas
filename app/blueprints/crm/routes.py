@@ -190,9 +190,15 @@ def bot_webhook():
             try:
                 historico = chatwoot.buscar_historico(conv_id)
                 if not historico:
-                    if not content:
+                    imagens = [a.get('data_url')
+                               for a in (payload.get('attachments') or [])
+                               if a.get('file_type') == 'image' and a.get('data_url')]
+                    if not content and not imagens:
                         return
-                    historico = [{'role': 'user', 'content': content}]
+                    msg = {'role': 'user', 'content': content}
+                    if imagens:
+                        msg['imagens'] = imagens
+                    historico = [msg]
                 resultado = chatbot.responder(historico)
                 if resultado.get('texto'):
                     chatwoot.enviar_mensagem(conv_id, resultado['texto'])
