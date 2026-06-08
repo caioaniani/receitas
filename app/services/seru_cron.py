@@ -193,6 +193,56 @@ def _run_vnda_sync(app):
             conn.close()
 
 
+def _run_vigia_abandono(app):
+    """Job: detecta conversas em status `pending` paradas ha mais de N min e
+    chama o vigia pra avaliar abandono. Anti-spam por set em memoria."""
+    from app.services import chatbot_vigia, chatwoot
+
+    with app.app_context():
+        if not chatbot_vigia.disponivel() or not chatwoot.bot_disponivel():
+            return
+        uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
+        is_pg = 'postgresql' in uri
+        from app.extensions import db
+        conn = db.engine.connect()
+        try:
+            if is_pg:
+                got = conn.execute(text('SELECT pg_try_advisory_lock(:k)'),
+                                   {'k': LOCK_KEY_VIGIA_ABANDONO}).scalar()
+                if not got:
+                    return
+            try:
+                min_minutos = int(app.config.get('CHATBOT_VIGIA_ABANDONO_MIN', 15) or 15)
+                paradas = chatwoot.listar_conversas_paradas(min_minutos=min_minutos)
+                for c in paradas:
+                    conv_id = c.get('id')
+                    if not conv_id or conv_id in chatbot_vigia._avisados_abandono:
+                        continue
+                    historico = chatwoot.buscar_historico(conv_id)
+                    if not historico:
+                        continue
+                    try:
+                        chatbot_vigia.avaliar_abandono(
+                            historico, conv_id=conv_id,
+                            nome_contato=c.get('nome_contato') or '',
+                            minutos_sem_resposta=c.get('minutos_paradas', min_minutos))
+                    except Exception:
+                        logger.exception('vigia abandono falhou conv=%s', conv_id)
+                    # Marca como avisado mesmo se o vigia decidiu silenciar — anti-spam.
+                    chatbot_vigia._avisados_abandono.add(conv_id)
+            except Exception:
+                logger.exception('vigia abandono ciclo falhou')
+            finally:
+                if is_pg:
+                    try:
+                        conn.execute(text('SELECT pg_advisory_unlock(:k)'),
+                                     {'k': LOCK_KEY_VIGIA_ABANDONO})
+                    except Exception:
+                        pass
+        finally:
+            conn.close()
+
+
 def iniciar(app):
     """Inicia o scheduler. Chamado uma vez no startup do app.
     Roda jobs Seru E VNDA no mesmo scheduler."""
