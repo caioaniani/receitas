@@ -172,9 +172,9 @@ def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=
 
     logger.info('vigia conv=%s veredicto=%s', conv_id, veredicto)
 
-    if not veredicto.get('alerta'):
-        return {'silencio': True, 'veredicto': veredicto}
-    if veredicto.get('gravidade') not in ('alta', 'media'):
+    # SO alta dispara WhatsApp na hora. media fica registrado (resumo diario),
+    # sem incomodar o dono em tempo real.
+    if not veredicto.get('alerta') or veredicto.get('gravidade') != 'alta':
         return {'silencio': True, 'veredicto': veredicto}
 
     numero = _numero_destino()
