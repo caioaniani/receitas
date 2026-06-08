@@ -97,6 +97,23 @@ TOOLS = [
             'required': ['itens'],
         },
     },
+    {
+        'name': 'buscar_nota_fiscal',
+        'description': ('Busca a Nota Fiscal de um pedido pelo CPF do comprador '
+                        'E o número do pedido (precisa dos DOIS pra evitar vazar '
+                        'NF de outro cliente). Use SO pra pedidos do SITE. Para '
+                        'pedidos B2B/locais, use transferir_para_humano.'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'cpf': {'type': 'string',
+                        'description': 'CPF do comprador (so digitos ou formatado)'},
+                'numero_pedido': {'type': 'string',
+                                   'description': 'numero do pedido informado pelo cliente'},
+            },
+            'required': ['cpf', 'numero_pedido'],
+        },
+    },
     TOOL_HANDOFF,
 ]
 
