@@ -213,6 +213,65 @@ def _origem_e_vnda(pedido_tiny):
     return any(t in origem for t in ('vnda', 'ecommerce', 'e-commerce', 'site'))
 
 
+# Resumo curto pra cada resultado da NF — entra no aviso do dono no WhatsApp.
+_NF_RESUMO = {
+    'enviada': 'NF enviada ✅',
+    'sem_nf_ainda': 'pedido sem NF emitida ainda',
+    'nao_encontrado': 'CPF+nº não bateu',
+    'fora_site': 'pedido fora do site → atendente',
+    'erro': 'erro técnico',
+    'handoff': 'handoff pro atendente',
+}
+
+
+def _avisar_dono_nf(resultado, cpf_digits, numero, conv_id, canal, *, detalhe=''):
+    """Manda WhatsApp pro dono cada vez que alguem solicita NF — pra ele
+    acompanhar. Best-effort: nunca propaga exception, e desligavel por
+    env var CHATBOT_AVISAR_NF=0.
+
+    Dados intencionalmente compactos:
+      - so 4 ultimos digitos do CPF (mesma regra do NFLog)
+      - sem nome de cliente (link pro Chatwoot resolve)
+      - 1 linha por solicitacao
+    """
+    import os as _os
+
+    from flask import current_app as _app
+    cfg = _app.config
+    if _os.environ.get('CHATBOT_AVISAR_NF',
+                       str(cfg.get('CHATBOT_AVISAR_NF', '1'))) == '0':
+        return
+    numero_destino = ((cfg.get('CHATBOT_VIGIA_NUMERO') or '').strip()
+                       or (cfg.get('ZAPI_NUMERO_DESTINO') or '').strip())
+    if not numero_destino:
+        return
+
+    cpf_4 = cpf_digits[-4:] if len(cpf_digits or '') >= 4 else '????'
+    resumo = _NF_RESUMO.get(resultado, resultado)
+    canal_label = (canal or 'cliente').strip()
+
+    linhas = [
+        '*NF solicitada*',
+        f'Pedido #{numero or "?"} · CPF ...{cpf_4}',
+        f'Canal: {canal_label}',
+        f'Resultado: {resumo}',
+    ]
+    if detalhe and resultado in ('erro', 'sem_nf_ainda'):
+        linhas.append(detalhe[:200])
+
+    base_cw = (cfg.get('CHATWOOT_URL') or '').rstrip('/')
+    acc = (cfg.get('CHATWOOT_ACCOUNT_ID') or '').strip()
+    if base_cw and acc and conv_id:
+        linhas.append('')
+        linhas.append(f'{base_cw}/app/accounts/{acc}/conversations/{conv_id}')
+
+    try:
+        from app.services import zapi
+        zapi.enviar_texto(numero_destino, '\n'.join(linhas))
+    except Exception:  # noqa: BLE001
+        logger.exception('aviso dono NF falhou')
+
+
 def buscar_nota_fiscal(cpf, numero_pedido, *, conv_id=None, canal=None):
     """Busca a NF do pedido no Tiny por (CPF + numero do pedido). E o caminho
     SEGURO — sem CPF o bot nunca expoe dado fiscal de outro cliente.
@@ -230,6 +289,11 @@ def buscar_nota_fiscal(cpf, numero_pedido, *, conv_id=None, canal=None):
     numero = (numero_pedido or '').strip()
 
     def _log(resultado, detalhe=''):
+        # Aviso pro dono no WhatsApp via Z-API (cada solicitacao de NF). E
+        # disparado JUNTO com o log pra centralizar; se um falhar, o outro
+        # tenta mesmo assim. Best-effort.
+        _avisar_dono_nf(resultado, cpf_d, numero, conv_id, canal,
+                         detalhe=detalhe)
         try:
             from app.extensions import db
             from app.models import NFLog
