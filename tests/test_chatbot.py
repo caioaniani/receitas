@@ -321,6 +321,113 @@ def test_gerar_link_carrinho_vazio():
     assert 'erro' in bot_tools.gerar_link_carrinho([])
 
 
+# ── Fase 5: auditor proativo (agente ativo) ──
+
+def test_auditor_coleta_e_pede_resumo(app):
+    """Auditor agrega VigiaVeredito, manda pro Sonnet e formata o WhatsApp."""
+    from datetime import datetime, timedelta
+
+    from app.extensions import db
+    from app.models import VigiaVeredito
+    from app.services import chatbot_auditor
+
+    with app.app_context():
+        for i in range(3):
+            db.session.add(VigiaVeredito(
+                conv_id=f'c{i}', cliente=f'Cliente {i}',
+                mensagem_cliente=f'o que tem na cesta X{i}?',
+                bot_acao='handoff', bot_motivo='conteudo de cesta',
+                alerta=True, gravidade='media',
+                motivo_vigia='handoff evitavel — bot devia saber',
+            ))
+        db.session.commit()
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
+        relatorio = {
+            'tem_problemas': True,
+            'destaque': '3 handoffs evitáveis sobre cesta',
+            'resumo_curto': 'Dia com 3 conversas, todas viraram handoff.',
+            'problemas': [{'tema': 'Conteúdo de cesta', 'ocorrencias': 3,
+                           'exemplos': ['o que tem na cesta X0?'],
+                           'sugestao': 'verificar se DESCRIÇÃO está vindo do VNDA'}],
+        }
+        inicio = datetime.utcnow() - timedelta(hours=1)
+        fim = datetime.utcnow() + timedelta(hours=1)
+        with patch('app.services.chatbot_auditor._chamar_sonnet',
+                   return_value=relatorio), \
+             patch('app.services.zapi.enviar_texto',
+                   return_value={'ok': True}) as send:
+            r = chatbot_auditor.auditar_periodo(inicio, fim, enviar=True)
+    assert r['enviado'] is True
+    msg = send.call_args[0][1]
+    assert 'Auditor do bot' in msg
+    assert 'Conteúdo de cesta' in msg
+    assert '3x' in msg
+
+
+def test_auditor_sem_problemas_nao_envia(app):
+    """Dia tranquilo → não pinga (Sonnet retornou sem problemas)."""
+    from datetime import datetime, timedelta
+
+    from app.extensions import db
+    from app.models import VigiaVeredito
+    from app.services import chatbot_auditor
+    with app.app_context():
+        db.session.add(VigiaVeredito(conv_id='c1', mensagem_cliente='oi',
+                                      bot_acao='responder', alerta=False))
+        db.session.commit()
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
+        rel = {'tem_problemas': False, 'destaque': 'Tudo tranquilo',
+               'resumo_curto': '1 conversa', 'problemas': []}
+        inicio = datetime.utcnow() - timedelta(hours=1)
+        fim = datetime.utcnow() + timedelta(hours=1)
+        with patch('app.services.chatbot_auditor._chamar_sonnet', return_value=rel), \
+             patch('app.services.zapi.enviar_texto') as send:
+            r = chatbot_auditor.auditar_periodo(inicio, fim, enviar=True)
+    assert r['enviado'] is False
+    send.assert_not_called()
+
+
+def test_auditor_sem_dados_pula(app):
+    """Sem nenhum VigiaVeredito no periodo → pula (e não chama Sonnet)."""
+    from datetime import datetime
+
+    from app.services import chatbot_auditor
+    with app.app_context():
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        with patch('app.services.chatbot_auditor._chamar_sonnet') as sonnet:
+            r = chatbot_auditor.auditar_periodo(
+                datetime(2020, 1, 1), datetime(2020, 1, 2), enviar=False)
+    assert 'pulou' in r
+    sonnet.assert_not_called()
+
+
+def test_vigia_persiste_em_vigiaveredito(app):
+    """Cada chamada a `_registrar` cria 1 VigiaVeredito (sem isso o auditor
+    fica cego entre deploys)."""
+    from app.extensions import db
+    from app.models import VigiaVeredito
+    from app.services import chatbot_vigia
+    with app.app_context():
+        chatbot_vigia._historico.clear()
+        n_antes = VigiaVeredito.query.count()
+        veredicto = {'alerta': True, 'gravidade': 'media',
+                     'motivo': 'handoff evitavel', 'acao_sugerida': ''}
+        chatbot_vigia._registrar(
+            {'veredicto': veredicto},
+            conv_id=99, nome_contato='Maria',
+            ultima_mensagem_cliente='o que tem na cesta?',
+            resultado_bot={'acao': 'handoff', 'motivo': 'conteudo de cesta'})
+        n_depois = VigiaVeredito.query.count()
+        assert n_depois == n_antes + 1
+        v = VigiaVeredito.query.order_by(VigiaVeredito.id.desc()).first()
+        assert v.gravidade == 'media'
+        assert v.bot_acao == 'handoff'
+        assert 'cesta' in (v.mensagem_cliente or '')
+        db.session.remove()
+
+
 # ── Fase 4: vigia (IA supervisora) ──
 
 def test_webhook_passa_resposta_do_bot_pro_vigia(app):
