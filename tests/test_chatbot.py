@@ -258,6 +258,58 @@ def test_consultar_pedido_nao_encontrado(app):
     assert 'erro' in r
 
 
+def test_consultar_produtos_inclui_descricao(app):
+    """Match focado traz a descrição (conteúdo da cesta), com HTML limpo."""
+    from app.services import bot_tools
+    bot_tools._catalogo_cache.clear()
+    fake = SimpleNamespace(json=lambda: {'products': [
+        {'name': 'Cesta Monamour', 'available': True,
+         'description': '<p>Contém: 2 croissants, 1 geleia, suco de laranja</p>',
+         'variants': [{'sku': '999', 'price': 200.0, 'available': True}]}]})
+    with app.app_context():
+        with patch('app.services.vnda._get', return_value=fake):
+            r = bot_tools.consultar_produtos('monamour')
+    p = r['produtos'][0]
+    assert 'croissants' in p['descricao']
+    assert '<p>' not in p['descricao']   # HTML removido
+
+
+def test_consultar_produtos_fallback_sem_descricao(app):
+    """Sem match no nome, o catálogo amplo vem SEM descrição (token-light)."""
+    from app.services import bot_tools
+    bot_tools._catalogo_cache.clear()
+    fake = SimpleNamespace(json=lambda: {'products': [
+        {'name': 'Pão Sourdough', 'available': True,
+         'description': 'Pão de fermentação natural',
+         'variants': [{'sku': '111', 'price': 30.0, 'available': True}]}]})
+    with app.app_context():
+        with patch('app.services.vnda._get', return_value=fake):
+            r = bot_tools.consultar_produtos('zzznadacasa')
+    p = r['produtos'][0]
+    assert 'descricao' not in p   # stripado no fallback
+    assert p['sku'] == '111'
+
+
+def test_vigia_media_nao_pinga_so_registra(app):
+    """Gravidade media NÃO manda WhatsApp na hora (vai pro resumo); só registra."""
+    from app.services import chatbot_vigia
+    veredicto = {'alerta': True, 'gravidade': 'media',
+                 'motivo': 'handoff evitável (conteúdo de cesta)', 'acao_sugerida': ''}
+    with app.app_context():
+        chatbot_vigia._historico.clear()
+        app.config['CHATBOT_VIGIA'] = True
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
+        with patch('app.services.chatbot_vigia._chamar_haiku', return_value=veredicto), \
+             patch('app.services.chatbot_vigia._resumo_estoque_loja', return_value=''), \
+             patch('app.services.zapi.enviar_texto') as send:
+            r = chatbot_vigia.avaliar([{'role': 'user', 'content': 'o que tem na cesta?'}],
+                                      conv_id=5)
+    assert r['silencio'] is True
+    send.assert_not_called()
+    assert chatbot_vigia.ultimos()[0]['gravidade'] == 'media'   # fica pro resumo
+
+
 def test_gerar_link_carrinho():
     from app.services import bot_tools
     r = bot_tools.gerar_link_carrinho([{'sku': '10007', 'qtd': 2}, {'sku': '10009', 'qtd': 1}])
