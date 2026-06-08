@@ -192,6 +192,57 @@
 </div>
 
 <div class="card mt-3">
+    <div class="card-header py-2">
+        <strong>Vigia do chatbot</strong>
+        {% if info.vigia_status.ligado %}
+        <span class="badge bg-success">ligado</span>
+        {% else %}
+        <span class="badge bg-secondary">desligado</span>
+        {% endif %}
+        {% if info.vigia_status.numero_destino %}
+        <span class="badge bg-info">→ {{ info.vigia_status.numero_destino }}</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <p class="small mb-2">
+            Supervisor automático que assiste cada conversa do bot e alerta no
+            seu WhatsApp via Z-API quando vê problema (cliente irritado, bot
+            dizendo esgotado pra item que tem, perda de venda).
+            Modelo: <code>Haiku 4.5</code>.
+            <br>
+            <a href="{{ url_for('main.vigia_diag') }}" target="_blank">
+                Abrir diagnóstico JSON (últimos veredictos)
+            </a>
+        </p>
+        <p class="small text-muted mb-2">
+            Disparar alerta de TESTE no seu WhatsApp — escolha o cenário:
+        </p>
+        <div class="d-flex gap-2 flex-wrap">
+            <form method="POST" action="{{ url_for('main.vigia_teste') }}?cenario=estoque" class="mb-0">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-danger"
+                        onclick="return confirm('Disparar alerta de TESTE (estoque) no seu WhatsApp?');">
+                    Cenário: esgotado mas tem na loja (ALTA)
+                </button>
+            </form>
+            <form method="POST" action="{{ url_for('main.vigia_teste') }}?cenario=irritado" class="mb-0">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-danger"
+                        onclick="return confirm('Disparar alerta de TESTE (cliente irritado) no seu WhatsApp?');">
+                    Cenário: cliente irritado (ALTA)
+                </button>
+            </form>
+            <form method="POST" action="{{ url_for('main.vigia_teste') }}?cenario=silencio" class="mb-0">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline-secondary">
+                    Cenário: conversa normal (NÃO deve disparar — controle)
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3">
     <div class="card-header py-2"><strong>Migracao BLOB → Dropbox (M6)</strong></div>
     <div class="card-body">
         <p class="small mb-2">
