@@ -194,6 +194,124 @@ def test_gerar_link_carrinho_vazio():
     assert 'erro' in bot_tools.gerar_link_carrinho([])
 
 
+# ── Fase 4: vigia (IA supervisora) ──
+
+def test_vigia_dispara_alerta_quando_gravidade_alta(app):
+    """Vigia avalia, Haiku retorna alerta=alta, envia via Z-API."""
+    from app.services import chatbot_vigia
+    veredicto = {'alerta': True, 'gravidade': 'alta',
+                 'motivo': 'Bot disse esgotado pro croissant que tem na loja',
+                 'acao_sugerida': 'Atualizar VNDA'}
+    historico = [{'role': 'user', 'content': 'tem croissant?'},
+                 {'role': 'assistant', 'content': 'desculpe, esgotado'}]
+    with app.app_context():
+        app.config['CHATBOT_VIGIA'] = True
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
+        with patch('app.services.chatbot_vigia._chamar_haiku',
+                   return_value=veredicto), \
+             patch('app.services.chatbot_vigia._resumo_estoque_loja',
+                   return_value='- Croissant: 12 un'), \
+             patch('app.services.zapi.enviar_texto',
+                   return_value={'ok': True}) as send:
+            r = chatbot_vigia.avaliar(historico, conv_id=42, nome_contato='Maria')
+    assert r['enviado'] is True
+    args = send.call_args
+    assert args[0][0] == '5511999990000'   # numero do dono
+    msg = args[0][1]
+    assert 'ALTA' in msg
+    assert 'Maria' in msg
+    assert 'croissant' in msg.lower()
+
+
+def test_vigia_silencia_quando_sem_alerta(app):
+    """Conversa normal: vigia decide nao alertar -> Z-API NAO chamado."""
+    from app.services import chatbot_vigia
+    veredicto = {'alerta': False, 'gravidade': None,
+                 'motivo': 'conversa normal', 'acao_sugerida': ''}
+    historico = [{'role': 'user', 'content': 'oi'},
+                 {'role': 'assistant', 'content': 'olá!'}]
+    with app.app_context():
+        app.config['CHATBOT_VIGIA'] = True
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
+        with patch('app.services.chatbot_vigia._chamar_haiku',
+                   return_value=veredicto), \
+             patch('app.services.chatbot_vigia._resumo_estoque_loja',
+                   return_value=''), \
+             patch('app.services.zapi.enviar_texto') as send:
+            r = chatbot_vigia.avaliar(historico, conv_id=42)
+    assert r['silencio'] is True
+    send.assert_not_called()
+
+
+def test_vigia_silencia_quando_gravidade_baixa(app):
+    """Anti-spam: gravidade=baixa nao dispara WhatsApp (só log)."""
+    from app.services import chatbot_vigia
+    veredicto = {'alerta': True, 'gravidade': 'baixa', 'motivo': 'pequeno',
+                 'acao_sugerida': ''}
+    with app.app_context():
+        app.config['CHATBOT_VIGIA'] = True
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
+        with patch('app.services.chatbot_vigia._chamar_haiku',
+                   return_value=veredicto), \
+             patch('app.services.chatbot_vigia._resumo_estoque_loja',
+                   return_value=''), \
+             patch('app.services.zapi.enviar_texto') as send:
+            r = chatbot_vigia.avaliar([{'role': 'user', 'content': 'oi'}])
+    assert r['silencio'] is True
+    send.assert_not_called()
+
+
+def test_vigia_desligado_pula(app):
+    from app.services import chatbot_vigia
+    with app.app_context():
+        app.config['CHATBOT_VIGIA'] = False
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        with patch('app.services.chatbot_vigia._chamar_haiku') as call:
+            r = chatbot_vigia.avaliar([{'role': 'user', 'content': 'oi'}])
+    assert 'pulou' in r
+    call.assert_not_called()
+
+
+def test_vigia_resumo_estoque_lista_itens_com_saldo(app):
+    """Resumo passado pro Haiku traz itens com saldo positivo nas lojas
+    (e ele cruza com o que o bot disse pra detectar erro)."""
+    from app.extensions import db
+    from app.models import EstoqueLoja, Loja, Receita
+    from app.services import chatbot_vigia
+    with app.app_context():
+        loja = Loja(nome='Brooklin', ativa=True)
+        receita = Receita(nome='Croissant', categoria='Padaria',
+                          rendimento_qtd=1, rendimento_unidade='un',
+                          peso_base=80)
+        db.session.add_all([loja, receita])
+        db.session.flush()
+        db.session.add(EstoqueLoja(loja_id=loja.id, receita_id=receita.id,
+                                   quantidade=12))
+        db.session.commit()
+        resumo = chatbot_vigia._resumo_estoque_loja()
+    assert 'Croissant' in resumo
+    assert '12' in resumo
+
+
+def test_vigia_extrai_json_com_markdown_wrapper(app):
+    """Haiku as vezes responde ```json {...} ``` — parser tolera."""
+    from types import SimpleNamespace
+
+    from app.services import chatbot_vigia
+    fake_resp = SimpleNamespace(content=[SimpleNamespace(
+        type='text', text='```json\n{"alerta": false, "gravidade": null, '
+                          '"motivo": "ok", "acao_sugerida": ""}\n```')])
+    with app.app_context():
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        with patch('anthropic.Anthropic') as M:
+            M.return_value.messages.create.return_value = fake_resp
+            r = chatbot_vigia._chamar_haiku('test', 'contexto')
+    assert r['alerta'] is False
+
+
 # ── Fase 3: leitura de imagem ──
 
 def test_baixar_imagem_comprime_e_base64(app):
