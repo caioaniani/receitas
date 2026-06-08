@@ -33,6 +33,10 @@ MAX_TOKENS = 400
 # AuditLog ou tabela dedicada no futuro.
 HISTORICO_MAX = 30
 _historico = deque(maxlen=HISTORICO_MAX)
+# Conversas ja avisadas como abandono nesta sessao (anti-spam do detector
+# de abandono). Volatil — reseta no deploy, o que e aceitavel: vale a pena
+# reavisar depois de um restart se o cliente ainda nao voltou.
+_avisados_abandono = set()
 
 PROMPT_VIGIA = """Você é o Vigia: supervisor automático do bot de atendimento da O Pão (padaria artesanal).
 Sua função é ler a conversa abaixo e decidir se o dono precisa ser AVISADO no WhatsApp.
