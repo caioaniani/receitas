@@ -147,13 +147,13 @@ def _coletar_periodo(inicio, fim):
     }
 
 
-def _chamar_sonnet(api_key, contexto):
+def _chamar_sonnet(api_key, contexto, prompt_sistema=None):
     import anthropic
     client = anthropic.Anthropic(api_key=api_key)
     resp = client.messages.create(
         model=MODELO,
         max_tokens=MAX_TOKENS,
-        system=PROMPT_AUDITOR,
+        system=prompt_sistema or PROMPT_AUDITOR,
         messages=[{'role': 'user', 'content': contexto}],
     )
     texto = ''.join(b.text for b in resp.content
