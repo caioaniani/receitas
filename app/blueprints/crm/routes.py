@@ -184,9 +184,14 @@ def bot_webhook():
 
     app = current_app._get_current_object()
 
+    contato = ((payload.get('sender') or {}).get('name')
+               or ((conv.get('meta') or {}).get('sender') or {}).get('name') or '')
+
     def _processar():
         with app.app_context():
             from app.services import chatbot, chatwoot
+            resultado = None
+            historico = None
             try:
                 historico = chatwoot.buscar_historico(conv_id)
                 if not historico:
@@ -213,6 +218,19 @@ def bot_webhook():
                     chatwoot.definir_status(conv_id, 'open')
                 except Exception:
                     logger.exception('crm bot fallback handoff falhou conv=%s', conv_id)
+
+            # Vigia: assiste a conversa DEPOIS do bot ter respondido (nao
+            # atrasa o cliente) e alerta no WhatsApp do dono via Z-API quando
+            # detecta problema. Best-effort: falha do vigia nunca afeta o
+            # atendimento.
+            try:
+                from app.services import chatbot_vigia
+                if historico and chatbot_vigia.disponivel():
+                    chatbot_vigia.avaliar(historico, conv_id=conv_id,
+                                          nome_contato=contato,
+                                          resultado_bot=resultado)
+            except Exception:
+                logger.exception('crm vigia falhou conv=%s', conv_id)
 
     threading.Thread(target=_processar, daemon=True).start()
     return jsonify({'ok': True})
