@@ -193,9 +193,15 @@ def _montar_mensagem(rel, inicio, fim):
     return '\n'.join(linhas)
 
 
-def auditar_periodo(inicio, fim, *, enviar=True):
+def auditar_periodo(inicio, fim, *, enviar=True, forcar_envio=False,
+                    prompt_sistema=None, titulo='Auditor do bot'):
     """Audita o periodo [inicio, fim). Retorna {'ok', 'rel', 'enviado',
-    'mensagem'} ou {'pulou'}/{'erro'}. Best-effort."""
+    'mensagem'} ou {'pulou'}/{'erro'}. Best-effort.
+
+    - `enviar`: se False, so retorna sem mexer em Z-API (preview).
+    - `forcar_envio`: True envia MESMO dia tranquilo (modo resumo de fim de dia).
+    - `prompt_sistema`: prompt customizado (padrao = PROMPT_AUDITOR pra
+      janelas curtas, PROMPT_AUDITOR_RESUMO pra fim de dia)."""
     api_key = (os.environ.get('ANTHROPIC_API_KEY')
                or current_app.config.get('ANTHROPIC_API_KEY'))
     if not api_key:
@@ -210,21 +216,23 @@ def auditar_periodo(inicio, fim, *, enviar=True):
         f'DADOS AGREGADOS:\n{json.dumps(dados, ensure_ascii=False, indent=2)}'
     )
     try:
-        rel = _chamar_sonnet(api_key, contexto)
+        rel = _chamar_sonnet(api_key, contexto, prompt_sistema=prompt_sistema)
     except Exception as exc:  # noqa: BLE001
         logger.exception('auditor: Sonnet falhou')
         return {'erro': str(exc)}
 
-    mensagem = _montar_mensagem(rel, inicio, fim)
+    mensagem = _montar_mensagem(rel, inicio, fim, titulo=titulo)
     resultado = {'ok': True, 'rel': rel, 'mensagem': mensagem,
                  'dados': dados, 'enviado': False}
 
     if not enviar:
         return resultado
-    # Sem problemas + sem destaque -> nao incomoda o dono.
-    if not rel.get('tem_problemas') and not (rel.get('problemas') or []):
-        logger.info('auditor: sem problemas, sem envio')
-        return resultado
+    # Modo "janela curta": so manda se tiver problema. Modo "fim de dia"
+    # (forcar_envio=True): manda mesmo dia tranquilo.
+    if not forcar_envio:
+        if not rel.get('tem_problemas') and not (rel.get('problemas') or []):
+            logger.info('auditor: sem problemas, sem envio')
+            return resultado
 
     numero = _numero_destino()
     if not numero:
