@@ -211,3 +211,94 @@ def _montar_mensagem(veredicto, nome_contato, conv_id):
         linhas.append('')
         linhas.append(link)
     return '\n'.join(linhas)
+
+
+def _registrar(resultado, conv_id, nome_contato, ultima_mensagem_cliente):
+    """Adiciona o resultado ao historico em memoria (`_historico`)."""
+    import time as _time
+
+    from app.utils import agora as _ag
+
+    veredicto = (resultado or {}).get('veredicto') or {}
+    _historico.append({
+        'epoch': _time.time(),
+        'ts': _ag().strftime('%d/%m %H:%M'),
+        'conv_id': conv_id,
+        'cliente': nome_contato or '',
+        'mensagem_cliente': (ultima_mensagem_cliente or '')[:200],
+        'alerta': bool(veredicto.get('alerta')),
+        'gravidade': veredicto.get('gravidade'),
+        'motivo': veredicto.get('motivo', ''),
+        'enviado': bool(resultado.get('enviado')),
+        'pulou': resultado.get('pulou'),
+        'erro': resultado.get('erro'),
+    })
+
+
+def avaliar(historico, *, conv_id=None, nome_contato='', resultado_bot=None):
+    """Wrapper publico: chama o avaliador e registra o resultado no historico
+    em memoria (consumido por /admin/vigia/diag). Best-effort: erros do
+    registro nunca afetam o fluxo do bot.
+
+    `historico`: lista [{'role', 'content'}] da conversa
+    `resultado_bot`: {'acao', 'texto', 'motivo'?} do que o bot acabou de fazer
+    """
+    res = _avaliar_interno(historico, conv_id=conv_id,
+                            nome_contato=nome_contato,
+                            resultado_bot=resultado_bot)
+    ultima_msg = ''
+    for m in reversed(historico or []):
+        if m.get('role') == 'user' and (m.get('content') or '').strip():
+            ultima_msg = m['content'].strip()
+            break
+    try:
+        _registrar(res, conv_id, nome_contato, ultima_msg)
+    except Exception:  # noqa: BLE001
+        logger.exception('vigia: registro no historico falhou')
+    return res
+
+
+def ultimos(limite=30):
+    """Devolve os ultimos N veredictos (mais recentes primeiro) pro
+    /admin/vigia/diag mostrar. Volatil — reseta no deploy."""
+    return list(reversed(list(_historico)))[:limite]
+
+
+def disparar_teste(cenario='estoque'):
+    """Dispara uma avaliacao com conversa SINTETICA pra confirmar que o
+    pipeline inteiro funciona (Haiku -> Z-API -> WhatsApp do dono). Retorna
+    o resultado bruto pra mostrar na rota /admin/vigia/teste.
+
+    Cenarios:
+      - 'estoque': bot afirma esgotado pra item que tem nas lojas (ALTA)
+      - 'irritado': cliente irritado com atendimento (ALTA)
+      - 'silencio': conversa neutra (NAO deve disparar)
+    """
+    base = {
+        'estoque': [
+            {'role': 'user', 'content': 'oi, vocês têm croissant de amêndoas?'},
+            {'role': 'assistant', 'content': 'Oi! Infelizmente o croissant de '
+             'amêndoas está esgotado hoje. 😕'},
+            {'role': 'user', 'content': 'mas a vendedora aqui da loja Brooklin '
+             'falou que tem'},
+        ],
+        'irritado': [
+            {'role': 'user', 'content': 'queria fazer um pedido pra amanhã'},
+            {'role': 'assistant', 'content': 'Posso te ajudar! Qual cesta você '
+             'quer?'},
+            {'role': 'user', 'content': 'já te falei 3 vezes, é a Family Box. '
+             'Vocês não prestam atenção. Vou desistir.'},
+        ],
+        'silencio': [
+            {'role': 'user', 'content': 'oi, qual o horário de vocês hoje?'},
+            {'role': 'assistant', 'content': 'Oi! As lojas abrem das 7h às 20h, '
+             'todos os dias.'},
+            {'role': 'user', 'content': 'obrigada!'},
+        ],
+    }
+    historico = base.get(cenario, base['estoque'])
+    return avaliar(historico,
+                   conv_id=f'teste-{cenario}',
+                   nome_contato='Teste do Vigia',
+                   resultado_bot={'acao': 'responder',
+                                   'motivo': f'cenario {cenario}'})
