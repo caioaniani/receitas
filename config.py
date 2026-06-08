@@ -42,6 +42,9 @@ class Config:
     # Detector de abandono: minutos sem resposta na conversa pra acionar o vigia
     # (default 15). Roda no cron de 5 em 5 min via seru_cron.
     CHATBOT_VIGIA_ABANDONO_MIN = int(os.environ.get('CHATBOT_VIGIA_ABANDONO_MIN', '15') or '15')
+    # Tiny ERP — token da API v2 (gera em Painel Tiny -> Configuracoes -> API).
+    # Sem token, o bot recusa NF gentilmente e passa pro humano.
+    TINY_API_TOKEN = os.environ.get('TINY_API_TOKEN', '')
     # Coordenadas da loja matriz — origem das rotas de entrega
     ROTA_ORIGEM_LAT = os.environ.get('ROTA_ORIGEM_LAT', '')
     ROTA_ORIGEM_LNG = os.environ.get('ROTA_ORIGEM_LNG', '')
