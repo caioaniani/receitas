@@ -42,6 +42,7 @@ LOCK_KEY_BACKUP = 7731  # advisory lock pro backup diario
 LOCK_KEY_BACKUP_CHATWOOT = 7735  # advisory lock pro backup do banco do Chatwoot
 LOCK_KEY_VNDA_CARD = 7736  # advisory lock pro cache de pedidos do site (card CRM)
 LOCK_KEY_VIGIA_ABANDONO = 7737  # advisory lock pro detector de conversas abandonadas
+LOCK_KEY_AUDITOR = 7738  # advisory lock pro auditor diario do bot
 
 
 def _com_lock(key, fn, label='job'):
