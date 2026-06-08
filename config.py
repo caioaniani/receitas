@@ -39,6 +39,9 @@ class Config:
     # CHATBOT_VIGIA_NUMERO ou, na ausencia, ZAPI_NUMERO_DESTINO.
     CHATBOT_VIGIA = os.environ.get('CHATBOT_VIGIA', '1') == '1'
     CHATBOT_VIGIA_NUMERO = os.environ.get('CHATBOT_VIGIA_NUMERO', '')
+    # Detector de abandono: minutos sem resposta na conversa pra acionar o vigia
+    # (default 15). Roda no cron de 5 em 5 min via seru_cron.
+    CHATBOT_VIGIA_ABANDONO_MIN = int(os.environ.get('CHATBOT_VIGIA_ABANDONO_MIN', '15') or '15')
     # Coordenadas da loja matriz — origem das rotas de entrega
     ROTA_ORIGEM_LAT = os.environ.get('ROTA_ORIGEM_LAT', '')
     ROTA_ORIGEM_LNG = os.environ.get('ROTA_ORIGEM_LNG', '')
