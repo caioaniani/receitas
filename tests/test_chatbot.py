@@ -232,6 +232,87 @@ def test_responder_loop_consultar_produtos(app):
     cp.assert_called_once()
 
 
+# ── Fase 6: NF do Tiny ──
+
+def test_nf_link_quando_cpf_e_numero_batem_e_pedido_vnda(app):
+    from app.extensions import db
+    from app.models import NFLog
+    from app.services import bot_tools
+    pedido = {'id': '1', 'numero': 'DA999', 'origem': 'ecommerce',
+              'nota_fiscal_id': '88', 'situacao': 'aprovado'}
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'xxx'
+        with patch('app.services.tiny.buscar_pedido_por_cpf_e_numero',
+                   return_value=pedido), \
+             patch('app.services.tiny.obter_link_nota_fiscal',
+                   return_value='https://tiny.com.br/nf/88.pdf'):
+            r = bot_tools.buscar_nota_fiscal('111.444.777-35', 'DA999',
+                                              conv_id=1, canal='whatsapp')
+        assert r.get('link') == 'https://tiny.com.br/nf/88.pdf'
+        log = NFLog.query.order_by(NFLog.id.desc()).first()
+        assert log.resultado == 'enviada'
+        assert log.cpf_4ultimos == '7735'   # ultimos 4 do CPF
+        db.session.remove()
+
+
+def test_nf_handoff_se_pedido_b2b(app):
+    """Pedido fora do site (B2B/local) — bot NAO entrega NF, manda pro humano."""
+    from app.services import bot_tools
+    pedido = {'id': '2', 'numero': 'X1', 'origem': 'b2b',
+              'nota_fiscal_id': '99'}
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'xxx'
+        with patch('app.services.tiny.buscar_pedido_por_cpf_e_numero',
+                   return_value=pedido):
+            r = bot_tools.buscar_nota_fiscal('11144477735', 'X1')
+    assert r['erro'] == 'fora_site'
+
+
+def test_nf_avisa_quando_nf_ainda_nao_emitida(app):
+    from app.services import bot_tools
+    pedido = {'id': '3', 'numero': 'Y9', 'origem': 'ecommerce',
+              'nota_fiscal_id': '', 'situacao': 'em_separacao'}
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'xxx'
+        with patch('app.services.tiny.buscar_pedido_por_cpf_e_numero',
+                   return_value=pedido):
+            r = bot_tools.buscar_nota_fiscal('11144477735', 'Y9')
+    assert r['erro'] == 'sem_nf_ainda'
+
+
+def test_nf_nao_encontrado_nao_vaza_outro_cliente(app):
+    """CPF + numero sem match: bot NÃO retorna nada — não vaza nem confirma."""
+    from app.services import bot_tools
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'xxx'
+        with patch('app.services.tiny.buscar_pedido_por_cpf_e_numero',
+                   return_value=None):
+            r = bot_tools.buscar_nota_fiscal('11144477735', 'INEXISTENTE')
+    assert r['erro'] == 'nao_encontrado'
+
+
+def test_nf_recusa_sem_cpf_ou_numero(app):
+    """Bot NÃO consulta o Tiny se faltar CPF ou número (regra de segurança)."""
+    from app.services import bot_tools
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'xxx'
+        with patch('app.services.tiny.buscar_pedido_por_cpf_e_numero') as call:
+            r = bot_tools.buscar_nota_fiscal('', 'DA999')
+        assert r['erro'] == 'dados_incompletos'
+        call.assert_not_called()
+
+
+def test_nf_sem_token_passa_pro_humano(app):
+    """Sem TINY_API_TOKEN setado: bot avisa indisponivel (não inventa)."""
+    from app.services import bot_tools
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = ''
+        r = bot_tools.buscar_nota_fiscal('11144477735', 'DA999')
+    assert r['erro'] == 'tiny_indisponivel'
+
+
+# ── Fase: data de entrega ──
+
 def test_consultar_pedido_retorna_data_agendada(app):
     """consultar_pedido devolve a data AGENDADA (extra.DataDeEntrega), nunca o
     expected_delivery_date bugado do VNDA (o do "entregue hoje")."""
