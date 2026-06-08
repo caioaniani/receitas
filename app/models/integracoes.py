@@ -9,6 +9,27 @@ from app.extensions import db
 from app.utils import agora
 
 
+class VigiaVeredito(db.Model):
+    """Cada avaliacao do vigia do chatbot (1 por mensagem do cliente).
+
+    Persiste pra o auditor diario (`chatbot_auditor`) achar PADROES — ex:
+    'bot empurrou conteudo de cesta pro humano 5x', 'cliente X surtou no
+    horario de pico'. Sem isso, o historico vive em memoria e some no deploy."""
+    __tablename__ = 'vigia_veredito'
+
+    id = db.Column(db.Integer, primary_key=True)
+    criado_em = db.Column(db.DateTime, default=agora, index=True)
+    conv_id = db.Column(db.String(50), index=True)  # str pra cobrir 'teste-X'
+    cliente = db.Column(db.String(200))
+    mensagem_cliente = db.Column(db.Text)
+    bot_acao = db.Column(db.String(30))  # 'responder' ou 'handoff'
+    bot_motivo = db.Column(db.Text)      # quando handoff: motivo do bot
+    alerta = db.Column(db.Boolean, default=False)
+    gravidade = db.Column(db.String(10), index=True)  # 'alta' | 'media' | None
+    motivo_vigia = db.Column(db.Text)
+    enviado_whatsapp = db.Column(db.Boolean, default=False)
+
+
 class CopilotConversa(db.Model):
     """Audit trail das interacoes com o copilot.
     Cada prompt do usuario vira 1 registro. Guarda a interpretacao da
