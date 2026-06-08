@@ -294,6 +294,33 @@ def test_nf_aviso_dono_pode_ser_desligado(app):
     send.assert_not_called()  # dono nao recebe ping
 
 
+def test_tiny_busca_por_numero_ecommerce_quando_alfanumerico(app):
+    """Pedido com codigo alfanumerico (D884A21B9E) deve ser buscado pelo campo
+    `numero_ecommerce` no Tiny (numero do site), nao `numero` (interno seq)."""
+    from app.services import tiny
+    chamadas = []
+
+    def _fake_get(endpoint, params=None):
+        chamadas.append(dict(params or {}))
+        if (params or {}).get('numero_ecommerce') == 'D884A21B9E':
+            return {'pedidos': [{'pedido': {
+                'id': '011287', 'numero': '11287',
+                'numero_ecommerce': 'D884A21B9E',
+                'origem': 'ecommerce', 'nota_fiscal': {'id': '55'},
+            }}]}
+        return {'pedidos': []}
+
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'xxx'
+        with patch('app.services.tiny._get', side_effect=_fake_get):
+            r = tiny.buscar_pedido_por_cpf_e_numero('087.271.904-98',
+                                                     '#D884A21B9E')
+    assert r['id'] == '011287'
+    assert r['nota_fiscal_id'] == '55'
+    # 1a consulta deve ser por numero_ecommerce (porque eh alfanumerico)
+    assert chamadas[0].get('numero_ecommerce') == 'D884A21B9E'
+
+
 def test_nf_handoff_se_pedido_b2b(app):
     """Pedido fora do site (B2B/local) — bot NAO entrega NF, manda pro humano."""
     from app.services import bot_tools
