@@ -9,6 +9,24 @@ from app.extensions import db
 from app.utils import agora
 
 
+class NFLog(db.Model):
+    """Audit log de cada solicitacao de NF pelo bot. Obrigatorio pela LGPD —
+    em caso de questionamento, a gente precisa provar quem pediu o que e quando.
+
+    NUNCA grava CPF inteiro: so os 4 ultimos digitos pra ajudar na auditoria
+    sem armazenar dado sensivel a mais."""
+    __tablename__ = 'nf_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    criado_em = db.Column(db.DateTime, default=agora, index=True)
+    conv_id = db.Column(db.String(50), index=True)
+    canal = db.Column(db.String(20))  # 'whatsapp' | 'instagram' | 'site' | ?
+    cpf_4ultimos = db.Column(db.String(4))   # '0099' pra '...000-00'
+    numero_pedido = db.Column(db.String(50), index=True)
+    resultado = db.Column(db.String(30))   # 'enviada', 'nao_encontrado', 'sem_nf', 'erro', 'handoff'
+    detalhe = db.Column(db.Text)
+
+
 class VigiaVeredito(db.Model):
     """Cada avaliacao do vigia do chatbot (1 por mensagem do cliente).
 
