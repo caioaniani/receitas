@@ -1246,3 +1246,66 @@ def backup_run():
     else:
         flash(f'Backup falhou: {resultado.get("motivo") or "ver logs"}', 'danger')
     return redirect(url_for('main.debug_schema'))
+
+
+@main_bp.route('/admin/vigia/diag')
+@owner_required
+def vigia_diag():
+    """Diagnostico do vigia do chatbot: mostra config + ultimos veredictos.
+
+    Owner-only. Pra confirmar que o vigia esta avaliando conversas e que o
+    pipeline (Haiku -> Z-API -> WhatsApp do dono) esta funcionando."""
+    import os as _os
+
+    from flask import current_app, jsonify
+
+    from app.services import chatbot_vigia
+    cfg = current_app.config
+    return jsonify({
+        'ligado': bool(cfg.get('CHATBOT_VIGIA')),
+        'anthropic_api_key_configurada': bool(cfg.get('ANTHROPIC_API_KEY')
+                                              or _os.environ.get('ANTHROPIC_API_KEY')),
+        'numero_destino': chatbot_vigia._numero_destino(),
+        'modelo': chatbot_vigia.MODELO,
+        'ultimos_veredictos': chatbot_vigia.ultimos(),
+        'tip': ('Pra disparar alerta de teste no seu WhatsApp: '
+                'POST /admin/vigia/teste?cenario=estoque '
+                '(ou cenario=irritado, ou cenario=silencio)'),
+    })
+
+
+@main_bp.route('/admin/vigia/teste', methods=['POST'])
+@owner_required
+def vigia_teste():
+    """Dispara o vigia com conversa SINTETICA pra confirmar que tudo funciona
+    de ponta a ponta. Owner-only.
+
+    Cenarios:
+      estoque  - bot afirma esgotado pra item que tem nas lojas (ALERTA ALTA)
+      irritado - cliente irritado com o atendimento (ALERTA ALTA)
+      silencio - conversa normal (NAO deve disparar — controle)
+    """
+    from flask import flash, jsonify, request
+
+    from app.services import chatbot_vigia
+    cenario = (request.args.get('cenario') or request.form.get('cenario')
+               or 'estoque').strip().lower()
+    if cenario not in ('estoque', 'irritado', 'silencio'):
+        cenario = 'estoque'
+    resultado = chatbot_vigia.disparar_teste(cenario)
+    if request.headers.get('Accept', '').startswith('application/json'):
+        return jsonify({'cenario': cenario, 'resultado': resultado})
+    if resultado.get('enviado'):
+        flash(f'Vigia OK: alerta de TESTE ({cenario}) enviado pro seu WhatsApp.',
+              'success')
+    elif resultado.get('silencio'):
+        flash(f'Vigia avaliou ({cenario}) e decidiu NAO alertar — confere se '
+              'o cenario era pra disparar. Veredicto: '
+              f'{resultado.get("veredicto")}', 'warning')
+    elif resultado.get('pulou'):
+        flash(f'Vigia pulou: {resultado["pulou"]} (cheque CHATBOT_VIGIA e '
+              'ANTHROPIC_API_KEY)', 'warning')
+    else:
+        flash(f'Vigia teste falhou: {resultado.get("erro") or resultado}',
+              'danger')
+    return redirect(url_for('main.debug_schema'))
