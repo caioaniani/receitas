@@ -27,6 +27,26 @@ from app.utils import telefone_chave
 
 logger = logging.getLogger(__name__)
 
+# Locks por conv_id pra serializar threads que processam a MESMA conversa.
+# Sem isso, mensagens consecutivas do cliente no WhatsApp viram webhooks paralelos
+# que disputam o historico — bot esquece o que ja perguntou. Globais (escopo do
+# processo gunicorn). Acumulam: aceitavel ate ~milhares de conversas/dia (~32B
+# por entry); se virar problema, troca por LRU.
+import threading as _threading
+
+_BOT_LOCKS: dict = {}
+_BOT_LOCKS_GUARD = _threading.Lock()
+
+
+def _lock_para_conv(conv_id):
+    """Devolve um threading.Lock dedicado a essa conv_id. Cria sob demanda."""
+    with _BOT_LOCKS_GUARD:
+        lock = _BOT_LOCKS.get(conv_id)
+        if lock is None:
+            lock = _threading.Lock()
+            _BOT_LOCKS[conv_id] = lock
+        return lock
+
 # Chamado de iframe externo (Chatwoot) — sem token CSRF. Autenticidade vem
 # do CHATWOOT_CARD_TOKEN, não do cookie de sessão.
 csrf.exempt(crm_bp)
@@ -187,60 +207,77 @@ def bot_webhook():
     contato = ((payload.get('sender') or {}).get('name')
                or ((conv.get('meta') or {}).get('sender') or {}).get('name') or '')
 
+    # Lock por conv_id: serializa threads que processam a MESMA conversa.
+    # Sem isso, mensagens consecutivas do cliente (caso comum no WhatsApp)
+    # disparam threads paralelas que leem snapshots diferentes do historico,
+    # cada uma respondendo com contexto incompleto. Resultado: bot esquece o
+    # que ja perguntou. Mantemos um dict global de locks (1 por conv_id ativa).
+    # Cleanup oportunista: locks com 0 waiters sao removidos no proximo acesso.
+    _lock_conv = _BOT_LOCKS.setdefault(conv_id, threading.Lock())
+
     def _processar():
         with app.app_context():
             from app.services import chatbot, chatwoot
-            resultado = None
-            historico = None
-            try:
-                historico = chatwoot.buscar_historico(conv_id)
-                if not historico:
-                    imagens = [a.get('data_url')
-                               for a in (payload.get('attachments') or [])
-                               if a.get('file_type') == 'image' and a.get('data_url')]
-                    if not content and not imagens:
-                        return
-                    msg = {'role': 'user', 'content': content}
-                    if imagens:
-                        msg['imagens'] = imagens
-                    historico = [msg]
-                resultado = chatbot.responder(historico)
-                if resultado.get('texto'):
-                    chatwoot.enviar_mensagem(conv_id, resultado['texto'])
-                if resultado['acao'] == 'handoff':
-                    chatwoot.definir_status(conv_id, 'open')
-                    logger.info('crm bot handoff conv=%s motivo=%s',
-                                conv_id, resultado.get('motivo'))
-            except Exception:
-                logger.exception('crm bot processamento falhou conv=%s', conv_id)
-                # Nunca deixa o cliente sem resposta: joga pro humano.
+            with _lock_conv:
+                resultado = None
+                historico = None
                 try:
-                    chatwoot.definir_status(conv_id, 'open')
+                    historico = chatwoot.buscar_historico(conv_id)
+                    if not historico:
+                        imagens = [a.get('data_url')
+                                   for a in (payload.get('attachments') or [])
+                                   if a.get('file_type') == 'image' and a.get('data_url')]
+                        if not content and not imagens:
+                            return
+                        msg = {'role': 'user', 'content': content}
+                        if imagens:
+                            msg['imagens'] = imagens
+                        historico = [msg]
+                        current_app.logger.warning(
+                            'crm/bot: historico VAZIO p/ conv %s — usando fallback (msg atual). '
+                            'Possivel race ou Chatwoot indisponivel.', conv_id)
+                    else:
+                        current_app.logger.info(
+                            'crm/bot: conv %s historico=%d msgs, ultima=%r',
+                            conv_id, len(historico),
+                            (historico[-1].get('content') or '')[:60])
+                    resultado = chatbot.responder(historico)
+                    if resultado.get('texto'):
+                        chatwoot.enviar_mensagem(conv_id, resultado['texto'])
+                    if resultado['acao'] == 'handoff':
+                        chatwoot.definir_status(conv_id, 'open')
+                        logger.info('crm bot handoff conv=%s motivo=%s',
+                                    conv_id, resultado.get('motivo'))
                 except Exception:
-                    logger.exception('crm bot fallback handoff falhou conv=%s', conv_id)
+                    logger.exception('crm bot processamento falhou conv=%s', conv_id)
+                    # Nunca deixa o cliente sem resposta: joga pro humano.
+                    try:
+                        chatwoot.definir_status(conv_id, 'open')
+                    except Exception:
+                        logger.exception('crm bot fallback handoff falhou conv=%s', conv_id)
 
-            # Vigia: assiste a conversa DEPOIS do bot ter respondido (nao
-            # atrasa o cliente) e alerta no WhatsApp do dono via Z-API quando
-            # detecta problema. Best-effort: falha do vigia nunca afeta o
-            # atendimento.
-            try:
-                from app.services import chatbot_vigia
-                if historico and chatbot_vigia.disponivel():
-                    # Anexa a resposta do bot ao historico — sem isso, o vigia
-                    # ve so a fala do cliente e nunca consegue julgar o que o
-                    # bot disse (caso classico: "bot afirmou esgotado mas tem
-                    # na loja"). Lista nova pra nao mutar o original.
-                    hist_pra_vigia = list(historico)
-                    if resultado and (resultado.get('texto') or '').strip():
-                        hist_pra_vigia.append({
-                            'role': 'assistant',
-                            'content': resultado['texto'].strip(),
-                        })
-                    chatbot_vigia.avaliar(hist_pra_vigia, conv_id=conv_id,
-                                          nome_contato=contato,
-                                          resultado_bot=resultado)
-            except Exception:
-                logger.exception('crm vigia falhou conv=%s', conv_id)
+                # Vigia: assiste a conversa DEPOIS do bot ter respondido (nao
+                # atrasa o cliente) e alerta no WhatsApp do dono via Z-API quando
+                # detecta problema. Best-effort: falha do vigia nunca afeta o
+                # atendimento. Dentro do lock pra serializar com proximos turnos.
+                try:
+                    from app.services import chatbot_vigia
+                    if historico and chatbot_vigia.disponivel():
+                        # Anexa a resposta do bot ao historico — sem isso, o vigia
+                        # ve so a fala do cliente e nunca consegue julgar o que o
+                        # bot disse (caso classico: "bot afirmou esgotado mas tem
+                        # na loja"). Lista nova pra nao mutar o original.
+                        hist_pra_vigia = list(historico)
+                        if resultado and (resultado.get('texto') or '').strip():
+                            hist_pra_vigia.append({
+                                'role': 'assistant',
+                                'content': resultado['texto'].strip(),
+                            })
+                        chatbot_vigia.avaliar(hist_pra_vigia, conv_id=conv_id,
+                                              nome_contato=contato,
+                                              resultado_bot=resultado)
+                except Exception:
+                    logger.exception('crm vigia falhou conv=%s', conv_id)
 
     threading.Thread(target=_processar, daemon=True).start()
     return jsonify({'ok': True})
