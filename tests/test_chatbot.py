@@ -135,6 +135,74 @@ def test_bot_webhook_token_invalido(app):
     assert r.status_code == 403
 
 
+def test_vigia_registra_no_historico(app):
+    """`avaliar` (wrapper) grava o resultado em `_historico` pra /admin/vigia/diag."""
+    from app.services import chatbot_vigia
+    veredicto = {'alerta': True, 'gravidade': 'alta',
+                 'motivo': 'X', 'acao_sugerida': ''}
+    with app.app_context():
+        chatbot_vigia._historico.clear()
+        app.config['CHATBOT_VIGIA'] = True
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
+        with patch('app.services.chatbot_vigia._chamar_haiku',
+                   return_value=veredicto), \
+             patch('app.services.chatbot_vigia._resumo_estoque_loja',
+                   return_value=''), \
+             patch('app.services.zapi.enviar_texto',
+                   return_value={'ok': True}):
+            chatbot_vigia.avaliar([{'role': 'user', 'content': 'tem croissant?'}],
+                                  conv_id=99, nome_contato='Maria')
+        ultimos = chatbot_vigia.ultimos()
+    assert len(ultimos) == 1
+    assert ultimos[0]['conv_id'] == 99
+    assert ultimos[0]['gravidade'] == 'alta'
+    assert ultimos[0]['enviado'] is True
+    assert 'croissant' in ultimos[0]['mensagem_cliente']
+
+
+def test_vigia_disparar_teste_cenario_estoque(app):
+    """Cenario sintetico 'estoque' chega ao Haiku + Z-API + grava historico."""
+    from app.services import chatbot_vigia
+    veredicto = {'alerta': True, 'gravidade': 'alta',
+                 'motivo': 'TESTE: bot esgotado mas tem na loja',
+                 'acao_sugerida': 'atualizar VNDA'}
+    with app.app_context():
+        chatbot_vigia._historico.clear()
+        app.config['CHATBOT_VIGIA'] = True
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
+        with patch('app.services.chatbot_vigia._chamar_haiku',
+                   return_value=veredicto), \
+             patch('app.services.chatbot_vigia._resumo_estoque_loja',
+                   return_value=''), \
+             patch('app.services.zapi.enviar_texto',
+                   return_value={'ok': True}) as send:
+            r = chatbot_vigia.disparar_teste('estoque')
+    assert r['enviado'] is True
+    send.assert_called_once()
+    assert 'teste-estoque' in str(chatbot_vigia.ultimos()[0]['conv_id'])
+
+
+def test_admin_vigia_diag_route_responde_json(app, owner_user):
+    from app.services import chatbot_vigia
+    with app.app_context():
+        chatbot_vigia._historico.clear()
+        app.config['CHATBOT_VIGIA'] = True
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
+    client = app.test_client()
+    with client.session_transaction() as s:
+        s['_user_id'] = str(owner_user.id)
+    r = client.get('/admin/vigia/diag')
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['ligado'] is True
+    assert j['numero_destino'] == '5511999990000'
+    assert j['anthropic_api_key_configurada'] is True
+    assert j['ultimos_veredictos'] == []
+
+
 # ── Fase 2: ferramentas ──
 
 def test_responder_loop_consultar_produtos(app):
