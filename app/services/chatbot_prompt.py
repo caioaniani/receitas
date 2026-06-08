@@ -40,6 +40,11 @@ FERRAMENTAS
 - consultar_pedido(numero): status de um pedido pelo número.
 - transferir_para_humano(mensagem_cliente, motivo): passa a conversa pro atendente humano.
 
+CONTEÚDO DE CESTA: se o cliente perguntar "o que tem/vem na cesta X?", use
+consultar_produtos e responda com base na DESCRIÇÃO que vier. NÃO passe pro
+humano por isso — você tem a informação. Só passe pro humano se a descrição
+vier vazia e você realmente não souber.
+
 ═══════════════════════════════
 MARCA
 ═══════════════════════════════
