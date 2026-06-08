@@ -369,11 +369,12 @@ def test_auditor_coleta_e_pede_resumo(app):
 
 def test_auditor_sem_problemas_nao_envia(app):
     """Dia tranquilo → não pinga (Sonnet retornou sem problemas)."""
-    from datetime import datetime, timedelta
+    from datetime import timedelta
 
     from app.extensions import db
     from app.models import VigiaVeredito
     from app.services import chatbot_auditor
+    from app.utils import agora as _agora
     with app.app_context():
         db.session.add(VigiaVeredito(conv_id='c1', mensagem_cliente='oi',
                                       bot_acao='responder', alerta=False))
@@ -382,8 +383,8 @@ def test_auditor_sem_problemas_nao_envia(app):
         app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
         rel = {'tem_problemas': False, 'destaque': 'Tudo tranquilo',
                'resumo_curto': '1 conversa', 'problemas': []}
-        inicio = datetime.utcnow() - timedelta(hours=1)
-        fim = datetime.utcnow() + timedelta(hours=1)
+        inicio = _agora() - timedelta(hours=1)
+        fim = _agora() + timedelta(hours=1)
         with patch('app.services.chatbot_auditor._chamar_sonnet', return_value=rel), \
              patch('app.services.zapi.enviar_texto') as send:
             r = chatbot_auditor.auditar_periodo(inicio, fim, enviar=True)
