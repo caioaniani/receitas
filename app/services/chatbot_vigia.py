@@ -285,7 +285,8 @@ def avaliar(historico, *, conv_id=None, nome_contato='', resultado_bot=None):
             ultima_msg = m['content'].strip()
             break
     try:
-        _registrar(res, conv_id, nome_contato, ultima_msg)
+        _registrar(res, conv_id, nome_contato, ultima_msg,
+                   resultado_bot=resultado_bot)
     except Exception:  # noqa: BLE001
         logger.exception('vigia: registro no historico falhou')
     return res
