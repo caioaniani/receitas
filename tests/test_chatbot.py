@@ -184,16 +184,23 @@ def test_vigia_disparar_teste_cenario_estoque(app):
     assert 'teste-estoque' in str(chatbot_vigia.ultimos()[0]['conv_id'])
 
 
-def test_admin_vigia_diag_route_responde_json(app, owner_user):
+def test_admin_vigia_diag_route_responde_json(app):
+    from app.extensions import db
+    from app.models import Usuario
     from app.services import chatbot_vigia
     with app.app_context():
         chatbot_vigia._historico.clear()
         app.config['CHATBOT_VIGIA'] = True
         app.config['ANTHROPIC_API_KEY'] = 'test'
         app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
+        owner = Usuario(nome='owner', login='owner', papel='admin', is_owner=True)
+        owner.set_senha('123')
+        db.session.add(owner)
+        db.session.commit()
+        owner_id = owner.id
     client = app.test_client()
     with client.session_transaction() as s:
-        s['_user_id'] = str(owner_user.id)
+        s['_user_id'] = str(owner_id)
     r = client.get('/admin/vigia/diag')
     assert r.status_code == 200
     j = r.get_json()
