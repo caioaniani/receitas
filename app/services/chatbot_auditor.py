@@ -232,3 +232,45 @@ def auditar_hoje(*, enviar=True):
     inicio = datetime.combine(_hoje(), datetime.min.time())
     fim = _agora()
     return auditar_periodo(inicio, fim, enviar=enviar)
+
+
+CHAVE_ULTIMA_EXEC = 'chatbot_auditor_ultima_exec'
+# Quanto tempo pra tras ir na primeira execucao (quando nao ha registro).
+# 24h cobre desde a ultima rodada do dia anterior (19h), sem ir longe demais.
+FALLBACK_JANELA_H = 24
+
+
+def auditar_janela_pendente(*, enviar=True):
+    """Audita a janela desde a ULTIMA execucao registrada ate agora. Anti-spam
+    nativo: rodando 5x por dia, cada execucao olha so o que aconteceu desde a
+    anterior — sem repetir o mesmo problema 5 vezes.
+
+    Persiste `chatbot_auditor_ultima_exec` em AppConfig (sobrevive deploy)."""
+    from app.models import AppConfig
+    from app.utils import agora as _agora
+
+    fim = _agora()
+    ultima = AppConfig.get(CHAVE_ULTIMA_EXEC)
+    if ultima:
+        try:
+            inicio = datetime.fromisoformat(ultima)
+        except (TypeError, ValueError):
+            inicio = fim - timedelta(hours=FALLBACK_JANELA_H)
+    else:
+        inicio = fim - timedelta(hours=FALLBACK_JANELA_H)
+
+    if (fim - inicio).total_seconds() < 60:
+        return {'pulou': 'janela muito curta (<1min desde a ultima exec)'}
+
+    res = auditar_periodo(inicio, fim, enviar=enviar)
+    # So avanca o ponteiro se a execucao chegou ao Sonnet de fato (ou foi
+    # legitimamente "sem dados"). Erro de API NAO avanca — proxima tentativa
+    # cobre a mesma janela e nao perde nada.
+    if 'erro' not in res:
+        try:
+            from app.extensions import db
+            AppConfig.set(CHAVE_ULTIMA_EXEC, fim.isoformat())
+            db.session.commit()
+        except Exception:  # noqa: BLE001
+            logger.exception('auditor: salvar ultima_exec falhou')
+    return res
