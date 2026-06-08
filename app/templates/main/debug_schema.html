@@ -239,6 +239,21 @@
                 </button>
             </form>
         </div>
+
+        <hr>
+        <p class="small mb-2">
+            <strong>Auditor proativo</strong> — lê as conversas do dia, acha
+            padrões (handoff evitável, perda de venda, cliente irritado) e te
+            manda no WhatsApp. Roda automático às <strong>19h BRT</strong>;
+            use o botão pra rodar agora.
+        </p>
+        <form method="POST" action="{{ url_for('main.auditor_run') }}" class="mb-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-primary"
+                    onclick="return confirm('Rodar auditor do dia agora? Vai analisar e mandar resumo no seu WhatsApp.');">
+                <i class="bi bi-clipboard-check"></i> Rodar auditor agora
+            </button>
+        </form>
     </div>
 </div>
 
