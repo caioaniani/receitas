@@ -1,0 +1,234 @@
+"""Auditor proativo do chatbot — agente ativo que vai atras dos problemas.
+
+Roda 1x por dia (cron 19h BRT no seru_cron) + sob demanda em
+/admin/auditor/run. Le todos os VigiaVeredito do periodo, agrega, manda pra
+Claude Sonnet detectar PADROES (handoff evitavel repetido, produto com erro
+recorrente, momento de pico critico, perda de venda) e escreve um resumo
+acionavel pro WhatsApp do dono via Z-API.
+
+Usa Sonnet (nao Haiku) porque eh meta-analise — vale a pena. Volume baixo
+(1x dia), custo ~R$0,30/dia.
+"""
+import json
+import logging
+import os
+from collections import Counter
+from datetime import datetime, timedelta
+
+from flask import current_app
+
+logger = logging.getLogger(__name__)
+
+MODELO = 'claude-sonnet-4-6'
+MAX_TOKENS = 1200
+
+PROMPT_AUDITOR = """Você é o Auditor do bot de atendimento da O Pão (padaria artesanal).
+Sua função é olhar os dados agregados do dia (ou periodo) e devolver:
+
+1. Resumo numérico curto
+2. PROBLEMAS identificados — apenas os que aparecem como PADRÃO (>=2 ocorrências OU 1 grave)
+3. Sugestão concreta de ajuste pra cada problema
+
+Tipos de problema relevantes:
+- Bot empurrando pro humano coisa que deveria saber (ex: 3x dúvida de conteúdo de cesta, 2x agendamento, etc)
+- Produto recebendo afirmação incorreta repetida (esgotado errado, preço estranho)
+- Clientes desistindo no mesmo ponto (perda de venda recorrente)
+- Cliente irritado/surtando (mesmo só 1 caso, é grave)
+- Bot dando resposta confusa/truncada/contraditória
+
+Seja DIRETO e CURTO. Linguagem coloquial brasileira, sem corporativês. NUNCA invente número.
+
+Responda APENAS com JSON neste formato:
+{
+  "tem_problemas": true|false,
+  "resumo_curto": "1-2 linhas com o número do dia",
+  "problemas": [
+    {"tema": "frase curta", "ocorrencias": N, "exemplos": ["frase 1", "frase 2"], "sugestao": "ajuste concreto"}
+  ],
+  "destaque": "frase única pro topo do WhatsApp (ex: 'Tudo tranquilo hoje' ou '3 vendas perdidas no frete')"
+}
+
+NUNCA texto fora do JSON."""
+
+
+def disponivel():
+    cfg = current_app.config
+    return bool(os.environ.get('ANTHROPIC_API_KEY') or cfg.get('ANTHROPIC_API_KEY'))
+
+
+def _numero_destino():
+    cfg = current_app.config
+    return ((cfg.get('CHATBOT_VIGIA_NUMERO') or '').strip()
+            or (cfg.get('ZAPI_NUMERO_DESTINO') or '').strip())
+
+
+def _coletar_periodo(inicio, fim):
+    """Le VigiaVeredito do periodo e devolve uma estrutura compacta pro
+    Sonnet trabalhar. Tudo agregado pra caber no prompt."""
+    from app.models import VigiaVeredito
+
+    veredictos = (VigiaVeredito.query
+                  .filter(VigiaVeredito.criado_em >= inicio,
+                          VigiaVeredito.criado_em < fim)
+                  .order_by(VigiaVeredito.criado_em.asc())
+                  .all())
+    if not veredictos:
+        return None
+
+    total = len(veredictos)
+    handoffs = [v for v in veredictos if (v.bot_acao or '') == 'handoff']
+    alta = [v for v in veredictos if v.gravidade == 'alta']
+    media = [v for v in veredictos if v.gravidade == 'media']
+    conv_unicas = len({v.conv_id for v in veredictos if v.conv_id})
+
+    # Top motivos de handoff (ja vem do bot quando faz handoff)
+    motivos_handoff = Counter(
+        (v.bot_motivo or '').strip().lower()
+        for v in handoffs if (v.bot_motivo or '').strip()
+    ).most_common(10)
+
+    # Top motivos do vigia (o que ELE achou)
+    motivos_vigia = Counter(
+        (v.motivo_vigia or '').strip()[:120]
+        for v in veredictos if (v.motivo_vigia or '').strip()
+    ).most_common(15)
+
+    # Amostras de mensagens nos handoffs (limitado, pra dar contexto)
+    amostras_handoff = []
+    for v in handoffs[:30]:
+        msg = (v.mensagem_cliente or '').strip()[:200]
+        motivo = (v.bot_motivo or '').strip()[:120]
+        if msg:
+            amostras_handoff.append({'msg': msg, 'motivo': motivo,
+                                     'cliente': v.cliente or ''})
+
+    # Casos de alta (raros, mas todos)
+    casos_alta = [{
+        'cliente': v.cliente or '', 'msg': (v.mensagem_cliente or '')[:200],
+        'motivo': (v.motivo_vigia or '')[:200],
+    } for v in alta]
+
+    return {
+        'total_eventos': total,
+        'conversas_unicas': conv_unicas,
+        'handoffs': len(handoffs),
+        'gravidade_alta': len(alta),
+        'gravidade_media': len(media),
+        'top_motivos_handoff': motivos_handoff,
+        'top_motivos_vigia': motivos_vigia,
+        'amostras_handoff': amostras_handoff,
+        'casos_alta': casos_alta,
+    }
+
+
+def _chamar_sonnet(api_key, contexto):
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+    resp = client.messages.create(
+        model=MODELO,
+        max_tokens=MAX_TOKENS,
+        system=PROMPT_AUDITOR,
+        messages=[{'role': 'user', 'content': contexto}],
+    )
+    texto = ''.join(b.text for b in resp.content
+                    if getattr(b, 'type', None) == 'text' and b.text).strip()
+    if texto.startswith('```'):
+        texto = texto.split('```', 2)[1]
+        if texto.startswith('json'):
+            texto = texto[4:].strip()
+        texto = texto.rsplit('```', 1)[0].strip()
+    return json.loads(texto)
+
+
+def _montar_mensagem(rel, inicio, fim):
+    linhas = []
+    periodo = (f'{inicio.strftime("%d/%m")} a {fim.strftime("%d/%m")}'
+               if (fim - inicio).days > 1
+               else inicio.strftime('%d/%m'))
+    linhas.append(f'*Auditor do bot — {periodo}*')
+    if rel.get('destaque'):
+        linhas.append('')
+        linhas.append(rel['destaque'])
+    if rel.get('resumo_curto'):
+        linhas.append('')
+        linhas.append(rel['resumo_curto'])
+    problemas = rel.get('problemas') or []
+    if problemas:
+        linhas.append('')
+        linhas.append('*Problemas:*')
+        for p in problemas:
+            t = (p.get('tema') or '').strip()
+            n = p.get('ocorrencias') or 0
+            s = (p.get('sugestao') or '').strip()
+            if t:
+                linhas.append(f'• {t} ({n}x)')
+                if s:
+                    linhas.append(f'  → {s}')
+    return '\n'.join(linhas)
+
+
+def auditar_periodo(inicio, fim, *, enviar=True):
+    """Audita o periodo [inicio, fim). Retorna {'ok', 'rel', 'enviado',
+    'mensagem'} ou {'pulou'}/{'erro'}. Best-effort."""
+    api_key = (os.environ.get('ANTHROPIC_API_KEY')
+               or current_app.config.get('ANTHROPIC_API_KEY'))
+    if not api_key:
+        return {'pulou': 'sem ANTHROPIC_API_KEY'}
+
+    dados = _coletar_periodo(inicio, fim)
+    if not dados:
+        return {'pulou': 'sem dados no periodo', 'ok': True}
+
+    contexto = (
+        f'Periodo: {inicio.isoformat()} a {fim.isoformat()}\n\n'
+        f'DADOS AGREGADOS:\n{json.dumps(dados, ensure_ascii=False, indent=2)}'
+    )
+    try:
+        rel = _chamar_sonnet(api_key, contexto)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('auditor: Sonnet falhou')
+        return {'erro': str(exc)}
+
+    mensagem = _montar_mensagem(rel, inicio, fim)
+    resultado = {'ok': True, 'rel': rel, 'mensagem': mensagem,
+                 'dados': dados, 'enviado': False}
+
+    if not enviar:
+        return resultado
+    # Sem problemas + sem destaque -> nao incomoda o dono.
+    if not rel.get('tem_problemas') and not (rel.get('problemas') or []):
+        logger.info('auditor: sem problemas, sem envio')
+        return resultado
+
+    numero = _numero_destino()
+    if not numero:
+        logger.warning('auditor: sem destino — relatorio nao enviado')
+        return resultado
+
+    try:
+        from app.services import zapi
+        envio = zapi.enviar_texto(numero, mensagem)
+        resultado['enviado'] = bool(envio.get('ok'))
+        resultado['envio'] = envio
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('auditor: envio Z-API falhou')
+        resultado['erro_envio'] = str(exc)
+    return resultado
+
+
+def auditar_dia(dia=None, *, enviar=True):
+    """Audita um dia inteiro em BRT (default = ontem inteiro)."""
+    from app.utils import hoje as _hoje
+    base = dia or (_hoje() - timedelta(days=1))
+    inicio = datetime.combine(base, datetime.min.time())
+    fim = inicio + timedelta(days=1)
+    return auditar_periodo(inicio, fim, enviar=enviar)
+
+
+def auditar_hoje(*, enviar=True):
+    """Audita o dia corrente (ate agora) — usado pelo botao on-demand."""
+    from app.utils import agora as _agora
+    from app.utils import hoje as _hoje
+    inicio = datetime.combine(_hoje(), datetime.min.time())
+    fim = _agora()
+    return auditar_periodo(inicio, fim, enviar=enviar)
