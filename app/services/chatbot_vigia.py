@@ -394,7 +394,8 @@ def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_re
             break
     res = {'veredicto': veredicto, 'silencio': not veredicto.get('alerta')}
 
-    if not veredicto.get('alerta') or veredicto.get('gravidade') not in ('alta', 'media'):
+    # So alta (desistencia clara / perda de venda) dispara na hora; media -> resumo.
+    if not veredicto.get('alerta') or veredicto.get('gravidade') != 'alta':
         try:
             _registrar(res, conv_id, nome_contato, f'[ABANDONO {minutos_sem_resposta}min] {ultima_msg}')
         except Exception:  # noqa: BLE001
