@@ -306,3 +306,119 @@ def disparar_teste(cenario='estoque'):
                    nome_contato='Teste do Vigia',
                    resultado_bot={'acao': 'responder',
                                    'motivo': f'cenario {cenario}'})
+
+
+PROMPT_ABANDONO = """Você é o Vigia: supervisor automático do bot de atendimento da O Pão (padaria artesanal).
+Estou te mostrando uma conversa que está PARADA há um tempo — o cliente não respondeu mais.
+Decida se o dono precisa ser AVISADO no WhatsApp pra um humano pegar a conversa.
+
+ALERTE (gravidade=alta) quando:
+- Cliente claramente DESISTIU de comprar (estava no meio de um pedido, sumiu)
+- Cliente parecia INSATISFEITO/IRRITADO antes de parar de responder
+- Bot deu uma resposta CONFUSA ou pediu esclarecimento que travou a conversa
+- Possível PERDA DE VENDA (cliente perguntou produto/preço, bot respondeu, cliente sumiu)
+
+ALERTE (gravidade=media) quando:
+- Bot pediu esclarecimento e cliente sumiu (potencial dúvida sem resolver)
+- Conversa começou interessante (pedido, dúvida concreta) mas parou no meio
+
+NÃO alerte quando:
+- Conversa era apenas cumprimento ("oi", "boa tarde") sem demanda concreta
+- Cliente já tinha sido atendido (info recebida) — silêncio normal
+- Conversa muito curta ou sem contexto util pra um humano
+
+Seja RIGOROSO: alerta demais vira ruído. Em dúvida, NÃO alerte.
+
+Responda APENAS com JSON válido neste formato:
+{"alerta": true|false, "gravidade": "alta"|"media"|null, "motivo": "frase curta em PT-BR", "acao_sugerida": "frase curta ou vazia"}
+
+NUNCA inclua texto fora do JSON."""
+
+
+def _chamar_haiku_abandono(api_key, contexto):
+    """Igual ao _chamar_haiku, mas com PROMPT_ABANDONO."""
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+    resp = client.messages.create(
+        model=MODELO,
+        max_tokens=MAX_TOKENS,
+        system=PROMPT_ABANDONO,
+        messages=[{'role': 'user', 'content': contexto}],
+    )
+    texto = ''.join(b.text for b in resp.content
+                    if getattr(b, 'type', None) == 'text' and b.text).strip()
+    if texto.startswith('```'):
+        texto = texto.split('```', 2)[1]
+        if texto.startswith('json'):
+            texto = texto[4:].strip()
+        texto = texto.rsplit('```', 1)[0].strip()
+    return json.loads(texto)
+
+
+def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_resposta=0):
+    """Avalia conversa PARADA (cliente sumiu) e alerta no WhatsApp se valer.
+    Best-effort. Usado pelo cron `_run_vigia_abandono` no seru_cron.py."""
+    if not disponivel():
+        return {'pulou': 'vigia desligado'}
+
+    api_key = (os.environ.get('ANTHROPIC_API_KEY')
+               or current_app.config.get('ANTHROPIC_API_KEY'))
+    if not api_key:
+        return {'pulou': 'sem ANTHROPIC_API_KEY'}
+
+    try:
+        contexto = (
+            f'Cliente: {nome_contato or "(sem nome)"}\n'
+            f'Conversation ID: {conv_id or "?"}\n'
+            f'Sem resposta ha {minutos_sem_resposta} minutos.\n\n'
+            f'CONVERSA:\n{_formatar_historico(historico)}'
+        )
+        veredicto = _chamar_haiku_abandono(api_key, contexto)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('vigia abandono: avaliacao falhou')
+        return {'erro': str(exc)}
+
+    if not isinstance(veredicto, dict):
+        return {'erro': 'veredicto invalido'}
+
+    logger.info('vigia abandono conv=%s min=%s veredicto=%s',
+                conv_id, minutos_sem_resposta, veredicto)
+
+    # Registra no historico em memoria mesmo nao alertando (visivel no diag).
+    ultima_msg = ''
+    for m in reversed(historico or []):
+        if m.get('role') == 'user' and (m.get('content') or '').strip():
+            ultima_msg = m['content'].strip()
+            break
+    res = {'veredicto': veredicto, 'silencio': not veredicto.get('alerta')}
+
+    if not veredicto.get('alerta') or veredicto.get('gravidade') not in ('alta', 'media'):
+        try:
+            _registrar(res, conv_id, nome_contato, f'[ABANDONO {minutos_sem_resposta}min] {ultima_msg}')
+        except Exception:  # noqa: BLE001
+            logger.exception('vigia abandono: registro falhou')
+        return res
+
+    numero = _numero_destino()
+    if not numero:
+        logger.warning('vigia abandono: alerta gerado mas sem destino')
+        return {'erro': 'sem destino', 'veredicto': veredicto}
+
+    # Prefixa motivo com "ABANDONO" pra ficar claro no WhatsApp.
+    veredicto_msg = dict(veredicto)
+    veredicto_msg['motivo'] = (f'[{minutos_sem_resposta} min sem resposta] '
+                                + (veredicto.get('motivo') or '').strip())
+    mensagem = _montar_mensagem(veredicto_msg, nome_contato, conv_id)
+    try:
+        from app.services import zapi
+        envio = zapi.enviar_texto(numero, mensagem)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('vigia abandono: envio Z-API falhou')
+        return {'erro': f'zapi: {exc}', 'veredicto': veredicto}
+
+    res = {'enviado': bool(envio.get('ok')), 'envio': envio, 'veredicto': veredicto}
+    try:
+        _registrar(res, conv_id, nome_contato, f'[ABANDONO {minutos_sem_resposta}min] {ultima_msg}')
+    except Exception:  # noqa: BLE001
+        logger.exception('vigia abandono: registro falhou')
+    return res
