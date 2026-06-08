@@ -1279,6 +1279,29 @@ def vigia_diag():
     })
 
 
+@main_bp.route('/admin/auditor/run', methods=['POST'])
+@owner_required
+def auditor_run():
+    """Roda o auditor proativo do bot AGORA (varre o dia ate este momento) e
+    envia o relatorio pro WhatsApp do dono. Owner-only."""
+    from flask import flash
+
+    from app.services import chatbot_auditor
+    r = chatbot_auditor.auditar_hoje(enviar=True)
+    if r.get('enviado'):
+        flash('Auditor rodou e enviou o relatorio pro seu WhatsApp.', 'success')
+    elif r.get('pulou'):
+        flash(f'Auditor pulou: {r["pulou"]}', 'warning')
+    elif r.get('erro'):
+        flash(f'Auditor falhou: {r["erro"]}', 'danger')
+    elif r.get('ok') and not r.get('rel', {}).get('problemas'):
+        flash('Auditor rodou: nenhum problema relevante encontrado no periodo.',
+              'info')
+    else:
+        flash(f'Auditor rodou mas nao enviou (sem destino?): {r}', 'warning')
+    return redirect(url_for('main.debug_schema'))
+
+
 @main_bp.route('/admin/vigia/teste', methods=['POST'])
 @owner_required
 def vigia_teste():
