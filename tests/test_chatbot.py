@@ -323,6 +323,31 @@ def test_gerar_link_carrinho_vazio():
 
 # ── Fase 5: auditor proativo (agente ativo) ──
 
+def test_auditor_janela_avanca_ponteiro_e_evita_spam(app):
+    """Rodando 5x/dia, cada execução SÓ olha a janela desde a anterior. Sem
+    isso, mesmo problema seria reportado várias vezes."""
+    from app.extensions import db
+    from app.models import AppConfig
+    from app.services import chatbot_auditor
+    with app.app_context():
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
+        # 1a execucao: sem ponteiro -> roda (mas sem dados -> 'pulou'), avanca.
+        with patch('app.services.chatbot_auditor._chamar_sonnet') as sonnet, \
+             patch('app.services.zapi.enviar_texto') as send:
+            r1 = chatbot_auditor.auditar_janela_pendente(enviar=True)
+        assert AppConfig.get(chatbot_auditor.CHAVE_ULTIMA_EXEC) is not None
+        # 2a execucao IMEDIATA: janela < 1min -> pula sem chamar Sonnet/Z-API.
+        with patch('app.services.chatbot_auditor._chamar_sonnet') as sonnet2, \
+             patch('app.services.zapi.enviar_texto') as send2:
+            r2 = chatbot_auditor.auditar_janela_pendente(enviar=True)
+        assert 'pulou' in r2
+        sonnet2.assert_not_called()
+        send2.assert_not_called()
+        db.session.remove()
+        _ = r1, sonnet, send  # silencia ruff/lint
+
+
 def test_auditor_coleta_e_pede_resumo(app):
     """Auditor agrega VigiaVeredito, manda pro Sonnet e formata o WhatsApp."""
     from datetime import timedelta
