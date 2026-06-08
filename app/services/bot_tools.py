@@ -205,6 +205,89 @@ def gerar_link_carrinho(itens):
     return {'link': f'{SHOP}/carrinho?itens=' + ','.join(partes)}
 
 
+def _origem_e_vnda(pedido_tiny):
+    """Heuristica: o pedido no Tiny veio do site (VNDA) ou outra origem?
+    Pra cumprir a regra 'so VNDA' definida com o dono."""
+    origem = (pedido_tiny.get('origem') or '').lower()
+    # Tiny marca origem como 'ecommerce', 'vnda', etc — qualquer um desses indica site.
+    return any(t in origem for t in ('vnda', 'ecommerce', 'e-commerce', 'site'))
+
+
+def buscar_nota_fiscal(cpf, numero_pedido, *, conv_id=None, canal=None):
+    """Busca a NF do pedido no Tiny por (CPF + numero do pedido). E o caminho
+    SEGURO — sem CPF o bot nunca expoe dado fiscal de outro cliente.
+
+    Retorna dict com instrucao clara pro Claude:
+      {'link': str}                          → NF emitida (link do DANFE)
+      {'erro': 'sem_nf_ainda', ...}          → pedido existe mas NF nao foi emitida
+      {'erro': 'nao_encontrado', ...}        → CPF+numero nao casou
+      {'erro': 'fora_site', ...}             → pedido B2B/local -> humano
+      {'erro': 'tiny_indisponivel', ...}     → API caiu
+
+    SEMPRE registra no NFLog (audit LGPD)."""
+    from app.services import tiny
+    cpf_d = ''.join(c for c in (cpf or '') if c.isdigit())
+    numero = (numero_pedido or '').strip()
+
+    def _log(resultado, detalhe=''):
+        try:
+            from app.extensions import db
+            from app.models import NFLog
+            db.session.add(NFLog(
+                conv_id=str(conv_id) if conv_id else None,
+                canal=canal or None,
+                cpf_4ultimos=cpf_d[-4:] if len(cpf_d) >= 4 else None,
+                numero_pedido=numero[:50] or None,
+                resultado=resultado,
+                detalhe=(detalhe or '')[:500] or None,
+            ))
+            db.session.commit()
+        except Exception:  # noqa: BLE001
+            logger.exception('NFLog falhou (resultado=%s)', resultado)
+            try:
+                from app.extensions import db
+                db.session.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+
+    if len(cpf_d) not in (11, 14) or not numero:
+        _log('erro', 'CPF/numero ausentes ou invalidos')
+        return {'erro': 'dados_incompletos',
+                'mensagem': 'Preciso do CPF do pedido e do número do pedido.'}
+
+    if not tiny.disponivel():
+        _log('erro', 'TINY_API_TOKEN nao configurado')
+        return {'erro': 'tiny_indisponivel',
+                'mensagem': 'Não consigo consultar a nota agora. Já passo pra um atendente.'}
+
+    pedido = tiny.buscar_pedido_por_cpf_e_numero(cpf_d, numero)
+    if not pedido:
+        _log('nao_encontrado')
+        return {'erro': 'nao_encontrado',
+                'mensagem': 'Não encontrei pedido com esse CPF e número. Confere os dados, por favor.'}
+
+    if not _origem_e_vnda(pedido):
+        _log('handoff', f'pedido origem={pedido.get("origem")}')
+        return {'erro': 'fora_site',
+                'mensagem': 'Esse pedido vou passar pra um atendente continuar com você.'}
+
+    nota_id = pedido.get('nota_fiscal_id') or ''
+    if not nota_id:
+        _log('sem_nf', f'situacao={pedido.get("situacao")}')
+        return {'erro': 'sem_nf_ainda',
+                'situacao': pedido.get('situacao'),
+                'mensagem': 'Achei seu pedido, mas a nota ainda não foi emitida. Ela sai junto com o despacho — te aviso ou você pode pedir depois.'}
+
+    link = tiny.obter_link_nota_fiscal(nota_id)
+    if not link:
+        _log('erro', f'sem link pra nota_id={nota_id}')
+        return {'erro': 'link_falhou',
+                'mensagem': 'Achei a nota mas não consegui gerar o link agora. Já passo pra um atendente.'}
+
+    _log('enviada', f'nota_id={nota_id}')
+    return {'link': link, 'numero_pedido': pedido.get('numero')}
+
+
 def consultar_pedido(numero):
     """Status + DATA DE ENTREGA de um pedido pelo número (code do VNDA).
 
