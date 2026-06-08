@@ -271,6 +271,37 @@ def test_gerar_link_carrinho_vazio():
 
 # ── Fase 4: vigia (IA supervisora) ──
 
+def test_webhook_passa_resposta_do_bot_pro_vigia(app):
+    """O historico que vai pro vigia inclui a resposta do bot. Sem isso, o
+    vigia nunca consegue julgar o que o bot disse (caso real visto em prod
+    em 08/06: vigia avaliando como 'bot ainda nao respondeu')."""
+    app.config['CHATBOT_BOT_SECRET'] = app.config['CHATBOT_BOT_SECRET'] = 'seg'
+    app.config['CHATBOT_VIGIA'] = True
+    app.config['ANTHROPIC_API_KEY'] = 'test'
+    app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
+    app.config['CHATWOOT_BOT_SECRET'] = 'seg'
+    client = app.test_client()
+    historico_cliente = [{'role': 'user', 'content': 'tem croissant?'}]
+    resposta_bot = {'acao': 'responder',
+                    'texto': 'Infelizmente está esgotado hoje.'}
+    with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.buscar_historico',
+               return_value=historico_cliente), \
+         patch('app.services.chatbot.responder', return_value=resposta_bot), \
+         patch('app.services.chatwoot.enviar_mensagem', return_value={'ok': True}), \
+         patch('app.services.chatwoot.definir_status', return_value={'ok': True}), \
+         patch('app.services.chatbot_vigia.disponivel', return_value=True), \
+         patch('app.services.chatbot_vigia.avaliar', return_value={}) as vigia:
+        _post(client, content='tem croissant?')
+    assert vigia.called, 'vigia deveria ter sido chamado'
+    historico_passado = vigia.call_args.args[0]
+    # Cliente + resposta do bot — vigia tem o contexto completo
+    assert len(historico_passado) == 2
+    assert historico_passado[0]['role'] == 'user'
+    assert historico_passado[1]['role'] == 'assistant'
+    assert 'esgotado' in historico_passado[1]['content']
+
+
 def test_vigia_dispara_alerta_quando_gravidade_alta(app):
     """Vigia avalia, Haiku retorna alerta=alta, envia via Z-API."""
     from app.services import chatbot_vigia
