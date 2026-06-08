@@ -226,7 +226,17 @@ def bot_webhook():
             try:
                 from app.services import chatbot_vigia
                 if historico and chatbot_vigia.disponivel():
-                    chatbot_vigia.avaliar(historico, conv_id=conv_id,
+                    # Anexa a resposta do bot ao historico — sem isso, o vigia
+                    # ve so a fala do cliente e nunca consegue julgar o que o
+                    # bot disse (caso classico: "bot afirmou esgotado mas tem
+                    # na loja"). Lista nova pra nao mutar o original.
+                    hist_pra_vigia = list(historico)
+                    if resultado and (resultado.get('texto') or '').strip():
+                        hist_pra_vigia.append({
+                            'role': 'assistant',
+                            'content': resultado['texto'].strip(),
+                        })
+                    chatbot_vigia.avaliar(hist_pra_vigia, conv_id=conv_id,
                                           nome_contato=contato,
                                           resultado_bot=resultado)
             except Exception:
