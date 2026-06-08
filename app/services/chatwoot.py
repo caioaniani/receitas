@@ -184,3 +184,56 @@ def baixar_imagem(url):
 
     import base64
     return 'image/jpeg', base64.b64encode(jpeg).decode('ascii')
+
+
+def listar_conversas_paradas(min_minutos=15, limite=50):
+    """Conversas em status `pending` (turno do bot) cujo `last_activity_at` foi
+    ha mais de `min_minutos`. Usado pelo job de detecao de abandono.
+
+    Retorna lista de {'id', 'nome_contato', 'minutos_paradas'}. Lista vazia se
+    o Chatwoot nao estiver configurado ou se a chamada falhar."""
+    if not bot_disponivel():
+        return []
+    url = f'{_base()}/conversations'
+    try:
+        r = requests.get(url, headers=_bot_headers(),
+                         params={'status': 'pending', 'page': 1},
+                         timeout=15)
+        if r.status_code not in (200, 201):
+            logger.warning('chatwoot listar_conversas_paradas %s: %s',
+                           r.status_code, r.text[:200])
+            return []
+        data = r.json() if r.text else {}
+    except Exception:  # noqa: BLE001
+        logger.exception('chatwoot listar_conversas_paradas falhou')
+        return []
+
+    payload = (data.get('data') or {}).get('payload') if isinstance(data, dict) else None
+    if not isinstance(payload, list):
+        payload = data if isinstance(data, list) else []
+
+    import time as _time
+    agora_epoch = _time.time()
+    paradas = []
+    for c in payload:
+        if not isinstance(c, dict):
+            continue
+        ult = c.get('last_activity_at') or c.get('updated_at') or c.get('created_at')
+        if not ult:
+            continue
+        try:
+            ult_epoch = float(ult)
+        except (TypeError, ValueError):
+            continue
+        minutos = (agora_epoch - ult_epoch) / 60.0
+        if minutos < min_minutos:
+            continue
+        meta = c.get('meta') or {}
+        sender = meta.get('sender') or {}
+        paradas.append({
+            'id': c.get('id'),
+            'nome_contato': sender.get('name') or '',
+            'minutos_paradas': int(minutos),
+        })
+    paradas.sort(key=lambda p: -p['minutos_paradas'])
+    return paradas[:limite]
