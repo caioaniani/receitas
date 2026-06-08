@@ -282,6 +282,21 @@ CHAVE_ULTIMA_EXEC = 'chatbot_auditor_ultima_exec'
 FALLBACK_JANELA_H = 24
 
 
+def auditar_dia_resumo(dia=None, *, enviar=True):
+    """Resumo de fim de dia (sempre envia, mesmo dia tranquilo). Audita o
+    DIA INTEIRO em BRT. Usado pelo cron das 19h no modo hibrido.
+
+    Diferente das janelas curtas: traz numeros + insights + problemas, e
+    nao depende do ponteiro `ultima_exec` (sempre olha o dia inteiro)."""
+    from app.utils import hoje as _hoje
+    base = dia or _hoje()
+    inicio = datetime.combine(base, datetime.min.time())
+    fim = inicio + timedelta(days=1)
+    return auditar_periodo(inicio, fim, enviar=enviar, forcar_envio=True,
+                           prompt_sistema=PROMPT_AUDITOR_RESUMO,
+                           titulo='Resumo do dia')
+
+
 def auditar_janela_pendente(*, enviar=True):
     """Audita a janela desde a ULTIMA execucao registrada ate agora. Anti-spam
     nativo: rodando 5x por dia, cada execucao olha so o que aconteceu desde a
