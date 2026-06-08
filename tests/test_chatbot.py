@@ -325,11 +325,12 @@ def test_gerar_link_carrinho_vazio():
 
 def test_auditor_coleta_e_pede_resumo(app):
     """Auditor agrega VigiaVeredito, manda pro Sonnet e formata o WhatsApp."""
-    from datetime import datetime, timedelta
+    from datetime import timedelta
 
     from app.extensions import db
     from app.models import VigiaVeredito
     from app.services import chatbot_auditor
+    from app.utils import agora as _agora
 
     with app.app_context():
         for i in range(3):
@@ -351,8 +352,9 @@ def test_auditor_coleta_e_pede_resumo(app):
                            'exemplos': ['o que tem na cesta X0?'],
                            'sugestao': 'verificar se DESCRIÇÃO está vindo do VNDA'}],
         }
-        inicio = datetime.utcnow() - timedelta(hours=1)
-        fim = datetime.utcnow() + timedelta(hours=1)
+        # `criado_em` salva em BRT — filtrar com BRT (não utcnow).
+        inicio = _agora() - timedelta(hours=1)
+        fim = _agora() + timedelta(hours=1)
         with patch('app.services.chatbot_auditor._chamar_sonnet',
                    return_value=relatorio), \
              patch('app.services.zapi.enviar_texto',
