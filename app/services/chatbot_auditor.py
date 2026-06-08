@@ -166,18 +166,26 @@ def _chamar_sonnet(api_key, contexto, prompt_sistema=None):
     return json.loads(texto)
 
 
-def _montar_mensagem(rel, inicio, fim):
+def _montar_mensagem(rel, inicio, fim, *, titulo='Auditor do bot'):
     linhas = []
     periodo = (f'{inicio.strftime("%d/%m")} a {fim.strftime("%d/%m")}'
                if (fim - inicio).days > 1
                else inicio.strftime('%d/%m'))
-    linhas.append(f'*Auditor do bot — {periodo}*')
+    linhas.append(f'*{titulo} — {periodo}*')
     if rel.get('destaque'):
         linhas.append('')
         linhas.append(rel['destaque'])
     if rel.get('resumo_curto'):
         linhas.append('')
         linhas.append(rel['resumo_curto'])
+    insights = rel.get('insights') or []
+    if insights:
+        linhas.append('')
+        linhas.append('*Insights:*')
+        for ins in insights:
+            ins = (ins or '').strip()
+            if ins:
+                linhas.append(f'• {ins}')
     problemas = rel.get('problemas') or []
     if problemas:
         linhas.append('')
