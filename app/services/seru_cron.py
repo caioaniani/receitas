@@ -360,6 +360,16 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
+    # Vigia do chatbot — detector de conversas ABANDONADAS. Roda a cada 5 min,
+    # acha conversas em status `pending` paradas ha > CHATBOT_VIGIA_ABANDONO_MIN
+    # (default 15 min) e avalia via Haiku. Anti-spam: uma conversa nao recebe
+    # 2 avisos de abandono na mesma sessao do app.
+    _scheduler.add_job(
+        lambda app=app: _run_vigia_abandono(app),
+        'cron', minute='*/5', id='vigia-abandono',
+        max_instances=1, coalesce=True,
+    )
+
     _scheduler.start()
     logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h · zapi tarefas 07:00 · zapi anomalias 23:00 · desperdicio slack 20:10/15/20/25 + whatsapp 20:30 · backup 04:00 · automacoes whatsapp 5min')
 
