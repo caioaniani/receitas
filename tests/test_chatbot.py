@@ -323,6 +323,33 @@ def test_gerar_link_carrinho_vazio():
 
 # ── Fase 5: auditor proativo (agente ativo) ──
 
+def test_auditor_dia_resumo_envia_mesmo_dia_tranquilo(app):
+    """Modo 'resumo' (19h): traz insights e envia MESMO sem problemas."""
+    from app.extensions import db
+    from app.models import VigiaVeredito
+    from app.services import chatbot_auditor
+    with app.app_context():
+        db.session.add(VigiaVeredito(conv_id='c1', mensagem_cliente='oi',
+                                      bot_acao='responder', alerta=False))
+        db.session.commit()
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
+        rel = {'destaque': 'Tudo tranquilo hoje',
+               'resumo_curto': '1 conversa, 0 handoffs',
+               'insights': ['Pico de mensagens entre 12h e 14h'],
+               'problemas': []}
+        with patch('app.services.chatbot_auditor._chamar_sonnet',
+                   return_value=rel), \
+             patch('app.services.zapi.enviar_texto',
+                   return_value={'ok': True}) as send:
+            r = chatbot_auditor.auditar_dia_resumo(enviar=True)
+    assert r['enviado'] is True   # mesmo sem problemas
+    msg = send.call_args[0][1]
+    assert 'Resumo do dia' in msg
+    assert 'Insights' in msg
+    assert 'Pico' in msg
+
+
 def test_auditor_janela_avanca_ponteiro_e_evita_spam(app):
     """Rodando 5x/dia, cada execução SÓ olha a janela desde a anterior. Sem
     isso, mesmo problema seria reportado várias vezes."""
