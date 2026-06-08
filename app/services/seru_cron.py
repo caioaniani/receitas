@@ -244,10 +244,10 @@ def _run_vigia_abandono(app):
             conn.close()
 
 
-def _run_auditor_janela(app):
-    """Job recorrente: auditor proativo do chatbot. Audita SO a janela desde
-    a ultima execucao (anti-spam: rodando 5x ao dia, nao repete o mesmo
-    problema toda vez). Avisa via Z-API so se houver anormalidade."""
+def _run_auditor(app, modo='janela'):
+    """Job recorrente do auditor. `modo`:
+      - 'janela': audita desde a ultima execucao; manda Z-API SO se anormal.
+      - 'resumo': audita o dia inteiro; sempre manda Z-API (fim de dia)."""
     from app.services import chatbot_auditor
     with app.app_context():
         if not chatbot_auditor.disponivel():
@@ -263,11 +263,15 @@ def _run_auditor_janela(app):
                 if not got:
                     return
             try:
-                r = chatbot_auditor.auditar_janela_pendente(enviar=True)
-                logger.info('auditor janela rodou: enviado=%s pulou=%s erro=%s',
-                            r.get('enviado'), r.get('pulou'), r.get('erro'))
+                if modo == 'resumo':
+                    r = chatbot_auditor.auditar_dia_resumo(enviar=True)
+                else:
+                    r = chatbot_auditor.auditar_janela_pendente(enviar=True)
+                logger.info('auditor %s rodou: enviado=%s pulou=%s erro=%s',
+                            modo, r.get('enviado'), r.get('pulou'),
+                            r.get('erro'))
             except Exception:
-                logger.exception('auditor janela falhou')
+                logger.exception('auditor %s falhou', modo)
             finally:
                 if is_pg:
                     try:
@@ -396,17 +400,24 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
-    # Auditor proativo do chatbot — 5 horarios fixos BRT: 07, 09, 12, 15, 19.
-    # Cada execucao audita SO a janela desde a ultima (anti-spam: nao repete
-    # problema 5 vezes ao dia). Manda WhatsApp so se houver anormalidade.
+    # Auditor proativo do chatbot — HIBRIDO:
+    #   07, 09, 12, 15h BRT: 'janela' — audita janela curta desde a ultima
+    #     execucao; manda WhatsApp SO se houver anormalidade.
+    #   19h BRT: 'resumo' — audita o dia inteiro; SEMPRE manda WhatsApp (com
+    #     numeros, insights e problemas, mesmo se foi tranquilo).
     # Desligavel via CHATBOT_AUDITOR_AUTO=0.
     if os.environ.get('CHATBOT_AUDITOR_AUTO', '1') != '0':
-        for h in (7, 9, 12, 15, 19):
+        for h in (7, 9, 12, 15):
             _scheduler.add_job(
-                lambda app=app: _run_auditor_janela(app),
+                lambda app=app: _run_auditor(app, modo='janela'),
                 'cron', hour=h, minute=0, id=f'chatbot-auditor-{h}h',
                 max_instances=1, coalesce=True,
             )
+        _scheduler.add_job(
+            lambda app=app: _run_auditor(app, modo='resumo'),
+            'cron', hour=19, minute=0, id='chatbot-auditor-19h-resumo',
+            max_instances=1, coalesce=True,
+        )
 
     # Vigia do chatbot — detector de conversas ABANDONADAS. Roda a cada 5 min,
     # acha conversas em status `pending` paradas ha > CHATBOT_VIGIA_ABANDONO_MIN
