@@ -14,12 +14,13 @@ Detecta principalmente:
 - Bot afirmando algo claramente errado (preco estranho, info inventada)
 
 Anti-spam: so dispara WhatsApp se gravidade for `alta` ou `media`. Casos
-`baixa`/sem alerta ficam so no log (visiveis em /admin/debug-schema se um
-dia adicionarmos dashboard).
+`baixa`/sem alerta ficam so no log e no historico em memoria (rota
+/admin/vigia/diag mostra os ultimos).
 """
 import json
 import logging
 import os
+from collections import deque
 
 from flask import current_app
 
@@ -27,6 +28,11 @@ logger = logging.getLogger(__name__)
 
 MODELO = 'claude-haiku-4-5-20251001'
 MAX_TOKENS = 400
+# Historico em memoria das ultimas avaliacoes (volatil, reinicia no deploy).
+# Bom o suficiente pra confirmar "ta rodando?" — pra historico durador usar
+# AuditLog ou tabela dedicada no futuro.
+HISTORICO_MAX = 30
+_historico = deque(maxlen=HISTORICO_MAX)
 
 PROMPT_VIGIA = """Você é o Vigia: supervisor automático do bot de atendimento da O Pão (padaria artesanal).
 Sua função é ler a conversa abaixo e decidir se o dono precisa ser AVISADO no WhatsApp.
