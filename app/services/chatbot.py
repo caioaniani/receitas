@@ -50,8 +50,9 @@ TOOLS = [
     {
         'name': 'consultar_produtos',
         'description': 'Busca produtos no catálogo do site (nome, preço, '
-                       'disponibilidade e SKU). Use SEMPRE antes de sugerir um '
-                       'produto ou montar um link.',
+                       'disponibilidade, SKU e DESCRIÇÃO/conteúdo da cesta). Use '
+                       'SEMPRE antes de sugerir um produto, montar um link, ou '
+                       'responder o que vem numa cesta.',
         'input_schema': {
             'type': 'object',
             'properties': {
