@@ -219,8 +219,11 @@ def _montar_mensagem(veredicto, nome_contato, conv_id):
     return '\n'.join(linhas)
 
 
-def _registrar(resultado, conv_id, nome_contato, ultima_mensagem_cliente):
-    """Adiciona o resultado ao historico em memoria (`_historico`)."""
+def _registrar(resultado, conv_id, nome_contato, ultima_mensagem_cliente,
+               resultado_bot=None):
+    """Adiciona o resultado ao historico em memoria (`_historico`) E persiste
+    em VigiaVeredito (pro auditor diario achar padroes). Persistencia e
+    best-effort: nunca propaga erro."""
     import time as _time
 
     from app.utils import agora as _ag
@@ -239,6 +242,30 @@ def _registrar(resultado, conv_id, nome_contato, ultima_mensagem_cliente):
         'pulou': resultado.get('pulou'),
         'erro': resultado.get('erro'),
     })
+    # Persiste (best-effort).
+    try:
+        from app.extensions import db
+        from app.models import VigiaVeredito
+        rb = resultado_bot or {}
+        db.session.add(VigiaVeredito(
+            conv_id=str(conv_id) if conv_id is not None else None,
+            cliente=(nome_contato or '')[:200] or None,
+            mensagem_cliente=(ultima_mensagem_cliente or '')[:2000] or None,
+            bot_acao=rb.get('acao'),
+            bot_motivo=(rb.get('motivo') or '')[:500] or None,
+            alerta=bool(veredicto.get('alerta')),
+            gravidade=veredicto.get('gravidade'),
+            motivo_vigia=(veredicto.get('motivo') or '')[:1000] or None,
+            enviado_whatsapp=bool(resultado.get('enviado')),
+        ))
+        db.session.commit()
+    except Exception:  # noqa: BLE001
+        logger.exception('vigia: persistir VigiaVeredito falhou')
+        try:
+            from app.extensions import db
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def avaliar(historico, *, conv_id=None, nome_contato='', resultado_bot=None):
