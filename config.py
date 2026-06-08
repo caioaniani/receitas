@@ -33,6 +33,12 @@ class Config:
     # o bot usa este pro catalogo; senao, cai no VNDA_API_TOKEN.
     VNDA_PRODUTOS_TOKEN = os.environ.get('VNDA_PRODUTOS_TOKEN', '')
     VNDA_SHOP_HOST = os.environ.get('VNDA_SHOP_HOST', 'www.padariaartesanalonline.com.br')
+    # Vigia do chatbot: IA supervisora que assiste cada conversa e alerta via
+    # Z-API quando detecta problema (cliente irritado, bot errou produto, perda
+    # de venda). Liga/desliga sem mexer em codigo. Destino do alerta:
+    # CHATBOT_VIGIA_NUMERO ou, na ausencia, ZAPI_NUMERO_DESTINO.
+    CHATBOT_VIGIA = os.environ.get('CHATBOT_VIGIA', '1') == '1'
+    CHATBOT_VIGIA_NUMERO = os.environ.get('CHATBOT_VIGIA_NUMERO', '')
     # Coordenadas da loja matriz — origem das rotas de entrega
     ROTA_ORIGEM_LAT = os.environ.get('ROTA_ORIGEM_LAT', '')
     ROTA_ORIGEM_LNG = os.environ.get('ROTA_ORIGEM_LNG', '')
