@@ -67,14 +67,29 @@ def _iter_variants(variants):
     return out
 
 
+def _limpar_descricao(p):
+    """Descricao do produto VNDA (texto/HTML) limpa e truncada. E o que permite
+    o bot responder 'o que tem na cesta X?' sem jogar pro humano."""
+    import re
+    raw = (p.get('description') or p.get('html_description')
+           or p.get('short_description') or p.get('meta_description') or '')
+    if not raw:
+        return ''
+    texto = re.sub(r'<[^>]+>', ' ', str(raw))       # tira tags HTML
+    texto = re.sub(r'\s+', ' ', texto).strip()       # normaliza espacos
+    return texto[:600]
+
+
 def _parse_produtos(raw):
-    """Extrai [{nome, sku, preco, disponivel}] da resposta do VNDA.
+    """Extrai [{nome, sku, preco, disponivel, descricao}] da resposta do VNDA.
 
     SKU sempre de variants[].sku; preco prioriza sale_price (o que o cliente
-    paga). Uma linha por variante que tenha SKU."""
+    paga); descricao (conteudo da cesta/produto) vem do produto. Uma linha por
+    variante que tenha SKU."""
     out = []
     for p in (raw or []):
         nome_base = (p.get('name') or p.get('title') or '').strip()
+        descricao = _limpar_descricao(p)
         for v in _iter_variants(p.get('variants')):
             sku = v.get('sku')
             if not sku:
@@ -96,6 +111,7 @@ def _parse_produtos(raw):
                 'sku': str(sku),
                 'preco': preco,
                 'disponivel': bool(disp),
+                'descricao': descricao,
             })
     return out
 
