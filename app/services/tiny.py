@@ -75,23 +75,45 @@ def buscar_pedido_por_cpf_e_numero(cpf, numero):
     if not cpf_d or not numero:
         return None
 
-    retorno = _get('pedidos.pesquisa.php',
-                   params={'cpf_cnpj': cpf_d, 'numero': numero})
-    if not retorno:
-        return None
-
-    pedidos = retorno.get('pedidos') or []
-    # Tiny embrulha cada item em {'pedido': {...}}
+    # A API v2 do Tiny tem DOIS campos pra numero de pedido:
+    #   `numero`            = numero INTERNO do Tiny (sequencial: 12345)
+    #   `numero_ecommerce`  = numero gerado pelo site (alfanumerico: D884A21B9E)
+    # Cliente que recebe email do VNDA cola o numero_ecommerce. Se o codigo
+    # tem letra, e ecommerce; se e so digitos, pode ser qualquer um — buscamos
+    # nos dois e juntamos.
+    so_digitos = numero.isdigit()
     candidatos = []
-    for item in pedidos:
-        p = item.get('pedido') if isinstance(item, dict) else None
-        if isinstance(p, dict):
-            candidatos.append(p)
-    # Match exato pelo numero (a pesquisa pode trazer prefixos parecidos).
-    # Aceita match case-insensitive — '#d884' (cliente) vs 'D884' (Tiny).
+    consultas = []
+    if so_digitos:
+        consultas.append({'cpf_cnpj': cpf_d, 'numero': numero})
+        consultas.append({'cpf_cnpj': cpf_d, 'numero_ecommerce': numero})
+    else:
+        # Alfanumerico = ecommerce. Tenta ecommerce primeiro; fallback no `numero`
+        # so caso o Tiny tenha indexado errado.
+        consultas.append({'cpf_cnpj': cpf_d, 'numero_ecommerce': numero})
+        consultas.append({'cpf_cnpj': cpf_d, 'numero': numero})
+
+    for params in consultas:
+        retorno = _get('pedidos.pesquisa.php', params=params)
+        if not retorno:
+            continue
+        for item in (retorno.get('pedidos') or []):
+            p = item.get('pedido') if isinstance(item, dict) else None
+            if isinstance(p, dict):
+                candidatos.append(p)
+        if candidatos:
+            break  # achou em uma das consultas, nao precisa tentar outras
+
+    # Match exato (case-insensitive) contra os DOIS campos.
     nlow = numero.lower()
-    achados = [p for p in candidatos
-               if str(p.get('numero') or '').strip().lower() == nlow]
+
+    def _matches(p):
+        n1 = str(p.get('numero') or '').strip().lower()
+        n2 = str(p.get('numero_ecommerce') or p.get('numero_ordem_compra')
+                 or '').strip().lower()
+        return nlow in (n1, n2)
+
+    achados = [p for p in candidatos if _matches(p)]
     if not achados:
         logger.info('tiny: 0 pedidos p/ cpf=...%s numero=%r (retornados=%d)',
                     cpf_d[-4:], numero, len(candidatos))
