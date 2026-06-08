@@ -244,6 +244,43 @@ def _run_vigia_abandono(app):
             conn.close()
 
 
+def _run_auditor_dia(app):
+    """Job diario: auditor proativo do chatbot. Le os VigiaVeredito do dia,
+    detecta padroes via Sonnet e manda resumo pro WhatsApp do dono."""
+    from app.services import chatbot_auditor
+    with app.app_context():
+        if not chatbot_auditor.disponivel():
+            return
+        uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
+        is_pg = 'postgresql' in uri
+        from app.extensions import db
+        conn = db.engine.connect()
+        try:
+            if is_pg:
+                got = conn.execute(text('SELECT pg_try_advisory_lock(:k)'),
+                                   {'k': LOCK_KEY_AUDITOR}).scalar()
+                if not got:
+                    return
+            try:
+                # `auditar_hoje`: cobre o dia inteiro ate o momento do cron.
+                # Rodando as 19h BRT, pega manha + tarde + comeco da noite —
+                # quando ainda da pro dono agir antes do dia acabar.
+                r = chatbot_auditor.auditar_hoje(enviar=True)
+                logger.info('auditor diario rodou: enviado=%s pulou=%s erro=%s',
+                            r.get('enviado'), r.get('pulou'), r.get('erro'))
+            except Exception:
+                logger.exception('auditor diario falhou')
+            finally:
+                if is_pg:
+                    try:
+                        conn.execute(text('SELECT pg_advisory_unlock(:k)'),
+                                     {'k': LOCK_KEY_AUDITOR})
+                    except Exception:
+                        pass
+        finally:
+            conn.close()
+
+
 def iniciar(app):
     """Inicia o scheduler. Chamado uma vez no startup do app.
     Roda jobs Seru E VNDA no mesmo scheduler."""
