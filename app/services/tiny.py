@@ -69,7 +69,9 @@ def buscar_pedido_por_cpf_e_numero(cpf, numero):
     Retorna dict com {'id', 'numero', 'situacao', 'nota_fiscal_id',
     'origem'} ou None se nao achar / erro."""
     cpf_d = _so_digitos(cpf)
-    numero = (numero or '').strip()
+    # Cliente costuma colar o numero como '#XXXX' (assim aparece no email do
+    # VNDA). Tira o # e espaços antes de buscar — o Tiny indexa sem o prefixo.
+    numero = (numero or '').strip().lstrip('#').strip()
     if not cpf_d or not numero:
         return None
 
@@ -85,10 +87,14 @@ def buscar_pedido_por_cpf_e_numero(cpf, numero):
         p = item.get('pedido') if isinstance(item, dict) else None
         if isinstance(p, dict):
             candidatos.append(p)
-    # Match exato pelo numero (a pesquisa pode trazer prefixos parecidos)
+    # Match exato pelo numero (a pesquisa pode trazer prefixos parecidos).
+    # Aceita match case-insensitive — '#d884' (cliente) vs 'D884' (Tiny).
+    nlow = numero.lower()
     achados = [p for p in candidatos
-               if str(p.get('numero') or '').strip() == numero]
+               if str(p.get('numero') or '').strip().lower() == nlow]
     if not achados:
+        logger.info('tiny: 0 pedidos p/ cpf=...%s numero=%r (retornados=%d)',
+                    cpf_d[-4:], numero, len(candidatos))
         return None
 
     pedido = achados[0]
