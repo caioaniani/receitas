@@ -242,17 +242,56 @@ def test_nf_link_quando_cpf_e_numero_batem_e_pedido_vnda(app):
               'nota_fiscal_id': '88', 'situacao': 'aprovado'}
     with app.app_context():
         app.config['TINY_API_TOKEN'] = 'xxx'
+        app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
         with patch('app.services.tiny.buscar_pedido_por_cpf_e_numero',
                    return_value=pedido), \
              patch('app.services.tiny.obter_link_nota_fiscal',
-                   return_value='https://tiny.com.br/nf/88.pdf'):
+                   return_value='https://tiny.com.br/nf/88.pdf'), \
+             patch('app.services.zapi.enviar_texto',
+                   return_value={'ok': True}) as send:
             r = bot_tools.buscar_nota_fiscal('111.444.777-35', 'DA999',
                                               conv_id=1, canal='whatsapp')
         assert r.get('link') == 'https://tiny.com.br/nf/88.pdf'
         log = NFLog.query.order_by(NFLog.id.desc()).first()
         assert log.resultado == 'enviada'
         assert log.cpf_4ultimos == '7735'   # ultimos 4 do CPF
+        # Aviso pro dono via Z-API: 1 mensagem, formato esperado
+        send.assert_called_once()
+        msg = send.call_args[0][1]
+        assert 'NF solicitada' in msg
+        assert 'DA999' in msg
+        assert '7735' in msg  # 4 ultimos do CPF
+        assert '111.444.777-35' not in msg  # CPF inteiro NUNCA vai no aviso
         db.session.remove()
+
+
+def test_nf_aviso_dono_pode_ser_desligado(app):
+    """CHATBOT_AVISAR_NF=0 desliga o aviso (cliente ainda recebe NF, mas dono
+    não recebe ping)."""
+    import os as _os
+
+    from app.services import bot_tools
+    pedido = {'id': '1', 'numero': 'DA999', 'origem': 'ecommerce',
+              'nota_fiscal_id': '88'}
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'xxx'
+        app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
+        prev = _os.environ.get('CHATBOT_AVISAR_NF')
+        _os.environ['CHATBOT_AVISAR_NF'] = '0'
+        try:
+            with patch('app.services.tiny.buscar_pedido_por_cpf_e_numero',
+                       return_value=pedido), \
+                 patch('app.services.tiny.obter_link_nota_fiscal',
+                       return_value='https://tiny.com.br/x.pdf'), \
+                 patch('app.services.zapi.enviar_texto') as send:
+                r = bot_tools.buscar_nota_fiscal('11144477735', 'DA999')
+        finally:
+            if prev is None:
+                _os.environ.pop('CHATBOT_AVISAR_NF', None)
+            else:
+                _os.environ['CHATBOT_AVISAR_NF'] = prev
+    assert r.get('link')  # cliente continua recebendo
+    send.assert_not_called()  # dono nao recebe ping
 
 
 def test_nf_handoff_se_pedido_b2b(app):
