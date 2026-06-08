@@ -164,11 +164,12 @@ def _carregar_catalogo():
 
 def consultar_produtos(busca):
     """Busca produtos no catalogo do VNDA por texto. Retorna
-    {'produtos': [{nome, sku, preco, disponivel}]} ou {'erro': ...}.
+    {'produtos': [{nome, sku, preco, disponivel, descricao?}]} ou {'erro': ...}.
 
-    Carrega o catalogo (/products) e filtra pelos termos da busca. Sem match
-    local, devolve o catalogo (limitado) pro Claude aplicar o mapa de sinonimos
-    do prompt (ex: "amendoas" -> "Almond"). SKU sempre de variants[].sku."""
+    Match focado (achou produto pelo termo): inclui a `descricao` — pra o bot
+    responder 'o que tem na cesta X?'. Sem match: devolve o catalogo amplo SEM
+    descricao (economiza token) pro Claude aplicar sinonimos (ex: "amendoas" ->
+    "Almond"). SKU sempre de variants[].sku."""
     catalogo = _carregar_catalogo()
     if catalogo is None:
         return {'erro': 'VNDA indisponível no momento'}
@@ -180,8 +181,10 @@ def consultar_produtos(busca):
         filtrados = [p for p in catalogo
                      if any(t in normalizar_busca(p['nome']) for t in termos)]
         if filtrados:
-            return {'produtos': filtrados[:40]}
-    return {'produtos': catalogo[:80]}
+            return {'produtos': filtrados[:40]}  # com descricao (foco)
+    # Sem match: catalogo amplo SEM descricao (token-light).
+    leve = [{k: v for k, v in p.items() if k != 'descricao'} for p in catalogo[:80]]
+    return {'produtos': leve}
 
 
 def gerar_link_carrinho(itens):
