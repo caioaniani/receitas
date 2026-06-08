@@ -207,13 +207,9 @@ def bot_webhook():
     contato = ((payload.get('sender') or {}).get('name')
                or ((conv.get('meta') or {}).get('sender') or {}).get('name') or '')
 
-    # Lock por conv_id: serializa threads que processam a MESMA conversa.
-    # Sem isso, mensagens consecutivas do cliente (caso comum no WhatsApp)
-    # disparam threads paralelas que leem snapshots diferentes do historico,
-    # cada uma respondendo com contexto incompleto. Resultado: bot esquece o
-    # que ja perguntou. Mantemos um dict global de locks (1 por conv_id ativa).
-    # Cleanup oportunista: locks com 0 waiters sao removidos no proximo acesso.
-    _lock_conv = _BOT_LOCKS.setdefault(conv_id, threading.Lock())
+    # Lock por conv_id: serializa threads que processam a MESMA conversa
+    # (mensagens consecutivas do cliente no WhatsApp = webhooks paralelos).
+    _lock_conv = _lock_para_conv(conv_id)
 
     def _processar():
         with app.app_context():
