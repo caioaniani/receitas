@@ -115,6 +115,10 @@ def _executar_tool(nome, inp):
             return bot_tools.consultar_pedido(inp.get('numero') or inp.get('numero_pedido') or '')
         if nome == 'gerar_link_carrinho':
             return bot_tools.gerar_link_carrinho(inp.get('itens') or [])
+        if nome == 'buscar_nota_fiscal':
+            return bot_tools.buscar_nota_fiscal(
+                inp.get('cpf') or '',
+                inp.get('numero_pedido') or inp.get('numero') or '')
         return {'erro': f'ferramenta desconhecida: {nome}'}
     except Exception as exc:  # noqa: BLE001
         logger.exception('bot tool %s falhou', nome)
