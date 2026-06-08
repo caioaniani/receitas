@@ -750,9 +750,10 @@ def permissoes_editar():
 def debug_schema():
     """Diagnostico de schema/migrations Alembic. Owner-only."""
 
+    from flask import current_app as _app
     from sqlalchemy import inspect, text
 
-    from app.services import seru_cron
+    from app.services import chatbot_vigia, seru_cron
 
     info = {
         'alembic_current': None,
@@ -764,6 +765,10 @@ def debug_schema():
         'last_upgrade_log': request.args.get('log'),
         'last_upgrade_ok': request.args.get('ok'),
         'backup_status': seru_cron.status_backup(),
+        'vigia_status': {
+            'ligado': bool(_app.config.get('CHATBOT_VIGIA')),
+            'numero_destino': chatbot_vigia._numero_destino(),
+        },
     }
 
     # 1. Alembic current vs heads
