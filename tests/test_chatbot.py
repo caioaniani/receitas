@@ -418,6 +418,82 @@ def test_vigia_extrai_json_com_markdown_wrapper(app):
     assert r['alerta'] is False
 
 
+def test_vigia_abandono_alerta_quando_perda_de_venda(app):
+    """Cliente pediu produto, bot respondeu, cliente sumiu por 30min — alerta."""
+    from app.services import chatbot_vigia
+    veredicto = {'alerta': True, 'gravidade': 'alta',
+                 'motivo': 'Cliente sumiu sem fechar pedido',
+                 'acao_sugerida': 'mandar mensagem proativa'}
+    historico = [
+        {'role': 'user', 'content': 'Quero a Family Box pra amanhã'},
+        {'role': 'assistant', 'content': 'Pra qual endereço?'},
+    ]
+    with app.app_context():
+        chatbot_vigia._historico.clear()
+        app.config['CHATBOT_VIGIA'] = True
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
+        with patch('app.services.chatbot_vigia._chamar_haiku_abandono',
+                   return_value=veredicto), \
+             patch('app.services.zapi.enviar_texto',
+                   return_value={'ok': True}) as send:
+            r = chatbot_vigia.avaliar_abandono(
+                historico, conv_id=88, nome_contato='Carlos',
+                minutos_sem_resposta=30)
+    assert r['enviado'] is True
+    msg = send.call_args[0][1]
+    assert '30 min sem resposta' in msg
+
+
+def test_vigia_abandono_silencia_quando_conversa_so_cumprimento(app):
+    """Cliente disse 'oi', bot respondeu, ninguem voltou — nao deve alertar."""
+    from app.services import chatbot_vigia
+    veredicto = {'alerta': False, 'gravidade': None,
+                 'motivo': 'apenas cumprimento, sem demanda',
+                 'acao_sugerida': ''}
+    historico = [
+        {'role': 'user', 'content': 'oi'},
+        {'role': 'assistant', 'content': 'Olá! Como posso ajudar?'},
+    ]
+    with app.app_context():
+        chatbot_vigia._historico.clear()
+        app.config['CHATBOT_VIGIA'] = True
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
+        with patch('app.services.chatbot_vigia._chamar_haiku_abandono',
+                   return_value=veredicto), \
+             patch('app.services.zapi.enviar_texto') as send:
+            r = chatbot_vigia.avaliar_abandono(
+                historico, conv_id=89, minutos_sem_resposta=20)
+    assert r['silencio'] is True
+    send.assert_not_called()
+
+
+def test_chatwoot_listar_conversas_paradas_filtra_por_idade(app):
+    """Conversa parada ha 20min entra; conversa de 5min nao."""
+    import time as _t
+
+    from app.services import chatwoot
+    app.config['CHATWOOT_URL'] = 'https://cw.exemplo.com'
+    app.config['CHATWOOT_BOT_TOKEN'] = 'tok'
+    app.config['CHATWOOT_ACCOUNT_ID'] = '1'
+    agora = _t.time()
+    payload = {'data': {'payload': [
+        {'id': 11, 'last_activity_at': agora - 20*60,  # 20 min atras
+         'meta': {'sender': {'name': 'Maria'}}},
+        {'id': 12, 'last_activity_at': agora - 5*60,   # 5 min atras
+         'meta': {'sender': {'name': 'Joao'}}},
+    ]}}
+    fake = SimpleNamespace(status_code=200, text='x', json=lambda: payload)
+    with app.app_context():
+        with patch('requests.get', return_value=fake):
+            paradas = chatwoot.listar_conversas_paradas(min_minutos=15)
+    ids = [p['id'] for p in paradas]
+    assert 11 in ids
+    assert 12 not in ids
+    assert paradas[0]['nome_contato'] == 'Maria'
+
+
 # ── Fase 3: leitura de imagem ──
 
 def test_baixar_imagem_comprime_e_base64(app):
