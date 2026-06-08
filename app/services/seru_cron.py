@@ -398,6 +398,16 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
+    # Auditor diario do chatbot — 19:00 BRT. Le os VigiaVeredito do dia,
+    # detecta padroes via Sonnet e manda resumo pro WhatsApp do dono. Ligavel
+    # via CHATBOT_AUDITOR_AUTO.
+    if os.environ.get('CHATBOT_AUDITOR_AUTO', '1') != '0':
+        _scheduler.add_job(
+            lambda app=app: _run_auditor_dia(app),
+            'cron', hour=19, minute=0, id='chatbot-auditor-diario',
+            max_instances=1, coalesce=True,
+        )
+
     # Vigia do chatbot — detector de conversas ABANDONADAS. Roda a cada 5 min,
     # acha conversas em status `pending` paradas ha > CHATBOT_VIGIA_ABANDONO_MIN
     # (default 15 min) e avalia via Haiku. Anti-spam: uma conversa nao recebe
