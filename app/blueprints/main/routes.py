@@ -894,6 +894,44 @@ def debug_schema():
     return render_template('main/debug_schema.html', info=info)
 
 
+@main_bp.route('/admin/debug-tiny')
+@owner_required
+def debug_tiny():
+    """Owner-only: testa busca no Tiny pra (CPF, numero). Mostra exatamente o
+    que a API v2 do Tiny retornou — util pra debugar bot achando 'nao
+    encontrado' quando o pedido existe no painel."""
+    from app.services import tiny
+    cpf = (request.args.get('cpf') or '').strip()
+    numero = (request.args.get('numero') or '').strip()
+    resultado: dict = {'cpf': cpf, 'numero': numero,
+                       'tiny_disponivel': tiny.disponivel()}
+    if cpf and numero:
+        cpf_d = ''.join(c for c in cpf if c.isdigit())
+        n = numero.lstrip('#').strip()
+        chamadas = []
+        for params in ({'cpf_cnpj': cpf_d, 'numero_ecommerce': n},
+                       {'cpf_cnpj': cpf_d, 'numero_ordem_compra': n},
+                       {'cpf_cnpj': cpf_d, 'numero': n},
+                       {'cpf_cnpj': cpf_d}):
+            r = tiny._get('pedidos.pesquisa.php', params=params)
+            chamadas.append({
+                'params': params,
+                'retorno_status': (r or {}).get('status') if isinstance(r, dict) else None,
+                'qtd_pedidos': len((r or {}).get('pedidos') or []) if isinstance(r, dict) else 0,
+                'pedidos_resumo': [
+                    {k: ped.get('pedido', {}).get(k)
+                     for k in ('id', 'numero', 'numero_ecommerce',
+                               'numero_ordem_compra', 'origem',
+                               'situacao', 'cliente', 'nota_fiscal')}
+                    for ped in ((r or {}).get('pedidos') or [])[:10]
+                ] if isinstance(r, dict) else None,
+            })
+        resultado['chamadas'] = chamadas
+        resultado['pedido_resolvido'] = tiny.buscar_pedido_por_cpf_e_numero(cpf, numero)
+
+    return jsonify(resultado), 200
+
+
 @main_bp.route('/admin/debug-schema/upgrade', methods=['POST'])
 @owner_required
 def debug_schema_upgrade():
