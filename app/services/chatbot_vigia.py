@@ -135,14 +135,9 @@ def _chamar_haiku(api_key, contexto):
     return json.loads(texto)
 
 
-def avaliar(historico, *, conv_id=None, nome_contato='', resultado_bot=None):
-    """Avalia a conversa e, se for alerta de gravidade alta/media, envia
-    WhatsApp pro dono via Z-API. Best-effort: nunca propaga exception (e
-    nunca trava o atendimento, ja que so roda DEPOIS de o bot ter respondido).
-
-    `historico`: lista [{'role', 'content'}] da conversa
-    `resultado_bot`: {'acao', 'texto', 'motivo'?} do que o bot acabou de fazer
-    """
+def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=None):
+    """Logica de avaliar — multiplos returns, sem efeitos colaterais alem
+    do envio via Z-API. O wrapper `avaliar` cuida do registro no historico."""
     if not disponivel():
         return {'pulou': 'vigia desligado'}
 
