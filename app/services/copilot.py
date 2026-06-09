@@ -986,7 +986,8 @@ REGRAS:
 """
 
 
-def interpretar(prompt_text, user, historico=None, images=None):
+def interpretar(prompt_text, user, historico=None, images=None,
+                apenas_leitura=False):
     """Chama Claude. Retorna dict com tipo, params, explicacao.
 
     historico: lista de {role: 'user'|'assistant', content: str} com
@@ -995,6 +996,10 @@ def interpretar(prompt_text, user, historico=None, images=None):
 
     images: lista opcional de {mimetype, base64} pra mandar imagens junto
     com o prompt (vision do Haiku). Usado pelo Slack bot.
+
+    apenas_leitura: se True, remove TODAS as tools de write (REQUER_APROVACAO)
+    antes de mandar pra Claude. Usado pelo bot WhatsApp do dono (modo so
+    consulta). Como Claude nem ve a tool, nao tem como tentar usa-la.
     """
     api_key = os.environ.get('ANTHROPIC_API_KEY') or current_app.config.get('ANTHROPIC_API_KEY')
     if not api_key:
