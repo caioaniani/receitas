@@ -437,36 +437,63 @@ def atualizar_driver(did):
     return jsonify(ok=True, token=d.token)
 
 
+def _limpar_referencias_driver(did, apagar_atribuicoes):
+    """Remove/zera TODAS as FKs que apontam pro driver, pra o delete nao quebrar
+    no Postgres (FK pendente -> IntegrityError -> 500 que o front engolia, e o
+    driver nunca era excluido — bug visto em prod 2026-06-09).
+
+    - `DriverMagicToken` (driver_id NOT NULL, link efemero diario): DELETE.
+    - `PedidoLoja.driver_id` (handshake de coleta) / `PedidoItemFoto.
+      criado_por_driver_id` (foto do motorista) — ambos nullable: zera (preserva
+      o registro, perde so a atribuicao ao motorista).
+    - `AtribuicaoEntrega`: DELETE so com force (e a 'historia' de entregas)."""
+    from app.models import DriverMagicToken, PedidoItemFoto, PedidoLoja
+    DriverMagicToken.query.filter_by(driver_id=did).delete(synchronize_session=False)
+    PedidoLoja.query.filter_by(driver_id=did).update(
+        {'driver_id': None}, synchronize_session=False)
+    PedidoItemFoto.query.filter_by(criado_por_driver_id=did).update(
+        {'criado_por_driver_id': None}, synchronize_session=False)
+    if apagar_atribuicoes:
+        AtribuicaoEntrega.query.filter_by(driver_id=did).delete(synchronize_session=False)
+
+
 @entregas_bp.route('/api/drivers/<int:did>', methods=['DELETE'])
 @login_required
 @entrega_access_required
 def remover_driver(did):
-    """Exclui o driver de vez se nao tem historico; senao apenas desativa.
-    Forca exclusao com ?force=1 (cuidado: apaga atribuicoes)."""
+    """Exclui o driver de vez se nao tem historico de entregas; senao apenas
+    desativa. Forca exclusao com ?force=1 (cuidado: apaga atribuicoes)."""
     d = Driver.query.get_or_404(did)
     force = request.args.get('force') == '1'
 
     n_atrib = AtribuicaoEntrega.query.filter_by(driver_id=did).count()
 
-    if n_atrib == 0:
-        # Sem historico — exclui de vez
-        nome = d.nome
-        db.session.delete(d)
-        db.session.commit()
-        return jsonify(ok=True, acao='excluido', nome=nome)
+    try:
+        if n_atrib == 0:
+            # Sem historico de entregas — exclui de vez (limpando magic tokens
+            # e zerando refs nullable de pedido/foto, que senao travam a FK).
+            nome = d.nome
+            _limpar_referencias_driver(did, apagar_atribuicoes=False)
+            db.session.delete(d)
+            db.session.commit()
+            return jsonify(ok=True, acao='excluido', nome=nome)
 
-    if force:
-        # Apaga as atribuicoes tambem (cuidado!)
-        AtribuicaoEntrega.query.filter_by(driver_id=did).delete()
-        nome = d.nome
-        db.session.delete(d)
-        db.session.commit()
-        return jsonify(ok=True, acao='excluido_com_historico', nome=nome, atribuicoes_apagadas=n_atrib)
+        if force:
+            nome = d.nome
+            _limpar_referencias_driver(did, apagar_atribuicoes=True)
+            db.session.delete(d)
+            db.session.commit()
+            return jsonify(ok=True, acao='excluido_com_historico', nome=nome,
+                           atribuicoes_apagadas=n_atrib)
 
-    # Tem historico mas sem force — apenas desativa
-    d.ativo = False
-    db.session.commit()
-    return jsonify(ok=True, acao='desativado', nome=d.nome, atribuicoes=n_atrib)
+        # Tem historico mas sem force — apenas desativa
+        d.ativo = False
+        db.session.commit()
+        return jsonify(ok=True, acao='desativado', nome=d.nome, atribuicoes=n_atrib)
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception('remover_driver %s falhou', did)
+        return jsonify(ok=False, erro=f'Falha ao excluir: {exc}'), 500
 
 
 # ── Atribuicao pedido <-> driver ──
