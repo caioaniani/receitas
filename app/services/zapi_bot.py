@@ -192,15 +192,24 @@ def processar_payload(payload):
 def _formatar_resposta(resp):
     """Converte a dict de retorno do copilot em texto pra WhatsApp.
 
-    Como esta tudo em modo leitura, espera tipo='conversa' ou tipo='read_result'
-    (resultado de consulta). Tipos write nunca acontecem aqui."""
+    Em modo leitura, dois caminhos possiveis:
+      - tipo='conversa'        → so explicacao (Claude conversando)
+      - tipo='consultar_*'     → tool de read ja executou; resultado.texto
+                                 traz o que devolver pra o user (igual Slack)."""
     if not isinstance(resp, dict):
         return ''
-    if resp.get('tipo') == 'erro':
-        return f'Erro: {resp.get("explicacao") or "indeterminado"}'
-    # Texto principal — o copilot usa varios nomes ao longo do codigo
-    return (resp.get('mensagem') or resp.get('explicacao')
-            or resp.get('texto') or resp.get('resposta') or '')
+    tipo = resp.get('tipo')
+    explicacao = (resp.get('explicacao') or '').strip()
+    if tipo == 'erro':
+        return f'Erro: {explicacao or "indeterminado"}'
+    if tipo == 'conversa':
+        return explicacao or '(sem resposta)'
+    resultado = resp.get('resultado') or {}
+    if isinstance(resultado, dict):
+        if resultado.get('erro'):
+            return f'Erro: {resultado["erro"]}'
+        return resultado.get('texto') or explicacao or '(sem detalhes)'
+    return explicacao
 
 
 def _responder(texto):
