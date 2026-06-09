@@ -491,3 +491,24 @@ class ZapiBotEventoProcessado(db.Model):
 
     message_id = db.Column(db.String(80), primary_key=True)
     processado_em = db.Column(db.DateTime, default=agora, index=True)
+
+
+class ChatbotConversa(db.Model):
+    """Historico persistente da conversa do chatbot do cliente (Chatwoot), por
+    conversation_id.
+
+    EXISTE porque a API de historico do Chatwoot (`buscar_historico`) falha
+    intermitentemente (retorna vazio mesmo havendo conversa). Quando isso
+    acontecia, o bot tratava a mensagem como conversa NOVA e 'esquecia' o
+    contexto — o cliente mandava o CPF e o bot perguntava 'o que voce precisa?'
+    de novo (visto em prod 2026-06-09). Com o historico no NOSSO banco, o
+    contexto deixa de depender da confiabilidade do Chatwoot.
+
+    `mensagens_json`: lista [{role: 'user'|'assistant', content: str}], ja
+    capada nas ultimas N por `chatbot.salvar_historico`."""
+    __tablename__ = 'chatbot_conversa'
+
+    id = db.Column(db.Integer, primary_key=True)
+    conv_id = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    mensagens_json = db.Column(db.Text, default='[]')
+    ultima_msg_em = db.Column(db.DateTime, default=agora, onupdate=agora, index=True)
