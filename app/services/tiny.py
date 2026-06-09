@@ -100,14 +100,23 @@ def buscar_pedido_por_cpf_e_numero(cpf, numero, diag=None):
 
     nlow = numero.lower()
     candidato = None
+    paginas_lidas = 0
+    pedidos_vistos = 0
+    api_falhou_em = None
     for pagina in range(1, 6):  # ate 5 paginas = ate 500 pedidos
         retorno = _get('pedidos.pesquisa.php',
                        params={'cpf_cnpj': cpf_d, 'pagina': str(pagina)})
         if not retorno:
+            # `_get` ja loga a causa (HTTP X, retry, etc). Para o caller saber
+            # que esta diferenciacao importa, marca diag — sem isso, "nao bateu"
+            # se confunde com "API caiu" (ja causou bug em prod).
+            api_falhou_em = pagina
             break
+        paginas_lidas += 1
         pedidos = retorno.get('pedidos') or []
         if not pedidos:
             break
+        pedidos_vistos += len(pedidos)
         for item in pedidos:
             p = item.get('pedido') if isinstance(item, dict) else None
             if not isinstance(p, dict):
@@ -124,9 +133,16 @@ def buscar_pedido_por_cpf_e_numero(cpf, numero, diag=None):
         if len(pedidos) < 100:
             break
 
+    if isinstance(diag, dict):
+        diag['paginas_lidas'] = paginas_lidas
+        diag['pedidos_vistos'] = pedidos_vistos
+        diag['api_falhou_em_pagina'] = api_falhou_em
+
     if not candidato:
-        logger.info('tiny: 0 pedidos batendo p/ cpf=...%s numero=%r',
-                    cpf_d[-4:], numero)
+        logger.info('tiny: 0 pedidos batendo p/ cpf=...%s numero=%r '
+                    '(paginas=%d, vistos=%d, api_falhou=%s)',
+                    cpf_d[-4:], numero, paginas_lidas, pedidos_vistos,
+                    api_falhou_em)
         return None
 
     # `pesquisa.php` nao traz nota_fiscal nem origem completos. Buscar detalhe.
