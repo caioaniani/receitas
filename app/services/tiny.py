@@ -125,6 +125,12 @@ def buscar_pedido_por_cpf_e_numero(cpf, numero):
     if not isinstance(nf, dict):
         nf = {}
 
+    # `origem`/`ecommerce` na v2 pode vir como dict {nome,...} OU string. Normaliza.
+    def _txt(v):
+        if isinstance(v, dict):
+            return str(v.get('nome') or v.get('descricao') or '').strip()
+        return str(v or '').strip()
+
     return {
         'id': pedido_id,
         'numero': str(candidato.get('numero') or ''),
@@ -132,8 +138,9 @@ def buscar_pedido_por_cpf_e_numero(cpf, numero):
         'situacao': detalhe.get('situacao') or candidato.get('situacao') or '',
         'data_pedido': (detalhe.get('data_pedido')
                         or candidato.get('data_pedido') or ''),
-        'origem': (detalhe.get('origem') or detalhe.get('ecommerce')
-                    or candidato.get('origem') or '').strip(),
+        'origem': (_txt(detalhe.get('origem'))
+                    or _txt(detalhe.get('ecommerce'))
+                    or _txt(candidato.get('origem'))),
         'nota_fiscal_id': str(nf.get('id') or ''),
         'nota_fiscal_situacao': str(nf.get('situacao') or ''),
     }
