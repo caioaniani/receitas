@@ -206,10 +206,19 @@ def gerar_link_carrinho(itens):
 
 
 def _origem_e_vnda(pedido_tiny):
-    """Heuristica: o pedido no Tiny veio do site (VNDA) ou outra origem?
-    Pra cumprir a regra 'so VNDA' definida com o dono."""
+    """O pedido no Tiny veio do site (VNDA) ou outra origem?
+
+    Estrategia em duas camadas:
+      1) Se o pedido tem `numero_ecommerce` nao-vazio, e do site — esse
+         campo so existe em pedido vindo via integracao com loja virtual,
+         B2B/local nao tem.
+      2) Senao, cai no fallback de checar o campo `origem` (texto livre,
+         pode vir 'ecommerce', 'vnda', etc).
+
+    A regra existe pra cumprir a decisao 'so atender NF de pedido do site'."""
+    if (pedido_tiny.get('numero_ecommerce') or '').strip():
+        return True
     origem = (pedido_tiny.get('origem') or '').lower()
-    # Tiny marca origem como 'ecommerce', 'vnda', etc — qualquer um desses indica site.
     return any(t in origem for t in ('vnda', 'ecommerce', 'e-commerce', 'site'))
 
 
