@@ -17,6 +17,7 @@ from app.models import (
     OverrideEntrega,
     PedidoLocal,
     PedidoLocalItem,
+    PedidoVistoPainel,
     Produto,
 )
 from app.services import dropbox_storage, vnda
@@ -37,6 +38,128 @@ def index():
     resp.headers['Pragma'] = 'no-cache'
     resp.headers['Expires'] = '0'
     return resp
+
+
+def _aplicar_cartinhas(pedidos):
+    """Resolve a cartinha de cada pedido: a manual (CartinhaEntrega, editada
+    por humano) tem prioridade sobre a do VNDA. Muta os dicts in-place.
+
+    Centralizado aqui porque a tela de entregas E o Painel do Dia precisam da
+    mesma regra de prioridade — duplicar geraria divergencia silenciosa."""
+    codes = [p['code'] for p in pedidos if p.get('code')]
+    manuais = {}
+    if codes:
+        for c in CartinhaEntrega.query.filter(
+                CartinhaEntrega.pedido_code.in_(codes)).all():
+            manuais[c.pedido_code] = c.texto or ''
+    for p in pedidos:
+        manual = manuais.get(p.get('code'), '')
+        auto = p.get('cartinha_vnda', '')
+        p['cartinha'] = manual or auto
+        p['cartinha_origem'] = 'manual' if manual else ('vnda' if auto else None)
+    return pedidos
+
+
+# ── Painel do Dia (tela simples pra equipe de preparo) ────────────────────
+#
+# Objetivo: a equipe para de olhar pedidos no VNDA e passa a olhar aqui.
+# Requisitos (turma com baixa familiaridade com tela): UI grande e obvia,
+# alerta SONORO quando cai pedido novo do dia, e o som so para quando alguem
+# CLICA no pedido (marca como visto). O "visto" eh server-side: se uma pessoa
+# clica, silencia em todos os aparelhos da equipe.
+
+def _painel_pedidos_do_dia(target):
+    """Busca pedidos do dia no VNDA (com overrides + locais) e resolve a
+    cartinha. Retorna (pedidos, erro_str|None). Reusa o mesmo caminho da tela
+    de entregas pra nao divergir."""
+    try:
+        overrides_data = {code: o['data']
+                          for code, o in _carregar_overrides_full().items()}
+        resultado = _injetar_pedidos_locais(
+            target, vnda.buscar_pedidos_do_dia(target, overrides=overrides_data))
+    except Exception as e:  # noqa: BLE001
+        current_app.logger.exception('painel: erro carregando VNDA')
+        return [], f'{type(e).__name__}: {str(e)[:200]}'
+    if 'erro' in resultado:
+        return [], resultado['erro']
+    pedidos = resultado.get('pedidos', [])
+    _aplicar_cartinhas(pedidos)
+    return pedidos, None
+
+
+@entregas_bp.route('/painel')
+@login_required
+@entrega_access_required
+def painel():
+    resp = current_app.make_response(
+        render_template('entregas/painel.html', hoje=hoje_brt().isoformat()))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return resp
+
+
+@entregas_bp.route('/api/painel')
+@login_required
+@entrega_access_required
+def api_painel():
+    data_str = request.args.get('data', hoje_brt().isoformat())
+    try:
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        target = hoje_brt()
+
+    pedidos, erro = _painel_pedidos_do_dia(target)
+    if erro:
+        return jsonify(pedidos=[], data=data_str, erro=erro)
+
+    codes = [p['code'] for p in pedidos if p.get('code')]
+    vistos = set()
+    if codes:
+        for v in PedidoVistoPainel.query.filter(
+                PedidoVistoPainel.pedido_code.in_(codes)).all():
+            vistos.add(v.pedido_code)
+
+    out = []
+    for p in pedidos:
+        code = p.get('code')
+        out.append({
+            'code': code,
+            'destinatario': p.get('destinatario') or p.get('comprador') or 'Sem nome',
+            'endereco': p.get('endereco') or '',
+            'periodo': p.get('periodo') or '',
+            'telefone': p.get('telefone') or '',
+            'cartinha': p.get('cartinha') or '',
+            'itens': [{'nome': it.get('nome') or '', 'qtd': it.get('quantidade') or 1}
+                      for it in (p.get('itens') or [])],
+            'novo': bool(code) and code not in vistos,
+        })
+    # Novos primeiro, pra saltarem aos olhos
+    out.sort(key=lambda p: (not p['novo'], p['destinatario'].lower()))
+
+    resp = jsonify(pedidos=out, data=data_str, total=len(out),
+                   novos=sum(1 for p in out if p['novo']))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    return resp
+
+
+@entregas_bp.route('/api/painel/visto/<code>', methods=['POST'])
+@login_required
+@entrega_access_required
+def api_painel_visto(code):
+    """Marca um pedido como visto (silencia o alerta). Idempotente."""
+    code = (code or '').strip()
+    if not code:
+        return jsonify(ok=False, erro='code vazio'), 400
+    v = PedidoVistoPainel.query.filter_by(pedido_code=code).first()
+    if not v:
+        uid = current_user.id if current_user.is_authenticated else None
+        v = PedidoVistoPainel(pedido_code=code, data_ref=hoje_brt(),
+                              visto_por=uid)
+        db.session.add(v)
+        try:
+            db.session.commit()
+        except Exception:  # noqa: BLE001
+            db.session.rollback()  # corrida entre 2 aparelhos: ja existe, ok
+    return jsonify(ok=True)
 
 
 def _carregar_overrides_data():
@@ -85,19 +208,10 @@ def api_pedidos():
             total_janela = resultado.get('total_janela', 0)
 
             codes = [p['code'] for p in pedidos if p['code']]
-            cartinhas_manuais = {}
-            if codes:
-                for c in CartinhaEntrega.query.filter(CartinhaEntrega.pedido_code.in_(codes)).all():
-                    cartinhas_manuais[c.pedido_code] = c.texto or ''
+            _aplicar_cartinhas(pedidos)
 
-            # Cartinha manual (editada pelo usuario) tem prioridade sobre a do VNDA
+            # Info adicional de override de data
             for p in pedidos:
-                manual = cartinhas_manuais.get(p['code'], '')
-                auto = p.get('cartinha_vnda', '')
-                p['cartinha'] = manual or auto
-                p['cartinha_origem'] = 'manual' if manual else ('vnda' if auto else None)
-
-                # Info adicional de override de data
                 if p.get('data_override'):
                     ov = overrides_full.get(p['code'])
                     if ov:
