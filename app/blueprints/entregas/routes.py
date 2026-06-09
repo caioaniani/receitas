@@ -89,7 +89,6 @@ def _painel_pedidos_do_dia(target):
 
 @entregas_bp.route('/painel')
 @login_required
-@entrega_access_required
 def painel():
     resp = current_app.make_response(
         render_template('entregas/painel.html', hoje=hoje_brt().isoformat()))
