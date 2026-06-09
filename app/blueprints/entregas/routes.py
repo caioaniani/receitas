@@ -15,9 +15,9 @@ from app.models import (
     LoteSaida,
     MateriaPrima,
     OverrideEntrega,
+    PainelPedidoStatus,
     PedidoLocal,
     PedidoLocalItem,
-    PedidoVistoPainel,
     Produto,
 )
 from app.services import dropbox_storage, vnda
@@ -110,28 +110,29 @@ def api_painel():
         return jsonify(pedidos=[], data=data_str, erro=erro)
 
     codes = [p['code'] for p in pedidos if p.get('code')]
-    vistos = set()
+    status_por_code = {}
     if codes:
-        for v in PedidoVistoPainel.query.filter(
-                PedidoVistoPainel.pedido_code.in_(codes)).all():
-            vistos.add(v.pedido_code)
+        for s in PainelPedidoStatus.query.filter(
+                PainelPedidoStatus.pedido_code.in_(codes)).all():
+            status_por_code[s.pedido_code] = s.status or 'visto'
 
     out = []
     for p in pedidos:
         code = p.get('code')
+        status = status_por_code.get(code, 'novo')
         out.append({
             'code': code,
             'destinatario': p.get('destinatario') or p.get('comprador') or 'Sem nome',
             'endereco': p.get('endereco') or '',
             'periodo': p.get('periodo') or '',
+            'expresso': bool(p.get('expresso')),
             'telefone': p.get('telefone') or '',
             'cartinha': p.get('cartinha') or '',
             'itens': [{'nome': it.get('nome') or '', 'qtd': it.get('quantidade') or 1}
                       for it in (p.get('itens') or [])],
-            'novo': bool(code) and code not in vistos,
+            'status': status,            # novo|visto|pronto|entregue
+            'novo': status == 'novo',    # mantido pra o alerta sonoro
         })
-    # Novos primeiro, pra saltarem aos olhos
-    out.sort(key=lambda p: (not p['novo'], p['destinatario'].lower()))
 
     resp = jsonify(pedidos=out, data=data_str, total=len(out),
                    novos=sum(1 for p in out if p['novo']))
@@ -139,24 +140,41 @@ def api_painel():
     return resp
 
 
-@entregas_bp.route('/api/painel/visto/<code>', methods=['POST'])
+@entregas_bp.route('/api/painel/status/<code>', methods=['POST'])
 @login_required
-def api_painel_visto(code):
-    """Marca um pedido como visto (silencia o alerta). Idempotente."""
+def api_painel_status(code):
+    """Muda o status de preparo de um pedido (visto/pronto/entregue).
+
+    'visto' eh o que o clique automatico manda (silencia o alerta). 'pronto' e
+    'entregue' vem dos botoes. Idempotente: upsert por pedido_code."""
     code = (code or '').strip()
+    novo_status = (request.args.get('status')
+                   or (request.get_json(silent=True) or {}).get('status')
+                   or 'visto').strip().lower()
     if not code:
         return jsonify(ok=False, erro='code vazio'), 400
-    v = PedidoVistoPainel.query.filter_by(pedido_code=code).first()
-    if not v:
-        uid = current_user.id if current_user.is_authenticated else None
-        v = PedidoVistoPainel(pedido_code=code, data_ref=hoje_brt(),
-                              visto_por=uid)
-        db.session.add(v)
+    if novo_status not in PainelPedidoStatus.STATUS_VALIDOS:
+        return jsonify(ok=False, erro='status invalido'), 400
+
+    uid = current_user.id if current_user.is_authenticated else None
+    s = PainelPedidoStatus.query.filter_by(pedido_code=code).first()
+    if s:
+        # Nao regride de pronto/entregue pra visto por um clique acidental de
+        # abertura — so o 'visto' automatico nao deve rebaixar status maior.
+        ordem = {'visto': 1, 'pronto': 2, 'entregue': 3}
+        if not (novo_status == 'visto' and ordem.get(s.status, 0) >= 2):
+            s.status = novo_status
+            s.atualizado_por = uid
+        db.session.commit()
+    else:
+        s = PainelPedidoStatus(pedido_code=code, status=novo_status,
+                               data_ref=hoje_brt(), atualizado_por=uid)
+        db.session.add(s)
         try:
             db.session.commit()
         except Exception:  # noqa: BLE001
             db.session.rollback()  # corrida entre 2 aparelhos: ja existe, ok
-    return jsonify(ok=True)
+    return jsonify(ok=True, status=novo_status)
 
 
 def _carregar_overrides_data():
