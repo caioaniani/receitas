@@ -1,0 +1,278 @@
+{% extends "base_limpo.html" %}
+{% block title %}Pedidos de Hoje{% endblock %}
+
+{% block head %}
+<style>
+  :root { --novo: #d6336c; --ok: #2b8a3e; }
+  * { box-sizing: border-box; }
+  body { background: #f4f5f7; margin: 0; font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif; }
+
+  .painel-topo {
+    position: sticky; top: 0; z-index: 10;
+    background: #1f2933; color: #fff;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px; gap: 12px;
+  }
+  .painel-topo h1 { font-size: 26px; margin: 0; font-weight: 800; letter-spacing: .5px; }
+  .painel-topo .data { font-size: 15px; opacity: .85; }
+  .badge-novos {
+    background: var(--novo); color: #fff; font-weight: 800;
+    padding: 6px 14px; border-radius: 999px; font-size: 18px;
+    display: none;
+  }
+  .badge-novos.on { display: inline-block; animation: pisca 1s infinite; }
+  .relogio { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .conexao { width: 12px; height: 12px; border-radius: 50%; background: #2b8a3e; }
+  .conexao.off { background: #e03131; }
+
+  .grade {
+    display: grid; gap: 16px; padding: 18px;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  }
+
+  .cartao {
+    background: #fff; border-radius: 16px; padding: 20px;
+    border: 3px solid #e6e8eb; cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,.06);
+    transition: transform .08s;
+    min-height: 150px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .cartao:active { transform: scale(.98); }
+  .cartao .nome { font-size: 24px; font-weight: 800; color: #1f2933; line-height: 1.1; }
+  .cartao .end { font-size: 16px; color: #52606d; }
+  .cartao .rodape { margin-top: auto; display: flex; justify-content: space-between; align-items: center; }
+  .cartao .periodo { font-size: 20px; font-weight: 800; color: #1f2933; }
+  .cartao .qtd { font-size: 15px; color: #7b8794; }
+
+  .cartao.novo {
+    border-color: var(--novo); background: #fff0f4;
+    animation: pisca-borda 1.1s infinite;
+  }
+  .cartao .tag-novo {
+    display: none; align-self: flex-start;
+    background: var(--novo); color: #fff; font-weight: 800;
+    padding: 4px 12px; border-radius: 999px; font-size: 15px;
+  }
+  .cartao.novo .tag-novo { display: inline-block; }
+
+  @keyframes pisca { 50% { opacity: .35; } }
+  @keyframes pisca-borda {
+    0%,100% { border-color: var(--novo); box-shadow: 0 0 0 0 rgba(214,51,108,.4); }
+    50% { border-color: #f06595; box-shadow: 0 0 0 8px rgba(214,51,108,0); }
+  }
+
+  /* Overlay de "iniciar" pra liberar o som (browsers bloqueiam audio sem clique) */
+  .arm {
+    position: fixed; inset: 0; z-index: 50; background: #1f2933;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: #fff; text-align: center; padding: 20px;
+  }
+  .arm h2 { font-size: 30px; font-weight: 800; margin: 0 0 10px; }
+  .arm p { font-size: 18px; opacity: .8; max-width: 460px; }
+  .arm button {
+    margin-top: 26px; font-size: 26px; font-weight: 800;
+    background: var(--ok); color: #fff; border: 0; border-radius: 16px;
+    padding: 22px 48px; cursor: pointer;
+  }
+
+  /* Detalhe do pedido (a cartinha pra escrever a mao fica GRANDE) */
+  .detalhe { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.5);
+    display: none; align-items: center; justify-content: center; padding: 16px; }
+  .detalhe.on { display: flex; }
+  .detalhe-box { background: #fff; border-radius: 18px; width: 100%; max-width: 620px;
+    max-height: 92vh; overflow-y: auto; padding: 24px; }
+  .detalhe-box .d-nome { font-size: 28px; font-weight: 800; color: #1f2933; }
+  .detalhe-box .d-end { font-size: 18px; color: #52606d; margin: 6px 0 4px; }
+  .detalhe-box .d-tel { font-size: 18px; color: #52606d; }
+  .cartinha-bloco {
+    margin: 18px 0; padding: 20px; border-radius: 14px;
+    background: #fff9db; border: 2px dashed #f0c000;
+  }
+  .cartinha-bloco .lbl { font-size: 15px; font-weight: 800; color: #b8860b; text-transform: uppercase; letter-spacing: 1px; }
+  .cartinha-bloco .txt { font-size: 26px; line-height: 1.4; color: #1f2933; margin-top: 8px; white-space: pre-wrap; word-break: break-word; }
+  .cartinha-bloco.vazia { background: #f1f3f5; border-color: #ced4da; }
+  .cartinha-bloco.vazia .txt { font-size: 18px; color: #868e96; font-style: italic; }
+  .itens-lista { margin: 14px 0; }
+  .itens-lista .item { font-size: 19px; padding: 6px 0; border-bottom: 1px solid #eee; }
+  .itens-lista .item b { font-size: 21px; }
+  .btn-fechar { width: 100%; margin-top: 12px; font-size: 22px; font-weight: 800;
+    background: #1f2933; color: #fff; border: 0; border-radius: 14px; padding: 18px; cursor: pointer; }
+
+  .vazio { text-align: center; padding: 60px 20px; color: #7b8794; font-size: 22px; }
+  .erro-banner { background: #fff3bf; color: #5c3c00; text-align: center; padding: 10px; font-size: 15px; display: none; }
+  .erro-banner.on { display: block; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="arm" id="arm">
+  <h2>🔔 Painel de Pedidos</h2>
+  <p>Toque no botão abaixo para ligar o painel e o som de aviso. Deixe esta tela
+     aberta o dia todo.</p>
+  <button id="btn-arm" type="button">▶ LIGAR PAINEL</button>
+</div>
+
+<div class="painel-topo">
+  <div>
+    <h1>PEDIDOS DE HOJE</h1>
+    <div class="data" id="data-hoje"></div>
+  </div>
+  <span class="badge-novos" id="badge-novos">0 novos</span>
+  <div style="display:flex; align-items:center; gap:10px;">
+    <span class="relogio" id="relogio">--:--</span>
+    <span class="conexao" id="conexao" title="conexão"></span>
+  </div>
+</div>
+
+<div class="erro-banner" id="erro-banner"></div>
+<div class="grade" id="grade"></div>
+<div class="vazio" id="vazio" style="display:none;">Nenhum pedido para hoje ainda.</div>
+
+<div class="detalhe" id="detalhe">
+  <div class="detalhe-box" id="detalhe-box"></div>
+</div>
+
+<script>
+(function () {
+  var ENDPOINT = "{{ url_for('entregas.api_painel') }}";
+  var VISTO = "{{ url_for('entregas.painel') }}".replace('/painel', '/api/painel/visto/');
+  var pedidos = [];
+  var audioCtx = null, beepTimer = null;
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;');
+  }
+
+  // ── Som ────────────────────────────────────────────────
+  function armAudio() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch (e) { /* sem audio: tela ainda funciona visualmente */ }
+  }
+  function beep() {
+    if (!audioCtx) return;
+    var now = audioCtx.currentTime;
+    [880, 1320].forEach(function (freq, i) {
+      var osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.type = 'sine'; osc.frequency.value = freq;
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      var t = now + i * 0.18;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.5, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+      osc.start(t); osc.stop(t + 0.2);
+    });
+  }
+  function ligarAlarme() { if (!beepTimer) { beep(); beepTimer = setInterval(beep, 2000); } }
+  function desligarAlarme() { if (beepTimer) { clearInterval(beepTimer); beepTimer = null; } }
+
+  // ── Render ─────────────────────────────────────────────
+  function atualizarAlarme() {
+    var novos = pedidos.filter(function (p) { return p.novo; }).length;
+    var badge = document.getElementById('badge-novos');
+    badge.textContent = novos + (novos === 1 ? ' NOVO' : ' NOVOS');
+    badge.classList.toggle('on', novos > 0);
+    if (novos > 0) ligarAlarme(); else desligarAlarme();
+  }
+
+  function render() {
+    var grade = document.getElementById('grade');
+    document.getElementById('vazio').style.display = pedidos.length ? 'none' : 'block';
+    grade.innerHTML = pedidos.map(function (p) {
+      var nItens = (p.itens || []).reduce(function (s, it) { return s + (Number(it.qtd) || 1); }, 0);
+      return '<div class="cartao ' + (p.novo ? 'novo' : '') + '" data-code="' + esc(p.code) + '">' +
+        '<span class="tag-novo">🔔 NOVO</span>' +
+        '<div class="nome">' + esc(p.destinatario) + '</div>' +
+        '<div class="end">' + esc(p.endereco || '—') + '</div>' +
+        '<div class="rodape">' +
+          '<span class="periodo">' + esc(p.periodo || '') + '</span>' +
+          '<span class="qtd">' + nItens + ' ' + (nItens === 1 ? 'item' : 'itens') + '</span>' +
+        '</div></div>';
+    }).join('');
+    Array.prototype.forEach.call(grade.querySelectorAll('.cartao'), function (el) {
+      el.addEventListener('click', function () { abrir(el.getAttribute('data-code')); });
+    });
+  }
+
+  function abrir(code) {
+    var p = pedidos.find(function (x) { return x.code === code; });
+    if (!p) return;
+    if (p.novo) {                    // clicou = visto: silencia ja, sem esperar o servidor
+      p.novo = false;
+      render(); atualizarAlarme();
+      fetch(VISTO + encodeURIComponent(code), { method: 'POST',
+        headers: { 'X-Requested-With': 'fetch' } }).catch(function () {});
+    }
+    abrirDetalhe(p);
+  }
+
+  function abrirDetalhe(p) {
+    var temCart = (p.cartinha || '').trim().length > 0;
+    var itens = (p.itens || []).map(function (it) {
+      return '<div class="item"><b>' + (Number(it.qtd) || 1) + 'x</b> ' + esc(it.nome) + '</div>';
+    }).join('') || '<div class="item">—</div>';
+    document.getElementById('detalhe-box').innerHTML =
+      '<div class="d-nome">' + esc(p.destinatario) + '</div>' +
+      '<div class="d-end">📍 ' + esc(p.endereco || '—') + '</div>' +
+      (p.telefone ? '<div class="d-tel">📞 ' + esc(p.telefone) + '</div>' : '') +
+      '<div class="cartinha-bloco ' + (temCart ? '' : 'vazia') + '">' +
+        '<div class="lbl">💌 Cartinha (escrever à mão)</div>' +
+        '<div class="txt">' + (temCart ? esc(p.cartinha) : 'Este pedido não tem cartinha.') + '</div>' +
+      '</div>' +
+      '<div class="itens-lista">' + itens + '</div>' +
+      '<button class="btn-fechar" type="button" id="btn-fechar">FECHAR</button>';
+    document.getElementById('btn-fechar').addEventListener('click', fecharDetalhe);
+    document.getElementById('detalhe').classList.add('on');
+  }
+  function fecharDetalhe() { document.getElementById('detalhe').classList.remove('on'); }
+  document.getElementById('detalhe').addEventListener('click', function (e) {
+    if (e.target.id === 'detalhe') fecharDetalhe();
+  });
+
+  // ── Dados ──────────────────────────────────────────────
+  function setConexao(ok) { document.getElementById('conexao').classList.toggle('off', !ok); }
+  function setErro(msg) {
+    var b = document.getElementById('erro-banner');
+    if (msg) { b.textContent = '⚠ ' + msg; b.classList.add('on'); }
+    else b.classList.remove('on');
+  }
+
+  function carregar() {
+    fetch(ENDPOINT, { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        setConexao(true);
+        if (data.erro) { setErro('Não consegui atualizar agora. Mostrando o último que carregou.'); return; }
+        setErro('');
+        pedidos = data.pedidos || [];
+        render(); atualizarAlarme();
+      })
+      .catch(function () { setConexao(false); });
+  }
+
+  function tick() {
+    var d = new Date();
+    document.getElementById('relogio').textContent =
+      ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  }
+  function dataHoje() {
+    var dias = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+    var d = new Date();
+    document.getElementById('data-hoje').textContent =
+      dias[d.getDay()] + ', ' + ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2);
+  }
+
+  document.getElementById('btn-arm').addEventListener('click', function () {
+    armAudio();
+    document.getElementById('arm').style.display = 'none';
+    carregar();
+    setInterval(carregar, 20000);   // novos pedidos aparecem em ate 20s
+  });
+
+  dataHoje(); tick(); setInterval(tick, 10000);
+})();
+</script>
+{% endblock %}
