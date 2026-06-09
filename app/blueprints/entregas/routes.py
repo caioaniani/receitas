@@ -1291,6 +1291,7 @@ def api_atribuidos():
         return resp
 
     pedidos = resultado.get('pedidos', [])
+    _aplicar_cartinhas(pedidos)   # resolve p['cartinha'] (manual > VNDA) p/ a aba Operacao
     codes = [p['code'] for p in pedidos if p.get('code')]
 
     atribuicoes_por_code = {}
