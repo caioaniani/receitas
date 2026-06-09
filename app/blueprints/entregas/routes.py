@@ -1355,6 +1355,10 @@ def api_atribuidos():
             'qtd': len(paradas_list),
         })
 
+    # "Sem driver" tambem por janela: expresso no topo, depois por horario —
+    # quem prepara/atribui ve primeiro o que tem SLA mais apertado.
+    sem_driver.sort(key=rotas_svc.janela_rank)
+
     return jsonify(
         data=data_str,
         drivers=drivers_resp,
