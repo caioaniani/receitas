@@ -66,12 +66,13 @@ def test_remover_driver_com_historico_desativa_depois_force_exclui(app):
 def test_remover_driver_zera_ref_de_pedido_loja(app):
     """PedidoLoja.driver_id (handshake) é nullable → deve ser zerado, não travar."""
     from app.extensions import db
-    from app.models import Driver, PedidoLoja
+    from app.models import Driver, Loja, PedidoLoja
     c = _admin_logado(app)
+    loja = Loja(nome='Centro', ativa=True)
     d = Driver(nome='Carlos', ativo=True)
-    db.session.add(d)
+    db.session.add_all([loja, d])
     db.session.commit()
-    pl = PedidoLoja(driver_id=d.id)
+    pl = PedidoLoja(loja_id=loja.id, driver_id=d.id)
     db.session.add(pl)
     db.session.commit()
     did, plid = d.id, pl.id
