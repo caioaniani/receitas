@@ -468,3 +468,26 @@ class SlackConversa(db.Model):
     __table_args__ = (
         db.UniqueConstraint('slack_user_id', 'slack_channel_id', name='uq_slack_conversa'),
     )
+
+
+class ZapiBotConversa(db.Model):
+    """Conversa persistente do Caio (dono) com o copilot via WhatsApp/Z-API.
+
+    1 unica linha esperada (so o dono usa). Mensagens em JSON pra reusar o
+    contrato `historico=[{role, content, imagens?}]` que o copilot ja aceita."""
+    __tablename__ = 'zapi_bot_conversa'
+
+    id = db.Column(db.Integer, primary_key=True)
+    telefone = db.Column(db.String(30), unique=True, nullable=False, index=True)
+    mensagens_json = db.Column(db.Text, default='[]')
+    ultima_msg_em = db.Column(db.DateTime, default=agora, onupdate=agora, index=True)
+
+
+class ZapiBotEventoProcessado(db.Model):
+    """Idempotencia: Z-API pode reenviar webhook se nao recebe 200 em ~5s.
+
+    A chave eh o messageId. TTL implicito (acumula; ~baixo volume = 1 user)."""
+    __tablename__ = 'zapi_bot_evento_processado'
+
+    message_id = db.Column(db.String(80), primary_key=True)
+    processado_em = db.Column(db.DateTime, default=agora, index=True)
