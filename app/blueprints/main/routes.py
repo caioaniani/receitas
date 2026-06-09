@@ -1,7 +1,15 @@
 import json
 from datetime import datetime, timedelta
 
-from flask import Response, jsonify, redirect, render_template, request, url_for
+from flask import (
+    Response,
+    current_app,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
@@ -1499,6 +1507,88 @@ def backup_run():
     else:
         flash(f'Backup falhou: {resultado.get("motivo") or "ver logs"}', 'danger')
     return redirect(url_for('main.debug_schema'))
+
+
+@main_bp.route('/admin/backup/drill')
+@owner_required
+def backup_drill():
+    """Drill de restore do backup (owner-only): prova que o dump do Dropbox
+    eh restauravel. Sem parametro = mostra status do ultimo drill.
+
+    ?iniciar=1     baixa o dump mais recente + valida estrutura (pg_restore
+                   --list). Rapido (~1 min), nao toca em banco nenhum.
+    ?iniciar=full  alem do acima, restaura num banco temporario
+                   (drill_restore_tmp), conta linhas de tabelas-chave e dropa.
+                   Prova completa. Pode levar varios minutos — acompanhe
+                   recarregando esta rota.
+    """
+    from app.services import backup as backup_svc
+
+    iniciar = (request.args.get('iniciar') or '').strip().lower()
+    if iniciar in ('1', 'full'):
+        out = backup_svc.iniciar_drill(full=(iniciar == 'full'))
+        out['status'] = backup_svc.drill_status()
+        return jsonify(out), 200
+    return jsonify(backup_svc.drill_status()), 200
+
+
+@main_bp.route('/admin/retencao')
+@owner_required
+def retencao_admin():
+    """Retencao de dados (owner-only). Sem parametro = DRY-RUN: mostra o que
+    SERIA apagado por alvo, sem tocar em nada. ?executar=1 apaga de verdade.
+
+    O ciclo automatico roda no cron diario apos o backup OK (RETENCAO_AUTO=0
+    desliga). Prazos via env: RETENCAO_LOGS_DIAS(365) /
+    RETENCAO_CONVERSAS_DIAS(180) / RETENCAO_EVENTOS_DIAS(7) /
+    RETENCAO_BACKUPS_DIAS(90).
+    """
+    from app.services import retencao
+
+    executar = request.args.get('executar') == '1'
+    rel = retencao.executar_limpeza(dry_run=not executar)
+    rel['prazos_dias'] = {
+        'logs': current_app.config['RETENCAO_LOGS_DIAS'],
+        'conversas': current_app.config['RETENCAO_CONVERSAS_DIAS'],
+        'eventos': current_app.config['RETENCAO_EVENTOS_DIAS'],
+        'backups': current_app.config['RETENCAO_BACKUPS_DIAS'],
+    }
+    rel['auto_diaria'] = bool(current_app.config.get('RETENCAO_AUTO', True))
+    return jsonify(rel), 200
+
+
+@main_bp.route('/admin/debug-sentry')
+@owner_required
+def debug_sentry():
+    """Status do monitoramento de erros (owner-only). ?testar=1 manda um
+    evento de teste pro Sentry — confira se chegou no painel sentry.io."""
+    import os as _os
+    dsn = (_os.environ.get('SENTRY_DSN') or '').strip()
+    out = {
+        'dsn_configurado': bool(dsn),
+        'ambiente': _os.environ.get('SENTRY_ENV', 'production'),
+    }
+    try:
+        import sentry_sdk
+        out['sdk_instalado'] = True
+        client = sentry_sdk.Hub.current.client
+        out['sdk_ativo'] = client is not None
+        if request.args.get('testar') == '1':
+            if not out['sdk_ativo']:
+                out['teste'] = ('NAO enviado: SDK inativo. Configure SENTRY_DSN '
+                                'no Railway e redeploye.')
+            else:
+                event_id = sentry_sdk.capture_message(
+                    'Teste manual via /admin/debug-sentry', level='warning')
+                out['teste'] = f'enviado (event_id={event_id}) — confira no sentry.io'
+    except ImportError:
+        out['sdk_instalado'] = False
+    if not dsn:
+        out['como_ativar'] = (
+            '1) Crie projeto Flask gratis em sentry.io; 2) copie o DSN; '
+            '3) Railway -> Variables -> SENTRY_DSN=<dsn>; 4) aguarde redeploy; '
+            '5) volte aqui com ?testar=1.')
+    return jsonify(out), 200
 
 
 @main_bp.route('/admin/vigia/diag')
