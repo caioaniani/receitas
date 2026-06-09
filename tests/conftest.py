@@ -58,8 +58,27 @@ def _config_baseline(_app_session):
 
 
 def _limpar_tabelas(db):
-    """Apaga as linhas de todas as tabelas, em ordem reversa de FK (seguro
-    mesmo com foreign_keys=ON). Substitui o drop+create por teste."""
+    """Reseta o banco ao baseline entre testes (substitui o drop+create):
+
+    1. Dropa indices que NAO sao do modelo — ou seja, adicionados por
+       migrations (ex: `uq_estoque_loja_receita` de `_migrate_estoque_trava`).
+       Como o schema agora eh compartilhado (nao recriado por teste), um teste
+       que chama a migration deixava o indice unico vazar e quebrava testes
+       seguintes que criam duplicatas de proposito. `create_all` nunca cria
+       esses indices — sao so de migration.
+    2. Apaga as linhas de todas as tabelas (ordem reversa de FK)."""
+    from sqlalchemy import text
+    try:
+        model_idx = {idx.name for t in db.metadata.tables.values()
+                     for idx in t.indexes}
+        rows = db.session.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='index' "
+            "AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'")).fetchall()
+        for (name,) in rows:
+            if name not in model_idx:
+                db.session.execute(text(f'DROP INDEX IF EXISTS "{name}"'))
+    except Exception:  # noqa: BLE001
+        db.session.rollback()
     for table in reversed(db.metadata.sorted_tables):
         db.session.execute(table.delete())
     db.session.commit()
