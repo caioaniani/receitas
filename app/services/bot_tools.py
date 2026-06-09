@@ -333,9 +333,21 @@ def buscar_nota_fiscal(cpf, numero_pedido, *, conv_id=None, canal=None):
         return {'erro': 'tiny_indisponivel',
                 'mensagem': 'Não consigo consultar a nota agora. Já passo pra um atendente.'}
 
-    pedido = tiny.buscar_pedido_por_cpf_e_numero(cpf_d, numero)
+    diag: dict = {}
+    pedido = tiny.buscar_pedido_por_cpf_e_numero(cpf_d, numero, diag=diag)
     if not pedido:
-        _log('nao_encontrado')
+        # Diferencia "API caiu" de "nao casou". Se a API falhou, a gente NUNCA
+        # pode dizer ao cliente "confere os dados" — isso lava as maos da
+        # falha tecnica e culpa ele. Joga pro humano com handoff explicito.
+        if diag.get('api_falhou_em_pagina'):
+            det = (f'API Tiny falhou na pagina {diag["api_falhou_em_pagina"]} '
+                   f'(paginas_lidas={diag.get("paginas_lidas")})')
+            _log('erro', det)
+            return {'erro': 'tiny_indisponivel',
+                    'mensagem': 'Não consegui consultar a nota agora — está com instabilidade. Já passo pra um atendente.'}
+        det = (f'sem match (paginas={diag.get("paginas_lidas")}, '
+               f'pedidos_vistos={diag.get("pedidos_vistos")})')
+        _log('nao_encontrado', det)
         return {'erro': 'nao_encontrado',
                 'mensagem': 'Não encontrei pedido com esse CPF e número. Confere os dados, por favor.'}
 
