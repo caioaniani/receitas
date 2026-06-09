@@ -230,8 +230,11 @@
         </a>
         {% endif %}
         {% if current_user.is_admin() %}
+        <a href="{{ url_for('entregas.painel') }}" target="_blank" class="sidebar-link">
+            🔔 Painel do Dia
+        </a>
         <a href="{{ url_for('entregas.index') }}"
-           class="sidebar-link {% if request.path.startswith('/entregas') and '/drivers/bulk' not in request.path %}active{% endif %}">
+           class="sidebar-link {% if request.path.startswith('/entregas') and '/painel' not in request.path and '/drivers/bulk' not in request.path %}active{% endif %}">
             Entregas Site
         </a>
         <a href="{{ url_for('entregas.drivers_bulk') }}"
