@@ -964,6 +964,25 @@ def debug_tiny():
     return jsonify(resultado), 200
 
 
+@main_bp.route('/admin/debug-nflog')
+@owner_required
+def debug_nflog():
+    """Owner-only: ultimas 50 entradas do NFLog (audit das solicitacoes de NF
+    pelo bot). Util pra ver POR QUE o bot disse 'nao encontrei' num caso real:
+    o `resultado` + `detalhe` revelam onde foi recusado e com qual numero."""
+    from app.models import NFLog
+    qs = NFLog.query.order_by(NFLog.id.desc()).limit(50).all()
+    return jsonify([{
+        'id': r.id,
+        'em': r.criado_em.isoformat() if r.criado_em else None,
+        'conv': r.conv_id, 'canal': r.canal,
+        'cpf_4': r.cpf_4ultimos,
+        'numero_buscado': r.numero_pedido,
+        'resultado': r.resultado,
+        'detalhe': r.detalhe,
+    } for r in qs]), 200
+
+
 @main_bp.route('/admin/debug-vnda-cartinha')
 @owner_required
 def debug_vnda_cartinha():
