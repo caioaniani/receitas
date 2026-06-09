@@ -145,18 +145,55 @@ def executar_backup(forcar=False, db_url=None, prefixo='padaria', pasta=None):
 # valida o TOC com pg_restore --list e (modo full) restaura num banco
 # temporario, conta linhas de tabelas-chave e dropa o banco.
 #
-# Roda em thread (restore de ~100MB estoura o timeout HTTP do gunicorn);
-# o status fica neste dict por worker — a rota /admin/backup/drill consulta.
+# Roda em thread (restore de ~100MB estoura o timeout HTTP do gunicorn).
+# Status persistido em ARQUIVO (/tmp) e nao em memoria: gunicorn tem 2
+# workers, e status em dict fazia a rota de consulta cair 50% das vezes no
+# worker errado ("rodando: false" sem resultado — visto em prod 2026-06-09).
+# Arquivo compartilha entre workers e sobrevive a reciclagem do processo.
 
-_drill_status = {'rodando': False, 'iniciado_em': None, 'resultado': None}
+_DRILL_STATUS_PATH = '/tmp/padaria_drill_status.json'
+# Drill rodando ha mais que isso = worker morreu no meio (OOM/restart);
+# considera abandonado e permite iniciar outro.
+_DRILL_TIMEOUT_MIN = 30
 
 _DRILL_DB = 'drill_restore_tmp'
 # Tabelas-chave: se restauraram com linhas, o dump cobre o nucleo do negocio.
 _DRILL_TABELAS_CHAVE = ('usuario', 'pedido_loja', 'receita', 'estoque_loja')
 
 
+def _drill_salvar(status):
+    import json as _json
+    try:
+        with open(_DRILL_STATUS_PATH, 'w', encoding='utf-8') as f:
+            _json.dump(status, f, ensure_ascii=False, default=str)
+    except OSError:
+        logger.exception('[drill] falha gravando status em %s', _DRILL_STATUS_PATH)
+
+
 def drill_status():
-    return dict(_drill_status)
+    import json as _json
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+    try:
+        with open(_DRILL_STATUS_PATH, encoding='utf-8') as f:
+            st = _json.load(f)
+    except (OSError, ValueError):
+        return {'rodando': False, 'iniciado_em': None, 'resultado': None}
+    # Detecta drill abandonado (worker morreu no meio — ex: OOM no restore):
+    # sem isso, 'rodando: true' orfao bloquearia novos drills pra sempre.
+    if st.get('rodando') and st.get('iniciado_em'):
+        try:
+            inicio = _dt.fromisoformat(st['iniciado_em'])
+            if _agora_brt() - inicio > _td(minutes=_DRILL_TIMEOUT_MIN):
+                st['rodando'] = False
+                st['resultado'] = st.get('resultado') or {
+                    'ok': False,
+                    'motivo': (f'drill abandonado (>{_DRILL_TIMEOUT_MIN}min sem '
+                               'terminar — worker provavelmente reiniciou no meio). '
+                               'Rode de novo com ?iniciar=full.')}
+        except ValueError:
+            pass
+    return st
 
 
 def iniciar_drill(full=False):
@@ -164,22 +201,25 @@ def iniciar_drill(full=False):
     import threading
 
     from flask import current_app as _app
-    if _drill_status['rodando']:
-        return {'ok': False, 'motivo': 'drill ja em andamento', **drill_status()}
+    atual = drill_status()
+    if atual.get('rodando'):
+        return {'ok': False, 'motivo': 'drill ja em andamento', **atual}
     app_obj = _app._get_current_object()
-    _drill_status.update(rodando=True, iniciado_em=_agora_brt().isoformat(),
-                         resultado=None)
+    inicio_iso = _agora_brt().isoformat()
+    _drill_salvar({'rodando': True, 'iniciado_em': inicio_iso, 'resultado': None})
 
     def _run():
+        resultado = None
         try:
             with app_obj.app_context():
-                _drill_status['resultado'] = _executar_drill(full=full)
+                resultado = _executar_drill(full=full)
         except Exception as exc:  # noqa: BLE001
             logger.exception('[drill] falha inesperada')
-            _drill_status['resultado'] = {'ok': False,
-                                          'motivo': f'{type(exc).__name__}: {exc}'}
+            resultado = {'ok': False, 'motivo': f'{type(exc).__name__}: {exc}'}
         finally:
-            _drill_status['rodando'] = False
+            _drill_salvar({'rodando': False, 'iniciado_em': inicio_iso,
+                           'terminado_em': _agora_brt().isoformat(),
+                           'resultado': resultado})
 
     threading.Thread(target=_run, daemon=True).start()
     return {'ok': True, 'iniciado': True, 'full': full}
