@@ -1521,6 +1521,10 @@ def backup_drill():
                    (drill_restore_tmp), conta linhas de tabelas-chave e dropa.
                    Prova completa. Pode levar varios minutos — acompanhe
                    recarregando esta rota.
+
+    NOTA: o status vive em memoria DO WORKER gunicorn que iniciou o drill
+    (2 workers em prod). Se ao recarregar aparecer 'rodando: false' sem
+    resultado, voce caiu no outro worker — recarregue de novo.
     """
     from app.services import backup as backup_svc
 
