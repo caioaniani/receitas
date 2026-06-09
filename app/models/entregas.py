@@ -21,21 +21,30 @@ class CartinhaEntrega(db.Model):
     autor = db.relationship('Usuario', backref='cartinhas')
 
 
-class PedidoVistoPainel(db.Model):
-    """Marca que um pedido do dia ja foi 'visto' (clicado) no Painel do Dia.
+class PainelPedidoStatus(db.Model):
+    """Status de preparo de um pedido no Painel do Dia (fluxo da cozinha):
 
-    Enquanto NAO visto, o painel toca o alerta sonoro. Clicar no pedido grava
-    aqui e silencia. Server-side de proposito: se uma pessoa da equipe clica,
-    silencia em TODOS os aparelhos (a turma compartilha a mesma fila)."""
-    __tablename__ = 'pedido_visto_painel'
+        novo (sem registro) → visto (amarelo) → pronto (verde) → entregue
+
+    Server-side de proposito: a turma compartilha a mesma fila — se uma pessoa
+    marca, atualiza em TODOS os aparelhos. Enquanto status='novo' (sem registro),
+    o painel toca o alerta sonoro; clicar no pedido grava 'visto' e silencia.
+
+    Tabela NOVA (nao reaproveita a antiga `pedido_visto_painel`) porque
+    db.create_all cria tabela nova sem precisar de ALTER — evita o ritual de
+    migration de coluna. A tabela antiga, se existir em prod, fica orfa e vazia."""
+    __tablename__ = 'painel_pedido_status'
+
+    STATUS_VALIDOS = ('visto', 'pronto', 'entregue')
 
     id = db.Column(db.Integer, primary_key=True)
     pedido_code = db.Column(db.String(50), nullable=False, unique=True, index=True)
+    status = db.Column(db.String(20), default='visto', index=True)
     data_ref = db.Column(db.Date, index=True)   # dia de entrega (escopo/limpeza)
-    visto_em = db.Column(db.DateTime, default=agora)
-    visto_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
+    atualizado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
-    autor = db.relationship('Usuario', backref='pedidos_vistos_painel')
+    autor = db.relationship('Usuario', backref='painel_status')
 
 class OverrideEntrega(db.Model):
     """Sobrescreve a data de entrega de um pedido VNDA — local, nao sincroniza com o VNDA."""
