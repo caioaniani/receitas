@@ -1522,9 +1522,8 @@ def backup_drill():
                    Prova completa. Pode levar varios minutos — acompanhe
                    recarregando esta rota.
 
-    NOTA: o status vive em memoria DO WORKER gunicorn que iniciou o drill
-    (2 workers em prod). Se ao recarregar aparecer 'rodando: false' sem
-    resultado, voce caiu no outro worker — recarregue de novo.
+    O status fica em arquivo compartilhado (/tmp) — qualquer worker gunicorn
+    responde o mesmo estado, e o resultado sobrevive a reinicio de worker.
     """
     from app.services import backup as backup_svc
 
