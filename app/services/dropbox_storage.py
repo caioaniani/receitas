@@ -441,12 +441,29 @@ def listar_pasta(path):
         return out
 
 
+# Causa da ultima falha de `baixar()` (thread-local, padrao do tiny.py):
+# o drill consome pra reportar a causa EXATA no relatorio — sem isso, o
+# motivo era so "download falhou" e o debug exigia acesso aos logs do
+# Railway (visto em prod 2026-06-09).
+import threading as _threading
+
+_falha_download = _threading.local()
+
+
+def consumir_falha_download():
+    motivo = getattr(_falha_download, 'motivo', None)
+    _falha_download.motivo = None
+    return motivo
+
+
 def baixar(path):
-    """Baixa um arquivo do Dropbox. Retorna bytes ou None.
+    """Baixa um arquivo do Dropbox. Retorna bytes ou None (causa em
+    `consumir_falha_download()`).
 
     Usado pelo drill de restore (puxar o ultimo dump pra validar)."""
     token = _token()
     if not token or not path:
+        _falha_download.motivo = 'Dropbox nao configurado ou path vazio'
         return None
 
     def _do():
@@ -463,13 +480,17 @@ def baixar(path):
             _invalidar_cache()
             token = _token()
             if not token:
+                _falha_download.motivo = 'token expirou e refresh falhou'
                 return None
             r = _do()
         if r.status_code != 200:
+            corpo = (r.text or '')[:200]
+            _falha_download.motivo = f'HTTP {r.status_code}: {corpo}'
             logger.warning('Dropbox download %s: %s %s',
-                           path, r.status_code, r.text[:200])
+                           path, r.status_code, corpo)
             return None
         return r.content
-    except requests.RequestException:
+    except requests.RequestException as exc:
+        _falha_download.motivo = f'{type(exc).__name__}: {exc}'
         logger.exception('Erro baixando %s do Dropbox', path)
         return None
