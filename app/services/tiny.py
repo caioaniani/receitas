@@ -11,6 +11,7 @@ Se nao houver token, todas as funcoes retornam None (feature fica dormente).
 """
 import logging
 import threading
+import time
 
 import requests
 from flask import current_app
@@ -40,50 +41,75 @@ def disponivel():
     return bool((current_app.config.get('TINY_API_TOKEN') or '').strip())
 
 
+_TIMEOUT = 12
+_RETRY_BACKOFF = (1.0, 2.0)   # delays antes da 2a e 3a tentativas
+_HTTP_TRANSIENTES = (408, 429, 500, 502, 503, 504)
+
+
 def _get(endpoint, params=None):
     """POST no Tiny (a API v2 usa POST com form-data). Devolve dict do JSON ou
     None em qualquer falha. Tiny envolve tudo em {'retorno': {'status': ...}}.
 
-    Faz 1 retry em erros TRANSIENTES (HTTP 429/5xx ou timeout). Glitches do
-    Tiny aconteciam silenciosamente — o bot de NF recusava o cliente com
-    'nao encontrei' (visto em prod 2026-06-09)."""
+    Faz 3 tentativas com backoff (1s, 2s) em erros TRANSIENTES (HTTP 408/429/5xx
+    ou timeout/connection error). Em prod 2026-06-09 o bot pegou janelas de
+    intermitencia em que 1 retry nao bastou — o Tiny tossiu nas duas e o
+    cliente foi pra atendente. Registra a causa exata em `_registrar_falha`
+    pra propagar no NFLog (debug rapido)."""
     if not disponivel():
+        _registrar_falha('TINY_API_TOKEN ausente')
         return None
     token = current_app.config['TINY_API_TOKEN'].strip()
     url = f'{BASE}/{endpoint}'
     data = {'token': token, 'formato': 'JSON'}
     data.update(params or {})
 
-    for tentativa in (1, 2):
+    ultima_causa = 'desconhecida'
+    tentativas = len(_RETRY_BACKOFF) + 1
+    for i in range(tentativas):
+        if i > 0:
+            time.sleep(_RETRY_BACKOFF[i - 1])
         try:
-            r = requests.post(url, data=data, timeout=12)
+            r = requests.post(url, data=data, timeout=_TIMEOUT)
+        except requests.Timeout as exc:
+            ultima_causa = f'timeout ({_TIMEOUT}s)'
+            logger.warning('tiny %s tentativa %d: timeout (%s)', endpoint, i + 1, exc)
+            continue
         except requests.RequestException as exc:
-            logger.warning('tiny %s tentativa %d: %s', endpoint, tentativa, exc)
-            if tentativa == 1:
-                continue
-            logger.error('tiny %s falhou em ambas tentativas: %s', endpoint, exc)
-            return None
-        if r.status_code in (429, 500, 502, 503, 504) and tentativa == 1:
-            logger.warning('tiny %s HTTP %s — retry', endpoint, r.status_code)
+            ultima_causa = f'{type(exc).__name__}'
+            logger.warning('tiny %s tentativa %d: %s: %s',
+                           endpoint, i + 1, type(exc).__name__, exc)
+            continue
+        if r.status_code in _HTTP_TRANSIENTES:
+            ultima_causa = f'HTTP {r.status_code}'
+            logger.warning('tiny %s tentativa %d: HTTP %s — retry',
+                           endpoint, i + 1, r.status_code)
             continue
         if r.status_code not in (200, 201):
+            _registrar_falha(f'HTTP {r.status_code} (nao-transient)')
             logger.warning('tiny %s: HTTP %s', endpoint, r.status_code)
             return None
         try:
             payload = r.json()
         except ValueError:
+            _registrar_falha('resposta nao-JSON')
             logger.warning('tiny %s: resposta nao-JSON', endpoint)
             return None
         retorno = payload.get('retorno') if isinstance(payload, dict) else None
         if not isinstance(retorno, dict):
+            _registrar_falha('payload sem .retorno')
             return None
         status = (retorno.get('status') or '').lower()
         if status not in ('ok', '1'):
             erros = retorno.get('erros') or retorno.get('registros') or []
+            _registrar_falha(f'retorno.status={status!r}')
             logger.warning('tiny %s erro: status=%s erros=%s',
                            endpoint, status, str(erros)[:200])
             return None
         return retorno
+    # esgotou todas as tentativas
+    _registrar_falha(f'{ultima_causa} (apos {tentativas} tentativas)')
+    logger.error('tiny %s falhou apos %d tentativas: %s',
+                 endpoint, tentativas, ultima_causa)
     return None
 
 
