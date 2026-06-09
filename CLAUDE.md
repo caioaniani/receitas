@@ -143,6 +143,14 @@ Claude. Comandos shell que escrevem direto (ex: `ruff --fix`, `flask db init`,
 ou um pip install que cria arquivos) precisam de `git add` + commit manual.
 O Stop hook global avisa quando isso acontece (saida nao commitada).
 
+**Armadilha do push silencioso** (2026-06-09): se o clone local estiver ATRAS
+do remoto (ex: container novo clonou um commit velho), o push do hook falha
+SILENCIOSAMENTE a sessao inteira — os commits ficam so locais e a suite roda
+contra codigo desatualizado (sintoma: testes subitamente lentos ou arquivo
+"sumido"). Antes de confiar no estado local: `git fetch` + `git rev-list
+--left-right --count <branch>...origin/<branch>`. Se divergiu, rebase em cima
+do origin (os commits locais nunca foram pushados — rebase sem force e ok).
+
 ## CI / GitHub Actions
 
 `.github/workflows/ci.yml` roda `ruff check` + `pytest` em cada push.
