@@ -340,8 +340,9 @@ def buscar_nota_fiscal(cpf, numero_pedido, *, conv_id=None, canal=None):
         # pode dizer ao cliente "confere os dados" — isso lava as maos da
         # falha tecnica e culpa ele. Joga pro humano com handoff explicito.
         if diag.get('api_falhou_em_pagina'):
+            causa = tiny._consumir_falha() or 'desconhecida'
             det = (f'API Tiny falhou na pagina {diag["api_falhou_em_pagina"]} '
-                   f'(paginas_lidas={diag.get("paginas_lidas")})')
+                   f'({causa}; paginas_lidas={diag.get("paginas_lidas")})')
             _log('erro', det)
             return {'erro': 'tiny_indisponivel',
                     'mensagem': 'Não consegui consultar a nota agora — está com instabilidade. Já passo pra um atendente.'}
