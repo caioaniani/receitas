@@ -14,9 +14,9 @@ def app_zapi(app):
         app.config['ZAPI_BOT_WEBHOOK_TOKEN'] = 'secret-token'
         app.config['ZAPI_NUMERO_DESTINO'] = '5511988888888'
         app.config['ANTHROPIC_API_KEY'] = 'fake-key'
-        if not Usuario.query.filter_by(papel='owner', ativo=True).first():
-            u = Usuario(nome='Dono', email='dono@test.com', papel='owner',
-                        ativo=True)
+        if not Usuario.query.filter_by(is_owner=True).first():
+            u = Usuario(nome='Dono', login='dono', papel='admin',
+                        is_owner=True)
             u.set_senha('xxxxxxxxxx')
             db.session.add(u)
             db.session.commit()
