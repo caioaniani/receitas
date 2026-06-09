@@ -11,6 +11,18 @@ import os
 
 import pytest
 
+# ── Paralelizacao (pytest-xdist) ──────────────────────────────────────────
+# Cada worker do xdist roda em processo separado. Pra eles nao brigarem pelo
+# MESMO arquivo SQLite (config.py:8 le DATABASE_URL no import), damos a cada
+# worker o seu proprio arquivo. Sem xdist (PYTEST_XDIST_WORKER ausente), nada
+# muda — comportamento de antes. Tem que rodar ANTES de qualquer `from app
+# import ...` (que importa config.py); por isso fica no topo do conftest.
+_xdist_worker = os.environ.get('PYTEST_XDIST_WORKER')
+if _xdist_worker:
+    import tempfile
+    os.environ['DATABASE_URL'] = (
+        f'sqlite:///{tempfile.gettempdir()}/padaria_test_{_xdist_worker}.db')
+
 
 @pytest.fixture
 def app():
