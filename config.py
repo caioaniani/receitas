@@ -45,6 +45,11 @@ class Config:
     # Tiny ERP — token da API v2 (gera em Painel Tiny -> Configuracoes -> API).
     # Sem token, o bot recusa NF gentilmente e passa pro humano.
     TINY_API_TOKEN = os.environ.get('TINY_API_TOKEN', '')
+    # Bot WhatsApp privado do dono (copilot read-only via Z-API).
+    # ZAPI_BOT_DONO_NUMERO    = 55DDDNUMERO (so digitos) do WhatsApp do dono
+    # ZAPI_BOT_WEBHOOK_TOKEN  = segredo na URL do webhook (?k=...)
+    ZAPI_BOT_DONO_NUMERO = os.environ.get('ZAPI_BOT_DONO_NUMERO', '')
+    ZAPI_BOT_WEBHOOK_TOKEN = os.environ.get('ZAPI_BOT_WEBHOOK_TOKEN', '')
     # Coordenadas da loja matriz — origem das rotas de entrega
     ROTA_ORIGEM_LAT = os.environ.get('ROTA_ORIGEM_LAT', '')
     ROTA_ORIGEM_LNG = os.environ.get('ROTA_ORIGEM_LNG', '')
