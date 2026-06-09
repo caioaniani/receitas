@@ -120,10 +120,13 @@ def buscar_pedido_por_cpf_e_numero(cpf, numero):
     # `pesquisa.php` nao traz nota_fiscal nem origem completos. Buscar detalhe.
     pedido_id = str(candidato.get('id') or '')
     detalhe = obter_pedido_detalhe(pedido_id) or {}
-    # Em detalhe, nota_fiscal vem como dict {'id': ..., 'numero': ...} se emitida.
-    nf = detalhe.get('nota_fiscal') or candidato.get('nota_fiscal') or {}
-    if not isinstance(nf, dict):
-        nf = {}
+
+    # A v2 do Tiny retorna o ID da NF como campo SOLTO `id_nota_fiscal` no
+    # pedido (nao como dict aninhado). Fallback pros nomes que docs antigas
+    # mencionam, por defesa.
+    nf_id = (str(detalhe.get('id_nota_fiscal') or '').strip()
+             or str(((detalhe.get('nota_fiscal') or {})).get('id') or '').strip()
+             or str(((candidato.get('nota_fiscal') or {})).get('id') or '').strip())
 
     # `origem`/`ecommerce` na v2 pode vir como dict {nome,...} OU string. Normaliza.
     def _txt(v):
@@ -141,8 +144,8 @@ def buscar_pedido_por_cpf_e_numero(cpf, numero):
         'origem': (_txt(detalhe.get('origem'))
                     or _txt(detalhe.get('ecommerce'))
                     or _txt(candidato.get('origem'))),
-        'nota_fiscal_id': str(nf.get('id') or ''),
-        'nota_fiscal_situacao': str(nf.get('situacao') or ''),
+        'nota_fiscal_id': nf_id,
+        'nota_fiscal_situacao': '',
     }
 
 
