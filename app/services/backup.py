@@ -248,7 +248,15 @@ def _executar_drill(full=False):
     # 2. Baixa e descomprime
     gz = dropbox_storage.baixar(alvo['path'])
     if not gz:
-        rel['motivo'] = 'download do Dropbox falhou'
+        causa = dropbox_storage.consumir_falha_download() or 'causa desconhecida'
+        rel['motivo'] = f'download do Dropbox falhou — {causa}'
+        if 'missing_scope' in causa or '401' in causa or '403' in causa:
+            rel['dica'] = ('Provavel falta do escopo files.content.read na app '
+                           'Dropbox: App Console -> Permissions -> marcar '
+                           'files.content.read -> Submit; depois gerar NOVO '
+                           'refresh token (re-autorizar) e atualizar '
+                           'DROPBOX_REFRESH_TOKEN no Railway — escopos novos '
+                           'nao valem pra tokens ja emitidos.')
         return rel
     rel['etapas'].append('baixado')
     try:
