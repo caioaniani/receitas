@@ -221,6 +221,20 @@
 
     // ── Render ──
 
+    // Extrai a hora inicial de "8h às 9h" → 8. Usada pra ordenar janelas.
+    function horaInicio(periodo) {
+        var m = String(periodo || '').match(/(\d{1,2})/);
+        return m ? parseInt(m[1], 10) : 99;
+    }
+    // Janela do pedido: chave de ordenacao + titulo do cabecalho. Expresso
+    // sempre primeiro (ordem -1); "sem horario" sempre no fim.
+    function janelaDoPedido(p) {
+        if (p.expresso) return { ordem: -1, titulo: '⚡ EXPRESSO (entrega em 1h)' };
+        var per = (p.periodo || '').trim();
+        if (!per) return { ordem: 999, titulo: 'Sem horário' };
+        return { ordem: horaInicio(per), titulo: '🕐 ' + per };
+    }
+
     function renderPedidos() {
         var container = document.getElementById('pedidos-container');
         var dataStr = document.getElementById('data-entrega').value;
@@ -228,9 +242,19 @@
         var counts = {todos: 0, pendente: 0, separado: 0, entregue: 0};
         var totalDia = 0;
 
+        // Ordena por janela (Expresso → 7h → 8h → ... → Sem horário) e, dentro
+        // da janela, alfabetico pelo destinatario. A turma de preparo le de
+        // cima pra baixo seguindo o relogio.
+        var pedidosOrd = pedidos.slice().sort(function (a, b) {
+            var ka = janelaDoPedido(a), kb = janelaDoPedido(b);
+            if (ka.ordem !== kb.ordem) return ka.ordem - kb.ordem;
+            return (a.destinatario || '').localeCompare(b.destinatario || '');
+        });
+
         var html = '';
-        for (var i = 0; i < pedidos.length; i++) {
-            var p = pedidos[i];
+        var janelaAtualTitulo = null;
+        for (var i = 0; i < pedidosOrd.length; i++) {
+            var p = pedidosOrd[i];
             var status = getStatus(dataStr, p.code);
             counts.todos++;
             counts[status] = (counts[status] || 0) + 1;
@@ -239,6 +263,19 @@
             if (filtroAtual !== 'todos' && status !== filtroAtual) continue;
             var buscaTexto = (p.destinatario + ' ' + p.comprador + ' ' + p.code).toLowerCase();
             if (busca && buscaTexto.indexOf(busca) === -1) continue;
+
+            // Cabecalho da janela quando muda
+            var jn = janelaDoPedido(p);
+            if (jn.titulo !== janelaAtualTitulo) {
+                var corHeader = p.expresso ? '#fff4e6' : '#f1f3f5';
+                var corText = p.expresso ? '#e8590c' : '#495057';
+                html += '<div class="d-flex align-items-center mt-3 mb-2 px-2 py-1" ' +
+                        'style="background:' + corHeader + ';border-radius:8px;' +
+                        'border-left:5px solid ' + corText + ';">' +
+                        '<strong style="color:' + corText + ';font-size:15px;">' +
+                        escapeHtml(jn.titulo) + '</strong></div>';
+                janelaAtualTitulo = jn.titulo;
+            }
 
             var statusBadge = '';
             if (status === 'pendente') statusBadge = '<span class="status-badge status-pendente">Pendente</span>';
@@ -251,13 +288,39 @@
                 itensHtml += '<span class="me-3">' + it.quantidade + 'x ' + escapeHtml(it.nome) + '</span>';
             }
 
-            var cartinhaClass = (p.cartinha || p.tem_customizacao) ? 'has-text' : '';
-            var cartinhaBadge = p.tem_customizacao ? ' <span class="badge bg-warning text-dark" style="font-size:10px;"><i class="bi bi-envelope-heart"></i> Cartinha</span>' : '';
-
             var compradorLine = '';
             if (p.comprador && p.comprador !== p.destinatario) {
                 compradorLine = '<div class="text-muted" style="font-size:11px;"><i class="bi bi-person"></i> Comprador: ' + escapeHtml(p.comprador) + '</div>';
             }
+
+            // Cartinha SEMPRE visivel quando tem texto (antes ficava
+            // escondida atras de um botao que so aparecia se `tem_customizacao`
+            // — cartinha manual nunca aparecia). Banner amarelo de leitura;
+            // botao Editar abre o textarea pra corrigir.
+            var temCart = (p.cartinha || '').trim().length > 0;
+            var cartinhaBloco = '';
+            if (temCart) {
+                cartinhaBloco =
+                    '<div class="mt-2 px-3 py-2" ' +
+                    'style="background:#fff9db;border:1px dashed #f0c000;border-radius:8px;">' +
+                        '<div style="font-size:11px;font-weight:700;color:#b8860b;' +
+                        'text-transform:uppercase;letter-spacing:1px;">💌 Cartinha' +
+                        (p.cartinha_origem === 'vnda' ? ' <span class="text-muted">(do VNDA)</span>' : ' <span class="text-muted">(editada)</span>') +
+                        '</div>' +
+                        '<div style="font-size:15px;line-height:1.35;white-space:pre-wrap;' +
+                        'word-break:break-word;margin-top:3px;">' + escapeHtml(p.cartinha) + '</div>' +
+                    '</div>';
+            }
+            // Area de edicao (textarea + salvar) — escondida por padrao,
+            // abre clicando no botao "Editar/Corrigir cartinha".
+            var cartinhaEdit =
+                '<div class="cartinha-area mt-2 d-none" id="cartinha-' + p.code + '">' +
+                    (temCart ? '' : '<small class="text-muted d-block mb-1">' +
+                        (p.tem_customizacao ? '<i class="bi bi-magic"></i> Cartinha automática do VNDA — edite se quiser sobrescrever' : 'Adicione uma cartinha manual abaixo:') +
+                        '</small>') +
+                    '<textarea class="form-control form-control-sm mb-1" rows="3" id="cartinha-txt-' + p.code + '" placeholder="Texto da cartinha...">' + escapeHtml(p.cartinha || '') + '</textarea>' +
+                    '<button class="btn btn-sm btn-warning d-print-none" onclick="salvarCartinha(\'' + p.code + '\')"><i class="bi bi-save"></i> Salvar</button>' +
+                '</div>';
 
             html += '<div class="card mb-2">' +
                 '<div class="card-body py-2 px-3">' +
@@ -267,11 +330,11 @@
                                 '<strong style="font-size:13px; color: var(--accent);">[' + escapeHtml(p.code) + '] <i class="bi bi-box-arrow-up-right" style="font-size:11px;"></i></strong>' +
                             '</a> ' +
                             '<span class="fw-semibold"><i class="bi bi-person-fill"></i> ' + escapeHtml(p.destinatario) + '</span>' +
-                            cartinhaBadge +
                             (p.data_override ? ' <span class="badge bg-warning text-dark" title="Data alterada — original: ' + escapeHtml(p.data_entrega_original_fmt || '') + (p.override_motivo ? ' · Motivo: ' + escapeHtml(p.override_motivo) : '') + (p.override_autor ? ' · Por: ' + escapeHtml(p.override_autor) : '') + '" style="font-size:10px;"><i class="bi bi-pencil-square"></i> Data alterada</span>' : '') +
                             (p.driver ? ' <span class="badge text-white" style="font-size:10px;background:' + (p.driver.cor || '#3cb44b') + ';" title="Driver atribuído"><i class="bi bi-person-badge"></i> ' + escapeHtml(p.driver.nome) + '</span>' : '') +
                         '</div>' +
                         '<div class="d-flex align-items-center gap-2">' +
+                            (p.expresso ? '<span class="badge" style="background:#e8590c;color:#fff;font-size:11px;"><i class="bi bi-lightning-fill"></i> Expresso</span>' : '') +
                             (p.periodo ? '<span class="badge bg-light text-dark" style="font-size:11px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>' : '') +
                             statusBadge +
                         '</div>' +
@@ -282,22 +345,19 @@
                         (p.telefone ? ' &nbsp;<i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) : '') +
                     '</div>' +
                     '<div class="mt-1" style="font-size:13px;">' + itensHtml + '</div>' +
-                    '<div class="d-flex justify-content-between align-items-center mt-1">' +
+                    cartinhaBloco +
+                    '<div class="d-flex justify-content-between align-items-center mt-2">' +
                         '<strong>R$ ' + formatMoney(p.total) + '</strong>' +
                         '<div class="d-print-none d-flex gap-1">' +
                             (status !== 'separado' ? '<button class="btn btn-sm btn-outline-info" onclick="marcarStatus(\'' + p.code + '\',\'separado\')"><i class="bi bi-check"></i> Separar</button>' : '') +
                             (status !== 'entregue' ? '<button class="btn btn-sm btn-outline-success" onclick="marcarStatus(\'' + p.code + '\',\'entregue\')"><i class="bi bi-check-all"></i> Entregar</button>' : '') +
                             (status !== 'pendente' ? '<button class="btn btn-sm btn-outline-secondary" onclick="marcarStatus(\'' + p.code + '\',\'pendente\')"><i class="bi bi-arrow-counterclockwise"></i></button>' : '') +
                             '<button class="btn btn-sm btn-outline-warning" onclick="editarData(\'' + p.code + '\',\'' + (p.data_entrega || '') + '\',' + (p.data_override ? 'true' : 'false') + ')" title="Mudar data de entrega"><i class="bi bi-calendar-event"></i></button>' +
-                            (p.tem_customizacao ? '<button class="btn btn-sm btn-outline-warning" onclick="toggleCartinha(\'' + p.code + '\')"><i class="bi bi-envelope-heart"></i></button>' : '') +
+                            '<button class="btn btn-sm btn-outline-warning" onclick="toggleCartinha(\'' + p.code + '\')" title="' + (temCart ? 'Corrigir cartinha' : 'Adicionar cartinha') + '"><i class="bi bi-envelope-heart"></i></button>' +
                             '<a class="btn btn-sm btn-outline-dark" href="https://www.padariaartesanalonline.com.br/admin/pedido?id=' + encodeURIComponent(p.code) + '" target="_blank" rel="noopener" title="Abrir pedido no VNDA"><i class="bi bi-box-arrow-up-right"></i> VNDA</a>' +
                         '</div>' +
                     '</div>' +
-                    '<div class="cartinha-area ' + cartinhaClass + ' mt-2 d-none" id="cartinha-' + p.code + '">' +
-                        (p.cartinha_origem === 'vnda' ? '<small class="text-muted d-block mb-1"><i class="bi bi-magic"></i> Cartinha automática do VNDA — edite se quiser sobrescrever</small>' : '') +
-                        '<textarea class="form-control form-control-sm mb-1" rows="3" id="cartinha-txt-' + p.code + '" placeholder="Cole a cartinha do admin Vnda...">' + escapeHtml(p.cartinha || '') + '</textarea>' +
-                        '<button class="btn btn-sm btn-warning d-print-none" onclick="salvarCartinha(\'' + p.code + '\')"><i class="bi bi-save"></i> Salvar</button>' +
-                    '</div>' +
+                    cartinhaEdit +
                 '</div>' +
             '</div>';
         }
