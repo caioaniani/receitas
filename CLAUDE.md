@@ -80,8 +80,12 @@ Esta regra é obrigatória e se aplica a TODA conversa.
 
 - **Branch de produção (Railway acompanha)**: `claude/continue-controller-conversation-aGS3F`
 - **URL publica de prod**: https://gestao.opaopadariaartesanal.com.br/
-- **Auto-deploy** no Railway (Auto deploys ON, Wait for CI OFF). Push = build + deploy
-  automatico em ~2-3 min (Dockerfile pode demorar 5min se mexer no apt).
+- **Auto-deploy** no Railway (Auto deploys ON, **Wait for CI ON** — confirmado pelo
+  usuario em 2026-06-09). CONSEQUENCIA: cada push **espera o CI inteiro passar**
+  (~12-15 min) antes de subir. NAO eh "~3 min" — essa nota antiga estava errada e
+  causou varias estimativas furadas. O gargalo do deploy eh o CI, nao o build Docker
+  (que cacheia bem: requirements.txt antes do COPY . .). Pra deploy rapido: ou
+  acelerar o CI, ou desligar "Wait for CI" (perde o gate de testes).
 - **Workflow**: **SEMPRE commit direto no branch de producao**. Nao abrir PR — o auto-commit
   hook ja faz commit+push pro branch atual, e o usuario nao quer mergear nada manualmente.
   Se a mudanca for grande, ainda assim vai direto em prod (auto-commit acumula varios commits).
