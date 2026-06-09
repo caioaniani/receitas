@@ -77,10 +77,9 @@ def _baixar_imagens(payload):
 
 
 def _user_dono():
-    """Pega o User com papel='owner' (Caio). Por seguranca ainda valida
-    que existe so 1 e que esta ativo."""
+    """Pega o User dono (is_owner=True). 1 esperado."""
     from app.models import Usuario
-    return Usuario.query.filter_by(papel='owner', ativo=True).first()
+    return Usuario.query.filter_by(is_owner=True).first()
 
 
 def _conversa_dono():
