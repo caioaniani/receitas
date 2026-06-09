@@ -307,9 +307,30 @@ Backup diario do Postgres pro Dropbox. Implementado em 22/05/2026.
 do repo pgdg porque o server Railway eh PG 18 e pg_dump precisa ser
 >= versao do server. Quando server upgradear, atualizar Dockerfile.
 
-**Retencao**: sem limpeza automatica — Dropbox acumula. Custo
-baixo (~$0.10/mes pra ~100 dumps de ~100MB). Quando virar problema,
-adicionar limpeza no servico.
+**Drill de restore** (2026-06-09): `GET /admin/backup/drill?iniciar=1`
+(owner) baixa o dump mais recente do Dropbox e valida o TOC com
+`pg_restore --list` (~1 min). `?iniciar=full` restaura num banco
+temporario `drill_restore_tmp`, conta linhas de tabelas-chave e dropa
+(roda em thread; recarregar a rota mostra o status). Servico:
+`backup.py::iniciar_drill/_executar_drill`. Fazer 1x por trimestre.
+
+**Retencao de dados** (2026-06-09, LGPD + custo): limpeza automatica
+roda no cron diario APOS o backup dar OK (nunca apaga o que nao esta
+no dump do dia). Servico `app/services/retencao.py`. Prazos via env:
+`RETENCAO_LOGS_DIAS=365` (NFLog, VigiaVeredito),
+`RETENCAO_CONVERSAS_DIAS=180` (ChatbotConversa inativa),
+`RETENCAO_EVENTOS_DIAS=7` (idempotencia Slack/Zapi),
+`RETENCAO_BACKUPS_DIAS=90` (dumps Dropbox — decisao do dono;
+o dump MAIS RECENTE de cada pasta nunca eh apagado).
+Desligar: `RETENCAO_AUTO=0`. Inspecao manual: `GET /admin/retencao`
+(dry-run) / `?executar=1` (apaga). NUNCA adicionar tabela de negocio
+(pedido/venda/estoque) nos alvos — retencao eh so log/contexto/
+idempotencia.
+
+**Monitoramento de erros (Sentry)**: ja instalado e integrado
+(`app/__init__.py::_init_sentry`, opt-in). Ativar = setar `SENTRY_DSN`
+no Railway. Diagnostico: `GET /admin/debug-sentry` (owner) mostra
+status; `?testar=1` manda evento de teste.
 
 ## Convenções de codigo
 
