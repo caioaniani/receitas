@@ -964,6 +964,103 @@ def debug_tiny():
     return jsonify(resultado), 200
 
 
+@main_bp.route('/admin/debug-vnda-cartinha')
+@owner_required
+def debug_vnda_cartinha():
+    """Owner-only: sonda a API VNDA pra descobrir se da pra ESCREVER a cartinha
+    (customization) de um pedido ja fechado. So GET + OPTIONS — NAO grava nada.
+
+    A cartinha no VNDA se grava no CARRINHO (/carts/...), nao no pedido
+    (/orders/... e read-only). Esta rota investiga se o carrinho do pedido
+    ainda eh alcancavel/gravavel depois de fechado.
+
+    Uso: /admin/debug-vnda-cartinha?code=CODIGO_DO_PEDIDO
+    """
+    import requests
+
+    from app.services import vnda
+    code = (request.args.get('code') or '').strip()
+    out: dict = {'code': code}
+    if not code:
+        out['erro'] = 'passe ?code=CODIGO_DO_PEDIDO (ex: ?code=DA19F38765)'
+        return jsonify(out), 200
+
+    base = vnda._base_url()
+    headers = vnda._headers()
+
+    def _probe(method, path, **kw):
+        """GET/OPTIONS seguro. Devolve status + Allow + corpo (truncado)."""
+        try:
+            r = requests.request(method, f'{base}{path}', headers=headers,
+                                  timeout=10, **kw)
+            try:
+                body = r.json()
+            except ValueError:
+                body = (r.text or '')[:400]
+            return {'status': r.status_code, 'allow': r.headers.get('Allow'),
+                    'body': body}
+        except requests.RequestException as e:
+            return {'erro': str(e)}
+
+    try:
+        # 1. Pedido completo: chaves + campos candidatos a ligar no carrinho
+        ped = _probe('GET', f'/orders/{code}')
+        out['pedido_status'] = ped.get('status')
+        body = ped.get('body') if isinstance(ped.get('body'), dict) else {}
+        out['pedido_chaves'] = sorted(body.keys()) if body else None
+        # Campos que tipicamente referenciam o carrinho (sem despejar PII)
+        out['campos_cart'] = {k: body.get(k) for k in
+                              ('token', 'cart_id', 'cart_token', 'cart', 'id',
+                               'number', 'code')
+                              if k in body}
+        itens = body.get('items') or []
+        out['itens'] = [{'id': it.get('id'), 'sku': it.get('sku'),
+                         'nome': it.get('product_name') or it.get('name'),
+                         'has_customizations': it.get('has_customizations')}
+                        for it in itens]
+
+        # 2. Customizations atuais (READ — ja sabemos que funciona)
+        cust = {}
+        for it in itens[:5]:
+            iid = it.get('id')
+            if iid:
+                cust[str(iid)] = _probe(
+                    'GET', f'/orders/{code}/items/{iid}/customizations')
+        out['customizations_pedido'] = cust
+
+        # 3. OPTIONS no customizations do PEDIDO — revela metodos aceitos
+        if itens and itens[0].get('id'):
+            out['options_pedido'] = _probe(
+                'OPTIONS',
+                f"/orders/{code}/items/{itens[0]['id']}/customizations")
+
+        # 4. Tenta alcancar o CARRINHO do pedido por token/cart_id
+        cart_ref = (body.get('token') or body.get('cart_id')
+                    or body.get('cart_token'))
+        if cart_ref:
+            out['cart_ref'] = cart_ref
+            ci = _probe('GET', f'/carts/{cart_ref}/items')
+            out['cart_items'] = ci
+            cib = ci.get('body') if isinstance(ci, dict) else None
+            primeiro = (cib[0].get('id')
+                        if isinstance(cib, list) and cib else None)
+            if primeiro:
+                out['options_cart'] = _probe(
+                    'OPTIONS',
+                    f'/carts/{cart_ref}/items/{primeiro}/customizations')
+        else:
+            out['cart_ref'] = None
+            out['nota'] = ('Pedido nao expoe token/cart_id direto — talvez '
+                           'precise de GET /carts pra cruzar, ou a escrita '
+                           'pos-fechamento nao seja suportada.')
+    except Exception as exc:  # noqa: BLE001
+        import traceback
+        out['erro_exception'] = f'{type(exc).__name__}: {exc}'
+        out['traceback'] = traceback.format_exc()[-1500:]
+
+    return jsonify(out), 200
+
+
 @main_bp.route('/admin/debug-schema/upgrade', methods=['POST'])
 @owner_required
 def debug_schema_upgrade():
