@@ -385,3 +385,91 @@ def deletar(storage_path):
     except Exception:
         logger.exception('Erro deletando foto do Dropbox')
         return False
+
+
+def listar_pasta(path):
+    """Lista arquivos de uma pasta do Dropbox (nao-recursivo, com paginacao).
+
+    Retorna lista de {'path': str, 'nome': str, 'tamanho': int,
+    'modificado': str ISO-8601} so de ARQUIVOS (ignora subpastas), ou []
+    se pasta inexistente/erro. Usado pela retencao de backups e pelo drill
+    de restore (achar o dump mais recente)."""
+    token = _token()
+    if not token or not path:
+        return []
+    out = []
+    url = 'https://api.dropboxapi.com/2/files/list_folder'
+    body = {'path': path.rstrip('/'), 'recursive': False, 'limit': 500}
+    try:
+        while True:
+            r = requests.post(
+                url,
+                headers={'Authorization': f'Bearer {token}',
+                         'Content-Type': 'application/json'},
+                json=body,
+                timeout=30,
+            )
+            if r.status_code == 401:
+                _invalidar_cache()
+                token = _token()
+                if not token:
+                    return out
+                continue
+            if r.status_code != 200:
+                # path/not_found = pasta nunca criada (sem backups ainda): nao
+                # eh erro de verdade, devolve vazio sem poluir o log.
+                if 'not_found' not in (r.text or ''):
+                    logger.warning('Dropbox list_folder %s: %s %s',
+                                   path, r.status_code, r.text[:200])
+                return out
+            data = r.json()
+            for e in data.get('entries', []):
+                if e.get('.tag') != 'file':
+                    continue
+                out.append({
+                    'path': e.get('path_lower') or e.get('path_display') or '',
+                    'nome': e.get('name') or '',
+                    'tamanho': e.get('size') or 0,
+                    'modificado': e.get('server_modified') or '',
+                })
+            if not data.get('has_more'):
+                return out
+            url = 'https://api.dropboxapi.com/2/files/list_folder/continue'
+            body = {'cursor': data.get('cursor')}
+    except requests.RequestException:
+        logger.exception('Erro listando pasta do Dropbox %s', path)
+        return out
+
+
+def baixar(path):
+    """Baixa um arquivo do Dropbox. Retorna bytes ou None.
+
+    Usado pelo drill de restore (puxar o ultimo dump pra validar)."""
+    token = _token()
+    if not token or not path:
+        return None
+
+    def _do():
+        return requests.post(
+            'https://content.dropboxapi.com/2/files/download',
+            headers={'Authorization': f'Bearer {token}',
+                     'Dropbox-API-Arg': json.dumps({'path': path})},
+            timeout=300,   # dumps de ~100MB em link lento
+        )
+
+    try:
+        r = _do()
+        if r.status_code == 401:
+            _invalidar_cache()
+            token = _token()
+            if not token:
+                return None
+            r = _do()
+        if r.status_code != 200:
+            logger.warning('Dropbox download %s: %s %s',
+                           path, r.status_code, r.text[:200])
+            return None
+        return r.content
+    except requests.RequestException:
+        logger.exception('Erro baixando %s do Dropbox', path)
+        return None
