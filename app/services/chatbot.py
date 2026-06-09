@@ -20,6 +20,59 @@ logger = logging.getLogger(__name__)
 MODELO = 'claude-sonnet-4-6'
 MAX_ITERACOES = 6  # teto de idas-e-voltas de ferramenta por mensagem
 _FALLBACK = 'Já te passo para um atendente pra te ajudar melhor. 🙂'
+
+# Quantas mensagens guardar no nosso store por conversa (cap). O Claude ja
+# recebe so as ultimas 20 (`_build_messages`), entao 40 cobre folgado.
+MAX_HIST_STORE = 40
+
+
+def carregar_historico(conv_id):
+    """Le o historico persistido desta conversa do NOSSO banco
+    (`ChatbotConversa`). Retorna lista [{role, content}] ou [] se nao houver.
+
+    Fonte confiavel de contexto — nao depende da API do Chatwoot, que falha
+    intermitentemente e fazia o bot 'esquecer' a conversa."""
+    from app.models import ChatbotConversa
+    conv = ChatbotConversa.query.filter_by(conv_id=str(conv_id)).first()
+    if not conv:
+        return []
+    try:
+        h = json.loads(conv.mensagens_json or '[]')
+        return h if isinstance(h, list) else []
+    except (ValueError, TypeError):
+        return []
+
+
+def salvar_historico(conv_id, historico, resposta):
+    """Persiste o turno no nosso banco: o historico efetivo (que JA inclui a
+    msg atual do cliente) + a resposta do bot. So texto — imagens nao vao pro
+    store (o `_build_messages` so usa imagem da ULTIMA msg, que sempre vem
+    fresca do webhook). Capa nas ultimas MAX_HIST_STORE."""
+    from app.extensions import db
+    from app.models import ChatbotConversa
+    msgs = []
+    for m in (historico or []):
+        role = m.get('role')
+        if role not in ('user', 'assistant'):
+            continue
+        c = (m.get('content') or '').strip()
+        if not c and m.get('imagens'):
+            c = '[imagem enviada]'
+        if c:
+            msgs.append({'role': role, 'content': c})
+    if resposta and resposta.strip():
+        msgs.append({'role': 'assistant', 'content': resposta.strip()})
+    msgs = msgs[-MAX_HIST_STORE:]
+    try:
+        conv = ChatbotConversa.query.filter_by(conv_id=str(conv_id)).first()
+        if not conv:
+            conv = ChatbotConversa(conv_id=str(conv_id))
+            db.session.add(conv)
+        conv.mensagens_json = json.dumps(msgs, ensure_ascii=False)
+        db.session.commit()
+    except Exception:  # noqa: BLE001
+        db.session.rollback()
+        logger.exception('chatbot salvar_historico falhou conv=%s', conv_id)
 # Mensagem segura quando a consulta de catalogo falha: NUNCA responder preco
 # de memoria (risco de inventar valor — dinheiro). Passa pro humano.
 _FALLBACK_CATALOGO = ('Tive uma instabilidade pra consultar nosso catálogo '
