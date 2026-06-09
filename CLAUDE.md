@@ -82,22 +82,22 @@ Esta regra é obrigatória e se aplica a TODA conversa.
 - **URL publica de prod**: https://gestao.opaopadariaartesanal.com.br/
 - **Auto-deploy** no Railway (Auto deploys ON, **Wait for CI ON** — religado pelo
   usuario em 2026-06-09 apos a janela de fix de NF). CONSEQUENCIA: cada push
-  **espera o CI inteiro passar** (~12-15 min) antes de subir. O gargalo do
-  deploy eh o CI, nao o build Docker (que cacheia bem). Pra deploy rapido em
-  emergencia: desligar "Wait for CI" no Railway temporariamente.
+  **espera o CI passar** antes de subir. Com o CI agora em ~1,5 min (ver abaixo),
+  o deploy gira em ~3-5 min (CI + build Docker). Pra deploy rapido em emergencia:
+  desligar "Wait for CI" no Railway temporariamente.
 
-- **Pendentes do CI** (acelerar pra religar Wait for CI sem dor):
-  - Suite hoje leva ~12 min sequencial. Tentei xdist com `--dist loadfile` em
-    2026-06-09: ganho minusculo (~10%, 10m47s) porque o maior arquivo de teste
-    monopoliza 1 worker. NAO foi pra producao.
-  - Caminho real: refactor do `tests/conftest.py` — hoje cada teste faz
-    `db.drop_all() + db.create_all()` (linhas 28-29) recriando ~91 tabelas. Substituir
-    por schema criado 1 vez + transacao com rollback (SAVEPOINT) corta a maior
-    parte do custo. Junto com xdist `--dist load` (por teste), CI cai pra ~3min.
-    Esforco: ~2-3h + risco medio (mexe em fixture base de 487 testes).
-  - Hack ja-feito-mas-dormente: `tests/conftest.py` ja da um SQLite proprio por
-    worker xdist (env var `PYTEST_XDIST_WORKER`). Inofensivo sem xdist; ativa
-    quando o `.github/workflows/ci.yml` for atualizado pra rodar paralelo.
+- **CI rapido (refatorado 2026-06-09)**: a suite caiu de **~12 min pra ~73s**
+  (~10x). O `tests/conftest.py` cria o app + schema UMA vez por sessao e reseta
+  entre testes via `DELETE` de linhas (~0.02s/teste vs 0.88s do drop+create).
+  Dois cuidados que o app-compartilhado exigiu (ja resolvidos no conftest):
+  - **Rate limiter**: `limiter.reset()` no inicio de cada teste (sem isso, o
+    estado acumula entre testes e estoura 429 no login).
+  - **Indices de migration**: dropar indices que NAO sao do modelo no inicio de
+    cada teste (ex: `uq_estoque_loja_receita` de `_migrate_estoque_trava`) — eles
+    vazavam entre testes e quebravam os que criam duplicatas de proposito.
+  - **Config**: snapshot/restore por teste (mutacoes `app.config[X]=Y` nao vazam).
+  - xdist ainda dormente (`PYTEST_XDIST_WORKER` da SQLite proprio por worker);
+    com 73s sequencial nao foi preciso paralelizar.
 - **Workflow**: **SEMPRE commit direto no branch de producao**. Nao abrir PR — o auto-commit
   hook ja faz commit+push pro branch atual, e o usuario nao quer mergear nada manualmente.
   Se a mudanca for grande, ainda assim vai direto em prod (auto-commit acumula varios commits).
