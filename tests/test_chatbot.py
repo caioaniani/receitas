@@ -309,10 +309,11 @@ def test_tiny_busca_por_cpf_e_acha_via_numero_ecommerce(app):
                             'numero_ecommerce': 'D884A21B9E', 'situacao': 'Entregue'}},
             ]}
         if endpoint == 'pedido.obter.php' and (params or {}).get('id') == '907266869':
+            # Formato REAL da v2 do Tiny: id_nota_fiscal solto + ecommerce dict
             return {'pedido': {'id': '907266869', 'numero': '98720',
                                 'numero_ecommerce': 'D884A21B9E',
-                                'origem': 'ecommerce',
-                                'nota_fiscal': {'id': '55', 'situacao': 'emitida'}}}
+                                'ecommerce': {'nomeEcommerce': 'Vnda Commerce'},
+                                'id_nota_fiscal': '55'}}
         return {'pedidos': []}
 
     with app.app_context():
