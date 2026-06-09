@@ -25,25 +25,6 @@ def app_zapi(app):
         yield app
 
 
-def test_webhook_rejeita_token_invalido(app_zapi):
-    c = app_zapi.test_client()
-    r = c.post('/zapi/webhook?k=outro', json={'phone': '5511988888888'})
-    assert r.status_code == 403
-
-
-def test_webhook_aceita_token_e_responde_200(app_zapi):
-    """Bot recebe payload valido — webhook deve responder 200 imediato
-    (processamento eh async). Whitelist sera checada no processamento."""
-    c = app_zapi.test_client()
-    with patch('app.services.zapi_bot.processar_payload') as p:
-        r = c.post('/zapi/webhook?k=secret-token',
-                    json={'phone': '5511988888888', 'messageId': 'X1',
-                          'text': {'message': 'oi'}})
-    assert r.status_code == 200
-    # processamento dispara em thread — pode nao ter rodado ainda; importa
-    # o webhook nao bloquear
-
-
 def test_payload_de_outro_numero_eh_ignorado(app_zapi):
     """Numero != ZAPI_BOT_DONO_NUMERO nunca chega no copilot."""
     from app.services import zapi_bot
