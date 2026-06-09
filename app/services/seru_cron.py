@@ -515,6 +515,16 @@ def _run_backup_diario(app):
         _ult_run_backup = _agora()
         if not resultado['ok']:
             logger.warning('backup diario falhou: %s', resultado.get('motivo'))
+            return
+        # Retencao SO roda apos backup OK: tudo que ela apaga do banco esta
+        # no dump de hoje (recuperavel por RETENCAO_BACKUPS_DIAS=90 dias).
+        # Backup falhou -> pula a limpeza, sem excecao.
+        if app.config.get('RETENCAO_AUTO', True):
+            try:
+                from app.services import retencao
+                retencao.executar_limpeza()
+            except Exception:  # noqa: BLE001
+                logger.exception('retencao diaria falhou (backup ja esta OK)')
 
     with app.app_context():
         if db.engine.dialect.name != 'postgresql':
