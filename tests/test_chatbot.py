@@ -294,20 +294,25 @@ def test_nf_aviso_dono_pode_ser_desligado(app):
     send.assert_not_called()  # dono nao recebe ping
 
 
-def test_tiny_busca_por_numero_ecommerce_quando_alfanumerico(app):
-    """Pedido com codigo alfanumerico (D884A21B9E) deve ser buscado pelo campo
-    `numero_ecommerce` no Tiny (numero do site), nao `numero` (interno seq)."""
+def test_tiny_busca_por_cpf_e_acha_via_numero_ecommerce(app):
+    """A v2 do Tiny IGNORA filtros de numero — so cpf_cnpj filtra. Por isso
+    busca lista TODOS pedidos do cpf, e o match e feito no codigo no campo
+    `numero_ecommerce`. Depois chama `pedido.obter.php` pra trazer nota_fiscal."""
     from app.services import tiny
-    chamadas = []
 
     def _fake_get(endpoint, params=None):
-        chamadas.append(dict(params or {}))
-        if (params or {}).get('numero_ecommerce') == 'D884A21B9E':
-            return {'pedidos': [{'pedido': {
-                'id': '011287', 'numero': '11287',
-                'numero_ecommerce': 'D884A21B9E',
-                'origem': 'ecommerce', 'nota_fiscal': {'id': '55'},
-            }}]}
+        if endpoint == 'pedidos.pesquisa.php':
+            return {'pedidos': [
+                {'pedido': {'id': '111', 'numero': '11287',
+                            'numero_ecommerce': 'AAA111', 'situacao': 'Entregue'}},
+                {'pedido': {'id': '907266869', 'numero': '98720',
+                            'numero_ecommerce': 'D884A21B9E', 'situacao': 'Entregue'}},
+            ]}
+        if endpoint == 'pedido.obter.php' and (params or {}).get('id') == '907266869':
+            return {'pedido': {'id': '907266869', 'numero': '98720',
+                                'numero_ecommerce': 'D884A21B9E',
+                                'origem': 'ecommerce',
+                                'nota_fiscal': {'id': '55', 'situacao': 'emitida'}}}
         return {'pedidos': []}
 
     with app.app_context():
@@ -315,10 +320,9 @@ def test_tiny_busca_por_numero_ecommerce_quando_alfanumerico(app):
         with patch('app.services.tiny._get', side_effect=_fake_get):
             r = tiny.buscar_pedido_por_cpf_e_numero('087.271.904-98',
                                                      '#D884A21B9E')
-    assert r['id'] == '011287'
-    assert r['nota_fiscal_id'] == '55'
-    # 1a consulta deve ser por numero_ecommerce (porque eh alfanumerico)
-    assert chamadas[0].get('numero_ecommerce') == 'D884A21B9E'
+    assert r['id'] == '907266869'
+    assert r['nota_fiscal_id'] == '55'   # veio do pedido.obter.php (pesquisa nao traz)
+    assert r['numero_ecommerce'] == 'D884A21B9E'
 
 
 def test_nf_handoff_se_pedido_b2b(app):
