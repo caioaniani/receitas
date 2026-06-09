@@ -136,3 +136,206 @@ def executar_backup(forcar=False, db_url=None, prefixo='padaria', pasta=None):
         'tamanho': resultado['tamanho'],
         'arquivo': resultado['storage_path'],
     }
+
+
+# ── Drill de restore ───────────────────────────────────────────────────
+#
+# "Backup que nunca foi restaurado eh esperanca, nao backup." O drill prova
+# que o dump do Dropbox eh restauravel DE VERDADE: baixa o mais recente,
+# valida o TOC com pg_restore --list e (modo full) restaura num banco
+# temporario, conta linhas de tabelas-chave e dropa o banco.
+#
+# Roda em thread (restore de ~100MB estoura o timeout HTTP do gunicorn);
+# o status fica neste dict por worker — a rota /admin/backup/drill consulta.
+
+_drill_status = {'rodando': False, 'iniciado_em': None, 'resultado': None}
+
+_DRILL_DB = 'drill_restore_tmp'
+# Tabelas-chave: se restauraram com linhas, o dump cobre o nucleo do negocio.
+_DRILL_TABELAS_CHAVE = ('usuario', 'pedido_loja', 'receita', 'estoque_loja')
+
+
+def drill_status():
+    return dict(_drill_status)
+
+
+def iniciar_drill(full=False):
+    """Dispara o drill em background. Retorna o status (ou erro se ja rodando)."""
+    import threading
+
+    from flask import current_app as _app
+    if _drill_status['rodando']:
+        return {'ok': False, 'motivo': 'drill ja em andamento', **drill_status()}
+    app_obj = _app._get_current_object()
+    _drill_status.update(rodando=True, iniciado_em=_agora_brt().isoformat(),
+                         resultado=None)
+
+    def _run():
+        try:
+            with app_obj.app_context():
+                _drill_status['resultado'] = _executar_drill(full=full)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception('[drill] falha inesperada')
+            _drill_status['resultado'] = {'ok': False,
+                                          'motivo': f'{type(exc).__name__}: {exc}'}
+        finally:
+            _drill_status['rodando'] = False
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {'ok': True, 'iniciado': True, 'full': full}
+
+
+def _executar_drill(full=False):
+    """Corpo do drill. Retorna relatorio dict (sempre, nunca levanta)."""
+    import tempfile
+
+    from app.services import dropbox_storage
+
+    rel = {'ok': False, 'full': full, 'etapas': []}
+
+    # 1. Acha o dump mais recente
+    arquivos = dropbox_storage.listar_pasta(_pasta_destino())
+    dumps = sorted((a for a in arquivos if a['nome'].endswith('.dump.gz')),
+                   key=lambda a: a['nome'], reverse=True)
+    if not dumps:
+        rel['motivo'] = f'nenhum .dump.gz em {_pasta_destino()}'
+        return rel
+    alvo = dumps[0]
+    rel['arquivo'] = alvo['nome']
+    rel['tamanho_mb'] = round(alvo['tamanho'] / 1024 / 1024, 2)
+    rel['etapas'].append('listado')
+
+    # 2. Baixa e descomprime
+    gz = dropbox_storage.baixar(alvo['path'])
+    if not gz:
+        rel['motivo'] = 'download do Dropbox falhou'
+        return rel
+    rel['etapas'].append('baixado')
+    try:
+        dump_bytes = gzip.decompress(gz)
+    except OSError as exc:
+        rel['motivo'] = f'gunzip falhou (dump corrompido?): {exc}'
+        return rel
+    rel['etapas'].append('descomprimido')
+
+    with tempfile.NamedTemporaryFile(suffix='.dump', delete=True) as tmp:
+        tmp.write(dump_bytes)
+        tmp.flush()
+
+        # 3. Valida o TOC: pg_restore --list le o indice do dump custom.
+        # Dump truncado/corrompido falha aqui, mesmo sem banco de destino.
+        try:
+            proc = subprocess.run(['pg_restore', '--list', tmp.name],
+                                  capture_output=True, timeout=120)
+        except FileNotFoundError:
+            rel['motivo'] = 'pg_restore nao encontrado no PATH'
+            return rel
+        except subprocess.TimeoutExpired:
+            rel['motivo'] = 'pg_restore --list excedeu 2min'
+            return rel
+        if proc.returncode != 0:
+            rel['motivo'] = ('pg_restore --list falhou: '
+                             + (proc.stderr or b'').decode('utf-8', 'replace')[:300])
+            return rel
+        toc = (proc.stdout or b'').decode('utf-8', 'replace')
+        rel['toc_tabelas'] = sum(1 for ln in toc.splitlines()
+                                 if ' TABLE ' in ln and ' TABLE DATA ' not in ln)
+        rel['toc_table_data'] = sum(1 for ln in toc.splitlines()
+                                    if ' TABLE DATA ' in ln)
+        rel['etapas'].append('toc_validado')
+        if rel['toc_tabelas'] < 10:
+            rel['motivo'] = (f'TOC suspeito: so {rel["toc_tabelas"]} tabelas '
+                             '(esperado ~90). Dump pode estar incompleto.')
+            return rel
+
+        if not full:
+            rel['ok'] = True
+            rel['motivo'] = ('Dump integro (TOC validado). Pra prova completa '
+                             'de restore, rode com ?iniciar=full.')
+            return rel
+
+        # 4. FULL: restaura num banco temporario e conta linhas
+        return _drill_full(tmp.name, rel)
+
+
+def _drill_full(dump_path, rel):
+    from sqlalchemy import create_engine, text
+
+    uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    conn_info = _parse_database_url(uri)
+    if not conn_info:
+        rel['motivo'] = 'banco do app nao eh Postgres — full drill indisponivel'
+        return rel
+
+    admin_engine = create_engine(uri, isolation_level='AUTOCOMMIT',
+                                 pool_pre_ping=True)
+    try:
+        with admin_engine.connect() as c:
+            c.execute(text(f'DROP DATABASE IF EXISTS {_DRILL_DB}'))
+            c.execute(text(f'CREATE DATABASE {_DRILL_DB}'))
+    except Exception as exc:  # noqa: BLE001
+        # Sem permissao de CREATE DATABASE (alguns planos restringem):
+        # o TOC ja foi validado, entao reporta degradado em vez de falhar.
+        rel['ok'] = True
+        rel['motivo'] = (f'TOC OK, mas CREATE DATABASE falhou ({exc}) — '
+                         'restore completo indisponivel neste servidor. '
+                         'Valide manualmente num Postgres local com: '
+                         'pg_restore -d test --no-owner --no-acl <arquivo>')
+        admin_engine.dispose()
+        return rel
+    rel['etapas'].append('db_temp_criado')
+
+    try:
+        cmd = ['pg_restore',
+               '-h', conn_info['host'], '-p', conn_info['port'],
+               '-U', conn_info['user'], '-d', _DRILL_DB,
+               '--no-owner', '--no-acl', dump_path]
+        env = os.environ.copy()
+        env['PGPASSWORD'] = conn_info['password']
+        proc = subprocess.run(cmd, env=env, capture_output=True, timeout=900)
+        # pg_restore devolve 1 em warnings benignos (ex: extensao ja existe);
+        # o veredito real vem das CONTAGENS abaixo, nao do exit code.
+        rel['restore_exit'] = proc.returncode
+        if proc.returncode not in (0, 1):
+            rel['motivo'] = ('pg_restore falhou: '
+                             + (proc.stderr or b'').decode('utf-8', 'replace')[:300])
+            return rel
+        rel['etapas'].append('restaurado')
+
+        drill_uri = uri.rsplit('/', 1)[0] + f'/{_DRILL_DB}'
+        drill_engine = create_engine(drill_uri, pool_pre_ping=True)
+        contagens = {}
+        with drill_engine.connect() as c:
+            for t in _DRILL_TABELAS_CHAVE:
+                try:
+                    contagens[t] = c.execute(
+                        text(f'SELECT count(*) FROM {t}')).scalar()
+                except Exception:  # noqa: BLE001
+                    contagens[t] = 'AUSENTE'
+        drill_engine.dispose()
+        rel['contagens'] = contagens
+        rel['etapas'].append('contado')
+
+        vazio = [t for t, n in contagens.items()
+                 if n == 'AUSENTE' or (isinstance(n, int) and n == 0
+                                       and t != 'estoque_loja')]
+        if vazio:
+            rel['motivo'] = f'Restore subiu mas tabelas-chave vazias/ausentes: {vazio}'
+            return rel
+
+        rel['ok'] = True
+        rel['motivo'] = 'Restore COMPLETO validado: dump restauravel de ponta a ponta.'
+        return rel
+    except subprocess.TimeoutExpired:
+        rel['motivo'] = 'pg_restore excedeu 15min'
+        return rel
+    finally:
+        try:
+            with admin_engine.connect() as c:
+                c.execute(text(f'DROP DATABASE IF EXISTS {_DRILL_DB} WITH (FORCE)'))
+            rel['etapas'].append('db_temp_dropado')
+        except Exception:  # noqa: BLE001
+            logger.exception('[drill] DROP DATABASE %s falhou — dropar manualmente',
+                             _DRILL_DB)
+            rel['aviso'] = f'banco temporario {_DRILL_DB} pode ter ficado — dropar manualmente'
+        admin_engine.dispose()
