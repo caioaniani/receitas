@@ -402,6 +402,10 @@
                 }
                 var btn = document.querySelector('#cartinha-' + code + ' .btn');
                 if (btn) { btn.textContent = ' Salvo!'; setTimeout(function(){ btn.innerHTML = '<i class="bi bi-save"></i> Salvar'; }, 1500); }
+                // Recarrega a aba Operacao (onde a equipe ve a cartinha) pra
+                // refletir o texto corrigido na hora — o array `pedidos` acima
+                // so atualiza a aba legada.
+                if (typeof opCarregar === 'function') { try { opCarregar(); } catch (e) {} }
             }
         });
     };
