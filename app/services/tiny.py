@@ -67,7 +67,18 @@ def buscar_pedido_por_cpf_e_numero(cpf, numero):
     E o caminho seguro pra o bot — sem CPF, nao retorna nada de outro cliente.
 
     Retorna dict com {'id', 'numero', 'situacao', 'nota_fiscal_id',
-    'origem'} ou None se nao achar / erro."""
+    'origem'} ou None se nao achar / erro.
+
+    IMPORTANTE: a v2 do Tiny IGNORA os params `numero`/`numero_ecommerce`/
+    `numero_ordem_compra` em `pedidos.pesquisa.php` — esses filtros nao
+    funcionam, so o `cpf_cnpj` filtra. Por isso a gente lista TODOS os pedidos
+    do CPF e procura pelo numero no codigo. Limite de 5 paginas (500 pedidos)
+    cobre 99% dos casos de atendimento; cliente com mais que isso e fora da
+    norma (atacadista, B2B).
+
+    Tambem: `pesquisa.php` nao traz `nota_fiscal_id` nem `origem` — esses
+    so vem em `pedido.obter.php`. Por isso, depois de achar pela pesquisa,
+    a gente faz a segunda chamada pra resolver os detalhes."""
     cpf_d = _so_digitos(cpf)
     # Cliente costuma colar o numero como '#XXXX' (assim aparece no email do
     # VNDA). Tira o # e espaços antes de buscar — o Tiny indexa sem o prefixo.
@@ -75,60 +86,56 @@ def buscar_pedido_por_cpf_e_numero(cpf, numero):
     if not cpf_d or not numero:
         return None
 
-    # A API v2 do Tiny tem DOIS campos pra numero de pedido:
-    #   `numero`            = numero INTERNO do Tiny (sequencial: 12345)
-    #   `numero_ecommerce`  = numero gerado pelo site (alfanumerico: D884A21B9E)
-    # Cliente que recebe email do VNDA cola o numero_ecommerce. Se o codigo
-    # tem letra, e ecommerce; se e so digitos, pode ser qualquer um — buscamos
-    # nos dois e juntamos.
-    so_digitos = numero.isdigit()
-    candidatos = []
-    consultas = []
-    if so_digitos:
-        consultas.append({'cpf_cnpj': cpf_d, 'numero': numero})
-        consultas.append({'cpf_cnpj': cpf_d, 'numero_ecommerce': numero})
-    else:
-        # Alfanumerico = ecommerce. Tenta ecommerce primeiro; fallback no `numero`
-        # so caso o Tiny tenha indexado errado.
-        consultas.append({'cpf_cnpj': cpf_d, 'numero_ecommerce': numero})
-        consultas.append({'cpf_cnpj': cpf_d, 'numero': numero})
-
-    for params in consultas:
-        retorno = _get('pedidos.pesquisa.php', params=params)
-        if not retorno:
-            continue
-        for item in (retorno.get('pedidos') or []):
-            p = item.get('pedido') if isinstance(item, dict) else None
-            if isinstance(p, dict):
-                candidatos.append(p)
-        if candidatos:
-            break  # achou em uma das consultas, nao precisa tentar outras
-
-    # Match exato (case-insensitive) contra os DOIS campos.
     nlow = numero.lower()
+    candidato = None
+    for pagina in range(1, 6):  # ate 5 paginas = ate 500 pedidos
+        retorno = _get('pedidos.pesquisa.php',
+                       params={'cpf_cnpj': cpf_d, 'pagina': str(pagina)})
+        if not retorno:
+            break
+        pedidos = retorno.get('pedidos') or []
+        if not pedidos:
+            break
+        for item in pedidos:
+            p = item.get('pedido') if isinstance(item, dict) else None
+            if not isinstance(p, dict):
+                continue
+            n_interno = str(p.get('numero') or '').strip().lower()
+            n_ecom = str(p.get('numero_ecommerce') or '').strip().lower()
+            n_oc = str(p.get('numero_ordem_compra') or '').strip().lower()
+            if nlow in (n_interno, n_ecom, n_oc):
+                candidato = p
+                break
+        if candidato:
+            break
+        # Total de paginas? Se o Tiny retornou < 100, e a ultima.
+        if len(pedidos) < 100:
+            break
 
-    def _matches(p):
-        n1 = str(p.get('numero') or '').strip().lower()
-        n2 = str(p.get('numero_ecommerce') or p.get('numero_ordem_compra')
-                 or '').strip().lower()
-        return nlow in (n1, n2)
-
-    achados = [p for p in candidatos if _matches(p)]
-    if not achados:
-        logger.info('tiny: 0 pedidos p/ cpf=...%s numero=%r (retornados=%d)',
-                    cpf_d[-4:], numero, len(candidatos))
+    if not candidato:
+        logger.info('tiny: 0 pedidos batendo p/ cpf=...%s numero=%r',
+                    cpf_d[-4:], numero)
         return None
 
-    pedido = achados[0]
+    # `pesquisa.php` nao traz nota_fiscal nem origem completos. Buscar detalhe.
+    pedido_id = str(candidato.get('id') or '')
+    detalhe = obter_pedido_detalhe(pedido_id) or {}
+    # Em detalhe, nota_fiscal vem como dict {'id': ..., 'numero': ...} se emitida.
+    nf = detalhe.get('nota_fiscal') or candidato.get('nota_fiscal') or {}
+    if not isinstance(nf, dict):
+        nf = {}
+
     return {
-        'id': str(pedido.get('id') or ''),
-        'numero': str(pedido.get('numero') or ''),
-        'situacao': pedido.get('situacao') or '',
-        'data_pedido': pedido.get('data_pedido') or '',
-        'origem': (pedido.get('origem') or pedido.get('ecommerce') or '').strip(),
-        # nota_fiscal pode vir como dict {id, numero} ou ausente
-        'nota_fiscal_id': str(((pedido.get('nota_fiscal') or {})
-                                .get('id')) or ''),
+        'id': pedido_id,
+        'numero': str(candidato.get('numero') or ''),
+        'numero_ecommerce': str(candidato.get('numero_ecommerce') or ''),
+        'situacao': detalhe.get('situacao') or candidato.get('situacao') or '',
+        'data_pedido': (detalhe.get('data_pedido')
+                        or candidato.get('data_pedido') or ''),
+        'origem': (detalhe.get('origem') or detalhe.get('ecommerce')
+                    or candidato.get('origem') or '').strip(),
+        'nota_fiscal_id': str(nf.get('id') or ''),
+        'nota_fiscal_situacao': str(nf.get('situacao') or ''),
     }
 
 
