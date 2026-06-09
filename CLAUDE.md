@@ -80,18 +80,11 @@ Esta regra é obrigatória e se aplica a TODA conversa.
 
 - **Branch de produção (Railway acompanha)**: `claude/continue-controller-conversation-aGS3F`
 - **URL publica de prod**: https://gestao.opaopadariaartesanal.com.br/
-- **Auto-deploy** no Railway (Auto deploys ON, **Wait for CI OFF TEMPORARIAMENTE** —
-  desligado pelo usuario em 2026-06-09 pra destravar deploy enquanto a suite eh
-  lenta). CONSEQUENCIA: cada push sobe em ~2-3 min direto, sem esperar o CI
-  passar. O CI continua rodando no GitHub Actions como rede de seguranca
-  **paralela**, mas nao bloqueia o deploy — entao push com teste quebrado SOBE
-  pra prod mesmo (ja aconteceu em 2026-05-22). Mitigacao: sempre rodar
-  `ruff check app/ tests/` E os testes relevantes localmente ANTES de cada
-  push. Mudancas grandes em area de risco (dinheiro/estoque/hooks), rodar a
-  suite inteira: `PYTEST_RUNNING=1 python -m pytest -q`.
-
-  **PENDENTE**: religar Wait for CI assim que a suite estiver rapida (ver
-  "Pendentes do CI" abaixo). Sem isso, o gate de qualidade some pra sempre.
+- **Auto-deploy** no Railway (Auto deploys ON, **Wait for CI ON** — religado pelo
+  usuario em 2026-06-09 apos a janela de fix de NF). CONSEQUENCIA: cada push
+  **espera o CI inteiro passar** (~12-15 min) antes de subir. O gargalo do
+  deploy eh o CI, nao o build Docker (que cacheia bem). Pra deploy rapido em
+  emergencia: desligar "Wait for CI" no Railway temporariamente.
 
 - **Pendentes do CI** (acelerar pra religar Wait for CI sem dor):
   - Suite hoje leva ~12 min sequencial. Tentei xdist com `--dist loadfile` em
