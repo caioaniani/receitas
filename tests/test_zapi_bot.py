@@ -6,7 +6,10 @@ import pytest
 
 @pytest.fixture
 def app_zapi(app):
-    """App com configs do bot setadas + um Usuario owner ativo."""
+    """App com configs do bot setadas + 1 Usuario owner ja criado.
+
+    Nao usa o admin auto-criado pelo create_app() porque em teste a tabela
+    nao existe quando ele tenta — entao criamos manualmente aqui."""
     from app.extensions import db
     from app.models import Usuario
     with app.app_context():
@@ -14,14 +17,12 @@ def app_zapi(app):
         app.config['ZAPI_BOT_WEBHOOK_TOKEN'] = 'secret-token'
         app.config['ZAPI_NUMERO_DESTINO'] = '5511988888888'
         app.config['ANTHROPIC_API_KEY'] = 'fake-key'
-        if not Usuario.query.filter_by(is_owner=True).first():
-            u = Usuario(nome='Dono', login='dono', papel='admin',
-                        is_owner=True)
-            u.set_senha('xxxxxxxxxx')
-            db.session.add(u)
-            db.session.commit()
+        u = Usuario(nome='Dono', login='dono', papel='admin',
+                    is_owner=True)
+        u.set_senha('xxxxxxxxxx')
+        db.session.add(u)
+        db.session.commit()
         yield app
-        db.session.remove()
 
 
 def test_webhook_rejeita_token_invalido(app_zapi):
