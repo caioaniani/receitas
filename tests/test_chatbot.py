@@ -362,6 +362,31 @@ def test_nf_nao_encontrado_nao_vaza_outro_cliente(app):
     assert r['erro'] == 'nao_encontrado'
 
 
+def test_nf_api_falhou_vira_handoff_nao_nao_encontrado(app):
+    """Quando a API do Tiny falha, o bot NUNCA pode dizer 'não encontrei,
+    confere os dados' — isso lava as mãos da falha e culpa o cliente.
+    Tem que ser handoff explicito por instabilidade. Bug visto em prod
+    2026-06-09 (pedido BF6390FBCD existia, Tiny deu glitch transiente)."""
+    from app.services import bot_tools
+
+    def _fake_buscar(cpf, numero, diag=None):
+        if isinstance(diag, dict):
+            diag['api_falhou_em_pagina'] = 1
+            diag['paginas_lidas'] = 0
+            diag['pedidos_vistos'] = 0
+        return None
+
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'xxx'
+        with patch('app.services.tiny.buscar_pedido_por_cpf_e_numero',
+                   side_effect=_fake_buscar):
+            r = bot_tools.buscar_nota_fiscal('11144477735', 'BF6390FBCD')
+    assert r['erro'] == 'tiny_indisponivel'
+    assert 'instabilidade' in r['mensagem'].lower() or 'atendente' in r['mensagem'].lower()
+    # NUNCA cair em "nao encontrado" quando foi falha de API
+    assert r['erro'] != 'nao_encontrado'
+
+
 def test_nf_recusa_sem_cpf_ou_numero(app):
     """Bot NÃO consulta o Tiny se faltar CPF ou número (regra de segurança)."""
     from app.services import bot_tools
