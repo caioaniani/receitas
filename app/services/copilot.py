@@ -1045,6 +1045,9 @@ def interpretar(prompt_text, user, historico=None, images=None,
 
     # Filtra tools pelo papel do user — Claude so ve o que o user pode usar
     tools_filtradas = tools_permitidas(user)
+    if apenas_leitura:
+        tools_filtradas = [t for t in tools_filtradas
+                           if t.get('name') not in REQUER_APROVACAO]
     if not tools_filtradas:
         return {'tipo': 'erro', 'explicacao': 'Sem permissao pra usar o copilot.', 'raw': None}
 
