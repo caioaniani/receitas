@@ -218,28 +218,46 @@ def bot_webhook():
                 resultado = None
                 historico = None
                 try:
-                    historico = chatwoot.buscar_historico(conv_id)
-                    if not historico:
-                        imagens = [a.get('data_url')
-                                   for a in (payload.get('attachments') or [])
-                                   if a.get('file_type') == 'image' and a.get('data_url')]
-                        if not content and not imagens:
-                            return
-                        msg = {'role': 'user', 'content': content}
-                        if imagens:
-                            msg['imagens'] = imagens
-                        historico = [msg]
-                        current_app.logger.warning(
-                            'crm/bot: historico VAZIO p/ conv %s — usando fallback (msg atual). '
-                            'Possivel race ou Chatwoot indisponivel.', conv_id)
+                    # Imagens da mensagem ATUAL (vem do webhook, nao do historico)
+                    imagens = [a.get('data_url')
+                               for a in (payload.get('attachments') or [])
+                               if a.get('file_type') == 'image' and a.get('data_url')]
+                    if not content and not imagens:
+                        return
+                    msg_atual = {'role': 'user', 'content': content}
+                    if imagens:
+                        msg_atual['imagens'] = imagens
+
+                    # Contexto vem do NOSSO banco (confiavel). So semeia do
+                    # Chatwoot na 1a vez (conv nova ou anterior a este fix). A
+                    # msg atual SEMPRE entra como ultima — nunca depende do
+                    # Chatwoot pra estar presente.
+                    store = chatbot.carregar_historico(conv_id)
+                    if store:
+                        base = store
                     else:
-                        current_app.logger.info(
-                            'crm/bot: conv %s historico=%d msgs, ultima=%r',
-                            conv_id, len(historico),
-                            (historico[-1].get('content') or '')[:60])
+                        seed = chatwoot.buscar_historico(conv_id) or []
+                        # O seed do Chatwoot costuma ja terminar com a msg atual;
+                        # tira pra nao duplicar (vamos re-adicionar msg_atual,
+                        # que carrega as imagens).
+                        if (seed and seed[-1].get('role') == 'user'
+                                and (seed[-1].get('content') or '').strip()
+                                == (content or '').strip()):
+                            seed = seed[:-1]
+                        base = seed
+                        if not base:
+                            current_app.logger.info(
+                                'crm/bot: conv %s sem historico previo — conversa nova', conv_id)
+                    historico = base + [msg_atual]
+                    current_app.logger.info('crm/bot: conv %s historico=%d msgs',
+                                            conv_id, len(historico))
+
                     resultado = chatbot.responder(historico)
                     if resultado.get('texto'):
                         chatwoot.enviar_mensagem(conv_id, resultado['texto'])
+                    # Persiste o turno (msg atual + resposta) pro proximo contexto
+                    chatbot.salvar_historico(conv_id, historico,
+                                             resultado.get('texto') or '')
                     if resultado['acao'] == 'handoff':
                         chatwoot.definir_status(conv_id, 'open')
                         logger.info('crm bot handoff conv=%s motivo=%s',
