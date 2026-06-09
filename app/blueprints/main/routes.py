@@ -906,43 +906,60 @@ def debug_tiny():
     resultado: dict = {'cpf': cpf, 'numero': numero,
                        'tiny_disponivel': tiny.disponivel()}
     if cpf and numero:
-        cpf_d = ''.join(c for c in cpf if c.isdigit())
-        # 1. Pesquisa por CPF (a v2 ignora filtros de numero — vimos no debug anterior)
-        r_pesq = tiny._get('pedidos.pesquisa.php',
-                            params={'cpf_cnpj': cpf_d, 'pagina': '1'})
-        resultado['pesquisa'] = {
-            'status': (r_pesq or {}).get('status') if isinstance(r_pesq, dict) else None,
-            'qtd': len((r_pesq or {}).get('pedidos') or []) if isinstance(r_pesq, dict) else 0,
-            'campos_disponiveis': list(((((r_pesq or {}).get('pedidos') or [{}])[0]
-                                          .get('pedido') or {}).keys())
-                                       if isinstance(r_pesq, dict) else []),
-        }
+        try:
+            cpf_d = ''.join(c for c in cpf if c.isdigit())
+            # 1. Pesquisa por CPF (v2 ignora filtros de numero — visto antes)
+            r_pesq = tiny._get('pedidos.pesquisa.php',
+                                params={'cpf_cnpj': cpf_d, 'pagina': '1'})
+            pesq_dict = r_pesq if isinstance(r_pesq, dict) else {}
+            primeiros = pesq_dict.get('pedidos') or []
+            campos = []
+            if primeiros and isinstance(primeiros[0], dict):
+                p0 = primeiros[0].get('pedido') or {}
+                if isinstance(p0, dict):
+                    campos = list(p0.keys())
+            resultado['pesquisa'] = {
+                'status': pesq_dict.get('status'),
+                'qtd': len(primeiros),
+                'campos_disponiveis': campos,
+            }
 
-        # 2. Funcao de alto nivel — o que o bot enxerga
-        pedido = tiny.buscar_pedido_por_cpf_e_numero(cpf, numero)
-        resultado['pedido_resolvido'] = pedido
+            # 2. Funcao de alto nivel — o que o bot enxerga
+            pedido = tiny.buscar_pedido_por_cpf_e_numero(cpf, numero)
+            resultado['pedido_resolvido'] = pedido
 
-        # 3. Se achou o pedido, traz o detalhe CRU (campos crus da v2)
-        if pedido and pedido.get('id'):
-            r_det = tiny._get('pedido.obter.php', params={'id': pedido['id']})
-            resultado['detalhe_cru'] = r_det if isinstance(r_det, dict) else None
-            if isinstance(r_det, dict):
-                p_det = r_det.get('pedido') or {}
-                # v2 pode retornar nota_fiscal (sing) OU notas_fiscais (lista)
-                nf = p_det.get('nota_fiscal') or {}
-                if not nf:
-                    lista = p_det.get('notas_fiscais') or []
-                    if lista and isinstance(lista, list):
-                        primeiro = lista[0]
-                        nf = primeiro.get('nota_fiscal', primeiro) if isinstance(primeiro, dict) else {}
-                resultado['nota_fiscal_extraida'] = nf
-                # 4. Tenta gerar o link se houver id
-                nf_id = (nf or {}).get('id') if isinstance(nf, dict) else None
-                if nf_id:
-                    r_link = tiny._get('nota.fiscal.obter.link.php',
-                                        params={'id': str(nf_id)})
-                    resultado['link_resposta'] = r_link if isinstance(r_link, dict) else None
-                    resultado['link_resolvido'] = tiny.obter_link_nota_fiscal(nf_id)
+            # 3. Se achou o pedido, traz o detalhe CRU
+            if pedido and pedido.get('id'):
+                r_det = tiny._get('pedido.obter.php',
+                                   params={'id': pedido['id']})
+                resultado['detalhe_cru'] = r_det if isinstance(r_det, dict) else None
+                if isinstance(r_det, dict):
+                    p_det = r_det.get('pedido') or {}
+                    if not isinstance(p_det, dict):
+                        p_det = {}
+                    # v2 retorna nota_fiscal (sing) OU notas_fiscais (lista)
+                    nf = p_det.get('nota_fiscal')
+                    if not isinstance(nf, dict):
+                        nf = {}
+                    if not nf:
+                        lista = p_det.get('notas_fiscais') or []
+                        if isinstance(lista, list) and lista:
+                            primeiro = lista[0]
+                            if isinstance(primeiro, dict):
+                                nf = primeiro.get('nota_fiscal') or primeiro
+                                if not isinstance(nf, dict):
+                                    nf = {}
+                    resultado['nota_fiscal_extraida'] = nf
+                    nf_id = nf.get('id') if isinstance(nf, dict) else None
+                    if nf_id:
+                        r_link = tiny._get('nota.fiscal.obter.link.php',
+                                            params={'id': str(nf_id)})
+                        resultado['link_resposta'] = r_link if isinstance(r_link, dict) else None
+                        resultado['link_resolvido'] = tiny.obter_link_nota_fiscal(nf_id)
+        except Exception as exc:  # noqa: BLE001
+            resultado['erro_exception'] = f'{type(exc).__name__}: {exc}'
+            import traceback
+            resultado['traceback'] = traceback.format_exc()[-1500:]
 
     return jsonify(resultado), 200
 
