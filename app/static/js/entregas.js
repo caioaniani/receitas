@@ -2227,12 +2227,33 @@
         html += '<span class="fw-semibold"><i class="bi bi-person-fill"></i> ' + escapeHtml(p.destinatario || '—') + '</span>';
         if (stBadge) html += ' ' + stBadge;
         if (badgeOrigem) html += badgeOrigem;
+        if (p.expresso) html += ' <span class="badge" style="background:#e8590c;color:#fff;font-size:10px;"><i class="bi bi-lightning-fill"></i> Expresso</span>';
         if (p.periodo) html += ' <span class="badge bg-light text-dark" style="font-size:10px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>';
         html += totalHtml + proofLink + adminBtns + btnData + editLocal;
         html += '<div class="text-muted small mt-1"><i class="bi bi-geo-alt"></i> ' + escapeHtml(p.endereco || '') + '</div>';
         if (p.telefone) html += '<div class="text-muted small"><i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) + '</div>';
         if (p.nota_driver) html += '<div class="text-muted small fst-italic mt-1"><i class="bi bi-chat-left-quote"></i> ' + escapeHtml(p.nota_driver) + '</div>';
         html += itensHtml;
+        // Cartinha: faixa amarela sempre visivel quando ha texto (manual > VNDA).
+        // E aqui que a equipe le pra escrever a mao. Botao Editar usa o mesmo
+        // toggleCartinha/salvarCartinha das outras telas.
+        if ((p.cartinha || '').trim().length > 0) {
+            html += '<div class="mt-2 px-2 py-2" style="background:#fff9db;border:1px dashed #f0c000;border-radius:8px;">' +
+                '<div style="font-size:10px;font-weight:700;color:#b8860b;text-transform:uppercase;letter-spacing:1px;">💌 Cartinha' +
+                (p.cartinha_origem === 'vnda' ? ' <span class="text-muted">(do VNDA)</span>' : ' <span class="text-muted">(editada)</span>') + '</div>' +
+                '<div style="font-size:15px;line-height:1.35;white-space:pre-wrap;word-break:break-word;margin-top:2px;">' + escapeHtml(p.cartinha) + '</div>' +
+                '<button class="btn btn-link btn-sm p-0 mt-1 d-print-none" onclick="toggleCartinha(\'' + p.code + '\')" style="font-size:11px;"><i class="bi bi-pencil"></i> Corrigir</button>' +
+                '<div class="cartinha-area d-none mt-1" id="cartinha-' + p.code + '">' +
+                    '<textarea class="form-control form-control-sm mb-1" rows="2" id="cartinha-txt-' + p.code + '">' + escapeHtml(p.cartinha) + '</textarea>' +
+                    '<button class="btn btn-sm btn-warning d-print-none" onclick="salvarCartinha(\'' + p.code + '\')"><i class="bi bi-save"></i> Salvar</button>' +
+                '</div></div>';
+        } else {
+            html += '<div class="mt-1 d-print-none"><button class="btn btn-link btn-sm p-0" onclick="toggleCartinha(\'' + p.code + '\')" style="font-size:11px;color:#94a3b8;"><i class="bi bi-envelope-heart"></i> + cartinha</button>' +
+                '<div class="cartinha-area d-none mt-1" id="cartinha-' + p.code + '">' +
+                    '<textarea class="form-control form-control-sm mb-1" rows="2" id="cartinha-txt-' + p.code + '" placeholder="Texto da cartinha..."></textarea>' +
+                    '<button class="btn btn-sm btn-warning d-print-none" onclick="salvarCartinha(\'' + p.code + '\')"><i class="bi bi-save"></i> Salvar</button>' +
+                '</div></div>';
+        }
         html += fotosHtml;
         html += '</div></div>';
         html += '<div class="d-print-none">';
