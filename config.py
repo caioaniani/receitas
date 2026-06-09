@@ -50,6 +50,13 @@ class Config:
     # ZAPI_BOT_WEBHOOK_TOKEN  = segredo na URL do webhook (?k=...)
     ZAPI_BOT_DONO_NUMERO = os.environ.get('ZAPI_BOT_DONO_NUMERO', '')
     ZAPI_BOT_WEBHOOK_TOKEN = os.environ.get('ZAPI_BOT_WEBHOOK_TOKEN', '')
+    # Retencao de dados (LGPD + custo). Roda no cron diario APOS o backup OK
+    # (nunca apaga dado que nao esteja no dump do dia). RETENCAO_AUTO=0 desliga.
+    RETENCAO_AUTO = os.environ.get('RETENCAO_AUTO', '1') != '0'
+    RETENCAO_LOGS_DIAS = int(os.environ.get('RETENCAO_LOGS_DIAS', '365') or '365')
+    RETENCAO_CONVERSAS_DIAS = int(os.environ.get('RETENCAO_CONVERSAS_DIAS', '180') or '180')
+    RETENCAO_EVENTOS_DIAS = int(os.environ.get('RETENCAO_EVENTOS_DIAS', '7') or '7')
+    RETENCAO_BACKUPS_DIAS = int(os.environ.get('RETENCAO_BACKUPS_DIAS', '90') or '90')
     # Coordenadas da loja matriz — origem das rotas de entrega
     ROTA_ORIGEM_LAT = os.environ.get('ROTA_ORIGEM_LAT', '')
     ROTA_ORIGEM_LNG = os.environ.get('ROTA_ORIGEM_LNG', '')
