@@ -141,7 +141,6 @@ def api_painel():
 
 @entregas_bp.route('/api/painel/visto/<code>', methods=['POST'])
 @login_required
-@entrega_access_required
 def api_painel_visto(code):
     """Marca um pedido como visto (silencia o alerta). Idempotente."""
     code = (code or '').strip()
