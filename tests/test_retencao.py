@@ -144,3 +144,39 @@ def test_rota_debug_sentry_sem_dsn_instrui(app):
     data = r.get_json()
     assert data['dsn_configurado'] is False
     assert 'como_ativar' in data
+
+
+def test_drill_status_compartilhado_entre_processos(app, tmp_path):
+    """Status do drill persiste em ARQUIVO: qualquer worker gunicorn responde
+    o mesmo estado (fix da loteria de worker vista em prod 2026-06-09)."""
+    from unittest.mock import patch as _patch
+
+    from app.services import backup
+    arq = str(tmp_path / 'drill_status.json')
+    with _patch.object(backup, '_DRILL_STATUS_PATH', arq):
+        # sem arquivo = estado zerado
+        assert backup.drill_status() == {'rodando': False, 'iniciado_em': None,
+                                         'resultado': None}
+        # grava como worker A; le como worker B (mesmo arquivo)
+        backup._drill_salvar({'rodando': False, 'iniciado_em': 'x',
+                              'resultado': {'ok': True}})
+        st = backup.drill_status()
+        assert st['resultado'] == {'ok': True}
+
+
+def test_drill_abandonado_destrava(app, tmp_path):
+    """'rodando: true' órfão (worker morreu no meio) expira após o timeout —
+    senão bloquearia novos drills pra sempre."""
+    from datetime import timedelta as _td
+    from unittest.mock import patch as _patch
+
+    from app.services import backup
+    from app.utils import agora as _agora
+    arq = str(tmp_path / 'drill_status.json')
+    velho = (_agora() - _td(minutes=backup._DRILL_TIMEOUT_MIN + 5)).isoformat()
+    with _patch.object(backup, '_DRILL_STATUS_PATH', arq):
+        backup._drill_salvar({'rodando': True, 'iniciado_em': velho,
+                              'resultado': None})
+        st = backup.drill_status()
+    assert st['rodando'] is False
+    assert 'abandonado' in st['resultado']['motivo']
