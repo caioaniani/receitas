@@ -1734,11 +1734,17 @@
                     fetch('/entregas/api/drivers/' + id, {
                         method: 'DELETE',
                         headers: {'X-CSRFToken': CSRF_TOKEN},
-                    }).then(function(r) { return r.json(); })
+                    }).then(function(r) {
+                          // Erro do servidor (ex: FK) nao pode ser engolido — antes
+                          // o r.json() num 500 falhava em silencio e "nada acontecia".
+                          if (!r.ok) {
+                              return r.json().catch(function(){ return {}; })
+                                  .then(function(d){ throw new Error(d.erro || ('HTTP ' + r.status)); });
+                          }
+                          return r.json();
+                      })
                       .then(function(d) {
-                          if (d.acao === 'excluido') {
-                              carregarDrivers();
-                          } else if (d.acao === 'desativado') {
+                          if (d.acao === 'desativado') {
                               var msg = 'Esse driver tem ' + d.atribuicoes + ' pedido(s) no histórico. ' +
                                         'Foi apenas DESATIVADO (não aparece mais nas rotas novas).\n\n' +
                                         'Quer apagar o driver E o histórico de atribuições? (irreversível)';
@@ -1746,14 +1752,25 @@
                                   fetch('/entregas/api/drivers/' + id + '?force=1', {
                                       method: 'DELETE',
                                       headers: {'X-CSRFToken': CSRF_TOKEN},
-                                  }).then(function(r) { return r.json(); })
-                                    .then(function() { carregarDrivers(); });
+                                  }).then(function(r) {
+                                        if (!r.ok) {
+                                            return r.json().catch(function(){ return {}; })
+                                                .then(function(d){ throw new Error(d.erro || ('HTTP ' + r.status)); });
+                                        }
+                                        return r.json();
+                                    })
+                                    .then(function() { carregarDrivers(); })
+                                    .catch(function(err) { alert('Não consegui excluir: ' + err.message); });
                               } else {
                                   carregarDrivers();
                               }
                           } else {
+                              // 'excluido' ou 'excluido_com_historico'
                               carregarDrivers();
                           }
+                      })
+                      .catch(function(err) {
+                          alert('Não consegui excluir o driver: ' + err.message + '\nTente de novo.');
                       });
                 }
             });
