@@ -80,12 +80,14 @@ Esta regra é obrigatória e se aplica a TODA conversa.
 
 - **Branch de produção (Railway acompanha)**: `claude/continue-controller-conversation-aGS3F`
 - **URL publica de prod**: https://gestao.opaopadariaartesanal.com.br/
-- **Auto-deploy** no Railway (Auto deploys ON, **Wait for CI ON** — confirmado pelo
-  usuario em 2026-06-09). CONSEQUENCIA: cada push **espera o CI inteiro passar**
-  (~12-15 min) antes de subir. NAO eh "~3 min" — essa nota antiga estava errada e
-  causou varias estimativas furadas. O gargalo do deploy eh o CI, nao o build Docker
-  (que cacheia bem: requirements.txt antes do COPY . .). Pra deploy rapido: ou
-  acelerar o CI, ou desligar "Wait for CI" (perde o gate de testes).
+- **Auto-deploy** no Railway (Auto deploys ON, **Wait for CI OFF** — desligado pelo
+  usuario em 2026-06-09). CONSEQUENCIA: cada push sobe em ~2-3 min direto, sem
+  esperar o CI passar. O CI continua rodando no GitHub Actions como rede de
+  seguranca **paralela**, mas nao bloqueia o deploy — entao push com teste
+  quebrado SOBE pra prod mesmo (ja aconteceu em 2026-05-22). Mitigacao: sempre
+  rodar `ruff check app/ tests/` E os testes relevantes localmente ANTES de
+  cada push. Mudancas grandes em area de risco (dinheiro/estoque/hooks), rodar
+  a suite inteira: `PYTEST_RUNNING=1 python -m pytest -q`.
 - **Workflow**: **SEMPRE commit direto no branch de producao**. Nao abrir PR — o auto-commit
   hook ja faz commit+push pro branch atual, e o usuario nao quer mergear nada manualmente.
   Se a mudanca for grande, ainda assim vai direto em prod (auto-commit acumula varios commits).
