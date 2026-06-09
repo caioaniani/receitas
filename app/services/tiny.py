@@ -74,7 +74,7 @@ def _so_digitos(s):
     return ''.join(c for c in (s or '') if c.isdigit())
 
 
-def buscar_pedido_por_cpf_e_numero(cpf, numero):
+def buscar_pedido_por_cpf_e_numero(cpf, numero, diag=None):
     """Procura UM pedido especifico no Tiny pela intersecao CPF + numero.
     E o caminho seguro pra o bot — sem CPF, nao retorna nada de outro cliente.
 
