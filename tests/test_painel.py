@@ -83,3 +83,21 @@ def test_painel_exige_login(app):
     c = app.test_client()
     assert c.get('/entregas/painel').status_code in (302, 401)
     assert c.get('/entregas/api/painel').status_code in (302, 401)
+
+
+def test_qualquer_logado_acessa(app):
+    """Trava afrouxada: usuario comum (sem admin, sem loja) acessa o painel."""
+    from app.extensions import db
+    from app.models import Usuario
+    u = Usuario(nome='Padeiro', login='pad', papel='padeiro')  # sem loja_id
+    u.set_senha('x' * 8)
+    db.session.add(u)
+    db.session.commit()
+    c = app.test_client()
+    with c.session_transaction() as sess:
+        sess['_user_id'] = str(u.id)
+        sess['_fresh'] = True
+    assert c.get('/entregas/painel').status_code == 200
+    with patch('app.services.vnda.buscar_pedidos_do_dia',
+               return_value={'pedidos': []}):
+        assert c.get('/entregas/api/painel').status_code == 200
