@@ -67,12 +67,18 @@ def _limpar_tabelas(db):
 
 @pytest.fixture
 def app(_app_session, _config_baseline):
-    from app.extensions import db
+    from app.extensions import db, limiter
     application = _app_session
     ctx = application.app_context()
     ctx.push()
     # Estado limpo garantido no INICIO do teste (mesmo se o anterior crashou).
     _limpar_tabelas(db)
+    # Zera o rate limiter — antes cada teste tinha app novo (limiter zerado);
+    # com app de sessao o estado acumula e estoura 429 (quebrava 91 testes).
+    try:
+        limiter.reset()
+    except Exception:  # noqa: BLE001
+        pass
     try:
         yield application
     finally:
