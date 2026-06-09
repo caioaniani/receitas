@@ -467,6 +467,14 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None):
                     km = round(km_total, 1)
                     minutos = min_total
 
+        # Respeita a janela de horario: EXPRESSO primeiro, depois por horario.
+        # Sort ESTAVEL -> preserva a ordem geografica otimizada DENTRO de cada
+        # janela. Sem isso, a otimizacao puramente geografica podia enterrar um
+        # expresso no fim da rota ou visitar um pedido das 8h depois das 14h.
+        # km/minutos ficam como estimativa do melhor caso (ordem geo-otima);
+        # a janela pode alongar um pouco, mas SLA de horario > distancia exata.
+        todas.sort(key=janela_rank)
+
         paradas = [{**p, 'ordem': idx + 1} for idx, p in enumerate(todas)]
         rotas.append({
             'driver': {'id': d['id'], 'nome': d['nome'], 'cor': d.get('cor')},
