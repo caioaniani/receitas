@@ -20,6 +20,23 @@ class CartinhaEntrega(db.Model):
 
     autor = db.relationship('Usuario', backref='cartinhas')
 
+
+class PedidoVistoPainel(db.Model):
+    """Marca que um pedido do dia ja foi 'visto' (clicado) no Painel do Dia.
+
+    Enquanto NAO visto, o painel toca o alerta sonoro. Clicar no pedido grava
+    aqui e silencia. Server-side de proposito: se uma pessoa da equipe clica,
+    silencia em TODOS os aparelhos (a turma compartilha a mesma fila)."""
+    __tablename__ = 'pedido_visto_painel'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_code = db.Column(db.String(50), nullable=False, unique=True, index=True)
+    data_ref = db.Column(db.Date, index=True)   # dia de entrega (escopo/limpeza)
+    visto_em = db.Column(db.DateTime, default=agora)
+    visto_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    autor = db.relationship('Usuario', backref='pedidos_vistos_painel')
+
 class OverrideEntrega(db.Model):
     """Sobrescreve a data de entrega de um pedido VNDA — local, nao sincroniza com o VNDA."""
     __tablename__ = 'override_entrega'
