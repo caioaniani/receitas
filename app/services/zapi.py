@@ -66,6 +66,10 @@ def _whitelist_numeros():
     destino = _normalizar_numero(current_app.config.get('ZAPI_NUMERO_DESTINO') or '')
     if destino:
         permitidos.add(destino)
+    # Numero do dono pro bot privado (so escreve pra ele mesmo).
+    dono = _normalizar_numero(current_app.config.get('ZAPI_BOT_DONO_NUMERO') or '')
+    if dono:
+        permitidos.add(dono)
     # Inclui motoristas ativos (pra magic link diario funcionar sem
     # admin precisar adicionar manualmente cada telefone).
     try:
