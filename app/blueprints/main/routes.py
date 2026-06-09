@@ -1019,6 +1019,14 @@ def debug_vnda_cartinha():
                          'has_customizations': it.get('has_customizations')}
                         for it in itens]
 
+        # Campos de NIVEL DE PEDIDO que poderiam conter a "cartinha escondida"
+        # (mensagem de entrega / observacao). Se o texto da cartinha aparecer
+        # aqui, da pra editar via PATCH /orders — bem mais facil que o carrinho.
+        out['campos_mensagem'] = {k: body.get(k) for k in
+                                  ('note', 'delivery_message', 'extra',
+                                   'user_code', 'agent', 'channel')
+                                  if k in body}
+
         # 2. Customizations atuais (READ — ja sabemos que funciona)
         cust = {}
         for it in itens[:5]:
@@ -1028,31 +1036,17 @@ def debug_vnda_cartinha():
                     'GET', f'/orders/{code}/items/{iid}/customizations')
         out['customizations_pedido'] = cust
 
-        # 3. OPTIONS no customizations do PEDIDO — revela metodos aceitos
-        if itens and itens[0].get('id'):
-            out['options_pedido'] = _probe(
-                'OPTIONS',
-                f"/orders/{code}/items/{itens[0]['id']}/customizations")
-
-        # 4. Tenta alcancar o CARRINHO do pedido por token/cart_id
-        cart_ref = (body.get('token') or body.get('cart_id')
-                    or body.get('cart_token'))
-        if cart_ref:
-            out['cart_ref'] = cart_ref
-            ci = _probe('GET', f'/carts/{cart_ref}/items')
-            out['cart_items'] = ci
-            cib = ci.get('body') if isinstance(ci, dict) else None
-            primeiro = (cib[0].get('id')
-                        if isinstance(cib, list) and cib else None)
-            if primeiro:
-                out['options_cart'] = _probe(
-                    'OPTIONS',
-                    f'/carts/{cart_ref}/items/{primeiro}/customizations')
-        else:
-            out['cart_ref'] = None
-            out['nota'] = ('Pedido nao expoe token/cart_id direto — talvez '
-                           'precise de GET /carts pra cruzar, ou a escrita '
-                           'pos-fechamento nao seja suportada.')
+        # 3. Tenta alcancar o CARRINHO por token E por cart_id numerico.
+        # (O token deu carrinho vazio antes; o cart_id numerico pode diferir.)
+        out['cart_por_token'] = None
+        out['cart_por_id'] = None
+        tok = body.get('token')
+        cid = body.get('cart_id')
+        if tok:
+            out['cart_por_token'] = _probe('GET', f'/carts/{tok}/items')
+        if cid:
+            out['cart_por_id_meta'] = _probe('GET', f'/carts/{cid}')
+            out['cart_por_id'] = _probe('GET', f'/carts/{cid}/items')
     except Exception as exc:  # noqa: BLE001
         import traceback
         out['erro_exception'] = f'{type(exc).__name__}: {exc}'
