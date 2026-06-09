@@ -1055,6 +1055,74 @@ def debug_vnda_cartinha():
     return jsonify(out), 200
 
 
+@main_bp.route('/admin/debug-vnda-cartinha-write')
+@owner_required
+def debug_vnda_cartinha_write():
+    """Owner-only TESTE DE ESCRITA da cartinha no pedido. Tenta um metodo HTTP
+    (POST/PUT/DELETE) no endpoint de customizations do PEDIDO e reporta o
+    status cru do VNDA. ESCREVE de verdade — por isso exige ?confirmo=sim.
+
+    ⚠️ USE EM PEDIDO DE TESTE. Pode alterar/duplicar a cartinha real.
+
+    Parametros:
+      code, item_id   obrigatorios (vem do sondador read-only)
+      metodo          post (default) | put | delete
+      texto           texto da cartinha de teste
+      grupo           group_name (default 'Cartinha')
+      cust_id         id da customization (pra put/delete em recurso especifico)
+      formato         body1 (default {group_name,name}) | body2 ({customizations:[...]})
+    """
+    import requests
+
+    from app.services import vnda
+    code = (request.args.get('code') or '').strip()
+    item_id = (request.args.get('item_id') or '').strip()
+    metodo = (request.args.get('metodo') or 'post').lower()
+    texto = (request.args.get('texto') or 'TESTE BOT - pode apagar').strip()
+    grupo = (request.args.get('grupo') or 'Cartinha').strip()
+    cust_id = (request.args.get('cust_id') or '').strip()
+    formato = (request.args.get('formato') or 'body1').strip()
+
+    out: dict = {'code': code, 'item_id': item_id, 'metodo': metodo,
+                 'formato': formato}
+    if request.args.get('confirmo') != 'sim':
+        out['erro'] = ('Faltou ?confirmo=sim. ATENCAO: esta rota ESCREVE no '
+                       'VNDA. Rode so em pedido de TESTE.')
+        return jsonify(out), 200
+    if not code or not item_id:
+        out['erro'] = 'precisa de ?code=...&item_id=... (pegue do sondador read-only)'
+        return jsonify(out), 200
+
+    base = vnda._base_url()
+    headers = vnda._headers()
+    path = f'/orders/{code}/items/{item_id}/customizations'
+    if metodo in ('put', 'delete') and cust_id:
+        path = f'{path}/{cust_id}'
+
+    # Dois palpites de corpo — VNDA pode querer chave plana ou aninhada.
+    if formato == 'body2':
+        payload = {'customizations': [{'group_name': grupo, 'name': texto}]}
+    else:
+        payload = {'group_name': grupo, 'name': texto}
+
+    out['url'] = f'{base}{path}'
+    out['payload_enviado'] = payload
+    try:
+        kwargs = {} if metodo == 'delete' else {'json': payload}
+        r = requests.request(metodo.upper(), f'{base}{path}',
+                             headers=headers, timeout=12, **kwargs)
+        try:
+            rbody = r.json()
+        except ValueError:
+            rbody = (r.text or '')[:600]
+        out['resposta'] = {'status': r.status_code,
+                           'allow': r.headers.get('Allow'), 'body': rbody}
+    except requests.RequestException as e:
+        out['erro_req'] = str(e)
+
+    return jsonify(out), 200
+
+
 @main_bp.route('/admin/debug-schema/upgrade', methods=['POST'])
 @owner_required
 def debug_schema_upgrade():
