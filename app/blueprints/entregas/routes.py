@@ -1339,7 +1339,12 @@ def api_atribuidos():
     for d in drivers_db:
         if d.id not in paradas_por_driver:
             continue
-        paradas_list = sorted(paradas_por_driver[d.id], key=lambda x: (x[0], x[1].get('periodo') or ''))
+        # Ordena por JANELA (expresso primeiro, depois por horario) e, dentro
+        # da janela, pela ordem salva da rota. Respeita o SLA de horario mesmo
+        # antes de re-otimizar.
+        paradas_list = sorted(
+            paradas_por_driver[d.id],
+            key=lambda x: (rotas_svc.janela_rank(x[1]), x[0]))
         drivers_resp.append({
             'id': d.id,
             'nome': d.nome,
