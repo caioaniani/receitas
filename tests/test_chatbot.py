@@ -1007,3 +1007,53 @@ def test_responder_erro_produtos_forca_handoff(app):
             r = chatbot.responder([{'role': 'user', 'content': 'quero uma cesta'}])
     assert r['acao'] == 'handoff'
     assert 'R$' not in r['texto']   # não vaza preço inventado
+
+
+# ── Histórico persistente (fix da perda de contexto, 2026-06-09) ──
+
+def test_historico_persiste_contexto_entre_turnos(app):
+    """Cerne do fix: o contexto sobrevive no NOSSO banco entre turnos, sem
+    depender do Chatwoot. Simula o caso que quebrou em prod: pedido num turno,
+    CPF no turno seguinte."""
+    from app.services import chatbot
+    with app.app_context():
+        # Turno 1: cliente pede NF. historico passado ao salvar termina na msg dele.
+        chatbot.salvar_historico(
+            'conv-9', [{'role': 'user', 'content': 'quero a nf do pedido BF6390FBCD'}],
+            'Preciso também do CPF do pedido. Pode informar?')
+        store = chatbot.carregar_historico('conv-9')
+        assert store == [
+            {'role': 'user', 'content': 'quero a nf do pedido BF6390FBCD'},
+            {'role': 'assistant', 'content': 'Preciso também do CPF do pedido. Pode informar?'},
+        ]
+        # Turno 2: cliente manda o CPF sozinho. _processar faria store + [msg_atual].
+        chatbot.salvar_historico(
+            'conv-9', store + [{'role': 'user', 'content': '23519277883'}], 'Buscando...')
+        conteudos = [m['content'] for m in chatbot.carregar_historico('conv-9')]
+        # Contexto completo preservado: o pedido E o CPF estao no historico.
+        assert 'quero a nf do pedido BF6390FBCD' in conteudos
+        assert '23519277883' in conteudos
+
+
+def test_historico_vazio_quando_nao_existe(app):
+    from app.services import chatbot
+    with app.app_context():
+        assert chatbot.carregar_historico('inexistente') == []
+
+
+def test_historico_capa_no_maximo(app):
+    from app.services import chatbot
+    with app.app_context():
+        big = [{'role': 'user', 'content': f'msg {i}'} for i in range(60)]
+        chatbot.salvar_historico('conv-cap', big, 'ok')
+        assert len(chatbot.carregar_historico('conv-cap')) == chatbot.MAX_HIST_STORE
+
+
+def test_historico_imagem_vira_placeholder(app):
+    """Msg só-imagem (sem texto) é preservada como turno, não some do histórico."""
+    from app.services import chatbot
+    with app.app_context():
+        chatbot.salvar_historico(
+            'conv-img', [{'role': 'user', 'content': '', 'imagens': ['http://x/y.jpg']}], 'vi sua imagem')
+        store = chatbot.carregar_historico('conv-img')
+        assert store[0]['content'] == '[imagem enviada]'
