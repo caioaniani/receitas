@@ -25,15 +25,30 @@ def disponivel():
 
 def _get(endpoint, params=None):
     """POST no Tiny (a API v2 usa POST com form-data). Devolve dict do JSON ou
-    None em qualquer falha. Tiny envolve tudo em {'retorno': {'status': ...}}."""
+    None em qualquer falha. Tiny envolve tudo em {'retorno': {'status': ...}}.
+
+    Faz 1 retry em erros TRANSIENTES (HTTP 429/5xx ou timeout). Glitches do
+    Tiny aconteciam silenciosamente — o bot de NF recusava o cliente com
+    'nao encontrei' (visto em prod 2026-06-09)."""
     if not disponivel():
         return None
     token = current_app.config['TINY_API_TOKEN'].strip()
     url = f'{BASE}/{endpoint}'
     data = {'token': token, 'formato': 'JSON'}
     data.update(params or {})
-    try:
-        r = requests.post(url, data=data, timeout=12)
+
+    for tentativa in (1, 2):
+        try:
+            r = requests.post(url, data=data, timeout=12)
+        except requests.RequestException as exc:
+            logger.warning('tiny %s tentativa %d: %s', endpoint, tentativa, exc)
+            if tentativa == 1:
+                continue
+            logger.error('tiny %s falhou em ambas tentativas: %s', endpoint, exc)
+            return None
+        if r.status_code in (429, 500, 502, 503, 504) and tentativa == 1:
+            logger.warning('tiny %s HTTP %s — retry', endpoint, r.status_code)
+            continue
         if r.status_code not in (200, 201):
             logger.warning('tiny %s: HTTP %s', endpoint, r.status_code)
             return None
@@ -45,7 +60,6 @@ def _get(endpoint, params=None):
         retorno = payload.get('retorno') if isinstance(payload, dict) else None
         if not isinstance(retorno, dict):
             return None
-        # Tiny indica erro em retorno.status = 'Erro' OU codigo != 1
         status = (retorno.get('status') or '').lower()
         if status not in ('ok', '1'):
             erros = retorno.get('erros') or retorno.get('registros') or []
@@ -53,9 +67,7 @@ def _get(endpoint, params=None):
                            endpoint, status, str(erros)[:200])
             return None
         return retorno
-    except requests.RequestException as exc:
-        logger.error('tiny %s falhou: %s', endpoint, exc)
-        return None
+    return None
 
 
 def _so_digitos(s):
