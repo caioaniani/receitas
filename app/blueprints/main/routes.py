@@ -907,27 +907,42 @@ def debug_tiny():
                        'tiny_disponivel': tiny.disponivel()}
     if cpf and numero:
         cpf_d = ''.join(c for c in cpf if c.isdigit())
-        n = numero.lstrip('#').strip()
-        chamadas = []
-        for params in ({'cpf_cnpj': cpf_d, 'numero_ecommerce': n},
-                       {'cpf_cnpj': cpf_d, 'numero_ordem_compra': n},
-                       {'cpf_cnpj': cpf_d, 'numero': n},
-                       {'cpf_cnpj': cpf_d}):
-            r = tiny._get('pedidos.pesquisa.php', params=params)
-            chamadas.append({
-                'params': params,
-                'retorno_status': (r or {}).get('status') if isinstance(r, dict) else None,
-                'qtd_pedidos': len((r or {}).get('pedidos') or []) if isinstance(r, dict) else 0,
-                'pedidos_resumo': [
-                    {k: ped.get('pedido', {}).get(k)
-                     for k in ('id', 'numero', 'numero_ecommerce',
-                               'numero_ordem_compra', 'origem',
-                               'situacao', 'cliente', 'nota_fiscal')}
-                    for ped in ((r or {}).get('pedidos') or [])[:10]
-                ] if isinstance(r, dict) else None,
-            })
-        resultado['chamadas'] = chamadas
-        resultado['pedido_resolvido'] = tiny.buscar_pedido_por_cpf_e_numero(cpf, numero)
+        # 1. Pesquisa por CPF (a v2 ignora filtros de numero — vimos no debug anterior)
+        r_pesq = tiny._get('pedidos.pesquisa.php',
+                            params={'cpf_cnpj': cpf_d, 'pagina': '1'})
+        resultado['pesquisa'] = {
+            'status': (r_pesq or {}).get('status') if isinstance(r_pesq, dict) else None,
+            'qtd': len((r_pesq or {}).get('pedidos') or []) if isinstance(r_pesq, dict) else 0,
+            'campos_disponiveis': list(((((r_pesq or {}).get('pedidos') or [{}])[0]
+                                          .get('pedido') or {}).keys())
+                                       if isinstance(r_pesq, dict) else []),
+        }
+
+        # 2. Funcao de alto nivel — o que o bot enxerga
+        pedido = tiny.buscar_pedido_por_cpf_e_numero(cpf, numero)
+        resultado['pedido_resolvido'] = pedido
+
+        # 3. Se achou o pedido, traz o detalhe CRU (campos crus da v2)
+        if pedido and pedido.get('id'):
+            r_det = tiny._get('pedido.obter.php', params={'id': pedido['id']})
+            resultado['detalhe_cru'] = r_det if isinstance(r_det, dict) else None
+            if isinstance(r_det, dict):
+                p_det = r_det.get('pedido') or {}
+                # v2 pode retornar nota_fiscal (sing) OU notas_fiscais (lista)
+                nf = p_det.get('nota_fiscal') or {}
+                if not nf:
+                    lista = p_det.get('notas_fiscais') or []
+                    if lista and isinstance(lista, list):
+                        primeiro = lista[0]
+                        nf = primeiro.get('nota_fiscal', primeiro) if isinstance(primeiro, dict) else {}
+                resultado['nota_fiscal_extraida'] = nf
+                # 4. Tenta gerar o link se houver id
+                nf_id = (nf or {}).get('id') if isinstance(nf, dict) else None
+                if nf_id:
+                    r_link = tiny._get('nota.fiscal.obter.link.php',
+                                        params={'id': str(nf_id)})
+                    resultado['link_resposta'] = r_link if isinstance(r_link, dict) else None
+                    resultado['link_resolvido'] = tiny.obter_link_nota_fiscal(nf_id)
 
     return jsonify(resultado), 200
 
