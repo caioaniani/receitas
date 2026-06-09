@@ -1082,3 +1082,52 @@ def test_historico_imagem_vira_placeholder(app):
             'conv-img', [{'role': 'user', 'content': '', 'imagens': ['http://x/y.jpg']}], 'vi sua imagem')
         store = chatbot.carregar_historico('conv-img')
         assert store[0]['content'] == '[imagem enviada]'
+
+
+def test_tiny_get_retry_em_glitch_transiente(app):
+    """`_get` faz 3 tentativas com backoff em 503/timeout/etc. Cenario real
+    visto em prod 2026-06-09: Tiny tosse na 1a e 2a, recupera na 3a."""
+    from app.services import tiny
+
+    class _Resp:
+        def __init__(self, status, json_data=None):
+            self.status_code = status
+            self._json = json_data
+
+        def json(self):
+            return self._json
+
+    chamadas = []
+    ok = _Resp(200, {'retorno': {'status': 'OK', 'pedidos': []}})
+    erros = [_Resp(503), _Resp(503), ok]
+
+    def _post(*args, **kwargs):
+        chamadas.append(1)
+        return erros[len(chamadas) - 1]
+
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'xxx'
+        with patch('app.services.tiny.requests.post', side_effect=_post), \
+             patch('app.services.tiny.time.sleep'):   # nao espera de verdade
+            r = tiny._get('pedidos.pesquisa.php', params={'cpf_cnpj': 'X'})
+    assert r is not None
+    assert r.get('status') == 'OK'
+    assert len(chamadas) == 3   # tentou 3 vezes ate sucesso
+
+
+def test_tiny_get_propaga_causa_quando_todas_falham(app):
+    """Apos 3 503s, `_consumir_falha` deve dar a causa (HTTP 503)."""
+    from app.services import tiny
+
+    class _Resp503:
+        status_code = 503
+
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'xxx'
+        with patch('app.services.tiny.requests.post', return_value=_Resp503()), \
+             patch('app.services.tiny.time.sleep'):
+            r = tiny._get('pedidos.pesquisa.php')
+    assert r is None
+    causa = tiny._consumir_falha()
+    assert causa is not None
+    assert '503' in causa
