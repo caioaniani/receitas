@@ -10,6 +10,7 @@ Token: env var TINY_API_TOKEN (gerado em Painel Tiny -> Configuracoes -> API).
 Se nao houver token, todas as funcoes retornam None (feature fica dormente).
 """
 import logging
+import threading
 
 import requests
 from flask import current_app
@@ -17,6 +18,22 @@ from flask import current_app
 logger = logging.getLogger(__name__)
 
 BASE = 'https://api.tiny.com.br/api2'
+
+# Causa da ULTIMA falha de `_get` por thread. Lida por `buscar_pedido_*` pra
+# propagar no `diag` (e dai pro NFLog). Thread-local porque o webhook do bot
+# processa em threads — sem isolamento, requests concorrentes embaralham o
+# erro reportado.
+_falha = threading.local()
+
+
+def _registrar_falha(motivo):
+    _falha.motivo = motivo
+
+
+def _consumir_falha():
+    motivo = getattr(_falha, 'motivo', None)
+    _falha.motivo = None
+    return motivo
 
 
 def disponivel():
