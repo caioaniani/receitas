@@ -98,7 +98,6 @@ def painel():
 
 @entregas_bp.route('/api/painel')
 @login_required
-@entrega_access_required
 def api_painel():
     data_str = request.args.get('data', hoje_brt().isoformat())
     try:
