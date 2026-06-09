@@ -1,8 +1,16 @@
-"""Fixtures de teste — SQLite in-memory + seed minimo.
+"""Fixtures de teste — app/schema criados 1x por sessao + reset por DELETE.
 
-Cada teste recebe um app/db isolado. Usar fixture `admin_user` pra ter
-um Usuario admin pronto. Fixture `loja` cria uma loja operacional.
+Cada teste recebe um banco LIMPO via fixture `app`. Usar fixture `admin_user`
+pra ter um Usuario admin pronto. Fixture `loja` cria uma loja operacional.
 Fixture `catalogo` cria 1 receita + 1 produto + 1 MP.
+
+PERFORMANCE (refactor 2026-06-09): antes cada teste fazia `create_app()` +
+`drop_all()` + `create_all()` (~1.16s/teste = ~9.4 min de setup nos 487
+testes). Agora o app e o schema sao criados UMA vez por sessao, e o reset
+entre testes vira `DELETE` das linhas de todas as tabelas (~0.02s/teste, 43x
+mais rapido). DELETE (e nao drop+create) mantem o arquivo SQLite vivo, entao
+codigo que abre `db.engine.connect()` proprio (seru_cron, blob_migrator)
+continua enxergando os dados — sem a fragilidade do padrao de transacao.
 
 Sem dependencia de Anthropic API: testes mockam tool_call ou chamam
 diretamente os enrichers/executores.
@@ -23,25 +31,56 @@ if _xdist_worker:
     os.environ['DATABASE_URL'] = (
         f'sqlite:///{tempfile.gettempdir()}/padaria_test_{_xdist_worker}.db')
 
+os.environ.setdefault('SECRET_KEY', 'test-secret')
+os.environ['PYTEST_RUNNING'] = '1'
 
-@pytest.fixture
-def app():
-    # Banco LOCAL (nao :memory:) porque varios helpers usam conexao propria
-    # do sqlite3 que nao ve um in-memory db. Drop+create_all garante isolamento.
-    os.environ['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'  # historico, ignorado
-    os.environ['SECRET_KEY'] = 'test-secret'
-    os.environ['PYTEST_RUNNING'] = '1'
+
+@pytest.fixture(scope='session')
+def _app_session():
+    """Cria o app + schema UMA vez por sessao de testes."""
     from app import create_app
     from app.extensions import db
-    app = create_app()
-    app.config['TESTING'] = True
-    app.config['WTF_CSRF_ENABLED'] = False
-    with app.app_context():
+    application = create_app()
+    application.config['TESTING'] = True
+    application.config['WTF_CSRF_ENABLED'] = False
+    with application.app_context():
         db.drop_all()
         db.create_all()
-        yield app
+    return application
+
+
+@pytest.fixture(scope='session')
+def _config_baseline(_app_session):
+    """Snapshot da config logo apos criar o app. Restaurada apos CADA teste
+    pra mutacoes (`app.config['X']=Y`, comuns nos testes) nao vazarem entre
+    testes, ja que o objeto `app` agora eh compartilhado pela sessao."""
+    return dict(_app_session.config)
+
+
+def _limpar_tabelas(db):
+    """Apaga as linhas de todas as tabelas, em ordem reversa de FK (seguro
+    mesmo com foreign_keys=ON). Substitui o drop+create por teste."""
+    for table in reversed(db.metadata.sorted_tables):
+        db.session.execute(table.delete())
+    db.session.commit()
+
+
+@pytest.fixture
+def app(_app_session, _config_baseline):
+    from app.extensions import db
+    application = _app_session
+    ctx = application.app_context()
+    ctx.push()
+    # Estado limpo garantido no INICIO do teste (mesmo se o anterior crashou).
+    _limpar_tabelas(db)
+    try:
+        yield application
+    finally:
         db.session.remove()
-        db.drop_all()
+        ctx.pop()
+        # Desfaz mutacoes de config feitas pelo teste (app compartilhado).
+        application.config.clear()
+        application.config.update(_config_baseline)
 
 
 def _make_receita(nome, categoria='Paes'):
