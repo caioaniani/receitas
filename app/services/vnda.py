@@ -356,6 +356,7 @@ def _normalizar_pedido(order, client_data=None, shipping_data=None, items_custom
         'data_entrega': data_entrega.isoformat() if data_entrega else None,
         'data_entrega_fmt': data_entrega.strftime('%d/%m/%Y') if data_entrega else '',
         'periodo': _extrair_periodo(order),
+        'expresso': _is_entrega_expressa(order),
         'comprador': comprador,
         'destinatario': destinatario,
         'telefone': telefone_dest,
