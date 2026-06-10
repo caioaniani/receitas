@@ -246,10 +246,17 @@ def prefill_sugestao(ia_fator, ia_unidade, unidade_mp, unidade_nf):
       1. NF quantificada em unidade metrica (farinha comprada por kg):
          fator = conversao fisica pura (kg->g: 1000); o tamanho da
          embalagem que a IA leu no nome e irrelevante.
-      2. NF em embalagem (cx/un/fd) + sugestao da IA em unidade metrica:
+      2. MP contada em 'un' + sugestao da IA em unidade METRICA (ml/l/g/
+         kg/mg): a IA leu o CONTEUDO da embalagem no nome ("Bebida de
+         Aveia Nude 1L" -> 1000 ml, 2026-06-10), mas conteudo nao conta
+         unidades — o fator da IA e descartado. NF tambem na familia 'un'
+         (un/cx/fd/pct...): fator = 1.0 (1 caixinha = 1 un); NF em outra
+         grandeza: fator vazio (None), sem chute.
+      3. NF em embalagem (cx/un/fd) + sugestao da IA em unidade metrica:
          converte o conteudo pra unidade da MP (1.8 kg -> 1800 g) e usa a
-         unidade de compra real da NF.
-      3. Resto: sugestao crua da IA, como antes.
+         unidade de compra real da NF. (So MP metrica chega aqui — MP em
+         'un' cai na regra 2.)
+      4. Resto: sugestao crua da IA, como antes.
     """
     try:
         ia_fator = float(ia_fator) if ia_fator is not None else None
@@ -259,6 +266,13 @@ def prefill_sugestao(ia_fator, ia_unidade, unidade_mp, unidade_nf):
     conv_nf = conversao_metrica(unidade_nf, unidade_mp)
     if conv_nf is not None:
         return conv_nf, unidade_nf
+    # Regra 2 — MP contavel ('un') com sugestao metrica da IA (caso
+    # "Bebida de Aveia Nude 1L", 2026-06-10: NF em 'un', IA sugeriu
+    # 1000/ml lendo o conteudo; prefill mostrava "1 un = 1000 un").
+    if (_grandeza(unidade_mp) == 'un'
+            and _grandeza(ia_unidade) in ('massa', 'volume')):
+        fator = 1.0 if _grandeza(unidade_nf) == 'un' else None
+        return fator, (unidade_nf or ia_unidade)
     conv_ia = conversao_metrica(ia_unidade, unidade_mp)
     if ia_fator and conv_ia is not None:
         return ia_fator * conv_ia, (unidade_nf or ia_unidade)
