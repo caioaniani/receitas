@@ -40,7 +40,6 @@ def executar_limpeza(dry_run=False):
     from app.extensions import db
     from app.models import (
         ChatbotConversa,
-        NFLog,
         SlackEventoProcessado,
         VigiaVeredito,
         ZapiBotEventoProcessado,
@@ -49,10 +48,13 @@ def executar_limpeza(dry_run=False):
     rel = {'dry_run': dry_run}
 
     # (modelo, coluna de data, dias) — escopo FECHADO e documentado por alvo.
-    # NUNCA adicionar tabela de negocio (pedido/venda/estoque) aqui: retencao
-    # eh so pra log/contexto/idempotencia, que tem copia ou perde valor.
+    # NUNCA adicionar tabela de negocio (pedido/venda/estoque/RH) aqui:
+    # retencao eh so pra log operacional/contexto/idempotencia.
+    #
+    # FORA por decisao do dono (2026-06-10): `NFLog` (auditoria de solicitacao
+    # de NF pelo bot) — tudo que toca nota fiscal fica PRA SEMPRE. A nota em
+    # si nunca esteve aqui (vive no Tiny/Sefaz; NF de fornecedor em ContaPagar).
     alvos_db = [
-        ('nf_log', NFLog, NFLog.criado_em, cfg['RETENCAO_LOGS_DIAS']),
         ('vigia_veredito', VigiaVeredito, VigiaVeredito.criado_em,
          cfg['RETENCAO_LOGS_DIAS']),
         ('chatbot_conversa', ChatbotConversa, ChatbotConversa.ultima_msg_em,
