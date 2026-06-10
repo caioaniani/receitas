@@ -7,6 +7,40 @@
     <div class="text-muted small">Últimas 200 mudanças no sistema — em linguagem natural.</div>
 </div>
 
+{% if cartinhas %}
+<div class="card mb-3">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <strong><i class="bi bi-envelope-heart"></i> Cartinhas cadastradas/editadas (últimas 48h)</strong>
+        <span class="badge bg-secondary">{{ cartinhas|length }}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th style="width:140px">Pedido</th>
+                    <th>Cartinha</th>
+                    <th style="width:160px">Quem cadastrou</th>
+                    <th style="width:140px">Quando</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in cartinhas %}
+                <tr>
+                    <td><code>{{ c.pedido_code }}</code></td>
+                    <td class="small text-muted" style="white-space:pre-wrap; max-width:520px;">{{ (c.texto or '')[:200] }}{% if c.texto and c.texto|length > 200 %}…{% endif %}</td>
+                    <td>{{ c.autor.nome if c.autor else '—' }}</td>
+                    <td class="small text-muted">{{ c.atualizado_em.strftime('%d/%m %H:%M') if c.atualizado_em else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer py-1 small text-muted">
+        Pedido com cliente que <i>pediu</i> cartinha mas não está aqui? Atendente não cadastrou — veja a conversa no Chatwoot e adicione em <a href="{{ url_for('entregas.painel') }}">/entregas/painel</a>.
+    </div>
+</div>
+{% endif %}
+
 <form method="GET" class="d-flex gap-2 mb-3 flex-wrap align-items-center">
     <select name="tabela" class="form-select form-select-sm" style="max-width:200px;" onchange="this.form.submit()">
         <option value="">Todos os tipos</option>
