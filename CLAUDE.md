@@ -325,15 +325,17 @@ temporario `drill_restore_tmp`, conta linhas de tabelas-chave e dropa
 **Retencao de dados** (2026-06-09, LGPD + custo): limpeza automatica
 roda no cron diario APOS o backup dar OK (nunca apaga o que nao esta
 no dump do dia). Servico `app/services/retencao.py`. Prazos via env:
-`RETENCAO_LOGS_DIAS=365` (NFLog, VigiaVeredito),
+`RETENCAO_LOGS_DIAS=365` (VigiaVeredito),
 `RETENCAO_CONVERSAS_DIAS=180` (ChatbotConversa inativa),
 `RETENCAO_EVENTOS_DIAS=7` (idempotencia Slack/Zapi),
 `RETENCAO_BACKUPS_DIAS=90` (dumps Dropbox — decisao do dono;
 o dump MAIS RECENTE de cada pasta nunca eh apagado).
 Desligar: `RETENCAO_AUTO=0`. Inspecao manual: `GET /admin/retencao`
 (dry-run) / `?executar=1` (apaga). NUNCA adicionar tabela de negocio
-(pedido/venda/estoque) nos alvos — retencao eh so log/contexto/
-idempotencia.
+(pedido/venda/estoque/RH) nos alvos — retencao eh so log/contexto/
+idempotencia. **NFLog fica PRA SEMPRE** (decisao do dono 2026-06-10:
+tudo que toca NF eh preservado; foi retirado dos alvos — ha teste
+travando isso, `test_nflog_nunca_e_apagado`).
 
 **Monitoramento de erros (Sentry)**: ja instalado e integrado
 (`app/__init__.py::_init_sentry`, opt-in). Ativar = setar `SENTRY_DSN`
