@@ -3,7 +3,16 @@ import io
 import os
 import zipfile
 
-from flask import abort, flash, jsonify, redirect, render_template, request, url_for
+from flask import (
+    abort,
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_login import current_user, login_required
 
 from app.blueprints.receitas import receitas_bp
@@ -605,6 +614,128 @@ def vinculos_resolver(id):
     db.session.commit()
     grupos, pode = _vinculos_receita(receita)
     return jsonify(grupos=grupos, pode_excluir=pode)
+
+
+@receitas_bp.route('/<int:id>/vinculos/transferir', methods=['POST'])
+@login_required
+@admin_required
+def vinculos_transferir(id):
+    """Transfere TODOS os vínculos da receita pra outra (fusão de duplicata,
+    ex: "Molho Pesto 100g" -> "Molho Pesto"). Histórico não se apaga — se
+    REAPONTA: pedidos/vendas/desperdício mudam a FK; estoque FUNDE com a
+    linha equivalente do destino (mesma loja/estado) somando quantidades e
+    reapontando as movimentações pra linha que fica — nada se perde.
+    Estoque/dinheiro têm peso especial: tudo explícito, 1 commit no fim."""
+    from sqlalchemy import func
+
+    from app.models import (
+        Atribuicao,
+        Desperdicio,
+        EstoqueLoja,
+        EstoqueProducao,
+        LojaProdutoMap,
+        MovEstoqueLoja,
+        MovEstoqueProducao,
+        PedidoItem,
+        PlanejamentoItem,
+        PrecoLojaReceita,
+        ProdutoItem,
+        SeruProdutoMap,
+        VendaB2BItem,
+        VendaManualLoja,
+        VndaProdutoMap,
+    )
+    origem = Receita.query.get_or_404(id)
+    nome_destino = (request.form.get('destino') or '').strip()
+    destino = (Receita.query
+               .filter(func.lower(Receita.nome) == nome_destino.lower())
+               .first()) if nome_destino else None
+    if not destino:
+        return jsonify(erro=f'receita "{nome_destino}" não encontrada — '
+                            'use o nome exato (o campo autocompleta)'), 400
+    if destino.id == origem.id:
+        return jsonify(erro='o destino é a própria receita'), 400
+
+    movidos = {}
+
+    def _conta(chave, n):
+        if n:
+            movidos[chave] = movidos.get(chave, 0) + n
+
+    # FKs simples: o registro histórico fica intacto, só muda o alvo.
+    for chave, modelo in (('pedidos', PedidoItem),
+                          ('vendas_b2b', VendaB2BItem),
+                          ('vendas_manuais', VendaManualLoja),
+                          ('desperdicio', Desperdicio),
+                          ('planejamento', PlanejamentoItem),
+                          ('atribuicoes', Atribuicao)):
+        _conta(chave, modelo.query.filter_by(receita_id=origem.id)
+               .update({'receita_id': destino.id}, synchronize_session=False))
+
+    # Cestas: reaponta a FK e corrige o nome humano-legível.
+    _conta('cestas', ProdutoItem.query.filter_by(receita_id=origem.id)
+           .update({'receita_id': destino.id, 'item_nome': destino.nome},
+                   synchronize_session=False))
+
+    # Uso como ingrediente em outras fichas (vínculo por NOME).
+    _conta('ingrediente_em_fichas', ReceitaIngrediente.query
+           .filter(ReceitaIngrediente.tipo == 'receita',
+                   ReceitaIngrediente.ingrediente_nome == origem.nome,
+                   ReceitaIngrediente.receita_id != origem.id)
+           .update({'ingrediente_nome': destino.nome},
+                   synchronize_session=False))
+
+    # Mapeamentos de PDV/site/loja (mantém confirmação e fator).
+    for modelo in (SeruProdutoMap, VndaProdutoMap, LojaProdutoMap):
+        _conta('mapeamentos', modelo.query.filter_by(receita_id=origem.id)
+               .update({'receita_id': destino.id}, synchronize_session=False))
+
+    # Preços por loja: unique (loja, receita) — se o destino já tem preço
+    # naquela loja, o preço dele prevalece e o da origem é descartado.
+    for p in PrecoLojaReceita.query.filter_by(receita_id=origem.id).all():
+        ja_tem = PrecoLojaReceita.query.filter_by(
+            receita_id=destino.id, loja_id=p.loja_id).first()
+        if ja_tem:
+            db.session.delete(p)
+        else:
+            p.receita_id = destino.id
+        _conta('precos_loja', 1)
+
+    # Estoque: funde com a linha equivalente do destino (mesmo estado/loja).
+    # As movimentações são reapontadas ANTES de apagar a linha da origem —
+    # o histórico de movimento sobrevive inteiro na linha que fica.
+    for e in EstoqueProducao.query.filter_by(receita_id=origem.id).all():
+        alvo = EstoqueProducao.query.filter_by(
+            receita_id=destino.id, estado=e.estado).first()
+        if alvo:
+            alvo.quantidade = (alvo.quantidade or 0) + (e.quantidade or 0)
+            MovEstoqueProducao.query.filter_by(estoque_producao_id=e.id).update(
+                {'estoque_producao_id': alvo.id}, synchronize_session=False)
+            db.session.delete(e)
+        else:
+            e.receita_id = destino.id
+        _conta('estoque_producao', 1)
+
+    for e in EstoqueLoja.query.filter_by(receita_id=origem.id).all():
+        alvo = EstoqueLoja.query.filter_by(
+            receita_id=destino.id, loja_id=e.loja_id, estado=e.estado).first()
+        if alvo:
+            alvo.quantidade = (alvo.quantidade or 0) + (e.quantidade or 0)
+            MovEstoqueLoja.query.filter_by(estoque_loja_id=e.id).update(
+                {'estoque_loja_id': alvo.id}, synchronize_session=False)
+            db.session.delete(e)
+        else:
+            e.receita_id = destino.id
+        _conta('estoque_loja', 1)
+
+    db.session.commit()
+    current_app.logger.info(
+        'vinculos de receita transferidos: "%s" (#%s) -> "%s" (#%s) por %s: %s',
+        origem.nome, origem.id, destino.nome, destino.id,
+        current_user.login, movidos)
+    grupos, pode = _vinculos_receita(origem)
+    return jsonify(grupos=grupos, pode_excluir=pode, movidos=movidos,
+                   destino=destino.nome)
 
 
 @receitas_bp.route('/<int:id>/excluir', methods=['POST'])
