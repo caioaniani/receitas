@@ -192,11 +192,11 @@
         </a>
         <a href="{{ url_for('receitas.precos') }}"
            class="sidebar-link {% if request.path == '/receitas/precos' %}active{% endif %}">
-            Preços (bulk)
+            Editar preços em massa
         </a>
         <a href="{{ url_for('receitas.reaproveitavel') }}"
            class="sidebar-link {% if request.path == '/receitas/reaproveitavel' %}active{% endif %}">
-            Reaproveitável (bulk)
+            Marcar reaproveitáveis
         </a>
         <a href="{{ url_for('receitas.modos_preparo') }}"
            class="sidebar-link {% if request.path.startswith('/receitas/modos-preparo') %}active{% endif %}">
@@ -204,8 +204,14 @@
         </a>
         <a href="{{ url_for('receitas.imagens_upload') }}"
            class="sidebar-link {% if request.path.startswith('/receitas/imagens') %}active{% endif %}">
-            Imagens (zip)
+            Subir imagens (zip)
         </a>
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('main.todo') }}"
+           class="sidebar-link {% if request.path == '/todo' %}active{% endif %}">
+            Pendências do catálogo
+        </a>
+        {% endif %}
         {% endif %}
 
         {# ── 4. VENDAS & ENTREGAS ── #}
