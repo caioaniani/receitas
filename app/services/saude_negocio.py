@@ -84,7 +84,9 @@ def resumo_receitas(margem_minima=None):
     dados = custos_svc.calcular_custos_receitas()
     custos = dados.get('custos') or {}
 
-    receitas = Receita.query.order_by(Receita.nome).all()
+    # Arquivada nao pede acao — fora do radar de fichas incompletas.
+    receitas = (Receita.query.filter(Receita.arquivada_em.is_(None))
+                .order_by(Receita.nome).all())
     ficha_incompleta = []
     sem_preco = []
     margem_critica = []

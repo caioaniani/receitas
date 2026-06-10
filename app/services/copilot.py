@@ -775,7 +775,7 @@ def _catalogo_texto():
         linhas.append(f"  - {p.nome}")
     linhas.append("")
     linhas.append("RECEITAS (use o nome exato):")
-    for r in Receita.query.order_by(Receita.nome).all():
+    for r in Receita.query.filter(Receita.arquivada_em.is_(None)).order_by(Receita.nome).all():
         linhas.append(f"  - {r.nome}")
     linhas.append("")
     linhas.append("MATERIAS PRIMAS (use o nome exato):")
@@ -1600,7 +1600,8 @@ def _resolver_produto(nome):
         return matches
     for p in Produto.query.filter(Produto.nome.ilike(f'%{nome}%')).limit(10).all():
         matches.append({'tipo': 'produto', 'id': p.id, 'nome': p.nome, 'match': 'fuzzy'})
-    for r in Receita.query.filter(Receita.nome.ilike(f'%{nome}%')).limit(10).all():
+    for r in (Receita.query.filter(Receita.nome.ilike(f'%{nome}%'),
+                                   Receita.arquivada_em.is_(None)).limit(10).all()):
         matches.append({'tipo': 'receita', 'id': r.id, 'nome': r.nome, 'match': 'fuzzy'})
     if matches:
         matches.sort(key=lambda m: _score_proximidade(nome, m['nome']))
@@ -1608,7 +1609,7 @@ def _resolver_produto(nome):
     # Fallback rapidfuzz — quando nenhuma substring bate (ex: "PFR" vs
     # "Pao Frances Fermentado", "cro almnd" vs "Croissant Almond").
     produtos = Produto.query.all()
-    receitas = Receita.query.all()
+    receitas = Receita.query.filter(Receita.arquivada_em.is_(None)).all()
     pool = [('produto', p.id, p.nome) for p in produtos] + \
            [('receita', r.id, r.nome) for r in receitas]
     if not pool:
@@ -2222,7 +2223,8 @@ def _read_consultar_margem(params, user):
         return {'texto': 'Informe o nome.'}
     resultado = calcular_custos_receitas()
     custos = resultado.get('custos', {})
-    r = Receita.query.filter(Receita.nome.ilike(nome)).first()
+    r = Receita.query.filter(Receita.nome.ilike(nome),
+                             Receita.arquivada_em.is_(None)).first()
     if not r:
         # Tenta produto
         p = Produto.query.filter(Produto.nome.ilike(nome)).first()
@@ -3167,7 +3169,8 @@ def _resolver_item_qualquer(nome):
         return ('mp', m.id, m.nome)
     # Fuzzy: coleta top 10 de cada e desempata por proximidade.
     cands = []
-    for r in Receita.query.filter(Receita.nome.ilike(f'%{nome}%')).limit(10).all():
+    for r in (Receita.query.filter(Receita.nome.ilike(f'%{nome}%'),
+                                   Receita.arquivada_em.is_(None)).limit(10).all()):
         cands.append(('receita', r.id, r.nome))
     for p in Produto.query.filter(Produto.nome.ilike(f'%{nome}%')).limit(10).all():
         cands.append(('produto', p.id, p.nome))

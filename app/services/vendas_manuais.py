@@ -474,7 +474,8 @@ def gerar_template_xlsx(loja):
 
     # Linhas de exemplo: pega ate 20 receitas + 10 produtos
     exemplos_nomes = [r.nome for r in
-                      Receita.query.order_by(Receita.categoria, Receita.nome).limit(30).all()]
+                      Receita.query.filter(Receita.arquivada_em.is_(None))
+                      .order_by(Receita.categoria, Receita.nome).limit(30).all()]
     if not exemplos_nomes:
         exemplos_nomes = ['Croissant Tradicional', 'Pao Frances', 'Sourdough']
 
