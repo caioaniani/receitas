@@ -143,4 +143,75 @@
 {% endfor %}
 
 {% include 'contas_pagar/_fator_vivo_js.html' %}
+
+<script>
+// Acoes em lote: junta os selecionados e manda pro /mapeamentos/lote.
+// "Confirmar" usa o que esta preenchido em CADA linha (MP + unidade + fator);
+// linha incompleta/invalida volta em `falhas` e fica intacta na tela.
+(function () {
+  var bar = document.getElementById('lote-bar');
+  if (!bar) return;
+  var todos = document.getElementById('lote-todos');
+  var contagem = document.getElementById('lote-contagem');
+  var btnConfirmar = document.getElementById('btn-lote-confirmar');
+  var btnIgnorar = document.getElementById('btn-lote-ignorar');
+
+  function selecionados() {
+    return Array.prototype.slice.call(
+      document.querySelectorAll('.lote-sel:checked'));
+  }
+  function atualizarBarra() {
+    var n = selecionados().length;
+    contagem.textContent = n ? n + ' selecionado(s)' : '';
+    btnConfirmar.disabled = !n;
+    btnIgnorar.disabled = !n;
+  }
+  document.addEventListener('change', function (e) {
+    if (e.target.classList.contains('lote-sel')) atualizarBarra();
+  });
+  todos.addEventListener('change', function () {
+    document.querySelectorAll('.lote-sel').forEach(function (c) {
+      c.checked = todos.checked;
+    });
+    atualizarBarra();
+  });
+
+  function enviar(acao) {
+    var sel = selecionados();
+    if (!sel.length) return;
+    var verbo = acao === 'ignorar' ? 'Ignorar' : 'Confirmar';
+    if (!confirm(verbo + ' ' + sel.length + ' item(ns) selecionado(s)?')) return;
+    var itens = sel.map(function (c) {
+      var form = c.closest('.mapa-form');
+      return {
+        id: parseInt(form.dataset.mapaId, 10),
+        materia_prima_id: form.querySelector('.mapa-mp').value,
+        unidade_compra: form.querySelector('.mapa-uncompra').value,
+        fator_conversao: form.querySelector('.mapa-fator').value
+      };
+    });
+    btnConfirmar.disabled = btnIgnorar.disabled = true;
+    fetch(btnConfirmar.dataset.url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify({acao: acao, itens: itens})
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var msg = (data.ok || 0) + ' resolvido(s).';
+        if (data.falhas && data.falhas.length) {
+          msg += '\n\nFicaram pendentes:\n• ' + data.falhas.join('\n• ');
+        }
+        alert(msg);
+        location.reload();
+      })
+      .catch(function () {
+        alert('Falha na ação em lote — tente de novo.');
+        atualizarBarra();
+      });
+  }
+  btnConfirmar.addEventListener('click', function () { enviar('vincular'); });
+  btnIgnorar.addEventListener('click', function () { enviar('ignorar'); });
+})();
+</script>
 {% endblock %}
