@@ -176,7 +176,14 @@
             </div>
         </div>
         {% else %}
-        <div class="card-body" style="white-space:pre-wrap;">{{ receita.modo_preparo }}</div>
+        <div class="card-body">
+            {% for etapa in etapas_preparo %}
+            <div class="d-flex gap-2 align-items-start {% if not loop.last %}mb-2 pb-2 border-bottom{% endif %}">
+                <span class="badge bg-dark mt-1">{{ loop.index }}</span>
+                <div style="white-space:pre-wrap;">{{ etapa }}</div>
+            </div>
+            {% endfor %}
+        </div>
         {% endif %}
     </div>
 </div>
