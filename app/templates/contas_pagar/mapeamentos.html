@@ -123,6 +123,17 @@
     return Number(n).toLocaleString('pt-BR',
       {minimumFractionDigits: 0, maximumFractionDigits: casas});
   }
+  // Espelho de conversao_metrica() do backend: unidades metricas e quantos
+  // da grandeza-base cada uma vale. cx/un/fardo ficam de fora de proposito.
+  var METRICAS = {kg: ['g', 1000], g: ['g', 1], mg: ['g', 0.001],
+                  l: ['ml', 1000], lt: ['ml', 1000], litro: ['ml', 1000],
+                  litros: ['ml', 1000], ml: ['ml', 1]};
+  function convMetrica(de, para) {
+    var a = METRICAS[(de || '').trim().toLowerCase()];
+    var b = METRICAS[(para || '').trim().toLowerCase()];
+    if (!a || !b || a[0] !== b[0]) return null;
+    return a[1] / b[1];
+  }
   document.querySelectorAll('form.card').forEach(function (form) {
     var sel = form.querySelector('.mapa-mp');
     var fator = form.querySelector('.mapa-fator');
