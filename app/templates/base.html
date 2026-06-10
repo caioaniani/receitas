@@ -415,9 +415,14 @@
             Modo Padeiro
         </a>
         {% if current_user.is_authenticated and current_user.is_admin() %}
+        <a href="{{ url_for('auth.painel') }}"
+           class="sidebar-link {% if request.path == '/auth/painel' %}active{% endif %}"
+           title="Fichas técnicas atribuídas a funcionários">
+            Fichas atribuídas
+        </a>
         <a href="{{ url_for('receitas.familias') }}"
            class="sidebar-link {% if request.path == '/receitas/familias' %}active{% endif %}">
-            Famílias (bulk)
+            Famílias
         </a>
         {% endif %}
 
