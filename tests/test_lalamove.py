@@ -69,7 +69,7 @@ def test_cotar_monta_stops_e_parseia(app):
     assert (r['quotation_id'], r['valor'], r['distancia_m']) == ('Q1', '24.50', 4970)
     assert (r['sender_stop_id'], r['recipient_stop_id']) == ('S0', 'S1')
     payload = json.loads(req.call_args[1]['data'])
-    assert payload['data']['serviceType'] == 'MOTORCYCLE'
+    assert payload['data']['serviceType'] == 'LALAGO'   # moto no BR
     assert len(payload['data']['stops']) == 2
     # origem fixada por env (sem geocodificar a origem; so o destino)
     assert geo.call_count == 1
@@ -149,7 +149,7 @@ def test_api_painel_inclui_lalamove(app, admin_user):
     with app.app_context():
         db.session.add(LalamoveEntrega(
             pedido_code='VND-1', data_ref=hoje(), order_id='O-9',
-            status='PICKED_UP', service_type='MOTORCYCLE', valor=12,
+            status='PICKED_UP', service_type='LALAGO', valor=12,
             moeda='BRL', share_link='https://share/x'))
         db.session.commit()
     c = app.test_client()
