@@ -169,8 +169,9 @@ def conversao_metrica(unidade_de, unidade_para):
     return de[1] / para[1]
 
 
-def prefill_sugestao(mapa, unidade_mp, unidade_nf):
-    """(fator, unidade_compra) pre-preenchidos no form de mapeamento.
+def prefill_sugestao(ia_fator, ia_unidade, unidade_mp, unidade_nf):
+    """(fator, unidade_compra) pre-preenchidos num form de vinculo item->MP
+    (tela de mapeamentos e detalhe da conta).
 
     A IA le o conteudo da embalagem no nome do item ('CX 1,8KG' -> 1.8 com
     unidade kg), mas a entrada de estoque multiplica a QTD DA NF pelo fator
@@ -185,16 +186,18 @@ def prefill_sugestao(mapa, unidade_mp, unidade_nf):
          unidade de compra real da NF.
       3. Resto: sugestao crua da IA, como antes.
     """
-    fator = mapa.ia_fator_sugerido
-    unidade = mapa.ia_unidade_sugerida
+    try:
+        ia_fator = float(ia_fator) if ia_fator is not None else None
+    except (TypeError, ValueError):
+        ia_fator = None
     unidade_nf = (unidade_nf or '').strip()
     conv_nf = conversao_metrica(unidade_nf, unidade_mp)
     if conv_nf is not None:
         return conv_nf, unidade_nf
-    conv_ia = conversao_metrica(unidade, unidade_mp)
-    if fator and conv_ia is not None:
-        return fator * conv_ia, (unidade_nf or unidade)
-    return fator, unidade
+    conv_ia = conversao_metrica(ia_unidade, unidade_mp)
+    if ia_fator and conv_ia is not None:
+        return ia_fator * conv_ia, (unidade_nf or ia_unidade)
+    return ia_fator, ia_unidade
 
 
 def _to_float(v):
