@@ -107,20 +107,26 @@ def test_power_multi_turn_envia_historico(app):
     """Segunda mensagem traz historico da primeira pro copilot_svc."""
     _setup(app)
     c = app.test_client()
+
+    # Snapshot dos historicos passados — a lista e modificada in-place pela
+    # rota depois da chamada, entao mock.call_args guardaria a versao final.
+    capturado = []
+
+    def fake_interpretar(*args, **kwargs):
+        capturado.append(list(kwargs.get('historico') or []))
+        return {'tipo': 'conversa', 'explicacao': 'A1'}
+
     with patch('app.services.copilot.interpretar',
-               return_value={'tipo': 'conversa', 'explicacao': 'A1'}) as fake:
+               side_effect=fake_interpretar):
         c.post('/api/bot/copilot?telefone=5511999990000',
                headers={'Authorization': 'Bearer tk_power'},
                json={'mensagem': 'pergunta 1'})
-        assert fake.call_args[1]['historico'] == []   # 1a vazia
-
         c.post('/api/bot/copilot?telefone=5511999990000',
                headers={'Authorization': 'Bearer tk_power'},
                json={'mensagem': 'pergunta 2'})
-        h2 = fake.call_args[1]['historico']
-        assert len(h2) == 2
-        assert h2[0] == {'role': 'user', 'content': 'pergunta 1'}
-        assert h2[1] == {'role': 'assistant', 'content': 'A1'}
+    assert capturado[0] == []
+    assert capturado[1] == [{'role': 'user', 'content': 'pergunta 1'},
+                            {'role': 'assistant', 'content': 'A1'}]
 
 
 def test_power_reset_apaga_memoria(app):
