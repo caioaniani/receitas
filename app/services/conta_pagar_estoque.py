@@ -140,13 +140,78 @@ def limpar_mapas_orfaos():
     return removidos
 
 
-def sugerir_para_item(nome):
+def sugerir_para_item(nome, unidade_nf=None):
     """Sugestoes de MateriaPrima pra um nome de item (pra UI de mapeamento).
 
-    Reusa o resolver fuzzy do copilot. Retorna [{id, nome, unidade, match}].
+    Reusa o resolver fuzzy do copilot e — quando a unidade da NF e conhecida
+    — adiciona candidatos por TOKEN do nome filtrados pela mesma grandeza
+    fisica. Sem isso, "Bebida de Aveia Nude 1L" em **un** so devolvia
+    "Aveia (g)" (resolver casa por substring "aveia") e o usuario tinha que
+    rolar todo o dropdown pra achar "Leite de aveia NUDE (un)".
     """
     from app.services.copilot import _resolver_mp
-    return _resolver_mp((nome or '').strip()) if (nome or '').strip() else []
+    nome = (nome or '').strip()
+    if not nome:
+        return []
+    base = _resolver_mp(nome)
+    grandeza_nf = _grandeza(unidade_nf)
+    if not grandeza_nf:
+        return base
+
+    # Candidatos extra: MPs cujo nome compartilha algum token >=4 letras com
+    # o item e cuja unidade casa com a grandeza da NF. Limita a 5 — eh
+    # complemento, nao substituto.
+    import re
+
+    from sqlalchemy import or_
+
+    from app.models import MateriaPrima
+    tokens = [t for t in re.findall(r'\w+', nome.lower())
+              if len(t) >= 4 and t not in {'litro', 'litros'}]
+    extras = []
+    if tokens:
+        clausulas = [MateriaPrima.nome.ilike(f'%{t}%') for t in tokens]
+        candidatos = MateriaPrima.query.filter(or_(*clausulas)).limit(20).all()
+        ids_base = {x.get('id') for x in base}
+        for mp in candidatos:
+            if mp.id in ids_base:
+                continue
+            if _grandeza(mp.unidade) != grandeza_nf:
+                continue
+            # ranqueia por # de tokens que aparecem no nome da MP
+            score = sum(1 for t in tokens if t in mp.nome.lower())
+            extras.append((score, {'id': mp.id, 'nome': mp.nome,
+                                   'unidade': mp.unidade, 'match': 'token'}))
+        extras.sort(key=lambda x: -x[0])
+        base = [e[1] for e in extras[:5]] + base
+
+    # Re-rank por afinidade de unidade: exato > grandeza casa > resto.
+    base.sort(key=lambda x: (0 if x.get('match') == 'exato'
+                             else (1 if _grandeza(x.get('unidade')) == grandeza_nf
+                                   else 2)))
+    # dedupe preservando ordem (extras podem reaparecer no base)
+    vistos, out = set(), []
+    for s in base:
+        if s['id'] in vistos:
+            continue
+        vistos.add(s['id'])
+        out.append(s)
+    return out
+
+
+# Agrupa unidades pelo TIPO fisico (un, massa, volume) — pra re-ranquear
+# sugestoes por afinidade de unidade. Une 'g'/'kg' e 'ml'/'l' como mesma
+# grandeza pra nao penalizar variacao de prefixo.
+def _grandeza(unidade):
+    u = (unidade or '').strip().lower()
+    if u in ('un', 'unidade', 'unidades', 'cx', 'fardo', 'fd', 'pct',
+             'pacote', 'pote', 'sache', 'sc', 'mc', 'pk'):
+        return 'un'
+    if u in ('g', 'kg', 'mg', 'gramas'):
+        return 'massa'
+    if u in ('ml', 'l', 'lt', 'litro', 'litros'):
+        return 'volume'
+    return None
 
 
 # 1 unidade -> (grandeza-base, quantos da base). So unidades METRICAS entram —
