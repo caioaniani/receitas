@@ -460,6 +460,152 @@ def duplicar(id):
     return redirect(url_for('receitas.ficha', id=copia.id))
 
 
+def _vinculos_receita(receita):
+    """Agrupa tudo que referencia a receita, separando o que tem resolucao
+    automatica SEGURA (configuracao: cestas, mapeamentos de PDV, precos,
+    atribuicoes, uso como ingrediente) do que e HISTORICO e nunca se apaga
+    por aqui (pedidos, vendas, estoque, desperdicio — peso especial).
+    Retorna (grupos, pode_excluir)."""
+    from app.models import (
+        Atribuicao,
+        Desperdicio,
+        EstoqueLoja,
+        EstoqueProducao,
+        LojaProdutoMap,
+        PedidoItem,
+        PlanejamentoItem,
+        PrecoLojaReceita,
+        ProdutoItem,
+        SeruProdutoMap,
+        VendaB2BItem,
+        VendaManualLoja,
+        VndaProdutoMap,
+    )
+    rid = receita.id
+    grupos = []
+
+    def _grupo(chave, titulo, resolvivel, descricao, itens, qtd=None):
+        if qtd or itens:
+            grupos.append({'chave': chave, 'titulo': titulo,
+                           'resolvivel': resolvivel, 'descricao': descricao,
+                           'qtd': qtd if qtd is not None else len(itens),
+                           'itens': itens[:10]})
+
+    # ── Resolviveis (configuracao, nao historico) ──
+    itens_cesta = ProdutoItem.query.filter_by(receita_id=rid).all()
+    _grupo('cestas', 'Componente de cestas/produtos', True,
+           'Remove esta receita da composição das cestas listadas.',
+           [{'label': (i.produto.nome if getattr(i, 'produto', None)
+                       else f'cesta #{i.produto_id}'),
+             'url': url_for('produtos.detalhe', id=i.produto_id)}
+            for i in itens_cesta])
+
+    usos = (ReceitaIngrediente.query
+            .filter(ReceitaIngrediente.tipo == 'receita',
+                    ReceitaIngrediente.ingrediente_nome == receita.nome,
+                    ReceitaIngrediente.receita_id != rid).all())
+    _grupo('ingrediente_em_fichas', 'Usada como ingrediente em outras fichas',
+           True,
+           'Remove o ingrediente das fichas listadas — a composição e o '
+           'custo DELAS mudam.',
+           [{'label': (u.receita.nome if u.receita else f'ficha #{u.receita_id}'),
+             'url': url_for('receitas.ficha', id=u.receita_id)} for u in usos])
+
+    maps = []
+    for m in SeruProdutoMap.query.filter_by(receita_id=rid).all():
+        maps.append({'label': f'Seru: {m.seru_nome}',
+                     'url': url_for('pdv.mapeamentos')})
+    for m in VndaProdutoMap.query.filter_by(receita_id=rid).all():
+        maps.append({'label': f'Site: {m.vnda_nome}', 'url': None})
+    for m in LojaProdutoMap.query.filter_by(receita_id=rid).all():
+        maps.append({'label': f'Loja: {m.nome_digitado}', 'url': None})
+    _grupo('mapeamentos', 'Mapeamentos de PDV/site/loja', True,
+           'Desfaz os vínculos — os nomes voltam pra fila de pendentes.',
+           maps)
+
+    precos = PrecoLojaReceita.query.filter_by(receita_id=rid).count()
+    _grupo('precos_loja', 'Preços por loja', True,
+           'Apaga os preços específicos por loja desta receita.',
+           [], qtd=precos)
+
+    atribs = Atribuicao.query.filter_by(receita_id=rid).count()
+    _grupo('atribuicoes', 'Atribuições a funcionários', True,
+           'Apaga as atribuições de preparo desta receita.',
+           [], qtd=atribs)
+
+    # ── Historico: NUNCA apagavel por aqui ──
+    historicos = (
+        ('Pedidos de loja', PedidoItem),
+        ('Vendas B2B', VendaB2BItem),
+        ('Vendas manuais de loja', VendaManualLoja),
+        ('Estoque de produção/congelados', EstoqueProducao),
+        ('Estoque de loja', EstoqueLoja),
+        ('Registros de desperdício', Desperdicio),
+        ('Planos de produção', PlanejamentoItem),
+    )
+    for titulo, modelo in historicos:
+        n = modelo.query.filter_by(receita_id=rid).count()
+        _grupo(f'hist_{modelo.__tablename__}', titulo, False,
+               'Histórico — não pode ser apagado. Enquanto existir, a '
+               'receita não pode ser excluída (pare de usá-la ou renomeie '
+               'para "zz-Descontinuada").',
+               [], qtd=n)
+
+    pode_excluir = not grupos
+    return grupos, pode_excluir
+
+
+@receitas_bp.route('/<int:id>/vinculos')
+@login_required
+@admin_required
+def vinculos(id):
+    """JSON pro modal de exclusão: o que ainda referencia a receita."""
+    receita = Receita.query.get_or_404(id)
+    grupos, pode = _vinculos_receita(receita)
+    return jsonify(grupos=grupos, pode_excluir=pode)
+
+
+@receitas_bp.route('/<int:id>/vinculos/resolver', methods=['POST'])
+@login_required
+@admin_required
+def vinculos_resolver(id):
+    """Resolve UM grupo de vínculos (ação explícita do admin no modal).
+    Só grupos de configuração — histórico nunca passa por aqui."""
+    from app.models import (
+        Atribuicao,
+        LojaProdutoMap,
+        PrecoLojaReceita,
+        ProdutoItem,
+        SeruProdutoMap,
+        VndaProdutoMap,
+    )
+    receita = Receita.query.get_or_404(id)
+    chave = request.form.get('chave') or ''
+    if chave == 'cestas':
+        ProdutoItem.query.filter_by(receita_id=receita.id).delete()
+    elif chave == 'ingrediente_em_fichas':
+        ReceitaIngrediente.query.filter(
+            ReceitaIngrediente.tipo == 'receita',
+            ReceitaIngrediente.ingrediente_nome == receita.nome,
+            ReceitaIngrediente.receita_id != receita.id).delete()
+    elif chave == 'mapeamentos':
+        # Volta pra pendente (receita_id NULL) — nao apaga o nome mapeado.
+        for modelo in (SeruProdutoMap, VndaProdutoMap, LojaProdutoMap):
+            for m in modelo.query.filter_by(receita_id=receita.id).all():
+                m.receita_id = None
+                if hasattr(m, 'confirmado_em'):
+                    m.confirmado_em = None
+    elif chave == 'precos_loja':
+        PrecoLojaReceita.query.filter_by(receita_id=receita.id).delete()
+    elif chave == 'atribuicoes':
+        Atribuicao.query.filter_by(receita_id=receita.id).delete()
+    else:
+        return jsonify(erro=f'grupo "{chave}" não tem resolução automática'), 400
+    db.session.commit()
+    grupos, pode = _vinculos_receita(receita)
+    return jsonify(grupos=grupos, pode_excluir=pode)
+
+
 @receitas_bp.route('/<int:id>/excluir', methods=['POST'])
 @login_required
 @admin_required
