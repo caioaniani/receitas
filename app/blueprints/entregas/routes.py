@@ -12,6 +12,7 @@ from app.models import (
     CartinhaEntrega,
     Driver,
     EntregaFoto,
+    LalamoveEntrega,
     LoteSaida,
     MateriaPrima,
     OverrideEntrega,
@@ -115,6 +116,7 @@ def api_painel():
         for s in PainelPedidoStatus.query.filter(
                 PainelPedidoStatus.pedido_code.in_(codes)).all():
             status_por_code[s.pedido_code] = s.status or 'visto'
+    lala_por_code = _lalamove_por_code(codes)
 
     out = []
     for p in pedidos:
@@ -132,6 +134,7 @@ def api_painel():
                       for it in (p.get('itens') or [])],
             'status': status,            # novo|visto|pronto|entregue
             'novo': status == 'novo',    # mantido pra o alerta sonoro
+            'lalamove': lala_por_code.get(code),
         })
 
     resp = jsonify(pedidos=out, data=data_str, total=len(out),
@@ -175,6 +178,126 @@ def api_painel_status(code):
         except Exception:  # noqa: BLE001
             db.session.rollback()  # corrida entre 2 aparelhos: ja existe, ok
     return jsonify(ok=True, status=novo_status)
+
+
+# ── Lalamove (entregador sob demanda a partir do painel) ──────────────────
+
+def _lalamove_json(e):
+    """Resumo de uma LalamoveEntrega pro front do painel."""
+    from app.services import lalamove as lala_svc
+    return {
+        'id': e.id,
+        'status': e.status,
+        'rotulo': ('Cotação feita — confirme a chamada'
+                   if e.status == 'cotacao' else lala_svc.rotulo_status(e.status)),
+        'valor': str(e.valor) if e.valor is not None else None,
+        'moeda': e.moeda or 'BRL',
+        'veiculo': ('moto' if e.service_type == 'MOTORCYCLE'
+                    else 'carro' if e.service_type == 'CAR' else e.service_type),
+        'share_link': e.share_link,
+        'motorista': e.motorista_nome,
+        'motorista_fone': e.motorista_telefone,
+        'pode_cancelar': e.status in ('ASSIGNING_DRIVER', 'ON_GOING'),
+        'encerrada': e.status in ('COMPLETED', 'CANCELED', 'REJECTED', 'EXPIRED'),
+    }
+
+
+def _lalamove_por_code(codes):
+    """{code: resumo} da corrida mais recente JÁ CHAMADA (com order_id) de
+    cada pedido. Cotações não confirmadas ficam de fora do card."""
+    if not codes:
+        return {}
+    out = {}
+    rows = (LalamoveEntrega.query
+            .filter(LalamoveEntrega.pedido_code.in_(codes),
+                    LalamoveEntrega.order_id.isnot(None))
+            .order_by(LalamoveEntrega.criado_em.asc()).all())
+    for e in rows:           # asc + sobrescrita = vence a mais recente
+        out[e.pedido_code] = _lalamove_json(e)
+    return out
+
+
+@entregas_bp.route('/api/painel/lalamove/cotar', methods=['POST'])
+@login_required
+def api_lalamove_cotar():
+    """Cota uma corrida pro endereço do pedido. JSON: {code, endereco,
+    destinatario, telefone, veiculo: moto|carro}. Guarda a cotação
+    (status='cotacao') e devolve id+preço pro atendente confirmar."""
+    from app.services import lalamove as lala_svc
+    dados = request.get_json(silent=True) or {}
+    code = (dados.get('code') or '').strip()
+    endereco = (dados.get('endereco') or '').strip()
+    veiculo = (dados.get('veiculo') or 'moto').strip().lower()
+    if not code or not endereco:
+        return jsonify(ok=False, erro='pedido sem código ou sem endereço'), 400
+    r = lala_svc.cotar(endereco, veiculo)
+    if not r.get('ok'):
+        return jsonify(ok=False, erro=r.get('erro')), 502
+    e = LalamoveEntrega(
+        pedido_code=code, data_ref=hoje_brt(),
+        quotation_id=r['quotation_id'],
+        sender_stop_id=r['sender_stop_id'],
+        recipient_stop_id=r['recipient_stop_id'],
+        status='cotacao', service_type=r['service_type'],
+        valor=r.get('valor'), moeda=r.get('moeda'),
+        distancia_m=r.get('distancia_m'),
+        endereco_destino=endereco,
+        destinatario=(dados.get('destinatario') or '')[:200] or None,
+        telefone_destino=(dados.get('telefone') or '')[:40] or None,
+        criado_por_id=current_user.id)
+    db.session.add(e)
+    db.session.commit()
+    km = (f'{r["distancia_m"] / 1000:.1f} km' if r.get('distancia_m') else '')
+    return jsonify(ok=True, entrega_id=e.id, valor=r.get('valor'),
+                   moeda=r.get('moeda') or 'BRL', distancia=km,
+                   veiculo=veiculo)
+
+
+@entregas_bp.route('/api/painel/lalamove/chamar', methods=['POST'])
+@login_required
+def api_lalamove_chamar():
+    """Confirma a corrida de uma cotação feita. JSON: {entrega_id}."""
+    from app.services import lalamove as lala_svc
+    dados = request.get_json(silent=True) or {}
+    e = db.session.get(LalamoveEntrega, dados.get('entrega_id'))
+    if not e or e.status != 'cotacao':
+        return jsonify(ok=False, erro='cotação não encontrada ou já usada'), 400
+    r = lala_svc.criar_ordem(
+        e.quotation_id, e.sender_stop_id, e.recipient_stop_id,
+        e.destinatario, e.telefone_destino,
+        observacao=f'Pedido {e.pedido_code} — O Pão Padaria Artesanal')
+    if not r.get('ok'):
+        return jsonify(ok=False, erro=r.get('erro')), 502
+    e.order_id = r['order_id']
+    e.status = r.get('status') or 'ASSIGNING_DRIVER'
+    e.share_link = r.get('share_link')
+    if r.get('valor') is not None:
+        e.valor = r['valor']
+    e.atualizado_em = agora()
+    db.session.commit()
+    current_app.logger.info('lalamove chamada: pedido=%s order=%s por uid=%s',
+                            e.pedido_code, e.order_id, current_user.id)
+    return jsonify(ok=True, lalamove=_lalamove_json(e))
+
+
+@entregas_bp.route('/api/painel/lalamove/cancelar', methods=['POST'])
+@login_required
+def api_lalamove_cancelar():
+    """Cancela uma corrida já chamada. JSON: {entrega_id}."""
+    from app.services import lalamove as lala_svc
+    dados = request.get_json(silent=True) or {}
+    e = db.session.get(LalamoveEntrega, dados.get('entrega_id'))
+    if not e or not e.order_id:
+        return jsonify(ok=False, erro='corrida não encontrada'), 400
+    r = lala_svc.cancelar(e.order_id)
+    if not r.get('ok'):
+        return jsonify(ok=False, erro=r.get('erro')), 502
+    e.status = 'CANCELED'
+    e.atualizado_em = agora()
+    db.session.commit()
+    current_app.logger.info('lalamove cancelada: pedido=%s order=%s por uid=%s',
+                            e.pedido_code, e.order_id, current_user.id)
+    return jsonify(ok=True, lalamove=_lalamove_json(e))
 
 
 def _carregar_overrides_data():
