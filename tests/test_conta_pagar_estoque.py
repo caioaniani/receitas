@@ -434,6 +434,22 @@ def test_prefill_sugestao_regras():
     # Abacaxi: nada metrico envolvido -> sugestao crua da IA, como antes.
     assert svc.prefill_sugestao(None, 'un', 'g', 'un') == (None, 'un')
 
+    # Caso Bebida de Aveia Nude 1L (2026-06-10): MP contada em 'un', IA
+    # sugeriu 1000/ml lendo o CONTEUDO no nome — irrelevante pra contagem.
+    # NF tambem em 'un' -> 1 caixinha = 1 un.
+    assert svc.prefill_sugestao(1000, 'ml', 'un', 'un') == (1.0, 'un')
+
+    # Conteudo em kg, MP contavel, NF em cx -> 1 cx = 1 un.
+    assert svc.prefill_sugestao(2.01, 'kg', 'un', 'cx') == (1.0, 'cx')
+
+    # Multi-pack continua passando cru (regra antiga): IA sugeriu 'un'
+    # (nao metrica, ex: caixa com 12 garrafas) -> nada metrico casa e a
+    # sugestao volta crua, inclusive a unidade da IA.
+    assert svc.prefill_sugestao(12, 'un', 'un', 'cx') == (12.0, 'un')
+
+    # NF fora da familia 'un' (kg) com MP em 'un': sem chute de fator.
+    assert svc.prefill_sugestao(1000, 'ml', 'un', 'kg') == (None, 'kg')
+
     # Fator vindo do JSON da NF como string nao quebra (detalhe da conta).
     # round() porque 2.01*1000 da 2009.9999... em float; o form formata com
     # {:g} e mostra "2010" — o que importa e o valor, nao o ruido binario.
