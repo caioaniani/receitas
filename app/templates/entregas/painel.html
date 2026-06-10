@@ -356,12 +356,14 @@
         if (act === 'nova') { p.lalamove = null; abrirDetalhe(p); return; }
         if (act === 'cotar') {
           var veic = (document.querySelector('input[name="lala-veic"]:checked') || {}).value || 'moto';
+          var endInput = document.getElementById('lala-end');
+          var endereco = (endInput && endInput.value.trim()) || p.endereco || '';
           b.disabled = true;
           document.getElementById('lala-res').textContent = 'Cotando...';
           fetch(LALA_COTAR, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-            body: JSON.stringify({ code: p.code, endereco: p.endereco,
+            body: JSON.stringify({ code: p.code, endereco: endereco,
                                    destinatario: p.destinatario,
                                    telefone: p.telefone, veiculo: veic })
           }).then(function (r) { return r.json(); }).then(function (d) {
