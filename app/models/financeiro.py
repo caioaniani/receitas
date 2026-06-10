@@ -63,8 +63,16 @@ class ContaPagar(db.Model):
     editado_em = db.Column(db.DateTime, nullable=True)
     editado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
                                 nullable=True)
+    # Conferencia humana (Fase 2, 2026-06-10): NULL = ninguem conferiu —
+    # os dados podem ser so o chute da IA. Editar a conta confere
+    # automaticamente; o botao "Conferida" na tela tambem. Colunas criadas
+    # por ALTER em migrations_legacy (deploy bb9f1cf) ANTES deste modelo.
+    revisada_em = db.Column(db.DateTime, nullable=True)
+    revisada_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
+                                 nullable=True)
 
     fornecedor = db.relationship('Fornecedor')
+    revisada_por = db.relationship('Usuario', foreign_keys=[revisada_por_id])
     # Self-FK: 'relacionado' = doc pra onde aponta; 'relacionado_por' = docs
     # que apontam pra este. Juntos dao o par NF<->boleto nos dois sentidos.
     relacionado = db.relationship('ContaPagar', remote_side=[id],
