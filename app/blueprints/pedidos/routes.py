@@ -581,6 +581,15 @@ def forcar_entrega(id):
         flash(f'Erro: {exc}', 'danger')
         return redirect(url_for('pedidos.detalhe', id=id))
 
+    # Mesmo aviso do recebimento normal — o link aponta pra pasta de fotos do
+    # pedido (pode nao existir se forcou sem fotos; o servico trata isso).
+    try:
+        from app.services import pedidos_notificacao
+        pedidos_notificacao.notificar_pedido_recebido(pedido)
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception(
+            'notificar_pedido_recebido (forcar) falhou pedido=%s', pedido.id)
+
     flash(f'Pedido #{pedido.id} marcado como entregue (de {estado_antes}). Estoque da loja atualizado.', 'success')
     return redirect(url_for('pedidos.detalhe', id=id))
 
