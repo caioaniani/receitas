@@ -767,6 +767,47 @@ def mapeamento_criar_mp(id):
     return jsonify(ok=True, mp_id=mp.id, nome=mp.nome, unidade=mp.unidade)
 
 
+@contas_pagar_bp.route('/mapeamentos/<int:id>/criar-produto', methods=['POST'])
+@login_required
+@admin_required
+def mapeamento_criar_produto(id):
+    """Cadastro rapido de PRODUTO de revenda direto do mapeamento (espelho
+    do criar-mp). JSON: {nome, custo_direto?, unidade_compra,
+    fator_conversao}. Custo e opcional — a primeira NF processada atualiza
+    de qualquer forma (custo = valor da nota / fator)."""
+    from sqlalchemy import func
+
+    from app.models import Produto
+    m = ContaPagarItemMap.query.get_or_404(id)
+    dados = request.get_json(silent=True) or {}
+    nome = (dados.get('nome') or '').strip()
+    if not nome:
+        return jsonify(erro='nome é obrigatório'), 400
+    if Produto.query.filter(func.lower(Produto.nome) == nome.lower(),
+                            Produto.ativo.is_(True)).first():
+        return jsonify(erro=f'"{nome}" já existe em Produtos — '
+                            'selecione no menu da linha'), 400
+    custo = None
+    bruto = str(dados.get('custo_direto') or '').strip()
+    if bruto:
+        try:
+            custo = float(bruto.replace(',', '.'))
+        except ValueError:
+            return jsonify(erro='custo inválido'), 400
+    prod = Produto(nome=nome, categoria='Revenda', custo_direto=custo or 0)
+    db.session.add(prod)
+    db.session.flush()
+    erro = _aplicar_vinculo(m, 'vincular', materia_prima_id=f'prod-{prod.id}',
+                            unidade_compra=dados.get('unidade_compra'),
+                            fator_raw=dados.get('fator_conversao'),
+                            exigir_completo=True)
+    if erro:
+        db.session.rollback()   # produto nao fica criado se o vinculo falhou
+        return jsonify(erro=erro), 400
+    db.session.commit()
+    return jsonify(ok=True, produto_id=prod.id, nome=prod.nome)
+
+
 @contas_pagar_bp.route('/reprocessar', methods=['POST'])
 @login_required
 @admin_required
