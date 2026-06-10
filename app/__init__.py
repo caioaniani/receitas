@@ -154,11 +154,14 @@ def create_app(config_class=None):
             # defer(imagem_blob/mimetype) — sidebar nao usa essas colunas e elas
             # podem ter 100KB+ cada, estourando memoria do worker.
             from sqlalchemy.orm import defer
+            # Arquivadas ficam fora da sidebar e dos datalists (selecao de
+            # uso ativo) — historico/telas de registro nao passam por aqui.
             recs = Receita.query.options(
                 db.joinedload(Receita.ingredientes),
                 defer(Receita.imagem_blob),
                 defer(Receita.imagem_mimetype),
-            ).order_by(Receita.categoria, Receita.nome).all()
+            ).filter(Receita.arquivada_em.is_(None)
+                     ).order_by(Receita.categoria, Receita.nome).all()
             cats = {}
             for r in recs:
                 cat = r.categoria or 'Outros'
