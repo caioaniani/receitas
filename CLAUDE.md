@@ -392,6 +392,13 @@ Mapeamentos persistentes em 3 tabelas:
 - **`SeruProdutoMap`**: nome Seru → receita/produto + estado (mapeado/ignorado/pendente)
   + `fator_quantidade` (Float, default 1.0) pra produtos compostos
   (ex: "NOZES COM MANTEIGA" = 2 fatias / 10 por pao = fator 0.2)
+  - **REGRA DE NEGOCIO confirmada pelo dono (2026-06-10): os CAFES/EXPRESSOS/
+    CAPPUCCINOS/CHA mapeados pro "Cookie Calebaut" com fator 0.2 estao
+    CERTOS** — a loja corta o cookie em 5 e serve 1 pedaco com cada cafe.
+    NAO eh bug, NAO "corrigir". (Eu, Claude, quase induzi o dono a quebrar
+    isso achando que era mapeamento errado em massa — intuicao de engenheiro
+    NAO substitui regra de negocio local. Confirmar com o dono antes de
+    mexer em mapeamento que parecer estranho.)
 - **`SeruLojaMap`**: company.name Seru → Loja. Auto-fuzzy NÃO basta — exige `confirmado_em`
   preenchido (admin clica OK ou Vincular em `/pdv/mapeamentos`) pra processar baixas.
 - **`SeruPedidoProcessado`**: idempotencia por seru_pedido_id; cancelados depois geram
