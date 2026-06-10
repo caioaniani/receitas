@@ -158,17 +158,15 @@ def test_tool_consultar_cartinhas_no_copilot_svc(app, admin_user):
     from app.models import CartinhaEntrega, Usuario
     from app.services import copilot as cs
     from app.utils import agora
+    uid = admin_user.id
     with app.app_context():
-        u = admin_user
         db.session.add(CartinhaEntrega(pedido_code='VND-AAA',
                                        texto='Feliz dia!',
                                        atualizado_em=agora(),
-                                       atualizado_por=u.id))
+                                       atualizado_por=uid))
         db.session.commit()
-        # tool registrada
         nomes = [t['name'] for t in cs.TOOLS]
         assert 'consultar_cartinhas' in nomes
-        # dispatcher executa
-        u_real = Usuario.query.get(u.id)
-        r = cs._executar_read('consultar_cartinhas', {'dias': 2}, u_real)
+        u = Usuario.query.get(uid)
+        r = cs._executar_read('consultar_cartinhas', {'dias': 2}, u)
         assert 'VND-AAA' in r['texto'] and r['total'] == 1
