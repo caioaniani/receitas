@@ -164,7 +164,10 @@ def cotar(endereco_destino, tipo_veiculo):
     """
     if not disponivel():
         return {'ok': False, 'erro': 'Lalamove sem credenciais configuradas'}
-    st = SERVICE_TYPES.get((tipo_veiculo or '').lower())
+    # Aceita apelido (moto/carro) ou o nome direto da API (LALAGO, VAN...).
+    bruto = (tipo_veiculo or '').strip()
+    st = SERVICE_TYPES.get(bruto.lower()) \
+        or (bruto.upper() if bruto.upper() in ROTULO_VEICULO else None)
     if not st:
         return {'ok': False, 'erro': f'veículo inválido: {tipo_veiculo}'}
     origem = _origem()
