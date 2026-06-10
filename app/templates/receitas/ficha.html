@@ -422,12 +422,36 @@
         </button>
     </form>
     <form method="POST" action="{{ url_for('receitas.excluir', id=receita.id) }}" class="d-inline"
-          onsubmit="return confirm('Excluir {{ receita.nome }}?')">
+          id="form-excluir-receita" data-vinculos-url="{{ url_for('receitas.vinculos', id=receita.id) }}"
+          data-resolver-url="{{ url_for('receitas.vinculos_resolver', id=receita.id) }}"
+          data-nome="{{ receita.nome }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-outline-danger btn-sm">
             <i class="bi bi-trash"></i> Excluir Produto
         </button>
     </form>
+</div>
+
+<!-- Modal: vinculos que impedem a exclusao (resolve na propria janela) -->
+<div class="modal fade" id="modal-vinculos" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header py-2 bg-danger text-white">
+                <h6 class="modal-title"><i class="bi bi-link-45deg"></i>
+                    "{{ receita.nome }}" ainda está vinculada</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="vinculos-body">
+                <div class="text-muted small">Carregando vínculos...</div>
+            </div>
+            <div class="modal-footer py-1">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-sm btn-danger" id="btn-excluir-liberado" style="display:none;">
+                    <i class="bi bi-trash"></i> Excluir agora
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 {% endif %}
 
