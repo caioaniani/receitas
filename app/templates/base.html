@@ -128,6 +128,16 @@
            class="sidebar-link {% if request.path == '/lista-compras' or request.path == '/lista-compras/' %}active{% endif %}">
             Lista de Compras
         </a>
+        {% if current_user.is_owner %}
+        <a href="{{ url_for('lista_compras.consolidada') }}"
+           class="sidebar-link ps-4 small {% if request.path == '/lista-compras/consolidada' %}active{% endif %}">
+            Consolidar compras
+        </a>
+        <a href="{{ url_for('lista_compras.catalogo') }}"
+           class="sidebar-link ps-4 small {% if request.path == '/lista-compras/catalogo' %}active{% endif %}">
+            Catálogo de compras
+        </a>
+        {% endif %}
         {% endif %}
 
         {# ── 2. PRODUÇÃO (industria) ── #}
