@@ -203,6 +203,65 @@ def _criar_shared_link(token, path):
     raise RuntimeError(f'create_shared_link falhou: {r.status_code}')
 
 
+def shared_link_pasta(path):
+    """Cria (ou recupera, se ja existe) o link compartilhado de uma PASTA do
+    Dropbox. Retorna a URL do navegador (NAO `?raw=1` — visualizacao da pasta
+    com as miniaturas, que e o que a equipe quer ver). None se falhar.
+
+    Usa a mesma API de `_criar_shared_link` (vale pra arquivo OU pasta), so
+    forca a URL pra `?dl=0` em vez de `?raw=1` no fim — `raw` num link de
+    pasta retorna ZIP, e queremos a tela de visualizacao."""
+    token = _token()
+    if not token or not path:
+        return None
+    try:
+        r = requests.post(
+            'https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings',
+            headers={'Authorization': f'Bearer {token}',
+                     'Content-Type': 'application/json'},
+            json={'path': path,
+                  'settings': {'requested_visibility': 'public'}},
+            timeout=15,
+        )
+        if r.status_code == 200:
+            url = (r.json().get('url') or '')
+        elif r.status_code == 409:
+            r2 = requests.post(
+                'https://api.dropboxapi.com/2/sharing/list_shared_links',
+                headers={'Authorization': f'Bearer {token}',
+                         'Content-Type': 'application/json'},
+                json={'path': path, 'direct_only': True},
+                timeout=15,
+            )
+            if r2.status_code != 200:
+                logger.warning('Dropbox list_shared_links %s: %s %s',
+                               path, r2.status_code, r2.text[:200])
+                return None
+            links = r2.json().get('links') or []
+            if not links:
+                return None
+            url = links[0].get('url') or ''
+        else:
+            logger.warning('Dropbox shared_link_pasta %s: %s %s',
+                           path, r.status_code, r.text[:200])
+            return None
+    except requests.RequestException:
+        logger.exception('Erro criando shared link de pasta %s', path)
+        return None
+
+    # `?dl=0` = visualizacao no navegador. `?raw=1` no link de pasta entrega
+    # um ZIP, que nao serve pra equipe abrir do celular.
+    if not url:
+        return None
+    if '?dl=' in url:
+        url = url.split('?dl=', 1)[0] + '?dl=0'
+    elif '?' in url:
+        url = url + '&dl=0'
+    else:
+        url = url + '?dl=0'
+    return url
+
+
 def _converter_para_raw(url):
     """Normaliza URL Dropbox pra servir arquivo raw.
 
