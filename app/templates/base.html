@@ -535,9 +535,7 @@
     {% if current_user.is_authenticated %}
     <script src="{{ url_for('static', filename='js/command-palette.js') }}"></script>
     {% endif %}
-    {% if current_user.is_authenticated and current_user.is_admin() %}
-    <script src="{{ url_for('static', filename='js/copilot.js') }}?v={{ static_v.get('js/copilot.js', '0') }}"></script>
-    {% endif %}
+    {# copilot.js intencionalmente fora — UI desativada em 10/06/2026 #}
     <script>
     (function(){
         var sw = document.getElementById('dark-mode-switch');
