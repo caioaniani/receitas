@@ -151,6 +151,23 @@ TOOLS = [
         },
     },
     {
+        'name': 'consultar_frete',
+        'description': ('Estima o frete de entrega pra um CEP ou endereço do '
+                        'cliente (anéis de distância a partir da padaria: '
+                        'grátis até 1 km, +R$5 por km, máximo 15 km). Prefira '
+                        'o CEP quando o cliente tiver. O valor é estimativa — '
+                        'o definitivo é o do checkout do site.'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'endereco_ou_cep': {
+                    'type': 'string',
+                    'description': 'CEP (melhor) ou endereço com bairro/cidade'},
+            },
+            'required': ['endereco_ou_cep'],
+        },
+    },
+    {
         'name': 'buscar_nota_fiscal',
         'description': ('Busca a Nota Fiscal de um pedido pelo CPF do comprador '
                         'E o número do pedido (precisa dos DOIS pra evitar vazar '
