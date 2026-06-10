@@ -138,3 +138,75 @@ def test_rota_admin_saude(app):
     data = r.get_json()
     assert 'contas' in data and 'receitas' in data
     assert data['contas']['abertas'] == 0
+
+
+# ── Fase 2: conferencia humana das contas ──
+
+def _admin_cliente(app):
+    from app.extensions import db
+    from app.models import Usuario
+    u = Usuario(nome='Admin', login='adm-f2', papel='admin')
+    u.set_senha('x' * 8)
+    db.session.add(u)
+    db.session.commit()
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(u.id)
+        s['_fresh'] = True
+    return c, u
+
+
+def test_revisar_marca_e_desmarca(app):
+    from app.extensions import db
+    from app.models import ContaPagar
+    c, u = _admin_cliente(app)
+    conta = ContaPagar(status='aberto', valor_total=10)
+    db.session.add(conta)
+    db.session.commit()
+    assert conta.revisada is False
+
+    c.post(f'/contas-pagar/{conta.id}/revisar')
+    db.session.refresh(conta)
+    assert conta.revisada is True
+    assert conta.revisada_por_id == u.id
+
+    c.post(f'/contas-pagar/{conta.id}/revisar')   # toggle desfaz
+    db.session.refresh(conta)
+    assert conta.revisada is False
+
+
+def test_editar_confere_automaticamente(app):
+    """Humano que edita os campos OLHOU o documento → conta vira conferida."""
+    from app.extensions import db
+    from app.models import ContaPagar
+    c, u = _admin_cliente(app)
+    conta = ContaPagar(status='aberto')
+    db.session.add(conta)
+    db.session.commit()
+
+    c.post(f'/contas-pagar/{conta.id}/editar',
+           data={'fornecedor_nome': 'Moinho X', 'valor_total': '123,45'})
+    db.session.refresh(conta)
+    assert conta.revisada is True
+    assert conta.revisada_por_id == u.id
+
+
+def test_radar_conta_nao_revisadas(app):
+    from app.extensions import db
+    from app.models import ContaPagar
+    from app.services import saude_negocio
+    from app.utils import agora as _agora
+    db.session.add_all([
+        ContaPagar(status='aberto', valor_total=10),                      # nao conferida
+        ContaPagar(status='aberto', valor_total=20, revisada_em=_agora()),  # conferida
+        ContaPagar(status='pago', valor_total=30),                        # paga: fora
+    ])
+    db.session.commit()
+    r = saude_negocio.resumo_contas()
+    assert r['nao_revisadas'] == 1
+
+    texto_fake = {'custos': {}, 'pesos': {}, 'circulares': []}
+    with patch('app.services.custos.calcular_custos_receitas',
+               return_value=texto_fake):
+        texto = saude_negocio.montar_digest_saude()
+    assert 'aguardando conferencia humana' in texto
