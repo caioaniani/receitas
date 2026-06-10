@@ -132,10 +132,39 @@
       </div>
       <button class="btn btn-sm btn-primary" name="acao" value="vincular">Confirmar</button>
       <button class="btn btn-sm btn-outline-secondary" name="acao" value="ignorar">Ignorar</button>
+      {% if m.estado == 'pendente' %}
+      <button type="button" class="btn btn-sm btn-outline-success btn-nova-mp-toggle"
+              title="A matéria-prima ainda não existe? Cadastre aqui mesmo.">
+        + nova MP
+      </button>
+      {% endif %}
       {% if m.confirmado_em or m.ignorar %}
       <button class="btn btn-sm btn-outline-danger" name="acao" value="desfazer">Desfazer</button>
       {% endif %}
     </div>
+    {% if m.estado == 'pendente' %}
+    <div class="nova-mp-box border rounded p-2 mt-2 bg-light" style="display:none;"
+         data-url="{{ url_for('contas_pagar.mapeamento_criar_mp', id=m.id) }}">
+      <div class="small fw-bold mb-1">Nova matéria-prima (cria e já vincula com o fator da linha)</div>
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <input type="text" class="form-control form-control-sm nova-mp-nome" style="max-width:260px"
+               value="{{ m.item_nome_exemplo|title }}" placeholder="nome da matéria-prima">
+        <select class="form-select form-select-sm nova-mp-unidade" style="max-width:90px"
+                title="unidade de ESTOQUE da matéria-prima">
+          <option value="g">g</option>
+          <option value="ml">ml</option>
+          <option value="un">un</option>
+          <option value="kg">kg</option>
+          <option value="l">l</option>
+        </select>
+        <input type="text" class="form-control form-control-sm nova-mp-peso" style="max-width:230px"
+               placeholder="conteúdo de 1 un em g/ml (opcional)"
+               title="Só pra MP em 'un': quanto 1 unidade contém (ex.: caixinha de 1L = 1000). É o que faz a FICHA calcular custo — sem isso, receita que usa essa MP fica com custo zero.">
+        <button type="button" class="btn btn-sm btn-success nova-mp-criar">Criar e vincular</button>
+      </div>
+      <div class="small text-danger mt-1 nova-mp-erro"></div>
+    </div>
+    {% endif %}
     {% set ex = exemplos.get(m.item_nome_norm) %}
     <div class="small mt-1 mapa-preview" style="color:#0a7d33; min-height:1em;"
          data-qtd="{{ ex.quantidade if ex and ex.quantidade is not none else '' }}"
