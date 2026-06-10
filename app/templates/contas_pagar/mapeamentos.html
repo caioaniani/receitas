@@ -111,4 +111,48 @@
 {% else %}
 <p class="text-muted">Nenhum item nesta aba.</p>
 {% endfor %}
+
+<script>
+// Frase-viva + preview: mostra a unidade da MP ao lado do fator e calcula,
+// com os numeros da ultima NF, quanto entraria de estoque e o custo por
+// unidade-base. Fator errado = custo absurdo na hora, antes de Confirmar.
+(function () {
+  function fmt(n, casas) {
+    return Number(n).toLocaleString('pt-BR',
+      {minimumFractionDigits: 0, maximumFractionDigits: casas});
+  }
+  document.querySelectorAll('form.card').forEach(function (form) {
+    var sel = form.querySelector('.mapa-mp');
+    var fator = form.querySelector('.mapa-fator');
+    var unc = form.querySelector('.mapa-uncompra');
+    var spanUnid = form.querySelector('.mapa-unid-mp');
+    var prev = form.querySelector('.mapa-preview');
+    if (!sel || !fator || !spanUnid) return;
+
+    function atualizar() {
+      var opt = sel.options[sel.selectedIndex];
+      var unid = (opt && opt.getAttribute('data-unid')) || '?';
+      spanUnid.textContent = unid;
+      if (!prev) return;
+      var f = parseFloat(fator.value);
+      var qtd = parseFloat(prev.getAttribute('data-qtd'));
+      var vunit = parseFloat(prev.getAttribute('data-vunit'));
+      if (!f || f <= 0 || !sel.value) { prev.textContent = ''; return; }
+      var partes = [];
+      if (!isNaN(qtd)) {
+        partes.push('→ a última NF (' + fmt(qtd, 1) + ' ' + (unc.value || 'un compra') +
+                    ') daria entrada de ' + fmt(qtd * f, 1) + ' ' + unid);
+      }
+      if (!isNaN(vunit) && vunit > 0) {
+        partes.push('custo R$ ' + fmt(vunit / f, 4) + '/' + unid);
+      }
+      prev.textContent = partes.join(' · ');
+    }
+    sel.addEventListener('change', atualizar);
+    fator.addEventListener('input', atualizar);
+    unc.addEventListener('input', atualizar);
+    atualizar();
+  });
+})();
+</script>
 {% endblock %}
