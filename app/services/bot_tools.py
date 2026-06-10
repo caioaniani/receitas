@@ -81,15 +81,20 @@ def _limpar_descricao(p):
 
 
 def _parse_produtos(raw):
-    """Extrai [{nome, sku, preco, disponivel, descricao}] da resposta do VNDA.
+    """Extrai [{nome, sku, preco, disponivel, descricao, url}] do VNDA.
 
     SKU sempre de variants[].sku; preco prioriza sale_price (o que o cliente
-    paga); descricao (conteudo da cesta/produto) vem do produto. Uma linha por
-    variante que tenha SKU."""
+    paga); descricao vem do produto. `url` e a pagina do produto montada do
+    slug — caso real (10/06/2026): a "Cesta Especial Dia dos Namorados" nao
+    estava na lista fixa do prompt e o bot mandou o link do Kit Brunch pro
+    cliente; com a url vinda do catalogo, produto novo nunca mais depende de
+    lista decorada. Uma linha por variante que tenha SKU."""
     out = []
     for p in (raw or []):
         nome_base = (p.get('name') or p.get('title') or '').strip()
         descricao = _limpar_descricao(p)
+        slug = str(p.get('slug') or '').strip()
+        url = f'{SHOP}/produto/{slug}' if slug else None
         for v in _iter_variants(p.get('variants')):
             sku = v.get('sku')
             if not sku:
@@ -112,6 +117,7 @@ def _parse_produtos(raw):
                 'preco': preco,
                 'disponivel': bool(disp),
                 'descricao': descricao,
+                'url': url,
             })
     return out
 
