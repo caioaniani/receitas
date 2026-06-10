@@ -512,3 +512,39 @@ class ChatbotConversa(db.Model):
     conv_id = db.Column(db.String(50), unique=True, nullable=False, index=True)
     mensagens_json = db.Column(db.Text, default='[]')
     ultima_msg_em = db.Column(db.DateTime, default=agora, onupdate=agora, index=True)
+
+
+class LalamoveEntrega(db.Model):
+    """Corrida Lalamove chamada a partir do painel do dia (1 linha por
+    cotacao/chamada). `pedido_code` = code do card do painel (VNDA/local).
+    Dinheiro em Numeric(10,2) — peso especial."""
+    __tablename__ = 'lalamove_entrega'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_code = db.Column(db.String(60), nullable=False, index=True)
+    data_ref = db.Column(db.Date)
+
+    quotation_id = db.Column(db.String(120))
+    sender_stop_id = db.Column(db.String(120))
+    recipient_stop_id = db.Column(db.String(120))
+    order_id = db.Column(db.String(120), unique=True, index=True)
+
+    # 'cotacao' antes de chamar; depois o status da Lalamove
+    # (ASSIGNING_DRIVER/ON_GOING/PICKED_UP/COMPLETED/CANCELED/...).
+    status = db.Column(db.String(40), default='cotacao', nullable=False)
+    service_type = db.Column(db.String(30))
+    valor = db.Column(db.Numeric(10, 2))
+    moeda = db.Column(db.String(8))
+    distancia_m = db.Column(db.Integer)
+
+    endereco_destino = db.Column(db.String(500))
+    destinatario = db.Column(db.String(200))
+    telefone_destino = db.Column(db.String(40))
+
+    share_link = db.Column(db.String(500))
+    motorista_nome = db.Column(db.String(120))
+    motorista_telefone = db.Column(db.String(40))
+
+    criado_em = db.Column(db.DateTime, default=agora)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    atualizado_em = db.Column(db.DateTime)
