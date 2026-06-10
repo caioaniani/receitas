@@ -25,7 +25,10 @@ def test_arquivar_toggle_e_listas(app, admin_user):
     c = app.test_client()
     _login(c)
 
-    assert c.post(f'/receitas/{rid}/arquivar').status_code == 302
+    # follow_redirects consome o flash ("... arquivada") nesta resposta —
+    # senao ele vaza pro GET seguinte e bagunca a contagem de ocorrencias.
+    assert c.post(f'/receitas/{rid}/arquivar',
+                  follow_redirects=True).status_code == 200
     with app.app_context():
         r = db.session.get(Receita, rid)
         assert r.arquivada_em is not None
