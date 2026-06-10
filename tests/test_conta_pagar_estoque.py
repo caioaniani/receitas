@@ -436,4 +436,4 @@ def test_prefill_sugestao_regras():
 
     # Fator vindo do JSON da NF como string nao quebra (detalhe da conta).
     assert svc.prefill_sugestao('2.01', 'kg', 'g', 'cx') == (2010.0, 'cx')
-    assert svc.prefill_sugestao('lixo', 'kg', 'g', 'cx') == (None, 'cx')
+    assert svc.prefill_sugestao('lixo', 'kg', 'g', 'cx') == (None, 'kg')
