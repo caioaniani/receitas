@@ -108,6 +108,7 @@ def padeiro(id):
     receita = Receita.query.get_or_404(id)
     resultado = calcular_custos_receitas()
     return render_template('receitas/padeiro.html', receita=receita,
+                           etapas_preparo=dividir_etapas_preparo(receita.modo_preparo),
                            receita_custos=resultado['custos'],
                            receita_pesos=resultado['pesos'])
 
