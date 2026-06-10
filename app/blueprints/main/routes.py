@@ -1692,6 +1692,138 @@ def saude_negocio_admin():
     return jsonify(out), 200
 
 
+@main_bp.route('/admin/debug-handshake-bypass')
+@owner_required
+def debug_handshake_bypass():
+    """Owner-only: pedidos que avancaram (em_transporte/entregue) SEM o
+    handshake de QR — responde "alguem pulou o QR?".
+
+    Bypasses LEGITIMOS aparecem identificados: forcar_entrega (admin, gera
+    HandshakeAudit proprio) e copilot via Slack (sem HandshakeAudit nenhum).
+    ?dias=N (default 30) controla a janela. Atribuir motorista NAO e bypass
+    (e o passo anterior ao QR)."""
+    from datetime import timedelta as _td
+
+    from app.models import HandshakeAudit, PedidoLoja
+    from app.utils import agora as _agora
+    dias = request.args.get('dias', 30, type=int)
+    corte = _agora() - _td(days=dias)
+
+    pedidos = (PedidoLoja.query
+               .filter(PedidoLoja.status.in_(('em_transporte', 'entregue')))
+               .filter(PedidoLoja.criado_em >= corte)
+               .order_by(PedidoLoja.id.desc()).all())
+    ids = [p.id for p in pedidos]
+    audits = {}
+    if ids:
+        for a in HandshakeAudit.query.filter(
+                HandshakeAudit.pedido_id.in_(ids)).all():
+            audits.setdefault(a.pedido_id, []).append(a)
+
+    suspeitos = []
+    com_handshake = 0
+    forcados = 0
+    for p in pedidos:
+        regs = audits.get(p.id, [])
+        sucessos = [a for a in regs if a.etapa == 'sucesso']
+        forcou = [a for a in regs if a.etapa == 'forcar_entrega']
+        if forcou:
+            forcados += 1
+            suspeitos.append({
+                'pedido_id': p.id, 'status': p.status,
+                'classificacao': 'forcado_pelo_admin',
+                'detalhe': (forcou[0].detalhe or '')[:120],
+                'quando': forcou[0].momento.isoformat() if forcou[0].momento else None,
+            })
+        elif sucessos:
+            com_handshake += 1
+        else:
+            suspeitos.append({
+                'pedido_id': p.id, 'status': p.status,
+                'classificacao': 'sem_handshake (provavel copilot/Slack)',
+                'loja_id': p.loja_id,
+                'driver_id': p.driver_id,
+                'criado_em': p.criado_em.isoformat() if p.criado_em else None,
+            })
+
+    return jsonify(
+        janela_dias=dias,
+        total_avancados=len(pedidos),
+        com_handshake_ok=com_handshake,
+        forcados_pelo_admin=forcados,
+        sem_handshake=len(suspeitos) - forcados,
+        suspeitos=suspeitos[:100],
+        dica=('sem_handshake = avancou sem NENHUM scan de QR. Caminho '
+              'legitimo: copilot/Slack ("recebi o pedido X"). Se nao foi '
+              'copilot, investigue no /audit filtrando o pedido.'),
+    ), 200
+
+
+@main_bp.route('/admin/debug-chapa')
+@owner_required
+def debug_chapa():
+    """Owner-only: raio-X da baixa fracionaria (itens de chapa) no Seru.
+
+    Responde "o desconto de fatias de pao esta funcionando?" com dados reais:
+    mapeamentos com fator fracionario, debitos acumulados (fatias aguardando
+    fechar 1 pao), orfaos (FK morta) e movimentos fracionarios recentes
+    (prova de execucao)."""
+    from datetime import timedelta as _td
+
+    from app.models import (
+        MovEstoqueLoja,
+        Receita,
+        SeruDebito,
+        SeruProdutoMap,
+    )
+    from app.utils import agora as _agora
+
+    out = {}
+
+    mapeados = SeruProdutoMap.query.filter(
+        (SeruProdutoMap.receita_id.isnot(None))
+        | (SeruProdutoMap.produto_id.isnot(None))).all()
+    com_fator = []
+    orfaos = []
+    for m in mapeados:
+        fator = float(m.fator_quantidade or 1.0)
+        alvo = None
+        if m.receita_id:
+            r = Receita.query.get(m.receita_id)
+            alvo = r.nome if r else None
+            if r is None:
+                orfaos.append({'map_id': m.id, 'seru_nome': m.seru_nome,
+                               'problema': f'receita_id={m.receita_id} nao existe'})
+        if fator != 1.0:
+            com_fator.append({'seru_nome': m.seru_nome, 'fator': fator,
+                              'alvo': alvo})
+    out['mapeados_total'] = len(mapeados)
+    out['com_fator_fracionario'] = sorted(com_fator,
+                                          key=lambda x: x['seru_nome'])
+    out['orfaos_fk_morta'] = orfaos
+
+    debitos = SeruDebito.query.filter(
+        SeruDebito.fracao_pendente > 0.001).all()
+    out['debitos_acumulados'] = [
+        {'loja_id': d.loja_id, 'map_id': d.seru_produto_map_id,
+         'fracao_pendente': round(float(d.fracao_pendente or 0), 3)}
+        for d in debitos]
+
+    corte = _agora() - _td(days=7)
+    out['movs_fracionarios_7d'] = (
+        MovEstoqueLoja.query
+        .filter(MovEstoqueLoja.tipo == 'venda_seru')
+        .filter(MovEstoqueLoja.referencia.like('%(fator%'))
+        .filter(MovEstoqueLoja.data >= corte).count())
+    out['interpretacao'] = (
+        'com_fator_fracionario vazio = NENHUM item de chapa configurado '
+        '(va em /pdv/mapeamentos e ajuste o fator de cada item de chapa). '
+        'movs_fracionarios_7d > 0 = o desconto ESTA rodando. '
+        'debitos_acumulados = fatias ja vendidas aguardando fechar 1 pao '
+        'inteiro pra baixar do estoque.')
+    return jsonify(out), 200
+
+
 @main_bp.route('/admin/retencao')
 @owner_required
 def retencao_admin():
