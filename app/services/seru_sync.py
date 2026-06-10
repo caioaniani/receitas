@@ -252,9 +252,16 @@ def _estornar_pedido(reg, lojas_ativas, user_id):
          deixa None (nao mente sobre estorno em branco).
     """
     pid = str(reg.seru_pedido_id)
+    # Movs com '(fator' ficam FORA da fase 1: baixas do mecanismo fracionario
+    # sao estornadas EXCLUSIVAMENTE pela fase 2 (via SeruDebitoMov), porque o
+    # inteiro baixado pode conter contribuicoes de OUTROS pedidos. Reverter o
+    # mov E a fracao devolvia o pao em dobro a cada cancelamento de item de
+    # chapa que fechou inteiro (bug provado em 2026-06-10:
+    # test_estorno_do_pedido_que_baixou_inteiro_nao_duplica).
     movs = MovEstoqueLoja.query.filter(
         MovEstoqueLoja.tipo == 'venda_seru',
         MovEstoqueLoja.referencia.like(f'Seru #{pid}%'),
+        ~MovEstoqueLoja.referencia.like('%(fator%'),
     ).all()
     fracoes = SeruDebitoMov.query.filter_by(
         seru_pedido_id=pid, estornado_em=None,
