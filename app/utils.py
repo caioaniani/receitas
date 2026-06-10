@@ -144,3 +144,13 @@ def resolver_loja_por_nome(nome, *, somente_ativas=False):
     if loja:
         return loja
     return q_base.filter(Loja.nome.ilike(f'%{nome}%')).first()
+
+
+def dividir_etapas_preparo(texto):
+    """Divide um modo de preparo em etapas: blocos separados por linha em
+    branco. Normaliza \r\n (textarea manda CRLF). Texto corrido (sem linha em
+    branco) vira 1 etapa unica. Usado pela ficha (editor modular) e pela
+    visao do padeiro (cards numerados)."""
+    import re
+    texto = (texto or '').replace('\r\n', '\n').replace('\r', '\n')
+    return [e.strip() for e in re.split(r'\n\s*\n', texto) if e.strip()]
