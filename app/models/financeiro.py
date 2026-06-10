@@ -85,6 +85,10 @@ class ContaPagar(db.Model):
                 and self.vencimento < hoje())
 
     @property
+    def revisada(self):
+        return self.revisada_em is not None
+
+    @property
     def ligados(self):
         """Documentos ligados a este (bidirecional). Mostra o par mesmo que
         so um lado tenha setado o vinculo."""
