@@ -175,3 +175,50 @@ def test_dropdown_mostra_grupo_de_produtos(app, admin_user):
     r = c.get('/contas-pagar/mapeamentos')
     assert 'Produtos (revenda'.encode() in r.data
     assert f'value="prod-{prod_id}"'.encode() in r.data
+
+
+def test_criar_produto_inline(app, admin_user):
+    """'+ novo Produto' no card: cria o produto de revenda e ja vincula com
+    o fator da linha. Custo opcional (a NF atualiza); sem fator -> recusa e
+    nao deixa produto orfao; nome duplicado -> erro claro."""
+    from app.models import ContaPagarItemMap, Produto
+    with app.app_context():
+        m = ContaPagarItemMap(
+            item_nome_norm=svc.normalizar_item_nome('AGUA PRATA PET 350ML'),
+            item_nome_exemplo='AGUA PRATA PET 350ML')
+        db.session.add(m)
+        db.session.commit()
+        mid = m.id
+
+    c = app.test_client()
+    _login(c)
+
+    # sem fator -> recusa, produto nao fica criado
+    r = c.post(f'/contas-pagar/mapeamentos/{mid}/criar-produto', json={
+        'nome': 'Água Prata 350ml', 'unidade_compra': 'fd',
+        'fator_conversao': ''})
+    assert r.status_code == 400
+    with app.app_context():
+        assert Produto.query.filter_by(nome='Água Prata 350ml').count() == 0
+
+    r2 = c.post(f'/contas-pagar/mapeamentos/{mid}/criar-produto', json={
+        'nome': 'Água Prata 350ml', 'custo_direto': '2,10',
+        'unidade_compra': 'fd', 'fator_conversao': '12'})
+    assert r2.get_json()['ok'] is True
+    with app.app_context():
+        prod = Produto.query.filter_by(nome='Água Prata 350ml').one()
+        assert prod.categoria == 'Revenda' and prod.custo_direto == 2.10
+        m2 = db.session.get(ContaPagarItemMap, mid)
+        assert m2.produto_id == prod.id and m2.confirmado_em is not None
+        assert m2.fator_conversao == 12
+
+    # duplicado (case-insensitive)
+    with app.app_context():
+        m3 = ContaPagarItemMap(item_nome_norm='outro2', item_nome_exemplo='OUTRO2')
+        db.session.add(m3)
+        db.session.commit()
+        m3id = m3.id
+    r3 = c.post(f'/contas-pagar/mapeamentos/{m3id}/criar-produto', json={
+        'nome': 'água prata 350ml', 'unidade_compra': 'fd',
+        'fator_conversao': '12'})
+    assert r3.status_code == 400 and 'já existe' in r3.get_json()['erro']
