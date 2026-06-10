@@ -147,6 +147,10 @@
               title="A matéria-prima ainda não existe? Cadastre aqui mesmo.">
         + nova MP
       </button>
+      <button type="button" class="btn btn-sm btn-outline-primary btn-novo-prod-toggle"
+              title="Item de revenda (água, chiclete...)? Cadastre o produto aqui mesmo.">
+        + novo Produto
+      </button>
       {% endif %}
       {% if m.confirmado_em or m.ignorar %}
       <button class="btn btn-sm btn-outline-danger" name="acao" value="desfazer">Desfazer</button>
@@ -173,6 +177,19 @@
         <button type="button" class="btn btn-sm btn-success nova-mp-criar">Criar e vincular</button>
       </div>
       <div class="small text-danger mt-1 nova-mp-erro"></div>
+    </div>
+    <div class="novo-prod-box border rounded p-2 mt-2 bg-light" style="display:none;"
+         data-url="{{ url_for('contas_pagar.mapeamento_criar_produto', id=m.id) }}">
+      <div class="small fw-bold mb-1">Novo produto de revenda (cria e já vincula com o fator da linha)</div>
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <input type="text" class="form-control form-control-sm novo-prod-nome" style="max-width:260px"
+               value="{{ m.item_nome_exemplo|title }}" placeholder="nome do produto">
+        <input type="text" class="form-control form-control-sm novo-prod-custo" style="max-width:210px"
+               placeholder="custo por unidade R$ (opcional)"
+               title="Opcional: a primeira NF processada atualiza o custo sozinha (valor da nota ÷ fator).">
+        <button type="button" class="btn btn-sm btn-primary novo-prod-criar">Criar e vincular</button>
+      </div>
+      <div class="small text-danger mt-1 novo-prod-erro"></div>
     </div>
     {% endif %}
     {% set ex = exemplos.get(m.item_nome_norm) %}
@@ -270,6 +287,41 @@
     if (t) {
       var box = t.closest('.mapa-form').querySelector('.nova-mp-box');
       box.style.display = box.style.display === 'none' ? '' : 'none';
+      return;
+    }
+    var tp = e.target.closest('.btn-novo-prod-toggle');
+    if (tp) {
+      var boxP = tp.closest('.mapa-form').querySelector('.novo-prod-box');
+      boxP.style.display = boxP.style.display === 'none' ? '' : 'none';
+      return;
+    }
+    var criarProd = e.target.closest('.novo-prod-criar');
+    if (criarProd) {
+      var boxQ = criarProd.closest('.novo-prod-box');
+      var formQ = criarProd.closest('.mapa-form');
+      var erroQ = boxQ.querySelector('.novo-prod-erro');
+      erroQ.textContent = '';
+      criarProd.disabled = true;
+      fetch(boxQ.dataset.url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+        body: JSON.stringify({
+          nome: boxQ.querySelector('.novo-prod-nome').value,
+          custo_direto: boxQ.querySelector('.novo-prod-custo').value,
+          unidade_compra: formQ.querySelector('.mapa-uncompra').value,
+          fator_conversao: formQ.querySelector('.mapa-fator').value
+        })
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          criarProd.disabled = false;
+          if (d.erro) { erroQ.textContent = d.erro; return; }
+          location.reload();
+        })
+        .catch(function () {
+          criarProd.disabled = false;
+          erroQ.textContent = 'Falha de conexão — tente de novo.';
+        });
       return;
     }
     var criar = e.target.closest('.nova-mp-criar');
