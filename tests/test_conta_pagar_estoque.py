@@ -363,6 +363,47 @@ def test_migrar_junta_duplicados_preserva_confirmado(app):
         assert farinha.item_nome_exemplo == 'FARINHA BAGATELLE T45'
 
 
+def test_limpar_mapas_orfaos(app):
+    """Pendente cujo item nao existe em NENHUMA conta (sobra de leitura da IA
+    re-extraida — ex: destinatario lido como item) e removido. Pendente com
+    NF, confirmado e ignorado ficam (decisao humana nao se apaga)."""
+    import json
+
+    from app.models import ContaPagar, ContaPagarItemMap
+    with app.app_context():
+        mp = _mp('Farinha', unidade='g')
+        db.session.add(ContaPagar(
+            tipo_documento='nota_fiscal', fornecedor_nome='Moinho',
+            status='aberto',
+            itens_json=json.dumps([{'nome': 'FARINHA GRANEL',
+                                    'quantidade': 1, 'valor_total': 10}])))
+        db.session.add_all([
+            # pendente COM nota -> fica
+            ContaPagarItemMap(
+                item_nome_norm=svc.normalizar_item_nome('FARINHA GRANEL'),
+                item_nome_exemplo='FARINHA GRANEL'),
+            # pendente orfao (nenhuma nota tem) -> sai
+            ContaPagarItemMap(
+                item_nome_norm=svc.normalizar_item_nome('BROOKFIELD PAULISTA'),
+                item_nome_exemplo='BROOKFIELD PAULISTA'),
+            # orfaos com decisao humana -> ficam
+            ContaPagarItemMap(
+                item_nome_norm='orfao confirmado', item_nome_exemplo='X',
+                materia_prima_id=mp.id, confirmado_em=agora()),
+            ContaPagarItemMap(
+                item_nome_norm='orfao ignorado', item_nome_exemplo='Y',
+                ignorar=True),
+        ])
+        db.session.commit()
+
+        assert svc.limpar_mapas_orfaos() == 1
+        restantes = {m.item_nome_norm for m in ContaPagarItemMap.query.all()}
+        assert svc.normalizar_item_nome('BROOKFIELD PAULISTA') not in restantes
+        assert svc.normalizar_item_nome('FARINHA GRANEL') in restantes
+        assert 'orfao confirmado' in restantes
+        assert 'orfao ignorado' in restantes
+
+
 def test_conversao_metrica():
     assert svc.conversao_metrica('kg', 'g') == 1000.0
     assert svc.conversao_metrica(' KG ', 'g') == 1000.0   # espacos/caixa
