@@ -1073,6 +1073,15 @@ def _migrate_postgres(app):
     _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS arquivada_em TIMESTAMP")
     _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS arquivada_por_id INTEGER REFERENCES usuario(id)")
 
+    # Item de NF -> PRODUTO de revenda (2026-06-10): agua/refrigerante/etc
+    # comprados prontos nao sao materia-prima — o mapeamento ganha o alvo
+    # produto_id (espelha SeruProdutoMap, que ja tem os dois). ALTER na
+    # frente do modelo (2 commits).
+    _try("ALTER TABLE conta_pagar_item_map ADD COLUMN IF NOT EXISTS "
+         "produto_id INTEGER REFERENCES produto(id)")
+    _try("CREATE INDEX IF NOT EXISTS ix_conta_pagar_item_map_produto "
+         "ON conta_pagar_item_map(produto_id)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
@@ -1117,6 +1126,12 @@ def _migrate_sqlite(app):
     if 'arquivada_por_id' not in colunas:
         cursor.execute(
             "ALTER TABLE receita ADD COLUMN arquivada_por_id INTEGER REFERENCES usuario(id)")
+
+    cursor.execute("PRAGMA table_info(conta_pagar_item_map)")
+    cols_cpim = [row[1] for row in cursor.fetchall()]
+    if cols_cpim and 'produto_id' not in cols_cpim:
+        cursor.execute("ALTER TABLE conta_pagar_item_map ADD COLUMN "
+                       "produto_id INTEGER REFERENCES produto(id)")
 
     # Migração tabela receita_ingrediente
     cursor.execute("PRAGMA table_info(receita_ingrediente)")
