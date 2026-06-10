@@ -192,8 +192,8 @@ def _lalamove_json(e):
                    if e.status == 'cotacao' else lala_svc.rotulo_status(e.status)),
         'valor': str(e.valor) if e.valor is not None else None,
         'moeda': e.moeda or 'BRL',
-        'veiculo': ('moto' if e.service_type == 'MOTORCYCLE'
-                    else 'carro' if e.service_type == 'CAR' else e.service_type),
+        'veiculo': {'LALAGO': 'moto', 'MOTORCYCLE': 'moto',
+                    'CAR': 'carro'}.get(e.service_type, e.service_type),
         'share_link': e.share_link,
         'motorista': e.motorista_nome,
         'motorista_fone': e.motorista_telefone,
