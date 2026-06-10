@@ -94,6 +94,40 @@ def test_consultar_frete_nao_encontrado_e_vazio():
     assert frete.consultar_frete('')['erro'] == 'endereco_vazio'
 
 
+def test_simplificar_endereco():
+    # complemento, bairro, estado e CEP fora; rua + numero + cidade ficam
+    assert (frete.simplificar_endereco(
+        'Rua Funchal, 418, apto 72 bloco B, Vila Olímpia, São Paulo, SP, 04551-060')
+        == 'Rua Funchal, 418, São Paulo')
+    assert frete.simplificar_endereco('Av Brasil, 1500') == 'Av Brasil, 1500, São Paulo'
+    assert frete.simplificar_endereco('') is None
+
+
+def test_geocodificar_cai_pro_endereco_simplificado():
+    """Endereço real de e-commerce (complemento + bairro) derruba o Nominatim
+    na 1a tentativa; a simplificada (rua, numero, cidade) resolve."""
+    completo = 'Rua Funchal, 418, apto 72, Vila Olímpia, São Paulo, SP'
+    chamadas = []
+
+    def fake_texto(q):
+        chamadas.append(q)
+        if q == 'Rua Funchal, 418, São Paulo':
+            return (-23.594, -46.689, 'Rua Funchal 418')
+        return None
+
+    with patch('app.services.frete._geocodificar_texto',
+               side_effect=fake_texto):
+        geo = frete.geocodificar(completo)
+    assert geo == (-23.594, -46.689, 'Rua Funchal 418')
+    assert chamadas == [completo, 'Rua Funchal, 418, São Paulo']
+
+
+def test_geocodificar_aceita_latlng_direto():
+    """Válvula de escape do atendente: colar 'lat,lng' no campo do painel."""
+    geo = frete.geocodificar('-23.612012, -46.687506')
+    assert geo[0] == -23.612012 and geo[1] == -46.687506
+
+
 def test_tool_registrada_no_chatbot():
     from app.services import chatbot
     nomes = {t['name'] for t in chatbot.TOOLS}
