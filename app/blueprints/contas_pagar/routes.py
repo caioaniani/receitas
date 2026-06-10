@@ -396,9 +396,33 @@ def _parse_fator(raw):
         return None
 
 
+def _erro_unidade_metrica(m):
+    """Trava de fisica: "1 kg = 1,8 g" nao existe. Quando a unidade de compra
+    e a da MP sao ambas metricas, o unico fator valido e a conversao fisica
+    (kg->g: 1000). Caso real (Toddy, 2026-06-10): a IA sugeriu o conteudo da
+    embalagem ('CX 1,8KG' -> 1.8) e confirmar daria entrada de 1,8 g por
+    caixa em vez de 1800 g. Estoque tem peso especial — bloquear e explicar,
+    nunca converter por conta propria."""
+    from app.services.conta_pagar_estoque import conversao_metrica
+    mp = db.session.get(MateriaPrima, m.materia_prima_id)
+    if not mp:
+        return None
+    conv = conversao_metrica(m.unidade_compra, mp.unidade)
+    if conv is None or abs(m.fator_conversao - conv) <= 1e-9:
+        return None
+    certo = m.fator_conversao * conv
+    return (f'Não confirmei "{m.item_nome_exemplo}": '
+            f'"1 {m.unidade_compra} = {m.fator_conversao:g} {mp.unidade}" '
+            f'não fecha — 1 {m.unidade_compra} = {conv:g} {mp.unidade}, '
+            f'sempre. Se a embalagem contém {m.fator_conversao:g} '
+            f'{m.unidade_compra}, troque a unidade de compra pela da NF '
+            f'(cx, un, fd...) e use fator {certo:g}.')
+
+
 def _aplicar_acao_mapa(m):
     """Aplica a acao do form (vincular/ignorar/desfazer) num ContaPagarItemMap.
-    Compartilhado entre a tela de mapeamentos e o vinculo no detalhe da conta."""
+    Compartilhado entre a tela de mapeamentos e o vinculo no detalhe da conta.
+    Retorna None se ok, ou a mensagem de erro (caller faz rollback+flash)."""
     acao = request.form.get('acao')
     if acao == 'ignorar':
         m.ignorar = True
@@ -417,10 +441,14 @@ def _aplicar_acao_mapa(m):
         m.fator_conversao = fator if (fator and fator > 0) else 1.0
         m.ignorar = False
         if m.materia_prima_id:
+            erro = _erro_unidade_metrica(m)
+            if erro:
+                return erro
             m.confirmado_em = agora()
             m.confirmado_por = current_user.id
         else:
             m.confirmado_em = None
+    return None
 
 
 # ── Vinculo canal -> loja (cada canal = 1 empresa = 1 estoque) ──
