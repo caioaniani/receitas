@@ -5,13 +5,22 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <h1 class="page-title mb-0"><i class="bi bi-link-45deg"></i> Itens de NF → Matéria-prima</h1>
-  {% if current_user.is_owner %}
-  <form method="POST" action="{{ url_for('contas_pagar.mapeamentos_limpar_nomes') }}" class="mb-0"
-        onsubmit="return confirm('Juntar itens duplicados (mesmo produto com lote/validade diferentes), limpar os nomes e remover pendentes órfãos (item que não existe em nenhuma NF)? Os vínculos já confirmados são preservados.');">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button class="btn btn-sm btn-outline-dark"><i class="bi bi-stars"></i> Limpar e juntar duplicados</button>
-  </form>
-  {% endif %}
+  <div class="d-flex gap-2 flex-wrap">
+    <form method="POST" action="{{ url_for('contas_pagar.reprocessar') }}" class="mb-0"
+          onsubmit="return confirm('Dar entrada de estoque/preço nas NFs dos últimos 2 dias com os vínculos atuais? Item já processado não duplica. NFs mais antigas ficam de fora de propósito: o estoque delas já foi acertado por balanço.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="dias" value="2">
+      <button class="btn btn-sm btn-success"><i class="bi bi-arrow-repeat"></i>
+        Dar entrada nas NFs recentes</button>
+    </form>
+    {% if current_user.is_owner %}
+    <form method="POST" action="{{ url_for('contas_pagar.mapeamentos_limpar_nomes') }}" class="mb-0"
+          onsubmit="return confirm('Juntar itens duplicados (mesmo produto com lote/validade diferentes), limpar os nomes e remover pendentes órfãos (item que não existe em nenhuma NF)? Os vínculos já confirmados são preservados.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-sm btn-outline-dark"><i class="bi bi-stars"></i> Limpar e juntar duplicados</button>
+    </form>
+    {% endif %}
+  </div>
 </div>
 
 <div class="alert alert-light border small py-2">
