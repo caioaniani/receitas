@@ -240,16 +240,8 @@
     </form>
     {% endif %}
 
-    {% if current_user.is_owner and pedido.status != 'entregue' and pedido.status != 'cancelado' %}
-    <form method="POST" action="{{ url_for('pedidos.forcar_entrega', id=pedido.id) }}"
-          onsubmit="return confirm('Forçar este pedido como ENTREGUE? Isso vai baixar estoque industria (se ainda não baixou) E subir estoque da loja. Use só se o QR de entrega falhou e a entrega realmente foi feita.')">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-warning btn-sm" title="Destrava pedido cuja entrega não foi confirmada via QR (owner-only)">
-            <i class="bi bi-lightning-charge"></i> Forçar entrega
-        </button>
-    </form>
-    {% endif %}
-
+    {# "Forçar entrega" REMOVIDO em 2026-06-10 por ordem do dono: entrega
+       passa SEMPRE pelo QR (handshake). Historico antigo segue no Audit QR. #}
     {% if current_user.is_admin() %}
     <a href="{{ url_for('pedidos.handshake_audit', id=pedido.id) }}" class="btn btn-outline-info btn-sm"
        title="Ver histórico de tentativas de QR Code">
