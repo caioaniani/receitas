@@ -362,6 +362,7 @@ def create_app(config_class=None):
     from app.blueprints.driver import driver_bp
     from app.blueprints.entregas import entregas_bp
     from app.blueprints.handshake import handshake_bp
+    from app.blueprints.lalamove import lalamove_bp
     from app.blueprints.main import main_bp
     from app.blueprints.materias_primas import materias_primas_bp
     from app.blueprints.pedidos import pedidos_bp
@@ -384,6 +385,7 @@ def create_app(config_class=None):
     app.register_blueprint(handshake_bp, url_prefix='/handshake')
     app.register_blueprint(pedidos_bp)
     app.register_blueprint(entregas_bp, url_prefix='/entregas')
+    app.register_blueprint(lalamove_bp)
     app.register_blueprint(driver_bp, url_prefix='/driver')
     app.register_blueprint(comprovante_bp, url_prefix='/entrega')
     app.register_blueprint(projetos_bp)

@@ -77,6 +77,17 @@ class Config:
     SERU_CLIENT_ID = os.environ.get('SERU_CLIENT_ID', '')
     SERU_CLIENT_SECRET = os.environ.get('SERU_CLIENT_SECRET', '')
 
+    # Lalamove (entregador sob demanda chamado do painel do dia).
+    # Producao: https://rest.lalamove.com | sandbox: https://rest.sandbox.lalamove.com
+    LALAMOVE_API_KEY = os.environ.get('LALAMOVE_API_KEY', '')
+    LALAMOVE_API_SECRET = os.environ.get('LALAMOVE_API_SECRET', '')
+    LALAMOVE_MARKET = os.environ.get('LALAMOVE_MARKET', 'BR')
+    LALAMOVE_BASE_URL = os.environ.get('LALAMOVE_BASE_URL', '')
+    LALAMOVE_ORIGEM_ENDERECO = os.environ.get('LALAMOVE_ORIGEM_ENDERECO', '')
+    LALAMOVE_ORIGEM_LATLNG = os.environ.get('LALAMOVE_ORIGEM_LATLNG', '')
+    LALAMOVE_REMETENTE_NOME = os.environ.get('LALAMOVE_REMETENTE_NOME', '')
+    LALAMOVE_REMETENTE_FONE = os.environ.get('LALAMOVE_REMETENTE_FONE', '')
+
     # Token para integracao com bots externos (n8n / WhatsApp).
     # Gere com: python -c "import secrets; print(secrets.token_urlsafe(32))"
     BOT_API_TOKEN = os.environ.get('BOT_API_TOKEN', '')
