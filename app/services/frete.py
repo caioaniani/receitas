@@ -103,20 +103,15 @@ def _geocodificar_texto(texto):
         return None
 
 
-def consultar_frete(endereco_ou_cep):
-    """Estimativa de frete pra um CEP ou endereço.
+def geocodificar(endereco_ou_cep):
+    """(lat, lng, rotulo) pra um CEP ou endereço livre, ou None.
 
-    Retorna:
-      {'ok': True, 'valor': 15.0, 'gratis': False, 'fora_area': False,
-       'distancia_km': 3.4, 'endereco': 'Rua X, Moema, São Paulo',
-       'aviso': 'valor estimado — o definitivo é o do checkout'}
-      {'ok': True, 'fora_area': True, ...}  -> além de 15 km
-      {'ok': False, 'erro': 'endereco_vazio'|'nao_encontrado'}
-    """
+    CEP via BrasilAPI (com fallback do endereço resolvido no Nominatim);
+    texto livre direto no Nominatim. Usado pelo frete do bot e pela
+    integração Lalamove (origem/destino das corridas)."""
     texto = (endereco_ou_cep or '').strip()
     if not texto:
-        return {'ok': False, 'erro': 'endereco_vazio'}
-
+        return None
     geo = None
     cep = _extrair_cep(texto)
     if cep:
@@ -129,6 +124,24 @@ def consultar_frete(endereco_ou_cep):
     if not geo or geo[0] is None:
         geo = _geocodificar_texto(texto)
     if not geo or geo[0] is None:
+        return None
+    return geo
+
+
+def consultar_frete(endereco_ou_cep):
+    """Estimativa de frete pra um CEP ou endereço.
+
+    Retorna:
+      {'ok': True, 'valor': 15.0, 'gratis': False, 'fora_area': False,
+       'distancia_km': 3.4, 'endereco': 'Rua X, Moema, São Paulo',
+       'aviso': 'valor estimado — o definitivo é o do checkout'}
+      {'ok': True, 'fora_area': True, ...}  -> além de 15 km
+      {'ok': False, 'erro': 'endereco_vazio'|'nao_encontrado'}
+    """
+    if not (endereco_ou_cep or '').strip():
+        return {'ok': False, 'erro': 'endereco_vazio'}
+    geo = geocodificar(endereco_ou_cep)
+    if not geo:
         return {'ok': False, 'erro': 'nao_encontrado'}
 
     lat, lng, rotulo = geo
