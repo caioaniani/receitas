@@ -16,11 +16,16 @@
 
 <div class="alert alert-light border small py-2">
   <i class="bi bi-info-circle"></i>
-  Vincule o nome do item como aparece na NF a uma matéria-prima cadastrada, e diga
-  quanto <b>1 unidade de compra</b> representa na unidade da matéria-prima
-  (ex.: 1 caixa = <b>300</b> unidades; 1 fardo = <b>25</b> kg). A IA sugere — você
-  confirma. Depois de confirmado, as próximas NFs atualizam preço e estoque
-  automaticamente.
+  Vincule o item da NF a uma matéria-prima e complete a frase
+  <b>“1 unidade de compra = X na unidade da matéria-prima”</b>. Exemplos reais:
+  <ul class="mb-1 mt-1">
+    <li><b>Açaí Natural 10L</b> (vem em caixa, MP em ml): 1 <b>cx</b> = <b>10000</b> ml</li>
+    <li><b>Abacaxi</b> (vem por unidade, MP em g): 1 <b>un</b> = <b>1400</b> g (peso médio de 1 abacaxi)</li>
+    <li><b>Toddy CX 1,8KG</b> (MP em g): 1 <b>cx</b> = <b>1800</b> g</li>
+  </ul>
+  O rendimento (quanto suco sai do abacaxi) <b>não</b> entra aqui — aqui é o peso/volume
+  <b>bruto</b> que entra no estoque; rendimento é assunto da ficha da receita.
+  Confira o <b>custo por unidade</b> que aparece embaixo: se ficar absurdo, o fator está errado.
 </div>
 
 <ul class="nav nav-tabs mb-3">
