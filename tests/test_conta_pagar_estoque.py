@@ -440,3 +440,38 @@ def test_prefill_sugestao_regras():
     f, u = svc.prefill_sugestao('2.01', 'kg', 'g', 'cx')
     assert (round(f, 6), u) == (2010.0, 'cx')
     assert svc.prefill_sugestao('lixo', 'kg', 'g', 'cx') == (None, 'kg')
+
+
+def test_sugerir_para_item_re_ranqueia_por_unidade(app):
+    """Caso real (Bebida de Aveia Nude 1L em 'un', 2026-06-10): a MP
+    "Aveia (g)" ganhava por similaridade de nome e o usuario tinha que
+    rolar o dropdown todo pra achar "Leite de aveia NUDE (un)". A busca
+    por TOKEN filtrada pela grandeza da NF complementa o resolver."""
+    from app.models import MateriaPrima
+    with app.app_context():
+        db.session.add_all([
+            MateriaPrima(nome='Aveia', unidade='g', custo_por_kg=0),
+            MateriaPrima(nome='Leite de aveia NUDE', unidade='un', custo_por_kg=0),
+        ])
+        db.session.commit()
+
+        # Sem hint da NF: o resolver puro pega "Aveia" pelo substring.
+        sem = svc.sugerir_para_item('Bebida de Aveia Nude 1L')
+        assert 'Aveia' in [s['nome'] for s in sem]
+
+        # Com hint 'un' (NF conta caixinhas): MP em 'un' sobe pro topo.
+        com = svc.sugerir_para_item('Bebida de Aveia Nude 1L', unidade_nf='un')
+        assert com[0]['nome'] == 'Leite de aveia NUDE'
+        assert 'Aveia' in [s['nome'] for s in com]   # ainda presente
+
+        # Com hint 'kg' (NF a granel): MP em massa fica no topo.
+        com_kg = svc.sugerir_para_item('Bebida de Aveia Nude 1L', unidade_nf='kg')
+        assert com_kg[0]['nome'] == 'Aveia'
+
+
+def test_grandeza_agrupa_familias_de_unidade():
+    assert svc._grandeza('un') == svc._grandeza('CX') == 'un'
+    assert svc._grandeza('kg') == svc._grandeza('g') == 'massa'
+    assert svc._grandeza('L') == svc._grandeza('ml') == 'volume'
+    assert svc._grandeza(None) is None
+    assert svc._grandeza('xyz') is None
