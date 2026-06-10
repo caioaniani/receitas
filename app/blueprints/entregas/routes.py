@@ -91,8 +91,10 @@ def _painel_pedidos_do_dia(target):
 @entregas_bp.route('/painel')
 @login_required
 def painel():
+    from app.services import lalamove as lala_svc
     resp = current_app.make_response(
-        render_template('entregas/painel.html', hoje=hoje_brt().isoformat()))
+        render_template('entregas/painel.html', hoje=hoje_brt().isoformat(),
+                        lala_veiculos=lala_svc.OPCOES_VEICULO))
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     return resp
 
@@ -192,8 +194,7 @@ def _lalamove_json(e):
                    if e.status == 'cotacao' else lala_svc.rotulo_status(e.status)),
         'valor': str(e.valor) if e.valor is not None else None,
         'moeda': e.moeda or 'BRL',
-        'veiculo': {'LALAGO': 'moto', 'MOTORCYCLE': 'moto',
-                    'CAR': 'carro'}.get(e.service_type, e.service_type),
+        'veiculo': lala_svc.ROTULO_VEICULO.get(e.service_type, e.service_type),
         'share_link': e.share_link,
         'motorista': e.motorista_nome,
         'motorista_fone': e.motorista_telefone,
@@ -248,9 +249,10 @@ def api_lalamove_cotar():
     db.session.add(e)
     db.session.commit()
     km = (f'{r["distancia_m"] / 1000:.1f} km' if r.get('distancia_m') else '')
+    rotulo_veic = lala_svc.ROTULO_VEICULO.get(r['service_type'], veiculo)
     return jsonify(ok=True, entrega_id=e.id, valor=r.get('valor'),
                    moeda=r.get('moeda') or 'BRL', distancia=km,
-                   veiculo=veiculo)
+                   veiculo=rotulo_veic)
 
 
 @entregas_bp.route('/api/painel/lalamove/chamar', methods=['POST'])
