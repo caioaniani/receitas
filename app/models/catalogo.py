@@ -103,6 +103,13 @@ class Receita(db.Model):
     # vira Croissant Almond, Sourdough Tradicional vira chapa). Outros
     # motivos (estragou/caiu/queimou) ainda baixam normalmente.
     reaproveitavel = db.Column(db.Boolean, default=False, nullable=False)
+    # Arquivamento: receita com historico (pedidos/vendas/estoque) nunca e
+    # excluida — arquivar tira ela das listas e seletores preservando tudo.
+    # NULL = ativa. Colunas criadas via _migrate_postgres/_migrate_sqlite
+    # (ALTER deployado e confirmado em 10/06/2026, antes deste modelo).
+    arquivada_em = db.Column(db.DateTime, nullable=True)
+    arquivada_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
+                                 nullable=True)
 
     ingredientes = db.relationship(
         'ReceitaIngrediente',
