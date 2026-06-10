@@ -59,12 +59,16 @@ def ficha(id):
 @receitas_bp.route('/padeiro')
 @login_required
 def padeiro_lista():
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    receitas = (Receita.query.filter(Receita.arquivada_em.is_(None))
+                .order_by(Receita.categoria, Receita.nome).all())
     categorias = {}
     for r in receitas:
         cat = r.categoria or 'Outros'
         categorias.setdefault(cat, []).append(r)
-    return render_template('receitas/padeiro_lista.html', categorias=categorias)
+    arquivadas = (Receita.query.filter(Receita.arquivada_em.isnot(None))
+                  .order_by(Receita.nome).all())
+    return render_template('receitas/padeiro_lista.html', categorias=categorias,
+                           arquivadas=arquivadas)
 
 
 @receitas_bp.route('/familias', methods=['GET', 'POST'])
