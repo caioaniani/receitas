@@ -280,16 +280,19 @@
             Contas a Pagar
         </a>
         <a href="{{ url_for('contas_pagar.canais') }}"
-           class="sidebar-link ps-4 small {% if request.path.startswith('/contas-pagar/canais') %}active{% endif %}">
-            Canais → Loja
+           class="sidebar-link ps-4 small {% if request.path.startswith('/contas-pagar/canais') %}active{% endif %}"
+           title="Qual canal do Slack pertence a qual loja">
+            Canais do Slack
         </a>
         <a href="{{ url_for('contas_pagar.mapeamentos') }}"
-           class="sidebar-link ps-4 small {% if request.path.startswith('/contas-pagar/mapeamentos') %}active{% endif %}">
-            Itens NF → MP
+           class="sidebar-link ps-4 small {% if request.path.startswith('/contas-pagar/mapeamentos') %}active{% endif %}"
+           title="Ligar cada item das notas fiscais à matéria-prima do estoque">
+            Vincular itens de NF
         </a>
         <a href="{{ url_for('contas_pagar.variacoes') }}"
-           class="sidebar-link ps-4 small {% if request.path.startswith('/contas-pagar/variacoes') %}active{% endif %}">
-            Variações de Preço
+           class="sidebar-link ps-4 small {% if request.path.startswith('/contas-pagar/variacoes') %}active{% endif %}"
+           title="Preço dos insumos subindo/caindo, nota a nota">
+            Preços dos insumos
         </a>
         <a href="{{ url_for('main.caixa') }}"
            class="sidebar-link {% if request.path == '/caixa' %}active{% endif %}">
