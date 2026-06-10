@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 
 def _setup(app):
-    """Loja + pedido entregue + fotos = ambiente mínimo pro aviso."""
+    """Loja + pedido entregue + fotos de recebimento (com storage_path)."""
     from app.extensions import db
     from app.models import FotoRecebimento, Loja, PedidoLoja
     loja = Loja(nome='Centro', ativa=True)
@@ -14,8 +14,12 @@ def _setup(app):
     p = PedidoLoja(loja_id=loja.id, status='entregue')
     db.session.add(p)
     db.session.flush()
-    db.session.add(FotoRecebimento(pedido_id=p.id, imagem_url='http://x/a.jpg'))
-    db.session.add(FotoRecebimento(pedido_id=p.id, imagem_url='http://x/b.jpg'))
+    db.session.add(FotoRecebimento(
+        pedido_id=p.id, imagem_url='http://x/a.jpg',
+        imagem_storage_path=f'/recebimento/{p.id}/a.jpg'))
+    db.session.add(FotoRecebimento(
+        pedido_id=p.id, imagem_url='http://x/b.jpg',
+        imagem_storage_path=f'/recebimento/{p.id}/b.jpg'))
     db.session.commit()
     app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999990000'
     return p
@@ -25,7 +29,7 @@ def test_envia_com_link_da_pasta(app):
     from app.services import pedidos_notificacao
     p = _setup(app)
     with patch('app.services.dropbox_storage.shared_link_pasta',
-               return_value='https://www.dropbox.com/scl/fo/abc?dl=0'), \
+               return_value='https://www.dropbox.com/scl/fo/abc?dl=0') as lk, \
          patch('app.services.zapi.enviar_texto',
                return_value={'ok': True}) as send:
         pedidos_notificacao.notificar_pedido_recebido(p)
@@ -37,6 +41,53 @@ def test_envia_com_link_da_pasta(app):
     assert 'Centro' in msg
     assert '2 foto(s)' in msg
     assert 'dropbox.com/scl/fo/abc?dl=0' in msg
+    # Pasta derivada do storage_path real (nao hardcode)
+    lk.assert_called_once_with(f'/recebimento/{p.id}')
+
+
+def test_fotos_de_conferencia_handshake_aparecem(app):
+    """Bug de prod 2026-06-10: pedido recebido via handshake QR tem fotos em
+    /conferencia/<id> (PedidoItemFoto) — o aviso dizia '(sem fotos)' porque
+    so olhava FotoRecebimento. Agora conta as duas e o link vai pra pasta
+    onde as fotos realmente estao."""
+    from app.extensions import db
+    from app.models import (
+        Loja,
+        PedidoItem,
+        PedidoItemFoto,
+        PedidoLoja,
+        Receita,
+    )
+    from app.services import pedidos_notificacao
+    loja = Loja(nome='Ribeiro do Vale', ativa=True)
+    r = Receita(nome='Sourdough', categoria='Paes', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=100.0)
+    db.session.add_all([loja, r])
+    db.session.flush()
+    p = PedidoLoja(loja_id=loja.id, status='entregue')
+    db.session.add(p)
+    db.session.flush()
+    item = PedidoItem(pedido_id=p.id, receita_id=r.id, quantidade=10)
+    db.session.add(item)
+    db.session.flush()
+    db.session.add(PedidoItemFoto(
+        pedido_item_id=item.id, etapa='entrega',
+        imagem_url='http://x/c.jpg',
+        imagem_storage_path=f'/conferencia/{p.id}/{item.id}_entrega.jpg'))
+    db.session.commit()
+    app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999990000'
+
+    with patch('app.services.dropbox_storage.shared_link_pasta',
+               return_value='https://www.dropbox.com/scl/fo/conf?dl=0') as lk, \
+         patch('app.services.zapi.enviar_texto',
+               return_value={'ok': True}) as send:
+        pedidos_notificacao.notificar_pedido_recebido(p)
+    send.assert_called_once()
+    msg = send.call_args[0][1]
+    assert '1 foto(s)' in msg
+    assert 'sem fotos' not in msg
+    assert 'dropbox.com/scl/fo/conf?dl=0' in msg
+    lk.assert_called_once_with(f'/conferencia/{p.id}')
 
 
 def test_idempotente_nao_envia_duas_vezes(app):
