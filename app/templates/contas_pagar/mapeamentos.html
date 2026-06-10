@@ -66,7 +66,7 @@
   <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-lote-ignorar" disabled>
     Ignorar selecionados
   </button>
-  <span class="small text-muted">— confirma só linha com matéria-prima e fator preenchidos</span>
+  <span class="small text-muted">— confirma só linha com alvo (MP ou produto) e fator preenchidos</span>
 </div>
 {% endif %}
 
@@ -106,14 +106,24 @@
         </div>
         {% endif %}
       </div>
-      <select name="materia_prima_id" class="form-select form-select-sm mapa-mp" style="max-width:240px">
-        <option value="" data-unid="?">— matéria-prima —</option>
-        {% for mp in mps %}
-        <option value="{{ mp.id }}" data-unid="{{ mp.unidade }}"
-          {% if m.materia_prima_id == mp.id or (not m.materia_prima_id and sug and sug[0].id == mp.id) %}selected{% endif %}>
-          {{ mp.nome }} ({{ mp.unidade }})
-        </option>
-        {% endfor %}
+      <select name="alvo" class="form-select form-select-sm mapa-mp" style="max-width:240px">
+        <option value="" data-unid="?">— vincular a —</option>
+        <optgroup label="Matérias-primas (ingrediente)">
+          {% for mp in mps %}
+          <option value="mp-{{ mp.id }}" data-unid="{{ mp.unidade }}"
+            {% if m.materia_prima_id == mp.id or (not m.materia_prima_id and not m.produto_id and sug and sug[0].id == mp.id) %}selected{% endif %}>
+            {{ mp.nome }} ({{ mp.unidade }})
+          </option>
+          {% endfor %}
+        </optgroup>
+        <optgroup label="Produtos (revenda — água, chiclete...)">
+          {% for pr in produtos %}
+          <option value="prod-{{ pr.id }}" data-unid="un"
+            {% if m.produto_id == pr.id %}selected{% endif %}>
+            {{ pr.nome }} (produto)
+          </option>
+          {% endfor %}
+        </optgroup>
       </select>
       {# Frase-viva: "1 [cx] = [10000] [ml]" — traduz o fator pra linguagem
          humana, com a unidade da MP acompanhando o dropdown em tempo real. #}
@@ -223,7 +233,7 @@
       var form = c.closest('.mapa-form');
       return {
         id: parseInt(form.dataset.mapaId, 10),
-        materia_prima_id: form.querySelector('.mapa-mp').value,
+        alvo: form.querySelector('.mapa-mp').value,
         unidade_compra: form.querySelector('.mapa-uncompra').value,
         fator_conversao: form.querySelector('.mapa-fator').value
       };
