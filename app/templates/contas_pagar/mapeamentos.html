@@ -251,5 +251,46 @@
   btnConfirmar.addEventListener('click', function () { enviar('vincular'); });
   btnIgnorar.addEventListener('click', function () { enviar('ignorar'); });
 })();
+
+// "+ nova MP": cria a materia-prima na hora e vincula com a unidade/fator
+// que ja estao preenchidos na linha — sem sair da tela.
+(function () {
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest('.btn-nova-mp-toggle');
+    if (t) {
+      var box = t.closest('.mapa-form').querySelector('.nova-mp-box');
+      box.style.display = box.style.display === 'none' ? '' : 'none';
+      return;
+    }
+    var criar = e.target.closest('.nova-mp-criar');
+    if (!criar) return;
+    var box = criar.closest('.nova-mp-box');
+    var form = criar.closest('.mapa-form');
+    var erroEl = box.querySelector('.nova-mp-erro');
+    erroEl.textContent = '';
+    criar.disabled = true;
+    fetch(box.dataset.url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify({
+        nome: box.querySelector('.nova-mp-nome').value,
+        unidade: box.querySelector('.nova-mp-unidade').value,
+        peso_unidade: box.querySelector('.nova-mp-peso').value,
+        unidade_compra: form.querySelector('.mapa-uncompra').value,
+        fator_conversao: form.querySelector('.mapa-fator').value
+      })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        criar.disabled = false;
+        if (d.erro) { erroEl.textContent = d.erro; return; }
+        location.reload();
+      })
+      .catch(function () {
+        criar.disabled = false;
+        erroEl.textContent = 'Falha de conexão — tente de novo.';
+      });
+  });
+})();
 </script>
 {% endblock %}
