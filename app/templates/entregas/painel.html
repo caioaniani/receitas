@@ -275,6 +275,7 @@
         '<div class="lbl">💌 Cartinha (escrever à mão)</div>' +
         '<div class="txt">' + (temCart ? esc(p.cartinha) : 'Este pedido não tem cartinha.') + '</div></div>' +
       '<div class="itens-lista">' + itens + '</div>' +
+      lalamoveHTML(p) +
       '<div class="acoes">' + acoes + '</div>' +
       '<button class="btn-fechar" data-act="fechar">FECHAR</button>';
 
@@ -284,7 +285,113 @@
         if (act === 'fechar') fecharDetalhe(); else setStatus(p.code, act);
       });
     });
+    ligarLalamove(p);
     document.getElementById('detalhe').classList.add('on');
+  }
+
+  // ── Lalamove (chamar entregador quando PRONTO) ─────────
+  var lalaCotacao = null;   // {entrega_id, valor, ...} da cotação corrente
+
+  function lalamoveHTML(p) {
+    var L = p.lalamove;
+    if (L) {
+      var linhas = '<div class="lala-st">🛵 Lalamove: <b>' + esc(L.rotulo) + '</b>' +
+        (L.valor ? ' · R$ ' + esc(L.valor) : '') +
+        (L.veiculo ? ' · ' + esc(L.veiculo) : '') + '</div>' +
+        (L.motorista ? '<div class="lala-mot">👤 ' + esc(L.motorista) +
+          (L.motorista_fone ? ' · ' + esc(L.motorista_fone) : '') + '</div>' : '') +
+        (L.share_link ? '<div><a class="lala-link" target="_blank" href="' +
+          esc(L.share_link) + '">📡 Acompanhar entrega</a></div>' : '');
+      var botoes = '';
+      if (L.pode_cancelar) {
+        botoes += '<button class="lala-btn cancelar" data-lala="cancelar" data-id="' +
+                  L.id + '">✕ Cancelar corrida</button>';
+      }
+      if (L.encerrada && p.status === 'pronto') {
+        botoes += '<button class="lala-btn" data-lala="nova">🛵 Chamar de novo</button>';
+      }
+      return '<div class="lala-box">' + linhas + botoes + '</div>';
+    }
+    if (p.status !== 'pronto') return '';
+    return '<div class="lala-box">' +
+      '<div class="lala-st">🛵 <b>Chamar entregador (Lalamove)</b></div>' +
+      '<div class="lala-veic">' +
+        '<label><input type="radio" name="lala-veic" value="moto" checked> 🏍 Moto</label>' +
+        '<label><input type="radio" name="lala-veic" value="carro"> 🚗 Carro</label>' +
+      '</div>' +
+      '<div class="lala-res" id="lala-res"></div>' +
+      '<button class="lala-btn" data-lala="cotar">💰 Ver preço</button>' +
+      '<button class="lala-btn chamar" data-lala="chamar" style="display:none">✓ CHAMAR ENTREGADOR</button>' +
+      '</div>';
+  }
+
+  function lalaErro(msg) {
+    var r = document.getElementById('lala-res');
+    if (r) { r.innerHTML = '<span class="lala-erro">⚠ ' + esc(msg) + '</span>'; }
+  }
+
+  function ligarLalamove(p) {
+    Array.prototype.forEach.call(
+        document.querySelectorAll('#detalhe-box [data-lala]'), function (b) {
+      b.addEventListener('click', function () {
+        var act = b.getAttribute('data-lala');
+        if (act === 'nova') { p.lalamove = null; abrirDetalhe(p); return; }
+        if (act === 'cotar') {
+          var veic = (document.querySelector('input[name="lala-veic"]:checked') || {}).value || 'moto';
+          b.disabled = true;
+          document.getElementById('lala-res').textContent = 'Cotando...';
+          fetch(LALA_COTAR, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ code: p.code, endereco: p.endereco,
+                                   destinatario: p.destinatario,
+                                   telefone: p.telefone, veiculo: veic })
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            b.disabled = false;
+            if (!d.ok) { lalaErro(d.erro || 'falhou'); return; }
+            lalaCotacao = d;
+            document.getElementById('lala-res').innerHTML =
+              '<b>R$ ' + esc(d.valor) + '</b>' +
+              (d.distancia ? ' · ' + esc(d.distancia) : '') + ' · ' + esc(d.veiculo);
+            var bc = document.querySelector('#detalhe-box [data-lala="chamar"]');
+            if (bc) bc.style.display = '';
+          }).catch(function () { b.disabled = false; lalaErro('sem conexão'); });
+          return;
+        }
+        if (act === 'chamar') {
+          if (!lalaCotacao) { lalaErro('cote o preço primeiro'); return; }
+          if (!confirm('Chamar entregador (' + lalaCotacao.veiculo + ', R$ ' +
+                       lalaCotacao.valor + ') para:\n' + (p.endereco || ''))) return;
+          b.disabled = true;
+          fetch(LALA_CHAMAR, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ entrega_id: lalaCotacao.entrega_id })
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            b.disabled = false;
+            if (!d.ok) { lalaErro(d.erro || 'falhou'); return; }
+            lalaCotacao = null;
+            p.lalamove = d.lalamove;
+            abrirDetalhe(p); carregar();
+          }).catch(function () { b.disabled = false; lalaErro('sem conexão'); });
+          return;
+        }
+        if (act === 'cancelar') {
+          if (!confirm('Cancelar a corrida Lalamove deste pedido?')) return;
+          b.disabled = true;
+          fetch(LALA_CANCELAR, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ entrega_id: b.getAttribute('data-id') })
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            b.disabled = false;
+            if (!d.ok) { lalaErro(d.erro || 'falhou'); return; }
+            p.lalamove = d.lalamove;
+            abrirDetalhe(p); carregar();
+          }).catch(function () { b.disabled = false; lalaErro('sem conexão'); });
+        }
+      });
+    });
   }
   function fecharDetalhe() { abertoCode = null; document.getElementById('detalhe').classList.remove('on'); }
   document.getElementById('detalhe').addEventListener('click', function (e) {
