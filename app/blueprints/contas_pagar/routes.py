@@ -190,7 +190,9 @@ def detalhe(id):
     for i, (it, n) in enumerate(zip(itens, norms)):
         mp_map = mapas.get(n)
         sem_vinculo = not (mp_map and (mp_map.materia_prima_id or mp_map.ignorar))
-        sug = sugerir_para_item(it.get('nome') or '')[:3] if (n and sem_vinculo) else []
+        sug = (sugerir_para_item(it.get('nome') or '',
+                                 unidade_nf=it.get('unidade'))[:3]
+               if (n and sem_vinculo) else [])
         # Mesma traducao da sugestao da IA da tela de mapeamentos (kg->g etc.)
         ia_f = (mp_map.ia_fator_sugerido if mp_map else None) or it.get('fator_embalagem')
         ia_u = ((mp_map.ia_unidade_sugerida if mp_map else None)
