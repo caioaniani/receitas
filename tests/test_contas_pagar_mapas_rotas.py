@@ -471,3 +471,18 @@ def test_reprocessar_nfs_recentes(app, admin_user):
            follow_redirects=True)
     with app.app_context():
         assert db.session.get(MateriaPrima, mp_id).estoque_atual == 25
+
+
+def test_produtos_novo_simples_e_cesta(app, admin_user):
+    """/produtos/novo agora cria tambem produto SIMPLES de revenda (sem
+    composicao) — antes so 'Nova Cesta' (furo apontado pelo dono 10/06)."""
+    from app.models import Produto
+    c = app.test_client()
+    _login(c)
+    c.post('/produtos/novo', data={'tipo': 'simples', 'nome': 'Água Prata 350ml',
+                                   'categoria': 'Bebidas'})
+    c.post('/produtos/novo', data={})   # comportamento antigo preservado
+    with app.app_context():
+        agua = Produto.query.filter_by(nome='Água Prata 350ml').one()
+        assert agua.categoria == 'Bebidas'
+        assert Produto.query.filter_by(nome='Nova Cesta').count() == 1
