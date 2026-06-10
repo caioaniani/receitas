@@ -695,6 +695,89 @@ def mapeamentos_lote():
     return jsonify(ok=ok, falhas=falhas)
 
 
+@contas_pagar_bp.route('/mapeamentos/<int:id>/criar-mp', methods=['POST'])
+@login_required
+@admin_required
+def mapeamento_criar_mp(id):
+    """Cria a matéria-prima NA HORA e já vincula o item — elimina o
+    vai-e-vem (sair pra /materias-primas, cadastrar, voltar, procurar o
+    item de novo), que era a maior fricção da tela de mapeamentos.
+
+    JSON: {nome, unidade (g/ml/un/kg/l), peso_unidade?, unidade_compra,
+    fator_conversao}. `peso_unidade` (conteúdo em g/ml de 1 unidade) é o
+    que permite as FICHAS converterem MP contada em 'un' — sem ele o custo
+    na receita sai zero. Custo inicial 0: a primeira NF processada define.
+    Mesmas travas do vínculo individual (fator obrigatório + física)."""
+    from sqlalchemy import func
+    m = ContaPagarItemMap.query.get_or_404(id)
+    dados = request.get_json(silent=True) or {}
+    nome = (dados.get('nome') or '').strip()
+    unidade = (dados.get('unidade') or '').strip().lower()
+    if not nome or unidade not in ('g', 'ml', 'un', 'kg', 'l'):
+        return jsonify(erro='nome e unidade (g/ml/un/kg/l) são obrigatórios'), 400
+    if MateriaPrima.query.filter(
+            func.lower(MateriaPrima.nome) == nome.lower()).first():
+        return jsonify(erro=f'"{nome}" já existe no banco de MP — '
+                            'selecione no menu da linha'), 400
+    peso_unidade = None
+    bruto = str(dados.get('peso_unidade') or '').strip()
+    if bruto:
+        try:
+            peso_unidade = float(bruto.replace(',', '.'))
+        except ValueError:
+            return jsonify(erro='peso por unidade inválido'), 400
+    mp = MateriaPrima(nome=nome, unidade=unidade, custo_por_kg=0,
+                      peso_unidade=peso_unidade)
+    db.session.add(mp)
+    db.session.flush()
+    erro = _aplicar_vinculo(m, 'vincular', materia_prima_id=mp.id,
+                            unidade_compra=dados.get('unidade_compra'),
+                            fator_raw=dados.get('fator_conversao'),
+                            exigir_completo=True)
+    if erro:
+        db.session.rollback()   # MP não fica criada se o vínculo falhou
+        return jsonify(erro=erro), 400
+    db.session.commit()
+    return jsonify(ok=True, mp_id=mp.id, nome=mp.nome, unidade=mp.unidade)
+
+
+@contas_pagar_bp.route('/reprocessar', methods=['POST'])
+@login_required
+@admin_required
+def reprocessar():
+    """Dá entrada nas NFs RECENTES depois de vincular itens pendentes.
+
+    `processar_conta` só roda na captura — item vinculado depois ficava sem
+    entrada até a PRÓXIMA nota. Este botão reprocessa as contas dos últimos
+    N dias (default 2, teto 7): janela curta de propósito — nota velha já
+    teve a mercadoria consumida e o estoque acertado por balanço; entrada
+    retroativa inflaria. Idempotente (item já processado não duplica);
+    ordem cronológica pra o preço final ser o da nota mais nova."""
+    from datetime import timedelta
+
+    from app.services.conta_pagar_estoque import processar_conta
+    try:
+        dias = min(max(int(request.form.get('dias', 2)), 1), 7)
+    except (TypeError, ValueError):
+        dias = 2
+    corte = agora() - timedelta(days=dias)
+    contas = (ContaPagar.query
+              .filter(ContaPagar.itens_json.isnot(None),
+                      ContaPagar.criado_em >= corte,
+                      ContaPagar.status != 'ignorado')
+              .order_by(ContaPagar.criado_em.asc()).all())
+    total = {}
+    for c in contas:
+        for k, v in processar_conta(c, user_id=current_user.id).items():
+            total[k] = total.get(k, 0) + v
+    flash(f'{len(contas)} NF(s) dos últimos {dias} dia(s) reprocessada(s): '
+          f"{total.get('processados', 0)} item(ns) deram entrada, "
+          f"{total.get('ja_processados', 0)} já estavam, "
+          f"{total.get('pendentes', 0)} seguem pendentes de vínculo.",
+          'success')
+    return redirect(url_for('contas_pagar.mapeamentos'))
+
+
 @contas_pagar_bp.route('/mapeamentos/<int:id>', methods=['POST'])
 @login_required
 @admin_required
