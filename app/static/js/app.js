@@ -406,6 +406,54 @@ document.addEventListener('DOMContentLoaded', function () {
                 excluirLiberado = true;
                 formExcluir.submit();
             });
+
+            // Transferir TODOS os vinculos pra outra receita (fusao de duplicata)
+            var btnTransferir = document.getElementById('btn-transferir-vinculos');
+            if (btnTransferir) {
+                btnTransferir.addEventListener('click', function () {
+                    var destino = (document.getElementById('transferir-destino').value || '').trim();
+                    var fb = document.getElementById('transferir-feedback');
+                    fb.className = 'small mt-1';
+                    if (!destino) {
+                        fb.classList.add('text-danger');
+                        fb.textContent = 'Digite o nome da receita destino.';
+                        return;
+                    }
+                    if (!confirm('Transferir TODOS os vínculos de "' +
+                                 formExcluir.dataset.nome + '" para "' + destino +
+                                 '"?\n\nPedidos, vendas e estoque passam a contar na receita destino.')) {
+                        return;
+                    }
+                    btnTransferir.disabled = true;
+                    fb.textContent = 'Transferindo...';
+                    var fd = new FormData();
+                    fd.append('destino', destino);
+                    fd.append('csrf_token', CSRF_TOKEN);
+                    fetch(btnTransferir.dataset.url, { method: 'POST', body: fd })
+                        .then(function (r) { return r.json(); })
+                        .then(function (data) {
+                            btnTransferir.disabled = false;
+                            if (data.erro) {
+                                fb.classList.add('text-danger');
+                                fb.textContent = data.erro;
+                                return;
+                            }
+                            var total = 0;
+                            Object.keys(data.movidos || {}).forEach(function (k) {
+                                total += data.movidos[k];
+                            });
+                            fb.classList.add('text-success');
+                            fb.textContent = total + ' vínculo(s) transferido(s) para "' +
+                                data.destino + '".';
+                            renderVinculos(data);
+                        })
+                        .catch(function () {
+                            btnTransferir.disabled = false;
+                            fb.classList.add('text-danger');
+                            fb.textContent = 'Falha na transferência — tente de novo.';
+                        });
+                });
+            }
         }
 
         // Cadeado de % Padeiro
