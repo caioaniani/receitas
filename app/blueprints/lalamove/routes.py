@@ -54,6 +54,34 @@ def ultimo_hit():
         return None
 
 
+def _salvar_saldo(data, payload_completo):
+    """Upsert do saldo (linha única id=1) a partir do evento de carteira.
+
+    Parse liberal: a doc varia entre data.balance.{amount,currency} e campos
+    soltos — tenta as chaves conhecidas e guarda o payload cru pra ajustar
+    se o formato real for outro (aparece no /admin/debug-lalamove)."""
+    from app.models import LalamoveSaldo
+    balance = data.get('balance') if isinstance(data.get('balance'), dict) \
+        else data
+    bruto = (balance.get('amount') or balance.get('totalBalance')
+             or balance.get('total') or balance.get('value'))
+    valor = None
+    try:
+        valor = float(str(bruto).replace(',', '.')) if bruto is not None else None
+    except ValueError:
+        logger.warning('saldo lalamove sem parse: %r', bruto)
+    moeda = balance.get('currency') or 'BRL'
+    s = db.session.get(LalamoveSaldo, 1) or LalamoveSaldo(id=1)
+    if valor is not None:
+        s.valor = valor
+    s.moeda = moeda
+    s.payload_json = json.dumps(payload_completo, ensure_ascii=False)[:4000]
+    s.atualizado_em = agora()
+    db.session.add(s)
+    db.session.commit()
+    logger.info('saldo lalamove atualizado: %s %s', moeda, valor)
+
+
 @lalamove_bp.route('/webhook', methods=['GET', 'POST', 'HEAD'])
 def webhook():
     # GET/HEAD = teste de alcance (portal/navegador).
@@ -82,6 +110,13 @@ def webhook():
     if not (nossa_key and chave and secrets.compare_digest(chave, nossa_key)):
         logger.warning('lalamove webhook com apiKey invalida — descartado')
         return jsonify(ok=False), 401
+
+    # Saldo da carteira: chega a cada debito/recarga. Parse liberal (o
+    # formato exato varia na doc) + payload cru guardado pra ajuste fino.
+    if event_type == 'WALLET_BALANCE_CHANGED' or (
+            'balance' in data and not order_id):
+        _salvar_saldo(data, dados)
+        return jsonify(ok=True)
 
     if not order_id:
         return jsonify(ok=True, ignorado='sem orderId')
