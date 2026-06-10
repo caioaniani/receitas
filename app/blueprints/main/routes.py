@@ -1849,6 +1849,53 @@ def retencao_admin():
     return jsonify(rel), 200
 
 
+@main_bp.route('/admin/debug-lalamove')
+@owner_required
+def debug_lalamove():
+    """Diagnóstico das credenciais Lalamove (owner-only). Mostra prefixos
+    (nunca a chave inteira) e bate num endpoint autenticado neutro
+    (GET /v3/cities): 200 = chave+assinatura OK; 401 = credencial/conta;
+    outro = corpo do erro pra leitura."""
+    from app.services import lalamove
+    key = lalamove._cfg('LALAMOVE_API_KEY') or ''
+    secret = lalamove._cfg('LALAMOVE_API_SECRET') or ''
+    out = {
+        'configurado': lalamove.disponivel(),
+        'key_prefixo': key[:8] + '...' if key else None,
+        'key_tamanho': len(key),
+        'secret_prefixo': secret[:8] + '...' if secret else None,
+        'secret_tamanho': len(secret),
+        # espaco/quebra de linha copiado junto e causa classica de 401
+        'key_tem_espaco': key != key.strip(),
+        'secret_tem_espaco': secret != secret.strip(),
+        'base_url': lalamove._base_url(),
+        'market': lalamove._cfg('LALAMOVE_MARKET', 'BR') or 'BR',
+        'origem_latlng_env': bool(lalamove._cfg('LALAMOVE_ORIGEM_LATLNG')),
+    }
+    if not out['configurado']:
+        out['erro'] = 'LALAMOVE_API_KEY/SECRET ausentes'
+        return jsonify(out), 200
+    try:
+        status, corpo = lalamove._request('GET', '/v3/cities')
+        out['teste_cities_status'] = status
+        out['teste_cities_ok'] = status == 200
+        if status == 200:
+            dados = corpo.get('data') or []
+            out['cidades'] = [c.get('locode') or c.get('id') for c in dados][:10]
+            out['conclusao'] = ('Credenciais e assinatura OK. Se a cotação '
+                                'ainda falhar, o problema é no payload — me '
+                                'mande este JSON.')
+        else:
+            out['teste_cities_corpo'] = str(corpo)[:600]
+            out['conclusao'] = ('401/erro também no endpoint neutro = chave/'
+                                'secret não conferem ou conta sem produção '
+                                'ativa (Wallet/aprovação no portal). Não é '
+                                'problema do payload de cotação.')
+    except Exception as exc:  # noqa: BLE001
+        out['erro'] = f'{type(exc).__name__}: {exc}'
+    return jsonify(out), 200
+
+
 @main_bp.route('/admin/debug-sentry')
 @owner_required
 def debug_sentry():
