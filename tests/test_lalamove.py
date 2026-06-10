@@ -256,3 +256,29 @@ def test_cotar_aceita_nome_direto_da_api(app):
 
     with app.app_context():
         assert lalamove.cotar('Rua X', 'jetski')['erro'].startswith('veículo inválido')
+
+
+def test_webhook_probe_sem_apikey_recebe_200_e_registra_hit(app):
+    """O teste de URL do portal manda POST sem apiKey/evento — precisa de
+    200 (senao o portal acusa falha). Nao autoriza nada: evento real exige
+    apiKey valida + orderId conhecido. Todo hit fica registrado pro debug."""
+    import os
+
+    from app.blueprints.lalamove import routes as wh
+    _config(app)
+    if os.path.exists(wh.ARQUIVO_ULTIMO_HIT):
+        os.remove(wh.ARQUIVO_ULTIMO_HIT)
+    c = app.test_client()
+
+    r = c.post('/lalamove/webhook', json={})
+    assert r.status_code == 200 and r.get_json()['ping'] is True
+    hit = wh.ultimo_hit()
+    assert hit['tipo'] == 'ping' and hit['tinha_apikey'] is False
+
+    assert c.get('/lalamove/webhook').status_code == 200
+    assert wh.ultimo_hit()['tipo'] == 'alcance'
+
+    # apiKey ERRADA com evento continua 401
+    r2 = c.post('/lalamove/webhook', json={
+        'apiKey': 'pk_invasor', 'data': {'order': {'orderId': 'O-1'}}})
+    assert r2.status_code == 401

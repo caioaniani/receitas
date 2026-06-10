@@ -1859,8 +1859,12 @@ def debug_lalamove():
     from app.services import lalamove
     key = lalamove._cfg('LALAMOVE_API_KEY') or ''
     secret = lalamove._cfg('LALAMOVE_API_SECRET') or ''
+    from app.blueprints.lalamove.routes import ultimo_hit
     out = {
         'configurado': lalamove.disponivel(),
+        # ultimo acesso registrado no /lalamove/webhook deste container —
+        # diz se o probe do portal chegou ao servidor ou morreu no caminho.
+        'webhook_ultimo_hit': ultimo_hit(),
         'key_prefixo': key[:8] + '...' if key else None,
         'key_tamanho': len(key),
         'secret_prefixo': secret[:8] + '...' if secret else None,
