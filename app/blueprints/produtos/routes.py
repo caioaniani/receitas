@@ -47,7 +47,17 @@ def lista():
 @login_required
 @admin_required
 def novo():
-    produto = Produto(nome='Nova Cesta', categoria='Cestas')
+    """Cria cesta/kit (composicao de itens) OU produto simples de revenda
+    (agua, chiclete, iogurte comprado pronto — so custo_direto + preco,
+    sem componentes). Antes o botao so criava 'Nova Cesta' e nao havia
+    caminho pra revenda (apontado pelo dono em 10/06/2026)."""
+    tipo = (request.form.get('tipo') or 'cesta').strip().lower()
+    nome = (request.form.get('nome') or '').strip()
+    if tipo == 'simples':
+        produto = Produto(nome=nome or 'Novo Produto',
+                          categoria=(request.form.get('categoria') or 'Revenda').strip())
+    else:
+        produto = Produto(nome=nome or 'Nova Cesta', categoria='Cestas')
     db.session.add(produto)
     db.session.commit()
     return redirect(url_for('produtos.detalhe', id=produto.id))
