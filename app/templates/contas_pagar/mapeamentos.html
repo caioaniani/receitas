@@ -66,6 +66,10 @@
           · unit R$ {{ ex.valor_unitario if ex.valor_unitario is not none else '—' }}
           · total R$ {{ ex.valor_total if ex.valor_total is not none else '—' }}
           {% if ex.n_notas and ex.n_notas > 1 %}· em {{ ex.n_notas }} notas{% endif %}
+          {% if ex.conta_id %}
+          · <a href="{{ url_for('contas_pagar.detalhe', id=ex.conta_id) }}"
+               target="_blank" rel="noopener">ver NF <i class="bi bi-box-arrow-up-right"></i></a>
+          {% endif %}
         </div>
         {% endif %}
       </div>
