@@ -1849,6 +1849,20 @@ def retencao_admin():
     return jsonify(rel), 200
 
 
+def _saldo_lalamove_json():
+    from app.models import LalamoveSaldo
+    s = db.session.get(LalamoveSaldo, 1)
+    if not s:
+        return ('ainda sem evento de carteira — chega no primeiro '
+                'debito/recarga apos ativar o webhook')
+    return {'valor': str(s.valor) if s.valor is not None else None,
+            'moeda': s.moeda,
+            'atualizado_em': s.atualizado_em.isoformat(sep=' ',
+                                                       timespec='seconds')
+            if s.atualizado_em else None,
+            'payload_cru': (s.payload_json or '')[:400]}
+
+
 @main_bp.route('/admin/debug-lalamove')
 @owner_required
 def debug_lalamove():
@@ -1865,6 +1879,7 @@ def debug_lalamove():
         # ultimo acesso registrado no /lalamove/webhook deste container —
         # diz se o probe do portal chegou ao servidor ou morreu no caminho.
         'webhook_ultimo_hit': ultimo_hit(),
+        'saldo_carteira': _saldo_lalamove_json(),
         'key_prefixo': key[:8] + '...' if key else None,
         'key_tamanho': len(key),
         'secret_prefixo': secret[:8] + '...' if secret else None,

@@ -13,6 +13,7 @@ from app.models import (
     Driver,
     EntregaFoto,
     LalamoveEntrega,
+    LalamoveSaldo,
     LoteSaida,
     MateriaPrima,
     OverrideEntrega,
@@ -139,8 +140,11 @@ def api_painel():
             'lalamove': lala_por_code.get(code),
         })
 
+    saldo = db.session.get(LalamoveSaldo, 1)
     resp = jsonify(pedidos=out, data=data_str, total=len(out),
-                   novos=sum(1 for p in out if p['novo']))
+                   novos=sum(1 for p in out if p['novo']),
+                   lalamove_saldo=(str(saldo.valor) if saldo and
+                                   saldo.valor is not None else None))
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
     return resp
 
