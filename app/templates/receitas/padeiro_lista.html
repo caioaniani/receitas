@@ -37,6 +37,22 @@
 </div>
 {% endfor %}
 
+{% if arquivadas and current_user.is_admin() %}
+<div class="mt-4">
+    <details>
+        <summary class="text-muted small">
+            <i class="bi bi-archive"></i> Arquivadas ({{ arquivadas|length }})
+        </summary>
+        <div class="mt-2 d-flex flex-wrap gap-2">
+            {% for r in arquivadas %}
+            <a href="{{ url_for('receitas.ficha', id=r.id) }}"
+               class="badge bg-light text-muted border text-decoration-none">{{ r.nome }}</a>
+            {% endfor %}
+        </div>
+    </details>
+</div>
+{% endif %}
+
 <style>
 .card-padeiro {
     transition: transform 0.1s, box-shadow 0.1s;
