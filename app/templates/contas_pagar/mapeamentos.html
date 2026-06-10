@@ -47,7 +47,7 @@
 {% for m in maps %}
 {% set sug = sugestoes.get(m.id) %}
 <form method="POST" action="{{ url_for('contas_pagar.mapeamento_vincular', id=m.id) }}"
-      class="card mb-2">
+      class="card mb-2 mapa-form">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="estado" value="{{ estado }}">
   <div class="card-body py-2">
