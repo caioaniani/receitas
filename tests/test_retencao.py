@@ -26,7 +26,8 @@ def _owner_logado(app):
 
 
 def _semear(db):
-    """1 registro VELHO + 1 NOVO por alvo. Retorna ids dos novos."""
+    """1 registro VELHO + 1 NOVO por alvo (+ NFLog velho, que NUNCA deve ser
+    apagado). Retorna ids relevantes."""
     from app.models import ChatbotConversa, NFLog, ZapiBotEventoProcessado
     velho = agora() - timedelta(days=400)
     recente = agora() - timedelta(days=1)
@@ -41,37 +42,49 @@ def _semear(db):
     ev_n = ZapiBotEventoProcessado(message_id='ev-novo', processado_em=recente)
     db.session.add_all([nf_v, nf_n, cv_v, cv_n, ev_v, ev_n])
     db.session.commit()
-    return {'nf_novo': nf_n.id, 'conv_nova': cv_n.id}
+    return {'nf_velho': nf_v.id, 'nf_novo': nf_n.id, 'conv_nova': cv_n.id}
 
 
 def test_limpeza_apaga_velhos_preserva_novos(app):
     from app.extensions import db
-    from app.models import ChatbotConversa, NFLog, ZapiBotEventoProcessado
+    from app.models import ChatbotConversa, ZapiBotEventoProcessado
     from app.services import retencao
     ids = _semear(db)
     with patch('app.services.dropbox_storage.disponivel', return_value=False):
         rel = retencao.executar_limpeza()
-    assert rel['nf_log'] == 1
     assert rel['chatbot_conversa'] == 1
     assert rel['zapi_bot_evento_processado'] == 1
     # novos sobreviveram
-    assert NFLog.query.get(ids['nf_novo']) is not None
     assert ChatbotConversa.query.get(ids['conv_nova']) is not None
     assert ZapiBotEventoProcessado.query.get('ev-novo') is not None
     assert ZapiBotEventoProcessado.query.get('ev-velho') is None
 
 
-def test_dry_run_conta_sem_apagar(app):
+def test_nflog_nunca_e_apagado(app):
+    """Decisao do dono (2026-06-10): auditoria de NF fica PRA SEMPRE — nem
+    registro de 400 dias entra na limpeza, e o relatorio nem lista o alvo."""
     from app.extensions import db
     from app.models import NFLog
     from app.services import retencao
+    ids = _semear(db)
+    with patch('app.services.dropbox_storage.disponivel', return_value=False):
+        rel = retencao.executar_limpeza()
+    assert 'nf_log' not in rel                              # fora dos alvos
+    assert NFLog.query.get(ids['nf_velho']) is not None     # velho preservado
+    assert NFLog.query.get(ids['nf_novo']) is not None
+
+
+def test_dry_run_conta_sem_apagar(app):
+    from app.extensions import db
+    from app.models import ChatbotConversa
+    from app.services import retencao
     _semear(db)
-    antes = NFLog.query.count()
+    antes = ChatbotConversa.query.count()
     with patch('app.services.dropbox_storage.disponivel', return_value=False):
         rel = retencao.executar_limpeza(dry_run=True)
     assert rel['dry_run'] is True
-    assert rel['nf_log'] == 1            # contou o velho
-    assert NFLog.query.count() == antes  # mas NAO apagou
+    assert rel['chatbot_conversa'] == 1            # contou a velha
+    assert ChatbotConversa.query.count() == antes  # mas NAO apagou
 
 
 def test_backups_dropbox_90d_preserva_mais_recente(app):
