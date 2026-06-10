@@ -50,15 +50,17 @@ def test_arquivar_toggle_e_listas(app, admin_user):
 def test_copilot_resolver_ignora_arquivada(app, admin_user):
     from app.extensions import db
     from app.models import Receita
-    from app.services.copilot import _resolver_receita_produto
+    from app.services.copilot import _resolver_produto
+    from app.utils import agora
     rid = _receita(app, 'Croissant Especial')
     with app.app_context():
-        assert _resolver_receita_produto('Croissant Especial') is not None
-        r = db.session.get(Receita, rid)
-        from app.utils import agora
-        r.arquivada_em = agora()
+        antes = _resolver_produto('Croissant Especial')
+        assert any(m['tipo'] == 'receita' for m in antes)
+        db.session.get(Receita, rid).arquivada_em = agora()
         db.session.commit()
-        assert _resolver_receita_produto('Croissant Especial') is None
+        depois = _resolver_produto('Croissant Especial')
+        assert not any(m['tipo'] == 'receita' and m['id'] == rid
+                       for m in depois)
 
 
 def test_precos_post_nao_zera_arquivada(app, admin_user):
