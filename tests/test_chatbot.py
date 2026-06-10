@@ -1131,3 +1131,19 @@ def test_tiny_get_propaga_causa_quando_todas_falham(app):
     causa = tiny._consumir_falha()
     assert causa is not None
     assert '503' in causa
+
+
+def test_parse_produtos_inclui_url_da_pagina(app):
+    """Caso Ben (10/06/2026): cesta sazonal fora da lista fixa do prompt fez
+    o bot mandar link de OUTRA cesta. A url agora vem do slug do catalogo —
+    produto novo nunca depende de lista decorada."""
+    from app.services.bot_tools import _parse_produtos
+    raw = [{'name': 'Cesta Especial dia dos Namorados',
+            'slug': 'cesta-especial-dia-dos-namorados-51',
+            'price': 350.0,
+            'variants': [{'sku': 'CESTA-NAM', 'available': True}]},
+           {'name': 'Sem Slug', 'variants': [{'sku': 'X1'}]}]
+    out = _parse_produtos(raw)
+    assert out[0]['url'] == ('https://www.padariaartesanalonline.com.br'
+                             '/produto/cesta-especial-dia-dos-namorados-51')
+    assert out[1]['url'] is None
