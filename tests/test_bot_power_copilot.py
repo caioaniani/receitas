@@ -16,7 +16,7 @@ def _setup(app, telefone='5511999990000'):
     app.config['BOT_ALLOWED_PHONES'] = telefone
     with app.app_context():
         u = Usuario(nome='Caio Owner', login='owner_power', papel='admin',
-                    is_owner=True, ativo=True)
+                    is_owner=True)
         u.set_senha('x' * 8)
         db.session.add(u)
         db.session.commit()
