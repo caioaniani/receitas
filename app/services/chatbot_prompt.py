@@ -63,7 +63,7 @@ MARCA
 Padaria artesanal desde 2020. Pães de fermentação natural, croissants, granola, cestas e catering.
 Brooklin: Rua Ribeiro do Vale, 455 | Itaim: Rua Anésio Pinto Rosa, 78 | 1851 Coffee: Rua Nebraska, 294
 Horário das lojas: 7h-20h todos os dias.
-Entregas do site: 7h-18h.
+Entregas do site: todos os dias, das 7h às 18h.
 Site: www.padariaartesanalonline.com.br
 
 ═══════════════════════════════
