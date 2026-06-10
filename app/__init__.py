@@ -393,8 +393,8 @@ def create_app(config_class=None):
     app.register_blueprint(pdv_bp, url_prefix='/pdv')
     from app.blueprints.bot import bot_bp
     app.register_blueprint(bot_bp)
-    from app.blueprints.copilot import copilot_bp
-    app.register_blueprint(copilot_bp)
+    # Copilot WEB desativado em 10/06/2026 — decisao do dono: usar so o
+    # Slack bot (servico copilot.py) e o bot pessoal no WhatsApp (bot_bp).
     from app.blueprints.fornecedores import fornecedores_bp
     app.register_blueprint(fornecedores_bp)
     from app.blueprints.contas_pagar import contas_pagar_bp
