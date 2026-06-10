@@ -26,9 +26,11 @@ from app.models import (
     ContaPagarItemMap,
     ContaPagarItemProcessado,
     EstoqueLoja,
+    EstoqueProducao,
     Fornecedor,
     HistoricoPrecoMP,
     MovEstoqueLoja,
+    MovEstoqueProducao,
     MovimentacaoEstoque,
     SlackCanalLojaMap,
     VariacaoPrecoMP,
@@ -423,10 +425,77 @@ def processar_conta(conta, user_id=None, aovivo=True):
         fator = mapa.fator_conversao or 1.0
         if fator <= 0:
             fator = 1.0
-        mp = mapa.materia_prima
-        custo_anterior = mp.custo_por_kg
         preco_por_compra = vtot / qtd_nf
         qtd_estoque = qtd_nf * fator
+
+        forn = _resolver_ou_criar_fornecedor(conta.fornecedor_nome)
+        if forn and not conta.fornecedor_id:
+            conta.fornecedor_id = forn.id
+
+        ref = f'NF {conta.nf_numero or ("conta " + str(conta.id))}'
+
+        # ── Alvo PRODUTO de revenda (agua/chiclete/iogurte pronto):
+        # estoque em unidades + Produto.custo_direto atualizado por NF.
+        # Sem HistoricoPrecoMP/VariacaoPrecoMP (FKs sao de MP) — limitacao
+        # consciente; o custo em si fica sempre atual. ──
+        if mapa.produto_id:
+            produto = mapa.produto
+            custo_base = preco_por_compra / fator   # produto e contado em un
+            if abs(qtd_estoque - round(qtd_estoque)) > 1e-9:
+                stats['fracao_loja_pendente'] += 1
+                logger.warning(
+                    'conta %s item %d: qtd fracionaria %.4f (produto %s) — '
+                    'nao processado (estoque de produto e inteiro)',
+                    conta.id, i, qtd_estoque, produto.nome)
+                continue
+            qtd_int = int(round(qtd_estoque))
+            mov_loja = None
+            loja_id = None
+            if canal_map.eh_industria:
+                ep = (EstoqueProducao.query
+                      .filter_by(produto_id=produto.id, estado=None).first())
+                if not ep:
+                    ep = EstoqueProducao(produto_id=produto.id, quantidade=0,
+                                         estado=None)
+                    db.session.add(ep)
+                    db.session.flush()
+                anterior = ep.quantidade or 0
+                ep.quantidade = anterior + qtd_int
+                db.session.add(MovEstoqueProducao(
+                    estoque_producao_id=ep.id, tipo='entrada_nf',
+                    quantidade=qtd_int,
+                    referencia=f'{ref} (era {anterior}, ficou {ep.quantidade})',
+                    usuario_id=user_id))
+            else:
+                loja_id = canal_map.loja_id
+                el = (EstoqueLoja.query
+                      .filter_by(loja_id=loja_id, produto_id=produto.id,
+                                 estado=None).first())
+                if not el:
+                    el = EstoqueLoja(loja_id=loja_id, produto_id=produto.id,
+                                     quantidade=0, estado=None)
+                    db.session.add(el)
+                    db.session.flush()
+                anterior = el.quantidade or 0
+                el.quantidade = anterior + qtd_int
+                mov_loja = MovEstoqueLoja(
+                    estoque_loja_id=el.id, tipo='entrada_nf',
+                    quantidade=qtd_int,
+                    referencia=f'{ref} (era {anterior}, ficou {el.quantidade})',
+                    usuario_id=user_id)
+                db.session.add(mov_loja)
+            produto.custo_direto = custo_base
+            db.session.flush()
+            db.session.add(ContaPagarItemProcessado(
+                conta_pagar_id=conta.id, item_indice=i, materia_prima_id=None,
+                loja_id=loja_id, custo_aplicado=custo_base,
+                qtd_estoque=qtd_estoque,
+                mov_estoque_loja_id=(mov_loja.id if mov_loja else None)))
+            stats['processados'] += 1
+            continue
+
+        mp = mapa.materia_prima
+        custo_anterior = mp.custo_por_kg
         # custo_por_kg guarda custo por KG (unidade g/kg/ml) ou por UNIDADE ('un').
         # O fator esta na unidade de ESTOQUE da MP; pra g/ml ela e 1000x menor
         # que o kg, entao converte o fator pra kg SO no custo (o estoque continua
@@ -435,11 +504,6 @@ def processar_conta(conta, user_id=None, aovivo=True):
         fator_custo = fator / 1000.0 if unid in ('g', 'ml') else fator
         custo_base = preco_por_compra / fator_custo if fator_custo else preco_por_compra
 
-        forn = _resolver_ou_criar_fornecedor(conta.fornecedor_nome)
-        if forn and not conta.fornecedor_id:
-            conta.fornecedor_id = forn.id
-
-        ref = f'NF {conta.nf_numero or ("conta " + str(conta.id))}'
         mov_global = None
         mov_loja = None
         loja_id = None
