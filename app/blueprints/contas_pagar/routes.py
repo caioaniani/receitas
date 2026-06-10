@@ -625,9 +625,13 @@ def item_vincular(id, indice):
     if not m:
         m = ContaPagarItemMap(item_nome_norm=norm, item_nome_exemplo=nome)
         db.session.add(m)
-    _aplicar_acao_mapa(m)
-    db.session.commit()
-    flash('Item atualizado.', 'success')
+    erro = _aplicar_acao_mapa(m)
+    if erro:
+        db.session.rollback()
+        flash(erro, 'warning')
+    else:
+        db.session.commit()
+        flash('Item atualizado.', 'success')
     return redirect(url_for('contas_pagar.detalhe', id=id))
 
 
