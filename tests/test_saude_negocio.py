@@ -45,7 +45,7 @@ def test_resumo_receitas_classifica(app):
     """Sem ingredientes → ficha incompleta; com ingrediente mas sem preco →
     sem_preco; preco baixo vs custo → margem critica."""
     from app.extensions import db
-    from app.models import IngredienteReceita, MateriaPrima, Receita
+    from app.models import MateriaPrima, Receita, ReceitaIngrediente
     from app.services import saude_negocio
 
     sem_ficha = Receita(nome='Sem Ficha', categoria='Paes', rendimento_qtd=1,
@@ -59,10 +59,10 @@ def test_resumo_receitas_classifica(app):
     db.session.add_all([sem_ficha, mp, com_tudo, sem_preco])
     db.session.flush()
     db.session.add_all([
-        IngredienteReceita(receita_id=com_tudo.id, materia_prima_id=mp.id,
-                           quantidade=100, unidade='g'),
-        IngredienteReceita(receita_id=sem_preco.id, materia_prima_id=mp.id,
-                           quantidade=50, unidade='g'),
+        ReceitaIngrediente(receita_id=com_tudo.id, tipo='mp',
+                           ingrediente_nome='Farinha', porcentagem=100),
+        ReceitaIngrediente(receita_id=sem_preco.id, tipo='mp',
+                           ingrediente_nome='Farinha', porcentagem=50),
     ])
     db.session.commit()
 
