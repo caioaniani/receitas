@@ -50,6 +50,10 @@ class Config:
     # ZAPI_BOT_WEBHOOK_TOKEN  = segredo na URL do webhook (?k=...)
     ZAPI_BOT_DONO_NUMERO = os.environ.get('ZAPI_BOT_DONO_NUMERO', '')
     ZAPI_BOT_WEBHOOK_TOKEN = os.environ.get('ZAPI_BOT_WEBHOOK_TOKEN', '')
+    # Aviso no WhatsApp do dono quando pedido eh recebido na loja (com link da
+    # pasta de fotos no Dropbox). Desligar: ZAPI_BOT_AVISO_RECEBIMENTO=0.
+    ZAPI_BOT_AVISO_RECEBIMENTO = (
+        os.environ.get('ZAPI_BOT_AVISO_RECEBIMENTO', '1') != '0')
     # Retencao de dados (LGPD + custo). Roda no cron diario APOS o backup OK
     # (nunca apaga dado que nao esteja no dump do dia). RETENCAO_AUTO=0 desliga.
     RETENCAO_AUTO = os.environ.get('RETENCAO_AUTO', '1') != '0'
