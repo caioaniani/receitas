@@ -7,7 +7,15 @@ import json
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
-from flask import current_app, flash, redirect, render_template, request, url_for
+from flask import (
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_login import current_user, login_required
 
 from app.blueprints.contas_pagar import contas_pagar_bp
@@ -640,6 +648,45 @@ def mapeamentos_limpar_nomes():
                 "ficaram sem mesclar (revise).")
     flash(msg, 'success')
     return redirect(url_for('contas_pagar.mapeamentos'))
+
+
+@contas_pagar_bp.route('/mapeamentos/lote', methods=['POST'])
+@login_required
+@admin_required
+def mapeamentos_lote():
+    """Acao em lote nos mapeamentos selecionados (checkboxes da tela).
+
+    JSON: {"acao": "vincular"|"ignorar",
+           "itens": [{"id", "materia_prima_id", "unidade_compra",
+                      "fator_conversao"}, ...]}
+    Vincular em lote exige MP + fator preenchidos em CADA linha (sem default
+    silencioso — estoque tem peso especial); linha invalida fica como esta e
+    volta em `falhas`. Um commit so pros que passaram."""
+    dados = request.get_json(silent=True) or {}
+    acao = dados.get('acao')
+    itens = dados.get('itens') or []
+    if acao not in ('vincular', 'ignorar') or not isinstance(itens, list):
+        return jsonify(erro='payload inválido'), 400
+    ok = 0
+    falhas = []
+    for item in itens[:500]:
+        if not isinstance(item, dict):
+            continue
+        m = db.session.get(ContaPagarItemMap, item.get('id'))
+        if not m:
+            continue
+        erro = _aplicar_vinculo(
+            m, acao,
+            materia_prima_id=item.get('materia_prima_id'),
+            unidade_compra=item.get('unidade_compra'),
+            fator_raw=item.get('fator_conversao'),
+            exigir_completo=True)
+        if erro:
+            falhas.append(erro)
+        else:
+            ok += 1
+    db.session.commit()
+    return jsonify(ok=ok, falhas=falhas)
 
 
 @contas_pagar_bp.route('/mapeamentos/<int:id>', methods=['POST'])
