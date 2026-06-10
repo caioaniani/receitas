@@ -853,6 +853,15 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
         ))
 
     db.session.commit()
+    # Aviso best-effort pro WhatsApp do dono com o link da pasta de fotos.
+    # Depois do commit pra o sentinela 'avisado' so persistir se o aviso
+    # de fato saiu.
+    try:
+        from app.services import pedidos_notificacao
+        pedidos_notificacao.notificar_pedido_recebido(pedido)
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception(
+            'notificar_pedido_recebido falhou pedido=%s', pedido.id)
     msg = ('Pedido recebido com divergencias. Detalhes salvos na observacao.'
            if divergencias else
            'Pedido recebido integralmente. Estoque da loja atualizado.')
