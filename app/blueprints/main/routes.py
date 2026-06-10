@@ -1672,6 +1672,26 @@ def teste_aviso_recebimento():
     ), 200
 
 
+@main_bp.route('/admin/saude')
+@owner_required
+def saude_negocio_admin():
+    """Radar de saude do negocio (owner-only): contas a pagar + receitas.
+
+    O mesmo conteudo chega as 07:30 no WhatsApp do dono (job
+    `zapi-digest-saude`; DIGEST_SAUDE=0 desliga). Aqui e a versao on-demand
+    com os detalhes completos (listas, nao so contagens).
+    ?enviar=1 dispara o digest no WhatsApp agora (teste)."""
+    from app.services import saude_negocio
+
+    out = {
+        'contas': saude_negocio.resumo_contas(),
+        'receitas': saude_negocio.resumo_receitas(),
+    }
+    if request.args.get('enviar') == '1':
+        out['envio'] = saude_negocio.enviar_digest_saude()
+    return jsonify(out), 200
+
+
 @main_bp.route('/admin/retencao')
 @owner_required
 def retencao_admin():
