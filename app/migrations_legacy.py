@@ -1288,6 +1288,14 @@ def _migrate_sqlite(app):
     if cols_spm and 'fator_quantidade' not in cols_spm:
         cursor.execute("ALTER TABLE seru_produto_map ADD COLUMN fator_quantidade REAL NOT NULL DEFAULT 1.0")
 
+    # conta_pagar: conferencia humana (Fase 2, 2026-06-10)
+    cursor.execute("PRAGMA table_info(conta_pagar)")
+    cols_cp = [row[1] for row in cursor.fetchall()]
+    if cols_cp and 'revisada_em' not in cols_cp:
+        cursor.execute("ALTER TABLE conta_pagar ADD COLUMN revisada_em TIMESTAMP")
+    if cols_cp and 'revisada_por_id' not in cols_cp:
+        cursor.execute("ALTER TABLE conta_pagar ADD COLUMN revisada_por_id INTEGER REFERENCES usuario(id)")
+
     # Status intermediario 'pendente' vira 'confirmado' direto (idempotente).
     try:
         cursor.execute("UPDATE pedido_loja SET status='confirmado' WHERE status='pendente'")
