@@ -327,14 +327,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             }
 
+            var boxTransferir = document.getElementById('vinculos-transferir-box');
+
             function renderVinculos(data) {
                 if (data.pode_excluir) {
                     vincBody.innerHTML = '<div class="text-success">' +
                         '<i class="bi bi-check-circle"></i> Nenhum vínculo restante — pode excluir.</div>';
                     btnLiberado.style.display = '';
+                    if (boxTransferir) boxTransferir.style.display = 'none';
                     return;
                 }
                 btnLiberado.style.display = 'none';
+                if (boxTransferir) boxTransferir.style.display = '';
                 var html = '';
                 data.grupos.forEach(function (g) {
                     html += '<div class="border rounded p-2 mb-2">' +
