@@ -72,6 +72,11 @@
                     {% for t in tipos %}<span class="badge bg-light text-dark">{{ t }}</span> {% endfor %}
                     {% if extras %}<i class="bi bi-link-45deg text-primary" title="NF + boleto juntos ({{ extras|length + 1 }} documentos)"></i>{% endif %}
                     {% if c.nf_numero %}<span class="text-muted">NF {{ c.nf_numero }}</span>{% endif %}
+                    {% if c.status == 'aberto' and not c.revisada %}
+                    <span class="badge bg-warning text-dark" title="Ninguém conferiu — os dados podem ser só a leitura da IA"><i class="bi bi-eye"></i> conferir</span>
+                    {% elif c.revisada %}
+                    <span class="badge bg-success-subtle text-success" title="Conferida por {{ c.revisada_por.nome if c.revisada_por else '?' }}{% if c.revisada_em %} em {{ c.revisada_em.strftime('%d/%m') }}{% endif %}"><i class="bi bi-check2"></i></span>
+                    {% endif %}
                 </div>
                 <div class="small text-muted mt-1">
                     {% if c.vencimento %}
