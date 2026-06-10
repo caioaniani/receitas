@@ -212,8 +212,34 @@ def editar(id):
     conta.relacionado_id = int(rel) if rel and rel.isdigit() else None
     conta.editado_em = agora()
     conta.editado_por_id = current_user.id
+    # Editar = humano olhou o documento e os campos -> conta conferida.
+    if conta.revisada_em is None:
+        conta.revisada_em = agora()
+        conta.revisada_por_id = current_user.id
     db.session.commit()
     flash('Conta atualizada.', 'success')
+    return redirect(url_for('contas_pagar.detalhe', id=id))
+
+
+@contas_pagar_bp.route('/<int:id>/revisar', methods=['POST'])
+@login_required
+@admin_required
+def revisar(id):
+    """Marca/desmarca a conta como CONFERIDA por humano (Fase 2).
+
+    Conferida = alguem olhou o documento e validou que a extracao da IA
+    (valor, vencimento, fornecedor) esta certa. O radar diario conta as
+    abertas nao-conferidas."""
+    conta = ContaPagar.query.get_or_404(id)
+    if conta.revisada_em is None:
+        conta.revisada_em = agora()
+        conta.revisada_por_id = current_user.id
+        flash('Conta marcada como conferida.', 'success')
+    else:
+        conta.revisada_em = None
+        conta.revisada_por_id = None
+        flash('Conferencia desfeita.', 'info')
+    db.session.commit()
     return redirect(url_for('contas_pagar.detalhe', id=id))
 
 
