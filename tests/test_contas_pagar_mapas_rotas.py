@@ -233,6 +233,74 @@ def test_item_vincular_no_detalhe(app, admin_user):
         assert m.confirmado_em is not None
 
 
+def test_lote_ignorar_e_confirmar_misto(app, admin_user):
+    """Lote: ignora varios de uma vez; confirmar exige MP+fator por linha
+    (sem default silencioso de 1.0) e aplica a trava de fisica — quem falha
+    fica intacto e volta em `falhas`, quem passa confirma num commit so."""
+    from app.extensions import db
+    from app.models import ContaPagarItemMap, MateriaPrima
+    from app.services import conta_pagar_estoque as svc
+
+    def _mapa(nome):
+        m = ContaPagarItemMap(item_nome_norm=svc.normalizar_item_nome(nome),
+                              item_nome_exemplo=nome)
+        db.session.add(m)
+        return m
+
+    with app.app_context():
+        mp = MateriaPrima(nome='Toddy', unidade='g', custo_por_kg=0)
+        db.session.add(mp)
+        db.session.flush()
+        mp_id = mp.id
+        a = _mapa('ALCOOL LIQ 70')
+        b = _mapa('ALCOOL GEL 70')
+        c = _mapa('TODDY CX 1,8KG')
+        d = _mapa('TODDY SEM FATOR')
+        e = _mapa('TODDY KG IMPOSSIVEL')
+        db.session.commit()
+        ids = {x.item_nome_exemplo: x.id for x in (a, b, c, d, e)}
+
+    cli = app.test_client()
+    _login(cli)
+
+    # ignorar em lote (caso alcool/limpeza)
+    r = cli.post('/contas-pagar/mapeamentos/lote', json={
+        'acao': 'ignorar',
+        'itens': [{'id': ids['ALCOOL LIQ 70']}, {'id': ids['ALCOOL GEL 70']}]})
+    assert r.get_json() == {'ok': 2, 'falhas': []}
+    with app.app_context():
+        assert db.session.get(ContaPagarItemMap, ids['ALCOOL LIQ 70']).ignorar
+        assert db.session.get(ContaPagarItemMap, ids['ALCOOL GEL 70']).ignorar
+
+    # confirmar em lote: 1 valida, 1 sem fator, 1 fisicamente impossivel
+    r2 = cli.post('/contas-pagar/mapeamentos/lote', json={
+        'acao': 'vincular',
+        'itens': [
+            {'id': ids['TODDY CX 1,8KG'], 'materia_prima_id': str(mp_id),
+             'unidade_compra': 'cx', 'fator_conversao': '1800'},
+            {'id': ids['TODDY SEM FATOR'], 'materia_prima_id': str(mp_id),
+             'unidade_compra': 'cx', 'fator_conversao': ''},
+            {'id': ids['TODDY KG IMPOSSIVEL'], 'materia_prima_id': str(mp_id),
+             'unidade_compra': 'kg', 'fator_conversao': '1,8'},
+        ]})
+    data = r2.get_json()
+    assert data['ok'] == 1
+    assert len(data['falhas']) == 2
+    assert any('sem fator' in f for f in data['falhas'])
+    assert any('use fator 1800' in f for f in data['falhas'])
+    with app.app_context():
+        ok = db.session.get(ContaPagarItemMap, ids['TODDY CX 1,8KG'])
+        assert ok.confirmado_em is not None and ok.fator_conversao == 1800
+        for nome in ('TODDY SEM FATOR', 'TODDY KG IMPOSSIVEL'):
+            falho = db.session.get(ContaPagarItemMap, ids[nome])
+            assert falho.confirmado_em is None
+            assert falho.materia_prima_id is None   # intacto
+
+    # payload invalido
+    assert cli.post('/contas-pagar/mapeamentos/lote',
+                    json={'acao': 'apagar', 'itens': []}).status_code == 400
+
+
 def test_detalhe_prefill_convertido_e_frase_viva(app, admin_user):
     """Caso Callebaut (2026-06-10): item 'CALLEBAUT ... 2.01 KG', NF em cx,
     MP sugerida em g -> o detalhe da conta ja abre com '1 cx = 2010 g' (mesma
