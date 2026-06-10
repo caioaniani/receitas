@@ -10,27 +10,45 @@ Cada teste verifica o cenario exato que escapava antes do fix.
 # ──────────────────────────────────────────────────────────────────────
 
 def test_b1_estorno_seru_com_fator(app, admin_user, loja, catalogo):
-    """Estorno tem que pegar refs 'Seru #123 (fator 0.2)' tambem.
+    """Estorno de venda com fator restaura o estoque EXATAMENTE 1x.
 
-    Antes: filtro `==` exato so achava 'Seru #123', deixava 'Seru #123 (fator X)'
-    sem reverter. Estoque baixado para sempre.
+    Historia: o fix B1 fazia a fase 1 reverter movs 'Seru #123 (fator X)'
+    via LIKE. Depois do B9 (SeruDebitoMov), isso virou DUPLA devolucao —
+    fase 1 devolvia o mov E fase 2 devolvia de novo pelo acumulador
+    negativo (bug provado em 2026-06-10, test_estorno_fator_duplo). Hoje:
+    movs '(fator' sao estornados SO pela fase 2; este teste semeia o
+    cenario REAL pos-B9 (mov + SeruDebitoMov) e espera devolucao unica.
     """
     from app.extensions import db
-    from app.models import EstoqueLoja, MovEstoqueLoja, SeruPedidoProcessado
+    from app.models import (
+        EstoqueLoja,
+        MovEstoqueLoja,
+        SeruDebitoMov,
+        SeruPedidoProcessado,
+        SeruProdutoMap,
+    )
     from app.services.seru_sync import _estornar_pedido
 
     el = EstoqueLoja(loja_id=loja.id, receita_id=catalogo['receita'].id,
                      quantidade=10)
-    db.session.add(el)
+    mapping = SeruProdutoMap(seru_nome='MISTO B1',
+                             receita_id=catalogo['receita'].id,
+                             fator_quantidade=0.2)
+    db.session.add_all([el, mapping])
     db.session.commit()
 
-    # Simula baixa com fator (referencia tem sufixo)
+    # Cenario real pos-B9: venda de 10 un (fator 0.2 -> bruto 2.0) baixou
+    # 2 inteiros E registrou a contribuicao bruta no SeruDebitoMov.
     db.session.add(MovEstoqueLoja(
         estoque_loja_id=el.id,
         tipo='venda_seru',
         quantidade=2,
         referencia='Seru #999 (fator 0.2)',
         usuario_id=admin_user.id,
+    ))
+    db.session.add(SeruDebitoMov(
+        loja_id=loja.id, seru_produto_map_id=mapping.id,
+        seru_pedido_id='999', fracao=2.0,
     ))
     el.quantidade = 8  # post-baixa
     reg = SeruPedidoProcessado(
@@ -44,7 +62,8 @@ def test_b1_estorno_seru_com_fator(app, admin_user, loja, catalogo):
     db.session.refresh(el)
 
     assert el.quantidade == 10, (
-        f'estorno nao restaurou estoque: ficou {el.quantidade}, esperado 10'
+        f'estorno errado: ficou {el.quantidade}, esperado 10 '
+        '(devolucao unica via fase 2)'
     )
     assert reg.estornado_em is not None
 
