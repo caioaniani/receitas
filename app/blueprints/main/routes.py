@@ -1878,7 +1878,11 @@ def debug_lalamove():
         'configurado': lalamove.disponivel(),
         # ultimo acesso registrado no /lalamove/webhook deste container —
         # diz se o probe do portal chegou ao servidor ou morreu no caminho.
-        'webhook_ultimo_hit': ultimo_hit(),
+        'webhook_ultimo_hit': (ultimo_hit() or
+                               'nenhum acesso DESDE O ULTIMO DEPLOY (o '
+                               'rastro zera a cada deploy) — abra '
+                               '/lalamove/webhook no navegador e recarregue '
+                               'aqui pra testar o caminho de entrada'),
         'saldo_carteira': _saldo_lalamove_json(),
         'key_prefixo': key[:8] + '...' if key else None,
         'key_tamanho': len(key),
