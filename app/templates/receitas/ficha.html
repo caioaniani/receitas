@@ -155,6 +155,10 @@
                 {% endif %}
                 {% for ing in receita.ingredientes %}
                 <tr class="ingrediente-row" data-base="{{ '1' if ing.eh_base else '0' }}">
+                    <td class="text-center align-middle">
+                        <span class="ing-drag text-muted" title="Arraste para reordenar"
+                              style="cursor:grab; touch-action:none;"><i class="bi bi-grip-vertical"></i></span>
+                    </td>
                     <td>
                         <select name="ingrediente_tipo[]" class="form-select form-select-sm ing-tipo" style="font-size:10px;">
                             <option value="mp" {{ 'selected' if (ing.tipo or 'mp') == 'mp' }}>MP (%)</option>
