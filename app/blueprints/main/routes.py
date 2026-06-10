@@ -1593,6 +1593,85 @@ def dropbox_reauth():
     ), 200
 
 
+@main_bp.route('/admin/teste-aviso-recebimento')
+@owner_required
+def teste_aviso_recebimento():
+    """Teste end-to-end do aviso de pedido recebido (owner-only).
+
+    Sem parametro: cria um PedidoLoja de TESTE (sem itens — nao toca
+    estoque), sobe 2 fotos geradas pra /recebimento/<id>/ no Dropbox, marca
+    'entregue' e dispara o aviso pro WhatsApp do dono com o link da pasta.
+
+    ?limpar=<id>: apaga o pedido de teste (so se tiver o marcador de teste
+    na observacao — pedido real e recusado), as fotos do banco e os
+    arquivos do Dropbox.
+    """
+    import io
+    import time as _time
+
+    from app.models import FotoRecebimento, Loja, PedidoLoja
+    from app.services import dropbox_storage, pedidos_notificacao
+
+    MARCADOR = '[PEDIDO-TESTE-AVISO]'
+
+    limpar_id = request.args.get('limpar')
+    if limpar_id:
+        p = PedidoLoja.query.get(int(limpar_id))
+        if not p:
+            return jsonify(erro='pedido nao encontrado'), 200
+        if MARCADOR not in (p.observacao or ''):
+            return jsonify(erro='esse pedido NAO eh de teste — recusado'), 200
+        for f in list(p.fotos or []):
+            if f.imagem_storage_path:
+                dropbox_storage.deletar(f.imagem_storage_path)
+        db.session.delete(p)   # cascade apaga FotoRecebimento
+        db.session.commit()
+        return jsonify(ok=True, apagado=int(limpar_id)), 200
+
+    loja = Loja.query.filter_by(ativa=True).first()
+    if not loja:
+        return jsonify(erro='nenhuma loja ativa'), 200
+
+    p = PedidoLoja(loja_id=loja.id, status='entregue',
+                   observacao=f'{MARCADOR} criado via /admin/teste-aviso-recebimento',
+                   criado_por=current_user.id)
+    db.session.add(p)
+    db.session.flush()
+
+    # 2 fotos geradas (quadrados coloridos) pra pasta ter conteudo real
+    fotos_ok = 0
+    if dropbox_storage.disponivel():
+        from PIL import Image
+        for cor in ((220, 60, 90), (60, 140, 220)):
+            img = Image.new('RGB', (320, 320), cor)
+            buf = io.BytesIO()
+            img.save(buf, format='JPEG', quality=80)
+            try:
+                info = dropbox_storage.upload_publico(
+                    buf.getvalue(),
+                    f'/recebimento/{p.id}/teste_{int(_time.time() * 1000)}.jpg',
+                    mode='add', autorename=True)
+                db.session.add(FotoRecebimento(
+                    pedido_id=p.id, imagem_url=info['url'],
+                    imagem_storage_path=info['storage_path'],
+                    mimetype='image/jpeg', enviada_por=current_user.id))
+                fotos_ok += 1
+            except RuntimeError:
+                current_app.logger.exception('teste-aviso: upload falhou')
+    db.session.commit()
+
+    pedidos_notificacao.notificar_pedido_recebido(p)
+
+    return jsonify(
+        ok=True,
+        pedido_id=p.id,
+        loja=loja.nome,
+        fotos_enviadas=fotos_ok,
+        confira='o aviso deve ter chegado no seu WhatsApp',
+        limpar_depois=f'/admin/teste-aviso-recebimento?limpar={p.id}',
+    ), 200
+
+
 @main_bp.route('/admin/retencao')
 @owner_required
 def retencao_admin():
