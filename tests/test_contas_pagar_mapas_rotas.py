@@ -369,3 +369,105 @@ def test_tela_variacoes_e_aprovar(app, admin_user):
     with app.app_context():
         v = db.session.get(VariacaoPrecoMP, vid)
         assert v.status == 'aprovado' and v.revisado_em is not None
+
+
+def test_criar_mp_inline_vincula_na_hora(app, admin_user):
+    """'+ nova MP' no card: cria a MP (com peso_unidade pro custo de ficha)
+    e ja confirma o vinculo com o fator da linha. Falhou o vinculo -> a MP
+    NAO fica criada (rollback). Nome duplicado -> erro claro."""
+    from app.extensions import db
+    from app.models import ContaPagarItemMap, MateriaPrima
+    from app.services import conta_pagar_estoque as svc
+    with app.app_context():
+        m = ContaPagarItemMap(
+            item_nome_norm=svc.normalizar_item_nome('BEBIDA DE AVEIA NUDE 1L'),
+            item_nome_exemplo='BEBIDA DE AVEIA NUDE 1L')
+        db.session.add(m)
+        db.session.commit()
+        mid = m.id
+
+    c = app.test_client()
+    _login(c)
+
+    # sem fator -> recusa e nao deixa MP orfa pra tras
+    r = c.post(f'/contas-pagar/mapeamentos/{mid}/criar-mp', json={
+        'nome': 'Leite de aveia NUDE', 'unidade': 'un',
+        'unidade_compra': 'un', 'fator_conversao': ''})
+    assert r.status_code == 400 and 'sem fator' in r.get_json()['erro']
+    with app.app_context():
+        assert MateriaPrima.query.filter_by(nome='Leite de aveia NUDE').count() == 0
+
+    r2 = c.post(f'/contas-pagar/mapeamentos/{mid}/criar-mp', json={
+        'nome': 'Leite de aveia NUDE', 'unidade': 'un', 'peso_unidade': '1000',
+        'unidade_compra': 'un', 'fator_conversao': '1'})
+    assert r2.get_json()['ok'] is True
+    with app.app_context():
+        mp = MateriaPrima.query.filter_by(nome='Leite de aveia NUDE').one()
+        assert mp.unidade == 'un' and mp.peso_unidade == 1000
+        m2 = db.session.get(ContaPagarItemMap, mid)
+        assert m2.materia_prima_id == mp.id
+        assert m2.confirmado_em is not None and m2.fator_conversao == 1
+
+    # duplicado
+    with app.app_context():
+        m3 = ContaPagarItemMap(item_nome_norm='outro', item_nome_exemplo='OUTRO')
+        db.session.add(m3)
+        db.session.commit()
+        m3id = m3.id
+    r3 = c.post(f'/contas-pagar/mapeamentos/{m3id}/criar-mp', json={
+        'nome': 'leite de aveia nude', 'unidade': 'un',
+        'unidade_compra': 'un', 'fator_conversao': '1'})
+    assert r3.status_code == 400 and 'já existe' in r3.get_json()['erro']
+
+
+def test_reprocessar_nfs_recentes(app, admin_user):
+    """Vinculo feito DEPOIS da captura: o botao reprocessa as NFs dos
+    ultimos dias (janela curta — nota velha ja foi acertada por balanco)
+    e da a entrada que ficou faltando. Idempotente."""
+    import json as _json
+    from datetime import timedelta
+
+    from app.extensions import db
+    from app.models import ContaPagar, ContaPagarItemMap, Loja, MateriaPrima, SlackCanalLojaMap
+    from app.services import conta_pagar_estoque as svc
+    from app.utils import agora
+    with app.app_context():
+        ind = Loja(nome='Industria', ativa=True)
+        db.session.add(ind)
+        db.session.flush()
+        db.session.add(SlackCanalLojaMap(canal_id='C_IND', loja_id=ind.id,
+                                         eh_industria=True, confirmado_em=agora()))
+        mp = MateriaPrima(nome='Farinha', unidade='kg', custo_por_kg=0,
+                          estoque_atual=0)
+        db.session.add(mp)
+        db.session.flush()
+        mp_id = mp.id
+        db.session.add(ContaPagarItemMap(
+            item_nome_norm=svc.normalizar_item_nome('FARINHA SC 25KG'),
+            item_nome_exemplo='FARINHA SC 25KG', materia_prima_id=mp_id,
+            fator_conversao=25, confirmado_em=agora()))
+        item = [{'nome': 'FARINHA SC 25KG', 'quantidade': 1, 'valor_total': 125}]
+        recente = ContaPagar(origem_canal='C_IND', fornecedor_nome='Moinho',
+                             status='aberto', itens_json=_json.dumps(item))
+        antiga = ContaPagar(origem_canal='C_IND', fornecedor_nome='Moinho',
+                            status='aberto', itens_json=_json.dumps(item))
+        db.session.add_all([recente, antiga])
+        db.session.flush()
+        antiga.criado_em = agora() - timedelta(days=10)   # fora da janela
+        db.session.commit()
+
+    c = app.test_client()
+    _login(c)
+    r = c.post('/contas-pagar/reprocessar', data={'dias': '2'},
+               follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        mp = db.session.get(MateriaPrima, mp_id)
+        assert mp.estoque_atual == 25      # so a NF recente entrou
+        assert mp.custo_por_kg == 5.0      # 125 / 25
+
+    # segunda rodada nao duplica (idempotente)
+    c.post('/contas-pagar/reprocessar', data={'dias': '2'},
+           follow_redirects=True)
+    with app.app_context():
+        assert db.session.get(MateriaPrima, mp_id).estoque_atual == 25
