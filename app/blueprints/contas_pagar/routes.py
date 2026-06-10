@@ -589,9 +589,13 @@ def mapeamentos_limpar_nomes():
 @admin_required
 def mapeamento_vincular(id):
     m = ContaPagarItemMap.query.get_or_404(id)
-    _aplicar_acao_mapa(m)
-    db.session.commit()
-    flash('Mapeamento atualizado.', 'success')
+    erro = _aplicar_acao_mapa(m)
+    if erro:
+        db.session.rollback()
+        flash(erro, 'warning')
+    else:
+        db.session.commit()
+        flash('Mapeamento atualizado.', 'success')
     return redirect(url_for('contas_pagar.mapeamentos',
                             estado=request.form.get('estado') or 'pendente'))
 
