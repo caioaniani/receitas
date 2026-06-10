@@ -126,6 +126,9 @@
 (function () {
   var ENDPOINT = "{{ url_for('entregas.api_painel') }}";
   var STATUS_TMPL = "{{ url_for('entregas.api_painel_status', code='__CODE__') }}";
+  var LALA_COTAR = "{{ url_for('entregas.api_lalamove_cotar') }}";
+  var LALA_CHAMAR = "{{ url_for('entregas.api_lalamove_chamar') }}";
+  var LALA_CANCELAR = "{{ url_for('entregas.api_lalamove_cancelar') }}";
   var CSRF = "{{ csrf_token() }}";
   var pedidos = [];
   var audioCtx = null, beepTimer = null;
