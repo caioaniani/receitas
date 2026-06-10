@@ -34,6 +34,7 @@ from app.models import (
     Usuario,
 )
 from app.services.custos import calcular_custos_receitas, calcular_rendimento
+from app.utils import agora
 from app.utils import hoje as hoje_brt
 
 
@@ -595,8 +596,20 @@ def audit():
     # Lista de tabelas e usuarios pra filtros
     tabelas = [r[0] for r in db.session.query(AuditLog.tabela).distinct().all()]
     usuarios = Usuario.query.order_by(Usuario.nome).all()
+    # Cartinhas atualizadas nas ultimas 48h — pra rastrear pedidos com
+    # cartinha cadastrada manualmente (relatorio do auditor "cliente pediu
+    # cartinha em pedido ja feito" usa a conversa do Chatwoot; aqui voce
+    # ve o que o atendente efetivamente CADASTROU no banco).
+    from datetime import timedelta as _td
+
+    from app.models import CartinhaEntrega
+    cartinhas = (CartinhaEntrega.query
+                 .filter(CartinhaEntrega.atualizado_em >= agora() - _td(hours=48))
+                 .order_by(CartinhaEntrega.atualizado_em.desc())
+                 .limit(50).all())
     return render_template("main/audit.html", rows=rows, tabelas=sorted(tabelas),
-                           usuarios=usuarios, filtros={"tabela": tabela_f,
+                           usuarios=usuarios, cartinhas=cartinhas,
+                           filtros={"tabela": tabela_f,
                            "usuario_id": usuario_f, "acao": acao_f,
                            "registro_id": registro_f})
 
