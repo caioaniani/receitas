@@ -436,6 +436,10 @@
 <!-- Template para nova linha de ingrediente -->
 <template id="ing-row-template">
     <tr class="ingrediente-row" data-base="0">
+        <td class="text-center align-middle">
+            <span class="ing-drag text-muted" title="Arraste para reordenar"
+                  style="cursor:grab; touch-action:none;"><i class="bi bi-grip-vertical"></i></span>
+        </td>
         <td>
             <select name="ingrediente_tipo[]" class="form-select form-select-sm ing-tipo" style="font-size:10px;">
                 <option value="mp">MP (%)</option>
