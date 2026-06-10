@@ -549,7 +549,7 @@ def _exemplos_itens_nf():
 @login_required
 @admin_required
 def mapeamentos():
-    from app.services.conta_pagar_estoque import sugerir_para_item
+    from app.services.conta_pagar_estoque import prefill_sugestao, sugerir_para_item
     estado = request.args.get('estado', 'pendente')
     todos = ContaPagarItemMap.query.order_by(ContaPagarItemMap.item_nome_exemplo).all()
     contagens = {'pendente': 0, 'mapeado': 0, 'ignorado': 0}
@@ -562,9 +562,20 @@ def mapeamentos():
             sugestoes[m.id] = sugerir_para_item(m.item_nome_exemplo)[:3]
     mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
     exemplos = _exemplos_itens_nf()
+    # Sugestao da IA traduzida pra unidade da MP (kg->g etc.) antes de
+    # pre-encher o form — ver prefill_sugestao. So pra itens sem vinculo.
+    prefill = {}
+    for m in maps:
+        if m.materia_prima_id:
+            continue
+        sug = sugestoes.get(m.id) or []
+        ex = exemplos.get(m.item_nome_norm) or {}
+        f, u = prefill_sugestao(m, sug[0]['unidade'] if sug else None,
+                                ex.get('unidade'))
+        prefill[m.id] = {'fator': f'{f:g}' if f else '', 'unidade': u or ''}
     return render_template('contas_pagar/mapeamentos.html', maps=maps, mps=mps,
                            estado=estado, contagens=contagens, sugestoes=sugestoes,
-                           exemplos=exemplos)
+                           exemplos=exemplos, prefill=prefill)
 
 
 @contas_pagar_bp.route('/mapeamentos/limpar-nomes', methods=['POST'])
