@@ -223,6 +223,187 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
 
+        // ── Reordenar por arraste (alça ⠿) — ingredientes e etapas ──
+        // A ordem persiste no salvar: o backend apaga e recria os itens na
+        // ordem em que os campos chegam no formulário. Mouse (HTML5 DnD) e
+        // dedo (touch) suportados.
+        function tornarOrdenavel(container, seletorItem, seletorAlca, aoSoltar) {
+            var arrastando = null;
+
+            function moverPara(clientY, alvo) {
+                if (!arrastando || !alvo || alvo === arrastando) return;
+                var r = alvo.getBoundingClientRect();
+                var antes = clientY < r.top + r.height / 2;
+                container.insertBefore(arrastando, antes ? alvo : alvo.nextSibling);
+            }
+            function soltar() {
+                if (!arrastando) return;
+                arrastando.style.opacity = '';
+                arrastando.draggable = false;
+                arrastando = null;
+                formAlterado = true;
+                if (aoSoltar) aoSoltar();
+            }
+
+            container.addEventListener('mousedown', function (e) {
+                var alca = e.target.closest(seletorAlca);
+                if (alca) alca.closest(seletorItem).draggable = true;
+            });
+            container.addEventListener('dragstart', function (e) {
+                var item = e.target.closest(seletorItem);
+                if (!item || !item.draggable) return;
+                arrastando = item;
+                item.style.opacity = '0.4';
+                e.dataTransfer.effectAllowed = 'move';
+                try { e.dataTransfer.setData('text/plain', ''); } catch (err) { /* IE */ }
+            });
+            container.addEventListener('dragover', function (e) {
+                if (!arrastando) return;
+                e.preventDefault();
+                moverPara(e.clientY, e.target.closest(seletorItem));
+            });
+            container.addEventListener('dragend', soltar);
+
+            container.addEventListener('touchstart', function (e) {
+                var alca = e.target.closest(seletorAlca);
+                if (!alca) return;
+                arrastando = alca.closest(seletorItem);
+                arrastando.style.opacity = '0.4';
+            }, { passive: true });
+            container.addEventListener('touchmove', function (e) {
+                if (!arrastando) return;
+                e.preventDefault();
+                var t = e.touches[0];
+                var el = document.elementFromPoint(t.clientX, t.clientY);
+                moverPara(t.clientY, el && el.closest(seletorItem));
+            }, { passive: false });
+            container.addEventListener('touchend', soltar);
+        }
+
+        tornarOrdenavel(fichaBody, '.ingrediente-row', '.ing-drag', recalcularTudo);
+
+        // ── Modo de preparo em etapas (1 módulo por etapa) ──
+        var etapasBox = document.getElementById('etapas-box');
+        var etapaTemplate = document.getElementById('etapa-template');
+        var btnAddEtapa = document.getElementById('btn-add-etapa');
+
+        function renumerarEtapas() {
+            etapasBox.querySelectorAll('.etapa-num').forEach(function (b, i) {
+                b.textContent = i + 1;
+            });
+        }
+        if (etapasBox) {
+            tornarOrdenavel(etapasBox, '.etapa-modulo', '.etapa-drag', renumerarEtapas);
+            etapasBox.addEventListener('click', function (e) {
+                var btn = e.target.closest('.btn-remove-etapa');
+                if (btn) {
+                    btn.closest('.etapa-modulo').remove();
+                    renumerarEtapas();
+                    formAlterado = true;
+                }
+            });
+            if (btnAddEtapa && etapaTemplate) {
+                btnAddEtapa.addEventListener('click', function () {
+                    etapasBox.appendChild(etapaTemplate.content.cloneNode(true));
+                    renumerarEtapas();
+                    var nova = etapasBox.querySelector('.etapa-modulo:last-child textarea');
+                    if (nova) nova.focus();
+                });
+            }
+        }
+
+        // ── Excluir receita: modal lista os vínculos e resolve ali mesmo ──
+        var formExcluir = document.getElementById('form-excluir-receita');
+        if (formExcluir) {
+            var modalVinc = document.getElementById('modal-vinculos');
+            var vincBody = document.getElementById('vinculos-body');
+            var btnLiberado = document.getElementById('btn-excluir-liberado');
+            var excluirLiberado = false;
+
+            function esc(s) {
+                return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;',
+                             '"': '&quot;', "'": '&#39;' }[c];
+                });
+            }
+
+            function renderVinculos(data) {
+                if (data.pode_excluir) {
+                    vincBody.innerHTML = '<div class="text-success">' +
+                        '<i class="bi bi-check-circle"></i> Nenhum vínculo restante — pode excluir.</div>';
+                    btnLiberado.style.display = '';
+                    return;
+                }
+                btnLiberado.style.display = 'none';
+                var html = '';
+                data.grupos.forEach(function (g) {
+                    html += '<div class="border rounded p-2 mb-2">' +
+                        '<div class="d-flex justify-content-between align-items-start gap-2">' +
+                        '<div><b>' + esc(g.titulo) + '</b> ' +
+                        '<span class="badge bg-secondary">' + esc(g.qtd) + '</span>' +
+                        '<div class="small text-muted">' + esc(g.descricao) + '</div></div>';
+                    if (g.resolvivel) {
+                        html += '<button type="button" class="btn btn-sm btn-outline-danger btn-resolver" ' +
+                            'data-chave="' + esc(g.chave) + '">Resolver</button>';
+                    } else {
+                        html += '<span class="badge bg-dark">histórico</span>';
+                    }
+                    html += '</div>';
+                    if (g.itens && g.itens.length) {
+                        html += '<div class="small mt-1">' + g.itens.map(function (i) {
+                            return i.url
+                                ? '<a href="' + esc(i.url) + '" target="_blank">' + esc(i.label) + '</a>'
+                                : esc(i.label);
+                        }).join(' · ') + '</div>';
+                    }
+                    html += '</div>';
+                });
+                vincBody.innerHTML = html;
+            }
+
+            formExcluir.addEventListener('submit', function (e) {
+                if (excluirLiberado) return;
+                e.preventDefault();
+                fetch(formExcluir.dataset.vinculosUrl)
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data.pode_excluir) {
+                            if (confirm('Excluir "' + formExcluir.dataset.nome + '"?')) {
+                                excluirLiberado = true;
+                                formExcluir.submit();
+                            }
+                            return;
+                        }
+                        renderVinculos(data);
+                        bootstrap.Modal.getOrCreateInstance(modalVinc).show();
+                    })
+                    .catch(function () {
+                        // fetch falhou: deixa o servidor decidir (fallback IntegrityError)
+                        excluirLiberado = true;
+                        formExcluir.submit();
+                    });
+            });
+
+            vincBody.addEventListener('click', function (e) {
+                var btn = e.target.closest('.btn-resolver');
+                if (!btn) return;
+                btn.disabled = true;
+                var fd = new FormData();
+                fd.append('chave', btn.dataset.chave);
+                fd.append('csrf_token', CSRF_TOKEN);
+                fetch(formExcluir.dataset.resolverUrl, { method: 'POST', body: fd })
+                    .then(function (r) { return r.json(); })
+                    .then(renderVinculos)
+                    .catch(function () { btn.disabled = false; });
+            });
+
+            btnLiberado.addEventListener('click', function () {
+                if (!confirm('Excluir "' + formExcluir.dataset.nome + '" de vez?')) return;
+                excluirLiberado = true;
+                formExcluir.submit();
+            });
+        }
+
         // Cadeado de % Padeiro
         var pctTravado = true;
         var btnLock = document.getElementById('btn-lock-pct');
