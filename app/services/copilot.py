@@ -3366,6 +3366,37 @@ def executar_registrar_desperdicio(params, user):
             'url': f'/pedidos/desperdicio?loja={loja.id}'}
 
 
+def _read_consultar_cartinhas(params, user):
+    """Cartinhas cadastradas/editadas nas ultimas N horas (default 48h).
+    A tabela tem 1 linha por pedido (texto sobrescrito a cada edicao) —
+    `atualizado_em` captura a ultima escrita. Fonte: CartinhaEntrega."""
+    from app.models import CartinhaEntrega, Usuario
+    try:
+        dias = int(params.get('dias') or 2)
+    except (TypeError, ValueError):
+        dias = 2
+    dias = max(1, min(30, dias))
+    desde = agora() - timedelta(days=dias)
+    cartinhas = (CartinhaEntrega.query
+                 .filter(CartinhaEntrega.atualizado_em >= desde)
+                 .order_by(CartinhaEntrega.atualizado_em.desc())
+                 .limit(50).all())
+    if not cartinhas:
+        return {'texto': f'Nenhuma cartinha cadastrada nos ultimos {dias} dia(s).'}
+    autores = {u.id: u.nome for u in Usuario.query.filter(
+        Usuario.id.in_({c.atualizado_por for c in cartinhas if c.atualizado_por})).all()}
+    linhas = [f'*{len(cartinhas)} cartinha(s) nos ultimos {dias} dia(s):*', '']
+    for c in cartinhas[:20]:
+        quem = autores.get(c.atualizado_por, '—')
+        quando = c.atualizado_em.strftime('%d/%m %H:%M') if c.atualizado_em else '—'
+        preview = (c.texto or '').strip().replace('\n', ' / ')[:120]
+        linhas.append(f'• `{c.pedido_code}` — _{preview}_')
+        linhas.append(f'   ↳ {quem} em {quando}')
+    if len(cartinhas) > 20:
+        linhas.append(f'_(+ {len(cartinhas) - 20} mais — abra /audit pra ver tudo)_')
+    return {'texto': '\n'.join(linhas), 'total': len(cartinhas)}
+
+
 def _read_consultar_desperdicio(params, user):
     from app.models import Desperdicio
     try:
@@ -3481,6 +3512,7 @@ _READ_HANDLERS = {
     'consultar_foco': _read_consultar_foco,
     'consultar_tarefas': _read_consultar_tarefas,
     'consultar_desperdicio': _read_consultar_desperdicio,
+    'consultar_cartinhas': _read_consultar_cartinhas,
     'enviar_digest_whatsapp': _read_enviar_digest_whatsapp,
     'consultar_cliente_b2b': _read_consultar_cliente_b2b,
 }
