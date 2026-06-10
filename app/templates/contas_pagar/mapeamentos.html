@@ -71,6 +71,12 @@
                target="_blank" rel="noopener">ver NF <i class="bi bi-box-arrow-up-right"></i></a>
           {% endif %}
         </div>
+        {% elif m.estado == 'pendente' %}
+        <div class="small text-muted fst-italic">
+          nenhuma NF atual tem esse item — sobrou de uma leitura antiga da IA
+          que já foi corrigida; pode Ignorar (ou use "Limpar e juntar
+          duplicados", que remove esses órfãos)
+        </div>
         {% endif %}
       </div>
       <select name="materia_prima_id" class="form-select form-select-sm mapa-mp" style="max-width:240px">
