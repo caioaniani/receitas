@@ -108,6 +108,54 @@ def sugerir_para_item(nome):
     return _resolver_mp((nome or '').strip()) if (nome or '').strip() else []
 
 
+# 1 unidade -> (grandeza-base, quantos da base). So unidades METRICAS entram —
+# cx/un/fardo sao embalagem: o conteudo delas e o fator, nao uma conversao.
+_UNIDADES_METRICAS = {
+    'kg': ('g', 1000.0), 'g': ('g', 1.0), 'mg': ('g', 0.001),
+    'l': ('ml', 1000.0), 'lt': ('ml', 1000.0), 'litro': ('ml', 1000.0),
+    'litros': ('ml', 1000.0), 'ml': ('ml', 1.0),
+}
+
+
+def conversao_metrica(unidade_de, unidade_para):
+    """Fator fisico de "1 <unidade_de> = X <unidade_para>" quando AMBAS sao
+    metricas da mesma grandeza (kg->g: 1000.0; l->ml: 1000.0; g->g: 1.0).
+    None quando nao se aplica (cx/un/fardo, ou massa vs volume)."""
+    de = _UNIDADES_METRICAS.get((unidade_de or '').strip().lower())
+    para = _UNIDADES_METRICAS.get((unidade_para or '').strip().lower())
+    if not de or not para or de[0] != para[0]:
+        return None
+    return de[1] / para[1]
+
+
+def prefill_sugestao(mapa, unidade_mp, unidade_nf):
+    """(fator, unidade_compra) pre-preenchidos no form de mapeamento.
+
+    A IA le o conteudo da embalagem no nome do item ('CX 1,8KG' -> 1.8 com
+    unidade kg), mas a entrada de estoque multiplica a QTD DA NF pelo fator
+    NA UNIDADE DA MP (`processar_conta`, qtd_estoque = qtd_nf * fator) —
+    confirmar 1.8 cru numa MP em gramas daria entrada de 1,8 g por caixa.
+    Regras, na ordem:
+      1. NF quantificada em unidade metrica (farinha comprada por kg):
+         fator = conversao fisica pura (kg->g: 1000); o tamanho da
+         embalagem que a IA leu no nome e irrelevante.
+      2. NF em embalagem (cx/un/fd) + sugestao da IA em unidade metrica:
+         converte o conteudo pra unidade da MP (1.8 kg -> 1800 g) e usa a
+         unidade de compra real da NF.
+      3. Resto: sugestao crua da IA, como antes.
+    """
+    fator = mapa.ia_fator_sugerido
+    unidade = mapa.ia_unidade_sugerida
+    unidade_nf = (unidade_nf or '').strip()
+    conv_nf = conversao_metrica(unidade_nf, unidade_mp)
+    if conv_nf is not None:
+        return conv_nf, unidade_nf
+    conv_ia = conversao_metrica(unidade, unidade_mp)
+    if fator and conv_ia is not None:
+        return fator * conv_ia, (unidade_nf or unidade)
+    return fator, unidade
+
+
 def _to_float(v):
     try:
         return float(v)
