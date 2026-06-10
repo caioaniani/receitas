@@ -607,12 +607,16 @@ def mapeamentos():
     for m in todos:
         contagens[m.estado] = contagens.get(m.estado, 0) + 1
     maps = [m for m in todos if m.estado == estado] if estado in contagens else todos
+    # exemplos antes das sugestoes — re-rank usa a unidade da NF pra priorizar
+    # MPs da mesma grandeza (un x g x ml).
+    exemplos = _exemplos_itens_nf()
     sugestoes = {}
     for m in maps:
         if m.estado == 'pendente':
-            sugestoes[m.id] = sugerir_para_item(m.item_nome_exemplo)[:3]
+            unid_nf = (exemplos.get(m.item_nome_norm) or {}).get('unidade')
+            sugestoes[m.id] = sugerir_para_item(m.item_nome_exemplo,
+                                                unidade_nf=unid_nf)[:3]
     mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
-    exemplos = _exemplos_itens_nf()
     # Sugestao da IA traduzida pra unidade da MP (kg->g etc.) antes de
     # pre-encher o form — ver prefill_sugestao. So pra itens sem vinculo.
     prefill = {}
