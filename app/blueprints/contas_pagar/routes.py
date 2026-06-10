@@ -584,12 +584,15 @@ def mapeamentos():
 @login_required
 @owner_required
 def mapeamentos_limpar_nomes():
-    """Re-normaliza os nomes dos itens (ignora validade/lote) e junta os
-    vinculos duplicados. Preserva os confirmados."""
-    from app.services.conta_pagar_estoque import migrar_nomes_itens
+    """Re-normaliza os nomes dos itens (ignora validade/lote), junta os
+    vinculos duplicados e remove pendentes orfaos (item que nao existe em
+    nenhuma NF — sobra de leitura da IA corrigida). Preserva os confirmados."""
+    from app.services.conta_pagar_estoque import limpar_mapas_orfaos, migrar_nomes_itens
     stats = migrar_nomes_itens()
+    orfaos = limpar_mapas_orfaos()
     msg = (f"{stats['mesclados']} duplicado(s) juntado(s), "
-           f"{stats['atualizados']} nome(s) limpo(s).")
+           f"{stats['atualizados']} nome(s) limpo(s), "
+           f"{orfaos} pendente(s) órfão(s) removido(s).")
     if stats['conflitos']:
         msg += (f" {stats['conflitos']} grupo(s) com vinculos divergentes "
                 "ficaram sem mesclar (revise).")
