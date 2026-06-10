@@ -209,7 +209,7 @@ def copilot():
     # Quem responde com o copilot precisa de Usuario pra filtrar tools pelo
     # papel. Whitelist do Power so tem o dono — usa o primeiro owner ativo.
     user = (Usuario.query
-            .filter(Usuario.is_owner.is_(True), Usuario.ativo.is_(True))
+            .filter(Usuario.is_owner.is_(True))
             .order_by(Usuario.id.asc()).first())
     if not user:
         return jsonify(ok=False,
