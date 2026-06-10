@@ -109,3 +109,43 @@ def test_sem_dono_nao_envia(app):
     with patch('app.services.zapi.enviar_texto') as send:
         pedidos_notificacao.notificar_pedido_recebido(p)
     send.assert_not_called()
+
+
+def test_rota_teste_cria_dispara_e_limpa(app):
+    """Rota owner /admin/teste-aviso-recebimento: cria pedido de teste,
+    dispara o aviso, e ?limpar= apaga (mas recusa apagar pedido real)."""
+    from app.extensions import db
+    from app.models import Loja, PedidoLoja, Usuario
+    u = Usuario(nome='Dono', login='dono2', papel='admin', is_owner=True)
+    u.set_senha('x' * 8)
+    db.session.add_all([u, Loja(nome='Centro', ativa=True)])
+    db.session.commit()
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(u.id)
+        s['_fresh'] = True
+    app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999990000'
+
+    with patch('app.services.dropbox_storage.disponivel', return_value=False), \
+         patch('app.services.dropbox_storage.shared_link_pasta',
+               return_value=None), \
+         patch('app.services.zapi.enviar_texto',
+               return_value={'ok': True}) as send:
+        r = c.get('/admin/teste-aviso-recebimento')
+    data = r.get_json()
+    assert data['ok'] is True
+    pid = data['pedido_id']
+    send.assert_called_once()
+
+    # pedido REAL (sem marcador) nao pode ser apagado pela rota
+    real = PedidoLoja(loja_id=Loja.query.first().id, status='entregue')
+    db.session.add(real)
+    db.session.commit()
+    r2 = c.get(f'/admin/teste-aviso-recebimento?limpar={real.id}')
+    assert 'recusado' in r2.get_json()['erro']
+    assert PedidoLoja.query.get(real.id) is not None
+
+    # o de TESTE pode
+    r3 = c.get(f'/admin/teste-aviso-recebimento?limpar={pid}')
+    assert r3.get_json()['ok'] is True
+    assert PedidoLoja.query.get(pid) is None
