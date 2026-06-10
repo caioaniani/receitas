@@ -61,6 +61,9 @@ def resumo_contas():
         'vencendo_7d': vencendo,
         'vencendo_7d_total': vencendo_total,
         'extracao_incompleta': incompletas_q.count(),
+        # Fase 2: abertas que NENHUM humano conferiu (dados = chute da IA)
+        'nao_revisadas': abertas.filter(
+            ContaPagar.revisada_em.is_(None)).count(),
         'novas_24h': ContaPagar.query.filter(
             ContaPagar.criado_em >= ha24h).count(),
     }
