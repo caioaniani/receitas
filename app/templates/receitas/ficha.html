@@ -485,6 +485,16 @@
                 </div>
             </div>
             <div class="modal-footer py-1">
+                {% if not receita.arquivada_em %}
+                <form method="POST" action="{{ url_for('receitas.arquivar', id=receita.id) }}"
+                      class="me-auto mb-0"
+                      onsubmit="return confirm('Arquivar a receita? Ela sai das listas e seletores; pedidos, vendas e estoque ficam intactos. Dá pra desarquivar depois na ficha.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-dark" data-no-loading="1">
+                        <i class="bi bi-archive"></i> Arquivar receita
+                    </button>
+                </form>
+                {% endif %}
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fechar</button>
                 <button type="button" class="btn btn-sm btn-danger" id="btn-excluir-liberado" style="display:none;">
                     <i class="bi bi-trash"></i> Excluir agora
