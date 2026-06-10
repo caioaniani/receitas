@@ -34,8 +34,11 @@ _TIMEOUT = 15
 ORIGEM_ENDERECO_DEFAULT = ('Rua Anésio Pinto Rosa, 78 - Brooklin Paulista, '
                            'São Paulo - SP, 04570-130')
 
-# Tipos de veículo do mercado BR expostos pro atendente.
-SERVICE_TYPES = {'moto': 'MOTORCYCLE', 'carro': 'CAR'}
+# Tipos de veículo do mercado BR expostos pro atendente. Nomes confirmados
+# pelo 422 da propria API em prod (10/06/2026) — validos em BR SAO:
+# CAR, CARFOURH, HATCHBACK, HATCHFOURH, LALAGO (moto), LALAGOFOUR, LALAPRO,
+# TRUCK330, TRUCK3_5T, TRUCK_6H, UV_4H, UV_FIORINO, VAN, VANFOURH.
+SERVICE_TYPES = {'moto': 'LALAGO', 'carro': 'CAR'}
 
 STATUS_LABEL = {
     'ASSIGNING_DRIVER': 'Procurando entregador',
