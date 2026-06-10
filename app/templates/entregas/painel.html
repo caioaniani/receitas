@@ -331,6 +331,8 @@
     if (p.status !== 'pronto') return '';
     return '<div class="lala-box">' +
       '<div class="lala-st">🛵 <b>Chamar entregador (Lalamove)</b></div>' +
+      '<input class="lala-end" id="lala-end" value="' + esc(p.endereco || '') + '"' +
+        ' placeholder="endereço de entrega" title="Pode editar: tire apto/bloco se o mapa não achar, ou cole coordenadas lat,lng">' +
       '<div class="lala-veic">' +
         '<label><input type="radio" name="lala-veic" value="moto" checked> 🏍 Moto</label>' +
         '<label><input type="radio" name="lala-veic" value="carro"> 🚗 Carro</label>' +
