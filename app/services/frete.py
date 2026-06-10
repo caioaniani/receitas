@@ -103,15 +103,42 @@ def _geocodificar_texto(texto):
         return None
 
 
+def simplificar_endereco(texto):
+    """Reduz um endereço completo pra 'rua, numero, cidade' — complemento
+    (apto/bloco), bairro, estado e CEP costumam DERRUBAR o Nominatim.
+    'Rua X, 123, apto 45, Moema, São Paulo, SP, 04500-000'
+    -> 'Rua X, 123, São Paulo'."""
+    t = re.sub(r'\d{5}[\s.-]?\d{3}', '', texto or '')
+    partes = [p.strip() for p in t.split(',') if p.strip()]
+    if not partes:
+        return None
+    rua = partes[0]
+    numero = ''
+    for p in partes[1:3]:
+        m = re.match(r'^(\d+)\b', p)
+        if m:
+            numero = m.group(1)
+            break
+    base = f'{rua}, {numero}' if numero else rua
+    return f'{base}, São Paulo'
+
+
 def geocodificar(endereco_ou_cep):
     """(lat, lng, rotulo) pra um CEP ou endereço livre, ou None.
 
-    CEP via BrasilAPI (com fallback do endereço resolvido no Nominatim);
-    texto livre direto no Nominatim. Usado pelo frete do bot e pela
-    integração Lalamove (origem/destino das corridas)."""
+    Cadeia de tentativas (endereços reais de e-commerce vêm com complemento
+    e bairro que derrubam geocoder):
+      0. "lat,lng" colado direto (válvula de escape do atendente);
+      1. CEP via BrasilAPI (com fallback do endereço resolvido no Nominatim);
+      2. texto completo no Nominatim;
+      3. texto SIMPLIFICADO (rua + número + cidade) no Nominatim.
+    Usado pelo frete do bot e pela Lalamove (origem/destino das corridas)."""
     texto = (endereco_ou_cep or '').strip()
     if not texto:
         return None
+    m = re.match(r'^(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)$', texto)
+    if m:
+        return float(m.group(1)), float(m.group(2)), texto
     geo = None
     cep = _extrair_cep(texto)
     if cep:
@@ -124,6 +151,12 @@ def geocodificar(endereco_ou_cep):
     if not geo or geo[0] is None:
         geo = _geocodificar_texto(texto)
     if not geo or geo[0] is None:
+        simples = simplificar_endereco(texto)
+        if simples and simples.lower() != texto.lower():
+            geo = _geocodificar_texto(simples)
+    if not geo or geo[0] is None:
+        logger.warning('geocodificacao falhou em todas as tentativas: %r',
+                       texto[:200])
         return None
     return geo
 
