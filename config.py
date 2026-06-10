@@ -54,6 +54,9 @@ class Config:
     # pasta de fotos no Dropbox). Desligar: ZAPI_BOT_AVISO_RECEBIMENTO=0.
     ZAPI_BOT_AVISO_RECEBIMENTO = (
         os.environ.get('ZAPI_BOT_AVISO_RECEBIMENTO', '1') != '0')
+    # Radar de saude (digest 07:30 + /admin/saude): margem abaixo disso (em %)
+    # entra como critica no alerta de receitas.
+    SAUDE_MARGEM_MINIMA = float(os.environ.get('SAUDE_MARGEM_MINIMA', '30') or '30')
     # Retencao de dados (LGPD + custo). Roda no cron diario APOS o backup OK
     # (nunca apaga dado que nao esteja no dump do dia). RETENCAO_AUTO=0 desliga.
     RETENCAO_AUTO = os.environ.get('RETENCAO_AUTO', '1') != '0'
