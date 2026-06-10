@@ -50,6 +50,11 @@ def test_b1_estorno_seru_com_fator(app, admin_user, loja, catalogo):
         loja_id=loja.id, seru_produto_map_id=mapping.id,
         seru_pedido_id='999', fracao=2.0,
     ))
+    # No fluxo real o acumulador SEMPRE existe (criado na venda); aqui ficou
+    # zerado porque o bruto 2.0 virou 2 inteiros sem residuo.
+    from app.models import SeruDebito
+    db.session.add(SeruDebito(loja_id=loja.id, seru_produto_map_id=mapping.id,
+                              fracao_pendente=0.0))
     el.quantidade = 8  # post-baixa
     reg = SeruPedidoProcessado(
         seru_pedido_id='999', loja_id=loja.id,
