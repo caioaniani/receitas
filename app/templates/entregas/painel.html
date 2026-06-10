@@ -357,7 +357,7 @@
         var act = b.getAttribute('data-lala');
         if (act === 'nova') { p.lalamove = null; abrirDetalhe(p); return; }
         if (act === 'cotar') {
-          var veic = (document.querySelector('input[name="lala-veic"]:checked') || {}).value || 'moto';
+          var veic = (document.getElementById('lala-veic') || {}).value || 'moto';
           var endInput = document.getElementById('lala-end');
           var endereco = (endInput && endInput.value.trim()) || p.endereco || '';
           b.disabled = true;
