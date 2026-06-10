@@ -339,6 +339,15 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
+    # Radar de saude do negocio (contas a pagar + receitas) — 07:30 BRT.
+    # Desligar: DIGEST_SAUDE=0.
+    if os.environ.get('DIGEST_SAUDE', '1') != '0':
+        _scheduler.add_job(
+            lambda app=app: _run_zapi_digest_saude(app),
+            'cron', hour=7, minute=30, id='zapi-digest-saude',
+            max_instances=1, coalesce=True,
+        )
+
     # Digest WhatsApp de anomalias do dia — 23:00 BRT (apos fechamento)
     _scheduler.add_job(
         lambda app=app: _run_zapi_digest_anomalias(app),
@@ -459,6 +468,14 @@ def _run_zapi_digest_tarefas(app):
 
     with app.app_context():
         _com_lock(7728, zapi_resumos.enviar_digest_tarefas, 'zapi digest tarefas')
+
+
+def _run_zapi_digest_saude(app):
+    """Job: radar de saude do negocio (contas a pagar + receitas), 07:30 BRT."""
+    from app.services import saude_negocio
+
+    with app.app_context():
+        _com_lock(7736, saude_negocio.enviar_digest_saude, 'zapi digest saude')
 
 
 def _run_zapi_digest_anomalias(app):
