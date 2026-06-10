@@ -82,6 +82,111 @@ def test_tela_mapeamentos_e_vincular(app, admin_user):
         assert m.confirmado_em is not None
 
 
+def test_vincular_unidade_metrica_impossivel_bloqueia(app, admin_user):
+    """Trava de fisica (caso Toddy 2026-06-10): MP em g + '1 kg = 1,8 g'
+    daria entrada de 1,8 g por caixa de 1,8 kg. O servidor recusa, sugere o
+    fator certo (1800) e nada fica confirmado."""
+    from app.extensions import db
+    from app.models import ContaPagarItemMap, MateriaPrima
+    from app.services import conta_pagar_estoque as svc
+    with app.app_context():
+        mp = MateriaPrima(nome='Toddy', unidade='g', custo_por_kg=0)
+        db.session.add(mp)
+        db.session.flush()
+        mp_id = mp.id
+        m = ContaPagarItemMap(
+            item_nome_norm=svc.normalizar_item_nome('ACHOCOLATADO PO TODDY CX 1,8KG'),
+            item_nome_exemplo='ACHOCOLATADO PO TODDY CX 1,8KG')
+        db.session.add(m)
+        db.session.commit()
+        mid = m.id
+
+    c = app.test_client()
+    _login(c)
+    r = c.post(f'/contas-pagar/mapeamentos/{mid}',
+               data={'acao': 'vincular', 'materia_prima_id': str(mp_id),
+                     'unidade_compra': 'kg', 'fator_conversao': '1,8',
+                     'estado': 'pendente'},
+               follow_redirects=True)
+    assert r.status_code == 200
+    assert 'use fator 1800'.encode() in r.data
+    with app.app_context():
+        m2 = db.session.get(ContaPagarItemMap, mid)
+        assert m2.confirmado_em is None
+        assert m2.materia_prima_id is None   # rollback: nada pela metade
+
+
+def test_vincular_compra_em_kg_fator_fisico_passa(app, admin_user):
+    """Compra quantificada em kg (NF conta quilos, MP em g): '1 kg = 1000 g'
+    e o unico fator valido e confirma normal."""
+    from app.extensions import db
+    from app.models import ContaPagarItemMap, MateriaPrima
+    from app.services import conta_pagar_estoque as svc
+    with app.app_context():
+        mp = MateriaPrima(nome='Farinha', unidade='g', custo_por_kg=0)
+        db.session.add(mp)
+        db.session.flush()
+        mp_id = mp.id
+        m = ContaPagarItemMap(
+            item_nome_norm=svc.normalizar_item_nome('FARINHA GRANEL'),
+            item_nome_exemplo='FARINHA GRANEL')
+        db.session.add(m)
+        db.session.commit()
+        mid = m.id
+
+    c = app.test_client()
+    _login(c)
+    r = c.post(f'/contas-pagar/mapeamentos/{mid}',
+               data={'acao': 'vincular', 'materia_prima_id': str(mp_id),
+                     'unidade_compra': 'kg', 'fator_conversao': '1000',
+                     'estado': 'pendente'},
+               follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        m2 = db.session.get(ContaPagarItemMap, mid)
+        assert m2.confirmado_em is not None
+        assert m2.fator_conversao == 1000
+
+
+def test_prefill_converte_sugestao_kg_para_g(app, admin_user):
+    """A IA leu 'CX 1,8KG' e sugeriu 1.8/kg; a MP sugerida e em g e a NF
+    conta em cx -> o form ja abre com '1 cx = 1800 g', sem exigir que o
+    humano multiplique por 1000."""
+    import json
+    from unittest.mock import patch
+
+    from app.extensions import db
+    from app.models import ContaPagar, ContaPagarItemMap, MateriaPrima
+    from app.services import conta_pagar_estoque as svc
+    nome = 'ACHOCOLATADO PO TODDY CX 1,8KG'
+    with app.app_context():
+        mp = MateriaPrima(nome='Toddy', unidade='g', custo_por_kg=0)
+        db.session.add(mp)
+        db.session.flush()
+        mp_id = mp.id
+        db.session.add(ContaPagarItemMap(
+            item_nome_norm=svc.normalizar_item_nome(nome),
+            item_nome_exemplo=nome,
+            ia_unidade_sugerida='kg', ia_fator_sugerido=1.8))
+        db.session.add(ContaPagar(
+            tipo_documento='nota_fiscal', fornecedor_nome='Dist',
+            status='aberto',
+            itens_json=json.dumps([{'nome': nome, 'quantidade': 1,
+                                    'valor_unitario': 41.72,
+                                    'valor_total': 41.72, 'unidade': 'cx'}])))
+        db.session.commit()
+
+    c = app.test_client()
+    _login(c)
+    with patch('app.services.conta_pagar_estoque.sugerir_para_item',
+               return_value=[{'id': mp_id, 'nome': 'Toddy', 'unidade': 'g',
+                              'match': 'fuzzy'}]):
+        r = c.get('/contas-pagar/mapeamentos')
+    assert r.status_code == 200
+    assert b'value="1800"' in r.data    # fator ja convertido kg -> g
+    assert b'value="cx"' in r.data      # unidade de compra real da NF
+
+
 def test_item_vincular_no_detalhe(app, admin_user):
     """Vincular um item de NF a uma MP direto da tela de detalhe cria o
     ContaPagarItemMap por nome (mesmo que ainda nao exista) e confirma."""
