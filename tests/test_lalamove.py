@@ -202,3 +202,34 @@ def test_webhook_atualiza_status_e_motorista(app):
         'apiKey': 'pk_test_chave',
         'data': {'order': {'orderId': 'O-INEXISTENTE', 'status': 'COMPLETED'}}})
     assert r3.status_code == 200
+
+
+def test_debug_lalamove_owner(app):
+    """Rota de diagnostico (owner): prefixos sem vazar segredo + teste no
+    endpoint neutro /v3/cities pra separar 'credencial ruim' de 'payload'."""
+    from app.models import Usuario
+    _config(app)
+    with app.app_context():
+        u = Usuario(nome='Dono', login='dono9', papel='admin', is_owner=True)
+        u.set_senha('x' * 8)
+        db.session.add(u)
+        db.session.commit()
+        uid = u.id
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(uid)
+        s['_fresh'] = True
+
+    with patch('app.services.lalamove._request',
+               return_value=(200, {'data': [{'locode': 'BR SAO'}]})):
+        d = c.get('/admin/debug-lalamove').get_json()
+    assert d['teste_cities_ok'] is True
+    assert d['cidades'] == ['BR SAO']
+    assert d['key_prefixo'].startswith('pk_test_')
+    assert 'sk_test_segredo' not in str(d)   # segredo nunca vaza inteiro
+
+    with patch('app.services.lalamove._request',
+               return_value=(401, {'errors': [{'id': 'ERR_AUTHENTICATE'}]})):
+        d2 = c.get('/admin/debug-lalamove').get_json()
+    assert d2['teste_cities_ok'] is False
+    assert 'ERR_AUTHENTICATE' in d2['teste_cities_corpo']
