@@ -84,12 +84,12 @@
         <span class="small text-muted">1</span>
         <input type="text" name="unidade_compra" class="form-control form-control-sm mapa-uncompra"
                style="max-width:90px" placeholder="cx / un / fardo"
-               value="{{ m.unidade_compra or m.ia_unidade_sugerida or '' }}"
+               value="{{ m.unidade_compra or prefill.get(m.id, {}).get('unidade') or '' }}"
                title="unidade de compra como vem na NF (cx, un, fardo, kg...)">
         <span class="small text-muted">=</span>
         <input type="number" step="any" name="fator_conversao" class="form-control form-control-sm mapa-fator"
                style="max-width:100px" placeholder="quanto?"
-               value="{{ m.fator_conversao if m.materia_prima_id else (m.ia_fator_sugerido or '') }}"
+               value="{{ m.fator_conversao if m.materia_prima_id else prefill.get(m.id, {}).get('fator', '') }}"
                title="quanto 1 unidade de compra representa na unidade da matéria-prima">
         <span class="small fw-bold mapa-unid-mp">?</span>
       </div>
