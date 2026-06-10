@@ -246,6 +246,10 @@
         </a>
         {% endif %}
         {% if current_user.is_admin() %}
+        <a href="{{ url_for('b2b.dashboard') }}"
+           class="sidebar-link {% if request.path.startswith('/b2b') %}active{% endif %}">
+            Vendas B2B (Indústria)
+        </a>
         <a href="{{ url_for('entregas.painel') }}" target="_blank" class="sidebar-link">
             🔔 Painel do Dia
         </a>
