@@ -138,6 +138,10 @@ def precos():
     if request.method == 'POST':
         atualizados = 0
         for r in Receita.query.all():
+            # So mexe em quem veio no form — arquivadas (fora da tela) nao
+            # podem ter os precos zerados por ausencia.
+            if f'preco_loja_{r.id}' not in request.form:
+                continue
             antes = (r.preco_loja, r.preco_site, r.preco_venda)
             r.preco_loja = parse_float_br(request.form.get(f'preco_loja_{r.id}', ''))
             r.preco_site = parse_float_br(request.form.get(f'preco_site_{r.id}', ''))
