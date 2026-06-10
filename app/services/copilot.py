@@ -614,6 +614,22 @@ TOOL_CONSULTAR_DESPERDICIO = {
     },
 }
 
+TOOL_CONSULTAR_CARTINHAS = {
+    "name": "consultar_cartinhas",
+    "description": ("Lista cartinhas cadastradas/editadas no painel de "
+                     "entregas num periodo. Cada cartinha = cliente que "
+                     "pediu mensagem personalizada no pedido (Dia das Maes, "
+                     "Namorados, etc.). Retorna pedido_code, texto, quem "
+                     "cadastrou e quando."),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "dias": {"type": "integer", "minimum": 1, "maximum": 30,
+                      "description": "Janela em dias (default 2)."},
+        },
+    },
+}
+
 TOOLS = [
     # Existentes
     TOOL_CRIAR_PEDIDO, TOOL_EDITAR_PEDIDO, TOOL_CONSULTAR_PEDIDO, TOOL_CONSULTAR_ESTOQUE,
