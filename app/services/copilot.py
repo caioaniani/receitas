@@ -1593,7 +1593,8 @@ def _resolver_produto(nome):
     p = Produto.query.filter(func.lower(Produto.nome) == nome.lower()).first()
     if p:
         matches.append({'tipo': 'produto', 'id': p.id, 'nome': p.nome, 'match': 'exato'})
-    r = Receita.query.filter(func.lower(Receita.nome) == nome.lower()).first()
+    r = Receita.query.filter(func.lower(Receita.nome) == nome.lower(),
+                             Receita.arquivada_em.is_(None)).first()
     if r:
         matches.append({'tipo': 'receita', 'id': r.id, 'nome': r.nome, 'match': 'exato'})
     if matches:
@@ -3158,7 +3159,8 @@ def _resolver_item_qualquer(nome):
     nome = (nome or '').strip()
     if not nome:
         return None
-    r = Receita.query.filter(func.lower(Receita.nome) == nome.lower()).first()
+    r = Receita.query.filter(func.lower(Receita.nome) == nome.lower(),
+                             Receita.arquivada_em.is_(None)).first()
     if r:
         return ('receita', r.id, r.nome)
     p = Produto.query.filter(func.lower(Produto.nome) == nome.lower()).first()
