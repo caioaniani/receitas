@@ -114,6 +114,7 @@ def test_fluxo_painel_cotar_chamar_cancelar(app, admin_user):
             'veiculo': 'carro'})
     d = r.get_json()
     assert d['ok'] is True and d['valor'] == '31.00' and d['distancia'] == '8.2 km'
+    assert d['veiculo'] == '🚗 Carro'   # rotulo legivel, nao slug
     eid = d['entrega_id']
     with app.app_context():
         e = db.session.get(LalamoveEntrega, eid)
@@ -162,7 +163,7 @@ def test_api_painel_inclui_lalamove(app, admin_user):
     lala = d['pedidos'][0]['lalamove']
     assert lala['status'] == 'PICKED_UP'
     assert lala['rotulo'] == 'Saiu para entrega'
-    assert lala['veiculo'] == 'moto'
+    assert lala['veiculo'] == '🏍 Moto'
 
 
 def test_webhook_atualiza_status_e_motorista(app):
@@ -233,3 +234,25 @@ def test_debug_lalamove_owner(app):
         d2 = c.get('/admin/debug-lalamove').get_json()
     assert d2['teste_cities_ok'] is False
     assert 'ERR_AUTHENTICATE' in d2['teste_cities_corpo']
+
+
+def test_cotar_aceita_nome_direto_da_api(app):
+    """O seletor do painel manda o nome oficial (VAN, LALAPRO...) — alem dos
+    apelidos moto/carro mantidos pra chamadas antigas."""
+    from app.services import lalamove
+    _config(app)
+    resposta = {'data': {'quotationId': 'Q2',
+                         'priceBreakdown': {'total': '80.00', 'currency': 'BRL'},
+                         'stops': [{'stopId': 'A'}, {'stopId': 'B'}]}}
+    with app.app_context(), \
+         patch('app.services.frete.geocodificar',
+               return_value=(-23.62, -46.70, 'Rua X')), \
+         patch('app.services.lalamove.requests.request',
+               return_value=_Resp(201, resposta)) as req:
+        lalamove._origem_cache = None
+        r = lalamove.cotar('Rua X, 100', 'van')
+    assert r['ok'] is True and r['service_type'] == 'VAN'
+    assert json.loads(req.call_args[1]['data'])['data']['serviceType'] == 'VAN'
+
+    with app.app_context():
+        assert lalamove.cotar('Rua X', 'jetski')['erro'].startswith('veículo inválido')
