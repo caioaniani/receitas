@@ -1061,6 +1061,11 @@ def _migrate_postgres(app):
     _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS imagem_blob BYTEA")
     _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS imagem_mimetype VARCHAR(50)")
 
+    # Fase 2 contas a pagar (2026-06-10): conferencia humana — separa o que
+    # um humano JA revisou do que e so extracao da IA. NULL = nao conferida.
+    _try("ALTER TABLE conta_pagar ADD COLUMN IF NOT EXISTS revisada_em TIMESTAMP")
+    _try("ALTER TABLE conta_pagar ADD COLUMN IF NOT EXISTS revisada_por_id INTEGER REFERENCES usuario(id)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
