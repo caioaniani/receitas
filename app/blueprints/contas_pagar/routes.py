@@ -572,7 +572,8 @@ def mapeamentos():
             continue
         sug = sugestoes.get(m.id) or []
         ex = exemplos.get(m.item_nome_norm) or {}
-        f, u = prefill_sugestao(m, sug[0]['unidade'] if sug else None,
+        f, u = prefill_sugestao(m.ia_fator_sugerido, m.ia_unidade_sugerida,
+                                sug[0]['unidade'] if sug else None,
                                 ex.get('unidade'))
         prefill[m.id] = {'fator': f'{f:g}' if f else '', 'unidade': u or ''}
     return render_template('contas_pagar/mapeamentos.html', maps=maps, mps=mps,
