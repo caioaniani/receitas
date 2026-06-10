@@ -361,3 +361,39 @@ def test_migrar_junta_duplicados_preserva_confirmado(app):
         farinha = ContaPagarItemMap.query.filter_by(materia_prima_id=mp_id).first()
         assert farinha is not None and farinha.confirmado_em is not None
         assert farinha.item_nome_exemplo == 'FARINHA BAGATELLE T45'
+
+
+def test_conversao_metrica():
+    assert svc.conversao_metrica('kg', 'g') == 1000.0
+    assert svc.conversao_metrica(' KG ', 'g') == 1000.0   # espacos/caixa
+    assert svc.conversao_metrica('l', 'ml') == 1000.0
+    assert svc.conversao_metrica('g', 'g') == 1.0
+    assert svc.conversao_metrica('g', 'kg') == 0.001
+    assert svc.conversao_metrica('kg', 'ml') is None      # massa vs volume
+    assert svc.conversao_metrica('cx', 'g') is None       # embalagem nao e metrica
+    assert svc.conversao_metrica('', 'g') is None
+    assert svc.conversao_metrica(None, None) is None
+
+
+def test_prefill_sugestao_regras():
+    """Traducao da sugestao da IA pra unidade da MP (caso Toddy 2026-06-10:
+    'CX 1,8KG' -> IA sugere 1.8/kg, MP em g, NF conta em cx -> 1800/cx)."""
+    from types import SimpleNamespace
+
+    # Caso Toddy: IA leu o conteudo da embalagem em kg, NF em cx, MP em g.
+    m = SimpleNamespace(ia_fator_sugerido=1.8, ia_unidade_sugerida='kg')
+    assert svc.prefill_sugestao(m, 'g', 'cx') == (1800.0, 'cx')
+
+    # Acai: IA ja sugeriu na unidade da MP (ml) — fator fica, unidade vira a
+    # da NF (cx).
+    m = SimpleNamespace(ia_fator_sugerido=10000.0, ia_unidade_sugerida='ml')
+    assert svc.prefill_sugestao(m, 'ml', 'CX') == (10000.0, 'CX')
+
+    # Farinha a granel: a PROPRIA NF conta em kg -> fisica pura (1 kg =
+    # 1000 g); o tamanho de embalagem que a IA leu no nome e irrelevante.
+    m = SimpleNamespace(ia_fator_sugerido=25.0, ia_unidade_sugerida='kg')
+    assert svc.prefill_sugestao(m, 'g', 'kg') == (1000.0, 'kg')
+
+    # Abacaxi: nada metrico envolvido -> sugestao crua da IA, como antes.
+    m = SimpleNamespace(ia_fator_sugerido=None, ia_unidade_sugerida='un')
+    assert svc.prefill_sugestao(m, 'g', 'un') == (None, 'un')
