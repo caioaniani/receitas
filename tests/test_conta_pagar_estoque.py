@@ -435,5 +435,8 @@ def test_prefill_sugestao_regras():
     assert svc.prefill_sugestao(None, 'un', 'g', 'un') == (None, 'un')
 
     # Fator vindo do JSON da NF como string nao quebra (detalhe da conta).
-    assert svc.prefill_sugestao('2.01', 'kg', 'g', 'cx') == (2010.0, 'cx')
+    # round() porque 2.01*1000 da 2009.9999... em float; o form formata com
+    # {:g} e mostra "2010" — o que importa e o valor, nao o ruido binario.
+    f, u = svc.prefill_sugestao('2.01', 'kg', 'g', 'cx')
+    assert (round(f, 6), u) == (2010.0, 'cx')
     assert svc.prefill_sugestao('lixo', 'kg', 'g', 'cx') == (None, 'kg')
