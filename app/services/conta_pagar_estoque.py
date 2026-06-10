@@ -99,6 +99,47 @@ def migrar_nomes_itens():
     return stats
 
 
+def norms_em_notas():
+    """Set de nomes normalizados que aparecem nos itens de ALGUMA conta atual.
+    E a referencia de 'esse item existe em NF' — mapeamentos fora desse set
+    sao orfaos (sobra de leitura da IA que foi corrigida por re-extracao)."""
+    from app.models import ContaPagar
+    norms = set()
+    contas = ContaPagar.query.filter(ContaPagar.itens_json.isnot(None)).all()
+    for c in contas:
+        try:
+            itens = json.loads(c.itens_json or '[]')
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(itens, list):
+            continue
+        for it in itens:
+            if isinstance(it, dict):
+                n = normalizar_item_nome(it.get('nome') or '')
+                if n:
+                    norms.add(n)
+    return norms
+
+
+def limpar_mapas_orfaos():
+    """Apaga ContaPagarItemMap PENDENTES cujo item nao existe em nenhuma conta
+    (a re-extracao reescreve itens_json e pode deixar pra tras vinculos de
+    leituras erradas — ex: a IA leu o destinatario como item). So pendente
+    cru sai: confirmado/ignorado/com MP escolhida e decisao humana e fica.
+    Sem perda: se o nome reaparecer numa NF, processar_conta recria pendente.
+    Retorna quantos foram removidos."""
+    norms = norms_em_notas()
+    removidos = 0
+    for m in ContaPagarItemMap.query.all():
+        if m.confirmado_em or m.ignorar or m.materia_prima_id:
+            continue
+        if m.item_nome_norm not in norms:
+            db.session.delete(m)
+            removidos += 1
+    db.session.commit()
+    return removidos
+
+
 def sugerir_para_item(nome):
     """Sugestoes de MateriaPrima pra um nome de item (pra UI de mapeamento).
 
