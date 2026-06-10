@@ -548,3 +548,17 @@ class LalamoveEntrega(db.Model):
     criado_em = db.Column(db.DateTime, default=agora)
     criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
     atualizado_em = db.Column(db.DateTime)
+
+
+class LalamoveSaldo(db.Model):
+    """Ultimo saldo da carteira Lalamove (linha unica, id=1). Alimentado
+    pelo webhook WALLET_BALANCE_CHANGED — chega a cada debito/recarga.
+    `payload_json` guarda o evento cru pra ajustar o parse se o formato
+    real divergir do esperado."""
+    __tablename__ = 'lalamove_saldo'
+
+    id = db.Column(db.Integer, primary_key=True)
+    valor = db.Column(db.Numeric(10, 2))
+    moeda = db.Column(db.String(8), default='BRL')
+    payload_json = db.Column(db.Text)
+    atualizado_em = db.Column(db.DateTime, default=agora)
