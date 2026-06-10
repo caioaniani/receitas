@@ -34,10 +34,29 @@ _TIMEOUT = 15
 ORIGEM_ENDERECO_DEFAULT = ('Rua Anésio Pinto Rosa, 78 - Brooklin Paulista, '
                            'São Paulo - SP, 04570-130')
 
-# Tipos de veículo do mercado BR expostos pro atendente. Nomes confirmados
-# pelo 422 da propria API em prod (10/06/2026) — validos em BR SAO:
-# CAR, CARFOURH, HATCHBACK, HATCHFOURH, LALAGO (moto), LALAGOFOUR, LALAPRO,
-# TRUCK330, TRUCK3_5T, TRUCK_6H, UV_4H, UV_FIORINO, VAN, VANFOURH.
+# Tipos de veículo do mercado BR (lista oficial confirmada pelo 422 da
+# propria API em prod, 10/06/2026, BR SAO). Ordem = mais usados primeiro;
+# o atendente escolhe no seletor do painel. Os "4h/6h" sao aluguel por
+# periodo (varias paradas), raros pra entrega de pedido.
+OPCOES_VEICULO = [
+    ('LALAGO', '🏍 Moto'),
+    ('LALAPRO', '🏍 Moto Pro (baú maior)'),
+    ('CAR', '🚗 Carro'),
+    ('HATCHBACK', '🚗 Hatch'),
+    ('UV_FIORINO', '🛻 Fiorino'),
+    ('VAN', '🚐 Van'),
+    ('TRUCK330', '🚚 Caminhão pequeno (330kg)'),
+    ('TRUCK3_5T', '🚚 Caminhão 3,5t'),
+    ('LALAGOFOUR', '🏍 Moto — aluguel 4h'),
+    ('CARFOURH', '🚗 Carro — aluguel 4h'),
+    ('HATCHFOURH', '🚗 Hatch — aluguel 4h'),
+    ('VANFOURH', '🚐 Van — aluguel 4h'),
+    ('UV_4H', '🛻 Utilitário — aluguel 4h'),
+    ('TRUCK_6H', '🚚 Caminhão — aluguel 6h'),
+]
+ROTULO_VEICULO = dict(OPCOES_VEICULO)
+
+# Apelidos usados por chamadas antigas/bot — mapeiam pros nomes da API.
 SERVICE_TYPES = {'moto': 'LALAGO', 'carro': 'CAR'}
 
 STATUS_LABEL = {
