@@ -11,7 +11,7 @@ from app.decorators import admin_required
 from app.extensions import db
 from app.models import Atribuicao, MateriaPrima, Produto, Receita, ReceitaIngrediente
 from app.services.custos import calcular_custos_receitas
-from app.utils import parse_float_br
+from app.utils import dividir_etapas_preparo, parse_float_br
 
 
 @receitas_bp.route('/<int:id>')
@@ -42,6 +42,7 @@ def ficha(id):
 
     return render_template('receitas/ficha.html', receita=receita, mp_dict=mp_dict,
                            funcionarios=funcionarios,
+                           etapas_preparo=dividir_etapas_preparo(receita.modo_preparo),
                            receita_custos=resultado['custos'],
                            receita_pesos=resultado['pesos'])
 
