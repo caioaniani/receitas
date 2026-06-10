@@ -351,10 +351,10 @@
         </a>
         {% endif %}
 
-        {# ── 7. SISTEMA (admin) ── #}
+        {# ── 7. RELATÓRIOS (admin) — números pra decidir ── #}
         {% if current_user.is_admin() %}
         <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Sistema</div>
+        <div class="sidebar-section-title">Relatórios</div>
 
         <a href="{{ url_for('relatorios.dashboards') }}"
            class="sidebar-link {% if request.path == '/relatorios/dashboards' %}active{% endif %}">
@@ -362,24 +362,17 @@
         </a>
         <a href="{{ url_for('relatorios.custos') }}"
            class="sidebar-link {% if request.path == '/relatorios/custos' %}active{% endif %}">
-            Relatórios de Custos
+            Custos
         </a>
         <a href="{{ url_for('relatorios.previsao') }}"
            class="sidebar-link {% if request.path.startswith('/relatorios/previsao') %}active{% endif %}">
             Previsão de demanda
         </a>
-        <a href="{{ url_for('b2b.dashboard') }}"
-           class="sidebar-link {% if request.path.startswith('/b2b') %}active{% endif %}">
-            B2B Indústria
-        </a>
-        <a href="{{ url_for('main.todo') }}"
-           class="sidebar-link {% if request.path == '/todo' %}active{% endif %}">
-            TO-DO
-        </a>
-        <a href="{{ url_for('auth.painel') }}"
-           class="sidebar-link {% if request.path == '/auth/painel' %}active{% endif %}">
-            Atribuições
-        </a>
+
+        {# ── 8. ADMINISTRAÇÃO (admin) — usuários, permissões e integrações ── #}
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">Administração</div>
+
         <a href="{{ url_for('auth.usuarios') }}"
            class="sidebar-link {% if request.path == '/auth/usuarios' %}active{% endif %}">
             Usuários
@@ -389,18 +382,11 @@
            class="sidebar-link {% if request.path == '/admin/permissoes' %}active{% endif %}">
             Permissões por papel
         </a>
-        <a href="{{ url_for('lista_compras.consolidada') }}"
-           class="sidebar-link {% if request.path == '/lista-compras/consolidada' %}active{% endif %}">
-            Lista de Compras (consolidar)
-        </a>
-        <a href="{{ url_for('lista_compras.catalogo') }}"
-           class="sidebar-link {% if request.path == '/lista-compras/catalogo' %}active{% endif %}">
-            Catálogo Lista de Compras
-        </a>
         {% endif %}
         <a href="{{ url_for('main.audit') }}"
-           class="sidebar-link {% if request.path == '/audit' %}active{% endif %}">
-            Audit Log
+           class="sidebar-link {% if request.path == '/audit' %}active{% endif %}"
+           title="Quem mudou o quê e quando">
+            Histórico de alterações
         </a>
         <a href="{{ url_for('slack.install') }}"
            class="sidebar-link {% if request.path.startswith('/slack') %}active{% endif %}">
