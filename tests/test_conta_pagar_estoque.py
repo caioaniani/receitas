@@ -418,23 +418,22 @@ def test_conversao_metrica():
 
 def test_prefill_sugestao_regras():
     """Traducao da sugestao da IA pra unidade da MP (caso Toddy 2026-06-10:
-    'CX 1,8KG' -> IA sugere 1.8/kg, MP em g, NF conta em cx -> 1800/cx)."""
-    from types import SimpleNamespace
-
+    'CX 1,8KG' -> IA sugere 1.8/kg, MP em g, NF conta em cx -> 1800/cx).
+    Assinatura: prefill_sugestao(ia_fator, ia_unidade, unidade_mp, unidade_nf)."""
     # Caso Toddy: IA leu o conteudo da embalagem em kg, NF em cx, MP em g.
-    m = SimpleNamespace(ia_fator_sugerido=1.8, ia_unidade_sugerida='kg')
-    assert svc.prefill_sugestao(m, 'g', 'cx') == (1800.0, 'cx')
+    assert svc.prefill_sugestao(1.8, 'kg', 'g', 'cx') == (1800.0, 'cx')
 
     # Acai: IA ja sugeriu na unidade da MP (ml) — fator fica, unidade vira a
     # da NF (cx).
-    m = SimpleNamespace(ia_fator_sugerido=10000.0, ia_unidade_sugerida='ml')
-    assert svc.prefill_sugestao(m, 'ml', 'CX') == (10000.0, 'CX')
+    assert svc.prefill_sugestao(10000.0, 'ml', 'ml', 'CX') == (10000.0, 'CX')
 
     # Farinha a granel: a PROPRIA NF conta em kg -> fisica pura (1 kg =
     # 1000 g); o tamanho de embalagem que a IA leu no nome e irrelevante.
-    m = SimpleNamespace(ia_fator_sugerido=25.0, ia_unidade_sugerida='kg')
-    assert svc.prefill_sugestao(m, 'g', 'kg') == (1000.0, 'kg')
+    assert svc.prefill_sugestao(25.0, 'kg', 'g', 'kg') == (1000.0, 'kg')
 
     # Abacaxi: nada metrico envolvido -> sugestao crua da IA, como antes.
-    m = SimpleNamespace(ia_fator_sugerido=None, ia_unidade_sugerida='un')
-    assert svc.prefill_sugestao(m, 'g', 'un') == (None, 'un')
+    assert svc.prefill_sugestao(None, 'un', 'g', 'un') == (None, 'un')
+
+    # Fator vindo do JSON da NF como string nao quebra (detalhe da conta).
+    assert svc.prefill_sugestao('2.01', 'kg', 'g', 'cx') == (2010.0, 'cx')
+    assert svc.prefill_sugestao('lixo', 'kg', 'g', 'cx') == (None, 'cx')
