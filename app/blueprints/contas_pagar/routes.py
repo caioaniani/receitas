@@ -156,7 +156,11 @@ def lista():
 @login_required
 @admin_required
 def detalhe(id):
-    from app.services.conta_pagar_estoque import normalizar_item_nome, sugerir_para_item
+    from app.services.conta_pagar_estoque import (
+        normalizar_item_nome,
+        prefill_sugestao,
+        sugerir_para_item,
+    )
     conta = ContaPagar.query.get_or_404(id)
     itens = []
     if conta.itens_json:
@@ -165,7 +169,8 @@ def detalhe(id):
         except (json.JSONDecodeError, TypeError):
             itens = []
     # Anexa o vinculo (ContaPagarItemMap por nome) a cada item, pra vincular a
-    # MP direto aqui, vendo a nota. Sugestao da IA so pros ainda nao mapeados.
+    # MP direto aqui, vendo a nota. Sugestao da IA pros ainda nao vinculados
+    # (inclusive quando o mapa pendente ja existe — sem MP escolhida).
     norms = [normalizar_item_nome(it.get('nome') or '') for it in itens]
     mapas = {}
     presentes = [n for n in norms if n]
@@ -176,8 +181,19 @@ def detalhe(id):
     itens_vinc = []
     for i, (it, n) in enumerate(zip(itens, norms)):
         mp_map = mapas.get(n)
-        sug = sugerir_para_item(it.get('nome') or '')[:3] if (n and not mp_map) else []
-        itens_vinc.append({'indice': i, 'item': it, 'mapa': mp_map, 'sugestoes': sug})
+        sem_vinculo = not (mp_map and (mp_map.materia_prima_id or mp_map.ignorar))
+        sug = sugerir_para_item(it.get('nome') or '')[:3] if (n and sem_vinculo) else []
+        # Mesma traducao da sugestao da IA da tela de mapeamentos (kg->g etc.)
+        ia_f = (mp_map.ia_fator_sugerido if mp_map else None) or it.get('fator_embalagem')
+        ia_u = ((mp_map.ia_unidade_sugerida if mp_map else None)
+                or it.get('unidade_base_sugerida'))
+        unid_mp = (mp_map.materia_prima.unidade
+                   if (mp_map and mp_map.materia_prima)
+                   else (sug[0]['unidade'] if sug else None))
+        f, u = prefill_sugestao(ia_f, ia_u, unid_mp, it.get('unidade'))
+        itens_vinc.append({'indice': i, 'item': it, 'mapa': mp_map, 'sugestoes': sug,
+                           'prefill': {'fator': f'{f:g}' if f else '',
+                                       'unidade': u or ''}})
     mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
     fornecedores = Fornecedor.query.filter_by(ativo=True).order_by(Fornecedor.nome).all()
     # Candidatos pra vincular (mesmo... outro documento ainda nao relacionado)
