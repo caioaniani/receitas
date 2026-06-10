@@ -1066,6 +1066,13 @@ def _migrate_postgres(app):
     _try("ALTER TABLE conta_pagar ADD COLUMN IF NOT EXISTS revisada_em TIMESTAMP")
     _try("ALTER TABLE conta_pagar ADD COLUMN IF NOT EXISTS revisada_por_id INTEGER REFERENCES usuario(id)")
 
+    # Arquivamento de receita (2026-06-10): receita com historico (pedidos,
+    # vendas, estoque) NUNCA e excluida — arquivar tira ela das listas e
+    # preserva o historico. NULL = ativa. ALTER vai NA FRENTE do modelo
+    # (procedimento de 2 commits — ver CLAUDE.md "Schema migrations").
+    _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS arquivada_em TIMESTAMP")
+    _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS arquivada_por_id INTEGER REFERENCES usuario(id)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
