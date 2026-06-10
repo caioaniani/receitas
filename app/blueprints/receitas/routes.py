@@ -107,7 +107,8 @@ def familias():
             flash('Nenhuma mudança.', 'info')
         return redirect(url_for('receitas.familias'))
 
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    receitas = (Receita.query.filter(Receita.arquivada_em.is_(None))
+                .order_by(Receita.categoria, Receita.nome).all())
     categorias = {}
     for r in receitas:
         cat = r.categoria or 'Outros'
@@ -151,7 +152,8 @@ def precos():
             flash('Nenhuma mudança.', 'info')
         return redirect(url_for('receitas.precos'))
 
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    receitas = (Receita.query.filter(Receita.arquivada_em.is_(None))
+                .order_by(Receita.categoria, Receita.nome).all())
     categorias = {}
     for r in receitas:
         cat = r.categoria or 'Outros'
@@ -192,7 +194,8 @@ def reaproveitavel():
             flash('Nenhuma mudança.', 'info')
         return redirect(url_for('receitas.reaproveitavel'))
 
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    receitas = (Receita.query.filter(Receita.arquivada_em.is_(None))
+                .order_by(Receita.categoria, Receita.nome).all())
     produtos = Produto.query.order_by(Produto.categoria, Produto.nome).all()
     receitas_por_cat = {}
     for r in receitas:
