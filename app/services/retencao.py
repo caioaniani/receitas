@@ -7,11 +7,16 @@ DEPOIS do backup dar OK (garantia: tudo que apagamos do banco esta no dump do
 dia, recuperavel por 90 dias).
 
 Prazos (env vars, defaults em config.py):
-  RETENCAO_LOGS_DIAS=365       NFLog, VigiaVeredito (audit: 1 ano)
+  RETENCAO_LOGS_DIAS=365       VigiaVeredito (alertas do vigia do chatbot)
   RETENCAO_CONVERSAS_DIAS=180  ChatbotConversa sem atividade (contexto do bot;
                                a conversa-mestre vive no Chatwoot)
   RETENCAO_EVENTOS_DIAS=7      Slack/Zapi eventos processados (so idempotencia)
   RETENCAO_BACKUPS_DIAS=90     dumps no Dropbox (decisao do dono, 2026-06-09)
+
+PRESERVADOS PRA SEMPRE (nunca entram aqui): funcionarios/RH (cadastro, ponto,
+atestados, salarios), pedidos, vendas, estoque, receitas, clientes, ContaPagar
+e TUDO de nota fiscal — incluindo NFLog (auditoria de solicitacao de NF pelo
+bot), retirado dos alvos por decisao do dono em 2026-06-10.
 
 Desligar tudo: RETENCAO_AUTO=0. Rota manual (owner): /admin/retencao.
 """
