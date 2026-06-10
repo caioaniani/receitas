@@ -20,7 +20,7 @@ from app.decorators import admin_required
 from app.extensions import db
 from app.models import Atribuicao, MateriaPrima, Produto, Receita, ReceitaIngrediente
 from app.services.custos import calcular_custos_receitas
-from app.utils import dividir_etapas_preparo, parse_float_br
+from app.utils import agora, dividir_etapas_preparo, parse_float_br
 
 
 @receitas_bp.route('/<int:id>')
@@ -736,6 +736,29 @@ def vinculos_transferir(id):
     grupos, pode = _vinculos_receita(origem)
     return jsonify(grupos=grupos, pode_excluir=pode, movidos=movidos,
                    destino=destino.nome)
+
+
+@receitas_bp.route('/<int:id>/arquivar', methods=['POST'])
+@login_required
+@admin_required
+def arquivar(id):
+    """Arquiva/desarquiva. Arquivada = fora das listas e seletores (padeiro,
+    datalists, copilot, vendas), historico 100% preservado — e o caminho pra
+    receita descontinuada que tem pedidos/vendas/estoque e nao pode ser
+    excluida nem faz sentido transferir."""
+    receita = Receita.query.get_or_404(id)
+    if receita.arquivada_em:
+        receita.arquivada_em = None
+        receita.arquivada_por_id = None
+        db.session.commit()
+        flash(f'"{receita.nome}" desarquivada — voltou pras listas.', 'success')
+        return redirect(url_for('receitas.ficha', id=id))
+    receita.arquivada_em = agora()
+    receita.arquivada_por_id = current_user.id
+    db.session.commit()
+    flash(f'"{receita.nome}" arquivada. O histórico fica intacto; ela só '
+          'sai das listas. Dá pra desarquivar na própria ficha.', 'success')
+    return redirect(url_for('receitas.padeiro_lista'))
 
 
 @receitas_bp.route('/<int:id>/excluir', methods=['POST'])
