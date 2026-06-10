@@ -315,12 +315,39 @@
         <small class="text-muted">Pra fazer upload de foto, role pro fim da página.</small>
     </div>
 
-    <!-- Modo de Preparo -->
+    <!-- Modo de Preparo (1 modulo por etapa; o salvar junta com linha em branco) -->
     <div class="mb-3">
         <label class="form-label fw-bold"><i class="bi bi-journal-text"></i> Modo de Preparo</label>
-        <textarea name="modo_preparo" class="form-control input-blue" rows="5"
-                  placeholder="Descreva o passo a passo do preparo...">{{ receita.modo_preparo or '' }}</textarea>
+        <input type="hidden" name="tem_etapas" value="1">
+        <div id="etapas-box">
+            {% for etapa in etapas_preparo %}
+            <div class="etapa-modulo d-flex gap-2 align-items-start mb-2">
+                <span class="etapa-drag text-muted mt-2" title="Arraste para reordenar"
+                      style="cursor:grab; touch-action:none;"><i class="bi bi-grip-vertical"></i></span>
+                <span class="badge bg-dark etapa-num mt-2">{{ loop.index }}</span>
+                <textarea name="modo_preparo_etapa[]" class="form-control input-blue" rows="2"
+                          placeholder="Descreva esta etapa...">{{ etapa }}</textarea>
+                <button type="button" class="btn btn-sm btn-outline-danger btn-remove-etapa mt-1"
+                        title="Remover etapa"><i class="bi bi-x"></i></button>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-add-etapa">
+            <i class="bi bi-plus-lg"></i> Adicionar etapa
+        </button>
     </div>
+
+    <template id="etapa-template">
+        <div class="etapa-modulo d-flex gap-2 align-items-start mb-2">
+            <span class="etapa-drag text-muted mt-2" title="Arraste para reordenar"
+                  style="cursor:grab; touch-action:none;"><i class="bi bi-grip-vertical"></i></span>
+            <span class="badge bg-dark etapa-num mt-2">?</span>
+            <textarea name="modo_preparo_etapa[]" class="form-control input-blue" rows="2"
+                      placeholder="Descreva esta etapa..."></textarea>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-etapa mt-1"
+                    title="Remover etapa"><i class="bi bi-x"></i></button>
+        </div>
+    </template>
 
     <!-- Reaproveitavel -->
     <div class="mb-3">
