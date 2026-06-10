@@ -3,6 +3,23 @@
 {% block title %}{{ receita.nome }} - Ficha Técnica{% endblock %}
 
 {% block content %}
+{% if receita.arquivada_em %}
+<div class="alert alert-warning d-flex justify-content-between align-items-center py-2 flex-wrap gap-2">
+    <div>
+        <i class="bi bi-archive"></i> <b>Receita arquivada</b>
+        em {{ receita.arquivada_em.strftime('%d/%m/%Y') }} —
+        fora das listas e seletores; o histórico continua intacto.
+    </div>
+    {% if current_user.is_admin() %}
+    <form method="POST" action="{{ url_for('receitas.arquivar', id=receita.id) }}" class="mb-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-outline-dark">
+            <i class="bi bi-box-arrow-up"></i> Desarquivar
+        </button>
+    </form>
+    {% endif %}
+</div>
+{% endif %}
 <form method="POST" action="{{ url_for('receitas.salvar', id=receita.id) }}" id="ficha-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
