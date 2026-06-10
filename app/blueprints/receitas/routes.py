@@ -546,9 +546,10 @@ def _vinculos_receita(receita):
     for titulo, modelo in historicos:
         n = modelo.query.filter_by(receita_id=rid).count()
         _grupo(f'hist_{modelo.__tablename__}', titulo, False,
-               'Histórico — não pode ser apagado. Enquanto existir, a '
-               'receita não pode ser excluída (pare de usá-la ou renomeie '
-               'para "zz-Descontinuada").',
+               'Histórico — não se apaga, mas dá pra TRANSFERIR: use o campo '
+               '"Transferir vínculos" abaixo pra reapontar tudo pra outra '
+               'receita (pedidos, vendas e estoque passam a contar lá) e aí '
+               'excluir esta.',
                [], qtd=n)
 
     pode_excluir = not grupos
