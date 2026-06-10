@@ -1535,6 +1535,64 @@ def backup_drill():
     return jsonify(backup_svc.drill_status()), 200
 
 
+@main_bp.route('/admin/dropbox/reauth')
+@owner_required
+def dropbox_reauth():
+    """Re-autorizacao OAuth da app Dropbox (owner-only), pra quando os ESCOPOS
+    mudam — permissao nova (ex: files.content.read pro drill de restore) NAO
+    vale pra refresh token ja emitido; precisa autorizar de novo.
+
+    Fluxo em 2 passos, sem curl:
+      1. GET sem parametro: mostra o link de autorizacao do Dropbox. Abra,
+         clique em Permitir, copie o codigo exibido.
+      2. GET ?code=<codigo>: troca o codigo por um refresh token NOVO e mostra
+         o valor pra voce colar em Railway -> Variables -> DROPBOX_REFRESH_TOKEN.
+    """
+    import requests as _requests
+    app_key = (current_app.config.get('DROPBOX_APP_KEY') or '').strip()
+    app_secret = (current_app.config.get('DROPBOX_APP_SECRET') or '').strip()
+    if not app_key or not app_secret:
+        return jsonify(erro='DROPBOX_APP_KEY/SECRET nao configurados no env'), 200
+
+    code = (request.args.get('code') or '').strip()
+    if not code:
+        url_auth = ('https://www.dropbox.com/oauth2/authorize'
+                    f'?client_id={app_key}&response_type=code'
+                    '&token_access_type=offline')
+        return jsonify(
+            passo_1=('Confirme ANTES no App Console que o escopo novo esta '
+                     'marcado (Permissions -> files.content.read -> Submit).'),
+            passo_2=f'Abra e autorize: {url_auth}',
+            passo_3=('Copie o codigo que o Dropbox mostrar e volte aqui com '
+                     '?code=<codigo>'),
+        ), 200
+
+    r = _requests.post(
+        'https://api.dropbox.com/oauth2/token',
+        data={'grant_type': 'authorization_code', 'code': code},
+        auth=(app_key, app_secret),
+        timeout=15,
+    )
+    if r.status_code != 200:
+        return jsonify(erro=f'troca do codigo falhou: HTTP {r.status_code}',
+                       detalhe=(r.text or '')[:300],
+                       dica=('Codigo expira em minutos e so vale 1 vez — '
+                             'gere outro no link do passo 2.')), 200
+    body = r.json()
+    novo_refresh = body.get('refresh_token') or ''
+    if not novo_refresh:
+        return jsonify(erro='resposta sem refresh_token',
+                       detalhe=str(body)[:300]), 200
+    return jsonify(
+        ok=True,
+        refresh_token=novo_refresh,
+        proximo_passo=('Railway -> servico web -> Variables -> substitua '
+                       'DROPBOX_REFRESH_TOKEN por este valor e salve. Apos o '
+                       'redeploy, rode o drill de novo: '
+                       '/admin/backup/drill?iniciar=full'),
+    ), 200
+
+
 @main_bp.route('/admin/retencao')
 @owner_required
 def retencao_admin():
