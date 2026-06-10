@@ -205,6 +205,9 @@ def detalhe(id):
                            'prefill': {'fator': f'{f:g}' if f else '',
                                        'unidade': u or ''}})
     mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    from app.models import Produto
+    produtos = (Produto.query.filter_by(ativo=True)
+                .order_by(Produto.nome).all())
     fornecedores = Fornecedor.query.filter_by(ativo=True).order_by(Fornecedor.nome).all()
     # Candidatos pra vincular (mesmo... outro documento ainda nao relacionado)
     relacionaveis = (ContaPagar.query
@@ -214,7 +217,7 @@ def detalhe(id):
                      .limit(50).all())
     mapa_lojas = _mapa_lojas_nf()
     return render_template('contas_pagar/detalhe.html', conta=conta, itens=itens,
-                           itens_vinc=itens_vinc, mps=mps,
+                           itens_vinc=itens_vinc, mps=mps, produtos=produtos,
                            fornecedores=fornecedores, relacionaveis=relacionaveis,
                            loja_nome=_nome_loja(conta.origem_canal, mapa_lojas))
 
@@ -444,6 +447,20 @@ def _erro_unidade_metrica(nome_item, unidade_compra, fator, mp):
             f'(cx, un, fd...) e use fator {certo:g}.')
 
 
+def _parse_alvo(bruto):
+    """Valor do select de alvo -> (materia_prima_id, produto_id).
+    'mp-12' -> (12, None); 'prod-7' -> (None, 7); '12' (legado/bulk antigo)
+    -> (12, None); invalido -> (None, None)."""
+    b = str(bruto or '').strip()
+    if b.startswith('mp-') and b[3:].isdigit():
+        return int(b[3:]), None
+    if b.startswith('prod-') and b[5:].isdigit():
+        return None, int(b[5:])
+    if b.isdigit():
+        return int(b), None
+    return None, None
+
+
 def _aplicar_vinculo(m, acao, materia_prima_id=None, unidade_compra=None,
                      fator_raw=None, exigir_completo=False):
     """Nucleo de vincular/ignorar/desfazer num ContaPagarItemMap — usado pelo
@@ -455,22 +472,24 @@ def _aplicar_vinculo(m, acao, materia_prima_id=None, unidade_compra=None,
     if acao == 'ignorar':
         m.ignorar = True
         m.materia_prima_id = None
+        m.produto_id = None
         m.confirmado_em = None
         return None
     if acao == 'desfazer':
         m.materia_prima_id = None
+        m.produto_id = None
         m.confirmado_em = None
         m.confirmado_por = None
         m.ignorar = False
         return None
-    # vincular
-    mid = str(materia_prima_id or '').strip()
-    mid = int(mid) if mid.isdigit() else None
+    # vincular — alvo pode ser materia-prima ('mp-12'/'12') ou produto de
+    # revenda ('prod-7').
+    mid, pid = _parse_alvo(materia_prima_id)
     unidade = (unidade_compra or '').strip() or None
     fator = _parse_fator(fator_raw)
     if exigir_completo:
-        if not mid:
-            return f'"{m.item_nome_exemplo}": sem matéria-prima selecionada'
+        if not (mid or pid):
+            return f'"{m.item_nome_exemplo}": sem matéria-prima/produto selecionado'
         if not fator or fator <= 0:
             return (f'"{m.item_nome_exemplo}": sem fator de conversão — '
                     'preencha o "1 un = X" antes de confirmar')
@@ -480,11 +499,13 @@ def _aplicar_vinculo(m, acao, materia_prima_id=None, unidade_compra=None,
         erro = _erro_unidade_metrica(m.item_nome_exemplo, unidade, fator, mp)
         if erro:
             return erro
+    # Produto e contado em unidades — trava de fisica nao se aplica.
     m.materia_prima_id = mid
+    m.produto_id = pid
     m.unidade_compra = unidade
     m.fator_conversao = fator
     m.ignorar = False
-    if mid:
+    if mid or pid:
         m.confirmado_em = agora()
         m.confirmado_por = current_user.id
     else:
@@ -497,7 +518,8 @@ def _aplicar_acao_mapa(m):
     Retorna None se ok, ou a mensagem de erro (caller faz rollback+flash)."""
     return _aplicar_vinculo(
         m, request.form.get('acao'),
-        materia_prima_id=request.form.get('materia_prima_id'),
+        materia_prima_id=(request.form.get('alvo')
+                          or request.form.get('materia_prima_id')),
         unidade_compra=request.form.get('unidade_compra'),
         fator_raw=request.form.get('fator_conversao'))
 
@@ -619,11 +641,14 @@ def mapeamentos():
             sugestoes[m.id] = sugerir_para_item(m.item_nome_exemplo,
                                                 unidade_nf=unid_nf)[:3]
     mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    from app.models import Produto
+    produtos = (Produto.query.filter_by(ativo=True)
+                .order_by(Produto.nome).all())
     # Sugestao da IA traduzida pra unidade da MP (kg->g etc.) antes de
     # pre-encher o form — ver prefill_sugestao. So pra itens sem vinculo.
     prefill = {}
     for m in maps:
-        if m.materia_prima_id:
+        if m.materia_prima_id or m.produto_id:
             continue
         sug = sugestoes.get(m.id) or []
         ex = exemplos.get(m.item_nome_norm) or {}
@@ -632,6 +657,7 @@ def mapeamentos():
                                 ex.get('unidade'))
         prefill[m.id] = {'fator': f'{f:g}' if f else '', 'unidade': u or ''}
     return render_template('contas_pagar/mapeamentos.html', maps=maps, mps=mps,
+                           produtos=produtos,
                            estado=estado, contagens=contagens, sugestoes=sugestoes,
                            exemplos=exemplos, prefill=prefill)
 
@@ -683,7 +709,7 @@ def mapeamentos_lote():
             continue
         erro = _aplicar_vinculo(
             m, acao,
-            materia_prima_id=item.get('materia_prima_id'),
+            materia_prima_id=item.get('alvo') or item.get('materia_prima_id'),
             unidade_compra=item.get('unidade_compra'),
             fator_raw=item.get('fator_conversao'),
             exigir_completo=True)
