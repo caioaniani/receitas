@@ -1112,6 +1112,11 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE receita ADD COLUMN imagem_blob BLOB")
     if 'imagem_mimetype' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN imagem_mimetype VARCHAR(50)")
+    if 'arquivada_em' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN arquivada_em TIMESTAMP")
+    if 'arquivada_por_id' not in colunas:
+        cursor.execute(
+            "ALTER TABLE receita ADD COLUMN arquivada_por_id INTEGER REFERENCES usuario(id)")
 
     # Migração tabela receita_ingrediente
     cursor.execute("PRAGMA table_info(receita_ingrediente)")
