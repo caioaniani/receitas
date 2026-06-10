@@ -510,30 +510,11 @@
         {% block content %}{% endblock %}
     </main>
 
-    {% if current_user.is_authenticated %}
-    <!-- Copilot — botao flutuante + painel lateral. Tools sao filtradas
-         pelo papel no backend (admin/gerente/funcionario). -->
-    <button id="copilot-fab" type="button" title="Copilot (Cmd/Ctrl+K)" aria-label="Copilot">
-        <i class="bi bi-stars"></i>
-    </button>
-    <div id="copilot-overlay" class="d-none"></div>
-    <aside id="copilot-panel" class="d-none" aria-hidden="true">
-        <header>
-            <strong>copilot</strong>
-            <button type="button" id="copilot-close" aria-label="Fechar" title="Fechar (Esc)">
-                <i class="bi bi-x-lg"></i>
-            </button>
-        </header>
-        <div id="copilot-history"></div>
-        <form id="copilot-form">
-            <textarea id="copilot-input" placeholder="ex: preciso pedir 100 croissants pra amanhã"
-                      maxlength="2000" autocomplete="off" rows="1"></textarea>
-            <button type="submit" id="copilot-send" title="Enviar (Enter) · Shift+Enter pula linha">
-                <i class="bi bi-arrow-up"></i>
-            </button>
-        </form>
-    </aside>
-    {% endif %}
+    <!-- Copilot do sistema removido em 10/06/2026 (decisao do dono):
+         o servico copilot.py continua, mas a UI web foi desativada.
+         Pontos de entrada do bot continuam ativos: Slack (DM/@mention via
+         slack_bot.py) e o bot pessoal no WhatsApp (blueprint bot/, auth
+         por BOT_API_TOKEN + whitelist em BOT_ALLOWED_PHONES). -->
 
     <!-- Legenda de cores -->
     <div class="legenda-cores">
