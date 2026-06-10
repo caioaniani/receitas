@@ -180,7 +180,9 @@ def reaproveitavel():
                       if k.startswith('reap_r_')}
         marcados_p = {int(k[len('reap_p_'):]) for k in request.form.keys()
                       if k.startswith('reap_p_')}
-        for r in Receita.query.all():
+        # Checkbox desmarcado nao vem no form — arquivada (fora da tela)
+        # nao pode ser "desmarcada" por ausencia.
+        for r in Receita.query.filter(Receita.arquivada_em.is_(None)).all():
             novo = r.id in marcados_r
             if bool(r.reaproveitavel) != novo:
                 r.reaproveitavel = novo
