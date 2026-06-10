@@ -206,7 +206,10 @@
                 <a href="{{ url_for('contas_pagar.mapeamentos') }}" class="small">ver todos os vínculos</a>
             </div>
             <div class="card-body">
-                <p class="small text-muted">Confira cada item conforme a nota e vincule à matéria-prima. No <b>fator</b>, diga quanto <b>1 unidade de compra</b> da NF representa na unidade da MP (ex.: 1 caixa = <b>300</b> un). O vínculo vale pra todas as NFs com esse mesmo item.</p>
+                <p class="small text-muted">Confira cada item conforme a nota e complete a frase
+                <b>“1 unidade de compra = X na unidade da matéria-prima”</b> (ex.: caixa com 2,01 kg e
+                MP em gramas → 1 <b>cx</b> = <b>2010</b> g; a quantidade da NF multiplica sozinha).
+                O vínculo vale pra todas as NFs com esse mesmo item.</p>
                 {% for iv in itens_vinc %}
                 {% set it = iv.item %}
                 {% set m = iv.mapa %}
