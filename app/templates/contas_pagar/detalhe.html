@@ -232,28 +232,38 @@
                         </div>
                     </div>
                     <form method="POST" action="{{ url_for('contas_pagar.item_vincular', id=conta.id, indice=iv.indice) }}"
-                          class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                          class="d-flex flex-wrap gap-2 align-items-center mt-2 mapa-form">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <select name="materia_prima_id" class="form-select form-select-sm" style="max-width:220px">
-                            <option value="">— matéria-prima —</option>
+                        <select name="materia_prima_id" class="form-select form-select-sm mapa-mp" style="max-width:220px">
+                            <option value="" data-unid="?">— matéria-prima —</option>
                             {% for mp in mps %}
-                            <option value="{{ mp.id }}"
-                              {% if (m and m.materia_prima_id == mp.id) or (not m and iv.sugestoes and iv.sugestoes[0].id == mp.id) %}selected{% endif %}>
+                            <option value="{{ mp.id }}" data-unid="{{ mp.unidade }}"
+                              {% if (m and m.materia_prima_id == mp.id) or (iv.sugestoes and iv.sugestoes[0].id == mp.id) %}selected{% endif %}>
                               {{ mp.nome }} ({{ mp.unidade }})
                             </option>
                             {% endfor %}
                         </select>
-                        <input type="text" name="unidade_compra" class="form-control form-control-sm" style="max-width:100px"
-                               placeholder="un compra" value="{{ (m.unidade_compra if m else '') or it.get('unidade') or '' }}"
-                               title="unidade de compra (cx, fardo, kg...)">
-                        <input type="number" step="any" name="fator_conversao" class="form-control form-control-sm" style="max-width:100px"
-                               placeholder="fator" value="{{ m.fator_conversao if (m and m.materia_prima_id) else (it.get('fator_embalagem') or '') }}"
-                               title="quantas unidades-base há em 1 unidade de compra">
+                        <div class="d-flex align-items-center gap-1 flex-nowrap">
+                          <span class="small text-muted">1</span>
+                          <input type="text" name="unidade_compra" class="form-control form-control-sm mapa-uncompra"
+                                 style="max-width:90px" placeholder="cx / un / fardo"
+                                 value="{{ (m.unidade_compra if m else '') or iv.prefill.unidade or it.get('unidade') or '' }}"
+                                 title="unidade de compra como vem na NF (cx, un, fardo, kg...)">
+                          <span class="small text-muted">=</span>
+                          <input type="number" step="any" name="fator_conversao" class="form-control form-control-sm mapa-fator"
+                                 style="max-width:100px" placeholder="quanto?"
+                                 value="{{ m.fator_conversao if (m and m.materia_prima_id) else iv.prefill.fator }}"
+                                 title="quanto 1 unidade de compra representa na unidade da matéria-prima">
+                          <span class="small fw-bold mapa-unid-mp">?</span>
+                        </div>
                         <button class="btn btn-sm btn-primary" name="acao" value="vincular">Vincular</button>
                         <button class="btn btn-sm btn-outline-secondary" name="acao" value="ignorar">Ignorar</button>
                         {% if m and (m.confirmado_em or m.ignorar) %}
                         <button class="btn btn-sm btn-outline-danger" name="acao" value="desfazer">Desfazer</button>
                         {% endif %}
+                        <div class="small mt-1 mapa-preview w-100" style="color:#0a7d33; min-height:1em;"
+                             data-qtd="{{ it.get('quantidade') if it.get('quantidade') is not none else '' }}"
+                             data-vunit="{{ it.get('valor_unitario') if it.get('valor_unitario') is not none else '' }}"></div>
                     </form>
                     {% if iv.sugestoes %}
                     <div class="small text-muted mt-1">Sugestões: {% for s in iv.sugestoes %}<span class="badge bg-light text-dark border">{{ s.nome }}</span> {% endfor %}</div>
