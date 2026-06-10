@@ -146,6 +146,9 @@ def montar_digest_saude():
         linhas.append(f'🔍 {c["extracao_incompleta"]} sem valor/vencimento '
                       '(IA nao leu — revisar em /contas-pagar)')
         tem_alerta_contas = True
+    if c.get('nao_revisadas'):
+        linhas.append(f'👀 {c["nao_revisadas"]} aguardando conferencia humana')
+        tem_alerta_contas = True
     if c['novas_24h']:
         linhas.append(f'📥 {c["novas_24h"]} nova(s) nas ultimas 24h')
         tem_alerta_contas = True
