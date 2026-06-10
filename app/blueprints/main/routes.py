@@ -600,11 +600,9 @@ def audit():
     # cartinha cadastrada manualmente (relatorio do auditor "cliente pediu
     # cartinha em pedido ja feito" usa a conversa do Chatwoot; aqui voce
     # ve o que o atendente efetivamente CADASTROU no banco).
-    from datetime import timedelta as _td
-
     from app.models import CartinhaEntrega
     cartinhas = (CartinhaEntrega.query
-                 .filter(CartinhaEntrega.atualizado_em >= agora() - _td(hours=48))
+                 .filter(CartinhaEntrega.atualizado_em >= agora() - timedelta(hours=48))
                  .order_by(CartinhaEntrega.atualizado_em.desc())
                  .limit(50).all())
     return render_template("main/audit.html", rows=rows, tabelas=sorted(tabelas),
