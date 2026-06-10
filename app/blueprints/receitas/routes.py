@@ -357,7 +357,16 @@ def salvar(id):
     receita.peso_unitario = parse_float_br(request.form.get('peso_unitario', ''))
     receita.perda_percentual = parse_float_br(request.form.get('perda_percentual', ''), default=0)
     receita.custo_embalagem = parse_float_br(request.form.get('custo_embalagem', ''), default=0)
-    receita.modo_preparo = request.form.get('modo_preparo', '').strip() or None
+    # Modo de preparo: a ficha nova manda etapas separadas (1 modulo por
+    # etapa); junta com linha em branco — mesmo separador que a leitura usa
+    # (dividir_etapas_preparo). Forms antigos/lote seguem mandando o texto
+    # inteiro em `modo_preparo`.
+    if request.form.get('tem_etapas'):
+        etapas = [e.replace('\r\n', '\n').replace('\r', '\n').strip()
+                  for e in request.form.getlist('modo_preparo_etapa[]')]
+        receita.modo_preparo = '\n\n'.join(e for e in etapas if e) or None
+    else:
+        receita.modo_preparo = request.form.get('modo_preparo', '').strip() or None
     receita.observacao = request.form.get('observacao', '').strip() or None
     ep = (request.form.get('estado_padrao') or '').strip().lower()
     receita.estado_padrao = ep if ep in ('assado', 'backup') else None
