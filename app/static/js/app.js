@@ -1115,6 +1115,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ═══ UX: LOADING STATES ═══
     document.addEventListener('submit', function(e) {
+        // Form interceptado por outro handler (ex: modal de vinculos da
+        // ficha chama preventDefault) NAO esta navegando — sem "Salvando...",
+        // senao o botao fica preso no spinner com o modal aberto.
+        if (e.defaultPrevented) return;
         var btn = e.target.querySelector('[type="submit"]');
         if (btn && !btn.dataset.noLoading) {
             btn.disabled = true;
