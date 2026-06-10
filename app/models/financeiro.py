@@ -117,6 +117,12 @@ class ContaPagarItemMap(db.Model):
     item_nome_exemplo = db.Column(db.String(300))  # grafia original (humano)
     materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'),
                                  nullable=True, index=True)
+    # Alvo alternativo: PRODUTO de revenda (agua/chiclete/iogurte comprado
+    # pronto) — mutuamente exclusivo com materia_prima_id. Espelha
+    # SeruProdutoMap. Coluna criada via migrations_legacy (ALTER deployado
+    # e confirmado em 10/06/2026, antes deste modelo).
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'),
+                           nullable=True, index=True)
     ignorar = db.Column(db.Boolean, default=False, nullable=False)
 
     # Conversao confirmada: 1 unidade-de-compra-da-NF = fator_conversao
@@ -133,24 +139,30 @@ class ContaPagarItemMap(db.Model):
     confirmado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)
 
     materia_prima = db.relationship('MateriaPrima')
+    produto = db.relationship('Produto')
 
     @property
     def estado(self):
         if self.ignorar:
             return 'ignorado'
-        if self.materia_prima_id:
+        if self.materia_prima_id or self.produto_id:
             return 'mapeado'
         return 'pendente'
 
     @property
     def alvo_nome(self):
-        return self.materia_prima.nome if self.materia_prima else None
+        if self.materia_prima:
+            return self.materia_prima.nome
+        if self.produto:
+            return f'{self.produto.nome} (produto)'
+        return None
 
     @property
     def processavel(self):
         """So da entrada de estoque se mapeado + confirmado + nao-ignorado
         (salvaguarda igual a SeruLojaMap.confirmado_em no Seru)."""
-        return bool(self.confirmado_em and self.materia_prima_id and not self.ignorar)
+        return bool(self.confirmado_em and not self.ignorar
+                    and (self.materia_prima_id or self.produto_id))
 
 
 class ContaPagarItemProcessado(db.Model):
