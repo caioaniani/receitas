@@ -233,6 +233,48 @@ def test_item_vincular_no_detalhe(app, admin_user):
         assert m.confirmado_em is not None
 
 
+def test_detalhe_prefill_convertido_e_frase_viva(app, admin_user):
+    """Caso Callebaut (2026-06-10): item 'CALLEBAUT ... 2.01 KG', NF em cx,
+    MP sugerida em g -> o detalhe da conta ja abre com '1 cx = 2010 g' (mesma
+    logica da tela de mapeamentos) e com o preview (data-qtd/data-vunit)."""
+    import json
+    from unittest.mock import patch
+
+    from app.extensions import db
+    from app.models import ContaPagar, MateriaPrima
+    nome = 'CALLEBAUT CHOCOLATE AO LEITE 33.6% MOEDAS 2.01 KG'
+    with app.app_context():
+        mp = MateriaPrima(nome='Chocolate ao leite Callebaut', unidade='g',
+                          custo_por_kg=0)
+        db.session.add(mp)
+        db.session.flush()
+        mp_id = mp.id
+        conta = ContaPagar(
+            tipo_documento='nota_fiscal', fornecedor_nome='Gratinatto',
+            status='aberto',
+            itens_json=json.dumps([{'nome': nome, 'quantidade': 2,
+                                    'unidade': 'cx', 'valor_unitario': 250.0,
+                                    'valor_total': 500.0,
+                                    'fator_embalagem': 2.01,
+                                    'unidade_base_sugerida': 'kg'}]))
+        db.session.add(conta)
+        db.session.commit()
+        conta_id = conta.id
+
+    c = app.test_client()
+    _login(c)
+    with patch('app.services.conta_pagar_estoque.sugerir_para_item',
+               return_value=[{'id': mp_id, 'nome': 'Chocolate ao leite Callebaut',
+                              'unidade': 'g', 'match': 'fuzzy'}]):
+        r = c.get(f'/contas-pagar/{conta_id}')
+    assert r.status_code == 200
+    assert b'value="2010"' in r.data         # 2.01 kg -> 2010 g
+    assert b'value="cx"' in r.data           # unidade de compra da NF
+    assert b'data-unid="g"' in r.data        # frase-viva sabe a unidade da MP
+    assert b'data-qtd="2"' in r.data         # preview com os numeros da nota
+    assert b'mapa-preview' in r.data
+
+
 def test_tela_variacoes_e_aprovar(app, admin_user):
     from app.extensions import db
     from app.models import MateriaPrima, VariacaoPrecoMP
