@@ -64,21 +64,41 @@ def notificar_pedido_recebido(pedido):
     try:
         from app.services import dropbox_storage, zapi
 
-        # Tenta o link da pasta. Se nao tiver foto / Dropbox nao
-        # configurado / API caiu, segue sem link.
-        link_pasta = None
+        # As fotos REAIS do pedido sao as da CONFERENCIA do handshake
+        # (PedidoItemFoto, em /conferencia/<id>/) — o motorista fotografa
+        # cada item. FotoRecebimento (/recebimento/<id>/) so existe no
+        # recebimento manual com upload. Bug original (2026-06-10): so
+        # olhavamos /recebimento e o aviso dizia "(sem fotos)" com a pasta
+        # de conferencia cheia. A pasta agora e DERIVADA do storage_path
+        # gravado em cada foto — sem hardcode de layout.
+        paths = []
         try:
-            link_pasta = dropbox_storage.shared_link_pasta(
-                f'/recebimento/{pedido.id}')
+            from app.models import PedidoItem, PedidoItemFoto
+            fotos_conf = (PedidoItemFoto.query
+                          .join(PedidoItem,
+                                PedidoItemFoto.pedido_item_id == PedidoItem.id)
+                          .filter(PedidoItem.pedido_id == pedido.id)
+                          .all())
+            paths += [f.imagem_storage_path for f in fotos_conf
+                      if f.imagem_storage_path]
         except Exception:  # noqa: BLE001
-            logger.exception('shared link da pasta de fotos falhou pedido=%s',
+            logger.exception('contagem de fotos de conferencia falhou pedido=%s',
                               pedido.id)
-
-        n_fotos = 0
         try:
-            n_fotos = len(pedido.fotos or [])
+            paths += [f.imagem_storage_path for f in (pedido.fotos or [])
+                      if f.imagem_storage_path]
         except Exception:  # noqa: BLE001
             pass
+
+        n_fotos = len(paths)
+        link_pasta = None
+        if paths:
+            pasta = paths[0].rsplit('/', 1)[0]
+            try:
+                link_pasta = dropbox_storage.shared_link_pasta(pasta)
+            except Exception:  # noqa: BLE001
+                logger.exception('shared link da pasta %s falhou pedido=%s',
+                                  pasta, pedido.id)
 
         loja = getattr(pedido.loja, 'nome', '?') if pedido.loja else '?'
         linhas = [
