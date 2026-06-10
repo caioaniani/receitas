@@ -282,3 +282,32 @@ def test_webhook_probe_sem_apikey_recebe_200_e_registra_hit(app):
     r2 = c.post('/lalamove/webhook', json={
         'apiKey': 'pk_invasor', 'data': {'order': {'orderId': 'O-1'}}})
     assert r2.status_code == 401
+
+
+def test_webhook_saldo_carteira_e_painel(app, admin_user):
+    """WALLET_BALANCE_CHANGED grava o saldo (linha unica) e o api_painel
+    expoe pro atendente ver antes de chamar."""
+    from app.models import LalamoveSaldo
+    _config(app)
+    c = app.test_client()
+    r = c.post('/lalamove/webhook', json={
+        'apiKey': 'pk_test_chave', 'eventType': 'WALLET_BALANCE_CHANGED',
+        'data': {'balance': {'amount': '152.30', 'currency': 'BRL'}}})
+    assert r.status_code == 200
+    with app.app_context():
+        s = db.session.get(LalamoveSaldo, 1)
+        assert str(s.valor) == '152.30' and s.moeda == 'BRL'
+
+    # segundo evento sobrescreve a MESMA linha
+    c.post('/lalamove/webhook', json={
+        'apiKey': 'pk_test_chave', 'eventType': 'WALLET_BALANCE_CHANGED',
+        'data': {'balance': {'amount': '99.00', 'currency': 'BRL'}}})
+    with app.app_context():
+        assert LalamoveSaldo.query.count() == 1
+        assert str(db.session.get(LalamoveSaldo, 1).valor) == '99.00'
+
+    _login(c)
+    with patch('app.blueprints.entregas.routes._painel_pedidos_do_dia',
+               return_value=([], None)):
+        d = c.get('/entregas/api/painel').get_json()
+    assert d['lalamove_saldo'] == '99.00'
