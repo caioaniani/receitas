@@ -734,15 +734,16 @@ def mapeamento_criar_mp(id):
     que permite as FICHAS converterem MP contada em 'un' — sem ele o custo
     na receita sai zero. Custo inicial 0: a primeira NF processada define.
     Mesmas travas do vínculo individual (fator obrigatório + física)."""
-    from sqlalchemy import func
     m = ContaPagarItemMap.query.get_or_404(id)
     dados = request.get_json(silent=True) or {}
     nome = (dados.get('nome') or '').strip()
     unidade = (dados.get('unidade') or '').strip().lower()
     if not nome or unidade not in ('g', 'ml', 'un', 'kg', 'l'):
         return jsonify(erro='nome e unidade (g/ml/un/kg/l) são obrigatórios'), 400
-    if MateriaPrima.query.filter(
-            func.lower(MateriaPrima.nome) == nome.lower()).first():
+    # lower() em Python — func.lower() do SQLite nao dobra acentos.
+    nome_lower = nome.lower()
+    if any((mp.nome or '').lower() == nome_lower
+           for mp in MateriaPrima.query.all()):
         return jsonify(erro=f'"{nome}" já existe no banco de MP — '
                             'selecione no menu da linha'), 400
     peso_unidade = None
@@ -775,16 +776,18 @@ def mapeamento_criar_produto(id):
     do criar-mp). JSON: {nome, custo_direto?, unidade_compra,
     fator_conversao}. Custo e opcional — a primeira NF processada atualiza
     de qualquer forma (custo = valor da nota / fator)."""
-    from sqlalchemy import func
-
     from app.models import Produto
     m = ContaPagarItemMap.query.get_or_404(id)
     dados = request.get_json(silent=True) or {}
     nome = (dados.get('nome') or '').strip()
     if not nome:
         return jsonify(erro='nome é obrigatório'), 400
-    if Produto.query.filter(func.lower(Produto.nome) == nome.lower(),
-                            Produto.ativo.is_(True)).first():
+    # Comparacao em Python: func.lower() do SQLite so dobra ASCII ("Água"
+    # != "água") — em Postgres funciona, mas a checagem tem que valer nos
+    # dois. Catalogo e pequeno, varrer e barato.
+    nome_lower = nome.lower()
+    if any((p.nome or '').lower() == nome_lower
+           for p in Produto.query.filter_by(ativo=True).all()):
         return jsonify(erro=f'"{nome}" já existe em Produtos — '
                             'selecione no menu da linha'), 400
     custo = None
