@@ -412,7 +412,7 @@ def _parse_fator(raw):
         return None
 
 
-def _erro_unidade_metrica(m):
+def _erro_unidade_metrica(nome_item, unidade_compra, fator, mp):
     """Trava de fisica: "1 kg = 1,8 g" nao existe. Quando a unidade de compra
     e a da MP sao ambas metricas, o unico fator valido e a conversao fisica
     (kg->g: 1000). Caso real (Toddy, 2026-06-10): a IA sugeriu o conteudo da
@@ -420,51 +420,76 @@ def _erro_unidade_metrica(m):
     caixa em vez de 1800 g. Estoque tem peso especial — bloquear e explicar,
     nunca converter por conta propria."""
     from app.services.conta_pagar_estoque import conversao_metrica
-    mp = db.session.get(MateriaPrima, m.materia_prima_id)
     if not mp:
         return None
-    conv = conversao_metrica(m.unidade_compra, mp.unidade)
-    if conv is None or abs(m.fator_conversao - conv) <= 1e-9:
+    conv = conversao_metrica(unidade_compra, mp.unidade)
+    if conv is None or abs(fator - conv) <= 1e-9:
         return None
-    certo = m.fator_conversao * conv
-    return (f'Não confirmei "{m.item_nome_exemplo}": '
-            f'"1 {m.unidade_compra} = {m.fator_conversao:g} {mp.unidade}" '
-            f'não fecha — 1 {m.unidade_compra} = {conv:g} {mp.unidade}, '
-            f'sempre. Se a embalagem contém {m.fator_conversao:g} '
-            f'{m.unidade_compra}, troque a unidade de compra pela da NF '
+    certo = fator * conv
+    return (f'Não confirmei "{nome_item}": '
+            f'"1 {unidade_compra} = {fator:g} {mp.unidade}" '
+            f'não fecha — 1 {unidade_compra} = {conv:g} {mp.unidade}, '
+            f'sempre. Se a embalagem contém {fator:g} '
+            f'{unidade_compra}, troque a unidade de compra pela da NF '
             f'(cx, un, fd...) e use fator {certo:g}.')
 
 
-def _aplicar_acao_mapa(m):
-    """Aplica a acao do form (vincular/ignorar/desfazer) num ContaPagarItemMap.
-    Compartilhado entre a tela de mapeamentos e o vinculo no detalhe da conta.
-    Retorna None se ok, ou a mensagem de erro (caller faz rollback+flash)."""
-    acao = request.form.get('acao')
+def _aplicar_vinculo(m, acao, materia_prima_id=None, unidade_compra=None,
+                     fator_raw=None, exigir_completo=False):
+    """Nucleo de vincular/ignorar/desfazer num ContaPagarItemMap — usado pelo
+    form individual e pelo lote. VALIDA ANTES de mexer: em caso de erro o
+    registro fica intacto (essencial pro lote, que commita os que passaram).
+    `exigir_completo` (lote): vincular sem MP ou sem fator e recusado — no
+    individual o humano esta olhando a linha; no lote nao, entao nada de
+    default silencioso de fator 1.0. Retorna None ok / str erro."""
     if acao == 'ignorar':
         m.ignorar = True
         m.materia_prima_id = None
         m.confirmado_em = None
-    elif acao == 'desfazer':
+        return None
+    if acao == 'desfazer':
         m.materia_prima_id = None
         m.confirmado_em = None
         m.confirmado_por = None
         m.ignorar = False
-    else:  # vincular
-        mid = request.form.get('materia_prima_id')
-        m.materia_prima_id = int(mid) if mid and mid.isdigit() else None
-        m.unidade_compra = (request.form.get('unidade_compra') or '').strip() or None
-        fator = _parse_fator(request.form.get('fator_conversao'))
-        m.fator_conversao = fator if (fator and fator > 0) else 1.0
-        m.ignorar = False
-        if m.materia_prima_id:
-            erro = _erro_unidade_metrica(m)
-            if erro:
-                return erro
-            m.confirmado_em = agora()
-            m.confirmado_por = current_user.id
-        else:
-            m.confirmado_em = None
+        return None
+    # vincular
+    mid = str(materia_prima_id or '').strip()
+    mid = int(mid) if mid.isdigit() else None
+    unidade = (unidade_compra or '').strip() or None
+    fator = _parse_fator(fator_raw)
+    if exigir_completo:
+        if not mid:
+            return f'"{m.item_nome_exemplo}": sem matéria-prima selecionada'
+        if not fator or fator <= 0:
+            return (f'"{m.item_nome_exemplo}": sem fator de conversão — '
+                    'preencha o "1 un = X" antes de confirmar')
+    fator = fator if (fator and fator > 0) else 1.0
+    if mid:
+        mp = db.session.get(MateriaPrima, mid)
+        erro = _erro_unidade_metrica(m.item_nome_exemplo, unidade, fator, mp)
+        if erro:
+            return erro
+    m.materia_prima_id = mid
+    m.unidade_compra = unidade
+    m.fator_conversao = fator
+    m.ignorar = False
+    if mid:
+        m.confirmado_em = agora()
+        m.confirmado_por = current_user.id
+    else:
+        m.confirmado_em = None
     return None
+
+
+def _aplicar_acao_mapa(m):
+    """Acao do form individual (telas de mapeamentos e detalhe da conta).
+    Retorna None se ok, ou a mensagem de erro (caller faz rollback+flash)."""
+    return _aplicar_vinculo(
+        m, request.form.get('acao'),
+        materia_prima_id=request.form.get('materia_prima_id'),
+        unidade_compra=request.form.get('unidade_compra'),
+        fator_raw=request.form.get('fator_conversao'))
 
 
 # ── Vinculo canal -> loja (cada canal = 1 empresa = 1 estoque) ──
