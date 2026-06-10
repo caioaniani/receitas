@@ -168,13 +168,15 @@ def test_prefill_converte_sugestao_kg_para_g(app, admin_user):
             item_nome_norm=svc.normalizar_item_nome(nome),
             item_nome_exemplo=nome,
             ia_unidade_sugerida='kg', ia_fator_sugerido=1.8))
-        db.session.add(ContaPagar(
+        conta = ContaPagar(
             tipo_documento='nota_fiscal', fornecedor_nome='Dist',
             status='aberto',
             itens_json=json.dumps([{'nome': nome, 'quantidade': 1,
                                     'valor_unitario': 41.72,
-                                    'valor_total': 41.72, 'unidade': 'cx'}])))
+                                    'valor_total': 41.72, 'unidade': 'cx'}]))
+        db.session.add(conta)
         db.session.commit()
+        conta_id = conta.id
 
     c = app.test_client()
     _login(c)
@@ -185,6 +187,8 @@ def test_prefill_converte_sugestao_kg_para_g(app, admin_user):
     assert r.status_code == 200
     assert b'value="1800"' in r.data    # fator ja convertido kg -> g
     assert b'value="cx"' in r.data      # unidade de compra real da NF
+    # link "ver NF" abre o detalhe da conta de onde o exemplo veio
+    assert f'/contas-pagar/{conta_id}'.encode() in r.data
 
 
 def test_item_vincular_no_detalhe(app, admin_user):
