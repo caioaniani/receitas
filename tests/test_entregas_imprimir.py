@@ -49,6 +49,28 @@ def _mock_carregamento():
     ]
 
 
+def test_botao_imprimir_existe_no_topo_da_tela(app, admin_user):
+    """Independente da aba ativa (Operacao/legado), o botao 'imprimir
+    selecionados' fica no topo e consome os checkboxes existentes
+    (op-check da Operacao OU chk-imprimir do legado)."""
+    c = app.test_client()
+    _login(c)
+    r = c.get('/entregas/')
+    body = r.data
+    assert b'btn-imprimir-sel' in body
+    assert b'imprimir selecionados' in body
+    assert b'modalImprimirVias' in body
+    assert b'sel-imprimir-info' in body
+
+
+def test_js_le_op_check_e_chk_imprimir(app):
+    """codesSelecionados() considera os dois seletores — nao quebra quando
+    o usuario esta na aba Operacao (que ja desenha op-check)."""
+    import pathlib
+    js = pathlib.Path('app/static/js/entregas.js').read_text()
+    assert '.op-check:checked, .chk-imprimir:checked' in js
+
+
 def test_funcionario_sem_loja_acessa_entregas_e_painel(app):
     """Decisao 11/06/2026: /entregas/ e /entregas/painel sao pra TODOS os
     usuarios logados — antes funcionario sem loja_id levava 403."""
