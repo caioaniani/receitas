@@ -217,6 +217,29 @@ def test_js_escuta_op_check_secao_pra_selecionar_todos(app):
     assert 'op-check-secao' in js and 'atualizarBarraImprimir' in js
 
 
+def test_botao_antigo_imprimir_agora_usa_modal(app, admin_user):
+    """Bug real (11/06/2026): o botao 'imprimir' da barra de acoes da aba
+    Operacao chamava window.print() puro, que ignorava a selecao e tentava
+    imprimir a tela inteira. Agora delega pra abrirModalImprimir() — mesmo
+    fluxo do botao 'imprimir selecionados' do topo."""
+    c = app.test_client()
+    _login(c)
+    body = c.get('/entregas/').data
+    # Nao pode mais ter o handler antigo no botao da aba Operacao
+    assert b'onclick="abrirModalImprimir()"' in body
+
+
+def test_js_captura_snapshot_dos_codes_no_abrir_modal(app):
+    """Race condition (11/06/2026): apos abrir o modal, a aba Operacao
+    podia re-renderizar (polling, atualizacao de drivers) e os checkboxes
+    perdiam :checked. O modal chamava codesSelecionados() no clique do
+    botao 'cliente'/'cliente+entregador' e devolvia lista vazia. Solucao:
+    capturar os codes na hora de abrir o modal."""
+    import pathlib
+    js = pathlib.Path('app/static/js/entregas.js').read_text()
+    assert 'codesSnapshot' in js
+
+
 def test_imprimir_default_via_cliente(app, admin_user):
     c = app.test_client()
     _login(c)
