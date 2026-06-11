@@ -91,14 +91,17 @@ def test_js_envia_dados_completos_via_post(app):
 
 
 
-def _post_imprimir(c, pedidos, vias='cliente', data='2026-06-11'):
-    """POST /entregas/imprimir com os dados dos pedidos (caminho novo
-    default do JS — nao depende do VNDA)."""
+def _post_imprimir(c, pedidos, vias='cliente', data='2026-06-11',
+                   follow_redirects=True):
+    """POST /entregas/imprimir com os dados dos pedidos (caminho default
+    do JS). Com payload valido o servidor responde 303 pro GET ?lote=
+    (Post/Redirect/Get — Safari nao re-busca POST na impressao e saia
+    tudo em branco); por default seguimos o redirect ate a pagina."""
     import json as _j
     return c.post('/entregas/imprimir', data={
         'pedidos_json': _j.dumps(pedidos),
         'vias': vias, 'data': data,
-    })
+    }, follow_redirects=follow_redirects)
 
 def test_funcionario_sem_loja_acessa_entregas_e_painel(app):
     """Decisao 11/06/2026: /entregas/ e /entregas/painel sao pra TODOS os
