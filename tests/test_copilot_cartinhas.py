@@ -79,3 +79,62 @@ def test_prompt_tem_regra_anti_amnesia(app, admin_user):
             # PROIBE elas; sao exibidas como negativa)
             assert 'cada sessao comeca do zero' in p
             assert 'NUNCA diga' in p
+
+
+def test_consultar_catalogo_site_devolve_url_da_pagina(app, admin_user):
+    """Caso real (bot WhatsApp do dono, 11/06/2026): 'me manda o link da
+    cesta de Dia dos Namorados' — o copilot nao tinha tool de catalogo do
+    site. Agora reusa bot_tools.consultar_produtos e devolve nome + URL
+    pra repassar no WhatsApp."""
+    from unittest.mock import patch
+
+    from app.models import Usuario
+    from app.services import copilot as cs
+    URL = ('https://www.padariaartesanalonline.com.br/produto/'
+           'cesta-especial-dia-dos-namorados-51')
+    fake = {'produtos': [{
+        'nome': 'Cesta Especial Dia dos Namorados', 'sku': 'CESTA-NAM',
+        'preco': 350.0, 'disponivel': True,
+        'descricao': 'Cesta romantica', 'url': URL}]}
+
+    with app.app_context():
+        u = Usuario.query.get(admin_user.id)
+        assert 'consultar_catalogo_site' in [t['name'] for t in cs.TOOLS]
+        assert cs.PAPEIS_POR_TOOL['consultar_catalogo_site'] == {
+            'admin', 'gerente', 'funcionario'}
+        assert 'consultar_catalogo_site' not in cs.REQUER_APROVACAO
+        with patch('app.services.bot_tools.consultar_produtos',
+                   return_value=fake):
+            r = cs._executar_read('consultar_catalogo_site',
+                                  {'busca': 'cesta namorados'}, u)
+    assert 'Cesta Especial Dia dos Namorados' in r['texto']
+    assert URL in r['texto']
+    assert 'R$ 350' in r['texto']
+
+
+def test_consultar_catalogo_site_vazio(app, admin_user):
+    from unittest.mock import patch
+
+    from app.models import Usuario
+    from app.services import copilot as cs
+    with app.app_context():
+        u = Usuario.query.get(admin_user.id)
+        with patch('app.services.bot_tools.consultar_produtos',
+                   return_value={'produtos': []}):
+            r = cs._executar_read('consultar_catalogo_site',
+                                  {'busca': 'xyzabc'}, u)
+    assert 'Nada no catalogo' in r['texto'] and 'xyzabc' in r['texto']
+
+
+def test_consultar_catalogo_site_propaga_erro(app, admin_user):
+    from unittest.mock import patch
+
+    from app.models import Usuario
+    from app.services import copilot as cs
+    with app.app_context():
+        u = Usuario.query.get(admin_user.id)
+        with patch('app.services.bot_tools.consultar_produtos',
+                   return_value={'erro': 'VNDA fora do ar'}):
+            r = cs._executar_read('consultar_catalogo_site',
+                                  {'busca': 'sourdough'}, u)
+    assert 'VNDA fora do ar' in r['texto']

@@ -619,6 +619,24 @@ TOOL_CONSULTAR_DESPERDICIO = {
     },
 }
 
+TOOL_CONSULTAR_CATALOGO_SITE = {
+    "name": "consultar_catalogo_site",
+    "description": ("Busca produtos/cestas no catalogo do SITE (VNDA) por "
+                     "nome — retorna NOME, SKU, PRECO, disponibilidade e "
+                     "URL DA PAGINA do produto. Use sempre que o usuario "
+                     "pedir 'me manda o link da cesta X', 'qual o link de Y', "
+                     "ou quiser ver preco/disponibilidade no SITE (nao no "
+                     "PDV — pra isso e' consultar_vendas_itens)."),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "busca": {"type": "string",
+                       "description": "Termo livre. Ex: 'cesta dia dos namorados', 'sourdough'."},
+        },
+        "required": ["busca"],
+    },
+}
+
 TOOL_CONSULTAR_CARTINHAS = {
     "name": "consultar_cartinhas",
     "description": ("Lista cartinhas cadastradas/editadas no painel de "
@@ -655,6 +673,7 @@ TOOLS = [
     # Desperdicio (sobra do dia / vencido)
     TOOL_REGISTRAR_DESPERDICIO, TOOL_REGISTRAR_DESPERDICIO_LOTE,
     TOOL_CONSULTAR_DESPERDICIO,
+    TOOL_CONSULTAR_CATALOGO_SITE,
     TOOL_CONSULTAR_CARTINHAS,
     # B2B (venda industria pra cliente externo)
     TOOL_CRIAR_CLIENTE_B2B, TOOL_CRIAR_VENDA_B2B, TOOL_CONSULTAR_CLIENTE_B2B,
@@ -718,6 +737,7 @@ PAPEIS_POR_TOOL = {
     'consultar_caixa': {'admin', 'gerente'},
     'consultar_vendas_itens': {'admin', 'gerente'},
     'consultar_desperdicio': {'admin', 'gerente', 'funcionario'},
+    'consultar_catalogo_site': {'admin', 'gerente', 'funcionario'},
     'consultar_cartinhas': {'admin', 'gerente'},
     'enviar_digest_whatsapp': {'admin'},
     'registrar_desperdicio': {'admin', 'gerente', 'funcionario'},
@@ -3415,6 +3435,32 @@ def executar_registrar_desperdicio(params, user):
             'url': f'/pedidos/desperdicio?loja={loja.id}'}
 
 
+def _read_consultar_catalogo_site(params, user):
+    """Reusa bot_tools.consultar_produtos (chatbot de cliente) — ele ja
+    bate na API do VNDA, normaliza nome/sku/preco e enriquece com a URL
+    da pagina (montada do slug). Pra WhatsApp/Slack formatamos uma
+    mensagem curta: top 3 com link clicavel; descricao truncada."""
+    from app.services import bot_tools
+    busca = (params or {}).get('busca') or ''
+    res = bot_tools.consultar_produtos(busca)
+    if 'erro' in res:
+        return {'texto': f'Catalogo indisponivel: {res["erro"]}'}
+    produtos = res.get('produtos') or []
+    if not produtos:
+        return {'texto': f'Nada no catalogo do site bateu com "{busca}".'}
+    linhas = [f'*Catalogo do site — "{busca}":*', '']
+    for p in produtos[:5]:
+        disp = '' if p.get('disponivel') else ' _(esgotado hoje)_'
+        preco = p.get('preco')
+        preco_txt = f' — R$ {preco}' if preco is not None else ''
+        linhas.append(f'• *{p.get("nome")}*{preco_txt}{disp}')
+        if p.get('url'):
+            linhas.append(f'  {p["url"]}')
+    if len(produtos) > 5:
+        linhas.append(f'_(+ {len(produtos) - 5} resultados — refina o termo se precisar)_')
+    return {'texto': '\n'.join(linhas), 'total': len(produtos)}
+
+
 def _read_consultar_cartinhas(params, user):
     """Cartinhas cadastradas/editadas nas ultimas N horas (default 48h).
     A tabela tem 1 linha por pedido (texto sobrescrito a cada edicao) —
@@ -3561,6 +3607,7 @@ _READ_HANDLERS = {
     'consultar_foco': _read_consultar_foco,
     'consultar_tarefas': _read_consultar_tarefas,
     'consultar_desperdicio': _read_consultar_desperdicio,
+    'consultar_catalogo_site': _read_consultar_catalogo_site,
     'consultar_cartinhas': _read_consultar_cartinhas,
     'enviar_digest_whatsapp': _read_enviar_digest_whatsapp,
     'consultar_cliente_b2b': _read_consultar_cliente_b2b,
