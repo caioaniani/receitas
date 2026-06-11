@@ -13,12 +13,16 @@
   body { font-family: -apple-system, system-ui, "Helvetica Neue", Arial, sans-serif;
          font-size: 16px; margin: 0; line-height: 1.35; }
 
+  /* SEM flex e SEM min-height aqui — os dois quebravam a impressao real
+     (11/06/2026): min-height 270mm > area util do A4 (297 - 2x14 de
+     margem = 269mm), entao TODA folha vazava 1mm e virava 2 paginas (a
+     segunda so com o Total). E o WebKit/Safari pagina mal containers
+     flex no print — conteudo alem da 1a pagina sai cortado/em branco. */
   .folha {
     page-break-after: always;
-    min-height: 270mm;        /* segura conteudo na folha */
-    display: flex; flex-direction: column;
+    break-after: page;
   }
-  .folha:last-child { page-break-after: auto; }
+  .folha:last-child { page-break-after: auto; break-after: auto; }
 
   .cabecalho {
     display: flex; justify-content: space-between; align-items: flex-end;
