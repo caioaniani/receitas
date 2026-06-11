@@ -436,6 +436,28 @@ def test_imprimir_get_diag_codes_sem_match(app, admin_user):
     assert 'codes_sem_match_na_data' in body
 
 
+def test_css_da_folha_nao_usa_flex_nem_min_height(app, admin_user):
+    """Bug real (11/06/2026, print do dono): min-height de 270mm na .folha
+    era MAIOR que a area util do A4 com margem 14mm (297-28=269mm) — toda
+    folha vazava 1mm e virava 2 paginas (a 2a so com o Total). E
+    display:flex na .folha faz o WebKit/Safari paginar errado no print
+    (conteudo alem da 1a pagina sai cortado/EM BRANCO). A folha tem que
+    ser bloco simples com page-break-after."""
+    c = app.test_client()
+    _login(c)
+    r = _post_imprimir(c, _pedidos_fake(), vias='cliente')
+    body = r.data.decode()
+    # bloco CSS da .folha (ate fechar chave) nao pode ter flex/min-height
+    import re
+    m = re.search(r'\.folha\s*\{([^}]*)\}', body)
+    assert m, 'bloco .folha sumiu do CSS'
+    bloco = m.group(1)
+    assert 'flex' not in bloco, f'flex voltou pra .folha: {bloco!r}'
+    assert 'min-height' not in bloco, f'min-height voltou: {bloco!r}'
+    assert 'page-break-after: always' in bloco
+    assert 'break-after: page' in bloco
+
+
 def test_apis_leitura_da_operacao_abertas_pra_funcionario(app):
     """A aba Operacao do /entregas/ chama /api/atribuidos, /api/lotes e
     /api/rotas. Como a tela abre pra todos (decisao 11/06/2026), os GETs
