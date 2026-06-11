@@ -265,3 +265,19 @@ def test_imprimir_default_via_cliente(app, admin_user):
     body = r.data
     assert b'via do cliente' in body
     assert b'via do entregador' not in body
+
+
+def test_js_le_opUltimoResultado_da_iife_nao_window(app):
+    """Bug real (11/06/2026): pedidoDoEstado lia window.opUltimoResultado
+    (sempre undefined) em vez da variavel local da IIFE. Resultado:
+    snapshot vazio e alerta 'Marque ao menos um pedido antes' mesmo com
+    checkbox marcado e contador mostrando '1 selecionado(s)'."""
+    import pathlib
+    js = pathlib.Path('app/static/js/entregas.js').read_text()
+    # Pra ignorar a mencao em comentario explicativo, exige que SE a
+    # palavra aparece, esteja so dentro de comentario.
+    linhas_codigo = [linha for linha in js.splitlines()
+                     if 'window.opUltimoResultado' in linha
+                     and not linha.lstrip().startswith('//')]
+    assert not linhas_codigo, f'uso em codigo: {linhas_codigo!r}'
+    assert "typeof opUltimoResultado !== 'undefined'" in js
