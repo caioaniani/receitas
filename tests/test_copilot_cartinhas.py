@@ -26,3 +26,34 @@ def test_cartinhas_e_read_tool_visivel_no_modo_leitura(app, admin_user):
     consegue usa-la."""
     from app.services import copilot as cs
     assert 'consultar_cartinhas' not in cs.REQUER_APROVACAO
+
+
+def test_modo_leitura_nao_lista_writes_no_system_prompt(app, admin_user):
+    """Caso real (bot WhatsApp 11/06/2026): o system prompt listava
+    criar_tarefa (write) mesmo com o filtro apenas_leitura — o bot prometia
+    'tenho a tool criar_tarefa' sem conseguir invoca-la. Prompt agora lista
+    exatamente o que a API recebe + aviso de modo leitura."""
+    from app.models import Usuario
+    from app.services import copilot as cs
+    with app.app_context():
+        u = Usuario.query.get(admin_user.id)
+        todas = cs.tools_permitidas(u)
+        so_leitura = [t for t in todas
+                      if t['name'] not in cs.REQUER_APROVACAO]
+
+        def linha_tools(prompt):
+            return next(ln for ln in prompt.splitlines()
+                        if ln.startswith('TOOLS QUE ESTE USUARIO'))
+
+        normal = cs._build_system_prompt(u, tools_visiveis=todas)
+        assert 'criar_tarefa' in linha_tools(normal)
+        assert 'MODO SOMENTE LEITURA' not in normal
+
+        leitura = cs._build_system_prompt(u, tools_visiveis=so_leitura,
+                                          apenas_leitura=True)
+        # a LISTA anunciada nao contem writes (mencoes em texto de regra
+        # estatica sao inofensivas; a promessa vinha da lista)
+        assert 'criar_tarefa' not in linha_tools(leitura)
+        assert 'ajuste_estoque' not in linha_tools(leitura)
+        assert 'consultar_cartinhas' in linha_tools(leitura)
+        assert 'MODO SOMENTE LEITURA' in leitura
