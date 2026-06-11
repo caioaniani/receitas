@@ -237,6 +237,9 @@ def test_imprimir_aguenta_quantidade_none(app, admin_user):
     assert 'Item sem qtd' in body
     # contagem deve somar so o que existe (2 + 0 + 1 = 3) — sem TypeError
     assert '(3 itens)' in body
+    # compat: campos legados valor_total/valor_unitario ainda renderizam
+    assert 'R$ 100,00' in body    # total do pedido (fallback valor_total)
+    assert 'R$ 60,00' in body     # item (fallback it.valor_total)
 
 
 def test_js_escuta_op_check_secao_pra_selecionar_todos(app):
