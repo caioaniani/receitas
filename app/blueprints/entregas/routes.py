@@ -387,6 +387,66 @@ def api_pedidos():
     return resp
 
 
+@entregas_bp.route('/imprimir')
+@login_required
+def imprimir():
+    """Folha A4 por pedido pra impressao fisica.
+
+    Params:
+      data=YYYY-MM-DD (default hoje)
+      codes=A,B,C    — codes dos pedidos a imprimir (1 folha por pedido por via)
+      vias=cliente,motorista (default 'cliente') — qual(is) via(s) gerar
+
+    Decisao 11/06/2026 (dono): tela acessivel a todo usuario logado; via do
+    entregador OMITE valores comerciais (preco unitario/total) e cartinha
+    (mensagem ao destinatario, nao logistica) — so o que ele precisa pra
+    achar/entregar/conferir (destinatario, endereco, telefone, itens,
+    janela, codigo).
+    """
+    data_str = request.args.get('data', hoje_brt().isoformat())
+    try:
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        target = hoje_brt()
+    codes_param = (request.args.get('codes') or '').strip()
+    codes_sel = {c.strip() for c in codes_param.split(',') if c.strip()}
+    vias_param = (request.args.get('vias') or 'cliente').strip().lower()
+    vias = [v for v in (s.strip() for s in vias_param.split(','))
+            if v in ('cliente', 'motorista')]
+    if not vias:
+        vias = ['cliente']
+
+    try:
+        overrides_full = _carregar_overrides_full()
+        overrides_data = {code: o['data'] for code, o in overrides_full.items()}
+        resultado = _injetar_pedidos_locais(
+            target, vnda.buscar_pedidos_do_dia(target, overrides=overrides_data))
+        pedidos = resultado.get('pedidos', []) if 'erro' not in resultado else []
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception('imprimir: falha carregando pedidos')
+        pedidos = []
+
+    if codes_sel:
+        pedidos = [p for p in pedidos if p.get('code') in codes_sel]
+    _aplicar_cartinhas(pedidos)
+
+    # Driver atribuido (so aparece na via do cliente; entregador nao precisa)
+    codes_p = [p['code'] for p in pedidos if p.get('code')]
+    drv_por_code = {}
+    if codes_p:
+        for a in AtribuicaoEntrega.query.filter(
+                AtribuicaoEntrega.pedido_code.in_(codes_p)).all():
+            if a.driver_id:
+                d = Driver.query.get(a.driver_id)
+                if d:
+                    drv_por_code[a.pedido_code] = d.nome
+    for p in pedidos:
+        p['driver_nome'] = drv_por_code.get(p.get('code'))
+
+    return render_template('entregas/imprimir.html',
+                           pedidos=pedidos, vias=vias, data=target)
+
+
 @entregas_bp.route('/api/calendario')
 @login_required
 def api_calendario():
