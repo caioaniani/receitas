@@ -558,11 +558,21 @@
         atualizarBarraImprimir();
     });
 
+    // SNAPSHOT pra evitar race: quando o modal abre, capturo os codes
+    // selecionados. Se a Operacao re-renderizar entre abrir-modal e clicar
+    // "cliente", os checkboxes perdem :checked — mas a impressao usa o
+    // snapshot, nao o estado da tela. Bug real (11/06/2026): clicava
+    // selecionar-todos, abria modal, escolhia cliente -> "Nenhum pedido".
+    var codesSnapshot = [];
+
     window.abrirModalImprimir = function() {
-        var sel = codesSelecionados();
-        if (!sel.length) return;
+        codesSnapshot = codesSelecionados();
+        if (!codesSnapshot.length) {
+            alert('Marque ao menos um pedido antes.');
+            return;
+        }
         var el = document.getElementById('modal-imprimir-qt');
-        if (el) el.textContent = sel.length;
+        if (el) el.textContent = codesSnapshot.length;
         var m = document.getElementById('modalImprimirVias');
         if (m && window.bootstrap) {
             bootstrap.Modal.getOrCreateInstance(m).show();
@@ -571,7 +581,8 @@
         }
     };
     window.imprimirSelecionados = function(vias) {
-        var sel = codesSelecionados();
+        var sel = (codesSnapshot && codesSnapshot.length)
+            ? codesSnapshot : codesSelecionados();
         if (!sel.length) return;
         var data = document.getElementById('op-data');
         var dataVal = (data && data.value) || '';
@@ -586,7 +597,9 @@
         }
         window.open(url, '_blank');
     };
-    // Compat: chamada antiga do botão "imprimir" topo direita.
+    // Compat: chamada antiga do botão "imprimir" topo direita E botao
+    // "imprimir" da barra da Operacao (que chamava window.print() puro —
+    // imprimia a tela toda sem filtrar nem montar A4 por pedido).
     window.imprimirPedidos = function() { window.abrirModalImprimir(); };
 
     // ── Filtros ──
