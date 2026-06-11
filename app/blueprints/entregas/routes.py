@@ -427,6 +427,16 @@ def imprimir():
         pedidos = []
 
     if codes_sel:
+        codes_carregados = {p.get('code') for p in pedidos if p.get('code')}
+        ausentes = codes_sel - codes_carregados
+        if ausentes:
+            # Bug-fix por log: caso 11/06/2026 "Nenhum pedido selecionado" com
+            # 'codes' chegando do JS — registra os codes que nao bateram pra
+            # poder reconciliar (data errada? pedido cancelado? cache?).
+            current_app.logger.warning(
+                'imprimir: %d code(s) selecionado(s) nao bateram com a data '
+                '%s: %s', len(ausentes), target.isoformat(),
+                ', '.join(sorted(ausentes))[:500])
         pedidos = [p for p in pedidos if p.get('code') in codes_sel]
     _aplicar_cartinhas(pedidos)
 
