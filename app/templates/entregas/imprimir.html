@@ -175,10 +175,14 @@
     </div>
     {% endif %}
 
+    {# Soma defensiva: alguns pedidos vem com quantidade=None — sum() do
+       Jinja com attribute estoura nesse caso. Inicializo com 0 e ignoro
+       None. Caso real (NF de 11/06): 500 na pagina de impressao. #}
+    {% set ns = namespace(n=0) %}
+    {% for it in (p.itens or []) %}{% set ns.n = ns.n + ((it.quantidade or 0)|int) %}{% endfor %}
     <div class="secao-tit">Itens
-      {% set n_itens = (p.itens or [])|sum(attribute='quantidade', start=0) %}
       <span style="font-weight:400;color:#444;font-size:13px;">
-        ({{ n_itens|int }} {% if n_itens|int == 1 %}item{% else %}itens{% endif %})
+        ({{ ns.n }} {% if ns.n == 1 %}item{% else %}itens{% endif %})
       </span>
     </div>
     <table class="itens">
@@ -193,11 +197,13 @@
         {% for it in (p.itens or []) %}
         <tr>
           <td class="qcol">{{ (it.quantidade or 1)|int }}×</td>
-          <td>{{ it.nome }}</td>
+          <td>{{ it.nome or '—' }}</td>
           {% if not motorista %}
           <td class="vcol">
-            {% set v = (it.valor_total if it.valor_total is not none
-                        else (it.valor_unitario or 0) * (it.quantidade or 1)) %}
+            {% set vt = it.valor_total %}
+            {% set vu = it.valor_unitario or 0 %}
+            {% set q = it.quantidade or 1 %}
+            {% set v = vt if vt not in (None, '') else (vu|float) * (q|float) %}
             R$ {{ '%.2f'|format(v|float) | replace('.', ',') }}
           </td>
           {% endif %}
