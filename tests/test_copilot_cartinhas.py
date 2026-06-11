@@ -57,3 +57,25 @@ def test_modo_leitura_nao_lista_writes_no_system_prompt(app, admin_user):
         assert 'ajuste_estoque' not in linha_tools(leitura)
         assert 'consultar_cartinhas' in linha_tools(leitura)
         assert 'MODO SOMENTE LEITURA' in leitura
+
+
+def test_prompt_tem_regra_anti_amnesia(app, admin_user):
+    """Bug real (zapi_bot, 11/06/2026): o usuario disse 'me manda o link aqui'
+    e o bot alucinou 'cada sessao comeca do zero pra mim', mesmo recebendo
+    historico de 80 turnos. Causa: prompt nao mencionava memoria — Claude
+    assumiu que era turno isolado. Fix: bloco MEMORIA com proibicao explicita
+    das frases-mentira."""
+    from app.models import Usuario
+    from app.services import copilot as cs
+    with app.app_context():
+        u = Usuario.query.get(admin_user.id)
+        for kwargs in ({}, {'apenas_leitura': True,
+                            'tools_visiveis': [t for t in cs.tools_permitidas(u)
+                                               if t['name'] not in cs.REQUER_APROVACAO]}):
+            p = cs._build_system_prompt(u, **kwargs)
+            assert 'MEMORIA' in p
+            assert 'historico completo desta conversa' in p
+            # frases-mentira proibidas no prompt (em modo positivo: o prompt
+            # PROIBE elas; sao exibidas como negativa)
+            assert 'cada sessao comeca do zero' in p
+            assert 'NUNCA diga' in p
