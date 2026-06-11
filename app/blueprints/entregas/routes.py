@@ -419,16 +419,29 @@ def imprimir():
         vias = ['cliente']
 
     pedidos = []
+    # Diagnostico exibido na pagina quando o resultado da 0 pedidos — ja
+    # rodamos 3 iteracoes de bug as cegas nessa tela (CSRF, codes vs VNDA,
+    # snapshot vazio); com isso o proximo print do usuario diz o porque.
+    diag = {'metodo': request.method}
     if request.method == 'POST':
         pj = src.get('pedidos_json') or '[]'
+        diag['pedidos_json_bytes'] = len(pj)
         try:
             pedidos = json.loads(pj)
             if not isinstance(pedidos, list):
+                diag['problema'] = 'pedidos_json nao e lista'
                 pedidos = []
         except (ValueError, TypeError):
             current_app.logger.warning(
                 'imprimir: pedidos_json invalido (%d bytes)', len(pj))
+            diag['problema'] = 'pedidos_json nao parseou como JSON'
             pedidos = []
+        if not pedidos and 'problema' not in diag:
+            current_app.logger.warning(
+                'imprimir: POST com pedidos_json vazio (vias=%s data=%s)',
+                vias_param, data_str)
+            diag['problema'] = ('lista vazia — o JS nao achou os pedidos '
+                                'marcados no estado da tela')
     else:
         codes_param = (src.get('codes') or '').strip()
         codes_sel = {c.strip() for c in codes_param.split(',') if c.strip()}
