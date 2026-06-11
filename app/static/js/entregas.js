@@ -494,11 +494,25 @@
         });
     });
 
-    // ── Imprimir (seleção + modal "incluir via do entregador") ──────────
+    // ── Imprimir (selecao + modal "incluir via do entregador") ──────────
+    //
+    // A aba Operacao ja desenha checkboxes em cada card (.op-check, ver
+    // opRenderItem). A aba legada "Pedidos do Dia" tem .chk-imprimir (que
+    // eu adicionei). codesSelecionados() considera as duas — funciona em
+    // qualquer aba sem duplicar UI.
     function codesSelecionados() {
-        return Array.prototype.slice.call(
-            document.querySelectorAll('.chk-imprimir:checked'))
-            .map(function(c) { return decodeURIComponent(c.dataset.code); });
+        var nodes = document.querySelectorAll(
+            '.op-check:checked, .chk-imprimir:checked');
+        var vistos = {};
+        var codes = [];
+        Array.prototype.forEach.call(nodes, function(c) {
+            var code = decodeURIComponent(c.dataset.code || '');
+            if (code && !vistos[code]) {
+                vistos[code] = true;
+                codes.push(code);
+            }
+        });
+        return codes;
     }
     function atualizarBarraImprimir() {
         var sel = codesSelecionados();
@@ -509,13 +523,25 @@
         if (btn) btn.disabled = sel.length === 0;
     }
     document.addEventListener('change', function(e) {
-        if (e.target.classList && e.target.classList.contains('chk-imprimir')) {
+        var t = e.target;
+        if (t && t.classList && (t.classList.contains('chk-imprimir')
+                                  || t.classList.contains('op-check'))) {
             atualizarBarraImprimir();
         }
     });
-    // Re-avalia depois de cada render dos cards (sumiram filtros, etc.)
-    var _origRender = renderPedidos;
-    renderPedidos = function() { _origRender(); atualizarBarraImprimir(); };
+    // Polling leve: o render da Operacao acontece em varios pontos
+    // (opRenderLista, ?lote=, callbacks de atribuicao). Em vez de embrulhar
+    // cada um, observo o container e re-avalio quando muda.
+    document.addEventListener('DOMContentLoaded', function() {
+        var alvos = ['op-container', 'pedidos-container'];
+        alvos.forEach(function(id) {
+            var n = document.getElementById(id);
+            if (!n || !window.MutationObserver) return;
+            new MutationObserver(atualizarBarraImprimir).observe(
+                n, { childList: true, subtree: true });
+        });
+        atualizarBarraImprimir();
+    });
 
     window.abrirModalImprimir = function() {
         var sel = codesSelecionados();
