@@ -771,7 +771,18 @@
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
       body: JSON.stringify({ itens: prodPendentes })
     })
-      .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
+      // Mantemos o status pra mostrar uma mensagem util quando o servidor
+      // responder 500 com HTML (ex: rota lança antes de chegar no
+      // jsonify, gateway derruba) — assim o padeiro nao ve "Erro ao
+      // registrar. Tente de novo." sem pista nenhuma do que aconteceu.
+      .then(function (r) {
+        return r.text().then(function (txt) {
+          var d = { ok: false, status: r.status };
+          try { Object.assign(d, JSON.parse(txt)); }
+          catch (_) { d.raw = (txt || '').slice(0, 200); }
+          return d;
+        });
+      })
       .then(function (d) {
         document.getElementById('prod-confirm').classList.remove('aberto');
         var msg = document.getElementById('prod-msg');
@@ -782,7 +793,18 @@
           setTimeout(function () { if (msg) { msg.textContent = ''; msg.style.color = ''; } }, 4000);
         } else if (msg) {
           msg.style.color = '';
-          msg.textContent = (d && d.erro) ? d.erro : 'Erro ao registrar. Tente de novo.';
+          if (d && d.erro) {
+            msg.textContent = d.erro;
+          } else if (d && d.status === 403) {
+            msg.textContent = 'Sem permissão (precisa ser padeiro). '
+              + 'Avise o Caio.';
+          } else if (d && d.status >= 500) {
+            msg.textContent = 'Servidor com erro (' + d.status + '). '
+              + 'Tente em 1 minuto; se persistir, avise o Caio.';
+          } else {
+            msg.textContent = 'Erro ao registrar (HTTP '
+              + ((d && d.status) || '?') + '). Tente de novo.';
+          }
         }
       })
       .catch(function () {
