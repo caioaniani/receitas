@@ -319,15 +319,15 @@ def test_imprimir_post_aceita_csrf_token_valido(app, admin_user):
     """Smoke do POST /entregas/imprimir com CSRF token valido — garante que
     o endpoint nao rejeita o caminho real (form HTML com csrf_token oculto)."""
     import json
-    # Cliente com CSRF habilitado pra testar o caminho de prod
+    import re
+    c = app.test_client()
+    # Login antes de ligar CSRF — login com CSRF on exigiria token tambem
+    _login(c)
+    # Liga CSRF SO pra exercitar o POST /imprimir
     app.config['WTF_CSRF_ENABLED'] = True
     try:
-        c = app.test_client()
-        _login(c)
         # Pega um token CSRF valido da pagina /entregas/
         r = c.get('/entregas/')
-        # CSRF_TOKEN aparece como literal JS no base.html
-        import re
         m = re.search(rb'const CSRF_TOKEN = "([^"]+)"', r.data)
         assert m, 'CSRF_TOKEN nao foi renderizado no base.html'
         token = m.group(1).decode()
@@ -343,5 +343,12 @@ def test_imprimir_post_aceita_csrf_token_valido(app, admin_user):
             f'(corpo: {r.data[:200]!r})'
         )
         assert b'via do cliente' in r.data
+        # Sem token = 400 (prova que CSRF estava de fato ativo)
+        r2 = c.post('/entregas/imprimir', data={
+            'pedidos_json': json.dumps(_pedidos_fake()),
+            'vias': 'cliente', 'data': '2026-06-11',
+        })
+        assert r2.status_code == 400
     finally:
+        # Defensivo — conftest tambem restaura, mas explicito nao fere.
         app.config['WTF_CSRF_ENABLED'] = False
