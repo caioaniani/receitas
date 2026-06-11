@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 
 import requests as http_requests
-from flask import abort, current_app, jsonify, render_template, request
+from flask import abort, current_app, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.blueprints.entregas import entregas_bp
@@ -13,6 +13,7 @@ from app.models import (
     CartinhaEntrega,
     Driver,
     EntregaFoto,
+    ImpressaoLote,
     LalamoveEntrega,
     LalamoveSaldo,
     LoteSaida,
@@ -394,13 +395,17 @@ def imprimir():
     """Folha A4 por pedido pra impressao fisica.
 
     POST (caminho default do JS): manda `pedidos_json` com os dados ja
-    carregados na tela (estado em memoria da aba Operacao). Servidor NAO
-    chama VNDA — evita o caso real 11/06/2026 de "Nenhum pedido selecionado"
-    quando a data nao bate exato (override de data, cache, polling
-    re-renderizando entre marcacao e clique).
+    carregados na tela. O servidor GUARDA o payload (ImpressaoLote) e
+    REDIRECIONA pro GET ?lote=<token> — padrao Post/Redirect/Get. Motivo
+    (11/06/2026): o Safari re-busca o documento ao montar a impressao e
+    nao reenvia POST; a pagina resultado de POST imprimia TODA EM BRANCO.
 
-    GET (legado): `codes=A,B,C&data=YYYY-MM-DD` — busca no VNDA pela data.
-    Mantido pra compat com bookmarks/abas abertas com o link antigo.
+    GET ?lote=<token>: carrega o payload salvo. E o documento final que o
+    usuario imprime (re-buscavel, recarregavel).
+
+    GET ?codes=A,B,C&data=YYYY-MM-DD (legado): busca no VNDA pela data.
+    Mantido pra compat com bookmarks/fallback do JS quando o estado em
+    memoria nao tem os pedidos marcados.
 
     Comum: `vias=cliente,motorista` (default 'cliente').
 
@@ -420,8 +425,9 @@ def imprimir():
 
     pedidos = []
     # Diagnostico exibido na pagina quando o resultado da 0 pedidos — ja
-    # rodamos 3 iteracoes de bug as cegas nessa tela (CSRF, codes vs VNDA,
-    # snapshot vazio); com isso o proximo print do usuario diz o porque.
+    # rodamos 4 iteracoes de bug as cegas nessa tela (CSRF, codes vs VNDA,
+    # snapshot vazio, POST em branco no Safari); com isso o proximo print
+    # do usuario diz o porque.
     diag = {'metodo': request.method}
     if request.method == 'POST':
         pj = src.get('pedidos_json') or '[]'
@@ -436,12 +442,41 @@ def imprimir():
                 'imprimir: pedidos_json invalido (%d bytes)', len(pj))
             diag['problema'] = 'pedidos_json nao parseou como JSON'
             pedidos = []
-        if not pedidos and 'problema' not in diag:
+        if pedidos:
+            # PRG: persiste e redireciona pro GET imprimivel. Aproveita
+            # pra varrer lotes velhos (efemeros por design).
+            import secrets as _secrets
+            from datetime import timedelta
+            token = _secrets.token_urlsafe(16)
+            ImpressaoLote.query.filter(
+                ImpressaoLote.criado_em < agora() - timedelta(days=2)
+            ).delete(synchronize_session=False)
+            db.session.add(ImpressaoLote(
+                token=token, payload=pj,
+                criado_por=current_user.id if current_user else None))
+            db.session.commit()
+            return redirect(url_for('entregas.imprimir', lote=token,
+                                    vias=vias_param, data=data_str),
+                            code=303)
+        if 'problema' not in diag:
             current_app.logger.warning(
                 'imprimir: POST com pedidos_json vazio (vias=%s data=%s)',
                 vias_param, data_str)
             diag['problema'] = ('lista vazia — o JS nao achou os pedidos '
                                 'marcados no estado da tela')
+    elif src.get('lote'):
+        row = ImpressaoLote.query.filter_by(token=src.get('lote')).first()
+        if row:
+            try:
+                pedidos = json.loads(row.payload)
+                if not isinstance(pedidos, list):
+                    pedidos = []
+            except (ValueError, TypeError):
+                pedidos = []
+        if not pedidos:
+            diag['problema'] = ('lote de impressao nao encontrado ou '
+                                'expirado — volte, selecione e imprima '
+                                'de novo')
     else:
         codes_param = (src.get('codes') or '').strip()
         codes_sel = {c.strip() for c in codes_param.split(',') if c.strip()}
