@@ -843,7 +843,7 @@ def _lojas_texto(user):
     return "\n".join(f"  - id={l.id}: {l.nome}" for l in lojas)
 
 
-def _build_system_prompt(user):
+def _build_system_prompt(user, tools_visiveis=None, apenas_leitura=False):
     from app.utils import hoje as _hoje_brt
     hoje = _hoje_brt().isoformat()
     papel = papel_efetivo(user) or 'desconhecido'
@@ -851,7 +851,22 @@ def _build_system_prompt(user):
     # Lista de tools que ESTE user pode usar — Claude ja recebe filtrado,
     # mas dizer explicitamente evita alucinacao tipo "essa tool nao esta
     # disponivel pra mim" quando na verdade eh permissao do usuario.
-    tools_do_user = sorted([t['name'] for t in tools_permitidas(user)])
+    # IMPORTANTE: a lista do prompt tem que ser a MESMA enviada na API —
+    # caso real (bot WhatsApp read-only, 11/06/2026): o prompt listava
+    # criar_tarefa (write) que o filtro apenas_leitura tinha removido, e o
+    # bot PROMETIA "tenho a tool criar_tarefa" sem conseguir invoca-la.
+    if tools_visiveis is None:
+        tools_visiveis = tools_permitidas(user)
+    tools_do_user = sorted([t['name'] for t in tools_visiveis])
+    aviso_leitura = ''
+    if apenas_leitura:
+        aviso_leitura = """
+MODO SOMENTE LEITURA (canal WhatsApp do dono):
+- Voce SO consulta. Nao existe nenhuma tool de criar/editar/registrar aqui.
+- Se pedirem uma acao (criar tarefa, pedido, ajuste...), NAO prometa fazer:
+  diga que pelo WhatsApp voce so consulta, e que acoes sao feitas pelo bot
+  do Slack ou direto no sistema.
+"""
     return f"""Voce e' um assistente de gestao de uma padaria. Interpreta comandos em
 linguagem natural e estrutura acoes pra o usuario confirmar.
 
@@ -859,7 +874,7 @@ Hoje e' {hoje}.
 
 USUARIO LOGADO: {nome_user} (papel: {papel}).
 TOOLS QUE ESTE USUARIO PODE USAR: {', '.join(tools_do_user) if tools_do_user else '(nenhuma)'}.
-
+{aviso_leitura}
 REGRA DE PERMISSAO — CRITICA:
 - Se uma acao que o usuario pediu NAO esta na lista acima, NAO INVENTE
   "limitacao do meu acesso", "tool nao disponivel pra mim", "estou offline",
