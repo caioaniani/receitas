@@ -1306,8 +1306,10 @@ def _recompute_lote_status(lote_id):
 
 @entregas_bp.route('/api/lotes', methods=['GET'])
 @login_required
-@entrega_access_required
 def listar_lotes():
+    # Read-only e necessario pra aba Operacao do /entregas/ (que abre pra
+    # TODOS os usuarios logados — decisao 11/06/2026). Writes de lote
+    # continuam com @entrega_access_required.
     """Lista lotes de uma data (?data=YYYY-MM-DD).
     Retorna metadados + contadores por status."""
     import json as _json
