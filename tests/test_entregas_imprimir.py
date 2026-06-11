@@ -71,6 +71,30 @@ def test_js_le_op_check_e_chk_imprimir(app):
     assert '.op-check:checked, .chk-imprimir:checked' in js
 
 
+def test_js_envia_dados_completos_via_post(app):
+    """Bug real (11/06/2026): mandar so codes via GET fazia o servidor
+    rebuscar do VNDA pela data. Quando a data nao bate exato (override,
+    cache, polling re-renderiza entre marcacao e clique) volta vazio.
+    Agora o JS coleta os dados dos pedidos do estado em memoria
+    (opUltimoResultado) e manda via POST — servidor nao precisa do VNDA."""
+    import pathlib
+    js = pathlib.Path('app/static/js/entregas.js').read_text()
+    assert 'pedidosSnapshot' in js
+    assert "addInput('pedidos_json'" in js
+    assert "f.method = 'POST'" in js
+
+
+
+
+def _post_imprimir(c, pedidos, vias='cliente', data='2026-06-11'):
+    """POST /entregas/imprimir com os dados dos pedidos (caminho novo
+    default do JS — nao depende do VNDA)."""
+    import json as _j
+    return c.post('/entregas/imprimir', data={
+        'pedidos_json': _j.dumps(pedidos),
+        'vias': vias, 'data': data,
+    })
+
 def test_funcionario_sem_loja_acessa_entregas_e_painel(app):
     """Decisao 11/06/2026: /entregas/ e /entregas/painel sao pra TODOS os
     usuarios logados — antes funcionario sem loja_id levava 403."""
@@ -227,17 +251,6 @@ def test_botao_antigo_imprimir_agora_usa_modal(app, admin_user):
     body = c.get('/entregas/').data
     # Nao pode mais ter o handler antigo no botao da aba Operacao
     assert b'onclick="abrirModalImprimir()"' in body
-
-
-def test_js_captura_snapshot_dos_codes_no_abrir_modal(app):
-    """Race condition (11/06/2026): apos abrir o modal, a aba Operacao
-    podia re-renderizar (polling, atualizacao de drivers) e os checkboxes
-    perdiam :checked. O modal chamava codesSelecionados() no clique do
-    botao 'cliente'/'cliente+entregador' e devolvia lista vazia. Solucao:
-    capturar os codes na hora de abrir o modal."""
-    import pathlib
-    js = pathlib.Path('app/static/js/entregas.js').read_text()
-    assert 'codesSnapshot' in js
 
 
 def test_imprimir_default_via_cliente(app, admin_user):
