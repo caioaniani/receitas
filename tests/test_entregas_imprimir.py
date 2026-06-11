@@ -281,3 +281,18 @@ def test_js_le_opUltimoResultado_da_iife_nao_window(app):
                      and not linha.lstrip().startswith('//')]
     assert not linhas_codigo, f'uso em codigo: {linhas_codigo!r}'
     assert "typeof opUltimoResultado !== 'undefined'" in js
+
+
+def test_js_form_target_nomeado_nao_blank(app):
+    """Bug real (11/06/2026): a aba aberta ficava em 'about:blank' porque
+    window.open(_blank) e form.target='_blank' criam abas DIFERENTES.
+    Com nome unico, o submit navega a mesma janela aberta."""
+    import pathlib
+    js = pathlib.Path('app/static/js/entregas.js').read_text()
+    # nao pode mais ter '_blank' literal no fluxo de impressao
+    assert "f.target = '_blank'" not in js
+    assert "f.target = w ? '_blank' : '_self'" not in js
+    # tem que ter nome unico (Date.now) e abertura prelimar
+    assert 'imprimir-' in js
+    assert "window.open('', nomeAba)" in js
+    assert 'f.target = nomeAba' in js
