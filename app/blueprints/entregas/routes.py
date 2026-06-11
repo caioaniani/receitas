@@ -1556,9 +1556,13 @@ def api_produtos():
 
 @entregas_bp.route('/api/atribuidos')
 @login_required
-@entrega_access_required
 def api_atribuidos():
-    """Lista pedidos do dia agrupados por driver atribuido + secao 'sem driver'."""
+    """Lista pedidos do dia agrupados por driver atribuido + secao 'sem driver'.
+
+    Read-only e alimenta a aba Operacao do /entregas/, que abre pra TODOS
+    os usuarios logados (decisao 11/06/2026) — sem isso a aba ficava vazia
+    pra funcionario (403 silencioso) e a impressao de pedidos morria com
+    "snapshot vazio". Writes (atribuir/reset/etc) continuam guardados."""
     data_str = request.args.get('data', hoje_brt().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
