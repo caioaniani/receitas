@@ -209,8 +209,16 @@
           <td>{{ it.nome or '—' }}</td>
           {% if not motorista %}
           <td class="vcol">
-            {% set vt = it.valor_total %}
-            {% set vu = it.valor_unitario or 0 %}
+            {# Forma REAL do VNDA (vnda.py::_normalizar_pedido): itens tem
+               `subtotal` e `preco_unitario`. Os nomes valor_total/
+               valor_unitario nunca existiram nos dados reais — so nos
+               fakes dos testes (bug 11/06/2026: via do cliente imprimia
+               R$ 0,00 em tudo). Fallback mantido por compat com
+               pedidos locais antigos. #}
+            {% set vt = it.subtotal if it.subtotal not in (None, '')
+                        else it.valor_total %}
+            {% set vu = it.preco_unitario if it.preco_unitario not in (None, '')
+                        else (it.valor_unitario or 0) %}
             {% set q = it.quantidade or 1 %}
             {% set v = vt if vt not in (None, '') else (vu|float) * (q|float) %}
             R$ {{ '%.2f'|format(v|float) | replace('.', ',') }}
