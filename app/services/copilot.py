@@ -1043,7 +1043,9 @@ def interpretar(prompt_text, user, historico=None, images=None,
         return {'tipo': 'erro', 'explicacao': 'Biblioteca anthropic nao instalada.', 'raw': None}
 
     client = anthropic.Anthropic(api_key=api_key)
-    system = _build_system_prompt(user)
+    # System prompt construido DEPOIS do filtro de tools (mais abaixo) —
+    # placeholder aqui; ver bloco tools_filtradas.
+    system = None
 
     # Monta mensagens: historico (filtrado/sanitizado) + prompt atual
     messages = []
