@@ -84,7 +84,9 @@
   .obs { font-size: 16px; margin-top: 8px; white-space: pre-wrap;
          word-break: break-word; }
 
-  .totais { margin-top: auto; padding-top: 12px; border-top: 2px solid #000;
+  /* margin-top fixo: o 'auto' dependia do flex-column da .folha (removido
+     — ver comentario la em cima); sem flex ele colapsa pra 0. */
+  .totais { margin-top: 18px; padding-top: 12px; border-top: 2px solid #000;
             display: flex; justify-content: space-between; font-size: 22px;
             font-weight: 800; }
 
