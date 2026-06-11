@@ -1661,10 +1661,12 @@ def api_atribuidos():
 
 @entregas_bp.route('/api/rotas')
 @login_required
-@entrega_access_required
 def api_rotas():
     """Distribui pedidos entre drivers nominais (cadastrados em /api/drivers).
-    Pedidos com atribuicao salva (AtribuicaoEntrega) preservam o driver."""
+    Pedidos com atribuicao salva (AtribuicaoEntrega) preservam o driver.
+
+    Read-only (so CALCULA a distribuicao, nao persiste) — aberto a todos
+    os usuarios logados junto com a aba Operacao (decisao 11/06/2026)."""
     data_str = request.args.get('data', hoje_brt().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
