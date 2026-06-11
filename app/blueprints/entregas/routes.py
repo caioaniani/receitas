@@ -444,16 +444,19 @@ def imprimir():
             pedidos = []
         if pedidos:
             # PRG: persiste e redireciona pro GET imprimivel. Aproveita
-            # pra varrer lotes velhos (efemeros por design).
+            # pra varrer lotes velhos (efemeros por design). Insere ANTES
+            # de varrer: SQLite reusa id de linha deletada na mesma
+            # transacao e colide no identity map da sessao.
             import secrets as _secrets
             from datetime import timedelta
             token = _secrets.token_urlsafe(16)
-            ImpressaoLote.query.filter(
-                ImpressaoLote.criado_em < agora() - timedelta(days=2)
-            ).delete(synchronize_session=False)
             db.session.add(ImpressaoLote(
                 token=token, payload=pj,
                 criado_por=current_user.id if current_user else None))
+            db.session.flush()
+            ImpressaoLote.query.filter(
+                ImpressaoLote.criado_em < agora() - timedelta(days=2)
+            ).delete(synchronize_session=False)
             db.session.commit()
             return redirect(url_for('entregas.imprimir', lote=token,
                                     vias=vias_param, data=data_str),
