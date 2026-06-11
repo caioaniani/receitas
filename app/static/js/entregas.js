@@ -565,21 +565,26 @@
     // selecionado". Agora mandamos os DADOS direto via POST: o servidor nao
     // precisa do VNDA pra imprimir o que ja esta na tela.
     var pedidosSnapshot = [];
+    var codesSnapshotImpr = [];
 
     function pedidoDoEstado(code) {
-        // opUltimoResultado eh a variavel local da MESMA IIFE (linha
-        // 1926+); var e' hoisted, entao acessivel daqui. Bug real
-        // (11/06/2026): eu estava lendo window.opUltimoResultado — que
-        // nunca foi exposto — entao retornava null sempre e o snapshot
-        // ficava vazio ("Marque ao menos um pedido antes" com checkbox
-        // marcado).
+        // Procura nos DOIS estados em memoria da MESMA IIFE:
+        // 1. aba Operacao — opUltimoResultado (sem_driver + drivers[].paradas)
+        // 2. aba legada "Pedidos do Dia" — array `pedidos` (linha 7)
+        // Bug real (11/06/2026): so olhava a Operacao. Quem marcava
+        // checkbox na aba legada (ou quando /api/atribuidos nao carregou,
+        // ex: 403 pra funcionario) caia em snapshot vazio e a impressao
+        // morria mesmo com a lista visivel na tela.
+        var fontes = [];
         var estado = (typeof opUltimoResultado !== 'undefined'
                       && opUltimoResultado) ? opUltimoResultado : null;
-        if (!estado) return null;
-        var fontes = [estado.sem_driver || []];
-        (estado.drivers || []).forEach(function(dr) {
-            fontes.push(dr.paradas || []);
-        });
+        if (estado) {
+            fontes.push(estado.sem_driver || []);
+            (estado.drivers || []).forEach(function(dr) {
+                fontes.push(dr.paradas || []);
+            });
+        }
+        if (pedidos && pedidos.length) fontes.push(pedidos);
         for (var i = 0; i < fontes.length; i++) {
             for (var j = 0; j < fontes[i].length; j++) {
                 if (fontes[i][j].code === code) return fontes[i][j];
@@ -590,18 +595,21 @@
 
     window.abrirModalImprimir = function() {
         var codes = codesSelecionados();
+        codesSnapshotImpr = codes;
         pedidosSnapshot = [];
         codes.forEach(function(c) {
             var p = pedidoDoEstado(c);
             if (p) pedidosSnapshot.push(p);
         });
-        if (!pedidosSnapshot.length) {
-            alert('Marque ao menos um pedido antes (e aguarde a tela '
-                  + 'carregar a lista do dia).');
+        if (!codes.length) {
+            alert('Marque ao menos um pedido antes.');
             return;
         }
+        // Snapshot vazio mas HA codes marcados: segue mesmo assim — o
+        // imprimirSelecionados cai no fallback GET (servidor rebusca do
+        // VNDA pelos codes). Pior caso o servidor mostra o diagnostico.
         var el = document.getElementById('modal-imprimir-qt');
-        if (el) el.textContent = pedidosSnapshot.length;
+        if (el) el.textContent = (pedidosSnapshot.length || codes.length);
         var m = document.getElementById('modalImprimirVias');
         if (m && window.bootstrap) {
             bootstrap.Modal.getOrCreateInstance(m).show();
@@ -610,9 +618,13 @@
         }
     };
     window.imprimirSelecionados = function(vias) {
-        if (!pedidosSnapshot.length) return;
+        if (!pedidosSnapshot.length && !codesSnapshotImpr.length) return;
         var data = document.getElementById('op-data');
         var dataVal = (data && data.value) || '';
+        if (!dataVal) {
+            var dEl = document.getElementById('data-entrega');
+            dataVal = (dEl && dEl.value) || '';
+        }
 
         // POST via form com TARGET NOMEADO — abre nova aba E o submit
         // navega ela. Bug real (11/06/2026): window.open(_blank) +
@@ -621,6 +633,24 @@
         // window.open e form.target apontam pra MESMA janela. E nao
         // removemos o form na hora — esperamos o submit despachar.
         var nomeAba = 'imprimir-' + Date.now();
+
+        var m = document.getElementById('modalImprimirVias');
+        if (m && window.bootstrap) {
+            var inst = bootstrap.Modal.getInstance(m);
+            if (inst) inst.hide();
+        }
+
+        if (!pedidosSnapshot.length) {
+            // Fallback: sem dados em memoria (nenhum estado carregado
+            // continha os codes) — manda so os codes via GET e deixa o
+            // servidor rebuscar do VNDA pela data.
+            var qs = 'codes=' + encodeURIComponent(codesSnapshotImpr.join(','))
+                   + '&vias=' + encodeURIComponent(vias || 'cliente')
+                   + (dataVal ? '&data=' + encodeURIComponent(dataVal) : '');
+            window.open('/entregas/imprimir?' + qs, nomeAba);
+            return;
+        }
+
         window.open('', nomeAba);   // abre/encontra a aba pelo nome
         var f = document.createElement('form');
         f.method = 'POST';
@@ -641,11 +671,6 @@
         addInput('vias', vias || 'cliente');
         if (dataVal) addInput('data', dataVal);
         document.body.appendChild(f);
-        var m = document.getElementById('modalImprimirVias');
-        if (m && window.bootstrap) {
-            var inst = bootstrap.Modal.getInstance(m);
-            if (inst) inst.hide();
-        }
         f.submit();
         // Limpa o form depois do submit despachar (browsers nao gostam
         // que removamos antes da navegacao iniciar).
