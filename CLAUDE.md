@@ -422,7 +422,7 @@ Desligar: env `SERU_AUTO_SYNC=0` (default `1`).
 - `/pdv/mapeamentos`: tabela completa de produtos + tabela de lojas. Form POST normal
   (scroll preservado via `sessionStorage`).
 
-## Copilot
+## Copilot (servico) — canais: Slack + WhatsApp do dono. SEM interface web
 
 `app/services/copilot.py` orquestra tools com Claude Sonnet 4.6 (Anthropic API).
 Prompt caching ativo: `system` + ultima tool com `cache_control: ephemeral`
@@ -431,11 +431,31 @@ primeiro request da janela de 5min).
 Tools: criar_pedido, receber_mp, ajuste_estoque, mudar_status_pedido, criar_fornecedor,
 marcar_ponto, criar_tarefa, marcar_tarefa_feita, balanco_congelados, entrada_lote_loja,
 registrar_desperdicio,
-consultar_pedido/estoque/fornecedores/margem/funcionario/caixa/foco/tarefas/vendas_itens/desperdicio.
+consultar_pedido/estoque/fornecedores/margem/funcionario/caixa/foco/tarefas/vendas_itens/desperdicio/cartinhas.
 
-Tools de write requerem aprovacao (preview HTML no chat). Frontend em
-`app/static/js/copilot.js` — modal lateral com textarea, Enter envia, Shift+Enter
-quebra linha.
+Tools de write requerem aprovacao. Tool nova = adicionar em `TOOLS` +
+`PAPEIS_POR_TOOL` (teste trava sem a entrada explicita) + executor read em
+`_EXECUTORES_READ` quando for leitura — TODOS os canais herdam na hora.
+
+**UI WEB REMOVIDA em 10/06/2026 (decisao do dono).** Nao existe mais
+`app/blueprints/copilot/`, `copilot.js` nem o FAB lateral — NAO recriar.
+Testes em `tests/test_remocao_copilot_web.py` travam regressao. Os canais
+vivos sao:
+
+1. **Slack** (`app/services/slack_bot.py`): DM/@mention → `copilot_svc.
+   interpretar`; writes com botao Confirmar/Cancelar (Block Kit).
+2. **WhatsApp do dono — DIRETO PELO Z-API, sem n8n** (`app/services/
+   zapi_bot.py` + blueprint `zapi_bot`): webhook `POST /zapi/webhook?k=
+   ZAPI_BOT_WEBHOOK_TOKEN` configurado no painel Z-API. So responde pro
+   `ZAPI_BOT_DONO_NUMERO` (whitelist hard). **Read-only**: chama
+   `interpretar(apenas_leitura=True)` — Claude NEM VE as tools de write
+   (decisao do dono: zero edicao/acao pelo WhatsApp). Historico persistente
+   em `ZapiBotConversa` (80 turnos), aceita imagem. Idempotente por
+   messageId (`ZapiBotEventoProcessado`).
+
+O n8n foi APOSENTADO — `app/blueprints/bot/routes.py` e API legada
+(`/api/bot/faturamento`, token `BOT_API_TOKEN`); nao construir nada novo
+nela, e nao confundir com o bot do dono (que e o zapi_bot acima).
 
 ## Contas a Pagar (NF/boleto via Slack → IA → Dropbox → banco)
 
