@@ -1,4 +1,9 @@
-"""API pra integracao com bots externos (n8n / WhatsApp).
+"""API legada pra integracao com bots externos via token.
+
+HISTORICO: nasceu pro n8n (aposentado). O bot WhatsApp do dono NAO usa
+esta API — ele vive em app/services/zapi_bot.py (webhook Z-API direto,
+copilot read-only completo). Mantido apenas /api/bot/faturamento por
+compatibilidade; se nada mais chamar, remover no futuro.
 
 Auth: header `Authorization: Bearer <BOT_API_TOKEN>`. Sem session/login —
 projetada pra ser chamada por workflows externos.
@@ -12,7 +17,7 @@ from functools import wraps
 from flask import current_app, jsonify, request
 
 from app.blueprints.bot import bot_bp
-from app.extensions import csrf, db
+from app.extensions import csrf
 from app.services import seru
 from app.utils import hoje as hoje_brt
 
@@ -176,94 +181,3 @@ def faturamento():
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     resp.headers['Pragma'] = 'no-cache'
     return resp
-
-
-# ── Power (WhatsApp pessoal do dono) — copilot READ-ONLY ──
-#
-# Decisao de 10/06/2026: o Power ganha acesso ao copilot_svc inteiro, mas
-# SO leitura — apenas_leitura=True remove todas as tools de write antes do
-# Claude ver. Auth: BOT_API_TOKEN + whitelist BOT_ALLOWED_PHONES (igual ao
-# faturamento). Multi-turn por telefone reusando ChatbotConversa.
-
-@bot_bp.route('/api/bot/copilot', methods=['POST'])
-@csrf.exempt
-@_bot_auth_required
-def copilot():
-    """POST /api/bot/copilot
-
-    Body JSON: {"mensagem": "..."} (telefone vai por ?telefone= como o resto).
-    Resposta: {ok: bool, resposta: str, tipo: 'conversa'|'tool:<nome>'|'erro'}.
-    """
-    import json as _json
-
-    from app.models import ChatbotConversa, Usuario
-    from app.services import copilot as copilot_svc
-
-    body = request.get_json(silent=True) or {}
-    mensagem = (body.get('mensagem') or body.get('texto')
-                or body.get('prompt') or '').strip()
-    if not mensagem:
-        return jsonify(ok=False, erro='mensagem obrigatoria'), 400
-
-    telefone = _normalizar_telefone(request.args.get('telefone') or '')
-    # Quem responde com o copilot precisa de Usuario pra filtrar tools pelo
-    # papel. Whitelist do Power so tem o dono — usa o primeiro owner ativo.
-    user = (Usuario.query
-            .filter(Usuario.is_owner.is_(True))
-            .order_by(Usuario.id.asc()).first())
-    if not user:
-        return jsonify(ok=False,
-                       erro='nenhum usuario owner ativo no sistema'), 503
-
-    # Memoria multi-turn por telefone (reusa ChatbotConversa, generica).
-    conv_id = f'wpp-power-{telefone or "anon"}'
-    conv = ChatbotConversa.query.filter_by(conv_id=conv_id).first()
-    if not conv:
-        conv = ChatbotConversa(conv_id=conv_id, mensagens_json='[]')
-        db.session.add(conv)
-    try:
-        historico = _json.loads(conv.mensagens_json or '[]')
-    except (ValueError, TypeError):
-        historico = []
-    historico = historico[-20:]   # cap
-
-    res = copilot_svc.interpretar(mensagem, user, historico=historico,
-                                  apenas_leitura=True)
-    tipo = res.get('tipo') or 'conversa'
-    explicacao = res.get('explicacao') or ''
-
-    if tipo == 'erro':
-        return jsonify(ok=False, tipo='erro', resposta=explicacao or
-                       'copilot indisponivel'), 503
-
-    # Read tool ja executou — concatena explicacao + texto formatado.
-    resultado = res.get('resultado') or {}
-    extra = ''
-    if isinstance(resultado, dict):
-        extra = resultado.get('texto') or resultado.get('mensagem') or ''
-    resposta = '\n\n'.join(p for p in (explicacao, extra) if p).strip()
-    if not resposta:
-        resposta = 'OK.'
-
-    # Persiste o turno na memoria (ultimas 40 mensagens — janela do interpret
-    # ja limita a 20 mas guardamos um pouco mais pra ter folga).
-    historico.append({'role': 'user', 'content': mensagem})
-    historico.append({'role': 'assistant', 'content': resposta})
-    conv.mensagens_json = _json.dumps(historico[-40:], ensure_ascii=False)
-    db.session.commit()
-
-    return jsonify(ok=True, tipo=f'tool:{tipo}' if tipo != 'conversa'
-                   else 'conversa', resposta=resposta)
-
-
-@bot_bp.route('/api/bot/copilot/reset', methods=['POST'])
-@csrf.exempt
-@_bot_auth_required
-def copilot_reset():
-    """Limpa a memoria de conversa do Power (?telefone=...)."""
-    from app.models import ChatbotConversa
-    telefone = _normalizar_telefone(request.args.get('telefone') or '')
-    conv_id = f'wpp-power-{telefone or "anon"}'
-    n = ChatbotConversa.query.filter_by(conv_id=conv_id).delete()
-    db.session.commit()
-    return jsonify(ok=True, apagada=bool(n))
