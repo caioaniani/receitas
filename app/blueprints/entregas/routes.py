@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 import requests as http_requests
@@ -387,56 +388,70 @@ def api_pedidos():
     return resp
 
 
-@entregas_bp.route('/imprimir')
+@entregas_bp.route('/imprimir', methods=['GET', 'POST'])
 @login_required
 def imprimir():
     """Folha A4 por pedido pra impressao fisica.
 
-    Params:
-      data=YYYY-MM-DD (default hoje)
-      codes=A,B,C    — codes dos pedidos a imprimir (1 folha por pedido por via)
-      vias=cliente,motorista (default 'cliente') — qual(is) via(s) gerar
+    POST (caminho default do JS): manda `pedidos_json` com os dados ja
+    carregados na tela (estado em memoria da aba Operacao). Servidor NAO
+    chama VNDA — evita o caso real 11/06/2026 de "Nenhum pedido selecionado"
+    quando a data nao bate exato (override de data, cache, polling
+    re-renderizando entre marcacao e clique).
 
-    Decisao 11/06/2026 (dono): tela acessivel a todo usuario logado; via do
-    entregador OMITE valores comerciais (preco unitario/total) e cartinha
-    (mensagem ao destinatario, nao logistica) — so o que ele precisa pra
-    achar/entregar/conferir (destinatario, endereco, telefone, itens,
-    janela, codigo).
+    GET (legado): `codes=A,B,C&data=YYYY-MM-DD` — busca no VNDA pela data.
+    Mantido pra compat com bookmarks/abas abertas com o link antigo.
+
+    Comum: `vias=cliente,motorista` (default 'cliente').
+
+    Via do entregador OMITE valores comerciais e cartinha (decisao do dono).
     """
-    data_str = request.args.get('data', hoje_brt().isoformat())
+    src = request.form if request.method == 'POST' else request.args
+    data_str = src.get('data') or hoje_brt().isoformat()
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
         target = hoje_brt()
-    codes_param = (request.args.get('codes') or '').strip()
-    codes_sel = {c.strip() for c in codes_param.split(',') if c.strip()}
-    vias_param = (request.args.get('vias') or 'cliente').strip().lower()
+    vias_param = (src.get('vias') or 'cliente').strip().lower()
     vias = [v for v in (s.strip() for s in vias_param.split(','))
             if v in ('cliente', 'motorista')]
     if not vias:
         vias = ['cliente']
 
-    try:
-        overrides_full = _carregar_overrides_full()
-        overrides_data = {code: o['data'] for code, o in overrides_full.items()}
-        resultado = _injetar_pedidos_locais(
-            target, vnda.buscar_pedidos_do_dia(target, overrides=overrides_data))
-        pedidos = resultado.get('pedidos', []) if 'erro' not in resultado else []
-    except Exception:  # noqa: BLE001
-        current_app.logger.exception('imprimir: falha carregando pedidos')
-        pedidos = []
-
-    if codes_sel:
-        codes_carregados = {p.get('code') for p in pedidos if p.get('code')}
-        ausentes = codes_sel - codes_carregados
-        if ausentes:
-            # Bug-fix por log: caso 11/06/2026 "Nenhum pedido selecionado" com
-            # 'codes' chegando do JS — registra os codes que nao bateram pra
-            # poder reconciliar (data errada? pedido cancelado? cache?).
+    pedidos = []
+    if request.method == 'POST':
+        pj = src.get('pedidos_json') or '[]'
+        try:
+            pedidos = json.loads(pj)
+            if not isinstance(pedidos, list):
+                pedidos = []
+        except (ValueError, TypeError):
             current_app.logger.warning(
-                'imprimir: %d code(s) selecionado(s) nao bateram com a data '
-                '%s: %s', len(ausentes), target.isoformat(),
-                ', '.join(sorted(ausentes))[:500])
+                'imprimir: pedidos_json invalido (%d bytes)', len(pj))
+            pedidos = []
+    else:
+        codes_param = (src.get('codes') or '').strip()
+        codes_sel = {c.strip() for c in codes_param.split(',') if c.strip()}
+        try:
+            overrides_full = _carregar_overrides_full()
+            overrides_data = {code: o['data']
+                              for code, o in overrides_full.items()}
+            resultado = _injetar_pedidos_locais(
+                target,
+                vnda.buscar_pedidos_do_dia(target, overrides=overrides_data))
+            pedidos = (resultado.get('pedidos', [])
+                       if 'erro' not in resultado else [])
+        except Exception:  # noqa: BLE001
+            current_app.logger.exception('imprimir: falha carregando pedidos')
+            pedidos = []
+        if codes_sel:
+            codes_carregados = {p.get('code') for p in pedidos if p.get('code')}
+            ausentes = codes_sel - codes_carregados
+            if ausentes:
+                current_app.logger.warning(
+                    'imprimir: %d code(s) selecionado(s) nao bateram com a '
+                    'data %s: %s', len(ausentes), target.isoformat(),
+                    ', '.join(sorted(ausentes))[:500])
         pedidos = [p for p in pedidos if p.get('code') in codes_sel]
     _aplicar_cartinhas(pedidos)
 
