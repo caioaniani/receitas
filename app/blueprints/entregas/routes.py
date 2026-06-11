@@ -30,7 +30,6 @@ from app.utils import hoje as hoje_brt
 
 @entregas_bp.route('/')
 @login_required
-@entrega_access_required
 def index():
     resp = current_app.make_response(
         render_template('entregas/index.html', hoje=hoje_brt().isoformat())
