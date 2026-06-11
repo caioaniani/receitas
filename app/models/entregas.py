@@ -170,3 +170,25 @@ class EntregaFoto(db.Model):
     storage_path = db.Column(db.String(500))  # caminho no storage pra deletar depois
     tirada_em = db.Column(db.DateTime, default=agora)
     tamanho_bytes = db.Column(db.Integer)
+
+
+class ImpressaoLote(db.Model):
+    """Payload de uma impressao de pedidos (padrao Post/Redirect/Get).
+
+    O JS POSTa os dados dos pedidos selecionados; o servidor guarda aqui e
+    redireciona pro GET /entregas/imprimir?lote=<token>. Motivo
+    (11/06/2026): o Safari re-busca o documento ao montar a impressao e
+    NAO reenvia POST — pagina de impressao que era resultado de POST saia
+    TODA EM BRANCO (contagem de paginas certa, conteudo vazio). Com PRG o
+    documento final e GET: imprime, recarrega e re-imprime sem dor.
+
+    Tabela nova de proposito: db.create_all cria sem ALTER (mesmo padrao
+    do PainelPedidoStatus acima). Linhas sao efemeras — cada POST novo
+    apaga as com mais de 2 dias."""
+    __tablename__ = 'impressao_lote'
+
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(43), unique=True, nullable=False, index=True)
+    payload = db.Column(db.Text, nullable=False)   # JSON (lista de pedidos)
+    criado_em = db.Column(db.DateTime, default=agora, index=True)
+    criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
