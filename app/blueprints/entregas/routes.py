@@ -443,8 +443,27 @@ def imprimir():
     for p in pedidos:
         p['driver_nome'] = drv_por_code.get(p.get('code'))
 
-    return render_template('entregas/imprimir.html',
-                           pedidos=pedidos, vias=vias, data=target)
+    # Rede de seguranca: se um pedido especifico estourar o template (ex:
+    # campo com tipo inesperado), nao deixa 500 levar toda a impressao —
+    # renderiza um a um e descarta o que falhou (com log pra diagnostico).
+    try:
+        return render_template('entregas/imprimir.html',
+                               pedidos=pedidos, vias=vias, data=target)
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception(
+            'imprimir: render em lote falhou — isolando pedido com defeito')
+        bons = []
+        for p in pedidos:
+            try:
+                render_template('entregas/imprimir.html',
+                                pedidos=[p], vias=vias, data=target)
+                bons.append(p)
+            except Exception:  # noqa: BLE001
+                current_app.logger.warning(
+                    'imprimir: pedido %s nao renderiza, descartado',
+                    p.get('code'))
+        return render_template('entregas/imprimir.html',
+                               pedidos=bons, vias=vias, data=target)
 
 
 @entregas_bp.route('/api/calendario')
