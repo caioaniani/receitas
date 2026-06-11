@@ -494,9 +494,59 @@
         });
     });
 
-    window.imprimirPedidos = function() {
-        window.print();
+    // ── Imprimir (seleção + modal "incluir via do entregador") ──────────
+    function codesSelecionados() {
+        return Array.prototype.slice.call(
+            document.querySelectorAll('.chk-imprimir:checked'))
+            .map(function(c) { return decodeURIComponent(c.dataset.code); });
+    }
+    function atualizarBarraImprimir() {
+        var sel = codesSelecionados();
+        var info = document.getElementById('sel-imprimir-info');
+        var btn = document.getElementById('btn-imprimir-sel');
+        if (info) info.textContent = sel.length
+            ? sel.length + ' selecionado(s)' : '';
+        if (btn) btn.disabled = sel.length === 0;
+    }
+    document.addEventListener('change', function(e) {
+        if (e.target.classList && e.target.classList.contains('chk-imprimir')) {
+            atualizarBarraImprimir();
+        }
+    });
+    // Re-avalia depois de cada render dos cards (sumiram filtros, etc.)
+    var _origRender = renderPedidos;
+    renderPedidos = function() { _origRender(); atualizarBarraImprimir(); };
+
+    window.abrirModalImprimir = function() {
+        var sel = codesSelecionados();
+        if (!sel.length) return;
+        var el = document.getElementById('modal-imprimir-qt');
+        if (el) el.textContent = sel.length;
+        var m = document.getElementById('modalImprimirVias');
+        if (m && window.bootstrap) {
+            bootstrap.Modal.getOrCreateInstance(m).show();
+        } else {
+            imprimirSelecionados('cliente,motorista');
+        }
     };
+    window.imprimirSelecionados = function(vias) {
+        var sel = codesSelecionados();
+        if (!sel.length) return;
+        var data = document.getElementById('op-data');
+        var dataVal = (data && data.value) || '';
+        var url = '/entregas/imprimir?codes=' +
+            encodeURIComponent(sel.join(',')) +
+            '&vias=' + encodeURIComponent(vias || 'cliente') +
+            (dataVal ? '&data=' + encodeURIComponent(dataVal) : '');
+        var m = document.getElementById('modalImprimirVias');
+        if (m && window.bootstrap) {
+            var inst = bootstrap.Modal.getInstance(m);
+            if (inst) inst.hide();
+        }
+        window.open(url, '_blank');
+    };
+    // Compat: chamada antiga do botão "imprimir" topo direita.
+    window.imprimirPedidos = function() { window.abrirModalImprimir(); };
 
     // ── Filtros ──
 
