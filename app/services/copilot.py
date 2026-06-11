@@ -25,6 +25,11 @@ from app.utils import agora, hoje
 
 logger = logging.getLogger(__name__)
 
+# Modelo default do copilot (Slack e canais operacionais). O bot do
+# WhatsApp do dono usa Opus via override `modelo=` (fork de persona/modelo
+# por canal — decisao do dono 11/06/2026; o MOTOR continua um so).
+MODELO_DEFAULT = 'claude-sonnet-4-6'
+
 
 # ── Tools ──────────────────────────────────────────────────────────────
 
@@ -1034,7 +1039,7 @@ REGRAS:
 
 
 def interpretar(prompt_text, user, historico=None, images=None,
-                apenas_leitura=False):
+                apenas_leitura=False, modelo=None, system_extra=None):
     """Chama Claude. Retorna dict com tipo, params, explicacao.
 
     historico: lista de {role: 'user'|'assistant', content: str} com
@@ -1047,6 +1052,12 @@ def interpretar(prompt_text, user, historico=None, images=None,
     apenas_leitura: se True, remove TODAS as tools de write (REQUER_APROVACAO)
     antes de mandar pra Claude. Usado pelo bot WhatsApp do dono (modo so
     consulta). Como Claude nem ve a tool, nao tem como tentar usa-la.
+
+    modelo: override do model id (default MODELO_DEFAULT/Sonnet). O bot do
+    WhatsApp do dono passa Opus — fork de modelo por canal, motor unico.
+
+    system_extra: bloco de persona por canal, anexado ao fim do system
+    prompt (ex: persona de assessor do dono no WhatsApp).
     """
     api_key = os.environ.get('ANTHROPIC_API_KEY') or current_app.config.get('ANTHROPIC_API_KEY')
     if not api_key:
@@ -1103,6 +1114,8 @@ def interpretar(prompt_text, user, historico=None, images=None,
     # filtro removeu (ver _build_system_prompt).
     system = _build_system_prompt(user, tools_visiveis=tools_filtradas,
                                   apenas_leitura=apenas_leitura)
+    if system_extra:
+        system = system + '\n\n' + system_extra.strip()
 
     # Cache breakpoint na ULTIMA tool: marca todo o bloco de tools (schema
     # gigante, ~5-10KB) como cacheable. Junto com o cache do system_prompt,
@@ -1115,7 +1128,7 @@ def interpretar(prompt_text, user, historico=None, images=None,
 
     try:
         response = client.messages.create(
-            model='claude-sonnet-4-6',
+            model=modelo or MODELO_DEFAULT,
             max_tokens=4000,
             system=[{'type': 'text', 'text': system, 'cache_control': {'type': 'ephemeral'}}],
             tools=tools_com_cache,
