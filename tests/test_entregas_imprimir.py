@@ -346,13 +346,14 @@ def test_imprimir_post_aceita_csrf_token_valido(app, admin_user):
         m = re.search(rb'const CSRF_TOKEN = "([^"]+)"', r.data)
         assert m, 'CSRF_TOKEN nao foi renderizado no base.html'
         token = m.group(1).decode()
-        # POST com o token correto vai ate o handler
+        # POST com o token correto vai ate o handler (e segue o 303 do
+        # PRG ate a pagina final)
         r = c.post('/entregas/imprimir', data={
             'csrf_token': token,
             'pedidos_json': json.dumps(_pedidos_fake()),
             'vias': 'cliente',
             'data': '2026-06-11',
-        })
+        }, follow_redirects=True)
         assert r.status_code == 200, (
             f'POST com CSRF valido deu {r.status_code} '
             f'(corpo: {r.data[:200]!r})'
