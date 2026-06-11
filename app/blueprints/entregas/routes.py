@@ -389,7 +389,6 @@ def api_pedidos():
 
 @entregas_bp.route('/api/calendario')
 @login_required
-@entrega_access_required
 def api_calendario():
     mes_str = request.args.get('mes', '')
     try:
