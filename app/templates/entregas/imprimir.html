@@ -1,0 +1,246 @@
+{# Folha A4 por pedido. NAO estende base.html — pagina dedicada a impressao
+   (sem sidebar, sem header da web). Fonte grande, layout protegido contra
+   estouro. Via do MOTORISTA omite cartinha e valores. #}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Imprimir pedidos — {{ data.strftime('%d/%m/%Y') }}</title>
+<style>
+  @page { size: A4; margin: 14mm 12mm; }
+  * { box-sizing: border-box; }
+  html, body { background: #fff; color: #000; }
+  body { font-family: -apple-system, system-ui, "Helvetica Neue", Arial, sans-serif;
+         font-size: 16px; margin: 0; line-height: 1.35; }
+
+  .folha {
+    page-break-after: always;
+    min-height: 270mm;        /* segura conteudo na folha */
+    display: flex; flex-direction: column;
+  }
+  .folha:last-child { page-break-after: auto; }
+
+  .cabecalho {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    border-bottom: 3px solid #000; padding-bottom: 8px; margin-bottom: 16px;
+  }
+  .cabecalho .tit { font-size: 28px; font-weight: 800; }
+  .cabecalho .selo {
+    font-size: 14px; font-weight: 700; padding: 4px 12px;
+    border: 2px solid #000; border-radius: 999px;
+  }
+  .cabecalho .selo.motorista { background: #000; color: #fff; }
+
+  .linha-meta {
+    display: flex; gap: 24px; flex-wrap: wrap;
+    margin-bottom: 14px; font-size: 18px;
+  }
+  .linha-meta .rotulo { font-size: 12px; text-transform: uppercase;
+                         letter-spacing: 0.04em; color: #444; font-weight: 700; }
+  .linha-meta .val { font-size: 20px; font-weight: 700; }
+
+  .destinatario { font-size: 26px; font-weight: 800; margin-bottom: 4px;
+                  word-break: break-word; }
+  .endereco { font-size: 22px; line-height: 1.3; margin-bottom: 6px;
+              word-break: break-word; }
+  .telefone { font-size: 20px; font-weight: 700; margin-bottom: 14px; }
+
+  .janela {
+    display: inline-block; font-size: 22px; font-weight: 800; padding: 6px 16px;
+    border: 3px solid #000; border-radius: 8px; margin-bottom: 14px;
+  }
+  .janela.expresso { background: #000; color: #fff; }
+
+  .secao-tit {
+    font-size: 14px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.06em; border-bottom: 2px solid #000;
+    padding-bottom: 4px; margin: 10px 0 8px;
+  }
+
+  .itens { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .itens th, .itens td { padding: 6px 8px; vertical-align: top;
+                          border-bottom: 1px solid #ccc; font-size: 17px;
+                          word-break: break-word; }
+  .itens th { font-size: 13px; text-transform: uppercase; color: #444;
+              text-align: left; }
+  .itens .qcol { width: 14%; text-align: right; font-weight: 800; }
+  .itens .vcol { width: 22%; text-align: right; }
+  .itens .vcol-h { width: 22%; text-align: right; }
+  .itens td.qcol { font-size: 19px; }
+
+  .cartinha {
+    background: #fff9db; border: 2px dashed #b8860b; padding: 12px;
+    border-radius: 8px; margin: 12px 0;
+  }
+  .cartinha .lbl { font-size: 12px; font-weight: 800; color: #b8860b;
+                    text-transform: uppercase; letter-spacing: 0.06em; }
+  .cartinha .txt { font-size: 22px; line-height: 1.35; margin-top: 4px;
+                    white-space: pre-wrap; word-break: break-word; }
+
+  .obs { font-size: 16px; margin-top: 8px; white-space: pre-wrap;
+         word-break: break-word; }
+
+  .totais { margin-top: auto; padding-top: 12px; border-top: 2px solid #000;
+            display: flex; justify-content: space-between; font-size: 22px;
+            font-weight: 800; }
+
+  .footer {
+    margin-top: 14px; padding-top: 8px; border-top: 1px solid #999;
+    display: flex; justify-content: space-between; font-size: 12px;
+    color: #555;
+  }
+
+  .conferencia {
+    margin-top: 14px; padding-top: 12px; border-top: 2px dashed #999;
+    font-size: 14px;
+  }
+  .conferencia .linha { display: flex; gap: 18px; margin-top: 18px; }
+  .conferencia .campo { flex: 1; border-bottom: 2px solid #000;
+                         padding-bottom: 4px; }
+  .conferencia .campo .lbl { font-size: 11px; text-transform: uppercase;
+                              letter-spacing: 0.06em; color: #444; }
+
+  /* Barra topo so visivel no navegador (nao na impressao) */
+  .barra-topo {
+    background: #1f2933; color: #fff; padding: 10px 16px;
+    display: flex; gap: 12px; align-items: center; justify-content: space-between;
+    font-size: 14px;
+  }
+  .barra-topo button {
+    background: #2b8a3e; color: #fff; border: 0; padding: 8px 16px;
+    border-radius: 6px; font-weight: 800; cursor: pointer;
+  }
+  @media print {
+    .barra-topo { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="barra-topo">
+  <span>{{ pedidos|length }} pedido(s) ·
+        {{ vias|length }} via(s) por pedido ·
+        {{ data.strftime('%d/%m/%Y') }}</span>
+  <button onclick="window.print()">🖨 imprimir</button>
+</div>
+
+{% if not pedidos %}
+<div style="padding:40px;text-align:center;font-size:18px;color:#666;">
+  Nenhum pedido selecionado. Volte e marque os checkboxes.
+</div>
+{% endif %}
+
+{% for p in pedidos %}
+  {% for via in vias %}
+  {% set motorista = via == 'motorista' %}
+  <div class="folha">
+    <div class="cabecalho">
+      <div class="tit">Pedido #{{ p.code }}</div>
+      <div class="selo {% if motorista %}motorista{% endif %}">
+        {% if motorista %}via do entregador{% else %}via do cliente{% endif %}
+      </div>
+    </div>
+
+    <div class="linha-meta">
+      <div>
+        <div class="rotulo">Entrega</div>
+        <div class="val">{{ data.strftime('%d/%m/%Y') }}</div>
+      </div>
+      {% if p.periodo or p.expresso %}
+      <div>
+        <div class="rotulo">Janela</div>
+        <div class="val">
+          <span class="janela {% if p.expresso %}expresso{% endif %}">
+            {% if p.expresso %}⚡ EXPRESSO{% else %}{{ p.periodo or '—' }}{% endif %}
+          </span>
+        </div>
+      </div>
+      {% endif %}
+      {% if not motorista and p.driver_nome %}
+      <div>
+        <div class="rotulo">Entregador</div>
+        <div class="val">{{ p.driver_nome }}</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="secao-tit">Destinatário</div>
+    <div class="destinatario">{{ p.destinatario or p.comprador or '—' }}</div>
+    <div class="endereco">📍 {{ p.endereco or '—' }}</div>
+    {% if p.telefone %}<div class="telefone">📞 {{ p.telefone }}</div>{% endif %}
+
+    {% if p.cartinha and not motorista %}
+    <div class="cartinha">
+      <div class="lbl">💌 Cartinha (escrever à mão)</div>
+      <div class="txt">{{ p.cartinha }}</div>
+    </div>
+    {% endif %}
+
+    <div class="secao-tit">Itens
+      {% set n_itens = (p.itens or [])|sum(attribute='quantidade', start=0) %}
+      <span style="font-weight:400;color:#444;font-size:13px;">
+        ({{ n_itens|int }} {% if n_itens|int == 1 %}item{% else %}itens{% endif %})
+      </span>
+    </div>
+    <table class="itens">
+      <thead>
+        <tr>
+          <th class="qcol">Qtd</th>
+          <th>Item</th>
+          {% if not motorista %}<th class="vcol-h">Valor</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in (p.itens or []) %}
+        <tr>
+          <td class="qcol">{{ (it.quantidade or 1)|int }}×</td>
+          <td>{{ it.nome }}</td>
+          {% if not motorista %}
+          <td class="vcol">
+            {% set v = (it.valor_total if it.valor_total is not none
+                        else (it.valor_unitario or 0) * (it.quantidade or 1)) %}
+            R$ {{ '%.2f'|format(v|float) | replace('.', ',') }}
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if p.observacao %}
+    <div class="secao-tit">Observação</div>
+    <div class="obs">{{ p.observacao }}</div>
+    {% endif %}
+
+    {% if motorista %}
+    <div class="conferencia">
+      <div class="secao-tit">Conferência da entrega</div>
+      <div class="linha">
+        <div class="campo">
+          <div class="lbl">recebido por</div>
+        </div>
+        <div class="campo" style="max-width:160px;">
+          <div class="lbl">horário</div>
+        </div>
+      </div>
+      <div class="linha">
+        <div class="campo">
+          <div class="lbl">assinatura</div>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="totais">
+      <div>Total</div>
+      <div>R$ {{ '%.2f'|format((p.valor_total or 0)|float) | replace('.', ',') }}</div>
+    </div>
+    {% endif %}
+
+    <div class="footer">
+      <span>O Pão Padaria Artesanal</span>
+      <span>Pedido {{ p.code }} · {% if motorista %}entregador{% else %}cliente{% endif %}</span>
+    </div>
+  </div>
+  {% endfor %}
+{% endfor %}
+</body>
+</html>
