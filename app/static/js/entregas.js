@@ -558,21 +558,42 @@
         atualizarBarraImprimir();
     });
 
-    // SNAPSHOT pra evitar race: quando o modal abre, capturo os codes
-    // selecionados. Se a Operacao re-renderizar entre abrir-modal e clicar
-    // "cliente", os checkboxes perdem :checked — mas a impressao usa o
-    // snapshot, nao o estado da tela. Bug real (11/06/2026): clicava
-    // selecionar-todos, abria modal, escolhia cliente -> "Nenhum pedido".
-    var codesSnapshot = [];
+    // SNAPSHOT: codes + DADOS dos pedidos capturados ao abrir o modal.
+    // Bug real (11/06/2026): mandar so codes pro servidor fazia ele rebuscar
+    // do VNDA por data — se a data nao bate exato (override, fuso, polling
+    // re-renderizando entre marcacao e clique) volta vazio "Nenhum pedido
+    // selecionado". Agora mandamos os DADOS direto via POST: o servidor nao
+    // precisa do VNDA pra imprimir o que ja esta na tela.
+    var pedidosSnapshot = [];
+
+    function pedidoDoEstado(code) {
+        if (!window.opUltimoResultado) return null;
+        var fontes = [opUltimoResultado.sem_driver || []];
+        (opUltimoResultado.drivers || []).forEach(function(dr) {
+            fontes.push(dr.paradas || []);
+        });
+        for (var i = 0; i < fontes.length; i++) {
+            for (var j = 0; j < fontes[i].length; j++) {
+                if (fontes[i][j].code === code) return fontes[i][j];
+            }
+        }
+        return null;
+    }
 
     window.abrirModalImprimir = function() {
-        codesSnapshot = codesSelecionados();
-        if (!codesSnapshot.length) {
-            alert('Marque ao menos um pedido antes.');
+        var codes = codesSelecionados();
+        pedidosSnapshot = [];
+        codes.forEach(function(c) {
+            var p = pedidoDoEstado(c);
+            if (p) pedidosSnapshot.push(p);
+        });
+        if (!pedidosSnapshot.length) {
+            alert('Marque ao menos um pedido antes (e aguarde a tela '
+                  + 'carregar a lista do dia).');
             return;
         }
         var el = document.getElementById('modal-imprimir-qt');
-        if (el) el.textContent = codesSnapshot.length;
+        if (el) el.textContent = pedidosSnapshot.length;
         var m = document.getElementById('modalImprimirVias');
         if (m && window.bootstrap) {
             bootstrap.Modal.getOrCreateInstance(m).show();
@@ -581,21 +602,36 @@
         }
     };
     window.imprimirSelecionados = function(vias) {
-        var sel = (codesSnapshot && codesSnapshot.length)
-            ? codesSnapshot : codesSelecionados();
-        if (!sel.length) return;
+        if (!pedidosSnapshot.length) return;
         var data = document.getElementById('op-data');
         var dataVal = (data && data.value) || '';
-        var url = '/entregas/imprimir?codes=' +
-            encodeURIComponent(sel.join(',')) +
-            '&vias=' + encodeURIComponent(vias || 'cliente') +
-            (dataVal ? '&data=' + encodeURIComponent(dataVal) : '');
+
+        // POST via form-action: gera HTML server-side mas sem rebuscar o
+        // VNDA. window.open + form.submit pra abrir em nova aba.
+        var w = window.open('about:blank', '_blank');
+        var f = document.createElement('form');
+        f.method = 'POST';
+        f.action = '/entregas/imprimir';
+        f.target = w ? '_blank' : '_self';
+        var addInput = function(name, value) {
+            var i = document.createElement('input');
+            i.type = 'hidden';
+            i.name = name;
+            i.value = value;
+            f.appendChild(i);
+        };
+        addInput('csrf_token', (window.CSRF_TOKEN || ''));
+        addInput('pedidos_json', JSON.stringify(pedidosSnapshot));
+        addInput('vias', vias || 'cliente');
+        if (dataVal) addInput('data', dataVal);
+        document.body.appendChild(f);
         var m = document.getElementById('modalImprimirVias');
         if (m && window.bootstrap) {
             var inst = bootstrap.Modal.getInstance(m);
             if (inst) inst.hide();
         }
-        window.open(url, '_blank');
+        f.submit();
+        document.body.removeChild(f);
     };
     // Compat: chamada antiga do botão "imprimir" topo direita E botao
     // "imprimir" da barra da Operacao (que chamava window.print() puro —
