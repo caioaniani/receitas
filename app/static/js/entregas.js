@@ -337,6 +337,7 @@
                             (p.data_override ? ' <span class="badge bg-warning text-dark" title="Data alterada — original: ' + escapeHtml(p.data_entrega_original_fmt || '') + (p.override_motivo ? ' · Motivo: ' + escapeHtml(p.override_motivo) : '') + (p.override_autor ? ' · Por: ' + escapeHtml(p.override_autor) : '') + '" style="font-size:10px;"><i class="bi bi-pencil-square"></i> Data alterada</span>' : '') +
                             (p.driver ? ' <span class="badge text-white" style="font-size:10px;background:' + (p.driver.cor || '#3cb44b') + ';" title="Driver atribuído"><i class="bi bi-person-badge"></i> ' + escapeHtml(p.driver.nome) + '</span>' : '') +
                         '</div>' +
+                        '</div>' +
                         '<div class="d-flex align-items-center gap-2">' +
                             (p.expresso ? '<span class="badge" style="background:#e8590c;color:#fff;font-size:11px;"><i class="bi bi-lightning-fill"></i> Expresso</span>' : '') +
                             (p.periodo ? '<span class="badge bg-light text-dark" style="font-size:11px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>' : '') +
