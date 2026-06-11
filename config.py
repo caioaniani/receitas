@@ -88,6 +88,10 @@ class Config:
     LALAMOVE_REMETENTE_NOME = os.environ.get('LALAMOVE_REMETENTE_NOME', '')
     LALAMOVE_REMETENTE_FONE = os.environ.get('LALAMOVE_REMETENTE_FONE', '')
 
+    # Modelo do bot WhatsApp do dono (fork por canal; Slack usa o default
+    # Sonnet do copilot). Vazio = Opus (MODELO_WHATSAPP_DEFAULT).
+    ZAPI_BOT_MODELO = os.environ.get('ZAPI_BOT_MODELO', '')
+
     # Token para integracao com bots externos (n8n / WhatsApp).
     # Gere com: python -c "import secrets; print(secrets.token_urlsafe(32))"
     BOT_API_TOKEN = os.environ.get('BOT_API_TOKEN', '')

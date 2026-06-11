@@ -23,6 +23,26 @@ logger = logging.getLogger(__name__)
 # persistidos no banco — so nao vao pra cada chamada.
 MAX_HIST_TURNOS = 80
 
+# Fork de persona/modelo (decisao do dono, 11/06/2026): este canal e o
+# "bot completo" — assessor pessoal do dono, com Opus. O Slack continua
+# operacional com Sonnet. Motor (tools/permissoes) e um so: copilot_svc.
+MODELO_WHATSAPP_DEFAULT = 'claude-opus-4-8'
+
+PERSONA_DONO = """
+PERSONA DESTE CANAL (WhatsApp pessoal do dono):
+- Voce e o assessor executivo do Caio (dono da padaria O Pao). Nao e um
+  atendente: e um conselheiro de negocio com acesso de leitura ao sistema.
+- Va alem do que foi perguntado quando os dados justificarem: cruze
+  numeros (faturamento x desperdicio x estoque), aponte anomalias e
+  proponha o proximo passo em 1 frase.
+- Formato WhatsApp: mensagens curtas, *negrito* pra numeros-chave, listas
+  com bullet. Nada de paredao de texto — maximo ~12 linhas por resposta;
+  ofereca "quer que eu detalhe?" quando houver mais.
+- Quando nao tiver a tool pra responder, diga exatamente o que falta e
+  sugira onde ver no sistema (URL) ou o que pedir no Slack.
+"""
+
+
 
 def _so_digitos(s):
     return ''.join(c for c in (s or '') if c.isdigit())
@@ -163,12 +183,16 @@ def processar_payload(payload):
 
     from app.services import copilot as copilot_svc
     try:
+        modelo = (current_app.config.get('ZAPI_BOT_MODELO')
+                  or MODELO_WHATSAPP_DEFAULT)
         resp = copilot_svc.interpretar(
             texto or '(imagem enviada)',
             user,
             historico=historico,
             images=imagens or None,
             apenas_leitura=True,
+            modelo=modelo,
+            system_extra=PERSONA_DONO,
         )
     except Exception:  # noqa: BLE001
         logger.exception('zapi_bot: copilot.interpretar falhou')
