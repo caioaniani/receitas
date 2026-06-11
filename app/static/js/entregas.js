@@ -325,6 +325,10 @@
             html += '<div class="card mb-2">' +
                 '<div class="card-body py-2 px-3">' +
                     '<div class="d-flex justify-content-between align-items-start">' +
+                        '<div class="d-flex gap-2 align-items-start">' +
+                            '<input type="checkbox" class="form-check-input mt-1 chk-imprimir d-print-none" ' +
+                                'data-code="' + encodeURIComponent(p.code) + '" ' +
+                                'title="selecionar pra imprimir">' +
                         '<div>' +
                             '<a href="https://www.padariaartesanalonline.com.br/admin/pedido?id=' + encodeURIComponent(p.code) + '" target="_blank" rel="noopener" class="text-decoration-none" title="Abrir no VNDA" style="color: var(--accent);">' +
                                 '<strong style="font-size:13px; color: var(--accent);">[' + escapeHtml(p.code) + '] <i class="bi bi-box-arrow-up-right" style="font-size:11px;"></i></strong>' +
