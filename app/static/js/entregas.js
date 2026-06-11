@@ -614,13 +614,18 @@
         var data = document.getElementById('op-data');
         var dataVal = (data && data.value) || '';
 
-        // POST via form-action: gera HTML server-side mas sem rebuscar o
-        // VNDA. window.open + form.submit pra abrir em nova aba.
-        var w = window.open('about:blank', '_blank');
+        // POST via form com TARGET NOMEADO — abre nova aba E o submit
+        // navega ela. Bug real (11/06/2026): window.open(_blank) +
+        // form.target='_blank' criava DUAS abas (a aberta ficava
+        // about:blank, a do submit recebia a impressao). Com nome unico,
+        // window.open e form.target apontam pra MESMA janela. E nao
+        // removemos o form na hora — esperamos o submit despachar.
+        var nomeAba = 'imprimir-' + Date.now();
+        window.open('', nomeAba);   // abre/encontra a aba pelo nome
         var f = document.createElement('form');
         f.method = 'POST';
         f.action = '/entregas/imprimir';
-        f.target = w ? '_blank' : '_self';
+        f.target = nomeAba;
         var addInput = function(name, value) {
             var i = document.createElement('input');
             i.type = 'hidden';
@@ -639,7 +644,11 @@
             if (inst) inst.hide();
         }
         f.submit();
-        document.body.removeChild(f);
+        // Limpa o form depois do submit despachar (browsers nao gostam
+        // que removamos antes da navegacao iniciar).
+        setTimeout(function() {
+            if (f.parentNode) f.parentNode.removeChild(f);
+        }, 1500);
     };
     // Compat: chamada antiga do botão "imprimir" topo direita E botao
     // "imprimir" da barra da Operacao (que chamava window.print() puro —
