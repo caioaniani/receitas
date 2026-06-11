@@ -445,6 +445,7 @@ def imprimir():
     else:
         codes_param = (src.get('codes') or '').strip()
         codes_sel = {c.strip() for c in codes_param.split(',') if c.strip()}
+        diag['codes_recebidos'] = len(codes_sel)
         try:
             overrides_full = _carregar_overrides_full()
             overrides_data = {code: o['data']
@@ -454,9 +455,13 @@ def imprimir():
                 vnda.buscar_pedidos_do_dia(target, overrides=overrides_data))
             pedidos = (resultado.get('pedidos', [])
                        if 'erro' not in resultado else [])
-        except Exception:  # noqa: BLE001
+            if 'erro' in resultado:
+                diag['problema'] = 'VNDA: %s' % str(resultado['erro'])[:200]
+        except Exception as e:  # noqa: BLE001
             current_app.logger.exception('imprimir: falha carregando pedidos')
+            diag['problema'] = 'excecao carregando: %s' % type(e).__name__
             pedidos = []
+        diag['pedidos_na_data'] = len(pedidos)
         if codes_sel:
             codes_carregados = {p.get('code') for p in pedidos if p.get('code')}
             ausentes = codes_sel - codes_carregados
@@ -465,6 +470,8 @@ def imprimir():
                     'imprimir: %d code(s) selecionado(s) nao bateram com a '
                     'data %s: %s', len(ausentes), target.isoformat(),
                     ', '.join(sorted(ausentes))[:500])
+                diag['codes_sem_match_na_data'] = ', '.join(
+                    sorted(ausentes))[:300]
         pedidos = [p for p in pedidos if p.get('code') in codes_sel]
     _aplicar_cartinhas(pedidos)
 
