@@ -1085,6 +1085,10 @@ def interpretar(prompt_text, user, historico=None, images=None,
                            if t.get('name') not in REQUER_APROVACAO]
     if not tools_filtradas:
         return {'tipo': 'erro', 'explicacao': 'Sem permissao pra usar o copilot.', 'raw': None}
+    # Prompt lista exatamente as tools enviadas — nunca promete write que o
+    # filtro removeu (ver _build_system_prompt).
+    system = _build_system_prompt(user, tools_visiveis=tools_filtradas,
+                                  apenas_leitura=apenas_leitura)
 
     # Cache breakpoint na ULTIMA tool: marca todo o bloco de tools (schema
     # gigante, ~5-10KB) como cacheable. Junto com o cache do system_prompt,
