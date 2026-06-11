@@ -20,20 +20,25 @@ def _user(app, papel='funcionario', login='func1', loja_id=None):
 
 
 def _pedidos_fake():
+    """Forma REAL do pedido VNDA (vnda.py::_normalizar_pedido): dinheiro
+    fica em `total` (pedido) e `preco_unitario`/`subtotal` (item).
+    Bug real (11/06/2026): os fakes antigos usavam valor_total/
+    valor_unitario — nomes que NUNCA existiram nos dados reais — e o
+    template lia esses nomes: testes verdes, prod imprimindo R$ 0,00."""
     return [
         {'code': 'VND-1', 'destinatario': 'Ana', 'endereco': 'Rua A, 1',
          'telefone': '11 99999-1111', 'periodo': '10h-12h', 'expresso': False,
          'cartinha_vnda': 'Feliz aniversario!', 'observacao': 'portaria 1',
-         'valor_total': 360.0,
+         'total': 360.0,
          'itens': [{'nome': 'Cesta Bonjour', 'quantidade': 1,
-                    'valor_unitario': 215, 'valor_total': 215},
+                    'preco_unitario': 215, 'subtotal': 215},
                    {'nome': 'Croissant Tradicional', 'quantidade': 5,
-                    'valor_unitario': 29, 'valor_total': 145}]},
+                    'preco_unitario': 29, 'subtotal': 145}]},
         {'code': 'VND-2', 'destinatario': 'Bruno', 'endereco': 'Rua B, 2',
          'telefone': '', 'expresso': True, 'observacao': '',
-         'valor_total': 50.0,
+         'total': 50.0,
          'itens': [{'nome': 'Sourdough Tradicional', 'quantidade': 1,
-                    'valor_total': 50}]},
+                    'subtotal': 50}]},
     ]
 
 
