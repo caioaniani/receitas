@@ -254,7 +254,10 @@
     {% else %}
     <div class="totais">
       <div>Total</div>
-      <div>R$ {{ '%.2f'|format((p.valor_total or 0)|float) | replace('.', ',') }}</div>
+      {# `total` = nome real do campo no pedido VNDA; valor_total so
+         existia nos fakes de teste (ver comentario nos itens). #}
+      {% set tot = p.total if p.total not in (None, '') else (p.valor_total or 0) %}
+      <div>R$ {{ '%.2f'|format(tot|float) | replace('.', ',') }}</div>
     </div>
     {% endif %}
 
