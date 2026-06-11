@@ -440,6 +440,59 @@ def test_imprimir_get_diag_codes_sem_match(app, admin_user):
     assert 'codes_sem_match_na_data' in body
 
 
+def test_post_redireciona_pra_get_lote(app, admin_user):
+    """Bug real (11/06/2026, 2o print do dono): pagina resultado de POST
+    imprimia TODA EM BRANCO no Safari — o print re-busca o documento e nao
+    reenvia POST. Agora o POST persiste o payload (ImpressaoLote) e
+    devolve 303 pro GET ?lote=<token>; o documento impresso e GET."""
+    c = app.test_client()
+    _login(c)
+    r = _post_imprimir(c, _pedidos_fake(), vias='cliente,motorista',
+                       follow_redirects=False)
+    assert r.status_code == 303
+    assert 'lote=' in r.headers['Location']
+    assert 'vias=cliente%2Cmotorista' in r.headers['Location'] \
+        or 'vias=cliente,motorista' in r.headers['Location']
+    # O GET do redirect renderiza o conteudo completo, sem tocar o VNDA
+    r2 = c.get(r.headers['Location'])
+    assert r2.status_code == 200
+    body = r2.data.decode()
+    assert 'Ana' in body
+    assert body.count('class="folha"') == 4   # 2 pedidos x 2 vias
+    # Recarregar a MESMA URL funciona (era o ponto: documento re-buscavel)
+    r3 = c.get(r.headers['Location'])
+    assert 'Ana' in r3.data.decode()
+
+
+def test_get_lote_expirado_mostra_diagnostico(app, admin_user):
+    c = app.test_client()
+    _login(c)
+    r = c.get('/entregas/imprimir?lote=nao-existe-mais')
+    assert r.status_code == 200
+    body = r.data.decode()
+    assert 'Nenhum pedido selecionado' in body
+    assert 'expirado' in body
+
+
+def test_post_limpa_lotes_velhos(app, admin_user):
+    """Lotes de impressao sao efemeros: cada POST novo varre os com mais
+    de 2 dias (a tabela nao pode crescer pra sempre)."""
+    from datetime import timedelta
+
+    from app.extensions import db
+    from app.models import ImpressaoLote
+    from app.utils import agora
+    velho = ImpressaoLote(token='tok-velho', payload='[]',
+                          criado_em=agora() - timedelta(days=3))
+    db.session.add(velho)
+    db.session.commit()
+    c = app.test_client()
+    _login(c)
+    _post_imprimir(c, _pedidos_fake(), follow_redirects=False)
+    assert ImpressaoLote.query.filter_by(token='tok-velho').first() is None
+    assert ImpressaoLote.query.count() == 1   # so o lote recem-criado
+
+
 def test_css_da_folha_nao_usa_flex_nem_min_height(app, admin_user):
     """Bug real (11/06/2026, print do dono): min-height de 270mm na .folha
     era MAIOR que a area util do A4 com margem 14mm (297-28=269mm) — toda
