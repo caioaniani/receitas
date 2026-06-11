@@ -524,9 +524,24 @@
     }
     document.addEventListener('change', function(e) {
         var t = e.target;
-        if (t && t.classList && (t.classList.contains('chk-imprimir')
-                                  || t.classList.contains('op-check'))) {
+        if (!t || !t.classList) return;
+        // op-check-secao marca/desmarca .op-check em lote via .checked direto
+        // (NAO dispara change), entao escutamos AQUI tambem — senao o
+        // "selecionar todos da secao" deixava o botao desabilitado.
+        if (t.classList.contains('chk-imprimir')
+                || t.classList.contains('op-check')
+                || t.classList.contains('op-check-secao')) {
             atualizarBarraImprimir();
+        }
+    });
+    // Como recurso final: clique direto re-avalia. Cobre "selecionar todos"
+    // em qualquer caminho — incluindo botoes futuros que setem .checked sem
+    // disparar evento.
+    document.addEventListener('click', function(e) {
+        var t = e.target;
+        if (t && t.matches && (t.matches('.op-check-secao')
+                                || t.closest('[data-op-sel-todos]'))) {
+            setTimeout(atualizarBarraImprimir, 0);
         }
     });
     // Polling leve: o render da Operacao acontece em varios pontos
