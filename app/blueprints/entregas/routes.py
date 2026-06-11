@@ -493,7 +493,8 @@ def imprimir():
     # renderiza um a um e descarta o que falhou (com log pra diagnostico).
     try:
         return render_template('entregas/imprimir.html',
-                               pedidos=pedidos, vias=vias, data=target)
+                               pedidos=pedidos, vias=vias, data=target,
+                               diag=diag)
     except Exception:  # noqa: BLE001
         current_app.logger.exception(
             'imprimir: render em lote falhou — isolando pedido com defeito')
@@ -501,14 +502,16 @@ def imprimir():
         for p in pedidos:
             try:
                 render_template('entregas/imprimir.html',
-                                pedidos=[p], vias=vias, data=target)
+                                pedidos=[p], vias=vias, data=target,
+                                diag=diag)
                 bons.append(p)
             except Exception:  # noqa: BLE001
                 current_app.logger.warning(
                     'imprimir: pedido %s nao renderiza, descartado',
                     p.get('code'))
         return render_template('entregas/imprimir.html',
-                               pedidos=bons, vias=vias, data=target)
+                               pedidos=bons, vias=vias, data=target,
+                               diag=diag)
 
 
 @entregas_bp.route('/api/calendario')
