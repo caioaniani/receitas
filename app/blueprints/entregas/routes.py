@@ -325,7 +325,6 @@ def _carregar_overrides_full():
 
 @entregas_bp.route('/api/pedidos')
 @login_required
-@entrega_access_required
 def api_pedidos():
     import traceback
     data_str = request.args.get('data', hoje_brt().isoformat())
