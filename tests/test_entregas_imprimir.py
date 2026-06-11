@@ -166,6 +166,57 @@ def test_imprimir_codes_invalido_devolve_pagina_vazia(app, admin_user):
     assert 'Nenhum pedido selecionado'.encode() in r.data
 
 
+def test_imprimir_aguenta_quantidade_none(app, admin_user):
+    """Bug real (11/06/2026): selecionei TODOS e a impressao deu 500. Causa:
+    algum item tem quantidade=None — sum(attribute=) do Jinja explode.
+    O template agora soma defensivo (None→0)."""
+    c = app.test_client()
+    _login(c)
+
+    pedido_quebrado = {
+        'code': 'VND-Q', 'destinatario': 'Z', 'endereco': 'Rua Q',
+        'telefone': '', 'periodo': '', 'expresso': False,
+        'valor_total': 100.0,
+        'itens': [
+            {'nome': 'Item ok', 'quantidade': 2, 'valor_total': 60},
+            {'nome': 'Item sem qtd', 'quantidade': None,
+             'valor_total': 40},
+            {'nome': 'Item sem valor', 'quantidade': 1,
+             'valor_total': None, 'valor_unitario': None},
+        ],
+    }
+    mocks = [
+        patch('app.blueprints.entregas.routes.vnda.buscar_pedidos_do_dia',
+              return_value={'pedidos': [pedido_quebrado]}),
+        patch('app.blueprints.entregas.routes._injetar_pedidos_locais',
+              side_effect=lambda target, res: res),
+        patch('app.blueprints.entregas.routes._carregar_overrides_full',
+              return_value={}),
+    ]
+    [m.start() for m in mocks]
+    try:
+        r = c.get('/entregas/imprimir?codes=VND-Q&data=2026-06-11')
+    finally:
+        [m.stop() for m in mocks]
+    assert r.status_code == 200
+    body = r.data.decode()
+    assert 'Item ok' in body
+    assert 'Item sem qtd' in body
+    # contagem deve somar so o que existe (2 + 0 + 1 = 3) — sem TypeError
+    assert '(3 itens)' in body
+
+
+def test_js_escuta_op_check_secao_pra_selecionar_todos(app):
+    """Bug real (11/06/2026): 'selecionar todos da secao' nao habilitava o
+    botao. Causa: op-check-secao seta .checked nos filhos por atribuicao
+    direta, sem disparar 'change'. Listener agora escuta op-check-secao
+    explicitamente + click como recurso final."""
+    import pathlib
+    js = pathlib.Path('app/static/js/entregas.js').read_text()
+    assert "'op-check-secao'" in js
+    assert 'op-check-secao' in js and 'atualizarBarraImprimir' in js
+
+
 def test_imprimir_default_via_cliente(app, admin_user):
     c = app.test_client()
     _login(c)
