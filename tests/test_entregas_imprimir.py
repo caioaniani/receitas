@@ -364,3 +364,115 @@ def test_imprimir_post_aceita_csrf_token_valido(app, admin_user):
     finally:
         # Defensivo — conftest tambem restaura, mas explicito nao fere.
         app.config['WTF_CSRF_ENABLED'] = False
+
+
+def test_post_renderiza_valores_reais_do_vnda(app, admin_user):
+    """Bug real (11/06/2026): o template lia valor_total/valor_unitario —
+    campos que so existiam nos fakes de teste. Pedido REAL do VNDA usa
+    total/preco_unitario/subtotal → via do cliente imprimia R$ 0,00 em
+    TUDO. Este teste POSTa a forma real e exige os valores certos."""
+    c = app.test_client()
+    _login(c)
+    r = _post_imprimir(c, _pedidos_fake(), vias='cliente')
+    assert r.status_code == 200
+    body = r.data.decode()
+    assert 'R$ 360,00' in body     # p.total
+    assert 'R$ 215,00' in body     # it.subtotal
+    assert 'R$ 145,00' in body     # it.subtotal (2o item)
+    assert 'R$ 0,00' not in body   # nada zerado na via do cliente
+
+
+def test_js_snapshot_busca_nas_duas_abas(app):
+    """Bug real (11/06/2026): pedidoDoEstado so olhava opUltimoResultado
+    (aba Operacao). Quem marcava checkbox na aba legada 'Pedidos do Dia'
+    (array `pedidos` da IIFE) — ou quando /api/atribuidos nem carregou —
+    caia em snapshot vazio e a impressao morria."""
+    import pathlib
+    js = pathlib.Path('app/static/js/entregas.js').read_text()
+    assert 'fontes.push(pedidos)' in js          # aba legada
+    assert 'estado.sem_driver' in js             # aba Operacao
+    assert 'dr.paradas' in js
+
+
+def test_js_fallback_get_quando_snapshot_vazio(app):
+    """Quando nenhum estado em memoria contem os codes marcados, o JS nao
+    pode morrer num alert: cai no GET legado (servidor rebusca do VNDA) e,
+    no pior caso, a pagina mostra o bloco de diagnostico."""
+    import pathlib
+    js = pathlib.Path('app/static/js/entregas.js').read_text()
+    assert "window.open('/entregas/imprimir?' + qs, nomeAba)" in js
+    assert 'codesSnapshotImpr' in js
+
+
+def test_imprimir_post_vazio_mostra_diagnostico(app, admin_user):
+    """POST que resulta em 0 pedidos mostra o bloco de diagnostico na
+    pagina (3 bugs as cegas nessa tela ja; o proximo print do usuario
+    tem que dizer o porque sozinho)."""
+    c = app.test_client()
+    _login(c)
+    r = _post_imprimir(c, [], vias='cliente,motorista')
+    assert r.status_code == 200
+    body = r.data.decode()
+    assert 'Nenhum pedido selecionado' in body
+    assert 'diagn' in body                     # bloco diagnostico
+    assert 'lista vazia' in body               # problema especifico
+    assert 'metodo: POST' in body
+
+
+def test_imprimir_get_diag_codes_sem_match(app, admin_user):
+    """GET legado com codes que nao batem com a data: diagnostico lista
+    os codes ausentes — distingue 'data errada' de 'VNDA fora'."""
+    c = app.test_client()
+    _login(c)
+    mocks = _mock_carregamento()
+    [m.start() for m in mocks]
+    try:
+        r = c.get('/entregas/imprimir?codes=VND-FANTASMA&data=2026-06-11')
+    finally:
+        [m.stop() for m in mocks]
+    body = r.data.decode()
+    assert 'Nenhum pedido selecionado' in body
+    assert 'VND-FANTASMA' in body              # code sem match aparece
+    assert 'codes_sem_match_na_data' in body
+
+
+def test_apis_leitura_da_operacao_abertas_pra_funcionario(app):
+    """A aba Operacao do /entregas/ chama /api/atribuidos, /api/lotes e
+    /api/rotas. Como a tela abre pra todos (decisao 11/06/2026), os GETs
+    read-only nao podem dar 403 pra funcionario — senao a aba fica vazia
+    e a impressao morre com snapshot vazio."""
+    uid = _user(app, papel='funcionario', loja_id=None)
+    c = app.test_client()
+    _login(c, login='func1', senha='senha123')
+    with c.session_transaction() as s:
+        s['_user_id'] = str(uid)
+        s['_fresh'] = True
+    mocks = [
+        patch('app.blueprints.entregas.routes.vnda.buscar_pedidos_do_dia',
+              return_value={'pedidos': []}),
+        patch('app.blueprints.entregas.routes._injetar_pedidos_locais',
+              side_effect=lambda target, res: res),
+    ]
+    [m.start() for m in mocks]
+    try:
+        assert c.get('/entregas/api/atribuidos?data=2026-06-11') \
+            .status_code == 200
+        assert c.get('/entregas/api/lotes?data=2026-06-11') \
+            .status_code == 200
+        assert c.get('/entregas/api/rotas?data=2026-06-11') \
+            .status_code == 200
+    finally:
+        [m.stop() for m in mocks]
+
+
+def test_writes_de_atribuicao_continuam_guardados(app):
+    """Abrir os reads NAO abre os writes: funcionario sem loja segue 403
+    em POST de atribuicao (mexe na operacao de entrega)."""
+    uid = _user(app, papel='funcionario', login='func2', loja_id=None)
+    c = app.test_client()
+    _login(c, login='func2', senha='senha123')
+    with c.session_transaction() as s:
+        s['_user_id'] = str(uid)
+        s['_fresh'] = True
+    r = c.post('/entregas/api/atribuicao/VND-1', json={'driver_id': 1})
+    assert r.status_code == 403
