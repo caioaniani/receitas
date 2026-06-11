@@ -633,7 +633,10 @@
             i.value = value;
             f.appendChild(i);
         };
-        addInput('csrf_token', (window.CSRF_TOKEN || ''));
+        // CSRF_TOKEN é declarado como `const` no base.html (top-level
+        // binding, NÃO está em window). Acessar via `window.CSRF_TOKEN`
+        // dava undefined → '' → Flask-WTF rejeitava o POST com 400.
+        addInput('csrf_token', (typeof CSRF_TOKEN !== 'undefined' ? CSRF_TOKEN : ''));
         addInput('pedidos_json', JSON.stringify(pedidosSnapshot));
         addInput('vias', vias || 'cliente');
         if (dataVal) addInput('data', dataVal);
