@@ -198,7 +198,11 @@ def test_imprimir_codes_invalido_devolve_pagina_vazia(app, admin_user):
 def test_imprimir_aguenta_quantidade_none(app, admin_user):
     """Bug real (11/06/2026): selecionei TODOS e a impressao deu 500. Causa:
     algum item tem quantidade=None — sum(attribute=) do Jinja explode.
-    O template agora soma defensivo (None→0)."""
+    O template agora soma defensivo (None→0).
+
+    Este teste tambem cobre a COMPAT com os nomes legados valor_total/
+    valor_unitario (pedidos locais antigos podem te-los): o template cai
+    neles quando total/subtotal/preco_unitario nao existem."""
     c = app.test_client()
     _login(c)
 
