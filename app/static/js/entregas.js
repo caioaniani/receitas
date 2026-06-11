@@ -567,9 +567,17 @@
     var pedidosSnapshot = [];
 
     function pedidoDoEstado(code) {
-        if (!window.opUltimoResultado) return null;
-        var fontes = [opUltimoResultado.sem_driver || []];
-        (opUltimoResultado.drivers || []).forEach(function(dr) {
+        // opUltimoResultado eh a variavel local da MESMA IIFE (linha
+        // 1926+); var e' hoisted, entao acessivel daqui. Bug real
+        // (11/06/2026): eu estava lendo window.opUltimoResultado — que
+        // nunca foi exposto — entao retornava null sempre e o snapshot
+        // ficava vazio ("Marque ao menos um pedido antes" com checkbox
+        // marcado).
+        var estado = (typeof opUltimoResultado !== 'undefined'
+                      && opUltimoResultado) ? opUltimoResultado : null;
+        if (!estado) return null;
+        var fontes = [estado.sem_driver || []];
+        (estado.drivers || []).forEach(function(dr) {
             fontes.push(dr.paradas || []);
         });
         for (var i = 0; i < fontes.length; i++) {
