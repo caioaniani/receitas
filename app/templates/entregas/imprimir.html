@@ -126,6 +126,15 @@
 {% if not pedidos %}
 <div style="padding:40px;text-align:center;font-size:18px;color:#666;">
   Nenhum pedido selecionado. Volte e marque os checkboxes.
+  {% if diag %}
+  <div style="margin-top:16px;font-size:13px;color:#999;text-align:left;
+              max-width:560px;margin-left:auto;margin-right:auto;
+              background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;
+              padding:12px;">
+    <strong>diagnóstico</strong> (mande print desta caixa se persistir):<br>
+    {% for k, v in diag.items() %}{{ k }}: {{ v }}<br>{% endfor %}
+  </div>
+  {% endif %}
 </div>
 {% endif %}
 
