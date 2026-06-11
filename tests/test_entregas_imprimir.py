@@ -296,3 +296,52 @@ def test_js_form_target_nomeado_nao_blank(app):
     assert 'imprimir-' in js
     assert "window.open('', nomeAba)" in js
     assert 'f.target = nomeAba' in js
+
+
+def test_js_csrf_token_nao_usa_window(app):
+    """Bug real (11/06/2026): addInput('csrf_token', window.CSRF_TOKEN || '')
+    mandava string vazia porque base.html declara `const CSRF_TOKEN = "..."`
+    (top-level binding, NAO em window). Flask-WTF entao rejeitava o POST com
+    400 'The CSRF token is missing.' Corrigido com typeof check, igual ao
+    padrao usado em todas as outras chamadas do mesmo arquivo."""
+    import pathlib
+    js = pathlib.Path('app/static/js/entregas.js').read_text()
+    # nenhum uso de window.CSRF_TOKEN em codigo (so em comentario explicativo)
+    linhas_codigo = [linha for linha in js.splitlines()
+                     if 'window.CSRF_TOKEN' in linha
+                     and not linha.lstrip().startswith('//')]
+    assert not linhas_codigo, f'uso em codigo: {linhas_codigo!r}'
+    # tem que usar o padrao typeof
+    assert "typeof CSRF_TOKEN !== 'undefined' ? CSRF_TOKEN : ''" in js
+
+
+def test_imprimir_post_aceita_csrf_token_valido(app, admin_user):
+    """Smoke do POST /entregas/imprimir com CSRF token valido — garante que
+    o endpoint nao rejeita o caminho real (form HTML com csrf_token oculto)."""
+    import json
+    # Cliente com CSRF habilitado pra testar o caminho de prod
+    app.config['WTF_CSRF_ENABLED'] = True
+    try:
+        c = app.test_client()
+        _login(c)
+        # Pega um token CSRF valido da pagina /entregas/
+        r = c.get('/entregas/')
+        # CSRF_TOKEN aparece como literal JS no base.html
+        import re
+        m = re.search(rb'const CSRF_TOKEN = "([^"]+)"', r.data)
+        assert m, 'CSRF_TOKEN nao foi renderizado no base.html'
+        token = m.group(1).decode()
+        # POST com o token correto vai ate o handler
+        r = c.post('/entregas/imprimir', data={
+            'csrf_token': token,
+            'pedidos_json': json.dumps(_pedidos_fake()),
+            'vias': 'cliente',
+            'data': '2026-06-11',
+        })
+        assert r.status_code == 200, (
+            f'POST com CSRF valido deu {r.status_code} '
+            f'(corpo: {r.data[:200]!r})'
+        )
+        assert b'via do cliente' in r.data
+    finally:
+        app.config['WTF_CSRF_ENABLED'] = False
