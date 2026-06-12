@@ -6,13 +6,18 @@
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
     <h1 class="page-title mb-0"><i class="bi bi-cash-stack"></i> Caixa</h1>
     <div class="d-flex align-items-center gap-2">
+        {% if modo_loja %}
+        <span id="cx-sync-badge" class="badge text-bg-secondary" title="Sincronização com a nuvem">
+            <i class="bi bi-cloud-arrow-up"></i> Nuvem: verificando…
+        </span>
+        {% endif %}
         <span id="cx-clover-badge" class="badge text-bg-secondary" title="Status da maquininha">
             <i class="bi bi-credit-card"></i> Clover: verificando…
         </span>
         <select id="cx-loja" class="form-select form-select-sm" style="max-width:220px;"
                 {% if loja_usuario_id %}disabled{% endif %}>
             {% for l in lojas %}
-            <option value="{{ l.id }}" {% if l.id == loja_usuario_id %}selected{% endif %}>{{ l.nome }}</option>
+            <option value="{{ l.id }}" {% if l.id == loja_padrao %}selected{% endif %}>{{ l.nome }}</option>
             {% endfor %}
         </select>
         {% if current_user.is_admin() %}
@@ -190,7 +195,8 @@ window.CAIXA_CTX = {
     csrf: '{{ csrf_token() }}',
     lojaFixa: {{ 'true' if loja_usuario_id else 'false' }},
     cloverAtivo: {{ 'true' if clover_ativo else 'false' }},
-    cloverModo: '{{ clover_modo }}'
+    cloverModo: '{{ clover_modo }}',
+    modoLoja: {{ 'true' if modo_loja else 'false' }}
 };
 </script>
 <script src="{{ url_for('static', filename='js/caixa.js') }}?v={{ static_v.get('js/caixa.js', '0') }}"></script>

@@ -1,4 +1,5 @@
 from datetime import datetime, date
+import uuid as _uuid
 
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -1088,13 +1089,20 @@ class TarefaTemplate(db.Model):
 
 class Venda(db.Model):
     """Venda registrada no caixa próprio (PDV Opão). Pagamentos em cartão
-    são capturados na Clover Mini via app/services/clover.py."""
+    são capturados na Clover Mini via app/services/clover.py.
+
+    Nasce no servidor local da loja e sobe pra nuvem via app/services/sync.py
+    — o uuid é a chave global (o id numérico difere entre os bancos)."""
     __tablename__ = 'venda'
 
     id = db.Column(db.Integer, primary_key=True)
+    uuid = db.Column(db.String(32), unique=True, index=True,
+                     default=lambda: _uuid.uuid4().hex)
     code = db.Column(db.String(30), unique=True, nullable=False, index=True)
     loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=True)
-    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    # Nulo quando a venda veio de outro servidor (usuários não são sincronizados)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)
+    operador = db.Column(db.String(100))  # snapshot do nome de quem vendeu
     status = db.Column(db.String(20), default='aberta', index=True)  # aberta|paga|cancelada
     subtotal = db.Column(db.Float, default=0)
     desconto = db.Column(db.Float, default=0)
@@ -1102,6 +1110,8 @@ class Venda(db.Model):
     observacao = db.Column(db.String(300))
     criado_em = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     finalizado_em = db.Column(db.DateTime)
+    # Preenchido no servidor da loja quando a venda subiu pra nuvem
+    sincronizada_em = db.Column(db.DateTime)
 
     loja = db.relationship('Loja')
     usuario = db.relationship('Usuario')

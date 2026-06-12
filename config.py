@@ -50,6 +50,14 @@ class Config:
     # '0' desliga verificação TLS (só faz sentido no modo local — cert da CA Clover)
     CLOVER_TLS_VERIFY = os.environ.get('CLOVER_TLS_VERIFY', '1')
 
+    # Sincronização loja ↔ nuvem (servidor local por loja) — docs/servidor-local.md
+    # No servidor DA LOJA defina os 3 primeiros; na nuvem defina só o token.
+    # SYNC_NUVEM_URL definido = modo loja (pula seeds, liga o loop de sync).
+    SYNC_NUVEM_URL = os.environ.get('SYNC_NUVEM_URL', '')      # ex: https://opao.up.railway.app
+    SYNC_API_TOKEN = os.environ.get('SYNC_API_TOKEN', '')      # mesmo valor na nuvem e nas lojas
+    SYNC_LOJA_ID = os.environ.get('SYNC_LOJA_ID', '')          # id (nuvem) da loja deste servidor
+    SYNC_INTERVALO = os.environ.get('SYNC_INTERVALO', '60')    # segundos entre ciclos
+
     # Token para integracao com bots externos (n8n / WhatsApp).
     # Gere com: python -c "import secrets; print(secrets.token_urlsafe(32))"
     BOT_API_TOKEN = os.environ.get('BOT_API_TOKEN', '')

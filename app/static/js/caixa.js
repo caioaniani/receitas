@@ -385,6 +385,34 @@
         });
     }
 
+    // ── Status da sincronização com a nuvem (modo servidor de loja) ──
+
+    function statusSync() {
+        if (!CTX.modoLoja) return;
+        var badge = $('cx-sync-badge');
+        if (!badge) return;
+        api('/pdv/caixa/api/sync/status').then(function (r) {
+            if (!r.ok) return;
+            var pend = r.pendentes || 0;
+            var cls, txt;
+            if (r.ultimo_erro) {
+                cls = 'danger';
+                txt = 'sem internet' + (pend ? ' · ' + pend + ' venda(s) na fila' : '');
+                badge.title = 'O caixa segue funcionando — as vendas sobem quando a internet voltar. ' + r.ultimo_erro;
+            } else if (pend > 0) {
+                cls = 'warning';
+                txt = pend + ' venda(s) na fila';
+                badge.title = 'Aguardando próximo ciclo de sincronização';
+            } else {
+                cls = 'success';
+                txt = 'sincronizada';
+                badge.title = 'Última sincronização: ' + (r.ultimo_ok || '—');
+            }
+            badge.className = 'badge text-bg-' + cls;
+            badge.innerHTML = '<i class="bi bi-cloud-arrow-up"></i> Nuvem: ' + txt;
+        });
+    }
+
     // ── Status Clover ──
 
     function statusClover() {
@@ -494,7 +522,9 @@
         carregarCatalogo();
         carregarVendasDia();
         statusClover();
+        statusSync();
         setInterval(statusClover, 60000);
+        setInterval(statusSync, 30000);
         renderCarrinho();
     });
 })();

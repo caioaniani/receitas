@@ -264,31 +264,40 @@ def create_app(config_class=None):
     from app.services.audit import init_audit
     init_audit()
 
+    # Servidor local de loja (SYNC_NUVEM_URL definido): o catálogo desce da
+    # nuvem via sync — seeds não rodam pra não conflitar com os IDs da nuvem.
+    modo_loja = bool((app.config.get('SYNC_NUVEM_URL') or '').strip())
+
     with app.app_context():
         db.create_all()
         _migrate(app)
 
-        # Seed só roda localmente (SQLite) — em produção os dados já existem
-        if app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite'):
-            from app.seed import seed_database, seed_cardapio, seed_update_v2
-            seed_database()
-            seed_cardapio()
-            seed_update_v2()
+        if not modo_loja:
+            # Seed só roda localmente (SQLite) — em produção os dados já existem
+            if app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite'):
+                from app.seed import seed_database, seed_cardapio, seed_update_v2
+                seed_database()
+                seed_cardapio()
+                seed_update_v2()
 
-        # Produtos do site — roda em todos os ambientes (SQLite + PostgreSQL)
-        from app.seed import seed_site_products
-        seed_site_products()
+            # Produtos do site — roda em todos os ambientes (SQLite + PostgreSQL)
+            from app.seed import seed_site_products
+            seed_site_products()
 
-        # RH: lojas + funcionários — roda em todos os ambientes
-        from app.seed import seed_rh, seed_rh_escala
-        seed_rh()
-        seed_rh_escala()
+            # RH: lojas + funcionários — roda em todos os ambientes
+            from app.seed import seed_rh, seed_rh_escala
+            seed_rh()
+            seed_rh_escala()
 
-        # Gestão de Projetos — seed inicial em todos os ambientes
-        from app.seed import seed_projetos
-        seed_projetos()
+            # Gestão de Projetos — seed inicial em todos os ambientes
+            from app.seed import seed_projetos
+            seed_projetos()
 
         _criar_admin()
+
+    if modo_loja:
+        from app.services import sync
+        sync.iniciar_loop(app)
 
     return app
 
@@ -398,6 +407,25 @@ def _migrate_postgres(app):
         cols_vi = {row[0] for row in result}
         if cols_vi and 'setor' not in cols_vi:
             conn.execute(text("ALTER TABLE venda_item ADD COLUMN setor VARCHAR(30)"))
+
+        # venda (caixa) — uuid global de sync, operador e marca de sincronizada
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'venda'"
+        ))
+        cols_venda = {row[0] for row in result}
+        if cols_venda:
+            if 'uuid' not in cols_venda:
+                conn.execute(text("ALTER TABLE venda ADD COLUMN uuid VARCHAR(32)"))
+                conn.execute(text(
+                    "UPDATE venda SET uuid = md5(random()::text || id::text) "
+                    "WHERE uuid IS NULL"))
+                conn.execute(text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_venda_uuid ON venda (uuid)"))
+            if 'operador' not in cols_venda:
+                conn.execute(text("ALTER TABLE venda ADD COLUMN operador VARCHAR(100)"))
+            if 'sincronizada_em' not in cols_venda:
+                conn.execute(text("ALTER TABLE venda ADD COLUMN sincronizada_em TIMESTAMP"))
 
         # funcionario
         result = conn.execute(text(
@@ -939,6 +967,22 @@ def _migrate_sqlite(app):
     cols_vi = [row[1] for row in cursor.fetchall()]
     if cols_vi and 'setor' not in cols_vi:
         cursor.execute("ALTER TABLE venda_item ADD COLUMN setor VARCHAR(30)")
+
+    # Migração venda (caixa): uuid global de sync, operador e sincronizada_em
+    cursor.execute("PRAGMA table_info(venda)")
+    cols_venda = [row[1] for row in cursor.fetchall()]
+    if cols_venda and 'uuid' not in cols_venda:
+        import uuid as _uuid_mod
+        cursor.execute("ALTER TABLE venda ADD COLUMN uuid VARCHAR(32)")
+        cursor.execute("SELECT id FROM venda WHERE uuid IS NULL")
+        for (vid,) in cursor.fetchall():
+            cursor.execute("UPDATE venda SET uuid = ? WHERE id = ?",
+                           (_uuid_mod.uuid4().hex, vid))
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_venda_uuid ON venda (uuid)")
+    if cols_venda and 'operador' not in cols_venda:
+        cursor.execute("ALTER TABLE venda ADD COLUMN operador VARCHAR(100)")
+    if cols_venda and 'sincronizada_em' not in cols_venda:
+        cursor.execute("ALTER TABLE venda ADD COLUMN sincronizada_em TIMESTAMP")
 
     conn.commit()
     conn.close()

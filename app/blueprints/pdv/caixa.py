@@ -20,7 +20,7 @@ from app.decorators import admin_required, loja_access_required
 from app.extensions import db
 from app.models import (Venda, VendaItem, VendaPagamento, Receita, Produto,
                         Loja, PrecoLojaReceita, Impressora, VendaImpressao)
-from app.services import clover, impressao
+from app.services import clover, impressao, sync
 
 # Fuso de Sao Paulo (Brasil nao tem horario de verao desde 2019).
 BRT = timezone(timedelta(hours=-3))
@@ -51,8 +51,11 @@ def caixa():
         'pdv/caixa.html',
         lojas=lojas,
         loja_usuario_id=current_user.loja_id,
+        # Pré-seleção: loja do usuário > loja deste servidor (modo loja)
+        loja_padrao=current_user.loja_id or sync.loja_id_local(current_app),
         clover_ativo=clover.ativo(),
         clover_modo=clover.modo(),
+        modo_loja=sync.modo_loja(current_app),
     )
 
 
@@ -134,8 +137,10 @@ def _venda_dict(v):
     }
 
 
-def _gerar_code():
-    prefixo = 'V' + _agora_brt().strftime('%Y%m%d')
+def _gerar_code(loja_id):
+    # Prefixo com a loja: vendas de servidores locais diferentes não
+    # colidem quando sobem pra nuvem (ex: V2-20260612-001)
+    prefixo = f'V{loja_id or 0}-' + _agora_brt().strftime('%Y%m%d')
     ultimo = Venda.query.filter(Venda.code.like(f'{prefixo}-%')) \
                         .order_by(Venda.id.desc()).first()
     seq = 1
@@ -209,6 +214,7 @@ def caixa_criar_venda():
     venda = Venda(
         loja_id=loja_id,
         usuario_id=current_user.id,
+        operador=current_user.nome,
         subtotal=subtotal,
         desconto=desconto,
         total=round(subtotal - desconto, 2),
@@ -217,7 +223,7 @@ def caixa_criar_venda():
     )
     # code é unique — em colisão (dois caixas criando junto) tenta de novo
     for _ in range(3):
-        venda.code = _gerar_code()
+        venda.code = _gerar_code(loja_id)
         db.session.add(venda)
         try:
             db.session.commit()
@@ -650,3 +656,29 @@ def caixa_salvar_setores():
             alterados += 1
     db.session.commit()
     return jsonify(ok=True, alterados=alterados)
+
+
+# ── Sincronização com a nuvem (servidor local da loja) ──
+
+@pdv_bp.route('/caixa/api/sync/status')
+@login_required
+@loja_access_required
+def caixa_sync_status():
+    app = current_app._get_current_object()
+    return jsonify(ok=True, **sync.status(app))
+
+
+@pdv_bp.route('/caixa/api/sync/agora', methods=['POST'])
+@login_required
+@admin_required
+def caixa_sync_agora():
+    """Força um ciclo completo (catálogo + vendas) — botão de diagnóstico."""
+    app = current_app._get_current_object()
+    if not sync.modo_loja(app):
+        return jsonify(ok=False, erro='este servidor não está em modo loja '
+                                      '(SYNC_NUVEM_URL vazio)'), 400
+    try:
+        resultado = sync.ciclo(app, com_catalogo=True)
+        return jsonify(ok=True, **resultado)
+    except Exception as e:
+        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:200]}'), 502
