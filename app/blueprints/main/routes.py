@@ -2052,8 +2052,8 @@ def vnda_contatos():
     }
     if formato == 'json':
         return jsonify(payload), 200
-    # HTML default: tela imprimivel, telefone clicavel (tel:), 1 cliente por bloco
-    return render_template('admin/vnda_contatos.html', dados=payload), 200
+    # HTML default: tela imprimivel, telefone clicavel, 1 cliente por bloco
+    return render_template('main/vnda_contatos.html', dados=payload), 200
 
 
 @main_bp.route('/admin/debug-bot')
