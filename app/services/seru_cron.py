@@ -44,6 +44,7 @@ LOCK_KEY_VNDA_CARD = 7736  # advisory lock pro cache de pedidos do site (card CR
 LOCK_KEY_VIGIA_ABANDONO = 7737  # advisory lock pro detector de conversas abandonadas
 LOCK_KEY_AUDITOR = 7738  # advisory lock pro auditor diario do bot
 LOCK_KEY_VIGIA_CHATWOOT = 7739  # advisory lock pro vigia de infra do Chatwoot
+LOCK_KEY_FOLLOWUP = 7740  # advisory lock pro follow-up do bot (cliente sumiu)
 
 
 def _com_lock(key, fn, label='job'):
