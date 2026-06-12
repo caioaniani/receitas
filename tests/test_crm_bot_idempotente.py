@@ -23,7 +23,7 @@ def _payload(msg_id=42, conv_id=170, content='oi'):
 def test_webhook_aceita_1a_vez_e_recusa_replay(app):
     app.config['CHATWOOT_BOT_SECRET'] = 'segredo-teste'
     c = app.test_client()
-    with patch('app.blueprints.crm.routes.threading.Thread') as fake_thread:
+    with patch('threading.Thread') as fake_thread:
         r1 = c.post('/crm/bot?k=segredo-teste', json=_payload(msg_id=100))
         assert r1.status_code == 200
         assert r1.get_json().get('ignorado') != 'duplicado'
@@ -38,7 +38,7 @@ def test_webhook_aceita_1a_vez_e_recusa_replay(app):
 def test_mensagens_distintas_processam_independentes(app):
     app.config['CHATWOOT_BOT_SECRET'] = 'segredo-teste'
     c = app.test_client()
-    with patch('app.blueprints.crm.routes.threading.Thread') as fake_thread:
+    with patch('threading.Thread') as fake_thread:
         c.post('/crm/bot?k=segredo-teste', json=_payload(msg_id=201))
         c.post('/crm/bot?k=segredo-teste', json=_payload(msg_id=202))
         c.post('/crm/bot?k=segredo-teste', json=_payload(msg_id=203))
@@ -74,7 +74,7 @@ def test_replay_persiste_apos_ack_do_primeiro(app):
     assert row is not None
     assert row.conversation_id == '170'
     # Replay simulado depois — segue rejeitando
-    with patch('app.blueprints.crm.routes.threading.Thread') as fake_thread:
+    with patch('threading.Thread') as fake_thread:
         r = c.post('/crm/bot?k=segredo-teste', json=_payload(msg_id=999))
         assert r.get_json()['ignorado'] == 'duplicado'
         fake_thread.assert_not_called()
