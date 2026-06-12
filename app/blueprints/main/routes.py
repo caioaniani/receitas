@@ -1974,15 +1974,77 @@ def debug_chatwoot():
     chamada: hospedagem do Chatwoot fora x token nosso invalido x canais
     Meta desconectados — cada um tem dono e correcao diferentes.
 
-    ?conversa=<id>: alem do diagnostico, busca as mensagens que FALHARAM
-    naquela conversa com o erro bruto que a Meta devolveu (ex: janela de
-    24h fechada vs token morto) — o numero da conversa e o #NNN que
-    aparece no topo da tela do Chatwoot."""
+    ?conversa=<id>: alem do diagnostico, busca a conversa e o que falhou
+    (erro bruto da Meta). Numero da conversa = o #NNN no topo do
+    Chatwoot."""
     from app.services import chatwoot
     out = chatwoot.diagnostico()
     conv = (request.args.get('conversa') or '').strip()
     if conv.isdigit():
-        out['erros_da_conversa_' + conv] = chatwoot.erros_de_envio(int(conv))
+        cid = int(conv)
+        out['erros_da_conversa_' + conv] = chatwoot.erros_de_envio(cid)
+        out['historico_da_conversa_' + conv] = (
+            chatwoot.buscar_historico(cid, limite=40))
+    return jsonify(out), 200
+
+
+@main_bp.route('/admin/debug-bot')
+@owner_required
+def debug_bot():
+    """O que o bot ENXERGA sobre um produto (owner-only).
+
+    Caso real (12/06/2026): vigia alertou 'bot disse esgotado mas tem 872
+    un em estoque'. O bot consulta o VNDA (canal de venda do site); o
+    vigia compara contra EstoqueLoja (estoque fisico). Fontes diferentes
+    explicam o desencontro sem o bot delirar. Esta rota mostra a verdade
+    de cada fonte lado a lado pra qualquer produto.
+
+    ?busca=Pain au Chocolat → {vnda: [...], estoque_loja: [{loja, qtd}]}
+    """
+    from app.services import bot_tools
+    busca = (request.args.get('busca') or '').strip()
+    if not busca:
+        return jsonify({'erro': 'use ?busca=<termo>'}), 400
+    out = {'busca': busca}
+    try:
+        r = bot_tools.consultar_produtos(busca)
+        out['vnda'] = r
+    except Exception as exc:  # noqa: BLE001
+        out['vnda'] = {'erro': f'{type(exc).__name__}: {str(exc)[:200]}'}
+
+    # Estoque interno (mesma fonte que o vigia usa pra comparar)
+    from collections import defaultdict
+
+    from app.models import EstoqueLoja
+    saldos = defaultdict(lambda: {'qtd_total': 0, 'por_loja': {}})
+    try:
+        from app.utils import normalizar_busca
+        termos = [t for t in normalizar_busca(busca).split() if len(t) > 2]
+        for e in EstoqueLoja.query.filter(EstoqueLoja.quantidade > 0).all():
+            nome = None
+            if e.receita and e.receita.nome:
+                nome = e.receita.nome.strip()
+            elif e.produto and e.produto.nome:
+                nome = e.produto.nome.strip()
+            elif (e.nome_pendente or '').strip():
+                nome = e.nome_pendente.strip()
+            if not nome:
+                continue
+            nome_norm = normalizar_busca(nome)
+            if termos and not all(t in nome_norm for t in termos):
+                continue
+            loja_nome = (e.loja.nome if e.loja else f'loja_{e.loja_id}')
+            saldos[nome]['qtd_total'] += int(e.quantidade or 0)
+            saldos[nome]['por_loja'][loja_nome] = (
+                saldos[nome]['por_loja'].get(loja_nome, 0)
+                + int(e.quantidade or 0))
+        out['estoque_loja'] = [
+            {'nome': k, **v}
+            for k, v in sorted(saldos.items(),
+                               key=lambda kv: -kv[1]['qtd_total'])]
+    except Exception as exc:  # noqa: BLE001
+        out['estoque_loja'] = {'erro': f'{type(exc).__name__}: '
+                                       f'{str(exc)[:200]}'}
     return jsonify(out), 200
 
 
