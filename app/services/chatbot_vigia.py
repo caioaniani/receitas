@@ -82,34 +82,39 @@ def _numero_destino():
             or (cfg.get('ZAPI_NUMERO_DESTINO') or '').strip())
 
 
-def _resumo_estoque_loja(limite=80):
-    """Resumo dos itens com saldo positivo em alguma loja. Curto pra caber no
-    prompt (uma linha por item, agregado). E o contexto interno que permite o
-    Vigia detectar 'bot disse esgotado mas tem na loja'."""
-    try:
-        from collections import defaultdict
+def _resumo_catalogo_site(limite=120):
+    """Catalogo do SITE (VNDA) — MESMA fonte que o bot consulta via
+    `consultar_produtos`. Cada linha = nome + estado (DISPONIVEL ou
+    ESGOTADO). E so essa fonte que o vigia pode usar pra contradizer
+    o bot quando ele diz 'esgotado' — estoque de loja fisica e outra
+    realidade (venda balcao) e gerava falso alerta (caso real
+    12/06/2026: Pain au Chocolat 872 un nas lojas mas VNDA disponivel
+    — o vigia avisou 'erro critico' quando bot e VNDA estavam alinhados).
 
-        from app.models import EstoqueLoja
+    Lista TODOS os produtos do catalogo (disponiveis e esgotados) pro
+    Haiku ter contexto pra distinguir os dois casos."""
+    try:
+        from app.services import bot_tools
     except Exception:  # noqa: BLE001
         return ''
-
-    saldos = defaultdict(int)
     try:
-        for e in EstoqueLoja.query.filter(EstoqueLoja.quantidade > 0).all():
-            if e.receita and e.receita.nome:
-                saldos[e.receita.nome.strip()] += e.quantidade or 0
-            elif e.produto and e.produto.nome:
-                saldos[e.produto.nome.strip()] += e.quantidade or 0
-            elif (e.nome_pendente or '').strip():
-                saldos[e.nome_pendente.strip()] += e.quantidade or 0
+        catalogo = bot_tools._carregar_catalogo()
     except Exception:  # noqa: BLE001
-        logger.exception('vigia: _resumo_estoque_loja falhou')
+        logger.exception('vigia: _resumo_catalogo_site falhou')
         return ''
-
-    if not saldos:
-        return '(nenhum item com saldo nas lojas agora)'
-    itens = sorted(saldos.items(), key=lambda kv: -kv[1])[:limite]
-    return '\n'.join(f'- {nome}: {qtd} un' for nome, qtd in itens)
+    if not catalogo:
+        return '(catalogo VNDA indisponivel agora)'
+    # Dedup por nome (variantes do mesmo produto somam disponibilidade)
+    estado = {}
+    for p in catalogo:
+        nome = (p.get('nome') or '').strip()
+        if not nome:
+            continue
+        estado[nome] = estado.get(nome, False) or bool(p.get('disponivel'))
+    itens = sorted(estado.items())[:limite]
+    return '\n'.join(
+        f'- {nome}: {"DISPONIVEL" if disp else "ESGOTADO"}'
+        for nome, disp in itens)
 
 
 def _formatar_historico(historico):
@@ -162,8 +167,10 @@ def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=
             f'CONVERSA (últimas mensagens):\n{_formatar_historico(historico)}\n\n'
             f'ÚLTIMA AÇÃO DO BOT: {(resultado_bot or {}).get("acao", "?")} - '
             f'{(resultado_bot or {}).get("motivo", "")}\n\n'
-            f'ESTOQUE ATUAL NAS LOJAS (use pra detectar bot dizendo "esgotado" indevidamente):\n'
-            f'{_resumo_estoque_loja()}'
+            f'CATALOGO DO SITE (mesma fonte que o bot usa — '
+            f'CONTRADIGA o bot SO se ele disser esgotado pra item '
+            f'marcado DISPONIVEL aqui):\n'
+            f'{_resumo_catalogo_site()}'
         )
         veredicto = _chamar_haiku(api_key, contexto)
     except Exception as exc:  # noqa: BLE001
