@@ -323,6 +323,65 @@ def diagnostico():
     return out
 
 
+# Estado do vigia de infra (por worker; advisory lock no cron garante 1
+# executor por ciclo). Reinicio do worker re-alerta — aceitavel: melhor
+# alertar de novo que perder incidente.
+_vigia_infra_estado = {'quebrado_desde': None, 'ultimo_alerta_em': None,
+                       'ultima_assinatura': None}
+_VIGIA_REALERTA_MIN = 360   # re-alerta do MESMO problema a cada 6h
+
+
+def vigiar_infra():
+    """Roda o diagnostico e alerta o dono no WhatsApp (Z-API) quando o
+    Chatwoot adoece — inbox precisando reautorizar, token 401, servidor
+    fora/lento. Criado apos o incidente de 12/06/2026, em que a equipe
+    de atendimento descobriu o problema antes do sistema.
+
+    Anti-spam: alerta na TRANSICAO saudavel→doente, re-alerta o mesmo
+    problema a cada 6h, e avisa uma vez quando normalizar. Retorna dict
+    com o que fez (pro teste e pro log)."""
+    from app.services import zapi
+    from app.utils import agora as _agora
+
+    cfg = current_app.config
+    if not (cfg.get('CHATWOOT_URL') or '').strip():
+        return {'rodou': False, 'motivo': 'chatwoot nao configurado'}
+    dono = (cfg.get('ZAPI_BOT_DONO_NUMERO') or '').strip()
+    if not dono:
+        return {'rodou': False, 'motivo': 'ZAPI_BOT_DONO_NUMERO vazio'}
+
+    out = diagnostico()
+    est = _vigia_infra_estado
+    agora_dt = _agora()
+
+    if out.get('saudavel'):
+        if est['quebrado_desde'] is not None:
+            zapi.enviar_texto(dono, ('✅ Chatwoot normalizou — servidor, '
+                                     'tokens e canais OK de novo.'))
+            est['quebrado_desde'] = None
+            est['ultimo_alerta_em'] = None
+            est['ultima_assinatura'] = None
+            return {'rodou': True, 'enviado': True, 'tipo': 'recuperacao'}
+        return {'rodou': True, 'enviado': False, 'tipo': 'saudavel'}
+
+    assinatura = out.get('conclusao') or 'problema desconhecido'
+    mudou = assinatura != est['ultima_assinatura']
+    venceu = (est['ultimo_alerta_em'] is None
+              or (agora_dt - est['ultimo_alerta_em']).total_seconds()
+              >= _VIGIA_REALERTA_MIN * 60)
+    if est['quebrado_desde'] is None:
+        est['quebrado_desde'] = agora_dt
+    if mudou or venceu:
+        msg = ('⚠️ Chatwoot com problema (vigia automatico):\n\n'
+               f'{assinatura}\n\n'
+               'Detalhe: /admin/debug-chatwoot')
+        zapi.enviar_texto(dono, msg)
+        est['ultimo_alerta_em'] = agora_dt
+        est['ultima_assinatura'] = assinatura
+        return {'rodou': True, 'enviado': True, 'tipo': 'alerta'}
+    return {'rodou': True, 'enviado': False, 'tipo': 'throttle'}
+
+
 def listar_conversas_paradas(min_minutos=15, limite=50):
     """Conversas em status `pending` (turno do bot) cujo `last_activity_at` foi
     ha mais de `min_minutos`. Usado pelo job de detecao de abandono.
