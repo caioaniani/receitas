@@ -414,6 +414,41 @@ def vigiar_infra():
     return {'rodou': True, 'enviado': False, 'tipo': 'throttle'}
 
 
+def erros_de_envio(conversation_id, limite=10):
+    """Mensagens que FALHARAM numa conversa + o erro bruto que o canal
+    (Meta) devolveu — o Chatwoot guarda em content_attributes.
+    external_error. Responde 'por que a mensagem da atendente nao foi?'
+    sem depender de alguem clicar no ⚠️ no app. Usa o token de USUARIO
+    (CHATWOOT_API_TOKEN)."""
+    if not disponivel():
+        return {'ok': False, 'erro': 'Chatwoot nao configurado'}
+    url = f'{_base()}/conversations/{conversation_id}/messages'
+    try:
+        r = requests.get(url, headers=_headers(), timeout=10)
+        if r.status_code != 200:
+            return {'ok': False, 'erro': f'HTTP {r.status_code}'}
+        data = r.json() if r.text else {}
+    except Exception as exc:  # noqa: BLE001
+        return {'ok': False, 'erro': f'{type(exc).__name__}: {str(exc)[:200]}'}
+    msgs = data.get('payload') if isinstance(data, dict) else data
+    if not isinstance(msgs, list):
+        return {'ok': False, 'erro': 'payload inesperado'}
+    falhas = []
+    for m in sorted(msgs, key=lambda x: x.get('created_at') or 0):
+        if not isinstance(m, dict):
+            continue
+        ca = m.get('content_attributes') or {}
+        if m.get('status') == 'failed' or ca.get('external_error'):
+            falhas.append({
+                'mensagem': (m.get('content') or '')[:80],
+                'criada_em': m.get('created_at'),
+                'status': m.get('status'),
+                'erro_canal': ca.get('external_error') or '(sem detalhe)',
+            })
+    return {'ok': True, 'qtd_falhas': len(falhas),
+            'falhas': falhas[-limite:]}
+
+
 def listar_conversas_paradas(min_minutos=15, limite=50):
     """Conversas em status `pending` (turno do bot) cujo `last_activity_at` foi
     ha mais de `min_minutos`. Usado pelo job de detecao de abandono.
