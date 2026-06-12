@@ -520,6 +520,18 @@ def _run_automacoes_whatsapp(app):
 
 
 
+def _run_vigia_chatwoot(app):
+    """Job: vigia de infra do Chatwoot (15 em 15 min). Criado em
+    12/06/2026 apos a equipe de atendimento descobrir o Chatwoot quebrado
+    antes do sistema. Alerta o dono no WhatsApp na transicao
+    saudavel→doente (anti-spam de 6h dentro do servico)."""
+    from app.services import chatwoot
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_VIGIA_CHATWOOT, chatwoot.vigiar_infra,
+                  'vigia infra chatwoot')
+
+
 def _run_backup_diario(app):
     """Job: backup do Postgres pro Dropbox (04:00 BRT). Advisory lock pra
     garantir 1 execucao entre workers gunicorn."""
