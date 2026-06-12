@@ -168,12 +168,24 @@ def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=
         return {'pulou': 'sem ANTHROPIC_API_KEY'}
 
     try:
+        rb = resultado_bot or {}
+        # Sinal pro caso HANDOFF PREGUICOSO do prompt: lista das tools
+        # que o bot usou neste turno. Vazia + handoff + cliente comprando
+        # = ALTA (caso real 12/06/2026, conv #198).
+        tools_usadas = rb.get('tools_usadas')
+        if tools_usadas is None:
+            tools_txt = '(desconhecido — versao antiga do bot)'
+        elif tools_usadas:
+            tools_txt = ', '.join(tools_usadas)
+        else:
+            tools_txt = 'NENHUMA'
         contexto = (
             f'Cliente: {nome_contato or "(sem nome)"}\n'
             f'Conversation ID: {conv_id or "?"}\n\n'
             f'CONVERSA (últimas mensagens):\n{_formatar_historico(historico)}\n\n'
-            f'ÚLTIMA AÇÃO DO BOT: {(resultado_bot or {}).get("acao", "?")} - '
-            f'{(resultado_bot or {}).get("motivo", "")}\n\n'
+            f'ÚLTIMA AÇÃO DO BOT: {rb.get("acao", "?")} - '
+            f'{rb.get("motivo", "")}\n'
+            f'FERRAMENTAS USADAS PELO BOT NESTE TURNO: {tools_txt}\n\n'
             f'CATALOGO DO SITE (mesma fonte que o bot usa — '
             f'CONTRADIGA o bot SO se ele disser esgotado pra item '
             f'marcado DISPONIVEL aqui):\n'
