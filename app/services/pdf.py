@@ -319,11 +319,8 @@ def _folha_pedido(pdf, p, via, data_fmt):
         y = pdf.get_y()
         pdf.line(_MARGEM, y, 210 - _MARGEM, y)
     else:
-        # Total (so via do cliente). `total` = campo real do VNDA;
-        # valor_total por compat (mesma cadeia do HTML).
-        tot = p.get('total')
-        if tot in (None, ''):
-            tot = p.get('valor_total') or 0
+        # Total (so via do cliente)
+        tot = _total_pedido(p)
         pdf.ln(2)
         pdf.set_line_width(0.6)
         pdf.line(_MARGEM, pdf.get_y(), 210 - _MARGEM, pdf.get_y())
