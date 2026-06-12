@@ -309,6 +309,17 @@ def diagnostico():
             '(mensagem livre so ate 24h apos a ultima msg do cliente; '
             'fora disso exige template aprovado) e os logs do worker '
             '(Sidekiq) no Railway do Chatwoot.')
+
+    # Flag de maquina pro vigia de infra (nao depende do texto da
+    # conclusao). Token NAO configurado nao conta como doente — e estado
+    # de configuracao, alertar a cada 15min viraria spam.
+    out['saudavel'] = (
+        out.get('servidor_http') == 200
+        and (out.get('servidor_latencia_ms') or 0) <= 5000
+        and not any(s and s >= 500 for s in statuses)
+        and not any(s == 401 for s in statuses[1:] if s is not None)
+        and not quebrados
+    )
     return out
 
 
