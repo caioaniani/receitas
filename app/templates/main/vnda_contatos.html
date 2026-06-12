@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Contatos dos pedidos{% endblock %}
+{% block content %}
+<style>
+  @media print {
+    .d-print-none { display: none !important; }
+    .card { break-inside: avoid; }
+  }
+  .endereco { font-size: 17px; line-height: 1.35; word-break: break-word; }
+  .tel-grande { font-size: 20px; font-weight: 700; }
+</style>
+
+<h1 class="page-title d-print-none">
+  <i class="bi bi-people"></i> Contatos dos pedidos
+</h1>
+
+<div class="d-print-none mb-3">
+  <form method="get" action="{{ url_for('main.vnda_contatos') }}">
+    <label class="form-label small text-muted mb-1">
+      Códigos do VNDA (cole — separa por vírgula, espaço ou linha):
+    </label>
+    <textarea name="codes" class="form-control" rows="3"
+              placeholder="5B1A3766F7&#10;7666044AD1&#10;...">{{ request.args.get('codes', '') }}</textarea>
+    <button type="submit" class="btn btn-primary mt-2">
+      <i class="bi bi-search"></i> buscar
+    </button>
+    {% if dados.clientes %}
+    <button type="button" class="btn btn-outline-secondary mt-2"
+            onclick="window.print()">
+      <i class="bi bi-printer"></i> imprimir
+    </button>
+    <a class="btn btn-outline-secondary mt-2"
+       href="?{{ request.query_string.decode() }}&formato=json"
+       target="_blank">JSON</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="d-print-none alert alert-light border small mb-3">
+  <strong>{{ dados.total }}</strong> code(s) consultado(s) ·
+  <strong class="text-success">{{ dados.achados }}</strong> achado(s)
+  {% if dados.nao_achados %}
+  · <span class="text-danger">não achados:</span>
+  <code>{{ dados.nao_achados | join(', ') }}</code>
+  (confere a grafia — letra O é zero?)
+  {% endif %}
+</div>
+
+{% for c in dados.clientes %}
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-start mb-2">
+      <h5 class="mb-0">
+        <i class="bi bi-person-fill"></i>
+        {{ c.destinatario or '—' }}
+      </h5>
+      <small class="text-muted">#{{ c.code }}</small>
+    </div>
+    {% if c.telefone %}
+    <div class="tel-grande mb-2">
+      <i class="bi bi-telephone-fill"></i>
+      <a href="tel:+55{{ c.telefone | replace('(','') | replace(')','') | replace(' ','') | replace('-','') }}">
+        {{ c.telefone }}
+      </a>
+      {% set fone_wa = c.telefone | replace('(','') | replace(')','') | replace(' ','') | replace('-','') %}
+      <a class="btn btn-sm btn-success ms-2 d-print-none"
+         href="https://wa.me/55{{ fone_wa }}"
+         target="_blank" rel="noopener">
+        <i class="bi bi-whatsapp"></i> WhatsApp
+      </a>
+    </div>
+    {% else %}
+    <div class="text-muted mb-2"><i class="bi bi-telephone-x"></i> sem telefone no pedido</div>
+    {% endif %}
+    <div class="endereco mb-2">
+      <i class="bi bi-geo-alt-fill"></i> {{ c.endereco or '— sem endereço —' }}
+    </div>
+    <div class="small text-muted mb-2">
+      {% if c.data_entrega %}
+      <span class="me-3"><i class="bi bi-calendar"></i> entrega: {{ c.data_entrega }}</span>
+      {% endif %}
+      {% if c.periodo %}
+      <span><i class="bi bi-clock"></i> {{ c.periodo }}</span>
+      {% endif %}
+    </div>
+    {% if c.itens %}
+    <details class="small">
+      <summary class="text-muted">itens do pedido ({{ c.itens | length }})</summary>
+      <ul class="mt-1 mb-0">
+        {% for it in c.itens %}
+        <li>{{ it.qtd }}× {{ it.nome }}</li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+
+{% if not dados.clientes and request.args.get('codes') %}
+<div class="alert alert-warning">
+  Nenhum pedido encontrado pra esses códigos.
+</div>
+{% endif %}
+{% endblock %}
