@@ -27,6 +27,21 @@ class Config:
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB upload (atestados)
+
+    # Cookies de sessao — defesa em profundidade contra roubo de sessao
+    # (12 atendentes logados ao dia + admins; sessao roubada = acesso
+    # total a pedidos/clientes/dinheiro). Auditado em 12/06/2026: zero
+    # uso de `document.cookie` no JS, todo polling e same-origin, iframe
+    # do Chatwoot autentica via token na URL — flags nao quebram nada.
+    # - HTTPONLY: JS nao le o cookie (se algum script malicioso entrar
+    #   por CSP frouxa/extensao, nao captura sessao).
+    # - SAMESITE=Lax: outro site nao consegue forcar requests no nosso
+    #   em nome do usuario logado (CSRF estrutural).
+    # - SECURE: cookie so via HTTPS. Condicional: prod (postgresql) liga;
+    #   dev local (sqlite) deixa desligado pra http://localhost funcionar.
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SECURE = DATABASE_URL.startswith('postgresql')
     VNDA_API_TOKEN = os.environ.get('VNDA_API_TOKEN', '')
     # Token dedicado ao catalogo (/products). O VNDA_API_TOKEN pode nao ter o
     # escopo "Produtos" habilitado (so pedidos -> 403 no /products). Se setado,
