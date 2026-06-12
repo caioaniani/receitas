@@ -145,6 +145,51 @@ def test_diagnostico_nao_vaza_tokens(app):
     assert 'tok-bot' not in blob
 
 
+def test_erros_de_envio_lista_falhas_com_erro_do_canal(app):
+    """Cada mensagem que falhou no Chatwoot carrega o erro bruto do canal
+    em content_attributes.external_error — ex: janela de 24h da Meta vs
+    token morto. E o discriminador do 'Falha ao enviar' sem precisar
+    clicar no ⚠️ do app."""
+    from app.services import chatwoot
+    _cfg(app)
+
+    def fake_get(url, **kw):
+        assert url.endswith('/conversations/176/messages')
+        return _Resp(200, body={'payload': [
+            {'content': 'Boa tarde', 'created_at': 2, 'status': 'failed',
+             'message_type': 1,
+             'content_attributes': {'external_error':
+                 '131047: Re-engagement message — fora da janela de 24h'}},
+            {'content': 'oi', 'created_at': 1, 'status': 'sent',
+             'message_type': 0, 'content_attributes': {}},
+        ]})
+
+    with patch('app.services.chatwoot.requests.get', side_effect=fake_get):
+        out = chatwoot.erros_de_envio(176)
+    assert out['ok'] is True
+    assert out['qtd_falhas'] == 1
+    assert out['falhas'][0]['mensagem'] == 'Boa tarde'
+    assert '131047' in out['falhas'][0]['erro_canal']
+
+
+def test_debug_chatwoot_aceita_param_conversa(app):
+    from app.extensions import db
+    from app.models import Usuario
+    with app.app_context():
+        dono = Usuario(nome='dono', login='dono_cw2', papel='admin',
+                       is_owner=True)
+        dono.set_senha('senha123')
+        db.session.add(dono)
+        db.session.commit()
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'dono_cw2', 'senha': 'senha123'})
+    app.config['CHATWOOT_URL'] = ''   # diagnostico curto; so o shape importa
+    r = c.get('/admin/debug-chatwoot?conversa=176')
+    assert r.status_code == 200
+    data = r.get_json()
+    assert 'erros_da_conversa_176' in data
+
+
 # ── Vigia de infra (cron 15min → alerta WhatsApp do dono) ───────────────
 
 
