@@ -126,7 +126,13 @@
   <span>{{ pedidos|length }} pedido(s) ·
         {{ vias|length }} via(s) por pedido ·
         {{ data.strftime('%d/%m/%Y') }}</span>
-  <button onclick="window.print()">🖨 imprimir</button>
+  {# Impressao oficial = PDF do servidor. window.print() desta pagina
+     HTML foi abandonado: o Safari re-renderizava/re-buscava o documento
+     na hora de imprimir e saia em branco (3 rodadas de bug em
+     11/06/2026). O PDF e congelado — imprime exatamente o que mostra. #}
+  <a class="btn-pdf"
+     href="/entregas/imprimir.pdf?{{ request.query_string.decode() }}">
+    🖨 imprimir (PDF)</a>
 </div>
 
 {% if not pedidos %}
