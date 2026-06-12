@@ -145,6 +145,107 @@ def test_diagnostico_nao_vaza_tokens(app):
     assert 'tok-bot' not in blob
 
 
+# ── Vigia de infra (cron 15min → alerta WhatsApp do dono) ───────────────
+
+
+def _reset_vigia():
+    from app.services import chatwoot
+    chatwoot._vigia_infra_estado.update(
+        {'quebrado_desde': None, 'ultimo_alerta_em': None,
+         'ultima_assinatura': None})
+
+
+def test_vigia_alerta_na_transicao_e_throttla_repeticao(app):
+    from app.services import chatwoot
+    _cfg(app)
+    app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999990000'
+    _reset_vigia()
+    doente = {'saudavel': False, 'conclusao': 'Canal(is) com token Meta morto'}
+    with patch('app.services.chatwoot.diagnostico', return_value=doente), \
+         patch('app.services.zapi.enviar_texto') as envia:
+        r1 = chatwoot.vigiar_infra()
+        r2 = chatwoot.vigiar_infra()
+    assert r1 == {'rodou': True, 'enviado': True, 'tipo': 'alerta'}
+    assert r2['tipo'] == 'throttle'          # mesmo problema, sem re-spam
+    assert envia.call_count == 1
+    msg = envia.call_args[0][1]
+    assert 'token Meta morto' in msg
+    assert '/admin/debug-chatwoot' in msg
+
+
+def test_vigia_avisa_recuperacao_uma_vez(app):
+    from app.services import chatwoot
+    _cfg(app)
+    app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999990000'
+    _reset_vigia()
+    doente = {'saudavel': False, 'conclusao': 'x'}
+    saud = {'saudavel': True, 'conclusao': 'ok'}
+    with patch('app.services.zapi.enviar_texto') as envia:
+        with patch('app.services.chatwoot.diagnostico', return_value=doente):
+            chatwoot.vigiar_infra()
+        with patch('app.services.chatwoot.diagnostico', return_value=saud):
+            r2 = chatwoot.vigiar_infra()
+            r3 = chatwoot.vigiar_infra()
+    assert r2['tipo'] == 'recuperacao'
+    assert r3 == {'rodou': True, 'enviado': False, 'tipo': 'saudavel'}
+    assert envia.call_count == 2             # 1 alerta + 1 normalizou
+    assert 'normalizou' in envia.call_args[0][1]
+
+
+def test_vigia_problema_diferente_realerta_sem_esperar_6h(app):
+    from app.services import chatwoot
+    _cfg(app)
+    app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999990000'
+    _reset_vigia()
+    with patch('app.services.zapi.enviar_texto') as envia:
+        with patch('app.services.chatwoot.diagnostico',
+                   return_value={'saudavel': False, 'conclusao': 'problema A'}):
+            chatwoot.vigiar_infra()
+        with patch('app.services.chatwoot.diagnostico',
+                   return_value={'saudavel': False, 'conclusao': 'problema B'}):
+            r = chatwoot.vigiar_infra()
+    assert r['tipo'] == 'alerta'
+    assert envia.call_count == 2
+
+
+def test_vigia_sem_config_nao_roda(app):
+    from app.services import chatwoot
+    _reset_vigia()
+    app.config['CHATWOOT_URL'] = ''
+    assert chatwoot.vigiar_infra()['rodou'] is False
+    _cfg(app)
+    app.config['ZAPI_BOT_DONO_NUMERO'] = ''
+    r = chatwoot.vigiar_infra()
+    assert r['rodou'] is False
+    assert 'DONO' in r['motivo']
+
+
+def test_diagnostico_seta_flag_saudavel(app):
+    """O vigia decide pela flag `saudavel` (maquina), nao pelo texto."""
+    from app.services import chatwoot
+    _cfg(app)
+
+    def ok_get(url, **kw):
+        if url.endswith('/api'):
+            return _Resp(200, body={'version': '4.14.1'})
+        if url.endswith('/inboxes'):
+            return _Resp(200, body={'payload': [
+                {'name': 'WA', 'channel_type': 'Channel::Whatsapp',
+                 'reauthorization_required': False}]})
+        return _Resp(200, body={'payload': []})
+
+    with patch('app.services.chatwoot.requests.get', side_effect=ok_get):
+        assert chatwoot.diagnostico()['saudavel'] is True
+
+    def get_401(url, **kw):
+        if url.endswith('/api'):
+            return _Resp(200, body={'version': '4.14.1'})
+        return _Resp(401, body={'error': 'unauthorized'})
+
+    with patch('app.services.chatwoot.requests.get', side_effect=get_401):
+        assert chatwoot.diagnostico()['saudavel'] is False
+
+
 def test_rota_nega_admin_comum(app):
     """Admin nao-owner leva 403 (padrao owner_required — mesmo desenho
     dos outros /admin/debug-*)."""
