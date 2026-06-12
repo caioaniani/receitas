@@ -9,38 +9,21 @@
 <style>
   @page { size: A4; margin: 14mm 12mm; }
   * { box-sizing: border-box; }
-  html, body { background: #fff; color: #000; margin: 0; padding: 0; }
+  html, body { background: #fff; color: #000; }
   body { font-family: -apple-system, system-ui, "Helvetica Neue", Arial, sans-serif;
-         font-size: 16px; line-height: 1.35; }
+         font-size: 16px; margin: 0; line-height: 1.35; }
 
-  /* Folha = EXATAMENTE 1 pagina A4. Area util com margem 14mm vert /
-     12mm horiz = 186mm largura x 269mm altura.
-     Bug real (11/06/2026, 3o print do dono): sem dimensoes fixas e
-     overflow hidden, conteudo grande de algum pedido (cartinha longa,
-     observacao grande, muitos itens) VAZAVA pra proxima pagina, e o
-     Safari/WebKit paginava errado — geravam-se PAGINAS EM BRANCO entre
-     as folhas com conteudo (preview mostrava paginas 5,6,7 em branco
-     apos paginas 1-2 com conteudo OK), e a contagem total ficava ALEM de
-     pedidos*vias (31 paginas pra 15 pedidos x 2 vias). Correcao: travar
-     largura/altura e cortar overflow, garantindo 1 folha = 1 pagina
-     estrita. Strings longas sao truncadas no servidor (routes.py::
-     imprimir, _truncar_campos_pedido) pra minimizar corte visual. */
+  /* Folha = bloco simples com quebra de pagina. SEM flex, SEM
+     min-height, SEM height fixo — cada variacao dessas ja quebrou a
+     impressao no Safari de um jeito diferente (3 rodadas em
+     11/06/2026). A impressao OFICIAL agora e o PDF gerado no servidor
+     (/entregas/imprimir.pdf) — esta pagina e so preview de conferencia
+     na tela. */
   .folha {
-    width: 186mm;
-    height: 269mm;
-    overflow: hidden;
-    position: relative;
     page-break-after: always;
     break-after: page;
-    page-break-inside: avoid;
-    break-inside: avoid;
-    margin: 0;
-    padding: 0;
   }
-  .folha:last-child {
-    page-break-after: auto;
-    break-after: auto;
-  }
+  .folha:last-child { page-break-after: auto; break-after: auto; }
 
   .cabecalho {
     display: flex; justify-content: space-between; align-items: flex-end;
