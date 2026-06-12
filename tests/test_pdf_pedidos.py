@@ -138,3 +138,52 @@ def test_via_cliente_tem_valores_no_pdf():
     assert b'R$ 215,00' in raw       # item (subtotal real do VNDA)
     # cartinha aparece na via do cliente
     assert b'Feliz anivers' in raw
+
+
+def test_kit_sem_valor_por_item_esconde_coluna_valor():
+    """Caso real (Box Mimo, 11/06/2026): VNDA manda itens com price/
+    subtotal 0 em produto tipo kit — o dinheiro so existe no total do
+    pedido. Imprimir 'R$ 0,00' por item pro cliente e afirmacao falsa;
+    ratear o total seria inventar dado financeiro. A via do cliente
+    OMITE a coluna VALOR e mantem o Total."""
+    p = _pedido(itens=[{'nome': 'Box Mimo', 'quantidade': 1,
+                        'preco_unitario': 0, 'subtotal': 0}],
+                total=181.0)
+    from app.services.pdf import itens_sem_valor
+    assert itens_sem_valor(p) is True
+    pdf = montar_pedidos_pdf([p], ['cliente'], DATA)
+    pdf.set_compression(False)
+    raw = bytes(pdf.output())
+    assert b'R$ 0,00' not in raw     # nada de valor falso
+    assert b'VALOR' not in raw       # coluna omitida
+    assert b'R$ 181,00' in raw       # total continua
+    assert b'Box Mimo' in raw
+
+
+def test_brinde_junto_de_item_pago_mantem_r0():
+    """Se SO alguns itens sao 0 (brinde legitimo junto de item pago),
+    o R$ 0,00 do brinde e informacao real — coluna fica."""
+    p = _pedido(itens=[{'nome': 'Cesta', 'quantidade': 1,
+                        'subtotal': 360},
+                       {'nome': 'Brinde', 'quantidade': 1,
+                        'subtotal': 0}],
+                total=360.0)
+    from app.services.pdf import itens_sem_valor
+    assert itens_sem_valor(p) is False
+    pdf = montar_pedidos_pdf([p], ['cliente'], DATA)
+    pdf.set_compression(False)
+    raw = bytes(pdf.output())
+    assert b'VALOR' in raw
+    assert b'R$ 0,00' in raw         # brinde mostrado como gratis
+    assert b'R$ 360,00' in raw
+
+
+def test_itens_sem_valor_casos_borda():
+    from app.services.pdf import itens_sem_valor
+    # sem itens → False (nao ha coluna pra esconder)
+    assert itens_sem_valor({'total': 100, 'itens': []}) is False
+    # total 0 + itens 0 → False (pedido genuinamente zerado/cortesia)
+    assert itens_sem_valor(
+        {'total': 0, 'itens': [{'subtotal': 0}]}) is False
+    # nao-dict → False
+    assert itens_sem_valor('lixo') is False
