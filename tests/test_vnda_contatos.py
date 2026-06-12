@@ -27,18 +27,56 @@ def _fake_pedido(code, nome, fone, end, itens=None):
     }
 
 
-def test_owner_gate(app):
+def test_aberta_pra_qualquer_usuario_logado_mas_nao_anonimo(app):
+    """Decisao do dono (12/06/2026): equipe operacional usa pra repor/
+    contatar cliente — aberta a TODOS os logados (mesma classe de PII
+    que /entregas/). Anonimo continua barrado."""
     from app.extensions import db
     from app.models import Usuario
     with app.app_context():
-        u = Usuario(nome='comum', login='adm_vc', papel='admin',
+        u = Usuario(nome='func', login='func_vc', papel='funcionario',
                     is_owner=False)
         u.set_senha('senha123')
         db.session.add(u)
         db.session.commit()
     c = app.test_client()
-    c.post('/auth/login', data={'login': 'adm_vc', 'senha': 'senha123'})
-    assert c.get('/admin/vnda/contatos?codes=A').status_code == 403
+    # anonimo: redirect pro login
+    r = c.get('/admin/vnda/contatos?codes=A', follow_redirects=False)
+    assert r.status_code in (302, 401)
+    # funcionario logado: acessa
+    c.post('/auth/login', data={'login': 'func_vc', 'senha': 'senha123'})
+    with patch('app.services.vnda.buscar_pedido_completo',
+               return_value=None):
+        r = c.get('/admin/vnda/contatos?codes=A')
+    assert r.status_code == 200
+
+
+def test_data_de_entrega_respeita_override(app):
+    """A data mostrada e a OPERACIONAL: se o admin alterou a data do
+    pedido no nosso sistema (OverrideEntrega), ela prevalece sobre a do
+    VNDA e vem marcada — repor produto no dia errado e desastre."""
+    from app.extensions import db
+    from app.models import OverrideEntrega
+    _dono(app, login='dono_vc5')
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'dono_vc5', 'senha': 'senha123'})
+    from datetime import date
+    with app.app_context():
+        db.session.add(OverrideEntrega(pedido_code='AAA',
+                                       data_entrega=date(2026, 6, 20)))
+        db.session.commit()
+    pedido = _fake_pedido('AAA', 'Bia', '11 91234-5678', 'Rua X, 1')
+    # VNDA diz 13/06; nosso override diz 20/06
+    pedido['delivery_date'] = '2026-06-13'
+    with patch('app.services.vnda.buscar_pedido_completo',
+               return_value=pedido), \
+         patch('app.services.vnda.buscar_shipping_address', return_value=None), \
+         patch('app.services.vnda.buscar_cliente', return_value=None):
+        r = c.get('/admin/vnda/contatos?codes=AAA&formato=json')
+    d = r.get_json()
+    cli = d['clientes'][0]
+    assert cli['data_entrega'] == '20/06/2026'
+    assert cli['data_alterada'] is True
 
 
 def test_lista_contatos_com_destinatario_telefone_endereco(app):
