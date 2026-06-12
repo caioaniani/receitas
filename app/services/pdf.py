@@ -208,11 +208,9 @@ def _folha_pedido(pdf, p, via, data_fmt):
         pdf.cell(0, 5, _latin1('CARTINHA (escrever à mão)'),
                  new_x='LMARGIN', new_y='NEXT')
         pdf.set_font('Helvetica', '', 12)
-        y_antes = pdf.get_y()
         pdf.multi_cell(_LARGURA_UTIL - 4, 6, _latin1(p['cartinha']),
                        border=1, new_x='LMARGIN', new_y='NEXT',
                        padding=2)
-        del y_antes
         pdf.ln(3)
 
     # Itens
