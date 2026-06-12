@@ -7,8 +7,11 @@ avaliacao = ~R$9/mes pro volume atual.
 
 Detecta principalmente:
 - Cliente irritado/frustrado/prestes a desistir
-- Bot afirmando "esgotado"/"nao tem" produto que TEM em alguma loja fisica
-  (passamos EstoqueLoja no contexto pra o supervisor cruzar)
+- Bot afirmando "esgotado"/"nao tem" produto que esta DISPONIVEL NO SITE
+  (passamos o catalogo do VNDA, MESMA FONTE que o bot consulta — comparar
+  com estoque das lojas fisicas era apples-to-oranges; falso alerta de
+  12/06/2026 com Pain au Chocolat: VNDA `available: true`, EstoqueLoja
+  872 un, o bot estava certo pela fonte dele)
 - Handoff feito quando o bot poderia ter resolvido
 - Possivel perda de venda
 - Bot afirmando algo claramente errado (preco estranho, info inventada)
