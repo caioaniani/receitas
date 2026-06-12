@@ -147,7 +147,7 @@ def test_vigia_registra_no_historico(app):
         app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
         with patch('app.services.chatbot_vigia._chamar_haiku',
                    return_value=veredicto), \
-             patch('app.services.chatbot_vigia._resumo_estoque_loja',
+             patch('app.services.chatbot_vigia._resumo_catalogo_site',
                    return_value=''), \
              patch('app.services.zapi.enviar_texto',
                    return_value={'ok': True}):
@@ -174,7 +174,7 @@ def test_vigia_disparar_teste_cenario_estoque(app):
         app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
         with patch('app.services.chatbot_vigia._chamar_haiku',
                    return_value=veredicto), \
-             patch('app.services.chatbot_vigia._resumo_estoque_loja',
+             patch('app.services.chatbot_vigia._resumo_catalogo_site',
                    return_value=''), \
              patch('app.services.zapi.enviar_texto',
                    return_value={'ok': True}) as send:
@@ -478,7 +478,7 @@ def test_vigia_media_nao_pinga_so_registra(app):
         app.config['ANTHROPIC_API_KEY'] = 'test'
         app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
         with patch('app.services.chatbot_vigia._chamar_haiku', return_value=veredicto), \
-             patch('app.services.chatbot_vigia._resumo_estoque_loja', return_value=''), \
+             patch('app.services.chatbot_vigia._resumo_catalogo_site', return_value=''), \
              patch('app.services.zapi.enviar_texto') as send:
             r = chatbot_vigia.avaliar([{'role': 'user', 'content': 'o que tem na cesta?'}],
                                       conv_id=5)
@@ -707,7 +707,7 @@ def test_vigia_dispara_alerta_quando_gravidade_alta(app):
         app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
         with patch('app.services.chatbot_vigia._chamar_haiku',
                    return_value=veredicto), \
-             patch('app.services.chatbot_vigia._resumo_estoque_loja',
+             patch('app.services.chatbot_vigia._resumo_catalogo_site',
                    return_value='- Croissant: 12 un'), \
              patch('app.services.zapi.enviar_texto',
                    return_value={'ok': True}) as send:
@@ -734,7 +734,7 @@ def test_vigia_silencia_quando_sem_alerta(app):
         app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
         with patch('app.services.chatbot_vigia._chamar_haiku',
                    return_value=veredicto), \
-             patch('app.services.chatbot_vigia._resumo_estoque_loja',
+             patch('app.services.chatbot_vigia._resumo_catalogo_site',
                    return_value=''), \
              patch('app.services.zapi.enviar_texto') as send:
             r = chatbot_vigia.avaliar(historico, conv_id=42)
@@ -753,7 +753,7 @@ def test_vigia_silencia_quando_gravidade_baixa(app):
         app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
         with patch('app.services.chatbot_vigia._chamar_haiku',
                    return_value=veredicto), \
-             patch('app.services.chatbot_vigia._resumo_estoque_loja',
+             patch('app.services.chatbot_vigia._resumo_catalogo_site',
                    return_value=''), \
              patch('app.services.zapi.enviar_texto') as send:
             r = chatbot_vigia.avaliar([{'role': 'user', 'content': 'oi'}])
@@ -772,25 +772,55 @@ def test_vigia_desligado_pula(app):
     call.assert_not_called()
 
 
-def test_vigia_resumo_estoque_lista_itens_com_saldo(app):
-    """Resumo passado pro Haiku traz itens com saldo positivo nas lojas
-    (e ele cruza com o que o bot disse pra detectar erro)."""
-    from app.extensions import db
-    from app.models import EstoqueLoja, Loja, Receita
+def test_vigia_resumo_e_do_catalogo_do_site_nao_estoque_loja(app):
+    """Vigia compara contra o CATALOGO DO SITE (VNDA), mesma fonte que o
+    bot consulta. Caso real (12/06/2026): Pain au Chocolat 872 un em
+    estoque de loja fisica + VNDA disponivel=true; o vigia antigo
+    cruzava EstoqueLoja vs bot e mandava alerta 'esgotado mas tem 872',
+    quando o bot estava alinhado com o VNDA. Bot atende SITE; loja
+    fisica e outra fonte de venda."""
+    from unittest.mock import patch
+
     from app.services import chatbot_vigia
-    with app.app_context():
-        loja = Loja(nome='Brooklin', ativa=True)
-        receita = Receita(nome='Croissant', categoria='Padaria',
-                          rendimento_qtd=1, rendimento_unidade='un',
-                          peso_base=80)
-        db.session.add_all([loja, receita])
-        db.session.flush()
-        db.session.add(EstoqueLoja(loja_id=loja.id, receita_id=receita.id,
-                                   quantidade=12))
-        db.session.commit()
-        resumo = chatbot_vigia._resumo_estoque_loja()
-    assert 'Croissant' in resumo
-    assert '12' in resumo
+    catalogo = [
+        {'nome': 'Pain au Chocolat', 'sku': 'PAC', 'disponivel': True},
+        {'nome': 'Croissant Tradicional', 'sku': 'CT', 'disponivel': True},
+        {'nome': 'Sourdough Especial', 'sku': 'SE', 'disponivel': False},
+    ]
+    with patch('app.services.bot_tools._carregar_catalogo',
+               return_value=catalogo):
+        with app.app_context():
+            resumo = chatbot_vigia._resumo_catalogo_site()
+    assert 'Pain au Chocolat: DISPONIVEL' in resumo
+    assert 'Croissant Tradicional: DISPONIVEL' in resumo
+    assert 'Sourdough Especial: ESGOTADO' in resumo
+
+
+def test_vigia_resumo_catalogo_indisponivel(app):
+    """VNDA fora → resumo informa sem quebrar."""
+    from unittest.mock import patch
+
+    from app.services import chatbot_vigia
+    with patch('app.services.bot_tools._carregar_catalogo',
+               return_value=None):
+        with app.app_context():
+            resumo = chatbot_vigia._resumo_catalogo_site()
+    assert 'indispon' in resumo.lower()
+
+
+def test_vigia_nao_usa_mais_estoque_loja(app):
+    """Regressao do falso alerta de 12/06/2026: o vigia agora compara so
+    contra o catalogo do site (mesma fonte do bot). Estoque de loja
+    fisica era apples-to-oranges e gerava 'bot delirou' quando o bot
+    estava certo pela fonte dele."""
+    from app.services import chatbot_vigia
+    assert not hasattr(chatbot_vigia, '_resumo_estoque_loja')
+    assert hasattr(chatbot_vigia, '_resumo_catalogo_site')
+    # Prompt diz explicito: estoque de loja fisica NAO contradiz o bot
+    assert 'DISPONÍVEL=true no catálogo do site' \
+        in chatbot_vigia.PROMPT_VIGIA
+    assert 'estoque de loja física é OUTRA fonte' \
+        in chatbot_vigia.PROMPT_VIGIA
 
 
 def test_vigia_extrai_json_com_markdown_wrapper(app):
