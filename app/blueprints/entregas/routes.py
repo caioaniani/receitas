@@ -571,6 +571,44 @@ def imprimir():
                                diag=diag)
 
 
+@entregas_bp.route('/imprimir.pdf')
+@login_required
+def imprimir_pdf():
+    """PDF de impressao — o caminho OFICIAL pra papel (11/06/2026).
+
+    A impressao via HTML + window.print() quebrou no Safari de 3 jeitos
+    diferentes em sequencia (paginas duplicadas, paginas em branco,
+    conteudo apagado ao apertar imprimir — o Safari re-renderiza/re-busca
+    o documento na hora de montar a impressao). PDF gerado no servidor e
+    congelado: o navegador exibe e imprime bytes prontos, e o numero de
+    paginas e garantido aqui (len(pedidos) x len(vias)).
+
+    Mesmos params do GET /imprimir (?lote= ou ?codes=&data=, + vias=) —
+    o botao da pagina HTML repassa a query string inteira.
+    """
+    from app.services.pdf import gerar_pedidos_pdf
+    src = request.args
+    data_str, target, _vias_param, vias = _parse_params_imprimir(src)
+    diag = {}
+    pedidos = _carregar_pedidos_imprimir_get(src, target, diag)
+    if not pedidos:
+        # Sem pedido nao tem o que imprimir — devolve a pagina HTML de
+        # diagnostico em vez de um PDF vazio confuso.
+        return render_template('entregas/imprimir.html',
+                               pedidos=[], vias=vias, data=target,
+                               diag=diag)
+    try:
+        conteudo = gerar_pedidos_pdf(pedidos, vias, target)
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception('imprimir_pdf: geracao falhou')
+        abort(500)
+    resp = current_app.response_class(conteudo, mimetype='application/pdf')
+    resp.headers['Content-Disposition'] = (
+        f'inline; filename="pedidos_{data_str}.pdf"')
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
+
+
 @entregas_bp.route('/imprimir/debug/<token>')
 @login_required
 def imprimir_debug(token):
