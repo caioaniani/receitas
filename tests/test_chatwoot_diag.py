@@ -109,26 +109,34 @@ def test_diagnostico_nao_vaza_tokens(app):
     assert 'tok-bot' not in blob
 
 
-def test_rota_exige_owner(app):
+def test_rota_nega_admin_comum(app):
+    """Admin nao-owner leva 403 (padrao owner_required — mesmo desenho
+    dos outros /admin/debug-*)."""
     from app.extensions import db
     from app.models import Usuario
     with app.app_context():
         comum = Usuario(nome='adm', login='adm_cw', papel='admin',
                         is_owner=False)
         comum.set_senha('senha123')
-        dono = Usuario(nome='dono', login='dono_cw', papel='admin',
-                       is_owner=True)
-        dono.set_senha('senha123')
-        db.session.add_all([comum, dono])
+        db.session.add(comum)
         db.session.commit()
-
     c = app.test_client()
     c.post('/auth/login', data={'login': 'adm_cw', 'senha': 'senha123'})
     assert c.get('/admin/debug-chatwoot').status_code == 403
 
-    c2 = app.test_client()
-    c2.post('/auth/login', data={'login': 'dono_cw', 'senha': 'senha123'})
+
+def test_rota_responde_pro_owner(app):
+    from app.extensions import db
+    from app.models import Usuario
+    with app.app_context():
+        dono = Usuario(nome='dono', login='dono_cw', papel='admin',
+                       is_owner=True)
+        dono.set_senha('senha123')
+        db.session.add(dono)
+        db.session.commit()
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'dono_cw', 'senha': 'senha123'})
     app.config['CHATWOOT_URL'] = ''
-    r = c2.get('/admin/debug-chatwoot')
+    r = c.get('/admin/debug-chatwoot')
     assert r.status_code == 200
     assert 'conclusao' in r.get_json()
