@@ -591,7 +591,6 @@ def imprimir_pdf():
     Mesmos params do GET /imprimir (?lote= ou ?codes=&data=, + vias=) —
     o botao da pagina HTML repassa a query string inteira.
     """
-    from app.services.pdf import gerar_pedidos_pdf
     src = request.args
     data_str, target, _vias_param, vias = _parse_params_imprimir(src)
     diag = {}
@@ -603,7 +602,7 @@ def imprimir_pdf():
                                pedidos=[], vias=vias, data=target,
                                diag=diag)
     try:
-        conteudo = gerar_pedidos_pdf(pedidos, vias, target)
+        conteudo = pdf_svc.gerar_pedidos_pdf(pedidos, vias, target)
     except Exception:  # noqa: BLE001
         current_app.logger.exception('imprimir_pdf: geracao falhou')
         abort(500)
