@@ -625,7 +625,7 @@ def test_debug_lote_retorna_diag_por_pedido(app, admin_user):
     pedidos = [
         {'code': 'A1', 'destinatario': 'Ana', 'endereco': 'Rua A, 1',
          'telefone': '11 99999-1111', 'periodo': '10h-12h',
-         'cartinha': 'oi', 'observacao': 'portaria',
+         'cartinha_vnda': 'oi', 'observacao': 'portaria',
          'total': 100, 'expresso': False,
          'itens': [{'nome': 'X', 'quantidade': 1, 'subtotal': 100}]},
     ]
