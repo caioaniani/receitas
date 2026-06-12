@@ -8,9 +8,13 @@ from unittest.mock import patch
 
 
 class _Resp:
-    def __init__(self, status_code=200, body=None, text=''):
+    def __init__(self, status_code=200, body=None, text=None):
         self.status_code = status_code
         self._body = body
+        # Fiel ao requests real: resposta com JSON tem .text preenchido
+        # (o codigo de prod usa o padrao `r.json() if r.text else {}`).
+        if text is None:
+            text = 'x' if body is not None else ''
         self.text = text
 
     def json(self):
