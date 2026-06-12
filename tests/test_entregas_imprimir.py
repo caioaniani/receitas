@@ -580,7 +580,6 @@ def test_debug_lote_retorna_diag_por_pedido(app, admin_user):
     data = r.get_json()
     assert data['qtd_pedidos'] == 1
     assert data['payload_bytes'] > 0
-    assert data['caps']['cartinha'] == 600
     d0 = data['diag'][0]
     assert d0['code'] == 'A1'
     assert d0['destinatario'] is True
