@@ -512,3 +512,113 @@ def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_re
     except Exception:  # noqa: BLE001
         logger.exception('vigia abandono: registro falhou')
     return res
+
+
+def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
+                                       max_por_ciclo=5):
+    """Detector C (12/06/2026, conv #198): cliente manda mensagem em
+    conversa `open` (humano e dono da conversa) e NINGUEM responde.
+
+    O bot ignora `open` por design (humano assumiu); o detector de
+    abandono so olha `pending`. Resultado: cliente esperando atendente
+    era INVISIVEL pra todos os vigias — a Mariana mandou 'Olá' as 17:42
+    e ficou no vacuo.
+
+    Deterministico (sem Haiku): conversa open + ultima mensagem e do
+    CLIENTE + parada entre min e max minutos = fato, nao julgamento.
+    Dedupe persistente em VigiaVeredito ('[ESPERA_HUMANO'), mesmo padrao
+    do abandono. Alerta o dono via Z-API."""
+    from app.services import chatwoot, zapi
+
+    numero = _numero_destino()
+    if not numero:
+        return {'pulou': 'sem numero destino'}
+
+    paradas = chatwoot.listar_conversas_paradas(
+        min_minutos=min_minutos, status='open')
+    avaliadas = enviadas = 0
+    for c in paradas:
+        if enviadas >= max_por_ciclo:
+            break
+        conv_id = c.get('id')
+        minutos = c.get('minutos_paradas', 0)
+        if not conv_id or minutos > max_minutos:
+            continue
+        if _ja_avisado_espera_humano(conv_id):
+            continue
+        historico = chatwoot.buscar_historico(conv_id)
+        if not historico:
+            continue
+        # So alerta se quem falou por ultimo foi o CLIENTE (esperando).
+        # Ultima do atendente = atendimento em andamento, nao alertar.
+        if historico[-1].get('role') != 'user':
+            continue
+        avaliadas += 1
+        ultima = (historico[-1].get('content') or '')[:120]
+        nome = c.get('nome_contato') or '(sem nome)'
+        cfg = current_app.config
+        base_cw = (cfg.get('CHATWOOT_URL') or '').rstrip('/')
+        acc = (cfg.get('CHATWOOT_ACCOUNT_ID') or '').strip()
+        link = (f'{base_cw}/app/accounts/{acc}/conversations/{conv_id}'
+                if base_cw and acc else '')
+        msg = (f'🙋 *Cliente esperando ATENDENTE* ha {minutos}min\n'
+               f'Cliente: {nome} (conversa #{conv_id})\n\n'
+               f'Última mensagem: "{ultima}"\n\n'
+               'O bot nao responde conversas que ja foram assumidas por '
+               'humano — alguem da equipe precisa olhar.'
+               + (f'\n\n{link}' if link else ''))
+        try:
+            envio = zapi.enviar_texto(numero, msg)
+        except Exception:  # noqa: BLE001
+            logger.exception('espera-humano: envio falhou conv=%s', conv_id)
+            continue
+        _registrar_espera_humano(conv_id, nome, minutos, ultima,
+                                 bool(envio.get('ok')))
+        if envio.get('ok'):
+            enviadas += 1
+            logger.info('espera-humano alertado conv=%s (%smin)',
+                        conv_id, minutos)
+    return {'avaliadas': avaliadas, 'enviadas': enviadas}
+
+
+def _ja_avisado_espera_humano(conv_id, horas=12):
+    """Dedupe persistente (mesmo padrao do abandono). 12h: se o cliente
+    seguir esperando no dia seguinte, vale re-alertar."""
+    try:
+        from datetime import timedelta
+
+        from app.models import VigiaVeredito
+        from app.utils import agora
+        corte = agora() - timedelta(hours=horas)
+        return (VigiaVeredito.query
+                .filter(VigiaVeredito.conv_id == str(conv_id),
+                        VigiaVeredito.criado_em >= corte,
+                        VigiaVeredito.mensagem_cliente.like('[ESPERA_HUMANO%'))
+                .first()) is not None
+    except Exception:  # noqa: BLE001
+        logger.exception('espera-humano: dedupe falhou (assume avisado)')
+        return True   # fail-closed: na duvida nao re-alerta
+
+
+def _registrar_espera_humano(conv_id, nome, minutos, ultima_msg, enviado):
+    try:
+        from app.extensions import db
+        from app.models import VigiaVeredito
+        db.session.add(VigiaVeredito(
+            conv_id=str(conv_id),
+            cliente=(nome or '')[:200] or None,
+            mensagem_cliente=f'[ESPERA_HUMANO {minutos}min] {ultima_msg}'[:2000],
+            bot_acao='espera_humano',
+            alerta=True,
+            gravidade='alta',
+            motivo_vigia='cliente esperando atendente em conversa open',
+            enviado_whatsapp=bool(enviado),
+        ))
+        db.session.commit()
+    except Exception:  # noqa: BLE001
+        logger.exception('espera-humano: registro falhou')
+        try:
+            from app.extensions import db
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
