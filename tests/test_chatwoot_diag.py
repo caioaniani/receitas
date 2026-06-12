@@ -76,23 +76,55 @@ def test_token_401_conclui_token_invalido(app):
     assert 'token DESTE sistema' in out['conclusao']
 
 
-def test_tudo_ok_conclui_canais_meta(app):
-    """Servidor e tokens OK → o problema so pode estar nos canais Meta
-    (tokens de WhatsApp/IG dentro do Chatwoot). E exatamente o quadro do
-    incidente: IG '400 Session Invalid' com servidor de pe."""
+def test_inbox_quebrado_aponta_canal_pelo_nome(app):
+    """Com token de usuario valido, o diagnostico le /inboxes e aponta
+    EXATAMENTE qual canal precisa de Reauthorize (campo
+    `reauthorization_required` do Chatwoot — e o '400 Session Invalid'
+    do incidente de 12/06/2026)."""
     from app.services import chatwoot
     _cfg(app)
 
     def fake_get(url, **kw):
         if url.endswith('/api'):
-            return _Resp(200, body={'version': '3.12.0'})
+            return _Resp(200, body={'version': '4.14.1'})
+        if url.endswith('/inboxes'):
+            return _Resp(200, body={'payload': [
+                {'name': 'Instagram O PAO', 'channel_type': 'Channel::Instagram',
+                 'reauthorization_required': True},
+                {'name': 'O PAO WhatsApp', 'channel_type': 'Channel::Whatsapp',
+                 'reauthorization_required': False},
+            ]})
         return _Resp(200, body={'payload': []})
 
     with patch('app.services.chatwoot.requests.get', side_effect=fake_get):
         out = chatwoot.diagnostico()
-    assert 'CANAIS (Meta)' in out['conclusao']
+    assert out['inboxes'][0]['precisa_reautorizar'] is True
+    assert 'Instagram O PAO' in out['conclusao']
     assert 'Reauthorize' in out['conclusao']
     assert 'System User' in out['conclusao']
+
+
+def test_tudo_ok_aponta_janela_24h_e_sidekiq(app):
+    """Servidor, tokens e inboxes todos OK → as causas restantes de
+    'Falha ao enviar' sao operacionais (janela de 24h da Meta) ou o
+    worker do Chatwoot — a conclusao orienta os dois."""
+    from app.services import chatwoot
+    _cfg(app)
+
+    def fake_get(url, **kw):
+        if url.endswith('/api'):
+            return _Resp(200, body={'version': '4.14.1'})
+        if url.endswith('/inboxes'):
+            return _Resp(200, body={'payload': [
+                {'name': 'O PAO WhatsApp', 'channel_type': 'Channel::Whatsapp',
+                 'reauthorization_required': False},
+            ]})
+        return _Resp(200, body={'payload': []})
+
+    with patch('app.services.chatwoot.requests.get', side_effect=fake_get):
+        out = chatwoot.diagnostico()
+    assert 'janela de 24h' in out['conclusao']
+    assert 'Sidekiq' in out['conclusao']
 
 
 def test_diagnostico_nao_vaza_tokens(app):
