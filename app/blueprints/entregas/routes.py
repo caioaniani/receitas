@@ -25,6 +25,7 @@ from app.models import (
     Produto,
 )
 from app.services import dropbox_storage, vnda
+from app.services import pdf as pdf_svc
 from app.services import rotas as rotas_svc
 from app.utils import agora
 from app.utils import hoje as hoje_brt
@@ -455,6 +456,10 @@ def _carregar_pedidos_imprimir_get(src, target, diag):
                     drv_por_code[a.pedido_code] = d.nome
     for p in pedidos:
         p['driver_nome'] = drv_por_code.get(p.get('code'))
+        # Kit/box do VNDA vem com itens zerados e dinheiro so no total —
+        # o preview HTML esconde a coluna Valor nesses casos (mesma
+        # regra do PDF; logica unica em pdf.py::itens_sem_valor).
+        p['_itens_sem_valor'] = pdf_svc.itens_sem_valor(p)
     return pedidos
 
 
