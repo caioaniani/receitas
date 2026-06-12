@@ -611,6 +611,45 @@ def test_debug_lote_inexistente_devolve_404(app, admin_user):
     assert r.status_code == 404
 
 
+# ── PDF: o caminho OFICIAL de impressao (11/06/2026) ────────────────────
+
+
+def test_pdf_do_lote_retorna_pdf_valido(app, admin_user):
+    """POST → 303 (lote) → GET imprimir.pdf?lote= devolve um PDF de
+    verdade. E o documento congelado que o Safari imprime sem
+    re-renderizar (a causa raiz das 3 rodadas de pagina em branco)."""
+    c = app.test_client()
+    _login(c)
+    rpost = _post_imprimir(c, _pedidos_fake(), vias='cliente,motorista',
+                           follow_redirects=False)
+    import re
+    m = re.search(r'lote=([^&]+)', rpost.headers['Location'])
+    token = m.group(1)
+    r = c.get(f'/entregas/imprimir.pdf?lote={token}'
+              '&vias=cliente,motorista&data=2026-06-11')
+    assert r.status_code == 200
+    assert r.mimetype == 'application/pdf'
+    assert r.data[:5] == b'%PDF-'
+    assert 'inline' in r.headers.get('Content-Disposition', '')
+
+
+def test_pdf_lote_expirado_devolve_pagina_diagnostico(app, admin_user):
+    """PDF de lote inexistente nao pode ser PDF vazio mudo — devolve a
+    pagina HTML com o bloco de diagnostico."""
+    c = app.test_client()
+    _login(c)
+    r = c.get('/entregas/imprimir.pdf?lote=sumiu&vias=cliente')
+    assert r.status_code == 200
+    assert r.mimetype == 'text/html'
+    assert 'expirado'.encode() in r.data
+
+
+def test_pdf_exige_login(app, admin_user):
+    c = app.test_client()
+    r = c.get('/entregas/imprimir.pdf?lote=x', follow_redirects=False)
+    assert r.status_code in (302, 401)
+
+
 def test_apis_leitura_da_operacao_abertas_pra_funcionario(app):
     """A aba Operacao do /entregas/ chama /api/atribuidos, /api/lotes e
     /api/rotas. Como a tela abre pra todos (decisao 11/06/2026), os GETs
