@@ -105,27 +105,19 @@
   .conferencia .campo .lbl { font-size: 11px; text-transform: uppercase;
                               letter-spacing: 0.06em; color: #444; }
 
-  /* Aviso visual quando algum campo foi truncado pelo servidor — so na
-     tela (na impressao some pra nao poluir o papel). */
-  .truncado {
-    display: inline-block; font-size: 10px; font-weight: 700;
-    background: #fff3cd; color: #856404; padding: 1px 6px;
-    border-radius: 3px; margin-left: 6px; vertical-align: middle;
-  }
-
   /* Barra topo so visivel no navegador (nao na impressao) */
   .barra-topo {
     background: #1f2933; color: #fff; padding: 10px 16px;
     display: flex; gap: 12px; align-items: center; justify-content: space-between;
     font-size: 14px;
   }
-  .barra-topo button {
+  .barra-topo a.btn-pdf {
     background: #2b8a3e; color: #fff; border: 0; padding: 8px 16px;
     border-radius: 6px; font-weight: 800; cursor: pointer;
+    text-decoration: none; display: inline-block;
   }
   @media print {
     .barra-topo { display: none !important; }
-    .truncado { display: none !important; }
   }
 </style>
 </head>
