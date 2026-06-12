@@ -1,6 +1,16 @@
 from fpdf import FPDF
 
 
+def _latin1(texto):
+    """Sanitiza string pra fonte core do FPDF (latin-1). Acentos do
+    portugues (ã, ç, é...) passam intactos; emoji e outros simbolos fora
+    do latin-1 viram '?'. Necessario porque a cartinha vem do cliente e
+    pode ter qualquer coisa."""
+    if texto is None:
+        return ''
+    return str(texto).encode('latin-1', 'replace').decode('latin-1')
+
+
 class PadariaPDF(FPDF):
     def header(self):
         self.set_font('Helvetica', 'B', 14)
