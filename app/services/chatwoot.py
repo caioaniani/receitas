@@ -186,6 +186,105 @@ def baixar_imagem(url):
     return 'image/jpeg', base64.b64encode(jpeg).decode('ascii')
 
 
+def diagnostico():
+    """Bateria de checagens pro /admin/debug-chatwoot (owner-only).
+
+    Roda DO SERVIDOR de prod — que alcanca o Chatwoot mesmo quando o
+    navegador/app do atendente mascara o erro real. Distingue 3 familias
+    de problema sem precisar adivinhar:
+      1. hospedagem fora/doente (Railway do Chatwoot);
+      2. token DESTE sistema pro Chatwoot invalido (401);
+      3. servidor e tokens OK → problema e nos CANAIS Meta (tokens de
+         WhatsApp/IG guardados DENTRO do Chatwoot — reconectar inboxes).
+    Nao vaza tokens: so status HTTP e booleans."""
+    import time as _time
+    cfg = current_app.config
+    url = (cfg.get('CHATWOOT_URL') or '').strip().rstrip('/')
+    out = {
+        'url_configurada': url or '(vazia)',
+        'account_id': (cfg.get('CHATWOOT_ACCOUNT_ID') or '').strip()
+                      or '(vazio)',
+        'api_token_configurado': bool(
+            (cfg.get('CHATWOOT_API_TOKEN') or '').strip()),
+        'bot_token_configurado': bool(
+            (cfg.get('CHATWOOT_BOT_TOKEN') or '').strip()),
+    }
+    if not url:
+        out['conclusao'] = 'CHATWOOT_URL vazia no env — configure no Railway.'
+        return out
+
+    # 1. Servidor vivo? GET /api e endpoint publico de versao (sem auth).
+    t0 = _time.monotonic()
+    try:
+        r = requests.get(f'{url}/api', timeout=8)
+        out['servidor_http'] = r.status_code
+        out['servidor_latencia_ms'] = int((_time.monotonic() - t0) * 1000)
+        try:
+            out['servidor_versao'] = (r.json() or {}).get('version')
+        except ValueError:
+            out['servidor_corpo'] = (r.text or '')[:120]
+    except Exception as exc:  # noqa: BLE001
+        out['servidor_http'] = None
+        out['servidor_erro'] = f'{type(exc).__name__}: {str(exc)[:200]}'
+        out['conclusao'] = (
+            'Servidor Chatwoot NAO respondeu — problema na hospedagem '
+            '(projeto Railway do Chatwoot): conferir se web/worker estao '
+            'verdes, logs de crash, e disco/memoria de Postgres e Redis.')
+        return out
+
+    # 2. Token de usuario (o que empurra atributos de contato) valido?
+    if out['api_token_configurado']:
+        try:
+            r = requests.get(f'{_base()}/contacts', params={'page': 1},
+                             headers=_headers(), timeout=8)
+            out['api_token_http'] = r.status_code
+        except Exception as exc:  # noqa: BLE001
+            out['api_token_http'] = None
+            out['api_token_erro'] = f'{type(exc).__name__}: {str(exc)[:200]}'
+
+    # 3. Token do Agent Bot (o que responde conversas) valido?
+    if out['bot_token_configurado']:
+        try:
+            r = requests.get(f'{_base()}/conversations',
+                             params={'status': 'pending', 'page': 1},
+                             headers=_bot_headers(), timeout=8)
+            out['bot_token_http'] = r.status_code
+        except Exception as exc:  # noqa: BLE001
+            out['bot_token_http'] = None
+            out['bot_token_erro'] = f'{type(exc).__name__}: {str(exc)[:200]}'
+
+    # Conclusao automatica (ordem importa: do mais grave pro mais fino)
+    statuses = [out.get('servidor_http'), out.get('api_token_http'),
+                out.get('bot_token_http')]
+    if any(s and s >= 500 for s in statuses):
+        out['conclusao'] = (
+            'Chatwoot respondeu com erro 5xx — servidor doente. Ver logs '
+            'no Railway do Chatwoot; suspeitos comuns: Sidekiq parado, '
+            'Redis/Postgres cheios, migracao pendente apos update. '
+            'Explica os "unexpected error" do app dos atendentes.')
+    elif (out.get('servidor_latencia_ms') or 0) > 5000:
+        out['conclusao'] = (
+            'Chatwoot respondeu mas MUITO lento (%sms) — servidor sob '
+            'stress (memoria/CPU no Railway do Chatwoot). Explica '
+            '"unexpected error" e app travado.'
+            % out['servidor_latencia_ms'])
+    elif any(s == 401 for s in statuses[1:]):
+        out['conclusao'] = (
+            'Servidor OK, mas o token DESTE sistema pro Chatwoot esta '
+            'invalido (401) — regerar em Profile Settings (API) ou '
+            'Agent Bots (bot) e atualizar o env no Railway da padaria.')
+    elif out.get('servidor_http') == 200:
+        out['conclusao'] = (
+            'Servidor Chatwoot OK e tokens OK. O problema esta nos '
+            'CANAIS (Meta): "400 Session Invalid" no IG + "Falha ao '
+            'enviar" no WhatsApp = token Meta expirado/revogado DENTRO '
+            'do Chatwoot. Reconectar em Settings → Inboxes (Reauthorize '
+            'no Instagram e no WhatsApp). Pra nao repetir a cada 60 '
+            'dias: usar token de System User do Business Manager (nao '
+            'expira).')
+    return out
+
+
 def listar_conversas_paradas(min_minutos=15, limite=50):
     """Conversas em status `pending` (turno do bot) cujo `last_activity_at` foi
     ha mais de `min_minutos`. Usado pelo job de detecao de abandono.
