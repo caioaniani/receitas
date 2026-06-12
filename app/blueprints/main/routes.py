@@ -1988,6 +1988,74 @@ def debug_chatwoot():
     return jsonify(out), 200
 
 
+@main_bp.route('/admin/vnda/contatos')
+@owner_required
+def vnda_contatos():
+    """Endereco + contato de uma lista de codes do VNDA (owner-only).
+
+    Criado em 12/06/2026 pro caso operacional 'preciso achar 11 clientes
+    pra repor produto estragado'. Aceita ?codes=A,B,C (mais um por linha
+    quebrada/espaco/virgula — robusto pra copia-cola do print).
+
+    Resposta:
+      {ok, total, achados, nao_achados,
+       clientes: [{code, destinatario, telefone, endereco, data_entrega,
+                   periodo, itens: [{nome,qtd}]}]}.
+    """
+    import re
+
+    from flask import render_template
+
+    from app.services import vnda
+    raw = request.args.get('codes') or request.args.get('q') or ''
+    # split robusto: virgula, espaco, quebra de linha, tabs
+    codes = [c.strip().upper() for c in re.split(r'[,\s]+', raw) if c.strip()]
+    # dedup mantendo ordem
+    seen = set()
+    codes = [c for c in codes if not (c in seen or seen.add(c))]
+    formato = (request.args.get('formato') or '').lower()
+
+    clientes = []
+    nao_achados = []
+    for code in codes:
+        order = vnda.buscar_pedido_completo(code)
+        if not order:
+            nao_achados.append(code)
+            continue
+        shipping = vnda.buscar_shipping_address(code)
+        client = None
+        cid = order.get('client_id')
+        if cid:
+            try:
+                client = vnda.buscar_cliente(cid)
+            except Exception:  # noqa: BLE001
+                client = None
+        p = vnda._normalizar_pedido(order, client_data=client,
+                                     shipping_data=shipping)
+        clientes.append({
+            'code': p.get('code'),
+            'destinatario': p.get('destinatario') or p.get('comprador') or '',
+            'telefone': p.get('telefone') or '',
+            'endereco': p.get('endereco') or '',
+            'data_entrega': p.get('data_entrega_fmt') or '',
+            'periodo': p.get('periodo') or '',
+            'itens': [{'nome': it.get('nome'),
+                       'qtd': it.get('quantidade')}
+                      for it in (p.get('itens') or [])],
+        })
+    payload = {
+        'ok': True,
+        'total': len(codes),
+        'achados': len(clientes),
+        'nao_achados': nao_achados,
+        'clientes': clientes,
+    }
+    if formato == 'json':
+        return jsonify(payload), 200
+    # HTML default: tela imprimivel, telefone clicavel (tel:), 1 cliente por bloco
+    return render_template('admin/vnda_contatos.html', dados=payload), 200
+
+
 @main_bp.route('/admin/debug-bot')
 @owner_required
 def debug_bot():
