@@ -108,7 +108,7 @@ def _whitelist_grupos():
     permitidos = {_normalizar_grupo(g) for g in raw.split(',') if g.strip()}
     # Destinos de alerta que podem ser grupo entram sozinhos
     for chave in ('ZAPI_NUMERO_DESTINO', 'CHATBOT_VIGIA_NUMERO',
-                  'ZAPI_BOT_DONO_NUMERO'):
+                  'ZAPI_BOT_DONO_NUMERO', 'CHATWOOT_VIGIA_INFRA_NUMERO'):
         v = (cfg.get(chave) or '').strip()
         if _e_grupo(v):
             permitidos.add(_normalizar_grupo(v))
