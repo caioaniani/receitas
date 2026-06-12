@@ -389,6 +389,64 @@ def api_pedidos():
     return resp
 
 
+# Caps defensivos por campo na rota de impressao. Quando alguma string
+# excede o cap, ela e cortada e o nome do campo entra em p['_truncado']
+# (set) pra o template mostrar aviso visual. Bug real (11/06/2026, 3o
+# print do dono): conteudo grande em ALGUM pedido fazia o Safari paginar
+# errado e renderizar PAGINAS EM BRANCO entre as folhas com conteudo.
+# Caps escolhidos pra caber confortavelmente na area util A4 (269x186mm)
+# com a fonte usada (cartinha 22px, obs 16px, itens 17px).
+_CAP_CARTINHA = 600     # ~8-10 linhas de cartinha em 22px
+_CAP_OBSERVACAO = 400   # ~10-12 linhas de observacao em 16px
+_CAP_ENDERECO = 200
+_CAP_TELEFONE = 40
+_CAP_DESTINATARIO = 100
+_CAP_NOME_ITEM = 100
+_CAP_ITENS = 30
+
+
+def _truncar(valor, max_len):
+    """Trunca string longa com reticencias; devolve (novo, foi_cortado)."""
+    if valor is None:
+        return None, False
+    s = str(valor)
+    if len(s) <= max_len:
+        return s, False
+    return s[:max_len].rstrip() + '…', True
+
+
+def _truncar_campos_pedido(p):
+    """Aplica caps em todos os campos de texto do pedido. Marca o set
+    `_truncado` com os nomes dos campos cortados (pro template mostrar
+    aviso visual no preview)."""
+    if not isinstance(p, dict):
+        return
+    truncados = set()
+    for campo, cap in (('cartinha', _CAP_CARTINHA),
+                       ('observacao', _CAP_OBSERVACAO),
+                       ('endereco', _CAP_ENDERECO),
+                       ('telefone', _CAP_TELEFONE),
+                       ('destinatario', _CAP_DESTINATARIO)):
+        novo, cortado = _truncar(p.get(campo), cap)
+        if novo is not None:
+            p[campo] = novo
+        if cortado:
+            truncados.add(campo)
+    itens = p.get('itens') or []
+    if len(itens) > _CAP_ITENS:
+        p['itens'] = itens[:_CAP_ITENS]
+        truncados.add('itens')
+    for it in (p.get('itens') or []):
+        if isinstance(it, dict):
+            novo, cortado = _truncar(it.get('nome'), _CAP_NOME_ITEM)
+            if novo is not None:
+                it['nome'] = novo
+            if cortado:
+                truncados.add('itens')
+    if truncados:
+        p['_truncado'] = truncados
+
+
 @entregas_bp.route('/imprimir', methods=['GET', 'POST'])
 @login_required
 def imprimir():
