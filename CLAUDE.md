@@ -486,6 +486,57 @@ O n8n foi APOSENTADO — `app/blueprints/bot/routes.py` e API legada
 (`/api/bot/faturamento`, token `BOT_API_TOKEN`); nao construir nada novo
 nela, e nao confundir com o bot do dono (que e o zapi_bot acima).
 
+## Chatwoot (atendimento omnichannel — WhatsApp + IG + site)
+
+Self-hosted no Railway (projeto SEPARADO `positive-presence`;
+`https://atendimento.opaopadariaartesanal.com.br`, Chatwoot 4.x + Valkey).
+12 atendentes. O NOSSO sistema integra via API: bot de IA responde conversas
+`pending` (webhook `POST /crm/bot?k=CHATWOOT_BOT_SECRET`), card do cliente,
+vigias. Z-API (alertas internos do dono) e SEPARADO e intocavel.
+
+**Env (Railway da padaria)**: `CHATWOOT_URL`, `CHATWOOT_ACCOUNT_ID`,
+`CHATWOOT_API_TOKEN` (token de USUARIO, Profile Settings — le conversas/
+inboxes/contatos), `CHATWOOT_BOT_TOKEN` (token do AGENT BOT, /super_admin →
+Agent Bots — posta como bot), `CHATWOOT_BOT_SECRET` (segredo NOSSO, igual ao
+`?k=` da Outgoing URL do Agent Bot), `CHATWOOT_CARD_TOKEN`,
+`CHATWOOT_DATABASE_URL` (backup).
+
+**LICAO DURA (12/06/2026)**: token de Agent Bot NAO pode LISTAR conversas
+(GET /conversations = 401 mesmo com token VALIDO). So pode postar mensagem /
+toggle_status. Consequencias ja corrigidas: (1) o diagnostico testa o bot
+token com sonda `POST /conversations/0/toggle_status` — 404 = valido, 401 =
+invalido; (2) leituras (`buscar_historico`, `listar_conversas_paradas`)
+preferem o token de USUARIO com fallback pro de bot — com so o bot token, o
+detector de abandono ficou CEGO EM SILENCIO por semanas (401 → lista vazia).
+NAO regredir leituras pro token de bot.
+
+**Diagnostico (owner-only)**:
+- `GET /admin/debug-chatwoot` — servidor/latencia/versao, validade dos 2
+  tokens (sem vazar valor; expoe len + flag parece_url), inboxes com
+  `precisa_reautorizar` por canal, e `conclusao` pronta. `?conversa=N`
+  adiciona erros de envio (erro bruto da Meta por mensagem falhada) +
+  historico da conversa N.
+- `GET /admin/debug-bot?busca=X` — VNDA (o que o BOT ve) vs EstoqueLoja
+  (lojas fisicas) lado a lado.
+
+**Vigia de infra**: cron 15min (`seru_cron`, lock 7739, `CHATWOOT_VIGIA_INFRA=0`
+desliga) roda o diagnostico e alerta o dono via Z-API na transicao
+saudavel→doente; re-alerta mesmo problema a cada 6h; avisa "✅ normalizou" na
+recuperacao. Estado persistido em `AppConfig` (anti-spam sobrevive a deploy).
+
+**Vigia do bot (chatbot_vigia)**: compara o que o bot disse com o CATALOGO DO
+SITE (VNDA — MESMA fonte que o bot consulta). NUNCA comparar com EstoqueLoja:
+bot vende pelo site; loja fisica e outra realidade (falso "bot delirou" em
+12/06/2026: VNDA disponivel + 872 un na loja — bot estava certo).
+
+**Incidente 12/06/2026 (pos-mortem curto)**: IG caiu por token Meta expirado
+(inbox `reauthorization_required` → Reauthorize resolveu; conectar com System
+User do Business Manager evita expirar a cada 60d). WhatsApp "Falha ao
+enviar" foi instabilidade DA META (~12h, erro generico "An unexpected error"
+— classe code 2), passou sozinho. App Meta "O PAO ChatWoot" foi PUBLICADO em
+08/06 — se mensageria falhar de novo, conferir "Acoes necessarias"/App
+Review/verificacao da empresa no painel Meta.
+
 ## Contas a Pagar (NF/boleto via Slack → IA → Dropbox → banco)
 
 Feature de 2026-05-23. Funcionarios postam foto de NF/boleto em canais Slack de
