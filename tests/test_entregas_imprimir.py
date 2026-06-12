@@ -493,102 +493,44 @@ def test_post_limpa_lotes_velhos(app, admin_user):
     assert ImpressaoLote.query.count() == 1   # so o lote recem-criado
 
 
-def test_css_da_folha_tem_dimensoes_fixas_e_overflow_hidden(app, admin_user):
-    """Bug real (11/06/2026, 3o print do dono — preview com paginas 5+
-    em branco apesar das 1-2 OK): sem altura fixa, conteudo grande de
-    algum pedido vazava da folha pra proxima pagina e o Safari paginava
-    errado — paginas brancas entre folhas com conteudo, contagem
-    excedendo pedidos*vias. Solucao canonica: travar largura+altura na
-    area util A4 (186x269mm) + overflow hidden, garantindo 1 folha = 1
-    pagina estrita."""
+def test_css_da_folha_e_bloco_simples(app, admin_user):
+    """Decisao 11/06/2026 (apos 3 rodadas de bug de impressao no
+    Safari): a pagina HTML e SO preview de tela — a impressao oficial e
+    o PDF do servidor. O CSS da .folha volta ao bloco simples (que
+    paginava certo na tela): sem flex, sem min-height, sem height fixo,
+    sem overflow hidden."""
     c = app.test_client()
     _login(c)
     r = _post_imprimir(c, _pedidos_fake(), vias='cliente')
     body = r.data.decode()
-    # bloco CSS da .folha (ate fechar chave)
     import re
     m = re.search(r'\.folha\s*\{([^}]*)\}', body)
     assert m, 'bloco .folha sumiu do CSS'
     bloco = m.group(1)
-    # dimensoes fixas da area util A4 com margem 14mm v / 12mm h
-    assert 'width: 186mm' in bloco, f'largura nao fixou: {bloco!r}'
-    assert 'height: 269mm' in bloco, f'altura nao fixou: {bloco!r}'
-    assert 'overflow: hidden' in bloco, f'overflow nao corta: {bloco!r}'
-    # nao pode regressao dos bugs anteriores
     assert 'flex' not in bloco, f'flex voltou: {bloco!r}'
     assert 'min-height' not in bloco, f'min-height voltou: {bloco!r}'
-    # page-break esta presente (mantemos os 2 padroes pra compat)
+    assert 'height' not in bloco, f'height fixo voltou: {bloco!r}'
+    assert 'overflow' not in bloco, f'overflow voltou: {bloco!r}'
     assert 'page-break-after: always' in bloco
     assert 'break-after: page' in bloco
-    assert 'page-break-inside: avoid' in bloco
 
 
-def test_imprimir_trunca_cartinha_excessiva(app, admin_user):
-    """Cartinha de 5000 chars e cortada pelo servidor pra caber na area
-    util A4 e nao quebrar a paginacao do Safari (bug real 11/06/2026).
-    Uso `cartinha_vnda` porque o servidor refaz `_aplicar_cartinhas` no
-    POST — ele resolve `p['cartinha']` a partir de manual (banco) ou
-    `cartinha_vnda` (shape do VNDA, que e o que o JS efetivamente envia)."""
+def test_pagina_html_aponta_pro_pdf(app, admin_user):
+    """O botao verde da barra agora abre o PDF do servidor (impressao
+    congelada) em vez de chamar window.print() — que re-renderizava o
+    documento no Safari e imprimia em branco."""
     c = app.test_client()
     _login(c)
-    cartinha = 'A' * 5000
-    pedido = {
-        'code': 'VND-GIG', 'destinatario': 'Z', 'endereco': 'Rua Q',
-        'telefone': '', 'total': 100, 'cartinha_vnda': cartinha,
-        'itens': [{'nome': 'X', 'quantidade': 1, 'subtotal': 100}],
-    }
-    r = _post_imprimir(c, [pedido], vias='cliente')
+    r = _post_imprimir(c, _pedidos_fake(), vias='cliente')
     body = r.data.decode()
-    # cartinha original (5000) NAO aparece inteira
-    assert ('A' * 5000) not in body
-    # mas o inicio aparece (truncada com reticencias)
-    assert 'AAAAAAAA' in body
-    assert '…' in body
-    # marcador visual de "truncada" aparece (so no preview da tela —
-    # @media print esconde)
-    assert 'truncada' in body
-
-
-def test_imprimir_trunca_observacao_excessiva(app, admin_user):
-    c = app.test_client()
-    _login(c)
-    obs = 'X' * 3000
-    pedido = {
-        'code': 'VND-OBS', 'destinatario': 'Z', 'endereco': 'Rua Q',
-        'telefone': '', 'total': 100, 'observacao': obs,
-        'itens': [{'nome': 'X', 'quantidade': 1, 'subtotal': 100}],
-    }
-    r = _post_imprimir(c, [pedido], vias='cliente')
-    body = r.data.decode()
-    assert ('X' * 3000) not in body
-    assert '…' in body
-
-
-def test_imprimir_limita_qtd_itens(app, admin_user):
-    """Pedido com 100 itens fica com no maximo 30 — alem disso nao cabe
-    em A4 mesmo com fonte pequena."""
-    c = app.test_client()
-    _login(c)
-    itens = [{'nome': f'Item {i}', 'quantidade': 1, 'subtotal': 10}
-             for i in range(100)]
-    pedido = {
-        'code': 'VND-MANY', 'destinatario': 'Z', 'endereco': 'Rua Q',
-        'telefone': '', 'total': 1000, 'itens': itens,
-    }
-    r = _post_imprimir(c, [pedido], vias='cliente')
-    body = r.data.decode()
-    assert 'Item 0' in body
-    assert 'Item 29' in body
-    assert 'Item 30' not in body
-    assert 'primeiros 30 itens' in body
+    assert '/entregas/imprimir.pdf?' in body
+    assert 'imprimir (PDF)' in body
+    # o window.print() nao pode mais ser o caminho do botao
+    assert 'onclick="window.print()"' not in body
 
 
 def test_imprimir_15_pedidos_geram_exatamente_30_folhas(app, admin_user):
-    """15 pedidos x 2 vias = EXATAMENTE 30 .folha no DOM, nada a mais.
-    Bug real (11/06/2026): preview mostrava 31 paginas pra 15 pedidos x
-    2 vias — uma pagina extra fantasma (provavelmente da paginacao
-    estranha do Safari com conteudo vazado, agora travada por height
-    fixo + overflow hidden)."""
+    """15 pedidos x 2 vias = EXATAMENTE 30 .folha no DOM do preview."""
     c = app.test_client()
     _login(c)
     pedidos = [
