@@ -390,6 +390,17 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
+    # Heartbeat invertido — 08:00 BRT (manha): canal Slack recebe um
+    # 'sistema OK'. Detecta dependencia circular: se Z-API cair, ninguem
+    # avisa o dono via WhatsApp; mas se a msg sumir do Slack, o dono
+    # sabe que a infra de alertas caiu. Sem env SLACK_CHANNEL_HEARTBEAT,
+    # job nao posta (silencioso por design).
+    _scheduler.add_job(
+        lambda app=app: _run_heartbeat_slack(app),
+        'cron', hour=8, minute=0, id='heartbeat-slack',
+        max_instances=1, coalesce=True,
+    )
+
     # Alerta de desperdicio: escalada Slack (20:10/15/20/25) -> WhatsApp (20:30)
     if os.environ.get('DESPERDICIO_ALERTA', '1') != '0':
         # 4 ticks no Slack — gerentes veem la e podem resolver antes do WhatsApp
@@ -689,3 +700,31 @@ def _run_slack_lembretes_pedidos_hoje(app):
     with app.app_context():
         _com_lock(7727, slack_resumos.enviar_lembrete_pedidos_hoje_pendentes,
                   'slack lembrete pedidos hoje')
+
+
+def _run_heartbeat_slack(app):
+    """Heartbeat invertido: 1x por dia, posta no Slack 'sistema OK'.
+
+    Pedido do dono (12/06/2026, apos auditoria detectar dependencia
+    circular): se Z-API cair, NINGUEM avisa o dono (vigia de infra do
+    Chatwoot usa Z-API; auditor usa Z-API; abandono usa Z-API). Slack e
+    canal INDEPENDENTE — se o heartbeat sumir do canal por >12h, o dono
+    sabe que a infra alertadora caiu, mesmo sem WhatsApp chegando.
+
+    Configurar `SLACK_CHANNEL_HEARTBEAT` (id do canal de ops). Sem env,
+    job nao registra (silencioso por design — heartbeat sem destino e
+    so ruido)."""
+    from app.services import slack
+
+    with app.app_context():
+        canal = (os.environ.get('SLACK_CHANNEL_HEARTBEAT')
+                 or app.config.get('SLACK_CHANNEL_HEARTBEAT') or '').strip()
+        if not canal:
+            return
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        agora_brt = datetime.now(ZoneInfo('America/Sao_Paulo'))
+        texto = (f':heartbeat: sistema OK · {agora_brt.strftime("%d/%m %H:%M")} BRT\n'
+                 'se essa msg sumir do canal por mais de 24h, '
+                 'a infra de alertas (Z-API/vigias) pode estar fora')
+        slack.post_message(canal, text=texto)
