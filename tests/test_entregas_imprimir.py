@@ -525,13 +525,16 @@ def test_css_da_folha_tem_dimensoes_fixas_e_overflow_hidden(app, admin_user):
 
 def test_imprimir_trunca_cartinha_excessiva(app, admin_user):
     """Cartinha de 5000 chars e cortada pelo servidor pra caber na area
-    util A4 e nao quebrar a paginacao do Safari (bug real 11/06/2026)."""
+    util A4 e nao quebrar a paginacao do Safari (bug real 11/06/2026).
+    Uso `cartinha_vnda` porque o servidor refaz `_aplicar_cartinhas` no
+    POST — ele resolve `p['cartinha']` a partir de manual (banco) ou
+    `cartinha_vnda` (shape do VNDA, que e o que o JS efetivamente envia)."""
     c = app.test_client()
     _login(c)
     cartinha = 'A' * 5000
     pedido = {
         'code': 'VND-GIG', 'destinatario': 'Z', 'endereco': 'Rua Q',
-        'telefone': '', 'total': 100, 'cartinha': cartinha,
+        'telefone': '', 'total': 100, 'cartinha_vnda': cartinha,
         'itens': [{'nome': 'X', 'quantidade': 1, 'subtotal': 100}],
     }
     r = _post_imprimir(c, [pedido], vias='cliente')
