@@ -228,6 +228,9 @@
       <span style="font-weight:400;color:#444;font-size:13px;">
         ({{ ns.n }} {% if ns.n == 1 %}item{% else %}itens{% endif %})
       </span>
+      {% if p._truncado and 'itens' in p._truncado %}
+      <span class="truncado">primeiros 30 itens</span>
+      {% endif %}
     </div>
     <table class="itens">
       <thead>
