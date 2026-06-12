@@ -172,3 +172,31 @@ def test_rota_zapi_grupos_lista_ids(app):
     data = r.get_json()
     assert data['grupos'][0]['id'].endswith('-group')
     assert data['grupos'][0]['nome'] == 'Alertas O Pão'
+
+
+def test_rota_zapi_grupos_testar_envia_mensagem(app):
+    """?testar=<grupo> manda mensagem de teste na hora — confirma a
+    configuracao sem esperar incidente real. Grupo configurado em env
+    de destino passa pela whitelist automatica."""
+    from app.extensions import db
+    from app.models import Usuario
+    with app.app_context():
+        dono = Usuario(nome='dono', login='dono_zg2', papel='admin',
+                       is_owner=True)
+        dono.set_senha('senha123')
+        db.session.add(dono)
+        db.session.commit()
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'dono_zg2', 'senha': 'senha123'})
+    fake_lista = {'ok': True, 'total': 0, 'grupos': []}
+    with patch('app.services.zapi.listar_grupos',
+               return_value=fake_lista), \
+         patch('app.services.zapi.enviar_texto',
+               return_value={'ok': True}) as envia:
+        r = c.get('/admin/zapi/grupos?testar=120363999-group')
+    assert r.status_code == 200
+    data = r.get_json()
+    assert data['teste_envio'] == {'ok': True}
+    envia.assert_called_once()
+    assert envia.call_args[0][0] == '120363999-group'
+    assert 'Teste de alerta' in envia.call_args[0][1]
