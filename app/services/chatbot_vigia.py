@@ -395,6 +395,36 @@ def _chamar_haiku_abandono(api_key, contexto):
     return json.loads(texto)
 
 
+def ja_avisado_abandono(conv_id, horas=24):
+    """Dedupe do detector de abandono: memoria (rapido) + BANCO
+    (VigiaVeredito — sobrevive a deploy). Caso real 12/06/2026: o set em
+    memoria zerava a cada deploy; no dia em que o detector foi curado da
+    cegueira do token (nao listava conversas), ele metralhou o dono com
+    o backlog inteiro de uma vez — e re-metralharia a cada deploy.
+    O avaliar_abandono SEMPRE grava VigiaVeredito com prefixo
+    '[ABANDONO' na mensagem (alertando ou silenciando), entao a
+    existencia de linha recente = ja avaliado."""
+    if conv_id in _avisados_abandono:
+        return True
+    try:
+        from datetime import timedelta
+
+        from app.models import VigiaVeredito
+        from app.utils import agora
+        corte = agora() - timedelta(hours=horas)
+        row = (VigiaVeredito.query
+               .filter(VigiaVeredito.conv_id == str(conv_id),
+                       VigiaVeredito.criado_em >= corte,
+                       VigiaVeredito.mensagem_cliente.like('[ABANDONO%'))
+               .first())
+        if row:
+            _avisados_abandono.add(conv_id)   # aquece o cache
+            return True
+    except Exception:  # noqa: BLE001
+        logger.exception('vigia: dedupe de abandono via banco falhou')
+    return False
+
+
 def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_resposta=0):
     """Avalia conversa PARADA (cliente sumiu) e alerta no WhatsApp se valer.
     Best-effort. Usado pelo cron `_run_vigia_abandono` no seru_cron.py."""
