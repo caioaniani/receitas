@@ -1208,3 +1208,113 @@ def test_parse_produtos_inclui_url_da_pagina(app):
     assert out[0]['url'] == ('https://www.padariaartesanalonline.com.br'
                              '/produto/cesta-especial-dia-dos-namorados-51')
     assert out[1]['url'] is None
+
+
+# ── Follow-up automatico (bot retoma cliente que sumiu) ────────────────
+
+
+def _hist_bot_por_ultimo():
+    return [{'role': 'user', 'content': 'quero a family box'},
+            {'role': 'assistant', 'content': 'Aqui esta o link! 😊'}]
+
+
+def test_followup_envia_quando_cliente_sumiu(app):
+    """Pedido do dono (12/06/2026, conversa #186): cliente silencioso
+    apos mensagem NOSSA → bot manda cutucao gentil, registra
+    [FOLLOWUP em VigiaVeredito e nao repete."""
+    from unittest.mock import patch
+
+    from app.models import VigiaVeredito
+    from app.services import chatbot
+    with app.app_context(), \
+         patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'x'}), \
+         patch('app.services.chatwoot.listar_conversas_paradas',
+               return_value=[{'id': 42, 'nome_contato': 'Bethania',
+                              'minutos_paradas': 7}]), \
+         patch('app.services.chatwoot.buscar_historico',
+               return_value=_hist_bot_por_ultimo()), \
+         patch('app.services.chatbot._followup_gerar_texto',
+               return_value='Conseguiu finalizar seu pedido? 😊'), \
+         patch('app.services.chatwoot.enviar_mensagem',
+               return_value={'ok': True}) as envia:
+        r = chatbot.followup_conversas_paradas()
+        assert r == {'avaliadas': 1, 'enviadas': 1}
+        envia.assert_called_once_with(42, 'Conseguiu finalizar seu pedido? 😊')
+        row = VigiaVeredito.query.filter(
+            VigiaVeredito.conv_id == '42',
+            VigiaVeredito.mensagem_cliente.like('[FOLLOWUP%')).first()
+        assert row is not None
+        assert row.bot_acao == 'followup'
+        assert row.enviado_whatsapp is True
+
+        # Segundo ciclo: dedupe via banco — NAO manda de novo
+        r2 = chatbot.followup_conversas_paradas()
+        assert r2['enviadas'] == 0
+        assert envia.call_count == 1
+
+
+def test_followup_nao_cutuca_se_ultima_msg_e_do_cliente(app):
+    """Cliente mandou a ultima mensagem = quem esta devendo resposta
+    somos NOS (bot falhou) — cutucar seria constrangedor."""
+    from unittest.mock import patch
+
+    from app.services import chatbot
+    hist = [{'role': 'assistant', 'content': 'oi!'},
+            {'role': 'user', 'content': 'quanto custa a cesta?'}]
+    with app.app_context(), \
+         patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'x'}), \
+         patch('app.services.chatwoot.listar_conversas_paradas',
+               return_value=[{'id': 43, 'minutos_paradas': 10}]), \
+         patch('app.services.chatwoot.buscar_historico',
+               return_value=hist), \
+         patch('app.services.chatwoot.enviar_mensagem') as envia:
+        r = chatbot.followup_conversas_paradas()
+    assert r['enviadas'] == 0
+    envia.assert_not_called()
+
+
+def test_followup_ignora_conversa_fria(app):
+    """Parada ha mais que CHATBOT_FOLLOWUP_MAX_MIN (default 120) = fria.
+    Cutucao 19h depois e creepy e ainda esbarra na janela de 24h da
+    Meta."""
+    from unittest.mock import patch
+
+    from app.services import chatbot
+    with app.app_context(), \
+         patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'x'}), \
+         patch('app.services.chatwoot.listar_conversas_paradas',
+               return_value=[{'id': 44, 'minutos_paradas': 1145}]), \
+         patch('app.services.chatwoot.enviar_mensagem') as envia:
+        r = chatbot.followup_conversas_paradas()
+    assert r['enviadas'] == 0
+    envia.assert_not_called()
+
+
+def test_followup_kill_switch(app):
+    from app.services import chatbot
+    with app.app_context():
+        app.config['CHATBOT_FOLLOWUP'] = '0'
+        r = chatbot.followup_conversas_paradas()
+    assert r == {'pulou': 'desligado'}
+
+
+def test_followup_respeita_teto_por_ciclo(app):
+    """Backlog grande escoa em ciclos (default 3 por ciclo) — nada de
+    rajada nos clientes."""
+    from unittest.mock import patch
+
+    from app.services import chatbot
+    paradas = [{'id': i, 'minutos_paradas': 10} for i in range(1, 9)]
+    with app.app_context(), \
+         patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'x'}), \
+         patch('app.services.chatwoot.listar_conversas_paradas',
+               return_value=paradas), \
+         patch('app.services.chatwoot.buscar_historico',
+               return_value=_hist_bot_por_ultimo()), \
+         patch('app.services.chatbot._followup_gerar_texto',
+               return_value='Oi! Tudo certo?'), \
+         patch('app.services.chatwoot.enviar_mensagem',
+               return_value={'ok': True}) as envia:
+        r = chatbot.followup_conversas_paradas()
+    assert r['enviadas'] == 3
+    assert envia.call_count == 3
