@@ -198,6 +198,30 @@ def test_vigia_avisa_recuperacao_uma_vez(app):
     assert 'normalizou' in envia.call_args[0][1]
 
 
+def test_vigia_persiste_estado_entre_processos(app):
+    """Bug real (12/06/2026): o estado anti-spam vivia in-memory. Cada
+    deploy/restart zerava o estado e a proxima execucao do cron re-
+    alertava o MESMO problema. Resultado: o dono recebeu 2x o mesmo
+    aviso em segundos durante uma janela de Apply seguidas.
+    O estado agora vive em AppConfig — sobrevive a restart."""
+    from app.services import chatwoot
+    _cfg(app)
+    app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999990000'
+    doente = {'saudavel': False, 'conclusao': 'token 401'}
+    with patch('app.services.chatwoot.diagnostico', return_value=doente), \
+         patch('app.services.zapi.enviar_texto') as envia:
+        chatwoot.vigiar_infra()        # 1o alerta, persiste no banco
+        # Simula restart limpando QUALQUER cache em memoria do servico
+        # (a fonte da verdade tem que ser o banco — sem isso o teste
+        # seria fraco). Hoje nao ha cache em memoria; defensivo.
+        for nome in dir(chatwoot):
+            if nome.startswith('_vigia_infra_estado'):
+                getattr(chatwoot, nome).clear()
+        chatwoot.vigiar_infra()        # depois de "restart"
+        chatwoot.vigiar_infra()
+    assert envia.call_count == 1       # NAO realertou
+
+
 def test_vigia_problema_diferente_realerta_sem_esperar_6h(app):
     from app.services import chatwoot
     _cfg(app)
