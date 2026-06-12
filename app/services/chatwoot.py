@@ -213,14 +213,21 @@ def diagnostico():
     import time as _time
     cfg = current_app.config
     url = (cfg.get('CHATWOOT_URL') or '').strip().rstrip('/')
+    api_tok = (cfg.get('CHATWOOT_API_TOKEN') or '').strip()
+    bot_tok = (cfg.get('CHATWOOT_BOT_TOKEN') or '').strip()
     out = {
         'url_configurada': url or '(vazia)',
         'account_id': (cfg.get('CHATWOOT_ACCOUNT_ID') or '').strip()
                       or '(vazio)',
-        'api_token_configurado': bool(
-            (cfg.get('CHATWOOT_API_TOKEN') or '').strip()),
-        'bot_token_configurado': bool(
-            (cfg.get('CHATWOOT_BOT_TOKEN') or '').strip()),
+        'api_token_configurado': bool(api_tok),
+        'bot_token_configurado': bool(bot_tok),
+        # Forense de copia-e-cola SEM expor o valor: tokens do Chatwoot
+        # tem ~24 chars alfanumericos. len muito diferente = colou outra
+        # coisa (ex: a Outgoing URL do bot, o ID, o secret). Caso real
+        # 12/06/2026: bot_token seguia 401 apos o dono 'ja ter colado'.
+        'api_token_len': len(api_tok),
+        'bot_token_len': len(bot_tok),
+        'bot_token_parece_url': bot_tok.lower().startswith('http'),
     }
     if not url:
         out['conclusao'] = 'CHATWOOT_URL vazia no env — configure no Railway.'
