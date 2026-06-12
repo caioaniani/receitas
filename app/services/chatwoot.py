@@ -486,9 +486,14 @@ def erros_de_envio(conversation_id, limite=10):
             'falhas': falhas[-limite:]}
 
 
-def listar_conversas_paradas(min_minutos=15, limite=50):
-    """Conversas em status `pending` (turno do bot) cujo `last_activity_at` foi
-    ha mais de `min_minutos`. Usado pelo job de detecao de abandono.
+def listar_conversas_paradas(min_minutos=15, limite=50, status='pending'):
+    """Conversas no `status` dado cujo `last_activity_at` foi ha mais de
+    `min_minutos`. Usos:
+    - status='pending' (default): detector de abandono + follow-up do bot
+      (turno do bot, cliente sumiu).
+    - status='open': detector de CLIENTE ESPERANDO HUMANO (12/06/2026,
+      conv #198 — cliente mandou 'Olá' em conversa open e ninguem viu;
+      bot ignora open por design, mas o dono precisa saber).
 
     Retorna lista de {'id', 'nome_contato', 'minutos_paradas'}. Lista vazia se
     o Chatwoot nao estiver configurado ou se a chamada falhar.
@@ -506,7 +511,7 @@ def listar_conversas_paradas(min_minutos=15, limite=50):
     url = f'{_base()}/conversations'
     try:
         r = requests.get(url, headers=headers,
-                         params={'status': 'pending', 'page': 1},
+                         params={'status': status, 'page': 1},
                          timeout=15)
         if r.status_code not in (200, 201):
             logger.warning('chatwoot listar_conversas_paradas %s: %s',
