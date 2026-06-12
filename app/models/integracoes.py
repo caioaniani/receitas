@@ -493,6 +493,24 @@ class ZapiBotEventoProcessado(db.Model):
     processado_em = db.Column(db.DateTime, default=agora, index=True)
 
 
+class ChatwootEventoProcessado(db.Model):
+    """Idempotencia do webhook /crm/bot do Chatwoot.
+
+    Chatwoot pode reenviar `message_created` se o webhook demora (o bot
+    precisa de Claude + tools, facilmente passa de 5s). Sem dedupe, a
+    mesma mensagem do cliente vira 2 turnos do bot — segunda execucao
+    duplica resposta no canal e gasta token a toa.
+
+    PK = message id do Chatwoot (unico por mensagem). Acumula com TTL
+    implicito; volume = 1 mensagem por cliente * conversas/dia, fica
+    pequeno. Retencao automatica pode entrar depois se necessario."""
+    __tablename__ = 'chatwoot_evento_processado'
+
+    message_id = db.Column(db.String(80), primary_key=True)
+    conversation_id = db.Column(db.String(40), index=True)
+    processado_em = db.Column(db.DateTime, default=agora, index=True)
+
+
 class ChatbotConversa(db.Model):
     """Historico persistente da conversa do chatbot do cliente (Chatwoot), por
     conversation_id.
