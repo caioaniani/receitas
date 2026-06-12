@@ -206,12 +206,18 @@
         ({{ ns.n }} {% if ns.n == 1 %}item{% else %}itens{% endif %})
       </span>
     </div>
+    {# Kit/box do VNDA vem com itens zerados e o dinheiro so no total
+       (p._itens_sem_valor, regra unica em pdf.py::itens_sem_valor) —
+       imprimir R$ 0,00 pro cliente e falso, entao a coluna some e
+       fica so o Total. #}
+    {% set mostrar_valores = (not motorista)
+                             and (not p.get('_itens_sem_valor')) %}
     <table class="itens">
       <thead>
         <tr>
           <th class="qcol">Qtd</th>
           <th>Item</th>
-          {% if not motorista %}<th class="vcol-h">Valor</th>{% endif %}
+          {% if mostrar_valores %}<th class="vcol-h">Valor</th>{% endif %}
         </tr>
       </thead>
       <tbody>
@@ -219,7 +225,7 @@
         <tr>
           <td class="qcol">{{ (it.quantidade or 1)|int }}×</td>
           <td>{{ it.nome or '—' }}</td>
-          {% if not motorista %}
+          {% if mostrar_valores %}
           <td class="vcol">
             {# Forma REAL do VNDA (vnda.py::_normalizar_pedido): itens tem
                `subtotal` e `preco_unitario`. Os nomes valor_total/
