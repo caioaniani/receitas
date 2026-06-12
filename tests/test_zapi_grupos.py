@@ -67,11 +67,12 @@ def test_telefone_continua_com_normalizacao_e_whitelist(app):
     """Regressao: o caminho de telefone nao mudou — normaliza e valida
     na whitelist de numeros como sempre."""
     from app.services import zapi
-    _cfg_zapi(app, ZAPI_NUMEROS_PERMITIDOS='5511999990000')
+    _cfg_zapi(app, ZAPI_NUMEROS_PERMITIDOS='+55 11 99999-0000')
     with app.app_context(), \
          patch('app.services.zapi.requests.post',
                return_value=_Resp()) as post:
-        r = zapi.enviar_texto('(11) 99999-0000', 'oi')
+        # entrada formatada diferente do env — normalizacao colapsa as duas
+        r = zapi.enviar_texto('5511999990000', 'oi')
     assert r['ok'] is True
     assert post.call_args[1]['json']['phone'] == '5511999990000'
 
