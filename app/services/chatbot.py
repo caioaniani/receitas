@@ -357,3 +357,150 @@ def responder(historico):
 
     # Estourou o teto de iteracoes — passa pro humano por seguranca.
     return {'acao': 'handoff', 'texto': _FALLBACK, 'motivo': 'limite de passos'}
+
+
+# ── Follow-up automatico (bot retoma cliente que sumiu) ────────────────────
+#
+# Pedido do dono (12/06/2026, conversa #186 — Bethania): quando o CLIENTE
+# para de responder depois de uma mensagem NOSSA, o bot manda um cutucao
+# gentil ("Conseguiu finalizar?") em vez de so alertar o dono. O cutucao
+# humano equivalente reativou a venda na hora.
+#
+# Guarda-corpos (codigo, nao confianca no modelo):
+# - So conversa `pending` (turno do bot — listar_conversas_paradas ja filtra).
+# - So quando a ULTIMA mensagem e NOSSA (cliente silencioso). Se a ultima e
+#   do cliente, o problema e outro (bot nao respondeu) — nao cutucar.
+# - Janela: CHATBOT_FOLLOWUP_MIN (default 5) ate CHATBOT_FOLLOWUP_MAX_MIN
+#   (default 120). Conversa fria nao recebe cutucao 19h depois.
+# - UMA vez por conversa, persistido em VigiaVeredito ('[FOLLOWUP') —
+#   sobrevive a deploy, mesmo padrao do dedupe de abandono.
+# - Teto por ciclo (CHATBOT_FOLLOWUP_MAX_POR_CICLO, default 3).
+# - Kill-switch: CHATBOT_FOLLOWUP=0.
+
+FOLLOWUP_MODELO = 'claude-haiku-4-5-20251001'
+
+FOLLOWUP_PROMPT = (
+    'Você é o atendente virtual da padaria O Pão. A conversa abaixo parou: '
+    'o cliente não responde há {minutos} minutos e a última mensagem é '
+    'nossa. Escreva UMA mensagem curta (1 a 2 frases, PT-BR, tom leve e '
+    'gentil, no máximo 1 emoji) pra retomar — ex: perguntar se conseguiu '
+    'finalizar o pedido ou se ficou alguma dúvida. NÃO invente preço, '
+    'prazo, promoção nem informação nova. NÃO repita links. Responda '
+    'APENAS com o texto da mensagem, sem aspas.'
+)
+
+
+def _followup_ja_enviado(conv_id, horas=48):
+    from datetime import timedelta
+
+    from app.models import VigiaVeredito
+    from app.utils import agora
+    try:
+        corte = agora() - timedelta(hours=horas)
+        return (VigiaVeredito.query
+                .filter(VigiaVeredito.conv_id == str(conv_id),
+                        VigiaVeredito.criado_em >= corte,
+                        VigiaVeredito.mensagem_cliente.like('[FOLLOWUP%'))
+                .first()) is not None
+    except Exception:  # noqa: BLE001
+        logger.exception('followup: dedupe falhou (assume ja enviado)')
+        return True   # fail-closed: na duvida, NAO manda de novo
+
+
+def _followup_registrar(conv_id, nome_contato, minutos, texto, enviado):
+    from app.extensions import db
+    from app.models import VigiaVeredito
+    try:
+        db.session.add(VigiaVeredito(
+            conv_id=str(conv_id),
+            cliente=(nome_contato or '')[:200] or None,
+            mensagem_cliente=f'[FOLLOWUP {minutos}min]',
+            bot_acao='followup',
+            motivo_vigia=(texto or '')[:1000] or None,
+            alerta=False,
+            enviado_whatsapp=bool(enviado),
+        ))
+        db.session.commit()
+    except Exception:  # noqa: BLE001
+        logger.exception('followup: registro falhou')
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _followup_gerar_texto(api_key, historico, minutos):
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+    linhas = []
+    for m in (historico or [])[-10:]:
+        content = (m.get('content') or '').strip()
+        if not content:
+            continue
+        quem = 'CLIENTE' if m.get('role') == 'user' else 'NOS'
+        linhas.append(f'{quem}: {content}')
+    resp = client.messages.create(
+        model=FOLLOWUP_MODELO,
+        max_tokens=150,
+        system=FOLLOWUP_PROMPT.format(minutos=minutos),
+        messages=[{'role': 'user', 'content': '\n'.join(linhas) or '(vazio)'}],
+    )
+    texto = ''.join(b.text for b in resp.content
+                    if getattr(b, 'type', None) == 'text' and b.text).strip()
+    return texto.strip('"“” ').strip()
+
+
+def followup_conversas_paradas():
+    """Ciclo do follow-up: acha conversas pending com cliente silencioso
+    na janela configurada e manda UMA mensagem de retomada por conversa.
+    Retorna resumo {'avaliadas': n, 'enviadas': n} pro log/teste."""
+    from app.services import chatwoot
+
+    cfg = current_app.config
+    if str(cfg.get('CHATBOT_FOLLOWUP', '1')) == '0':
+        return {'pulou': 'desligado'}
+    api_key = (os.environ.get('ANTHROPIC_API_KEY')
+               or cfg.get('ANTHROPIC_API_KEY'))
+    if not api_key:
+        return {'pulou': 'sem ANTHROPIC_API_KEY'}
+
+    min_sil = int(cfg.get('CHATBOT_FOLLOWUP_MIN', 5) or 5)
+    max_sil = int(cfg.get('CHATBOT_FOLLOWUP_MAX_MIN', 120) or 120)
+    max_ciclo = int(cfg.get('CHATBOT_FOLLOWUP_MAX_POR_CICLO', 3) or 3)
+
+    paradas = chatwoot.listar_conversas_paradas(min_minutos=min_sil)
+    avaliadas = enviadas = 0
+    for c in paradas:
+        if enviadas >= max_ciclo:
+            break
+        conv_id = c.get('id')
+        minutos = c.get('minutos_paradas', 0)
+        if not conv_id or minutos > max_sil:
+            continue
+        if _followup_ja_enviado(conv_id):
+            continue
+        historico = chatwoot.buscar_historico(conv_id)
+        if not historico:
+            continue
+        # Ultima mensagem tem que ser NOSSA (cliente silencioso).
+        ultima = historico[-1]
+        if ultima.get('role') != 'assistant':
+            continue
+        avaliadas += 1
+        try:
+            texto = _followup_gerar_texto(api_key, historico, minutos)
+        except Exception:  # noqa: BLE001
+            logger.exception('followup: geracao falhou conv=%s', conv_id)
+            continue
+        if not texto:
+            continue
+        envio = chatwoot.enviar_mensagem(conv_id, texto)
+        ok = bool(envio.get('ok'))
+        _followup_registrar(conv_id, c.get('nome_contato') or '',
+                            minutos, texto, ok)
+        if ok:
+            enviadas += 1
+            logger.info('followup enviado conv=%s (%smin)', conv_id, minutos)
+        else:
+            logger.warning('followup falhou conv=%s: %s', conv_id, envio)
+    return {'avaliadas': avaliadas, 'enviadas': enviadas}
