@@ -83,11 +83,49 @@ def _whitelist_numeros():
     return {n for n in permitidos if n}
 
 
+def _e_grupo(destino):
+    """True se o destino e um ID de GRUPO do Z-API (sufixo '-group').
+
+    Grupos NAO passam pela normalizacao de telefone (que removeria o
+    sufixo e quebraria o ID) nem pela whitelist de numeros — tem
+    whitelist propria (ZAPI_GRUPOS_PERMITIDOS + destinos configurados)."""
+    return str(destino or '').strip().lower().endswith('-group')
+
+
+def _normalizar_grupo(destino):
+    """Mantem digitos + sufixo '-group'. '1203 6302-group' → '12036302-group'."""
+    s = str(destino or '').strip()
+    base = s[:-len('-group')] if s.lower().endswith('-group') else s
+    digitos = ''.join(ch for ch in base if ch.isdigit())
+    return f'{digitos}-group' if digitos else ''
+
+
+def _whitelist_grupos():
+    """IDs de grupo permitidos. Inclui automaticamente os destinos de
+    alerta configurados (mesmo atalho da whitelist de numeros)."""
+    cfg = current_app.config
+    raw = (cfg.get('ZAPI_GRUPOS_PERMITIDOS') or '').strip()
+    permitidos = {_normalizar_grupo(g) for g in raw.split(',') if g.strip()}
+    # Destinos de alerta que podem ser grupo entram sozinhos
+    for chave in ('ZAPI_NUMERO_DESTINO', 'CHATBOT_VIGIA_NUMERO',
+                  'ZAPI_BOT_DONO_NUMERO'):
+        v = (cfg.get(chave) or '').strip()
+        if _e_grupo(v):
+            permitidos.add(_normalizar_grupo(v))
+    return {g for g in permitidos if g}
+
+
 def enviar_texto(numero, mensagem):
     """POST /send-text com texto simples. Retorna {'ok': bool, ...}.
 
-    SEGURANCA: rejeita envio pra numero fora do whitelist
-    `ZAPI_NUMEROS_PERMITIDOS` (+ `ZAPI_NUMERO_DESTINO`). Fail-closed.
+    Aceita numero de telefone OU ID de grupo ('1203...-group'). Pra
+    mandar alertas num grupo: criar o grupo no WhatsApp, adicionar o
+    numero do bot, pegar o ID em /admin/zapi/grupos e configurar o
+    destino (ex: CHATBOT_VIGIA_NUMERO=120363...-group).
+
+    SEGURANCA: rejeita envio pra destino fora do whitelist
+    (`ZAPI_NUMEROS_PERMITIDOS` pra fones, `ZAPI_GRUPOS_PERMITIDOS` +
+    destinos configurados pra grupos). Fail-closed.
     """
     cfg = current_app.config
     instance_id = (cfg.get('ZAPI_INSTANCE_ID') or '').strip()
@@ -97,18 +135,28 @@ def enviar_texto(numero, mensagem):
     if not instance_id or not token:
         return {'ok': False, 'erro': 'Z-API nao configurado (ZAPI_INSTANCE_ID/ZAPI_TOKEN)'}
 
-    numero_norm = _normalizar_numero(numero)
-    if not numero_norm:
-        return {'ok': False, 'erro': 'numero invalido'}
-
-    permitidos = _whitelist_numeros()
-    if not permitidos:
-        logger.error('zapi: ZAPI_NUMEROS_PERMITIDOS vazio — recusa total. Numero pedido: %s', numero_norm)
-        return {'ok': False, 'erro': 'whitelist vazio — configure ZAPI_NUMEROS_PERMITIDOS'}
-    if numero_norm not in permitidos:
-        logger.error('zapi: numero %s NAO esta no whitelist (%s permitidos). RECUSADO.',
-                      numero_norm, len(permitidos))
-        return {'ok': False, 'erro': f'numero {numero_norm} fora do whitelist — recusado por seguranca'}
+    if _e_grupo(numero):
+        destino = _normalizar_grupo(numero)
+        if not destino:
+            return {'ok': False, 'erro': 'id de grupo invalido'}
+        grupos_ok = _whitelist_grupos()
+        if destino not in grupos_ok:
+            logger.error('zapi: grupo %s NAO esta no whitelist (%s '
+                          'permitidos). RECUSADO.', destino, len(grupos_ok))
+            return {'ok': False, 'erro': f'grupo {destino} fora do '
+                                          'whitelist — recusado por seguranca'}
+    else:
+        destino = _normalizar_numero(numero)
+        if not destino:
+            return {'ok': False, 'erro': 'numero invalido'}
+        permitidos = _whitelist_numeros()
+        if not permitidos:
+            logger.error('zapi: ZAPI_NUMEROS_PERMITIDOS vazio — recusa total. Numero pedido: %s', destino)
+            return {'ok': False, 'erro': 'whitelist vazio — configure ZAPI_NUMEROS_PERMITIDOS'}
+        if destino not in permitidos:
+            logger.error('zapi: numero %s NAO esta no whitelist (%s permitidos). RECUSADO.',
+                          destino, len(permitidos))
+            return {'ok': False, 'erro': f'numero {destino} fora do whitelist — recusado por seguranca'}
 
     url = f'{BASE}/instances/{instance_id}/token/{token}/send-text'
     headers = {'Content-Type': 'application/json'}
@@ -116,7 +164,7 @@ def enviar_texto(numero, mensagem):
         headers['Client-Token'] = client_token
 
     try:
-        r = requests.post(url, json={'phone': numero_norm, 'message': mensagem or '',
+        r = requests.post(url, json={'phone': destino, 'message': mensagem or '',
                                       'linkPreview': True},
                           headers=headers, timeout=15)
         if r.status_code not in (200, 201):
