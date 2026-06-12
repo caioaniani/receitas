@@ -493,26 +493,176 @@ def test_post_limpa_lotes_velhos(app, admin_user):
     assert ImpressaoLote.query.count() == 1   # so o lote recem-criado
 
 
-def test_css_da_folha_nao_usa_flex_nem_min_height(app, admin_user):
-    """Bug real (11/06/2026, print do dono): min-height de 270mm na .folha
-    era MAIOR que a area util do A4 com margem 14mm (297-28=269mm) — toda
-    folha vazava 1mm e virava 2 paginas (a 2a so com o Total). E
-    display:flex na .folha faz o WebKit/Safari paginar errado no print
-    (conteudo alem da 1a pagina sai cortado/EM BRANCO). A folha tem que
-    ser bloco simples com page-break-after."""
+def test_css_da_folha_tem_dimensoes_fixas_e_overflow_hidden(app, admin_user):
+    """Bug real (11/06/2026, 3o print do dono — preview com paginas 5+
+    em branco apesar das 1-2 OK): sem altura fixa, conteudo grande de
+    algum pedido vazava da folha pra proxima pagina e o Safari paginava
+    errado — paginas brancas entre folhas com conteudo, contagem
+    excedendo pedidos*vias. Solucao canonica: travar largura+altura na
+    area util A4 (186x269mm) + overflow hidden, garantindo 1 folha = 1
+    pagina estrita."""
     c = app.test_client()
     _login(c)
     r = _post_imprimir(c, _pedidos_fake(), vias='cliente')
     body = r.data.decode()
-    # bloco CSS da .folha (ate fechar chave) nao pode ter flex/min-height
+    # bloco CSS da .folha (ate fechar chave)
     import re
     m = re.search(r'\.folha\s*\{([^}]*)\}', body)
     assert m, 'bloco .folha sumiu do CSS'
     bloco = m.group(1)
-    assert 'flex' not in bloco, f'flex voltou pra .folha: {bloco!r}'
+    # dimensoes fixas da area util A4 com margem 14mm v / 12mm h
+    assert 'width: 186mm' in bloco, f'largura nao fixou: {bloco!r}'
+    assert 'height: 269mm' in bloco, f'altura nao fixou: {bloco!r}'
+    assert 'overflow: hidden' in bloco, f'overflow nao corta: {bloco!r}'
+    # nao pode regressao dos bugs anteriores
+    assert 'flex' not in bloco, f'flex voltou: {bloco!r}'
     assert 'min-height' not in bloco, f'min-height voltou: {bloco!r}'
+    # page-break esta presente (mantemos os 2 padroes pra compat)
     assert 'page-break-after: always' in bloco
     assert 'break-after: page' in bloco
+    assert 'page-break-inside: avoid' in bloco
+
+
+def test_imprimir_trunca_cartinha_excessiva(app, admin_user):
+    """Cartinha de 5000 chars e cortada pelo servidor pra caber na area
+    util A4 e nao quebrar a paginacao do Safari (bug real 11/06/2026)."""
+    c = app.test_client()
+    _login(c)
+    cartinha = 'A' * 5000
+    pedido = {
+        'code': 'VND-GIG', 'destinatario': 'Z', 'endereco': 'Rua Q',
+        'telefone': '', 'total': 100, 'cartinha': cartinha,
+        'itens': [{'nome': 'X', 'quantidade': 1, 'subtotal': 100}],
+    }
+    r = _post_imprimir(c, [pedido], vias='cliente')
+    body = r.data.decode()
+    # cartinha original (5000) NAO aparece inteira
+    assert ('A' * 5000) not in body
+    # mas o inicio aparece (truncada com reticencias)
+    assert 'AAAAAAAA' in body
+    assert '…' in body
+    # marcador visual de "truncada" aparece (so no preview da tela —
+    # @media print esconde)
+    assert 'truncada' in body
+
+
+def test_imprimir_trunca_observacao_excessiva(app, admin_user):
+    c = app.test_client()
+    _login(c)
+    obs = 'X' * 3000
+    pedido = {
+        'code': 'VND-OBS', 'destinatario': 'Z', 'endereco': 'Rua Q',
+        'telefone': '', 'total': 100, 'observacao': obs,
+        'itens': [{'nome': 'X', 'quantidade': 1, 'subtotal': 100}],
+    }
+    r = _post_imprimir(c, [pedido], vias='cliente')
+    body = r.data.decode()
+    assert ('X' * 3000) not in body
+    assert '…' in body
+
+
+def test_imprimir_limita_qtd_itens(app, admin_user):
+    """Pedido com 100 itens fica com no maximo 30 — alem disso nao cabe
+    em A4 mesmo com fonte pequena."""
+    c = app.test_client()
+    _login(c)
+    itens = [{'nome': f'Item {i}', 'quantidade': 1, 'subtotal': 10}
+             for i in range(100)]
+    pedido = {
+        'code': 'VND-MANY', 'destinatario': 'Z', 'endereco': 'Rua Q',
+        'telefone': '', 'total': 1000, 'itens': itens,
+    }
+    r = _post_imprimir(c, [pedido], vias='cliente')
+    body = r.data.decode()
+    assert 'Item 0' in body
+    assert 'Item 29' in body
+    assert 'Item 30' not in body
+    assert 'primeiros 30 itens' in body
+
+
+def test_imprimir_15_pedidos_geram_exatamente_30_folhas(app, admin_user):
+    """15 pedidos x 2 vias = EXATAMENTE 30 .folha no DOM, nada a mais.
+    Bug real (11/06/2026): preview mostrava 31 paginas pra 15 pedidos x
+    2 vias — uma pagina extra fantasma (provavelmente da paginacao
+    estranha do Safari com conteudo vazado, agora travada por height
+    fixo + overflow hidden)."""
+    c = app.test_client()
+    _login(c)
+    pedidos = [
+        {'code': f'V{i}', 'destinatario': f'Cliente {i}',
+         'endereco': 'Rua X', 'telefone': '', 'total': 100,
+         'itens': [{'nome': 'Item', 'quantidade': 1, 'subtotal': 100}]}
+        for i in range(15)
+    ]
+    r = _post_imprimir(c, pedidos, vias='cliente,motorista')
+    body = r.data.decode()
+    assert body.count('class="folha"') == 30   # 15 x 2 vias, sem sobra
+
+
+def test_pedido_so_com_code_nao_quebra_render(app, admin_user):
+    """Pedido vazio (so com code) ainda renderiza .folha com cabecalho —
+    nao pode virar div em branco que confunde paginacao do Safari."""
+    c = app.test_client()
+    _login(c)
+    pedido = {'code': 'VND-VAZIO'}
+    r = _post_imprimir(c, [pedido], vias='cliente,motorista')
+    body = r.data.decode()
+    assert body.count('class="folha"') == 2
+    # cabecalho sempre presente
+    assert 'Pedido #VND-VAZIO' in body
+    assert 'via do cliente' in body
+    assert 'via do entregador' in body
+
+
+def test_debug_lote_retorna_diag_por_pedido(app, admin_user):
+    """A rota /imprimir/debug/<token> mostra shape e tamanhos por
+    pedido — pra diagnosticar lote especifico sem chutar."""
+    c = app.test_client()
+    _login(c)
+    pedidos = [
+        {'code': 'A1', 'destinatario': 'Ana', 'endereco': 'Rua A, 1',
+         'telefone': '11 99999-1111', 'periodo': '10h-12h',
+         'cartinha': 'oi', 'observacao': 'portaria',
+         'total': 100, 'expresso': False,
+         'itens': [{'nome': 'X', 'quantidade': 1, 'subtotal': 100}]},
+    ]
+    rpost = _post_imprimir(c, pedidos, follow_redirects=False)
+    import re
+    m = re.search(r'lote=([^&]+)', rpost.headers['Location'])
+    token = m.group(1)
+    r = c.get(f'/entregas/imprimir/debug/{token}')
+    assert r.status_code == 200
+    data = r.get_json()
+    assert data['qtd_pedidos'] == 1
+    assert data['payload_bytes'] > 0
+    assert data['caps']['cartinha'] == 600
+    d0 = data['diag'][0]
+    assert d0['code'] == 'A1'
+    assert d0['destinatario'] is True
+    assert d0['endereco_len'] == len('Rua A, 1')
+    assert d0['cartinha_len'] == 2
+    assert d0['qtd_itens'] == 1
+
+
+def test_debug_lote_recusa_funcionario(app):
+    """Funcionario comum NAO pode ver o debug — payload tem cartinha,
+    telefone, endereco e e dado sensivel."""
+    uid = _user(app, papel='funcionario', login='funcdbg',
+                loja_id=None)
+    c = app.test_client()
+    _login(c, login='funcdbg', senha='senha123')
+    with c.session_transaction() as s:
+        s['_user_id'] = str(uid)
+        s['_fresh'] = True
+    r = c.get('/entregas/imprimir/debug/qualquer-token')
+    assert r.status_code == 403
+
+
+def test_debug_lote_inexistente_devolve_404(app, admin_user):
+    c = app.test_client()
+    _login(c)
+    r = c.get('/entregas/imprimir/debug/nao-existe')
+    assert r.status_code == 404
 
 
 def test_apis_leitura_da_operacao_abertas_pra_funcionario(app):
