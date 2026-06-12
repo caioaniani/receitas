@@ -187,7 +187,82 @@ def test_debug_chatwoot_aceita_param_conversa(app):
     r = c.get('/admin/debug-chatwoot?conversa=176')
     assert r.status_code == 200
     data = r.get_json()
+    # Tras erros (Meta) E historico (o que o BOT disse) — fecha tanto
+    # "Falha ao enviar" quanto "bot delirou?".
     assert 'erros_da_conversa_176' in data
+    assert 'historico_da_conversa_176' in data
+
+
+def test_debug_bot_compara_vnda_com_estoque_loja(app):
+    """Caso real (12/06/2026): vigia alertou 'bot disse esgotado mas tem
+    872 un'. Bot consulta VNDA; vigia compara contra EstoqueLoja. Esta
+    rota mostra as duas fontes lado a lado pra qualquer produto."""
+    from app.extensions import db
+    from app.models import EstoqueLoja, Loja, Receita, Usuario
+    with app.app_context():
+        loja = Loja(nome='Loja A', ativa=True)
+        rec = Receita(nome='Pain au Chocolat', categoria='Paes',
+                      rendimento_qtd=1, rendimento_unidade='un',
+                      peso_base=80.0)
+        db.session.add_all([loja, rec])
+        db.session.flush()
+        db.session.add(EstoqueLoja(loja_id=loja.id, receita_id=rec.id,
+                                    quantidade=872))
+        dono = Usuario(nome='dono', login='dono_bot', papel='admin',
+                       is_owner=True)
+        dono.set_senha('senha123')
+        db.session.add(dono)
+        db.session.commit()
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'dono_bot', 'senha': 'senha123'})
+
+    # VNDA mockado pra retornar 'available: false' (= o que o bot viu)
+    fake_vnda = {'produtos': [{'nome': 'Pain au Chocolat', 'sku': 'PAC1',
+                                'preco': 12.0, 'disponivel': False}]}
+    from unittest.mock import patch
+    with patch('app.services.bot_tools.consultar_produtos',
+               return_value=fake_vnda):
+        r = c.get('/admin/debug-bot?busca=Pain au Chocolat')
+    assert r.status_code == 200
+    data = r.get_json()
+    # Lado VNDA: o que o bot viu (disponivel=False explica "esgotado")
+    assert data['vnda']['produtos'][0]['disponivel'] is False
+    # Lado EstoqueLoja: o que o vigia vê (872 un, justificando o alerta)
+    estoq = data['estoque_loja']
+    assert any(e['nome'] == 'Pain au Chocolat' and e['qtd_total'] == 872
+               for e in estoq)
+    # Por loja: 'Loja A' tem as 872
+    pac = next(e for e in estoq if e['nome'] == 'Pain au Chocolat')
+    assert pac['por_loja']['Loja A'] == 872
+
+
+def test_debug_bot_sem_param_da_400(app):
+    from app.extensions import db
+    from app.models import Usuario
+    with app.app_context():
+        dono = Usuario(nome='dono', login='dono_bot2', papel='admin',
+                       is_owner=True)
+        dono.set_senha('senha123')
+        db.session.add(dono)
+        db.session.commit()
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'dono_bot2', 'senha': 'senha123'})
+    r = c.get('/admin/debug-bot')
+    assert r.status_code == 400
+
+
+def test_debug_bot_nega_admin_comum(app):
+    from app.extensions import db
+    from app.models import Usuario
+    with app.app_context():
+        comum = Usuario(nome='adm', login='adm_bot', papel='admin',
+                        is_owner=False)
+        comum.set_senha('senha123')
+        db.session.add(comum)
+        db.session.commit()
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'adm_bot', 'senha': 'senha123'})
+    assert c.get('/admin/debug-bot?busca=x').status_code == 403
 
 
 # ── Vigia de infra (cron 15min → alerta WhatsApp do dono) ───────────────
