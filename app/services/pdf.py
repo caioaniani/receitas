@@ -144,6 +144,38 @@ def _moeda(v):
         return 'R$ 0,00'
 
 
+def _total_pedido(p):
+    """Total do pedido: `total` (campo real do VNDA) com fallback
+    valor_total (compat pedidos locais antigos)."""
+    tot = p.get('total')
+    if tot in (None, ''):
+        tot = p.get('valor_total') or 0
+    try:
+        return float(tot)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def itens_sem_valor(p):
+    """True quando o VNDA nao informou valor por item (todos zerados)
+    mas o pedido tem total > 0 — acontece com produtos tipo kit/box
+    ('Box Mimo'), onde o dinheiro so existe no total do pedido. Nesses
+    casos imprimir 'R$ 0,00' por item e afirmacao falsa pro cliente —
+    a coluna Valor e omitida e fica so o Total. (Rateio do total entre
+    itens seria INVENTAR dado financeiro — nao fazemos.)
+
+    Se apenas ALGUNS itens sao 0 (brinde legitimo junto de itens
+    pagos), devolve False — o R$ 0,00 do brinde e informacao real."""
+    if not isinstance(p, dict):
+        return False
+    itens = [it for it in (p.get('itens') or []) if isinstance(it, dict)]
+    if not itens:
+        return False
+    if _total_pedido(p) <= 0:
+        return False
+    return all(_campo_valor_item(it) <= 0 for it in itens)
+
+
 def _folha_pedido(pdf, p, via, data_fmt):
     """Desenha UMA folha (pagina A4) de um pedido numa via."""
     motorista = via == 'motorista'
