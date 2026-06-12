@@ -149,10 +149,16 @@ def test_diagnostico_nao_vaza_tokens(app):
 
 
 def _reset_vigia():
-    from app.services import chatwoot
-    chatwoot._vigia_infra_estado.update(
-        {'quebrado_desde': None, 'ultimo_alerta_em': None,
-         'ultima_assinatura': None})
+    """Estado do vigia agora vive no banco (AppConfig). O conftest ja
+    limpa todas as tabelas entre testes — esta funcao existe so como
+    ponto de extensao caso um teste precise resetar no MEIO da sua
+    execucao (ex: simular 2 chamadas em janelas separadas)."""
+    from app.extensions import db
+    from app.models import AppConfig
+    AppConfig.query.filter(
+        AppConfig.key.like('vigia_chatwoot_%')
+    ).delete(synchronize_session=False)
+    db.session.commit()
 
 
 def test_vigia_alerta_na_transicao_e_throttla_repeticao(app):
