@@ -143,6 +143,25 @@ def test_diagnostico_nao_vaza_tokens(app):
     blob = str(out)
     assert 'tok-api' not in blob
     assert 'tok-bot' not in blob
+    # Forense sem vazamento: tamanhos e flag de URL aparecem
+    assert out['api_token_len'] == len('tok-api')
+    assert out['bot_token_len'] == len('tok-bot')
+    assert out['bot_token_parece_url'] is False
+
+
+def test_diagnostico_detecta_url_colada_no_lugar_do_token(app):
+    """Caso real (12/06/2026): bot_token 401 mesmo apos o dono 'ja ter
+    colado'. Causa comum: colar a Outgoing URL do Agent Bot em vez do
+    Access Token. O flag desmascara sem expor o valor."""
+    from app.services import chatwoot
+    _cfg(app, CHATWOOT_BOT_TOKEN='https://gestao.exemplo.com/crm/bot?k=x')
+
+    def fake_get(url, **kw):
+        return _Resp(200, body={'version': '4.14.1', 'payload': []})
+
+    with patch('app.services.chatwoot.requests.get', side_effect=fake_get):
+        out = chatwoot.diagnostico()
+    assert out['bot_token_parece_url'] is True
 
 
 def test_erros_de_envio_lista_falhas_com_erro_do_canal(app):
