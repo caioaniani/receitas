@@ -188,8 +188,7 @@ def _folha_pedido(pdf, p, via, data_fmt):
 
     # Destinatario
     pdf.set_font('Helvetica', 'B', 9)
-    pdf.cell(0, 5, 'DESTINATÁRIO'.encode('latin-1', 'replace')
-             .decode('latin-1'), new_x='LMARGIN', new_y='NEXT')
+    pdf.cell(0, 5, _latin1('DESTINATÁRIO'), new_x='LMARGIN', new_y='NEXT')
     pdf.set_font('Helvetica', 'B', 15)
     pdf.multi_cell(0, 7, _latin1(p.get('destinatario')
                                  or p.get('comprador') or '—'),
