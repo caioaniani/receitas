@@ -75,12 +75,19 @@
     <div class="endereco mb-2">
       <i class="bi bi-geo-alt-fill"></i> {{ c.endereco or '— sem endereço —' }}
     </div>
-    <div class="small text-muted mb-2">
-      {% if c.data_entrega %}
-      <span class="me-3"><i class="bi bi-calendar"></i> entrega: {{ c.data_entrega }}</span>
-      {% endif %}
+    <div class="mb-2" style="font-size:17px;font-weight:700;">
+      <i class="bi bi-calendar-event"></i>
+      entrega: {{ c.data_entrega or '— sem data —' }}
       {% if c.periodo %}
-      <span><i class="bi bi-clock"></i> {{ c.periodo }}</span>
+      <span class="text-muted fw-normal ms-2">
+        <i class="bi bi-clock"></i> {{ c.periodo }}</span>
+      {% endif %}
+      {% if c.data_alterada %}
+      <span class="badge bg-warning text-dark ms-2"
+            title="Data alterada no nosso sistema — original do site: {{ c.data_original }}">
+        <i class="bi bi-pencil-square"></i> data alterada
+        (site: {{ c.data_original }})
+      </span>
       {% endif %}
     </div>
     {% if c.itens %}
