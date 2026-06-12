@@ -2091,11 +2091,23 @@ def zapi_grupos():
     Fluxo (12/06/2026, pedido do dono): criar grupo no WhatsApp →
     adicionar o numero do bot ao grupo → abrir esta rota → copiar o
     `id` (termina em '-group') → colar no Railway em
-    CHATBOT_VIGIA_NUMERO (alertas do vigia) e/ou ZAPI_NUMERO_DESTINO
-    (digests) → Apply. O envio pra grupo tem whitelist propria que
-    inclui automaticamente esses destinos."""
+    CHATBOT_VIGIA_NUMERO (vigia do bot) e CHATWOOT_VIGIA_INFRA_NUMERO
+    (vigia de infra) → Apply. O envio pra grupo tem whitelist propria
+    que inclui automaticamente esses destinos.
+
+    ?testar=<id-do-grupo>: manda uma mensagem de teste pro grupo na
+    hora — fecha o loop da configuracao sem esperar um incidente real.
+    Se o grupo nao estiver em nenhuma env de destino, a whitelist
+    recusa e o erro aparece no JSON (tambem e diagnostico util)."""
     from app.services import zapi
-    return jsonify(zapi.listar_grupos()), 200
+    out = zapi.listar_grupos()
+    testar = (request.args.get('testar') or '').strip()
+    if testar:
+        out['teste_envio'] = zapi.enviar_texto(
+            testar,
+            '✅ Teste de alerta — este grupo está configurado pra '
+            'receber os avisos do vigia da O Pão.')
+    return jsonify(out), 200
 
 
 @main_bp.route('/admin/debug-bot')
