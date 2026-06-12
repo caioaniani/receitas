@@ -52,17 +52,24 @@ def test_servidor_fora_conclui_hospedagem(app):
     assert 'Railway do Chatwoot' in out['conclusao']
 
 
+def _patch_post(status=404):
+    """Mock da SONDA do bot token (POST conversations/0/toggle_status).
+    404 = token valido (conversa 0 nao existe); 401 = token invalido."""
+    return patch('app.services.chatwoot.requests.post',
+                 return_value=_Resp(status, body={'erro': 'x'}))
+
+
 def test_5xx_conclui_servidor_doente(app):
     from app.services import chatwoot
     _cfg(app)
     with patch('app.services.chatwoot.requests.get',
-               return_value=_Resp(500, text='oops')):
+               return_value=_Resp(500, text='oops')), _patch_post(500):
         out = chatwoot.diagnostico()
     assert '5xx' in out['conclusao']
     assert 'Sidekiq' in out['conclusao']
 
 
-def test_token_401_conclui_token_invalido(app):
+def test_token_api_401_conclui_token_invalido(app):
     from app.services import chatwoot
     _cfg(app)
 
@@ -71,13 +78,57 @@ def test_token_401_conclui_token_invalido(app):
             return _Resp(200, body={'version': '3.12.0'})
         return _Resp(401, body={'error': 'unauthorized'})
 
-    with patch('app.services.chatwoot.requests.get', side_effect=fake_get):
+    with patch('app.services.chatwoot.requests.get',
+               side_effect=fake_get), _patch_post(404):
         out = chatwoot.diagnostico()
     assert out['servidor_http'] == 200
     assert out['servidor_versao'] == '3.12.0'
     assert out['api_token_http'] == 401
     assert '401' in out['conclusao']
-    assert 'token DESTE sistema' in out['conclusao']
+    assert 'CHATWOOT_API_TOKEN' in out['conclusao']
+    # bot esta OK (sonda 404) — conclusao NAO pode mandar trocar o bot
+    assert 'CHATWOOT_BOT_TOKEN' not in out['conclusao']
+
+
+def test_sonda_404_significa_bot_token_valido(app):
+    """Regressao do falso 401 de 12/06/2026: token de Agent Bot NAO pode
+    listar conversas — o check antigo via GET /conversations devolvia
+    401 pra token VALIDO (o dono re-colou o token certo 2x a toa; o bot
+    respondia clientes normalmente o tempo todo). A sonda nova (POST
+    toggle_status na conversa 0) devolve 404 com token valido e 401 so
+    com token invalido."""
+    from app.services import chatwoot
+    _cfg(app)
+
+    def fake_get(url, **kw):
+        if url.endswith('/api'):
+            return _Resp(200, body={'version': '4.14.1'})
+        if url.endswith('/inboxes'):
+            return _Resp(200, body={'payload': []})
+        return _Resp(200, body={'payload': []})
+
+    with patch('app.services.chatwoot.requests.get',
+               side_effect=fake_get), _patch_post(404):
+        out = chatwoot.diagnostico()
+    assert out['bot_token_http'] == 404
+    assert out['bot_token_ok'] is True
+    assert out['saudavel'] is True
+
+
+def test_sonda_401_conclui_bot_token_invalido(app):
+    from app.services import chatwoot
+    _cfg(app)
+
+    def fake_get(url, **kw):
+        return _Resp(200, body={'version': '4.14.1', 'payload': []})
+
+    with patch('app.services.chatwoot.requests.get',
+               side_effect=fake_get), _patch_post(401):
+        out = chatwoot.diagnostico()
+    assert out['bot_token_ok'] is False
+    assert out['saudavel'] is False
+    assert 'CHATWOOT_BOT_TOKEN' in out['conclusao']
+    assert 'Agent Bots' in out['conclusao']
 
 
 def test_inbox_quebrado_aponta_canal_pelo_nome(app):
@@ -100,7 +151,8 @@ def test_inbox_quebrado_aponta_canal_pelo_nome(app):
             ]})
         return _Resp(200, body={'payload': []})
 
-    with patch('app.services.chatwoot.requests.get', side_effect=fake_get):
+    with patch('app.services.chatwoot.requests.get',
+               side_effect=fake_get), _patch_post(404):
         out = chatwoot.diagnostico()
     assert out['inboxes'][0]['precisa_reautorizar'] is True
     assert 'Instagram O PAO' in out['conclusao']
@@ -125,7 +177,8 @@ def test_tudo_ok_aponta_janela_24h_e_sidekiq(app):
             ]})
         return _Resp(200, body={'payload': []})
 
-    with patch('app.services.chatwoot.requests.get', side_effect=fake_get):
+    with patch('app.services.chatwoot.requests.get',
+               side_effect=fake_get), _patch_post(404):
         out = chatwoot.diagnostico()
     assert 'janela de 24h' in out['conclusao']
     assert 'Sidekiq' in out['conclusao']
@@ -138,7 +191,8 @@ def test_diagnostico_nao_vaza_tokens(app):
     def fake_get(url, **kw):
         return _Resp(200, body={'version': '3.12.0', 'payload': []})
 
-    with patch('app.services.chatwoot.requests.get', side_effect=fake_get):
+    with patch('app.services.chatwoot.requests.get',
+               side_effect=fake_get), _patch_post(404):
         out = chatwoot.diagnostico()
     blob = str(out)
     assert 'tok-api' not in blob
@@ -150,16 +204,16 @@ def test_diagnostico_nao_vaza_tokens(app):
 
 
 def test_diagnostico_detecta_url_colada_no_lugar_do_token(app):
-    """Caso real (12/06/2026): bot_token 401 mesmo apos o dono 'ja ter
-    colado'. Causa comum: colar a Outgoing URL do Agent Bot em vez do
-    Access Token. O flag desmascara sem expor o valor."""
+    """Causa comum de bot token rejeitado: colar a Outgoing URL do Agent
+    Bot em vez do Access Token. O flag desmascara sem expor o valor."""
     from app.services import chatwoot
     _cfg(app, CHATWOOT_BOT_TOKEN='https://gestao.exemplo.com/crm/bot?k=x')
 
     def fake_get(url, **kw):
         return _Resp(200, body={'version': '4.14.1', 'payload': []})
 
-    with patch('app.services.chatwoot.requests.get', side_effect=fake_get):
+    with patch('app.services.chatwoot.requests.get',
+               side_effect=fake_get), _patch_post(401):
         out = chatwoot.diagnostico()
     assert out['bot_token_parece_url'] is True
 
