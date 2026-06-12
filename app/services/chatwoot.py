@@ -323,23 +323,53 @@ def diagnostico():
     return out
 
 
-# Estado do vigia de infra (por worker; advisory lock no cron garante 1
-# executor por ciclo). Reinicio do worker re-alerta — aceitavel: melhor
-# alertar de novo que perder incidente.
-_vigia_infra_estado = {'quebrado_desde': None, 'ultimo_alerta_em': None,
-                       'ultima_assinatura': None}
+# Estado do vigia de infra persistido no banco (AppConfig key-value).
+# Em memoria era perigoso: cada restart do worker / cada deploy resetava
+# o estado e a proxima execucao do cron re-alertava o mesmo problema —
+# foi exatamente o que aconteceu em 12/06/2026 (dono recebeu o mesmo
+# aviso 2x em segundos durante uma janela de deploys). Persistir
+# garante anti-spam mesmo entre processos e deploys.
+_VIGIA_KEY_QUEBRADO = 'vigia_chatwoot_quebrado_desde'
+_VIGIA_KEY_ULTIMO = 'vigia_chatwoot_ultimo_alerta_em'
+_VIGIA_KEY_ASSIN = 'vigia_chatwoot_ultima_assinatura'
 _VIGIA_REALERTA_MIN = 360   # re-alerta do MESMO problema a cada 6h
+
+
+def _vigia_carregar():
+    from datetime import datetime as _dt
+
+    from app.models import AppConfig
+    def _parse_dt(s):
+        if not s:
+            return None
+        try:
+            return _dt.fromisoformat(s)
+        except ValueError:
+            return None
+    return {
+        'quebrado_desde': _parse_dt(AppConfig.get(_VIGIA_KEY_QUEBRADO)),
+        'ultimo_alerta_em': _parse_dt(AppConfig.get(_VIGIA_KEY_ULTIMO)),
+        'ultima_assinatura': AppConfig.get(_VIGIA_KEY_ASSIN),
+    }
+
+
+def _vigia_gravar(est):
+    from app.extensions import db
+    from app.models import AppConfig
+    def _fmt(v):
+        return v.isoformat() if v else None
+    AppConfig.set(_VIGIA_KEY_QUEBRADO, _fmt(est['quebrado_desde']))
+    AppConfig.set(_VIGIA_KEY_ULTIMO, _fmt(est['ultimo_alerta_em']))
+    AppConfig.set(_VIGIA_KEY_ASSIN, est['ultima_assinatura'])
+    db.session.commit()
 
 
 def vigiar_infra():
     """Roda o diagnostico e alerta o dono no WhatsApp (Z-API) quando o
-    Chatwoot adoece — inbox precisando reautorizar, token 401, servidor
-    fora/lento. Criado apos o incidente de 12/06/2026, em que a equipe
-    de atendimento descobriu o problema antes do sistema.
-
-    Anti-spam: alerta na TRANSICAO saudavel→doente, re-alerta o mesmo
-    problema a cada 6h, e avisa uma vez quando normalizar. Retorna dict
-    com o que fez (pro teste e pro log)."""
+    Chatwoot adoece. Estado persistido em AppConfig (anti-spam mesmo
+    entre workers/deploys). Anti-spam: alerta na TRANSICAO
+    saudavel→doente, re-alerta o mesmo problema a cada 6h, e avisa uma
+    vez quando normalizar."""
     from app.services import zapi
     from app.utils import agora as _agora
 
@@ -351,16 +381,16 @@ def vigiar_infra():
         return {'rodou': False, 'motivo': 'ZAPI_BOT_DONO_NUMERO vazio'}
 
     out = diagnostico()
-    est = _vigia_infra_estado
+    est = _vigia_carregar()
     agora_dt = _agora()
 
     if out.get('saudavel'):
         if est['quebrado_desde'] is not None:
             zapi.enviar_texto(dono, ('✅ Chatwoot normalizou — servidor, '
                                      'tokens e canais OK de novo.'))
-            est['quebrado_desde'] = None
-            est['ultimo_alerta_em'] = None
-            est['ultima_assinatura'] = None
+            _vigia_gravar({'quebrado_desde': None,
+                           'ultimo_alerta_em': None,
+                           'ultima_assinatura': None})
             return {'rodou': True, 'enviado': True, 'tipo': 'recuperacao'}
         return {'rodou': True, 'enviado': False, 'tipo': 'saudavel'}
 
@@ -378,7 +408,9 @@ def vigiar_infra():
         zapi.enviar_texto(dono, msg)
         est['ultimo_alerta_em'] = agora_dt
         est['ultima_assinatura'] = assinatura
+        _vigia_gravar(est)
         return {'rodou': True, 'enviado': True, 'tipo': 'alerta'}
+    _vigia_gravar(est)
     return {'rodou': True, 'enviado': False, 'tipo': 'throttle'}
 
 
