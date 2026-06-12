@@ -196,6 +196,34 @@ def bot_webhook():
         return jsonify({'ok': True, 'ignorado': 'sem-conversa'})
     content = (payload.get('content') or '').strip()
 
+    # Idempotencia: Chatwoot reenvia message_created se o webhook demora
+    # (bot precisa de Claude + tools, passa de 5s as vezes). Sem isso,
+    # mesma mensagem vira 2 turnos do bot — duplica resposta no canal e
+    # gasta token a toa. PK do payload identifica a mensagem unica.
+    msg_id = payload.get('id') or payload.get('message_id')
+    if msg_id:
+        from app.extensions import db as _db
+        from app.models import ChatwootEventoProcessado
+        msg_id_str = str(msg_id)[:80]
+        ja = ChatwootEventoProcessado.query.filter_by(
+            message_id=msg_id_str).first()
+        if ja:
+            logger.info('crm/bot: msg %s ja processada (conv=%s) — ignora',
+                         msg_id_str, conv_id)
+            return jsonify({'ok': True, 'ignorado': 'duplicado'})
+        # Grava ANTES do processamento async — se o webhook for reenviado
+        # enquanto o primeiro ainda esta rodando, o segundo cai no
+        # IntegrityError (UNIQUE PK) e e ignorado.
+        try:
+            _db.session.add(ChatwootEventoProcessado(
+                message_id=msg_id_str,
+                conversation_id=str(conv_id)[:40]))
+            _db.session.commit()
+        except Exception:  # noqa: BLE001
+            _db.session.rollback()
+            logger.info('crm/bot: msg %s race no commit — ignora', msg_id_str)
+            return jsonify({'ok': True, 'ignorado': 'race-duplicado'})
+
     # Processa em SEGUNDO PLANO e responde o webhook na hora. O Agent Bot do
     # Chatwoot tem timeout curto: se a gente fizer Claude + ferramentas antes de
     # responder, ele marca a conversa como erro e joga pro humano. Devolvemos
