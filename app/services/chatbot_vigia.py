@@ -48,7 +48,7 @@ hora no WhatsApp do dono; media entra num resumo diário (não incomoda na hora)
 GRAVIDADE=ALTA (urgente — o dono precisa saber AGORA):
 - Cliente IRRITADO, agressivo, SURTANDO/alterado, ofendido, ou prestes a desistir/cancelar
 - Cliente reclamando de algo sério (pedido errado, atraso, cobrança indevida)
-- Bot afirmou "esgotado"/"não temos" para item que CONSTA no estoque interno abaixo (ERRO REAL)
+- Bot afirmou "esgotado"/"não temos" para item que aparece como DISPONÍVEL=true no catálogo do site abaixo (ERRO REAL — o bot e o cliente compram pelo SITE; estoque de loja física é OUTRA fonte e NÃO deve ser usado pra contradizer o bot)
 - Bot disse algo claramente errado: preço estranho, prazo errado, info inventada, contradição grave
 - PERDA DE VENDA clara: cliente estava comprando, o bot atrapalhou/confundiu, e o cliente saiu
 
