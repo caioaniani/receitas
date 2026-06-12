@@ -584,6 +584,12 @@ def imprimir():
     for p in pedidos:
         p['driver_nome'] = drv_por_code.get(p.get('code'))
 
+    # Caps por campo (cartinha/observacao/itens/etc) — o conteudo
+    # excessivamente grande de UM pedido estourava o A4 e quebrava a
+    # paginacao do Safari (paginas em branco entre folhas com conteudo).
+    for p in pedidos:
+        _truncar_campos_pedido(p)
+
     # Rede de seguranca: se um pedido especifico estourar o template (ex:
     # campo com tipo inesperado), nao deixa 500 levar toda a impressao —
     # renderiza um a um e descarta o que falhou (com log pra diagnostico).
@@ -608,6 +614,63 @@ def imprimir():
         return render_template('entregas/imprimir.html',
                                pedidos=bons, vias=vias, data=target,
                                diag=diag)
+
+
+@entregas_bp.route('/imprimir/debug/<token>')
+@login_required
+def imprimir_debug(token):
+    """Mostra shape/tamanhos dos campos por pedido de um lote de impressao.
+    Owner-only — usado pra diagnosticar paginacao estranha (paginas em
+    branco, contagem off-by-N) sem precisar adivinhar shape do payload.
+
+    Ex: GET /entregas/imprimir/debug/abc123 → JSON com qtd_pedidos,
+    tamanhos por campo, e shape resumido por pedido."""
+    papel = getattr(current_user, 'papel', None)
+    if papel not in ('admin', 'owner'):
+        abort(403)
+    row = ImpressaoLote.query.filter_by(token=token).first()
+    if not row:
+        return jsonify(erro='lote nao encontrado'), 404
+    try:
+        pedidos = json.loads(row.payload)
+    except (ValueError, TypeError):
+        return jsonify(erro='payload nao parseou'), 500
+    diag_pedidos = []
+    for p in (pedidos if isinstance(pedidos, list) else []):
+        if not isinstance(p, dict):
+            diag_pedidos.append({'tipo': type(p).__name__,
+                                  'valor': str(p)[:200]})
+            continue
+        diag_pedidos.append({
+            'code': p.get('code'),
+            'destinatario': bool(p.get('destinatario')),
+            'endereco_len': len(p.get('endereco') or ''),
+            'telefone_len': len(p.get('telefone') or ''),
+            'cartinha_len': len(p.get('cartinha') or ''),
+            'observacao_len': len(p.get('observacao') or ''),
+            'qtd_itens': len(p.get('itens') or []),
+            'total': p.get('total'),
+            'expresso': p.get('expresso'),
+            'tem_periodo': bool(p.get('periodo')),
+        })
+    return jsonify({
+        'token': token,
+        'criado_em': (row.criado_em.isoformat()
+                      if row.criado_em else None),
+        'criado_por_id': row.criado_por,
+        'payload_bytes': len(row.payload or ''),
+        'qtd_pedidos': len(diag_pedidos),
+        'caps': {
+            'cartinha': _CAP_CARTINHA,
+            'observacao': _CAP_OBSERVACAO,
+            'endereco': _CAP_ENDERECO,
+            'telefone': _CAP_TELEFONE,
+            'destinatario': _CAP_DESTINATARIO,
+            'nome_item': _CAP_NOME_ITEM,
+            'itens': _CAP_ITENS,
+        },
+        'diag': diag_pedidos,
+    })
 
 
 @entregas_bp.route('/api/calendario')
