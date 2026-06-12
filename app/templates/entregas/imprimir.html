@@ -210,7 +210,11 @@
 
     {% if p.cartinha and not motorista %}
     <div class="cartinha">
-      <div class="lbl">💌 Cartinha (escrever à mão)</div>
+      <div class="lbl">💌 Cartinha (escrever à mão)
+        {% if p._truncado and 'cartinha' in p._truncado %}
+        <span class="truncado">truncada — original maior</span>
+        {% endif %}
+      </div>
       <div class="txt">{{ p.cartinha }}</div>
     </div>
     {% endif %}
