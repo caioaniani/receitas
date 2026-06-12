@@ -298,6 +298,11 @@ def responder(historico):
     # Rastreia se a ULTIMA consulta de catalogo desta rodada falhou. Se falhou,
     # o bot NAO pode responder preco/produto (poderia inventar) — forca handoff.
     produto_falhou = False
+    # Quais ferramentas o bot usou neste turno. Vai no resultado pra o
+    # VIGIA saber se um handoff foi 'preguicoso' (transferiu sem nem
+    # consultar o catalogo — caso real 12/06/2026, conv #198: cliente
+    # perguntou de cesta+entrega e o bot fez handoff com zero consulta).
+    tools_usadas = []
 
     for _ in range(MAX_ITERACOES):
         try:
@@ -311,7 +316,9 @@ def responder(historico):
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception('chatbot: erro Anthropic')
-            return {'acao': 'handoff', 'texto': _FALLBACK, 'motivo': f'erro anthropic: {exc}'}
+            return {'acao': 'handoff', 'texto': _FALLBACK,
+                    'motivo': f'erro anthropic: {exc}',
+                    'tools_usadas': tools_usadas}
 
         tool_uses = [b for b in resp.content if getattr(b, 'type', None) == 'tool_use']
 
@@ -322,13 +329,16 @@ def responder(historico):
                 logger.warning('crm bot: consultar_produtos falhou -> handoff '
                                '(evita preco inventado)')
                 return {'acao': 'handoff', 'texto': _FALLBACK_CATALOGO,
-                        'motivo': 'consultar_produtos falhou'}
+                        'motivo': 'consultar_produtos falhou',
+                        'tools_usadas': tools_usadas}
             texto = '\n'.join(b.text for b in resp.content
                               if getattr(b, 'type', None) == 'text' and b.text).strip()
             if not texto:
                 return {'acao': 'handoff', 'texto': 'Já te passo para um atendente. 🙂',
-                        'motivo': 'resposta vazia'}
-            return {'acao': 'responder', 'texto': texto}
+                        'motivo': 'resposta vazia',
+                        'tools_usadas': tools_usadas}
+            return {'acao': 'responder', 'texto': texto,
+                    'tools_usadas': tools_usadas}
 
         # Handoff tem prioridade — encerra o loop na hora.
         for b in tool_uses:
@@ -339,6 +349,7 @@ def responder(historico):
                     'texto': (inp.get('mensagem_cliente') or '').strip()
                              or 'Já te passo para um atendente. 🙂',
                     'motivo': inp.get('motivo') or 'handoff',
+                    'tools_usadas': tools_usadas,
                 }
 
         # Executa as ferramentas e devolve os resultados pro Claude.
@@ -346,6 +357,7 @@ def responder(historico):
         resultados = []
         for b in tool_uses:
             out = _executar_tool(b.name, b.input or {})
+            tools_usadas.append(b.name)
             if b.name == 'consultar_produtos':
                 produto_falhou = bool(isinstance(out, dict) and out.get('erro'))
             resultados.append({
@@ -356,7 +368,8 @@ def responder(historico):
         messages.append({'role': 'user', 'content': resultados})
 
     # Estourou o teto de iteracoes — passa pro humano por seguranca.
-    return {'acao': 'handoff', 'texto': _FALLBACK, 'motivo': 'limite de passos'}
+    return {'acao': 'handoff', 'texto': _FALLBACK, 'motivo': 'limite de passos',
+            'tools_usadas': tools_usadas}
 
 
 # ── Follow-up automatico (bot retoma cliente que sumiu) ────────────────────
