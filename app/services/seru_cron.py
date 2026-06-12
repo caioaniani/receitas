@@ -258,6 +258,21 @@ def _run_vigia_abandono(app):
                         logger.exception('vigia abandono falhou conv=%s', conv_id)
                     # Marca como avisado mesmo se o vigia decidiu silenciar — anti-spam.
                     chatbot_vigia._avisados_abandono.add(conv_id)
+                # Detector C (12/06/2026, conv #198): cliente esperando
+                # ATENDENTE em conversa `open` — invisivel pro bot (que
+                # ignora open por design) e pro detector de abandono
+                # (que so olha pending). Deterministico, dedupe proprio,
+                # mesmo ciclo/lock. Desligar: CHATBOT_VIGIA_ESPERA=0.
+                if str(app.config.get('CHATBOT_VIGIA_ESPERA',
+                                      os.environ.get('CHATBOT_VIGIA_ESPERA',
+                                                     '1'))) != '0':
+                    try:
+                        min_espera = int(app.config.get(
+                            'CHATBOT_VIGIA_ESPERA_MIN', 10) or 10)
+                        chatbot_vigia.alertar_clientes_esperando_humano(
+                            min_minutos=min_espera)
+                    except Exception:
+                        logger.exception('vigia espera-humano ciclo falhou')
             except Exception:
                 logger.exception('vigia abandono ciclo falhou')
             finally:
