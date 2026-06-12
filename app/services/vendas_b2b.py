@@ -33,12 +33,19 @@ from app.utils import agora, hoje
 
 
 def _get_or_create_estoque(receita_id=None, produto_id=None):
-    """Acha (ou cria zerado) a linha de EstoqueProducao do item."""
+    """Acha (ou cria zerado) a linha de EstoqueProducao do item.
+
+    `.with_for_update()` no SELECT: trava a linha ate o commit. Sem isso,
+    2 admins registrando venda B2B do mesmo item ao mesmo tempo podem
+    ler o mesmo saldo (100), cada um decidir 'sobram 80' e 'sobram 70',
+    e o segundo commit sobrescrever o primeiro — sai 50 do estoque mas
+    o sistema registra 30. Diferente do Seru sync (advisory lock 7723
+    serializa workers), B2B vem de UI, sem essa protecao previa."""
     filtro = {
         'receita_id': receita_id,
         'produto_id': produto_id,
     }
-    ep = EstoqueProducao.query.filter_by(**filtro).first()
+    ep = EstoqueProducao.query.filter_by(**filtro).with_for_update().first()
     if not ep:
         ep = EstoqueProducao(**filtro, quantidade=0)
         db.session.add(ep)
