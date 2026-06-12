@@ -245,8 +245,12 @@ def _folha_pedido(pdf, p, via, data_fmt):
                        padding=2)
         pdf.ln(3)
 
-    # Itens
+    # Itens. `mostrar_valores`: na via do cliente, a coluna VALOR so
+    # aparece quando o VNDA informou valor por item — produto tipo
+    # kit/box vem com itens zerados e o dinheiro so no total (ver
+    # itens_sem_valor); imprimir R$ 0,00 pro cliente e falso.
     itens = [it for it in (p.get('itens') or []) if isinstance(it, dict)]
+    mostrar_valores = not motorista and not itens_sem_valor(p)
     total_unidades = 0
     for it in itens:
         try:
@@ -260,7 +264,7 @@ def _folha_pedido(pdf, p, via, data_fmt):
         new_x='LMARGIN', new_y='NEXT')
     pdf.set_font('Helvetica', 'B', 9)
     pdf.set_fill_color(235, 235, 235)
-    if motorista:
+    if not mostrar_valores:
         pdf.cell(24, 6, 'QTD', border=1, align='R', fill=True)
         pdf.cell(0, 6, '  ITEM', border=1, fill=True,
                  new_x='LMARGIN', new_y='NEXT')
@@ -276,7 +280,7 @@ def _folha_pedido(pdf, p, via, data_fmt):
         except (TypeError, ValueError):
             qtd = 1
         nome = _latin1(it.get('nome') or '—')
-        if motorista:
+        if not mostrar_valores:
             pdf.cell(24, 6, f'{qtd}x ', border='B', align='R')
             pdf.cell(0, 6, f'  {nome}'[:90], border='B',
                      new_x='LMARGIN', new_y='NEXT')
