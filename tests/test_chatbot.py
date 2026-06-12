@@ -866,6 +866,37 @@ def test_vigia_abandono_alerta_quando_perda_de_venda(app):
     assert '30 min sem resposta' in msg
 
 
+def test_ja_avisado_abandono_persiste_no_banco(app):
+    """Caso real (12/06/2026): o anti-spam do detector de abandono era um
+    set em memoria que zerava a cada deploy — no dia em que o detector
+    voltou a enxergar (fix do token), metralhou o dono com o backlog e
+    re-metralharia a cada deploy. Agora o dedupe consulta VigiaVeredito
+    (gravado pelo proprio avaliar_abandono com prefixo '[ABANDONO')."""
+    from unittest.mock import patch
+
+    from app.services import chatbot_vigia
+    with app.app_context():
+        chatbot_vigia._avisados_abandono.clear()
+        # Nunca avaliado → False
+        assert chatbot_vigia.ja_avisado_abandono(555) is False
+        # Avalia (veredicto silencioso) → grava VigiaVeredito [ABANDONO...]
+        app.config['CHATBOT_VIGIA'] = '1'
+        with patch('app.services.chatbot_vigia._chamar_haiku_abandono',
+                   return_value={'alerta': False, 'gravidade': None,
+                                 'motivo': 'so cumprimento'}), \
+             patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'x'}):
+            chatbot_vigia.avaliar_abandono(
+                [{'role': 'user', 'content': 'oi'}],
+                conv_id=555, nome_contato='Teste',
+                minutos_sem_resposta=30)
+        # Simula DEPLOY: zera o cache em memoria
+        chatbot_vigia._avisados_abandono.clear()
+        # Banco lembra → True (nao re-avalia, nao re-alerta)
+        assert chatbot_vigia.ja_avisado_abandono(555) is True
+        # E aqueceu o cache em memoria de novo
+        assert 555 in chatbot_vigia._avisados_abandono
+
+
 def test_vigia_abandono_silencia_quando_conversa_so_cumprimento(app):
     """Cliente disse 'oi', bot respondeu, ninguem voltou — nao deve alertar."""
     from app.services import chatbot_vigia
