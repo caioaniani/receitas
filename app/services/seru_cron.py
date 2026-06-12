@@ -197,7 +197,19 @@ def _run_vnda_sync(app):
 
 def _run_vigia_abandono(app):
     """Job: detecta conversas em status `pending` paradas ha mais de N min e
-    chama o vigia pra avaliar abandono. Anti-spam por set em memoria."""
+    chama o vigia pra avaliar abandono.
+
+    3 freios (calibrados no caso real de 12/06/2026, quando o detector —
+    recem-curado da cegueira do token — metralhou o dono com o backlog
+    inteiro de uma vez):
+    1. Dedupe PERSISTENTE: `ja_avisado_abandono` consulta VigiaVeredito
+       no banco (sobrevive a deploy; o set em memoria zerava a cada um).
+    2. Idade maxima (`CHATBOT_VIGIA_ABANDONO_MAX_MIN`, default 720 =
+       12h): conversa fria de ontem nao e 'abandono em andamento' — vira
+       ruido as 15h do dia seguinte.
+    3. Teto por ciclo (`CHATBOT_VIGIA_ABANDONO_MAX_POR_CICLO`, default
+       5): backlog grande escoa ao longo dos ciclos de 15min em vez de
+       virar rajada no WhatsApp."""
     from app.services import chatbot_vigia, chatwoot
 
     with app.app_context():
@@ -215,10 +227,21 @@ def _run_vigia_abandono(app):
                     return
             try:
                 min_minutos = int(app.config.get('CHATBOT_VIGIA_ABANDONO_MIN', 15) or 15)
+                max_minutos = int(app.config.get(
+                    'CHATBOT_VIGIA_ABANDONO_MAX_MIN', 720) or 720)
+                max_por_ciclo = int(app.config.get(
+                    'CHATBOT_VIGIA_ABANDONO_MAX_POR_CICLO', 5) or 5)
                 paradas = chatwoot.listar_conversas_paradas(min_minutos=min_minutos)
+                avaliadas = 0
                 for c in paradas:
+                    if avaliadas >= max_por_ciclo:
+                        break
                     conv_id = c.get('id')
-                    if not conv_id or conv_id in chatbot_vigia._avisados_abandono:
+                    if not conv_id:
+                        continue
+                    if c.get('minutos_paradas', 0) > max_minutos:
+                        continue   # conversa fria — nao e abandono em andamento
+                    if chatbot_vigia.ja_avisado_abandono(conv_id):
                         continue
                     historico = chatwoot.buscar_historico(conv_id)
                     if not historico:
@@ -228,6 +251,7 @@ def _run_vigia_abandono(app):
                             historico, conv_id=conv_id,
                             nome_contato=c.get('nome_contato') or '',
                             minutos_sem_resposta=c.get('minutos_paradas', min_minutos))
+                        avaliadas += 1
                     except Exception:
                         logger.exception('vigia abandono falhou conv=%s', conv_id)
                     # Marca como avisado mesmo se o vigia decidiu silenciar — anti-spam.
