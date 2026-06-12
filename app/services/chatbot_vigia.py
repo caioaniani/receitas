@@ -51,9 +51,16 @@ GRAVIDADE=ALTA (urgente — o dono precisa saber AGORA):
 - Bot afirmou "esgotado"/"não temos" para item que aparece como DISPONÍVEL=true no catálogo do site abaixo (ERRO REAL — o bot e o cliente compram pelo SITE; estoque de loja física é OUTRA fonte e NÃO deve ser usado pra contradizer o bot)
 - Bot disse algo claramente errado: preço estranho, prazo errado, info inventada, contradição grave
 - PERDA DE VENDA clara: cliente estava comprando, o bot atrapalhou/confundiu, e o cliente saiu
+- HANDOFF PREGUIÇOSO: o bot transferiu pro humano SEM usar nenhuma ferramenta
+  (veja "FERRAMENTAS USADAS" abaixo — lista vazia) E a mensagem do cliente era
+  sobre produto/cesta/compra. Caso real 12/06/2026: "tem cesta de café? entrega
+  amanhã?" → bot transferiu sem nem consultar o catálogo. Cliente comprando +
+  bot que nem tentou = venda em risco AGORA. (Handoff sem ferramenta é OK
+  quando o cliente PEDE humano, faz reclamação, ou o assunto é genuinamente
+  fora do escopo — aí não alerte por isso.)
 
 GRAVIDADE=MEDIA (não urgente — vai pro resumo diário):
-- Handoff que o bot PODERIA ter resolvido (ex: "o que tem na cesta?", dúvida simples de produto)
+- Handoff que o bot PODERIA ter resolvido (ex: "o que tem na cesta?", dúvida simples de produto) — exceto o caso ALTA acima (sem ferramenta + cliente comprando)
 - Bot deu resposta truncada/confusa/repetiu saudação, mas sem erro grave
 - Cliente meio perdido depois de várias trocas
 
