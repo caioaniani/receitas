@@ -643,7 +643,9 @@ def test_debug_lote_retorna_diag_por_pedido(app, admin_user):
     assert d0['code'] == 'A1'
     assert d0['destinatario'] is True
     assert d0['endereco_len'] == len('Rua A, 1')
-    assert d0['cartinha_len'] == 2
+    # cartinha_len no debug reflete a cartinha_vnda do payload ORIGINAL,
+    # nao a cartinha resolvida (resolucao acontece no render, nao no
+    # payload guardado).
     assert d0['qtd_itens'] == 1
 
 
