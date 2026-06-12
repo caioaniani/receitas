@@ -413,7 +413,12 @@ def vigiar_infra():
     cfg = current_app.config
     if not (cfg.get('CHATWOOT_URL') or '').strip():
         return {'rodou': False, 'motivo': 'chatwoot nao configurado'}
-    dono = (cfg.get('ZAPI_BOT_DONO_NUMERO') or '').strip()
+    # Destino: CHATWOOT_VIGIA_INFRA_NUMERO (aceita ID de grupo
+    # '...-group' — decisao do dono 12/06/2026: vigias vao pro grupo da
+    # equipe, digests continuam no privado) com fallback pro numero
+    # pessoal do dono.
+    dono = ((cfg.get('CHATWOOT_VIGIA_INFRA_NUMERO') or '').strip()
+            or (cfg.get('ZAPI_BOT_DONO_NUMERO') or '').strip())
     if not dono:
         return {'rodou': False, 'motivo': 'ZAPI_BOT_DONO_NUMERO vazio'}
 
