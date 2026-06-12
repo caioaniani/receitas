@@ -374,6 +374,35 @@ balanco/entrada-em-lote acha um item sem cadastro, cria linha com `nome_pendente
 `/pedidos/congelados` ou `/pedidos/estoque-loja` (cards amarelos no topo). `_carregar_catalogo`
 nos services inclui orfaos pra match — reaplicar o balanco com o mesmo nome reusa a linha.
 
+## Impressao de pedidos de entrega (2026-06-12)
+
+**A impressao oficial e PDF gerado no servidor** (`app/services/pdf.py::
+gerar_pedidos_pdf`, rota `GET /entregas/imprimir.pdf`, fpdf2 ja no
+requirements). A pagina HTML `/entregas/imprimir` e SO preview de tela —
+**NUNCA reintroduzir `window.print()` nela**: o Safari re-renderiza/
+re-busca o documento ao montar a impressao e quebrou 3 vezes seguidas em
+11/06/2026 (paginas duplicadas com `min-height` 270mm > area util de
+269mm; paginas em branco com flex na `.folha`; conteudo apagado ao apertar
+imprimir). Contagem de paginas e garantida no servidor:
+`len(pedidos) x len(vias)` (teste trava).
+
+**Fluxo**: JS POSTa `pedidos_json` (estado em memoria das DUAS abas) →
+servidor persiste em `ImpressaoLote` (tabela efemera, lotes >2 dias
+varridos a cada POST) → 303 pro GET `?lote=<token>` (PRG) → botao verde
+abre o PDF. Debug de lote: `GET /entregas/imprimir/debug/<token>`
+(admin/owner).
+
+**Kit/box do VNDA (ex: "Box Mimo") — decisao do dono (2026-06-12)**: a
+API VNDA manda `price`/`subtotal` = 0 nos itens desses produtos; o
+dinheiro so existe no `total` do pedido. Na impressao, a coluna Valor e
+OMITIDA quando todos os itens sao 0 e total > 0 (`pdf.py::
+itens_sem_valor`) — NUNCA ratear o total entre itens (inventar valor
+financeiro). Consequencia conhecida e ACEITA pelo dono: o faturamento
+VNDA (`vnda_sync.py:94-95`) PULA pedidos com itens todos zerados — o
+relatorio subconta as vendas de kit/box. NAO "corrigir" sem perguntar
+(a alternativa, usar `order['total']`, incluiria frete e mudaria a
+semantica de comparacao com o Seru).
+
 ## Integracao Seru (PDV)
 
 **Documentação**: https://integration.plataformaseru.com.br/v1/docs.
