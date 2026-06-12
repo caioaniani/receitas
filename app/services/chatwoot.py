@@ -325,11 +325,18 @@ def diagnostico():
             'Chatwoot (Settings → Inboxes → Reauthorize): %s. Pra nao '
             'repetir a cada 60 dias, conectar com token de System User '
             'do Business Manager (nao expira).' % ', '.join(quebrados))
-    elif any(s == 401 for s in statuses[1:]):
+    elif (out.get('api_token_http') == 401
+          or out.get('bot_token_ok') is False):
+        qual = []
+        if out.get('api_token_http') == 401:
+            qual.append('CHATWOOT_API_TOKEN (regerar em Profile Settings)')
+        if out.get('bot_token_ok') is False:
+            qual.append('CHATWOOT_BOT_TOKEN (copiar em /super_admin → '
+                        'Agent Bots → Access Token)')
         out['conclusao'] = (
-            'Servidor OK, mas o token DESTE sistema pro Chatwoot esta '
-            'invalido (401) — regerar em Profile Settings (API) ou '
-            'Agent Bots (bot) e atualizar o env no Railway da padaria.')
+            'Servidor OK, mas token DESTE sistema pro Chatwoot esta '
+            'invalido (401): %s. Atualizar o env no Railway da padaria.'
+            % '; '.join(qual))
     elif out.get('servidor_http') == 200:
         out['conclusao'] = (
             'Servidor, tokens e inboxes OK pela API. Se atendente ainda '
@@ -340,12 +347,14 @@ def diagnostico():
 
     # Flag de maquina pro vigia de infra (nao depende do texto da
     # conclusao). Token NAO configurado nao conta como doente — e estado
-    # de configuracao, alertar a cada 15min viraria spam.
+    # de configuracao, alertar a cada 15min viraria spam. Bot token:
+    # so 401 e doente (404 da sonda = token valido).
     out['saudavel'] = (
         out.get('servidor_http') == 200
         and (out.get('servidor_latencia_ms') or 0) <= 5000
         and not any(s and s >= 500 for s in statuses)
-        and not any(s == 401 for s in statuses[1:] if s is not None)
+        and out.get('api_token_http') != 401
+        and out.get('bot_token_ok') is not False
         and not quebrados
     )
     return out
