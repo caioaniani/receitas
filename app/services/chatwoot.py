@@ -491,12 +491,21 @@ def listar_conversas_paradas(min_minutos=15, limite=50):
     ha mais de `min_minutos`. Usado pelo job de detecao de abandono.
 
     Retorna lista de {'id', 'nome_contato', 'minutos_paradas'}. Lista vazia se
-    o Chatwoot nao estiver configurado ou se a chamada falhar."""
-    if not bot_disponivel():
+    o Chatwoot nao estiver configurado ou se a chamada falhar.
+
+    Auth: token de USUARIO (com fallback pro de bot). Token de Agent Bot
+    NAO pode listar conversas (401) — descoberto em 12/06/2026: este
+    detector ficou cego em silencio o tempo todo em que so o bot token
+    existia (o 401 virava lista vazia sem alarde)."""
+    if disponivel():
+        headers = _headers()
+    elif bot_disponivel():
+        headers = _bot_headers()
+    else:
         return []
     url = f'{_base()}/conversations'
     try:
-        r = requests.get(url, headers=_bot_headers(),
+        r = requests.get(url, headers=headers,
                          params={'status': 'pending', 'page': 1},
                          timeout=15)
         if r.status_code not in (200, 201):
