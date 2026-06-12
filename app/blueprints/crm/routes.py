@@ -190,7 +190,16 @@ def bot_webhook():
 
     conv = payload.get('conversation') or {}
     if (conv.get('status') or '') != 'pending':
-        return jsonify({'ok': True, 'ignorado': 'nao-pending'})
+        # Log com status real recebido — diagnostico de '"Olá" do cliente
+        # nao acordou o bot' (incidente 12/06/2026, conv #198): mensagem
+        # nova em conversa resolved/open passa por aqui em silencio.
+        # Saber o STATUS exato decide se e config do Chatwoot (reabrir
+        # como 'pending') ou bug nosso.
+        logger.info('crm/bot ignora: status=%s conv=%s',
+                    conv.get('status'),
+                    conv.get('id') or payload.get('conversation_id'))
+        return jsonify({'ok': True, 'ignorado': 'nao-pending',
+                        'status': conv.get('status')})
     conv_id = conv.get('id') or payload.get('conversation_id')
     if not conv_id:
         return jsonify({'ok': True, 'ignorado': 'sem-conversa'})
