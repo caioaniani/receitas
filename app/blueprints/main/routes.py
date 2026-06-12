@@ -1964,6 +1964,19 @@ def debug_sentry():
     return jsonify(out), 200
 
 
+@main_bp.route('/admin/debug-chatwoot')
+@owner_required
+def debug_chatwoot():
+    """Diagnostico do Chatwoot rodando DO SERVIDOR de prod (owner-only).
+
+    Criado em 12/06/2026 durante incidente (WhatsApp "Falha ao enviar" +
+    IG "400 Session Invalid" + app "unexpected error"). Distingue em uma
+    chamada: hospedagem do Chatwoot fora x token nosso invalido x canais
+    Meta desconectados — cada um tem dono e correcao diferentes."""
+    from app.services import chatwoot
+    return jsonify(chatwoot.diagnostico()), 200
+
+
 @main_bp.route('/admin/vigia/diag')
 @owner_required
 def vigia_diag():
