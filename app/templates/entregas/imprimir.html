@@ -266,7 +266,11 @@
     </table>
 
     {% if p.observacao %}
-    <div class="secao-tit">Observação</div>
+    <div class="secao-tit">Observação
+      {% if p._truncado and 'observacao' in p._truncado %}
+      <span class="truncado">truncada</span>
+      {% endif %}
+    </div>
     <div class="obs">{{ p.observacao }}</div>
     {% endif %}
 
