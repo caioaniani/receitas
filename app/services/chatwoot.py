@@ -253,9 +253,32 @@ def diagnostico():
             out['bot_token_http'] = None
             out['bot_token_erro'] = f'{type(exc).__name__}: {str(exc)[:200]}'
 
+    # 4. Saude dos CANAIS (inboxes): o payload de /inboxes traz
+    # `reauthorization_required` quando o token Meta do canal morreu —
+    # exatamente o "400 Session Invalid" do IG. Requer o token de
+    # USUARIO (o de bot nao tem permissao pra listar inboxes).
+    if out.get('api_token_http') == 200:
+        try:
+            r = requests.get(f'{_base()}/inboxes', headers=_headers(),
+                             timeout=8)
+            if r.status_code == 200:
+                data = r.json() if r.text else {}
+                payload = (data.get('payload')
+                           if isinstance(data, dict) else data) or []
+                out['inboxes'] = [
+                    {'nome': ib.get('name'),
+                     'canal': ib.get('channel_type'),
+                     'precisa_reautorizar': bool(
+                         ib.get('reauthorization_required'))}
+                    for ib in payload if isinstance(ib, dict)]
+        except Exception as exc:  # noqa: BLE001
+            out['inboxes_erro'] = f'{type(exc).__name__}: {str(exc)[:200]}'
+
     # Conclusao automatica (ordem importa: do mais grave pro mais fino)
     statuses = [out.get('servidor_http'), out.get('api_token_http'),
                 out.get('bot_token_http')]
+    quebrados = [ib['nome'] for ib in out.get('inboxes', [])
+                 if ib['precisa_reautorizar']]
     if any(s and s >= 500 for s in statuses):
         out['conclusao'] = (
             'Chatwoot respondeu com erro 5xx — servidor doente. Ver logs '
@@ -268,6 +291,12 @@ def diagnostico():
             'stress (memoria/CPU no Railway do Chatwoot). Explica '
             '"unexpected error" e app travado.'
             % out['servidor_latencia_ms'])
+    elif quebrados:
+        out['conclusao'] = (
+            'Canal(is) com token Meta morto, precisa REAUTORIZAR no '
+            'Chatwoot (Settings → Inboxes → Reauthorize): %s. Pra nao '
+            'repetir a cada 60 dias, conectar com token de System User '
+            'do Business Manager (nao expira).' % ', '.join(quebrados))
     elif any(s == 401 for s in statuses[1:]):
         out['conclusao'] = (
             'Servidor OK, mas o token DESTE sistema pro Chatwoot esta '
@@ -275,13 +304,11 @@ def diagnostico():
             'Agent Bots (bot) e atualizar o env no Railway da padaria.')
     elif out.get('servidor_http') == 200:
         out['conclusao'] = (
-            'Servidor Chatwoot OK e tokens OK. O problema esta nos '
-            'CANAIS (Meta): "400 Session Invalid" no IG + "Falha ao '
-            'enviar" no WhatsApp = token Meta expirado/revogado DENTRO '
-            'do Chatwoot. Reconectar em Settings → Inboxes (Reauthorize '
-            'no Instagram e no WhatsApp). Pra nao repetir a cada 60 '
-            'dias: usar token de System User do Business Manager (nao '
-            'expira).')
+            'Servidor, tokens e inboxes OK pela API. Se atendente ainda '
+            've "Falha ao enviar": olhar a janela de 24h da Meta '
+            '(mensagem livre so ate 24h apos a ultima msg do cliente; '
+            'fora disso exige template aprovado) e os logs do worker '
+            '(Sidekiq) no Railway do Chatwoot.')
     return out
 
 
