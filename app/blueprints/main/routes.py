@@ -1972,9 +1972,18 @@ def debug_chatwoot():
     Criado em 12/06/2026 durante incidente (WhatsApp "Falha ao enviar" +
     IG "400 Session Invalid" + app "unexpected error"). Distingue em uma
     chamada: hospedagem do Chatwoot fora x token nosso invalido x canais
-    Meta desconectados — cada um tem dono e correcao diferentes."""
+    Meta desconectados — cada um tem dono e correcao diferentes.
+
+    ?conversa=<id>: alem do diagnostico, busca as mensagens que FALHARAM
+    naquela conversa com o erro bruto que a Meta devolveu (ex: janela de
+    24h fechada vs token morto) — o numero da conversa e o #NNN que
+    aparece no topo da tela do Chatwoot."""
     from app.services import chatwoot
-    return jsonify(chatwoot.diagnostico()), 200
+    out = chatwoot.diagnostico()
+    conv = (request.args.get('conversa') or '').strip()
+    if conv.isdigit():
+        out['erros_da_conversa_' + conv] = chatwoot.erros_de_envio(int(conv))
+    return jsonify(out), 200
 
 
 @main_bp.route('/admin/vigia/diag')
