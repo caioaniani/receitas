@@ -553,6 +553,20 @@ def _run_automacoes_whatsapp(app):
 
 
 
+def _run_followup_bot(app):
+    """Job: follow-up automatico do bot (12/06/2026, pedido do dono).
+    Cliente que sumiu apos mensagem NOSSA em conversa pending recebe um
+    cutucao gentil do proprio bot (1x por conversa, janela 5-120min).
+    Guarda-corpos no servico (chatbot.followup_conversas_paradas)."""
+    from app.services import chatbot, chatwoot
+
+    with app.app_context():
+        if not chatwoot.bot_disponivel():
+            return
+        _com_lock(LOCK_KEY_FOLLOWUP, chatbot.followup_conversas_paradas,
+                  'followup bot')
+
+
 def _run_vigia_chatwoot(app):
     """Job: vigia de infra do Chatwoot (15 em 15 min). Criado em
     12/06/2026 apos a equipe de atendimento descobrir o Chatwoot quebrado
