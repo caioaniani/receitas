@@ -1989,23 +1989,33 @@ def debug_chatwoot():
 
 
 @main_bp.route('/admin/vnda/contatos')
-@owner_required
+@login_required
 def vnda_contatos():
-    """Endereco + contato de uma lista de codes do VNDA (owner-only).
+    """Endereco + contato + DATA DE ENTREGA de uma lista de codes VNDA.
 
     Criado em 12/06/2026 pro caso operacional 'preciso achar 11 clientes
     pra repor produto estragado'. Aceita ?codes=A,B,C (mais um por linha
     quebrada/espaco/virgula — robusto pra copia-cola do print).
 
+    Acesso: TODOS os usuarios logados (decisao do dono 12/06/2026 — a
+    equipe operacional usa pra repor/contatar; mesma classe de PII que
+    /entregas/, ja aberta a todos). Era owner-only no nascimento.
+
+    Data de entrega: a OPERACIONAL — se houver OverrideEntrega pro code
+    (data alterada no nosso sistema), ela prevalece sobre a do VNDA e
+    vem marcada com `data_alterada` + a original.
+
     Resposta:
       {ok, total, achados, nao_achados,
        clientes: [{code, destinatario, telefone, endereco, data_entrega,
-                   periodo, itens: [{nome,qtd}]}]}.
+                   data_alterada, data_original, periodo,
+                   itens: [{nome,qtd}]}]}.
     """
     import re
 
     from flask import render_template
 
+    from app.models import OverrideEntrega
     from app.services import vnda
     raw = request.args.get('codes') or request.args.get('q') or ''
     # split robusto: virgula, espaco, quebra de linha, tabs
@@ -2014,6 +2024,12 @@ def vnda_contatos():
     seen = set()
     codes = [c for c in codes if not (c in seen or seen.add(c))]
     formato = (request.args.get('formato') or '').lower()
+
+    overrides = {}
+    if codes:
+        for ov in OverrideEntrega.query.filter(
+                OverrideEntrega.pedido_code.in_(codes)).all():
+            overrides[ov.pedido_code] = ov.data_entrega
 
     clientes = []
     nao_achados = []
@@ -2032,12 +2048,22 @@ def vnda_contatos():
                 client = None
         p = vnda._normalizar_pedido(order, client_data=client,
                                      shipping_data=shipping)
+        data_fmt = p.get('data_entrega_fmt') or ''
+        ov = overrides.get(code)
+        data_alterada = False
+        data_original = None
+        if ov:
+            data_alterada = True
+            data_original = data_fmt
+            data_fmt = ov.strftime('%d/%m/%Y')
         clientes.append({
             'code': p.get('code'),
             'destinatario': p.get('destinatario') or p.get('comprador') or '',
             'telefone': p.get('telefone') or '',
             'endereco': p.get('endereco') or '',
-            'data_entrega': p.get('data_entrega_fmt') or '',
+            'data_entrega': data_fmt,
+            'data_alterada': data_alterada,
+            'data_original': data_original,
             'periodo': p.get('periodo') or '',
             'itens': [{'nome': it.get('nome'),
                        'qtd': it.get('quantidade')}
