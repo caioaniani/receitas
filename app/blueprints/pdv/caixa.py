@@ -16,11 +16,11 @@ from flask_login import login_required, current_user
 from sqlalchemy.exc import IntegrityError
 
 from app.blueprints.pdv import pdv_bp
-from app.decorators import loja_access_required
+from app.decorators import admin_required, loja_access_required
 from app.extensions import db
 from app.models import (Venda, VendaItem, VendaPagamento, Receita, Produto,
-                        Loja, PrecoLojaReceita)
-from app.services import clover
+                        Loja, PrecoLojaReceita, Impressora, VendaImpressao)
+from app.services import clover, impressao
 
 # Fuso de Sao Paulo (Brasil nao tem horario de verao desde 2019).
 BRT = timezone(timedelta(hours=-3))
@@ -111,10 +111,16 @@ def _venda_dict(v):
         'criado_em': v.criado_em.isoformat() if v.criado_em else None,
         'itens': [{
             'descricao': i.descricao,
+            'setor': i.setor,
             'quantidade': i.quantidade,
             'preco_unitario': i.preco_unitario,
             'subtotal': i.subtotal,
         } for i in v.itens],
+        'impressoes': [{
+            'setor': im.setor,
+            'status': im.status,
+            'erro': im.erro,
+        } for im in v.impressoes],
         'pagamentos': [{
             'id': p.id,
             'metodo': p.metodo,
@@ -173,14 +179,14 @@ def caixa_criar_venda():
             preco = _preco_receita(r, overrides) if r else None
             if not r or not preco:
                 return jsonify(ok=False, erro=f'receita {it.get("id")} sem preço de venda'), 400
-            item = VendaItem(receita_id=r.id, descricao=r.nome,
+            item = VendaItem(receita_id=r.id, descricao=r.nome, setor=r.setor,
                              quantidade=qtd, preco_unitario=round(preco, 2))
         elif tipo == 'produto':
             p = db.session.get(Produto, int(it.get('id') or 0))
             preco = _preco_produto(p) if p else None
             if not p or not preco:
                 return jsonify(ok=False, erro=f'produto {it.get("id")} sem preço de venda'), 400
-            item = VendaItem(produto_id=p.id, descricao=p.nome,
+            item = VendaItem(produto_id=p.id, descricao=p.nome, setor=p.setor,
                              quantidade=qtd, preco_unitario=round(preco, 2))
         elif tipo == 'avulso':
             descricao = (it.get('descricao') or '').strip()[:200]
@@ -262,6 +268,75 @@ def _finalizar_se_paga(venda):
         venda.finalizado_em = datetime.utcnow()
 
 
+# ── Comandas por setor ──
+
+def _imprimir_comandas(venda, setores=None):
+    """Imprime 1 comanda por setor com impressora ativa na loja, mais o
+    cupom de conferência se houver impressora no setor 'caixa'. Grava
+    VendaImpressao por tentativa e retorna a lista de resultados.
+
+    Bloqueante (timeout de rede por impressora) — no fluxo de pagamento
+    chame via _disparar_comandas; na reimpressão pode ser sincrono.
+    """
+    resultados = []
+    impressoras = {i.setor: i for i in Impressora.query.filter_by(
+        loja_id=venda.loja_id, ativa=True).all()}
+    if not impressoras:
+        return resultados
+
+    por_setor = {}
+    for item in venda.itens:
+        if item.setor:
+            por_setor.setdefault(item.setor, []).append(item)
+
+    alvos = []
+    for setor, itens in sorted(por_setor.items()):
+        imp = impressoras.get(setor)
+        if imp and (not setores or setor in setores):
+            alvos.append((setor, imp,
+                          impressao.comanda_setor(venda, setor, itens, imp.largura or 48)))
+    imp_caixa = impressoras.get('caixa')
+    if imp_caixa and (not setores or 'caixa' in setores):
+        alvos.append(('caixa', imp_caixa,
+                      impressao.cupom_conferencia(venda, imp_caixa.largura or 48)))
+
+    for setor, imp, dados in alvos:
+        try:
+            impressao.enviar(imp.host, imp.porta, dados)
+            status, erro = 'ok', None
+        except Exception as e:
+            status, erro = 'erro', f'{type(e).__name__}: {str(e)[:250]}'
+            current_app.logger.warning('comanda %s falhou (%s:%s): %s',
+                                       setor, imp.host, imp.porta, erro)
+        db.session.add(VendaImpressao(venda_id=venda.id, impressora_id=imp.id,
+                                      setor=setor, status=status, erro=erro))
+        resultados.append({'setor': setor, 'status': status, 'erro': erro})
+    db.session.commit()
+    return resultados
+
+
+def _disparar_comandas(app, venda_id):
+    """Imprime em background pra não segurar a resposta do pagamento."""
+    def _run():
+        with app.app_context():
+            venda = db.session.get(Venda, venda_id)
+            if venda and venda.status == 'paga':
+                try:
+                    _imprimir_comandas(venda)
+                except Exception:
+                    app.logger.exception('comandas: falha na venda %s', venda_id)
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def _comandas_pos_pagamento(venda):
+    """Imprime comandas inline (uso nos fluxos que já rodam em thread)."""
+    if venda.status == 'paga':
+        try:
+            _imprimir_comandas(venda)
+        except Exception:
+            current_app.logger.exception('comandas: falha na venda %s', venda.id)
+
+
 def _processar_clover(app, pagamento_id):
     """Roda em thread de background: chama a Clover (bloqueante) e grava o
     resultado. Só atualiza se o pagamento ainda estiver aguardando — o
@@ -297,6 +372,7 @@ def _processar_clover(app, pagamento_id):
                 current_app.logger.warning(
                     'Clover: pagamento %s aprovado após cancelamento no caixa', pagamento_id)
             db.session.commit()
+            _comandas_pos_pagamento(pag.venda)
             return
         if res.get('aprovado'):
             pag.status = 'aprovado'
@@ -306,6 +382,7 @@ def _processar_clover(app, pagamento_id):
             pag.status = 'negado'
             pag.erro = (res.get('mensagem') or 'pagamento não aprovado')[:300]
         db.session.commit()
+        _comandas_pos_pagamento(pag.venda)
 
 
 @pdv_bp.route('/caixa/api/vendas/<int:venda_id>/pagamentos', methods=['POST'])
@@ -363,6 +440,8 @@ def caixa_add_pagamento(venda_id):
     pag.capturado_via = 'manual'
     _finalizar_se_paga(venda)
     db.session.commit()
+    if venda.status == 'paga':
+        _disparar_comandas(current_app._get_current_object(), venda.id)
     return jsonify(ok=True, aguardando=False, pagamento_id=pag.id,
                    venda=_venda_dict(venda))
 
@@ -423,3 +502,151 @@ def caixa_vendas_dia():
 def caixa_clover_status():
     return jsonify(ok=True, ativo=clover.ativo(), modo=clover.modo(),
                    ping=clover.ping())
+
+
+@pdv_bp.route('/caixa/api/vendas/<int:venda_id>/imprimir', methods=['POST'])
+@login_required
+@loja_access_required
+def caixa_reimprimir(venda_id):
+    """(Re)imprime as comandas da venda. Body opcional: {setores: [...]}."""
+    venda = db.session.get(Venda, venda_id)
+    if not venda:
+        return jsonify(ok=False, erro='venda não encontrada'), 404
+    if venda.status != 'paga':
+        return jsonify(ok=False, erro='só vendas pagas têm comanda'), 400
+    data = request.get_json(silent=True) or {}
+    setores = data.get('setores') or None
+    resultados = _imprimir_comandas(venda, setores=setores)
+    if not resultados:
+        return jsonify(ok=False, erro='nenhuma impressora ativa pra essa loja '
+                                      '(ou itens sem setor) — veja Caixa > Configurar'), 400
+    return jsonify(ok=True, resultados=resultados, venda=_venda_dict(venda))
+
+
+# ── Configuração (admin): impressoras + setor por item ──
+
+SETORES_SUGERIDOS = ('chapa', 'cafe', 'cozinha', 'viagem', 'caixa')
+
+
+@pdv_bp.route('/caixa/config')
+@login_required
+@admin_required
+def caixa_config():
+    return render_template('pdv/caixa_config.html')
+
+
+@pdv_bp.route('/caixa/api/config')
+@login_required
+@admin_required
+def caixa_config_dados():
+    impressoras = Impressora.query.order_by(Impressora.loja_id, Impressora.setor).all()
+    setores = sorted({i.setor for i in impressoras} | set(SETORES_SUGERIDOS))
+    itens = []
+    for r in Receita.query.order_by(Receita.categoria, Receita.nome).all():
+        itens.append({'tipo': 'receita', 'id': r.id, 'nome': r.nome,
+                      'categoria': r.categoria or 'Outros', 'setor': r.setor})
+    for p in Produto.query.filter(Produto.ativo.isnot(False)) \
+                          .order_by(Produto.categoria, Produto.nome).all():
+        itens.append({'tipo': 'produto', 'id': p.id, 'nome': p.nome,
+                      'categoria': p.categoria or 'Cestas', 'setor': p.setor})
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    return jsonify(
+        ok=True,
+        setores=setores,
+        lojas=[{'id': l.id, 'nome': l.nome} for l in lojas],
+        itens=itens,
+        impressoras=[{
+            'id': i.id, 'loja_id': i.loja_id, 'setor': i.setor, 'nome': i.nome,
+            'host': i.host, 'porta': i.porta, 'largura': i.largura, 'ativa': i.ativa,
+        } for i in impressoras],
+    )
+
+
+@pdv_bp.route('/caixa/api/impressoras', methods=['POST'])
+@login_required
+@admin_required
+def caixa_salvar_impressora():
+    data = request.get_json(silent=True) or {}
+    setor = (data.get('setor') or '').strip().lower()[:30]
+    nome = (data.get('nome') or '').strip()[:100]
+    host = (data.get('host') or '').strip()[:100]
+    loja_id = data.get('loja_id')
+    if not setor or not nome or not host or not loja_id:
+        return jsonify(ok=False, erro='preencha loja, setor, nome e IP'), 400
+    if not db.session.get(Loja, loja_id):
+        return jsonify(ok=False, erro='loja inválida'), 400
+    try:
+        porta = int(data.get('porta') or 9100)
+        largura = int(data.get('largura') or 48)
+    except (TypeError, ValueError):
+        return jsonify(ok=False, erro='porta/largura inválidas'), 400
+    if not (1 <= porta <= 65535) or not (20 <= largura <= 64):
+        return jsonify(ok=False, erro='porta/largura fora do intervalo'), 400
+
+    imp = db.session.get(Impressora, data['id']) if data.get('id') else None
+    if data.get('id') and not imp:
+        return jsonify(ok=False, erro='impressora não encontrada'), 404
+    if not imp:
+        imp = Impressora()
+        db.session.add(imp)
+    imp.loja_id = loja_id
+    imp.setor = setor
+    imp.nome = nome
+    imp.host = host
+    imp.porta = porta
+    imp.largura = largura
+    imp.ativa = bool(data.get('ativa', True))
+    db.session.commit()
+    return jsonify(ok=True, id=imp.id)
+
+
+@pdv_bp.route('/caixa/api/impressoras/<int:imp_id>/excluir', methods=['POST'])
+@login_required
+@admin_required
+def caixa_excluir_impressora(imp_id):
+    imp = db.session.get(Impressora, imp_id)
+    if not imp:
+        return jsonify(ok=False, erro='impressora não encontrada'), 404
+    # Histórico de comandas referencia a impressora — solta o vínculo antes
+    VendaImpressao.query.filter_by(impressora_id=imp_id) \
+                        .update({'impressora_id': None})
+    db.session.delete(imp)
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@pdv_bp.route('/caixa/api/impressoras/<int:imp_id>/testar', methods=['POST'])
+@login_required
+@admin_required
+def caixa_testar_impressora(imp_id):
+    imp = db.session.get(Impressora, imp_id)
+    if not imp:
+        return jsonify(ok=False, erro='impressora não encontrada'), 404
+    try:
+        impressao.enviar(imp.host, imp.porta, impressao.teste(imp))
+        return jsonify(ok=True)
+    except Exception as e:
+        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:250]}'), 502
+
+
+@pdv_bp.route('/caixa/api/setores-itens', methods=['POST'])
+@login_required
+@admin_required
+def caixa_salvar_setores():
+    """Atribui setor em lote: {itens: [{tipo, id, setor}]} — setor vazio limpa."""
+    data = request.get_json(silent=True) or {}
+    itens = data.get('itens') or []
+    if not isinstance(itens, list) or len(itens) > 1000:
+        return jsonify(ok=False, erro='payload inválido'), 400
+    alterados = 0
+    for it in itens:
+        if not isinstance(it, dict):
+            continue
+        setor = (it.get('setor') or '').strip().lower()[:30] or None
+        modelo = {'receita': Receita, 'produto': Produto}.get(it.get('tipo'))
+        obj = db.session.get(modelo, int(it.get('id') or 0)) if modelo else None
+        if obj and obj.setor != setor:
+            obj.setor = setor
+            alterados += 1
+    db.session.commit()
+    return jsonify(ok=True, alterados=alterados)

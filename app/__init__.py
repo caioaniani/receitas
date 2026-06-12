@@ -357,6 +357,7 @@ def _migrate_postgres(app):
             'custo_embalagem': 'ALTER TABLE receita ADD COLUMN custo_embalagem REAL DEFAULT 0',
             'modo_preparo': 'ALTER TABLE receita ADD COLUMN modo_preparo TEXT',
             'observacao': 'ALTER TABLE receita ADD COLUMN observacao TEXT',
+            'setor': 'ALTER TABLE receita ADD COLUMN setor VARCHAR(30)',
         }
         for col, sql in migrações_receita.items():
             if col not in colunas:
@@ -383,10 +384,20 @@ def _migrate_postgres(app):
                 'custo_embalagem': 'ALTER TABLE produto ADD COLUMN custo_embalagem REAL DEFAULT 0',
                 'modo_preparo': 'ALTER TABLE produto ADD COLUMN modo_preparo TEXT',
                 'observacao': 'ALTER TABLE produto ADD COLUMN observacao TEXT',
+                'setor': 'ALTER TABLE produto ADD COLUMN setor VARCHAR(30)',
             }
             for col, sql in migrações_produto.items():
                 if col not in cols_prod:
                     conn.execute(text(sql))
+
+        # venda_item (caixa) — setor snapshot da comanda
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'venda_item'"
+        ))
+        cols_vi = {row[0] for row in result}
+        if cols_vi and 'setor' not in cols_vi:
+            conn.execute(text("ALTER TABLE venda_item ADD COLUMN setor VARCHAR(30)"))
 
         # funcionario
         result = conn.execute(text(
@@ -918,6 +929,16 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE tarefa_projeto ADD COLUMN observacao TEXT")
     if cols_tp and 'recorrencia' not in cols_tp:
         cursor.execute("ALTER TABLE tarefa_projeto ADD COLUMN recorrencia VARCHAR(20)")
+
+    # Migração setor de comanda (caixa): receita, produto e venda_item
+    if 'setor' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN setor VARCHAR(30)")
+    if cols_prod and 'setor' not in cols_prod:
+        cursor.execute("ALTER TABLE produto ADD COLUMN setor VARCHAR(30)")
+    cursor.execute("PRAGMA table_info(venda_item)")
+    cols_vi = [row[1] for row in cursor.fetchall()]
+    if cols_vi and 'setor' not in cols_vi:
+        cursor.execute("ALTER TABLE venda_item ADD COLUMN setor VARCHAR(30)")
 
     conn.commit()
     conn.close()

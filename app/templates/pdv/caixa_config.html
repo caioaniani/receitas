@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+
+{% block title %}Caixa — Configuração{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-gear"></i> Caixa — Configuração</h1>
+    <a href="{{ url_for('pdv.caixa') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Voltar pro caixa
+    </a>
+</div>
+
+<div id="cfg-msg"></div>
+
+<div class="row g-3">
+    <!-- Impressoras -->
+    <div class="col-lg-6">
+        <div class="card p-3">
+            <strong class="mb-2"><i class="bi bi-printer"></i> Impressoras de setor</strong>
+            <p class="text-muted mb-2" style="font-size:12px;">
+                Térmicas ESC/POS na rede da loja (porta padrão 9100). O setor
+                <code>caixa</code> recebe o cupom de conferência da venda inteira;
+                os demais recebem a comanda dos seus itens.
+            </p>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead><tr>
+                        <th>Loja</th><th>Setor</th><th>Nome</th><th>Endereço</th><th></th>
+                    </tr></thead>
+                    <tbody id="cfg-imp-lista"></tbody>
+                </table>
+            </div>
+
+            <div class="border-top pt-2">
+                <strong class="small" id="cfg-imp-form-titulo">Nova impressora</strong>
+                <input type="hidden" id="imp-id">
+                <div class="row g-2 mt-1">
+                    <div class="col-6">
+                        <select id="imp-loja" class="form-select form-select-sm"></select>
+                    </div>
+                    <div class="col-6">
+                        <input id="imp-setor" class="form-control form-control-sm"
+                               placeholder="setor (ex: chapa)" list="dl-setores">
+                    </div>
+                    <div class="col-6">
+                        <input id="imp-nome" class="form-control form-control-sm" placeholder="nome (ex: Jetway chapa)">
+                    </div>
+                    <div class="col-6">
+                        <input id="imp-host" class="form-control form-control-sm" placeholder="IP (ex: 192.168.0.60)">
+                    </div>
+                    <div class="col-4">
+                        <input id="imp-porta" type="number" class="form-control form-control-sm" placeholder="porta" value="9100">
+                    </div>
+                    <div class="col-4">
+                        <select id="imp-largura" class="form-select form-select-sm">
+                            <option value="48">80mm (48 col)</option>
+                            <option value="32">58mm (32 col)</option>
+                        </select>
+                    </div>
+                    <div class="col-4 d-flex align-items-center">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="imp-ativa" checked>
+                            <label class="form-check-label small" for="imp-ativa">Ativa</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex gap-2 mt-2">
+                    <button class="btn btn-primary btn-sm" id="imp-salvar">Salvar</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="imp-limpar">Limpar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Setores dos itens -->
+    <div class="col-lg-6">
+        <div class="card p-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <strong><i class="bi bi-diagram-3"></i> Setor de cada item</strong>
+                <button class="btn btn-success btn-sm" id="cfg-setores-salvar">
+                    <i class="bi bi-check-lg"></i> Salvar setores
+                </button>
+            </div>
+            <p class="text-muted mb-2" style="font-size:12px;">
+                Item sem setor não gera comanda (ex: pão pra levar). Sugestões:
+                chapa, cafe, cozinha, viagem.
+            </p>
+            <input type="text" id="cfg-busca-item" class="form-control form-control-sm mb-2"
+                   placeholder="Filtrar itens…">
+            <div style="max-height:65vh;overflow-y:auto;">
+                <table class="table table-sm align-middle">
+                    <tbody id="cfg-itens-lista"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<datalist id="dl-setores"></datalist>
+
+<script>
+(function () {
+    'use strict';
+    var CSRF = '{{ csrf_token() }}';
+    var dados = {impressoras: [], lojas: [], setores: [], itens: []};
+
+    function $(id) { return document.getElementById(id); }
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+        });
+    }
+    function msg(html, tipo) {
+        $('cfg-msg').innerHTML = html
+            ? '<div class="alert alert-' + (tipo || 'danger') + ' py-2">' + html + '</div>' : '';
+        if (html) setTimeout(function () { $('cfg-msg').innerHTML = ''; }, 6000);
+    }
+    function api(path, body) {
+        var init = {method: body !== undefined ? 'POST' : 'GET', credentials: 'same-origin',
+                    cache: 'no-store', headers: {'X-CSRFToken': CSRF}};
+        if (body !== undefined) {
+            init.headers['Content-Type'] = 'application/json';
+            init.body = JSON.stringify(body);
+        }
+        return fetch(path, init).then(function (r) {
+            return r.text().then(function (t) {
+                try { return JSON.parse(t); } catch (e) { return {ok: false, erro: t.slice(0, 200)}; }
+            });
+        });
+    }
+
+    function nomeLoja(id) {
+        var l = dados.lojas.find(function (x) { return x.id === id; });
+        return l ? l.nome : id;
+    }
+
+    function renderImpressoras() {
+        var html = '';
+        dados.impressoras.forEach(function (i) {
+            html += '<tr' + (i.ativa ? '' : ' class="text-muted"') + '>' +
+                '<td>' + esc(nomeLoja(i.loja_id)) + '</td>' +
+                '<td><span class="badge text-bg-dark">' + esc(i.setor) + '</span></td>' +
+                '<td>' + esc(i.nome) + (i.ativa ? '' : ' <small>(inativa)</small>') + '</td>' +
+                '<td class="text-nowrap small">' + esc(i.host) + ':' + i.porta + '</td>' +
+                '<td class="text-nowrap text-end">' +
+                '<button class="btn btn-outline-secondary btn-sm py-0" title="Testar" data-testar="' + i.id + '"><i class="bi bi-printer"></i></button> ' +
+                '<button class="btn btn-outline-primary btn-sm py-0" title="Editar" data-editar="' + i.id + '"><i class="bi bi-pencil"></i></button> ' +
+                '<button class="btn btn-outline-danger btn-sm py-0" title="Excluir" data-excluir="' + i.id + '"><i class="bi bi-trash"></i></button>' +
+                '</td></tr>';
+        });
+        $('cfg-imp-lista').innerHTML = html ||
+            '<tr><td colspan="5" class="text-muted small">Nenhuma impressora cadastrada.</td></tr>';
+
+        $('cfg-imp-lista').querySelectorAll('[data-testar]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                b.disabled = true;
+                api('/pdv/caixa/api/impressoras/' + b.getAttribute('data-testar') + '/testar', {})
+                    .then(function (r) {
+                        b.disabled = false;
+                        msg(r.ok ? 'Teste enviado — confira o papel.' : 'Teste falhou: ' + esc(r.erro),
+                            r.ok ? 'success' : 'danger');
+                    });
+            });
+        });
+        $('cfg-imp-lista').querySelectorAll('[data-editar]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                var i = dados.impressoras.find(function (x) { return x.id == b.getAttribute('data-editar'); });
+                if (!i) return;
+                $('imp-id').value = i.id;
+                $('imp-loja').value = i.loja_id;
+                $('imp-setor').value = i.setor;
+                $('imp-nome').value = i.nome;
+                $('imp-host').value = i.host;
+                $('imp-porta').value = i.porta;
+                $('imp-largura').value = i.largura;
+                $('imp-ativa').checked = !!i.ativa;
+                $('cfg-imp-form-titulo').textContent = 'Editando: ' + i.nome;
+            });
+        });
+        $('cfg-imp-lista').querySelectorAll('[data-excluir]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                if (!window.confirm('Excluir essa impressora?')) return;
+                api('/pdv/caixa/api/impressoras/' + b.getAttribute('data-excluir') + '/excluir', {})
+                    .then(function (r) {
+                        if (!r.ok) { msg(esc(r.erro)); return; }
+                        carregar();
+                    });
+            });
+        });
+    }
+
+    function renderItens() {
+        var filtro = ($('cfg-busca-item').value || '').toLowerCase().trim();
+        var html = '', catAtual = null;
+        dados.itens.forEach(function (it, idx) {
+            if (filtro && it.nome.toLowerCase().indexOf(filtro) === -1) return;
+            if (it.categoria !== catAtual) {
+                catAtual = it.categoria;
+                html += '<tr class="table-light"><td colspan="2"><strong class="small">' +
+                    esc(catAtual) + '</strong></td></tr>';
+            }
+            html += '<tr><td>' + esc(it.nome) + '</td>' +
+                '<td style="width:160px;"><input class="form-control form-control-sm" ' +
+                'list="dl-setores" placeholder="(sem setor)" data-item="' + idx + '" ' +
+                'value="' + esc(it.setor || '') + '"></td></tr>';
+        });
+        $('cfg-itens-lista').innerHTML = html ||
+            '<tr><td class="text-muted small">Nenhum item.</td></tr>';
+        $('cfg-itens-lista').querySelectorAll('[data-item]').forEach(function (inp) {
+            inp.addEventListener('input', function () {
+                dados.itens[parseInt(inp.getAttribute('data-item'), 10)].setor = inp.value;
+            });
+        });
+    }
+
+    function renderDatalist() {
+        $('dl-setores').innerHTML = dados.setores.map(function (s) {
+            return '<option value="' + esc(s) + '">';
+        }).join('');
+    }
+
+    function limparForm() {
+        $('imp-id').value = '';
+        $('imp-setor').value = '';
+        $('imp-nome').value = '';
+        $('imp-host').value = '';
+        $('imp-porta').value = '9100';
+        $('imp-largura').value = '48';
+        $('imp-ativa').checked = true;
+        $('cfg-imp-form-titulo').textContent = 'Nova impressora';
+    }
+
+    function carregar() {
+        api('/pdv/caixa/api/config').then(function (r) {
+            if (!r.ok) { msg('Erro: ' + esc(r.erro)); return; }
+            dados = r;
+            $('imp-loja').innerHTML = dados.lojas.map(function (l) {
+                return '<option value="' + l.id + '">' + esc(l.nome) + '</option>';
+            }).join('');
+            renderDatalist();
+            renderImpressoras();
+            renderItens();
+        });
+    }
+
+    $('imp-salvar').addEventListener('click', function () {
+        var body = {
+            id: $('imp-id').value ? parseInt($('imp-id').value, 10) : null,
+            loja_id: parseInt($('imp-loja').value, 10),
+            setor: $('imp-setor').value,
+            nome: $('imp-nome').value,
+            host: $('imp-host').value,
+            porta: $('imp-porta').value,
+            largura: $('imp-largura').value,
+            ativa: $('imp-ativa').checked,
+        };
+        api('/pdv/caixa/api/impressoras', body).then(function (r) {
+            if (!r.ok) { msg(esc(r.erro)); return; }
+            msg('Impressora salva.', 'success');
+            limparForm();
+            carregar();
+        });
+    });
+    $('imp-limpar').addEventListener('click', limparForm);
+
+    $('cfg-setores-salvar').addEventListener('click', function () {
+        var itens = dados.itens.map(function (it) {
+            return {tipo: it.tipo, id: it.id, setor: it.setor || ''};
+        });
+        api('/pdv/caixa/api/setores-itens', {itens: itens}).then(function (r) {
+            if (!r.ok) { msg(esc(r.erro)); return; }
+            msg(r.alterados + ' item(ns) atualizado(s).', 'success');
+            carregar();
+        });
+    });
+
+    $('cfg-busca-item').addEventListener('input', renderItens);
+
+    carregar();
+})();
+</script>
+{% endblock %}

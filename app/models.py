@@ -126,6 +126,8 @@ class Receita(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(150), nullable=False)
     categoria = db.Column(db.String(50))
+    # Setor de producao que recebe a comanda na venda do caixa (chapa, cafe...)
+    setor = db.Column(db.String(30))
     preco_venda = db.Column(db.Float)
     preco_loja = db.Column(db.Float)
     preco_site = db.Column(db.Float)
@@ -199,6 +201,8 @@ class Produto(db.Model):
     nome = db.Column(db.String(150), nullable=False)
     categoria = db.Column(db.String(50))
     descricao = db.Column(db.String(300))
+    # Setor de producao que recebe a comanda na venda do caixa (chapa, cafe...)
+    setor = db.Column(db.String(30))
     preco_atacado = db.Column(db.Float)
     preco_loja = db.Column(db.Float)
     preco_site = db.Column(db.Float)
@@ -1128,6 +1132,8 @@ class VendaItem(db.Model):
     produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
     # Snapshot do nome no momento da venda (receita/produto pode ser renomeado depois)
     descricao = db.Column(db.String(200), nullable=False)
+    # Snapshot do setor de producao (comanda) no momento da venda
+    setor = db.Column(db.String(30))
     quantidade = db.Column(db.Float, default=1)
     preco_unitario = db.Column(db.Float, nullable=False)
     subtotal = db.Column(db.Float, nullable=False)
@@ -1160,3 +1166,41 @@ class VendaPagamento(db.Model):
     erro = db.Column(db.String(300))
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Impressora(db.Model):
+    """Impressora térmica de setor (comandas do caixa) — ESC/POS via rede
+    (TCP raw, porta 9100). O setor 'caixa' recebe o cupom de conferência."""
+    __tablename__ = 'impressora'
+
+    id = db.Column(db.Integer, primary_key=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
+    setor = db.Column(db.String(30), nullable=False)  # chapa, cafe, cozinha, viagem, caixa...
+    nome = db.Column(db.String(100), nullable=False)
+    host = db.Column(db.String(100), nullable=False)  # IP na rede da loja
+    porta = db.Column(db.Integer, default=9100)
+    largura = db.Column(db.Integer, default=48)  # colunas: 48 (80mm) ou 32 (58mm)
+    ativa = db.Column(db.Boolean, default=True)
+
+    loja = db.relationship('Loja')
+
+    def __repr__(self):
+        return f'<Impressora {self.setor}@{self.host}>'
+
+
+class VendaImpressao(db.Model):
+    """Registro de cada comanda enviada (ou tentada) por setor — permite
+    reimprimir quando a térmica falha (papel, rede etc)."""
+    __tablename__ = 'venda_impressao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    venda_id = db.Column(db.Integer, db.ForeignKey('venda.id', ondelete='CASCADE'),
+                         nullable=False, index=True)
+    impressora_id = db.Column(db.Integer, db.ForeignKey('impressora.id'), nullable=True)
+    setor = db.Column(db.String(30), nullable=False)
+    status = db.Column(db.String(20), nullable=False)  # ok | erro
+    erro = db.Column(db.String(300))
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    venda = db.relationship('Venda', backref=db.backref('impressoes', cascade='all, delete-orphan'))
+    impressora = db.relationship('Impressora')

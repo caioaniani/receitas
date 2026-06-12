@@ -348,12 +348,40 @@
                 var cor = { paga: 'success', aberta: 'warning', cancelada: 'secondary' }[v.status] || 'secondary';
                 var hora = v.criado_em ? new Date(v.criado_em + 'Z').toLocaleTimeString('pt-BR',
                     { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : '';
-                html += '<div class="d-flex justify-content-between border-bottom py-1">' +
+                var comandaErro = (v.impressoes || []).some(function (im) { return im.status === 'erro'; });
+                var temSetor = (v.itens || []).some(function (i) { return i.setor; });
+                var btnImp = (v.status === 'paga' && temSetor)
+                    ? ' <button class="btn py-0 px-1 ' + (comandaErro ? 'btn-outline-danger' : 'btn-outline-secondary') +
+                      '" data-reimprimir="' + v.id + '" title="' +
+                      (comandaErro ? 'Comanda falhou — reimprimir' : 'Reimprimir comandas') + '">' +
+                      '<i class="bi bi-printer"></i></button>'
+                    : '';
+                html += '<div class="d-flex justify-content-between align-items-center border-bottom py-1">' +
                     '<span>' + hora + ' <span class="text-muted">' + esc(v.code) + '</span></span>' +
                     '<span><span class="badge text-bg-' + cor + '">' + esc(v.status) + '</span> ' +
-                    fmt(v.total) + '</span></div>';
+                    fmt(v.total) + btnImp + '</span></div>';
             });
             $('cx-dia-lista').innerHTML = html || '<div class="text-muted py-2">Nenhuma venda hoje.</div>';
+            $('cx-dia-lista').querySelectorAll('[data-reimprimir]').forEach(function (b) {
+                b.addEventListener('click', function () {
+                    b.disabled = true;
+                    api('/pdv/caixa/api/vendas/' + b.getAttribute('data-reimprimir') + '/imprimir',
+                        { method: 'POST' }).then(function (r2) {
+                        b.disabled = false;
+                        if (!r2.ok) { msg('Comandas: ' + esc(r2.erro), 'warning'); return; }
+                        var falhas = (r2.resultados || []).filter(function (x) { return x.status !== 'ok'; });
+                        msg(falhas.length
+                            ? 'Comanda falhou: ' + falhas.map(function (x) {
+                                return esc(x.setor) + ' — ' + esc(x.erro || '');
+                              }).join('; ')
+                            : 'Comandas enviadas: ' + (r2.resultados || []).map(function (x) {
+                                return esc(x.setor);
+                              }).join(', '),
+                            falhas.length ? 'warning' : 'success');
+                        carregarVendasDia();
+                    });
+                });
+            });
         });
     }
 

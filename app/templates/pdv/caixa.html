@@ -15,6 +15,10 @@
             <option value="{{ l.id }}" {% if l.id == loja_usuario_id %}selected{% endif %}>{{ l.nome }}</option>
             {% endfor %}
         </select>
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('pdv.caixa_config') }}" class="btn btn-outline-secondary btn-sm"
+           title="Impressoras e setores de comanda"><i class="bi bi-gear"></i></a>
+        {% endif %}
     </div>
 </div>
 
