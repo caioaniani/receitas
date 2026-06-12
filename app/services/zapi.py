@@ -174,3 +174,38 @@ def enviar_texto(numero, mensagem):
     except Exception as exc:  # noqa: BLE001
         logger.exception('zapi enviar_texto falhou')
         return {'ok': False, 'erro': str(exc)}
+
+
+def listar_grupos():
+    """Lista os GRUPOS que o numero do bot participa, com id pronto pra
+    colar no destino de alertas. Usa GET /chats do Z-API e filtra
+    isGroup. Retorna {'ok': bool, 'grupos': [{'id', 'nome'}], ...}."""
+    cfg = current_app.config
+    instance_id = (cfg.get('ZAPI_INSTANCE_ID') or '').strip()
+    token = (cfg.get('ZAPI_TOKEN') or '').strip()
+    client_token = (cfg.get('ZAPI_CLIENT_TOKEN') or '').strip()
+    if not instance_id or not token:
+        return {'ok': False, 'erro': 'Z-API nao configurado'}
+    url = f'{BASE}/instances/{instance_id}/token/{token}/chats'
+    headers = {}
+    if client_token:
+        headers['Client-Token'] = client_token
+    try:
+        r = requests.get(url, params={'page': 1, 'pageSize': 100},
+                         headers=headers, timeout=15)
+        if r.status_code not in (200, 201):
+            return {'ok': False, 'erro': f'HTTP {r.status_code}: {r.text[:200]}'}
+        data = r.json() if r.text else []
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('zapi listar_grupos falhou')
+        return {'ok': False, 'erro': str(exc)}
+    chats = data if isinstance(data, list) else (data.get('chats') or [])
+    grupos = []
+    for c in chats:
+        if not isinstance(c, dict):
+            continue
+        cid = str(c.get('phone') or c.get('id') or '')
+        if c.get('isGroup') or cid.lower().endswith('-group'):
+            grupos.append({'id': cid,
+                           'nome': c.get('name') or c.get('chatName') or ''})
+    return {'ok': True, 'grupos': grupos, 'total': len(grupos)}
