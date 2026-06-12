@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block title %}Caixa{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-cash-stack"></i> Caixa</h1>
+    <div class="d-flex align-items-center gap-2">
+        <span id="cx-clover-badge" class="badge text-bg-secondary" title="Status da maquininha">
+            <i class="bi bi-credit-card"></i> Clover: verificando…
+        </span>
+        <select id="cx-loja" class="form-select form-select-sm" style="max-width:220px;"
+                {% if loja_usuario_id %}disabled{% endif %}>
+            {% for l in lojas %}
+            <option value="{{ l.id }}" {% if l.id == loja_usuario_id %}selected{% endif %}>{{ l.nome }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+
+<div id="cx-msg"></div>
+
+<div class="row g-3">
+    <!-- Catálogo -->
+    <div class="col-lg-7">
+        <div class="card p-3">
+            <input type="text" id="cx-busca" class="form-control mb-2"
+                   placeholder="Buscar produto… (ou clique abaixo)" autocomplete="off">
+            <div id="cx-categorias" class="d-flex flex-wrap gap-1 mb-2"></div>
+            <div id="cx-catalogo" class="row g-2" style="max-height:62vh;overflow-y:auto;"></div>
+        </div>
+    </div>
+
+    <!-- Venda atual -->
+    <div class="col-lg-5">
+        <div class="card p-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <strong><i class="bi bi-cart3"></i> Venda atual</strong>
+                <span id="cx-venda-code" class="text-muted small"></span>
+            </div>
+
+            <div id="cx-carrinho-vazio" class="text-muted small py-3 text-center">
+                Toque nos produtos pra adicionar.
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-2" id="cx-tabela" style="display:none;">
+                    <tbody id="cx-itens"></tbody>
+                </table>
+            </div>
+
+            <div class="d-flex gap-2 mb-2">
+                <button class="btn btn-outline-secondary btn-sm" id="cx-avulso">
+                    <i class="bi bi-plus-circle"></i> Item avulso
+                </button>
+                <button class="btn btn-outline-danger btn-sm ms-auto" id="cx-limpar">
+                    <i class="bi bi-trash"></i> Limpar
+                </button>
+            </div>
+
+            <div class="d-flex justify-content-between small">
+                <span>Subtotal</span><span id="cx-subtotal">R$ 0,00</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center small mb-1">
+                <span>Desconto (R$)</span>
+                <input type="number" id="cx-desconto" class="form-control form-control-sm text-end"
+                       style="max-width:110px;" min="0" step="0.01" value="">
+            </div>
+            <div class="d-flex justify-content-between h4 mb-1">
+                <span>Total</span><span id="cx-total">R$ 0,00</span>
+            </div>
+            <div class="d-flex justify-content-between text-success small mb-2" id="cx-pago-row" style="display:none!important;">
+                <span>Pago</span><span id="cx-pago">R$ 0,00</span>
+            </div>
+            <div class="d-flex justify-content-between text-danger fw-bold mb-2" id="cx-restante-row" style="display:none!important;">
+                <span>Restante</span><span id="cx-restante">R$ 0,00</span>
+            </div>
+
+            <div id="cx-pagamentos-feitos" class="small mb-2"></div>
+
+            <div class="row g-2">
+                <div class="col-6"><button class="btn btn-success w-100" data-metodo="dinheiro">
+                    <i class="bi bi-cash-coin"></i> Dinheiro</button></div>
+                <div class="col-6"><button class="btn btn-info w-100 text-white" data-metodo="pix">
+                    <i class="bi bi-qr-code"></i> PIX</button></div>
+                <div class="col-6"><button class="btn btn-primary w-100" data-metodo="debito">
+                    <i class="bi bi-credit-card"></i> Débito</button></div>
+                <div class="col-6"><button class="btn btn-primary w-100" data-metodo="credito">
+                    <i class="bi bi-credit-card-2-front"></i> Crédito</button></div>
+            </div>
+            <button class="btn btn-outline-danger btn-sm w-100 mt-2" id="cx-cancelar-venda" style="display:none;">
+                Cancelar venda
+            </button>
+            {% if not clover_ativo %}
+            <div class="text-muted mt-2" style="font-size:11px;">
+                <i class="bi bi-info-circle"></i> Clover não integrada: em cartão, digite o valor
+                na maquininha e o caixa registra como captura manual.
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="card p-3 mt-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <strong><i class="bi bi-receipt"></i> Vendas de hoje</strong>
+                <button class="btn btn-outline-secondary btn-sm" id="cx-recarregar-dia">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            </div>
+            <div id="cx-dia-resumo" class="small text-muted my-1"></div>
+            <div id="cx-dia-lista" class="small" style="max-height:30vh;overflow-y:auto;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: dinheiro -->
+<div class="modal fade" id="cx-modal-dinheiro" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2"><strong>Pagamento em dinheiro</strong>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <label class="form-label small mb-1">Valor a pagar (R$)</label>
+        <input type="number" id="cx-din-valor" class="form-control mb-2" min="0.01" step="0.01">
+        <label class="form-label small mb-1">Recebido do cliente (R$)</label>
+        <input type="number" id="cx-din-recebido" class="form-control mb-2" min="0" step="0.01">
+        <div class="d-flex justify-content-between h5">
+            <span>Troco</span><span id="cx-din-troco">R$ 0,00</span>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-success w-100" id="cx-din-confirmar">Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: item avulso -->
+<div class="modal fade" id="cx-modal-avulso" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2"><strong>Item avulso</strong>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <label class="form-label small mb-1">Descrição</label>
+        <input type="text" id="cx-av-desc" class="form-control mb-2" maxlength="200">
+        <label class="form-label small mb-1">Preço unitário (R$)</label>
+        <input type="number" id="cx-av-preco" class="form-control mb-2" min="0.01" step="0.01">
+        <label class="form-label small mb-1">Quantidade</label>
+        <input type="number" id="cx-av-qtd" class="form-control" min="1" step="1" value="1">
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-primary w-100" id="cx-av-confirmar">Adicionar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: aguardando maquininha -->
+<div class="modal fade" id="cx-modal-clover" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content text-center p-3">
+      <div class="spinner-border text-primary mx-auto my-3" style="width:3rem;height:3rem;"></div>
+      <h5>Aguardando a maquininha…</h5>
+      <p class="text-muted small mb-2">Peça pro cliente inserir ou aproximar o cartão na Clover.</p>
+      <div class="h4" id="cx-clover-valor"></div>
+      <button class="btn btn-outline-danger btn-sm mt-2" id="cx-clover-cancelar">Cancelar cobrança</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: venda concluída -->
+<div class="modal fade" id="cx-modal-fim" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content text-center p-3">
+      <div class="display-4 text-success"><i class="bi bi-check-circle"></i></div>
+      <h5 class="mb-1">Venda concluída</h5>
+      <div class="text-muted small" id="cx-fim-code"></div>
+      <div class="h5 mt-2" id="cx-fim-total"></div>
+      <div class="h3 text-success" id="cx-fim-troco" style="display:none;"></div>
+      <button class="btn btn-primary w-100 mt-3" id="cx-fim-nova">Nova venda (Enter)</button>
+    </div>
+  </div>
+</div>
+
+<script>
+window.CAIXA_CTX = {
+    csrf: '{{ csrf_token() }}',
+    lojaFixa: {{ 'true' if loja_usuario_id else 'false' }},
+    cloverAtivo: {{ 'true' if clover_ativo else 'false' }},
+    cloverModo: '{{ clover_modo }}'
+};
+</script>
+<script src="{{ url_for('static', filename='js/caixa.js') }}?v={{ static_v.get('js/caixa.js', '0') }}"></script>
+{% endblock %}

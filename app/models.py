@@ -1078,3 +1078,85 @@ class TarefaTemplate(db.Model):
     esforco = db.Column(db.String(2))
     dias_prazo = db.Column(db.Integer)  # dias a partir da criacao do projeto
     ordem = db.Column(db.Integer, default=0)
+
+
+# ── PDV próprio (frente de caixa) com captura de pagamento na Clover ──
+
+class Venda(db.Model):
+    """Venda registrada no caixa próprio (PDV Opão). Pagamentos em cartão
+    são capturados na Clover Mini via app/services/clover.py."""
+    __tablename__ = 'venda'
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(30), unique=True, nullable=False, index=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    status = db.Column(db.String(20), default='aberta', index=True)  # aberta|paga|cancelada
+    subtotal = db.Column(db.Float, default=0)
+    desconto = db.Column(db.Float, default=0)
+    total = db.Column(db.Float, default=0)
+    observacao = db.Column(db.String(300))
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    finalizado_em = db.Column(db.DateTime)
+
+    loja = db.relationship('Loja')
+    usuario = db.relationship('Usuario')
+    itens = db.relationship('VendaItem', backref='venda',
+                            cascade='all, delete-orphan', order_by='VendaItem.id')
+    pagamentos = db.relationship('VendaPagamento', backref='venda',
+                                 cascade='all, delete-orphan', order_by='VendaPagamento.id')
+
+    @property
+    def total_pago(self):
+        return round(sum(p.valor or 0 for p in self.pagamentos if p.status == 'aprovado'), 2)
+
+    @property
+    def restante(self):
+        return round(max((self.total or 0) - self.total_pago, 0), 2)
+
+    def __repr__(self):
+        return f'<Venda {self.code} {self.status}>'
+
+
+class VendaItem(db.Model):
+    __tablename__ = 'venda_item'
+
+    id = db.Column(db.Integer, primary_key=True)
+    venda_id = db.Column(db.Integer, db.ForeignKey('venda.id', ondelete='CASCADE'),
+                         nullable=False, index=True)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
+    # Snapshot do nome no momento da venda (receita/produto pode ser renomeado depois)
+    descricao = db.Column(db.String(200), nullable=False)
+    quantidade = db.Column(db.Float, default=1)
+    preco_unitario = db.Column(db.Float, nullable=False)
+    subtotal = db.Column(db.Float, nullable=False)
+
+    receita = db.relationship('Receita')
+    produto = db.relationship('Produto')
+
+
+class VendaPagamento(db.Model):
+    """Um pagamento da venda (suporta dividir: dinheiro + cartão etc).
+
+    status: pendente | aguardando_clover | aprovado | negado | cancelado | erro
+    capturado_via: manual (valor digitado na maquininha pelo operador),
+                   cloud/local (Clover REST Pay Display) ou simulado.
+    """
+    __tablename__ = 'venda_pagamento'
+
+    id = db.Column(db.Integer, primary_key=True)
+    venda_id = db.Column(db.Integer, db.ForeignKey('venda.id', ondelete='CASCADE'),
+                         nullable=False, index=True)
+    metodo = db.Column(db.String(20), nullable=False)  # dinheiro|pix|debito|credito
+    valor = db.Column(db.Float, nullable=False)
+    valor_recebido = db.Column(db.Float)  # dinheiro: quanto o cliente entregou
+    troco = db.Column(db.Float)
+    status = db.Column(db.String(30), default='pendente', index=True)
+    capturado_via = db.Column(db.String(20))
+    clover_external_id = db.Column(db.String(40), index=True)
+    clover_payment_id = db.Column(db.String(60))
+    clover_resposta = db.Column(db.Text)  # JSON cru da Clover (debug/conciliação)
+    erro = db.Column(db.String(300))
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

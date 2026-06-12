@@ -126,9 +126,13 @@
             <i class="bi bi-truck"></i> Entregas Site
         </a>
 
+        <a href="{{ url_for('pdv.caixa') }}"
+           class="sidebar-link {% if request.path.startswith('/pdv/caixa') %}active{% endif %}">
+            <i class="bi bi-cash-stack"></i> Caixa
+        </a>
         {% if current_user.is_admin() %}
         <a href="{{ url_for('pdv.index') }}"
-           class="sidebar-link {% if request.path.startswith('/pdv') %}active{% endif %}">
+           class="sidebar-link {% if request.path.startswith('/pdv') and not request.path.startswith('/pdv/caixa') %}active{% endif %}">
             <i class="bi bi-shop-window"></i> Vendas PDV
         </a>
         {% endif %}
@@ -234,9 +238,13 @@
             <i class="bi bi-truck"></i> Entregas Site
         </a>
 
+        <a href="{{ url_for('pdv.caixa') }}"
+           class="sidebar-link {% if request.path.startswith('/pdv/caixa') %}active{% endif %}">
+            <i class="bi bi-cash-stack"></i> Caixa
+        </a>
         {% if current_user.is_admin() %}
         <a href="{{ url_for('pdv.index') }}"
-           class="sidebar-link {% if request.path.startswith('/pdv') %}active{% endif %}">
+           class="sidebar-link {% if request.path.startswith('/pdv') and not request.path.startswith('/pdv/caixa') %}active{% endif %}">
             <i class="bi bi-shop-window"></i> Vendas PDV
         </a>
         {% endif %}

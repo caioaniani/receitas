@@ -32,6 +32,24 @@ class Config:
     SERU_CLIENT_ID = os.environ.get('SERU_CLIENT_ID', '')
     SERU_CLIENT_SECRET = os.environ.get('SERU_CLIENT_SECRET', '')
 
+    # Clover (maquininha do caixa) — captura de pagamento no PDV próprio.
+    # Setup completo: docs/clover-pdv.md
+    # CLOVER_MODE: 'cloud'    -> servidor → nuvem Clover → maquininha (recomendado no Railway)
+    #              'local'    -> rede local (CLOVER_API_BASE ex: https://192.168.0.50:12346)
+    #              'simulado' -> aprova sozinho em ~4s, para testar o fluxo sem maquininha
+    #              ''         -> desativado: caixa registra cartão como captura manual
+    CLOVER_MODE = os.environ.get('CLOVER_MODE', '')
+    # Cloud: produção https://api.clover.com | sandbox https://sandbox.dev.clover.com
+    CLOVER_API_BASE = os.environ.get('CLOVER_API_BASE', '')
+    # Token OAuth do app criado no painel de desenvolvedor Clover
+    CLOVER_ACCESS_TOKEN = os.environ.get('CLOVER_ACCESS_TOKEN', '')
+    # Número de série da Clover Mini (Configurações > Sobre, ex: C045UQ12345678)
+    CLOVER_DEVICE_SERIAL = os.environ.get('CLOVER_DEVICE_SERIAL', '')
+    # Remote Application ID (RAID) gerado no painel de desenvolvedor
+    CLOVER_POS_ID = os.environ.get('CLOVER_POS_ID', 'OpaoPDV')
+    # '0' desliga verificação TLS (só faz sentido no modo local — cert da CA Clover)
+    CLOVER_TLS_VERIFY = os.environ.get('CLOVER_TLS_VERIFY', '1')
+
     # Token para integracao com bots externos (n8n / WhatsApp).
     # Gere com: python -c "import secrets; print(secrets.token_urlsafe(32))"
     BOT_API_TOKEN = os.environ.get('BOT_API_TOKEN', '')
