@@ -54,7 +54,7 @@ def test_payload_sem_message_id_segue_o_fluxo_antigo(app):
     c = app.test_client()
     payload = _payload()
     payload.pop('id')
-    with patch('app.blueprints.crm.routes.threading.Thread'):
+    with patch('threading.Thread'):
         r = c.post('/crm/bot?k=segredo-teste', json=payload)
     assert r.status_code == 200
 
@@ -67,7 +67,7 @@ def test_replay_persiste_apos_ack_do_primeiro(app):
     from app.models import ChatwootEventoProcessado
     app.config['CHATWOOT_BOT_SECRET'] = 'segredo-teste'
     c = app.test_client()
-    with patch('app.blueprints.crm.routes.threading.Thread'):
+    with patch('threading.Thread'):
         c.post('/crm/bot?k=segredo-teste', json=_payload(msg_id=999))
     # Confirma que ficou gravado
     row = db.session.get(ChatwootEventoProcessado, '999')
