@@ -19,7 +19,14 @@ logger = logging.getLogger(__name__)
 
 def _token_ok(provided):
     expected = (current_app.config.get('ZAPI_BOT_WEBHOOK_TOKEN') or '').strip()
-    return bool(expected) and provided == expected
+    if not expected:
+        return False
+    # Timing-safe: == em Python sai cedo no 1o caractere diferente —
+    # atacante pode medir o microtempo e adivinhar o token caractere a
+    # caractere. compare_digest sempre demora o mesmo. Mesmo padrao do
+    # crm/routes.py:168.
+    import secrets as _s
+    return _s.compare_digest(str(provided or ''), expected)
 
 
 @zapi_bot_bp.route('/webhook', methods=['POST'])
