@@ -2082,6 +2082,22 @@ def vnda_contatos():
     return render_template('main/vnda_contatos.html', dados=payload), 200
 
 
+@main_bp.route('/admin/zapi/grupos')
+@owner_required
+def zapi_grupos():
+    """Lista os grupos de WhatsApp que o numero do bot participa, com o
+    ID pronto pra colar no destino de alertas (owner-only).
+
+    Fluxo (12/06/2026, pedido do dono): criar grupo no WhatsApp →
+    adicionar o numero do bot ao grupo → abrir esta rota → copiar o
+    `id` (termina em '-group') → colar no Railway em
+    CHATBOT_VIGIA_NUMERO (alertas do vigia) e/ou ZAPI_NUMERO_DESTINO
+    (digests) → Apply. O envio pra grupo tem whitelist propria que
+    inclui automaticamente esses destinos."""
+    from app.services import zapi
+    return jsonify(zapi.listar_grupos()), 200
+
+
 @main_bp.route('/admin/debug-bot')
 @owner_required
 def debug_bot():
