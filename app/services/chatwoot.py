@@ -115,13 +115,26 @@ def buscar_historico(conversation_id, limite=20):
     Claude). Cliente = user (incoming), bot/atendente = assistant (outgoing).
     Ignora notas internas e eventos. Anexos de imagem do cliente entram em
     'imagens' (URLs do Chatwoot) — quem monta o prompt baixa via baixar_imagem.
-    Mensagem so-imagem (sem texto) do cliente tambem entra."""
-    if not bot_disponivel():
+    Mensagem so-imagem (sem texto) do cliente tambem entra.
+
+    Auth: prefere o token de USUARIO (CHATWOOT_API_TOKEN) pra leitura —
+    o token de bot tem permissao mais limitada. Caso real (12/06/2026):
+    durante o incidente do Chatwoot o bot_token estava 401 e o historico
+    voltava vazio; com fallback pro de usuario, a leitura segue. So o
+    envio (enviar_mensagem) precisa do token de bot (pra aparecer como
+    bot na conversa)."""
+    if disponivel():
+        headers = _headers()
+    elif bot_disponivel():
+        headers = _bot_headers()
+    else:
         return []
     url = f'{_base()}/conversations/{conversation_id}/messages'
     try:
-        r = requests.get(url, headers=_bot_headers(), timeout=10)
+        r = requests.get(url, headers=headers, timeout=10)
         if r.status_code not in (200, 201):
+            logger.warning('chatwoot buscar_historico %s: %s',
+                           r.status_code, (r.text or '')[:200])
             return []
         data = r.json() if r.text else {}
     except Exception:  # noqa: BLE001
