@@ -650,6 +650,37 @@ def test_pdf_exige_login(app, admin_user):
     assert r.status_code in (302, 401)
 
 
+def test_html_esconde_valor_de_kit_sem_valor_por_item(app, admin_user):
+    """Caso real (Box Mimo, 11/06/2026): preview HTML segue a mesma
+    regra do PDF — itens todos zerados + total > 0 esconde a coluna
+    Valor (nada de R$ 0,00 falso pro cliente); Total continua."""
+    c = app.test_client()
+    _login(c)
+    pedido = {
+        'code': 'VND-KIT', 'destinatario': 'Carolina',
+        'endereco': 'Av. Jandira, 731', 'telefone': '11 94464-1313',
+        'total': 181.0,
+        'itens': [{'nome': 'Box Mimo', 'quantidade': 1,
+                   'preco_unitario': 0, 'subtotal': 0}],
+    }
+    r = _post_imprimir(c, [pedido], vias='cliente')
+    body = r.data.decode()
+    assert 'R$ 0,00' not in body
+    assert 'R$ 181,00' in body       # total continua
+    assert 'Box Mimo' in body
+    # brinde junto de item pago NAO esconde (R$ 0,00 legitimo)
+    pedido2 = {
+        'code': 'VND-MIX', 'destinatario': 'Z', 'endereco': 'Rua Q',
+        'total': 360.0,
+        'itens': [{'nome': 'Cesta', 'quantidade': 1, 'subtotal': 360},
+                  {'nome': 'Brinde', 'quantidade': 1, 'subtotal': 0}],
+    }
+    r2 = _post_imprimir(c, [pedido2], vias='cliente')
+    body2 = r2.data.decode()
+    assert 'R$ 0,00' in body2
+    assert 'R$ 360,00' in body2
+
+
 def test_apis_leitura_da_operacao_abertas_pra_funcionario(app):
     """A aba Operacao do /entregas/ chama /api/atribuidos, /api/lotes e
     /api/rotas. Como a tela abre pra todos (decisao 11/06/2026), os GETs
