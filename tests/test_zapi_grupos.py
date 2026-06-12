@@ -77,6 +77,60 @@ def test_telefone_continua_com_normalizacao_e_whitelist(app):
     assert post.call_args[1]['json']['phone'] == '5511999990000'
 
 
+def test_vigia_infra_envia_pro_grupo_quando_configurado(app):
+    """Decisao do dono (12/06/2026): SO os vigias vao pro grupo; digests
+    continuam no privado. O vigia de infra usa CHATWOOT_VIGIA_INFRA_NUMERO
+    (aceita grupo) com fallback pro numero pessoal."""
+    from app.services import chatwoot
+    _cfg_zapi(app,
+              CHATWOOT_URL='https://chat.exemplo.com.br',
+              ZAPI_BOT_DONO_NUMERO='5511999990000',
+              CHATWOOT_VIGIA_INFRA_NUMERO='120363555-group')
+    doente = {'saudavel': False, 'conclusao': 'problema X'}
+    # Zera estado persistido do vigia
+    from app.extensions import db
+    from app.models import AppConfig
+    with app.app_context():
+        for k in ('vigia_chatwoot_quebrado_desde',
+                  'vigia_chatwoot_ultimo_alerta_em',
+                  'vigia_chatwoot_ultima_assinatura'):
+            AppConfig.set(k, None)
+        db.session.commit()
+        with patch('app.services.chatwoot.diagnostico',
+                   return_value=doente), \
+             patch('app.services.zapi.enviar_texto',
+                   return_value={'ok': True}) as envia:
+            r = chatwoot.vigiar_infra()
+    assert r['tipo'] == 'alerta'
+    # Foi pro GRUPO, nao pro numero pessoal
+    assert envia.call_args[0][0] == '120363555-group'
+
+
+def test_vigia_infra_fallback_pro_dono_sem_grupo(app):
+    """Sem CHATWOOT_VIGIA_INFRA_NUMERO, continua indo pro numero do
+    dono — comportamento de antes preservado."""
+    from app.extensions import db
+    from app.models import AppConfig
+    from app.services import chatwoot
+    _cfg_zapi(app,
+              CHATWOOT_URL='https://chat.exemplo.com.br',
+              ZAPI_BOT_DONO_NUMERO='5511999990000',
+              CHATWOOT_VIGIA_INFRA_NUMERO='')
+    doente = {'saudavel': False, 'conclusao': 'problema Y'}
+    with app.app_context():
+        for k in ('vigia_chatwoot_quebrado_desde',
+                  'vigia_chatwoot_ultimo_alerta_em',
+                  'vigia_chatwoot_ultima_assinatura'):
+            AppConfig.set(k, None)
+        db.session.commit()
+        with patch('app.services.chatwoot.diagnostico',
+                   return_value=doente), \
+             patch('app.services.zapi.enviar_texto',
+                   return_value={'ok': True}) as envia:
+            chatwoot.vigiar_infra()
+    assert envia.call_args[0][0] == '5511999990000'
+
+
 def test_normalizar_grupo_limpa_lixo_e_preserva_sufixo(app):
     from app.services.zapi import _normalizar_grupo
     assert _normalizar_grupo('1203 6302-group') == '12036302-group'
