@@ -356,6 +356,14 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
+    # Vigia de infra do Chatwoot — 15 em 15 min. Desligar: CHATWOOT_VIGIA_INFRA=0.
+    if os.environ.get('CHATWOOT_VIGIA_INFRA', '1') != '0':
+        _scheduler.add_job(
+            lambda app=app: _run_vigia_chatwoot(app),
+            'interval', minutes=15, id='chatwoot-vigia-infra',
+            max_instances=1, coalesce=True,
+        )
+
     # Alerta de desperdicio: escalada Slack (20:10/15/20/25) -> WhatsApp (20:30)
     if os.environ.get('DESPERDICIO_ALERTA', '1') != '0':
         # 4 ticks no Slack — gerentes veem la e podem resolver antes do WhatsApp
