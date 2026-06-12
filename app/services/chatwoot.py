@@ -263,14 +263,22 @@ def diagnostico():
             out['api_token_erro'] = f'{type(exc).__name__}: {str(exc)[:200]}'
 
     # 3. Token do Agent Bot (o que responde conversas) valido?
+    # Sonda: POST toggle_status numa conversa IMPOSSIVEL (id 0). Token
+    # valido → 404 (nao achou a conversa); token invalido → 401. NAO da
+    # pra usar GET /conversations: token de Agent Bot nao tem permissao
+    # de listar e devolve 401 mesmo VALIDO — falso alarme real de
+    # 12/06/2026 (diag acusava bot 401 enquanto o bot postava respostas
+    # normalmente; o dono re-colou token certo 2x atras do proprio rabo).
     if out['bot_token_configurado']:
         try:
-            r = requests.get(f'{_base()}/conversations',
-                             params={'status': 'pending', 'page': 1},
-                             headers=_bot_headers(), timeout=8)
+            r = requests.post(f'{_base()}/conversations/0/toggle_status',
+                              json={'status': 'open'},
+                              headers=_bot_headers(), timeout=8)
             out['bot_token_http'] = r.status_code
+            out['bot_token_ok'] = r.status_code != 401
         except Exception as exc:  # noqa: BLE001
             out['bot_token_http'] = None
+            out['bot_token_ok'] = None
             out['bot_token_erro'] = f'{type(exc).__name__}: {str(exc)[:200]}'
 
     # 4. Saude dos CANAIS (inboxes): o payload de /inboxes traz
