@@ -71,10 +71,15 @@ def test_vigia_mostra_tools_quando_bot_consultou(app):
 def test_prompt_vigia_tem_regra_handoff_preguicoso(app):
     import pathlib
     src = pathlib.Path('app/services/chatbot_vigia.py').read_text()
-    assert 'HANDOFF PREGUIÇOSO' in src
+    assert 'HANDOFF PREGUIÇOSO EM VENDA' in src
+    assert 'HANDOFF PREGUIÇOSO EM CONSULTA DE PEDIDO' in src
     assert 'FERRAMENTAS USADAS' in src
     # exemplo concreto do caso #198
     assert 'entrega' in src.lower() and 'amanhã' in src
+    # regressao do falso positivo (12/06/2026 noite):
+    # reclamacao de entrega NAO e handoff preguicoso
+    assert 'não chegou' in src
+    assert 'reclamação' in src.lower() or 'reclamacao' in src.lower()
 
 
 def test_chatbot_responder_inclui_tools_usadas(app):
