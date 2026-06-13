@@ -969,6 +969,7 @@ TOOLS DISPONIVEIS — ACOES:
   Mapeamento → novo_status:
   * 'enviar' / 'motorista vai levar' / 'motorista chegou' / 'vai sair' / 'sair' / 'pronto pra sair' / 'separado' / 'pronto pra ir' → **novo_status='separar'** (NAO 'enviar' literal! 'separar' eh o que GERA O QR pro motorista — eh isso que o usuario chama de "enviado")
   * 'recebido' / 'entregue' / 'chegou na loja' / 'entreguei' / 'recebi' → **novo_status='receber'**
+    ⚠️ ENTREGA EXIGE FOTO (regra de 13/06/2026): nao da pra fechar recebimento por aqui (texto nao anexa foto). Ao receber 'recebi/entregue/chegou', oriente o usuario a abrir a ficha do pedido no app e confirmar COM A FOTO do pedido recebido (/pedidos/<id>). Se ele mandar a foto junto na mensagem, use anexar_foto_pedido pra guardar a foto, mas o recebimento em si (somar estoque + marcar recebido) acontece no app, com a foto. A tool 'receber' vai recusar e devolver esse mesmo aviso — repasse-o com gentileza.
   * 'cancelar' / 'cancelado' → novo_status='cancelar'
 
   IMPORTANTE: nas respostas em texto pro usuario, use APENAS 'pedido feito' / 'enviado' / 'recebido'. NUNCA fale 'separado', 'em_transporte', 'confirmado'. Quando geramos QR de saida (apos novo_status='separar'), diga 'pedido enviado — motorista escaneia o QR abaixo'. Se usuario nao mencionar pedido_id, consulte com consultar_pedido por loja + data primeiro.
