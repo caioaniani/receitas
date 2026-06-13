@@ -204,9 +204,18 @@
     <div class="w-100 mb-2">
         <label class="form-label fw-semibold" style="font-size:13px;">
             <i class="bi bi-camera"></i> Foto(s) do pedido recebido
+            <span class="text-danger">— obrigatória</span>
         </label>
-        <input type="file" name="fotos" class="form-control form-control-sm" accept="image/*" capture="environment" multiple>
-        <small class="text-muted">No celular abre a camera direto. Pode enviar mais de uma.</small>
+        {# Foto obrigatoria pra entregar (decisao do dono 13/06/2026). O
+           `required` so cai quando ja ha foto de conferencia de entrega
+           (caminho QR parcial) — nesse caso o backend ja aceita; nos demais
+           exige anexar. A validacao REAL esta no executor (_executar_
+           recebimento_pedido), o `required` aqui e so pra evitar o round-trip. #}
+        <input type="file" name="fotos" class="form-control form-control-sm"
+               accept="image/*" capture="environment" multiple
+               {% if not fotos_conf['entrega'] %}required{% endif %}>
+        <small class="text-muted">No celular abre a câmera direto. Pelo menos
+            1 foto é obrigatória pra confirmar a entrega.</small>
     </div>
     <button type="submit" class="btn btn-success btn-sm">
         <i class="bi bi-check-all"></i> Confirmar Recebimento
