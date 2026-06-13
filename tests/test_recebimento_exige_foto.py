@@ -20,8 +20,7 @@ def _pedido_em_transporte(app):
     p = PedidoLoja(loja_id=loja.id, status='em_transporte')
     db.session.add(p)
     db.session.flush()
-    item = PedidoItem(pedido_id=p.id, receita_id=r.id, quantidade=6,
-                      nome_item='Pain au Chocolat')
+    item = PedidoItem(pedido_id=p.id, receita_id=r.id, quantidade=6)
     db.session.add(item)
     db.session.commit()
     return p, item
