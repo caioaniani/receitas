@@ -61,14 +61,22 @@ def test_executar_recebimento_pedido_sobe_loja(app, admin_user, loja, catalogo):
     """Recebimento sem divergencia sobe EstoqueLoja + status entregue."""
     from app.blueprints.pedidos.routes import _executar_recebimento_pedido
     from app.extensions import db
-    from app.models import EstoqueLoja, PedidoItem, PedidoLoja
+    from app.models import EstoqueLoja, PedidoItem, PedidoItemFoto, PedidoLoja
     p = PedidoLoja(loja_id=loja.id, status='em_transporte',
                    data_entrega=date.today())
     db.session.add(p)
     db.session.flush()
-    db.session.add(PedidoItem(pedido_id=p.id,
-                               receita_id=catalogo['receita'].id,
-                               quantidade=3))
+    item = PedidoItem(pedido_id=p.id,
+                      receita_id=catalogo['receita'].id,
+                      quantidade=3)
+    db.session.add(item)
+    db.session.flush()
+    # Caminho QR: a entrega exige foto de conferencia (etapa=entrega) — o
+    # motorista fotografa cada item antes do PIN (regra de 13/06/2026).
+    db.session.add(PedidoItemFoto(
+        pedido_item_id=item.id, etapa='entrega',
+        imagem_url='http://x/e.jpg',
+        imagem_storage_path=f'/conferencia/{p.id}/{item.id}_entrega.jpg'))
     db.session.commit()
 
     ok, msg, divergencias = _executar_recebimento_pedido(
