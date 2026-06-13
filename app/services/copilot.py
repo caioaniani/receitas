@@ -2520,6 +2520,20 @@ def executar_mudar_status_pedido(params, user):
         return {'ok': False,
                 'erro': f'Pedido #{pid} ja esta {STATUS_LABEL.get(p.status, p.status)}, nao pode {ACAO_LABEL.get(novo, novo)} novamente.'}
 
+    # ENTREGA EXIGE FOTO (decisao do dono 13/06/2026). O recebimento por
+    # texto (Slack/WhatsApp) nao tem como anexar foto, entao o copilot NAO
+    # fecha entrega — redireciona pro app, onde a foto e obrigatoria
+    # (_executar_recebimento_pedido valida). Sem isso o copilot seria um
+    # furo na regra (fechava entrega sem comprovacao). NAO marca status
+    # nem mexe em estoque — so devolve a orientacao.
+    if novo == 'receber':
+        return {'ok': False, 'redirecionar': True,
+                'pedido_id': pid, 'url': f'/pedidos/{pid}',
+                'erro': (f'Pra confirmar o recebimento do pedido #{pid} '
+                         'agora é obrigatório anexar foto do pedido recebido. '
+                         'Abra a ficha do pedido no app e confirme com a foto — '
+                         f'/pedidos/{pid}')}
+
     try:
         # ENVIAR: baixa estoque da industria
         if novo == 'enviar':
