@@ -57,3 +57,47 @@ def test_mudar_status_outro_nao_gera_qr(app, admin_user, loja, catalogo):
     assert out['ok'] is True
     assert out.get('qr_url') is None
     assert PedidoQRCode.query.filter_by(pedido_id=p.id).count() == 0
+
+
+def test_copilot_receber_redireciona_pro_app_sem_fechar(app, admin_user, loja, catalogo):
+    """Entrega exige foto (decisao do dono 13/06/2026). O copilot (texto)
+    nao anexa foto, entao 'receber' NAO fecha a entrega — redireciona pro
+    app. Garante que: nao marca entregue, nao soma estoque da loja, e
+    devolve a orientacao com o link da ficha."""
+    from datetime import date
+
+    from app.extensions import db
+    from app.models import EstoqueLoja, PedidoItem, PedidoLoja
+    from app.services import copilot
+
+    p = PedidoLoja(loja_id=loja.id, status='em_transporte',
+                   data_entrega=date.today())
+    db.session.add(p)
+    db.session.flush()
+    db.session.add(PedidoItem(pedido_id=p.id,
+                              receita_id=catalogo['receita'].id,
+                              quantidade=4))
+    db.session.commit()
+
+    with app.test_request_context():
+        out = copilot.executar_mudar_status_pedido(
+            {'pedido_id': p.id, 'novo_status': 'receber'},
+            admin_user,
+        )
+    # Recusou e orientou
+    assert out['ok'] is False
+    assert out.get('redirecionar') is True
+    assert f'/pedidos/{p.id}' in out['erro']
+    assert 'foto' in out['erro'].lower()
+    # NAO mexeu no pedido nem no estoque
+    db.session.refresh(p)
+    assert p.status == 'em_transporte'
+    assert EstoqueLoja.query.filter_by(
+        loja_id=loja.id, receita_id=catalogo['receita'].id).count() == 0
+
+
+def test_copilot_prompt_avisa_foto_obrigatoria_no_receber(app):
+    """O prompt do copilot orienta sobre a foto obrigatoria no recebimento."""
+    import pathlib
+    src = pathlib.Path('app/services/copilot.py').read_text()
+    assert 'ENTREGA EXIGE FOTO' in src
