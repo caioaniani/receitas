@@ -697,6 +697,25 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
 
     recebidos_map = recebidos_map or {}
     fotos = fotos or []
+
+    # REGRA (decisao do dono 13/06/2026): entrega exige PELO MENOS 1 foto de
+    # comprovacao — nao se entrega "no escuro". Tres fontes contam como prova,
+    # checadas nesta ordem pra NAO quebrar o caminho do QR:
+    #   1. `fotos` novas deste recebimento manual (upload do admin/loja);
+    #   2. PedidoItemFoto da conferencia de ENTREGA — o caminho QR: o motorista
+    #      fotografa cada item antes do PIN, ja salvas quando este executor roda
+    #      (o handshake NAO passa `fotos` aqui, as dele sao PedidoItemFoto);
+    #   3. FotoRecebimento ja anexada antes (tentativa anterior).
+    # Sem nenhuma das tres → recusa, e a rota mostra a mensagem no flash.
+    if not fotos:
+        from app.services.conferencia import fotos_presentes
+        tem_conferencia = bool(fotos_presentes(pedido, 'entrega'))
+        tem_recebimento = FotoRecebimento.query.filter_by(
+            pedido_id=pedido.id).first() is not None
+        if not tem_conferencia and not tem_recebimento:
+            return False, ('Entrega exige pelo menos 1 foto de comprovação. '
+                           'Anexe a foto do pedido recebido e confirme de novo.'), []
+
     divergencias = []
 
     for item in pedido.itens:
