@@ -84,7 +84,7 @@ def test_obter_linha_loja_idempotente(app, loja):
 def test_recebimento_soma_estados_numa_linha(app, loja, admin_user):
     from app.blueprints.pedidos.routes import _executar_recebimento_pedido
     from app.extensions import db
-    from app.models import EstoqueLoja, PedidoItem, PedidoLoja
+    from app.models import EstoqueLoja, PedidoItem, PedidoItemFoto, PedidoLoja
 
     with app.app_context():
         r = _receita('Croissant')
@@ -93,10 +93,17 @@ def test_recebimento_soma_estados_numa_linha(app, loja, admin_user):
         ped = PedidoLoja(loja_id=loja.id, status='em_transporte')
         db.session.add(ped)
         db.session.flush()
-        db.session.add(PedidoItem(pedido_id=ped.id, receita_id=r.id,
-                                  quantidade=5, estado=None))
+        it1 = PedidoItem(pedido_id=ped.id, receita_id=r.id,
+                         quantidade=5, estado=None)
+        db.session.add(it1)
         db.session.add(PedidoItem(pedido_id=ped.id, receita_id=r.id,
                                   quantidade=3, estado='backup'))
+        db.session.flush()
+        # Foto de entrega: entrega exige comprovacao (regra 13/06/2026).
+        db.session.add(PedidoItemFoto(
+            pedido_item_id=it1.id, etapa='entrega',
+            imagem_url='http://x/e.jpg',
+            imagem_storage_path=f'/conferencia/{ped.id}/{it1.id}_entrega.jpg'))
         db.session.commit()
 
         ok, _msg, _div = _executar_recebimento_pedido(ped, admin_user)
