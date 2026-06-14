@@ -332,6 +332,14 @@ def responder(historico):
     except ImportError:
         return {'acao': 'handoff', 'texto': _FALLBACK, 'motivo': 'lib anthropic ausente'}
 
+    # Fora do horario do chat (06-20 BRT): o bot avisa UMA VEZ por janela e nao
+    # chama a API. Conta como `acao=responder` (nao e handoff — ninguem pega
+    # agora), mas marca tools_usadas pra o auditor entender que NAO foi
+    # decisao de prompt e sim corte horario.
+    if _fora_horario_chat() and not _ja_avisou_fora_horario(historico):
+        return {'acao': 'responder', 'texto': _AVISO_FORA_HORARIO,
+                'tools_usadas': ['fora_horario_chat']}
+
     messages = _build_messages(historico)
     if not messages:
         return {'acao': 'handoff', 'texto': _FALLBACK, 'motivo': 'sem mensagem'}
