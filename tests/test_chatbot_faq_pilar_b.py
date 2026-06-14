@@ -115,49 +115,70 @@ def test_tool_consultar_ingredientes_registrada(app):
         assert out.get('receita') == 'Pão Teste'
 
 
-# -------- Detector fora-horário do chat (06-20 BRT) -----------------------
+# -------- Aviso de fora-horário no handoff (06-20 BRT) --------------------
+# Decisão do dono 14/06/2026: o bot NÃO bloqueia mais fora do horário —
+# continua respondendo normal (catálogo, link). Só quando precisa fazer
+# HANDOFF é que o aviso é injetado no texto (cliente saber que ninguém
+# vai pegar agora). Verifica direto a função `_texto_handoff_com_horario`
+# pra evitar mock do LLM.
 
-def test_fora_horario_dispara_aviso(app):
+def test_handoff_fora_horario_prepend_aviso():
+    from app.services import chatbot
+    with patch('app.services.chatbot._fora_horario_chat', return_value=True):
+        out = chatbot._texto_handoff_com_horario(
+            'Vou te passar para a Elô continuar o atendimento. 💛')
+    assert '06:00' in out
+    assert '20:00' in out
+    # Texto original preservado depois do aviso
+    assert 'Vou te passar para a Elô' in out
+
+
+def test_handoff_dentro_horario_nao_muda_texto():
+    from app.services import chatbot
+    with patch('app.services.chatbot._fora_horario_chat', return_value=False):
+        original = 'Vou te passar para a Elô continuar o atendimento. 💛'
+        out = chatbot._texto_handoff_com_horario(original)
+    assert out == original
+
+
+def test_handoff_fora_horario_idempotente():
+    """Se o LLM já escreveu o aviso (mensagem já contém '06:00'), NÃO
+    duplica — senão o cliente recebe a mesma frase 2x."""
+    from app.services import chatbot
+    msg_llm_ja_avisou = (
+        'Estamos fora do horário (06:00 às 20:00). Já anotei aqui '
+        'e respondemos pela manhã, tá? 🙂')
+    with patch('app.services.chatbot._fora_horario_chat', return_value=True):
+        out = chatbot._texto_handoff_com_horario(msg_llm_ja_avisou)
+    # NÃO duplicou: a frase aparece exatamente 1 vez (1 '06:00' só)
+    assert out.count('06:00') == 1
+
+
+def test_handoff_via_fallback_tambem_avisa_fora_horario(app):
+    """Fallback de erro (ex: sem API key, lib ausente) também é um handoff
+    e o cliente precisa do aviso. Sem isso, erro técnico fora de horário
+    devolveria 'já te passo para um atendente' sem avisar a janela."""
     from app.services import chatbot
     with app.app_context():
-        # Hora local mock: 23h BRT
         with patch('app.services.chatbot._fora_horario_chat', return_value=True):
-            out = chatbot.responder([
-                {'role': 'user', 'content': 'oi tem cesta?'},
-            ])
-        assert out['acao'] == 'responder'
-        assert '06:00 às 20:00' in out['texto']
-        assert out.get('tools_usadas') == ['fora_horario_chat']
-
-
-def test_fora_horario_dedupe_nao_repete(app):
-    """Se o assistant já avisou nesta janela, próxima msg do cliente NÃO
-    recebe o aviso de novo — deixa o flow processar normal (ou cair em
-    fallback de outro motivo, mas não aviso duplicado)."""
-    from app.services import chatbot
-    historico = [
-        {'role': 'user', 'content': 'oi'},
-        {'role': 'assistant', 'content': chatbot._AVISO_FORA_HORARIO},
-        {'role': 'user', 'content': 'mas eu queria saber agora'},
-    ]
-    with app.app_context():
-        # Hora fora, mas ja avisou: nao deve retornar pelo branch fora-horario.
-        with patch('app.services.chatbot._fora_horario_chat', return_value=True), \
-             patch('app.services.chatbot.disponivel', return_value=False):
-            # disponivel=False forca FALLBACK no caminho normal — assim eu provo
-            # que o codigo PASSOU do branch fora-horario (chegou no fallback).
-            out = chatbot.responder(historico)
-        # Caiu no fallback de chave, NAO no aviso de fora-horario.
-        assert '06:00 às 20:00' not in out['texto']
-
-
-def test_dentro_horario_nao_aciona_aviso(app):
-    from app.services import chatbot
-    with app.app_context():
-        with patch('app.services.chatbot._fora_horario_chat', return_value=False), \
-             patch('app.services.chatbot.disponivel', return_value=False):
+            # Sem ANTHROPIC_API_KEY → cai no fallback de chave
             out = chatbot.responder([{'role': 'user', 'content': 'oi'}])
-        assert '06:00 às 20:00' not in out['texto']
+        assert out['acao'] == 'handoff'
+        assert '06:00' in out['texto']
+
+
+def test_bot_continua_respondendo_fora_horario(app):
+    """A regra antiga (bloquear bot fora de horário) FOI REMOVIDA — o bot
+    continua processando. Sem ANTHROPIC_API_KEY, vai cair em handoff de
+    fallback (com aviso), mas o caminho NÃO é mais o early-return de
+    fora-horário. Confirmação: motivo NÃO é 'fora_horario_chat'."""
+    from app.services import chatbot
+    with app.app_context():
+        with patch('app.services.chatbot._fora_horario_chat', return_value=True):
+            out = chatbot.responder([{'role': 'user', 'content': 'oi'}])
+        # Não existe mais o caminho 'tools_usadas=[fora_horario_chat]'
+        assert out.get('tools_usadas') != ['fora_horario_chat']
+        assert out.get('motivo') == 'sem ANTHROPIC_API_KEY'
 
 
 def test_fora_horario_real_calcula_pela_hora_local(app):
