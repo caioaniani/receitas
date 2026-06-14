@@ -653,6 +653,40 @@ TOOL_CONSULTAR_CARTINHAS = {
     },
 }
 
+TOOL_CONSULTAR_VIGIA = {
+    "name": "consultar_vigia",
+    "description": (
+        "Le o que a Vigia do chatbot do site flagrou — reclamacoes "
+        "operacionais, handoffs preguicosos, 'bot delirou', clientes "
+        "esperando humano. Cada alerta que chega no WhatsApp do dono "
+        "vem daqui. Use quando o dono perguntar 'qual foi a reclamacao', "
+        "'o que aconteceu na conversa X', 'me da detalhes do alerta', "
+        "'quem reclamou hoje'. Default: ultimos 1 dia, gravidade alta. "
+        "Passe conv_id pra ver TODOS os vereditos de uma conversa "
+        "especifica (com a mensagem do cliente que disparou cada um). "
+        "Passe `palavra` pra filtrar por texto na mensagem do cliente "
+        "ou no motivo da vigia (ex: 'reclamacao', 'esperando', 'cesta')."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "dias": {"type": "integer", "minimum": 1, "maximum": 14,
+                      "description": "Janela em dias. Default 1 (ultimas 24h)."},
+            "gravidade": {"type": ["string", "null"],
+                          "enum": ["alta", "media", None],
+                          "description": ("'alta' (default), 'media' ou null pra "
+                                          "TODOS — incluindo 'baixa'/sem gravidade.")},
+            "conv_id": {"type": ["string", "null"],
+                         "description": ("ID da conversa no Chatwoot. Quando setado, "
+                                         "ignora `dias`/`gravidade` e retorna todo o "
+                                         "historico de vereditos dessa conversa.")},
+            "palavra": {"type": ["string", "null"],
+                         "description": ("Filtro de texto (substring, case-insensitive) "
+                                         "em mensagem_cliente OU motivo_vigia.")},
+        },
+    },
+}
+
 TOOLS = [
     # Existentes
     TOOL_CRIAR_PEDIDO, TOOL_EDITAR_PEDIDO, TOOL_CONSULTAR_PEDIDO, TOOL_CONSULTAR_ESTOQUE,
