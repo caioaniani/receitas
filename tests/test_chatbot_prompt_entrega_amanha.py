@@ -61,3 +61,24 @@ def test_prompt_distingue_pedido_novo_vs_existente_em_entrega():
         'distincao novo/existente perdida'
     assert ('JÁ EXISTENTE' in p or 'ja existente' in p.lower()
             or 'já existente' in p.lower())
+
+
+def test_prompt_esgota_ferramentas_antes_de_handoff():
+    """Auditoria 13/06/2026: handoff preguicoso em rastreamento/pagamento.
+    O prompt agora obriga esgotar ferramentas antes de transferir."""
+    p = _prompt()
+    assert 'ANTES DE TRANSFERIR' in p
+    # rastreamento: pedir numero + consultar_pedido antes de handoff
+    assert 'consultar_pedido' in p
+    assert 'cadê meu pedido' in p.lower() or 'rastreamento' in p.lower()
+    # pagamento: gerar link em vez de transferir
+    assert 'como pago' in p.lower() or 'link de pagamento' in p.lower()
+
+
+def test_prompt_fecha_venda_com_link_proativo():
+    """Auditoria 13/06/2026: 3 vendas abandonadas. O prompt manda gerar o
+    link assim que o pedido estiver definido, sem esperar."""
+    p = _prompt()
+    assert 'FECHAR A VENDA' in p
+    assert 'gerar_link_carrinho' in p
+    assert 'esfria' in p.lower() or 'esfriar' in p.lower()
