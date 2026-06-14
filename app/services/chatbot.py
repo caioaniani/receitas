@@ -116,6 +116,24 @@ TOOLS = [
         },
     },
     {
+        'name': 'consultar_ingredientes',
+        'description': ('Consulta a receita REAL do produto e devolve a lista '
+                        'de ingredientes (com percentual). Use SOMENTE em '
+                        'pergunta informativa ("tem leite no croissant?", '
+                        '"esse pão tem ovo?"). NÃO use se o cliente disser que '
+                        'TEM alergia/intolerância — alergia = handoff direto '
+                        '(ver seção ALERGIA do prompt).'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'nome_produto': {
+                    'type': 'string',
+                    'description': 'nome do produto, ex: "Sourdough Tradicional"'},
+            },
+            'required': ['nome_produto'],
+        },
+    },
+    {
         'name': 'consultar_pedido',
         'description': 'Consulta status, itens e a DATA DE ENTREGA real (a '
                        'agendada) de um pedido pelo número. Use pra dar a data '
