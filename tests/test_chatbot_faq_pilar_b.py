@@ -286,3 +286,97 @@ def test_prompt_encomenda_evento_humano():
         bloco_idx = PROMPT.lower().find('evento')
     bloco = PROMPT[bloco_idx:bloco_idx + 400]
     assert 'transferir_para_humano' in bloco
+
+
+# -------- Tool nova: editar_cartinha_pedido (Mudança 2) -------------------
+
+def test_editar_cartinha_cria_quando_nao_existe(app):
+    from app.extensions import db
+    from app.models import CartinhaEntrega
+    from app.services.bot_tools import editar_cartinha_pedido
+    with app.app_context():
+        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
+                   return_value={'code': 'P12345', 'number': '12345'}):
+            out = editar_cartinha_pedido('P12345', 'Feliz aniversário, mãe! ❤️')
+        assert out.get('ok') is True
+        assert out.get('acao') == 'criada'
+        assert out.get('pedido') == 'P12345'
+        c = CartinhaEntrega.query.filter_by(pedido_code='P12345').first()
+        assert c is not None
+        assert c.texto == 'Feliz aniversário, mãe! ❤️'
+        # Bot não é humano — atualizado_por NULL
+        assert c.atualizado_por is None
+        CartinhaEntrega.query.delete()
+        db.session.commit()
+
+
+def test_editar_cartinha_atualiza_quando_existe(app):
+    from app.extensions import db
+    from app.models import CartinhaEntrega
+    from app.services.bot_tools import editar_cartinha_pedido
+    with app.app_context():
+        db.session.add(CartinhaEntrega(pedido_code='P777', texto='Texto antigo'))
+        db.session.commit()
+        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
+                   return_value={'code': 'P777'}):
+            out = editar_cartinha_pedido('P777', 'Texto novo')
+        assert out.get('ok') is True
+        assert out.get('acao') == 'atualizada'
+        c = CartinhaEntrega.query.filter_by(pedido_code='P777').first()
+        assert c.texto == 'Texto novo'
+        CartinhaEntrega.query.delete()
+        db.session.commit()
+
+
+def test_editar_cartinha_rejeita_pedido_inexistente(app):
+    """Bot não pode gravar cartinha pra pedido fake — validar contra VNDA."""
+    from app.services.bot_tools import editar_cartinha_pedido
+    with app.app_context():
+        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
+                   return_value=None):
+            out = editar_cartinha_pedido('99999', 'oi')
+        assert out.get('erro') == 'pedido_nao_encontrado'
+
+
+def test_editar_cartinha_rejeita_vazios(app):
+    from app.services.bot_tools import editar_cartinha_pedido
+    with app.app_context():
+        assert editar_cartinha_pedido('', 'oi').get('erro') == 'numero_pedido vazio'
+        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
+                   return_value={'code': 'P1'}):
+            assert editar_cartinha_pedido('P1', '   ').get('erro') == 'texto_vazio'
+
+
+def test_editar_cartinha_vnda_indisponivel(app):
+    """VNDA caiu na hora do pedido: NÃO grava — bot ficaria com cartinha
+    pra pedido que talvez não exista. Devolve erro pro bot transferir."""
+    from app.services.bot_tools import editar_cartinha_pedido
+    with app.app_context():
+        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
+                   side_effect=ConnectionError('timeout')):
+            out = editar_cartinha_pedido('P1', 'oi')
+        assert out.get('erro') == 'vnda_indisponivel'
+
+
+def test_tool_editar_cartinha_registrada(app):
+    from app.services.chatbot import TOOLS, _executar_tool
+    nomes = [t['name'] for t in TOOLS]
+    assert 'editar_cartinha_pedido' in nomes
+    # Roteamento do executor
+    with app.app_context():
+        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
+                   return_value={'code': 'PX'}):
+            out = _executar_tool('editar_cartinha_pedido',
+                                  {'numero_pedido': 'PX', 'texto_cartinha': 'Oi'})
+        assert out.get('ok') is True
+
+
+def test_prompt_cartinha_pedido_existente_agora_e_tool():
+    """Regressão: a versão antiga do prompt dizia 'cartinha em pedido feito =
+    humano'. Foi substituída por orientação de usar a tool."""
+    from app.services.chatbot_prompt import PROMPT
+    # A tool aparece como caminho oficial
+    assert 'editar_cartinha_pedido' in PROMPT
+    # E a regra antiga 'voce nao consegue' NÃO existe mais
+    assert 'você não consegue' not in PROMPT.lower() or \
+           'cartinha' not in PROMPT.lower().split('você não consegue')[0][-200:]
