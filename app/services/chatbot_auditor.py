@@ -318,7 +318,7 @@ def auditar_periodo(inicio, fim, *, enviar=True, forcar_envio=False,
         logger.exception('auditor: Sonnet falhou')
         return {'erro': str(exc)}
 
-    mensagem = _montar_mensagem(rel, inicio, fim, titulo=titulo)
+    mensagem = _montar_mensagem(rel, inicio, fim, titulo=titulo, dados=dados)
     resultado = {'ok': True, 'rel': rel, 'mensagem': mensagem,
                  'dados': dados, 'enviado': False}
 
