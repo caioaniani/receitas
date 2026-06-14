@@ -246,6 +246,58 @@ def consultar_ingredientes(nome_produto):
         return {'erro': str(exc)}
 
 
+def editar_cartinha_pedido(numero_pedido, texto_cartinha):
+    """UPSERTA a cartinha de um pedido do site no NOSSO sistema
+    (CartinhaEntrega). Aparece pro time de produção/embalagem na tela
+    /entregas (manual sobrescreve a cartinha original do VNDA).
+
+    Validacao: confirma que o pedido EXISTE no VNDA antes de gravar —
+    senao bot poderia criar cartinha pra pedido fake. Retorna:
+      {'ok': True, 'pedido': X, 'acao': 'criada'|'atualizada',
+       'texto': str, 'aviso_se_diferente'?: str}
+      {'erro': 'pedido_nao_encontrado'} — pedido nao existe no VNDA
+      {'erro': 'texto_vazio'} — cliente nao informou cartinha
+      {'erro': str} — falha generica
+    """
+    from app.extensions import db
+    from app.models import CartinhaEntrega
+    from app.utils import agora as _agora
+    try:
+        numero = str(numero_pedido or '').strip()
+        texto = (texto_cartinha or '').strip()
+        if not numero:
+            return {'erro': 'numero_pedido vazio'}
+        if not texto:
+            return {'erro': 'texto_vazio'}
+        # Confirma pedido no VNDA — evita gravar cartinha de pedido fake.
+        try:
+            pedido = vnda.buscar_pedido(numero)
+        except Exception:  # noqa: BLE001
+            logger.exception('editar_cartinha_pedido: VNDA falhou nro=%r', numero)
+            return {'erro': 'vnda_indisponivel'}
+        if not pedido or not isinstance(pedido, dict):
+            return {'erro': 'pedido_nao_encontrado'}
+        code = str(pedido.get('code') or pedido.get('number') or numero).strip()
+        c = CartinhaEntrega.query.filter_by(pedido_code=code).first()
+        existia = c is not None
+        if not c:
+            c = CartinhaEntrega(pedido_code=code)
+            db.session.add(c)
+        c.texto = texto
+        c.atualizado_em = _agora()
+        c.atualizado_por = None  # bot — sem usuario humano
+        db.session.commit()
+        return {
+            'ok': True,
+            'pedido': code,
+            'acao': 'atualizada' if existia else 'criada',
+            'texto': texto,
+        }
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('editar_cartinha_pedido falhou nro=%r', numero_pedido)
+        return {'erro': str(exc)}
+
+
 def gerar_link_carrinho(itens):
     """itens: lista de dicts {'sku': str, 'qtd': int}. Monta o link de
     carrinho do VNDA: /carrinho?itens=SKU:qtd,SKU:qtd (parametro 'itens' em
