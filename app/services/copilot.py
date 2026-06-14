@@ -687,6 +687,52 @@ TOOL_CONSULTAR_VIGIA = {
     },
 }
 
+TOOL_CONSULTAR_CONVERSA_CHATWOOT = {
+    "name": "consultar_conversa_chatwoot",
+    "description": (
+        "Le o HISTORICO de uma conversa especifica no Chatwoot — as "
+        "mensagens reais entre cliente, bot e atendente. Use quando o "
+        "dono perguntar 'me mostra a conversa #X', 'o que foi falado', "
+        "'o que o cliente disse'. O conv_id vem do alerta da Vigia "
+        "(ex: 'conversa #198') ou do consultar_vigia."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "conv_id": {"type": "string",
+                         "description": "ID da conversa no Chatwoot."},
+            "limite": {"type": "integer", "minimum": 1, "maximum": 50,
+                        "description": ("Quantas mensagens recentes trazer. "
+                                        "Default 20.")},
+        },
+        "required": ["conv_id"],
+    },
+}
+
+TOOL_LISTAR_CONVERSAS_CHATWOOT = {
+    "name": "listar_conversas_chatwoot",
+    "description": (
+        "Lista conversas ATIVAS no Chatwoot — quem ta na fila do bot "
+        "(status=pending) ou quem ta esperando atendente humano "
+        "(status=open). Use quando o dono perguntar 'quem ta esperando', "
+        "'tem alguem na fila', 'lista as conversas paradas'. Retorna "
+        "id, nome do contato e ha quantos minutos a conversa ta parada."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "status": {"type": "string",
+                        "enum": ["pending", "open"],
+                        "description": ("'pending' = aguardando bot, "
+                                        "'open' = humano assumiu. Default 'open' "
+                                        "(o que mais importa: cliente esperando atendente).")},
+            "min_minutos": {"type": "integer", "minimum": 0, "maximum": 1440,
+                             "description": ("So lista conversa parada ha pelo menos "
+                                             "X minutos. Default 0 (todas).")},
+        },
+    },
+}
+
 TOOLS = [
     # Existentes
     TOOL_CRIAR_PEDIDO, TOOL_EDITAR_PEDIDO, TOOL_CONSULTAR_PEDIDO, TOOL_CONSULTAR_ESTOQUE,
