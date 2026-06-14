@@ -288,9 +288,15 @@ def _registrar(resultado, conv_id, nome_contato, ultima_mensagem_cliente,
     })
     # Persiste (best-effort).
     try:
+        import json as _json
+
         from app.extensions import db
         from app.models import VigiaVeredito
         rb = resultado_bot or {}
+        tools = rb.get('tools_usadas')
+        tools_json = (_json.dumps(list(tools), ensure_ascii=False)
+                      if isinstance(tools, (list, tuple))
+                      else None)
         db.session.add(VigiaVeredito(
             conv_id=str(conv_id) if conv_id is not None else None,
             cliente=(nome_contato or '')[:200] or None,
@@ -301,6 +307,7 @@ def _registrar(resultado, conv_id, nome_contato, ultima_mensagem_cliente,
             gravidade=veredicto.get('gravidade'),
             motivo_vigia=(veredicto.get('motivo') or '')[:1000] or None,
             enviado_whatsapp=bool(resultado.get('enviado')),
+            tools_usadas=tools_json,
         ))
         db.session.commit()
     except Exception:  # noqa: BLE001
