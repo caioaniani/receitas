@@ -193,6 +193,30 @@ TOOLS = [
         },
     },
     {
+        'name': 'editar_cartinha_pedido',
+        'description': ('Cria ou ALTERA a cartinha/mensagem de um pedido JÁ '
+                        'FEITO no site. A cartinha aparece pra equipe na tela '
+                        'de impressão de entregas — a versão manual sobrescreve '
+                        'a do site. Use quando o cliente disser "adiciona uma '
+                        'cartinha", "muda a mensagem", "esqueci de pôr a '
+                        'cartinha". PEÇA O NÚMERO DO PEDIDO + o TEXTO da '
+                        'cartinha (palavras exatas) antes de chamar. NÃO use '
+                        'pra produto/pedido novo — nesse caso o cliente '
+                        'preenche no checkout do site.'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'numero_pedido': {
+                    'type': 'string',
+                    'description': 'numero do pedido do site (ex: "12345")'},
+                'texto_cartinha': {
+                    'type': 'string',
+                    'description': 'texto exato da cartinha que o cliente quer'},
+            },
+            'required': ['numero_pedido', 'texto_cartinha'],
+        },
+    },
+    {
         'name': 'gerar_link_carrinho',
         'description': 'Monta o link do carrinho a partir dos itens (SKU + '
                        'quantidade). Use os SKUs vindos do consultar_produtos. '
