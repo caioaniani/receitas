@@ -3644,6 +3644,157 @@ def _read_consultar_desperdicio(params, user):
     return {'texto': '\n'.join(linhas)}
 
 
+def _read_consultar_vigia(params, user):
+    """Le VigiaVeredito — onde a vigia do chatbot persiste tudo que viu
+    (reclamacoes, handoff preguicoso, 'bot delirou'). Permite o dono pedir
+    detalhes do alerta que recebeu via WhatsApp."""
+    from app.models import VigiaVeredito
+
+    conv_id = (params.get('conv_id') or '').strip() or None
+    palavra = (params.get('palavra') or '').strip() or None
+
+    q = VigiaVeredito.query
+    if conv_id:
+        q = q.filter(VigiaVeredito.conv_id == conv_id)
+    else:
+        try:
+            dias = int(params.get('dias') or 1)
+        except (TypeError, ValueError):
+            dias = 1
+        dias = max(1, min(14, dias))
+        desde = agora() - timedelta(days=dias)
+        q = q.filter(VigiaVeredito.criado_em >= desde)
+        # Default = alta. None/'' explicito = todas. 'media' = so media.
+        if 'gravidade' in params:
+            grav = params.get('gravidade')
+            if grav:  # 'alta' ou 'media'
+                q = q.filter(VigiaVeredito.gravidade == grav)
+        else:
+            q = q.filter(VigiaVeredito.gravidade == 'alta')
+
+    if palavra:
+        like = f'%{palavra.lower()}%'
+        from sqlalchemy import func, or_
+        q = q.filter(or_(
+            func.lower(VigiaVeredito.mensagem_cliente).like(like),
+            func.lower(VigiaVeredito.motivo_vigia).like(like),
+            func.lower(VigiaVeredito.cliente).like(like),
+        ))
+
+    regs = q.order_by(VigiaVeredito.criado_em.desc()).limit(40).all()
+    if not regs:
+        return {'texto': 'Vigia: nenhum veredito bate com esse filtro.'}
+
+    base_cw = (current_app.config.get('CHATWOOT_URL') or '').rstrip('/')
+    acc = (current_app.config.get('CHATWOOT_ACCOUNT_ID') or '').strip()
+
+    def _link(cid):
+        if base_cw and acc and cid:
+            return f'{base_cw}/app/accounts/{acc}/conversations/{cid}'
+        return ''
+
+    linhas = [f'**Vigia ({len(regs)} verediltos):**', '']
+    for r in regs:
+        quando = r.criado_em.strftime('%d/%m %H:%M') if r.criado_em else '?'
+        grav = (r.gravidade or '–').upper()
+        cliente = r.cliente or '(sem nome)'
+        cid_txt = f' · conv #{r.conv_id}' if r.conv_id else ''
+        alerta = ' ⚠️' if r.alerta else ''
+        linhas.append(f'**{quando} · {grav}{alerta} · {cliente}{cid_txt}**')
+        if r.mensagem_cliente:
+            msg = r.mensagem_cliente[:280].replace('\n', ' ')
+            linhas.append(f'  Cliente: "{msg}"')
+        if r.bot_acao or r.bot_motivo:
+            acao = r.bot_acao or '?'
+            motivo = (r.bot_motivo or '').replace('\n', ' ')[:200]
+            sep = ' — ' if motivo else ''
+            linhas.append(f'  Bot: {acao}{sep}{motivo}')
+        if r.motivo_vigia:
+            mv = r.motivo_vigia[:280].replace('\n', ' ')
+            linhas.append(f'  Vigia: {mv}')
+        link = _link(r.conv_id)
+        if link:
+            linhas.append(f'  {link}')
+        linhas.append('')
+    return {'texto': '\n'.join(linhas).rstrip()}
+
+
+def _read_consultar_conversa_chatwoot(params, user):
+    """Le o historico real de uma conversa especifica no Chatwoot."""
+    from app.services import chatwoot
+
+    conv_id = (params.get('conv_id') or '').strip()
+    if not conv_id:
+        return {'texto': 'Erro: conv_id e obrigatorio.'}
+    try:
+        limite = int(params.get('limite') or 20)
+    except (TypeError, ValueError):
+        limite = 20
+    limite = max(1, min(50, limite))
+
+    historico = chatwoot.buscar_historico(conv_id, limite=limite)
+    if not historico:
+        return {'texto': (f'Conversa #{conv_id}: sem mensagens (ou Chatwoot '
+                          'nao configurado / token sem acesso).')}
+
+    base_cw = (current_app.config.get('CHATWOOT_URL') or '').rstrip('/')
+    acc = (current_app.config.get('CHATWOOT_ACCOUNT_ID') or '').strip()
+    link = (f'{base_cw}/app/accounts/{acc}/conversations/{conv_id}'
+            if base_cw and acc else '')
+
+    linhas = [f'**Conversa #{conv_id} ({len(historico)} msgs):**']
+    if link:
+        linhas.append(link)
+    linhas.append('')
+    for m in historico:
+        role = m.get('role') or '?'
+        quem = 'Cliente' if role == 'user' else 'Bot/Atendente'
+        content = (m.get('content') or '').replace('\n', ' ')[:500]
+        imgs = m.get('imagens') or []
+        prefixo_img = f' [+{len(imgs)} imagem(s)]' if imgs else ''
+        linhas.append(f'- **{quem}**: {content}{prefixo_img}')
+    return {'texto': '\n'.join(linhas)}
+
+
+def _read_listar_conversas_chatwoot(params, user):
+    """Lista conversas paradas no Chatwoot — fila do bot (pending) ou
+    clientes esperando atendente humano (open)."""
+    from app.services import chatwoot
+
+    status = (params.get('status') or 'open').strip().lower()
+    if status not in ('pending', 'open'):
+        status = 'open'
+    try:
+        min_min = int(params.get('min_minutos') or 0)
+    except (TypeError, ValueError):
+        min_min = 0
+    min_min = max(0, min(1440, min_min))
+
+    paradas = chatwoot.listar_conversas_paradas(
+        min_minutos=min_min, status=status, limite=50)
+    if not paradas:
+        rotulo = ('na fila do bot' if status == 'pending'
+                  else 'esperando atendente')
+        return {'texto': f'Nenhuma conversa {rotulo}'
+                         + (f' ha mais de {min_min} min' if min_min else '')
+                         + '.'}
+
+    base_cw = (current_app.config.get('CHATWOOT_URL') or '').rstrip('/')
+    acc = (current_app.config.get('CHATWOOT_ACCOUNT_ID') or '').strip()
+    rotulo = ('Fila do bot (pending)' if status == 'pending'
+              else 'Esperando atendente (open)')
+    linhas = [f'**{rotulo} — {len(paradas)} conversa(s):**', '']
+    for c in paradas:
+        cid = c.get('id')
+        nome = c.get('nome_contato') or '(sem nome)'
+        mins = c.get('minutos_paradas', 0)
+        link = (f'{base_cw}/app/accounts/{acc}/conversations/{cid}'
+                if base_cw and acc and cid else '')
+        sufixo = f' · {link}' if link else ''
+        linhas.append(f'- conv #{cid} · {nome} · parada ha {mins}min{sufixo}')
+    return {'texto': '\n'.join(linhas)}
+
+
 def _read_consultar_cliente_b2b(params, user):
     from app.models import ClienteB2B
     q = ClienteB2B.query.filter_by(ativo=True)
@@ -3711,6 +3862,9 @@ _READ_HANDLERS = {
     'consultar_desperdicio': _read_consultar_desperdicio,
     'consultar_catalogo_site': _read_consultar_catalogo_site,
     'consultar_cartinhas': _read_consultar_cartinhas,
+    'consultar_vigia': _read_consultar_vigia,
+    'consultar_conversa_chatwoot': _read_consultar_conversa_chatwoot,
+    'listar_conversas_chatwoot': _read_listar_conversas_chatwoot,
     'enviar_digest_whatsapp': _read_enviar_digest_whatsapp,
     'consultar_cliente_b2b': _read_consultar_cliente_b2b,
 }
