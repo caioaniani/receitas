@@ -232,12 +232,35 @@ def _chamar_sonnet(api_key, contexto, prompt_sistema=None):
     return json.loads(texto)
 
 
-def _montar_mensagem(rel, inicio, fim, *, titulo='Auditor do bot'):
+def _linha_contencao(dados):
+    """Renderiza 'Contencao: 87,5% (28/32 conversas) | preguicoso: 2/4'.
+    Devolve string vazia se nao tem dados suficientes."""
+    if not dados:
+        return ''
+    conv = dados.get('conversas_unicas') or 0
+    com_hand = dados.get('conversas_com_handoff') or 0
+    pct = dados.get('contencao_pct')
+    if not conv or pct is None:
+        return ''
+    sem_hand = conv - com_hand
+    base = f'*Contenção:* {pct}% ({sem_hand}/{conv} conversas)'
+    preg = dados.get('handoffs_preguicosos') or 0
+    handoffs = dados.get('handoffs') or 0
+    if handoffs:
+        base += f'  ·  preguiçoso: {preg}/{handoffs}'
+    return base
+
+
+def _montar_mensagem(rel, inicio, fim, *, titulo='Auditor do bot', dados=None):
     linhas = []
     periodo = (f'{inicio.strftime("%d/%m")} a {fim.strftime("%d/%m")}'
                if (fim - inicio).days > 1
                else inicio.strftime('%d/%m'))
     linhas.append(f'*{titulo} — {periodo}*')
+    contencao = _linha_contencao(dados)
+    if contencao:
+        linhas.append('')
+        linhas.append(contencao)
     if rel.get('destaque'):
         linhas.append('')
         linhas.append(rel['destaque'])
