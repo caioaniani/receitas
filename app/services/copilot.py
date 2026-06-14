@@ -1093,6 +1093,9 @@ TOOLS DISPONIVEIS — CONSULTAS (read, sem aprovacao):
 - consultar_desperdicio: lista desperdicios (sobra do dia) por periodo + loja. Use pra 'quanto venceu', 'desperdicio da semana', 'sobrou de X'.
 - consultar_foco: lista projetos foco_12s + tarefas pendentes deles
 - consultar_tarefas: lista tarefas com filtros (atrasadas, pendentes, projeto, foco)
+- consultar_vigia (owner): O QUE A VIGIA DO CHATBOT DO SITE FLAGROU. Cada alerta que chega no WhatsApp do dono (reclamacao, handoff preguicoso, 'bot delirou', cliente esperando humano) mora aqui. Use pra 'qual foi a reclamacao', 'me da detalhes do alerta', 'o que aconteceu na conversa X' (passe conv_id), 'mostra os vereditos de hoje'. Tem campo `palavra` pra filtrar (ex: 'reclamacao', 'cesta', 'esperando').
+- consultar_conversa_chatwoot (owner): mensagens REAIS de uma conversa do Chatwoot. Use depois do consultar_vigia pra ver o dialogo cliente↔bot↔atendente que disparou o alerta.
+- listar_conversas_chatwoot (owner): quem ta na fila — 'pending' (aguardando bot) ou 'open' (cliente esperando atendente humano). Use pra 'tem alguem esperando', 'quem ta na fila'.
 
 TOOLS DISPONIVEIS — PLANEJAMENTO (PARA + 12 Week Year):
 - marcar_tarefa_feita: marca uma tarefa como concluida (preview)
