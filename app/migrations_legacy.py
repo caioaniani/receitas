@@ -1082,6 +1082,14 @@ def _migrate_postgres(app):
     _try("CREATE INDEX IF NOT EXISTS ix_conta_pagar_item_map_produto "
          "ON conta_pagar_item_map(produto_id)")
 
+    # Tools usadas pelo chatbot do site antes do veredito (14/06/2026):
+    # persistir a lista de ferramentas chamadas em cada decisao do bot
+    # permite ao auditor distinguir handoff "preguicoso" (lista vazia ou
+    # so transferir_para_humano) de handoff legitimo, e calcular a taxa
+    # de contencao real. ALTER vai NA FRENTE do modelo (2 commits — ver
+    # CLAUDE.md "Schema migrations").
+    _try("ALTER TABLE vigia_veredito ADD COLUMN IF NOT EXISTS tools_usadas TEXT")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
