@@ -15,6 +15,21 @@ Estas travas garantem que o bot agora tem:
 from datetime import timedelta
 from unittest.mock import patch
 
+import pytest
+
+
+@pytest.fixture
+def owner_user(app):
+    """Owner = unico papel autorizado pra as 3 tools (mensagens de cliente)."""
+    from app.extensions import db
+    from app.models import Usuario
+    u = Usuario(nome='dono teste', login='dono', papel='admin',
+                is_owner=True)
+    u.set_senha('123')
+    db.session.add(u)
+    db.session.commit()
+    return u
+
 
 def _setup_veredito(grav='alta', conv_id='123', dias_atras=0,
                      mensagem='Pedido nao chegou e ja sao 18h',
