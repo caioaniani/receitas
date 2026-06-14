@@ -88,16 +88,61 @@ def _numero_destino():
             or (cfg.get('ZAPI_NUMERO_DESTINO') or '').strip())
 
 
+_TRACKING_PREFIXES = ('[FOLLOWUP', '[ABANDONO', '[ESPERA_HUMANO')
+
+
+def _eh_conversa_real(v):
+    """Filtra registros que NAO representam conversa real de cliente:
+    - conv_id 'teste-*' (do /admin/vigia/teste)
+    - mensagens-tracking dos detectores deterministicos (followup,
+      abandono, espera humano) que gravam VigiaVeredito sem `bot_acao`
+      e mensagem com prefixo [FOLLOWUP/[ABANDONO/[ESPERA_HUMANO.
+    Sem esse filtro, o denominador inflaria e a contencao apareceria
+    menor do que e na realidade."""
+    cid = (v.conv_id or '')
+    if cid.startswith('teste-'):
+        return False
+    msg = (v.mensagem_cliente or '')
+    if msg.startswith(_TRACKING_PREFIXES):
+        return False
+    return True
+
+
+def _tools_de(v):
+    """Devolve a lista de tools persistida no veredito, [] se inexistente
+    ou JSON corrompido. Best-effort — nao quebra o auditor."""
+    raw = (v.tools_usadas or '').strip()
+    if not raw:
+        return []
+    try:
+        out = json.loads(raw)
+        return out if isinstance(out, list) else []
+    except (ValueError, TypeError):
+        return []
+
+
+def _eh_handoff_preguicoso(v):
+    """Handoff sem ter chamado tool de busca/resolucao antes — so
+    transferir_para_humano ou nenhuma. Determine pelos dados persistidos
+    em vez de LLM-judge — barato e auditavel."""
+    tools = _tools_de(v)
+    nao_handoff = [t for t in tools if t and t != 'transferir_para_humano']
+    return not nao_handoff
+
+
 def _coletar_periodo(inicio, fim):
     """Le VigiaVeredito do periodo e devolve uma estrutura compacta pro
     Sonnet trabalhar. Tudo agregado pra caber no prompt."""
     from app.models import VigiaVeredito
 
-    veredictos = (VigiaVeredito.query
-                  .filter(VigiaVeredito.criado_em >= inicio,
-                          VigiaVeredito.criado_em < fim)
-                  .order_by(VigiaVeredito.criado_em.asc())
-                  .all())
+    todos = (VigiaVeredito.query
+             .filter(VigiaVeredito.criado_em >= inicio,
+                     VigiaVeredito.criado_em < fim)
+             .order_by(VigiaVeredito.criado_em.asc())
+             .all())
+    if not todos:
+        return None
+    veredictos = [v for v in todos if _eh_conversa_real(v)]
     if not veredictos:
         return None
 
@@ -106,6 +151,18 @@ def _coletar_periodo(inicio, fim):
     alta = [v for v in veredictos if v.gravidade == 'alta']
     media = [v for v in veredictos if v.gravidade == 'media']
     conv_unicas = len({v.conv_id for v in veredictos if v.conv_id})
+
+    # Conversas distintas que tiveram >=1 handoff no periodo.
+    conv_com_handoff = len({v.conv_id for v in handoffs if v.conv_id})
+    handoffs_preguicosos = [v for v in handoffs if _eh_handoff_preguicoso(v)]
+    conv_preguicosa = len({v.conv_id for v in handoffs_preguicosos if v.conv_id})
+
+    # Taxa de contencao = % das conversas distintas que terminaram SEM
+    # handoff. Meta do dono = 90%. Arredonda 1 casa pra evitar ruido.
+    contencao_pct = (round(100.0 * (conv_unicas - conv_com_handoff) / conv_unicas, 1)
+                     if conv_unicas else None)
+    preguicosos_pct = (round(100.0 * len(handoffs_preguicosos) / len(handoffs), 1)
+                       if handoffs else None)
 
     # Top motivos de handoff (ja vem do bot quando faz handoff)
     motivos_handoff = Counter(
@@ -119,25 +176,34 @@ def _coletar_periodo(inicio, fim):
         for v in veredictos if (v.motivo_vigia or '').strip()
     ).most_common(15)
 
-    # Amostras de mensagens nos handoffs (limitado, pra dar contexto)
+    # Amostras de mensagens nos handoffs (limitado, pra dar contexto).
+    # Inclui as tools usadas pra o Sonnet conseguir cruzar a queixa do
+    # vigia com o que o bot DE FATO tentou.
     amostras_handoff = []
     for v in handoffs[:30]:
         msg = (v.mensagem_cliente or '').strip()[:200]
         motivo = (v.bot_motivo or '').strip()[:120]
         if msg:
             amostras_handoff.append({'msg': msg, 'motivo': motivo,
-                                     'cliente': v.cliente or ''})
+                                     'cliente': v.cliente or '',
+                                     'tools': _tools_de(v)})
 
     # Casos de alta (raros, mas todos)
     casos_alta = [{
         'cliente': v.cliente or '', 'msg': (v.mensagem_cliente or '')[:200],
         'motivo': (v.motivo_vigia or '')[:200],
+        'tools': _tools_de(v),
     } for v in alta]
 
     return {
         'total_eventos': total,
         'conversas_unicas': conv_unicas,
         'handoffs': len(handoffs),
+        'conversas_com_handoff': conv_com_handoff,
+        'handoffs_preguicosos': len(handoffs_preguicosos),
+        'conversas_preguicosas': conv_preguicosa,
+        'contencao_pct': contencao_pct,
+        'preguicosos_pct': preguicosos_pct,
         'gravidade_alta': len(alta),
         'gravidade_media': len(media),
         'top_motivos_handoff': motivos_handoff,
