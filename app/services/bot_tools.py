@@ -271,7 +271,7 @@ def editar_cartinha_pedido(numero_pedido, texto_cartinha):
             return {'erro': 'texto_vazio'}
         # Confirma pedido no VNDA — evita gravar cartinha de pedido fake.
         try:
-            pedido = vnda.buscar_pedido(numero)
+            pedido = vnda.buscar_pedido_completo(numero)
         except Exception:  # noqa: BLE001
             logger.exception('editar_cartinha_pedido: VNDA falhou nro=%r', numero)
             return {'erro': 'vnda_indisponivel'}
