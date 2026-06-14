@@ -36,8 +36,9 @@ def test_prompt_tem_caso_concreto_de_pedido_novo_com_entrega_futura():
         or 'tem cesta' in p.lower(), \
         'exemplo concreto do caso da Mariana sumiu do prompt'
     # E o que fazer e explicito: consultar produtos + horario do site
+    # (atualizado 14/06/2026: dono confirmou 8h-18h, nao 7h-18h)
     assert 'consultar_produtos' in p
-    assert 'das 7h às 18h' in p or '7h as 18h' in p.lower()
+    assert 'das 8h às 18h' in p or '8h as 18h' in p.lower()
 
 
 def test_prompt_mantem_handoff_pra_reagendar_pedido_existente():
