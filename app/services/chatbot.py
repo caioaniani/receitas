@@ -53,6 +53,21 @@ def _texto_handoff_com_horario(texto):
              'te responde a partir das 06:00 da manhã. ')
     return aviso + base
 
+
+def _resp_handoff(texto, motivo, tools_usadas=None):
+    """Constroi o dict de handoff aplicando o aviso de fora-horario no texto.
+    Centraliza pra TODOS os caminhos de handoff (fallback de erro, tool,
+    teto de iteracoes) usarem a mesma garantia — sem isso, fallbacks que
+    nao passam pelo LLM ignoram a regra de horario."""
+    out = {
+        'acao': 'handoff',
+        'texto': _texto_handoff_com_horario(texto),
+        'motivo': motivo,
+    }
+    if tools_usadas is not None:
+        out['tools_usadas'] = tools_usadas
+    return out
+
 # Quantas mensagens guardar no nosso store por conversa (cap). O Claude ja
 # recebe so as ultimas 20 (`_build_messages`), entao 40 cobre folgado.
 MAX_HIST_STORE = 40
