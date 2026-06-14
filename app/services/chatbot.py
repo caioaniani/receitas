@@ -436,8 +436,8 @@ def responder(historico):
         messages.append({'role': 'user', 'content': resultados})
 
     # Estourou o teto de iteracoes — passa pro humano por seguranca.
-    return {'acao': 'handoff', 'texto': _FALLBACK, 'motivo': 'limite de passos',
-            'tools_usadas': tools_usadas}
+    return _resp_handoff(_FALLBACK, 'limite de passos',
+                         tools_usadas=tools_usadas)
 
 
 # ── Follow-up automatico (bot retoma cliente que sumiu) ────────────────────
