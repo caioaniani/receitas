@@ -1141,6 +1141,11 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE conta_pagar_item_map ADD COLUMN "
                        "produto_id INTEGER REFERENCES produto(id)")
 
+    cursor.execute("PRAGMA table_info(vigia_veredito)")
+    cols_vv = [row[1] for row in cursor.fetchall()]
+    if cols_vv and 'tools_usadas' not in cols_vv:
+        cursor.execute("ALTER TABLE vigia_veredito ADD COLUMN tools_usadas TEXT")
+
     # Migração tabela receita_ingrediente
     cursor.execute("PRAGMA table_info(receita_ingrediente)")
     cols_ing = [row[1] for row in cursor.fetchall()]
