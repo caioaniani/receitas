@@ -400,10 +400,11 @@ def responder(historico):
         for b in tool_uses:
             if b.name == 'transferir_para_humano':
                 inp = b.input or {}
+                texto_base = ((inp.get('mensagem_cliente') or '').strip()
+                              or 'Já te passo para um atendente. 🙂')
                 return {
                     'acao': 'handoff',
-                    'texto': (inp.get('mensagem_cliente') or '').strip()
-                             or 'Já te passo para um atendente. 🙂',
+                    'texto': _texto_handoff_com_horario(texto_base),
                     'motivo': inp.get('motivo') or 'handoff',
                     'tools_usadas': tools_usadas,
                 }
