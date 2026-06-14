@@ -46,6 +46,13 @@ class VigiaVeredito(db.Model):
     gravidade = db.Column(db.String(10), index=True)  # 'alta' | 'media' | None
     motivo_vigia = db.Column(db.Text)
     enviado_whatsapp = db.Column(db.Boolean, default=False)
+    # JSON list ['consultar_produtos', ...] das tools chamadas pelo bot
+    # ANTES de produzir o veredito (responder ou handoff). Persistir aqui
+    # permite o auditor distinguir handoff "preguicoso" (lista vazia ou
+    # so transferir_para_humano) de handoff legitimo, e calcular contencao
+    # real. Nullable: registros velhos / detectores deterministicos
+    # (followup, abandono, espera_humano) gravam NULL.
+    tools_usadas = db.Column(db.Text)
 
 
 class CopilotConversa(db.Model):
