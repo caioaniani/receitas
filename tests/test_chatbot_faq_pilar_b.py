@@ -92,6 +92,9 @@ def test_consultar_ingredientes_arquivada_invisivel(app):
     from app.services.bot_tools import consultar_ingredientes
     from app.utils import agora
     with app.app_context():
+        # Outra receita ativa garante que NÃO caímos em 'sem receitas
+        # cadastradas' — queremos validar que a ARQUIVADA está invisível.
+        _criar_receita(app, 'Receita Ativa', [('Farinha', 60.0)])
         rec = _criar_receita(app, 'Sazonal Antigo', [('Farinha', 100.0)])
         rec.arquivada_em = agora()
         db.session.commit()
