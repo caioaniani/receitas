@@ -216,6 +216,9 @@ def _executar_tool(nome, inp):
     try:
         if nome == 'consultar_produtos':
             return bot_tools.consultar_produtos(inp.get('busca') or inp.get('query') or '')
+        if nome == 'consultar_ingredientes':
+            return bot_tools.consultar_ingredientes(
+                inp.get('nome_produto') or inp.get('nome') or inp.get('produto') or '')
         if nome == 'consultar_pedido':
             return bot_tools.consultar_pedido(inp.get('numero') or inp.get('numero_pedido') or '')
         if nome == 'gerar_link_carrinho':
