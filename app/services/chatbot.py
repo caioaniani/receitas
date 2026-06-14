@@ -21,6 +21,36 @@ MODELO = 'claude-sonnet-4-6'
 MAX_ITERACOES = 6  # teto de idas-e-voltas de ferramenta por mensagem
 _FALLBACK = 'Já te passo para um atendente pra te ajudar melhor. 🙂'
 
+# Janela de atendimento humano-monitorado (BRT). Fora dela, o bot avisa em
+# vez de prometer respostas/atendimento humano que nao vao acontecer agora.
+HORARIO_CHAT_INICIO = 6   # 06:00
+HORARIO_CHAT_FIM = 20     # 20:00 (exclusivo: 19:59 ainda dentro)
+_AVISO_FORA_HORARIO = (
+    'Olá! Nosso atendimento aqui no chat é das 06:00 às 20:00. '
+    'Vou registrar sua mensagem — nossa equipe responde a partir das '
+    '06:00 da manhã. Se for compra pelo site, ele está rodando normal '
+    'em www.padariaartesanalonline.com.br 🙂'
+)
+# Marcador para deduplicar o aviso na mesma janela de fora-horario
+# (sem isso, cada msg do cliente das 23h gera o mesmo aviso de novo).
+_AVISO_DEDUPE_TRECHO = 'atendimento aqui no chat é das 06:00 às 20:00'
+
+
+def _fora_horario_chat():
+    from app.utils import agora
+    h = agora().hour
+    return h < HORARIO_CHAT_INICIO or h >= HORARIO_CHAT_FIM
+
+
+def _ja_avisou_fora_horario(historico):
+    """Olha SE a ultima mensagem do assistant foi o aviso de fora-horario.
+    Se sim, NAO repete — deixa o bot processar normal (o cliente ja foi
+    avisado nesta janela). Best-effort: erro = trata como nao avisou."""
+    for m in reversed(historico or []):
+        if (m or {}).get('role') == 'assistant':
+            return _AVISO_DEDUPE_TRECHO in ((m or {}).get('content') or '')
+    return False
+
 # Quantas mensagens guardar no nosso store por conversa (cap). O Claude ja
 # recebe so as ultimas 20 (`_build_messages`), entao 40 cobre folgado.
 MAX_HIST_STORE = 40
