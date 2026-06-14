@@ -822,6 +822,10 @@ PAPEIS_POR_TOOL = {
     'consultar_desperdicio': {'admin', 'gerente', 'funcionario'},
     'consultar_catalogo_site': {'admin', 'gerente', 'funcionario'},
     'consultar_cartinhas': {'admin', 'gerente'},
+    # Vigia + Chatwoot: owner-only (mensagens de cliente / alertas operacionais)
+    'consultar_vigia': {'owner'},
+    'consultar_conversa_chatwoot': {'owner'},
+    'listar_conversas_chatwoot': {'owner'},
     'enviar_digest_whatsapp': {'admin'},
     'registrar_desperdicio': {'admin', 'gerente', 'funcionario'},
     'registrar_desperdicio_lote': {'admin', 'gerente', 'funcionario'},
