@@ -346,15 +346,15 @@ def responder(historico):
     api_key = (os.environ.get('ANTHROPIC_API_KEY')
                or current_app.config.get('ANTHROPIC_API_KEY'))
     if not api_key:
-        return {'acao': 'handoff', 'texto': _FALLBACK, 'motivo': 'sem ANTHROPIC_API_KEY'}
+        return _resp_handoff(_FALLBACK, 'sem ANTHROPIC_API_KEY')
     try:
         import anthropic
     except ImportError:
-        return {'acao': 'handoff', 'texto': _FALLBACK, 'motivo': 'lib anthropic ausente'}
+        return _resp_handoff(_FALLBACK, 'lib anthropic ausente')
 
     messages = _build_messages(historico)
     if not messages:
-        return {'acao': 'handoff', 'texto': _FALLBACK, 'motivo': 'sem mensagem'}
+        return _resp_handoff(_FALLBACK, 'sem mensagem')
 
     # Cache breakpoint na ultima tool (schema) + no system: ~corta custo.
     tools_cache = [dict(t) for t in TOOLS]
@@ -364,7 +364,7 @@ def responder(historico):
         client = anthropic.Anthropic(api_key=api_key)
     except Exception as exc:  # noqa: BLE001
         logger.exception('chatbot: erro criando client')
-        return {'acao': 'handoff', 'texto': _FALLBACK, 'motivo': f'client: {exc}'}
+        return _resp_handoff(_FALLBACK, f'client: {exc}')
 
     # Rastreia se a ULTIMA consulta de catalogo desta rodada falhou. Se falhou,
     # o bot NAO pode responder preco/produto (poderia inventar) — forca handoff.
