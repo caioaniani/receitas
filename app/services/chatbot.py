@@ -323,6 +323,15 @@ def responder(historico):
       {'acao': 'responder', 'texto': str}
       {'acao': 'handoff',   'texto': str, 'motivo': str}
     """
+    # Fora do horario do chat (06-20 BRT): o bot avisa UMA VEZ por janela e nao
+    # chama a API. Conta como `acao=responder` (nao e handoff — ninguem pega
+    # agora), mas marca tools_usadas pra o auditor entender que NAO foi
+    # decisao de prompt e sim corte horario. Roda ANTES do api_key check pra
+    # nao gastar handoff por causa de chave faltando dentro da janela errada.
+    if _fora_horario_chat() and not _ja_avisou_fora_horario(historico):
+        return {'acao': 'responder', 'texto': _AVISO_FORA_HORARIO,
+                'tools_usadas': ['fora_horario_chat']}
+
     api_key = (os.environ.get('ANTHROPIC_API_KEY')
                or current_app.config.get('ANTHROPIC_API_KEY'))
     if not api_key:
@@ -331,14 +340,6 @@ def responder(historico):
         import anthropic
     except ImportError:
         return {'acao': 'handoff', 'texto': _FALLBACK, 'motivo': 'lib anthropic ausente'}
-
-    # Fora do horario do chat (06-20 BRT): o bot avisa UMA VEZ por janela e nao
-    # chama a API. Conta como `acao=responder` (nao e handoff — ninguem pega
-    # agora), mas marca tools_usadas pra o auditor entender que NAO foi
-    # decisao de prompt e sim corte horario.
-    if _fora_horario_chat() and not _ja_avisou_fora_horario(historico):
-        return {'acao': 'responder', 'texto': _AVISO_FORA_HORARIO,
-                'tools_usadas': ['fora_horario_chat']}
 
     messages = _build_messages(historico)
     if not messages:
