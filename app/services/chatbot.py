@@ -21,19 +21,12 @@ MODELO = 'claude-sonnet-4-6'
 MAX_ITERACOES = 6  # teto de idas-e-voltas de ferramenta por mensagem
 _FALLBACK = 'Já te passo para um atendente pra te ajudar melhor. 🙂'
 
-# Janela de atendimento humano-monitorado (BRT). Fora dela, o bot avisa em
-# vez de prometer respostas/atendimento humano que nao vao acontecer agora.
+# Janela de atendimento humano (BRT). O bot CONTINUA respondendo fora dela
+# (consulta produtos, manda link, etc) — mas quando vai FAZER HANDOFF fora
+# da janela, avisa que ninguem vai pegar agora e a equipe responde de manha.
+# Decisao do dono 14/06/2026.
 HORARIO_CHAT_INICIO = 6   # 06:00
 HORARIO_CHAT_FIM = 20     # 20:00 (exclusivo: 19:59 ainda dentro)
-_AVISO_FORA_HORARIO = (
-    'Olá! Nosso atendimento aqui no chat é das 06:00 às 20:00. '
-    'Vou registrar sua mensagem — nossa equipe responde a partir das '
-    '06:00 da manhã. Se for compra pelo site, ele está rodando normal '
-    'em www.padariaartesanalonline.com.br 🙂'
-)
-# Marcador para deduplicar o aviso na mesma janela de fora-horario
-# (sem isso, cada msg do cliente das 23h gera o mesmo aviso de novo).
-_AVISO_DEDUPE_TRECHO = 'atendimento aqui no chat é das 06:00 às 20:00'
 
 
 def _fora_horario_chat():
@@ -42,14 +35,23 @@ def _fora_horario_chat():
     return h < HORARIO_CHAT_INICIO or h >= HORARIO_CHAT_FIM
 
 
-def _ja_avisou_fora_horario(historico):
-    """Olha SE a ultima mensagem do assistant foi o aviso de fora-horario.
-    Se sim, NAO repete — deixa o bot processar normal (o cliente ja foi
-    avisado nesta janela). Best-effort: erro = trata como nao avisou."""
-    for m in reversed(historico or []):
-        if (m or {}).get('role') == 'assistant':
-            return _AVISO_DEDUPE_TRECHO in ((m or {}).get('content') or '')
-    return False
+def _texto_handoff_com_horario(texto):
+    """Se estiver fora da janela de atendimento (06-20), prepend um aviso
+    explicito ao texto que o bot vai mandar pro cliente no handoff. Sem
+    isso, o cliente fica esperando atendente as 23h sem saber que ninguem
+    vai pegar agora.
+
+    Idempotente: se o LLM ja escreveu o aviso (mensagem ja contem '06:00'),
+    nao duplica."""
+    if not _fora_horario_chat():
+        return texto
+    base = (texto or '').strip()
+    if '06:00' in base:
+        return base
+    aviso = ('Estamos fora do nosso horário de atendimento aqui no chat '
+             '(06:00 às 20:00). Vou registrar sua mensagem e nossa equipe '
+             'te responde a partir das 06:00 da manhã. ')
+    return aviso + base
 
 # Quantas mensagens guardar no nosso store por conversa (cap). O Claude ja
 # recebe so as ultimas 20 (`_build_messages`), entao 40 cobre folgado.
@@ -323,15 +325,9 @@ def responder(historico):
       {'acao': 'responder', 'texto': str}
       {'acao': 'handoff',   'texto': str, 'motivo': str}
     """
-    # Fora do horario do chat (06-20 BRT): o bot avisa UMA VEZ por janela e nao
-    # chama a API. Conta como `acao=responder` (nao e handoff — ninguem pega
-    # agora), mas marca tools_usadas pra o auditor entender que NAO foi
-    # decisao de prompt e sim corte horario. Roda ANTES do api_key check pra
-    # nao gastar handoff por causa de chave faltando dentro da janela errada.
-    if _fora_horario_chat() and not _ja_avisou_fora_horario(historico):
-        return {'acao': 'responder', 'texto': _AVISO_FORA_HORARIO,
-                'tools_usadas': ['fora_horario_chat']}
-
+    # Fora-horario NAO bloqueia mais o bot (decisao do dono 14/06/2026).
+    # O bot continua respondendo normal; quem injeta o aviso de horario eh o
+    # branch de handoff abaixo (via `_texto_handoff_com_horario`).
     api_key = (os.environ.get('ANTHROPIC_API_KEY')
                or current_app.config.get('ANTHROPIC_API_KEY'))
     if not api_key:
