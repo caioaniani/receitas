@@ -387,9 +387,8 @@ def responder(historico):
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception('chatbot: erro Anthropic')
-            return {'acao': 'handoff', 'texto': _FALLBACK,
-                    'motivo': f'erro anthropic: {exc}',
-                    'tools_usadas': tools_usadas}
+            return _resp_handoff(_FALLBACK, f'erro anthropic: {exc}',
+                                 tools_usadas=tools_usadas)
 
         tool_uses = [b for b in resp.content if getattr(b, 'type', None) == 'tool_use']
 
@@ -399,15 +398,15 @@ def responder(historico):
             if produto_falhou:
                 logger.warning('crm bot: consultar_produtos falhou -> handoff '
                                '(evita preco inventado)')
-                return {'acao': 'handoff', 'texto': _FALLBACK_CATALOGO,
-                        'motivo': 'consultar_produtos falhou',
-                        'tools_usadas': tools_usadas}
+                return _resp_handoff(_FALLBACK_CATALOGO,
+                                     'consultar_produtos falhou',
+                                     tools_usadas=tools_usadas)
             texto = '\n'.join(b.text for b in resp.content
                               if getattr(b, 'type', None) == 'text' and b.text).strip()
             if not texto:
-                return {'acao': 'handoff', 'texto': 'Já te passo para um atendente. 🙂',
-                        'motivo': 'resposta vazia',
-                        'tools_usadas': tools_usadas}
+                return _resp_handoff('Já te passo para um atendente. 🙂',
+                                     'resposta vazia',
+                                     tools_usadas=tools_usadas)
             return {'acao': 'responder', 'texto': texto,
                     'tools_usadas': tools_usadas}
 
@@ -417,12 +416,9 @@ def responder(historico):
                 inp = b.input or {}
                 texto_base = ((inp.get('mensagem_cliente') or '').strip()
                               or 'Já te passo para um atendente. 🙂')
-                return {
-                    'acao': 'handoff',
-                    'texto': _texto_handoff_com_horario(texto_base),
-                    'motivo': inp.get('motivo') or 'handoff',
-                    'tools_usadas': tools_usadas,
-                }
+                return _resp_handoff(texto_base,
+                                     inp.get('motivo') or 'handoff',
+                                     tools_usadas=tools_usadas)
 
         # Executa as ferramentas e devolve os resultados pro Claude.
         messages.append({'role': 'assistant', 'content': resp.content})
