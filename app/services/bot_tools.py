@@ -193,6 +193,59 @@ def consultar_produtos(busca):
     return {'produtos': leve}
 
 
+def consultar_ingredientes(nome_produto):
+    """Consulta a Receita por nome (fuzzy) e devolve a lista de ingredientes
+    pra o bot responder duvidas de gluten/lactose/ovo/origem animal de forma
+    HONESTA (sem chutar). Filtra ingredientes < 0.5% (irrelevantes pro cliente
+    e ruido na resposta).
+
+    Retorna:
+      {'receita': str, 'ingredientes': [{'nome': str, 'pct': float}, ...]}
+      {'erro': 'nao_encontrado', 'sugestoes': [str]} — match falhou; sugere
+        os 5 nomes mais proximos pra o bot esclarecer com o cliente.
+      {'erro': str} — falha de DB ou tabela vazia.
+
+    Nao retorna a receita inteira (peso, modo de preparo) — so a lista que
+    importa pra alergia/restricao. NUNCA usar pra alergia confirmada (regra do
+    prompt: alergia = handoff sempre)."""
+    from app.models import Receita
+    from app.utils import normalizar_busca
+    try:
+        alvo = normalizar_busca(nome_produto or '').strip()
+        if not alvo:
+            return {'erro': 'nome vazio'}
+        receitas = Receita.query.filter(Receita.arquivada_em.is_(None)).all()
+        if not receitas:
+            return {'erro': 'sem receitas cadastradas'}
+        match = next((r for r in receitas
+                      if normalizar_busca(r.nome or '') == alvo), None)
+        if match is None:
+            termos = [t for t in alvo.split() if len(t) > 2]
+            if termos:
+                match = next((r for r in receitas
+                              if all(t in normalizar_busca(r.nome or '')
+                                     for t in termos)), None)
+        if match is None:
+            sug = sorted(
+                ({normalizar_busca(r.nome or ''): r.nome for r in receitas
+                  if any(t in normalizar_busca(r.nome or '')
+                         for t in alvo.split() if len(t) > 2)}.values()),
+            )[:5]
+            return {'erro': 'nao_encontrado', 'sugestoes': sug}
+        ings = []
+        for ing in (match.ingredientes or []):
+            pct = float(ing.porcentagem or 0)
+            if pct < 0.5:
+                continue
+            ings.append({'nome': (ing.ingrediente_nome or '').strip(),
+                         'pct': round(pct, 2)})
+        ings.sort(key=lambda x: x['pct'], reverse=True)
+        return {'receita': match.nome, 'ingredientes': ings}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('consultar_ingredientes falhou nome=%r', nome_produto)
+        return {'erro': str(exc)}
+
+
 def gerar_link_carrinho(itens):
     """itens: lista de dicts {'sku': str, 'qtd': int}. Monta o link de
     carrinho do VNDA: /carrinho?itens=SKU:qtd,SKU:qtd (parametro 'itens' em
