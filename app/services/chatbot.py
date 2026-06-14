@@ -292,6 +292,10 @@ def _executar_tool(nome, inp):
                 inp.get('nome_produto') or inp.get('nome') or inp.get('produto') or '')
         if nome == 'consultar_pedido':
             return bot_tools.consultar_pedido(inp.get('numero') or inp.get('numero_pedido') or '')
+        if nome == 'editar_cartinha_pedido':
+            return bot_tools.editar_cartinha_pedido(
+                inp.get('numero_pedido') or inp.get('numero') or '',
+                inp.get('texto_cartinha') or inp.get('texto') or inp.get('cartinha') or '')
         if nome == 'gerar_link_carrinho':
             return bot_tools.gerar_link_carrinho(inp.get('itens') or [])
         if nome == 'consultar_frete':
