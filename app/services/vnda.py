@@ -285,6 +285,51 @@ def _extrair_cartinha(items_customizations):
     return ' · '.join(textos)
 
 
+def telefone_do_pedido(code):
+    """Devolve o telefone canonico (so digitos, sem 55 inicial) do
+    destinatario de um pedido VNDA — ou string vazia se nao achou.
+
+    Usado pra autorizar consulta/edicao de pedido: o bot so libera se
+    o telefone do contato no Chatwoot bate com este. Fail-closed: se
+    nao achar telefone no pedido, retorna '' (caller trata como nao
+    autorizado e cai pro fallback de CPF).
+
+    Source: prioritiza /orders/{code}/shipping_address (recipient_phone),
+    fallback shipping_address embutido em /orders/{code}."""
+    from app.utils import telefone_chave
+    if not code:
+        return ''
+    shipping = buscar_shipping_address(str(code).strip())
+    if shipping:
+        _nome, tel, _end = _extrair_endereco(shipping)
+        if tel:
+            return telefone_chave(tel)
+    order = buscar_pedido_completo(str(code).strip())
+    if order:
+        inline = order.get('shipping_address') or {}
+        if inline:
+            _nome, tel, _end = _extrair_endereco(inline)
+            if tel:
+                return telefone_chave(tel)
+    return ''
+
+
+def cpf_do_pedido(code):
+    """Devolve o CPF (so digitos) do COMPRADOR de um pedido VNDA —
+    usado como autorizacao alternativa quando nao temos telefone do
+    contato (canal sem identificador telefonico, ou bate-bate falhou).
+
+    Fail-closed: retorna '' se nao achou."""
+    if not code:
+        return ''
+    order = buscar_pedido_completo(str(code).strip())
+    if not order:
+        return ''
+    client = order.get('client') or {}
+    raw = (client.get('cpf') or order.get('client_cpf') or '').strip()
+    return ''.join(c for c in raw if c.isdigit())
+
+
 def buscar_pedido_completo(code):
     """Busca detalhes completos de um pedido (inclui shipping_address)."""
     resp = _get(f'/orders/{code}')
