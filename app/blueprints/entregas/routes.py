@@ -206,6 +206,10 @@ def _lalamove_json(e):
         'motorista_fone': e.motorista_telefone,
         'pode_cancelar': e.status in ('ASSIGNING_DRIVER', 'ON_GOING'),
         'encerrada': e.status in ('COMPLETED', 'CANCELED', 'REJECTED', 'EXPIRED'),
+        # Gorjeta (priority fee): so faz sentido enquanto procura entregador.
+        # O front mostra o campo "Acelerar" so quando `pode_acelerar`.
+        'priority_fee': str(e.priority_fee) if e.priority_fee is not None else None,
+        'pode_acelerar': e.status == 'ASSIGNING_DRIVER',
     }
 
 
