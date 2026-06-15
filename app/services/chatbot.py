@@ -214,7 +214,11 @@ TOOLS = [
                         'cartinha". PEÇA O NÚMERO DO PEDIDO + o TEXTO da '
                         'cartinha (palavras exatas) antes de chamar. NÃO use '
                         'pra produto/pedido novo — nesse caso o cliente '
-                        'preenche no checkout do site.'),
+                        'preenche no checkout do site.\n\n'
+                        'AUTORIZAÇÃO: a tool valida que o solicitante é o '
+                        'dono do pedido (por telefone do canal OU CPF). Se '
+                        'vier `erro: autorizacao_necessaria`, peça o CPF ao '
+                        'cliente e chame de novo com `cpf_cliente`.'),
         'input_schema': {
             'type': 'object',
             'properties': {
@@ -224,6 +228,11 @@ TOOLS = [
                 'texto_cartinha': {
                     'type': 'string',
                     'description': 'texto exato da cartinha que o cliente quer'},
+                'cpf_cliente': {
+                    'type': 'string',
+                    'description': ('CPF do comprador do pedido — só preencha '
+                                     'se o cliente JÁ informou na conversa.'),
+                },
             },
             'required': ['numero_pedido', 'texto_cartinha'],
         },
