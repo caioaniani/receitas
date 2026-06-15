@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block title %}Notas — memória do agente{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-2">
+  <h1 class="page-title mb-0"><i class="bi bi-journal-text"></i> Notas — memória do agente</h1>
+  {% if current_user.papel in ('admin', 'owner') %}
+  <a href="{{ url_for('notas.nova') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg"></i> Nova nota
+  </a>
+  {% endif %}
+</div>
+<p class="text-muted small">
+  Regras, exceções e decisões que o copilot/bot consultam antes de responder. Quem cadastra:
+  você (via Slack/WhatsApp) ou o admin direto aqui. Notas arquivadas somem das buscas dos agentes.
+</p>
+
+<form method="GET" class="d-flex gap-2 mb-3" style="max-width:560px;">
+  <input type="text" name="q" class="form-control" placeholder="buscar título, tag, conteúdo..."
+         value="{{ termo or '' }}" autofocus>
+  <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
+  {% if termo %}
+  <a href="{{ url_for('notas.index') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-x-lg"></i>
+  </a>
+  {% endif %}
+</form>
+
+<div class="form-check form-switch mb-3">
+  <input class="form-check-input" type="checkbox" id="arq"
+         {% if mostrar_arquivadas %}checked{% endif %}
+         onchange="window.location='{{ url_for('notas.index') }}' + (this.checked ? '?arquivadas=1' : '');">
+  <label class="form-check-label small text-muted" for="arq">Mostrar arquivadas</label>
+</div>
+
+{% if not notas %}
+<div class="alert alert-light text-muted small">
+  Nenhuma nota {% if termo %}com esse termo{% endif %} por enquanto.
+  Você ensina o copilot pelo Slack/WhatsApp ("a partir de hoje X funciona assim")
+  ou cria manualmente aqui.
+</div>
+{% else %}
+<div class="row g-3">
+  {% for n in notas %}
+  <div class="col-12 col-md-6 col-lg-4">
+    <div class="card h-100 {% if not n.ativa %}bg-light text-muted{% endif %}">
+      <div class="card-body">
+        <div class="d-flex align-items-start justify-content-between gap-2">
+          <h6 class="card-title mb-1">
+            <span class="text-muted small">#{{ n.id }}</span> {{ n.titulo }}
+            {% if not n.ativa %}<span class="badge bg-secondary">arquivada</span>{% endif %}
+          </h6>
+        </div>
+        {% if n.lista_tags %}
+        <div class="mb-2">
+          {% for t in n.lista_tags %}
+          <span class="badge bg-light text-dark border">{{ t }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <div class="small" style="white-space:pre-wrap;">{{ n.conteudo }}</div>
+        <div class="small text-muted mt-2">
+          {{ n.origem }} · {{ n.criada_em.strftime('%d/%m %H:%M') }}
+          {% if n.criada_por %} · {{ n.criada_por.nome }}{% endif %}
+          {% if n.atualizada_em %} · editada {{ n.atualizada_em.strftime('%d/%m %H:%M') }}{% endif %}
+        </div>
+      </div>
+      {% if current_user.papel in ('admin', 'owner') %}
+      <div class="card-footer bg-white d-flex gap-2">
+        <a href="{{ url_for('notas.editar', nid=n.id) }}" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-pencil"></i> Editar
+        </a>
+        {% if n.ativa %}
+        <form method="POST" action="{{ url_for('notas.arquivar', nid=n.id) }}"
+              onsubmit="return confirm('Arquivar essa nota? Vai sumir das buscas do copilot/bot.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline-warning"><i class="bi bi-archive"></i> Arquivar</button>
+        </form>
+        {% else %}
+        <form method="POST" action="{{ url_for('notas.restaurar', nid=n.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline-success"><i class="bi bi-arrow-counterclockwise"></i> Restaurar</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
