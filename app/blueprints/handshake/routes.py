@@ -334,12 +334,6 @@ def sucesso(token):
     return render_template('handshake/sucesso.html', msg=msg, pedido=pedido)
 
 
-# Suprime ruido do linter: timedelta importada pra contas explicitas no
-# escopo dessa funcao acima.
-_ = timedelta  # noqa: F821 — placeholder, removido se ruff acusar
-
-
-
 def _handshake_entrega(qr, pedido, pin):
     """PIN da loja → muda status pra entregue."""
     from app.blueprints.pedidos.routes import _executar_recebimento_pedido
