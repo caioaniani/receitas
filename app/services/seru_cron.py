@@ -538,18 +538,6 @@ def _run_zapi_digest_tarefas(app):
         _com_lock(7728, zapi_resumos.enviar_digest_tarefas, 'zapi digest tarefas')
 
 
-def _run_zapi_digest_saude(app):
-    """Job: radar de saude do negocio (contas a pagar + receitas), 07:30 BRT."""
-    from app.services import saude_negocio
-
-    with app.app_context():
-        # Bug 12/06/2026: lock 7736 ja era usado pra vnda-card-sync —
-        # quando saude_negocio (07:30) coincidia com a janela horaria do
-        # vnda-card, um dos dois falhava SILENCIOSAMENTE em pegar o lock
-        # e skipava sem alarde. Cada job de cron precisa de lock unico.
-        _com_lock(LOCK_KEY_SAUDE_NEGOCIO,
-                  saude_negocio.enviar_digest_saude, 'zapi digest saude')
-
 
 def _run_zapi_digest_anomalias(app):
     """Job: envia digest WhatsApp de anomalias do dia (23:00 BRT)."""
