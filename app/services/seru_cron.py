@@ -45,9 +45,10 @@ LOCK_KEY_VIGIA_ABANDONO = 7737  # advisory lock pro detector de conversas abando
 LOCK_KEY_AUDITOR = 7738  # advisory lock pro auditor diario do bot
 LOCK_KEY_VIGIA_CHATWOOT = 7739  # advisory lock pro vigia de infra do Chatwoot
 LOCK_KEY_FOLLOWUP = 7740  # advisory lock pro follow-up do bot (cliente sumiu)
-# 7741 era LOCK_KEY_SAUDE_NEGOCIO — liberado em 14/06/2026 com a remocao
-# do cron de digest de saude do negocio. Manter o numero RESERVADO (nao
-# reusar) pra evitar conflito caso o job seja reativado depois.
+# Locks LIBERADOS mas RESERVADOS (nao reusar — evita conflito se algum
+# dos jobs for reativado no futuro):
+# - 7730 era do `zapi-digest-anomalias` (job 23:00 BRT, removido 14/06/2026).
+# - 7741 era do `zapi-digest-saude` (job 07:30 BRT, removido 14/06/2026).
 
 
 def _com_lock(key, fn, label='job'):
