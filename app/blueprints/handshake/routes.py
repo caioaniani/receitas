@@ -283,24 +283,10 @@ def _handshake_saida(qr, pedido, pin):
     # aqui, nao faz sentido pedir de novo.
     if driver_match.pin:
         session[f'driver_auth_{driver_match.id}'] = True
-    # Link de proximo passo: prefere magic token do dia (rotativo) se
-    # existir; cai pra Driver.token legado caso ainda nao tenha
-    # rodado o cron diario.
-    from app.models import DriverMagicToken
-    mt = (DriverMagicToken.query
-          .filter_by(driver_id=driver_match.id, revogado=False)
-          .filter(DriverMagicToken.expira_em > agora())
-          .order_by(DriverMagicToken.criado_em.desc())
-          .first())
-    tok = mt.token if mt else driver_match.token
-    proximo_url = url_for('driver.qr_entrega',
-                           token=tok,
-                           pedido_id=pedido.id, _external=True)
-    return render_template('handshake/sucesso.html',
-                            msg=f'Saida confirmada por {driver_match.nome}.',
-                            pedido=pedido,
-                            proximo_label='Conferir e entregar na loja',
-                            proximo_url=proximo_url)
+    # PRG: 303 pra rota GET de sucesso. Refresh do navegador la = re-GET
+    # idempotente, nao reenvia o POST. Tela de sucesso reconstroi proximo_url
+    # a partir do qr/pedido persistidos.
+    return redirect(url_for('handshake.sucesso', token=qr.token), code=303)
 
 
 def _handshake_entrega(qr, pedido, pin):
