@@ -100,8 +100,8 @@ _INJECTION_PATTERNS = [
     re.compile(r'<\|(system|user|assistant)\|>'),
     # tentativa de injetar role no inicio da msg
     re.compile(r'(?im)^\s*(system|assistant)\s*:\s*'),
-    # cliente perguntando pelo canario diretamente
-    re.compile(r'(?i)(canario|canary|canar[ií]o)\b'),
+    # cliente perguntando pelo canario diretamente (com/sem acento)
+    re.compile(r'(?i)\b(canario|can[áa]rio|canary)\b'),
 ]
 
 
