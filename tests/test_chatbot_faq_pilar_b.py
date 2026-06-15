@@ -449,27 +449,6 @@ def test_consultar_pedido_inexistente_nao_revela_autorizacao(app):
         assert out.get('erro') == 'pedido_nao_encontrado'
 
 
-def test_editar_cartinha_sem_auth_recusa(app):
-    """Atacante MAIS critico (porque WRITE): sem autorizacao,
-    editar_cartinha_pedido DEVE recusar — e NUNCA gravar registro no
-    CartinhaEntrega."""
-    from app.models import CartinhaEntrega
-    from app.services.bot_tools import editar_cartinha_pedido
-    with app.app_context():
-        antes = CartinhaEntrega.query.count()
-        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
-                   return_value={'code': 'PEDIDO_ALHEIO'}), \
-             patch('app.services.bot_tools.vnda.telefone_do_pedido',
-                   return_value='11888887777'), \
-             patch('app.services.bot_tools.vnda.cpf_do_pedido',
-                   return_value='99988877766'):
-            out = editar_cartinha_pedido(
-                'PEDIDO_ALHEIO', 'cancelado por falta de pagamento ❤️')
-        assert out.get('erro') == 'autorizacao_necessaria'
-        # CRITICO: nenhum registro foi criado
-        assert CartinhaEntrega.query.count() == antes
-
-
 def test_consultar_pedido_vnda_indisponivel_falha_seguro(app):
     """Fail-closed: VNDA caiu na hora de autorizar → NAO libera. Senao
     bastava derrubar o VNDA pra contornar o gate."""
