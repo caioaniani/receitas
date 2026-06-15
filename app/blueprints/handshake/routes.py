@@ -323,6 +323,7 @@ def _handshake_entrega(qr, pedido, pin):
     qr.usado_por_descricao = f'loja:{loja.nome}'
     db.session.commit()
     _audit(qr.token, pedido, qr.tipo, 'sucesso', f'loja:{loja.nome}')
-    return render_template('handshake/sucesso.html',
-                            msg=f'Entrega confirmada em {loja.nome}.',
-                            pedido=pedido)
+    # PRG: 303 pra rota GET de sucesso. Refresh do navegador la = re-GET
+    # idempotente, sem re-disparar o POST que assustava o funcionario com
+    # "QR Code esta ja usado" depois da entrega ter sido confirmada.
+    return redirect(url_for('handshake.sucesso', token=qr.token), code=303)
