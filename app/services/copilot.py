@@ -3986,6 +3986,10 @@ _READ_HANDLERS = {
     'listar_conversas_chatwoot': _read_listar_conversas_chatwoot,
     'enviar_digest_whatsapp': _read_enviar_digest_whatsapp,
     'consultar_cliente_b2b': _read_consultar_cliente_b2b,
+    # Memoria persistente: 'registrar' eh write mas executa sem aprovacao
+    # Block Kit (atrito demais pra anotar). Errou? admin arquiva em /notas.
+    'consultar_notas': _read_consultar_notas,
+    'registrar_nota': _read_registrar_nota,
 }
 
 _EXEC_HANDLERS = {
