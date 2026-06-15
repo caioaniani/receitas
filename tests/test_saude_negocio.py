@@ -210,3 +210,23 @@ def test_radar_conta_nao_revisadas(app):
                return_value=texto_fake):
         texto = saude_negocio.montar_digest_saude()
     assert 'aguardando conferencia humana' in texto
+
+
+# -------- Cron desligado em 14/06/2026 (decisao do dono) -----------------
+
+def test_cron_de_digest_saude_DESLIGADO():
+    """Trava: o dono pediu pra parar de receber o 'Radar do negocio' no
+    WhatsApp dele (14/06/2026). NUNCA reativar o job sem decisao explicita.
+
+    A rota `/admin/saude` continua funcionando pra consulta manual."""
+    import pathlib
+    src = pathlib.Path('app/services/seru_cron.py').read_text()
+    # Job NAO pode estar registrado no scheduler
+    assert "id='zapi-digest-saude'" not in src
+    # Funcao de execucao do job tambem removida (dead code)
+    assert 'def _run_zapi_digest_saude' not in src
+    # Mas a rota admin continua tendo acesso ao servico
+    routes = pathlib.Path('app/blueprints/main/routes.py').read_text()
+    assert 'saude_negocio.enviar_digest_saude' in routes, (
+        'rota /admin/saude perdeu acesso ao servico — manter ela viva era '
+        'o ponto de desligar so o cron')
