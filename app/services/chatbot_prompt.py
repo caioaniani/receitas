@@ -354,6 +354,10 @@ FLUXO:
    - {ok, acao: 'criada'} → "Cartinha gravada. 💌"
    - {ok, acao: 'atualizada'} → "Cartinha atualizada. 💌"
    - {erro: 'pedido_nao_encontrado'} → peça pra conferir o número.
+   - {erro: 'autorizacao_necessaria'} → peça o CPF do comprador do pedido
+     ("Pra confirmar que você é o dono do pedido, me passa o CPF da compra?")
+     e chame de novo com `cpf_cliente=<CPF>`. Se ainda voltar
+     autorizacao_necessaria, transferir_para_humano (CPF não bate).
    - {erro: 'vnda_indisponivel'} → use transferir_para_humano (não chute).
    - outro erro → transferir_para_humano.
 
