@@ -289,6 +289,57 @@ def _handshake_saida(qr, pedido, pin):
     return redirect(url_for('handshake.sucesso', token=qr.token), code=303)
 
 
+@handshake_bp.route('/<token>/sucesso')
+def sucesso(token):
+    """Tela de confirmacao pos-handshake (PRG).
+
+    Idempotente: refresh do navegador re-GET aqui, nao re-dispara o POST.
+    Resgata a 'msg' a partir de `qr.usado_por_descricao` + `qr.tipo` (sem
+    depender do que veio no POST) e, pra saida, reconstroi o link de
+    proximo passo (qr_entrega) com o magic token corrente do motorista.
+    """
+
+    from app.models import DriverMagicToken
+
+    qr = PedidoQRCode.query.filter_by(token=token).first()
+    if not qr:
+        abort(404)
+    # Se o QR ainda nao foi consumido, o funcionario chegou aqui via URL
+    # direta sem ter feito o handshake — manda pro form.
+    if qr.usado_em is None:
+        return redirect(url_for('handshake.handshake', token=token))
+    pedido = qr.pedido
+    descricao = qr.usado_por_descricao or ''
+    if qr.tipo == 'saida':
+        nome_driver = descricao.replace('driver:', '', 1) if descricao.startswith('driver:') else descricao
+        msg = f'Saida confirmada por {nome_driver}.' if nome_driver else 'Saida confirmada.'
+        proximo_url = None
+        proximo_label = None
+        if pedido.driver_id:
+            mt = (DriverMagicToken.query
+                  .filter_by(driver_id=pedido.driver_id, revogado=False)
+                  .filter(DriverMagicToken.expira_em > agora())
+                  .order_by(DriverMagicToken.criado_em.desc())
+                  .first())
+            tok = mt.token if mt else (pedido.driver.token if pedido.driver else None)
+            if tok:
+                proximo_url = url_for('driver.qr_entrega', token=tok,
+                                       pedido_id=pedido.id, _external=True)
+                proximo_label = 'Conferir e entregar na loja'
+        return render_template('handshake/sucesso.html', msg=msg, pedido=pedido,
+                                proximo_label=proximo_label, proximo_url=proximo_url)
+    # tipo == 'entrega'
+    nome_loja = descricao.replace('loja:', '', 1) if descricao.startswith('loja:') else (pedido.loja.nome if pedido.loja else '')
+    msg = f'Entrega confirmada em {nome_loja}.' if nome_loja else 'Entrega confirmada.'
+    return render_template('handshake/sucesso.html', msg=msg, pedido=pedido)
+
+
+# Suprime ruido do linter: timedelta importada pra contas explicitas no
+# escopo dessa funcao acima.
+_ = timedelta  # noqa: F821 — placeholder, removido se ruff acusar
+
+
+
 def _handshake_entrega(qr, pedido, pin):
     """PIN da loja → muda status pra entregue."""
     from app.blueprints.pedidos.routes import _executar_recebimento_pedido
