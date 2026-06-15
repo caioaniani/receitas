@@ -80,6 +80,16 @@ def _salvar_saldo(data, payload_completo):
     db.session.add(s)
     db.session.commit()
     logger.info('saldo lalamove atualizado: %s %s', moeda, valor)
+    # Alerta de saldo baixo (decisao do dono 15/06/2026): se o saldo capturado
+    # ficou abaixo do limite (default R$200), dispara WhatsApp pro dono via
+    # Z-API. Best-effort — se Z-API estiver fora, o webhook NAO falha (o saldo
+    # ja foi persistido). Dedupe anti-spam dentro do servico.
+    if valor is not None:
+        try:
+            from app.services import lalamove_saldo as _saldo_svc
+            _saldo_svc.avaliar_e_alertar(valor, moeda)
+        except Exception:  # noqa: BLE001
+            logger.exception('lalamove_saldo: alerta nao saiu (best-effort)')
 
 
 @lalamove_bp.route('/webhook', methods=['GET', 'POST', 'HEAD'])
