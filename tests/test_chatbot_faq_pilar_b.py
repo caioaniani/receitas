@@ -684,3 +684,68 @@ def test_prompt_tem_regra_responder_antes_de_perguntar():
     # Regra de UMA pergunta por mensagem aparece
     assert ('uma pergunta' in PROMPT.lower()
             or 'mais de uma pergunta' in PROMPT.lower())
+
+
+# -------- Regressão das convs #115 e #241 (15/06/2026) -------------------
+#
+# Os vigias detectaram handoff preguiçoso no Opus 4.8 mesmo com a regra
+# "preferir RESPONDER a PERGUNTAR". Análise:
+# - #241 (Ka Barbieri, R$269,50 abandonado): cliente forneceu endereço, bot
+#   pediu CEP de novo em vez de chamar consultar_frete. O prompt anterior
+#   dizia "Se o cliente ainda não disse onde está, peça o CEP (1 pergunta
+#   só)" — o framing 'peça primeiro' empurrava o bot a perguntar.
+# - #115 (Bruna - Isabela): caso menos claro, mas a tool consultar_pedido
+#   exige numero e o bot pode ter ignorado um número embutido na mensagem.
+#
+# Reforço cirúrgico (15/06/2026): "REGRA #0 — USE O QUE O CLIENTE JÁ DEU.
+# ANTES DE PEDIR." + exemplos concretos das duas convs.
+
+def test_prompt_tem_REGRA_0_use_o_que_cliente_ja_deu():
+    """REGRA #0 é o cabeçalho de batalha contra handoff preguiçoso."""
+    from app.services.chatbot_prompt import PROMPT
+    assert 'REGRA #0' in PROMPT
+    # A norma essencial
+    assert 'USE O QUE O CLIENTE J' in PROMPT
+    # As 2 violações observadas viraram exemplos negativos
+    assert 'conv' in PROMPT.lower() and '#241' in PROMPT  # frete
+    # Pelo menos um exemplo concreto de cada tool problemática
+    assert 'consultar_frete("Moema' in PROMPT or 'consultar_frete("Moema, ' in PROMPT
+    assert 'consultar_pedido("12345"' in PROMPT
+
+
+def test_secao_frete_diz_pra_usar_endereco_antes_de_pedir_cep():
+    """A regressão exata do #241: 'cliente deu endereço, bot pediu CEP'."""
+    from app.services.chatbot_prompt import PROMPT
+    idx = PROMPT.find('ÁREA DE ENTREGA E FRETE')
+    assert idx >= 0
+    bloco = PROMPT[idx:idx + 2000]
+    # O passo 0 (antes de pedir) tem que estar lá
+    assert 'ANTES DE PEDIR CEP' in bloco
+    # A tool aceita endereço/bairro — o prompt tem que dizer isso
+    assert 'bairro' in bloco.lower() and 'endereco' in bloco.lower().replace('ç','c').replace('é','e').replace('ó','o')
+    # E mencionar o caso real pra fixar memória
+    assert '#241' in bloco
+
+
+def test_secao_rastreamento_diz_pra_ler_numero_antes_de_pedir():
+    """Mesma idéia pra pedido: se o número já apareceu na mensagem,
+    consultar_pedido na hora — não pedir o número de novo."""
+    from app.services.chatbot_prompt import PROMPT
+    idx = PROMPT.find('RASTREAMENTO')
+    assert idx >= 0
+    bloco = PROMPT[idx:idx + 1500]
+    assert 'ANTES DE PEDIR' in bloco
+    # Exemplos do número EMBUTIDO na mensagem
+    assert 'pedido 12345' in bloco or '12345' in bloco
+    # Ainda transfere quando cliente não tem número (caso real do #115)
+    assert 'pelo seu cadastro' in bloco or 'pelo cadastro' in bloco
+
+
+def test_prompt_NAO_tem_mais_peca_o_cep_1_pergunta_so_isolado():
+    """Regressão: o framing antigo 'peça o CEP (1 pergunta só)' como passo
+    1 nu, sem o passo 0 'use o que tem', é o que empurrava o bot a perguntar
+    em vez de tentar. Garantir que sumiu (ou pelo menos não está sozinho)."""
+    from app.services.chatbot_prompt import PROMPT
+    # O literal antigo NUNCA aparece sozinho como passo 1.
+    # A nova versão tem "SE — e SÓ se — o cliente não deu nenhuma pista"
+    assert 'SE — e SÓ se' in PROMPT or 'SE — e SO se' in PROMPT
