@@ -822,6 +822,8 @@ TOOLS = [
     TOOL_LISTAR_CONVERSAS_CHATWOOT,
     # B2B (venda industria pra cliente externo)
     TOOL_CRIAR_CLIENTE_B2B, TOOL_CRIAR_VENDA_B2B, TOOL_CONSULTAR_CLIENTE_B2B,
+    # Memoria persistente (15/06/2026)
+    TOOL_REGISTRAR_NOTA, TOOL_CONSULTAR_NOTAS,
 ]
 
 # Quais tools requerem preview/aprovacao (writes)
