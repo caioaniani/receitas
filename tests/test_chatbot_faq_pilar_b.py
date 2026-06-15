@@ -41,8 +41,12 @@ def test_consultar_ingredientes_match_exato(app):
         ])
         out = consultar_ingredientes('Sourdough Tradicional')
         assert out.get('receita') == 'Sourdough Tradicional'
-        nomes = [i['nome'] for i in out['ingredientes']]
-        # ordenado por % desc
+        ings = out['ingredientes']
+        # Cada item tem APENAS nome — percentual NUNCA exposto (segredo industrial)
+        assert all(set(i.keys()) == {'nome'} for i in ings), \
+            'percentual vazou no retorno — receita virou pública'
+        nomes = [i['nome'] for i in ings]
+        # Ordem interna por percentual decrescente (sem expor o número)
         assert nomes[0] == 'Farinha de trigo'
         assert nomes[1] == 'Água'
         # NÃO contém 'leite' nem 'ovo' nesta receita
