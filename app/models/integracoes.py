@@ -562,6 +562,11 @@ class LalamoveEntrega(db.Model):
     moeda = db.Column(db.String(8))
     distancia_m = db.Column(db.Integer)
 
+    # Priority fee (gorjeta) pra acelerar a alocacao do entregador. Setado
+    # via POST /v3/orders/{id}/priority-fee enquanto a corrida procura
+    # motorista. Guarda o valor ATUAL da gorjeta (a API substitui, nao soma).
+    priority_fee = db.Column(db.Numeric(10, 2))
+
     endereco_destino = db.Column(db.String(500))
     destinatario = db.Column(db.String(200))
     telefone_destino = db.Column(db.String(40))
