@@ -37,11 +37,11 @@ def test_qr_entrega_renderiza_com_qr_inline(app, loja, catalogo):
     """A tela do motorista mostra o QR (data-URL inline) e o link Voltar."""
     with app.app_context():
         d, p = _driver_em_transporte(loja, catalogo)
-        token, pid = d.token, p.id
+        token, pid, did = d.token, p.id, d.id
     client = app.test_client()
     # Autentica o driver na sessão (PIN já passado no painel)
     with client.session_transaction() as s:
-        s[f'driver_auth_{d.id}'] = True
+        s[f'driver_auth_{did}'] = True
     r = client.get(f'/driver/{token}/pedido/{pid}/qr-entrega')
     assert r.status_code == 200
     html = r.get_data(as_text=True)
