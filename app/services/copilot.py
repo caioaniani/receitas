@@ -3901,6 +3901,43 @@ def _read_consultar_cliente_b2b(params, user):
     return {'texto': '\n'.join(linhas)}
 
 
+def _read_consultar_notas(params, user):
+    """Busca nas notas persistentes. Vazio = mais recentes."""
+    from app.services import notas as notas_svc
+    termo = (params.get('termo') or '').strip()
+    encontradas = notas_svc.buscar(termo)
+    if not encontradas:
+        return {'texto': '_(nenhuma nota encontrada — registre com '
+                          'registrar_nota se quiser ensinar algo novo)_'}
+    return {'texto': notas_svc.serializar_pro_agente(encontradas)}
+
+
+def _read_registrar_nota(params, user):
+    """Cria nota nova. Executa direto (sem aprovacao Block Kit) — anotacao
+    e leve e o admin sempre pode arquivar em /notas se virou ruido."""
+    from app.services import notas as notas_svc
+    titulo = (params.get('titulo') or '').strip()
+    conteudo = (params.get('conteudo') or '').strip()
+    if not titulo or not conteudo:
+        return {'erro': 'titulo e conteudo sao obrigatorios'}
+    tags = params.get('tags') or ''
+    # Origem ajuda na auditoria — qual canal cadastrou a nota.
+    canal = (params.get('_canal') or 'admin').strip()
+    origem = {
+        'slack': 'copilot_slack',
+        'whatsapp': 'copilot_wpp',
+        'wpp': 'copilot_wpp',
+    }.get(canal.lower(), 'admin')
+    try:
+        n = notas_svc.registrar(
+            titulo, conteudo, tags=tags, origem=origem,
+            criada_por_id=getattr(user, 'id', None))
+    except ValueError as e:
+        return {'erro': str(e)}
+    return {'texto': f'✅ Nota #{n.id} registrada: *{n.titulo}*\n'
+            f'_(consultavel via "/notas" ou perguntando pro copilot)_'}
+
+
 def _read_enviar_digest_whatsapp(params, user):
     """Envia WhatsApp pro ZAPI_NUMERO_DESTINO. Se texto_custom, manda esse;
     senao, monta o digest de tarefas."""
