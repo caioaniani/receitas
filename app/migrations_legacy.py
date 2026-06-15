@@ -1090,6 +1090,15 @@ def _migrate_postgres(app):
     # CLAUDE.md "Schema migrations").
     _try("ALTER TABLE vigia_veredito ADD COLUMN IF NOT EXISTS tools_usadas TEXT")
 
+    # Priority fee (gorjeta) da Lalamove pra acelerar a alocacao do
+    # entregador. Coluna nova em lalamove_entrega (tabela criada via
+    # db.create_all, que NAO altera tabela existente). ALTER no mesmo
+    # commit do modelo eh seguro aqui: _migrate roda no startup ANTES do
+    # gunicorn servir (app/__init__.py:423), entao a coluna existe antes
+    # de qualquer SELECT. Dinheiro -> Numeric(10,2).
+    _try("ALTER TABLE lalamove_entrega ADD COLUMN IF NOT EXISTS "
+         "priority_fee NUMERIC(10, 2)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
