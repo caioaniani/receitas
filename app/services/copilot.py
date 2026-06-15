@@ -3921,18 +3921,22 @@ def _read_consultar_notas(params, user):
 
 def _read_registrar_nota(params, user):
     """Cria nota nova. Executa direto (sem aprovacao Block Kit) — anotacao
-    e leve e o admin sempre pode arquivar em /notas se virou ruido. A
-    origem fica 'copilot' (qual canal usou nao importa muito; o admin
-    sabe pelo criada_por_id quem foi)."""
+    e leve e o admin sempre pode arquivar em /notas se virou ruido.
+
+    Origem vem de `_canal` (injetado em `interpretar`): 'whatsapp' →
+    `copilot_wpp`, 'slack' (default) → `copilot_slack`. Permite filtrar
+    em /notas e auditar de onde veio o ensinamento."""
     from app.services import notas as notas_svc
     titulo = (params.get('titulo') or '').strip()
     conteudo = (params.get('conteudo') or '').strip()
     if not titulo or not conteudo:
         return {'erro': 'titulo e conteudo sao obrigatorios'}
     tags = params.get('tags') or ''
+    canal = (params.get('_canal') or 'slack').lower()
+    origem = 'copilot_wpp' if canal in ('whatsapp', 'wpp') else 'copilot_slack'
     try:
         n = notas_svc.registrar(
-            titulo, conteudo, tags=tags, origem='copilot_slack',
+            titulo, conteudo, tags=tags, origem=origem,
             criada_por_id=getattr(user, 'id', None))
     except ValueError as e:
         return {'erro': str(e)}
