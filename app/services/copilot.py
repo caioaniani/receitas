@@ -1385,6 +1385,9 @@ def interpretar(prompt_text, user, historico=None, images=None,
     if tool_call and tool_name:
         # Enriquece params com info do banco (matches de produto/MP)
         params = _enriquecer_params(tool_name, tool_call, user)
+        # Dica de canal pros handlers (origem da nota etc): apenas_leitura
+        # = True hoje só vem do WhatsApp do dono (zapi_bot).
+        params['_canal'] = 'whatsapp' if apenas_leitura else 'slack'
         # Tools 'read' executam direto agora e retornam resultado no campo `resultado`
         if tool_name not in REQUER_APROVACAO:
             resultado = _executar_read(tool_name, params, user)
