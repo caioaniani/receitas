@@ -740,6 +740,61 @@ TOOL_LISTAR_CONVERSAS_CHATWOOT = {
     },
 }
 
+# ── Memoria persistente (notas markdown — 15/06/2026) ────────────────
+# Substitui a "memoria efemera" que evaporava a cada sessao. O dono ensina
+# uma regra/excecao/decisao via copilot → registrar_nota → consulta nas
+# proximas conversas. Mesma tabela serve o bot Padeiro (Chatwoot) — bot so
+# le, copilot le e escreve.
+TOOL_REGISTRAR_NOTA = {
+    "name": "registrar_nota",
+    "description": (
+        "Grava uma nota PERSISTENTE quando o usuario te ensinar uma REGRA, "
+        "EXCECAO, DECISAO de negocio, ou CONHECIMENTO que deve ser lembrado "
+        "nas proximas conversas. Exemplos: 'a partir de hoje cookies cortam "
+        "em 5', 'loja Anesio nao vende croissant nutella', 'fornecedor X "
+        "sempre atrasa entrega na sexta', 'quando cliente pedir cesta de "
+        "natal, ja oferece o Box Mimo'. NAO use pra dados efemeros (status "
+        "de pedido especifico, lembrete de tarefa do dia). Confirme no texto "
+        "que registrou, pra o usuario corrigir se entendeu errado. Notas "
+        "ficam visiveis em /notas — admin edita/arquiva la."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "titulo": {"type": "string",
+                       "description": "Frase curta resumindo a regra (max 200 chars)"},
+            "conteudo": {"type": "string",
+                          "description": "A regra COMPLETA em markdown. "
+                          "Inclua contexto, exececoes, exemplos."},
+            "tags": {"type": "string",
+                      "description": "Tags separadas por virgula pra ajudar a "
+                      "buscar depois. Ex: 'cookie,corte,cafe'. Opcional mas "
+                      "recomendado."},
+        },
+        "required": ["titulo", "conteudo"],
+    },
+}
+
+TOOL_CONSULTAR_NOTAS = {
+    "name": "consultar_notas",
+    "description": (
+        "Busca nas notas persistentes (regras/excecoes de negocio que voce ou "
+        "outros usuarios ensinaram em sessoes anteriores). USE ANTES de "
+        "responder perguntas de NEGOCIO cuja resposta pode estar em uma regra "
+        "previamente cadastrada — assim voce nao 'esquece' o que combinaram. "
+        "Termo curto/vazio devolve as mais recentes."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "termo": {"type": "string",
+                       "description": "Palavras-chave pra buscar (titulo, tags "
+                       "e conteudo). Vazio = mais recentes."},
+        },
+    },
+}
+
+
 TOOLS = [
     # Existentes
     TOOL_CRIAR_PEDIDO, TOOL_EDITAR_PEDIDO, TOOL_CONSULTAR_PEDIDO, TOOL_CONSULTAR_ESTOQUE,
