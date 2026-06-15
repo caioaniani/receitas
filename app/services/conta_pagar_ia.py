@@ -68,20 +68,6 @@ SYSTEM_PROMPT = (
     "Se nao for documento de compra, retorna {\"erro\": \"nao_reconhecido\"}."
 )
 
-# Campos sem os quais a extracao eh considerada incompleta (dispara Opus).
-def _faltou_campo_critico(dados):
-    if dados.get('erro'):
-        return True
-    if not dados.get('valor_total'):
-        return True
-    if not dados.get('fornecedor'):
-        return True
-    if dados.get('tipo_documento') == 'boleto' and not (
-            dados.get('codigo_barras') or dados.get('linha_digitavel')):
-        return True
-    return False
-
-
 def _content_block(file_bytes, mimetype):
     """Monta o content block de imagem ou documento (PDF) pra Anthropic."""
     b64 = base64.b64encode(file_bytes).decode('ascii')
