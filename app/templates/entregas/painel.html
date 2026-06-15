@@ -320,10 +320,25 @@
       var linhas = '<div class="lala-st">🛵 Lalamove: <b>' + esc(L.rotulo) + '</b>' +
         (L.valor ? ' · R$ ' + esc(L.valor) : '') +
         (L.veiculo ? ' · ' + esc(L.veiculo) : '') + '</div>' +
+        (L.priority_fee ? '<div class="lala-fee">⚡ Gorjeta ativa: R$ ' +
+          esc(L.priority_fee) + '</div>' : '') +
         (L.motorista ? '<div class="lala-mot">👤 ' + esc(L.motorista) +
           (L.motorista_fone ? ' · ' + esc(L.motorista_fone) : '') + '</div>' : '') +
         (L.share_link ? '<div><a class="lala-link" target="_blank" href="' +
           esc(L.share_link) + '">📡 Acompanhar entrega</a></div>' : '');
+      // Acelerar (priority fee): só enquanto procura entregador. Dá pra
+      // repetir aumentando o valor — a Lalamove substitui pelo maior.
+      var acelerar = '';
+      if (L.pode_acelerar) {
+        acelerar = '<div class="lala-acel">' +
+          '<div class="lala-acel-tit">⚡ Acelerar (gorjeta pro entregador)</div>' +
+          '<input class="lala-fee-inp" id="lala-fee" type="number" min="1" step="1" ' +
+            'inputmode="numeric" placeholder="R$ (ex: 5)">' +
+          '<button class="lala-btn acelerar" data-lala="acelerar" data-id="' + L.id +
+            '">⚡ Dar gorjeta</button>' +
+          '<div class="lala-res" id="lala-res"></div>' +
+          '</div>';
+      }
       var botoes = '';
       if (L.pode_cancelar) {
         botoes += '<button class="lala-btn cancelar" data-lala="cancelar" data-id="' +
@@ -332,7 +347,7 @@
       if (L.encerrada && p.status === 'pronto') {
         botoes += '<button class="lala-btn" data-lala="nova">🛵 Chamar de novo</button>';
       }
-      return '<div class="lala-box">' + linhas + botoes + '</div>';
+      return '<div class="lala-box">' + linhas + acelerar + botoes + '</div>';
     }
     if (p.status !== 'pronto') return '';
     var opcoes = LALA_VEICULOS.map(function (v) {
