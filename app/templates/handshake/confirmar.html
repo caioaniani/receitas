@@ -81,6 +81,17 @@
 </form>
 
 <script>
+// Bloqueia double-tap no botao Confirmar em rede lenta. Servidor tambem
+// aceita re-POST como idempotente (14/06/2026, bug pedido 201), mas o
+// guard de UI evita o cenario de duas requests em paralelo.
+function travarBotaoConfirmar(form) {
+    const btn = form.querySelector('#btn-confirmar');
+    if (!btn || btn.disabled) return false;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Confirmando...';
+    return true;
+}
+
 async function enviarFoto(input) {
     const form = input.closest('form');
     const url = form.dataset.uploadUrl;
