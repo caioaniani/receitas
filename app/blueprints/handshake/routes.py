@@ -26,6 +26,7 @@ submit e redirecionamos pra tela de sucesso, em vez de erro.
 """
 import io
 import logging
+from datetime import timedelta
 
 from flask import abort, flash, redirect, render_template, request, send_file, session, url_for
 
@@ -161,7 +162,6 @@ _DOUBLE_SUBMIT_JANELA_MINUTOS = 10
 
 @handshake_bp.route('/<token>', methods=['GET', 'POST'])
 def handshake(token):
-    from datetime import timedelta
     qr = PedidoQRCode.query.filter_by(token=token).first()
     if not qr:
         _audit(token, None, None, 'scan_falha', 'token nao encontrado')
