@@ -567,6 +567,17 @@ def responder(historico, *, telefone_contato=None):
                 return _resp_handoff('Já te passo para um atendente. 🙂',
                                      'resposta vazia',
                                      tools_usadas=tools_usadas)
+            # Camada 3 anti-injection: filtro de saida. Se o bot regurgita
+            # o canario ou frase-padrao do system prompt, o jailbreak
+            # passou pelas camadas anteriores — recusa a resposta. NUNCA
+            # mandar pro cliente.
+            if _output_vazou_prompt(texto):
+                logger.warning('chatbot: output vazou prompt — handoff '
+                                'forcado. trecho=%r', texto[:200])
+                return _resp_handoff(
+                    'Vou te conectar com nossa equipe agora. 🙂',
+                    'output vazou prompt',
+                    tools_usadas=tools_usadas)
             return {'acao': 'responder', 'texto': texto,
                     'tools_usadas': tools_usadas}
 
