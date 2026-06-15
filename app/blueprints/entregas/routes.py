@@ -312,6 +312,54 @@ def api_lalamove_cancelar():
     return jsonify(ok=True, lalamove=_lalamove_json(e))
 
 
+@entregas_bp.route('/api/painel/lalamove/acelerar', methods=['POST'])
+@login_required
+def api_lalamove_acelerar():
+    """Adiciona/atualiza a gorjeta (priority fee) de uma corrida que ainda
+    procura entregador, pra acelerar a alocacao. JSON: {entrega_id, valor}.
+
+    Regra da Lalamove: o novo valor SUBSTITUI o anterior e tem que ser
+    MAIOR que ele. A gente valida isso aqui (mensagem amigavel) antes de
+    bater na API, e a API valida de novo do lado dela."""
+    from decimal import Decimal, InvalidOperation
+
+    from app.services import lalamove as lala_svc
+    dados = request.get_json(silent=True) or {}
+    e = db.session.get(LalamoveEntrega, dados.get('entrega_id'))
+    if not e or not e.order_id:
+        return jsonify(ok=False, erro='corrida não encontrada'), 400
+    if e.status != 'ASSIGNING_DRIVER':
+        return jsonify(ok=False, erro='só dá pra acelerar enquanto procura '
+                       'entregador (a corrida já tem motorista ou encerrou)'), 400
+    try:
+        valor = Decimal(str(dados.get('valor')).replace(',', '.'))
+    except (InvalidOperation, ValueError, TypeError):
+        return jsonify(ok=False, erro='valor inválido'), 400
+    if valor <= 0:
+        return jsonify(ok=False, erro='a gorjeta precisa ser maior que zero'), 400
+    # Lalamove exige que o novo valor seja MAIOR que o anterior (ela
+    # substitui, nao soma). Barrar aqui evita o 4xx feio da API.
+    if e.priority_fee is not None and valor <= e.priority_fee:
+        return jsonify(ok=False, erro=f'a nova gorjeta precisa ser maior que '
+                       f'a atual (R$ {e.priority_fee})'), 400
+    r = lala_svc.adicionar_priority_fee(e.order_id, float(valor))
+    if not r.get('ok'):
+        return jsonify(ok=False, erro=r.get('erro')), 502
+    e.priority_fee = valor
+    # A API devolve o novo total (com a gorjeta) — atualiza o valor exibido.
+    if r.get('total') is not None:
+        try:
+            e.valor = Decimal(str(r['total']))
+        except (InvalidOperation, ValueError):
+            pass
+    e.atualizado_em = agora()
+    db.session.commit()
+    current_app.logger.info('lalamove acelerada: pedido=%s order=%s fee=%s '
+                            'por uid=%s', e.pedido_code, e.order_id, valor,
+                            current_user.id)
+    return jsonify(ok=True, lalamove=_lalamove_json(e))
+
+
 def _carregar_overrides_data():
     """Retorna dict {pedido_code: date} com todas as datas sobrescritas no ERP."""
     return {o.pedido_code: o.data_entrega for o in OverrideEntrega.query.all()}
