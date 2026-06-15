@@ -1155,6 +1155,15 @@ def _migrate_sqlite(app):
     if cols_vv and 'tools_usadas' not in cols_vv:
         cursor.execute("ALTER TABLE vigia_veredito ADD COLUMN tools_usadas TEXT")
 
+    # Priority fee (gorjeta) da Lalamove — coluna nova em lalamove_entrega.
+    # Em SQLite novo, create_all ja cria com a coluna; aqui cobre bancos
+    # locais antigos. Guarda contra a tabela nao existir ainda.
+    cursor.execute("PRAGMA table_info(lalamove_entrega)")
+    cols_lala = [row[1] for row in cursor.fetchall()]
+    if cols_lala and 'priority_fee' not in cols_lala:
+        cursor.execute("ALTER TABLE lalamove_entrega ADD COLUMN "
+                       "priority_fee NUMERIC(10, 2)")
+
     # Migração tabela receita_ingrediente
     cursor.execute("PRAGMA table_info(receita_ingrediente)")
     cols_ing = [row[1] for row in cursor.fetchall()]
