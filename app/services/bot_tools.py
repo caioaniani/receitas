@@ -255,62 +255,6 @@ def consultar_ingredientes(nome_produto):
         return {'erro': str(exc)}
 
 
-def editar_cartinha_pedido(numero_pedido, texto_cartinha,
-                            *, telefone_contato=None, cpf_cliente=None):
-    """UPSERTA a cartinha de um pedido do site no NOSSO sistema
-    (CartinhaEntrega). Aparece pro time de produção/embalagem na tela
-    /entregas (manual sobrescreve a cartinha original do VNDA).
-
-    AUTORIZACAO (14/06/2026): exige que o solicitante seja o dono do
-    pedido — match por telefone do canal OU CPF informado. Sem isso,
-    qualquer pessoa que digitar um numero VNDA valido podia reescrever
-    cartinha de OUTRO cliente (atacante manda 'cartinha cancelada por
-    falta de pagamento' no presente do vizinho). Ver `_autorizar_pedido`.
-
-    Retorna:
-      {'ok': True, 'pedido': X, 'acao': 'criada'|'atualizada', 'texto': str}
-      {'erro': 'pedido_nao_encontrado'} — pedido nao existe no VNDA
-      {'erro': 'autorizacao_necessaria', 'instrucao': str} — pedido existe,
-        mas dono nao confirmado. Bot deve pedir CPF e re-chamar.
-      {'erro': 'texto_vazio'} — cliente nao informou cartinha
-      {'erro': 'vnda_indisponivel'} — VNDA caiu na hora; nao gravar
-      {'erro': str} — falha generica
-    """
-    from app.extensions import db
-    from app.models import CartinhaEntrega
-    from app.utils import agora as _agora
-    try:
-        numero = str(numero_pedido or '').strip()
-        texto = (texto_cartinha or '').strip()
-        if not numero:
-            return {'erro': 'numero_pedido vazio'}
-        if not texto:
-            return {'erro': 'texto_vazio'}
-        auth = _autorizar_pedido(numero, telefone_contato, cpf_cliente)
-        if auth.get('erro'):
-            return auth
-        pedido = auth['order']
-        code = str(pedido.get('code') or pedido.get('number') or numero).strip()
-        c = CartinhaEntrega.query.filter_by(pedido_code=code).first()
-        existia = c is not None
-        if not c:
-            c = CartinhaEntrega(pedido_code=code)
-            db.session.add(c)
-        c.texto = texto
-        c.atualizado_em = _agora()
-        c.atualizado_por = None  # bot — sem usuario humano
-        db.session.commit()
-        return {
-            'ok': True,
-            'pedido': code,
-            'acao': 'atualizada' if existia else 'criada',
-            'texto': texto,
-        }
-    except Exception as exc:  # noqa: BLE001
-        logger.exception('editar_cartinha_pedido falhou nro=%r', numero_pedido)
-        return {'erro': str(exc)}
-
-
 def gerar_link_carrinho(itens):
     """itens: lista de dicts {'sku': str, 'qtd': int}. Monta o link de
     carrinho do VNDA: /carrinho?itens=SKU:qtd,SKU:qtd (parametro 'itens' em
