@@ -905,6 +905,11 @@ PAPEIS_POR_TOOL = {
     'consultar_tarefas': {'admin', 'gerente', 'funcionario'},
     'criar_tarefa': {'admin', 'gerente', 'funcionario'},
     'marcar_tarefa_feita': {'admin', 'gerente', 'funcionario'},
+    # Memoria persistente: leitura aberta (qualquer um precisa lembrar das
+    # regras), escrita restrita a quem define regra de negocio (owner e
+    # admin). Sem isso, vira lixo dump rapido.
+    'consultar_notas': {'admin', 'gerente', 'funcionario'},
+    'registrar_nota': {'admin'},
 }
 
 
