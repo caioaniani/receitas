@@ -385,6 +385,25 @@ TOOLS = [
             'required': ['cpf', 'numero_pedido'],
         },
     },
+    {
+        'name': 'consultar_notas',
+        'description': (
+            'Busca nas NOTAS PERSISTENTES (regras e excecoes de negocio que '
+            'o time anotou — ex: "loja X nao vende produto Y", "fornecedor '
+            'Z atrasa na sexta", "cookie do cafe corta em 5"). USE ANTES '
+            'de responder pergunta cuja resposta pode estar em uma regra '
+            'cadastrada — assim voce aproveita o conhecimento acumulado em '
+            'vez de transferir ou chutar. Termo curto/vazio devolve as '
+            'mais recentes.'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'termo': {'type': 'string',
+                           'description': 'Palavras-chave da busca '
+                           '(opcional — vazio = recentes)'},
+            },
+        },
+    },
     TOOL_HANDOFF,
 ]
 
