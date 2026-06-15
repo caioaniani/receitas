@@ -485,7 +485,8 @@ def responder(historico, *, telefone_contato=None):
         messages.append({'role': 'assistant', 'content': resp.content})
         resultados = []
         for b in tool_uses:
-            out = _executar_tool(b.name, b.input or {})
+            out = _executar_tool(b.name, b.input or {},
+                                  telefone_contato=telefone_contato)
             tools_usadas.append(b.name)
             if b.name == 'consultar_produtos':
                 produto_falhou = bool(isinstance(out, dict) and out.get('erro'))
