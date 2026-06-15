@@ -1,11 +1,13 @@
 
 
-# -------- Opus 4.8 + regra "responder antes de perguntar" (14/06/2026) ---
+# -------- Fork de modelo Slack/WhatsApp + regra "responder antes" (14/06) -
 
-def test_copilot_usa_opus_4_8():
-    """Trava que o modelo default do copilot é Opus 4.8."""
+def test_copilot_default_e_sonnet_no_slack():
+    """Fork (14/06/2026): default = Sonnet 4.6 (Slack). WhatsApp do dono
+    sobrescreve pra Opus 4.8 via override `modelo=` no zapi_bot."""
     from app.services.copilot import MODELO_DEFAULT
-    assert MODELO_DEFAULT == 'claude-opus-4-8', f'modelo mudou: {MODELO_DEFAULT}'
+    assert MODELO_DEFAULT == 'claude-sonnet-4-6', \
+        f'modelo mudou: {MODELO_DEFAULT}'
 
 
 def test_copilot_prompt_tem_regra_responder_antes_de_perguntar(app):
