@@ -488,6 +488,20 @@ def responder(historico, *, telefone_contato=None):
     # Fora-horario NAO bloqueia mais o bot (decisao do dono 14/06/2026).
     # O bot continua respondendo normal; quem injeta o aviso de horario eh o
     # branch de handoff abaixo (via `_texto_handoff_com_horario`).
+
+    # Camada 2 anti-injection: detecta padroes na ULTIMA msg do user antes
+    # de gastar token do Claude. Se bate, vai direto pro humano (motivo
+    # registrado pro audit). NUNCA dizer pro cliente o que detectamos —
+    # so 'vou te conectar'.
+    ultima_user = next((m for m in reversed(historico or [])
+                        if (m or {}).get('role') == 'user'), None)
+    texto_user = (ultima_user or {}).get('content') or ''
+    if _detectar_injection(texto_user):
+        logger.warning('chatbot: injection detectado msg=%r', texto_user[:120])
+        return _resp_handoff(
+            'Vou te conectar com nossa equipe agora. 🙂',
+            'tentativa de bypass', tools_usadas=[])
+
     api_key = (os.environ.get('ANTHROPIC_API_KEY')
                or current_app.config.get('ANTHROPIC_API_KEY'))
     if not api_key:
