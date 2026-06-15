@@ -255,17 +255,25 @@ def consultar_ingredientes(nome_produto):
         return {'erro': str(exc)}
 
 
-def editar_cartinha_pedido(numero_pedido, texto_cartinha):
+def editar_cartinha_pedido(numero_pedido, texto_cartinha,
+                            *, telefone_contato=None, cpf_cliente=None):
     """UPSERTA a cartinha de um pedido do site no NOSSO sistema
     (CartinhaEntrega). Aparece pro time de produção/embalagem na tela
     /entregas (manual sobrescreve a cartinha original do VNDA).
 
-    Validacao: confirma que o pedido EXISTE no VNDA antes de gravar —
-    senao bot poderia criar cartinha pra pedido fake. Retorna:
-      {'ok': True, 'pedido': X, 'acao': 'criada'|'atualizada',
-       'texto': str, 'aviso_se_diferente'?: str}
+    AUTORIZACAO (14/06/2026): exige que o solicitante seja o dono do
+    pedido — match por telefone do canal OU CPF informado. Sem isso,
+    qualquer pessoa que digitar um numero VNDA valido podia reescrever
+    cartinha de OUTRO cliente (atacante manda 'cartinha cancelada por
+    falta de pagamento' no presente do vizinho). Ver `_autorizar_pedido`.
+
+    Retorna:
+      {'ok': True, 'pedido': X, 'acao': 'criada'|'atualizada', 'texto': str}
       {'erro': 'pedido_nao_encontrado'} — pedido nao existe no VNDA
+      {'erro': 'autorizacao_necessaria', 'instrucao': str} — pedido existe,
+        mas dono nao confirmado. Bot deve pedir CPF e re-chamar.
       {'erro': 'texto_vazio'} — cliente nao informou cartinha
+      {'erro': 'vnda_indisponivel'} — VNDA caiu na hora; nao gravar
       {'erro': str} — falha generica
     """
     from app.extensions import db
@@ -278,14 +286,10 @@ def editar_cartinha_pedido(numero_pedido, texto_cartinha):
             return {'erro': 'numero_pedido vazio'}
         if not texto:
             return {'erro': 'texto_vazio'}
-        # Confirma pedido no VNDA — evita gravar cartinha de pedido fake.
-        try:
-            pedido = vnda.buscar_pedido_completo(numero)
-        except Exception:  # noqa: BLE001
-            logger.exception('editar_cartinha_pedido: VNDA falhou nro=%r', numero)
-            return {'erro': 'vnda_indisponivel'}
-        if not pedido or not isinstance(pedido, dict):
-            return {'erro': 'pedido_nao_encontrado'}
+        auth = _autorizar_pedido(numero, telefone_contato, cpf_cliente)
+        if auth.get('erro'):
+            return auth
+        pedido = auth['order']
         code = str(pedido.get('code') or pedido.get('number') or numero).strip()
         c = CartinhaEntrega.query.filter_by(pedido_code=code).first()
         existia = c is not None
