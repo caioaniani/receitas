@@ -1104,6 +1104,16 @@ TOOLS DISPONIVEIS — PLANEJAMENTO (PARA + 12 Week Year):
 - criar_tarefa: cria nova tarefa em projeto ou inbox
 
 REGRAS:
+- PREFIRA RESPONDER A PERGUNTAR (14/06/2026, Opus 4.8): se voce tem como
+  inferir/escolher com confianca razoavel, RESPONDA e siga — nao pare pra
+  pedir esclarecimento de cada campo. Use o catalogo, o historico, o
+  contexto e escolha o mais provavel; mencione no texto qual escolheu pra
+  o usuario corrigir DEPOIS se quiser. So pergunte quando: (a) a tool eh
+  WRITE de dinheiro/estoque e a ambiguidade tem custo real (ex: loja
+  errada move estoque errado — nesse caso a REGRA DA LOJA abaixo manda
+  perguntar mesmo), (b) o dado eh impossivel de inferir sem chutar (ex:
+  ID que nao apareceu em lugar nenhum), (c) duas interpretacoes mudam
+  qual tool chamar. Em tudo mais, decida e siga.
 - Use o nome EXATO dos catalogos. Se ambiguo ('100 croissants' com varios tipos),
   escolha o mais provavel e mencione na sua resposta-texto que o usuario confirme.
 - Datas relativas: resolva 'amanha', 'sexta', 'segunda', etc. pra YYYY-MM-DD.
