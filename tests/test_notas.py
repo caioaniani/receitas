@@ -295,3 +295,44 @@ def test_copilot_prompt_menciona_notas(app, admin_user):
         s = _build_system_prompt(admin_user)
     assert 'consultar_notas' in s
     assert 'registrar_nota' in s
+
+
+# ── WhatsApp do dono (apenas_leitura=True) — pode gravar nota ───────────
+#
+# Pergunta do dono 15/06/2026: "pelo WhatsApp ele consegue gravar?". Sim:
+# `registrar_nota` NÃO está em REQUER_APROVACAO, então o filtro
+# `apenas_leitura` (que tira só tools de write críticas: criar_pedido,
+# ajuste_estoque, etc.) NÃO remove ela. O canal whatsapp vira origem
+# `copilot_wpp` na nota — útil pra auditoria em /notas.
+
+def test_registrar_nota_sobrevive_ao_filtro_apenas_leitura():
+    """O filtro de modo leitura é só pra REQUER_APROVACAO. Nota é leve
+    e fica disponível pelo WhatsApp do dono."""
+    from app.services import copilot
+    assert 'registrar_nota' not in copilot.REQUER_APROVACAO
+    assert 'registrar_nota' in copilot._READ_HANDLERS
+
+
+def test_canal_whatsapp_marca_origem_copilot_wpp(app, admin_user):
+    """Param _canal='whatsapp' → origem 'copilot_wpp' na nota persistida."""
+    from app.models import Nota
+    from app.services import copilot
+    with app.app_context():
+        copilot._read_registrar_nota(
+            {'titulo': 'Anotando pelo WhatsApp',
+             'conteudo': 'feita do celular do dono',
+             '_canal': 'whatsapp'}, admin_user)
+        n = Nota.query.filter_by(titulo='Anotando pelo WhatsApp').first()
+        assert n is not None
+        assert n.origem == 'copilot_wpp'
+
+
+def test_canal_slack_marca_origem_copilot_slack(app, admin_user):
+    from app.models import Nota
+    from app.services import copilot
+    with app.app_context():
+        copilot._read_registrar_nota(
+            {'titulo': 'Anotando pelo Slack', 'conteudo': 'desktop',
+             '_canal': 'slack'}, admin_user)
+        n = Nota.query.filter_by(titulo='Anotando pelo Slack').first()
+        assert n.origem == 'copilot_slack'
