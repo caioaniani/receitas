@@ -33,31 +33,35 @@ def _driver_em_transporte(loja, catalogo):
     return d, p
 
 
-def test_qr_entrega_renderiza_com_qr_inline(app):
+def test_qr_entrega_renderiza_com_qr_inline(app, loja, catalogo):
     """A tela do motorista mostra o QR (data-URL inline) e o link Voltar."""
-    d, p = _driver_em_transporte(app)
+    with app.app_context():
+        d, p = _driver_em_transporte(loja, catalogo)
+        token, pid = d.token, p.id
     client = app.test_client()
     # Autentica o driver na sessão (PIN já passado no painel)
     with client.session_transaction() as s:
         s[f'driver_auth_{d.id}'] = True
-    r = client.get(f'/driver/{d.token}/pedido/{p.id}/qr-entrega')
+    r = client.get(f'/driver/{token}/pedido/{pid}/qr-entrega')
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     # QR presente como data-URL inline (não depende de rede)
     assert 'data:image/png;base64,' in html
-    assert f'Pedido #{p.id}' in html
+    assert f'Pedido #{pid}' in html
     assert 'Voltar' in html
 
 
-def test_qr_entrega_NAO_depende_de_cdn_render_blocking(app):
+def test_qr_entrega_NAO_depende_de_cdn_render_blocking(app, loja, catalogo):
     """Regressão do incidente: a tela crítica de campo NÃO pode ter
     stylesheet externo render-blocking no <head>. O QR já é inline; o CSS
     também precisa ser (ou não existir dependência externa nenhuma)."""
-    d, p = _driver_em_transporte(app)
+    with app.app_context():
+        d, p = _driver_em_transporte(loja, catalogo)
+        token, pid, did = d.token, p.id, d.id
     client = app.test_client()
     with client.session_transaction() as s:
-        s[f'driver_auth_{d.id}'] = True
-    r = client.get(f'/driver/{d.token}/pedido/{p.id}/qr-entrega')
+        s[f'driver_auth_{did}'] = True
+    r = client.get(f'/driver/{token}/pedido/{pid}/qr-entrega')
     html = r.get_data(as_text=True)
     # Não pode haver NENHUM <link rel=stylesheet> apontando pra CDN externo
     # (jsdelivr/cdnjs/etc) — nem render-blocking nem não-blocking. A tela é
@@ -77,10 +81,13 @@ def test_base_mobile_carrega_cdn_sem_bloquear_render():
     inline de fallback pro caso de o CDN não responder."""
     import pathlib
     src = pathlib.Path('app/templates/handshake/_base_mobile.html').read_text()
-    # Todo <link> de stylesheet pro CDN tem que ser não-blocking.
-    for m in re.finditer(r'<link[^>]+cdn\.jsdelivr[^>]*>', src):
-        tag = m.group(0)
-        # Ou está dentro de <noscript> (fallback) ou tem media=print+onload
+    # Ignora o que está dentro de <noscript> (fallback blocking proposital).
+    sem_noscript = re.sub(r'<noscript>.*?</noscript>', '', src,
+                          flags=re.DOTALL)
+    # Fora do noscript, todo <link> pro CDN tem que ser não-blocking.
+    links_cdn = re.findall(r'<link[^>]+cdn\.jsdelivr[^>]*>', sem_noscript)
+    assert links_cdn, 'esperava ao menos 1 link do Bootstrap (não-blocking)'
+    for tag in links_cdn:
         assert ('media="print"' in tag and 'onload=' in tag), (
             f'link do CDN ainda é render-blocking: {tag}')
     # Fallback inline: alertas e form do PIN legíveis mesmo sem Bootstrap.
