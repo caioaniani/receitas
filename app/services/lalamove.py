@@ -248,6 +248,47 @@ def criar_ordem(quotation_id, sender_stop_id, recipient_stop_id,
             'valor': preco.get('total'), 'moeda': preco.get('currency')}
 
 
+def adicionar_priority_fee(order_id, valor):
+    """Adiciona/atualiza a gorjeta (priority fee) de uma corrida pra acelerar
+    a alocacao do entregador.
+
+    Regras da Lalamove (v3):
+    - Só vale ENQUANTO procura entregador (antes de o motorista aceitar).
+    - Cada novo valor SUBSTITUI o anterior e precisa ser MAIOR que ele.
+    - Endpoint POST /v3/orders/{id}/priority-fee.
+
+    `valor`: número (reais). Vira string com 2 casas no payload.
+
+    Sucesso: {'ok': True, 'priority_fee' (str), 'total' (str|None),
+    'moeda'}. A doc deles está fechada (403); o campo do body é inferido
+    como `priorityFee` (mesmo nome do priceBreakdown). Se a API recusar por
+    nome de campo, o erro cru aparece pro atendente via `_erro_api`.
+    """
+    if not disponivel():
+        return {'ok': False, 'erro': 'Lalamove sem credenciais configuradas'}
+    if not order_id:
+        return {'ok': False, 'erro': 'corrida sem order_id'}
+    try:
+        v = float(str(valor).replace(',', '.'))
+    except (TypeError, ValueError):
+        return {'ok': False, 'erro': f'valor inválido: {valor}'}
+    if v <= 0:
+        return {'ok': False, 'erro': 'a gorjeta precisa ser maior que zero'}
+    payload = {'data': {'priorityFee': f'{v:.2f}'}}
+    status, corpo = _request('POST', f'/v3/orders/{order_id}/priority-fee',
+                             payload)
+    if status not in (200, 201):
+        return _erro_api(status, corpo, 'priority fee')
+    d = corpo.get('data') or {}
+    preco = d.get('priceBreakdown') or {}
+    return {
+        'ok': True,
+        'priority_fee': preco.get('priorityFee') or f'{v:.2f}',
+        'total': preco.get('total'),
+        'moeda': preco.get('currency') or 'BRL',
+    }
+
+
 def detalhes(order_id):
     status, corpo = _request('GET', f'/v3/orders/{order_id}')
     if status != 200:
