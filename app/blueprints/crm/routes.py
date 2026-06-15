@@ -304,7 +304,8 @@ def bot_webhook():
                     current_app.logger.info('crm/bot: conv %s historico=%d msgs',
                                             conv_id, len(historico))
 
-                    resultado = chatbot.responder(historico)
+                    resultado = chatbot.responder(
+                        historico, telefone_contato=telefone_contato)
                     if resultado.get('texto'):
                         chatwoot.enviar_mensagem(conv_id, resultado['texto'])
                     # Persiste o turno (msg atual + resposta) pro proximo contexto
