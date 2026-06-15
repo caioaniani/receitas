@@ -25,10 +25,12 @@ from app.utils import agora, hoje
 
 logger = logging.getLogger(__name__)
 
-# Modelo default do copilot (Slack e canais operacionais). O bot do
-# WhatsApp do dono usa Opus via override `modelo=` (fork de persona/modelo
-# por canal — decisao do dono 11/06/2026; o MOTOR continua um so).
-MODELO_DEFAULT = 'claude-sonnet-4-6'
+# Modelo default do copilot (Slack e canais operacionais).
+# Atualizado 14/06/2026 (decisao do dono): Opus 4.8 default em todos os
+# canais — vale o custo extra pra que o copilot responda diretamente em
+# vez de ficar pedindo esclarecimento. O bot do WhatsApp do dono ja usava
+# Opus via override `modelo=`; agora o Slack tambem cai no mesmo.
+MODELO_DEFAULT = 'claude-opus-4-8'
 
 
 # ── Tools ──────────────────────────────────────────────────────────────
