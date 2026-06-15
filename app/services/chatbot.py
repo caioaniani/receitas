@@ -436,6 +436,16 @@ def _executar_tool(nome, inp, *, telefone_contato=None):
             return frete.consultar_frete(
                 inp.get('endereco_ou_cep') or inp.get('cep')
                 or inp.get('endereco') or '')
+        if nome == 'consultar_notas':
+            from app.services import notas as notas_svc
+            achadas = notas_svc.buscar(
+                (inp.get('termo') or inp.get('busca') or '').strip())
+            if not achadas:
+                return {'notas': [], 'texto': '(nenhuma nota encontrada)'}
+            return {'notas': [{'id': n.id, 'titulo': n.titulo,
+                                'tags': n.tags, 'conteudo': n.conteudo}
+                               for n in achadas],
+                    'texto': notas_svc.serializar_pro_agente(achadas)}
         if nome == 'buscar_nota_fiscal':
             return bot_tools.buscar_nota_fiscal(
                 inp.get('cpf') or '',
