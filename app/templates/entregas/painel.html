@@ -432,6 +432,24 @@
             p.lalamove = d.lalamove;
             abrirDetalhe(p); carregar();
           }).catch(function () { b.disabled = false; lalaErro('sem conexão'); });
+          return;
+        }
+        if (act === 'acelerar') {
+          var feeInp = document.getElementById('lala-fee');
+          var fee = feeInp ? parseFloat(feeInp.value) : 0;
+          if (!fee || fee <= 0) { lalaErro('digite o valor da gorjeta'); return; }
+          if (!confirm('Dar gorjeta de R$ ' + fee + ' pra acelerar este pedido?')) return;
+          b.disabled = true;
+          fetch(LALA_ACELERAR, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ entrega_id: b.getAttribute('data-id'), valor: fee })
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            b.disabled = false;
+            if (!d.ok) { lalaErro(d.erro || 'falhou'); return; }
+            p.lalamove = d.lalamove;
+            abrirDetalhe(p); carregar();
+          }).catch(function () { b.disabled = false; lalaErro('sem conexão'); });
         }
       });
     });
