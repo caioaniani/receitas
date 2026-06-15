@@ -151,14 +151,34 @@ def foto_serve(token, foto_id):
     abort(404)
 
 
+# Janela em que um re-POST do mesmo navegador eh tratado como double-submit
+# acidental (refresh, voltar/avancar, double-tap em rede lenta) e redirecionado
+# pra tela de sucesso, em vez de mostrar erro "QR ja usado". Depois disso a
+# mensagem de erro normal volta — reuso intencional muito depois do fato
+# precisa do alarme.
+_DOUBLE_SUBMIT_JANELA_MINUTOS = 10
+
+
 @handshake_bp.route('/<token>', methods=['GET', 'POST'])
 def handshake(token):
+    from datetime import timedelta
     qr = PedidoQRCode.query.filter_by(token=token).first()
     if not qr:
         _audit(token, None, None, 'scan_falha', 'token nao encontrado')
         return render_template('handshake/erro.html',
                                 msg='Token nao encontrado. Pode ja ter sido usado ou estar errado.'), 404
     if not qr.valido:
+        # Idempotencia: re-POST do mesmo handshake recem-concluido (pull-to-
+        # refresh do mobile, voltar+avancar, double-tap) NAO deve assustar o
+        # funcionario com "QR ja usado" — o pedido ja foi processado. Manda
+        # pra tela de sucesso (PRG ja idempotente). Reuso fora da janela
+        # continua mostrando erro normal.
+        if (request.method == 'POST'
+                and qr.usado_em is not None
+                and qr.usado_em >= agora() - timedelta(minutes=_DOUBLE_SUBMIT_JANELA_MINUTOS)):
+            _audit(token, qr.pedido, qr.tipo, 'double_submit_suprimido',
+                   f'usado_em={qr.usado_em.isoformat()}')
+            return redirect(url_for('handshake.sucesso', token=token), code=303)
         motivo = 'expirado' if qr.expira_em <= agora() else 'ja usado'
         _audit(token, qr.pedido, qr.tipo, 'scan_falha', f'qr {motivo}')
         return render_template('handshake/erro.html',
