@@ -155,3 +155,17 @@ def render_item_com_estado(nome, estado):
     Ex: ('Croissant Francês', 'backup') -> 'Croissant Francês [BACKUP]'."""
     tag = estado_label(estado)
     return f'{nome} {tag}'.rstrip()
+
+
+# ─── Lalamove ─────────────────────────────────────────────────────────
+# Limite mínimo do saldo da carteira Lalamove. Quando o saldo capturado
+# pelo webhook WALLET_BALANCE_CHANGED ficar abaixo disso, o dono recebe
+# alerta no WhatsApp. Decisão do dono 15/06/2026.
+LALAMOVE_SALDO_MIN_REAIS = 200
+
+# Anti-spam do alerta de saldo: não realerta se já avisou nas últimas
+# `_ALERTA_DEDUPE_HORAS` E o saldo não caiu pelo menos `_ALERTA_DEDUPE_DELTA`
+# (em reais) desde o último alerta. Permite re-alertar se o saldo desabar
+# rápido (ex: alertou em R$190, caiu pra R$80 → vale realertar).
+LALAMOVE_SALDO_ALERTA_DEDUPE_HORAS = 12
+LALAMOVE_SALDO_ALERTA_DEDUPE_DELTA_REAIS = 50
