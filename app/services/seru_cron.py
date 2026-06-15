@@ -390,12 +390,12 @@ def iniciar(app):
     # automatico sem decisao explicita do dono. Servico `saude_negocio.py`
     # e funcao `_run_zapi_digest_saude` mantidos pro uso da rota.
 
-    # Digest WhatsApp de anomalias do dia — 23:00 BRT (apos fechamento)
-    _scheduler.add_job(
-        lambda app=app: _run_zapi_digest_anomalias(app),
-        'cron', hour=23, minute=0, id='zapi-digest-anomalias',
-        max_instances=1, coalesce=True,
-    )
+    # Digest WhatsApp "Alertas do dia" (vendas atipicas + quedas + estoque
+    # parado): DESLIGADO em 14/06/2026 por pedido do dono — chegava todo dia
+    # 23:00 BRT no WhatsApp dele. A funcao `anomalias.enviar_digest_whatsapp`
+    # continua viva pra rota admin (`/notificacoes/...`) e pra tool do
+    # copilot (`enviar_digest_whatsapp`) — o dono ainda pode pedir o
+    # resumo sob demanda. NAO reativar como cron sem decisao explicita.
 
     # Vigia de infra do Chatwoot — 15 em 15 min. Desligar: CHATWOOT_VIGIA_INFRA=0.
     if os.environ.get('CHATWOOT_VIGIA_INFRA', '1') != '0':
