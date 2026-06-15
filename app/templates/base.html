@@ -91,6 +91,10 @@
            class="sidebar-link {% if request.path.startswith('/avisos') %}active{% endif %}">
             Avisos à produção
         </a>
+        <a href="{{ url_for('notas.index') }}"
+           class="sidebar-link {% if request.path.startswith('/notas') %}active{% endif %}">
+            Notas (memória do agente)
+        </a>
         {% if current_user.is_owner %}
         <a href="{{ url_for('projetos.painel') }}"
            class="sidebar-link {% if request.path.startswith('/projetos') %}active{% endif %}">
