@@ -25,12 +25,17 @@ from app.utils import agora, hoje
 
 logger = logging.getLogger(__name__)
 
-# Modelo default do copilot (Slack e canais operacionais).
-# Atualizado 14/06/2026 (decisao do dono): Opus 4.8 default em todos os
-# canais — vale o custo extra pra que o copilot responda diretamente em
-# vez de ficar pedindo esclarecimento. O bot do WhatsApp do dono ja usava
-# Opus via override `modelo=`; agora o Slack tambem cai no mesmo.
-MODELO_DEFAULT = 'claude-opus-4-8'
+# Modelo default do copilot (Slack e canais operacionais que NAO passam
+# override `modelo=`).
+#
+# Historico do fork (14/06/2026, decisao do dono):
+# - WhatsApp do dono (zapi_bot.py) passa `modelo=MODELO_WHATSAPP_DEFAULT`
+#   = Opus 4.8 — caminho premium pra ele.
+# - Slack (slack_bot.py) NAO passa override — opera em Sonnet 4.6,
+#   modelo default mais barato. Decidido apos a janela de tentar Opus
+#   default em todos os canais: o ganho de qualidade no Slack nao
+#   compensou o custo extra com 12 atendentes usando.
+MODELO_DEFAULT = 'claude-sonnet-4-6'
 
 
 # ── Tools ──────────────────────────────────────────────────────────────
