@@ -387,11 +387,15 @@ def _build_messages(historico):
     return messages
 
 
-def responder(historico):
+def responder(historico, *, telefone_contato=None):
     """Processa a conversa (com loop de ferramentas) e decide a resposta.
 
     `historico`: lista cronológica [{'role','content'}] terminando na última
     mensagem do cliente.
+    `telefone_contato`: telefone canonico do contato do canal (Chatwoot
+    WhatsApp). NUNCA vem do cliente — vem do payload do canal. Usado
+    pra autorizar tools que acessam pedido (`consultar_pedido`,
+    `editar_cartinha_pedido`); sem isso, cai no fallback de CPF.
 
     Retorna:
       {'acao': 'responder', 'texto': str}
