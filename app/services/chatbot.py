@@ -539,7 +539,8 @@ def responder(historico, *, telefone_contato=None):
             resp = client.messages.create(
                 model=MODELO,
                 max_tokens=1200,
-                system=[{'type': 'text', 'text': PROMPT,
+                system=[{'type': 'text',
+                         'text': PROMPT + _CANARIO_INSTRUCAO,
                          'cache_control': {'type': 'ephemeral'}}],
                 tools=tools_cache,
                 messages=messages,
