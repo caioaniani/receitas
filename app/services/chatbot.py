@@ -182,13 +182,25 @@ TOOLS = [
     },
     {
         'name': 'consultar_pedido',
-        'description': 'Consulta status, itens e a DATA DE ENTREGA real (a '
-                       'agendada) de um pedido pelo número. Use pra dar a data '
-                       'correta quando o cliente tiver dúvida — o site às vezes '
-                       'mostra "entregue hoje" por bug; esta data é a verdadeira.',
+        'description': ('Consulta status, itens e a DATA DE ENTREGA real (a '
+                        'agendada) de um pedido pelo número. Use pra dar a data '
+                        'correta quando o cliente tiver dúvida — o site às vezes '
+                        'mostra "entregue hoje" por bug; esta data é a verdadeira.\n\n'
+                        'AUTORIZAÇÃO: a tool valida que o solicitante é o dono '
+                        'do pedido (por telefone do canal OU CPF). Se vier '
+                        '`erro: autorizacao_necessaria`, peça o CPF ao cliente '
+                        'e chame de novo com `cpf_cliente`.'),
         'input_schema': {
             'type': 'object',
-            'properties': {'numero': {'type': 'string'}},
+            'properties': {
+                'numero': {'type': 'string',
+                            'description': 'numero do pedido'},
+                'cpf_cliente': {
+                    'type': 'string',
+                    'description': ('CPF do comprador do pedido — só preencha '
+                                     'se o cliente JÁ informou na conversa.'),
+                },
+            },
             'required': ['numero'],
         },
     },
