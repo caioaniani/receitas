@@ -510,7 +510,7 @@ def iniciar(app):
         )
 
     _scheduler.start()
-    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h · zapi tarefas 07:00 · zapi anomalias 23:00 · desperdicio slack 20:10/15/20/25 + whatsapp 20:30 · backup 04:00 · automacoes whatsapp 5min')
+    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h · zapi tarefas 07:00 · desperdicio slack 20:10/15/20/25 + whatsapp 20:30 · backup 04:00 · automacoes whatsapp 5min')
 
 
 def _run_slack_resumo_diario(app):
