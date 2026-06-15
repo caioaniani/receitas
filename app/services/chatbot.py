@@ -51,9 +51,10 @@ _CANARIO_INSTRUCAO = (
 # bloquear cliente honesto (ex: "esquece" sozinho nao basta).
 _INJECTION_PATTERNS = [
     # "ignore/esqueça as instruções acima/anteriores/previous"
+    # (esquec/esqueç pega 'esqueça', 'esquece', 'esqueceu'; tb 'esque[çc]a')
     re.compile(
-        r'(?i)\b(ignore|esqu[eé]c[ae]|desconsidere|disregard|forget)\s+'
-        r'(as?\s+|the\s+|todas?\s+|all\s+)?'
+        r'(?i)\b(ignore|esque[cç]e?[ae]?|desconsidere|disregard|forget)\s+'
+        r'(as?\s+|o\s+|the\s+|todas?\s+|todo\s+|tudo\s+|all\s+)?'
         r'(instru[cç][oõ]es?|regras|prompts?|tudo|anterior(es)?|acima|'
         r'previous|above|de\s+cima|rules?|guidelines?)'),
     # "system prompt" / "seu prompt" / "suas instruções" / "regras escondidas"
