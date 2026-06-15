@@ -4,10 +4,11 @@ Baseado em `ocr_nota.py`, mas pra contas a pagar: classifica o documento
 (nota fiscal ou boleto) e extrai fornecedor, valor, vencimento, codigo de
 barras / linha digitavel, itens.
 
-Estrategia de custo: tenta Sonnet primeiro (barato); se faltar campo critico
-(valor_total, fornecedor, ou — pra boleto — codigo_barras/linha_digitavel),
-reprocessa com Opus. Modelos configuraveis por env var (caso o id do Opus
-mude).
+Modelo: Opus 4.8 direto (decisao do dono 14/06/2026 — vale o custo extra
+pra reduzir os fallbacks e os campos faltantes que o humano tinha que
+preencher na mao). Modelo configuravel por env var (caso o id do Opus
+mude). Atras de erro de json/transient, o codigo tenta UMA vez com o
+mesmo modelo — sem cascata Sonnet->Opus.
 
 Aceita imagem (image/*) e PDF (application/pdf — boleto as vezes eh PDF).
 NAO grava nada — so extrai. Quem chamar decide o que fazer.
@@ -20,8 +21,7 @@ import re
 
 logger = logging.getLogger(__name__)
 
-SONNET = os.environ.get('OCR_MODELO_SONNET', 'claude-sonnet-4-6')
-OPUS = os.environ.get('OCR_MODELO_OPUS', 'claude-opus-4-7')
+MODELO = os.environ.get('OCR_MODELO_OPUS', 'claude-opus-4-8')
 
 SYSTEM_PROMPT = (
     "Voce extrai dados de documentos de compra (nota fiscal ou boleto) a "
@@ -115,7 +115,7 @@ def extrair_documento(file_bytes, mimetype='image/jpeg'):
     """Extrai dados de uma NF/boleto. Retorna dict com os campos +
     `modelo_usado`, ou `{'erro': ...}`.
 
-    Sonnet primeiro; Opus no fallback se faltar campo critico.
+    Opus 4.8 direto — sem cascata. Decisao do dono 14/06/2026.
     """
     api_key = os.environ.get('ANTHROPIC_API_KEY')
     if not api_key:
@@ -129,28 +129,12 @@ def extrair_documento(file_bytes, mimetype='image/jpeg'):
 
     client = anthropic.Anthropic(api_key=api_key)
     bloco = _content_block(file_bytes, mimetype)
-
-    # 1a tentativa: Sonnet
     try:
-        dados = _chamar(client, SONNET, bloco)
-        dados['modelo_usado'] = SONNET
+        dados = _chamar(client, MODELO, bloco)
+        dados['modelo_usado'] = MODELO
+        return dados
     except json.JSONDecodeError:
-        dados = {'erro': 'json_invalido'}
+        return {'erro': 'json_invalido'}
     except Exception as exc:  # noqa: BLE001
-        logger.warning('conta_pagar_ia Sonnet falhou: %s', exc)
-        dados = {'erro': f'sonnet: {exc}'}
-
-    # Fallback Opus se incompleto
-    if _faltou_campo_critico(dados):
-        try:
-            dados_opus = _chamar(client, OPUS, bloco)
-            dados_opus['modelo_usado'] = OPUS
-            return dados_opus
-        except Exception as exc:  # noqa: BLE001
-            logger.warning('conta_pagar_ia Opus falhou: %s', exc)
-            # devolve o que o Sonnet conseguiu (mesmo incompleto) se nao for erro
-            if not dados.get('erro'):
-                return dados
-            return {'erro': f'opus: {exc}', 'raw_sonnet': dados}
-
-    return dados
+        logger.warning('conta_pagar_ia falhou: %s', exc)
+        return {'erro': f'opus: {exc}'}
