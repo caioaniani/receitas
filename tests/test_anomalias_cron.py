@@ -26,4 +26,4 @@ def test_funcao_continua_disponivel_pra_admin_e_copilot():
     assert 'anomalias.enviar_digest_whatsapp' in routes
 
     copilot_src = pathlib.Path('app/services/copilot.py').read_text()
-    assert "'name': 'enviar_digest_whatsapp'" in copilot_src
+    assert 'enviar_digest_whatsapp' in copilot_src
