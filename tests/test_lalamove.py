@@ -311,3 +311,145 @@ def test_webhook_saldo_carteira_e_painel(app, admin_user):
                return_value=([], None)):
         d = c.get('/entregas/api/painel').get_json()
     assert d['lalamove_saldo'] == '99.00'
+
+
+# ── Priority fee / gorjeta pra acelerar entregador (15/06/2026) ──
+
+def test_adicionar_priority_fee_monta_payload_e_parseia(app):
+    """Service: POST /v3/orders/{id}/priority-fee com data.priorityFee.
+    Resposta traz o novo priceBreakdown (priorityFee + total)."""
+    from app.services import lalamove as lala_svc
+    _config(app)
+    resp = {'data': {'priceBreakdown': {
+        'priorityFee': '5.00', 'total': '36.00', 'currency': 'BRL'}}}
+    with app.app_context():
+        with patch('app.services.lalamove._request',
+                   return_value=(200, resp)) as req:
+            r = lala_svc.adicionar_priority_fee('O-123', 5)
+    assert r['ok'] is True
+    assert r['priority_fee'] == '5.00'
+    assert r['total'] == '36.00'
+    # confere endpoint + payload enviados
+    metodo, path = req.call_args[0][0], req.call_args[0][1]
+    payload = req.call_args[0][2]
+    assert metodo == 'POST'
+    assert path == '/v3/orders/O-123/priority-fee'
+    assert payload == {'data': {'priorityFee': '5.00'}}
+
+
+def test_adicionar_priority_fee_valor_invalido_nao_chama_api(app):
+    from app.services import lalamove as lala_svc
+    _config(app)
+    with app.app_context():
+        with patch('app.services.lalamove._request') as req:
+            assert lala_svc.adicionar_priority_fee('O-1', 0)['ok'] is False
+            assert lala_svc.adicionar_priority_fee('O-1', -3)['ok'] is False
+            assert lala_svc.adicionar_priority_fee('O-1', 'abc')['ok'] is False
+        req.assert_not_called()
+
+
+def test_adicionar_priority_fee_erro_da_api_vira_mensagem(app):
+    """Se a API recusar (ex: campo errado), o erro cru chega pro atendente."""
+    from app.services import lalamove as lala_svc
+    _config(app)
+    corpo = {'errors': [{'id': 'ERR_INVALID', 'message': 'bad field'}]}
+    with app.app_context():
+        with patch('app.services.lalamove._request', return_value=(422, corpo)):
+            r = lala_svc.adicionar_priority_fee('O-9', 5)
+    assert r['ok'] is False
+    assert 'bad field' in r['erro']
+
+
+def _criar_corrida_assigning(app, admin_user):
+    """Helper: corrida já chamada (ASSIGNING_DRIVER) pronta pra acelerar."""
+    from app.models import LalamoveEntrega
+    from app.utils import hoje
+    with app.app_context():
+        e = LalamoveEntrega(
+            pedido_code='VND-900', data_ref=hoje(), order_id='O-900',
+            status='ASSIGNING_DRIVER', service_type='LALAGO',
+            valor=20, moeda='BRL', criado_por_id=admin_user.id)
+        db.session.add(e)
+        db.session.commit()
+        return e.id
+
+
+def test_acelerar_rota_adiciona_gorjeta(app, admin_user):
+    """Fluxo feliz: atendente dá R$5, a API aceita, persistimos priority_fee
+    e o novo total volta no card."""
+    from app.models import LalamoveEntrega
+    _config(app)
+    eid = _criar_corrida_assigning(app, admin_user)
+    c = app.test_client()
+    _login(c)
+    resp = {'ok': True, 'priority_fee': '5.00', 'total': '25.00', 'moeda': 'BRL'}
+    with patch('app.services.lalamove.adicionar_priority_fee',
+               return_value=resp) as svc:
+        r = c.post('/entregas/api/painel/lalamove/acelerar',
+                   json={'entrega_id': eid, 'valor': 5})
+    d = r.get_json()
+    assert d['ok'] is True
+    assert d['lalamove']['priority_fee'] == '5.00'
+    assert d['lalamove']['valor'] == '25.00'   # total atualizado
+    svc.assert_called_once_with('O-900', 5.0)
+    with app.app_context():
+        e = db.session.get(LalamoveEntrega, eid)
+        assert str(e.priority_fee) == '5.00'
+
+
+def test_acelerar_exige_valor_maior_que_o_atual(app, admin_user):
+    """A Lalamove substitui (não soma) e exige valor maior. Barramos antes
+    de bater na API com mensagem amigável."""
+    from app.extensions import db as _db
+    from app.models import LalamoveEntrega
+    _config(app)
+    eid = _criar_corrida_assigning(app, admin_user)
+    with app.app_context():
+        e = _db.session.get(LalamoveEntrega, eid)
+        e.priority_fee = 10
+        _db.session.commit()
+    c = app.test_client()
+    _login(c)
+    with patch('app.services.lalamove.adicionar_priority_fee') as svc:
+        r = c.post('/entregas/api/painel/lalamove/acelerar',
+                   json={'entrega_id': eid, 'valor': 8})
+    assert r.status_code == 400
+    assert 'maior' in r.get_json()['erro']
+    svc.assert_not_called()
+
+
+def test_acelerar_so_quando_procura_entregador(app, admin_user):
+    """Corrida que já tem motorista (ON_GOING) ou encerrou não pode acelerar."""
+    from app.extensions import db as _db
+    from app.models import LalamoveEntrega
+    _config(app)
+    eid = _criar_corrida_assigning(app, admin_user)
+    with app.app_context():
+        e = _db.session.get(LalamoveEntrega, eid)
+        e.status = 'ON_GOING'
+        _db.session.commit()
+    c = app.test_client()
+    _login(c)
+    with patch('app.services.lalamove.adicionar_priority_fee') as svc:
+        r = c.post('/entregas/api/painel/lalamove/acelerar',
+                   json={'entrega_id': eid, 'valor': 5})
+    assert r.status_code == 400
+    svc.assert_not_called()
+    # E o JSON do card reflete que NÃO dá mais pra acelerar
+    with app.app_context():
+        from app.blueprints.entregas.routes import _lalamove_json
+        e = _db.session.get(LalamoveEntrega, eid)
+        assert _lalamove_json(e)['pode_acelerar'] is False
+
+
+def test_acelerar_valor_invalido_400(app, admin_user):
+    _config(app)
+    eid = _criar_corrida_assigning(app, admin_user)
+    c = app.test_client()
+    _login(c)
+    with patch('app.services.lalamove.adicionar_priority_fee') as svc:
+        assert c.post('/entregas/api/painel/lalamove/acelerar',
+                      json={'entrega_id': eid, 'valor': 0}).status_code == 400
+        assert c.post('/entregas/api/painel/lalamove/acelerar',
+                      json={'entrega_id': eid, 'valor': 'xx'}).status_code == 400
+    svc.assert_not_called()
