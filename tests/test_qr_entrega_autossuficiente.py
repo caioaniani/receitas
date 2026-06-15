@@ -15,14 +15,11 @@ import re
 from datetime import date
 
 
-def _driver_em_transporte(app):
+def _driver_em_transporte(loja, catalogo):
     """Cria driver autenticado + pedido em_transporte pronto pro qr_entrega."""
     from app.extensions import db
-    from app.models import Driver, Loja, PedidoItem, PedidoLoja
+    from app.models import Driver, PedidoItem, PedidoLoja
 
-    loja = Loja(nome='Loja Nebraska', ativa=True)
-    db.session.add(loja)
-    db.session.flush()
     d = Driver(nome='Will', ativo=True, token='tok-will-legado', pin='0000')
     db.session.add(d)
     db.session.flush()
@@ -31,7 +28,7 @@ def _driver_em_transporte(app):
     db.session.add(p)
     db.session.flush()
     db.session.add(PedidoItem(pedido_id=p.id, quantidade=15,
-                              nome_item='Cookie Calebaut'))
+                              receita_id=catalogo['receita'].id))
     db.session.commit()
     return d, p
 
