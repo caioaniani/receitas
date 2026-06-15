@@ -381,14 +381,12 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
-    # Radar de saude do negocio (contas a pagar + receitas) — 07:30 BRT.
-    # Desligar: DIGEST_SAUDE=0.
-    if os.environ.get('DIGEST_SAUDE', '1') != '0':
-        _scheduler.add_job(
-            lambda app=app: _run_zapi_digest_saude(app),
-            'cron', hour=7, minute=30, id='zapi-digest-saude',
-            max_instances=1, coalesce=True,
-        )
+    # Radar de saude do negocio (Contas a Pagar + Receitas):
+    # DESLIGADO em 14/06/2026 por pedido do dono — chegava todo dia 07:30
+    # BRT no WhatsApp dele. A rota `/admin/saude` continua disponivel
+    # pra consulta manual quando o dono quiser. NAO reativar como cron
+    # automatico sem decisao explicita do dono. Servico `saude_negocio.py`
+    # e funcao `_run_zapi_digest_saude` mantidos pro uso da rota.
 
     # Digest WhatsApp de anomalias do dia — 23:00 BRT (apos fechamento)
     _scheduler.add_job(
