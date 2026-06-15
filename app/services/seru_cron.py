@@ -540,15 +540,6 @@ def _run_zapi_digest_tarefas(app):
         _com_lock(7728, zapi_resumos.enviar_digest_tarefas, 'zapi digest tarefas')
 
 
-
-def _run_zapi_digest_anomalias(app):
-    """Job: envia digest WhatsApp de anomalias do dia (23:00 BRT)."""
-    from app.services import anomalias
-
-    with app.app_context():
-        _com_lock(7730, anomalias.enviar_digest_whatsapp, 'zapi digest anomalias')
-
-
 def _run_desperdicio_alerta_slack(app):
     """Job: posta no Slack as lojas sem desperdicio lancado (20:10/15/20/25 BRT).
 
