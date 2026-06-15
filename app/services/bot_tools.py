@@ -494,22 +494,88 @@ def buscar_nota_fiscal(cpf, numero_pedido, *, conv_id=None, canal=None):
     return {'link': link, 'numero_pedido': pedido.get('numero')}
 
 
-def consultar_pedido(numero):
+def _autorizar_pedido(code, telefone_contato, cpf_cliente):
+    """Verifica que o cliente da conversa eh DONO do pedido antes de liberar
+    dado/edicao. Sem isso, qualquer pessoa que digite um numero VNDA valido
+    recebe status/itens/total — vazamento real (14/06/2026: dono confirmou
+    como risco alto). Defesa em camadas:
+
+    1. Se temos telefone do contato no canal (Chatwoot WhatsApp) E o pedido
+       tem telefone no shipping_address E batem (canonico via
+       `telefone_chave`): AUTORIZADO. Sem fricao pro cliente honesto.
+    2. Se cliente forneceu CPF E bate com CPF do comprador no pedido:
+       AUTORIZADO. Caminho para canal sem telefone (site/IG).
+    3. Caso contrario: NAO AUTORIZADO. Retorna instrucao pro bot pedir CPF.
+
+    Fail-closed: se nem telefone nem CPF batem, devolve nao_autorizado
+    (e nao 'erro generico' — pra o bot distinguir e pedir CPF, sem revelar
+    que o pedido existe).
+
+    Retorna:
+      {'ok': True, 'order': dict_normalizado_minimo} — autorizado, pode usar
+      {'erro': 'pedido_nao_encontrado'} — pedido nao existe
+      {'erro': 'autorizacao_necessaria', 'instrucao': str} — pedido existe
+        mas dono nao confirmado; instrucao orienta o bot a pedir CPF.
+      {'erro': 'vnda_indisponivel'}
+    """
+    from app.utils import telefone_chave
+    try:
+        order = vnda.buscar_pedido_completo(code)
+    except Exception:  # noqa: BLE001
+        logger.exception('_autorizar_pedido: VNDA falhou code=%r', code)
+        return {'erro': 'vnda_indisponivel'}
+    if not order:
+        return {'erro': 'pedido_nao_encontrado'}
+
+    # 1. Match por telefone do contato (Chatwoot WhatsApp).
+    tel_contato = telefone_chave(telefone_contato or '')
+    if tel_contato:
+        try:
+            tel_pedido = vnda.telefone_do_pedido(code)
+        except Exception:  # noqa: BLE001
+            logger.exception('_autorizar_pedido: telefone_do_pedido falhou')
+            tel_pedido = ''
+        if tel_pedido and tel_pedido == tel_contato:
+            return {'ok': True, 'order': order}
+
+    # 2. Match por CPF.
+    cpf_digits = ''.join(c for c in (cpf_cliente or '') if c.isdigit())
+    if cpf_digits:
+        try:
+            cpf_pedido = vnda.cpf_do_pedido(code)
+        except Exception:  # noqa: BLE001
+            logger.exception('_autorizar_pedido: cpf_do_pedido falhou')
+            cpf_pedido = ''
+        if cpf_pedido and cpf_pedido == cpf_digits:
+            return {'ok': True, 'order': order}
+
+    return {
+        'erro': 'autorizacao_necessaria',
+        'instrucao': ('Peca o CPF do comprador do pedido pra confirmar que '
+                       'voce esta falando com o dono. So depois chame a tool '
+                       'de novo passando cpf_cliente=<cpf informado>.'),
+    }
+
+
+def consultar_pedido(numero, *, telefone_contato=None, cpf_cliente=None):
     """Status + DATA DE ENTREGA de um pedido pelo número (code do VNDA).
+
+    AUTORIZACAO: a partir de 14/06/2026 a tool exige que o solicitante
+    seja o dono do pedido — match por telefone do canal (Chatwoot)
+    OU CPF informado pelo cliente. Sem isso, retorna autorizacao_necessaria
+    (NAO expoe que o pedido existe). Ver `_autorizar_pedido`.
 
     A data vem de vnda._extrair_data_entrega, que prioriza a data AGENDADA no
     checkout (extra.DataDeEntrega) — e NAO o expected_delivery_date do VNDA, que
     e o campo bugado por tras do "pedido pode ser entregue hoje" no site. Ou
-    seja: esta data e a correta pra desfazer essa confusao com o cliente.
-
-    Retorna dados do pedido ou {'erro': ...}. Nunca expoe dados de outro
-    cliente — busca direta pelo code informado."""
+    seja: esta data e a correta pra desfazer essa confusao com o cliente."""
     code = str(numero or '').strip()
     if not code:
         return {'erro': 'informe o número do pedido'}
-    order = vnda.buscar_pedido_completo(code)
-    if not order:
-        return {'erro': 'pedido não encontrado'}
+    auth = _autorizar_pedido(code, telefone_contato, cpf_cliente)
+    if auth.get('erro'):
+        return auth
+    order = auth['order']
     itens = [{'nome': i.get('product_name') or i.get('name') or '',
               'qtd': i.get('quantity', 1)} for i in (order.get('items') or [])]
     data_entrega = vnda._extrair_data_entrega(order)
