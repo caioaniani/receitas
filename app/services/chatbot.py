@@ -355,8 +355,8 @@ def responder(historico, *, telefone_contato=None):
     mensagem do cliente.
     `telefone_contato`: telefone canonico do contato do canal (Chatwoot
     WhatsApp). NUNCA vem do cliente — vem do payload do canal. Usado
-    pra autorizar tools que acessam pedido (`consultar_pedido`,
-    `editar_cartinha_pedido`); sem isso, cai no fallback de CPF.
+    pra autorizar tools que acessam pedido (`consultar_pedido`); sem isso,
+    cai no fallback de CPF.
 
     Retorna:
       {'acao': 'responder', 'texto': str}
