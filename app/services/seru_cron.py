@@ -45,7 +45,9 @@ LOCK_KEY_VIGIA_ABANDONO = 7737  # advisory lock pro detector de conversas abando
 LOCK_KEY_AUDITOR = 7738  # advisory lock pro auditor diario do bot
 LOCK_KEY_VIGIA_CHATWOOT = 7739  # advisory lock pro vigia de infra do Chatwoot
 LOCK_KEY_FOLLOWUP = 7740  # advisory lock pro follow-up do bot (cliente sumiu)
-LOCK_KEY_SAUDE_NEGOCIO = 7741  # advisory lock pro digest de saude do negocio
+# 7741 era LOCK_KEY_SAUDE_NEGOCIO — liberado em 14/06/2026 com a remocao
+# do cron de digest de saude do negocio. Manter o numero RESERVADO (nao
+# reusar) pra evitar conflito caso o job seja reativado depois.
 
 
 def _com_lock(key, fn, label='job'):
