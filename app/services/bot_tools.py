@@ -199,15 +199,20 @@ def consultar_ingredientes(nome_produto):
     HONESTA (sem chutar). Filtra ingredientes < 0.5% (irrelevantes pro cliente
     e ruido na resposta).
 
+    Retorna SOMENTE os NOMES dos ingredientes (sem percentual) — receita
+    com percentuais e segredo industrial. Pra resposta de alergia
+    ("tem leite?", "tem ovo?") a lista de nomes ja cobre 100% — percentual
+    nao acrescenta nada e abre risco de concorrente raspar receita pelo bot.
+
     Retorna:
-      {'receita': str, 'ingredientes': [{'nome': str, 'pct': float}, ...]}
+      {'receita': str, 'ingredientes': [{'nome': str}, ...]}
       {'erro': 'nao_encontrado', 'sugestoes': [str]} — match falhou; sugere
         os 5 nomes mais proximos pra o bot esclarecer com o cliente.
       {'erro': str} — falha de DB ou tabela vazia.
 
-    Nao retorna a receita inteira (peso, modo de preparo) — so a lista que
-    importa pra alergia/restricao. NUNCA usar pra alergia confirmada (regra do
-    prompt: alergia = handoff sempre)."""
+    Nao retorna a receita inteira (peso, modo de preparo, percentuais) —
+    so a lista que importa pra alergia/restricao. NUNCA usar pra alergia
+    confirmada (regra do prompt: alergia = handoff sempre)."""
     from app.models import Receita
     from app.utils import normalizar_busca
     try:
@@ -232,14 +237,18 @@ def consultar_ingredientes(nome_produto):
                          for t in alvo.split() if len(t) > 2)}.values()),
             )[:5]
             return {'erro': 'nao_encontrado', 'sugestoes': sug}
-        ings = []
+        # Filtra ingredientes irrelevantes (< 0.5%) e ordena por importancia
+        # internamente — mas NAO expoe o percentual no retorno.
+        relevantes = []
         for ing in (match.ingredientes or []):
             pct = float(ing.porcentagem or 0)
             if pct < 0.5:
                 continue
-            ings.append({'nome': (ing.ingrediente_nome or '').strip(),
-                         'pct': round(pct, 2)})
-        ings.sort(key=lambda x: x['pct'], reverse=True)
+            nome = (ing.ingrediente_nome or '').strip()
+            if nome:
+                relevantes.append((pct, nome))
+        relevantes.sort(reverse=True)
+        ings = [{'nome': nome} for _pct, nome in relevantes]
         return {'receita': match.nome, 'ingredientes': ings}
     except Exception as exc:  # noqa: BLE001
         logger.exception('consultar_ingredientes falhou nome=%r', nome_produto)
