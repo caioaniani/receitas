@@ -411,7 +411,11 @@ def test_nf_sem_token_passa_pro_humano(app):
 
 def test_consultar_pedido_retorna_data_agendada(app):
     """consultar_pedido devolve a data AGENDADA (extra.DataDeEntrega), nunca o
-    expected_delivery_date bugado do VNDA (o do "entregue hoje")."""
+    expected_delivery_date bugado do VNDA (o do "entregue hoje").
+
+    Atualizado 14/06/2026: tool agora exige autorização (telefone do canal
+    OU CPF). Aqui autorizo via telefone batendo pra focar no teste original
+    (data agendada vence o expected_delivery_date)."""
     from app.services import bot_tools
     order = {
         'code': 'AB123', 'status': 'paid', 'total': 321.0,
@@ -420,8 +424,10 @@ def test_consultar_pedido_retorna_data_agendada(app):
         'expected_delivery_date': '2026-06-05',  # bug do VNDA: "hoje"
     }
     with app.app_context():
-        with patch('app.services.vnda.buscar_pedido_completo', return_value=order):
-            r = bot_tools.consultar_pedido('AB123')
+        with patch('app.services.vnda.buscar_pedido_completo', return_value=order), \
+             patch('app.services.vnda.telefone_do_pedido', return_value='11999998888'):
+            r = bot_tools.consultar_pedido(
+                'AB123', telefone_contato='5511999998888')
     assert r['data_entrega'] == '08/06/2026'   # a agendada, não a bugada
     assert r['periodo'] == '08-09h'
     assert r['numero'] == 'AB123'
