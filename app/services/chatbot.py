@@ -282,7 +282,10 @@ def disponivel():
                 or current_app.config.get('ANTHROPIC_API_KEY'))
 
 
-def _executar_tool(nome, inp):
+def _executar_tool(nome, inp, *, telefone_contato=None):
+    """Executa a tool. `telefone_contato` (canonico, vindo do canal — ex:
+    Chatwoot WhatsApp) eh injetado em tools que precisam autorizar dono
+    de pedido. Nunca vem do LLM, sempre do contexto da conversa."""
     from app.services import bot_tools
     try:
         if nome == 'consultar_produtos':
@@ -291,11 +294,16 @@ def _executar_tool(nome, inp):
             return bot_tools.consultar_ingredientes(
                 inp.get('nome_produto') or inp.get('nome') or inp.get('produto') or '')
         if nome == 'consultar_pedido':
-            return bot_tools.consultar_pedido(inp.get('numero') or inp.get('numero_pedido') or '')
+            return bot_tools.consultar_pedido(
+                inp.get('numero') or inp.get('numero_pedido') or '',
+                telefone_contato=telefone_contato,
+                cpf_cliente=inp.get('cpf_cliente') or inp.get('cpf') or None)
         if nome == 'editar_cartinha_pedido':
             return bot_tools.editar_cartinha_pedido(
                 inp.get('numero_pedido') or inp.get('numero') or '',
-                inp.get('texto_cartinha') or inp.get('texto') or inp.get('cartinha') or '')
+                inp.get('texto_cartinha') or inp.get('texto') or inp.get('cartinha') or '',
+                telefone_contato=telefone_contato,
+                cpf_cliente=inp.get('cpf_cliente') or inp.get('cpf') or None)
         if nome == 'gerar_link_carrinho':
             return bot_tools.gerar_link_carrinho(inp.get('itens') or [])
         if nome == 'consultar_frete':
