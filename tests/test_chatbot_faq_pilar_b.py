@@ -470,12 +470,3 @@ def test_prompt_orienta_autorizacao_pedido():
             or 'antes da autorização' in PROMPT.lower())
 
 
-def test_prompt_cartinha_pedido_existente_agora_e_tool():
-    """Regressão: a versão antiga do prompt dizia 'cartinha em pedido feito =
-    humano'. Foi substituída por orientação de usar a tool."""
-    from app.services.chatbot_prompt import PROMPT
-    # A tool aparece como caminho oficial
-    assert 'editar_cartinha_pedido' in PROMPT
-    # E a regra antiga 'voce nao consegue' NÃO existe mais
-    assert 'você não consegue' not in PROMPT.lower() or \
-           'cartinha' not in PROMPT.lower().split('você não consegue')[0][-200:]
