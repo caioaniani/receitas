@@ -243,6 +243,33 @@ def test_prompt_tem_regra_ingredientes_tool():
     assert 'nao_encontrado' in PROMPT.lower() or 'não tenho a ficha' in PROMPT.lower()
 
 
+def test_prompt_proibe_vazar_percentual_de_receita():
+    """Trava contra raspagem de receita: bot deve recusar pergunta de
+    'quanto X tem?' / 'qual a porcentagem de Y?'. Tool já não devolve
+    percentual; prompt fecha o flanco do cliente perguntar mesmo assim."""
+    from app.services.chatbot_prompt import PROMPT
+    assert 'segredo' in PROMPT.lower() or 'não compartilhamos' in PROMPT.lower()
+    assert 'porcentagem' in PROMPT.lower() or 'proporção' in PROMPT.lower() or 'proporções' in PROMPT.lower()
+
+
+def test_tool_ingredientes_nunca_devolve_percentual(app):
+    """Defesa em camadas: mesmo se o prompt falhar, a tool não tem
+    como vazar percentual — só devolve {'nome': ...}."""
+    from app.services.bot_tools import consultar_ingredientes
+    with app.app_context():
+        _criar_receita(app, 'Receita Sensivel', [
+            ('Farinha especial', 65.0),
+            ('Outro ingrediente caro', 20.0),
+        ])
+        out = consultar_ingredientes('Receita Sensivel')
+        for ing in out['ingredientes']:
+            assert 'pct' not in ing
+            assert 'percentual' not in ing
+            assert 'porcentagem' not in ing
+            # Garante que NENHUM número aparece nas chaves ou valores
+            assert all(not isinstance(v, (int, float)) for v in ing.values())
+
+
 def test_prompt_entrega_horario_corrigido():
     from app.services.chatbot_prompt import PROMPT
     # Site entrega 8h-18h (NÃO 7h-18h)
