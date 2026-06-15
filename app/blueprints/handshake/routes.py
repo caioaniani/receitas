@@ -14,11 +14,20 @@ Tokens tem TTL de 2h e sao single-use (usado_em preenchido). Pin invalido
 mostra erro mas mantem token vivo (pode tentar de novo).
 
 Toda tentativa eh registrada em HandshakeAudit pra investigar falhas.
+
+PRG + IDEMPOTENCIA (14/06/2026, bug pedido 201 Nebraska 294): apos sucesso
+do POST, redirecionamos 303 pra rota GET `/handshake/<token>/sucesso`.
+Sem isso, refresh do navegador (pull-to-refresh do Chrome Android, F5,
+voltar/avancar) ou double-tap em rede lenta dispara um segundo POST que
+ve o QR ja consumido e renderiza "QR Code esta ja usado" — o pedido ja
+estava entregue (correto) mas a UX assustava o funcionario. Camada 2:
+se o POST chega com qr.usado_em recente (<10min), tratamos como double-
+submit e redirecionamos pra tela de sucesso, em vez de erro.
 """
 import io
 import logging
 
-from flask import abort, flash, render_template, request, send_file, session, url_for
+from flask import abort, flash, redirect, render_template, request, send_file, session, url_for
 
 from app.blueprints.handshake import handshake_bp
 from app.extensions import csrf, db
@@ -125,7 +134,6 @@ def foto_serve(token, foto_id):
     Pos-M6: se a foto ja foi migrada pro Dropbox (imagem_url preenchido),
     redireciona pro CDN do Dropbox. Senao serve BLOB legado do banco.
     """
-    from flask import redirect
 
     from app.models import PedidoItemFoto
     qr, pedido, erro = _qr_ativo(token)
