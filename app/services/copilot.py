@@ -1166,6 +1166,10 @@ TOOLS DISPONIVEIS — CONSULTAS (read, sem aprovacao):
 - consultar_conversa_chatwoot (owner): mensagens REAIS de uma conversa do Chatwoot. Use depois do consultar_vigia pra ver o dialogo cliente↔bot↔atendente que disparou o alerta.
 - listar_conversas_chatwoot (owner): quem ta na fila — 'pending' (aguardando bot) ou 'open' (cliente esperando atendente humano). Use pra 'tem alguem esperando', 'quem ta na fila'.
 
+TOOLS DISPONIVEIS — MEMORIA PERSISTENTE (notas markdown — usa SEMPRE):
+- consultar_notas(termo?): busca regras/excecoes de negocio que voce ou outros usuarios CADASTRARAM em sessoes anteriores (ex: "loja X nao vende Y", "fornecedor Z atrasa sexta"). USE NO INICIO da conversa OU sempre que o usuario perguntar de regra de negocio — assim voce nao 'esquece' o que combinaram. Termo vazio = ultimas notas.
+- registrar_nota(titulo, conteudo, tags?): grava REGRA/EXCECAO/DECISAO que precisa lembrar nas proximas conversas. USE quando o usuario te ENSINAR algo explicitamente ("a partir de hoje X", "agora vai ser assim", "guarda essa regra", "lembra disso"). NAO use pra dados efemeros (pedido especifico, lembrete do dia). Confirme no texto o que registrou — usuario corrige se entendeu errado.
+
 TOOLS DISPONIVEIS — PLANEJAMENTO (PARA + 12 Week Year):
 - marcar_tarefa_feita: marca uma tarefa como concluida (preview)
 - criar_tarefa: cria nova tarefa em projeto ou inbox
