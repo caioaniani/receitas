@@ -326,9 +326,15 @@ def test_editar_cartinha_cria_quando_nao_existe(app):
     from app.models import CartinhaEntrega
     from app.services.bot_tools import editar_cartinha_pedido
     with app.app_context():
+        # Telefone do contato bate com telefone do pedido → autoriza sem
+        # precisar de CPF (caso WhatsApp comum).
         with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
-                   return_value={'code': 'P12345', 'number': '12345'}):
-            out = editar_cartinha_pedido('P12345', 'Feliz aniversário, mãe! ❤️')
+                   return_value={'code': 'P12345', 'number': '12345'}), \
+             patch('app.services.bot_tools.vnda.telefone_do_pedido',
+                   return_value='11999998888'):
+            out = editar_cartinha_pedido(
+                'P12345', 'Feliz aniversário, mãe! ❤️',
+                telefone_contato='5511999998888')
         assert out.get('ok') is True
         assert out.get('acao') == 'criada'
         assert out.get('pedido') == 'P12345'
@@ -348,9 +354,15 @@ def test_editar_cartinha_atualiza_quando_existe(app):
     with app.app_context():
         db.session.add(CartinhaEntrega(pedido_code='P777', texto='Texto antigo'))
         db.session.commit()
+        # Aqui autorizo via CPF (canal sem telefone)
         with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
-                   return_value={'code': 'P777'}):
-            out = editar_cartinha_pedido('P777', 'Texto novo')
+                   return_value={'code': 'P777', 'client': {'cpf': '123.456.789-00'}}), \
+             patch('app.services.bot_tools.vnda.telefone_do_pedido',
+                   return_value=''), \
+             patch('app.services.bot_tools.vnda.cpf_do_pedido',
+                   return_value='12345678900'):
+            out = editar_cartinha_pedido('P777', 'Texto novo',
+                                          cpf_cliente='12345678900')
         assert out.get('ok') is True
         assert out.get('acao') == 'atualizada'
         c = CartinhaEntrega.query.filter_by(pedido_code='P777').first()
