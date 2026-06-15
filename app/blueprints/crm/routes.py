@@ -244,6 +244,21 @@ def bot_webhook():
     contato = ((payload.get('sender') or {}).get('name')
                or ((conv.get('meta') or {}).get('sender') or {}).get('name') or '')
 
+    # Telefone do contato (canonico, sem 55 inicial) — vai pro `chatbot.responder`
+    # e dali pras tools que autorizam dono de pedido (consultar_pedido,
+    # editar_cartinha_pedido). NUNCA pegar telefone que o cliente CHAMA — so do
+    # canal. Se canal nao tiver telefone (IG, site), fica vazio e o bot cai no
+    # fallback de CPF.
+    sender = (payload.get('sender') or {})
+    sender_meta = ((conv.get('meta') or {}).get('sender') or {})
+    telefone_contato = telefone_chave(
+        sender.get('phone_number')
+        or sender.get('identifier')
+        or sender_meta.get('phone_number')
+        or sender_meta.get('identifier')
+        or ''
+    )
+
     # Lock por conv_id: serializa threads que processam a MESMA conversa
     # (mensagens consecutivas do cliente no WhatsApp = webhooks paralelos).
     _lock_conv = _lock_para_conv(conv_id)
