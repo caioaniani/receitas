@@ -286,12 +286,6 @@ def _executar_tool(nome, inp, *, telefone_contato=None):
                 inp.get('numero') or inp.get('numero_pedido') or '',
                 telefone_contato=telefone_contato,
                 cpf_cliente=inp.get('cpf_cliente') or inp.get('cpf') or None)
-        if nome == 'editar_cartinha_pedido':
-            return bot_tools.editar_cartinha_pedido(
-                inp.get('numero_pedido') or inp.get('numero') or '',
-                inp.get('texto_cartinha') or inp.get('texto') or inp.get('cartinha') or '',
-                telefone_contato=telefone_contato,
-                cpf_cliente=inp.get('cpf_cliente') or inp.get('cpf') or None)
         if nome == 'gerar_link_carrinho':
             return bot_tools.gerar_link_carrinho(inp.get('itens') or [])
         if nome == 'consultar_frete':
