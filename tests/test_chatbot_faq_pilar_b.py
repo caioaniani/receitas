@@ -319,103 +319,38 @@ def test_prompt_encomenda_evento_humano():
     assert 'transferir_para_humano' in bloco
 
 
-# -------- Tool nova: editar_cartinha_pedido (Mudança 2) -------------------
-
-def test_editar_cartinha_cria_quando_nao_existe(app):
-    from app.extensions import db
-    from app.models import CartinhaEntrega
-    from app.services.bot_tools import editar_cartinha_pedido
-    with app.app_context():
-        # Telefone do contato bate com telefone do pedido → autoriza sem
-        # precisar de CPF (caso WhatsApp comum).
-        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
-                   return_value={'code': 'P12345', 'number': '12345'}), \
-             patch('app.services.bot_tools.vnda.telefone_do_pedido',
-                   return_value='11999998888'):
-            out = editar_cartinha_pedido(
-                'P12345', 'Feliz aniversário, mãe! ❤️',
-                telefone_contato='5511999998888')
-        assert out.get('ok') is True
-        assert out.get('acao') == 'criada'
-        assert out.get('pedido') == 'P12345'
-        c = CartinhaEntrega.query.filter_by(pedido_code='P12345').first()
-        assert c is not None
-        assert c.texto == 'Feliz aniversário, mãe! ❤️'
-        # Bot não é humano — atualizado_por NULL
-        assert c.atualizado_por is None
-        CartinhaEntrega.query.delete()
-        db.session.commit()
+# -------- Cartinha pelo bot REMOVIDA (14/06/2026, decisao do dono) -------
+#
+# A tool `editar_cartinha_pedido` foi tirada do bot porque a defesa contra
+# texto abusivo/ameaçador (insulto, sarcasmo, ironia) exigiria classificador
+# de conteudo confiavel — e mesmo assim falsos negativos chegariam pra
+# impressao/embalagem. Decisao: cliente que quer cartinha em pedido feito
+# → handoff sempre. Os testes abaixo travam a regressao.
 
 
-def test_editar_cartinha_atualiza_quando_existe(app):
-    from app.extensions import db
-    from app.models import CartinhaEntrega
-    from app.services.bot_tools import editar_cartinha_pedido
-    with app.app_context():
-        db.session.add(CartinhaEntrega(pedido_code='P777', texto='Texto antigo'))
-        db.session.commit()
-        # Aqui autorizo via CPF (canal sem telefone)
-        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
-                   return_value={'code': 'P777', 'client': {'cpf': '123.456.789-00'}}), \
-             patch('app.services.bot_tools.vnda.telefone_do_pedido',
-                   return_value=''), \
-             patch('app.services.bot_tools.vnda.cpf_do_pedido',
-                   return_value='12345678900'):
-            out = editar_cartinha_pedido('P777', 'Texto novo',
-                                          cpf_cliente='12345678900')
-        assert out.get('ok') is True
-        assert out.get('acao') == 'atualizada'
-        c = CartinhaEntrega.query.filter_by(pedido_code='P777').first()
-        assert c.texto == 'Texto novo'
-        CartinhaEntrega.query.delete()
-        db.session.commit()
-
-
-def test_editar_cartinha_rejeita_pedido_inexistente(app):
-    """Bot não pode gravar cartinha pra pedido fake — validar contra VNDA."""
-    from app.services.bot_tools import editar_cartinha_pedido
-    with app.app_context():
-        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
-                   return_value=None):
-            out = editar_cartinha_pedido('99999', 'oi')
-        assert out.get('erro') == 'pedido_nao_encontrado'
-
-
-def test_editar_cartinha_rejeita_vazios(app):
-    from app.services.bot_tools import editar_cartinha_pedido
-    with app.app_context():
-        assert editar_cartinha_pedido('', 'oi').get('erro') == 'numero_pedido vazio'
-        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
-                   return_value={'code': 'P1'}):
-            assert editar_cartinha_pedido('P1', '   ').get('erro') == 'texto_vazio'
-
-
-def test_editar_cartinha_vnda_indisponivel(app):
-    """VNDA caiu na hora do pedido: NÃO grava — bot ficaria com cartinha
-    pra pedido que talvez não exista. Devolve erro pro bot transferir."""
-    from app.services.bot_tools import editar_cartinha_pedido
-    with app.app_context():
-        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
-                   side_effect=ConnectionError('timeout')):
-            out = editar_cartinha_pedido('P1', 'oi')
-        assert out.get('erro') == 'vnda_indisponivel'
-
-
-def test_tool_editar_cartinha_registrada(app):
-    from app.services.chatbot import TOOLS, _executar_tool
+def test_tool_editar_cartinha_REMOVIDA(app):
+    """Trava: a tool nao pode voltar pro bot sem reabrir essa decisao."""
+    from app.services.chatbot import TOOLS
     nomes = [t['name'] for t in TOOLS]
-    assert 'editar_cartinha_pedido' in nomes
-    # Roteamento do executor — agora exige autorização (telefone do canal)
-    with app.app_context():
-        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
-                   return_value={'code': 'PX'}), \
-             patch('app.services.bot_tools.vnda.telefone_do_pedido',
-                   return_value='11999998888'):
-            out = _executar_tool(
-                'editar_cartinha_pedido',
-                {'numero_pedido': 'PX', 'texto_cartinha': 'Oi'},
-                telefone_contato='5511999998888')
-        assert out.get('ok') is True
+    assert 'editar_cartinha_pedido' not in nomes
+
+
+def test_funcao_editar_cartinha_REMOVIDA_do_bot_tools():
+    """Trava: a funcao no bot_tools tambem foi removida (sem dead code)."""
+    from app.services import bot_tools
+    assert not hasattr(bot_tools, 'editar_cartinha_pedido')
+
+
+def test_prompt_cartinha_pedido_existente_diz_handoff():
+    """Cliente pedir mexer em cartinha de pedido feito → bot transfere."""
+    from app.services.chatbot_prompt import PROMPT
+    # Tool NAO aparece como caminho oficial
+    assert 'editar_cartinha_pedido' not in PROMPT
+    # E a regra explicita de handoff esta la
+    idx = PROMPT.upper().find('CARTINHA EM PEDIDO J')
+    assert idx >= 0, 'sumiu a seção CARTINHA EM PEDIDO JÁ FEITO'
+    bloco = PROMPT[idx:idx + 600]
+    assert 'transferir_para_humano' in bloco or 'humano' in bloco.lower()
 
 
 # -------- Reparos de seguranca de pedido (14/06/2026) ---------------------
