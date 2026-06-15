@@ -531,11 +531,13 @@ def _autorizar_pedido(code, telefone_contato, cpf_cliente):
     if not order:
         return {'erro': 'pedido_nao_encontrado'}
 
-    # 1. Match por telefone do contato (Chatwoot WhatsApp).
+    # 1. Match por telefone do contato (Chatwoot WhatsApp). Canoniza nos 2
+    # lados — `telefone_do_pedido` ja canoniza, mas defensivo evita bug
+    # silencioso se a impl mudar.
     tel_contato = telefone_chave(telefone_contato or '')
     if tel_contato:
         try:
-            tel_pedido = vnda.telefone_do_pedido(code)
+            tel_pedido = telefone_chave(vnda.telefone_do_pedido(code) or '')
         except Exception:  # noqa: BLE001
             logger.exception('_autorizar_pedido: telefone_do_pedido falhou')
             tel_pedido = ''
