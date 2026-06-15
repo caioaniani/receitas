@@ -405,13 +405,155 @@ def test_tool_editar_cartinha_registrada(app):
     from app.services.chatbot import TOOLS, _executar_tool
     nomes = [t['name'] for t in TOOLS]
     assert 'editar_cartinha_pedido' in nomes
-    # Roteamento do executor
+    # Roteamento do executor — agora exige autorização (telefone do canal)
     with app.app_context():
         with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
-                   return_value={'code': 'PX'}):
-            out = _executar_tool('editar_cartinha_pedido',
-                                  {'numero_pedido': 'PX', 'texto_cartinha': 'Oi'})
+                   return_value={'code': 'PX'}), \
+             patch('app.services.bot_tools.vnda.telefone_do_pedido',
+                   return_value='11999998888'):
+            out = _executar_tool(
+                'editar_cartinha_pedido',
+                {'numero_pedido': 'PX', 'texto_cartinha': 'Oi'},
+                telefone_contato='5511999998888')
         assert out.get('ok') is True
+
+
+# -------- Reparos de seguranca de pedido (14/06/2026) ---------------------
+
+def test_consultar_pedido_sem_auth_devolve_autorizacao_necessaria(app):
+    """REGRESSAO de vazamento: cliente A nao pode ler pedido B so com o
+    numero. Sem telefone do canal e sem CPF, tool DEVE recusar."""
+    from app.services.bot_tools import consultar_pedido
+    with app.app_context():
+        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
+                   return_value={'code': 'P1', 'status': 'paid',
+                                  'total': 300}), \
+             patch('app.services.bot_tools.vnda.telefone_do_pedido',
+                   return_value='11888887777'), \
+             patch('app.services.bot_tools.vnda.cpf_do_pedido',
+                   return_value='99988877766'):
+            out = consultar_pedido('P1')  # sem telefone, sem cpf
+        assert out.get('erro') == 'autorizacao_necessaria'
+        # NÃO devolve nenhum dado do pedido — nem status, nem total
+        assert 'status' not in out
+        assert 'total' not in out
+        assert 'itens' not in out
+
+
+def test_consultar_pedido_telefone_canal_bate_autoriza(app):
+    """Telefone do contato no Chatwoot bate com telefone do pedido VNDA →
+    autoriza sem precisar de CPF (caminho sem fricção)."""
+    from app.services.bot_tools import consultar_pedido
+    with app.app_context():
+        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
+                   return_value={'code': 'P2', 'status': 'paid',
+                                  'total': 200, 'items': []}), \
+             patch('app.services.bot_tools.vnda.telefone_do_pedido',
+                   return_value='11999998888'):
+            out = consultar_pedido('P2', telefone_contato='5511999998888')
+        assert out.get('numero') == 'P2'
+        assert out.get('status') == 'paid'
+
+
+def test_consultar_pedido_cpf_bate_autoriza(app):
+    """Fallback: telefone do canal ausente (IG, site) ou nao bate. Cliente
+    fornece CPF e bate com o do comprador no VNDA → autoriza."""
+    from app.services.bot_tools import consultar_pedido
+    with app.app_context():
+        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
+                   return_value={'code': 'P3', 'status': 'paid',
+                                  'total': 100, 'items': []}), \
+             patch('app.services.bot_tools.vnda.telefone_do_pedido',
+                   return_value=''), \
+             patch('app.services.bot_tools.vnda.cpf_do_pedido',
+                   return_value='11122233344'):
+            out = consultar_pedido('P3', cpf_cliente='111.222.333-44')
+        assert out.get('numero') == 'P3'
+
+
+def test_consultar_pedido_cpf_errado_NAO_autoriza(app):
+    """CPF informado nao bate com CPF do pedido → recusa. Atacante que
+    sabe o numero MAS chuta CPF errado nao consegue."""
+    from app.services.bot_tools import consultar_pedido
+    with app.app_context():
+        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
+                   return_value={'code': 'P4', 'status': 'paid'}), \
+             patch('app.services.bot_tools.vnda.telefone_do_pedido',
+                   return_value=''), \
+             patch('app.services.bot_tools.vnda.cpf_do_pedido',
+                   return_value='11122233344'):
+            out = consultar_pedido('P4', cpf_cliente='00000000000')
+        assert out.get('erro') == 'autorizacao_necessaria'
+
+
+def test_consultar_pedido_telefone_errado_cai_no_cpf(app):
+    """Telefone do contato NAO bate (cliente B usando WhatsApp pra
+    consultar pedido do A) → cai no fallback CPF. Sem CPF → recusa."""
+    from app.services.bot_tools import consultar_pedido
+    with app.app_context():
+        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
+                   return_value={'code': 'P5', 'status': 'paid'}), \
+             patch('app.services.bot_tools.vnda.telefone_do_pedido',
+                   return_value='11888887777'), \
+             patch('app.services.bot_tools.vnda.cpf_do_pedido',
+                   return_value='11122233344'):
+            # Cliente B (telefone diferente do dono A) tenta consultar
+            out = consultar_pedido('P5', telefone_contato='5511555556666')
+        assert out.get('erro') == 'autorizacao_necessaria'
+
+
+def test_consultar_pedido_inexistente_nao_revela_autorizacao(app):
+    """Pedido nao existe no VNDA → retorna pedido_nao_encontrado (nao
+    autorizacao_necessaria). Pra atacante varrer numeros é o sinal de que
+    o numero esta ou nao em uso, mas nao revela dado privado — aceitavel."""
+    from app.services.bot_tools import consultar_pedido
+    with app.app_context():
+        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
+                   return_value=None):
+            out = consultar_pedido('FAKE999')
+        assert out.get('erro') == 'pedido_nao_encontrado'
+
+
+def test_editar_cartinha_sem_auth_recusa(app):
+    """Atacante MAIS critico (porque WRITE): sem autorizacao,
+    editar_cartinha_pedido DEVE recusar — e NUNCA gravar registro no
+    CartinhaEntrega."""
+    from app.models import CartinhaEntrega
+    from app.services.bot_tools import editar_cartinha_pedido
+    with app.app_context():
+        antes = CartinhaEntrega.query.count()
+        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
+                   return_value={'code': 'PEDIDO_ALHEIO'}), \
+             patch('app.services.bot_tools.vnda.telefone_do_pedido',
+                   return_value='11888887777'), \
+             patch('app.services.bot_tools.vnda.cpf_do_pedido',
+                   return_value='99988877766'):
+            out = editar_cartinha_pedido(
+                'PEDIDO_ALHEIO', 'cancelado por falta de pagamento ❤️')
+        assert out.get('erro') == 'autorizacao_necessaria'
+        # CRITICO: nenhum registro foi criado
+        assert CartinhaEntrega.query.count() == antes
+
+
+def test_consultar_pedido_vnda_indisponivel_falha_seguro(app):
+    """Fail-closed: VNDA caiu na hora de autorizar → NAO libera. Senao
+    bastava derrubar o VNDA pra contornar o gate."""
+    from app.services.bot_tools import consultar_pedido
+    with app.app_context():
+        with patch('app.services.bot_tools.vnda.buscar_pedido_completo',
+                   side_effect=ConnectionError('timeout')):
+            out = consultar_pedido('P9', telefone_contato='5511999998888')
+        assert out.get('erro') == 'vnda_indisponivel'
+
+
+def test_prompt_orienta_autorizacao_pedido():
+    """Prompt explica ao bot o que fazer quando vier autorizacao_necessaria."""
+    from app.services.chatbot_prompt import PROMPT
+    assert 'autorizacao_necessaria' in PROMPT
+    assert 'CPF' in PROMPT
+    # NUNCA expoe que o pedido existe antes da autorizacao
+    assert ('NUNCA exponha' in PROMPT or 'não revele' in PROMPT.lower()
+            or 'antes da autorização' in PROMPT.lower())
 
 
 def test_prompt_cartinha_pedido_existente_agora_e_tool():
