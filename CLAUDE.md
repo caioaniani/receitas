@@ -239,7 +239,29 @@ Da auditoria 1, ainda pendentes:
 ## Stack
 
 Flask 3 + SQLAlchemy + Bootstrap 5 + Postgres em prod / SQLite local.
-Padaria Opão: receitas, pedidos, entregas, PDV, estoque, RH, copilot (Claude Sonnet 4.6).
+Padaria Opão: receitas, pedidos, entregas, PDV, estoque, RH, copilot (Claude Opus 4.8).
+
+### Modelos Anthropic em uso (atualizado 14/06/2026)
+
+- **Copilot do dono (Slack/WhatsApp)**: `claude-opus-4-8` (`copilot.py:
+  MODELO_DEFAULT`). Bot do WhatsApp ja era Opus; Slack tambem agora.
+- **Bot de atendimento (Padeiro, Chatwoot)**: `claude-opus-4-8`
+  (`chatbot.py:MODELO`). Decisao do dono: vale o custo extra pra o bot
+  responder com confianca em vez de ficar pingando perguntas.
+- **OCR de NF/boleto (Contas a Pagar)**: `claude-opus-4-8` direto
+  (`conta_pagar_ia.py:MODELO`). Sem cascata Sonnet->Opus.
+- **Auditor** (`chatbot_auditor.py`): Sonnet 4.6.
+- **Vigia chatbot** (`chatbot_vigia.py`): Haiku 4.5.
+- **OCR de cupom** (`ocr_nota.py`): Sonnet 4.6 — volume alto, escopo
+  diferente do Contas a Pagar, fica como esta.
+- **Follow-up pos-handoff** (`chatbot.py:FOLLOWUP_MODELO`): Haiku 4.5.
+
+**Regra do prompt nos bots Opus**: "preferir RESPONDER a PERGUNTAR" — usa
+a capacidade do Opus pra inferir/escolher com o contexto disponivel em
+vez de pingar pergunta de esclarecimento atras de pergunta. Excecao:
+WRITES de dinheiro/estoque ainda exigem confirmacao. Ver
+`copilot.py::_build_system_prompt` ("PREFIRA RESPONDER A PERGUNTAR") e
+`chatbot_prompt.py` (secao "PREFIRA RESPONDER A PERGUNTAR").
 
 ## Schema migrations
 
