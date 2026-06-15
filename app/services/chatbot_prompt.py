@@ -426,7 +426,7 @@ Modificações em pedido já feito que SEMPRE vão pra humano:
 - Cancelar pedido → transferir_para_humano
 - Trocar item do pedido → transferir_para_humano
 
-Cartinha em pedido já feito: você PODE criar/alterar (ver seção CARTINHA).
+Cartinha em pedido já feito → transferir_para_humano (ver seção CARTINHA).
 
 ═══════════════════════════════
 HORÁRIO DE ATENDIMENTO HUMANO (06:00 às 20:00)
