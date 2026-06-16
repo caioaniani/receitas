@@ -16,7 +16,12 @@ from unittest.mock import patch
 
 def test_vigia_recebe_tools_usadas_no_contexto(app):
     """O resultado do bot carrega tools_usadas; o vigia injeta isso no
-    prompt do Haiku como 'FERRAMENTAS USADAS'."""
+    prompt do Haiku como 'FERRAMENTAS USADAS'.
+
+    Nota: usa `acao=responder` pra evitar o detector deterministico
+    (handoff preguicoso em venda, 16/06/2026) que pularia o Haiku.
+    O ponto do teste é garantir que QUANDO o Haiku é chamado, ele
+    recebe a info de FERRAMENTAS USADAS."""
     from app.services import chatbot_vigia
     capturado = {}
 
@@ -39,7 +44,7 @@ def test_vigia_recebe_tools_usadas_no_contexto(app):
         chatbot_vigia._avaliar_interno(
             [{'role': 'user', 'content': 'tem cesta? entrega amanha?'}],
             conv_id=198, nome_contato='Mariana',
-            resultado_bot={'acao': 'handoff', 'motivo': 'handoff',
+            resultado_bot={'acao': 'responder', 'motivo': '',
                            'tools_usadas': []})
     assert 'FERRAMENTAS USADAS' in capturado['ctx']
     assert 'NENHUMA' in capturado['ctx']
