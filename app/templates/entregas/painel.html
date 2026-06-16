@@ -420,8 +420,10 @@
 
   function cartaoHTML(p) {
     var nItens = (p.itens || []).reduce(function (s, it) { return s + (Number(it.qtd) || 1); }, 0);
-    return '<div class="cartao ' + p.status + '" data-code="' + esc(p.code) + '">' +
-      '<div class="nome">' + esc(p.destinatario) + '</div>' +
+    var cls = 'cartao ' + p.status + (p.retirada ? ' retir' : '');
+    var nomeBadge = esc(p.destinatario) + (p.retirada ? ' <span class="badge-retir">RETIRADA</span>' : '');
+    return '<div class="' + cls + '" data-code="' + esc(p.code) + '">' +
+      '<div class="nome">' + nomeBadge + '</div>' +
       '<div class="end">' + esc(p.endereco || '—') + '</div>' +
       '<div class="meta"><span class="qtd">' + nItens + (nItens === 1 ? ' item' : ' itens') + '</span>' +
         '<span class="selo">' + selo(p.status) + '</span></div></div>';
