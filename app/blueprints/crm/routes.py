@@ -315,6 +315,14 @@ def bot_webhook():
                         chatwoot.definir_status(conv_id, 'open')
                         logger.info('crm bot handoff conv=%s motivo=%s',
                                     conv_id, resultado.get('motivo'))
+                    elif resultado['acao'] == 'encerrar':
+                        # Cliente fechou com "obrigada/valeu" e o bot ja tinha
+                        # resolvido — silencio + resolved no Chatwoot. Quando
+                        # cliente mandar nova msg, Chatwoot reabre como pending
+                        # e o bot atende normal.
+                        chatwoot.definir_status(conv_id, 'resolved')
+                        logger.info('crm bot encerrou conv=%s motivo=%s',
+                                    conv_id, resultado.get('motivo'))
                 except Exception:
                     logger.exception('crm bot processamento falhou conv=%s', conv_id)
                     # Nunca deixa o cliente sem resposta: joga pro humano.
