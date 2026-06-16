@@ -418,22 +418,32 @@
     };
 
     window.editarData = function(code, dataAtual, jaTemOverride) {
+        // Procura o pedido na lista global pra preencher campos de
+        // exibição (motivo, autor, histórico). Se NÃO achar, abre o modal
+        // mesmo assim — pra salvar basta `code` + data nova. Nunca retorna
+        // silencioso, que era o sintoma reportado pelo dono em 16/06/2026:
+        // "Alterar data fica sem ação, não acontece nada". Bug acontecia
+        // quando o pedido vinha pra tela por outro caminho que não populou
+        // `pedidos[]` (aba Operação, mudança de data sem reload, etc.).
         var pedido = null;
-        for (var i = 0; i < pedidos.length; i++) {
+        for (var i = 0; i < (pedidos || []).length; i++) {
             if (pedidos[i].code === code) { pedido = pedidos[i]; break; }
         }
-        if (!pedido) return;
+        if (!code) {
+            alert('Pedido sem código — não consegui abrir.');
+            return;
+        }
 
         document.getElementById('md-code').value = code;
         document.getElementById('md-info-code').textContent = code;
         document.getElementById('md-info-original').textContent =
-            pedido.data_entrega_original_fmt || pedido.data_entrega_fmt || '—';
-        document.getElementById('md-data').value = dataAtual || '';
-        document.getElementById('md-motivo').value = pedido.override_motivo || '';
+            (pedido && (pedido.data_entrega_original_fmt || pedido.data_entrega_fmt)) || '—';
+        document.getElementById('md-data').value = dataAtual || (pedido && pedido.data_entrega) || '';
+        document.getElementById('md-motivo').value = (pedido && pedido.override_motivo) || '';
 
         var btnRemover = document.getElementById('md-remover');
         var hist = document.getElementById('md-historico');
-        if (jaTemOverride) {
+        if (jaTemOverride && pedido) {
             btnRemover.classList.remove('d-none');
             var quando = pedido.override_em ? new Date(pedido.override_em).toLocaleString('pt-BR') : '—';
             hist.classList.remove('d-none');
