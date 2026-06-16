@@ -136,7 +136,7 @@
     <ul class="pendente-list list-unstyled mt-2">
       {% for m in mapa_orfao %}
       <li>
-        <strong>{{ m.nome_vnda }}</strong>
+        <strong>{{ m.vnda_nome }}</strong>
         <a href="{{ url_for('pdv.mapeamentos_vnda') if 'mapeamentos_vnda' in (config.get('_ENDPOINTS_KNOWN') or '') else '#' }}" class="small ms-2 text-decoration-none">mapear</a>
       </li>
       {% endfor %}
