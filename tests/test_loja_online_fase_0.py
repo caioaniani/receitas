@@ -183,28 +183,35 @@ def test_preco_rejeita_valor_invalido(app):
 
 
 def test_curadoria_filtros(app):
-    """3 receitas em estados diferentes; filtro 'sem-preco' devolve só a sem preço."""
+    """3 receitas em estados diferentes; cada filtro mostra a contagem
+    correta. Checagem pelo class CSS `item-card` (presente só no card do
+    catálogo — não vaza pra autocomplete/datalist do base.html)."""
     from app.extensions import db
     from app.models import Receita
-    db.session.add(Receita(nome='ZZZCompletoXXX', preco_site=20.0,
+    db.session.add(Receita(nome='Pronta site', preco_site=20.0,
                             imagem_dropbox_url='https://x/c.jpg',
                             rendimento_qtd=1, rendimento_unidade='un',
                             peso_base=100.0))
-    db.session.add(Receita(nome='Sem preço',
+    db.session.add(Receita(nome='Falta preco', preco_site=None,
                             imagem_dropbox_url='https://x/sp.jpg',
                             rendimento_qtd=1, rendimento_unidade='un',
                             peso_base=100.0))
-    db.session.add(Receita(nome='Sem foto', preco_site=15.0,
+    db.session.add(Receita(nome='Falta foto', preco_site=15.0,
+                            imagem_dropbox_url=None,
                             rendimento_qtd=1, rendimento_unidade='un',
                             peso_base=100.0))
     db.session.commit()
     c, _ = _owner_logado(app)
+
+    def n_cards(html):
+        # cada card tem `class="item-card ..."` — conta a presença
+        return html.count(b'item-card')
+
     r = c.get('/admin/loja-online/catalogo?filtro=sem-preco')
-    assert b'Sem pre\xc3\xa7o' in r.data
-    assert b'ZZZCompletoXXX' not in r.data
+    assert n_cards(r.data) == 1, 'só 1 receita sem preço'
     r2 = c.get('/admin/loja-online/catalogo?filtro=no-site')
-    assert b'ZZZCompletoXXX' in r2.data
-    assert b'Sem pre\xc3\xa7o' not in r2.data
+    assert n_cards(r2.data) == 1, 'só 1 receita pronta pro site'
     r3 = c.get('/admin/loja-online/catalogo?filtro=sem-foto')
-    assert b'Sem foto' in r3.data
-    assert b'ZZZCompletoXXX' not in r3.data
+    assert n_cards(r3.data) == 1, 'só 1 receita sem foto'
+    r4 = c.get('/admin/loja-online/catalogo?filtro=todos')
+    assert n_cards(r4.data) == 3, 'todas as 3'
