@@ -204,8 +204,9 @@ def test_curadoria_filtros(app):
     c, _ = _owner_logado(app)
 
     def n_cards(html):
-        # cada card tem `class="item-card ..."` — conta a presença
-        return html.count(b'item-card')
+        # cada card tem `data-tipo="receita"` ou `data-tipo="produto"` —
+        # atributo aparece SÓ no card real (não no CSS embutido).
+        return html.count(b'data-tipo="receita"') + html.count(b'data-tipo="produto"')
 
     r = c.get('/admin/loja-online/catalogo?filtro=sem-preco')
     assert n_cards(r.data) == 1, 'só 1 receita sem preço'
