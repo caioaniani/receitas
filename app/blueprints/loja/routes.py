@@ -32,7 +32,12 @@ def _em_teste():
 def _gate_acesso():
     """404 silencioso pra visitante anônimo enquanto LOJA_VISIVEL=0.
     Retorna 404 (não 403) pra não confessar que a rota existe — robots/
-    Google não indexa rota inexistente."""
+    Google não indexa rota inexistente.
+
+    `/loja/robots.txt` é exceção: precisa estar sempre acessível pra dizer
+    pro Google "não indexa" enquanto a loja está em teste."""
+    if request.endpoint == 'loja.robots':
+        return None
     if _loja_visivel_publico():
         return None  # liberada
     if current_user.is_authenticated:
