@@ -660,6 +660,7 @@
         pedidos = data.pedidos || [];
         lalaSaldo = data.lalamove_saldo || null;
         render(); atualizarAlarme();
+        atualizarVigia(data.vigia);
         if (abertoCode) {
           var p = pedidos.find(function (x) { return x.code === abertoCode; });
           if (p) abrirDetalhe(p); else fecharDetalhe();
