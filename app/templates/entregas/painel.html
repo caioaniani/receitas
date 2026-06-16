@@ -274,6 +274,103 @@
     if (novos > 0) ligarAlarme(); else desligarAlarme();
   }
 
+  // ── Vigia: banner + som "chato" + aba lateral ─────────
+  // Klaxon insistente (mais agressivo que o beep de pedido novo). So toca
+  // quando ha alerta ALTA pendente; para quando alguem clica (= reconhece).
+  function klaxon() {
+    if (!audioCtx) return;
+    var now = audioCtx.currentTime;
+    [440, 660, 440].forEach(function (freq, i) {
+      var osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.type = 'square'; osc.frequency.value = freq;
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      var t = now + i * 0.22;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.35, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      osc.start(t); osc.stop(t + 0.24);
+    });
+  }
+  function ligarKlaxon() { if (!vigiaKlaxonTimer) { klaxon(); vigiaKlaxonTimer = setInterval(klaxon, 1600); } }
+  function desligarKlaxon() { if (vigiaKlaxonTimer) { clearInterval(vigiaKlaxonTimer); vigiaKlaxonTimer = null; } }
+
+  function atualizarVigia(v) {
+    vigia = v || { pendentes: 0, ultimo: null };
+    var n = vigia.pendentes || 0;
+    var cnt = document.getElementById('alertas-cnt');
+    cnt.textContent = n;
+    cnt.classList.toggle('on', n > 0);
+    var banner = document.getElementById('vigia-banner');
+    if (n > 0 && vigia.ultimo) {
+      var u = vigia.ultimo;
+      var quando = (u.ha_minutos != null) ? (' · há ' + u.ha_minutos + 'min') : '';
+      document.getElementById('vigia-banner-tit').textContent =
+        (n === 1 ? '1 alerta' : n + ' alertas') + ' do atendimento — ' + (u.cliente || '') + quando;
+      document.getElementById('vigia-banner-msg').textContent = u.motivo || '';
+      banner.classList.add('on');
+      ligarKlaxon();
+    } else {
+      banner.classList.remove('on');
+      desligarKlaxon();
+    }
+  }
+
+  function reconhecerAlertas() {
+    // Para o som JA (otimista) e zera local pra nao re-tocar antes do proximo poll.
+    desligarKlaxon();
+    vigia.pendentes = 0;
+    document.getElementById('vigia-banner').classList.remove('on');
+    document.getElementById('alertas-cnt').classList.remove('on');
+    fetch(VIGIA_RECONHECER, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({})
+    }).catch(function () {});
+  }
+
+  function alertaCardHTML(a) {
+    var lido = a.reconhecido ? ' lido' : '';
+    var quando = a.criado_em ? new Date(a.criado_em).toLocaleString('pt-BR',
+      { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    var link = a.chatwoot_url
+      ? '<a class="al-link" href="' + esc(a.chatwoot_url) + '" target="_blank" rel="noopener">💬 Abrir no Chatwoot</a>'
+      : '<span class="al-semlink">sem link da conversa</span>';
+    var msg = a.mensagem_cliente
+      ? '<div class="al-msg">' + esc(a.mensagem_cliente) + '</div>' : '';
+    return '<div class="al-card' + lido + '">' +
+      '<div class="al-top"><span class="al-cliente">' + esc(a.cliente) + '</span>' +
+        '<span class="al-quando">' + esc(quando) + '</span></div>' +
+      '<span class="al-badge' + lido + '">' + (a.reconhecido ? 'visto' : 'NOVO') + '</span>' +
+      '<div class="al-motivo">' + esc(a.motivo) + '</div>' + msg + link + '</div>';
+  }
+
+  function carregarHistorico() {
+    var lista = document.getElementById('drawer-lista');
+    lista.innerHTML = '<div class="al-vazio">Carregando…</div>';
+    fetch(VIGIA_HISTORICO, { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var al = d.alertas || [];
+        lista.innerHTML = al.length
+          ? al.map(alertaCardHTML).join('')
+          : '<div class="al-vazio">Nenhum alerta nas últimas 48h. 🎉</div>';
+      })
+      .catch(function () {
+        lista.innerHTML = '<div class="al-vazio">Não consegui carregar o histórico.</div>';
+      });
+  }
+
+  function abrirDrawer() {
+    // Abrir a aba = "estou olhando" → reconhece (silencia em todos) + carrega.
+    reconhecerAlertas();
+    document.getElementById('drawer-bg').classList.add('on');
+    document.getElementById('drawer').classList.add('on');
+    carregarHistorico();
+  }
+  function fecharDrawer() {
+    document.getElementById('drawer-bg').classList.remove('on');
+    document.getElementById('drawer').classList.remove('on');
+  }
+
   // ── Agrupamento por janela ────────────────────────────
   function horaInicio(periodo) {
     var m = String(periodo || '').match(/(\d{1,2})/);
