@@ -102,6 +102,22 @@ def _is_entrega_expressa(order):
     return False
 
 
+def _is_retirada(order):
+    """Detecta pedidos de RETIRADA na loja (cliente vai buscar; não tem
+    entrega). VNDA marca em dois campos (confirmado em pedido EF1B2AE877,
+    16/06/2026): `delivery_type='retirar-na-loja'` e
+    `shipping_label='Retire na loja'`. Detector tolera variações de caixa
+    e wording (acentos, hífens) — qualquer 'retir' em delivery_type ou
+    shipping_label conta como retirada."""
+    delivery = (order.get('delivery_type') or '').lower()
+    if 'retir' in delivery:
+        return True
+    label = (order.get('shipping_label') or '').lower()
+    if 'retir' in label:
+        return True
+    return False
+
+
 def _parse_iso_date(val):
     if not val:
         return None
