@@ -1161,6 +1161,11 @@ def _migrate_sqlite(app):
     cols_vv = [row[1] for row in cursor.fetchall()]
     if cols_vv and 'tools_usadas' not in cols_vv:
         cursor.execute("ALTER TABLE vigia_veredito ADD COLUMN tools_usadas TEXT")
+    if cols_vv and 'reconhecido_em' not in cols_vv:
+        cursor.execute("ALTER TABLE vigia_veredito ADD COLUMN reconhecido_em TIMESTAMP")
+    if cols_vv and 'reconhecido_por_id' not in cols_vv:
+        cursor.execute("ALTER TABLE vigia_veredito ADD COLUMN "
+                       "reconhecido_por_id INTEGER REFERENCES usuario(id)")
 
     # Priority fee (gorjeta) da Lalamove — coluna nova em lalamove_entrega.
     # Em SQLite novo, create_all ja cria com a coluna; aqui cobre bancos
