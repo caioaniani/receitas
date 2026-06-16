@@ -112,6 +112,65 @@
   function rotaPreco(tipo, id) { return URL_PRECO.replace('__TIPO__', tipo).replace('__ID__', id); }
   function rotaFoto(tipo, id) { return URL_FOTO.replace('__TIPO__', tipo).replace('__ID__', id); }
 
+  // ── Helper: tenta extrair erro útil de uma Response que pode não ser JSON ──
+  // Sem isso, qualquer 413/500/timeout vira "erro de conexão" cego (que foi
+  // exatamente o que aconteceu em 16/06/2026 — dono subiu foto >10MB, Flask
+  // devolveu 413 HTML, .json() falhou no catch genérico).
+  function extrairErro(resp) {
+    return resp.text().then(function(t) {
+      try {
+        var j = JSON.parse(t);
+        return j.erro || j.message || ('erro ' + resp.status);
+      } catch (e) {
+        // Não é JSON. Códigos comuns viram mensagem clara:
+        if (resp.status === 413) return 'arquivo grande demais (depois da otimização) — tira outra foto';
+        if (resp.status === 401 || resp.status === 403) return 'sessão expirou — recarrega a página';
+        if (resp.status === 404) return 'item não encontrado (404)';
+        if (resp.status >= 500) return 'erro no servidor (' + resp.status + ') — tenta de novo em 1min';
+        return 'erro HTTP ' + resp.status;
+      }
+    });
+  }
+
+  // ── Compressão client-side de imagem ─────────────────────────────────
+  // Decisão 16/06/2026: vitrine de e-commerce não precisa de 4000px. Reduz
+  // pra 1600px max + JPEG 85% ANTES de subir → arquivo vai de 20MB pra
+  // ~150-250KB, sobe em qualquer rede 4G de loja. createImageBitmap com
+  // imageOrientation:'from-image' preserva orientação EXIF (sem isso, foto
+  // de celular vira de lado). Fallback: se algo der errado, sobe o arquivo
+  // original (servidor ainda comprime via utils.comprimir_imagem).
+  function comprimirImagem(file) {
+    var MAX_LADO = 1600, QUALIDADE = 0.85;
+    if (!file.type || !file.type.startsWith('image/')) return Promise.resolve(file);
+    if (!window.createImageBitmap || !HTMLCanvasElement.prototype.toBlob) {
+      return Promise.resolve(file);  // browser velho → manda original
+    }
+    return createImageBitmap(file, { imageOrientation: 'from-image' })
+      .catch(function() { return createImageBitmap(file); })
+      .then(function(bmp) {
+        var w = bmp.width, h = bmp.height;
+        if (w <= MAX_LADO && h <= MAX_LADO && file.size < 800 * 1024) {
+          // Já é pequena: não vale recomprimir (perde qualidade à toa).
+          bmp.close && bmp.close();
+          return file;
+        }
+        var escala = Math.min(1, MAX_LADO / Math.max(w, h));
+        var nw = Math.round(w * escala), nh = Math.round(h * escala);
+        var canvas = document.createElement('canvas');
+        canvas.width = nw; canvas.height = nh;
+        canvas.getContext('2d').drawImage(bmp, 0, 0, nw, nh);
+        bmp.close && bmp.close();
+        return new Promise(function(resolve) {
+          canvas.toBlob(function(blob) {
+            if (!blob) { resolve(file); return; }
+            // Devolve um File pra manter compatibilidade com FormData
+            resolve(new File([blob], 'foto.jpg', { type: 'image/jpeg', lastModified: Date.now() }));
+          }, 'image/jpeg', QUALIDADE);
+        });
+      })
+      .catch(function() { return file; });  // qualquer falha → manda original
+  }
+
   // Salvar preço inline (blur ou Enter)
   document.querySelectorAll('.preco-input').forEach(function(inp) {
     var origem = inp.value;
@@ -126,7 +185,12 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
         body: JSON.stringify({ preco: v || null })
-      }).then(function(r) { return r.json(); }).then(function(d) {
+      }).then(function(r) {
+        if (!r.ok) {
+          return extrairErro(r).then(function(msg) { throw new Error(msg); });
+        }
+        return r.json();
+      }).then(function(d) {
         inp.classList.remove('saving');
         if (d.ok) {
           inp.classList.add('saved');
@@ -136,9 +200,10 @@
           inp.classList.add('error');
           alert(d.erro || 'erro ao salvar');
         }
-      }).catch(function() {
+      }).catch(function(e) {
         inp.classList.remove('saving');
         inp.classList.add('error');
+        alert((e && e.message) || 'sem conexão — tenta de novo');
       });
     }
     inp.addEventListener('blur', salvar);
@@ -147,7 +212,7 @@
     });
   });
 
-  // Upload foto direto do thumb
+  // Upload foto direto do thumb (com compressão client-side)
   document.querySelectorAll('.foto-input').forEach(function(inp) {
     inp.addEventListener('change', function(e) {
       var f = e.target.files[0];
@@ -155,17 +220,29 @@
       var card = inp.closest('.item-card');
       var tipo = card.dataset.tipo, id = card.dataset.id;
       var thumb = inp.closest('.item-thumb');
-      var fd = new FormData();
-      fd.append('imagem_arquivo', f);
+      var overlay = thumb.querySelector('.overlay');
+      var textoOriginal = overlay ? overlay.textContent : '';
+      if (overlay) { overlay.textContent = 'Otimizando…'; overlay.style.display = 'flex'; }
       thumb.style.opacity = '.4';
-      fetch(rotaFoto(tipo, id), {
-        method: 'POST',
-        headers: { 'X-CSRFToken': CSRF },
-        body: fd
-      }).then(function(r) { return r.json(); }).then(function(d) {
+
+      comprimirImagem(f).then(function(blobFinal) {
+        if (overlay) overlay.textContent = 'Enviando…';
+        var fd = new FormData();
+        fd.append('imagem_arquivo', blobFinal, blobFinal.name || 'foto.jpg');
+        return fetch(rotaFoto(tipo, id), {
+          method: 'POST',
+          headers: { 'X-CSRFToken': CSRF },
+          body: fd
+        });
+      }).then(function(r) {
+        if (!r.ok) {
+          return extrairErro(r).then(function(msg) { throw new Error(msg); });
+        }
+        return r.json();
+      }).then(function(d) {
         thumb.style.opacity = '1';
+        if (overlay) { overlay.textContent = textoOriginal; overlay.style.display = ''; }
         if (d.ok) {
-          // Recarrega o thumb com a nova URL (cache-bust)
           var img = thumb.querySelector('.thumb-img');
           var empty = thumb.querySelector('.empty');
           if (empty) empty.remove();
@@ -179,9 +256,10 @@
         } else {
           alert(d.erro || 'erro no upload');
         }
-      }).catch(function() {
+      }).catch(function(e) {
         thumb.style.opacity = '1';
-        alert('erro de conexão');
+        if (overlay) { overlay.textContent = textoOriginal; overlay.style.display = ''; }
+        alert((e && e.message) || 'sem conexão — tenta de novo');
       });
     });
   });
