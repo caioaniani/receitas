@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% block title %}Loja Online — auditoria de catálogo{% endblock %}
+{% block content %}
+<style>
+  .audit-card { background: #fff; border-radius: 10px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,.06); margin-bottom: 14px; }
+  .audit-num { font-size: 28px; font-weight: 800; color: #1f2933; line-height: 1; }
+  .audit-num.bad { color: #c92a2a; }
+  .audit-num.warn { color: #e8590c; }
+  .audit-num.ok { color: #2b8a3e; }
+  .audit-lbl { font-size: 12px; color: #868e96; text-transform: uppercase; letter-spacing: .5px; margin-top: 4px; }
+  .audit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+  .progress-bar-bg { background: #e9ecef; border-radius: 8px; height: 10px; overflow: hidden; margin-top: 8px; }
+  .progress-bar-fg { background: #2b8a3e; height: 100%; transition: width .3s; }
+  .pendente-list { font-size: 13px; max-height: 320px; overflow-y: auto; background: #f8f9fa; border-radius: 8px; padding: 8px 12px; }
+  .pendente-list li { padding: 3px 0; border-bottom: 1px dashed #e9ecef; }
+  .pendente-list li:last-child { border-bottom: 0; }
+  .badge-falta { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 999px; background: #ffe3e3; color: #c92a2a; margin-left: 4px; }
+</style>
+
+<h1 class="page-title"><i class="bi bi-shop"></i> Loja Online — Fase 0: auditoria de catálogo</h1>
+<p class="text-muted">
+  Pré-requisito da migração do VNDA pra loja própria. "Pronto pra vitrine" =
+  produto ativo, com <code>preco_site</code> definido E pelo menos uma imagem.
+  Plano completo: <code>/root/.claude/plans/modular-tinkering-owl.md</code>.
+</p>
+
+{# ── Receitas ─────────────────────────────────────────────────────── #}
+<h4 class="mt-4 mb-2"><i class="bi bi-egg-fried"></i> Receitas (pães, doces, viennoiserie)</h4>
+<div class="audit-card">
+  <div class="audit-grid">
+    <div>
+      <div class="audit-num">{{ rec_ativas }}</div>
+      <div class="audit-lbl">Ativas (de {{ rec_total }} total)</div>
+    </div>
+    <div>
+      <div class="audit-num {{ 'ok' if rec_preco_site == rec_ativas else 'warn' if rec_preco_site > rec_ativas / 2 else 'bad' }}">{{ rec_preco_site }}</div>
+      <div class="audit-lbl">Com preço_site</div>
+    </div>
+    <div>
+      <div class="audit-num {{ 'ok' if rec_img == rec_ativas else 'warn' if rec_img > rec_ativas / 2 else 'bad' }}">{{ rec_img }}</div>
+      <div class="audit-lbl">Com imagem</div>
+    </div>
+    <div>
+      <div class="audit-num {{ 'ok' if rec_prontas == rec_ativas else 'warn' if rec_prontas > rec_ativas / 2 else 'bad' }}">{{ rec_prontas }}</div>
+      <div class="audit-lbl">✓ Prontas pra vitrine</div>
+    </div>
+  </div>
+  {% if rec_ativas > 0 %}
+  <div class="progress-bar-bg">
+    <div class="progress-bar-fg" style="width: {{ (rec_prontas * 100 // rec_ativas) }}%"></div>
+  </div>
+  <p class="small text-muted mt-1">{{ (rec_prontas * 100 // rec_ativas) }}% prontas</p>
+  {% endif %}
+
+  {% if rec_faltando %}
+  <details class="mt-3">
+    <summary class="small text-muted">Ver primeiras {{ rec_faltando|length }} receitas pendentes</summary>
+    <ul class="pendente-list list-unstyled mt-2">
+      {% for r in rec_faltando %}
+      <li>
+        <strong>{{ r.nome }}</strong>
+        {% if not r.preco_site %}<span class="badge-falta">sem preço</span>{% endif %}
+        {% if not r.imagem_dropbox_url and not r.imagem_url %}<span class="badge-falta">sem imagem</span>{% endif %}
+        <a href="{{ url_for('main.index') }}#receita-{{ r.id }}" class="small ms-2 text-decoration-none">editar</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+</div>
+
+{# ── Produtos (cestas/kits) ──────────────────────────────────────── #}
+<h4 class="mt-4 mb-2"><i class="bi bi-box-seam"></i> Produtos (cestas, kits, boxes)</h4>
+<div class="audit-card">
+  <div class="audit-grid">
+    <div>
+      <div class="audit-num">{{ prod_ativos }}</div>
+      <div class="audit-lbl">Ativos (de {{ prod_total }} total)</div>
+    </div>
+    <div>
+      <div class="audit-num {{ 'ok' if prod_preco_site == prod_ativos else 'warn' if prod_preco_site > prod_ativos / 2 else 'bad' }}">{{ prod_preco_site }}</div>
+      <div class="audit-lbl">Com preço_site</div>
+    </div>
+    <div>
+      <div class="audit-num {{ 'ok' if prod_img == prod_ativos else 'warn' if prod_img > prod_ativos / 2 else 'bad' }}">{{ prod_img }}</div>
+      <div class="audit-lbl">Com imagem</div>
+    </div>
+    <div>
+      <div class="audit-num {{ 'ok' if prod_prontos == prod_ativos else 'warn' if prod_prontos > prod_ativos / 2 else 'bad' }}">{{ prod_prontos }}</div>
+      <div class="audit-lbl">✓ Prontos pra vitrine</div>
+    </div>
+  </div>
+  {% if prod_ativos > 0 %}
+  <div class="progress-bar-bg">
+    <div class="progress-bar-fg" style="width: {{ (prod_prontos * 100 // prod_ativos) }}%"></div>
+  </div>
+  <p class="small text-muted mt-1">{{ (prod_prontos * 100 // prod_ativos) }}% prontos</p>
+  {% endif %}
+
+  {% if prod_faltando %}
+  <details class="mt-3">
+    <summary class="small text-muted">Ver primeiros {{ prod_faltando|length }} produtos pendentes</summary>
+    <ul class="pendente-list list-unstyled mt-2">
+      {% for p in prod_faltando %}
+      <li>
+        <strong>{{ p.nome }}</strong>
+        {% if not p.preco_site %}<span class="badge-falta">sem preço</span>{% endif %}
+        {% if not p.imagem_dropbox_url and not p.imagem_url %}<span class="badge-falta">sem imagem</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+</div>
+
+{# ── VndaProdutoMap ──────────────────────────────────────────────── #}
+<h4 class="mt-4 mb-2"><i class="bi bi-arrow-left-right"></i> Mapeamento VNDA → catálogo</h4>
+<div class="audit-card">
+  <div class="audit-grid">
+    <div>
+      <div class="audit-num">{{ mapa_total }}</div>
+      <div class="audit-lbl">Produtos VNDA conhecidos</div>
+    </div>
+    <div>
+      <div class="audit-num {{ 'ok' if mapa_mapeado == mapa_total else 'warn' if mapa_mapeado > mapa_total / 2 else 'bad' }}">{{ mapa_mapeado }}</div>
+      <div class="audit-lbl">Mapeados</div>
+    </div>
+    <div>
+      <div class="audit-num {{ 'bad' if mapa_orfao|length > 0 else 'ok' }}">{{ mapa_orfao|length }}</div>
+      <div class="audit-lbl">Órfãos (precisam mapear)</div>
+    </div>
+  </div>
+  {% if mapa_orfao %}
+  <details class="mt-3">
+    <summary class="small text-muted">Ver órfãos VNDA</summary>
+    <ul class="pendente-list list-unstyled mt-2">
+      {% for m in mapa_orfao %}
+      <li>
+        <strong>{{ m.nome_vnda }}</strong>
+        <a href="{{ url_for('pdv.mapeamentos_vnda') if 'mapeamentos_vnda' in (config.get('_ENDPOINTS_KNOWN') or '') else '#' }}" class="small ms-2 text-decoration-none">mapear</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+</div>
+
+{# ── Checklist Fase 0 ─────────────────────────────────────────────── #}
+<h4 class="mt-4 mb-2"><i class="bi bi-list-check"></i> Checklist da Fase 0</h4>
+<div class="audit-card">
+  <p class="text-muted small">Passos manuais que dependem do dono. Os itens marcados nos números acima são automáticos.</p>
+  <ul class="list-unstyled">
+    <li class="mb-2"><input type="checkbox" disabled> <strong>Abrir conta Pagar.me sandbox</strong> e me passar as chaves (API key + webhook secret) <span class="text-muted small">— vão em <code>PAGARME_API_KEY</code>, <code>PAGARME_WEBHOOK_SECRET</code> no Railway</span></li>
+    <li class="mb-2"><input type="checkbox" disabled> <strong>Conversar com o contador</strong>: regime fiscal, CFOP do pedido de site, gatilho de emissão NF (recomendo "quando o pagamento confirma"), endpoint do Tiny pra emitir</li>
+    <li class="mb-2"><input type="checkbox" disabled> <strong>Confirmar comigo:</strong> o frete de <code>frete.py</code> (grátis até 1km, +R$5/km, teto 15km) vai virar preço REAL do checkout — está OK? Ou quer revisar antes?</li>
+    <li class="mb-2"><input type="checkbox" disabled> <strong>Decidir o prefixo da rota:</strong> <code>/loja</code>, <code>/teste-loja</code>, ou outro?</li>
+    <li class="mb-2"><input type="checkbox" disabled> <strong>Auditoria de catálogo OK:</strong> "Prontos pra vitrine" acima de <strong>80%</strong> dos ativos (preencher preço_site e imagem do que faltar antes da Fase 2)</li>
+  </ul>
+</div>
+
+<p class="small text-muted mt-3">
+  <i class="bi bi-info-circle"></i>
+  Esta página é read-only. Não muda nada. Recarrega o número em tempo real.
+</p>
+{% endblock %}
