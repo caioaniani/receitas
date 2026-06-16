@@ -10,7 +10,7 @@ from unittest.mock import patch
 def _owner_logado(app):
     from app.extensions import db
     from app.models import Usuario
-    u = Usuario(nome='Dono', login='dono', papel='owner')
+    u = Usuario(nome='Dono', login='dono', papel='owner', is_owner=True)
     u.set_senha('x' * 8)
     db.session.add(u)
     db.session.commit()
