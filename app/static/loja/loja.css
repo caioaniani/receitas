@@ -1,0 +1,291 @@
+/* Loja Online — primeira passada visual (Fase 2, 16/06/2026).
+ * Editorial premium, paleta quente, mobile-first.
+ * Iteramos vendo no ar — não é design final. */
+
+:root {
+  --bg: #fbf8f3;          /* off-white quente */
+  --texto: #2a2520;       /* marrom-quase-preto */
+  --texto-suave: #6b5f54;
+  --acento: #8b5a2b;      /* marrom queimado (acento) */
+  --linha: #e8e0d5;
+  --card-bg: #ffffff;
+  --teste: #fff4a3;
+  --teste-borda: #e0b800;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg);
+  color: var(--texto);
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 17px; line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--acento); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Banner teste (só staff vê) ─────────────────────────── */
+.teste-banner {
+  background: var(--teste);
+  border-bottom: 1px solid var(--teste-borda);
+  padding: 9px 16px;
+  text-align: center;
+  font-size: 13px;
+  font-family: system-ui, sans-serif;
+}
+.teste-banner code { background: rgba(0,0,0,.08); padding: 1px 5px; border-radius: 3px; }
+
+/* ── Header ────────────────────────────────────────────── */
+.topo {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--linha);
+  background: var(--bg);
+}
+.topo .logo {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--texto);
+  letter-spacing: .3px;
+  font-family: 'Georgia', serif;
+}
+.topo .logo span {
+  color: var(--acento);
+  margin: 0 6px;
+  opacity: .6;
+}
+.topo .logo:hover { text-decoration: none; }
+.topo-nav { display: flex; gap: 22px; font-family: system-ui, sans-serif; font-size: 15px; }
+.topo-nav a { color: var(--texto); }
+.topo-nav a.disabled { opacity: .35; cursor: not-allowed; pointer-events: none; }
+
+/* ── Hero ──────────────────────────────────────────────── */
+.hero {
+  padding: 60px 22px 30px;
+  max-width: 1080px;
+  margin: 0 auto;
+}
+.hero h1 {
+  font-size: 44px;
+  font-weight: 400;
+  line-height: 1.05;
+  margin: 0 0 14px;
+  font-family: 'Georgia', serif;
+}
+.hero p {
+  color: var(--texto-suave);
+  font-size: 17px;
+  max-width: 540px;
+  margin: 0;
+}
+
+/* ── Categorias ────────────────────────────────────────── */
+.categoria {
+  padding: 30px 22px 50px;
+  max-width: 1080px;
+  margin: 0 auto;
+}
+.categoria-titulo {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--texto-suave);
+  font-family: system-ui, sans-serif;
+  font-weight: 600;
+  margin: 0 0 22px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--linha);
+}
+
+/* ── Grid de produtos ──────────────────────────────────── */
+.grid-produtos {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 28px;
+}
+@media (min-width: 600px) {
+  .grid-produtos { grid-template-columns: 1fr 1fr; gap: 32px; }
+}
+@media (min-width: 960px) {
+  .grid-produtos { grid-template-columns: 1fr 1fr 1fr; gap: 36px; }
+}
+
+.card-produto {
+  display: block;
+  color: var(--texto);
+  background: var(--card-bg);
+  border-radius: 4px;
+  overflow: hidden;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.card-produto:hover {
+  text-decoration: none;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 32px rgba(80, 50, 20, .10);
+}
+
+.card-foto {
+  aspect-ratio: 4 / 3;
+  background: #efe7da;
+  overflow: hidden;
+  position: relative;
+}
+.card-foto img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform .4s ease;
+}
+.card-produto:hover .card-foto img { transform: scale(1.03); }
+.card-foto-placeholder {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 64px; opacity: .25;
+}
+.card-foto-placeholder.grande { font-size: 96px; }
+
+.card-corpo { padding: 16px 4px 4px; }
+.card-nome {
+  font-size: 19px;
+  font-weight: 500;
+  margin: 0 0 4px;
+  line-height: 1.25;
+  font-family: 'Georgia', serif;
+}
+.card-preco {
+  color: var(--acento);
+  font-size: 16px;
+  font-weight: 600;
+  font-family: system-ui, sans-serif;
+}
+
+/* ── Página de produto ─────────────────────────────────── */
+.produto {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 40px 22px 80px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+}
+@media (min-width: 800px) {
+  .produto {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: 56px;
+    align-items: start;
+  }
+}
+
+.produto-foto {
+  aspect-ratio: 4 / 3;
+  background: #efe7da;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.produto-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.produto-cat {
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 12px;
+  color: var(--texto-suave);
+  font-family: system-ui, sans-serif;
+  margin: 0 0 6px;
+}
+.produto-info h1 {
+  font-size: 36px;
+  font-weight: 400;
+  margin: 0 0 18px;
+  line-height: 1.1;
+  font-family: 'Georgia', serif;
+}
+.produto-preco {
+  font-size: 28px;
+  color: var(--acento);
+  font-weight: 600;
+  font-family: system-ui, sans-serif;
+  margin-bottom: 18px;
+}
+.produto-descricao {
+  color: var(--texto-suave);
+  font-size: 17px;
+  margin: 0 0 24px;
+}
+
+.produto-composicao {
+  background: #f5efe5;
+  padding: 18px 22px;
+  border-radius: 6px;
+  margin-bottom: 28px;
+}
+.produto-composicao h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--texto-suave);
+  font-family: system-ui, sans-serif;
+  margin: 0 0 10px;
+  font-weight: 600;
+}
+.produto-composicao ul { margin: 0; padding-left: 18px; }
+.produto-composicao li { padding: 4px 0; font-size: 16px; }
+.produto-composicao li strong { color: var(--acento); }
+
+.btn-comprar {
+  width: 100%;
+  padding: 16px 24px;
+  font-size: 17px;
+  font-weight: 600;
+  background: var(--acento);
+  color: #fff;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: system-ui, sans-serif;
+  letter-spacing: .3px;
+}
+.btn-comprar.disabled,
+.btn-comprar:disabled {
+  background: #c4b8a8;
+  cursor: not-allowed;
+}
+.aviso-comprar {
+  font-size: 13px;
+  color: var(--texto-suave);
+  margin: 8px 0 24px;
+  font-family: system-ui, sans-serif;
+}
+.voltar {
+  display: inline-block;
+  color: var(--texto-suave);
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+}
+
+/* ── Vazio ────────────────────────────────────────────── */
+.vazio {
+  text-align: center;
+  padding: 80px 22px;
+  color: var(--texto-suave);
+}
+
+/* ── Rodapé ───────────────────────────────────────────── */
+.rodape {
+  border-top: 1px solid var(--linha);
+  padding: 38px 22px;
+  display: grid;
+  gap: 28px;
+  font-family: system-ui, sans-serif;
+  font-size: 15px;
+  color: var(--texto-suave);
+  max-width: 1080px;
+  margin: 40px auto 0;
+}
+@media (min-width: 700px) {
+  .rodape { grid-template-columns: 2fr 1fr; gap: 60px; }
+}
+.rodape strong { color: var(--texto); font-weight: 600; }
+.rodape .small { font-size: 14px; }
