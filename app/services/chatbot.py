@@ -264,8 +264,7 @@ TOOL_HANDOFF = {
                 'type': 'string',
                 'description': 'Mensagem curta e gentil avisando que um atendente vai continuar.',
             },
-            'motivo': {'type': 'string', 'description': 'Motivo curto (uso interno).'},
-        },
+            'motivo': {'type': 'string', 'description': 'Motivo curto (uso interno).'},        },
         'required': ['mensagem_cliente'],
     },
 }
