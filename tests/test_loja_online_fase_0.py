@@ -216,3 +216,22 @@ def test_curadoria_filtros(app):
     assert n_cards(r3.data) == 1, 'só 1 receita sem foto'
     r4 = c.get('/admin/loja-online/catalogo?filtro=todos')
     assert n_cards(r4.data) == 3, 'todas as 3'
+
+
+# ── Limite de upload alinhado entre Flask e a rota (16/06/2026) ──────────
+#
+# Bug real: MAX_CONTENT_LENGTH no Flask estava 10MB e a rota de upload
+# permitia 25MB. Foto >10MB era rejeitada com 413 HTML antes da rota rodar,
+# JS interpretava como "erro de conexão" cego. Esta trava garante que os
+# dois limites NUNCA divergem silenciosamente.
+
+def test_max_content_length_alinhado_com_limite_da_rota_foto():
+    """Limite do Flask (config.py) precisa ser >= limite hardcoded da rota
+    de upload da loja (25MB), senão arquivos válidos pra rota são bloqueados
+    pelo middleware do Flask antes."""
+    from config import Config
+    LIMITE_ROTA_MB = 25  # ver `app/blueprints/main/routes.py::loja_online_catalogo_foto`
+    limite_flask_mb = Config.MAX_CONTENT_LENGTH / (1024 * 1024)
+    assert limite_flask_mb >= LIMITE_ROTA_MB, (
+        f'Flask aceita até {limite_flask_mb}MB mas a rota tenta processar '
+        f'{LIMITE_ROTA_MB}MB — Flask vai retornar 413 antes da rota rodar')
