@@ -1,0 +1,41 @@
+{% extends 'loja/_base.html' %}
+
+{% block content %}
+<section class="hero">
+  <div class="hero-texto">
+    <h1>Pão fresco<br>com fermentação<br>natural.</h1>
+    <p>Cestas, pães e doces feitos no dia. Entrega em São Paulo, todos os dias.</p>
+  </div>
+</section>
+
+{% if not grupos %}
+<section class="vazio">
+  <p>Catálogo em montagem. Volte em alguns instantes.</p>
+</section>
+{% endif %}
+
+{% for cat, itens in grupos %}
+<section class="categoria" id="cat-{{ loop.index }}">
+  <h2 class="categoria-titulo">{{ cat }}</h2>
+  <div class="grid-produtos">
+    {% for it in itens %}
+    <a class="card-produto" href="{{ it.href }}">
+      <div class="card-foto">
+        {% if it.imagem %}
+        <img src="{{ it.imagem }}" alt="{{ it.nome }}" loading="lazy">
+        {% else %}
+        <div class="card-foto-placeholder">🥐</div>
+        {% endif %}
+      </div>
+      <div class="card-corpo">
+        <h3 class="card-nome">{{ it.nome }}</h3>
+        {% if it.preco is not none %}
+        <div class="card-preco">R$ {{ '%.2f'|format(it.preco)|replace('.', ',') }}</div>
+        {% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}
+{% endblock %}
