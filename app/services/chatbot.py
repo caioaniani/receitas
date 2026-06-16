@@ -269,6 +269,31 @@ TOOL_HANDOFF = {
     },
 }
 
+# Encerrar conversa SEM mandar mensagem (decisao do dono 16/06/2026).
+# Quando o cliente fecha com "obrigada/valeu/tchau" e a conversa ja teve
+# resolucao, o bot fica em SILENCIO e marca como resolved no Chatwoot.
+# Eliminar o ping-pong de "imagina! 💛" — cliente nao espera resposta de
+# obrigada e quem espera fica frustrado quando o bot so manda emoji.
+# Cliente reabre mandando outra mensagem (volta a pending).
+TOOL_ENCERRAR = {
+    'name': 'encerrar_conversa',
+    'description': (
+        'Encerra a conversa SEM enviar mensagem nenhuma. Use APENAS quando '
+        'TODAS as condicoes batem: (1) o cliente disse so um agradecimento/'
+        'despedida ("obrigada", "valeu", "ok", "💛", "tchau", "show"); '
+        '(2) no seu TURNO ANTERIOR voce JA atendeu o pedido dele (mandou '
+        'link, deu a info, resolveu); (3) nao ha pendencia em aberto (voce '
+        'NAO esta esperando ele responder algo — ex: CPF, escolha entre '
+        'opcoes, confirmacao de pedido). Em DUVIDA, NAO use. Cliente reabre '
+        'mandando outra mensagem — nao perde nada.'
+    ),
+    'input_schema': {
+        'type': 'object',
+        'properties': {},
+    },
+}
+
+
 TOOLS = [
     {
         'name': 'consultar_produtos',
