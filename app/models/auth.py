@@ -17,6 +17,11 @@ class Usuario(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(100), nullable=False)
     login = db.Column(db.String(50), nullable=False, unique=True)
+    # Email pra envio de senha/convite (Resend). Nullable: usuários antigos
+    # não têm; cadastro novo passa a exigir. Coluna criada via
+    # _migrate_postgres/_migrate_sqlite no mesmo commit do modelo
+    # (ADD COLUMN IF NOT EXISTS roda no startup antes de servir).
+    email = db.Column(db.String(200), nullable=True)
     senha_hash = db.Column(db.String(256), nullable=False)
     papel = db.Column(db.String(20), nullable=False, default='funcionario')
     loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=True)
