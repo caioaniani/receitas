@@ -53,6 +53,12 @@ class VigiaVeredito(db.Model):
     # real. Nullable: registros velhos / detectores deterministicos
     # (followup, abandono, espera_humano) gravam NULL.
     tools_usadas = db.Column(db.Text)
+    # Reconhecimento do alerta no PAINEL (banner + som). Quando alguem clica
+    # no banner pra "ler", marcamos aqui — o som para e o alerta sai dos
+    # pendentes (mas continua no historico). Server-side: silencia em todos
+    # os aparelhos. (15/06/2026 — alertas do vigia no /entregas/painel)
+    reconhecido_em = db.Column(db.DateTime)
+    reconhecido_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
 
 class CopilotConversa(db.Model):
