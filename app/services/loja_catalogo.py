@@ -12,8 +12,6 @@ vazar campo interno (custo, modo de preparo, etc.) por engano.
 import re
 import unicodedata
 
-from sqlalchemy import or_
-
 from app.models import Produto, Receita
 
 
@@ -137,8 +135,3 @@ def parse_slug_id(slug_completo):
         return (kind, int(raw_id), slug)
     except ValueError:
         return (None, None, None)
-
-
-# Aliases para qualquer fora desse blueprint enxergar a mesma regra de
-# "publicado" — Fase 4 (checkout) vai importar daqui.
-_ = (or_,)  # mantém import pra futura extensão (filtro por categoria, etc.)
