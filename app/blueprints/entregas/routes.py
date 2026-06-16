@@ -133,6 +133,7 @@ def api_painel():
             'endereco': p.get('endereco') or '',
             'periodo': p.get('periodo') or '',
             'expresso': bool(p.get('expresso')),
+            'retirada': bool(p.get('retirada')),
             'telefone': p.get('telefone') or '',
             'cartinha': p.get('cartinha') or '',
             'itens': [{'nome': it.get('nome') or '', 'qtd': it.get('quantidade') or 1}
