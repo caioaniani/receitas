@@ -588,5 +588,12 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+{# entregas.js usa `CSRF_TOKEN` em 6 lugares (POST/DELETE de override de
+   data, atribuição, etc). Sem essa declaração, todas as escritas
+   silenciosamente falham com 400 (Flask-WTF rejeita o header undefined),
+   o `.then(r => r.json())` quebra sem alert e o usuário não entende por
+   quê — bug real reportado pelo dono em 16/06/2026 ("não consigo mudar
+   data de entrega"). #}
+<script>var CSRF_TOKEN = "{{ csrf_token() }}";</script>
 <script src="{{ url_for('static', filename='js/entregas.js') }}?v={{ static_v['js/entregas.js'] }}"></script>
 {% endblock %}
