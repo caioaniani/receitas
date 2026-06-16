@@ -228,10 +228,14 @@
   var LALA_CANCELAR = "{{ url_for('entregas.api_lalamove_cancelar') }}";
   var LALA_ACELERAR = "{{ url_for('entregas.api_lalamove_acelerar') }}";
   var LALA_VEICULOS = {{ (lala_veiculos or []) | tojson }};
+  var VIGIA_RECONHECER = "{{ url_for('entregas.api_painel_vigia_reconhecer') }}";
+  var VIGIA_HISTORICO = "{{ url_for('entregas.api_painel_vigia_historico') }}";
   var lalaSaldo = null;   // ultimo saldo da carteira (vem no api_painel)
   var CSRF = "{{ csrf_token() }}";
   var pedidos = [];
   var audioCtx = null, beepTimer = null;
+  var vigia = { pendentes: 0, ultimo: null };  // resumo do api_painel
+  var vigiaKlaxonTimer = null;
   var abertoCode = null;
 
   function esc(s) {
