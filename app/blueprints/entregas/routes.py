@@ -143,12 +143,42 @@ def api_painel():
         })
 
     saldo = db.session.get(LalamoveSaldo, 1)
+    # Alertas do vigia (banner + som). Best-effort: se o vigia/banco tropecar,
+    # o painel de pedidos NAO pode quebrar por causa disso.
+    try:
+        from app.services import chatbot_vigia
+        vigia_resumo = chatbot_vigia.alertas_pendentes_resumo()
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception('painel: resumo de alertas do vigia falhou')
+        vigia_resumo = {'pendentes': 0, 'ultimo': None}
     resp = jsonify(pedidos=out, data=data_str, total=len(out),
                    novos=sum(1 for p in out if p['novo']),
                    lalamove_saldo=(str(saldo.valor) if saldo and
-                                   saldo.valor is not None else None))
+                                   saldo.valor is not None else None),
+                   vigia=vigia_resumo)
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
     return resp
+
+
+@entregas_bp.route('/api/painel/vigia/reconhecer', methods=['POST'])
+@login_required
+def api_painel_vigia_reconhecer():
+    """Clique no banner = reconhece os alertas pendentes (para o som em todos
+    os aparelhos). JSON opcional {ids:[...]}; sem ids, reconhece todos os
+    pendentes da janela."""
+    from app.services import chatbot_vigia
+    dados = request.get_json(silent=True) or {}
+    ids = dados.get('ids') or None
+    n = chatbot_vigia.reconhecer_pendentes(user_id=current_user.id, ids=ids)
+    return jsonify(ok=True, reconhecidos=n)
+
+
+@entregas_bp.route('/api/painel/vigia/historico')
+@login_required
+def api_painel_vigia_historico():
+    """Aba lateral: historico de alertas do vigia (com link do Chatwoot)."""
+    from app.services import chatbot_vigia
+    return jsonify(alertas=chatbot_vigia.historico_alertas())
 
 
 @entregas_bp.route('/api/painel/status/<code>', methods=['POST'])
