@@ -26,7 +26,11 @@ class Config:
         SECRET_KEY = _secrets.token_hex(32)  # so dev/SQLite local
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB upload (atestados)
+    MAX_CONTENT_LENGTH = 25 * 1024 * 1024  # 25 MB (uploads de foto/atestado;
+    # subiu de 10 → 25 MB em 16/06/2026 porque foto de celular passa de 10
+    # fácil. Defesa em profundidade — a tela de catalogo (loja_online)
+    # comprime client-side antes do upload, mas se algo escapar o servidor
+    # ainda aceita. comprimir_imagem (utils.py) reduz pra ~150KB no banco.
 
     # Cookies de sessao — defesa em profundidade contra roubo de sessao
     # (12 atendentes logados ao dia + admins; sessao roubada = acesso
