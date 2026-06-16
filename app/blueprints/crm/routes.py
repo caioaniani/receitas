@@ -168,6 +168,54 @@ def _bot_secret_ok(recebido):
     return secrets.compare_digest(str(recebido or ''), esperado)
 
 
+def _e_story_mention_instagram(payload, conv):
+    """Detecta marcacao em story do Instagram (caso real 16/06/2026): alguem
+    marca @opao em uma story, Chatwoot empurra pelo mesmo webhook de bot, e
+    o bot tentava 'atender' a story como pergunta de cliente.
+
+    Retorna string com o sinal que casou, ou '' se nao for story mention.
+    Heuristica conservadora — combina varios sinais pra evitar falso positivo
+    (ex: cliente real mandando foto de produto no IG DM).
+
+    Sinais (qualquer um vale; o primeiro que bate ganha):
+    1. `content_attributes.message_type` explicito ('story_mention',
+       'instagram_story_mention') — Chatwoot moderno expoe isso direto.
+    2. `content_attributes.in_reply_to_external_source_id` com prefixo
+       de story (`ig_reel_`, `story_`) — referencia a story original.
+    3. Inbox Instagram + content vazio + anexo com URL de CDN do
+       Instagram (cdninstagram.com/fbcdn) — fallback observacional.
+
+    Falso positivo aceitavel: handoff silencioso pra equipe decidir. Falso
+    negativo (deixou passar) ja era o comportamento antigo — sem regressao.
+    """
+    content_attrs = payload.get('content_attributes') or {}
+    msg_type = (content_attrs.get('message_type') or '').lower()
+    if 'story_mention' in msg_type or 'story-mention' in msg_type:
+        return f'content_attributes.message_type={msg_type}'
+
+    ref = (content_attrs.get('in_reply_to_external_source_id') or '')
+    if isinstance(ref, str) and (ref.startswith('ig_reel_')
+                                  or ref.startswith('story_')
+                                  or 'story' in ref.lower()[:30]):
+        return f'in_reply_to_external_source_id={ref[:40]}'
+
+    inbox = (conv.get('meta') or {}).get('channel') or payload.get('inbox') or {}
+    channel = (inbox.get('channel_type') if isinstance(inbox, dict) else '') or ''
+    channel = str(channel).lower()
+    e_ig = ('instagram' in channel) or ('instagram' in str(payload.get('source') or '').lower())
+    if not e_ig:
+        return ''
+    content = (payload.get('content') or '').strip()
+    if content:
+        return ''  # IG com texto = DM real, deixa passar
+    anexos = payload.get('attachments') or []
+    for a in anexos:
+        url = str(a.get('data_url') or a.get('file_url') or '').lower()
+        if ('cdninstagram' in url) or ('fbcdn' in url) or ('ig_cache' in url):
+            return f'inbox_ig + content vazio + anexo CDN ({url[:60]}...)'
+    return ''
+
+
 @crm_bp.route('/bot', methods=['POST'])
 def bot_webhook():
     """Webhook do Agent Bot do Chatwoot.
@@ -189,6 +237,28 @@ def bot_webhook():
         return jsonify({'ok': True, 'ignorado': 'nota'})
 
     conv = payload.get('conversation') or {}
+
+    # Story mention do Instagram NAO eh atendimento — eh marcacao social
+    # (alguem marcou a conta @opao numa story). Chatwoot manda pelo mesmo
+    # webhook do bot, e o bot tentava "atender" a story como se fosse
+    # pergunta de cliente — incidente 16/06/2026. Detecta e faz handoff
+    # silencioso: muda pra 'open' (equipe decide se responde) sem chamar
+    # o Claude. Heuristica conservadora: combina varios sinais pra evitar
+    # falso positivo (cliente mandando so uma foto de produto).
+    ig_mention = _e_story_mention_instagram(payload, conv)
+    if ig_mention:
+        conv_id_log = conv.get('id') or payload.get('conversation_id')
+        logger.info('crm/bot: story mention IG conv=%s — handoff silencioso (%s)',
+                    conv_id_log, ig_mention)
+        if conv_id_log:
+            try:
+                from app.services import chatwoot
+                chatwoot.definir_status(conv_id_log, 'open')
+            except Exception:  # noqa: BLE001
+                logger.exception('crm/bot: handoff de story mention falhou')
+        return jsonify({'ok': True, 'ignorado': 'ig-story-mention',
+                        'motivo': ig_mention})
+
     if (conv.get('status') or '') != 'pending':
         # Log com status real recebido — diagnostico de '"Olá" do cliente
         # nao acordou o bot' (incidente 12/06/2026, conv #198): mensagem
