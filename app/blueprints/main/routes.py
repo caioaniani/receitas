@@ -2254,3 +2254,89 @@ def vigia_teste():
         flash(f'Vigia teste falhou: {resultado.get("erro") or resultado}',
               'danger')
     return redirect(url_for('main.debug_schema'))
+
+
+@main_bp.route('/admin/loja-online/auditoria-catalogo')
+@owner_required
+def loja_online_auditoria_catalogo():
+    """Fase 0 da Loja Online (16/06/2026): auditoria de pre-requisitos do
+    catalogo. Quantos produtos ja estao 'prontos pra vitrine' (preco_site +
+    imagem) e quantos VNDA-orfaos restam mapear. Read-only — so observa o
+    estado, nao muda nada.
+
+    Plano completo: /root/.claude/plans/modular-tinkering-owl.md (Loja
+    propria substituindo VNDA). docs/loja-online/fase-0-checklist.md
+    lista os passos manuais (Pagar.me sandbox, contador, etc)."""
+    from sqlalchemy import or_
+
+    from app.models import Produto, Receita, VndaProdutoMap
+
+    # Receitas
+    rec_total = Receita.query.count()
+    rec_ativas = Receita.query.filter(Receita.arquivada_em.is_(None)).count()
+    rec_preco_site = Receita.query.filter(
+        Receita.arquivada_em.is_(None),
+        Receita.preco_site.isnot(None),
+        Receita.preco_site > 0).count()
+    rec_img = Receita.query.filter(
+        Receita.arquivada_em.is_(None),
+        or_(Receita.imagem_dropbox_url.isnot(None),
+            Receita.imagem_url.isnot(None))).count()
+    rec_prontas = Receita.query.filter(
+        Receita.arquivada_em.is_(None),
+        Receita.preco_site.isnot(None), Receita.preco_site > 0,
+        or_(Receita.imagem_dropbox_url.isnot(None),
+            Receita.imagem_url.isnot(None))).count()
+    rec_faltando = (Receita.query
+                    .filter(Receita.arquivada_em.is_(None))
+                    .filter(or_(Receita.preco_site.is_(None),
+                                Receita.preco_site == 0,
+                                Receita.imagem_dropbox_url.is_(None),
+                                Receita.imagem_url.is_(None)))
+                    .order_by(Receita.nome).limit(40).all())
+
+    # Produtos (cestas/kits)
+    prod_total = Produto.query.count()
+    prod_ativos = Produto.query.filter_by(ativo=True).count()
+    prod_preco_site = Produto.query.filter(
+        Produto.ativo.is_(True),
+        Produto.preco_site.isnot(None),
+        Produto.preco_site > 0).count()
+    prod_img = Produto.query.filter(
+        Produto.ativo.is_(True),
+        or_(Produto.imagem_dropbox_url.isnot(None),
+            Produto.imagem_url.isnot(None))).count()
+    prod_prontos = Produto.query.filter(
+        Produto.ativo.is_(True),
+        Produto.preco_site.isnot(None), Produto.preco_site > 0,
+        or_(Produto.imagem_dropbox_url.isnot(None),
+            Produto.imagem_url.isnot(None))).count()
+    prod_faltando = (Produto.query
+                     .filter_by(ativo=True)
+                     .filter(or_(Produto.preco_site.is_(None),
+                                 Produto.preco_site == 0,
+                                 Produto.imagem_dropbox_url.is_(None),
+                                 Produto.imagem_url.is_(None)))
+                     .order_by(Produto.nome).limit(40).all())
+
+    # VndaProdutoMap (espelha o que o VNDA vende e mapeia pra catalogo nosso)
+    mapa_total = VndaProdutoMap.query.count()
+    mapa_mapeado = VndaProdutoMap.query.filter(
+        or_(VndaProdutoMap.receita_id.isnot(None),
+            VndaProdutoMap.produto_id.isnot(None))).count()
+    mapa_orfao = (VndaProdutoMap.query
+                  .filter(VndaProdutoMap.receita_id.is_(None),
+                          VndaProdutoMap.produto_id.is_(None))
+                  .order_by(VndaProdutoMap.primeira_visto_em.desc()).limit(40).all())
+
+    return render_template(
+        'admin/loja_online_auditoria_catalogo.html',
+        rec_total=rec_total, rec_ativas=rec_ativas,
+        rec_preco_site=rec_preco_site, rec_img=rec_img,
+        rec_prontas=rec_prontas, rec_faltando=rec_faltando,
+        prod_total=prod_total, prod_ativos=prod_ativos,
+        prod_preco_site=prod_preco_site, prod_img=prod_img,
+        prod_prontos=prod_prontos, prod_faltando=prod_faltando,
+        mapa_total=mapa_total, mapa_mapeado=mapa_mapeado,
+        mapa_orfao=mapa_orfao,
+    )
