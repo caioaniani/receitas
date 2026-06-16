@@ -386,13 +386,18 @@
     var entregues = pedidos.filter(function (p) { return p.status === 'entregue'; });
     var cols = [];
 
-    // 1) Expresso
-    var expr = ativos.filter(function (p) { return p.expresso; });
+    // 1) Expresso (NÃO inclui retirada — retirada tem coluna própria)
+    var expr = ativos.filter(function (p) { return p.expresso && !p.retirada; });
     if (expr.length) cols.push({ titulo: '⚡ EXPRESSO (1h)', cls: 'expr', itens: expr });
 
-    // 2) Janelas de horario (nao-expresso), ordenadas pela hora de inicio
+    // 2) Retirada na loja (decisão dono 16/06/2026): cliente busca em
+    // Anésio Pinto Rosa, 78. NÃO vai pra entrega, NÃO chama Lalamove.
+    var retir = ativos.filter(function (p) { return p.retirada; });
+    if (retir.length) cols.push({ titulo: '🏪 RETIRADA HOJE', cls: 'retir', itens: retir });
+
+    // 3) Janelas de horario (nao-expresso, nao-retirada)
     var porJanela = {};
-    ativos.filter(function (p) { return !p.expresso; }).forEach(function (p) {
+    ativos.filter(function (p) { return !p.expresso && !p.retirada; }).forEach(function (p) {
       var j = (p.periodo || '').trim() || 'Sem horário';
       (porJanela[j] = porJanela[j] || []).push(p);
     });
@@ -402,7 +407,7 @@
       cols.push({ titulo: '🕐 ' + j, cls: '', itens: porJanela[j] });
     });
 
-    // 3) Entregues do dia
+    // 4) Entregues do dia (inclui retiradas finalizadas)
     if (entregues.length) cols.push({ titulo: '✓ ENTREGUES', cls: 'entregues', itens: entregues });
     return cols;
   }
