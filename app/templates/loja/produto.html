@@ -1,0 +1,56 @@
+{% extends 'loja/_base.html' %}
+
+{% block title %}{{ item.nome }} — O Pão Padaria Artesanal{% endblock %}
+{% block description %}{{ item.descricao or (item.nome ~ ' — ' ~ item.categoria) }}{% endblock %}
+{% block og_extra %}
+  {% if item.imagem %}<meta property="og:image" content="{{ item.imagem }}">{% endif %}
+{% endblock %}
+
+{% block content %}
+<article class="produto">
+
+  <div class="produto-foto">
+    {% if item.imagem %}
+    <img src="{{ item.imagem }}" alt="{{ item.nome }}">
+    {% else %}
+    <div class="card-foto-placeholder grande">🥐</div>
+    {% endif %}
+  </div>
+
+  <div class="produto-info">
+    <p class="produto-cat">{{ item.categoria }}</p>
+    <h1>{{ item.nome }}</h1>
+
+    {% if item.preco is not none %}
+    <div class="produto-preco">R$ {{ '%.2f'|format(item.preco)|replace('.', ',') }}</div>
+    {% endif %}
+
+    {% if item.descricao %}
+    <p class="produto-descricao">{{ item.descricao }}</p>
+    {% endif %}
+
+    {% if item.itens %}
+    <div class="produto-composicao">
+      <h3>O que vem nessa cesta</h3>
+      <ul>
+        {% for sub in item.itens %}
+        <li><strong>{{ sub.quantidade|int if sub.quantidade == sub.quantidade|int else '%.1f'|format(sub.quantidade) }}×</strong> {{ sub.nome }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <button class="btn-comprar disabled"
+            title="Em breve — checkout entra na próxima fase"
+            disabled>
+      Comprar (em breve)
+    </button>
+    <p class="aviso-comprar">
+      O carrinho e o pagamento entram na próxima etapa. Por enquanto, isso é a vitrine.
+    </p>
+
+    <a href="{{ url_for('loja.home') }}" class="voltar">← Voltar pra vitrine</a>
+  </div>
+
+</article>
+{% endblock %}
