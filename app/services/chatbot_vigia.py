@@ -23,6 +23,7 @@ Anti-spam: so dispara WhatsApp se gravidade for `alta` ou `media`. Casos
 import json
 import logging
 import os
+import re
 from collections import deque
 
 from flask import current_app
@@ -284,9 +285,7 @@ def _processar_veredicto(veredicto, nome_contato, conv_id):
 # Sinais conservadores — falso positivo gera ruido no WhatsApp do dono, mas
 # falso negativo perde venda. Preferimos errar pra MAIS alerta.
 
-import re as _re
-
-_SINAIS_COMPRA = _re.compile(
+_SINAIS_COMPRA = re.compile(
     r'\b('
     r'compr(ar|ei|ando|a)|pag(ar|amento|amento|uei|o|a)|finaliz(ar|ando|ei)|'
     r'fechar( o)?( meu)?( a)? (pedido|compra)|checkout|carrinho|link|'
@@ -294,11 +293,11 @@ _SINAIS_COMPRA = _re.compile(
     r'pre[çc]o|quanto (custa|fica|sai)|valor|fazer( um)? pedido|'
     r'quero pedir|quero comprar|tem .* dispon|quero a |gostaria de '
     r')',
-    _re.IGNORECASE,
+    re.IGNORECASE,
 )
 
 # Reclamacao = handoff humano e correto (nao alerta como preguicoso).
-_SINAIS_RECLAMACAO = _re.compile(
+_SINAIS_RECLAMACAO = re.compile(
     r'\b('
     r'n[aã]o chegou|n[aã]o (recebi|veio)|atras(ou|ado|ando|o)|'
     r'veio (errado|quebrado|estragado|diferente|faltando|amassado)|'
@@ -306,7 +305,7 @@ _SINAIS_RECLAMACAO = _re.compile(
     r'devolver|trocar|t[aá] estragado|t[aá] quebrado|p[eé]ssimo|'
     r'falar com (gerente|dono|respons[aá]vel)'
     r')',
-    _re.IGNORECASE,
+    re.IGNORECASE,
 )
 
 
