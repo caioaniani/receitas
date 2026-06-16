@@ -177,13 +177,39 @@ def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=
     if not disponivel():
         return {'pulou': 'vigia desligado'}
 
+    rb = resultado_bot or {}
+
+    # ── DETECTOR DETERMINISTICO: HANDOFF PREGUIÇOSO EM VENDA ──────────
+    # Pedido do dono 16/06/2026 (auditor reportou caso Ale, venda perdida):
+    # quando o bot transfere SEM ter chamado tool de busca/resolucao E a
+    # conversa tem sinais claros de COMPRA EM CURSO, alerta IMEDIATO
+    # (banner + WhatsApp), nao espera o resumo diario. Determinístico
+    # (regex) — auditavel, sem depender do humor do Haiku que ja falhou
+    # em pegar isso (caso real: conversas de hoje).
+    #
+    # Quando bate, pula o Haiku (1) reage instantaneo, (2) evita o Haiku
+    # subestimar como "media" e o alerta nao sair. O motivo customizado
+    # diz exatamente o que aconteceu pra o dono agir.
+    if _e_handoff_preguicoso_em_compra(historico, rb):
+        logger.warning('vigia: HANDOFF PREGUICOSO EM VENDA detectado '
+                       'conv=%s (deterministico, pulou Haiku)', conv_id)
+        veredicto = {
+            'alerta': True,
+            'gravidade': 'alta',
+            'motivo': ('🚨 Venda em risco: bot fez handoff sem tentar '
+                       'resolver. Cliente estava comprando e foi empurrado '
+                       'pra fila sem o bot chamar uma ferramenta sequer.'),
+            'acao_sugerida': ('Abrir a conversa AGORA, antes do cliente '
+                              'esfriar — ainda dá pra reverter.'),
+        }
+        return _processar_veredicto(veredicto, nome_contato, conv_id)
+
     api_key = (os.environ.get('ANTHROPIC_API_KEY')
                or current_app.config.get('ANTHROPIC_API_KEY'))
     if not api_key:
         return {'pulou': 'sem ANTHROPIC_API_KEY'}
 
     try:
-        rb = resultado_bot or {}
         # Sinal pro caso HANDOFF PREGUICOSO do prompt: lista das tools
         # que o bot usou neste turno. Vazia + handoff + cliente comprando
         # = ALTA (caso real 12/06/2026, conv #198).
@@ -211,6 +237,14 @@ def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=
         logger.exception('vigia: avaliacao falhou')
         return {'erro': str(exc)}
 
+    return _processar_veredicto(veredicto, nome_contato, conv_id)
+
+
+def _processar_veredicto(veredicto, nome_contato, conv_id):
+    """Pos-processa um veredicto (vem do Haiku OU do detector deterministico):
+    valida, decide se manda WhatsApp, dispara o envio. Centralizado pra os
+    dois caminhos gerarem o MESMO efeito (banner do painel + WhatsApp +
+    persistencia via _registrar)."""
     if not isinstance(veredicto, dict):
         return {'erro': 'veredicto invalido'}
 
@@ -235,6 +269,69 @@ def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=
         return {'erro': f'zapi: {exc}', 'veredicto': veredicto}
 
     return {'enviado': bool(envio.get('ok')), 'envio': envio, 'veredicto': veredicto}
+
+
+# ── Detector deterministico: handoff preguicoso em VENDA ─────────────
+#
+# Auditor reportou caso real 16/06/2026 (Ale, venda perdida): bot transferiu
+# sem chamar nenhuma tool, no meio de uma compra. Esse padrao tem 3 sinais
+# combinados (todos precisam bater):
+#   1. acao=handoff
+#   2. tools_usadas vazia OU so ['transferir_para_humano']
+#   3. historico recente tem sinais fortes de COMPRA EM CURSO
+#      E nao tem sinais fortes de RECLAMACAO (handoff legitimo)
+#
+# Sinais conservadores — falso positivo gera ruido no WhatsApp do dono, mas
+# falso negativo perde venda. Preferimos errar pra MAIS alerta.
+
+import re as _re
+
+_SINAIS_COMPRA = _re.compile(
+    r'\b('
+    r'compr(ar|ei|ando|a)|pag(ar|amento|amento|uei|o|a)|finaliz(ar|ando|ei)|'
+    r'fechar( o)?( meu)?( a)? (pedido|compra)|checkout|carrinho|link|'
+    r'cesta|cestas|kit|box|brunch|sourdough|croissant|brioche|granola|'
+    r'pre[çc]o|quanto (custa|fica|sai)|valor|fazer( um)? pedido|'
+    r'quero pedir|quero comprar|tem .* dispon|quero a |gostaria de '
+    r')',
+    _re.IGNORECASE,
+)
+
+# Reclamacao = handoff humano e correto (nao alerta como preguicoso).
+_SINAIS_RECLAMACAO = _re.compile(
+    r'\b('
+    r'n[aã]o chegou|n[aã]o (recebi|veio)|atras(ou|ado|ando|o)|'
+    r'veio (errado|quebrado|estragado|diferente|faltando|amassado)|'
+    r'reembolso|reclamar|reclama[cç][aã]o|cancelar (meu )?pedido|'
+    r'devolver|trocar|t[aá] estragado|t[aá] quebrado|p[eé]ssimo|'
+    r'falar com (gerente|dono|respons[aá]vel)'
+    r')',
+    _re.IGNORECASE,
+)
+
+
+def _e_handoff_preguicoso_em_compra(historico, resultado_bot):
+    """True se: bot fez handoff SEM tool de busca + cliente em compra ativa.
+    Determinístico pra ser auditavel e nao depender do Haiku."""
+    rb = resultado_bot or {}
+    if rb.get('acao') != 'handoff':
+        return False
+    tools = rb.get('tools_usadas')
+    if tools is None:
+        return False  # versao antiga do bot — sem sinal confiavel
+    nao_handoff = [t for t in tools if t and t != 'transferir_para_humano']
+    if nao_handoff:
+        return False  # bot tentou algo — handoff legitimo
+
+    # Junta as ultimas msgs do cliente (texto, role=user)
+    msgs_user = [m.get('content', '') for m in (historico or [])[-12:]
+                 if m.get('role') == 'user' and m.get('content')]
+    if not msgs_user:
+        return False
+    texto = ' '.join(msgs_user).lower()
+    if _SINAIS_RECLAMACAO.search(texto):
+        return False  # reclamacao = handoff humano correto, nao preguicoso
+    return bool(_SINAIS_COMPRA.search(texto))
 
 
 def _montar_mensagem(veredicto, nome_contato, conv_id):
