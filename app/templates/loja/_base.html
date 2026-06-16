@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block title %}O Pão — Padaria Artesanal{% endblock %}</title>
+<meta name="description" content="{% block description %}Pães de fermentação natural, croissants, cestas e café da manhã. Entrega em São Paulo.{% endblock %}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="{% block og_title %}{{ self.title() }}{% endblock %}">
+<meta property="og:description" content="{% block og_description %}{{ self.description() }}{% endblock %}">
+{% block og_extra %}{% endblock %}
+{% if em_teste %}<meta name="robots" content="noindex,nofollow">{% endif %}
+<link rel="stylesheet" href="{{ url_for('loja.static', filename='loja.css') }}">
+</head>
+<body>
+
+{% if em_teste %}
+<div class="teste-banner">
+  🧪 Loja em teste — você está vendo porque está logado no admin.
+  Visitante anônimo recebe 404. Quando subir <code>LOJA_VISIVEL=1</code>, vira pública.
+</div>
+{% endif %}
+
+<header class="topo">
+  <a href="{{ url_for('loja.home') }}" class="logo">O Pão<span>·</span>Padaria Artesanal</a>
+  <nav class="topo-nav">
+    <a href="{{ url_for('loja.home') }}">Produtos</a>
+    <a href="#" class="disabled" title="Em breve">Carrinho (em breve)</a>
+  </nav>
+</header>
+
+<main>
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="rodape">
+  <div class="rodape-col">
+    <strong>O Pão Padaria Artesanal</strong><br>
+    Pães de fermentação natural, croissants, cestas e café da manhã.<br>
+    São Paulo · entrega grátis até 1 km.
+  </div>
+  <div class="rodape-col small">
+    Brooklin: Ribeiro do Vale, 455<br>
+    Itaim: Anésio Pinto Rosa, 78<br>
+    1851 Coffee: Nebraska, 294<br>
+    Lojas: 7h–20h todos os dias.
+  </div>
+</footer>
+
+</body>
+</html>
