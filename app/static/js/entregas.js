@@ -229,6 +229,7 @@
     // Janela do pedido: chave de ordenacao + titulo do cabecalho. Expresso
     // sempre primeiro (ordem -1); "sem horario" sempre no fim.
     function janelaDoPedido(p) {
+        if (p.retirada) return { ordem: -2, titulo: '🏪 RETIRADA NA LOJA' };
         if (p.expresso) return { ordem: -1, titulo: '⚡ EXPRESSO (entrega em 1h)' };
         var per = (p.periodo || '').trim();
         if (!per) return { ordem: 999, titulo: 'Sem horário' };
