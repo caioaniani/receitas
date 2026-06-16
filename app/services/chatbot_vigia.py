@@ -644,3 +644,131 @@ def _registrar_espera_humano(conv_id, nome, minutos, ultima_msg, enviado):
             db.session.rollback()
         except Exception:  # noqa: BLE001
             pass
+
+
+# ── Alertas no painel de entregas (banner + som + historico) ───────────
+#
+# 15/06/2026 (decisao do dono): alem do WhatsApp, os alertas ALTA do vigia
+# aparecem num banner pulsante com som "chato" no /entregas/painel. O som
+# so para quando alguem CLICA no banner (= reconhece), server-side (silencia
+# em todos os aparelhos). Uma aba lateral lista o historico com o link da
+# conversa no Chatwoot pra resolver.
+#
+# Reusa VigiaVeredito (mesma fonte do WhatsApp): alerta=True, gravidade='alta'.
+# Pendente = ainda nao reconhecido E dentro da janela. Apos a janela, sai do
+# banner (o WhatsApp ja notificou; o banner eh nudge ao vivo) mas continua
+# no historico.
+
+# Janela (horas) em que um alerta nao-reconhecido ainda alarma no painel.
+# Configuravel: VIGIA_PAINEL_JANELA_HORAS (default 8 — cobre um turno).
+def _janela_horas():
+    try:
+        return int(os.environ.get('VIGIA_PAINEL_JANELA_HORAS', '8'))
+    except (TypeError, ValueError):
+        return 8
+
+
+def link_chatwoot(conv_id):
+    """URL da conversa no Chatwoot, ou '' se nao der pra montar.
+
+    So monta pra conv_id NUMERICO (conversas reais). conv_id sintetico
+    ('teste-estoque', '0', etc) nao vira link — evita mandar a equipe
+    pra uma URL quebrada."""
+    cid = str(conv_id or '').strip()
+    if not cid.isdigit():
+        return ''
+    cfg = current_app.config
+    base_cw = (cfg.get('CHATWOOT_URL') or '').rstrip('/')
+    acc = (cfg.get('CHATWOOT_ACCOUNT_ID') or '').strip()
+    if not (base_cw and acc):
+        return ''
+    return f'{base_cw}/app/accounts/{acc}/conversations/{cid}'
+
+
+def _serializar_alerta(v):
+    """Dict compacto de um VigiaVeredito pro front do painel."""
+    from app.utils import agora as _ag
+    criado = v.criado_em
+    # "ha quanto tempo" simples, pro banner ("ha 12min")
+    minutos = None
+    if criado:
+        try:
+            minutos = int((_ag() - criado).total_seconds() // 60)
+        except Exception:  # noqa: BLE001
+            minutos = None
+    return {
+        'id': v.id,
+        'gravidade': v.gravidade,
+        'cliente': v.cliente or '(sem nome)',
+        'motivo': v.motivo_vigia or v.bot_motivo or '',
+        'mensagem_cliente': (v.mensagem_cliente or '')[:300],
+        'conv_id': v.conv_id,
+        'chatwoot_url': link_chatwoot(v.conv_id),
+        'criado_em': criado.isoformat() if criado else None,
+        'ha_minutos': minutos,
+        'reconhecido': v.reconhecido_em is not None,
+    }
+
+
+def _query_pendentes():
+    """VigiaVeredito ALTA, nao reconhecido, dentro da janela — mais novos
+    primeiro."""
+    from datetime import timedelta
+
+    from app.models import VigiaVeredito
+    from app.utils import agora as _ag
+    corte = _ag() - timedelta(hours=_janela_horas())
+    return (VigiaVeredito.query
+            .filter(VigiaVeredito.alerta.is_(True),
+                    VigiaVeredito.gravidade == 'alta',
+                    VigiaVeredito.reconhecido_em.is_(None),
+                    VigiaVeredito.criado_em >= corte)
+            .order_by(VigiaVeredito.criado_em.desc()))
+
+
+def alertas_pendentes_resumo():
+    """Pro api_painel: {pendentes: N, ultimo: {..}|None}. Barato — 1 query."""
+    pend = _query_pendentes().limit(50).all()
+    return {
+        'pendentes': len(pend),
+        'ultimo': _serializar_alerta(pend[0]) if pend else None,
+    }
+
+
+def reconhecer_pendentes(user_id=None, ids=None):
+    """Marca alertas como reconhecidos (clique no banner). Sem `ids`, marca
+    TODOS os pendentes da janela. Retorna quantos foram marcados."""
+    from app.extensions import db
+    from app.utils import agora as _ag
+    q = _query_pendentes()
+    if ids:
+        from app.models import VigiaVeredito
+        q = q.filter(VigiaVeredito.id.in_(list(ids)))
+    marcados = 0
+    momento = _ag()
+    for v in q.all():
+        v.reconhecido_em = momento
+        v.reconhecido_por_id = user_id
+        marcados += 1
+    if marcados:
+        db.session.commit()
+        logger.info('vigia painel: %s alerta(s) reconhecido(s) por uid=%s',
+                    marcados, user_id)
+    return marcados
+
+
+def historico_alertas(limite=40, janela_horas=48):
+    """Pro drawer lateral: ultimos alertas ALTA (reconhecidos ou nao) da
+    janela, com link do Chatwoot. Mais recentes primeiro."""
+    from datetime import timedelta
+
+    from app.models import VigiaVeredito
+    from app.utils import agora as _ag
+    corte = _ag() - timedelta(hours=janela_horas)
+    rows = (VigiaVeredito.query
+            .filter(VigiaVeredito.alerta.is_(True),
+                    VigiaVeredito.gravidade == 'alta',
+                    VigiaVeredito.criado_em >= corte)
+            .order_by(VigiaVeredito.criado_em.desc())
+            .limit(limite).all())
+    return [_serializar_alerta(v) for v in rows]
