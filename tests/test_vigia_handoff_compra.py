@@ -1,0 +1,160 @@
+"""Detector determinístico: handoff preguiçoso EM VENDA → alerta na hora.
+
+16/06/2026 — auditor reportou venda perdida (caso Ale): bot transferiu
+sem chamar nenhuma ferramenta no meio da compra. Esse tipo de handoff já
+era detectado pelo Haiku em teoria, mas falhou na prática. Agora há uma
+camada DETERMINÍSTICA que combina 3 sinais auditáveis (acao=handoff +
+tools sem busca + sinais fortes de compra sem reclamação) e, quando bate,
+PULA o Haiku, força gravidade=alta e dispara o alerta na hora.
+
+Trade-off: falso positivo gera ruído no WhatsApp do dono. Falso negativo
+perde venda. Detector é conservador, mas erra pra mais alerta.
+"""
+from unittest.mock import patch
+
+# ── Detector puro ───────────────────────────────────────────────────────
+
+def _hist(*frases_user):
+    return [{'role': 'user', 'content': f} for f in frases_user]
+
+
+def test_detector_pega_compra_obvia_sem_tool():
+    """Caso da Ale: cliente disse 'quero comprar', bot transferiu sem
+    consultar nada."""
+    from app.services import chatbot_vigia as v
+    rb = {'acao': 'handoff', 'tools_usadas': ['transferir_para_humano']}
+    h = _hist('oi, quero comprar uma cesta')
+    assert v._e_handoff_preguicoso_em_compra(h, rb)
+
+
+def test_detector_pega_quando_tools_vazia():
+    from app.services import chatbot_vigia as v
+    rb = {'acao': 'handoff', 'tools_usadas': []}
+    h = _hist('quanto custa o sourdough?')
+    assert v._e_handoff_preguicoso_em_compra(h, rb)
+
+
+def test_detector_NAO_dispara_quando_bot_consultou_antes():
+    """Bot chamou `consultar_produtos` e depois transferiu — não é
+    preguiçoso, é legítimo."""
+    from app.services import chatbot_vigia as v
+    rb = {'acao': 'handoff',
+          'tools_usadas': ['consultar_produtos', 'transferir_para_humano']}
+    h = _hist('quero comprar')
+    assert not v._e_handoff_preguicoso_em_compra(h, rb)
+
+
+def test_detector_NAO_dispara_quando_e_reclamacao():
+    """Reclamação = handoff humano é correto. Não classifica como
+    preguiçoso mesmo sem tool."""
+    from app.services import chatbot_vigia as v
+    rb = {'acao': 'handoff', 'tools_usadas': []}
+    casos = [
+        'meu pedido não chegou',
+        'veio errado',
+        'quero reembolso',
+        'cancelar meu pedido',
+        'falar com responsável',
+    ]
+    for frase in casos:
+        h = _hist(frase)
+        assert not v._e_handoff_preguicoso_em_compra(h, rb), \
+            f'falso positivo em reclamação: {frase!r}'
+
+
+def test_detector_NAO_dispara_em_saudacao_simples():
+    """Conversa que começou com 'oi' e foi pra handoff (provavelmente
+    cliente pediu humano direto) — não é venda em risco."""
+    from app.services import chatbot_vigia as v
+    rb = {'acao': 'handoff', 'tools_usadas': []}
+    h = _hist('oi, tudo bem?', 'pode falar com atendente')
+    assert not v._e_handoff_preguicoso_em_compra(h, rb)
+
+
+def test_detector_NAO_dispara_quando_acao_eh_responder():
+    from app.services import chatbot_vigia as v
+    rb = {'acao': 'responder', 'tools_usadas': []}
+    h = _hist('quero comprar uma cesta')
+    assert not v._e_handoff_preguicoso_em_compra(h, rb)
+
+
+def test_detector_NAO_dispara_quando_tools_None_versao_antiga():
+    """Bot antigo não persistia tools_usadas — tratar como 'desconhecido'
+    e não promover (evita falso positivo em backfill de logs velhos)."""
+    from app.services import chatbot_vigia as v
+    rb = {'acao': 'handoff', 'tools_usadas': None}
+    h = _hist('quero comprar')
+    assert not v._e_handoff_preguicoso_em_compra(h, rb)
+
+
+def test_detector_reclamacao_E_compra_combinados_NAO_alerta():
+    """Cliente reclama + diz 'quero outro' — handoff humano é apropriado,
+    não conta como preguiçoso (escolhemos a interpretação mais conservadora)."""
+    from app.services import chatbot_vigia as v
+    rb = {'acao': 'handoff', 'tools_usadas': []}
+    h = _hist('meu pedido não chegou, queria comprar outro')
+    assert not v._e_handoff_preguicoso_em_compra(h, rb)
+
+
+# ── Integração com _avaliar_interno ──────────────────────────────────
+
+def test_avaliar_pula_haiku_quando_detector_bate(app):
+    """Quando o detector determinístico bate, o Haiku NÃO é chamado.
+    Economia + reação imediata + auditabilidade."""
+    from app.services import chatbot_vigia as v
+    app.config['CHATBOT_VIGIA'] = '1'
+    app.config['ANTHROPIC_API_KEY'] = 'sk-x'
+    app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999999999'
+    with app.app_context():
+        with patch.object(v, '_chamar_haiku') as haiku, \
+             patch('app.services.zapi.enviar_texto',
+                    return_value={'ok': True}) as send:
+            r = v._avaliar_interno(
+                _hist('quero comprar uma cesta'),
+                conv_id=42, nome_contato='Ale',
+                resultado_bot={'acao': 'handoff', 'tools_usadas': []})
+    haiku.assert_not_called()
+    # Veredicto montado pelo detector — gravidade alta
+    assert r['veredicto']['gravidade'] == 'alta'
+    assert 'Venda em risco' in r['veredicto']['motivo']
+    # Mensagem foi pro WhatsApp do dono
+    send.assert_called_once()
+
+
+def test_avaliar_chama_haiku_quando_detector_NAO_bate(app):
+    """Em conversa normal, o caminho do Haiku continua igual ao antigo
+    (sem regressão)."""
+    from app.services import chatbot_vigia as v
+    app.config['CHATBOT_VIGIA'] = '1'
+    app.config['ANTHROPIC_API_KEY'] = 'sk-x'
+    with app.app_context():
+        with patch.object(v, '_chamar_haiku',
+                           return_value={'alerta': False, 'gravidade': None,
+                                         'motivo': '', 'acao_sugerida': ''}) as haiku:
+            v._avaliar_interno(
+                _hist('oi'),
+                conv_id=99, nome_contato='X',
+                resultado_bot={'acao': 'responder', 'tools_usadas': []})
+    haiku.assert_called_once()
+
+
+def test_alerta_persistido_em_VigiaVeredito_pro_banner_do_painel(app):
+    """Detector → veredicto alta → banner do painel também acende. O
+    caminho `avaliar` (publico) grava em VigiaVeredito automaticamente."""
+    from app.models import VigiaVeredito
+    from app.services import chatbot_vigia as v
+    app.config['CHATBOT_VIGIA'] = '1'
+    app.config['ANTHROPIC_API_KEY'] = 'sk-x'
+    app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999999999'
+    with app.app_context():
+        with patch('app.services.zapi.enviar_texto',
+                    return_value={'ok': True}):
+            v.avaliar(
+                _hist('quero comprar a cesta Box Mimo'),
+                conv_id=123, nome_contato='Ale',
+                resultado_bot={'acao': 'handoff', 'tools_usadas': []})
+        vv = VigiaVeredito.query.filter_by(conv_id='123').first()
+        assert vv is not None
+        assert vv.alerta is True
+        assert vv.gravidade == 'alta'
+        assert 'Venda em risco' in (vv.motivo_vigia or '')
