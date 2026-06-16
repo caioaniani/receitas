@@ -340,8 +340,9 @@
                         '</div>' +
                         '</div>' +
                         '<div class="d-flex align-items-center gap-2">' +
-                            (p.expresso ? '<span class="badge" style="background:#e8590c;color:#fff;font-size:11px;"><i class="bi bi-lightning-fill"></i> Expresso</span>' : '') +
-                            (p.periodo ? '<span class="badge bg-light text-dark" style="font-size:11px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>' : '') +
+                            (p.retirada ? '<span class="badge" style="background:#1971c2;color:#fff;font-size:11px;"><i class="bi bi-shop"></i> Retirada</span>' : '') +
+                            (p.expresso && !p.retirada ? '<span class="badge" style="background:#e8590c;color:#fff;font-size:11px;"><i class="bi bi-lightning-fill"></i> Expresso</span>' : '') +
+                            (p.periodo && !p.retirada ? '<span class="badge bg-light text-dark" style="font-size:11px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>' : '') +
                             statusBadge +
                         '</div>' +
                     '</div>' +
