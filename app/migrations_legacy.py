@@ -1090,6 +1090,13 @@ def _migrate_postgres(app):
     # CLAUDE.md "Schema migrations").
     _try("ALTER TABLE vigia_veredito ADD COLUMN IF NOT EXISTS tools_usadas TEXT")
 
+    # Reconhecimento de alerta no painel (banner + som). ALTER no mesmo
+    # commit do modelo: _migrate roda no startup antes do gunicorn servir.
+    _try("ALTER TABLE vigia_veredito ADD COLUMN IF NOT EXISTS "
+         "reconhecido_em TIMESTAMP")
+    _try("ALTER TABLE vigia_veredito ADD COLUMN IF NOT EXISTS "
+         "reconhecido_por_id INTEGER REFERENCES usuario(id)")
+
     # Priority fee (gorjeta) da Lalamove pra acelerar a alocacao do
     # entregador. Coluna nova em lalamove_entrega (tabela criada via
     # db.create_all, que NAO altera tabela existente). ALTER no mesmo
