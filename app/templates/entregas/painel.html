@@ -687,6 +687,13 @@
     carregar();
     setInterval(carregar, 20000);
   });
+
+  // Banner do vigia + botao de alertas abrem a aba lateral (e silenciam).
+  document.getElementById('vigia-banner').addEventListener('click', abrirDrawer);
+  document.getElementById('btn-alertas').addEventListener('click', abrirDrawer);
+  document.getElementById('drawer-x').addEventListener('click', fecharDrawer);
+  document.getElementById('drawer-bg').addEventListener('click', fecharDrawer);
+
   dataHoje(); tick(); setInterval(tick, 10000);
 })();
 </script>
