@@ -104,7 +104,7 @@ def test_avaliar_pula_haiku_quando_detector_bate(app):
     from app.services import chatbot_vigia as v
     app.config['CHATBOT_VIGIA'] = '1'
     app.config['ANTHROPIC_API_KEY'] = 'sk-x'
-    app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999999999'
+    app.config['ZAPI_NUMERO_DESTINO'] = '5511999999999'
     with app.app_context():
         with patch.object(v, '_chamar_haiku') as haiku, \
              patch('app.services.zapi.enviar_texto',
@@ -145,7 +145,7 @@ def test_alerta_persistido_em_VigiaVeredito_pro_banner_do_painel(app):
     from app.services import chatbot_vigia as v
     app.config['CHATBOT_VIGIA'] = '1'
     app.config['ANTHROPIC_API_KEY'] = 'sk-x'
-    app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999999999'
+    app.config['ZAPI_NUMERO_DESTINO'] = '5511999999999'
     with app.app_context():
         with patch('app.services.zapi.enviar_texto',
                     return_value={'ok': True}):
