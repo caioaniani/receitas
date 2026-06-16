@@ -175,6 +175,18 @@ def _extrair_data_de_label(label, ref_year=None):
 
 
 def _extrair_data_entrega(order):
+    # 0. Retirada na loja (decisão do dono 16/06/2026): VNDA não tem campo
+    # confiável de data pra pickup (expected_delivery_date vem -78 dias do
+    # nada). O cliente entra em contato depois pra combinar — então a data
+    # inicial é a `confirmed_at` (dia que pagou). Quando a equipe combina
+    # outro dia, usa o OVERRIDE manual em /entregas/ (que aponta pra
+    # OverrideEntrega) — esse override tem prioridade no `buscar_pedidos_do_dia`.
+    if _is_retirada(order):
+        for campo in ('confirmed_at', 'paid_at', 'received_at', 'created_at'):
+            d = _parse_iso_date(order.get(campo))
+            if d:
+                return d
+
     # 1. extra.DataDeEntrega — campo customizado do checkout (formato confiavel)
     extra = order.get('extra') or {}
     data_br = extra.get('DataDeEntrega', '')
