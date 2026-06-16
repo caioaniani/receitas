@@ -560,6 +560,19 @@ SITE (VNDA — MESMA fonte que o bot consulta). NUNCA comparar com EstoqueLoja:
 bot vende pelo site; loja fisica e outra realidade (falso "bot delirou" em
 12/06/2026: VNDA disponivel + 872 un na loja — bot estava certo).
 
+**Alertas do Vigia no /entregas/painel (15/06/2026)**: alem do WhatsApp, os
+alertas ALTA do vigia aparecem num BANNER pulsante com som "chato" (klaxon
+WebAudio, reusa o `audioCtx` armado pelo "LIGAR PAINEL") no painel de
+entregas. O som SO para quando alguem clica no banner (= reconhece,
+server-side: silencia em todos os aparelhos). Aba lateral (drawer) lista o
+historico com link da conversa no Chatwoot pra resolver. Fonte: VigiaVeredito
+(alerta=True, gravidade='alta') — mesma do WhatsApp. Pendente = nao
+reconhecido + dentro da janela (`VIGIA_PAINEL_JANELA_HORAS`, default 8h).
+Backend: `chatbot_vigia.alertas_pendentes_resumo/reconhecer_pendentes/
+historico_alertas/link_chatwoot`; colunas `reconhecido_em`/`reconhecido_por_id`
+em VigiaVeredito. Rotas: resumo dobrado no `api_painel` (poll 20s) +
+`POST /entregas/api/painel/vigia/reconhecer` + `GET .../vigia/historico`.
+
 **Incidente 12/06/2026 (pos-mortem curto)**: IG caiu por token Meta expirado
 (inbox `reauthorization_required` → Reauthorize resolveu; conectar com System
 User do Business Manager evita expirar a cada 60d). WhatsApp "Falha ao
