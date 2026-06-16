@@ -195,10 +195,10 @@ def test_pagina_produto_cesta_lista_composicao(app):
     from app.extensions import db
     from app.models import ProdutoItem
     p = _criar_produto_publicado(db, nome='Bonjour')
-    db.session.add(ProdutoItem(produto_id=p.id,
+    db.session.add(ProdutoItem(produto_id=p.id, tipo='receita',
                                  item_nome='Sourdough Tradicional',
                                  quantidade=1))
-    db.session.add(ProdutoItem(produto_id=p.id,
+    db.session.add(ProdutoItem(produto_id=p.id, tipo='receita',
                                  item_nome='Croissant Tradicional',
                                  quantidade=2))
     db.session.commit()
