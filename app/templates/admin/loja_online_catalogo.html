@@ -1,0 +1,190 @@
+{% extends 'base.html' %}
+{% block title %}Loja Online — Catálogo do site{% endblock %}
+{% block content %}
+<style>
+  .cat-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+  .cat-filtros { display: flex; gap: 8px; flex-wrap: wrap; }
+  .cat-filtro { padding: 8px 14px; border-radius: 999px; background: #f1f3f5; border: 1px solid #dee2e6; text-decoration: none; color: #495057; font-size: 14px; font-weight: 600; }
+  .cat-filtro:hover { background: #e9ecef; color: #1f2933; }
+  .cat-filtro.active { background: #1f2933; color: #fff; border-color: #1f2933; }
+  .cat-filtro .cnt { background: rgba(255,255,255,.2); padding: 1px 8px; border-radius: 999px; margin-left: 4px; font-size: 12px; }
+  .cat-filtro:not(.active) .cnt { background: #dee2e6; }
+
+  .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .item-card { background: #fff; border-radius: 12px; padding: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.06); display: flex; gap: 12px; align-items: flex-start; }
+  .item-card.no-site { border-left: 4px solid #2b8a3e; }
+  .item-card.falta-foto { border-left: 4px solid #e8590c; }
+  .item-card.falta-preco { border-left: 4px solid #c92a2a; }
+  .item-thumb { width: 72px; height: 72px; flex-shrink: 0; border-radius: 8px; background: #f1f3f5; overflow: hidden; position: relative; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .item-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .item-thumb .empty { font-size: 28px; color: #adb5bd; }
+  .item-thumb .overlay { position: absolute; inset: 0; background: rgba(0,0,0,.5); color: #fff; font-size: 11px; font-weight: 700; display: none; align-items: center; justify-content: center; text-align: center; padding: 4px; }
+  .item-thumb:hover .overlay { display: flex; }
+  .item-thumb input[type=file] { display: none; }
+  .item-body { flex: 1; min-width: 0; }
+  .item-nome { font-size: 15px; font-weight: 700; color: #1f2933; line-height: 1.2; word-break: break-word; }
+  .item-cat { font-size: 11px; color: #868e96; text-transform: uppercase; letter-spacing: .5px; margin-top: 1px; }
+  .item-preco-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 14px; }
+  .item-preco-row label { font-size: 11px; color: #868e96; text-transform: uppercase; }
+  .preco-input { width: 80px; padding: 4px 8px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px; font-weight: 700; }
+  .preco-input.saving { background: #fff3bf; }
+  .preco-input.saved { background: #d3f9d8; }
+  .preco-input.error { background: #ffc9c9; }
+  .item-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+  .badge-mini { font-size: 10px; padding: 2px 6px; border-radius: 999px; font-weight: 700; }
+  .badge-ok { background: #d3f9d8; color: #2b8a3e; }
+  .badge-warn { background: #ffe8cc; color: #c47600; }
+  .badge-bad { background: #ffe3e3; color: #c92a2a; }
+</style>
+
+<h1 class="page-title"><i class="bi bi-shop"></i> Catálogo do site</h1>
+<p class="text-muted">
+  "Tem <code>preco_site</code> + foto = vende no site." Edite o preço clicando no
+  campo, e suba foto clicando no quadrado da esquerda. Tudo salva sem recarregar.
+</p>
+
+<div class="cat-topo">
+  <div class="cat-filtros">
+    <a href="?filtro=todos" class="cat-filtro {% if filtro == 'todos' %}active{% endif %}">
+      Todos <span class="cnt">{{ contagens.todos }}</span>
+    </a>
+    <a href="?filtro=no-site" class="cat-filtro {% if filtro == 'no-site' %}active{% endif %}">
+      ✓ No site <span class="cnt">{{ contagens.no_site }}</span>
+    </a>
+    <a href="?filtro=sem-preco" class="cat-filtro {% if filtro == 'sem-preco' %}active{% endif %}">
+      ⚠ Sem preço <span class="cnt">{{ contagens.sem_preco }}</span>
+    </a>
+    <a href="?filtro=sem-foto" class="cat-filtro {% if filtro == 'sem-foto' %}active{% endif %}">
+      📷 Sem foto <span class="cnt">{{ contagens.sem_foto }}</span>
+    </a>
+  </div>
+  <a href="{{ url_for('main.loja_online_auditoria_catalogo') }}" class="btn btn-sm btn-outline-secondary">
+    Auditoria
+  </a>
+</div>
+
+{% if not itens %}
+<div class="alert alert-light text-muted">Nenhum item neste filtro.</div>
+{% else %}
+<div class="cat-grid">
+  {% for i in itens %}
+  <div class="item-card {% if i.no_site %}no-site{% elif i.falta_preco %}falta-preco{% elif i.falta_foto %}falta-foto{% endif %}"
+       data-tipo="{{ i.tipo }}" data-id="{{ i.id }}">
+    <label class="item-thumb" title="Clique pra trocar a foto">
+      {% if i.imagem %}
+      <img src="{{ i.imagem }}" alt="" class="thumb-img">
+      {% else %}
+      <span class="empty">📷</span>
+      {% endif %}
+      <span class="overlay">Trocar foto</span>
+      <input type="file" accept="image/*" capture="environment" class="foto-input">
+    </label>
+    <div class="item-body">
+      <div class="item-nome">{{ i.nome }}</div>
+      <div class="item-cat">{{ i.categoria }} · {{ i.tipo }}</div>
+      <div class="item-preco-row">
+        <label>R$</label>
+        <input type="number" step="0.01" min="0" max="9999"
+               class="preco-input"
+               value="{% if i.preco_site %}{{ '%.2f' % i.preco_site }}{% endif %}"
+               placeholder="—">
+      </div>
+      <div class="item-badges">
+        {% if i.no_site %}
+        <span class="badge-mini badge-ok">✓ no site</span>
+        {% else %}
+          {% if i.falta_preco %}<span class="badge-mini badge-bad">sem preço</span>{% endif %}
+          {% if i.falta_foto %}<span class="badge-mini badge-warn">sem foto</span>{% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<script>
+(function() {
+  var CSRF = "{{ csrf_token() }}";
+  var URL_PRECO = "/admin/loja-online/catalogo/preco/__TIPO__/__ID__";
+  var URL_FOTO = "/admin/loja-online/catalogo/foto/__TIPO__/__ID__";
+
+  function rotaPreco(tipo, id) { return URL_PRECO.replace('__TIPO__', tipo).replace('__ID__', id); }
+  function rotaFoto(tipo, id) { return URL_FOTO.replace('__TIPO__', tipo).replace('__ID__', id); }
+
+  // Salvar preço inline (blur ou Enter)
+  document.querySelectorAll('.preco-input').forEach(function(inp) {
+    var origem = inp.value;
+    function salvar() {
+      var v = inp.value.trim();
+      if (v === origem) return;
+      var card = inp.closest('.item-card');
+      var tipo = card.dataset.tipo, id = card.dataset.id;
+      inp.classList.remove('saved', 'error');
+      inp.classList.add('saving');
+      fetch(rotaPreco(tipo, id), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ preco: v || null })
+      }).then(function(r) { return r.json(); }).then(function(d) {
+        inp.classList.remove('saving');
+        if (d.ok) {
+          inp.classList.add('saved');
+          origem = inp.value;
+          setTimeout(function() { inp.classList.remove('saved'); }, 1500);
+        } else {
+          inp.classList.add('error');
+          alert(d.erro || 'erro ao salvar');
+        }
+      }).catch(function() {
+        inp.classList.remove('saving');
+        inp.classList.add('error');
+      });
+    }
+    inp.addEventListener('blur', salvar);
+    inp.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+    });
+  });
+
+  // Upload foto direto do thumb
+  document.querySelectorAll('.foto-input').forEach(function(inp) {
+    inp.addEventListener('change', function(e) {
+      var f = e.target.files[0];
+      if (!f) return;
+      var card = inp.closest('.item-card');
+      var tipo = card.dataset.tipo, id = card.dataset.id;
+      var thumb = inp.closest('.item-thumb');
+      var fd = new FormData();
+      fd.append('imagem_arquivo', f);
+      thumb.style.opacity = '.4';
+      fetch(rotaFoto(tipo, id), {
+        method: 'POST',
+        headers: { 'X-CSRFToken': CSRF },
+        body: fd
+      }).then(function(r) { return r.json(); }).then(function(d) {
+        thumb.style.opacity = '1';
+        if (d.ok) {
+          // Recarrega o thumb com a nova URL (cache-bust)
+          var img = thumb.querySelector('.thumb-img');
+          var empty = thumb.querySelector('.empty');
+          if (empty) empty.remove();
+          if (!img) {
+            img = document.createElement('img');
+            img.className = 'thumb-img';
+            thumb.insertBefore(img, thumb.firstChild);
+          }
+          img.src = d.imagem_url + (d.imagem_url.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now();
+          inp.value = '';
+        } else {
+          alert(d.erro || 'erro no upload');
+        }
+      }).catch(function() {
+        thumb.style.opacity = '1';
+        alert('erro de conexão');
+      });
+    });
+  });
+})();
+</script>
+{% endblock %}
