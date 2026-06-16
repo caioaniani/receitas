@@ -429,6 +429,7 @@ TOOLS = [
         },
     },
     TOOL_HANDOFF,
+    TOOL_ENCERRAR,
 ]
 
 
