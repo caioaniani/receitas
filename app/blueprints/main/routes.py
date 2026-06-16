@@ -2497,3 +2497,38 @@ def loja_online_catalogo_foto(tipo, id):
     _db.session.commit()
     return jsonify(ok=True,
                    imagem_url=(obj.imagem_dropbox_url or ''))
+
+
+# ── Debug VNDA: o que campo a Loja usa pra marcar RETIRADA? (16/06/2026) ──
+#
+# Bug do dono: "pedidos de retirada nao aparecem em lugar nenhum". Causa
+# provavel: `_normalizar_pedido` (vnda.py:344) nao tem deteccao de retirada,
+# entao pedidos de pickup chegam misturados como entrega normal mas sem
+# endereco — e o painel filtra silenciosamente.
+#
+# Pra eu fazer o fix sem chutar o nome do shipping_method, esta rota expoe
+# o JSON BRUTO de um pedido especifico (owner abre, encontra um pedido de
+# retirada que ele conhece, me passa o que aparece em shipping_method_code/
+# shipping_method/shipping_label). Owner-only, read-only, nao muta nada.
+
+@main_bp.route('/admin/debug-vnda-pedido/<code>')
+@owner_required
+def debug_vnda_pedido(code):
+    """Mostra o JSON cru de um pedido VNDA + os campos de shipping_method
+    em destaque. Owner-only, read-only."""
+    from app.services import vnda
+    pedido = vnda.buscar_pedido_completo(code)
+    if not pedido:
+        return jsonify(ok=False, erro=f'pedido {code!r} nao encontrado no VNDA'), 404
+    shipping_keys = [
+        'shipping_method', 'shipping_method_code', 'shipping_method_name',
+        'shipping_name', 'shipping_label', 'delivery_type',
+    ]
+    destaque = {k: pedido.get(k) for k in shipping_keys}
+    extra = pedido.get('extra') or {}
+    return jsonify(
+        ok=True, code=code,
+        shipping_destaque=destaque,
+        extra=extra,
+        pedido_completo=pedido,
+    )
