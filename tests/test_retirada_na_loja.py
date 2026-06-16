@@ -138,3 +138,73 @@ def test_api_painel_devolve_flag_retirada_no_pedido(app):
     por_code = {p['code']: p for p in r['pedidos']}
     assert por_code['REAL-RETIR']['retirada'] is True
     assert por_code['REAL-ENT']['retirada'] is False
+
+
+# ── Data de entrega de retirada: usa confirmed_at (decisão dono 16/06) ───
+#
+# Justificativa: VNDA não tem campo limpo de data agendada pra pickup
+# (expected_delivery_date veio -78 dias no EF1B2AE877). Dono escolheu:
+# data inicial = data de confirmação do pagamento; quando o cliente combinar
+# outra data por WhatsApp/IG, equipe usa o OVERRIDE manual.
+
+def test_data_retirada_usa_confirmed_at():
+    """Caso real EF1B2AE877: confirmed_at em 16/06, expected_delivery
+    em 30/03 (errado). Tem que cair em 16/06."""
+    from app.services.vnda import _normalizar_pedido
+    ped = {
+        'code': 'EF1B2AE877',
+        'delivery_type': 'retirar-na-loja',
+        'shipping_label': 'Retire na loja',
+        'confirmed_at': '2026-06-16T19:04:09.325-03:00',
+        'paid_at': '2026-06-16T19:04:09.325-03:00',
+        'expected_delivery_date': '2026-03-30',  # VNDA enrolou — ignora
+        'items': [], 'total': 2415.0,
+    }
+    n = _normalizar_pedido(ped)
+    assert n['data_entrega'] == '2026-06-16'
+    assert n['data_entrega_fmt'] == '16/06/2026'
+
+
+def test_data_retirada_cai_pra_paid_se_falta_confirmed():
+    """Fallback: se confirmed_at NULL (status pending?), tenta paid_at,
+    depois received_at, depois created_at."""
+    from app.services.vnda import _normalizar_pedido
+    ped = {
+        'code': 'X', 'delivery_type': 'retirar-na-loja',
+        'confirmed_at': None,
+        'paid_at': '2026-06-10T10:00:00-03:00',
+        'items': [], 'total': 50.0,
+    }
+    assert _normalizar_pedido(ped)['data_entrega'] == '2026-06-10'
+
+
+def test_data_retirada_ignora_expected_delivery_date():
+    """Garantia explícita: mesmo que VNDA mande expected_delivery_date,
+    NÃO usamos pra retirada (é justamente o campo que dava ruim)."""
+    from app.services.vnda import _normalizar_pedido
+    ped = {
+        'code': 'X', 'delivery_type': 'retirar-na-loja',
+        'confirmed_at': '2026-06-16T10:00:00-03:00',
+        'expected_delivery_date': '2026-03-30',
+        'items': [], 'total': 50.0,
+    }
+    n = _normalizar_pedido(ped)
+    assert n['data_entrega'] == '2026-06-16'
+    assert n['data_entrega'] != '2026-03-30'
+
+
+def test_data_entrega_normal_continua_usando_extra_DataDeEntrega():
+    """Regressão: pedido NORMAL (não retirada) com extra.DataDeEntrega
+    preenchido tem que continuar usando essa data (caminho mais confiável
+    pro VNDA tradicional). NÃO pode pegar confirmed_at."""
+    from app.services.vnda import _normalizar_pedido
+    ped = {
+        'code': 'Y', 'delivery_type': 'standard',
+        'shipping_label': 'Entrega Normal',
+        'extra': {'DataDeEntrega': '20/06/2026'},
+        'confirmed_at': '2026-06-16T10:00:00-03:00',
+        'items': [], 'total': 100.0,
+    }
+    n = _normalizar_pedido(ped)
+    assert n['data_entrega'] == '2026-06-20', 'pedido normal usa DataDeEntrega'
+    assert n['retirada'] is False
