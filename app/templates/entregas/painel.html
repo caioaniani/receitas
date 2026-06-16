@@ -183,15 +183,41 @@
   <div><h1>PEDIDOS DE HOJE</h1><div class="data" id="data-hoje"></div></div>
   <span class="badge-novos" id="badge-novos">0 novos</span>
   <div style="display:flex; align-items:center; gap:10px;">
+    <button class="btn-alertas" id="btn-alertas" type="button" title="Alertas do Vigia">
+      🚨 Alertas<span class="cnt" id="alertas-cnt">0</span>
+    </button>
     <span class="relogio" id="relogio">--:--</span>
     <span class="conexao" id="conexao" title="conexão"></span>
   </div>
+</div>
+
+<!-- Banner do Vigia: aparece quando ha alerta ALTA pendente. Clicar
+     silencia o som (reconhece) e abre a aba lateral pra resolver. -->
+<div class="vigia-banner" id="vigia-banner">
+  <div class="ico">🚨</div>
+  <div class="corpo">
+    <div class="tit" id="vigia-banner-tit">Alerta do atendimento</div>
+    <div class="msg" id="vigia-banner-msg"></div>
+  </div>
+  <div class="cta">Clique para ver →</div>
 </div>
 
 <div class="erro-banner" id="erro-banner"></div>
 <div class="quadro" id="quadro"></div>
 
 <div class="detalhe" id="detalhe"><div class="detalhe-box" id="detalhe-box"></div></div>
+
+<!-- Aba lateral: historico de alertas do Vigia com link do Chatwoot -->
+<div class="drawer-bg" id="drawer-bg"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-topo">
+    <h2>🚨 Alertas do atendimento</h2>
+    <button class="x" id="drawer-x" type="button" aria-label="Fechar">×</button>
+  </div>
+  <div class="drawer-lista" id="drawer-lista">
+    <div class="al-vazio">Carregando…</div>
+  </div>
+</aside>
 
 <script>
 (function () {
