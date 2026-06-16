@@ -465,6 +465,23 @@
         var btnRemover = document.getElementById('md-remover');
         if (!btnSalvar) return;
 
+        // Helper: extrai mensagem útil de resposta que pode não ser JSON
+        // (ex: 400 HTML do CSRF, 500, etc). Sem isso, qualquer erro vira
+        // "erro de conexão" ou falha silenciosa — mesmo bug do upload de
+        // foto que já corrigimos em /admin/loja-online/catalogo.
+        function extrairErroFetch(r) {
+            return r.text().then(function(t) {
+                try { var j = JSON.parse(t); return j.erro || ('erro ' + r.status); }
+                catch (e) {
+                    if (r.status === 400) return 'CSRF inválido ou dados ruins (400). Recarrega a página e tenta de novo.';
+                    if (r.status === 401 || r.status === 403) return 'Sessão expirou — recarrega a página.';
+                    if (r.status === 404) return 'Pedido não encontrado (' + r.status + ').';
+                    if (r.status >= 500) return 'Erro do servidor (' + r.status + '). Tenta de novo em 1min.';
+                    return 'Erro HTTP ' + r.status;
+                }
+            });
+        }
+
         btnSalvar.addEventListener('click', function() {
             var code = document.getElementById('md-code').value;
             var nova = document.getElementById('md-data').value;
@@ -476,7 +493,10 @@
                 headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
                 body: JSON.stringify({data: nova, motivo: motivo})
             })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) return extrairErroFetch(r).then(function(msg) { throw new Error(msg); });
+                return r.json();
+            })
             .then(function(d) {
                 if (d.ok) {
                     bootstrap.Modal.getInstance(document.getElementById('modal-alterar-data')).hide();
@@ -485,6 +505,9 @@
                 } else {
                     alert('Erro: ' + (d.erro || 'desconhecido'));
                 }
+            })
+            .catch(function(e) {
+                alert('Não consegui salvar: ' + ((e && e.message) || 'sem conexão'));
             });
         });
 
@@ -495,13 +518,19 @@
                 method: 'DELETE',
                 headers: {'X-CSRFToken': CSRF_TOKEN}
             })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) return extrairErroFetch(r).then(function(msg) { throw new Error(msg); });
+                return r.json();
+            })
             .then(function(d) {
                 if (d.ok) {
                     bootstrap.Modal.getInstance(document.getElementById('modal-alterar-data')).hide();
                     carregarPedidos();
                     if (typeof window.opRecarregar === 'function') window.opRecarregar();
                 }
+            })
+            .catch(function(e) {
+                alert('Não consegui remover: ' + ((e && e.message) || 'sem conexão'));
             });
         });
     });
