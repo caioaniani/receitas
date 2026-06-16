@@ -411,6 +411,15 @@ def _normalizar_pedido(order, client_data=None, shipping_data=None, items_custom
     if not destinatario:
         destinatario = comprador
 
+    retirada = _is_retirada(order)
+    # Em retirada, o cliente vem buscar na loja Anésio Pinto Rosa, 78 — Itaim
+    # (única loja que faz pickup, decisão do dono confirmada no CLAUDE.md).
+    # Sobrescreve endereço (que vem vazio do VNDA pra retirada) pra a UI
+    # mostrar onde o cliente vai buscar. NÃO afeta o cálculo de frete
+    # (frete é zero, e a tela esconde botão de Lalamove pra retirada).
+    if retirada:
+        endereco_entrega = 'Anésio Pinto Rosa, 78 — Itaim (retirada)'
+
     return {
         'code': order.get('code', ''),
         'status_vnda': order.get('status', ''),
@@ -418,6 +427,7 @@ def _normalizar_pedido(order, client_data=None, shipping_data=None, items_custom
         'data_entrega_fmt': data_entrega.strftime('%d/%m/%Y') if data_entrega else '',
         'periodo': _extrair_periodo(order),
         'expresso': _is_entrega_expressa(order),
+        'retirada': retirada,
         'comprador': comprador,
         'destinatario': destinatario,
         'telefone': telefone_dest,
