@@ -3000,15 +3000,20 @@
                 (dr.paradas || []).forEach(function(p) { if (p.code === code) pedido = p; });
             });
             (opUltimoResultado.sem_driver || []).forEach(function(p) { if (p.code === code) pedido = p; });
-            if (!pedido) return;
-            // Reaproveita o modal: precisa popular pedidos[] global pra abrirAlterarData encontrar
+            // Mesmo se NÃO achar em opUltimoResultado (estado da aba pode
+            // estar dessincronizado), abre o modal com o code — editarData
+            // agora tolera ausência do objeto e ainda permite salvar.
+            // Reaproveita o modal: popula pedidos[] global pra editarData
+            // achar os campos de exibição quando o pedido EXISTE.
             window.pedidos = window.pedidos || [];
-            var idx = -1;
-            for (var i = 0; i < window.pedidos.length; i++) if (window.pedidos[i].code === code) { idx = i; break; }
-            if (idx === -1) window.pedidos.push(pedido);
-            else window.pedidos[idx] = pedido;
-            var dataAtual = pedido.data_entrega || opData();
-            var jaTem = !!pedido.data_override;
+            if (pedido) {
+                var idx = -1;
+                for (var i = 0; i < window.pedidos.length; i++) if (window.pedidos[i].code === code) { idx = i; break; }
+                if (idx === -1) window.pedidos.push(pedido);
+                else window.pedidos[idx] = pedido;
+            }
+            var dataAtual = (pedido && pedido.data_entrega) || opData();
+            var jaTem = !!(pedido && pedido.data_override);
             window.editarData(code, dataAtual, jaTem);
         });
 
