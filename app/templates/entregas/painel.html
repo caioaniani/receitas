@@ -510,6 +510,13 @@
   var lalaCotacao = null;   // {entrega_id, valor, ...} da cotação corrente
 
   function lalamoveHTML(p) {
+    // Retirada não chama Lalamove (cliente busca na loja). Mostra um aviso
+    // pra equipe e esconde TODA a UI de Lalamove pra esse pedido.
+    if (p.retirada) {
+      return '<div class="lala-box" style="background:#e7f5ff;border-color:#1971c2;">' +
+        '<div class="lala-st">🏪 <b>Retirada na loja</b> — cliente busca em Anésio Pinto Rosa, 78. ' +
+        'Sem Lalamove pra esse pedido.</div></div>';
+    }
     var L = p.lalamove;
     if (L) {
       var linhas = '<div class="lala-st">🛵 Lalamove: <b>' + esc(L.rotulo) + '</b>' +
