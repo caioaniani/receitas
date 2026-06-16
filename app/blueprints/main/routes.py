@@ -2340,3 +2340,160 @@ def loja_online_auditoria_catalogo():
         mapa_total=mapa_total, mapa_mapeado=mapa_mapeado,
         mapa_orfao=mapa_orfao,
     )
+
+
+# ── Loja Online — Fase 1: curadoria de catálogo (16/06/2026) ──────────
+#
+# Decisao do dono: "todo item com preco_site sobe no site". Esta tela e o
+# "comando central" do catalogo: lista compacta com preço inline + upload de
+# foto, sem sair da pagina. Edita rapido o que ainda esta faltando antes da
+# Fase 2 (vitrine) entrar.
+#
+# Reusa: `dropbox_storage.upload_publico` + `app.utils.comprimir_imagem` +
+# colunas `preco_site` / `imagem_dropbox_url` ja existentes. Sem schema novo.
+
+@main_bp.route('/admin/loja-online/catalogo')
+@owner_required
+def loja_online_catalogo():
+    """Lista combinada de Receitas + Produtos com edicao rapida de preco e
+    upload de foto. Filtros via query string: ?filtro=no-site|sem-preco|
+    sem-foto|todos (default: todos)."""
+    from app.models import Produto, Receita
+    filtro = (request.args.get('filtro') or 'todos').strip().lower()
+
+    # Receitas ativas
+    rec_q = Receita.query.filter(Receita.arquivada_em.is_(None))
+    # Produtos ativos
+    prod_q = Produto.query.filter_by(ativo=True)
+
+    receitas = rec_q.order_by(Receita.categoria, Receita.nome).all()
+    produtos = prod_q.order_by(Produto.nome).all()
+
+    # Unifica em uma lista com 'tipo' pra o template
+    itens = []
+    for r in receitas:
+        tem_foto = bool(r.imagem_dropbox_url or r.imagem_url)
+        tem_preco = r.preco_site is not None and r.preco_site > 0
+        item = {
+            'tipo': 'receita', 'id': r.id, 'nome': r.nome,
+            'categoria': r.categoria or '',
+            'preco_site': r.preco_site,
+            'imagem': r.imagem_dropbox_url or r.imagem_url,
+            'no_site': tem_foto and tem_preco,
+            'falta_foto': not tem_foto,
+            'falta_preco': not tem_preco,
+        }
+        itens.append(item)
+    for p in produtos:
+        tem_foto = bool(p.imagem_dropbox_url or p.imagem_url)
+        tem_preco = p.preco_site is not None and p.preco_site > 0
+        item = {
+            'tipo': 'produto', 'id': p.id, 'nome': p.nome,
+            'categoria': p.categoria or '(cesta/kit)',
+            'preco_site': p.preco_site,
+            'imagem': p.imagem_dropbox_url or p.imagem_url,
+            'no_site': tem_foto and tem_preco,
+            'falta_foto': not tem_foto,
+            'falta_preco': not tem_preco,
+        }
+        itens.append(item)
+
+    if filtro == 'no-site':
+        itens = [i for i in itens if i['no_site']]
+    elif filtro == 'sem-preco':
+        itens = [i for i in itens if i['falta_preco']]
+    elif filtro == 'sem-foto':
+        itens = [i for i in itens if i['falta_foto']]
+
+    contagens = {
+        'todos': len(receitas) + len(produtos),
+        'no_site': sum(1 for r in receitas if (r.preco_site or 0) > 0 and (r.imagem_dropbox_url or r.imagem_url))
+                  + sum(1 for p in produtos if (p.preco_site or 0) > 0 and (p.imagem_dropbox_url or p.imagem_url)),
+        'sem_preco': sum(1 for r in receitas if not r.preco_site or r.preco_site <= 0)
+                    + sum(1 for p in produtos if not p.preco_site or p.preco_site <= 0),
+        'sem_foto': sum(1 for r in receitas if not (r.imagem_dropbox_url or r.imagem_url))
+                   + sum(1 for p in produtos if not (p.imagem_dropbox_url or p.imagem_url)),
+    }
+    return render_template('admin/loja_online_catalogo.html',
+                            itens=itens, filtro=filtro, contagens=contagens)
+
+
+@main_bp.route('/admin/loja-online/catalogo/preco/<tipo>/<int:id>',
+                methods=['POST'])
+@owner_required
+def loja_online_catalogo_preco(tipo, id):
+    """Atualiza preco_site via AJAX. JSON: {preco: float|null}. Aceita
+    null/0 pra TIRAR do site. Owner-only — dinheiro."""
+    from decimal import Decimal, InvalidOperation
+
+    from app.extensions import db as _db
+    from app.models import Produto, Receita
+    if tipo == 'receita':
+        obj = Receita.query.get_or_404(id)
+    elif tipo == 'produto':
+        obj = Produto.query.get_or_404(id)
+    else:
+        return jsonify(ok=False, erro='tipo inválido'), 400
+    dados = request.get_json(silent=True) or {}
+    raw = dados.get('preco')
+    if raw is None or raw == '' or raw == 0:
+        obj.preco_site = None
+    else:
+        try:
+            val = Decimal(str(raw).replace(',', '.'))
+        except (InvalidOperation, ValueError, TypeError):
+            return jsonify(ok=False, erro='preço inválido'), 400
+        if val < 0 or val > 9999:
+            return jsonify(ok=False, erro='preço fora da faixa (0 a 9999)'), 400
+        obj.preco_site = float(val)
+    _db.session.commit()
+    return jsonify(ok=True,
+                   preco_site=(float(obj.preco_site)
+                               if obj.preco_site is not None else None))
+
+
+@main_bp.route('/admin/loja-online/catalogo/foto/<tipo>/<int:id>',
+                methods=['POST'])
+@owner_required
+def loja_online_catalogo_foto(tipo, id):
+    """Upload de foto via AJAX. JSON de resposta: {ok, imagem_url}. Reusa
+    `comprimir_imagem` + `dropbox_storage.upload_publico` (padrão de
+    `cardapio_img_upload`)."""
+    from app.extensions import db as _db
+    from app.models import Produto, Receita
+    from app.services import dropbox_storage
+    from app.utils import comprimir_imagem
+    if tipo == 'receita':
+        obj = Receita.query.get_or_404(id)
+    elif tipo == 'produto':
+        obj = Produto.query.get_or_404(id)
+    else:
+        return jsonify(ok=False, erro='tipo inválido'), 400
+
+    f = request.files.get('imagem_arquivo') or request.files.get('foto')
+    if not f or not f.filename:
+        return jsonify(ok=False, erro='nenhum arquivo enviado'), 400
+    if not (f.mimetype or '').startswith('image/'):
+        return jsonify(ok=False, erro='arquivo não é imagem'), 400
+    data = f.read()
+    if not data:
+        return jsonify(ok=False, erro='arquivo vazio'), 400
+    if len(data) > 25 * 1024 * 1024:
+        return jsonify(ok=False, erro='imagem maior que 25MB'), 400
+    try:
+        final = comprimir_imagem(data)
+        if dropbox_storage.disponivel():
+            path = f'/cardapio/{tipo}/{obj.id}.jpg'
+            info = dropbox_storage.upload_publico(
+                final, path, mode='overwrite', autorename=False)
+            obj.imagem_dropbox_url = info['url']
+            obj.imagem_storage_path = info['storage_path']
+            obj.imagem_blob = None
+        else:
+            obj.imagem_blob = final
+        obj.imagem_mimetype = 'image/jpeg'
+    except Exception as exc:  # noqa: BLE001
+        return jsonify(ok=False, erro=f'erro ao processar: {exc}'), 500
+    _db.session.commit()
+    return jsonify(ok=True,
+                   imagem_url=(obj.imagem_dropbox_url or ''))
