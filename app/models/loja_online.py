@@ -160,6 +160,13 @@ class PedidoOnline(db.Model):
     email_cliente = db.Column(db.String(200), nullable=False)
     telefone_cliente = db.Column(db.String(30))
 
+    # ── Destinatario (quando difere do pagador — presente) ──────────
+    # NULL = entrega/retirada vai pro proprio cliente. Quando preenchidos,
+    # estes prevalecem na entrega; o pagador (acima) continua sendo quem
+    # paga e recebe contato comercial.
+    nome_destinatario = db.Column(db.String(150))
+    telefone_destinatario = db.Column(db.String(30))
+
     # ── Entrega ──────────────────────────────────────────────────────
     modo_entrega = db.Column(db.String(20), nullable=False)  # MODOS_ENTREGA
     # Retirada: loja escolhida pelo cliente. NULL nos modos de entrega.
