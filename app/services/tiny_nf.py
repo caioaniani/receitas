@@ -258,8 +258,9 @@ def _nota_payload(pedido, itens):
         'cliente': _payload_cliente(pedido),
         'itens': itens,
         'valor_frete': float(pedido.frete_valor or 0),
-        # Modalidade do frete (NF-e modFrete) — obrigatório no Tiny.
-        'frete_por_conta': str(cfg.get('NF_FRETE_POR_CONTA', '0')),
+        # Modalidade do frete — obrigatório no Tiny. Letra, não número
+        # ("0" vira vazio no PHP do Tiny). 'R' = por conta do emitente.
+        'frete_por_conta': str(cfg.get('NF_FRETE_POR_CONTA', 'R')),
     }
 
 
