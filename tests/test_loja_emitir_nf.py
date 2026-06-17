@@ -362,6 +362,60 @@ def test_incluir_pedido_registros_como_dict(app):
         assert res['ok'] is True and res['id'] == '777'
 
 
+def test_emitir_nota_fiscal_status_3_e_autorizada(app):
+    """status_processamento '3' = autorizada (confirmado em prod com a NF
+    011428). Antes o '3' caía como falha apesar de a SEFAZ ter autorizado."""
+    from app.services import tiny
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'tok'
+
+        class R:
+            status_code = 200
+
+            def json(self):
+                return {'retorno': {'status': 'OK', 'status_processamento': '3'}}
+        with patch('app.services.tiny.requests.post', return_value=R()):
+            res = tiny.emitir_nota_fiscal('nf-1')
+        assert res['ok'] is True and res['status'] == 'autorizada'
+
+
+def test_emitir_nota_fiscal_ja_autorizada_e_sucesso(app):
+    """Reemitir uma NF já autorizada é sucesso (não marca falha em algo
+    válido na SEFAZ — evita o usuário 'Refazer' e duplicar)."""
+    from app.services import tiny
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'tok'
+
+        class R:
+            status_code = 200
+
+            def json(self):
+                return {'retorno': {'status': 'Erro', 'registros': {
+                    'registro': {'erros': [{
+                        'erro': 'Nota fiscal já autorizada'}]}}}}
+        with patch('app.services.tiny.requests.post', return_value=R()):
+            res = tiny.emitir_nota_fiscal('nf-1')
+        assert res['ok'] is True
+
+
+def test_emitir_nota_fiscal_status_2_e_erro(app):
+    """status_processamento '2' = rejeitada → falha com o motivo SEFAZ."""
+    from app.services import tiny
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'tok'
+
+        class R:
+            status_code = 200
+
+            def json(self):
+                return {'retorno': {'status': 'OK', 'status_processamento': '2',
+                                    'erros': [{'erro': 'Rejeicao SEFAZ 999'}]}}
+        with patch('app.services.tiny.requests.post', return_value=R()):
+            res = tiny.emitir_nota_fiscal('nf-1')
+        assert res['ok'] is False
+        assert 'Rejeicao' in res['erro']
+
+
 def test_detalhe_mostra_botao_emitir_pra_pago(app):
     from app.extensions import db
     c = _owner(app)
