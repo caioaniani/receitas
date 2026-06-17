@@ -64,9 +64,9 @@ def test_emitir_nf_ordem_e_payload(app):
         produto = _produto(db, preco=20.0)
         p = _pedido_pago(db, produto, qtd=2, sku='SKU-XYZ')
         with patch('app.services.tiny.incluir_pedido',
-                   return_value={'id': 'tp-1', 'numero': '999'}) as inc, \
+                   return_value={'ok': True, 'id': 'tp-1', 'numero': '999'}) as inc, \
              patch('app.services.tiny.gerar_nota_fiscal_pedido',
-                   return_value={'id_nota_fiscal': 'nf-9', 'status': 'aberta'}) as ger, \
+                   return_value={'ok': True, 'id_nota_fiscal': 'nf-9', 'status': 'aberta'}) as ger, \
              patch('app.services.tiny.emitir_nota_fiscal',
                    return_value={'ok': True, 'status': 'autorizada'}) as emi:
             res = tiny_nf.emitir_nf(p)
@@ -134,9 +134,9 @@ def test_botao_emitir_nf_no_admin(app):
     produto = _produto(db)
     p = _pedido_pago(db, produto, sku='S')
     with patch('app.services.tiny.incluir_pedido',
-               return_value={'id': 'tp', 'numero': '1'}), \
+               return_value={'ok': True, 'id': 'tp', 'numero': '1'}), \
          patch('app.services.tiny.gerar_nota_fiscal_pedido',
-               return_value={'id_nota_fiscal': 'nf', 'status': 'ok'}), \
+               return_value={'ok': True, 'id_nota_fiscal': 'nf', 'status': 'ok'}), \
          patch('app.services.tiny.emitir_nota_fiscal',
                return_value={'ok': True, 'status': 'autorizada'}):
         r = c.post(f'/admin/loja-online/pedidos/{p.codigo}/emitir-nf',
