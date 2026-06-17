@@ -86,18 +86,50 @@ def test_emitir_nf_ordem_e_payload(app):
 
 
 def test_emitir_nf_idempotente(app):
-    """Pedido que já tem nota_fiscal_id NÃO chama o Tiny de novo."""
+    """Pedido com NF emitida COM SUCESSO (nf_emitida_em setado) NÃO chama o
+    Tiny de novo."""
     from app.extensions import db
     from app.services import tiny_nf
+    from app.utils import agora
     with app.app_context():
         produto = _produto(db)
         p = _pedido_pago(db, produto, sku='SKU')
         p.tiny_nota_fiscal_id = 'nf-existente'
+        p.nf_emitida_em = agora()   # emitida com sucesso
         db.session.commit()
         with patch('app.services.tiny.incluir_pedido') as inc:
             res = tiny_nf.emitir_nf(p)
         assert res['ok'] and res['nota_fiscal_id'] == 'nf-existente'
         inc.assert_not_called()
+
+
+def test_emitir_nf_rascunho_falho_nao_e_idempotente(app):
+    """NF gerada mas NÃO autorizada (nf_emitida_em=None): clicar de novo NÃO
+    retorna 'já emitida' — tenta de novo (com recriar a SEFAZ aceita)."""
+    from app.extensions import db
+    from app.services import tiny_nf
+    with app.app_context():
+        produto = _produto(db)
+        p = _pedido_pago(db, produto, sku='S')
+        p.tiny_pedido_id = 'tp-velho'
+        p.tiny_nota_fiscal_id = 'nf-rejeitada'
+        p.nf_status = 'pendente'           # gerada, mas não autorizada
+        db.session.commit()
+        with patch('app.services.tiny.buscar_pedido_por_numero_ordem',
+                   return_value=None), \
+             patch('app.services.tiny.incluir_pedido',
+                   return_value={'ok': True, 'id': 'tp-novo'}) as inc, \
+             patch('app.services.tiny.gerar_nota_fiscal_pedido',
+                   return_value={'ok': True, 'id_nota_fiscal': 'nf-novo'}), \
+             patch('app.services.tiny.emitir_nota_fiscal',
+                   return_value={'ok': True, 'status': 'autorizada'}):
+            res = tiny_nf.emitir_nf(p, recriar=True)
+        assert res['ok'] is True
+        inc.assert_called_once()          # recriou o pedido do zero
+        db.session.refresh(p)
+        assert p.tiny_pedido_id == 'tp-novo'
+        assert p.tiny_nota_fiscal_id == 'nf-novo'
+        assert p.nf_emitida_em is not None
 
 
 def test_emitir_nf_bloqueia_sem_sku(app):
