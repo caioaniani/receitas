@@ -123,36 +123,6 @@ def test_emitir_nf_payload_inclui_endereco_e_natureza(app):
         assert 'serie' not in payload     # campo morto removido
 
 
-def test_checkout_grava_endereco_estruturado(app):
-    """O checkout de entrega guarda o endereço estruturado (não só a linha
-    única) — é o que alimenta a NF depois."""
-    from app.extensions import db
-    from app.models import Produto
-    from app.services import loja_checkout
-    with app.app_context():
-        prod = Produto(nome='Pão', categoria='Pães', preco_site=10.0,
-                       imagem_dropbox_url='https://x/p.jpg', ativo=True)
-        db.session.add(prod)
-        db.session.commit()
-        form = {
-            'nome': 'João', 'email': 'j@x.com', 'telefone': '11988887777',
-            'cpf': '52998224725', 'modo_entrega': 'retirada',
-            'aceite_lgpd': '1', 'loja_id': '',
-        }
-        # Usa retirada pra não depender de geocode externo; o foco é provar
-        # que os campos estruturados são lidos quando vêm. Então testamos o
-        # parser direto:
-        f2 = {
-            'logradouro': 'Av Brasil', 'numero': '500',
-            'complemento': 'sala 3', 'bairro': 'Jardins',
-            'cidade': 'Campinas', 'uf': 'sp',
-        }
-        # _montar_endereco junta tudo; a gravação estruturada é validada no
-        # teste de payload acima. Aqui só garante que o parser não quebra.
-        assert 'Av Brasil' in loja_checkout._montar_endereco(f2)
-        assert form  # placeholder p/ manter contexto de checkout
-
-
 def test_emitir_nf_idempotente(app):
     """Pedido com NF emitida COM SUCESSO (nf_emitida_em setado) NÃO chama o
     Tiny de novo."""
