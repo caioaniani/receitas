@@ -256,6 +256,10 @@ def criar_pedido(form, itens_raw, *, base=None):
     endereco_cep = (form.get('cep') or '').strip() or None
     distancia_km = None
     frete_valor = Decimal('0.00')
+    # Endereco ESTRUTURADO (snapshot pra NF-e). So a entrega preenche; a
+    # linha unica `endereco_entrega` acima continua sendo a versao legivel.
+    end_logradouro = end_numero = end_complemento = None
+    end_bairro = end_cidade = end_uf = None
 
     if modo == 'retirada':
         try:
