@@ -196,6 +196,13 @@ class PedidoOnline(db.Model):
     pago_em = db.Column(db.DateTime, nullable=True)
     cancelado_em = db.Column(db.DateTime, nullable=True)
 
+    # NF-e (Fase 5, via Tiny). Setados quando o admin clica "Emitir NF"
+    # — o Tiny aplica NCM/CFOP/CST do cadastro do produto.
+    tiny_pedido_id = db.Column(db.String(40), nullable=True)
+    tiny_nota_fiscal_id = db.Column(db.String(40), nullable=True, index=True)
+    nf_status = db.Column(db.String(40), nullable=True)
+    nf_emitida_em = db.Column(db.DateTime, nullable=True)
+
     itens = db.relationship(
         'PedidoOnlineItem', backref='pedido',
         cascade='all, delete-orphan', lazy='select')
