@@ -180,7 +180,20 @@
             }) });
         var data = await resp.json();
         if (!resp.ok || !data.id) {
-          throw new Error((data.message || data.errors || 'Cartão inválido'));
+          // Pagar.me devolve {message, errors:{campo:[motivos]}} — junta o
+          // detalhe por campo pra dizer EXATAMENTE o que está errado.
+          var det = data.message || '';
+          if (data.errors) {
+            try {
+              var partes = [];
+              Object.keys(data.errors).forEach(function (k) {
+                var v = data.errors[k];
+                partes.push(k + ': ' + (Array.isArray(v) ? v.join(', ') : v));
+              });
+              if (partes.length) det += ' — ' + partes.join(' | ');
+            } catch (e2) { det += ' ' + JSON.stringify(data.errors); }
+          }
+          throw new Error(det || 'Cartão inválido');
         }
         document.getElementById('card_token').value = data.id;
         form.submit();
