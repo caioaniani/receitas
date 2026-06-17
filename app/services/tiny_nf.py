@@ -220,6 +220,7 @@ def _payload_itens(pedido):
         out.append({'item': {
             'codigo': sku,
             'descricao': it.nome[:120],
+            'unidade': 'UN',
             'quantidade': float(it.quantidade),
             'valor_unitario': float(it.preco_unitario or 0),
         }})
