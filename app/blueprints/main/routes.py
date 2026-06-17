@@ -2499,6 +2499,25 @@ def loja_online_catalogo_foto(tipo, id):
                    imagem_url=(obj.imagem_dropbox_url or ''))
 
 
+# ── Debug Pagar.me: valida a chave sem expor o segredo (Fase 4) ───────────
+@main_bp.route('/admin/debug-pagarme')
+@owner_required
+def debug_pagarme():
+    """Diagnóstico do Pagar.me (owner-only). Confirma se a chave cadastrada
+    no Railway é válida e em qual ambiente (sandbox/produção), SEM expor o
+    segredo. Útil pra saber se as chaves são reais ou placeholders."""
+    from app.services import pagarme
+    cfg = current_app.config
+    return jsonify(
+        configurado=pagarme.disponivel(),
+        ambiente=pagarme.ambiente(),
+        api_key_len=len((cfg.get('PAGARME_API_KEY') or '')),
+        public_key_len=len((cfg.get('PAGARME_PUBLIC_KEY') or '')),
+        webhook_secret_set=bool((cfg.get('PAGARME_WEBHOOK_SECRET') or '').strip()),
+        resultado=pagarme.validar_chave(),
+    )
+
+
 # ── Pedidos do site (Fase 3): acompanhamento dos PedidoOnline ─────────────
 # Tela pra o dono acompanhar os pedidos que entram pelo checkout nativo. Read
 # + cancelar. Em Fase 3 o pedido nasce 'aguardando_pagamento' e NAO baixa
