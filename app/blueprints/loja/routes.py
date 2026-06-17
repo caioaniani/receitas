@@ -7,12 +7,14 @@ libera pra todo mundo.
 Read-only nesta fase: home + página de produto. Botão "Comprar" fica
 desabilitado com "Em breve" (carrinho/checkout entra na Fase 3).
 """
+import json
 import os
 
-from flask import abort, redirect, render_template, request, url_for
+from flask import abort, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 
 from app.blueprints.loja import loja_bp
+from app.services import frete as frete_svc
 from app.services import loja_catalogo, loja_checkout
 
 _DIAS_SEMANA = ('seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom')
@@ -84,13 +86,56 @@ def carrinho():
     return render_template('loja/carrinho.html', em_teste=_em_teste())
 
 
-@loja_bp.route('/checkout')
+@loja_bp.route('/checkout', methods=['GET', 'POST'])
 def checkout():
-    """Stub do checkout — a Fase 3 constrói o fluxo real (dados do cliente
-    → modo de entrega → endereço/frete ou loja → data/janela → cartinha →
-    cria PedidoOnline) no próximo passo. Por ora evita 404 no botão do
-    carrinho e deixa o lugar reservado no roteamento."""
-    return render_template('loja/checkout.html', em_teste=_em_teste())
+    """Checkout do site. GET serve o formulário; POST cria o PedidoOnline.
+
+    O carrinho vem do navegador (campo oculto itens_json). A integridade de
+    dinheiro é do SERVIDOR: loja_checkout.criar_pedido re-busca preço no
+    catálogo e recomputa o frete — nunca confia no que o cliente mandou.
+    PRG: sucesso redireciona pra confirmação."""
+    if request.method == 'POST':
+        try:
+            itens_raw = json.loads(request.form.get('itens_json') or '[]')
+        except ValueError:
+            itens_raw = []
+        pedido, erros = loja_checkout.criar_pedido(request.form, itens_raw)
+        if not erros:
+            return redirect(url_for('loja.pedido_confirmado',
+                                    codigo=pedido.codigo))
+        return render_template(
+            'loja/checkout.html',
+            **_ctx_checkout(erros=erros, form=request.form)), 400
+    return render_template('loja/checkout.html', **_ctx_checkout())
+
+
+@loja_bp.route('/api/frete', methods=['POST'])
+def api_frete():
+    """Cotação de frete pro checkout (anéis de distância do frete.py).
+    Recebe JSON {endereco, cep}; devolve o dict do consultar_frete.
+    Mesma fonte que o servidor usa no POST do checkout (autoritativo)."""
+    data = request.get_json(silent=True) or request.form
+    endereco = (data.get('endereco') or '').strip()
+    cep = (data.get('cep') or '').strip()
+    geo = endereco
+    if cep and cep not in endereco:
+        geo = f'{endereco}, {cep}' if endereco else cep
+    if not geo:
+        return jsonify(ok=False, erro='Informe o endereço ou o CEP.'), 400
+    return jsonify(frete_svc.consultar_frete(geo))
+
+
+@loja_bp.route('/pedido/<codigo>')
+def pedido_confirmado(codigo):
+    """Confirmação do pedido (PRG). Também é a base do 'meus pedidos'
+    (Fase 6). Rota com segmento estático 'pedido' — não colide com
+    /<slug_completo> (profundidade diferente)."""
+    from app.models import PedidoOnline
+    pedido = PedidoOnline.query.filter_by(codigo=codigo).first()
+    if not pedido:
+        abort(404)
+    return render_template('loja/pedido_confirmado.html',
+                           pedido=pedido, em_teste=_em_teste())
 
 
 @loja_bp.route('/<slug_completo>')
