@@ -46,9 +46,36 @@ _RETRY_BACKOFF = (1.0, 2.0)   # delays antes da 2a e 3a tentativas
 _HTTP_TRANSIENTES = (408, 429, 500, 502, 503, 504)
 
 
-def _get(endpoint, params=None):
+def _extrair_erros(retorno):
+    """Junta as mensagens de erro de um retorno do Tiny (vêm em formatos
+    diferentes: retorno.erros[].erro, ou registros[].registro.erros[].erro)."""
+    msgs = []
+    if not isinstance(retorno, dict):
+        return ''
+    for e in (retorno.get('erros') or []):
+        if isinstance(e, dict):
+            msgs.append(str(e.get('erro') or e.get('descricao') or e))
+        else:
+            msgs.append(str(e))
+    for r in (retorno.get('registros') or []):
+        reg = r.get('registro') if isinstance(r, dict) else None
+        for e in ((reg or {}).get('erros') or []):
+            if isinstance(e, dict):
+                msgs.append(str(e.get('erro') or e))
+            else:
+                msgs.append(str(e))
+    if retorno.get('codigo_erro'):
+        msgs.append(f"cod {retorno['codigo_erro']}")
+    return '; '.join(m for m in msgs if m)[:400]
+
+
+def _get(endpoint, params=None, retornar_erro=False):
     """POST no Tiny (a API v2 usa POST com form-data). Devolve dict do JSON ou
     None em qualquer falha. Tiny envolve tudo em {'retorno': {'status': ...}}.
+
+    `retornar_erro=True`: em vez de None quando o Tiny responde status de
+    erro, devolve o `retorno` completo (pra o caller ler `.registros[].erros`
+    e propagar a mensagem real — usado na emissão de NF).
 
     Faz 3 tentativas com backoff (1s, 2s) em erros TRANSIENTES (HTTP 408/429/5xx
     ou timeout/connection error). Em prod 2026-06-09 o bot pegou janelas de
