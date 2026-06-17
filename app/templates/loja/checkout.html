@@ -116,12 +116,9 @@
     <div class="checkout-bloco" id="bloco-data">
       <h2>Quando</h2>
       <label>Dia
-        <select name="data_entrega" id="data_entrega">
-          {% for iso, rotulo in datas %}
-          <option value="{{ iso }}"
-            {{ 'selected' if form.get('data_entrega') == iso }}>{{ rotulo }}</option>
-          {% endfor %}
-        </select>
+        <input type="date" name="data_entrega" id="data_entrega"
+               min="{{ data_min }}" max="{{ data_max }}"
+               value="{{ form.get('data_entrega', data_min) }}">
       </label>
       <label>Janela de horário
         <select name="janela_entrega" id="janela_entrega"
