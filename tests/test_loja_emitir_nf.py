@@ -362,7 +362,7 @@ def test_incluir_pedido_registros_como_dict(app):
         assert res['ok'] is True and res['id'] == '777'
 
 
-def test_emitir_nota_fiscal_status_3_e_autorizada(app):
+def test_emitir_nf_status_3_e_autorizada(app):
     """status_processamento '3' = autorizada (confirmado em prod com a NF
     011428). Antes o '3' caía como falha apesar de a SEFAZ ter autorizado."""
     from app.services import tiny
