@@ -194,12 +194,11 @@ def _baixar_estoque(pedido, usuario_id=None):
 
 
 def _estornar_estoque(pedido):
-    """Reverte a baixa: cria MovEstoqueLoja('venda_site_estorno') com
-    quantidade negativa pra cada baixa anterior (espelha seru_sync)."""
-    from app.models import MovEstoqueLoja
-    loja = _loja_baixa(pedido)
-    if not loja:
-        return 0
+    """Reverte a baixa: pra cada MovEstoqueLoja('venda_site') do pedido,
+    devolve a quantidade ao saldo de EstoqueLoja e registra um
+    MovEstoqueLoja('venda_site_estorno') com quantidade negativa
+    (espelha o estorno do seru_sync)."""
+    from app.models import EstoqueLoja, MovEstoqueLoja
     ref_baixa = f'Site #{pedido.codigo}'
     movs = (MovEstoqueLoja.query
             .filter(MovEstoqueLoja.tipo == 'venda_site',
@@ -207,9 +206,8 @@ def _estornar_estoque(pedido):
             .all())
     n = 0
     for m in movs:
-        # Devolve ao estoque (quantidade negativa = entra no saldo)
-        el = m.estoque_loja
-        if el:
+        el = EstoqueLoja.query.get(m.estoque_loja_id)
+        if el is not None:
             el.quantidade = (el.quantidade or 0) + m.quantidade
         db.session.add(MovEstoqueLoja(
             estoque_loja_id=m.estoque_loja_id,
