@@ -95,13 +95,6 @@
           <input type="text" id="cc-cvv" inputmode="numeric" autocomplete="cc-csc">
         </label>
       </div>
-      <label>Parcelas
-        <select name="parcelas">
-          {% for n in range(1, 7) %}
-          <option value="{{ n }}">{{ n }}x</option>
-          {% endfor %}
-        </select>
-      </label>
       <div class="billing-bloco">
         <p class="small text-muted" style="margin:6px 0 2px;">
           Endereço de cobrança do cartão (exigido pelo banco/antifraude):</p>
