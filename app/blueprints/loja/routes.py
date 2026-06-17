@@ -17,22 +17,20 @@ from app.blueprints.loja import loja_bp
 from app.services import frete as frete_svc
 from app.services import loja_catalogo, loja_checkout
 
-_DIAS_SEMANA = ('seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom')
-
-
-def _label_data(d):
-    return f'{_DIAS_SEMANA[d.weekday()]}, {d.day:02d}/{d.month:02d}'
-
 
 def _ctx_checkout(erros=None, form=None):
-    """Contexto compartilhado entre GET e POST(falha) do checkout."""
+    """Contexto compartilhado entre GET e POST(falha) do checkout.
+
+    Datas viram min/max pro <input type="date"> (calendário). O range é
+    contíguo (entregamos todo dia) e respeita o corte das 17h, então
+    [min, max] bate exatamente com o conjunto que o servidor valida."""
     datas = loja_checkout.datas_disponiveis('agendada')
     return dict(
         em_teste=_em_teste(),
         lojas=loja_checkout.lojas_retirada(),
-        datas=[(d.isoformat(), _label_data(d)) for d in datas],
-        janelas_entrega=list(loja_checkout.JANELAS_ENTREGA),
-        janelas_retirada=list(loja_checkout.JANELAS_RETIRADA),
+        data_min=(datas[0].isoformat() if datas else ''),
+        data_max=(datas[-1].isoformat() if datas else ''),
+        janelas=list(loja_checkout.JANELAS_HORARIAS),
         express_ok=loja_checkout.express_disponivel(),
         erros=erros, form=(form or {}),
     )
