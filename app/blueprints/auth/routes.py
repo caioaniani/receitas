@@ -103,7 +103,7 @@ def novo_usuario():
     db.session.commit()
 
     # Envio do email com a senha (best-effort). Sem email cadastrado ou se o
-    # Resend falhar, mostra a senha no flash pra o admin copiar e passar.
+    # Postmark falhar, mostra a senha no flash pra o admin copiar e passar.
     if email:
         from app.services import email as email_svc
         res = email_svc.enviar_boas_vindas(email, nome, login_val, senha)
