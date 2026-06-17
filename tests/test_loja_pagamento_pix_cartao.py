@@ -466,8 +466,6 @@ def test_reembolsar_pedido_estorna(app):
 
 
 def test_email_confirmacao_monta_resumo(app):
-    from decimal import Decimal as D
-
     from app.extensions import db
     from app.services import email as email_svc
     with app.app_context():
@@ -484,7 +482,6 @@ def test_email_confirmacao_monta_resumo(app):
         html = post.call_args[1]['json']['HtmlBody']
         assert ped.codigo in html
         assert 'Box Mimo' in html
-        assert D  # silencia import
 
 
 def _fake_resp_email():
