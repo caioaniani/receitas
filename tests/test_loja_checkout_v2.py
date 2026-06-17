@@ -230,7 +230,7 @@ def test_api_cep_ok(app, monkeypatch):
         def json(self):
             return {'street': 'Avenida Brasil', 'neighborhood': 'Centro',
                     'city': 'São Paulo', 'state': 'SP'}
-    with patch('app.blueprints.loja.routes.requests.get', return_value=_R()):
+    with patch('requests.get', return_value=_R()):
         r = c.get('/loja/api/cep/04077000')
     assert r.status_code == 200
     j = r.get_json()
