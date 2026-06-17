@@ -129,6 +129,30 @@
     if (!form) return;
     var btn = document.getElementById('btn-pagar-cartao');
     var erroEl = document.getElementById('cc-erro');
+
+    // Máscara MM/AA na validade: insere a "/" sozinha ao digitar.
+    var valEl = document.getElementById('cc-val');
+    if (valEl) {
+      valEl.addEventListener('input', function () {
+        var d = (valEl.value || '').replace(/\D/g, '').slice(0, 4);
+        valEl.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+      });
+    }
+    // Máscara do número do cartão em grupos de 4 (1234 5678 ...).
+    var numEl = document.getElementById('cc-num');
+    if (numEl) {
+      numEl.addEventListener('input', function () {
+        var d = (numEl.value || '').replace(/\D/g, '').slice(0, 19);
+        numEl.value = (d.match(/.{1,4}/g) || []).join(' ');
+      });
+    }
+    // CVV só dígitos (3-4).
+    var cvvEl = document.getElementById('cc-cvv');
+    if (cvvEl) {
+      cvvEl.addEventListener('input', function () {
+        cvvEl.value = (cvvEl.value || '').replace(/\D/g, '').slice(0, 4);
+      });
+    }
     form.addEventListener('submit', async function (e) {
       if (document.getElementById('card_token').value) return; // já tokenizado
       e.preventDefault();
