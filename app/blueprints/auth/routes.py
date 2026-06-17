@@ -74,27 +74,49 @@ def usuarios():
 @login_required
 @admin_required
 def novo_usuario():
+    import secrets
+
     nome = request.form.get('nome', '').strip()
     login_val = request.form.get('login', '').strip()
-    senha = request.form.get('senha', '').strip()
+    email = (request.form.get('email', '') or '').strip() or None
     papel = request.form.get('papel', 'funcionario')
     from app.constants import PAPEIS_VALIDOS
     if papel not in PAPEIS_VALIDOS:
         papel = 'funcionario'
 
-    if not nome or not login_val or not senha:
-        flash('Preencha todos os campos.', 'warning')
+    if not nome or not login_val:
+        flash('Preencha nome e login.', 'warning')
         return redirect(url_for('auth.usuarios'))
 
     if Usuario.query.filter_by(login=login_val).first():
         flash(f'Login "{login_val}" ja existe.', 'warning')
         return redirect(url_for('auth.usuarios'))
 
-    u = Usuario(nome=nome, login=login_val, papel=papel)
+    # Senha gerada — 10 chars urlsafe, legível o suficiente pra digitar uma
+    # vez. O usuário troca no primeiro acesso. NUNCA fica em texto plano além
+    # do email/flash (hash imediato via set_senha).
+    senha = secrets.token_urlsafe(8)[:10]
+
+    u = Usuario(nome=nome, login=login_val, email=email, papel=papel)
     u.set_senha(senha)
     db.session.add(u)
     db.session.commit()
-    flash(f'Usuario "{nome}" criado!', 'success')
+
+    # Envio do email com a senha (best-effort). Sem email cadastrado ou se o
+    # Resend falhar, mostra a senha no flash pra o admin copiar e passar.
+    if email:
+        from app.services import email as email_svc
+        res = email_svc.enviar_boas_vindas(email, nome, login_val, senha)
+        if res.get('ok'):
+            flash(f'Usuario "{nome}" criado! Senha enviada para {email}.',
+                  'success')
+        else:
+            flash(f'Usuario "{nome}" criado, mas o email falhou '
+                  f'({res.get("erro")}). Senha: {senha} — copie e passe '
+                  'manualmente.', 'warning')
+    else:
+        flash(f'Usuario "{nome}" criado! Senha: {senha} — copie e passe '
+              '(nenhum email cadastrado).', 'success')
     return redirect(url_for('auth.usuarios'))
 
 
