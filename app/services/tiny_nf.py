@@ -277,19 +277,32 @@ def _sincronizar_situacao(pedido):
     if not pedido.tiny_nota_fiscal_id:
         return None
     nf = tiny.obter_nota_fiscal(pedido.tiny_nota_fiscal_id) or {}
-    situ = str(nf.get('situacao') or '').strip().lower()
-    if not situ:
+    # Tiny pode mandar a situação em campos/formatos diferentes:
+    # `situacao` (texto curto), `situacao_descricao` (texto longo),
+    # `status` (numérico). Vamos varrer tudo pra ser robustos.
+    sigs = ' '.join(
+        str(nf.get(k) or '').strip().lower()
+        for k in ('situacao', 'situacao_descricao', 'status',
+                  'status_nfe', 'status_processamento')
+    )
+    if not sigs.strip():
+        logger.info('tiny obter NF %s: sem situacao (campos=%s)',
+                    pedido.tiny_nota_fiscal_id, list(nf.keys())[:20])
         return None
-    autorizada = ('autoriz' in situ) or ('emitida' in situ)
-    rejeitada = ('rejeit' in situ) or ('denegad' in situ)
+    autorizada = ('autoriz' in sigs) or ('emitida' in sigs)
+    rejeitada = ('rejeit' in sigs) or ('denegad' in sigs)
+    if not (autorizada or rejeitada):
+        logger.info('tiny obter NF %s: situacao desconhecida (sigs=%r, '
+                    'campos=%s)', pedido.tiny_nota_fiscal_id, sigs[:120],
+                    list(nf.keys())[:20])
     if autorizada and not pedido.nf_emitida_em:
         pedido.nf_status = 'autorizada'
         pedido.nf_emitida_em = agora()
         db.session.commit()
     elif rejeitada and not pedido.nf_emitida_em:
-        pedido.nf_status = situ
+        pedido.nf_status = sigs[:40]
         db.session.commit()
-    return {'autorizada': autorizada, 'rejeitada': rejeitada, 'situacao': situ}
+    return {'autorizada': autorizada, 'rejeitada': rejeitada, 'situacao': sigs}
 
 
 def emitir_nf(pedido, user_id=None, recriar=False):
