@@ -227,6 +227,24 @@ def _payload_itens(pedido):
     return out, faltando
 
 
+def _pedido_payload(pedido, itens):
+    """Monta o pedido pro Tiny COM o cabeçalho fiscal (série, natureza,
+    consumidor final) — sem isso o Tiny cria em série própria sem natureza
+    (bug visto em prod: nota saiu como 000010 em vez de seguir a série 1)."""
+    from flask import current_app
+    cfg = current_app.config
+    return {
+        'numero_ordem_compra': pedido.codigo,
+        'cliente': _payload_cliente(pedido),
+        'itens': itens,
+        'valor_frete': float(pedido.frete_valor or 0),
+        'serie': cfg.get('NF_SERIE', '1'),
+        'natureza_operacao': cfg.get('NF_NATUREZA_OPERACAO',
+                                     'Venda de mercadorias'),
+        'consumidor_final': cfg.get('NF_CONSUMIDOR_FINAL', 'S'),
+    }
+
+
 def emitir_nf(pedido, user_id=None):
     """Emite NF pro pedido. Devolve {ok, msg, nota_fiscal_id?}.
 
