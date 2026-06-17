@@ -402,7 +402,7 @@ def test_checkout_redireciona_pra_pagamento(app, monkeypatch):
     db.session.add(Loja(nome='Brooklin', ativa=True, endereco='r'))
     db.session.commit()
     loja = Loja.query.filter_by(nome='Brooklin').first()
-    data = loja_checkout.datas_disponiveis('retirada')[0].isoformat()
+    data = loja_checkout.datas_disponiveis('retirada')[-1].isoformat()
     r = c.post('/loja/checkout', data={
         'nome': 'João', 'email': 'j@x.com', 'cpf': '52998224725',
         'aceite_lgpd': '1',

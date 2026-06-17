@@ -108,7 +108,7 @@ def test_criar_pedido_sem_cpf_falha(app):
         p = _produto(db)
         loja = _loja(db)
         base = datetime(2026, 6, 17, 10, 0)
-        data = loja_checkout.datas_disponiveis('retirada', base=base)[0].isoformat()
+        data = loja_checkout.datas_disponiveis('retirada', base=base)[1].isoformat()
         form = {'nome': 'Maria', 'email': 'm@x.com', 'aceite_lgpd': '1',
                 'modo_entrega': 'retirada', 'loja_id': str(loja.id),
                 'data_entrega': data, 'janela_entrega': '08:00–09:00'}
@@ -126,7 +126,7 @@ def test_criar_pedido_grava_cpf_no_cliente(app):
         p = _produto(db)
         loja = _loja(db)
         base = datetime(2026, 6, 17, 10, 0)
-        data = loja_checkout.datas_disponiveis('retirada', base=base)[0].isoformat()
+        data = loja_checkout.datas_disponiveis('retirada', base=base)[1].isoformat()
         form = {'nome': 'Maria', 'email': 'm@x.com',
                 'cpf': '529.982.247-25', 'aceite_lgpd': '1',
                 'modo_entrega': 'retirada', 'loja_id': str(loja.id),
@@ -196,7 +196,7 @@ def test_presente_exige_nome_do_destinatario(app):
         p = _produto(db)
         loja = _loja(db)
         base = datetime(2026, 6, 17, 10, 0)
-        data = loja_checkout.datas_disponiveis('retirada', base=base)[0].isoformat()
+        data = loja_checkout.datas_disponiveis('retirada', base=base)[1].isoformat()
         form = {'nome': 'Maria', 'email': 'm@x.com',
                 'cpf': '52998224725', 'aceite_lgpd': '1',
                 'modo_entrega': 'retirada', 'loja_id': str(loja.id),
@@ -218,7 +218,7 @@ def test_presente_salva_destinatario(app):
         p = _produto(db)
         loja = _loja(db)
         base = datetime(2026, 6, 17, 10, 0)
-        data = loja_checkout.datas_disponiveis('retirada', base=base)[0].isoformat()
+        data = loja_checkout.datas_disponiveis('retirada', base=base)[1].isoformat()
         form = {'nome': 'Maria', 'email': 'm@x.com',
                 'cpf': '52998224725', 'aceite_lgpd': '1',
                 'modo_entrega': 'retirada', 'loja_id': str(loja.id),
@@ -242,7 +242,7 @@ def test_sem_presente_nao_salva_destinatario(app):
         p = _produto(db)
         loja = _loja(db)
         base = datetime(2026, 6, 17, 10, 0)
-        data = loja_checkout.datas_disponiveis('retirada', base=base)[0].isoformat()
+        data = loja_checkout.datas_disponiveis('retirada', base=base)[1].isoformat()
         form = {'nome': 'Maria', 'email': 'm@x.com',
                 'cpf': '52998224725', 'aceite_lgpd': '1',
                 'modo_entrega': 'retirada', 'loja_id': str(loja.id),

@@ -127,7 +127,7 @@ def test_criar_pedido_retirada_ok(app):
         p = _produto_pub(db, preco=20.0)
         loja = _loja(db)
         base = datetime(2026, 6, 17, 10, 0)
-        data = loja_checkout.datas_disponiveis('retirada', base=base)[0].isoformat()
+        data = loja_checkout.datas_disponiveis('retirada', base=base)[1].isoformat()
         form = _form(modo_entrega='retirada', loja_id=str(loja.id),
                      data_entrega=data, janela_entrega='08:00–09:00')
         pedido, erros = loja_checkout.criar_pedido(
@@ -196,7 +196,7 @@ def test_criar_pedido_sem_aceite_falha(app):
         p = _produto_pub(db)
         loja = _loja(db)
         base = datetime(2026, 6, 17, 10, 0)
-        data = loja_checkout.datas_disponiveis('retirada', base=base)[0].isoformat()
+        data = loja_checkout.datas_disponiveis('retirada', base=base)[1].isoformat()
         form = _form(modo_entrega='retirada', loja_id=str(loja.id),
                      data_entrega=data, janela_entrega='08:00–09:00')
         del form['aceite_lgpd']
@@ -230,7 +230,7 @@ def test_criar_pedido_reusa_cliente_por_email(app):
         p = _produto_pub(db)
         loja = _loja(db)
         base = datetime(2026, 6, 17, 10, 0)
-        data = loja_checkout.datas_disponiveis('retirada', base=base)[0].isoformat()
+        data = loja_checkout.datas_disponiveis('retirada', base=base)[1].isoformat()
         form = _form(modo_entrega='retirada', loja_id=str(loja.id),
                      data_entrega=data, janela_entrega='08:00–09:00')
         loja_checkout.criar_pedido(
@@ -267,7 +267,7 @@ def test_checkout_post_cria_pedido_e_redireciona(app, monkeypatch):
     c = _admin_logado(app)
     p = _produto_pub(db, preco=25.0)
     loja = _loja(db)
-    data = loja_checkout.datas_disponiveis('retirada')[0].isoformat()
+    data = loja_checkout.datas_disponiveis('retirada')[-1].isoformat()
     r = c.post('/loja/checkout', data={
         'nome': 'João', 'email': 'joao@x.com', 'telefone': '11888',
         'cpf': '52998224725',
@@ -294,7 +294,7 @@ def test_checkout_post_preco_forjado_usa_catalogo(app, monkeypatch):
     c = _admin_logado(app)
     p = _produto_pub(db, preco=25.0)
     loja = _loja(db)
-    data = loja_checkout.datas_disponiveis('retirada')[0].isoformat()
+    data = loja_checkout.datas_disponiveis('retirada')[-1].isoformat()
     c.post('/loja/checkout', data={
         'nome': 'Hacker', 'email': 'h@x.com', 'cpf': '52998224725',
         'aceite_lgpd': '1',
