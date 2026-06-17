@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}Loja Online — SKUs do Tiny (NF){% endblock %}
+
+{% block content %}
+<h1 class="page-title"><i class="bi bi-upc-scan"></i> SKUs do Tiny (NF-e)</h1>
+<p class="text-muted">
+  Ligue cada item do site ao <strong>código (SKU)</strong> dele no Tiny. A
+  emissão de NF manda só SKU + quantidade + valor; o Tiny aplica o fiscal
+  (NCM/CFOP/CST) do cadastro do produto. Itens sem SKU não emitem NF.
+</p>
+
+<div class="d-flex align-items-center gap-2 mb-3">
+  <form method="POST" action="{{ url_for('main.loja_online_tiny_sync') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-sm btn-outline-dark" type="submit">
+      <i class="bi bi-arrow-repeat"></i> Sugerir SKUs pelo nome (busca no Tiny)
+    </button>
+  </form>
+  <span class="badge {{ 'bg-success' if pendentes == 0 else 'bg-warning text-dark' }}">
+    {{ total - pendentes }}/{{ total }} mapeados
+  </span>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-sm bg-white align-middle">
+    <thead class="thead-padaria">
+      <tr><th>Item do site</th><th>Categoria</th><th>SKU no Tiny</th><th style="width:160px"></th></tr>
+    </thead>
+    <tbody>
+      {% for it in itens %}
+      <tr>
+        <td>{{ it.nome }}
+          {% if it.tiny_nome and it.tiny_nome != it.nome %}
+          <br><span class="small text-muted">Tiny: {{ it.tiny_nome }}</span>{% endif %}
+        </td>
+        <td class="small text-muted">{{ it.categoria }}</td>
+        <td>
+          <form method="POST" action="{{ url_for('main.loja_online_tiny_definir') }}"
+                class="d-flex gap-1">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="kind" value="{{ it.kind }}">
+            <input type="hidden" name="item_id" value="{{ it.id }}">
+            <input type="text" name="sku" value="{{ it.sku or '' }}"
+                   class="form-control form-control-sm" placeholder="código no Tiny"
+                   style="max-width:200px">
+            <button class="btn btn-sm btn-outline-primary" type="submit">Salvar</button>
+          </form>
+        </td>
+        <td>
+          {% if it.estado == 'mapeado' %}
+            {% if it.auto and not it.confirmado %}
+            <span class="badge bg-info text-dark" title="Sugerido por nome — confira e salve">sugerido</span>
+            {% else %}
+            <span class="badge bg-success">✓ mapeado</span>
+            {% endif %}
+          {% else %}
+            <span class="badge bg-warning text-dark">pendente</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if not itens %}
+<div class="alert alert-light border">Nenhum item publicado no site ainda (precisa ter preço de site).</div>
+{% endif %}
+{% endblock %}
