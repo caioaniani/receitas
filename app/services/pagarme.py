@@ -203,15 +203,27 @@ def criar_pedido_pix(pedido, expira_em_min=30):
     status, body = _post_order(payload)
     if status not in (200, 201):
         erro = body.get('message') or body.get('_erro') or f'HTTP {status}'
+        logger.warning('pagarme criar_pedido_pix HTTP %s: %s', status, body)
         return {'ok': False, 'erro': erro, 'http': status}
     charge = _extrair_charge(body)
     last_tx = charge.get('last_transaction') or {}
+    qr = last_tx.get('qr_code')
+    # Charge nasceu OK mas falhou na hora (gateway recusou): detecta e
+    # propaga o motivo (vai pro PagamentoOnline.erro e pra tela).
+    if (charge.get('status') in ('failed', 'canceled')
+            or last_tx.get('status') in ('failed', 'canceled')
+            or not qr):
+        motivo = _erro_da_charge(charge)
+        logger.warning('pagarme pix charge falhou: %s | body=%s', motivo, body)
+        return {'ok': False, 'erro': motivo, 'http': status,
+                'order_id': body.get('id'),
+                'charge_id': charge.get('id')}
     return {
         'ok': True,
         'order_id': body.get('id'),
         'charge_id': charge.get('id'),
         'status': charge.get('status'),
-        'qr_code': last_tx.get('qr_code'),
+        'qr_code': qr,
         'qr_code_url': last_tx.get('qr_code_url'),
         'expira_em': agora() + timedelta(minutes=int(expira_em_min)),
     }
