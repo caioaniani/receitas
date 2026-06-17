@@ -141,10 +141,14 @@ def test_gate_libera_cliente_logado_em_modo_teste(app):
 
 
 def test_gate_404_anonimo_em_modo_teste(app):
-    """Modo teste: visitante anônimo continua tomando 404."""
+    """Modo teste: visitante anônimo toma 404 na vitrine. As rotas de AUTH
+    (entrar/cadastrar) ficam sempre acessíveis — sem elas, cliente novo não
+    consegue criar conta nem fazer login pra ver a loja."""
     c = app.test_client()
     assert c.get('/loja/').status_code == 404
-    assert c.get('/loja/entrar').status_code == 404
+    # Auth sempre acessível, mesmo em modo teste
+    assert c.get('/loja/entrar').status_code == 200
+    assert c.get('/loja/cadastrar').status_code == 200
 
 
 def test_sessao_admin_nao_vira_cliente(app):
