@@ -262,6 +262,29 @@ def _marcar_estornado(pedido, pagamento):
     return True
 
 
+def reembolsar_pedido(pedido):
+    """Reembolso manual (admin). Cancela/estorna a cobrança no Pagar.me e,
+    se já estava pago, devolve o estoque. Devolve (ok, mensagem).
+
+    Idempotente o suficiente: se o pedido já está cancelado, no-op. O
+    webhook 'charge.refunded' do Pagar.me também chega depois — como
+    _marcar_estornado checa status, não duplica."""
+    if pedido.status == 'cancelado':
+        return True, 'Pedido já estava cancelado.'
+    # Acha a cobrança paga (ou a última com charge_id) pra estornar no gateway.
+    pago = next((p for p in pedido.pagamentos if p.status == 'pago'), None)
+    charge_id = (pago.pagarme_charge_id if pago else None) or next(
+        (p.pagarme_charge_id for p in pedido.pagamentos
+         if p.pagarme_charge_id), None)
+    if charge_id:
+        res = pagarme.cancelar_charge(charge_id)
+        if not res.get('ok'):
+            return False, f'Pagar.me recusou o estorno: {res.get("erro")}'
+    _marcar_estornado(pedido, pago)
+    db.session.commit()
+    return True, 'Pedido reembolsado e estornado.'
+
+
 def processar_webhook(evento):
     """Recebe o JSON do webhook (já parsed). Idempotente por `id` do
     evento (PagarmeEvento). Retorna dict com o que foi feito (pra
