@@ -140,11 +140,29 @@
     <div class="card mb-3">
       <div class="card-header py-2 fw-bold">Nota Fiscal (Tiny)</div>
       <div class="card-body small">
-        {% if p.tiny_nota_fiscal_id %}
+        {% if p.nf_emitida_em %}
+          {# Emitida com sucesso #}
           <div>NF: <code>{{ p.tiny_nota_fiscal_id }}</code></div>
           {% if p.nf_status %}<div>Status: <strong>{{ p.nf_status }}</strong></div>{% endif %}
-          {% if p.nf_emitida_em %}<div class="text-muted">Emitida: {{ p.nf_emitida_em.strftime('%d/%m/%Y %H:%M') }}</div>{% endif %}
+          <div class="text-muted">Emitida: {{ p.nf_emitida_em.strftime('%d/%m/%Y %H:%M') }}</div>
           {% if p.tiny_pedido_id %}<div class="text-muted">Pedido Tiny: <code>{{ p.tiny_pedido_id }}</code></div>{% endif %}
+        {% elif p.tiny_nota_fiscal_id %}
+          {# Rascunho gerado mas a emissão (autorização SEFAZ) falhou #}
+          <div>NF rascunho: <code>{{ p.tiny_nota_fiscal_id }}</code></div>
+          {% if p.nf_status %}<div class="text-danger">Status: <strong>{{ p.nf_status }}</strong></div>{% endif %}
+          {% if p.tiny_pedido_id %}<div class="text-muted">Pedido Tiny: <code>{{ p.tiny_pedido_id }}</code></div>{% endif %}
+          <div class="alert alert-warning py-2 px-2 mt-2 mb-2">
+            A autorização na SEFAZ não foi concluída. Confira os dados
+            (endereço, natureza no Tiny) e refaça do zero.
+          </div>
+          <form method="POST" action="{{ url_for('main.loja_online_emitir_nf', codigo=p.codigo) }}"
+                onsubmit="return confirm('Refazer a NF do zero no Tiny? O rascunho anterior é descartado.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="recriar" value="1">
+            <button type="submit" class="btn btn-sm btn-warning w-100">
+              <i class="bi bi-arrow-repeat"></i> Refazer NF
+            </button>
+          </form>
         {% elif p.status == 'pago' %}
           <form method="POST" action="{{ url_for('main.loja_online_emitir_nf', codigo=p.codigo) }}"
                 onsubmit="return confirm('Emitir NF deste pedido no Tiny?');">
