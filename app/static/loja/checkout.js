@@ -44,6 +44,12 @@
     resumoHtml += '</ul>';
     $('#checkout-resumo').innerHTML = resumoHtml;
 
+    // Cartinha só aparece se houver uma cesta (Produto) no carrinho —
+    // pães/itens individuais (Receita) não levam cartinha de presente.
+    var temCesta = itens.some(function (it) { return it.kind === 'produto'; });
+    var blocoCart = document.getElementById('bloco-cartinha');
+    if (blocoCart) blocoCart.style.display = temCesta ? 'block' : 'none';
+
     var freteAtual = null;  // null = ainda não cotado (entrega/express)
 
     function modoSelecionado() {
