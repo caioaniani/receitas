@@ -448,9 +448,15 @@ def emitir_nota_fiscal(nota_id):
     if sp in ('3', 'ok', '100', 'autorizada', 'emitida'):
         return {'ok': True, 'status': 'autorizada'}
     erro = _extrair_erros(retorno)
-    # NF que JÁ estava autorizada (re-emissão de uma nota que passou) =
-    # sucesso — evita marcar como falha algo que está válido na SEFAZ.
-    if erro and ('autoriz' in erro.lower() or 'emitida' in erro.lower()):
+    erro_low = (erro or '').lower()
+    # NF que JÁ está em estado autorizada/emitida = sucesso (re-emissão).
+    # Duas mensagens distintas do Tiny indicam isso:
+    # (a) "Nota fiscal já autorizada / emitida"
+    # (b) "apenas notas pendentes ou rejeitadas podem ser enviadas" (cod 32):
+    #     o Tiny dizendo que a NOSSA não é pendente nem rejeitada — logo,
+    #     está autorizada/emitida (confirmado em prod com a 011428).
+    if ('autoriz' in erro_low or 'emitida' in erro_low
+            or 'pendentes ou rejeitadas' in erro_low):
         return {'ok': True, 'status': 'autorizada'}
     if sp in ('1', 'processando', 'enviada', 'aguardando'):
         # Assíncrono: confirma a situação real antes de declarar falha.
