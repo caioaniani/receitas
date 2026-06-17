@@ -104,6 +104,17 @@ def pedido_cartao(codigo):
     return redirect(url_for('loja.pedido_confirmado', codigo=codigo))
 
 
+@loja_bp.route('/pedido/<codigo>/status')
+def pedido_status(codigo):
+    """JSON com o status do pedido — usado pelo polling da tela de Pix
+    pra detectar pagamento e redirecionar pra confirmação."""
+    from app.models import PedidoOnline
+    p = PedidoOnline.query.filter_by(codigo=codigo).first()
+    if not p:
+        return jsonify(status='nao_encontrado'), 404
+    return jsonify(status=p.status, codigo=p.codigo)
+
+
 @loja_bp.route('/webhook/pagarme', methods=['POST'])
 @csrf.exempt
 def webhook_pagarme():
