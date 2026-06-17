@@ -32,9 +32,10 @@ HORA_ABRE = 8
 HORA_FECHA = 18
 HORA_CORTE = 17
 
-# Janelas oferecidas. Entrega dentro de 8–18; retirada acompanha a loja.
-JANELAS_ENTREGA = ('08h–12h', '12h–15h', '15h–18h')
-JANELAS_RETIRADA = ('08h–12h', '12h–16h', '16h–20h')
+# Janelas de 1 hora, das 08:00 às 18:00 (decisão do dono 17/06/2026):
+# '08:00–09:00', '09:00–10:00', … , '17:00–18:00'.
+JANELAS_HORARIAS = tuple(
+    f'{h:02d}:00–{h + 1:02d}:00' for h in range(HORA_ABRE, HORA_FECHA))
 JANELA_EXPRESS = 'em até 1h'
 
 # Quantos dias de agenda oferecer a partir da primeira data válida.
@@ -74,11 +75,9 @@ def datas_disponiveis(modo, base=None, dias=DIAS_AGENDA):
 
 
 def janelas_do_modo(modo):
-    if modo == 'retirada':
-        return list(JANELAS_RETIRADA)
     if modo == 'express':
         return [JANELA_EXPRESS]
-    return list(JANELAS_ENTREGA)
+    return list(JANELAS_HORARIAS)
 
 
 def montar_itens(itens_raw):
