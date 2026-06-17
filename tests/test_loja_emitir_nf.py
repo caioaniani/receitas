@@ -148,6 +148,56 @@ def test_botao_emitir_nf_no_admin(app):
         assert atual.tiny_nota_fiscal_id == 'nf'
 
 
+def test_gerar_nf_retry_no_lock(app):
+    """Lock do Tiny (cod 31) é temporário — repete e na 2ª vez gera."""
+    from app.services import tiny
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'tok'
+        chamadas = []
+
+        class RLock:
+            status_code = 200
+            def json(self):
+                return {'retorno': {'status': 'Erro', 'registros': {
+                    'registro': {'erros': [{
+                        'erro': 'Lock Venda::gerarNotaFiscal bloqueado.'}]}}}}
+
+        class ROk:
+            status_code = 200
+            def json(self):
+                return {'retorno': {'status': 'OK',
+                                    'registro': {'id_nota_fiscal': 'nf-ok'}}}
+
+        def fake_post(*a, **k):
+            chamadas.append(1)
+            return RLock() if len(chamadas) == 1 else ROk()
+        with patch('app.services.tiny.time.sleep'), \
+             patch('app.services.tiny.requests.post', side_effect=fake_post):
+            res = tiny.gerar_nota_fiscal_pedido('tp-1')
+        assert res['ok'] is True and res['id_nota_fiscal'] == 'nf-ok'
+        assert len(chamadas) == 2  # repetiu após o lock
+
+
+def test_emitir_nf_resume_sem_duplicar_pedido(app):
+    """Pedido já criado no Tiny (tiny_pedido_id setado): reclica NÃO chama
+    incluir_pedido de novo — só retoma gerar+emitir."""
+    from app.extensions import db
+    from app.services import tiny_nf
+    with app.app_context():
+        produto = _produto(db)
+        p = _pedido_pago(db, produto, sku='S')
+        p.tiny_pedido_id = 'tp-existente'  # criado antes, NF falhou no lock
+        db.session.commit()
+        with patch('app.services.tiny.incluir_pedido') as inc, \
+             patch('app.services.tiny.gerar_nota_fiscal_pedido',
+                   return_value={'ok': True, 'id_nota_fiscal': 'nf-2'}), \
+             patch('app.services.tiny.emitir_nota_fiscal',
+                   return_value={'ok': True, 'status': 'autorizada'}):
+            res = tiny_nf.emitir_nf(p)
+        assert res['ok'] is True
+        inc.assert_not_called()   # não duplicou o pedido no Tiny
+
+
 def test_incluir_pedido_registros_como_dict(app):
     """Regressão do 500 (KeyError: 0): Tiny v2 às vezes manda `registros`
     como DICT {'registro': {...}}, não lista. _registros normaliza."""
