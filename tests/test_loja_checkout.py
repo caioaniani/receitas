@@ -117,7 +117,7 @@ def test_criar_pedido_retirada_ok(app):
         base = datetime(2026, 6, 17, 10, 0)
         data = loja_checkout.datas_disponiveis('retirada', base=base)[0].isoformat()
         form = _form(modo_entrega='retirada', loja_id=str(loja.id),
-                     data_entrega=data, janela_entrega='08h–12h')
+                     data_entrega=data, janela_entrega='08:00–09:00')
         pedido, erros = loja_checkout.criar_pedido(
             form, [{'kind': 'produto', 'id': p.id, 'qtd': 2}], base=base)
         assert erros == []
@@ -137,7 +137,7 @@ def test_criar_pedido_agendada_recomputa_frete_no_servidor(app):
         base = datetime(2026, 6, 17, 10, 0)
         data = loja_checkout.datas_disponiveis('agendada', base=base)[0].isoformat()
         form = _form(modo_entrega='agendada', endereco='Rua X, 1, Moema',
-                     cep='04077000', data_entrega=data, janela_entrega='12h–15h')
+                     cep='04077000', data_entrega=data, janela_entrega='12:00–13:00')
         with patch('app.services.frete.consultar_frete', return_value=FRETE_OK):
             pedido, erros = loja_checkout.criar_pedido(
                 form, [{'kind': 'produto', 'id': p.id, 'qtd': 1, 'preco': 0.01}],
@@ -158,7 +158,7 @@ def test_criar_pedido_fora_de_area_falha(app):
         base = datetime(2026, 6, 17, 10, 0)
         data = loja_checkout.datas_disponiveis('agendada', base=base)[0].isoformat()
         form = _form(modo_entrega='agendada', endereco='Muito longe',
-                     data_entrega=data, janela_entrega='12h–15h')
+                     data_entrega=data, janela_entrega='12:00–13:00')
         with patch('app.services.frete.consultar_frete', return_value=FRETE_FORA):
             pedido, erros = loja_checkout.criar_pedido(
                 form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
@@ -171,7 +171,7 @@ def test_criar_pedido_carrinho_vazio_falha(app):
     with app.app_context():
         base = datetime(2026, 6, 17, 10, 0)
         form = _form(modo_entrega='retirada', loja_id='1',
-                     data_entrega='2026-06-18', janela_entrega='08h–12h')
+                     data_entrega='2026-06-18', janela_entrega='08:00–09:00')
         pedido, erros = loja_checkout.criar_pedido(form, [], base=base)
         assert pedido is None
         assert any('vazio' in e.lower() or 'catálogo' in e.lower() for e in erros)
@@ -186,7 +186,7 @@ def test_criar_pedido_sem_aceite_falha(app):
         base = datetime(2026, 6, 17, 10, 0)
         data = loja_checkout.datas_disponiveis('retirada', base=base)[0].isoformat()
         form = _form(modo_entrega='retirada', loja_id=str(loja.id),
-                     data_entrega=data, janela_entrega='08h–12h')
+                     data_entrega=data, janela_entrega='08:00–09:00')
         del form['aceite_lgpd']
         pedido, erros = loja_checkout.criar_pedido(
             form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
@@ -203,7 +203,7 @@ def test_criar_pedido_data_invalida_falha(app):
         base = datetime(2026, 6, 17, 10, 0)
         form = _form(modo_entrega='retirada', loja_id=str(loja.id),
                      data_entrega='2020-01-01',  # passado, inválida
-                     janela_entrega='08h–12h')
+                     janela_entrega='08:00–09:00')
         pedido, erros = loja_checkout.criar_pedido(
             form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
         assert pedido is None
@@ -220,7 +220,7 @@ def test_criar_pedido_reusa_cliente_por_email(app):
         base = datetime(2026, 6, 17, 10, 0)
         data = loja_checkout.datas_disponiveis('retirada', base=base)[0].isoformat()
         form = _form(modo_entrega='retirada', loja_id=str(loja.id),
-                     data_entrega=data, janela_entrega='08h–12h')
+                     data_entrega=data, janela_entrega='08:00–09:00')
         loja_checkout.criar_pedido(
             form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
         loja_checkout.criar_pedido(
@@ -260,7 +260,7 @@ def test_checkout_post_cria_pedido_e_redireciona(app, monkeypatch):
         'nome': 'João', 'email': 'joao@x.com', 'telefone': '11888',
         'aceite_lgpd': '1', 'modo_entrega': 'retirada',
         'loja_id': str(loja.id), 'data_entrega': data,
-        'janela_entrega': '08h–12h',
+        'janela_entrega': '08:00–09:00',
         'itens_json': _json.dumps([{'kind': 'produto', 'id': p.id, 'qtd': 2}]),
     }, follow_redirects=False)
     assert r.status_code == 302
@@ -285,7 +285,7 @@ def test_checkout_post_preco_forjado_usa_catalogo(app, monkeypatch):
     c.post('/loja/checkout', data={
         'nome': 'Hacker', 'email': 'h@x.com', 'aceite_lgpd': '1',
         'modo_entrega': 'retirada', 'loja_id': str(loja.id),
-        'data_entrega': data, 'janela_entrega': '08h–12h',
+        'data_entrega': data, 'janela_entrega': '08:00–09:00',
         'itens_json': _json.dumps(
             [{'kind': 'produto', 'id': p.id, 'qtd': 1, 'preco': 0.01}]),
     })
