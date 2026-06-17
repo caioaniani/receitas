@@ -2593,6 +2593,59 @@ def loja_online_pedido_cancelar(codigo):
     return redirect(url_for('main.loja_online_pedido_detalhe', codigo=codigo))
 
 
+# ── Loja Online — Fase 5: mapeamento de SKU do Tiny (NF-e) ────────────────
+# Liga cada item publicado no site ao SKU dele no Tiny. Pré-requisito da
+# emissão de NF (o Tiny aplica o fiscal do cadastro do produto; nós só
+# mandamos SKU + quantidade + valor).
+
+@main_bp.route('/admin/loja-online/tiny-skus')
+@owner_required
+def loja_online_tiny_skus():
+    from app.services import tiny_nf
+    itens = tiny_nf.itens_para_mapear()
+    pendentes = sum(1 for i in itens if i['estado'] != 'mapeado')
+    return render_template('admin/loja_online_tiny.html',
+                           itens=itens, pendentes=pendentes,
+                           total=len(itens))
+
+
+@main_bp.route('/admin/loja-online/tiny-skus/sync', methods=['POST'])
+@owner_required
+def loja_online_tiny_sync():
+    """Busca o catálogo do Tiny e sugere SKUs por nome pros não mapeados."""
+    from flask import flash
+
+    from app.services import tiny_nf
+    res = tiny_nf.sincronizar_sugestoes()
+    if res.get('erro'):
+        flash(f'Sincronização falhou: {res["erro"]}', 'danger')
+    else:
+        flash(f'{res["sugeridos"]} SKU(s) sugeridos por nome, '
+              f'{res["sem_match"]} sem correspondência '
+              f'({res["total_tiny"]} produtos no Tiny). Confira e confirme.',
+              'success')
+    return redirect(url_for('main.loja_online_tiny_skus'))
+
+
+@main_bp.route('/admin/loja-online/tiny-skus/definir', methods=['POST'])
+@owner_required
+def loja_online_tiny_definir():
+    """Define/limpa o SKU de um item (kind + item_id + sku)."""
+    from flask import flash
+
+    from app.services import tiny_nf
+    kind = (request.form.get('kind') or '').strip()
+    try:
+        item_id = int(request.form.get('item_id'))
+    except (TypeError, ValueError):
+        flash('Item inválido.', 'warning')
+        return redirect(url_for('main.loja_online_tiny_skus'))
+    sku = (request.form.get('sku') or '').strip()
+    tiny_nf.definir_sku(kind, item_id, sku, user_id=current_user.id)
+    flash('SKU salvo.' if sku else 'SKU removido.', 'success')
+    return redirect(url_for('main.loja_online_tiny_skus'))
+
+
 # ── Debug VNDA: o que campo a Loja usa pra marcar RETIRADA? (16/06/2026) ──
 #
 # Bug do dono: "pedidos de retirada nao aparecem em lugar nenhum". Causa
