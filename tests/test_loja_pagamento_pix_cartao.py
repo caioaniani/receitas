@@ -337,6 +337,48 @@ def test_webhook_refunded_estorna_estoque(app):
 
 # ── Rotas + webhook seguro ────────────────────────────────────────────
 
+def test_qr_data_uri_gera_png(app):
+    from app.services import pagarme
+    with app.app_context():
+        uri = pagarme.qr_data_uri('00020101BR.GOV.BCB.PIX-EMV-TESTE6304ABCD')
+        assert uri and uri.startswith('data:image/png;base64,')
+        assert pagarme.qr_data_uri('') is None
+
+
+def test_pagamento_mostra_qr_gerado_do_emv(app, monkeypatch):
+    """Quando o Pix tem EMV, a tela mostra um <img> com QR data-URI
+    (gerado no servidor) — não depende do qr_code_url do Pagar.me."""
+    from decimal import Decimal as D
+
+    from app.extensions import db
+    from app.models import PagamentoOnline
+    monkeypatch.delenv('LOJA_VISIVEL', raising=False)
+    c = _admin(app)
+    _loja_site(db)
+    p = _produto(db)
+    ped = _pedido_com_item(db, p)
+    pag = PagamentoOnline(pedido_id=ped.id, metodo='pix', valor=D('20'),
+                          status='pendente',
+                          pix_qr_code='00020101BR.GOV.BCB.PIX6304XYZ',
+                          pix_qr_code_url='')
+    db.session.add(pag)
+    db.session.commit()
+    r = c.get(f'/loja/pedido/{ped.codigo}/pagamento')
+    assert r.status_code == 200
+    assert b'data:image/png;base64,' in r.data       # QR embutido
+    assert b'00020101BR.GOV.BCB.PIX6304XYZ' in r.data  # copia-e-cola = EMV
+
+
+def test_csp_loja_libera_pagarme(app):
+    """A página da loja precisa liberar o SDK do Pagar.me (script + connect)
+    pra tokenização do cartão funcionar."""
+    c = app.test_client()
+    r = c.get('/loja/robots.txt')  # rota da loja sempre acessível
+    csp = r.headers.get('Content-Security-Policy', '')
+    assert 'checkout.pagar.me' in csp
+    assert 'connect-src' in csp and 'api.pagar.me' in csp
+
+
 def test_pagamento_tela_renderiza(app, monkeypatch):
     from app.extensions import db
     monkeypatch.delenv('LOJA_VISIVEL', raising=False)
