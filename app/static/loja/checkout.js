@@ -196,8 +196,9 @@
     var btnFrete = document.getElementById('btn-frete');
     if (btnFrete) {
       btnFrete.addEventListener('click', function () {
-        var endereco = (document.getElementById('endereco').value || '').trim();
-        var cep = (document.getElementById('cep').value || '').trim();
+        var endereco = enderecoMontado();
+        var cepEl2 = document.getElementById('cep');
+        var cep = cepEl2 ? (cepEl2.value || '').trim() : '';
         var out = document.getElementById('frete-resultado');
         if (!endereco && !cep) {
           out.textContent = 'Informe o endereço ou o CEP.';
