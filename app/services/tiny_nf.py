@@ -260,21 +260,37 @@ def _pedido_payload(pedido, itens):
     }
 
 
-def emitir_nf(pedido, user_id=None):
+def emitir_nf(pedido, user_id=None, recriar=False):
     """Emite NF pro pedido. Devolve {ok, msg, nota_fiscal_id?}.
 
     Fluxo: pedido.incluir → gerar.nota.fiscal.pedido → nota.fiscal.emitir.
-    Idempotente: se o pedido já tem nota_fiscal_id, devolve a existente."""
-    if pedido.tiny_nota_fiscal_id:
+    Idempotente: NF já emitida COM SUCESSO (nf_emitida_em setado) não refaz.
+
+    `recriar=True`: descarta o vínculo anterior com o Tiny (pedido + nota
+    rascunho) e refaz do zero. Necessário quando uma tentativa anterior
+    gerou uma NF com dados errados que a SEFAZ rejeitou (ex: pedido criado
+    no Tiny ANTES de termos o endereço estruturado) — reemitir a MESMA nota
+    não corrige os dados; o rascunho precisa ser refeito do pedido novo."""
+    if pedido.nf_emitida_em and pedido.tiny_nota_fiscal_id and not recriar:
         return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
                 'msg': 'NF já emitida.'}
     if pedido.status != 'pago':
         return {'ok': False, 'msg': 'Pedido não está pago — não emite NF.'}
+    if recriar:
+        # Esquece pedido/nota antigos do Tiny (rascunho ruim) e recria com o
+        # payload atual. O rascunho velho fica órfão no Tiny (apagável). NÃO
+        # reaproveita o pedido velho pelo numero_ordem_compra (ele tem os
+        # dados errados) — por isso o `not recriar` na busca abaixo.
+        pedido.tiny_pedido_id = None
+        pedido.tiny_nota_fiscal_id = None
+        pedido.nf_status = None
+        pedido.nf_emitida_em = None
+        db.session.commit()
     # RESUMÍVEL sem duplicar: usa o tiny_pedido_id que já temos; se ele não
     # existir mais no Tiny ("Pedido não localizado", cod 32), procura pelo
     # nosso código (numero_ordem_compra) antes de criar um novo.
     tiny_pid = pedido.tiny_pedido_id
-    if not tiny_pid:
+    if not tiny_pid and not recriar:
         achado = tiny.buscar_pedido_por_numero_ordem(pedido.codigo)
         if achado:
             tiny_pid = achado
