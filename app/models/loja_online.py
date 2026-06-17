@@ -242,3 +242,65 @@ class PedidoOnlineItem(db.Model):
 
     def __repr__(self):
         return f'<PedidoOnlineItem {self.nome} x{self.quantidade}>'
+
+
+# Status do pagamento (espelha o ciclo do Pagar.me, simplificado).
+STATUS_PAGAMENTO = ('pendente', 'pago', 'falhou', 'estornado')
+
+
+class PagamentoOnline(db.Model):
+    """Tentativa de pagamento de um PedidoOnline via Pagar.me (Fase 4).
+
+    Dinheiro em Numeric(10,2). Um pedido pode ter várias tentativas (Pix que
+    expirou + cartão, etc.) — por isso é 1 pedido : N pagamentos. A
+    confirmação de 'pago' SEMPRE vem do webhook (nunca do retorno do
+    checkout) — CLAUDE.md, dinheiro tem peso especial.
+    """
+    __tablename__ = 'pagamento_online'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_id = db.Column(
+        db.Integer, db.ForeignKey('pedido_online.id'),
+        nullable=False, index=True)
+    metodo = db.Column(db.String(10), nullable=False)  # 'pix' | 'cartao'
+    valor = db.Column(db.Numeric(10, 2), nullable=False)
+    status = db.Column(
+        db.String(20), nullable=False, default='pendente', index=True)
+
+    # Identificadores do Pagar.me (auditoria + reconciliação no webhook).
+    pagarme_order_id = db.Column(db.String(60), index=True)
+    pagarme_charge_id = db.Column(db.String(60), index=True)
+
+    # Pix: payload pra exibir/copiar. Cartão não guarda NADA do cartão (PCI:
+    # a tokenização é no front com a public key; o servidor nunca vê o número).
+    pix_qr_code = db.Column(db.Text)        # EMV copia-e-cola
+    pix_qr_code_url = db.Column(db.Text)    # imagem do QR (se vier)
+    pix_expira_em = db.Column(db.DateTime)
+
+    erro = db.Column(db.Text)  # última mensagem de erro (falha)
+    criado_em = db.Column(db.DateTime, default=agora, index=True)
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
+    pago_em = db.Column(db.DateTime)
+
+    pedido = db.relationship('PedidoOnline', backref='pagamentos')
+
+    def __repr__(self):
+        return f'<PagamentoOnline {self.metodo} {self.status} ped={self.pedido_id}>'
+
+
+class PagarmeEvento(db.Model):
+    """Idempotência do webhook do Pagar.me.
+
+    Cada evento do webhook tem um id único; gravamos antes de processar pra
+    o MESMO evento (reentrega do Pagar.me) NÃO baixar estoque/marcar pago
+    duas vezes. Mesmo padrão de SeruPedidoProcessado / SlackEventoProcessado.
+    """
+    __tablename__ = 'pagarme_evento'
+
+    id = db.Column(db.Integer, primary_key=True)
+    evento_id = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    tipo = db.Column(db.String(60))  # 'order.paid', 'charge.paid', ...
+    recebido_em = db.Column(db.DateTime, default=agora)
+
+    def __repr__(self):
+        return f'<PagarmeEvento {self.tipo} {self.evento_id}>'
