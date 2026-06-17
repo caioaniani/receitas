@@ -248,23 +248,29 @@ def emitir_nf(pedido, user_id=None):
         'valor_frete': float(pedido.frete_valor or 0),
     }
     incl = tiny.incluir_pedido(pedido_tiny)
-    if not incl or not incl.get('id'):
+    if not incl.get('ok'):
         return {'ok': False,
-                'msg': 'Falha ao incluir o pedido no Tiny (ver logs).'}
+                'msg': f'Falha ao incluir o pedido no Tiny: {incl.get("erro")}'}
     pedido.tiny_pedido_id = incl['id']
+    db.session.commit()  # guarda o id mesmo se os próximos passos falharem
     gerar = tiny.gerar_nota_fiscal_pedido(incl['id'])
-    if not gerar or not gerar.get('id_nota_fiscal'):
-        db.session.commit()  # salva tiny_pedido_id pra reprocessar manual
+    if not gerar.get('ok'):
         return {'ok': False,
-                'msg': 'Pedido criado no Tiny, mas falhou ao gerar a NF.'}
+                'msg': f'Pedido criado no Tiny, mas falhou ao gerar a NF: '
+                       f'{gerar.get("erro")}'}
     pedido.tiny_nota_fiscal_id = gerar['id_nota_fiscal']
+    db.session.commit()
     emitir = tiny.emitir_nota_fiscal(gerar['id_nota_fiscal'])
     pedido.nf_status = emitir.get('status') or 'enviada'
     if emitir.get('ok'):
         pedido.nf_emitida_em = agora()
+        db.session.commit()
+        return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
+                'msg': f'NF emitida (status: {pedido.nf_status}).'}
     db.session.commit()
-    return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
-            'msg': f'NF emitida (status: {pedido.nf_status}).'}
+    return {'ok': False,
+            'msg': f'NF gerada (id {gerar["id_nota_fiscal"]}) mas a emissão '
+                   f'falhou: {emitir.get("erro")}. Dá pra reenviar.'}
 
 
 def link_danfe(pedido):
