@@ -77,6 +77,7 @@ def test_emitir_nf_ordem_e_payload(app):
         assert nota['tipo'] == 'S'
         assert nota['serie'] == '1'
         assert nota['natureza_operacao'] == 'Venda de mercadorias'
+        assert nota['frete_por_conta'] == '0'   # obrigatório (NF-e modFrete)
         assert nota['itens'][0]['item']['codigo'] == 'SKU-XYZ'
         assert nota['itens'][0]['item']['quantidade'] == 2.0
         emi.assert_called_once_with('nf-9')
