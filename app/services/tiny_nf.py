@@ -186,6 +186,93 @@ def _parse_planilha(conteudo, filename):
     return out
 
 
+# ── Emissão de NF (Fase 5 parte 2) ────────────────────────────────────
+# Plano A: botão manual no admin. Quando o admin clica, monta o pedido a
+# partir do PedidoOnline (cliente + itens via SKU + valores), cria no
+# Tiny, gera a NF (rascunho) e dispara emissão. Em homologação as notas
+# não têm valor fiscal — seguro pra testar.
+
+def _so_digitos(s):
+    return ''.join(c for c in (s or '') if c.isdigit())
+
+
+def _payload_cliente(pedido):
+    cli = getattr(pedido, 'cliente', None)
+    cpf = _so_digitos(getattr(cli, 'cpf', '') if cli else '')
+    return {
+        'nome': pedido.nome_cliente,
+        'tipo_pessoa': 'F',
+        'cpf_cnpj': cpf,
+        'email': pedido.email_cliente,
+        'fone': pedido.telefone_cliente or '',
+    }
+
+
+def _payload_itens(pedido):
+    """Cada item -> {item: {codigo, descricao, quantidade, valor_unitario}}.
+    Item sem SKU mapeado: ABORTA (não emite NF parcial)."""
+    out, faltando = [], []
+    for it in pedido.itens:
+        sku = sku_do_item(it.kind, it.receita_id or it.produto_id)
+        if not sku:
+            faltando.append(it.nome)
+            continue
+        out.append({'item': {
+            'codigo': sku,
+            'descricao': it.nome[:120],
+            'quantidade': float(it.quantidade),
+            'valor_unitario': float(it.preco_unitario or 0),
+        }})
+    return out, faltando
+
+
+def emitir_nf(pedido, user_id=None):
+    """Emite NF pro pedido. Devolve {ok, msg, nota_fiscal_id?}.
+
+    Fluxo: pedido.incluir → gerar.nota.fiscal.pedido → nota.fiscal.emitir.
+    Idempotente: se o pedido já tem nota_fiscal_id, devolve a existente."""
+    if pedido.tiny_nota_fiscal_id:
+        return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
+                'msg': 'NF já emitida.'}
+    if pedido.status != 'pago':
+        return {'ok': False, 'msg': 'Pedido não está pago — não emite NF.'}
+    itens, faltando = _payload_itens(pedido)
+    if faltando:
+        return {'ok': False,
+                'msg': 'Itens sem SKU mapeado no Tiny: ' + ', '.join(faltando)}
+    pedido_tiny = {
+        'numero_ordem_compra': pedido.codigo,
+        'cliente': _payload_cliente(pedido),
+        'itens': itens,
+        'valor_frete': float(pedido.frete_valor or 0),
+    }
+    incl = tiny.incluir_pedido(pedido_tiny)
+    if not incl or not incl.get('id'):
+        return {'ok': False,
+                'msg': 'Falha ao incluir o pedido no Tiny (ver logs).'}
+    pedido.tiny_pedido_id = incl['id']
+    gerar = tiny.gerar_nota_fiscal_pedido(incl['id'])
+    if not gerar or not gerar.get('id_nota_fiscal'):
+        db.session.commit()  # salva tiny_pedido_id pra reprocessar manual
+        return {'ok': False,
+                'msg': 'Pedido criado no Tiny, mas falhou ao gerar a NF.'}
+    pedido.tiny_nota_fiscal_id = gerar['id_nota_fiscal']
+    emitir = tiny.emitir_nota_fiscal(gerar['id_nota_fiscal'])
+    pedido.nf_status = emitir.get('status') or 'enviada'
+    if emitir.get('ok'):
+        pedido.nf_emitida_em = agora()
+    db.session.commit()
+    return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
+            'msg': f'NF emitida (status: {pedido.nf_status}).'}
+
+
+def link_danfe(pedido):
+    """URL pro DANFE em PDF (válida por tempo limitado no Tiny)."""
+    if not pedido.tiny_nota_fiscal_id:
+        return None
+    return tiny.obter_link_nota_fiscal(pedido.tiny_nota_fiscal_id)
+
+
 def importar_planilha(conteudo, filename, user_id=None):
     """Importa o export de produtos do Tiny e mapeia os SKUs por nome.
     Devolve contadores ou {erro}."""
