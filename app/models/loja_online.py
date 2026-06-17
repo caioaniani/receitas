@@ -175,6 +175,16 @@ class PedidoOnline(db.Model):
     # Entrega (agendada/express): endereco denormalizado (snapshot).
     endereco_entrega = db.Column(db.Text)
     endereco_cep = db.Column(db.String(9))
+    # Endereco ESTRUTURADO (snapshot) — a NF-e exige logradouro/numero/bairro/
+    # cidade/uf SEPARADOS; mandar so a linha unica acima fazia a SEFAZ
+    # rejeitar ("endereco/bairro/cidade em branco"). Preenchido no checkout
+    # de entrega; NULL na retirada (que nao coleta endereco do cliente).
+    endereco_logradouro = db.Column(db.String(200))
+    endereco_numero = db.Column(db.String(20))
+    endereco_complemento = db.Column(db.String(100))
+    endereco_bairro = db.Column(db.String(100))
+    endereco_cidade = db.Column(db.String(100))
+    endereco_uf = db.Column(db.String(2))
     # Distancia calculada pelo frete.py (km). Auditoria do valor cobrado.
     distancia_km = db.Column(db.Float)
     # Data + janela escolhidas. Retirada/express tambem usam (hora marcada).
