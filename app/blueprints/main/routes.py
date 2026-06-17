@@ -2549,14 +2549,19 @@ def debug_email():
         'app_base_url': cfg.get('APP_BASE_URL'),
         'api_key_len': len((cfg.get('RESEND_API_KEY') or '')),
     }
-    if request.method == 'POST':
-        para = (request.args.get('para') or request.form.get('para') or '').strip()
+    # GET com ?para=<email>&enviar=1 dispara o envio (mais fácil de testar
+    # do navegador). POST com ?para=<email> mantém compat programático.
+    para = (request.args.get('para') or request.form.get('para') or '').strip()
+    deve_enviar = request.method == 'POST' or request.args.get('enviar') == '1'
+    if deve_enviar:
         if not para:
-            return jsonify(ok=False, erro='passe ?para=<email>', status=status), 400
+            return jsonify(ok=False, erro='passe ?para=<email>&enviar=1',
+                           status=status), 400
         res = email_svc.enviar(
             para, 'Teste de email — O Pão',
-            '<p>Funcionou! Este é um email de teste do sistema.</p>',
-            texto='Funcionou! Email de teste do sistema.')
+            '<p>Funcionou! Este é um email de teste do sistema da padaria.</p>',
+            texto='Funcionou! Email de teste do sistema da padaria.')
         return jsonify(ok=res.get('ok'), resultado=res, status=status)
-    return jsonify(ok=True, status=status,
-                   dica='POST /admin/debug-email?para=seu@email.com pra testar')
+    return jsonify(
+        ok=True, status=status,
+        dica='Abra /admin/debug-email?para=seu@email.com&enviar=1 pra testar')
