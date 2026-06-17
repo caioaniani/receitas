@@ -59,25 +59,15 @@ def _pedido_aguardando(codigo):
     return pedido
 
 
-@loja_bp.route('/pedido/<codigo>/pagamento', methods=['GET'])
-def pedido_pagamento(codigo):
-    """Tela de pagamento — escolhe método e mostra o resultado."""
+def _ctx_pagamento(pedido, erros=None):
+    """Contexto da tela de pagamento. Usado no GET e nos POSTs (Pix/cartão)
+    quando falham — assim a re-renderização de erro NÃO perde o pubkey nem
+    o display do Pix (bug: aparecia 'PUBLIC_KEY não configurada' no erro)."""
     from flask import current_app
-    pedido = _pedido_aguardando(codigo)
     pubkey = (current_app.config.get('PAGARME_PUBLIC_KEY') or '')
     pix_pendente = next((p for p in pedido.pagamentos
                          if p.metodo == 'pix' and p.status == 'pendente'),
                         None)
-    # Última tentativa que falhou — mostramos o motivo pra o cliente
-    # entender o que aconteceu em vez de ver tela em branco.
-    pagamentos_ord = sorted(pedido.pagamentos, key=lambda x: x.criado_em or 0)
-    ultima_falha = next((p for p in reversed(pagamentos_ord)
-                         if p.status == 'falhou'), None)
-    erros = []
-    if ultima_falha and ultima_falha.erro:
-        erros.append(f'Última tentativa falhou: {ultima_falha.erro}')
-    # Display do Pix: separa EMV (copia-e-cola) de URL e gera o QR no
-    # servidor a partir do EMV (não depende do qr_code_url do Pagar.me).
     pix = None
     if pix_pendente:
         qc = pix_pendente.pix_qr_code or ''
@@ -87,11 +77,23 @@ def pedido_pagamento(codigo):
         pix = {'emv': emv, 'link': link,
                'img': loja_pagamento.pagarme.qr_data_uri(emv) if emv else None,
                'expira_em': pix_pendente.pix_expira_em}
-    return render_template('loja/pagamento.html',
-                           pedido=pedido, pubkey=pubkey,
-                           pix_pendente=pix_pendente, pix=pix,
-                           erros=erros if erros else None,
-                           em_teste=_em_teste())
+    # Sem erro explícito, mostra o motivo da última tentativa falhada.
+    if erros is None:
+        ult = next((p for p in sorted(pedido.pagamentos,
+                                      key=lambda x: x.criado_em or 0,
+                                      reverse=True) if p.status == 'falhou'),
+                   None)
+        if ult and ult.erro:
+            erros = [f'Última tentativa falhou: {ult.erro}']
+    return dict(pedido=pedido, pubkey=pubkey, pix_pendente=pix_pendente,
+                pix=pix, erros=erros or None, em_teste=_em_teste())
+
+
+@loja_bp.route('/pedido/<codigo>/pagamento', methods=['GET'])
+def pedido_pagamento(codigo):
+    """Tela de pagamento — escolhe método e mostra o resultado."""
+    pedido = _pedido_aguardando(codigo)
+    return render_template('loja/pagamento.html', **_ctx_pagamento(pedido))
 
 
 @loja_bp.route('/pedido/<codigo>/pix', methods=['POST'])
@@ -102,9 +104,9 @@ def pedido_pix(codigo):
         return redirect(url_for('loja.pedido_confirmado', codigo=codigo))
     pag, erros = loja_pagamento.iniciar_pix(pedido)
     if erros:
-        return render_template('loja/pagamento.html',
-                               pedido=pedido, erros=erros,
-                               em_teste=_em_teste()), 400
+        return render_template(
+            'loja/pagamento.html',
+            **_ctx_pagamento(pedido, erros=erros)), 400
     return redirect(url_for('loja.pedido_pagamento', codigo=codigo))
 
 
@@ -122,9 +124,9 @@ def pedido_cartao(codigo):
         parcelas = 1
     pag, erros = loja_pagamento.iniciar_cartao(pedido, token, parcelas)
     if erros:
-        return render_template('loja/pagamento.html',
-                               pedido=pedido, erros=erros,
-                               em_teste=_em_teste()), 400
+        return render_template(
+            'loja/pagamento.html',
+            **_ctx_pagamento(pedido, erros=erros)), 400
     # Cartão aprovado pelo Pagar.me: redireciona pra confirmação. A baixa
     # de estoque acontece quando chegar o webhook 'paid' (única fonte de
     # verdade — evita race).
