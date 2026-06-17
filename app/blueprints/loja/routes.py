@@ -191,9 +191,9 @@ def _em_teste():
     return not _loja_visivel_publico()
 
 
-@loja_bp.app_context_processor
+@loja_bp.context_processor
 def _injetar_cliente_atual():
-    """Expõe `cliente_atual` em todos os templates (header + base usam)."""
+    """Expõe `cliente_atual` nos templates da loja (header + base usam)."""
     return {'cliente_atual': loja_auth.cliente_atual()}
 
 
