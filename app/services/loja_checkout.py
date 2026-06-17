@@ -289,6 +289,13 @@ def criar_pedido(form, itens_raw, *, base=None):
             erros.append('Informe o número do endereço.')
         if not cidade:
             erros.append('Informe a cidade.')
+        # Snapshot estruturado pra NF-e (alem da linha unica abaixo).
+        end_logradouro = logradouro or None
+        end_numero = numero or None
+        end_complemento = (form.get('complemento') or '').strip() or None
+        end_bairro = (form.get('bairro') or '').strip() or None
+        end_cidade = cidade or None
+        end_uf = ((form.get('uf') or '').strip().upper()[:2]) or None
         endereco_txt = _montar_endereco(form)
         # geocoding usa o endereco completo (mais preciso que CEP só); CEP
         # entra concatenado pra desambiguar bairros homonimos.
