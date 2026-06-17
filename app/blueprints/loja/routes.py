@@ -16,7 +16,7 @@ from flask_login import current_user
 from app.blueprints.loja import loja_bp
 from app.extensions import csrf
 from app.services import frete as frete_svc
-from app.services import loja_catalogo, loja_checkout, loja_pagamento
+from app.services import loja_auth, loja_catalogo, loja_checkout, loja_pagamento
 
 
 def _ctx_checkout(erros=None, form=None):
@@ -205,7 +205,103 @@ def _gate_acesso():
         return None  # liberada
     if current_user.is_authenticated:
         return None  # staff logado vê pra testar
+    if loja_auth.cliente_atual():
+        return None  # cliente logado pode entrar mesmo em modo teste
     abort(404)
+
+
+# ── Auth do cliente (Fase 6) ───────────────────────────────────────────
+# Sessão SEPARADA do admin: cliente usa `cliente_id` na sessão; staff usa
+# `_user_id` do Flask-Login. Nunca cruzam — privilégio NÃO escala.
+
+@loja_bp.route('/entrar', methods=['GET', 'POST'])
+def entrar():
+    """Login do cliente final."""
+    if loja_auth.cliente_atual():
+        return redirect(loja_auth.safe_next() or url_for('loja.minha_conta'))
+    erro = None
+    email = ''
+    if request.method == 'POST':
+        from app.extensions import db
+        from app.models import Cliente
+        email = (request.form.get('email') or '').strip().lower()
+        senha = request.form.get('senha') or ''
+        c = Cliente.query.filter(
+            db.func.lower(Cliente.email) == email).first()
+        if c and c.check_senha(senha) and c.ativo:
+            loja_auth.login_cliente(c)
+            return redirect(loja_auth.safe_next()
+                            or url_for('loja.minha_conta'))
+        erro = 'Email ou senha incorretos.'
+    return render_template('loja/entrar.html',
+                           em_teste=_em_teste(), erro=erro, email=email), \
+        (400 if erro else 200)
+
+
+@loja_bp.route('/cadastrar', methods=['GET', 'POST'])
+def cadastrar():
+    """Cadastro de cliente: cria conta nova OU vincula senha a um Cliente
+    que já existia como guest (mesmo email)."""
+    if loja_auth.cliente_atual():
+        return redirect(url_for('loja.minha_conta'))
+    erros, form = [], {}
+    if request.method == 'POST':
+        from app.extensions import db
+        from app.models import Cliente
+        from app.utils import agora
+        form = request.form
+        nome = (form.get('nome') or '').strip()
+        email = (form.get('email') or '').strip().lower()
+        telefone = (form.get('telefone') or '').strip()
+        senha = form.get('senha') or ''
+        if not nome:
+            erros.append('Informe seu nome.')
+        if not loja_auth.email_valido(email):
+            erros.append('Informe um email válido.')
+        if len(senha) < 8:
+            erros.append('A senha precisa ter ao menos 8 caracteres.')
+        if form.get('aceite_lgpd') not in ('1', 'on', 'true'):
+            erros.append('É preciso aceitar os termos para criar a conta.')
+        if not erros:
+            c = Cliente.query.filter(
+                db.func.lower(Cliente.email) == email).first()
+            if c and c.senha_hash:
+                erros.append('Já existe uma conta com esse email. '
+                             'Tente entrar.')
+            else:
+                if not c:
+                    c = Cliente(nome=nome, email=email, telefone=telefone)
+                    db.session.add(c)
+                else:
+                    # Guest virou conta: preenche o que faltava sem
+                    # sobrescrever o que o cliente já tinha.
+                    c.nome = c.nome or nome
+                    c.telefone = c.telefone or telefone
+                c.set_senha(senha)
+                c.aceite_lgpd_em = c.aceite_lgpd_em or agora()
+                db.session.commit()
+                loja_auth.login_cliente(c)
+                return redirect(url_for('loja.minha_conta'))
+    return render_template('loja/cadastrar.html',
+                           em_teste=_em_teste(),
+                           erros=erros, form=form), \
+        (400 if erros else 200)
+
+
+@loja_bp.route('/sair', methods=['POST'])
+def sair():
+    """Logout do cliente. POST pra não disparar por link/prefetch."""
+    loja_auth.logout_cliente()
+    return redirect(url_for('loja.home'))
+
+
+@loja_bp.route('/conta')
+@loja_auth.cliente_required
+def minha_conta():
+    """Painel da conta. 'Meus pedidos' entra no PR 2."""
+    return render_template('loja/minha_conta.html',
+                           cliente=loja_auth.cliente_atual(),
+                           em_teste=_em_teste())
 
 
 @loja_bp.route('/')
