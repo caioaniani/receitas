@@ -1,0 +1,32 @@
+{% extends 'loja/_base.html' %}
+{% block title %}Entrar — O Pão Padaria Artesanal{% endblock %}
+{% block content %}
+<section class="checkout-pagina" style="max-width:480px">
+  <h1>Entrar</h1>
+
+  {% if erro %}
+  <div class="checkout-erros"><strong>{{ erro }}</strong></div>
+  {% endif %}
+
+  <form method="POST" action="{{ url_for('loja.entrar') }}" class="checkout-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if request.args.get('next') %}
+      <input type="hidden" name="next" value="{{ request.args.get('next') }}">
+    {% endif %}
+    <div class="checkout-bloco">
+      <label>Email
+        <input type="email" name="email" required autocomplete="email"
+               value="{{ email or '' }}">
+      </label>
+      <label>Senha
+        <input type="password" name="senha" required autocomplete="current-password">
+      </label>
+    </div>
+    <button type="submit" class="btn-loja">Entrar</button>
+  </form>
+
+  <p class="small" style="margin-top:1.5rem">
+    Não tem conta? <a href="{{ url_for('loja.cadastrar') }}">Criar conta</a>.
+  </p>
+</section>
+{% endblock %}
