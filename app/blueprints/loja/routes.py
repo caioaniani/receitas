@@ -194,7 +194,7 @@ def checkout():
             itens_raw = []
         pedido, erros = loja_checkout.criar_pedido(request.form, itens_raw)
         if not erros:
-            return redirect(url_for('loja.pedido_confirmado',
+            return redirect(url_for('loja.pedido_pagamento',
                                     codigo=pedido.codigo))
         return render_template(
             'loja/checkout.html',
