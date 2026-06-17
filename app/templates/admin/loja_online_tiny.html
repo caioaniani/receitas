@@ -45,8 +45,9 @@
       {% for it in itens %}
       <tr>
         <td>{{ it.nome }}
-          {% if it.tiny_nome and it.tiny_nome != it.nome %}
-          <br><span class="small text-muted">Tiny: {{ it.tiny_nome }}</span>{% endif %}
+          {% if it.sku %}
+          <br><span class="small text-muted">↳ Tiny: {{ it.tiny_nome or '(nome não guardado)' }}
+            <code>{{ it.sku }}</code></span>{% endif %}
         </td>
         <td class="small text-muted">{{ it.categoria }}</td>
         <td>
