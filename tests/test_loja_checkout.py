@@ -267,6 +267,7 @@ def test_checkout_post_cria_pedido_e_redireciona(app, monkeypatch):
     data = loja_checkout.datas_disponiveis('retirada')[0].isoformat()
     r = c.post('/loja/checkout', data={
         'nome': 'João', 'email': 'joao@x.com', 'telefone': '11888',
+        'cpf': '52998224725',
         'aceite_lgpd': '1', 'modo_entrega': 'retirada',
         'loja_id': str(loja.id), 'data_entrega': data,
         'janela_entrega': '08:00–09:00',
