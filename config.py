@@ -73,10 +73,12 @@ class Config:
     NF_NATUREZA_OPERACAO = os.environ.get(
         'NF_NATUREZA_OPERACAO', 'Venda de mercadorias')
     NF_SERIE = os.environ.get('NF_SERIE', '1')
-    # Modalidade do frete (NF-e modFrete). '0' = por conta do emitente (a
-    # padaria contrata a entrega — Lalamove/proprio), '1' = destinatario,
-    # '9' = sem frete. Ajustavel por env se o contador pedir outro.
-    NF_FRETE_POR_CONTA = os.environ.get('NF_FRETE_POR_CONTA', '0')
+    # Modalidade do frete pro Tiny (codigo de LETRA, nao numerico: a API e
+    # PHP e trata "0" como vazio -> "deve ser informado"). Valores Tiny:
+    # 'R' = Remetente/emitente (CIF, a padaria contrata a entrega),
+    # 'D' = Destinatario (FOB), 'T' = Terceiros, 'S' = sem frete.
+    # Ajustavel por env se o contador pedir outro.
+    NF_FRETE_POR_CONTA = os.environ.get('NF_FRETE_POR_CONTA', 'R')
     # Bot WhatsApp privado do dono (copilot read-only via Z-API).
     # ZAPI_BOT_DONO_NUMERO    = 55DDDNUMERO (so digitos) do WhatsApp do dono
     # ZAPI_BOT_WEBHOOK_TOKEN  = segredo na URL do webhook (?k=...)
