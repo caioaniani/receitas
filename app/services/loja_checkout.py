@@ -239,9 +239,25 @@ def criar_pedido(form, itens_raw, *, base=None):
         if modo == 'express' and not express_disponivel(base):
             erros.append('Express indisponível agora (fora do horário de '
                          'entrega). Escolha entrega agendada.')
-        endereco_txt = (form.get('endereco') or '').strip()
+        # Endereco estruturado (CEP + logradouro auto + numero/complemento
+        # digitados). Numero e' obrigatorio pra entrega — sem ele a equipe
+        # nao consegue entregar.
+        logradouro = (form.get('logradouro') or '').strip()
+        numero = (form.get('numero') or '').strip()
+        cidade = (form.get('cidade') or '').strip()
+        if not endereco_cep:
+            erros.append('Informe o CEP de entrega.')
+        if not logradouro:
+            erros.append('Informe o logradouro (rua/avenida).')
+        if not numero:
+            erros.append('Informe o número do endereço.')
+        if not cidade:
+            erros.append('Informe a cidade.')
+        endereco_txt = _montar_endereco(form)
+        # geocoding usa o endereco completo (mais preciso que CEP só); CEP
+        # entra concatenado pra desambiguar bairros homonimos.
         geo = endereco_txt
-        if endereco_cep and endereco_cep not in endereco_txt:
+        if endereco_cep and endereco_cep not in geo:
             geo = f'{endereco_txt}, {endereco_cep}' if endereco_txt else endereco_cep
         valor, dist, end_norm, erro_frete = _frete_para(modo, geo, base=base)
         if erro_frete:
