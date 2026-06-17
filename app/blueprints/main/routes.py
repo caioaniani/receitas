@@ -2671,6 +2671,24 @@ def loja_online_emitir_nf(codigo):
     return redirect(url_for('main.loja_online_pedido_detalhe', codigo=codigo))
 
 
+@main_bp.route('/admin/loja-online/pedidos/<codigo>/danfe')
+@owner_required
+def loja_online_danfe(codigo):
+    """Redireciona pro DANFE (PDF) da NF no Tiny. Link temporário — busca sob
+    demanda (não a cada abertura do pedido)."""
+    from flask import flash
+
+    from app.models import PedidoOnline
+    from app.services import tiny_nf
+    p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    url = tiny_nf.link_danfe(p)
+    if not url:
+        flash(f'{p.codigo}: não consegui obter o link do DANFE no Tiny '
+              '(a NF precisa estar autorizada).', 'warning')
+        return redirect(url_for('main.loja_online_pedido_detalhe', codigo=codigo))
+    return redirect(url)
+
+
 @main_bp.route('/admin/loja-online/tiny-skus/definir', methods=['POST'])
 @owner_required
 def loja_online_tiny_definir():
