@@ -273,6 +273,16 @@ def buscar_pedido_por_cpf_e_numero(cpf, numero, diag=None):
     }
 
 
+def id_nota_do_pedido(pedido_id):
+    """Lê o id da NF já vinculada a um pedido do Tiny (via pedido.obter).
+    Usado quando o Tiny diz 'Já foi gerada nota fiscal' — a gente captura
+    o id existente em vez de tentar gerar de novo."""
+    det = obter_pedido_detalhe(pedido_id) or {}
+    return (str(det.get('id_nota_fiscal') or '').strip()
+            or str((det.get('nota_fiscal') or {}).get('id') or '').strip()
+            or None)
+
+
 def obter_pedido_detalhe(pedido_id):
     """pedido.obter.php — traz detalhes (inclui nota_fiscal se ja emitida)."""
     if not pedido_id:
