@@ -97,8 +97,12 @@
         </a>
         {% if current_user.is_owner %}
         <a href="{{ url_for('main.loja_online_catalogo') }}"
-           class="sidebar-link {% if request.path.startswith('/admin/loja-online') %}active{% endif %}">
+           class="sidebar-link {% if request.path.startswith('/admin/loja-online/catalogo') or request.path.startswith('/admin/loja-online/auditoria') %}active{% endif %}">
             Catálogo do site
+        </a>
+        <a href="{{ url_for('main.loja_online_pedidos') }}"
+           class="sidebar-link {% if request.path.startswith('/admin/loja-online/pedidos') %}active{% endif %}">
+            Pedidos do site
         </a>
         <a href="{{ url_for('projetos.painel') }}"
            class="sidebar-link {% if request.path.startswith('/projetos') %}active{% endif %}">
