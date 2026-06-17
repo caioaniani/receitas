@@ -308,9 +308,12 @@ def emitir_nf(pedido, user_id=None, recriar=False):
         return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
                 'msg': f'NF emitida (status: {pedido.nf_status}).'}
     db.session.commit()
+    # A mensagem do emitir já orienta (processando = aguardar/reenviar;
+    # rejeitada = motivo SEFAZ). NÃO sugerir "Refazer" aqui — se a nota
+    # autorizou em background, Refazer duplicaria.
     return {'ok': False,
             'msg': f'NF criada (id {pedido.tiny_nota_fiscal_id}) mas a emissão '
-                   f'falhou: {emitir.get("erro")}. Dá pra reenviar (Refazer).'}
+                   f'não foi confirmada: {emitir.get("erro")}'}
 
 
 def link_danfe(pedido):
