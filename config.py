@@ -216,3 +216,14 @@ class Config:
     # URL do Chatwoot pra instruir o atendente (reusa CHATWOOT_URL se setado).
     CHATWOOT_PUBLIC_URL = os.environ.get(
         'CHATWOOT_PUBLIC_URL', 'https://atendimento.opaopadariaartesanal.com.br')
+
+    # ── Pagamento (Pagar.me / Stone) — Fase 4 loja online (17/06/2026) ──
+    # API v5 (https://api.pagar.me/core/v5), Basic auth com a SECRET KEY
+    # (sk_test_… sandbox / sk_live_… producao) como usuario e senha vazia.
+    # Segredos NUNCA vem pelo chat — o dono cadastra no Railway > Variables.
+    PAGARME_API_KEY = os.environ.get('PAGARME_API_KEY', '')        # sk_test_/sk_live_
+    PAGARME_PUBLIC_KEY = os.environ.get('PAGARME_PUBLIC_KEY', '')  # pk_… (tokenizacao no front)
+    # Segredo NOSSO no ?k= da URL do webhook (geramos e registramos no painel
+    # Pagar.me). Independe da assinatura interna deles — mesmo padrao do
+    # Chatwoot/Slack/Zapi. Vazio = webhook recusa tudo.
+    PAGARME_WEBHOOK_SECRET = os.environ.get('PAGARME_WEBHOOK_SECRET', '')
