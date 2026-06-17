@@ -60,8 +60,9 @@
     function popularJanelas(modo) {
       var sel = document.getElementById('janela_entrega');
       if (!sel) return;
-      var lista = modo === 'retirada' ? dados.janelas_retirada
-                                      : dados.janelas_entrega;
+      // Janelas de 1h (08:00–09:00 … 17:00–18:00) — mesma lista pros modos
+      // com data (agendada/retirada). Express não usa este bloco.
+      var lista = dados.janelas;
       var preferida = sel.getAttribute('data-sel') || '';
       sel.innerHTML = '';
       (lista || []).forEach(function (j) {
