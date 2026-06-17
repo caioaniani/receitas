@@ -39,6 +39,49 @@ def _loja(db, nome='Brooklin'):
     return loja
 
 
+# ── Janelas date-aware (filtra horários passados quando é hoje) ───────
+
+def test_janelas_hoje_filtra_horarios_passados(app):
+    from app.services import loja_checkout
+    with app.app_context():
+        hoje = datetime(2026, 6, 17, 13, 0)  # 13h, lead 2 -> a partir de 15h
+        js = loja_checkout.janelas_disponiveis('agendada', hoje.date(), base=hoje)
+        # 08:00–14:00 já passaram (início < 15)
+        assert '08:00–09:00' not in js
+        assert '14:00–15:00' not in js
+        assert '15:00–16:00' in js
+        assert '17:00–18:00' in js
+
+
+def test_janelas_dia_futuro_mostra_todas(app):
+    from datetime import timedelta as _td
+
+    from app.services import loja_checkout
+    with app.app_context():
+        hoje = datetime(2026, 6, 17, 13, 0)
+        amanha = (hoje + _td(days=1)).date()
+        js = loja_checkout.janelas_disponiveis('agendada', amanha, base=hoje)
+        assert js == list(loja_checkout.JANELAS_HORARIAS)  # todas
+
+
+def test_criar_pedido_rejeita_janela_passada_hoje(app):
+    from app.extensions import db
+    from app.services import loja_checkout
+    with app.app_context():
+        p = _produto(db)
+        loja = _loja(db)
+        base = datetime(2026, 6, 17, 13, 0)
+        form = {'nome': 'M', 'email': 'm@x.com', 'cpf': '52998224725',
+                'aceite_lgpd': '1', 'modo_entrega': 'retirada',
+                'loja_id': str(loja.id),
+                'data_entrega': '2026-06-17',  # hoje
+                'janela_entrega': '08:00–09:00'}  # já passou
+        pedido, erros = loja_checkout.criar_pedido(
+            form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+        assert pedido is None
+        assert any('horário' in e.lower() or 'passou' in e.lower() for e in erros)
+
+
 # ── Validador de CPF ─────────────────────────────────────────────────
 
 def test_cpf_valido_aceita_cpf_real():
