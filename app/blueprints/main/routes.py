@@ -2656,13 +2656,17 @@ def loja_online_tiny_importar():
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/emitir-nf', methods=['POST'])
 @owner_required
 def loja_online_emitir_nf(codigo):
-    """Botão manual de emissão de NF via Tiny (Fase 5 plano A)."""
+    """Botão manual de emissão de NF via Tiny (Fase 5 plano A).
+
+    `recriar=1`: descarta a NF rascunho anterior (que a SEFAZ rejeitou) e
+    refaz o pedido+nota do zero no Tiny com o payload atual."""
     from flask import flash
 
     from app.models import PedidoOnline
     from app.services import tiny_nf
     p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
-    res = tiny_nf.emitir_nf(p, user_id=current_user.id)
+    recriar = request.form.get('recriar') in ('1', 'true', 'on')
+    res = tiny_nf.emitir_nf(p, user_id=current_user.id, recriar=recriar)
     flash(f'{p.codigo}: {res["msg"]}', 'success' if res.get('ok') else 'danger')
     return redirect(url_for('main.loja_online_pedido_detalhe', codigo=codigo))
 
