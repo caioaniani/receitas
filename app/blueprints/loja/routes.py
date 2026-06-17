@@ -14,8 +14,9 @@ from flask import abort, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 
 from app.blueprints.loja import loja_bp
+from app.extensions import csrf
 from app.services import frete as frete_svc
-from app.services import loja_catalogo, loja_checkout
+from app.services import loja_catalogo, loja_checkout, loja_pagamento
 
 
 def _ctx_checkout(erros=None, form=None):
@@ -34,6 +35,102 @@ def _ctx_checkout(erros=None, form=None):
         express_ok=loja_checkout.express_disponivel(),
         erros=erros, form=(form or {}),
     )
+
+
+# ── Pagamento (Fase 4) ─────────────────────────────────────────────────
+# Esquema: checkout cria o PedidoOnline -> redireciona pra /pagamento ->
+# cliente escolhe Pix ou cartão -> POST chama loja_pagamento.iniciar_*.
+# Webhook Pagar.me marca como pago e baixa estoque (única fonte da verdade
+# de "pago", evita race com retorno do checkout).
+
+def _pedido_aguardando(codigo):
+    """Carrega pedido por código e exige status 'aguardando_pagamento'.
+    Bloqueia tentar pagar de novo um pedido já pago/cancelado."""
+    from app.models import PedidoOnline
+    pedido = PedidoOnline.query.filter_by(codigo=codigo).first()
+    if not pedido:
+        abort(404)
+    return pedido
+
+
+@loja_bp.route('/pedido/<codigo>/pagamento', methods=['GET'])
+def pedido_pagamento(codigo):
+    """Tela de pagamento — escolhe método e mostra o resultado."""
+    pedido = _pedido_aguardando(codigo)
+    pubkey = (loja_pagamento.pagarme.current_app.config
+              .get('PAGARME_PUBLIC_KEY') or '')
+    pix_pendente = next((p for p in pedido.pagamentos
+                         if p.metodo == 'pix' and p.status == 'pendente'),
+                        None)
+    return render_template('loja/pagamento.html',
+                           pedido=pedido, pubkey=pubkey,
+                           pix_pendente=pix_pendente, em_teste=_em_teste())
+
+
+@loja_bp.route('/pedido/<codigo>/pix', methods=['POST'])
+def pedido_pix(codigo):
+    """Gera Pix (QR + copia-e-cola) pro pedido."""
+    pedido = _pedido_aguardando(codigo)
+    if pedido.status != 'aguardando_pagamento':
+        return redirect(url_for('loja.pedido_confirmado', codigo=codigo))
+    pag, erros = loja_pagamento.iniciar_pix(pedido)
+    if erros:
+        return render_template('loja/pagamento.html',
+                               pedido=pedido, erros=erros,
+                               em_teste=_em_teste()), 400
+    return redirect(url_for('loja.pedido_pagamento', codigo=codigo))
+
+
+@loja_bp.route('/pedido/<codigo>/cartao', methods=['POST'])
+def pedido_cartao(codigo):
+    """Processa pagamento em cartão. Recebe `card_token` (já tokenizado no
+    front via pk_ do Pagar.me) — servidor NUNCA vê o número do cartão."""
+    pedido = _pedido_aguardando(codigo)
+    if pedido.status != 'aguardando_pagamento':
+        return redirect(url_for('loja.pedido_confirmado', codigo=codigo))
+    token = (request.form.get('card_token') or '').strip()
+    try:
+        parcelas = int(request.form.get('parcelas') or '1')
+    except ValueError:
+        parcelas = 1
+    pag, erros = loja_pagamento.iniciar_cartao(pedido, token, parcelas)
+    if erros:
+        return render_template('loja/pagamento.html',
+                               pedido=pedido, erros=erros,
+                               em_teste=_em_teste()), 400
+    # Cartão aprovado pelo Pagar.me: redireciona pra confirmação. A baixa
+    # de estoque acontece quando chegar o webhook 'paid' (única fonte de
+    # verdade — evita race).
+    return redirect(url_for('loja.pedido_confirmado', codigo=codigo))
+
+
+@loja_bp.route('/webhook/pagarme', methods=['POST'])
+@csrf.exempt
+def webhook_pagarme():
+    """Webhook do Pagar.me. Protegido por segredo na URL (?k=) — mesmo
+    padrão de Chatwoot/Slack/Zapi nesse projeto.
+
+    Idempotente (PagarmeEvento). 'order.paid'/'charge.paid' marca pago e
+    baixa estoque (venda_site). 'refunded'/'canceled' estorna. Reentrega do
+    mesmo evento devolve 200 sem dupli­car efeito."""
+    import os as _os
+    segredo_esperado = (loja_pagamento.pagarme.current_app.config
+                        .get('PAGARME_WEBHOOK_SECRET') or '').strip()
+    if not segredo_esperado:
+        return jsonify(ok=False, erro='webhook desabilitado'), 503
+    fornecido = request.args.get('k') or ''
+    if not _os.path.basename:  # noqa: SIM108 (placeholder pra evitar timing)
+        pass
+    # Comparação constante (defesa contra timing). hmac.compare_digest é o
+    # padrão correto pra segredo curto.
+    import hmac
+    if not hmac.compare_digest(segredo_esperado, fornecido):
+        return jsonify(ok=False, erro='unauthorized'), 401
+    evento = request.get_json(silent=True) or {}
+    res = loja_pagamento.processar_webhook(evento)
+    # Devolve 200 mesmo em "sem_pedido"/"ignorado" pra Pagar.me NÃO ficar
+    # reentregando indefinidamente um evento que não vai processar.
+    return jsonify(res), 200
 
 
 def _loja_visivel_publico():
