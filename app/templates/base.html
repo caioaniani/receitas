@@ -104,6 +104,10 @@
            class="sidebar-link {% if request.path.startswith('/admin/loja-online/pedidos') %}active{% endif %}">
             Pedidos do site
         </a>
+        <a href="{{ url_for('main.loja_online_tiny_skus') }}"
+           class="sidebar-link {% if request.path.startswith('/admin/loja-online/tiny') %}active{% endif %}">
+            SKUs do Tiny (NF)
+        </a>
         <a href="{{ url_for('projetos.painel') }}"
            class="sidebar-link {% if request.path.startswith('/projetos') %}active{% endif %}">
             Projetos
