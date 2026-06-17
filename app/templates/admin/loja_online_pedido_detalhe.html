@@ -137,6 +137,29 @@
       </div>
     </div>
 
+    <div class="card mb-3">
+      <div class="card-header py-2 fw-bold">Nota Fiscal (Tiny)</div>
+      <div class="card-body small">
+        {% if p.tiny_nota_fiscal_id %}
+          <div>NF: <code>{{ p.tiny_nota_fiscal_id }}</code></div>
+          {% if p.nf_status %}<div>Status: <strong>{{ p.nf_status }}</strong></div>{% endif %}
+          {% if p.nf_emitida_em %}<div class="text-muted">Emitida: {{ p.nf_emitida_em.strftime('%d/%m/%Y %H:%M') }}</div>{% endif %}
+          {% if p.tiny_pedido_id %}<div class="text-muted">Pedido Tiny: <code>{{ p.tiny_pedido_id }}</code></div>{% endif %}
+        {% elif p.status == 'pago' %}
+          <form method="POST" action="{{ url_for('main.loja_online_emitir_nf', codigo=p.codigo) }}"
+                onsubmit="return confirm('Emitir NF deste pedido no Tiny?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-primary w-100">
+              <i class="bi bi-file-earmark-text"></i> Emitir NF
+            </button>
+          </form>
+          <p class="text-muted mt-2 mb-0">O Tiny aplica NCM/CFOP/CST do cadastro.</p>
+        {% else %}
+          <span class="text-muted">Disponível após o pagamento.</span>
+        {% endif %}
+      </div>
+    </div>
+
     {% if p.status not in ('entregue', 'cancelado') %}
     {% set eh_pago = p.status == 'pago' %}
     <form method="POST" action="{{ url_for('main.loja_online_pedido_cancelar', codigo=p.codigo) }}"
