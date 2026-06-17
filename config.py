@@ -197,11 +197,16 @@ class Config:
     # veio do nosso Agent Bot. Gerar random longo. Vazio = webhook recusa tudo.
     CHATWOOT_BOT_SECRET = os.environ.get('CHATWOOT_BOT_SECRET', '')
 
-    # ── Email transacional (Resend) — 16/06/2026 ──────────────────────
+    # ── Email transacional (Postmark) — 17/06/2026 ────────────────────
     # Envio de senha/convite pra novos usuarios do gestao.*. Vazio =
     # email desligado (cadastro mostra a senha na tela como fallback).
-    RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
-    # Remetente — precisa de dominio verificado no Resend (DNS DKIM/SPF).
+    # Trocado do Resend pro Postmark porque o Resend exige MX em
+    # subdominio pra verificar o dominio, e o Wix (host do DNS de
+    # opao.online) so permite MX na raiz. Postmark valida com CNAME, que
+    # o Wix aceita — sem precisar mover o DNS.
+    POSTMARK_SERVER_TOKEN = os.environ.get('POSTMARK_SERVER_TOKEN', '')
+    # Remetente — precisa de Sender Signature verificada no Postmark
+    # (DKIM TXT na raiz + Return-Path CNAME em subdominio).
     EMAIL_REMETENTE = os.environ.get('EMAIL_REMETENTE', 'noreply@opao.online')
     EMAIL_REMETENTE_NOME = os.environ.get(
         'EMAIL_REMETENTE_NOME', 'O Pão Padaria Artesanal')
