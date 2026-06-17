@@ -439,8 +439,10 @@ def create_app(config_class=None):
                 seed_update_v2()
 
             # Produtos do site — roda em todos os ambientes (SQLite + PostgreSQL)
-            from app.seed import seed_site_products
+            from app.seed import seed_cestas_categoria, seed_site_products
             seed_site_products()
+            # Normaliza a categoria das cestas (libera cartinha no checkout)
+            seed_cestas_categoria()
 
             # RH: lojas + funcionários — roda em todos os ambientes
             from app.seed import seed_rh, seed_rh_escala
