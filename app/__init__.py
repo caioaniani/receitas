@@ -423,9 +423,7 @@ def create_app(config_class=None):
     init_audit()
 
     with app.app_context():
-        db.create_all()
-        _migrate(app)
-        _alembic_stamp_se_necessario(app)
+        _setup_schema(app)
 
         # Seeds populam catalogo/RH/projetos no startup. Em teste o conftest
         # faz drop_all+create_all logo apos create_app(), descartando tudo isso
@@ -499,6 +497,49 @@ def _criar_admin():
         admin.set_senha(senha)
         db.session.add(admin)
         db.session.commit()
+
+
+def _setup_schema(app):
+    """Cria tabelas + roda migrations no startup, serializado entre workers.
+
+    Os multiplos workers do gunicorn rodam isto ao mesmo tempo no boot.
+    `db.create_all()` (checkfirst=True) tem CORRIDA ao adicionar tabela
+    NOVA: dois workers consultam `pg_class`, ambos veem a tabela faltando,
+    ambos disparam `CREATE TABLE` -> o segundo bate em 'duplicate key
+    pg_type_typname_nsp_index' (UniqueViolation). Sintoma real: deploy da
+    Fase 3 (tabela `cliente`) gerou IntegrityError no Sentry; auto-curava
+    no restart do worker, mas sujo e recorrente a cada tabela nova.
+
+    Fix canonico: advisory lock BLOQUEANTE (nao `try`) serializa o setup.
+    O primeiro worker cria; os demais ESPERAM e, ao entrar, `create_all`
+    ve tudo pronto e pula. Bloqueante (e nao try-e-sai) garante que nenhum
+    worker comece a servir request antes do schema estar pronto.
+
+    Lock 7741 (livre; ver chaves em uso em seru_cron.py e migrations_legacy).
+    SQLite (local/teste) nao tem multiplos workers nem `pg_advisory_lock` —
+    roda direto.
+    """
+    is_pg = app.config.get('SQLALCHEMY_DATABASE_URI', '').startswith('postgresql')
+    if not is_pg:
+        db.create_all()
+        _migrate(app)
+        _alembic_stamp_se_necessario(app)
+        return
+
+    from sqlalchemy import text
+    lock_conn = db.engine.connect()
+    try:
+        # Bloqueia ate conseguir o lock (outro worker pode estar criando).
+        lock_conn.execute(text('SELECT pg_advisory_lock(7741)'))
+        db.create_all()
+        _migrate(app)
+        _alembic_stamp_se_necessario(app)
+    finally:
+        try:
+            lock_conn.execute(text('SELECT pg_advisory_unlock(7741)'))
+        except Exception:
+            pass
+        lock_conn.close()
 
 
 def _alembic_stamp_se_necessario(app):
