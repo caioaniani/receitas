@@ -296,12 +296,7 @@ def emitir_nf(pedido, user_id=None):
                 return {'ok': False,
                         'msg': 'Itens sem SKU mapeado: '
                                + ', '.join(faltando)}
-            incl = tiny.incluir_pedido({
-                'numero_ordem_compra': pedido.codigo,
-                'cliente': _payload_cliente(pedido),
-                'itens': itens,
-                'valor_frete': float(pedido.frete_valor or 0),
-            })
+            incl = tiny.incluir_pedido(_pedido_payload(pedido, itens))
             if not incl.get('ok'):
                 return {'ok': False,
                         'msg': f'Falha ao incluir o pedido no Tiny: '
