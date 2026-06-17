@@ -289,3 +289,132 @@ a:hover { text-decoration: underline; }
 }
 .rodape strong { color: var(--texto); font-weight: 600; }
 .rodape .small { font-size: 14px; }
+
+/* ── Carrinho: badge no header ─────────────────────────── */
+.topo-carrinho { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.cart-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 6px;
+  background: var(--acento); color: #fff;
+  border-radius: 999px;
+  font-size: 12px; font-weight: 700;
+  font-family: system-ui, sans-serif;
+}
+
+/* ── Bloco de compra (página de produto) ───────────────── */
+.comprar-bloco { margin-bottom: 24px; }
+.qtd-seletor {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 12px;
+  font-family: system-ui, sans-serif;
+}
+.qtd-seletor label { font-size: 14px; color: var(--texto-suave); }
+.qtd-seletor input {
+  width: 72px; padding: 9px 10px;
+  font-size: 16px; text-align: center;
+  border: 1px solid var(--linha); border-radius: 4px;
+  font-family: system-ui, sans-serif;
+}
+.btn-comprar.add-ok { background: #3c7a4a; }
+.ver-carrinho {
+  display: inline-block; margin-top: 12px;
+  font-family: system-ui, sans-serif; font-size: 14px;
+}
+
+/* ── Botões da loja ────────────────────────────────────── */
+.btn-loja, .btn-loja-secundario {
+  display: inline-block;
+  padding: 13px 22px;
+  font-size: 16px; font-weight: 600;
+  border-radius: 4px;
+  font-family: system-ui, sans-serif;
+  cursor: pointer; border: 0;
+}
+.btn-loja { background: var(--acento); color: #fff; }
+.btn-loja:hover { text-decoration: none; opacity: .92; }
+.btn-loja-secundario {
+  background: transparent; color: var(--texto-suave);
+  border: 1px solid var(--linha);
+}
+.btn-loja-secundario:hover { text-decoration: none; border-color: var(--acento); }
+
+/* ── Página do carrinho ────────────────────────────────── */
+.carrinho-pagina, .checkout-pagina {
+  max-width: 760px; margin: 0 auto; padding: 40px 22px 80px;
+}
+.carrinho-pagina h1, .checkout-pagina h1 {
+  font-size: 32px; font-weight: 400; margin: 0 0 24px;
+  font-family: 'Georgia', serif;
+}
+.carrinho-vazio { text-align: center; color: var(--texto-suave); padding: 40px 0; }
+.carrinho-vazio .btn-loja { margin-top: 16px; }
+
+.carrinho-linha {
+  display: grid;
+  grid-template-columns: 64px 1fr auto auto auto;
+  gap: 14px; align-items: center;
+  padding: 16px 0; border-bottom: 1px solid var(--linha);
+}
+.carrinho-foto {
+  width: 64px; height: 64px; border-radius: 4px; overflow: hidden;
+  background: #efe7da;
+}
+.carrinho-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.carrinho-foto .card-foto-placeholder { font-size: 30px; }
+.carrinho-nome { font-size: 17px; font-family: 'Georgia', serif; }
+.carrinho-preco-un {
+  font-size: 13px; color: var(--texto-suave);
+  font-family: system-ui, sans-serif;
+}
+.carrinho-qtd { display: flex; align-items: center; gap: 4px; }
+.qtd-btn {
+  width: 30px; height: 30px; border: 1px solid var(--linha);
+  background: #fff; border-radius: 4px; cursor: pointer;
+  font-size: 18px; line-height: 1; color: var(--texto);
+}
+.qtd-btn:hover { border-color: var(--acento); }
+.qtd-in {
+  width: 48px; height: 30px; text-align: center;
+  border: 1px solid var(--linha); border-radius: 4px;
+  font-family: system-ui, sans-serif; font-size: 15px;
+}
+.carrinho-sub {
+  font-family: system-ui, sans-serif; font-weight: 600;
+  color: var(--acento); min-width: 80px; text-align: right;
+}
+.carrinho-remover {
+  background: none; border: 0; cursor: pointer;
+  font-size: 16px; opacity: .55;
+}
+.carrinho-remover:hover { opacity: 1; }
+
+.carrinho-rodape { margin-top: 26px; }
+.carrinho-total {
+  font-size: 20px; text-align: right;
+  font-family: system-ui, sans-serif;
+}
+.carrinho-total strong { color: var(--acento); }
+.carrinho-aviso {
+  font-size: 13px; color: var(--texto-suave); text-align: right;
+  font-family: system-ui, sans-serif; margin: 6px 0 18px;
+}
+.carrinho-acoes {
+  display: flex; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Telas pequenas: simplifica a linha do carrinho */
+@media (max-width: 560px) {
+  .carrinho-linha {
+    grid-template-columns: 54px 1fr auto;
+    grid-template-areas:
+      "foto desc sub"
+      "foto qtd remover";
+    row-gap: 8px;
+  }
+  .carrinho-foto { grid-area: foto; width: 54px; height: 54px; }
+  .carrinho-desc { grid-area: desc; }
+  .carrinho-sub { grid-area: sub; }
+  .carrinho-qtd { grid-area: qtd; }
+  .carrinho-remover { grid-area: remover; justify-self: end; }
+}
