@@ -198,6 +198,37 @@ def test_emitir_nf_resume_sem_duplicar_pedido(app):
         inc.assert_not_called()   # não duplicou o pedido no Tiny
 
 
+def test_emitir_nf_recria_pedido_se_tiny_apagou(app):
+    """tiny_pedido_id salvo aponta pra pedido que não existe mais (cod 32
+    'Pedido não localizado'): limpa, tenta achar pelo código, cria novo."""
+    from app.extensions import db
+    from app.services import tiny_nf
+    with app.app_context():
+        produto = _produto(db)
+        p = _pedido_pago(db, produto, sku='S')
+        p.tiny_pedido_id = 'tp-antigo-apagado'
+        db.session.commit()
+        # 1ª chamada gerar: 'Pedido não localizado'. 2ª (após recriar): OK.
+        gerar_seq = iter([
+            {'ok': False, 'erro': 'Pedido não localizado.; cod 32'},
+            {'ok': True, 'id_nota_fiscal': 'nf-novo'},
+        ])
+        with patch('app.services.tiny.buscar_pedido_por_numero_ordem',
+                   return_value=None), \
+             patch('app.services.tiny.incluir_pedido',
+                   return_value={'ok': True, 'id': 'tp-novo'}) as inc, \
+             patch('app.services.tiny.gerar_nota_fiscal_pedido',
+                   side_effect=lambda *a, **k: next(gerar_seq)), \
+             patch('app.services.tiny.emitir_nota_fiscal',
+                   return_value={'ok': True, 'status': 'autorizada'}):
+            res = tiny_nf.emitir_nf(p)
+        assert res['ok'] is True
+        inc.assert_called_once()  # recriou (1 vez)
+        db.session.refresh(p)
+        assert p.tiny_pedido_id == 'tp-novo'
+        assert p.tiny_nota_fiscal_id == 'nf-novo'
+
+
 def test_incluir_pedido_registros_como_dict(app):
     """Regressão do 500 (KeyError: 0): Tiny v2 às vezes manda `registros`
     como DICT {'registro': {...}}, não lista. _registros normaliza."""
