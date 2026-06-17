@@ -76,9 +76,20 @@ def pedido_pagamento(codigo):
     erros = []
     if ultima_falha and ultima_falha.erro:
         erros.append(f'Última tentativa falhou: {ultima_falha.erro}')
+    # Display do Pix: separa EMV (copia-e-cola) de URL e gera o QR no
+    # servidor a partir do EMV (não depende do qr_code_url do Pagar.me).
+    pix = None
+    if pix_pendente:
+        qc = pix_pendente.pix_qr_code or ''
+        qu = pix_pendente.pix_qr_code_url or ''
+        emv = next((v for v in (qc, qu) if v and not v.startswith('http')), '')
+        link = next((v for v in (qu, qc) if v and v.startswith('http')), '')
+        pix = {'emv': emv, 'link': link,
+               'img': loja_pagamento.pagarme.qr_data_uri(emv) if emv else None,
+               'expira_em': pix_pendente.pix_expira_em}
     return render_template('loja/pagamento.html',
                            pedido=pedido, pubkey=pubkey,
-                           pix_pendente=pix_pendente,
+                           pix_pendente=pix_pendente, pix=pix,
                            erros=erros if erros else None,
                            em_teste=_em_teste())
 
