@@ -25,13 +25,19 @@ def _ctx_checkout(erros=None, form=None):
     Datas viram min/max pro <input type="date"> (calendário). O range é
     contíguo (entregamos todo dia) e respeita o corte das 17h, então
     [min, max] bate exatamente com o conjunto que o servidor valida."""
+    from app.utils import agora
     datas = loja_checkout.datas_disponiveis('agendada')
+    base = agora()
     return dict(
         em_teste=_em_teste(),
         lojas=loja_checkout.lojas_retirada(),
         data_min=(datas[0].isoformat() if datas else ''),
         data_max=(datas[-1].isoformat() if datas else ''),
         janelas=list(loja_checkout.JANELAS_HORARIAS),
+        # Pro JS filtrar janelas passadas quando a data escolhida é hoje
+        # (usa a hora do SERVIDOR — evita divergência de relógio do cliente).
+        hoje_iso=base.date().isoformat(),
+        min_hora_hoje=base.hour + loja_checkout.LEAD_HORAS,
         express_ok=loja_checkout.express_disponivel(),
         erros=erros, form=(form or {}),
     )
