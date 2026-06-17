@@ -1,7 +1,7 @@
-"""Email de boas-vindas pra novo usuário via Resend (16/06/2026).
+"""Email de boas-vindas pra novo usuário via Postmark (17/06/2026).
 
 Admin cadastra usuário com email → senha gerada → email enviado. Sem email
-ou se Resend falhar, senha aparece no flash pro admin copiar (fallback).
+ou se Postmark falhar, senha aparece no flash pro admin copiar (fallback).
 """
 from unittest.mock import patch
 
@@ -22,19 +22,19 @@ def _admin(app):
 
 # ── Service ─────────────────────────────────────────────────────────────
 
-def test_email_service_sem_chave_devolve_erro(app):
+def test_email_service_sem_token_devolve_erro(app):
     from app.services import email as email_svc
     with app.app_context():
-        app.config['RESEND_API_KEY'] = ''
+        app.config['POSTMARK_SERVER_TOKEN'] = ''
         r = email_svc.enviar('x@y.com', 'a', '<p>b</p>')
         assert r['ok'] is False
-        assert 'RESEND' in r['erro']
+        assert 'POSTMARK' in r['erro']
 
 
 def test_email_service_destinatario_invalido(app):
     from app.services import email as email_svc
     with app.app_context():
-        app.config['RESEND_API_KEY'] = 're_fake'
+        app.config['POSTMARK_SERVER_TOKEN'] = 'tok_fake'
         r = email_svc.enviar('sem-arroba', 'a', '<p>b</p>')
         assert r['ok'] is False
 
@@ -42,58 +42,86 @@ def test_email_service_destinatario_invalido(app):
 def test_email_service_monta_payload_e_envia(app):
     from app.services import email as email_svc
     with app.app_context():
-        app.config['RESEND_API_KEY'] = 're_fake'
+        app.config['POSTMARK_SERVER_TOKEN'] = 'tok_fake'
         app.config['EMAIL_REMETENTE'] = 'noreply@opao.online'
         app.config['EMAIL_REMETENTE_NOME'] = 'O Pão'
 
         class FakeResp:
             status_code = 200
+            text = ''
             def json(self):
-                return {'id': 'em_123'}
+                return {'MessageID': 'msg_123', 'ErrorCode': 0, 'Message': 'OK'}
         with patch('app.services.email.requests.post',
                     return_value=FakeResp()) as post:
             r = email_svc.enviar('cliente@x.com', 'Assunto', '<p>oi</p>',
                                   texto='oi')
-        assert r['ok'] is True and r['id'] == 'em_123'
-        # payload certinho
+        assert r['ok'] is True and r['id'] == 'msg_123'
+        # payload no padrao Postmark (PascalCase)
         _, kwargs = post.call_args
         body = kwargs['json']
-        assert body['to'] == ['cliente@x.com']
-        assert 'noreply@opao.online' in body['from']
-        assert body['subject'] == 'Assunto'
-        assert 'Bearer re_fake' in kwargs['headers']['Authorization']
+        assert body['To'] == 'cliente@x.com'
+        assert 'noreply@opao.online' in body['From']
+        assert body['Subject'] == 'Assunto'
+        assert body['HtmlBody'] == '<p>oi</p>'
+        assert body['TextBody'] == 'oi'
+        assert body['MessageStream'] == 'outbound'
+        # header de autenticacao do Postmark (NAO Bearer)
+        assert kwargs['headers']['X-Postmark-Server-Token'] == 'tok_fake'
 
 
 def test_boas_vindas_inclui_senha_e_login(app):
     from app.services import email as email_svc
     with app.app_context():
-        app.config['RESEND_API_KEY'] = 're_fake'
+        app.config['POSTMARK_SERVER_TOKEN'] = 'tok_fake'
 
         class FakeResp:
             status_code = 200
-            def json(self): return {'id': 'em_1'}
+            text = ''
+            def json(self):
+                return {'MessageID': 'm1', 'ErrorCode': 0, 'Message': 'OK'}
         with patch('app.services.email.requests.post',
                     return_value=FakeResp()) as post:
             email_svc.enviar_boas_vindas('novo@x.com', 'João', 'joao', 'senha123')
-        html = post.call_args[1]['json']['html']
+        html = post.call_args[1]['json']['HtmlBody']
         assert 'joao' in html
         assert 'senha123' in html
         assert 'Chatwoot' in html  # instrução do atendimento
 
 
-def test_boas_vindas_resend_falha_propaga_erro(app):
+def test_boas_vindas_postmark_falha_propaga_erro(app):
     from app.services import email as email_svc
     with app.app_context():
-        app.config['RESEND_API_KEY'] = 're_fake'
+        app.config['POSTMARK_SERVER_TOKEN'] = 'tok_fake'
 
         class FakeResp:
             status_code = 422
-            text = 'domain not verified'
-            def json(self): return {'message': 'domain not verified'}
+            text = 'signature not verified'
+            def json(self):
+                return {'ErrorCode': 405,
+                        'Message': "Sender 'noreply@opao.online' not verified"}
         with patch('app.services.email.requests.post', return_value=FakeResp()):
             r = email_svc.enviar_boas_vindas('x@y.com', 'N', 'n', 's')
         assert r['ok'] is False
-        assert 'domain not verified' in r['erro']
+        assert 'not verified' in r['erro']
+        assert '405' in r['erro']  # codigo do Postmark embutido
+
+
+def test_email_service_200_com_errorcode_diferente_zero_eh_falha(app):
+    """Postmark pode devolver HTTP 200 mas ErrorCode != 0 quando ha problema
+    de processamento. Trata como falha, nao como sucesso silencioso."""
+    from app.services import email as email_svc
+    with app.app_context():
+        app.config['POSTMARK_SERVER_TOKEN'] = 'tok_fake'
+
+        class FakeResp:
+            status_code = 200
+            text = ''
+            def json(self):
+                return {'ErrorCode': 300, 'Message': 'Invalid email request'}
+        with patch('app.services.email.requests.post', return_value=FakeResp()):
+            r = email_svc.enviar('x@y.com', 'a', '<p>b</p>')
+        assert r['ok'] is False
+        assert 'Invalid email request' in r['erro']
 
 
 # ── Cadastro de usuário ───────────────────────────────────────────────
@@ -153,10 +181,10 @@ def test_cadastro_nao_exige_mais_campo_senha_manual(app):
 
 
 def test_cadastro_email_falha_mostra_senha_pra_copiar(app):
-    """Se Resend falhar, admin NÃO fica sem a senha — aparece no flash."""
+    """Se Postmark falhar, admin NÃO fica sem a senha — aparece no flash."""
     c = _admin(app)
     with patch('app.services.email.enviar_boas_vindas',
-                return_value={'ok': False, 'erro': 'domain not verified'}):
+                return_value={'ok': False, 'erro': 'sender not verified'}):
         r = c.post('/auth/usuarios/novo', data={
             'nome': 'Falhou', 'login': 'falhou',
             'email': 'falhou@x.com', 'papel': 'funcionario',
