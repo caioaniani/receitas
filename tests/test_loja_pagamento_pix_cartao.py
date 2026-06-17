@@ -403,6 +403,99 @@ def test_csp_loja_libera_pagarme(app):
     assert 'connect-src' in csp and 'api.pagar.me' in csp
 
 
+def test_webhook_paid_dispara_email_confirmacao(app):
+    """Quando o pedido vira pago, manda e-mail de confirmação (best-effort)."""
+    from unittest.mock import patch as _patch
+
+    from app.extensions import db
+    from app.services import loja_pagamento
+    with app.app_context():
+        app.config['PAGARME_API_KEY'] = 'sk_test_abc'
+        app.config['POSTMARK_SERVER_TOKEN'] = 'tok'
+        loja = _loja_site(db)
+        p = _produto(db)
+        ped = _pedido_com_item(db, p, modo='retirada', loja_retirada_id=loja.id)
+        _setup_loja_estoque(db, ped, p)
+        body = {'id': 'or_e', 'charges': [{'id': 'ch_e', 'status': 'pending',
+                'last_transaction': {'qr_code': 'E'}}]}
+        with _patch('app.services.pagarme.requests.post',
+                    return_value=_fake_resp(200, body)):
+            loja_pagamento.iniciar_pix(ped)
+        with _patch('app.services.email.enviar_confirmacao_pedido',
+                    return_value={'ok': True}) as envia:
+            loja_pagamento.processar_webhook(
+                {'id': 'evt_mail', 'type': 'order.paid',
+                 'data': {'id': 'or_e', 'code': ped.codigo}})
+        envia.assert_called_once()
+
+
+def test_reembolsar_pedido_estorna(app):
+    from unittest.mock import patch as _patch
+
+    from app.extensions import db
+    from app.models import MovEstoqueLoja
+    from app.services import loja_pagamento
+    with app.app_context():
+        app.config['PAGARME_API_KEY'] = 'sk_test_abc'
+        loja = _loja_site(db)
+        p = _produto(db)
+        ped = _pedido_com_item(db, p, qtd=2, modo='retirada',
+                                loja_retirada_id=loja.id)
+        el = _setup_loja_estoque(db, ped, p, qtd_atual=10)
+        body = {'id': 'or_rf', 'charges': [{'id': 'ch_rf', 'status': 'pending',
+                'last_transaction': {'qr_code': 'E'}}]}
+        with _patch('app.services.pagarme.requests.post',
+                    return_value=_fake_resp(200, body)):
+            loja_pagamento.iniciar_pix(ped)
+        loja_pagamento.processar_webhook(
+            {'id': 'evt_p', 'type': 'order.paid',
+             'data': {'id': 'or_rf', 'code': ped.codigo}})
+        db.session.refresh(el)
+        assert el.quantidade == 8  # baixou 2
+        # Reembolso: cancela charge no gateway + estorna estoque
+        with _patch('app.services.pagarme.cancelar_charge',
+                    return_value={'ok': True}) as canc:
+            ok, msg = loja_pagamento.reembolsar_pedido(ped)
+        assert ok is True
+        canc.assert_called_once_with('ch_rf')
+        db.session.refresh(ped)
+        db.session.refresh(el)
+        assert ped.status == 'cancelado'
+        assert el.quantidade == 10  # devolvido
+        assert MovEstoqueLoja.query.filter_by(tipo='venda_site_estorno').count() == 1
+
+
+def test_email_confirmacao_monta_resumo(app):
+    from decimal import Decimal as D
+
+    from app.extensions import db
+    from app.services import email as email_svc
+    with app.app_context():
+        app.config['POSTMARK_SERVER_TOKEN'] = 'tok'
+        app.config['APP_BASE_URL'] = 'https://x'
+        loja = _loja_site(db)
+        p = _produto(db, preco=8.0)
+        ped = _pedido_com_item(db, p, qtd=1, modo='retirada',
+                                loja_retirada_id=loja.id)
+        with patch('app.services.email.requests.post',
+                   return_value=_fake_resp_email()) as post:
+            r = email_svc.enviar_confirmacao_pedido(ped)
+        assert r['ok'] is True
+        html = post.call_args[1]['json']['HtmlBody']
+        assert ped.codigo in html
+        assert 'Box Mimo' in html
+        assert D  # silencia import
+
+
+def _fake_resp_email():
+    class R:
+        status_code = 200
+        text = ''
+        def json(self):
+            return {'MessageID': 'm1', 'ErrorCode': 0, 'Message': 'OK'}
+    return R()
+
+
 def test_pagamento_tela_renderiza(app, monkeypatch):
     from app.extensions import db
     monkeypatch.delenv('LOJA_VISIVEL', raising=False)
