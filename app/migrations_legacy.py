@@ -1117,6 +1117,18 @@ def _migrate_postgres(app):
     _try("ALTER TABLE pedido_online ADD COLUMN IF NOT EXISTS "
          "telefone_destinatario VARCHAR(30)")
 
+    # NF-e via Tiny (Fase 5, 17/06/2026): id do pedido/NF e status no Tiny.
+    _try("ALTER TABLE pedido_online ADD COLUMN IF NOT EXISTS "
+         "tiny_pedido_id VARCHAR(40)")
+    _try("ALTER TABLE pedido_online ADD COLUMN IF NOT EXISTS "
+         "tiny_nota_fiscal_id VARCHAR(40)")
+    _try("ALTER TABLE pedido_online ADD COLUMN IF NOT EXISTS "
+         "nf_status VARCHAR(40)")
+    _try("ALTER TABLE pedido_online ADD COLUMN IF NOT EXISTS "
+         "nf_emitida_em TIMESTAMP")
+    _try("CREATE INDEX IF NOT EXISTS ix_pedido_online_nf "
+         "ON pedido_online(tiny_nota_fiscal_id)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
