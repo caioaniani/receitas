@@ -321,13 +321,12 @@ def incluir_pedido(pedido_dict):
                    retornar_erro=True)
     if not retorno:
         return {'ok': False, 'erro': _consumir_falha() or 'sem resposta do Tiny'}
-    registros = retorno.get('registros') or []
-    reg = (registros[0].get('registro')
-           if registros and isinstance(registros[0], dict) else None)
-    pid = str((reg or {}).get('id') or '').strip()
+    regs = _registros(retorno)
+    reg = regs[0] if regs else {}
+    pid = str(reg.get('id') or '').strip()
     if not pid:
-        return {'ok': False, 'erro': _extrair_erros(retorno) or 'sem id'}
-    return {'ok': True, 'id': pid, 'numero': str((reg or {}).get('numero') or '')}
+        return {'ok': False, 'erro': _extrair_erros(retorno) or 'sem id no retorno'}
+    return {'ok': True, 'id': pid, 'numero': str(reg.get('numero') or '')}
 
 
 def gerar_nota_fiscal_pedido(pedido_id, modelo='NFe'):
