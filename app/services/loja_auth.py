@@ -12,7 +12,7 @@ Senha em scrypt (`Cliente.set_senha`), mesmo padrão de `Usuario`.
 """
 from functools import wraps
 
-from flask import abort, g, redirect, request, session, url_for
+from flask import g, redirect, request, session, url_for
 
 
 def cliente_atual():
@@ -63,9 +63,3 @@ def safe_next():
 def email_valido(email):
     return ('@' in email and '.' in email.split('@')[-1]
             and 5 <= len(email) <= 200)
-
-
-def _abort_se_nao_cliente():
-    """Para uso em hooks; aborta 404 (não 403, pra não confessar a rota)."""
-    if not cliente_atual():
-        abort(404)
