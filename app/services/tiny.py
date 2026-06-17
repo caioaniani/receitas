@@ -339,6 +339,9 @@ def gerar_nota_fiscal_pedido(pedido_id, modelo='NFe'):
     if not retorno:
         return {'ok': False, 'erro': _consumir_falha() or 'sem resposta'}
     reg = retorno.get('registro') or {}
+    if not isinstance(reg, dict) or not reg.get('id_nota_fiscal'):
+        regs = _registros(retorno)
+        reg = regs[0] if regs else (reg if isinstance(reg, dict) else {})
     nf_id = str(reg.get('id_nota_fiscal') or reg.get('id') or '').strip()
     if not nf_id:
         return {'ok': False, 'erro': _extrair_erros(retorno) or 'sem id_nota_fiscal'}
