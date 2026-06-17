@@ -287,51 +287,52 @@ def listar_produtos(max_paginas=20):
 
 def incluir_pedido(pedido_dict):
     """pedido.incluir.php — cria um pedido no Tiny (formato JSON na v2).
-    `pedido_dict` é o dict no padrão Tiny ({'cliente': ..., 'itens': [...],
-    'numero_ordem_compra': ..., etc}). Devolve {id, numero, ...} ou None."""
+    Devolve {ok, id, numero, erro}. Em erro, `erro` traz a mensagem real do
+    Tiny (não só 'ver logs')."""
     import json as _json
     retorno = _get('pedido.incluir.php',
-                   params={'pedido': _json.dumps({'pedido': pedido_dict})})
+                   params={'pedido': _json.dumps({'pedido': pedido_dict})},
+                   retornar_erro=True)
     if not retorno:
-        return None
+        return {'ok': False, 'erro': _consumir_falha() or 'sem resposta do Tiny'}
     registros = retorno.get('registros') or []
-    if not registros:
-        return None
-    reg = registros[0].get('registro') if isinstance(registros[0], dict) else None
-    if not isinstance(reg, dict):
-        return None
-    return {'id': str(reg.get('id') or ''),
-            'numero': str(reg.get('numero') or ''),
-            'status': reg.get('status') or ''}
+    reg = (registros[0].get('registro')
+           if registros and isinstance(registros[0], dict) else None)
+    pid = str((reg or {}).get('id') or '').strip()
+    if not pid:
+        return {'ok': False, 'erro': _extrair_erros(retorno) or 'sem id'}
+    return {'ok': True, 'id': pid, 'numero': str((reg or {}).get('numero') or '')}
 
 
-def gerar_nota_fiscal_pedido(pedido_id, modelo='NFCe'):
+def gerar_nota_fiscal_pedido(pedido_id, modelo='NFe'):
     """gerar.nota.fiscal.pedido.php — cria a NF (rascunho) a partir de um
-    pedido existente no Tiny. `modelo` = 'NFCe' (consumidor) ou 'NFe'.
-    Devolve {id_nota_fiscal, status, numero} ou None."""
+    pedido no Tiny. `modelo` = 'NFe' (modelo 55, e-commerce com entrega) ou
+    'NFCe'. Devolve {ok, id_nota_fiscal, erro}."""
     retorno = _get('gerar.nota.fiscal.pedido.php',
-                   params={'id': str(pedido_id), 'modelo': modelo})
+                   params={'id': str(pedido_id), 'modelo': modelo},
+                   retornar_erro=True)
     if not retorno:
-        return None
+        return {'ok': False, 'erro': _consumir_falha() or 'sem resposta'}
     reg = retorno.get('registro') or {}
-    if not isinstance(reg, dict):
-        return None
-    nf_id = (str(reg.get('id_nota_fiscal') or reg.get('id') or '').strip())
-    return {'id_nota_fiscal': nf_id,
-            'numero': str(reg.get('numero') or ''),
-            'status': reg.get('status') or ''}
+    nf_id = str(reg.get('id_nota_fiscal') or reg.get('id') or '').strip()
+    if not nf_id:
+        return {'ok': False, 'erro': _extrair_erros(retorno) or 'sem id_nota_fiscal'}
+    return {'ok': True, 'id_nota_fiscal': nf_id,
+            'numero': str(reg.get('numero') or '')}
 
 
 def emitir_nota_fiscal(nota_id):
     """nota.fiscal.emitir.php — autoriza a NF na SEFAZ (sai do rascunho).
-    Em sandbox/homologação não tem efeito legal. Devolve {ok, status, erro?}."""
-    retorno = _get('nota.fiscal.emitir.php', params={'id': str(nota_id)})
+    Em homologação não tem efeito legal. Devolve {ok, status, erro?}."""
+    retorno = _get('nota.fiscal.emitir.php', params={'id': str(nota_id)},
+                   retornar_erro=True)
     if not retorno:
         return {'ok': False, 'erro': _consumir_falha() or 'sem resposta'}
     status = (retorno.get('status_processamento')
               or retorno.get('status') or '').lower()
-    return {'ok': status in ('ok', '1', '100', 'emitida', 'autorizada'),
-            'status': status}
+    ok = status in ('ok', '1', '100', 'emitida', 'autorizada')
+    return {'ok': ok, 'status': status,
+            'erro': None if ok else (_extrair_erros(retorno) or status)}
 
 
 def obter_nota_fiscal(nota_id):
