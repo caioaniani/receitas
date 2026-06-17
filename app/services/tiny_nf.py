@@ -240,20 +240,23 @@ def _payload_itens(pedido):
 
 
 def _pedido_payload(pedido, itens):
-    """Monta o pedido pro Tiny COM o cabeçalho fiscal (série, natureza,
-    consumidor final) — sem isso o Tiny cria em série própria sem natureza
-    (bug visto em prod: nota saiu como 000010 em vez de seguir a série 1)."""
+    """Monta o pedido pro Tiny com a natureza de operacao. Sem ela o Tiny
+    gera a NF com natOp vazia e a SEFAZ rejeita.
+
+    A SERIE, o CFOP e o indicador de consumidor final NAO vem daqui: sao
+    configurados no Tiny (Naturezas de operacao + Numeracao de NF). A v2 do
+    `pedido.incluir.php` NAO tem campo de serie — mandar um era ignorado
+    (a nota saia em numeracao/serie errada, bug visto em prod: 000009)."""
     from flask import current_app
-    cfg = current_app.config
+    natureza = current_app.config.get('NF_NATUREZA_OPERACAO',
+                                      'Venda de mercadorias')
     return {
+        'data_pedido': (pedido.criado_em or agora()).strftime('%d/%m/%Y'),
         'numero_ordem_compra': pedido.codigo,
         'cliente': _payload_cliente(pedido),
         'itens': itens,
         'valor_frete': float(pedido.frete_valor or 0),
-        'serie': cfg.get('NF_SERIE', '1'),
-        'natureza_operacao': cfg.get('NF_NATUREZA_OPERACAO',
-                                     'Venda de mercadorias'),
-        'consumidor_final': cfg.get('NF_CONSUMIDOR_FINAL', 'S'),
+        'natureza_operacao': natureza,
     }
 
 
