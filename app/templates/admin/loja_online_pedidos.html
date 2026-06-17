@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}Loja Online — Pedidos do site{% endblock %}
+
+{% set badge = {
+  'aguardando_pagamento': 'bg-warning text-dark',
+  'pago': 'bg-info text-dark',
+  'em_preparo': 'bg-secondary',
+  'a_caminho': 'bg-primary',
+  'entregue': 'bg-success',
+  'cancelado': 'bg-danger',
+} %}
+{% set modo_label = {
+  'agendada': 'Entrega agendada', 'retirada': 'Retirada', 'express': 'Express',
+} %}
+
+{% block content %}
+<h1 class="page-title"><i class="bi bi-bag-check"></i> Pedidos do site</h1>
+<p class="text-muted">
+  Pedidos que entram pelo checkout da loja. Em fase de teste eles nascem
+  <em>aguardando pagamento</em> (o Pagar.me entra na próxima fase).
+</p>
+
+<div class="mb-3 d-flex flex-wrap gap-2">
+  <a href="{{ url_for('main.loja_online_pedidos') }}"
+     class="btn btn-sm {{ 'btn-dark' if not status else 'btn-outline-dark' }}">
+    Todos <span class="badge bg-light text-dark">{{ total }}</span>
+  </a>
+  {% for chave, rotulo in labels.items() %}
+  {% if contagens.get(chave) %}
+  <a href="{{ url_for('main.loja_online_pedidos', status=chave) }}"
+     class="btn btn-sm {{ 'btn-dark' if status == chave else 'btn-outline-dark' }}">
+    {{ rotulo }} <span class="badge bg-light text-dark">{{ contagens.get(chave) }}</span>
+  </a>
+  {% endif %}
+  {% endfor %}
+</div>
+
+{% if pedidos %}
+<div class="table-responsive">
+  <table class="table table-sm table-hover bg-white align-middle">
+    <thead class="thead-padaria">
+      <tr>
+        <th>Código</th><th>Quando</th><th>Cliente</th><th>Entrega</th>
+        <th>Data entrega</th><th class="text-end">Total</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in pedidos %}
+      <tr>
+        <td><a href="{{ url_for('main.loja_online_pedido_detalhe', codigo=p.codigo) }}">
+          <code>{{ p.codigo }}</code></a></td>
+        <td class="small text-muted">{{ p.criado_em.strftime('%d/%m %H:%M') if p.criado_em }}</td>
+        <td>{{ p.nome_cliente }}<br><span class="small text-muted">{{ p.telefone_cliente or p.email_cliente }}</span></td>
+        <td>{{ modo_label.get(p.modo_entrega, p.modo_entrega) }}</td>
+        <td class="small">
+          {% if p.data_entrega %}{{ p.data_entrega.strftime('%d/%m') }}
+            {% if p.janela_entrega %}· {{ p.janela_entrega }}{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td class="text-end fw-bold">R$ {{ '%.2f'|format(p.valor_total)|replace('.', ',') }}</td>
+        <td><span class="badge {{ badge.get(p.status, 'bg-secondary') }}">
+          {{ labels.get(p.status, p.status) }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="alert alert-light border">Nenhum pedido {{ ('com status “' ~ labels.get(status, status) ~ '”') if status else 'ainda' }}.</div>
+{% endif %}
+{% endblock %}
