@@ -1179,6 +1179,12 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE lalamove_entrega ADD COLUMN "
                        "priority_fee NUMERIC(10, 2)")
 
+    # Email do usuario (envio de senha/convite via Resend, 16/06/2026).
+    cursor.execute("PRAGMA table_info(usuario)")
+    cols_user = [row[1] for row in cursor.fetchall()]
+    if cols_user and 'email' not in cols_user:
+        cursor.execute("ALTER TABLE usuario ADD COLUMN email VARCHAR(200)")
+
     # Migração tabela receita_ingrediente
     cursor.execute("PRAGMA table_info(receita_ingrediente)")
     cols_ing = [row[1] for row in cursor.fetchall()]
