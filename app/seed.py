@@ -959,6 +959,29 @@ def seed_site_products():
     db.session.commit()
 
 
+def seed_cestas_categoria():
+    """Garante que toda CESTA tenha categoria de cesta (libera a cartinha no
+    checkout, cuja regra é 'categoria contém cesta').
+
+    Cesta = Produto com composição (ProdutoItem) — sinal estrutural, pega
+    até alguma cesta esquecida sem depender de lista de nomes. SÓ corrige as
+    que NÃO têm 'cesta' na categoria (vazia ou errada); preserva 'Cestas' e
+    'Cestas Personalizadas' já setadas. Idempotente. Roda em TODOS os
+    ambientes (caso algum produto tenha sido criado sem a categoria).
+    """
+    ids_com_itens = {pi.produto_id for pi in ProdutoItem.query.all()}
+    if not ids_com_itens:
+        return 0
+    n = 0
+    for p in Produto.query.filter(Produto.id.in_(ids_com_itens)).all():
+        if 'cesta' not in (p.categoria or '').lower():
+            p.categoria = 'Cestas'
+            n += 1
+    if n:
+        db.session.commit()
+    return n
+
+
 def seed_rh():
     """Cria lojas e importa 42 funcionários. Roda em TODOS os ambientes."""
     if Loja.query.first():
