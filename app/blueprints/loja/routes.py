@@ -56,9 +56,9 @@ def _pedido_aguardando(codigo):
 @loja_bp.route('/pedido/<codigo>/pagamento', methods=['GET'])
 def pedido_pagamento(codigo):
     """Tela de pagamento — escolhe método e mostra o resultado."""
+    from flask import current_app
     pedido = _pedido_aguardando(codigo)
-    pubkey = (loja_pagamento.pagarme.current_app.config
-              .get('PAGARME_PUBLIC_KEY') or '')
+    pubkey = (current_app.config.get('PAGARME_PUBLIC_KEY') or '')
     pix_pendente = next((p for p in pedido.pagamentos
                          if p.metodo == 'pix' and p.status == 'pendente'),
                         None)
