@@ -1,0 +1,14 @@
+{% extends 'loja/_base.html' %}
+
+{% block title %}Checkout — O Pão Padaria Artesanal{% endblock %}
+
+{% block content %}
+<section class="checkout-pagina">
+  <h1>Checkout</h1>
+  <p class="aviso-comprar">
+    Estamos montando o checkout (dados de entrega, frete, data e cartinha).
+    Esta etapa entra na sequência. Seu carrinho está guardado.
+  </p>
+  <a href="{{ url_for('loja.carrinho') }}" class="btn-loja-secundario">← Voltar ao carrinho</a>
+</section>
+{% endblock %}
