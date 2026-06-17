@@ -2653,6 +2653,20 @@ def loja_online_tiny_importar():
     return redirect(url_for('main.loja_online_tiny_skus'))
 
 
+@main_bp.route('/admin/loja-online/pedidos/<codigo>/emitir-nf', methods=['POST'])
+@owner_required
+def loja_online_emitir_nf(codigo):
+    """Botão manual de emissão de NF via Tiny (Fase 5 plano A)."""
+    from flask import flash
+
+    from app.models import PedidoOnline
+    from app.services import tiny_nf
+    p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    res = tiny_nf.emitir_nf(p, user_id=current_user.id)
+    flash(f'{p.codigo}: {res["msg"]}', 'success' if res.get('ok') else 'danger')
+    return redirect(url_for('main.loja_online_pedido_detalhe', codigo=codigo))
+
+
 @main_bp.route('/admin/loja-online/tiny-skus/definir', methods=['POST'])
 @owner_required
 def loja_online_tiny_definir():
