@@ -1109,6 +1109,14 @@ def _migrate_postgres(app):
     # Email do usuario (envio de senha/convite via Postmark, 16/06/2026).
     _try("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS email VARCHAR(200)")
 
+    # Destinatario diferente do pagador no pedido online (Fase 3+, 17/06/2026).
+    # PedidoOnline e' tabela criada por db.create_all (Fase 3) -> em prod
+    # ja existe sem as colunas; ALTER aplica em commit isolado.
+    _try("ALTER TABLE pedido_online ADD COLUMN IF NOT EXISTS "
+         "nome_destinatario VARCHAR(150)")
+    _try("ALTER TABLE pedido_online ADD COLUMN IF NOT EXISTS "
+         "telefone_destinatario VARCHAR(30)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
