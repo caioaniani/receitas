@@ -416,6 +416,73 @@ def test_emitir_nota_fiscal_status_2_e_erro(app):
         assert 'Rejeicao' in res['erro']
 
 
+def test_reenviar_detecta_nf_ja_autorizada_via_obter(app):
+    """Reenviar uma NF que JÁ autorizou em background (status_processamento
+    ambíguo no emitir): o sincronizar via `obter` resolve. Regressão 011428."""
+    from app.extensions import db
+    from app.services import tiny_nf
+    with app.app_context():
+        produto = _produto(db)
+        p = _pedido_pago(db, produto, sku='S')
+        p.tiny_nota_fiscal_id = 'nf-autorizada-bg'
+        p.nf_status = '2'                   # status ambíguo do emitir anterior
+        db.session.commit()
+        with patch('app.services.tiny.obter_nota_fiscal',
+                   return_value={'situacao': 'Autorizada'}), \
+             patch('app.services.tiny.incluir_nota_fiscal') as inc, \
+             patch('app.services.tiny.emitir_nota_fiscal') as emi:
+            res = tiny_nf.emitir_nf(p)
+        assert res['ok'] is True
+        assert 'autorizada' in res['msg'].lower()
+        inc.assert_not_called()             # não criou duplicata
+        emi.assert_not_called()             # nem precisou re-emitir
+        db.session.refresh(p)
+        assert p.nf_emitida_em is not None
+        assert p.nf_status == 'autorizada'
+
+
+def test_reenviar_detecta_nf_rejeitada_via_obter(app):
+    """NF rejeitada pela SEFAZ: o sincronizar avisa e orienta a Refazer."""
+    from app.extensions import db
+    from app.services import tiny_nf
+    with app.app_context():
+        produto = _produto(db)
+        p = _pedido_pago(db, produto, sku='S')
+        p.tiny_nota_fiscal_id = 'nf-rej'
+        db.session.commit()
+        with patch('app.services.tiny.obter_nota_fiscal',
+                   return_value={'situacao': 'Rejeitada'}), \
+             patch('app.services.tiny.emitir_nota_fiscal') as emi:
+            res = tiny_nf.emitir_nf(p)
+        assert res['ok'] is False
+        assert 'rejeit' in res['msg'].lower()
+        assert 'refazer' in res['msg'].lower()
+        emi.assert_not_called()             # não tenta re-emitir uma rejeitada
+        db.session.refresh(p)
+        assert p.nf_emitida_em is None      # NÃO marcou como emitida
+
+
+def test_emitir_obter_confirma_quando_emit_devolve_ambiguo(app):
+    """emitir_nota_fiscal retorna ok=False (status ambíguo) mas a NF
+    autorizou em background — o obter pós-emit captura isso."""
+    from app.extensions import db
+    from app.services import tiny_nf
+    with app.app_context():
+        produto = _produto(db)
+        p = _pedido_pago(db, produto, sku='S')
+        with patch('app.services.tiny.incluir_nota_fiscal',
+                   return_value={'ok': True, 'id': 'nf-x'}), \
+             patch('app.services.tiny.emitir_nota_fiscal',
+                   return_value={'ok': False, 'status': '2',
+                                 'erro': 'status 2'}), \
+             patch('app.services.tiny.obter_nota_fiscal',
+                   return_value={'situacao': 'autorizada'}):
+            res = tiny_nf.emitir_nf(p)
+        assert res['ok'] is True
+        db.session.refresh(p)
+        assert p.nf_emitida_em is not None
+
+
 def test_danfe_redireciona_pro_link(app):
     """A rota do DANFE redireciona pro link temporário do Tiny."""
     from app.extensions import db
