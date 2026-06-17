@@ -1,0 +1,22 @@
+{% extends 'loja/_base.html' %}
+{% block title %}Minha conta — O Pão Padaria Artesanal{% endblock %}
+{% block content %}
+<section class="checkout-pagina" style="max-width:600px">
+  <h1>🥐 Olá, {{ cliente.nome.split()[0] }}</h1>
+
+  <div class="checkout-bloco">
+    <p><strong>{{ cliente.nome }}</strong></p>
+    <p class="small">{{ cliente.email }}{% if cliente.telefone %} · {{ cliente.telefone }}{% endif %}</p>
+  </div>
+
+  <div class="checkout-bloco">
+    <h2>Meus pedidos</h2>
+    <p class="small">Em breve: lista dos seus pedidos com status e a nota fiscal.</p>
+  </div>
+
+  <form method="POST" action="{{ url_for('loja.sair') }}" style="margin-top:1.5rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn-loja btn-loja-outline">Sair</button>
+  </form>
+</section>
+{% endblock %}
