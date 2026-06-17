@@ -41,17 +41,50 @@ def test_definir_e_limpar_sku(app):
         assert tiny_nf.sku_do_item('produto', p.id) is None
 
 
-def test_sincronizar_sugestoes_fuzzy(app):
+def test_sincronizar_match_exato_confirma(app):
     from app.extensions import db
     from app.services import tiny_nf
     with app.app_context():
         p = _produto_pub(db, nome='Box Mimo')
-        # Tiny devolve um produto com nome equivalente (acento/caixa diferem)
+        # Nome normaliza igual (acento/caixa) -> match EXATO -> confirma auto
         fake = [{'sku': 'TINY-BOX', 'nome': 'BOX MIMO', 'tiny_id': '9'}]
         with patch('app.services.tiny.listar_produtos', return_value=fake):
             res = tiny_nf.sincronizar_sugestoes()
-        assert res['sugeridos'] == 1
+        assert res['exatos'] == 1
         assert tiny_nf.sku_do_item('produto', p.id) == 'TINY-BOX'
+
+
+def test_sincronizar_fuzzy_sugere(app):
+    from app.extensions import db
+    from app.services import tiny_nf
+    with app.app_context():
+        p = _produto_pub(db, nome='Brioche')
+        # Nome PARECIDO (não idêntico) -> sugestão pra conferir
+        fake = [{'sku': 'BR-1', 'nome': 'Brioche SITE', 'tiny_id': '7'}]
+        with patch('app.services.tiny.listar_produtos', return_value=fake):
+            res = tiny_nf.sincronizar_sugestoes()
+        assert res['sugeridos'] == 1
+        assert tiny_nf.sku_do_item('produto', p.id) == 'BR-1'
+
+
+def test_importar_planilha_csv(app):
+    from app.extensions import db
+    from app.services import tiny_nf
+    with app.app_context():
+        p = _produto_pub(db, nome='Box Mimo')
+        csv = (b'ID,Codigo (SKU),Descricao,Unidade\n'
+               b'1,202383,Box Mimo,UN\n'
+               b'2,99,Outro Produto,UN\n')
+        res = tiny_nf.importar_planilha(csv, 'produtos.csv')
+        assert res['exatos'] == 1
+        assert tiny_nf.sku_do_item('produto', p.id) == '202383'
+
+
+def test_importar_planilha_formato_invalido(app):
+    from app.services import tiny_nf
+    with app.app_context():
+        res = tiny_nf.importar_planilha(b'lixo sem colunas', 'x.csv')
+        assert res.get('erro')
 
 
 def test_sync_nao_sobrescreve_confirmado(app):
