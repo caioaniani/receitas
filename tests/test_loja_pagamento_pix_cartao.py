@@ -404,7 +404,8 @@ def test_checkout_redireciona_pra_pagamento(app, monkeypatch):
     loja = Loja.query.filter_by(nome='Brooklin').first()
     data = loja_checkout.datas_disponiveis('retirada')[0].isoformat()
     r = c.post('/loja/checkout', data={
-        'nome': 'João', 'email': 'j@x.com', 'aceite_lgpd': '1',
+        'nome': 'João', 'email': 'j@x.com', 'cpf': '52998224725',
+        'aceite_lgpd': '1',
         'modo_entrega': 'retirada', 'loja_id': str(loja.id),
         'data_entrega': data, 'janela_entrega': '08:00–09:00',
         'itens_json': _json.dumps([{'kind': 'produto', 'id': p.id, 'qtd': 1}]),
