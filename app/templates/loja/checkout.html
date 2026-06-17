@@ -1,14 +1,182 @@
 {% extends 'loja/_base.html' %}
+{% set modo_sel = form.get('modo_entrega', 'agendada') %}
 
-{% block title %}Checkout — O Pão Padaria Artesanal{% endblock %}
+{% block title %}Finalizar pedido — O Pão Padaria Artesanal{% endblock %}
 
 {% block content %}
 <section class="checkout-pagina">
-  <h1>Checkout</h1>
-  <p class="aviso-comprar">
-    Estamos montando o checkout (dados de entrega, frete, data e cartinha).
-    Esta etapa entra na sequência. Seu carrinho está guardado.
-  </p>
-  <a href="{{ url_for('loja.carrinho') }}" class="btn-loja-secundario">← Voltar ao carrinho</a>
+  <h1>Finalizar pedido</h1>
+
+  {% if erros %}
+  <div class="checkout-erros">
+    <strong>Revise antes de concluir:</strong>
+    <ul>{% for e in erros %}<li>{{ e }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  <div id="checkout-vazio" class="carrinho-vazio" style="display:none">
+    <p>Seu carrinho está vazio.</p>
+    <a class="btn-loja" href="{{ url_for('loja.home') }}">Ver produtos</a>
+  </div>
+
+  <form id="checkout-form" method="POST"
+        action="{{ url_for('loja.checkout') }}" class="checkout-form"
+        style="display:none">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="itens_json" id="itens_json" value="[]">
+
+    <!-- Resumo do pedido (preenchido pelo checkout.js a partir do carrinho) -->
+    <div class="checkout-bloco">
+      <h2>Seu pedido</h2>
+      <div id="checkout-resumo"></div>
+    </div>
+
+    <!-- Seus dados -->
+    <div class="checkout-bloco">
+      <h2>Seus dados</h2>
+      <label>Nome completo
+        <input type="text" name="nome" required
+               value="{{ form.get('nome', '') }}">
+      </label>
+      <label>Email
+        <input type="email" name="email" required
+               value="{{ form.get('email', '') }}">
+      </label>
+      <label>Telefone (WhatsApp)
+        <input type="tel" name="telefone" inputmode="tel"
+               value="{{ form.get('telefone', '') }}">
+      </label>
+    </div>
+
+    <!-- Modo de entrega -->
+    <div class="checkout-bloco">
+      <h2>Como você quer receber</h2>
+      <div class="modo-opcoes">
+        <label class="modo-opcao">
+          <input type="radio" name="modo_entrega" value="agendada"
+                 {{ 'checked' if modo_sel == 'agendada' }}>
+          <span><strong>Entrega agendada</strong><br>
+            Escolha o dia e a janela. Frete por distância.</span>
+        </label>
+        <label class="modo-opcao">
+          <input type="radio" name="modo_entrega" value="retirada"
+                 {{ 'checked' if modo_sel == 'retirada' }}>
+          <span><strong>Retirada na loja</strong><br>
+            Sem frete. Você escolhe a loja e o horário.</span>
+        </label>
+        <label class="modo-opcao {{ 'modo-desabilitado' if not express_ok }}">
+          <input type="radio" name="modo_entrega" value="express"
+                 {{ 'checked' if modo_sel == 'express' }}
+                 {{ 'disabled' if not express_ok }}>
+          <span><strong>Express (em até 1h)</strong><br>
+            {% if express_ok %}
+              Entrega imediata. Valor estimado — a equipe confirma.
+            {% else %}
+              Indisponível agora (fora do horário de entrega 8h–18h).
+            {% endif %}</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Endereço (entrega/express) -->
+    <div class="checkout-bloco" id="bloco-endereco">
+      <h2>Endereço de entrega</h2>
+      <label>CEP
+        <input type="text" name="cep" id="cep" inputmode="numeric"
+               placeholder="00000-000" value="{{ form.get('cep', '') }}">
+      </label>
+      <label>Endereço completo (rua, número, bairro, complemento)
+        <input type="text" name="endereco" id="endereco"
+               placeholder="Rua Exemplo, 123, Apto 4, Moema"
+               value="{{ form.get('endereco', '') }}">
+      </label>
+      <button type="button" class="btn-loja-secundario" id="btn-frete">
+        Calcular frete
+      </button>
+      <p id="frete-resultado" class="frete-resultado"></p>
+    </div>
+
+    <!-- Loja (retirada) -->
+    <div class="checkout-bloco" id="bloco-loja" style="display:none">
+      <h2>Loja para retirada</h2>
+      <label>Escolha a loja
+        <select name="loja_id" id="loja_id">
+          <option value="">Selecione…</option>
+          {% for l in lojas %}
+          <option value="{{ l.id }}"
+            {{ 'selected' if form.get('loja_id') == l.id|string }}>
+            {{ l.nome }}{% if l.endereco %} — {{ l.endereco }}{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+
+    <!-- Data + janela (agendada/retirada) -->
+    <div class="checkout-bloco" id="bloco-data">
+      <h2>Quando</h2>
+      <label>Dia
+        <select name="data_entrega" id="data_entrega">
+          {% for iso, rotulo in datas %}
+          <option value="{{ iso }}"
+            {{ 'selected' if form.get('data_entrega') == iso }}>{{ rotulo }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Janela de horário
+        <select name="janela_entrega" id="janela_entrega"></select>
+      </label>
+    </div>
+
+    <!-- Express: aviso de imediato -->
+    <div class="checkout-bloco" id="bloco-express" style="display:none">
+      <h2>Quando</h2>
+      <p class="frete-resultado">
+        Entrega <strong>hoje, em até 1 hora</strong>. O valor do express é
+        estimado — a equipe confirma o frete final (entregador próprio ou
+        Lalamove, conforme disponibilidade).
+      </p>
+    </div>
+
+    <!-- Cartinha -->
+    <div class="checkout-bloco">
+      <h2>Cartinha / observações <span class="opcional">(opcional)</span></h2>
+      <textarea name="cartinha" rows="3"
+        placeholder="Mensagem de presente, ponto de referência, etc.">{{ form.get('cartinha', '') }}</textarea>
+    </div>
+
+    <!-- Totais -->
+    <div class="checkout-bloco checkout-totais">
+      <div class="linha-total"><span>Subtotal</span>
+        <span id="t-subtotal">R$ 0,00</span></div>
+      <div class="linha-total"><span>Frete</span>
+        <span id="t-frete">—</span></div>
+      <div class="linha-total grande"><span>Total</span>
+        <span id="t-total">R$ 0,00</span></div>
+    </div>
+
+    <label class="aceite">
+      <input type="checkbox" name="aceite_lgpd" value="1"
+             {{ 'checked' if form.get('aceite_lgpd') }}>
+      Concordo em compartilhar meus dados para processar este pedido.
+    </label>
+
+    <button type="submit" class="btn-loja btn-finalizar" id="btn-finalizar">
+      Concluir pedido
+    </button>
+    <p class="aviso-comprar">
+      O pagamento entra na próxima etapa. Por ora o pedido fica registrado
+      como “aguardando pagamento” e a equipe entra em contato.
+    </p>
+    <a href="{{ url_for('loja.carrinho') }}" class="voltar">← Voltar ao carrinho</a>
+  </form>
 </section>
+
+<script id="checkout-dados" type="application/json">
+{{ {'janelas_entrega': janelas_entrega, 'janelas_retirada': janelas_retirada, 'expressOk': express_ok}|tojson }}
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('loja.static', filename='checkout.js') }}"></script>
 {% endblock %}
