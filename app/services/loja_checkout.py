@@ -28,10 +28,10 @@ from app.services import frete as frete_svc
 from app.services import loja_catalogo
 from app.utils import agora
 
-# Horário de entrega do site (CLAUDE.md / chatbot_prompt: 8h–18h, corte 17h).
+# Horário de entrega do site (8h–18h). O antigo "corte 17h do dia inteiro"
+# foi trocado por filtro de janela passada + lead (ver LEAD_HORAS abaixo).
 HORA_ABRE = 8
 HORA_FECHA = 18
-HORA_CORTE = 17
 
 # Janelas de 1 hora, das 08:00 às 18:00 (decisão do dono 17/06/2026):
 # '08:00–09:00', '09:00–10:00', … , '17:00–18:00'.
