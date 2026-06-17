@@ -233,7 +233,19 @@ def _marcar_pago(pedido, pagamento):
         pagamento.status = 'pago'
         pagamento.pago_em = agora()
     _baixar_estoque(pedido)
+    _enviar_confirmacao(pedido)
     return True
+
+
+def _enviar_confirmacao(pedido):
+    """E-mail de confirmação pro cliente (best-effort — nunca derruba o
+    processamento do pagamento se o e-mail falhar)."""
+    try:
+        from app.services import email as email_svc
+        if email_svc.disponivel():
+            email_svc.enviar_confirmacao_pedido(pedido)
+    except Exception:  # noqa: BLE001
+        logger.exception('confirmacao de pedido por email falhou')
 
 
 def _marcar_estornado(pedido, pagamento):
