@@ -313,10 +313,12 @@ def criar_pedido(form, itens_raw, *, base=None):
         if data_str not in disponiveis:
             erros.append('Escolha uma data de entrega válida.')
         else:
-            from datetime import date
             data_entrega = date.fromisoformat(data_str)
-        if janela not in janelas_do_modo(modo):
-            erros.append('Escolha uma janela de horário válida.')
+            # Janela tem que ser válida PARA AQUELA DATA (janelas passadas de
+            # hoje são rejeitadas — espelha o filtro do front).
+            if janela not in janelas_disponiveis(modo, data_entrega, base=base):
+                erros.append('Escolha uma janela de horário válida '
+                             '(o horário escolhido já passou).')
 
     if erros:
         return None, erros
