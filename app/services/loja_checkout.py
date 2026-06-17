@@ -1,0 +1,268 @@
+"""Checkout da loja online (Fase 3).
+
+Onde mora a INTEGRIDADE DE DINHEIRO do pedido nativo do site. Regras
+inegociáveis (CLAUDE.md — dinheiro tem peso especial):
+
+- O servidor NUNCA confia em preço/frete que vem do navegador. Ao criar o
+  pedido, re-busca o preço atual do catálogo (`loja_catalogo`) e recomputa
+  o frete (`frete.consultar_frete`) no servidor. O carrinho client-side é
+  só conveniência de UI.
+- Tudo em `Decimal` (centavo exato), nunca float.
+- Fase 3 NÃO cobra e NÃO baixa estoque: o pedido nasce
+  'aguardando_pagamento'. Pagamento + baixa entram na Fase 4 (Pagar.me).
+
+Modos de entrega (decisão do dono 17/06/2026):
+- 'agendada': frete real dos anéis do `frete.py`; data com corte 17h.
+- 'retirada': cliente escolhe a loja + data/hora; frete R$0.
+- 'express': entrega em até 1h; valor é ESTIMATIVA (a equipe confirma —
+  pode ser Lalamove de várias faixas de veículo ou entregador próprio,
+  decidido no painel). Só disponível dentro do horário de entrega.
+"""
+from datetime import timedelta
+from decimal import Decimal
+
+from app.extensions import db
+from app.models import Cliente, Loja, PedidoOnline, PedidoOnlineItem
+from app.services import frete as frete_svc
+from app.services import loja_catalogo
+from app.utils import agora
+
+# Horário de entrega do site (CLAUDE.md / chatbot_prompt: 8h–18h, corte 17h).
+HORA_ABRE = 8
+HORA_FECHA = 18
+HORA_CORTE = 17
+
+# Janelas oferecidas. Entrega dentro de 8–18; retirada acompanha a loja.
+JANELAS_ENTREGA = ('08h–12h', '12h–15h', '15h–18h')
+JANELAS_RETIRADA = ('08h–12h', '12h–16h', '16h–20h')
+JANELA_EXPRESS = 'em até 1h'
+
+# Quantos dias de agenda oferecer a partir da primeira data válida.
+DIAS_AGENDA = 14
+
+
+def lojas_retirada():
+    """Lojas físicas onde dá pra retirar — ativas, fora a 'Industria'
+    (que existe só pra RH). Espelha o filtro de lojas operacionais."""
+    return (Loja.query
+            .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
+            .order_by(Loja.nome).all())
+
+
+def express_disponivel(base=None):
+    """Express só faz sentido dentro do horário de entrega e com folga pra
+    chegar em ~1h (até a hora de corte do fim do expediente)."""
+    base = base or agora()
+    return HORA_ABRE <= base.hour < HORA_FECHA
+
+
+def datas_disponiveis(modo, base=None, dias=DIAS_AGENDA):
+    """Datas válidas pro modo, respeitando o corte das 17h.
+
+    - express: só hoje (entrega imediata).
+    - agendada/retirada: a partir de amanhã; se já passou das 17h, a
+      primeira data vira depois de amanhã (corte). Devolve `dias` datas.
+    """
+    base = base or agora()
+    hoje_d = base.date()
+    if modo == 'express':
+        return [hoje_d] if express_disponivel(base) else []
+    # Corte 17h: depois disso o dia seguinte já fechou pra produção.
+    deslocamento = 2 if base.hour >= HORA_CORTE else 1
+    inicio = hoje_d + timedelta(days=deslocamento)
+    return [inicio + timedelta(days=i) for i in range(dias)]
+
+
+def janelas_do_modo(modo):
+    if modo == 'retirada':
+        return list(JANELAS_RETIRADA)
+    if modo == 'express':
+        return [JANELA_EXPRESS]
+    return list(JANELAS_ENTREGA)
+
+
+def montar_itens(itens_raw):
+    """Re-valida o carrinho contra o catálogo. NUNCA usa o preço do
+    cliente — pega o preço publicado atual. Devolve (itens, avisos).
+
+    itens_raw: lista de {kind, id, qtd} (vindo do localStorage).
+    item de saída: {kind, id, receita_id, produto_id, nome, preco, qtd, subtotal}
+    """
+    itens = []
+    avisos = []
+    for raw in (itens_raw or []):
+        kind = (str(raw.get('kind') or '')).strip()
+        try:
+            item_id = int(raw.get('id'))
+            qtd = int(raw.get('qtd') or 0)
+        except (TypeError, ValueError):
+            continue
+        if qtd < 1:
+            continue
+        cat = loja_catalogo.por_id_publicado(kind, item_id)
+        if not cat or not cat.get('preco'):
+            avisos.append('Um item saiu de catálogo e foi removido do pedido.')
+            continue
+        preco = Decimal(str(cat['preco']))
+        itens.append({
+            'kind': kind,
+            'id': item_id,
+            'receita_id': item_id if kind == 'receita' else None,
+            'produto_id': item_id if kind == 'produto' else None,
+            'nome': cat['nome'],
+            'preco': preco,
+            'qtd': qtd,
+            'subtotal': preco * qtd,
+        })
+    return itens, avisos
+
+
+def _email_valido(email):
+    email = (email or '').strip()
+    return '@' in email and '.' in email.split('@')[-1] and len(email) >= 6
+
+
+def _frete_para(modo, endereco, base=None):
+    """Calcula o frete no servidor (autoritativo). Devolve
+    (valor:Decimal, distancia_km, endereco_norm, erro|None)."""
+    if modo == 'retirada':
+        return Decimal('0.00'), None, None, None
+    if not endereco:
+        return None, None, None, 'Informe o endereço de entrega.'
+    r = frete_svc.consultar_frete(endereco)
+    if not r.get('ok'):
+        return None, None, None, 'Não consegui localizar esse endereço. '\
+            'Confira o endereço ou o CEP.'
+    if r.get('fora_area'):
+        return None, r.get('distancia_km'), r.get('endereco'), \
+            'Esse endereço está fora da nossa área de entrega (até 15 km).'
+    valor = Decimal(str(r.get('valor') or 0))
+    # Express: o valor dos anéis é só uma ESTIMATIVA — a equipe confirma o
+    # custo real (Lalamove faixa X ou entregador próprio) no painel.
+    return valor, r.get('distancia_km'), r.get('endereco'), None
+
+
+def criar_pedido(form, itens_raw, *, base=None):
+    """Valida tudo e cria o PedidoOnline. Devolve (pedido|None, erros:list).
+
+    `form`: dict-like (request.form). `itens_raw`: lista de {kind,id,qtd}.
+    Não faz commit parcial: ou cria o pedido inteiro, ou devolve erros.
+    """
+    base = base or agora()
+    erros = []
+
+    nome = (form.get('nome') or '').strip()
+    email = (form.get('email') or '').strip()
+    telefone = (form.get('telefone') or '').strip()
+    modo = (form.get('modo_entrega') or '').strip()
+    cartinha = (form.get('cartinha') or '').strip() or None
+    aceite = form.get('aceite_lgpd') in ('1', 'on', 'true', True)
+
+    if not nome:
+        erros.append('Informe seu nome.')
+    if not _email_valido(email):
+        erros.append('Informe um email válido.')
+    if not aceite:
+        erros.append('É preciso aceitar os termos para concluir o pedido.')
+    if modo not in ('agendada', 'retirada', 'express'):
+        erros.append('Escolha um modo de entrega.')
+
+    itens, avisos = montar_itens(itens_raw)
+    if not itens:
+        erros.append('Seu carrinho está vazio ou os itens saíram de catálogo.')
+
+    # ── Por modo: endereço/loja + frete (servidor manda) ───────────────
+    loja_retirada_id = None
+    endereco_entrega = None
+    endereco_cep = (form.get('cep') or '').strip() or None
+    distancia_km = None
+    frete_valor = Decimal('0.00')
+
+    if modo == 'retirada':
+        try:
+            loja_retirada_id = int(form.get('loja_id'))
+        except (TypeError, ValueError):
+            loja_retirada_id = None
+        loja = Loja.query.get(loja_retirada_id) if loja_retirada_id else None
+        if not loja or not loja.ativa or loja.nome == 'Industria':
+            erros.append('Escolha uma loja válida para retirada.')
+        else:
+            endereco_entrega = f'Retirada: {loja.nome} — {loja.endereco or ""}'.strip()
+    elif modo in ('agendada', 'express'):
+        if modo == 'express' and not express_disponivel(base):
+            erros.append('Express indisponível agora (fora do horário de '
+                         'entrega). Escolha entrega agendada.')
+        endereco_txt = (form.get('endereco') or '').strip()
+        geo = endereco_txt
+        if endereco_cep and endereco_cep not in endereco_txt:
+            geo = f'{endereco_txt}, {endereco_cep}' if endereco_txt else endereco_cep
+        valor, dist, end_norm, erro_frete = _frete_para(modo, geo, base=base)
+        if erro_frete:
+            erros.append(erro_frete)
+        else:
+            frete_valor = valor
+            distancia_km = dist
+            endereco_entrega = endereco_txt or end_norm
+
+    # ── Data + janela ──────────────────────────────────────────────────
+    data_str = (form.get('data_entrega') or '').strip()
+    janela = (form.get('janela_entrega') or '').strip()
+    data_entrega = None
+    if modo == 'express':
+        # Express é hoje, imediato — ignora o que vier do form.
+        if express_disponivel(base):
+            data_entrega = base.date()
+            janela = JANELA_EXPRESS
+    else:
+        disponiveis = {d.isoformat() for d in datas_disponiveis(modo, base=base)}
+        if data_str not in disponiveis:
+            erros.append('Escolha uma data de entrega válida.')
+        else:
+            from datetime import date
+            data_entrega = date.fromisoformat(data_str)
+        if janela not in janelas_do_modo(modo):
+            erros.append('Escolha uma janela de horário válida.')
+
+    if erros:
+        return None, erros
+
+    # ── Cria/reusa cliente (guest por email) ───────────────────────────
+    cliente = Cliente.query.filter(
+        db.func.lower(Cliente.email) == email.lower()).first()
+    if not cliente:
+        cliente = Cliente(nome=nome, email=email, telefone=telefone)
+        db.session.add(cliente)
+    else:
+        # Atualiza dados de contato com o que o cliente acabou de informar.
+        cliente.nome = nome or cliente.nome
+        cliente.telefone = telefone or cliente.telefone
+    if aceite and not cliente.aceite_lgpd_em:
+        cliente.aceite_lgpd_em = base
+    db.session.flush()  # garante cliente.id
+
+    pedido = PedidoOnline(
+        cliente_id=cliente.id,
+        nome_cliente=nome, email_cliente=email, telefone_cliente=telefone,
+        modo_entrega=modo,
+        loja_retirada_id=loja_retirada_id,
+        endereco_entrega=endereco_entrega,
+        endereco_cep=endereco_cep,
+        distancia_km=distancia_km,
+        data_entrega=data_entrega,
+        janela_entrega=janela,
+        frete_valor=frete_valor,
+        cartinha=cartinha,
+        status='aguardando_pagamento',
+    )
+    db.session.add(pedido)
+    db.session.flush()
+    for it in itens:
+        pedido.itens.append(PedidoOnlineItem(
+            kind=it['kind'],
+            receita_id=it['receita_id'], produto_id=it['produto_id'],
+            nome=it['nome'], preco_unitario=it['preco'],
+            quantidade=it['qtd'], subtotal=it['subtotal'],
+        ))
+    pedido.recalcular_total()
+    db.session.commit()
+    return pedido, []
