@@ -64,14 +64,14 @@ class Config:
     # Tiny ERP — token da API v2 (gera em Painel Tiny -> Configuracoes -> API).
     # Sem token, o bot recusa NF gentilmente e passa pro humano.
     TINY_API_TOKEN = os.environ.get('TINY_API_TOKEN', '')
-    # NF-e da loja online (Fase 5): cabecalho da nota. DEVE bater com a
-    # config fiscal do Tiny e com a nota do VNDA (serie 1, natureza
-    # "Venda de mercadorias", consumidor final). Sao do CABECALHO da nota
-    # (nao vem do cadastro do produto). Ajustaveis por env sem deploy.
-    NF_SERIE = os.environ.get('NF_SERIE', '1')
+    # NF-e da loja online (Fase 5): natureza de operacao mandada no pedido
+    # pro Tiny. DEVE bater EXATAMENTE com uma natureza cadastrada no Tiny
+    # (Configuracoes -> Naturezas de operacao / wizard "Integracao com API
+    # do ERP" -> Pedidos -> Dados Fiscais). A SERIE, o CFOP e o indicador de
+    # consumidor final NAO vem daqui: sao da config fiscal do Tiny
+    # (pedido.incluir.php nao tem campo de serie). Ajustavel por env.
     NF_NATUREZA_OPERACAO = os.environ.get(
         'NF_NATUREZA_OPERACAO', 'Venda de mercadorias')
-    NF_CONSUMIDOR_FINAL = os.environ.get('NF_CONSUMIDOR_FINAL', 'S')
     # Bot WhatsApp privado do dono (copilot read-only via Z-API).
     # ZAPI_BOT_DONO_NUMERO    = 55DDDNUMERO (so digitos) do WhatsApp do dono
     # ZAPI_BOT_WEBHOOK_TOKEN  = segredo na URL do webhook (?k=...)
