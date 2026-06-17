@@ -81,6 +81,85 @@ def enviar(destinatario, assunto, html, *, texto=None):
         return {'ok': False, 'erro': str(exc)}
 
 
+def enviar_confirmacao_pedido(pedido):
+    """E-mail de confirmação de pagamento pro cliente do site. Best-effort —
+    chamado quando o pedido vira 'pago' (webhook). Resumo + entrega."""
+    destinatario = (pedido.email_cliente or '').strip()
+    if not destinatario:
+        return {'ok': False, 'erro': 'pedido sem email'}
+    base = (current_app.config.get('APP_BASE_URL') or '').rstrip('/')
+    assunto = f'Pedido {pedido.codigo} confirmado — O Pão Padaria Artesanal'
+    html = _template_confirmacao(pedido, base)
+    return enviar(destinatario, assunto, html, texto=_texto_confirmacao(pedido))
+
+
+def _fmt_brl(v):
+    from decimal import Decimal
+    return f'R$ {Decimal(str(v or 0)):.2f}'.replace('.', ',')
+
+
+def _entrega_linha(pedido):
+    if pedido.modo_entrega == 'retirada':
+        loja = getattr(pedido, 'loja_retirada', None)
+        onde = f'Retirada: {loja.nome}' if loja else 'Retirada na loja'
+    else:
+        onde = pedido.endereco_entrega or 'Entrega'
+    quando = ''
+    if pedido.data_entrega:
+        quando = pedido.data_entrega.strftime('%d/%m/%Y')
+        if pedido.janela_entrega:
+            quando += f' · {pedido.janela_entrega}'
+    return onde, quando
+
+
+def _template_confirmacao(pedido, base):
+    itens = ''.join(
+        f'<tr><td style="padding:4px 0;">{it.quantidade}× {it.nome}</td>'
+        f'<td style="padding:4px 0;text-align:right;">{_fmt_brl(it.subtotal)}</td></tr>'
+        for it in pedido.itens)
+    onde, quando = _entrega_linha(pedido)
+    link = f'{base}/loja/pedido/{pedido.codigo}' if base else ''
+    link_html = (f'<a href="{link}" style="color:#8b5a2b;">Acompanhar pedido</a>'
+                 if link else '')
+    return f"""\
+<!doctype html><html lang="pt-BR"><body style="margin:0;background:#fbf8f3;
+font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
+<div style="max-width:540px;margin:0 auto;padding:32px 24px;">
+  <h1 style="font-size:22px;margin:0 0 4px;">O Pão · Padaria Artesanal</h1>
+  <p style="color:#6b5f54;margin:0 0 20px;">Pagamento confirmado! 🎉
+    Pedido <strong>{pedido.codigo}</strong>.</p>
+  <div style="background:#fff;border-radius:12px;padding:18px 20px;margin-bottom:18px;">
+    <table style="width:100%;font-size:15px;border-collapse:collapse;">{itens}
+      <tr><td style="padding-top:10px;border-top:1px solid #eee;">Subtotal</td>
+          <td style="padding-top:10px;border-top:1px solid #eee;text-align:right;">{_fmt_brl(pedido.subtotal)}</td></tr>
+      <tr><td>Frete</td><td style="text-align:right;">{_fmt_brl(pedido.frete_valor)}</td></tr>
+      <tr><td style="font-weight:700;padding-top:6px;">Total</td>
+          <td style="font-weight:700;padding-top:6px;text-align:right;color:#8b5a2b;">{_fmt_brl(pedido.valor_total)}</td></tr>
+    </table>
+  </div>
+  <div style="background:#f5efe5;border-radius:12px;padding:16px 20px;">
+    <p style="margin:0 0 6px;font-weight:600;">Entrega</p>
+    <p style="margin:0;font-size:14px;color:#6b5f54;">{onde}<br>{quando}</p>
+  </div>
+  <p style="margin-top:20px;">{link_html}</p>
+  <p style="color:#9a8d80;font-size:12px;margin-top:24px;">
+    Dúvidas? Responda este e-mail ou fale com a gente.</p>
+</div></body></html>"""
+
+
+def _texto_confirmacao(pedido):
+    onde, quando = _entrega_linha(pedido)
+    linhas = '\n'.join(f'  {it.quantidade}x {it.nome} — {_fmt_brl(it.subtotal)}'
+                       for it in pedido.itens)
+    return (
+        f'Pagamento confirmado! Pedido {pedido.codigo}.\n\n'
+        f'{linhas}\n'
+        f'Subtotal: {_fmt_brl(pedido.subtotal)}\n'
+        f'Frete: {_fmt_brl(pedido.frete_valor)}\n'
+        f'Total: {_fmt_brl(pedido.valor_total)}\n\n'
+        f'Entrega: {onde} {quando}\n')
+
+
 def enviar_boas_vindas(destinatario, nome, login, senha):
     """Email de convite pro novo usuário: senha do gestao.* + como entrar
     no atendimento (Chatwoot). Cadastro do Chatwoot ainda é manual (Super
