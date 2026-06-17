@@ -46,9 +46,36 @@ _RETRY_BACKOFF = (1.0, 2.0)   # delays antes da 2a e 3a tentativas
 _HTTP_TRANSIENTES = (408, 429, 500, 502, 503, 504)
 
 
+def _registros(retorno):
+    """Normaliza `retorno.registros` numa LISTA de dicts 'registro'.
+
+    A API v2 do Tiny é inconsistente: às vezes manda
+    `registros: [{'registro': {...}}]` (lista), às vezes
+    `registros: {'registro': {...}}` ou `{'registro': [...]}` (dict). Sem
+    isso, `registros[0]` num dict estoura KeyError: 0 (bug real em prod)."""
+    regs = (retorno or {}).get('registros')
+    bruto = []
+    if isinstance(regs, list):
+        bruto = regs
+    elif isinstance(regs, dict):
+        # {'registro': {...}} ou {'registro': [...]}
+        r = regs.get('registro', regs)
+        bruto = r if isinstance(r, list) else [r]
+    out = []
+    for r in bruto:
+        reg = r.get('registro') if isinstance(r, dict) and 'registro' in r else r
+        if isinstance(reg, list):
+            out.extend(x for x in reg if isinstance(x, dict))
+        elif isinstance(reg, dict):
+            out.append(reg)
+    if not out and isinstance((retorno or {}).get('registro'), dict):
+        out.append(retorno['registro'])
+    return out
+
+
 def _extrair_erros(retorno):
     """Junta as mensagens de erro de um retorno do Tiny (vêm em formatos
-    diferentes: retorno.erros[].erro, ou registros[].registro.erros[].erro)."""
+    diferentes: retorno.erros[].erro, ou nos registros)."""
     msgs = []
     if not isinstance(retorno, dict):
         return ''
@@ -57,9 +84,8 @@ def _extrair_erros(retorno):
             msgs.append(str(e.get('erro') or e.get('descricao') or e))
         else:
             msgs.append(str(e))
-    for r in (retorno.get('registros') or []):
-        reg = r.get('registro') if isinstance(r, dict) else None
-        for e in ((reg or {}).get('erros') or []):
+    for reg in _registros(retorno):
+        for e in (reg.get('erros') or []):
             if isinstance(e, dict):
                 msgs.append(str(e.get('erro') or e))
             else:
