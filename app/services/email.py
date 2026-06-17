@@ -1,13 +1,17 @@
-"""Envio de email transacional via Resend (16/06/2026).
+"""Envio de email transacional via Postmark (17/06/2026).
+
+Trocado do Resend pro Postmark porque o Resend exige MX em subdomínio pra
+verificar o domínio, e o Wix (onde está hospedado o DNS do `opao.online`)
+não permite MX em subdomínio. Postmark valida com CNAME (que o Wix
+permite) — sem precisar mexer no DNS do email atual.
 
 Usado pra mandar a senha/convite pra novos usuários do gestao.* (admin
-cadastra → usuário recebe email com senha + como entrar). Resend foi
-escolhido pela simplicidade (HTTP API, sem SMTP no servidor).
+cadastra → usuário recebe email com senha + como entrar).
 
-Config (Railway): RESEND_API_KEY, EMAIL_REMETENTE, EMAIL_REMETENTE_NOME,
-APP_BASE_URL, CHATWOOT_PUBLIC_URL.
+Config (Railway): POSTMARK_SERVER_TOKEN, EMAIL_REMETENTE,
+EMAIL_REMETENTE_NOME, APP_BASE_URL, CHATWOOT_PUBLIC_URL.
 
-Best-effort: se Resend não estiver configurado ou falhar, devolve
+Best-effort: se Postmark não estiver configurado ou falhar, devolve
 {'ok': False, 'erro': ...} — quem chamar decide o fallback (ex: mostrar a
 senha na tela pro admin copiar). NUNCA levanta exceção pro caller.
 """
@@ -18,49 +22,60 @@ from flask import current_app
 
 logger = logging.getLogger(__name__)
 
-_RESEND_URL = 'https://api.resend.com/emails'
+_POSTMARK_URL = 'https://api.postmarkapp.com/email'
 _TIMEOUT = 12
+# Stream "outbound" eh o default transacional do Postmark. Mantemos
+# explicito pra deixar claro que NAO eh broadcast (newsletter, marketing
+# em massa) — tem regra diferente.
+_MESSAGE_STREAM = 'outbound'
 
 
 def disponivel():
-    return bool((current_app.config.get('RESEND_API_KEY') or '').strip())
+    return bool((current_app.config.get('POSTMARK_SERVER_TOKEN') or '').strip())
 
 
 def enviar(destinatario, assunto, html, *, texto=None):
     """Envia um email. Retorna {'ok': True, 'id': ...} ou
     {'ok': False, 'erro': ...}. Best-effort — nunca propaga exceção."""
     cfg = current_app.config
-    api_key = (cfg.get('RESEND_API_KEY') or '').strip()
-    if not api_key:
-        return {'ok': False, 'erro': 'RESEND_API_KEY não configurada'}
+    token = (cfg.get('POSTMARK_SERVER_TOKEN') or '').strip()
+    if not token:
+        return {'ok': False, 'erro': 'POSTMARK_SERVER_TOKEN não configurada'}
     if not destinatario or '@' not in destinatario:
         return {'ok': False, 'erro': f'destinatário inválido: {destinatario!r}'}
 
     remetente_nome = cfg.get('EMAIL_REMETENTE_NOME') or 'O Pão'
     remetente_email = cfg.get('EMAIL_REMETENTE') or 'noreply@opao.online'
     payload = {
-        'from': f'{remetente_nome} <{remetente_email}>',
-        'to': [destinatario],
-        'subject': assunto,
-        'html': html,
+        'From': f'{remetente_nome} <{remetente_email}>',
+        'To': destinatario,
+        'Subject': assunto,
+        'HtmlBody': html,
+        'MessageStream': _MESSAGE_STREAM,
     }
     if texto:
-        payload['text'] = texto
+        payload['TextBody'] = texto
     try:
         r = requests.post(
-            _RESEND_URL, json=payload,
-            headers={'Authorization': f'Bearer {api_key}',
-                     'Content-Type': 'application/json'},
+            _POSTMARK_URL, json=payload,
+            headers={'Accept': 'application/json',
+                     'Content-Type': 'application/json',
+                     'X-Postmark-Server-Token': token},
             timeout=_TIMEOUT)
-        if r.status_code not in (200, 201):
-            detalhe = ''
-            try:
-                detalhe = (r.json() or {}).get('message') or r.text[:300]
-            except ValueError:
-                detalhe = r.text[:300]
-            logger.warning('resend %s: %s', r.status_code, detalhe)
-            return {'ok': False, 'erro': f'Resend recusou ({r.status_code}): {detalhe}'}
-        return {'ok': True, 'id': (r.json() or {}).get('id')}
+        # Postmark devolve 200 com ErrorCode=0 em sucesso; outras combos sao
+        # falha (ex: 422 com ErrorCode=405 quando sender signature nao foi
+        # verificada). Tratamos as duas dimensoes.
+        try:
+            corpo = r.json() or {}
+        except ValueError:
+            corpo = {}
+        if r.status_code == 200 and corpo.get('ErrorCode') == 0:
+            return {'ok': True, 'id': corpo.get('MessageID')}
+        detalhe = corpo.get('Message') or r.text[:300] or f'HTTP {r.status_code}'
+        codigo = corpo.get('ErrorCode')
+        logger.warning('postmark %s (ErrorCode=%s): %s', r.status_code, codigo, detalhe)
+        return {'ok': False,
+                'erro': f'Postmark recusou ({r.status_code}/{codigo}): {detalhe}'}
     except Exception as exc:  # noqa: BLE001
         logger.exception('email.enviar falhou')
         return {'ok': False, 'erro': str(exc)}
