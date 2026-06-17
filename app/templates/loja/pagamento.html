@@ -169,6 +169,23 @@
         cvvEl.value = (cvvEl.value || '').replace(/\D/g, '').slice(0, 4);
       });
     }
+    // CEP de cobrança -> autocompleta cidade/UF (hidden) via nossa API.
+    var billCep = document.getElementById('bill-cep');
+    if (billCep) {
+      billCep.addEventListener('blur', function () {
+        var d = (billCep.value || '').replace(/\D/g, '');
+        if (d.length !== 8) return;
+        billCep.value = d.slice(0, 5) + '-' + d.slice(5);
+        fetch('/loja/api/cep/' + d).then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (!j.ok) return;
+            if (j.cidade) document.getElementById('bill-city').value = j.cidade;
+            if (j.uf) document.getElementById('bill-state').value = j.uf;
+            var ln = document.getElementById('bill-line');
+            if (ln && !ln.value && j.logradouro) ln.value = j.logradouro;
+          }).catch(function () {});
+      });
+    }
     form.addEventListener('submit', async function (e) {
       if (document.getElementById('card_token').value) return; // já tokenizado
       e.preventDefault();
@@ -181,6 +198,17 @@
         var cvv = document.getElementById('cc-cvv').value.trim();
         var partes = val.split(/[/-]/);
         var mm = partes[0] || ''; var aa = partes[1] || '';
+        // billing_address exigido pelo antifraude do Pagar.me.
+        var billing = {
+          line_1: (document.getElementById('bill-line').value || 'S/N').trim(),
+          zip_code: (document.getElementById('bill-cep').value || '').replace(/\D/g, ''),
+          city: (document.getElementById('bill-city').value || 'São Paulo').trim(),
+          state: (document.getElementById('bill-state').value || 'SP').trim(),
+          country: 'BR',
+        };
+        if (!billing.zip_code || billing.zip_code.length !== 8) {
+          throw new Error('Informe o CEP de cobrança (8 dígitos).');
+        }
         var resp = await fetch(
           'https://api.pagar.me/core/v5/tokens?appId={{ pubkey }}',
           { method: 'POST',
