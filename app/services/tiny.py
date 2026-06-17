@@ -231,6 +231,33 @@ def obter_pedido_detalhe(pedido_id):
     return pedido if isinstance(pedido, dict) else None
 
 
+def listar_produtos(max_paginas=20):
+    """Lista os produtos do Tiny (produtos.pesquisa.php), paginado. Devolve
+    [{'sku', 'nome', 'tiny_id'}] — usado pra sugerir o SKU por nome no
+    mapeamento da loja (Fase 5). Lista vazia se sem token/erro."""
+    out = []
+    for pagina in range(1, max_paginas + 1):
+        retorno = _get('produtos.pesquisa.php', params={'pagina': str(pagina)})
+        if not retorno:
+            break
+        produtos = retorno.get('produtos') or []
+        if not produtos:
+            break
+        for item in produtos:
+            p = item.get('produto') if isinstance(item, dict) else None
+            if not isinstance(p, dict):
+                continue
+            sku = str(p.get('codigo') or '').strip()
+            nome = str(p.get('nome') or '').strip()
+            if sku or nome:
+                out.append({'sku': sku, 'nome': nome,
+                            'tiny_id': str(p.get('id') or '')})
+        # Tiny v2: paginas de 100. Menos que isso = ultima.
+        if len(produtos) < 100:
+            break
+    return out
+
+
 def obter_link_nota_fiscal(nota_id):
     """Retorna URL temporaria do DANFE em PDF, ou None.
     A URL e publica mas com expiracao do lado do Tiny."""
