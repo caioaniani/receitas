@@ -12,10 +12,10 @@ VENDA_TIPOS_LOJA = (
     'venda_seru', 'venda_seru_sem_estoque',
     'venda_vnda', 'venda_vnda_sem_estoque',
     # Loja propria (checkout nativo do site). Baixa so apos 'pago' no
-    # webhook do Pagar.me (Fase 4); estorno no cancelamento. Adicionado
-    # ja na Fase 3 pra os relatorios que somam VENDA_TIPOS_LOJA contarem
-    # vendas do site automaticamente quando existirem.
-    'venda_site', 'venda_site_estorno',
+    # webhook do Pagar.me (Fase 4); falta de saldo registra
+    # `venda_site_sem_estoque` na propria linha (padrao Seru/VNDA).
+    # Estorno (cancelamento ou refund) usa `venda_site_estorno`.
+    'venda_site', 'venda_site_sem_estoque', 'venda_site_estorno',
 )
 
 # Vendas que baixam de EstoqueProducao (industria / B2B)
