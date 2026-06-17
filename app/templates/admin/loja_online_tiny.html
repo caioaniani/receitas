@@ -9,17 +9,32 @@
   (NCM/CFOP/CST) do cadastro do produto. Itens sem SKU não emitem NF.
 </p>
 
-<div class="d-flex align-items-center gap-2 mb-3">
+<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+  <form method="POST" action="{{ url_for('main.loja_online_tiny_importar') }}"
+        enctype="multipart/form-data" class="d-flex align-items-center gap-1">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="file" name="planilha" accept=".xls,.csv"
+           class="form-control form-control-sm" style="max-width:280px">
+    <button class="btn btn-sm btn-primary" type="submit">
+      <i class="bi bi-upload"></i> Importar planilha do Tiny
+    </button>
+  </form>
+  <span class="text-muted">ou</span>
   <form method="POST" action="{{ url_for('main.loja_online_tiny_sync') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button class="btn btn-sm btn-outline-dark" type="submit">
-      <i class="bi bi-arrow-repeat"></i> Sugerir SKUs pelo nome (busca no Tiny)
+      <i class="bi bi-arrow-repeat"></i> Buscar do Tiny (API)
     </button>
   </form>
   <span class="badge {{ 'bg-success' if pendentes == 0 else 'bg-warning text-dark' }}">
     {{ total - pendentes }}/{{ total }} mapeados
   </span>
 </div>
+<p class="text-muted small">
+  Importe o export de produtos do Tiny (Produtos → Exportar). Nome idêntico
+  é confirmado automático; nome parecido vira <span class="badge bg-info text-dark">sugerido</span>
+  pra você conferir e Salvar.
+</p>
 
 <div class="table-responsive">
   <table class="table table-sm bg-white align-middle">
