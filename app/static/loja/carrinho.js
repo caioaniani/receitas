@@ -51,7 +51,7 @@
         itens.push({
           kind: item.kind, id: item.id, nome: item.nome,
           preco: Number(item.preco) || 0, imagem: item.imagem || '',
-          qtd: qtd,
+          categoria: item.categoria || '', qtd: qtd,
         });
       }
       this.salvar(itens);
