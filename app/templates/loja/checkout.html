@@ -212,7 +212,8 @@
 </section>
 
 <script id="checkout-dados" type="application/json">
-{{ {'janelas': janelas, 'expressOk': express_ok}|tojson }}
+{{ {'janelas': janelas, 'expressOk': express_ok,
+    'hojeIso': hoje_iso, 'minHoraHoje': min_hora_hoje}|tojson }}
 </script>
 {% endblock %}
 
