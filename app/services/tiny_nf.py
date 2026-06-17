@@ -298,6 +298,16 @@ def emitir_nf(pedido, user_id=None):
         pedido.tiny_pedido_id = tiny_pid
         db.session.commit()
         gerar = tiny.gerar_nota_fiscal_pedido(tiny_pid)
+    # "Já foi gerada nota fiscal para este pedido": uma tentativa anterior
+    # gerou a NF mas não capturamos o id (ex: resposta de lock). Em vez de
+    # falhar, busca o id da NF que já existe no pedido.
+    erro_g = (gerar.get('erro') or '').lower()
+    if not gerar.get('ok') and ('ja foi gerada' in erro_g
+                                or 'já foi gerada' in erro_g
+                                or 'nota fiscal para este pedido' in erro_g):
+        nf_existente = tiny.id_nota_do_pedido(tiny_pid)
+        if nf_existente:
+            gerar = {'ok': True, 'id_nota_fiscal': nf_existente}
     if not gerar.get('ok'):
         return {'ok': False,
                 'msg': f'Pedido criado no Tiny, mas falhou ao gerar a NF: '
