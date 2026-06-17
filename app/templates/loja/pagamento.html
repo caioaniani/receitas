@@ -106,17 +106,17 @@
         <p class="small text-muted" style="margin:6px 0 2px;">
           Endereço de cobrança do cartão (exigido pelo banco/antifraude):</p>
         <label>CEP de cobrança
-          <input type="text" id="bill-cep" inputmode="numeric"
+          <input type="text" id="bill-cep" name="bill_cep" inputmode="numeric"
                  placeholder="00000-000"
                  value="{{ pedido.endereco_cep or '' }}">
         </label>
         <label>Endereço de cobrança (rua e número)
-          <input type="text" id="bill-line"
+          <input type="text" id="bill-line" name="bill_line"
                  placeholder="Rua, número"
                  value="{{ pedido.endereco_entrega or '' }}">
         </label>
-        <input type="hidden" id="bill-city" value="São Paulo">
-        <input type="hidden" id="bill-state" value="SP">
+        <input type="hidden" id="bill-city" name="bill_city" value="São Paulo">
+        <input type="hidden" id="bill-state" name="bill_state" value="SP">
       </div>
       <p id="cc-erro" class="frete-resultado erro"></p>
       <button type="submit" class="btn-loja" id="btn-pagar-cartao">Pagar com cartão</button>
