@@ -329,6 +329,38 @@ def incluir_pedido(pedido_dict):
     return {'ok': True, 'id': pid, 'numero': str(reg.get('numero') or '')}
 
 
+def buscar_pedido_por_numero_ordem(numero_ordem):
+    """Procura um pedido no Tiny pelo `numero_ordem_compra` (campo livre
+    que setamos = código do nosso pedido). Devolve o `id` do Tiny ou None.
+
+    Usado pra evitar duplicar pedido quando o `tiny_pedido_id` salvo ficou
+    inválido (apagado/limpo em homologação) — `numero_ordem_compra` é a
+    chave estável (nosso código AE7E4F0A não muda)."""
+    if not numero_ordem:
+        return None
+    # A v2 ignora `numero_ordem_compra` como filtro server-side; iteramos
+    # as primeiras paginas e procuramos no código. Como é homologação e
+    # poucos pedidos, 3 paginas (300) cobre tudo.
+    alvo = str(numero_ordem).strip().lower()
+    for pagina in range(1, 4):
+        retorno = _get('pedidos.pesquisa.php', params={'pagina': str(pagina)})
+        if not retorno:
+            break
+        pedidos = retorno.get('pedidos') or []
+        if not pedidos:
+            break
+        for item in pedidos:
+            p = item.get('pedido') if isinstance(item, dict) else None
+            if not isinstance(p, dict):
+                continue
+            oc = str(p.get('numero_ordem_compra') or '').strip().lower()
+            if oc == alvo:
+                return str(p.get('id') or '')
+        if len(pedidos) < 100:
+            break
+    return None
+
+
 def gerar_nota_fiscal_pedido(pedido_id, modelo='NFe'):
     """gerar.nota.fiscal.pedido.php — cria a NF (rascunho) a partir de um
     pedido no Tiny. `modelo` = 'NFe' (modelo 55, e-commerce com entrega) ou
