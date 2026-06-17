@@ -339,6 +339,31 @@ def incluir_pedido(pedido_dict):
     return {'ok': True, 'id': pid, 'numero': str(reg.get('numero') or '')}
 
 
+def incluir_nota_fiscal(nota_dict):
+    """nota.fiscal.incluir.php — cria a NF DIRETO (não a partir de um pedido),
+    com natureza de operação e série EXPLÍCITAS no payload.
+
+    Por que direto: o `gerar.nota.fiscal.pedido.php` NÃO aplica a natureza do
+    pedido na NF (só copia cliente/itens; a natureza ele puxa da config da
+    conta) — em prod a nota saía com natOp vazio e série fora de ordem.
+    Criar a NF direto dá controle total do cabeçalho fiscal. NCM/CFOP/CST
+    continuam vindo do cadastro do produto no Tiny via SKU (`codigo`).
+
+    Devolve {ok, id, numero, erro}. Em erro, `erro` traz a mensagem real."""
+    import json as _json
+    retorno = _get('nota.fiscal.incluir.php',
+                   params={'nota': _json.dumps({'nota_fiscal': nota_dict})},
+                   retornar_erro=True)
+    if not retorno:
+        return {'ok': False, 'erro': _consumir_falha() or 'sem resposta do Tiny'}
+    regs = _registros(retorno)
+    reg = regs[0] if regs else {}
+    nid = str(reg.get('id') or '').strip()
+    if not nid:
+        return {'ok': False, 'erro': _extrair_erros(retorno) or 'sem id no retorno'}
+    return {'ok': True, 'id': nid, 'numero': str(reg.get('numero') or '')}
+
+
 def buscar_pedido_por_numero_ordem(numero_ordem):
     """Procura um pedido no Tiny pelo `numero_ordem_compra` (campo livre
     que setamos = código do nosso pedido). Devolve o `id` do Tiny ou None.
