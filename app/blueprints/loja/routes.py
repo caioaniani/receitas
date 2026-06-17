@@ -191,6 +191,12 @@ def _em_teste():
     return not _loja_visivel_publico()
 
 
+@loja_bp.app_context_processor
+def _injetar_cliente_atual():
+    """Expõe `cliente_atual` em todos os templates (header + base usam)."""
+    return {'cliente_atual': loja_auth.cliente_atual()}
+
+
 @loja_bp.before_request
 def _gate_acesso():
     """404 silencioso pra visitante anônimo enquanto LOJA_VISIVEL=0.
