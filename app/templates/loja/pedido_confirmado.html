@@ -68,9 +68,12 @@
     <p><strong>Pedido cancelado.</strong> Se foi engano, faça um novo pedido
       pelo site ou fale com a gente.</p>
     {% elif pedido.status == 'aguardando_pagamento' %}
-    <p><strong>Falta pagar.</strong>
+    <p id="status-aguardando"><strong>Confirmando seu pagamento…</strong>
+      Assim que cair, esta página atualiza sozinha.</p>
+    <p class="small text-muted">
+      Ainda não pagou?
       <a href="{{ url_for('loja.pedido_pagamento', codigo=pedido.codigo) }}">
-        Ir para o pagamento</a> — Pix ou cartão de crédito.</p>
+        Ir para o pagamento</a> (Pix ou cartão).</p>
     {% else %}
     <p>Status atual: <strong>{{ pedido.status }}</strong>.</p>
     {% endif %}
@@ -78,4 +81,26 @@
 
   <a href="{{ url_for('loja.home') }}" class="btn-loja">Voltar à loja</a>
 </section>
+
+{% if pedido.status == 'aguardando_pagamento' %}
+<script>
+  // Auto-refresh: cartão/Pix confirmam via webhook em segundos. Faz poll do
+  // status e recarrega quando virar 'pago' (ou 'cancelado').
+  (function () {
+    var tentativas = 0;
+    var t = setInterval(function () {
+      tentativas++;
+      if (tentativas > 40) { clearInterval(t); return; }  // ~4 min e para
+      fetch('/loja/pedido/{{ pedido.codigo }}/status')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (d && d.status && d.status !== 'aguardando_pagamento') {
+            clearInterval(t);
+            window.location.reload();
+          }
+        }).catch(function () {});
+    }, 6000);
+  })();
+</script>
+{% endif %}
 {% endblock %}
