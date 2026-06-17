@@ -58,12 +58,15 @@ def test_carrinho_staff_renderiza_casca(app, monkeypatch):
     assert b'carrinho.js' in r.data
 
 
-def test_checkout_stub_renderiza(app, monkeypatch):
+def test_checkout_renderiza(app, monkeypatch):
     monkeypatch.delenv('LOJA_VISIVEL', raising=False)
     c = _admin_logado(app)
     r = c.get('/loja/checkout')
     assert r.status_code == 200
-    assert b'Checkout' in r.data
+    # Checkout real (Fase 3): formulário presente (fluxo testado a fundo
+    # em test_loja_checkout.py).
+    assert b'checkout-form' in r.data
+    assert b'Finalizar pedido' in r.data
 
 
 def test_carrinho_nao_colide_com_rota_de_produto(app, monkeypatch):
