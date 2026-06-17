@@ -229,9 +229,26 @@ def criar_pedido_pix(pedido, expira_em_min=30):
     }
 
 
-def criar_pedido_cartao(pedido, card_token, parcelas=1):
+def _billing_address(billing):
+    """Normaliza o endereço de cobrança pro formato do Pagar.me v5
+    (line_1, zip_code, city, state, country). Exigido pelo antifraude na
+    cobrança de cartão."""
+    billing = billing or {}
+    return {
+        'line_1': (billing.get('line_1') or 'S/N')[:255],
+        'zip_code': ''.join(c for c in (billing.get('zip_code') or '')
+                            if c.isdigit()),
+        'city': billing.get('city') or 'São Paulo',
+        'state': (billing.get('state') or 'SP')[:2].upper(),
+        'country': (billing.get('country') or 'BR')[:2].upper(),
+    }
+
+
+def criar_pedido_cartao(pedido, card_token, parcelas=1, billing=None):
     """Cria Order com payment_method=credit_card usando token tokenizado
     no FRONT (pk_, JS do Pagar.me). O servidor NUNCA vê o número do cartão.
+    `billing` = endereço de cobrança (antifraude exige no charge — vai em
+    credit_card.card.billing_address, junto com o card_token).
     Devolve {ok, order_id, charge_id, status, erro?}."""
     parcelas = max(1, min(int(parcelas or 1), 12))
     payload = {
@@ -245,6 +262,7 @@ def criar_pedido_cartao(pedido, card_token, parcelas=1):
                 'installments': parcelas,
                 'statement_descriptor': 'O PAO PADARIA',
                 'card_token': card_token,
+                'card': {'billing_address': _billing_address(billing)},
             },
         }],
         'code': pedido.codigo,
