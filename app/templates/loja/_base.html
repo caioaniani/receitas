@@ -10,6 +10,7 @@
 <meta property="og:description" content="{% block og_description %}{{ self.description() }}{% endblock %}">
 {% block og_extra %}{% endblock %}
 {% if em_teste %}<meta name="robots" content="noindex,nofollow">{% endif %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <link rel="stylesheet" href="{{ url_for('loja.static', filename='loja.css') }}">
 </head>
 <body>
