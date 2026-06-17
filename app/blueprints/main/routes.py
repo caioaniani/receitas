@@ -2567,18 +2567,24 @@ def loja_online_pedido_detalhe(codigo):
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/cancelar', methods=['POST'])
 @owner_required
 def loja_online_pedido_cancelar(codigo):
-    """Cancela um pedido do site. Fase 3: so muda status (nada foi cobrado
-    nem baixado do estoque). Fase 4 vai precisar disparar refund no Pagar.me
-    + estorno de estoque (venda_site_estorno) quando o pedido ja estiver
-    'pago'."""
+    """Cancela/reembolsa um pedido do site.
+
+    - Pago: dispara REEMBOLSO no Pagar.me + estorno de estoque
+      (loja_pagamento.reembolsar_pedido).
+    - Aguardando pagamento: só marca cancelado (nada foi cobrado/baixado).
+    - Entregue/cancelado: bloqueia."""
     from flask import flash
 
     from app.models import PedidoOnline
+    from app.services import loja_pagamento
     from app.utils import agora
     p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
     if p.status in ('entregue', 'cancelado'):
         flash(f'Pedido {p.codigo} nao pode ser cancelado (status '
               f'{p.status}).', 'warning')
+    elif p.status == 'pago':
+        ok, msg = loja_pagamento.reembolsar_pedido(p)
+        flash(f'{p.codigo}: {msg}', 'success' if ok else 'danger')
     else:
         p.status = 'cancelado'
         p.cancelado_em = agora()
