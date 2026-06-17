@@ -2499,6 +2499,75 @@ def loja_online_catalogo_foto(tipo, id):
                    imagem_url=(obj.imagem_dropbox_url or ''))
 
 
+# ── Pedidos do site (Fase 3): acompanhamento dos PedidoOnline ─────────────
+# Tela pra o dono acompanhar os pedidos que entram pelo checkout nativo. Read
+# + cancelar. Em Fase 3 o pedido nasce 'aguardando_pagamento' e NAO baixa
+# estoque; cancelar aqui e so mudanca de status (sem estorno/refund — isso
+# entra na Fase 4 com o Pagar.me).
+
+_STATUS_PEDIDO_ONLINE_LABEL = {
+    'aguardando_pagamento': 'Aguardando pagamento',
+    'pago': 'Pago',
+    'em_preparo': 'Em preparo',
+    'a_caminho': 'A caminho',
+    'entregue': 'Entregue',
+    'cancelado': 'Cancelado',
+}
+
+
+@main_bp.route('/admin/loja-online/pedidos')
+@owner_required
+def loja_online_pedidos():
+    """Lista os pedidos do site (mais recentes primeiro), com filtro por
+    status e contagem por status."""
+    from sqlalchemy import func as _func
+
+    from app.models import PedidoOnline
+    status = (request.args.get('status') or '').strip()
+    q = PedidoOnline.query
+    if status:
+        q = q.filter_by(status=status)
+    pedidos = q.order_by(PedidoOnline.criado_em.desc()).limit(200).all()
+    contagens = dict(db.session.query(PedidoOnline.status, _func.count())
+                     .group_by(PedidoOnline.status).all())
+    return render_template(
+        'admin/loja_online_pedidos.html',
+        pedidos=pedidos, status=status, contagens=contagens,
+        total=sum(contagens.values()), labels=_STATUS_PEDIDO_ONLINE_LABEL)
+
+
+@main_bp.route('/admin/loja-online/pedidos/<codigo>')
+@owner_required
+def loja_online_pedido_detalhe(codigo):
+    from app.models import PedidoOnline
+    p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    return render_template('admin/loja_online_pedido_detalhe.html',
+                           p=p, labels=_STATUS_PEDIDO_ONLINE_LABEL)
+
+
+@main_bp.route('/admin/loja-online/pedidos/<codigo>/cancelar', methods=['POST'])
+@owner_required
+def loja_online_pedido_cancelar(codigo):
+    """Cancela um pedido do site. Fase 3: so muda status (nada foi cobrado
+    nem baixado do estoque). Fase 4 vai precisar disparar refund no Pagar.me
+    + estorno de estoque (venda_site_estorno) quando o pedido ja estiver
+    'pago'."""
+    from flask import flash
+
+    from app.models import PedidoOnline
+    from app.utils import agora
+    p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    if p.status in ('entregue', 'cancelado'):
+        flash(f'Pedido {p.codigo} nao pode ser cancelado (status '
+              f'{p.status}).', 'warning')
+    else:
+        p.status = 'cancelado'
+        p.cancelado_em = agora()
+        db.session.commit()
+        flash(f'Pedido {p.codigo} cancelado.', 'success')
+    return redirect(url_for('main.loja_online_pedido_detalhe', codigo=codigo))
+
+
 # ── Debug VNDA: o que campo a Loja usa pra marcar RETIRADA? (16/06/2026) ──
 #
 # Bug do dono: "pedidos de retirada nao aparecem em lugar nenhum". Causa
