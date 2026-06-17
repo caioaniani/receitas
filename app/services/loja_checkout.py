@@ -187,18 +187,32 @@ def criar_pedido(form, itens_raw, *, base=None):
     nome = (form.get('nome') or '').strip()
     email = (form.get('email') or '').strip()
     telefone = (form.get('telefone') or '').strip()
+    cpf = _so_digitos(form.get('cpf') or '')
     modo = (form.get('modo_entrega') or '').strip()
     cartinha = (form.get('cartinha') or '').strip() or None
     aceite = form.get('aceite_lgpd') in ('1', 'on', 'true', True)
+
+    # Destinatário diferente do pagador (presente)
+    e_presente = form.get('e_presente') in ('1', 'on', 'true', True)
+    nome_destinatario = ((form.get('nome_destinatario') or '').strip()
+                         if e_presente else None) or None
+    telefone_destinatario = ((form.get('telefone_destinatario') or '').strip()
+                             if e_presente else None) or None
 
     if not nome:
         erros.append('Informe seu nome.')
     if not _email_valido(email):
         erros.append('Informe um email válido.')
+    # CPF é exigência do Pagar.me pra Pix e da NF-e (Fase 5) — pedir aqui
+    # já é mais barato que voltar pro cliente depois.
+    if not _cpf_valido(cpf):
+        erros.append('Informe um CPF válido (11 dígitos).')
     if not aceite:
         erros.append('É preciso aceitar os termos para concluir o pedido.')
     if modo not in ('agendada', 'retirada', 'express'):
         erros.append('Escolha um modo de entrega.')
+    if e_presente and not nome_destinatario:
+        erros.append('Informe o nome de quem vai receber.')
 
     itens, avisos = montar_itens(itens_raw)
     if not itens:
