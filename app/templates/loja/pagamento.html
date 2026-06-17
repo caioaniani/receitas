@@ -40,11 +40,14 @@
       </p>
     </div>
     <script>
-      document.getElementById('copiar-pix').addEventListener('click', function () {
-        var t = document.getElementById('pix-emv');
-        t.select(); document.execCommand('copy');
-        this.textContent = '✓ Copiado';
-      });
+      var btnCopiar = document.getElementById('copiar-pix');
+      if (btnCopiar) {
+        btnCopiar.addEventListener('click', function () {
+          var t = document.getElementById('pix-emv');
+          t.select(); document.execCommand('copy');
+          this.textContent = '✓ Copiado';
+        });
+      }
       // Polling leve: a cada 6s verifica se o pedido virou 'pago'.
       setInterval(function () {
         fetch(window.location.pathname.replace('/pagamento', '/status'))
