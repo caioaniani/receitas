@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block title %}Pedido {{ p.codigo }} — Loja Online{% endblock %}
+
+{% set badge = {
+  'aguardando_pagamento': 'bg-warning text-dark',
+  'pago': 'bg-info text-dark',
+  'em_preparo': 'bg-secondary',
+  'a_caminho': 'bg-primary',
+  'entregue': 'bg-success',
+  'cancelado': 'bg-danger',
+} %}
+{% set modo_label = {
+  'agendada': 'Entrega agendada', 'retirada': 'Retirada na loja',
+  'express': 'Express (em até 1h)',
+} %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="page-title mb-0">
+    <i class="bi bi-bag-check"></i> Pedido <code>{{ p.codigo }}</code>
+    <span class="badge {{ badge.get(p.status, 'bg-secondary') }}">{{ labels.get(p.status, p.status) }}</span>
+  </h1>
+  <a href="{{ url_for('main.loja_online_pedidos') }}" class="btn btn-sm btn-outline-secondary">← Todos os pedidos</a>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-7">
+    <div class="card mb-3">
+      <div class="card-header py-2 fw-bold">Itens</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0 align-middle">
+          <tbody>
+            {% for it in p.itens %}
+            <tr>
+              <td>{{ it.quantidade }}× {{ it.nome }}</td>
+              <td class="text-end text-muted small">R$ {{ '%.2f'|format(it.preco_unitario)|replace('.', ',') }} un</td>
+              <td class="text-end fw-bold">R$ {{ '%.2f'|format(it.subtotal)|replace('.', ',') }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot class="table-light">
+            <tr><td colspan="2" class="text-end">Subtotal</td>
+              <td class="text-end">R$ {{ '%.2f'|format(p.subtotal)|replace('.', ',') }}</td></tr>
+            <tr><td colspan="2" class="text-end">Frete
+              {% if p.modo_entrega == 'express' %}<span class="text-muted small">(estimado)</span>{% endif %}</td>
+              <td class="text-end">R$ {{ '%.2f'|format(p.frete_valor)|replace('.', ',') }}</td></tr>
+            <tr class="fw-bold"><td colspan="2" class="text-end">Total</td>
+              <td class="text-end">R$ {{ '%.2f'|format(p.valor_total)|replace('.', ',') }}</td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    {% if p.cartinha %}
+    <div class="card mb-3">
+      <div class="card-header py-2 fw-bold">Cartinha / observações</div>
+      <div class="card-body"><em>“{{ p.cartinha }}”</em></div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="col-md-5">
+    <div class="card mb-3">
+      <div class="card-header py-2 fw-bold">Cliente</div>
+      <div class="card-body">
+        {{ p.nome_cliente }}<br>
+        <a href="mailto:{{ p.email_cliente }}">{{ p.email_cliente }}</a><br>
+        {% if p.telefone_cliente %}
+        <a href="https://wa.me/55{{ p.telefone_cliente|replace(' ','')|replace('-','')|replace('(','')|replace(')','') }}">
+          {{ p.telefone_cliente }}</a>{% endif %}
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header py-2 fw-bold">{{ modo_label.get(p.modo_entrega, p.modo_entrega) }}</div>
+      <div class="card-body">
+        {% if p.modo_entrega == 'retirada' %}
+          <strong>{{ p.loja_retirada.nome if p.loja_retirada else '—' }}</strong><br>
+          {{ p.loja_retirada.endereco if p.loja_retirada }}<br>
+        {% else %}
+          {{ p.endereco_entrega or '—' }}<br>
+          {% if p.distancia_km %}<span class="text-muted small">{{ '%.1f'|format(p.distancia_km)|replace('.', ',') }} km</span><br>{% endif %}
+        {% endif %}
+        {% if p.data_entrega %}<span class="mt-1 d-inline-block">📅 {{ p.data_entrega.strftime('%d/%m/%Y') }}
+          {% if p.janela_entrega %}· {{ p.janela_entrega }}{% endif %}</span>{% endif %}
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header py-2 fw-bold">Datas</div>
+      <div class="card-body small text-muted">
+        Criado: {{ p.criado_em.strftime('%d/%m/%Y %H:%M') if p.criado_em }}<br>
+        {% if p.pago_em %}Pago: {{ p.pago_em.strftime('%d/%m/%Y %H:%M') }}<br>{% endif %}
+        {% if p.cancelado_em %}Cancelado: {{ p.cancelado_em.strftime('%d/%m/%Y %H:%M') }}<br>{% endif %}
+      </div>
+    </div>
+
+    {% if p.status not in ('entregue', 'cancelado') %}
+    <form method="POST" action="{{ url_for('main.loja_online_pedido_cancelar', codigo=p.codigo) }}"
+          onsubmit="return confirm('Cancelar o pedido {{ p.codigo }}?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-outline-danger btn-sm w-100">Cancelar pedido</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
