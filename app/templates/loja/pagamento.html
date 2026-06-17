@@ -17,21 +17,25 @@
   </div>
   {% endif %}
 
-  {% if pix_pendente and pix_pendente.pix_qr_code %}
-    <!-- Pix já gerado: mostra o QR + copia-e-cola -->
+  {% if pix %}
+    <!-- Pix já gerado: QR (gerado no servidor) + copia-e-cola -->
     <div class="checkout-bloco pix-bloco">
       <h2>Pague com Pix</h2>
-      {% if pix_pendente.pix_qr_code_url %}
-      <img class="pix-qr" src="{{ pix_pendente.pix_qr_code_url }}"
-           alt="QR Code Pix">
+      {% if pix.img %}
+      <img class="pix-qr" src="{{ pix.img }}" alt="QR Code Pix">
+      {% elif pix.link %}
+      <a class="btn-loja" href="{{ pix.link }}" target="_blank" rel="noopener">
+        Abrir página de pagamento Pix</a>
       {% endif %}
+      {% if pix.emv %}
       <label class="small text-muted">Pix copia-e-cola</label>
-      <textarea readonly id="pix-emv" class="pix-emv">{{ pix_pendente.pix_qr_code }}</textarea>
+      <textarea readonly id="pix-emv" class="pix-emv">{{ pix.emv }}</textarea>
       <button type="button" id="copiar-pix" class="btn-loja-secundario">Copiar código</button>
+      {% endif %}
       <p class="aviso-comprar mt-2">
         Assim que o pagamento for compensado, atualizamos o pedido.
-        {% if pix_pendente.pix_expira_em %}
-        O código expira em {{ pix_pendente.pix_expira_em.strftime('%H:%M') }}.
+        {% if pix.expira_em %}
+        O código expira em {{ pix.expira_em.strftime('%H:%M') }}.
         {% endif %}
       </p>
     </div>
