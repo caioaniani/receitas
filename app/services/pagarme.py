@@ -160,6 +160,28 @@ def _extrair_charge(order_json):
     return charges[0] if charges else {}
 
 
+def _erro_da_charge(charge):
+    """Quando a charge nasce/cai em status 'failed', cava o motivo na
+    estrutura aninhada pra propagar mensagem útil em vez de salvar QR vazio.
+    Fontes (em ordem): last_transaction.gateway_response.errors[*].message,
+    last_transaction.gateway_response.code, last_transaction.acquirer_message,
+    charge.status."""
+    last = charge.get('last_transaction') or {}
+    gw = last.get('gateway_response') or {}
+    errs = gw.get('errors') or []
+    if errs and isinstance(errs[0], dict):
+        msg = errs[0].get('message') or errs[0].get('code')
+        if msg:
+            return str(msg)
+    if gw.get('code'):
+        return f"gateway {gw.get('code')}: {gw.get('message') or ''}".strip()
+    if last.get('acquirer_message'):
+        return str(last.get('acquirer_message'))
+    if last.get('gateway_id'):
+        return f"gateway_id {last.get('gateway_id')} (status {last.get('status')})"
+    return f"charge status={charge.get('status')}"
+
+
 def criar_pedido_pix(pedido, expira_em_min=30):
     """Cria um Order no Pagar.me com payment_method=pix. Devolve dict:
       {ok, order_id, charge_id, qr_code, qr_code_url, expira_em, erro?}
