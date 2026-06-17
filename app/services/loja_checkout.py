@@ -18,7 +18,8 @@ Modos de entrega (decisão do dono 17/06/2026):
   pode ser Lalamove de várias faixas de veículo ou entregador próprio,
   decidido no painel). Só disponível dentro do horário de entrega.
 """
-from datetime import timedelta
+import os
+from datetime import date, timedelta
 from decimal import Decimal
 
 from app.extensions import db
@@ -57,27 +58,58 @@ def express_disponivel(base=None):
     return HORA_ABRE <= base.hour < HORA_FECHA
 
 
-def datas_disponiveis(modo, base=None, dias=DIAS_AGENDA):
-    """Datas válidas pro modo, respeitando o corte das 17h.
+# Antecedência mínima (horas) pra uma janela ser oferecida AINDA HOJE.
+# Ex: às 13h com LEAD=2, a primeira janela de hoje é 15:00–16:00. Substitui
+# o antigo "corte 17h bloqueia o dia inteiro" por filtro por janela —
+# decisão 17/06/2026 (o dono quis que janelas passadas sumam, não deem erro).
+LEAD_HORAS = int(os.environ.get('LOJA_LEAD_HORAS', '2') or '2')
 
-    - express: só hoje (entrega imediata).
-    - agendada/retirada: a partir de amanhã; se já passou das 17h, a
-      primeira data vira depois de amanhã (corte). Devolve `dias` datas.
+
+def janelas_disponiveis(modo, data=None, base=None):
+    """Janelas válidas pro modo numa data. Quando a data é HOJE, remove as
+    janelas que já passaram (início < agora + LEAD_HORAS). Em dias futuros,
+    todas as janelas. `data` aceita date ou str ISO."""
+    if modo == 'express':
+        return [JANELA_EXPRESS]
+    base = base or agora()
+    if isinstance(data, str):
+        try:
+            data = date.fromisoformat(data)
+        except ValueError:
+            data = None
+    janelas = list(JANELAS_HORARIAS)
+    if data and data == base.date():
+        limite = base.hour + LEAD_HORAS
+        janelas = [j for j in janelas if int(j[:2]) >= limite]
+    return janelas
+
+
+def janelas_do_modo(modo):
+    """Lista completa de janelas do modo (sem filtro de data). Mantida por
+    compat; a validação real usa janelas_disponiveis(modo, data)."""
+    if modo == 'express':
+        return [JANELA_EXPRESS]
+    return list(JANELAS_HORARIAS)
+
+
+def datas_disponiveis(modo, base=None, dias=DIAS_AGENDA):
+    """Datas válidas pro modo.
+
+    - express: só hoje (entrega imediata, dentro do horário).
+    - agendada/retirada: HOJE entra se ainda houver janela viável (lead),
+      depois amanhã em diante (contíguo). Sem o antigo corte-17h-do-dia:
+      janelas passadas são filtradas por `janelas_disponiveis`.
     """
     base = base or agora()
     hoje_d = base.date()
     if modo == 'express':
         return [hoje_d] if express_disponivel(base) else []
-    # Corte 17h: depois disso o dia seguinte já fechou pra produção.
-    deslocamento = 2 if base.hour >= HORA_CORTE else 1
-    inicio = hoje_d + timedelta(days=deslocamento)
-    return [inicio + timedelta(days=i) for i in range(dias)]
-
-
-def janelas_do_modo(modo):
-    if modo == 'express':
-        return [JANELA_EXPRESS]
-    return list(JANELAS_HORARIAS)
+    datas = []
+    if janelas_disponiveis(modo, hoje_d, base=base):
+        datas.append(hoje_d)
+    inicio = hoje_d + timedelta(days=1)
+    datas.extend(inicio + timedelta(days=i) for i in range(dias))
+    return datas
 
 
 def montar_itens(itens_raw):
