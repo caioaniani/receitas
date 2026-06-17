@@ -26,6 +26,11 @@
   <a href="{{ url_for('loja.home') }}" class="logo">O Pão<span>·</span>Padaria Artesanal</a>
   <nav class="topo-nav">
     <a href="{{ url_for('loja.home') }}">Produtos</a>
+    {% if cliente_atual %}
+      <a href="{{ url_for('loja.minha_conta') }}">Minha conta</a>
+    {% else %}
+      <a href="{{ url_for('loja.entrar') }}">Entrar</a>
+    {% endif %}
     <a href="{{ url_for('loja.carrinho') }}" class="topo-carrinho">
       Carrinho
       <span id="cart-badge" class="cart-badge" style="display:none">0</span>
