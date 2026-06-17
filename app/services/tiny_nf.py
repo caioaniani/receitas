@@ -239,120 +239,65 @@ def _payload_itens(pedido):
     return out, faltando
 
 
-def _pedido_payload(pedido, itens):
-    """Monta o pedido pro Tiny com a natureza de operacao. Sem ela o Tiny
-    gera a NF com natOp vazia e a SEFAZ rejeita.
+def _nota_payload(pedido, itens):
+    """Monta a NF pro `nota.fiscal.incluir` com o cabeçalho fiscal EXPLÍCITO:
+    tipo de saída, natureza de operação e série.
 
-    A SERIE, o CFOP e o indicador de consumidor final NAO vem daqui: sao
-    configurados no Tiny (Naturezas de operacao + Numeracao de NF). A v2 do
-    `pedido.incluir.php` NAO tem campo de serie — mandar um era ignorado
-    (a nota saia em numeracao/serie errada, bug visto em prod: 000009)."""
+    Por que aqui e não no pedido: o `gerar.nota.fiscal.pedido` não aplica a
+    natureza do pedido na NF (deixava natOp vazio + série fora de ordem em
+    prod). Criando a NF direto, nós mandamos natureza + série e o Tiny
+    respeita. NCM/CFOP/CST continuam vindo do cadastro do produto via SKU."""
     from flask import current_app
-    natureza = current_app.config.get('NF_NATUREZA_OPERACAO',
-                                      'Venda de mercadorias')
+    cfg = current_app.config
     return {
-        'data_pedido': (pedido.criado_em or agora()).strftime('%d/%m/%Y'),
-        'numero_ordem_compra': pedido.codigo,
+        'tipo': 'S',  # saída (venda)
+        'natureza_operacao': cfg.get('NF_NATUREZA_OPERACAO',
+                                     'Venda de mercadorias'),
+        'serie': str(cfg.get('NF_SERIE', '1')),
+        'data_emissao': agora().strftime('%d/%m/%Y'),
         'cliente': _payload_cliente(pedido),
         'itens': itens,
         'valor_frete': float(pedido.frete_valor or 0),
-        'natureza_operacao': natureza,
     }
 
 
 def emitir_nf(pedido, user_id=None, recriar=False):
     """Emite NF pro pedido. Devolve {ok, msg, nota_fiscal_id?}.
 
-    Fluxo: pedido.incluir → gerar.nota.fiscal.pedido → nota.fiscal.emitir.
+    Fluxo (Plano B): nota.fiscal.incluir (cria a NF com natureza+série
+    explícitas) → nota.fiscal.emitir (autoriza na SEFAZ).
     Idempotente: NF já emitida COM SUCESSO (nf_emitida_em setado) não refaz.
 
-    `recriar=True`: descarta o vínculo anterior com o Tiny (pedido + nota
-    rascunho) e refaz do zero. Necessário quando uma tentativa anterior
-    gerou uma NF com dados errados que a SEFAZ rejeitou (ex: pedido criado
-    no Tiny ANTES de termos o endereço estruturado) — reemitir a MESMA nota
-    não corrige os dados; o rascunho precisa ser refeito do pedido novo."""
+    `recriar=True`: descarta a NF rascunho anterior (que a SEFAZ rejeitou) e
+    cria uma nova do zero com o payload atual. Reemitir o MESMO rascunho não
+    corrige dados — o rascunho ruim fica órfão no Tiny (apagável)."""
     if pedido.nf_emitida_em and pedido.tiny_nota_fiscal_id and not recriar:
         return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
                 'msg': 'NF já emitida.'}
     if pedido.status != 'pago':
         return {'ok': False, 'msg': 'Pedido não está pago — não emite NF.'}
     if recriar:
-        # Esquece pedido/nota antigos do Tiny (rascunho ruim) e recria com o
-        # payload atual. O rascunho velho fica órfão no Tiny (apagável). NÃO
-        # reaproveita o pedido velho pelo numero_ordem_compra (ele tem os
-        # dados errados) — por isso o `not recriar` na busca abaixo.
         pedido.tiny_pedido_id = None
         pedido.tiny_nota_fiscal_id = None
         pedido.nf_status = None
         pedido.nf_emitida_em = None
         db.session.commit()
-    # RESUMÍVEL sem duplicar: usa o tiny_pedido_id que já temos; se ele não
-    # existir mais no Tiny ("Pedido não localizado", cod 32), procura pelo
-    # nosso código (numero_ordem_compra) antes de criar um novo.
-    tiny_pid = pedido.tiny_pedido_id
-    if not tiny_pid and not recriar:
-        achado = tiny.buscar_pedido_por_numero_ordem(pedido.codigo)
-        if achado:
-            tiny_pid = achado
-            pedido.tiny_pedido_id = tiny_pid
-            db.session.commit()
-    if not tiny_pid:
+    # 1) Cria a NF (rascunho) com natureza + série explícitas, se ainda não
+    #    temos uma. Resumível: se já criamos mas a emissão falhou, reusa o id.
+    if not pedido.tiny_nota_fiscal_id:
         itens, faltando = _payload_itens(pedido)
         if faltando:
             return {'ok': False,
                     'msg': 'Itens sem SKU mapeado no Tiny: '
                            + ', '.join(faltando)}
-        incl = tiny.incluir_pedido(_pedido_payload(pedido, itens))
+        incl = tiny.incluir_nota_fiscal(_nota_payload(pedido, itens))
         if not incl.get('ok'):
             return {'ok': False,
-                    'msg': f'Falha ao incluir o pedido no Tiny: '
-                           f'{incl.get("erro")}'}
-        pedido.tiny_pedido_id = tiny_pid = incl['id']
+                    'msg': f'Falha ao criar a NF no Tiny: {incl.get("erro")}'}
+        pedido.tiny_nota_fiscal_id = incl['id']
         db.session.commit()
-    gerar = tiny.gerar_nota_fiscal_pedido(tiny_pid)
-    # "Pedido não localizado" (cod 32): o id velho foi apagado no Tiny.
-    # Limpa e tenta UMA vez mais — busca pelo código ou cria novo pedido.
-    erro_gerar = (gerar.get('erro') or '').lower()
-    if not gerar.get('ok') and ('não localizado' in erro_gerar
-                                or 'nao localizado' in erro_gerar
-                                or 'cod 32' in erro_gerar):
-        pedido.tiny_pedido_id = None
-        db.session.commit()
-        achado = tiny.buscar_pedido_por_numero_ordem(pedido.codigo)
-        if achado:
-            tiny_pid = achado
-        else:
-            itens, faltando = _payload_itens(pedido)
-            if faltando:
-                return {'ok': False,
-                        'msg': 'Itens sem SKU mapeado: '
-                               + ', '.join(faltando)}
-            incl = tiny.incluir_pedido(_pedido_payload(pedido, itens))
-            if not incl.get('ok'):
-                return {'ok': False,
-                        'msg': f'Falha ao incluir o pedido no Tiny: '
-                               f'{incl.get("erro")}'}
-            tiny_pid = incl['id']
-        pedido.tiny_pedido_id = tiny_pid
-        db.session.commit()
-        gerar = tiny.gerar_nota_fiscal_pedido(tiny_pid)
-    # "Já foi gerada nota fiscal para este pedido": uma tentativa anterior
-    # gerou a NF mas não capturamos o id (ex: resposta de lock). Em vez de
-    # falhar, busca o id da NF que já existe no pedido.
-    erro_g = (gerar.get('erro') or '').lower()
-    if not gerar.get('ok') and ('ja foi gerada' in erro_g
-                                or 'já foi gerada' in erro_g
-                                or 'nota fiscal para este pedido' in erro_g):
-        nf_existente = tiny.id_nota_do_pedido(tiny_pid)
-        if nf_existente:
-            gerar = {'ok': True, 'id_nota_fiscal': nf_existente}
-    if not gerar.get('ok'):
-        return {'ok': False,
-                'msg': f'Pedido criado no Tiny, mas falhou ao gerar a NF: '
-                       f'{gerar.get("erro")}'}
-    pedido.tiny_nota_fiscal_id = gerar['id_nota_fiscal']
-    db.session.commit()
-    emitir = tiny.emitir_nota_fiscal(gerar['id_nota_fiscal'])
+    # 2) Autoriza na SEFAZ.
+    emitir = tiny.emitir_nota_fiscal(pedido.tiny_nota_fiscal_id)
     pedido.nf_status = emitir.get('status') or 'enviada'
     if emitir.get('ok'):
         pedido.nf_emitida_em = agora()
@@ -361,8 +306,8 @@ def emitir_nf(pedido, user_id=None, recriar=False):
                 'msg': f'NF emitida (status: {pedido.nf_status}).'}
     db.session.commit()
     return {'ok': False,
-            'msg': f'NF gerada (id {gerar["id_nota_fiscal"]}) mas a emissão '
-                   f'falhou: {emitir.get("erro")}. Dá pra reenviar.'}
+            'msg': f'NF criada (id {pedido.tiny_nota_fiscal_id}) mas a emissão '
+                   f'falhou: {emitir.get("erro")}. Dá pra reenviar (Refazer).'}
 
 
 def link_danfe(pedido):
