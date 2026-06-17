@@ -293,12 +293,13 @@ def criar_pedido(form, itens_raw, *, base=None):
     cliente = Cliente.query.filter(
         db.func.lower(Cliente.email) == email.lower()).first()
     if not cliente:
-        cliente = Cliente(nome=nome, email=email, telefone=telefone)
+        cliente = Cliente(nome=nome, email=email, telefone=telefone, cpf=cpf)
         db.session.add(cliente)
     else:
         # Atualiza dados de contato com o que o cliente acabou de informar.
         cliente.nome = nome or cliente.nome
         cliente.telefone = telefone or cliente.telefone
+        cliente.cpf = cpf or cliente.cpf
     if aceite and not cliente.aceite_lgpd_em:
         cliente.aceite_lgpd_em = base
     db.session.flush()  # garante cliente.id
@@ -306,6 +307,8 @@ def criar_pedido(form, itens_raw, *, base=None):
     pedido = PedidoOnline(
         cliente_id=cliente.id,
         nome_cliente=nome, email_cliente=email, telefone_cliente=telefone,
+        nome_destinatario=nome_destinatario,
+        telefone_destinatario=telefone_destinatario,
         modo_entrega=modo,
         loja_retirada_id=loja_retirada_id,
         endereco_entrega=endereco_entrega,
