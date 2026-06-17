@@ -293,7 +293,8 @@ def test_checkout_post_preco_forjado_usa_catalogo(app, monkeypatch):
     loja = _loja(db)
     data = loja_checkout.datas_disponiveis('retirada')[0].isoformat()
     c.post('/loja/checkout', data={
-        'nome': 'Hacker', 'email': 'h@x.com', 'aceite_lgpd': '1',
+        'nome': 'Hacker', 'email': 'h@x.com', 'cpf': '52998224725',
+        'aceite_lgpd': '1',
         'modo_entrega': 'retirada', 'loja_id': str(loja.id),
         'data_entrega': data, 'janela_entrega': '08:00–09:00',
         'itens_json': _json.dumps(
