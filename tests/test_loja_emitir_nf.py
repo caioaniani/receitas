@@ -229,6 +229,30 @@ def test_emitir_nf_recria_pedido_se_tiny_apagou(app):
         assert p.tiny_nota_fiscal_id == 'nf-novo'
 
 
+def test_emitir_nf_captura_nf_ja_gerada(app):
+    """Tiny diz 'Já foi gerada nota fiscal' (cod 31): captura o id da NF
+    existente no pedido em vez de falhar."""
+    from app.extensions import db
+    from app.services import tiny_nf
+    with app.app_context():
+        produto = _produto(db)
+        p = _pedido_pago(db, produto, sku='S')
+        p.tiny_pedido_id = 'tp-1'
+        db.session.commit()
+        with patch('app.services.tiny.gerar_nota_fiscal_pedido',
+                   return_value={'ok': False,
+                                 'erro': 'Já foi gerada nota fiscal para '
+                                         'este pedido; cod 31'}), \
+             patch('app.services.tiny.id_nota_do_pedido',
+                   return_value='nf-ja-existe'), \
+             patch('app.services.tiny.emitir_nota_fiscal',
+                   return_value={'ok': True, 'status': 'autorizada'}):
+            res = tiny_nf.emitir_nf(p)
+        assert res['ok'] is True
+        db.session.refresh(p)
+        assert p.tiny_nota_fiscal_id == 'nf-ja-existe'
+
+
 def test_incluir_pedido_registros_como_dict(app):
     """Regressão do 500 (KeyError: 0): Tiny v2 às vezes manda `registros`
     como DICT {'registro': {...}}, não lista. _registros normaliza."""
