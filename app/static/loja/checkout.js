@@ -63,12 +63,25 @@
     function popularJanelas(modo) {
       var sel = document.getElementById('janela_entrega');
       if (!sel) return;
-      // Janelas de 1h (08:00–09:00 … 17:00–18:00) — mesma lista pros modos
-      // com data (agendada/retirada). Express não usa este bloco.
-      var lista = dados.janelas;
-      var preferida = sel.getAttribute('data-sel') || '';
+      // Janelas de 1h. Se a data escolhida é HOJE, remove as que já
+      // passaram (usa a hora do servidor: minHoraHoje = hora_atual + lead).
+      var lista = (dados.janelas || []).slice();
+      var dataEl = document.getElementById('data_entrega');
+      var dataVal = dataEl ? dataEl.value : '';
+      if (dataVal && dataVal === dados.hojeIso) {
+        lista = lista.filter(function (j) {
+          return parseInt(j.slice(0, 2), 10) >= (dados.minHoraHoje || 0);
+        });
+      }
+      var preferida = sel.getAttribute('data-sel') || sel.value || '';
       sel.innerHTML = '';
-      (lista || []).forEach(function (j) {
+      if (!lista.length) {
+        var vazio = document.createElement('option');
+        vazio.value = ''; vazio.textContent = 'Sem horário disponível neste dia';
+        sel.appendChild(vazio);
+        return;
+      }
+      lista.forEach(function (j) {
         var opt = document.createElement('option');
         opt.value = j; opt.textContent = j;
         if (j === preferida) opt.selected = true;
