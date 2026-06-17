@@ -1,0 +1,71 @@
+{% extends 'loja/_base.html' %}
+
+{% block title %}Pedido {{ pedido.codigo }} — O Pão Padaria Artesanal{% endblock %}
+
+{% block content %}
+<section class="checkout-pagina confirmado">
+  <!-- Marker pro carrinho.js limpar o localStorage (pedido foi criado) -->
+  <div id="limpar-carrinho" hidden></div>
+
+  <div class="confirmado-cabecalho">
+    <div class="confirmado-check">✓</div>
+    <h1>Pedido recebido!</h1>
+    <p>Seu código é <strong>{{ pedido.codigo }}</strong>.
+       Anote — é por ele que a gente acompanha seu pedido.</p>
+  </div>
+
+  <div class="checkout-bloco">
+    <h2>Resumo</h2>
+    <ul class="checkout-itens-lista">
+      {% for it in pedido.itens %}
+      <li><span>{{ it.quantidade }}× {{ it.nome }}</span>
+        <span>R$ {{ '%.2f'|format(it.subtotal)|replace('.', ',') }}</span></li>
+      {% endfor %}
+    </ul>
+    <div class="checkout-totais">
+      <div class="linha-total"><span>Subtotal</span>
+        <span>R$ {{ '%.2f'|format(pedido.subtotal)|replace('.', ',') }}</span></div>
+      <div class="linha-total"><span>Frete</span>
+        <span>
+          {% if pedido.modo_entrega == 'retirada' %}Grátis (retirada)
+          {% else %}R$ {{ '%.2f'|format(pedido.frete_valor)|replace('.', ',') }}
+            {% if pedido.modo_entrega == 'express' %} (estimado){% endif %}
+          {% endif %}
+        </span></div>
+      <div class="linha-total grande"><span>Total</span>
+        <span>R$ {{ '%.2f'|format(pedido.valor_total)|replace('.', ',') }}</span></div>
+    </div>
+  </div>
+
+  <div class="checkout-bloco">
+    <h2>Entrega</h2>
+    {% if pedido.modo_entrega == 'retirada' %}
+      <p><strong>Retirada na loja</strong><br>
+        {{ pedido.loja_retirada.nome if pedido.loja_retirada }}<br>
+        {% if pedido.data_entrega %}{{ pedido.data_entrega.strftime('%d/%m/%Y') }}
+        · {{ pedido.janela_entrega }}{% endif %}</p>
+    {% elif pedido.modo_entrega == 'express' %}
+      <p><strong>Express — em até 1h</strong><br>
+        {{ pedido.endereco_entrega }}<br>
+        Valor do frete é estimado; a equipe confirma.</p>
+    {% else %}
+      <p><strong>Entrega agendada</strong><br>
+        {{ pedido.endereco_entrega }}<br>
+        {% if pedido.data_entrega %}{{ pedido.data_entrega.strftime('%d/%m/%Y') }}
+        · {{ pedido.janela_entrega }}{% endif %}</p>
+    {% endif %}
+    {% if pedido.cartinha %}
+    <p class="confirmado-cartinha"><em>“{{ pedido.cartinha }}”</em></p>
+    {% endif %}
+  </div>
+
+  <div class="checkout-bloco confirmado-proximo">
+    <p><strong>Próximo passo:</strong> seu pedido está
+      <em>aguardando pagamento</em>. O pagamento online entra em breve;
+      por enquanto a equipe entra em contato pelo telefone/email informado
+      para combinar o pagamento e confirmar a entrega.</p>
+  </div>
+
+  <a href="{{ url_for('loja.home') }}" class="btn-loja">Voltar à loja</a>
+</section>
+{% endblock %}
