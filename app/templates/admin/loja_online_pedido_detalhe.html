@@ -138,11 +138,17 @@
     </div>
 
     {% if p.status not in ('entregue', 'cancelado') %}
+    {% set eh_pago = p.status == 'pago' %}
     <form method="POST" action="{{ url_for('main.loja_online_pedido_cancelar', codigo=p.codigo) }}"
-          onsubmit="return confirm('Cancelar o pedido {{ p.codigo }}?');">
+          onsubmit="return confirm({{ ('Reembolsar e cancelar o pedido ' ~ p.codigo ~ '? O valor volta pro cliente.') if eh_pago else ('Cancelar o pedido ' ~ p.codigo ~ '?') | tojson }});">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-outline-danger btn-sm w-100">Cancelar pedido</button>
+      <button type="submit" class="btn btn-outline-danger btn-sm w-100">
+        {{ 'Reembolsar e cancelar' if eh_pago else 'Cancelar pedido' }}
+      </button>
     </form>
+    {% if eh_pago %}
+    <p class="text-muted small mt-1 mb-0">Reembolsa no Pagar.me + devolve o estoque.</p>
+    {% endif %}
     {% endif %}
   </div>
 </div>
