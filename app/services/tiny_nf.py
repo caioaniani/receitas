@@ -264,11 +264,40 @@ def _nota_payload(pedido, itens):
     }
 
 
+def _sincronizar_situacao(pedido):
+    """Consulta a situação REAL da NF no Tiny (fonte de verdade) e atualiza
+    o pedido se já autorizou na SEFAZ. Devolve {autorizada, rejeitada,
+    situacao} ou None se não temos NF / Tiny não respondeu.
+
+    Por que: o `nota.fiscal.emitir` é assíncrono e o `status_processamento`
+    é ambíguo (em prod a 011428 voltou status '2' mesmo já AUTORIZADA na
+    SEFAZ). A única fonte confiável é `nota.fiscal.obter`, que reflete o
+    que o Tiny tem armazenado. Texto, não número (mais robusto a mudança
+    de código)."""
+    if not pedido.tiny_nota_fiscal_id:
+        return None
+    nf = tiny.obter_nota_fiscal(pedido.tiny_nota_fiscal_id) or {}
+    situ = str(nf.get('situacao') or '').strip().lower()
+    if not situ:
+        return None
+    autorizada = ('autoriz' in situ) or ('emitida' in situ)
+    rejeitada = ('rejeit' in situ) or ('denegad' in situ)
+    if autorizada and not pedido.nf_emitida_em:
+        pedido.nf_status = 'autorizada'
+        pedido.nf_emitida_em = agora()
+        db.session.commit()
+    elif rejeitada and not pedido.nf_emitida_em:
+        pedido.nf_status = situ
+        db.session.commit()
+    return {'autorizada': autorizada, 'rejeitada': rejeitada, 'situacao': situ}
+
+
 def emitir_nf(pedido, user_id=None, recriar=False):
     """Emite NF pro pedido. Devolve {ok, msg, nota_fiscal_id?}.
 
     Fluxo (Plano B): nota.fiscal.incluir (cria a NF com natureza+série
-    explícitas) → nota.fiscal.emitir (autoriza na SEFAZ).
+    explícitas) → nota.fiscal.emitir (autoriza na SEFAZ) → obter (confirma
+    a situação real, pq o status_processamento do emitir é ambíguo).
     Idempotente: NF já emitida COM SUCESSO (nf_emitida_em setado) não refaz.
 
     `recriar=True`: descarta a NF rascunho anterior (que a SEFAZ rejeitou) e
@@ -285,6 +314,19 @@ def emitir_nf(pedido, user_id=None, recriar=False):
         pedido.nf_status = None
         pedido.nf_emitida_em = None
         db.session.commit()
+    # ANTES de tentar emitir de novo: se já temos NF, ver se ela já autorizou
+    # em background (caso da 011428 — status_processamento='2' enganoso). Isso
+    # também é o que o botão "Reenviar / verificar" precisa fazer pra
+    # sincronizar sem duplicar.
+    if pedido.tiny_nota_fiscal_id:
+        sit = _sincronizar_situacao(pedido)
+        if sit and sit['autorizada']:
+            return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
+                    'msg': 'NF autorizada na SEFAZ.'}
+        if sit and sit['rejeitada']:
+            return {'ok': False,
+                    'msg': f'NF rejeitada pela SEFAZ ({sit["situacao"]}). '
+                           f'Use "Refazer do zero" para criar uma nova.'}
     # 1) Cria a NF (rascunho) com natureza + série explícitas, se ainda não
     #    temos uma. Resumível: se já criamos mas a emissão falhou, reusa o id.
     if not pedido.tiny_nota_fiscal_id:
@@ -308,9 +350,13 @@ def emitir_nf(pedido, user_id=None, recriar=False):
         return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
                 'msg': f'NF emitida (status: {pedido.nf_status}).'}
     db.session.commit()
-    # A mensagem do emitir já orienta (processando = aguardar/reenviar;
-    # rejeitada = motivo SEFAZ). NÃO sugerir "Refazer" aqui — se a nota
-    # autorizou em background, Refazer duplicaria.
+    # Emit retornou status ambíguo. Vai DIRETO no obter pra ver a verdade —
+    # a NF pode ter autorizado em background mesmo o emitir retornando código
+    # ambíguo (visto em prod com a 011428).
+    sit = _sincronizar_situacao(pedido)
+    if sit and sit['autorizada']:
+        return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
+                'msg': 'NF autorizada na SEFAZ.'}
     return {'ok': False,
             'msg': f'NF criada (id {pedido.tiny_nota_fiscal_id}) mas a emissão '
                    f'não foi confirmada: {emitir.get("erro")}'}
