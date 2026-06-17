@@ -2616,14 +2616,40 @@ def loja_online_tiny_sync():
     from flask import flash
 
     from app.services import tiny_nf
-    res = tiny_nf.sincronizar_sugestoes()
+    res = tiny_nf.sincronizar_sugestoes(user_id=current_user.id)
     if res.get('erro'):
         flash(f'Sincronização falhou: {res["erro"]}', 'danger')
     else:
-        flash(f'{res["sugeridos"]} SKU(s) sugeridos por nome, '
-              f'{res["sem_match"]} sem correspondência '
-              f'({res["total_tiny"]} produtos no Tiny). Confira e confirme.',
-              'success')
+        flash(f'{res.get("exatos", 0)} confirmados (nome idêntico) + '
+              f'{res.get("sugeridos", 0)} sugeridos pra conferir, '
+              f'{res.get("sem_match", 0)} sem correspondência '
+              f'({res.get("total_tiny", 0)} produtos no Tiny).', 'success')
+    return redirect(url_for('main.loja_online_tiny_skus'))
+
+
+@main_bp.route('/admin/loja-online/tiny-skus/importar', methods=['POST'])
+@owner_required
+def loja_online_tiny_importar():
+    """Importa o export de produtos do Tiny (.xls/.csv) e mapeia SKUs por
+    nome. Nome idêntico confirma automático; parecido vira sugestão."""
+    from flask import flash
+
+    from app.services import tiny_nf
+    f = request.files.get('planilha')
+    if not f or not f.filename:
+        flash('Selecione a planilha de produtos do Tiny (.xls ou .csv).',
+              'warning')
+        return redirect(url_for('main.loja_online_tiny_skus'))
+    conteudo = f.read()
+    res = tiny_nf.importar_planilha(conteudo, f.filename,
+                                    user_id=current_user.id)
+    if res.get('erro'):
+        flash(res['erro'], 'danger')
+    else:
+        flash(f'Planilha importada: {res.get("exatos", 0)} confirmados '
+              f'(nome idêntico) + {res.get("sugeridos", 0)} sugeridos pra '
+              f'conferir, {res.get("sem_match", 0)} sem correspondência '
+              f'({res.get("total", 0)} linhas).', 'success')
     return redirect(url_for('main.loja_online_tiny_skus'))
 
 
