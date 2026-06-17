@@ -258,6 +258,67 @@ def listar_produtos(max_paginas=20):
     return out
 
 
+def incluir_pedido(pedido_dict):
+    """pedido.incluir.php — cria um pedido no Tiny (formato JSON na v2).
+    `pedido_dict` é o dict no padrão Tiny ({'cliente': ..., 'itens': [...],
+    'numero_ordem_compra': ..., etc}). Devolve {id, numero, ...} ou None."""
+    import json as _json
+    retorno = _get('pedido.incluir.php',
+                   params={'pedido': _json.dumps({'pedido': pedido_dict})})
+    if not retorno:
+        return None
+    registros = retorno.get('registros') or []
+    if not registros:
+        return None
+    reg = registros[0].get('registro') if isinstance(registros[0], dict) else None
+    if not isinstance(reg, dict):
+        return None
+    return {'id': str(reg.get('id') or ''),
+            'numero': str(reg.get('numero') or ''),
+            'status': reg.get('status') or ''}
+
+
+def gerar_nota_fiscal_pedido(pedido_id, modelo='NFCe'):
+    """gerar.nota.fiscal.pedido.php — cria a NF (rascunho) a partir de um
+    pedido existente no Tiny. `modelo` = 'NFCe' (consumidor) ou 'NFe'.
+    Devolve {id_nota_fiscal, status, numero} ou None."""
+    retorno = _get('gerar.nota.fiscal.pedido.php',
+                   params={'id': str(pedido_id), 'modelo': modelo})
+    if not retorno:
+        return None
+    reg = retorno.get('registro') or {}
+    if not isinstance(reg, dict):
+        return None
+    nf_id = (str(reg.get('id_nota_fiscal') or reg.get('id') or '').strip())
+    return {'id_nota_fiscal': nf_id,
+            'numero': str(reg.get('numero') or ''),
+            'status': reg.get('status') or ''}
+
+
+def emitir_nota_fiscal(nota_id):
+    """nota.fiscal.emitir.php — autoriza a NF na SEFAZ (sai do rascunho).
+    Em sandbox/homologação não tem efeito legal. Devolve {ok, status, erro?}."""
+    retorno = _get('nota.fiscal.emitir.php', params={'id': str(nota_id)})
+    if not retorno:
+        return {'ok': False, 'erro': _consumir_falha() or 'sem resposta'}
+    status = (retorno.get('status_processamento')
+              or retorno.get('status') or '').lower()
+    return {'ok': status in ('ok', '1', '100', 'emitida', 'autorizada'),
+            'status': status}
+
+
+def obter_nota_fiscal(nota_id):
+    """nota.fiscal.obter.php — situação atual da NF (chave, número,
+    autorizada/rejeitada). Devolve dict cru do Tiny ou None."""
+    if not nota_id:
+        return None
+    retorno = _get('nota.fiscal.obter.php', params={'id': str(nota_id)})
+    if not retorno:
+        return None
+    nf = retorno.get('nota_fiscal') or retorno.get('registro') or {}
+    return nf if isinstance(nf, dict) else None
+
+
 def obter_link_nota_fiscal(nota_id):
     """Retorna URL temporaria do DANFE em PDF, ou None.
     A URL e publica mas com expiracao do lado do Tiny."""
