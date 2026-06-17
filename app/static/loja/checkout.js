@@ -174,6 +174,24 @@
       r.addEventListener('change', aplicarModo);
     });
 
+    // Mudou a data -> repopular janelas (filtra passadas se for hoje)
+    var dataEl = document.getElementById('data_entrega');
+    if (dataEl) {
+      dataEl.addEventListener('change', function () {
+        popularJanelas(modoSelecionado());
+      });
+    }
+
+    // Monta o endereço estruturado em uma linha pra cotar o frete.
+    function enderecoMontado() {
+      var ids = ['logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf'];
+      var partes = ids.map(function (k) {
+        var el = document.getElementById(k);
+        return el ? (el.value || '').trim() : '';
+      }).filter(Boolean);
+      return partes.join(', ');
+    }
+
     // ── Cotação de frete ───────────────────────────────────────────────
     var btnFrete = document.getElementById('btn-frete');
     if (btnFrete) {
