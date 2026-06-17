@@ -237,11 +237,17 @@ def emitir_nf(pedido, user_id=None):
                 'msg': 'NF já emitida.'}
     if pedido.status != 'pago':
         return {'ok': False, 'msg': 'Pedido não está pago — não emite NF.'}
-    # RESUMÍVEL: se já criamos o pedido no Tiny numa tentativa anterior (ex:
-    # gerar NF falhou por lock), reaproveita o mesmo pedido — não duplica.
-    if pedido.tiny_pedido_id:
-        tiny_pid = pedido.tiny_pedido_id
-    else:
+    # RESUMÍVEL sem duplicar: usa o tiny_pedido_id que já temos; se ele não
+    # existir mais no Tiny ("Pedido não localizado", cod 32), procura pelo
+    # nosso código (numero_ordem_compra) antes de criar um novo.
+    tiny_pid = pedido.tiny_pedido_id
+    if not tiny_pid:
+        achado = tiny.buscar_pedido_por_numero_ordem(pedido.codigo)
+        if achado:
+            tiny_pid = achado
+            pedido.tiny_pedido_id = tiny_pid
+            db.session.commit()
+    if not tiny_pid:
         itens, faltando = _payload_itens(pedido)
         if faltando:
             return {'ok': False,
@@ -259,8 +265,39 @@ def emitir_nf(pedido, user_id=None):
                     'msg': f'Falha ao incluir o pedido no Tiny: '
                            f'{incl.get("erro")}'}
         pedido.tiny_pedido_id = tiny_pid = incl['id']
-        db.session.commit()  # guarda o id mesmo se os próximos passos falharem
+        db.session.commit()
     gerar = tiny.gerar_nota_fiscal_pedido(tiny_pid)
+    # "Pedido não localizado" (cod 32): o id velho foi apagado no Tiny.
+    # Limpa e tenta UMA vez mais — busca pelo código ou cria novo pedido.
+    erro_gerar = (gerar.get('erro') or '').lower()
+    if not gerar.get('ok') and ('não localizado' in erro_gerar
+                                or 'nao localizado' in erro_gerar
+                                or 'cod 32' in erro_gerar):
+        pedido.tiny_pedido_id = None
+        db.session.commit()
+        achado = tiny.buscar_pedido_por_numero_ordem(pedido.codigo)
+        if achado:
+            tiny_pid = achado
+        else:
+            itens, faltando = _payload_itens(pedido)
+            if faltando:
+                return {'ok': False,
+                        'msg': 'Itens sem SKU mapeado: '
+                               + ', '.join(faltando)}
+            incl = tiny.incluir_pedido({
+                'numero_ordem_compra': pedido.codigo,
+                'cliente': _payload_cliente(pedido),
+                'itens': itens,
+                'valor_frete': float(pedido.frete_valor or 0),
+            })
+            if not incl.get('ok'):
+                return {'ok': False,
+                        'msg': f'Falha ao incluir o pedido no Tiny: '
+                               f'{incl.get("erro")}'}
+            tiny_pid = incl['id']
+        pedido.tiny_pedido_id = tiny_pid
+        db.session.commit()
+        gerar = tiny.gerar_nota_fiscal_pedido(tiny_pid)
     if not gerar.get('ok'):
         return {'ok': False,
                 'msg': f'Pedido criado no Tiny, mas falhou ao gerar a NF: '
