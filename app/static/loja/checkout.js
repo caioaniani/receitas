@@ -97,7 +97,7 @@
     function aplicarModo() {
       var modo = modoSelecionado();
       var ehEntrega = (modo === 'agendada' || modo === 'express');
-      document.getElementById('bloco-endereco').style.display =
+      document.getElementById('bloco-entrega').style.display =
         ehEntrega ? 'block' : 'none';
       document.getElementById('bloco-loja').style.display =
         modo === 'retirada' ? 'block' : 'none';
@@ -110,6 +110,51 @@
       else freteAtual = null;
       popularJanelas(modo);
       atualizarTotais();
+    }
+
+    // Toggle "é um presente" (mostra campos do destinatário)
+    var chkPresente = document.getElementById('e_presente');
+    var blocoDest = document.getElementById('bloco-destinatario');
+    function aplicarPresente() {
+      if (blocoDest) blocoDest.style.display = chkPresente.checked ? 'block' : 'none';
+    }
+    if (chkPresente) {
+      chkPresente.addEventListener('change', aplicarPresente);
+      aplicarPresente();
+    }
+
+    // CEP -> BrasilAPI: preenche logradouro/bairro/cidade/UF
+    var cepEl = document.getElementById('cep');
+    if (cepEl) {
+      cepEl.addEventListener('blur', function () {
+        var d = (cepEl.value || '').replace(/\D/g, '');
+        if (d.length !== 8) return;
+        // máscara visual
+        cepEl.value = d.slice(0, 5) + '-' + d.slice(5);
+        fetch('/loja/api/cep/' + d).then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (!j.ok) return;
+            ['logradouro', 'bairro', 'cidade', 'uf'].forEach(function (k) {
+              var el = document.getElementById(k);
+              if (el && !el.value) el.value = j[k] || '';
+            });
+            var num = document.getElementById('numero');
+            if (num) num.focus();
+          }).catch(function () {});
+      });
+    }
+
+    // Máscara simples de CPF (XXX.XXX.XXX-XX)
+    var cpfEl = document.getElementById('cpf');
+    if (cpfEl) {
+      cpfEl.addEventListener('input', function () {
+        var d = (cpfEl.value || '').replace(/\D/g, '').slice(0, 11);
+        var out = d;
+        if (d.length > 9) out = d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6, 9) + '-' + d.slice(9);
+        else if (d.length > 6) out = d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6);
+        else if (d.length > 3) out = d.slice(0, 3) + '.' + d.slice(3);
+        cpfEl.value = out;
+      });
     }
 
     form.querySelectorAll('input[name="modo_entrega"]').forEach(function (r) {
