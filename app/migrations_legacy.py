@@ -1129,6 +1129,17 @@ def _migrate_postgres(app):
     _try("CREATE INDEX IF NOT EXISTS ix_pedido_online_nf "
          "ON pedido_online(tiny_nota_fiscal_id)")
 
+    # Endereco estruturado pra NF-e (17/06/2026): a SEFAZ exige logradouro/
+    # numero/bairro/cidade/uf SEPARADOS; antes so guardavamos a linha unica
+    # em endereco_entrega e a nota saia com "endereco/bairro/cidade em branco".
+    for _c, _t in (('endereco_logradouro', 'VARCHAR(200)'),
+                   ('endereco_numero', 'VARCHAR(20)'),
+                   ('endereco_complemento', 'VARCHAR(100)'),
+                   ('endereco_bairro', 'VARCHAR(100)'),
+                   ('endereco_cidade', 'VARCHAR(100)'),
+                   ('endereco_uf', 'VARCHAR(2)')):
+        _try(f"ALTER TABLE pedido_online ADD COLUMN IF NOT EXISTS {_c} {_t}")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
