@@ -133,19 +133,21 @@ def test_criar_pedido_cartao_token_e_parcelas(app):
         assert 'Frete' in descs
 
 
-def test_criar_pedido_cartao_sem_token(app):
+def test_criar_pedido_cartao_pagarme_recusa(app):
+    """Quando o Pagar.me devolve 422 (ex: token expirado/inválido),
+    criar_pedido_cartao propaga ok=False com o motivo."""
     from app.extensions import db
     from app.services import pagarme
     with app.app_context():
+        app.config['PAGARME_API_KEY'] = 'sk_test_abc'
         p = _produto(db)
         ped = _pedido_com_item(db, p)
-        # token vazio é bloqueado pelo orquestrador (não chega no pagarme),
-        # mas se chegar, o payload ainda é construído — só o token cai vazio.
         with patch('app.services.pagarme.requests.post',
-                   return_value=_fake_resp(422, {'message': 'token vazio'})):
-            res = pagarme.criar_pedido_cartao(ped, '', parcelas=1)
+                   return_value=_fake_resp(422,
+                                           {'message': 'card token invalid'})):
+            res = pagarme.criar_pedido_cartao(ped, 'tok_x', parcelas=1)
         assert res['ok'] is False
-        assert 'token' in res['erro'].lower() or '422' in str(res.get('http'))
+        assert 'invalid' in res['erro'].lower() or res.get('http') == 422
 
 
 def test_cancelar_charge(app):
