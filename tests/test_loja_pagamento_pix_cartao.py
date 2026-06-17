@@ -128,9 +128,33 @@ def test_criar_pedido_cartao_token_e_parcelas(app):
         assert cc['amount'] == 6500
         assert cc['credit_card']['card_token'] == 'tok_abc'
         assert cc['credit_card']['installments'] == 3
+        # billing_address (antifraude) vai em credit_card.card.billing_address
+        billing = cc['credit_card']['card']['billing_address']
+        assert billing['country'] == 'BR' and billing['state'] == 'SP'
         # Frete entra como item separado pra somar
         descs = [i['description'] for i in payload['items']]
         assert 'Frete' in descs
+
+
+def test_cartao_billing_address_do_form(app):
+    """O endereço de cobrança informado no form vai pro payload normalizado."""
+    from app.extensions import db
+    from app.services import pagarme
+    with app.app_context():
+        app.config['PAGARME_API_KEY'] = 'sk_test_abc'
+        p = _produto(db, preco=10.0)
+        ped = _pedido_com_item(db, p, qtd=1)
+        body = {'id': 'or_b', 'charges': [{'id': 'ch_b', 'status': 'paid'}]}
+        billing = {'line_1': 'Rua X, 10', 'zip_code': '04077-000',
+                   'city': 'São Paulo', 'state': 'sp', 'country': 'br'}
+        with patch('app.services.pagarme.requests.post',
+                   return_value=_fake_resp(200, body)) as post:
+            pagarme.criar_pedido_cartao(ped, 'tok', parcelas=1, billing=billing)
+        ba = post.call_args[1]['json']['payments'][0]['credit_card']['card']['billing_address']
+        assert ba['line_1'] == 'Rua X, 10'
+        assert ba['zip_code'] == '04077000'   # só dígitos
+        assert ba['state'] == 'SP'            # uppercase, 2 chars
+        assert ba['country'] == 'BR'
 
 
 def test_criar_pedido_cartao_pagarme_recusa(app):
