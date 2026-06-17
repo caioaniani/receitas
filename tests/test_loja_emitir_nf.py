@@ -416,6 +416,39 @@ def test_emitir_nota_fiscal_status_2_e_erro(app):
         assert 'Rejeicao' in res['erro']
 
 
+def test_danfe_redireciona_pro_link(app):
+    """A rota do DANFE redireciona pro link temporário do Tiny."""
+    from app.extensions import db
+    c = _owner(app)
+    produto = _produto(db)
+    with app.app_context():
+        p = _pedido_pago(db, produto, sku='S')
+        p.tiny_nota_fiscal_id = 'nf-1'
+        db.session.commit()
+        codigo = p.codigo
+    with patch('app.services.tiny_nf.link_danfe',
+               return_value='https://tiny/danfe.pdf'):
+        r = c.get(f'/admin/loja-online/pedidos/{codigo}/danfe',
+                  follow_redirects=False)
+    assert r.status_code == 302
+    assert r.headers['Location'] == 'https://tiny/danfe.pdf'
+
+
+def test_danfe_sem_link_volta_pro_detalhe(app):
+    """Sem link (NF não autorizada): avisa e volta pro detalhe, sem 500."""
+    from app.extensions import db
+    c = _owner(app)
+    produto = _produto(db)
+    with app.app_context():
+        p = _pedido_pago(db, produto, sku='S')
+        codigo = p.codigo
+    with patch('app.services.tiny_nf.link_danfe', return_value=None):
+        r = c.get(f'/admin/loja-online/pedidos/{codigo}/danfe',
+                  follow_redirects=False)
+    assert r.status_code == 302
+    assert f'/pedidos/{codigo}' in r.headers['Location']
+
+
 def test_detalhe_mostra_botao_emitir_pra_pago(app):
     from app.extensions import db
     c = _owner(app)
