@@ -113,17 +113,15 @@ def webhook_pagarme():
     Idempotente (PagarmeEvento). 'order.paid'/'charge.paid' marca pago e
     baixa estoque (venda_site). 'refunded'/'canceled' estorna. Reentrega do
     mesmo evento devolve 200 sem dupli­car efeito."""
-    import os as _os
-    segredo_esperado = (loja_pagamento.pagarme.current_app.config
-                        .get('PAGARME_WEBHOOK_SECRET') or '').strip()
+    import hmac
+
+    from flask import current_app
+    segredo_esperado = (current_app.config.get('PAGARME_WEBHOOK_SECRET')
+                        or '').strip()
     if not segredo_esperado:
         return jsonify(ok=False, erro='webhook desabilitado'), 503
     fornecido = request.args.get('k') or ''
-    if not _os.path.basename:  # noqa: SIM108 (placeholder pra evitar timing)
-        pass
-    # Comparação constante (defesa contra timing). hmac.compare_digest é o
-    # padrão correto pra segredo curto.
-    import hmac
+    # Comparação constante — defesa contra timing attack.
     if not hmac.compare_digest(segredo_esperado, fornecido):
         return jsonify(ok=False, erro='unauthorized'), 401
     evento = request.get_json(silent=True) or {}
