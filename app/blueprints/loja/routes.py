@@ -122,7 +122,17 @@ def pedido_cartao(codigo):
         parcelas = int(request.form.get('parcelas') or '1')
     except ValueError:
         parcelas = 1
-    pag, erros = loja_pagamento.iniciar_cartao(pedido, token, parcelas)
+    # Endereço de cobrança (antifraude do Pagar.me exige no charge).
+    billing = {
+        'line_1': (request.form.get('bill_line') or '').strip(),
+        'zip_code': ''.join(c for c in (request.form.get('bill_cep') or '')
+                            if c.isdigit()),
+        'city': (request.form.get('bill_city') or '').strip() or 'São Paulo',
+        'state': (request.form.get('bill_state') or '').strip() or 'SP',
+        'country': 'BR',
+    }
+    pag, erros = loja_pagamento.iniciar_cartao(pedido, token, parcelas,
+                                               billing=billing)
     if erros:
         return render_template(
             'loja/pagamento.html',
