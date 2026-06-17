@@ -102,8 +102,17 @@ def test_montar_itens_descarta_item_inexistente(app):
 # ── criar_pedido ─────────────────────────────────────────────────────
 
 def _form(**kw):
+    # CPF de teste válido (passa no DV padrão): 529.982.247-25
     base = {'nome': 'Maria', 'email': 'maria@x.com', 'telefone': '11999',
-            'aceite_lgpd': '1'}
+            'cpf': '52998224725', 'aceite_lgpd': '1'}
+    # Endereço estruturado pros modos de entrega
+    base.setdefault('logradouro', 'Rua X')
+    base.setdefault('numero', '10')
+    base.setdefault('bairro', 'Moema')
+    base.setdefault('cidade', 'São Paulo')
+    base.setdefault('uf', 'SP')
+    base.setdefault('cep', '04077000')
+    base.setdefault('endereco', 'Rua X, 10, Moema')  # legado
     base.update(kw)
     return base
 
