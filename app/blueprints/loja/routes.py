@@ -118,10 +118,8 @@ def pedido_cartao(codigo):
     if pedido.status != 'aguardando_pagamento':
         return redirect(url_for('loja.pedido_confirmado', codigo=codigo))
     token = (request.form.get('card_token') or '').strip()
-    try:
-        parcelas = int(request.form.get('parcelas') or '1')
-    except ValueError:
-        parcelas = 1
+    # Cartão só à vista (1x) — sem parcelamento (decisão do dono 17/06/2026).
+    parcelas = 1
     # Endereço de cobrança (antifraude do Pagar.me exige no charge).
     billing = {
         'line_1': (request.form.get('bill_line') or '').strip(),
