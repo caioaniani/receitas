@@ -55,6 +55,15 @@ def home():
     )
 
 
+@loja_bp.route('/carrinho')
+def carrinho():
+    """Página do carrinho. O estado vive no navegador (localStorage) —
+    o servidor só serve a casca; o JS (carrinho.js) renderiza os itens.
+    Persiste no banco só no checkout (cria PedidoOnline). Rota estática
+    tem prioridade sobre /<slug_completo> no roteamento do Werkzeug."""
+    return render_template('loja/carrinho.html', em_teste=_em_teste())
+
+
 @loja_bp.route('/<slug_completo>')
 def produto(slug_completo):
     """URL canônica: `/loja/<slug>-<r|p><id>` (ex: sourdough-tradicional-r12).
