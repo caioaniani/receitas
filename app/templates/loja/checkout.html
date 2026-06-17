@@ -136,11 +136,11 @@
       </p>
     </div>
 
-    <!-- Cartinha -->
-    <div class="checkout-bloco">
-      <h2>Cartinha / observações <span class="opcional">(opcional)</span></h2>
+    <!-- Cartinha — só aparece se houver uma cesta no carrinho (JS controla) -->
+    <div class="checkout-bloco" id="bloco-cartinha" style="display:none">
+      <h2>Cartinha <span class="opcional">(opcional)</span></h2>
       <textarea name="cartinha" rows="3"
-        placeholder="Mensagem de presente, ponto de referência, etc.">{{ form.get('cartinha', '') }}</textarea>
+        placeholder="Mensagem de presente para acompanhar a cesta.">{{ form.get('cartinha', '') }}</textarea>
     </div>
 
     <!-- Totais -->
