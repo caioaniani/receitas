@@ -147,20 +147,31 @@
           <div class="text-muted">Emitida: {{ p.nf_emitida_em.strftime('%d/%m/%Y %H:%M') }}</div>
           {% if p.tiny_pedido_id %}<div class="text-muted">Pedido Tiny: <code>{{ p.tiny_pedido_id }}</code></div>{% endif %}
         {% elif p.tiny_nota_fiscal_id %}
-          {# Rascunho gerado mas a emissão (autorização SEFAZ) falhou #}
-          <div>NF rascunho: <code>{{ p.tiny_nota_fiscal_id }}</code></div>
+          {# NF criada mas a emissão (autorização SEFAZ) não foi confirmada #}
+          <div>NF: <code>{{ p.tiny_nota_fiscal_id }}</code></div>
           {% if p.nf_status %}<div class="text-danger">Status: <strong>{{ p.nf_status }}</strong></div>{% endif %}
           {% if p.tiny_pedido_id %}<div class="text-muted">Pedido Tiny: <code>{{ p.tiny_pedido_id }}</code></div>{% endif %}
           <div class="alert alert-warning py-2 px-2 mt-2 mb-2">
-            A autorização na SEFAZ não foi concluída. Confira os dados
-            (endereço, natureza no Tiny) e refaça do zero.
+            A autorização não foi confirmada no nosso sistema. <strong>Reenviar</strong>
+            consulta a SEFAZ e sincroniza <em>sem duplicar</em> (use este se a nota
+            pode ter autorizado). Só use <strong>Refazer do zero</strong> se a nota
+            estiver realmente <em>rejeitada</em>.
           </div>
+          {# Primário: reenvia/verifica a MESMA nota (não duplica) #}
+          <form method="POST" action="{{ url_for('main.loja_online_emitir_nf', codigo=p.codigo) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-primary w-100">
+              <i class="bi bi-arrow-clockwise"></i> Reenviar / verificar
+            </button>
+          </form>
+          {# Secundário (perigo): descarta a atual e cria outra do zero #}
           <form method="POST" action="{{ url_for('main.loja_online_emitir_nf', codigo=p.codigo) }}"
-                onsubmit="return confirm('Refazer a NF do zero no Tiny? O rascunho anterior é descartado.');">
+                class="mt-2"
+                onsubmit="return confirm('Refazer do ZERO? A NF atual é descartada e uma nova é criada. NÃO faça isso se a nota já pode ter autorizado — geraria duplicidade.');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="recriar" value="1">
-            <button type="submit" class="btn btn-sm btn-warning w-100">
-              <i class="bi bi-arrow-repeat"></i> Refazer NF
+            <button type="submit" class="btn btn-sm btn-outline-warning w-100">
+              <i class="bi bi-arrow-repeat"></i> Refazer do zero
             </button>
           </form>
         {% elif p.status == 'pago' %}
