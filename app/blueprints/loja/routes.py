@@ -162,7 +162,7 @@ def _gate_acesso():
 
     `/loja/robots.txt` é exceção: precisa estar sempre acessível pra dizer
     pro Google "não indexa" enquanto a loja está em teste."""
-    if request.endpoint == 'loja.robots':
+    if request.endpoint in ('loja.robots', 'loja.webhook_pagarme'):
         return None
     if _loja_visivel_publico():
         return None  # liberada
