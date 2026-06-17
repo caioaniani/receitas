@@ -17,7 +17,7 @@ class Usuario(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(100), nullable=False)
     login = db.Column(db.String(50), nullable=False, unique=True)
-    # Email pra envio de senha/convite (Resend). Nullable: usuários antigos
+    # Email pra envio de senha/convite (Postmark). Nullable: usuários antigos
     # não têm; cadastro novo passa a exigir. Coluna criada via
     # _migrate_postgres/_migrate_sqlite no mesmo commit do modelo
     # (ADD COLUMN IF NOT EXISTS roda no startup antes de servir).
