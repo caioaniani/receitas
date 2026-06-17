@@ -307,6 +307,60 @@ def test_incluir_nota_fiscal_erro_propaga_mensagem(app):
         assert res['ok'] is False and 'natureza' in res['erro']
 
 
+# ── tiny.py: funções do Plano A (criar pedido + gerar NF do pedido) ────────
+# Mantidas como fallback enquanto o Plano B (nota.fiscal.incluir) não está
+# 100% confirmado em prod. Testam o cliente da API, não o orquestrador.
+
+def test_gerar_nf_retry_no_lock(app):
+    """Lock do Tiny (cod 31) é temporário — repete e na 2ª vez gera."""
+    from app.services import tiny
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'tok'
+        chamadas = []
+
+        class RLock:
+            status_code = 200
+
+            def json(self):
+                return {'retorno': {'status': 'Erro', 'registros': {
+                    'registro': {'erros': [{
+                        'erro': 'Lock Venda::gerarNotaFiscal bloqueado.'}]}}}}
+
+        class ROk:
+            status_code = 200
+
+            def json(self):
+                return {'retorno': {'status': 'OK',
+                                    'registro': {'id_nota_fiscal': 'nf-ok'}}}
+
+        def fake_post(*a, **k):
+            chamadas.append(1)
+            return RLock() if len(chamadas) == 1 else ROk()
+        with patch('app.services.tiny.time.sleep'), \
+             patch('app.services.tiny.requests.post', side_effect=fake_post):
+            res = tiny.gerar_nota_fiscal_pedido('tp-1')
+        assert res['ok'] is True and res['id_nota_fiscal'] == 'nf-ok'
+        assert len(chamadas) == 2  # repetiu após o lock
+
+
+def test_incluir_pedido_registros_como_dict(app):
+    """Regressão do 500 (KeyError: 0): Tiny v2 às vezes manda `registros`
+    como DICT {'registro': {...}}, não lista. _registros normaliza."""
+    from app.services import tiny
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'tok'
+
+        class R:
+            status_code = 200
+
+            def json(self):
+                return {'retorno': {'status': 'OK', 'registros': {
+                    'registro': {'id': '777', 'numero': '5', 'status': 'OK'}}}}
+        with patch('app.services.tiny.requests.post', return_value=R()):
+            res = tiny.incluir_pedido({'cliente': {}, 'itens': []})
+        assert res['ok'] is True and res['id'] == '777'
+
+
 def test_detalhe_mostra_botao_emitir_pra_pago(app):
     from app.extensions import db
     c = _owner(app)
