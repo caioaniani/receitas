@@ -127,11 +127,11 @@ def _get(endpoint, params=None, retornar_erro=False):
             return None
         status = (retorno.get('status') or '').lower()
         if status not in ('ok', '1'):
-            erros = retorno.get('erros') or retorno.get('registros') or []
-            _registrar_falha(f'retorno.status={status!r}')
-            logger.warning('tiny %s erro: status=%s erros=%s',
-                           endpoint, status, str(erros)[:200])
-            return None
+            detalhe = _extrair_erros(retorno)
+            _registrar_falha(detalhe or f'retorno.status={status!r}')
+            logger.warning('tiny %s erro: status=%s detalhe=%s',
+                           endpoint, status, detalhe[:200])
+            return retorno if retornar_erro else None
         return retorno
     # esgotou todas as tentativas
     _registrar_falha(f'{ultima_causa} (apos {tentativas} tentativas)')
