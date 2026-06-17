@@ -237,23 +237,30 @@ def emitir_nf(pedido, user_id=None):
                 'msg': 'NF já emitida.'}
     if pedido.status != 'pago':
         return {'ok': False, 'msg': 'Pedido não está pago — não emite NF.'}
-    itens, faltando = _payload_itens(pedido)
-    if faltando:
-        return {'ok': False,
-                'msg': 'Itens sem SKU mapeado no Tiny: ' + ', '.join(faltando)}
-    pedido_tiny = {
-        'numero_ordem_compra': pedido.codigo,
-        'cliente': _payload_cliente(pedido),
-        'itens': itens,
-        'valor_frete': float(pedido.frete_valor or 0),
-    }
-    incl = tiny.incluir_pedido(pedido_tiny)
-    if not incl.get('ok'):
-        return {'ok': False,
-                'msg': f'Falha ao incluir o pedido no Tiny: {incl.get("erro")}'}
-    pedido.tiny_pedido_id = incl['id']
-    db.session.commit()  # guarda o id mesmo se os próximos passos falharem
-    gerar = tiny.gerar_nota_fiscal_pedido(incl['id'])
+    # RESUMÍVEL: se já criamos o pedido no Tiny numa tentativa anterior (ex:
+    # gerar NF falhou por lock), reaproveita o mesmo pedido — não duplica.
+    if pedido.tiny_pedido_id:
+        tiny_pid = pedido.tiny_pedido_id
+    else:
+        itens, faltando = _payload_itens(pedido)
+        if faltando:
+            return {'ok': False,
+                    'msg': 'Itens sem SKU mapeado no Tiny: '
+                           + ', '.join(faltando)}
+        pedido_tiny = {
+            'numero_ordem_compra': pedido.codigo,
+            'cliente': _payload_cliente(pedido),
+            'itens': itens,
+            'valor_frete': float(pedido.frete_valor or 0),
+        }
+        incl = tiny.incluir_pedido(pedido_tiny)
+        if not incl.get('ok'):
+            return {'ok': False,
+                    'msg': f'Falha ao incluir o pedido no Tiny: '
+                           f'{incl.get("erro")}'}
+        pedido.tiny_pedido_id = tiny_pid = incl['id']
+        db.session.commit()  # guarda o id mesmo se os próximos passos falharem
+    gerar = tiny.gerar_nota_fiscal_pedido(tiny_pid)
     if not gerar.get('ok'):
         return {'ok': False,
                 'msg': f'Pedido criado no Tiny, mas falhou ao gerar a NF: '
