@@ -107,11 +107,11 @@ def iniciar_pix(pedido, expira_em_min=30):
     return pag, []
 
 
-def iniciar_cartao(pedido, card_token, parcelas=1):
+def iniciar_cartao(pedido, card_token, parcelas=1, billing=None):
     """Cria PagamentoOnline(metodo=cartao) e dispara Order de cartão.
     Pagar.me responde 'paid' (capturou) ou 'failed'. Diferente do Pix, o
     cartão dá resposta imediata — mas mesmo assim a baixa de estoque
-    espera o webhook."""
+    espera o webhook. `billing` = endereço de cobrança (antifraude)."""
     if not card_token:
         return None, ['Cartão não foi tokenizado — tente de novo.']
     _zerar_pagamento_anterior(pedido)
@@ -120,7 +120,8 @@ def iniciar_cartao(pedido, card_token, parcelas=1):
     db.session.add(pag)
     db.session.flush()
 
-    res = pagarme.criar_pedido_cartao(pedido, card_token, parcelas=parcelas)
+    res = pagarme.criar_pedido_cartao(pedido, card_token, parcelas=parcelas,
+                                      billing=billing)
     if not res.get('ok'):
         pag.status = 'falhou'
         pag.erro = res.get('erro') or 'falha desconhecida'
