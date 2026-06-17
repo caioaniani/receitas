@@ -1106,6 +1106,9 @@ def _migrate_postgres(app):
     _try("ALTER TABLE lalamove_entrega ADD COLUMN IF NOT EXISTS "
          "priority_fee NUMERIC(10, 2)")
 
+    # Email do usuario (envio de senha/convite via Resend, 16/06/2026).
+    _try("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS email VARCHAR(200)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
