@@ -252,13 +252,25 @@ def criar_pedido_cartao(pedido, card_token, parcelas=1):
     status, body = _post_order(payload)
     if status not in (200, 201):
         erro = body.get('message') or body.get('_erro') or f'HTTP {status}'
+        logger.warning('pagarme criar_pedido_cartao HTTP %s: %s', status, body)
         return {'ok': False, 'erro': erro, 'http': status}
     charge = _extrair_charge(body)
+    st = charge.get('status')
+    last_st = (charge.get('last_transaction') or {}).get('status')
+    # Recusado pelo emissor: charge nasce 'failed'/'not_authorized'. Cava o
+    # motivo real (mensagem do adquirente) em vez de "recusado" genérico.
+    if st in ('failed', 'canceled') or last_st in ('failed', 'not_authorized',
+                                                   'refused'):
+        motivo = _erro_da_charge(charge)
+        logger.warning('pagarme cartao recusado: %s | body=%s', motivo, body)
+        return {'ok': False, 'erro': motivo, 'http': status,
+                'status': st, 'order_id': body.get('id'),
+                'charge_id': charge.get('id')}
     return {
         'ok': True,
         'order_id': body.get('id'),
         'charge_id': charge.get('id'),
-        'status': charge.get('status'),  # 'paid', 'failed', 'pending'…
+        'status': st,  # 'paid', 'pending'…
     }
 
 
