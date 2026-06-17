@@ -62,9 +62,19 @@ def pedido_pagamento(codigo):
     pix_pendente = next((p for p in pedido.pagamentos
                          if p.metodo == 'pix' and p.status == 'pendente'),
                         None)
+    # Última tentativa que falhou — mostramos o motivo pra o cliente
+    # entender o que aconteceu em vez de ver tela em branco.
+    pagamentos_ord = sorted(pedido.pagamentos, key=lambda x: x.criado_em or 0)
+    ultima_falha = next((p for p in reversed(pagamentos_ord)
+                         if p.status == 'falhou'), None)
+    erros = []
+    if ultima_falha and ultima_falha.erro:
+        erros.append(f'Última tentativa falhou: {ultima_falha.erro}')
     return render_template('loja/pagamento.html',
                            pedido=pedido, pubkey=pubkey,
-                           pix_pendente=pix_pendente, em_teste=_em_teste())
+                           pix_pendente=pix_pendente,
+                           erros=erros if erros else None,
+                           em_teste=_em_teste())
 
 
 @loja_bp.route('/pedido/<codigo>/pix', methods=['POST'])
