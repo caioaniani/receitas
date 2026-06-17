@@ -156,8 +156,8 @@ def test_pagina_produto_carrega(app):
     assert r.status_code == 200
     assert b'Box Mimo' in r.data
     assert b'R$ 166,00' in r.data
-    # Botão de comprar desabilitado (vitrine ainda não tem checkout)
-    assert b'disabled' in r.data
+    # Fase 3 ligou o carrinho: botão "Adicionar ao carrinho" presente
+    assert b'data-add-carrinho' in r.data
 
 
 def test_slug_errado_redireciona_301(app):
