@@ -92,6 +92,9 @@ def iniciar_pix(pedido, expira_em_min=30):
     if not res.get('ok'):
         pag.status = 'falhou'
         pag.erro = res.get('erro') or 'falha desconhecida'
+        # Guarda os IDs mesmo na falha pra reconciliar no painel do Pagar.me.
+        pag.pagarme_order_id = res.get('order_id')
+        pag.pagarme_charge_id = res.get('charge_id')
         db.session.commit()
         return None, [res.get('erro') or 'Erro ao gerar Pix']
 
