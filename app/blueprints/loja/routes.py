@@ -223,6 +223,31 @@ def checkout():
     return render_template('loja/checkout.html', **_ctx_checkout())
 
 
+@loja_bp.route('/api/cep/<cep>', methods=['GET'])
+def api_cep(cep):
+    """Lookup de CEP via BrasilAPI pra autocompletar logradouro/bairro/
+    cidade/UF no checkout. Faz cache simples no servidor não — devolve
+    a resposta como veio. Sem rate limit dedicado (o gate da loja já
+    barra anônimos enquanto LOJA_VISIVEL=0)."""
+    import requests
+    cep_d = ''.join(c for c in (cep or '') if c.isdigit())
+    if len(cep_d) != 8:
+        return jsonify(ok=False, erro='CEP precisa ter 8 dígitos.'), 400
+    try:
+        r = requests.get(
+            f'https://brasilapi.com.br/api/cep/v2/{cep_d}', timeout=6)
+    except Exception:  # noqa: BLE001
+        return jsonify(ok=False, erro='Não consegui consultar o CEP.'), 502
+    if r.status_code != 200:
+        return jsonify(ok=False, erro='CEP não encontrado.'), 404
+    j = r.json() or {}
+    return jsonify(ok=True,
+                   logradouro=j.get('street') or '',
+                   bairro=j.get('neighborhood') or '',
+                   cidade=j.get('city') or '',
+                   uf=j.get('state') or '')
+
+
 @loja_bp.route('/api/frete', methods=['POST'])
 def api_frete():
     """Cotação de frete pro checkout (anéis de distância do frete.py).
