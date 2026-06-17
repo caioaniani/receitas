@@ -148,6 +148,40 @@ def test_botao_emitir_nf_no_admin(app):
         assert atual.tiny_nota_fiscal_id == 'nf'
 
 
+def test_incluir_pedido_registros_como_dict(app):
+    """Regressão do 500 (KeyError: 0): Tiny v2 às vezes manda `registros`
+    como DICT {'registro': {...}}, não lista. _registros normaliza."""
+    from app.services import tiny
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'tok'
+
+        class R:
+            status_code = 200
+            def json(self):
+                return {'retorno': {'status': 'OK', 'registros': {
+                    'registro': {'id': '777', 'numero': '5', 'status': 'OK'}}}}
+        with patch('app.services.tiny.requests.post', return_value=R()):
+            res = tiny.incluir_pedido({'cliente': {}, 'itens': []})
+        assert res['ok'] is True and res['id'] == '777'
+
+
+def test_incluir_pedido_erro_propaga_mensagem(app):
+    """Tiny recusa: a mensagem real volta no 'erro' (não 'ver logs')."""
+    from app.services import tiny
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'tok'
+
+        class R:
+            status_code = 200
+            def json(self):
+                return {'retorno': {'status': 'Erro', 'registros': {
+                    'registro': {'erros': [{'erro': 'Cliente sem endereço'}]}}}}
+        with patch('app.services.tiny.requests.post', return_value=R()):
+            res = tiny.incluir_pedido({'cliente': {}, 'itens': []})
+        assert res['ok'] is False
+        assert 'endereço' in res['erro']
+
+
 def test_detalhe_mostra_botao_emitir_pra_pago(app):
     from app.extensions import db
     c = _owner(app)
