@@ -47,20 +47,23 @@ def _loja(db, nome='Brooklin'):
 
 # ── Datas / corte 17h ────────────────────────────────────────────────
 
-def test_datas_agendada_antes_das_17h_comeca_amanha(app):
+def test_datas_agendada_inclui_hoje_se_ha_janela(app):
+    """Às 10h ainda há janelas hoje (12:00+ com lead 2h) — hoje entra."""
     from app.services import loja_checkout
     with app.app_context():
-        base = datetime(2026, 6, 17, 10, 0)  # 10h, antes do corte
+        base = datetime(2026, 6, 17, 10, 0)
+        datas = loja_checkout.datas_disponiveis('agendada', base=base)
+        assert datas[0].isoformat() == '2026-06-17'  # hoje
+        assert datas[1].isoformat() == '2026-06-18'  # amanhã (contíguo)
+
+
+def test_datas_agendada_pula_hoje_quando_tarde(app):
+    """Tarde demais (18:30): nenhuma janela cabe hoje -> começa amanhã."""
+    from app.services import loja_checkout
+    with app.app_context():
+        base = datetime(2026, 6, 17, 18, 30)
         datas = loja_checkout.datas_disponiveis('agendada', base=base)
         assert datas[0].isoformat() == '2026-06-18'  # amanhã
-
-
-def test_datas_agendada_depois_das_17h_pula_pro_dia_seguinte(app):
-    from app.services import loja_checkout
-    with app.app_context():
-        base = datetime(2026, 6, 17, 18, 30)  # depois do corte
-        datas = loja_checkout.datas_disponiveis('agendada', base=base)
-        assert datas[0].isoformat() == '2026-06-19'  # depois de amanhã
 
 
 def test_express_so_hoje_e_dentro_do_horario(app):
