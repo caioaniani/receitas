@@ -2532,3 +2532,31 @@ def debug_vnda_pedido(code):
         extra=extra,
         pedido_completo=pedido,
     )
+
+
+# ── Debug email (Resend): testa envio sem expor a chave (16/06/2026) ──────
+@main_bp.route('/admin/debug-email', methods=['GET', 'POST'])
+@owner_required
+def debug_email():
+    """Diagnóstico do Resend (owner-only). GET mostra status da config;
+    POST com ?para=<email> manda um email de teste. NÃO expõe a API key."""
+    from app.services import email as email_svc
+    cfg = current_app.config
+    status = {
+        'resend_configurado': email_svc.disponivel(),
+        'remetente': cfg.get('EMAIL_REMETENTE'),
+        'remetente_nome': cfg.get('EMAIL_REMETENTE_NOME'),
+        'app_base_url': cfg.get('APP_BASE_URL'),
+        'api_key_len': len((cfg.get('RESEND_API_KEY') or '')),
+    }
+    if request.method == 'POST':
+        para = (request.args.get('para') or request.form.get('para') or '').strip()
+        if not para:
+            return jsonify(ok=False, erro='passe ?para=<email>', status=status), 400
+        res = email_svc.enviar(
+            para, 'Teste de email — O Pão',
+            '<p>Funcionou! Este é um email de teste do sistema.</p>',
+            texto='Funcionou! Email de teste do sistema.')
+        return jsonify(ok=res.get('ok'), resultado=res, status=status)
+    return jsonify(ok=True, status=status,
+                   dica='POST /admin/debug-email?para=seu@email.com pra testar')
