@@ -57,6 +57,42 @@
       <div class="card-body"><em>“{{ p.cartinha }}”</em></div>
     </div>
     {% endif %}
+
+    <div class="card mb-3">
+      <div class="card-header py-2 fw-bold">Pagamentos</div>
+      <div class="card-body p-0">
+        {% if p.pagamentos %}
+        <table class="table table-sm mb-0 align-middle">
+          <thead><tr>
+            <th>Método</th><th>Status</th>
+            <th>Pagar.me</th><th class="text-end">Valor</th><th>Quando</th>
+          </tr></thead>
+          <tbody>
+          {% for pg in p.pagamentos | sort(attribute='criado_em') %}
+          <tr>
+            <td>{{ pg.metodo }}</td>
+            <td>
+              <span class="badge {{
+                {'pago':'bg-success','pendente':'bg-warning text-dark',
+                 'falhou':'bg-danger','estornado':'bg-secondary'
+                }.get(pg.status,'bg-secondary')
+              }}">{{ pg.status }}</span>
+              {% if pg.erro %}<br><small class="text-danger">{{ pg.erro }}</small>{% endif %}
+            </td>
+            <td><small><code>{{ pg.pagarme_order_id or '—' }}</code>
+              {% if pg.pagarme_charge_id %}<br><code>{{ pg.pagarme_charge_id }}</code>{% endif %}
+            </small></td>
+            <td class="text-end">R$ {{ '%.2f'|format(pg.valor)|replace('.', ',') }}</td>
+            <td class="small text-muted">{{ pg.criado_em.strftime('%d/%m %H:%M') if pg.criado_em }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted small p-3 mb-0">Nenhuma tentativa de pagamento ainda.</p>
+        {% endif %}
+      </div>
+    </div>
   </div>
 
   <div class="col-md-5">
