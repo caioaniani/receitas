@@ -64,6 +64,15 @@ def carrinho():
     return render_template('loja/carrinho.html', em_teste=_em_teste())
 
 
+@loja_bp.route('/checkout')
+def checkout():
+    """Stub do checkout — a Fase 3 constrói o fluxo real (dados do cliente
+    → modo de entrega → endereço/frete ou loja → data/janela → cartinha →
+    cria PedidoOnline) no próximo passo. Por ora evita 404 no botão do
+    carrinho e deixa o lugar reservado no roteamento."""
+    return render_template('loja/checkout.html', em_teste=_em_teste())
+
+
 @loja_bp.route('/<slug_completo>')
 def produto(slug_completo):
     """URL canônica: `/loja/<slug>-<r|p><id>` (ex: sourdough-tradicional-r12).
