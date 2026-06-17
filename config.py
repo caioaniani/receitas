@@ -196,3 +196,18 @@ class Config:
     # Segredo na URL do webhook do bot (/crm/bot?k=...). Valida que o evento
     # veio do nosso Agent Bot. Gerar random longo. Vazio = webhook recusa tudo.
     CHATWOOT_BOT_SECRET = os.environ.get('CHATWOOT_BOT_SECRET', '')
+
+    # ── Email transacional (Resend) — 16/06/2026 ──────────────────────
+    # Envio de senha/convite pra novos usuarios do gestao.*. Vazio =
+    # email desligado (cadastro mostra a senha na tela como fallback).
+    RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
+    # Remetente — precisa de dominio verificado no Resend (DNS DKIM/SPF).
+    EMAIL_REMETENTE = os.environ.get('EMAIL_REMETENTE', 'noreply@opao.online')
+    EMAIL_REMETENTE_NOME = os.environ.get(
+        'EMAIL_REMETENTE_NOME', 'O Pão Padaria Artesanal')
+    # URL base do sistema pro link de login no email (sem barra final).
+    APP_BASE_URL = os.environ.get(
+        'APP_BASE_URL', 'https://gestao.opaopadariaartesanal.com.br')
+    # URL do Chatwoot pra instruir o atendente (reusa CHATWOOT_URL se setado).
+    CHATWOOT_PUBLIC_URL = os.environ.get(
+        'CHATWOOT_PUBLIC_URL', 'https://atendimento.opaopadariaartesanal.com.br')
