@@ -262,6 +262,28 @@ def criar_pedido_cartao(pedido, card_token, parcelas=1):
     }
 
 
+def qr_data_uri(texto):
+    """PNG data-URI de um QR Code do texto (EMV Pix copia-e-cola). Gerado no
+    servidor com a lib `qrcode` (já no requirements) pra não depender do
+    qr_code_url do Pagar.me (que veio vazio/quebrado no sandbox). Devolve
+    None se faltar texto ou a lib falhar."""
+    if not texto:
+        return None
+    try:
+        import base64
+        import io
+
+        import qrcode
+        img = qrcode.make(texto)
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        return ('data:image/png;base64,'
+                + base64.b64encode(buf.getvalue()).decode())
+    except Exception:  # noqa: BLE001
+        logger.exception('qr_data_uri falhou')
+        return None
+
+
 def cancelar_charge(charge_id, valor_decimal=None):
     """Cancela/refund de uma cobrança. Se valor_decimal vier, refund
     parcial; senão, total. Devolve {ok, erro?}."""
