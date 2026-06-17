@@ -104,8 +104,9 @@ def test_criar_pedido_pix_envia_centavos_e_codigo(app):
         assert payload['payments'][0]['payment_method'] == 'pix'
         assert payload['payments'][0]['amount'] == 4000  # 40,00 em centavos
         assert payload['payments'][0]['pix']['expires_in'] == 15 * 60
-        # Items somam o total
-        soma_items = sum(i['amount'] for i in payload['items'])
+        # Items: amount é POR UNIDADE; total = sum(amount * quantity)
+        soma_items = sum(i['amount'] * i['quantity']
+                         for i in payload['items'])
         assert soma_items == 4000  # nada de frete neste pedido
 
 
