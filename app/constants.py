@@ -11,6 +11,11 @@ deve importar daqui.
 VENDA_TIPOS_LOJA = (
     'venda_seru', 'venda_seru_sem_estoque',
     'venda_vnda', 'venda_vnda_sem_estoque',
+    # Loja propria (checkout nativo do site). Baixa so apos 'pago' no
+    # webhook do Pagar.me (Fase 4); estorno no cancelamento. Adicionado
+    # ja na Fase 3 pra os relatorios que somam VENDA_TIPOS_LOJA contarem
+    # vendas do site automaticamente quando existirem.
+    'venda_site', 'venda_site_estorno',
 )
 
 # Vendas que baixam de EstoqueProducao (industria / B2B)
