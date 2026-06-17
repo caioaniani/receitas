@@ -117,6 +117,7 @@
           id: btn.getAttribute('data-id'),
           nome: btn.getAttribute('data-nome'),
           preco: btn.getAttribute('data-preco'),
+          categoria: btn.getAttribute('data-categoria'),
           imagem: btn.getAttribute('data-imagem'),
         }, qtd);
         // Feedback rápido
