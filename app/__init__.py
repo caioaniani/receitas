@@ -333,6 +333,23 @@ def create_app(config_class=None):
                     "https://*.dropboxusercontent.com; "
                     f"frame-ancestors 'self' {chatwoot};"
                 )
+        # Loja online: o cartão é tokenizado no navegador pelo SDK do
+        # Pagar.me (checkout.pagar.me) com fetch direto pra api.pagar.me —
+        # PCI baixo (o número do cartão nunca toca nosso servidor). Pra isso
+        # o CSP precisa liberar esse script + connect. QR do Pix é data-URI
+        # (já coberto por img-src data:).
+        if request.path.startswith('/loja'):
+            response.headers['Content-Security-Policy'] = (
+                "default-src 'self'; "
+                "script-src 'self' https://cdn.jsdelivr.net "
+                "https://checkout.pagar.me 'unsafe-inline'; "
+                "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+                "font-src 'self' https://cdn.jsdelivr.net; "
+                "img-src 'self' data: https://*.dropbox.com "
+                "https://*.dropboxusercontent.com; "
+                "connect-src 'self' https://api.pagar.me; "
+                "frame-src https://checkout.pagar.me;"
+            )
         if request.is_secure:
             response.headers['Strict-Transport-Security'] = (
                 'max-age=31536000; includeSubDomains'
