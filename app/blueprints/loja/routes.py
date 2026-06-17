@@ -13,7 +13,27 @@ from flask import abort, redirect, render_template, request, url_for
 from flask_login import current_user
 
 from app.blueprints.loja import loja_bp
-from app.services import loja_catalogo
+from app.services import loja_catalogo, loja_checkout
+
+_DIAS_SEMANA = ('seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom')
+
+
+def _label_data(d):
+    return f'{_DIAS_SEMANA[d.weekday()]}, {d.day:02d}/{d.month:02d}'
+
+
+def _ctx_checkout(erros=None, form=None):
+    """Contexto compartilhado entre GET e POST(falha) do checkout."""
+    datas = loja_checkout.datas_disponiveis('agendada')
+    return dict(
+        em_teste=_em_teste(),
+        lojas=loja_checkout.lojas_retirada(),
+        datas=[(d.isoformat(), _label_data(d)) for d in datas],
+        janelas_entrega=list(loja_checkout.JANELAS_ENTREGA),
+        janelas_retirada=list(loja_checkout.JANELAS_RETIRADA),
+        express_ok=loja_checkout.express_disponivel(),
+        erros=erros, form=(form or {}),
+    )
 
 
 def _loja_visivel_publico():
