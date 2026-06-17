@@ -153,6 +153,37 @@ class SeruProdutoMap(db.Model):
             return self.produto.nome
         return None
 
+class TinyProdutoMap(db.Model):
+    """Liga um item NOSSO (Receita/Produto vendido no site) ao SKU dele no
+    Tiny, pra emissao de NF (Fase 5). Direcao inversa do SeruProdutoMap:
+    aqui NOS mandamos pro Tiny, entao a chave eh o nosso item e o valor eh
+    o SKU.
+
+    O fiscal (NCM/CFOP/CST) NAO mora aqui — fica no cadastro do produto no
+    Tiny; a emissao so referencia o SKU e o Tiny aplica os impostos."""
+    __tablename__ = 'tiny_produto_map'
+
+    id = db.Column(db.Integer, primary_key=True)
+    kind = db.Column(db.String(10), nullable=False)   # 'receita' | 'produto'
+    item_id = db.Column(db.Integer, nullable=False)
+    tiny_sku = db.Column(db.String(100), nullable=True)
+    tiny_nome = db.Column(db.String(300), nullable=True)  # snapshot p/ exibir
+    auto_match = db.Column(db.Boolean, default=False)     # setado por fuzzy
+    confirmado_em = db.Column(db.DateTime, nullable=True)
+    confirmado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'),
+                               nullable=True)
+    criado_em = db.Column(db.DateTime, default=agora)
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
+
+    __table_args__ = (
+        db.UniqueConstraint('kind', 'item_id', name='uq_tiny_map_item'),
+    )
+
+    @property
+    def estado(self):
+        return 'mapeado' if (self.tiny_sku or '').strip() else 'pendente'
+
+
 class SeruLojaMap(db.Model):
     """Mapeia 'company.name' da Seru pra nossa Loja. Auto-fuzzy na primeira
     aparicao; admin pode confirmar/corrigir/ignorar via /pdv/config-lojas."""
