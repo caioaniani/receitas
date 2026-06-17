@@ -2534,20 +2534,21 @@ def debug_vnda_pedido(code):
     )
 
 
-# ── Debug email (Resend): testa envio sem expor a chave (16/06/2026) ──────
+# ── Debug email (Postmark): testa envio sem expor o token (17/06/2026) ────
 @main_bp.route('/admin/debug-email', methods=['GET', 'POST'])
 @owner_required
 def debug_email():
-    """Diagnóstico do Resend (owner-only). GET mostra status da config;
-    POST com ?para=<email> manda um email de teste. NÃO expõe a API key."""
+    """Diagnóstico do Postmark (owner-only). GET mostra status da config;
+    GET com ?para=<email>&enviar=1 (ou POST) manda um email de teste. NAO
+    expoe o server token."""
     from app.services import email as email_svc
     cfg = current_app.config
     status = {
-        'resend_configurado': email_svc.disponivel(),
+        'postmark_configurado': email_svc.disponivel(),
         'remetente': cfg.get('EMAIL_REMETENTE'),
         'remetente_nome': cfg.get('EMAIL_REMETENTE_NOME'),
         'app_base_url': cfg.get('APP_BASE_URL'),
-        'api_key_len': len((cfg.get('RESEND_API_KEY') or '')),
+        'token_len': len((cfg.get('POSTMARK_SERVER_TOKEN') or '')),
     }
     # GET com ?para=<email>&enviar=1 dispara o envio (mais fácil de testar
     # do navegador). POST com ?para=<email> mantém compat programático.
