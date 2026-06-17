@@ -197,6 +197,11 @@ def _so_digitos(s):
 
 
 def _payload_cliente(pedido):
+    """Cliente da NF, COM endereco estruturado. A SEFAZ exige logradouro/
+    numero/bairro/cidade/uf separados — sem eles a NF e' rejeitada
+    ('endereco/bairro/cidade em branco'). O endereco vem do snapshot do
+    pedido (entrega). Retirada nao coleta endereco -> campos vazios (NF de
+    pedido de retirada exigiria coletar o endereco do cliente a parte)."""
     cli = getattr(pedido, 'cliente', None)
     cpf = _so_digitos(getattr(cli, 'cpf', '') if cli else '')
     return {
@@ -205,6 +210,13 @@ def _payload_cliente(pedido):
         'cpf_cnpj': cpf,
         'email': pedido.email_cliente,
         'fone': pedido.telefone_cliente or '',
+        'endereco': pedido.endereco_logradouro or '',
+        'numero': pedido.endereco_numero or '',
+        'complemento': pedido.endereco_complemento or '',
+        'bairro': pedido.endereco_bairro or '',
+        'cep': pedido.endereco_cep or '',
+        'cidade': pedido.endereco_cidade or '',
+        'uf': (pedido.endereco_uf or '').upper(),
     }
 
 
