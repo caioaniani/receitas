@@ -1,0 +1,44 @@
+{% extends 'loja/_base.html' %}
+{% block title %}Criar conta — O Pão Padaria Artesanal{% endblock %}
+{% block content %}
+<section class="checkout-pagina" style="max-width:480px">
+  <h1>Criar conta</h1>
+
+  {% if erros %}
+  <div class="checkout-erros">
+    <strong>Revise antes de criar:</strong>
+    <ul>{% for e in erros %}<li>{{ e }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  <form method="POST" action="{{ url_for('loja.cadastrar') }}" class="checkout-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="checkout-bloco">
+      <label>Nome completo
+        <input type="text" name="nome" required autocomplete="name"
+               value="{{ form.get('nome', '') }}">
+      </label>
+      <label>Email
+        <input type="email" name="email" required autocomplete="email"
+               value="{{ form.get('email', '') }}">
+      </label>
+      <label>Telefone (WhatsApp)
+        <input type="tel" name="telefone" autocomplete="tel"
+               value="{{ form.get('telefone', '') }}">
+      </label>
+      <label>Senha (mínimo 8 caracteres)
+        <input type="password" name="senha" required autocomplete="new-password" minlength="8">
+      </label>
+      <label class="checkbox-inline">
+        <input type="checkbox" name="aceite_lgpd" value="1" required>
+        Concordo com o uso dos meus dados para os pedidos e contato sobre eles.
+      </label>
+    </div>
+    <button type="submit" class="btn-loja">Criar conta</button>
+  </form>
+
+  <p class="small" style="margin-top:1.5rem">
+    Já tem conta? <a href="{{ url_for('loja.entrar') }}">Entrar</a>.
+  </p>
+</section>
+{% endblock %}
