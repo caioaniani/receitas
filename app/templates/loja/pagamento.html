@@ -1,0 +1,164 @@
+{% extends 'loja/_base.html' %}
+
+{% block title %}Pagamento {{ pedido.codigo }} — O Pão{% endblock %}
+
+{% block content %}
+<section class="checkout-pagina">
+  <h1>Pagamento</h1>
+  <p class="text-muted small">
+    Pedido <code>{{ pedido.codigo }}</code> —
+    Total <strong>R$ {{ '%.2f'|format(pedido.valor_total)|replace('.', ',') }}</strong>
+  </p>
+
+  {% if erros %}
+  <div class="checkout-erros">
+    <strong>Não foi possível processar o pagamento:</strong>
+    <ul>{% for e in erros %}<li>{{ e }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  {% if pix_pendente and pix_pendente.pix_qr_code %}
+    <!-- Pix já gerado: mostra o QR + copia-e-cola -->
+    <div class="checkout-bloco pix-bloco">
+      <h2>Pague com Pix</h2>
+      {% if pix_pendente.pix_qr_code_url %}
+      <img class="pix-qr" src="{{ pix_pendente.pix_qr_code_url }}"
+           alt="QR Code Pix">
+      {% endif %}
+      <label class="small text-muted">Pix copia-e-cola</label>
+      <textarea readonly id="pix-emv" class="pix-emv">{{ pix_pendente.pix_qr_code }}</textarea>
+      <button type="button" id="copiar-pix" class="btn-loja-secundario">Copiar código</button>
+      <p class="aviso-comprar mt-2">
+        Assim que o pagamento for compensado, atualizamos o pedido.
+        {% if pix_pendente.pix_expira_em %}
+        O código expira em {{ pix_pendente.pix_expira_em.strftime('%H:%M') }}.
+        {% endif %}
+      </p>
+    </div>
+    <script>
+      document.getElementById('copiar-pix').addEventListener('click', function () {
+        var t = document.getElementById('pix-emv');
+        t.select(); document.execCommand('copy');
+        this.textContent = '✓ Copiado';
+      });
+      // Polling leve: a cada 6s verifica se o pedido virou 'pago'.
+      setInterval(function () {
+        fetch(window.location.pathname.replace('/pagamento', '/status'))
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) {
+            if (d && d.status === 'pago') {
+              window.location = '/loja/pedido/{{ pedido.codigo }}';
+            }
+          }).catch(function () {});
+      }, 6000);
+    </script>
+  {% else %}
+    <!-- Escolha do método -->
+    <form method="POST" action="{{ url_for('loja.pedido_pix', codigo=pedido.codigo) }}"
+          class="checkout-bloco">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <h2>Pix</h2>
+      <p class="text-muted small">
+        Gera um QR Code e o código copia-e-cola. Pagamento na hora.
+      </p>
+      <button type="submit" class="btn-loja">Gerar Pix</button>
+    </form>
+
+    <form method="POST" action="{{ url_for('loja.pedido_cartao', codigo=pedido.codigo) }}"
+          class="checkout-bloco" id="form-cartao">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="card_token" id="card_token">
+      <h2>Cartão de crédito</h2>
+      {% if not pubkey %}
+        <p class="text-muted small">
+          (Em testes — PAGARME_PUBLIC_KEY ainda não configurada. Use Pix por enquanto.)
+        </p>
+      {% else %}
+      <label>Número do cartão
+        <input type="text" id="cc-num" inputmode="numeric" autocomplete="cc-number">
+      </label>
+      <label>Nome no cartão
+        <input type="text" id="cc-nome" autocomplete="cc-name">
+      </label>
+      <div style="display:flex; gap:10px;">
+        <label style="flex:1">Validade (MM/AA)
+          <input type="text" id="cc-val" inputmode="numeric" placeholder="MM/AA" autocomplete="cc-exp">
+        </label>
+        <label style="flex:1">CVV
+          <input type="text" id="cc-cvv" inputmode="numeric" autocomplete="cc-csc">
+        </label>
+      </div>
+      <label>Parcelas
+        <select name="parcelas">
+          {% for n in range(1, 7) %}
+          <option value="{{ n }}">{{ n }}x</option>
+          {% endfor %}
+        </select>
+      </label>
+      <p id="cc-erro" class="frete-resultado erro"></p>
+      <button type="submit" class="btn-loja" id="btn-pagar-cartao">Pagar com cartão</button>
+      <p class="text-muted small mt-2">
+        O número do cartão NÃO passa pelo nosso servidor — vai direto pro Pagar.me.
+      </p>
+      {% endif %}
+    </form>
+    {% endif %}
+
+  <a href="{{ url_for('loja.pedido_confirmado', codigo=pedido.codigo) }}"
+     class="voltar">Ver detalhes do pedido</a>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% if pubkey %}
+<script src="https://checkout.pagar.me/v1/tokenizecard.js"
+        data-pagarmecheckout-app-id="{{ pubkey }}"></script>
+<script>
+  // Tokeniza o cartão no NAVEGADOR (servidor nunca vê o número). Espera o
+  // SDK do Pagar.me carregar e usa o endpoint /core/v5/tokens via fetch
+  // direto com a public key (PCI: nosso servidor sai do escopo).
+  (function () {
+    var form = document.getElementById('form-cartao');
+    if (!form) return;
+    var btn = document.getElementById('btn-pagar-cartao');
+    var erroEl = document.getElementById('cc-erro');
+    form.addEventListener('submit', async function (e) {
+      if (document.getElementById('card_token').value) return; // já tokenizado
+      e.preventDefault();
+      erroEl.textContent = '';
+      btn.disabled = true;
+      try {
+        var num = document.getElementById('cc-num').value.replace(/\s+/g, '');
+        var nome = document.getElementById('cc-nome').value.trim();
+        var val = document.getElementById('cc-val').value.replace(/\s+/g, '');
+        var cvv = document.getElementById('cc-cvv').value.trim();
+        var partes = val.split(/[/-]/);
+        var mm = partes[0] || ''; var aa = partes[1] || '';
+        var resp = await fetch(
+          'https://api.pagar.me/core/v5/tokens?appId={{ pubkey }}',
+          { method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'card',
+              card: {
+                number: num, holder_name: nome,
+                exp_month: parseInt(mm, 10),
+                exp_year: 2000 + parseInt(aa, 10),
+                cvv: cvv,
+              },
+            }) });
+        var data = await resp.json();
+        if (!resp.ok || !data.id) {
+          throw new Error((data.message || data.errors || 'Cartão inválido'));
+        }
+        document.getElementById('card_token').value = data.id;
+        form.submit();
+      } catch (err) {
+        erroEl.textContent = (err && err.message) || 'Não foi possível validar o cartão.';
+        btn.disabled = false;
+      }
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}
