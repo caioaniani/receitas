@@ -121,6 +121,40 @@ def _email_valido(email):
     return '@' in email and '.' in email.split('@')[-1] and len(email) >= 6
 
 
+def _so_digitos(s):
+    return ''.join(c for c in (s or '') if c.isdigit())
+
+
+def _cpf_valido(cpf):
+    """Valida 11 dígitos + dígitos verificadores. Algoritmo padrão da
+    Receita Federal. Rejeita sequências iguais ('11111111111')."""
+    cpf = _so_digitos(cpf)
+    if len(cpf) != 11 or len(set(cpf)) == 1:
+        return False
+    for i in (9, 10):
+        soma = sum(int(cpf[j]) * (i + 1 - j) for j in range(i))
+        dig = (soma * 10) % 11
+        if dig == 10:
+            dig = 0
+        if dig != int(cpf[i]):
+            return False
+    return True
+
+
+def _montar_endereco(form):
+    """Junta os campos estruturados em um texto de uma linha pra gravar
+    em PedidoOnline.endereco_entrega (snapshot da entrega)."""
+    partes = [
+        (form.get('logradouro') or '').strip(),
+        (form.get('numero') or '').strip(),
+        (form.get('complemento') or '').strip(),
+        (form.get('bairro') or '').strip(),
+        (form.get('cidade') or '').strip(),
+        (form.get('uf') or '').strip(),
+    ]
+    return ', '.join(p for p in partes if p)
+
+
 def _frete_para(modo, endereco, base=None):
     """Calcula o frete no servidor (autoritativo). Devolve
     (valor:Decimal, distancia_km, endereco_norm, erro|None)."""
