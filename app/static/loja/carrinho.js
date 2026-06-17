@@ -218,6 +218,10 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
+    // Página de confirmação: pedido criado no servidor -> esvazia o carrinho.
+    if (document.getElementById('limpar-carrinho')) {
+      Carrinho.salvar([]);  // salvar() já atualiza o badge
+    }
     Carrinho.atualizarBadge();
     ligarBotoesAdd();
     renderCarrinho();
