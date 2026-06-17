@@ -40,14 +40,28 @@
     </div>
     {% endif %}
 
-    <button class="btn-comprar disabled"
-            title="Em breve — checkout entra na próxima fase"
-            disabled>
-      Comprar (em breve)
-    </button>
-    <p class="aviso-comprar">
-      O carrinho e o pagamento entram na próxima etapa. Por enquanto, isso é a vitrine.
-    </p>
+    {% if item.preco is not none %}
+    <div class="comprar-bloco">
+      <div class="qtd-seletor">
+        <label for="qtd-add">Quantidade</label>
+        <input type="number" id="qtd-add" min="1" value="1" inputmode="numeric">
+      </div>
+      <button class="btn-comprar"
+              data-add-carrinho
+              data-kind="{{ item.kind }}"
+              data-id="{{ item.id }}"
+              data-nome="{{ item.nome }}"
+              data-preco="{{ item.preco }}"
+              data-imagem="{{ item.imagem or '' }}">
+        Adicionar ao carrinho
+      </button>
+      <a href="{{ url_for('loja.carrinho') }}" class="ver-carrinho">
+        Ver carrinho →
+      </a>
+    </div>
+    {% else %}
+    <p class="aviso-comprar">Produto sem preço cadastrado — indisponível.</p>
+    {% endif %}
 
     <a href="{{ url_for('loja.home') }}" class="voltar">← Voltar pra vitrine</a>
   </div>
