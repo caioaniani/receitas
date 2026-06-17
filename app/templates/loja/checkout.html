@@ -25,15 +25,15 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="itens_json" id="itens_json" value="[]">
 
-    <!-- Resumo do pedido (preenchido pelo checkout.js a partir do carrinho) -->
+    <!-- Resumo do pedido -->
     <div class="checkout-bloco">
       <h2>Seu pedido</h2>
       <div id="checkout-resumo"></div>
     </div>
 
-    <!-- Seus dados -->
+    <!-- ─── 1) Pagador ────────────────────────────────────────── -->
     <div class="checkout-bloco">
-      <h2>Seus dados</h2>
+      <h2>Seus dados (quem está comprando)</h2>
       <label>Nome completo
         <input type="text" name="nome" required
                value="{{ form.get('nome', '') }}">
@@ -46,9 +46,15 @@
         <input type="tel" name="telefone" inputmode="tel"
                value="{{ form.get('telefone', '') }}">
       </label>
+      <label>CPF
+        <input type="text" name="cpf" id="cpf" inputmode="numeric"
+               placeholder="000.000.000-00" maxlength="14"
+               required value="{{ form.get('cpf', '') }}">
+        <small class="text-muted">Necessário pra o pagamento Pix e a nota fiscal.</small>
+      </label>
     </div>
 
-    <!-- Modo de entrega -->
+    <!-- ─── 2) Modo de entrega ───────────────────────────────── -->
     <div class="checkout-bloco">
       <h2>Como você quer receber</h2>
       <div class="modo-opcoes">
@@ -78,25 +84,65 @@
       </div>
     </div>
 
-    <!-- Endereço (entrega/express) -->
-    <div class="checkout-bloco" id="bloco-endereco">
-      <h2>Endereço de entrega</h2>
-      <label>CEP
-        <input type="text" name="cep" id="cep" inputmode="numeric"
-               placeholder="00000-000" value="{{ form.get('cep', '') }}">
+    <!-- ─── 3) Quem recebe + endereço (entrega/express) ──────── -->
+    <div class="checkout-bloco" id="bloco-entrega">
+      <h2>Quem recebe e onde</h2>
+
+      <label class="aceite mb-2">
+        <input type="checkbox" name="e_presente" id="e_presente" value="1"
+               {{ 'checked' if form.get('e_presente') }}>
+        Estou presenteando alguém (destinatário diferente)
       </label>
-      <label>Endereço completo (rua, número, bairro, complemento)
-        <input type="text" name="endereco" id="endereco"
-               placeholder="Rua Exemplo, 123, Apto 4, Moema"
-               value="{{ form.get('endereco', '') }}">
-      </label>
+
+      <div id="bloco-destinatario" style="display:none">
+        <label>Nome de quem vai receber
+          <input type="text" name="nome_destinatario"
+                 value="{{ form.get('nome_destinatario', '') }}">
+        </label>
+        <label>Telefone do destinatário (opcional)
+          <input type="tel" name="telefone_destinatario" inputmode="tel"
+                 value="{{ form.get('telefone_destinatario', '') }}">
+        </label>
+      </div>
+
+      <div class="endereco-grid">
+        <label>CEP
+          <input type="text" name="cep" id="cep" inputmode="numeric"
+                 placeholder="00000-000" maxlength="9"
+                 value="{{ form.get('cep', '') }}">
+        </label>
+        <label>Logradouro (rua / avenida)
+          <input type="text" name="logradouro" id="logradouro"
+                 value="{{ form.get('logradouro', '') }}">
+        </label>
+        <label>Número
+          <input type="text" name="numero" id="numero"
+                 value="{{ form.get('numero', '') }}">
+        </label>
+        <label>Complemento (apto, bloco)
+          <input type="text" name="complemento"
+                 value="{{ form.get('complemento', '') }}">
+        </label>
+        <label>Bairro
+          <input type="text" name="bairro" id="bairro"
+                 value="{{ form.get('bairro', '') }}">
+        </label>
+        <label>Cidade
+          <input type="text" name="cidade" id="cidade"
+                 value="{{ form.get('cidade', '') }}">
+        </label>
+        <label class="uf-col">UF
+          <input type="text" name="uf" id="uf" maxlength="2"
+                 value="{{ form.get('uf', '') }}">
+        </label>
+      </div>
       <button type="button" class="btn-loja-secundario" id="btn-frete">
         Calcular frete
       </button>
       <p id="frete-resultado" class="frete-resultado"></p>
     </div>
 
-    <!-- Loja (retirada) -->
+    <!-- ─── 4) Retirada na loja ──────────────────────────────── -->
     <div class="checkout-bloco" id="bloco-loja" style="display:none">
       <h2>Loja para retirada</h2>
       <label>Escolha a loja
@@ -112,7 +158,7 @@
       </label>
     </div>
 
-    <!-- Data + janela (agendada/retirada) -->
+    <!-- ─── 5) Data + janela ─────────────────────────────────── -->
     <div class="checkout-bloco" id="bloco-data">
       <h2>Quando</h2>
       <label>Dia
@@ -126,7 +172,6 @@
       </label>
     </div>
 
-    <!-- Express: aviso de imediato -->
     <div class="checkout-bloco" id="bloco-express" style="display:none">
       <h2>Quando</h2>
       <p class="frete-resultado">
@@ -136,14 +181,14 @@
       </p>
     </div>
 
-    <!-- Cartinha — só aparece se houver uma cesta no carrinho (JS controla) -->
+    <!-- ─── 6) Cartinha (só se cesta) ────────────────────────── -->
     <div class="checkout-bloco" id="bloco-cartinha" style="display:none">
       <h2>Cartinha <span class="opcional">(opcional)</span></h2>
       <textarea name="cartinha" rows="3"
         placeholder="Mensagem de presente para acompanhar a cesta.">{{ form.get('cartinha', '') }}</textarea>
     </div>
 
-    <!-- Totais -->
+    <!-- ─── 7) Totais ────────────────────────────────────────── -->
     <div class="checkout-bloco checkout-totais">
       <div class="linha-total"><span>Subtotal</span>
         <span id="t-subtotal">R$ 0,00</span></div>
@@ -162,10 +207,6 @@
     <button type="submit" class="btn-loja btn-finalizar" id="btn-finalizar">
       Concluir pedido
     </button>
-    <p class="aviso-comprar">
-      O pagamento entra na próxima etapa. Por ora o pedido fica registrado
-      como “aguardando pagamento” e a equipe entra em contato.
-    </p>
     <a href="{{ url_for('loja.carrinho') }}" class="voltar">← Voltar ao carrinho</a>
   </form>
 </section>
