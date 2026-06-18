@@ -405,6 +405,86 @@ def meu_pedido(codigo):
                            em_teste=_em_teste())
 
 
+@loja_bp.route('/conta/dados.json')
+@loja_auth.cliente_required
+def exportar_dados():
+    """LGPD: exporta os dados do cliente (perfil + endereços + pedidos) em
+    JSON. Direito de portabilidade (Art. 18, V)."""
+    from flask import jsonify
+
+    from app.models import EnderecoCliente, PedidoOnline
+    cli = loja_auth.cliente_atual()
+    ends = EnderecoCliente.query.filter_by(cliente_id=cli.id).all()
+    pedidos = PedidoOnline.query.filter_by(cliente_id=cli.id).all()
+    out = {
+        'perfil': {
+            'nome': cli.nome, 'email': cli.email, 'telefone': cli.telefone,
+            'cpf': cli.cpf, 'aceite_lgpd_em': cli.aceite_lgpd_em.isoformat()
+            if cli.aceite_lgpd_em else None,
+            'criado_em': cli.criado_em.isoformat() if cli.criado_em else None,
+        },
+        'enderecos': [
+            {'apelido': e.apelido, 'cep': e.cep, 'logradouro': e.logradouro,
+             'numero': e.numero, 'complemento': e.complemento,
+             'bairro': e.bairro, 'cidade': e.cidade, 'uf': e.uf,
+             'principal': e.principal}
+            for e in ends
+        ],
+        'pedidos': [
+            {'codigo': p.codigo, 'criado_em':
+             p.criado_em.isoformat() if p.criado_em else None,
+             'status': p.status,
+             'valor_total': float(p.valor_total or 0),
+             'modo_entrega': p.modo_entrega,
+             'endereco_entrega': p.endereco_entrega,
+             'cartinha': p.cartinha,
+             'itens': [{'nome': i.nome, 'quantidade': i.quantidade,
+                        'preco_unitario': float(i.preco_unitario)}
+                       for i in p.itens]}
+            for p in pedidos
+        ],
+    }
+    resp = jsonify(out)
+    resp.headers['Content-Disposition'] = (
+        f'attachment; filename=opao-meus-dados-{cli.id}.json')
+    return resp
+
+
+@loja_bp.route('/conta/excluir', methods=['POST'])
+@loja_auth.cliente_required
+def excluir_conta():
+    """LGPD: exclui a conta do cliente (Art. 18, VI). Anonimiza os PEDIDOS
+    em vez de apagar — o histórico fiscal precisa existir (NF emitida não
+    pode sumir), mas tiramos as PII (nome/email/telefone/CPF). Endereços
+    salvos vão embora junto."""
+    from app.extensions import db
+    from app.models import Cliente, EnderecoCliente, PedidoOnline
+    confirma = (request.form.get('confirmar') or '').strip().upper()
+    if confirma != 'EXCLUIR':
+        from flask import flash
+        flash('Para confirmar, digite EXCLUIR exatamente.', 'warning')
+        return redirect(url_for('loja.minha_conta'))
+    cli = loja_auth.cliente_atual()
+    # Anonimiza os pedidos (mantém histórico fiscal)
+    rotulo = f'[Conta excluída #{cli.id}]'
+    PedidoOnline.query.filter_by(cliente_id=cli.id).update({
+        'nome_cliente': rotulo, 'email_cliente': '',
+        'telefone_cliente': '',
+        'nome_destinatario': None, 'telefone_destinatario': None,
+        'cliente_id': None,
+    })
+    EnderecoCliente.query.filter_by(cliente_id=cli.id).delete()
+    # Anonimiza o Cliente em si mas mantém a linha (FK histórica resolvida
+    # acima já fez setar pedido.cliente_id=NULL).
+    Cliente.query.filter_by(id=cli.id).update({
+        'nome': rotulo, 'email': f'excluida-{cli.id}@anonimo.local',
+        'telefone': None, 'cpf': None, 'senha_hash': None, 'ativo': False,
+    })
+    db.session.commit()
+    loja_auth.logout_cliente()
+    return redirect(url_for('loja.home'))
+
+
 @loja_bp.route('/conta/pedidos/<codigo>/nf')
 @loja_auth.cliente_required
 def meu_pedido_danfe(codigo):
