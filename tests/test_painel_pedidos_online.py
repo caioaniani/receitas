@@ -177,13 +177,90 @@ def test_lalamove_chamado_marca_a_caminho_e_email(app):
 
 def test_sync_nao_regride_status(app):
     """Sync nunca regride: pedido já entregue não volta pra a_caminho."""
-    from app.blueprints.entregas.routes import _sync_pedido_online_status
     from app.extensions import db
     from app.models import PedidoOnline
+    from app.services.loja_entrega import avancar_status_entrega
     with app.app_context():
         _pedido_online(db, codigo='NOREG1', status='entregue')
         with patch('app.services.email.disponivel', return_value=True), \
              patch('app.services.email.enviar_pedido_a_caminho') as ev:
-            _sync_pedido_online_status('NOREG1', 'a_caminho')
+            avancar_status_entrega('NOREG1', 'a_caminho')
         ev.assert_not_called()
         assert PedidoOnline.query.filter_by(codigo='NOREG1').first().status == 'entregue'
+
+
+def test_a_caminho_passa_rastreio_pro_email(app):
+    """Chamar Lalamove → e-mail "a caminho" recebe o share_link de rastreio."""
+    from app.extensions import db
+    from app.models import LalamoveEntrega
+    from app.utils import hoje
+    c = _staff(app)
+    with app.app_context():
+        _pedido_online(db, codigo='RAST01', status='pago')
+        e = LalamoveEntrega(
+            pedido_code='RAST01', data_ref=hoje(), status='cotacao',
+            quotation_id='q1', sender_stop_id='s1', recipient_stop_id='r1',
+            service_type='MOTORCYCLE',
+            endereco_destino='Rua Michigan, 560',
+            destinatario='Caio Cliente', telefone_destino='11988887777')
+        db.session.add(e)
+        db.session.commit()
+        eid = e.id
+    with patch('app.services.lalamove.criar_ordem',
+               return_value={'ok': True, 'order_id': 'ord1',
+                             'status': 'ASSIGNING_DRIVER',
+                             'share_link': 'https://share.lalamove.com/abc'}), \
+         patch('app.services.email.disponivel', return_value=True), \
+         patch('app.services.email.enviar_pedido_a_caminho') as ev:
+        r = c.post('/entregas/api/painel/lalamove/chamar',
+                   json={'entrega_id': eid})
+    assert r.status_code == 200 and r.get_json()['ok'] is True
+    ev.assert_called_once()
+    # share_link foi propagado como rastreio_url no e-mail
+    assert ev.call_args.kwargs.get('rastreio_url') == 'https://share.lalamove.com/abc'
+
+
+def test_rastreio_aparece_no_corpo_do_email():
+    """O template/texto de "a caminho" mostra o botão de rastreio quando há URL."""
+    from types import SimpleNamespace
+
+    from app.services.email import _template_a_caminho, _texto_a_caminho
+    pedido = SimpleNamespace(
+        codigo='RAST02', modo_entrega='agendada',
+        endereco_entrega='Rua X, 1', data_entrega=None, janela_entrega=None)
+    url = 'https://share.lalamove.com/xyz'
+    html = _template_a_caminho(pedido, 'https://opao.online', rastreio_url=url)
+    texto = _texto_a_caminho(pedido, 'https://opao.online', rastreio_url=url)
+    assert url in html and 'Acompanhar a entrega' in html
+    assert url in texto
+    # sem URL não vaza link quebrado
+    html_sem = _template_a_caminho(pedido, 'https://opao.online')
+    assert 'Acompanhar a entrega' not in html_sem
+
+
+def test_webhook_lalamove_completed_marca_entregue_e_email(app):
+    """Webhook Lalamove COMPLETED → PedidoOnline entregue + e-mail automático."""
+    from app.extensions import db
+    from app.models import LalamoveEntrega, PedidoOnline
+    from app.utils import hoje
+    c = app.test_client()
+    with app.app_context():
+        _pedido_online(db, codigo='WHCMP1', status='a_caminho')
+        e = LalamoveEntrega(
+            pedido_code='WHCMP1', data_ref=hoje(), status='ON_GOING',
+            order_id='ord-wh-1',
+            endereco_destino='Rua Michigan, 560',
+            destinatario='Caio Cliente', telefone_destino='11988887777')
+        db.session.add(e)
+        db.session.commit()
+    with patch('app.services.lalamove._cfg', return_value='chave-secreta'), \
+         patch('app.services.email.disponivel', return_value=True), \
+         patch('app.services.email.enviar_pedido_entregue') as ev:
+        r = c.post('/lalamove/webhook', json={
+            'apiKey': 'chave-secreta',
+            'eventType': 'ORDER_STATUS_CHANGED',
+            'data': {'order': {'orderId': 'ord-wh-1', 'status': 'COMPLETED'}}})
+    assert r.status_code == 200
+    ev.assert_called_once()
+    with app.app_context():
+        assert PedidoOnline.query.filter_by(codigo='WHCMP1').first().status == 'entregue'
