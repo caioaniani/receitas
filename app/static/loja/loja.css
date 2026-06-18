@@ -270,6 +270,41 @@ a:hover { text-decoration: underline; }
   .card-preco { font-size: 16px; }
 }
 
+/* ── Monte sua cesta (cesta personalizada) ─────────────── */
+.monte-cesta {
+  background: var(--card-bg);
+  padding: 32px 14px 50px;
+  margin-top: 30px;
+  border-top: 1px solid var(--linha);
+}
+.monte-cabecalho {
+  max-width: 1080px;
+  margin: 0 auto 20px;
+  text-align: left;
+}
+.monte-cabecalho h2 {
+  font-size: 22px;
+  font-weight: 400;
+  margin: 0 0 6px;
+  font-family: 'Georgia', serif;
+}
+.monte-cabecalho p {
+  color: var(--texto-suave);
+  font-size: 14px;
+  margin: 0;
+  max-width: 620px;
+}
+.monte-cesta .grid-produtos {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 8px;
+}
+@media (min-width: 600px) {
+  .monte-cesta { padding: 50px 22px 70px; }
+  .monte-cabecalho h2 { font-size: 28px; }
+  .monte-cabecalho p { font-size: 16px; }
+}
+
 /* ── Página de produto ─────────────────────────────────── */
 .produto {
   max-width: 1080px;
