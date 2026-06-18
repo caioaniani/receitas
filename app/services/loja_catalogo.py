@@ -86,6 +86,37 @@ def produtos_publicados():
     return out
 
 
+# Categoria especial: produtos com este nome de categoria abrem o modo
+# "monte sua cesta" na página de produto — cliente adiciona OUTROS itens
+# do catálogo ao carrinho junto da cesta. (Decisão do dono 17/06/2026.)
+CATEGORIA_PERSONALIZADA = 'Cestas Personalizadas'
+
+
+def eh_personalizada(item):
+    """Retorna True se o item é uma cesta personalizada."""
+    cat = (item.get('categoria') or '').strip() if isinstance(item, dict) \
+        else getattr(item, 'categoria', '') or ''
+    return cat.strip().lower() == CATEGORIA_PERSONALIZADA.lower()
+
+
+def itens_para_montar(excluir_item=None):
+    """Lista os itens publicados que o cliente pode adicionar pra montar
+    uma cesta personalizada. EXCLUI categorias 'Cestas Personalizadas' e
+    'Cestas' (pra não meter cesta dentro de cesta) e o próprio item de
+    referência (se passado)."""
+    excluir_cats = {CATEGORIA_PERSONALIZADA.lower(), 'cestas'}
+    out = []
+    for it in produtos_publicados():
+        cat = (it.get('categoria') or '').strip().lower()
+        if cat in excluir_cats:
+            continue
+        if excluir_item and excluir_item.get('kind') == it['kind'] \
+                and excluir_item.get('id') == it['id']:
+            continue
+        out.append(it)
+    return out
+
+
 def por_categorias(itens):
     """Agrupa lista de itens publicados por categoria.
 
