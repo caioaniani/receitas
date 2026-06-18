@@ -114,6 +114,40 @@
   {% block content %}{% endblock %}
 </main>
 
+{# ── Drawer do carrinho (bottom sheet) ──────────────────────────────────
+   Estrutura permanente, escondida por padrão (display:none até abrir).
+   Abre automaticamente quando o cliente ADICIONA O PRIMEIRO ITEM (mostra
+   que pode seguir pro checkout ou continuar comprando) e também ao clicar
+   no ícone do carrinho no header. JS em carrinho.js. #}
+<div id="cart-drawer" class="cart-drawer" aria-hidden="true" hidden>
+  <div class="cart-drawer-overlay" data-acao="fechar"></div>
+  <aside class="cart-drawer-panel" role="dialog" aria-modal="true" aria-label="Carrinho">
+    <header class="cart-drawer-cabecalho">
+      <strong>Seu carrinho</strong>
+      <button type="button" class="cart-drawer-fechar" data-acao="fechar"
+              aria-label="Fechar carrinho">✕</button>
+    </header>
+    <div id="cart-drawer-corpo" class="cart-drawer-corpo">
+      {# Renderizado pelo JS — itens + total. #}
+    </div>
+    <footer class="cart-drawer-rodape">
+      <div class="cart-drawer-total">
+        <span>Subtotal</span>
+        <strong id="cart-drawer-total-valor">R$ 0,00</strong>
+      </div>
+      <p class="small cart-drawer-aviso">Frete é calculado no checkout.</p>
+      <div class="cart-drawer-acoes">
+        <button type="button" class="btn-loja btn-loja-outline" data-acao="fechar">
+          Continuar comprando
+        </button>
+        <a class="btn-loja" href="{{ url_for('loja.checkout') }}">
+          Ir para o checkout →
+        </a>
+      </div>
+    </footer>
+  </aside>
+</div>
+
 <footer class="rodape">
   <div class="rodape-col">
     <strong>O Pão Padaria Artesanal</strong><br>
