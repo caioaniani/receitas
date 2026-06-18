@@ -228,6 +228,15 @@ class Config:
     # URL base do sistema pro link de login no email (sem barra final).
     APP_BASE_URL = os.environ.get(
         'APP_BASE_URL', 'https://gestao.opaopadariaartesanal.com.br')
+    # URL pública da LOJA (e-commerce) — usada nos links dos e-mails que vão
+    # pro CLIENTE (pedido, pagamento, NF, reset de senha). Separada do
+    # APP_BASE_URL (admin/gestão) porque a loja vive em opao.online e o admin
+    # em gestao.opaopadariaartesanal.com.br (18/06/2026).
+    LOJA_BASE_URL = os.environ.get('LOJA_BASE_URL', 'https://opao.online')
+    # Hosts que servem SOMENTE a loja (admin/gestão viram 404 neles, raiz
+    # redireciona pra /loja/). CSV. gestao.* NÃO entra aqui — continua full.
+    LOJA_HOSTS = os.environ.get(
+        'LOJA_HOSTS', 'opao.online,www.opao.online')
     # URL do Chatwoot pra instruir o atendente (reusa CHATWOOT_URL se setado).
     CHATWOOT_PUBLIC_URL = os.environ.get(
         'CHATWOOT_PUBLIC_URL', 'https://atendimento.opaopadariaartesanal.com.br')
