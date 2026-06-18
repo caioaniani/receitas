@@ -114,6 +114,46 @@ def comprimir_imagem(file_bytes, *, max_size=700, quality=82):
         raise ValueError(f'imagem invalida ou formato nao suportado ({e})') from e
 
 
+def comprimir_logo(file_bytes, *, max_size=520):
+    """Processa um LOGO preservando transparencia (PNG continua PNG).
+
+    Diferente de `comprimir_imagem`, que forca JPEG e descarta o canal
+    alpha — ruim pra logo sobre fundo claro (apareceria caixa branca).
+    SVG passa direto (vetor). Raster com alpha vira PNG; sem alpha vira
+    JPEG (menor).
+
+    Retorna (bytes, mimetype, extensao). Levanta ValueError se invalido.
+    """
+    import io
+
+    if not file_bytes:
+        raise ValueError('Arquivo vazio')
+
+    # SVG: vetor — sobe como veio (escala perfeita em qualquer tamanho).
+    cabeca = file_bytes[:512].lstrip().lower()
+    if cabeca.startswith(b'<?xml') or b'<svg' in cabeca[:200]:
+        return file_bytes, 'image/svg+xml', 'svg'
+
+    from PIL import Image, ImageOps
+    try:
+        img = Image.open(io.BytesIO(file_bytes))
+        img = ImageOps.exif_transpose(img)
+        tem_alpha = img.mode in ('RGBA', 'LA', 'P')
+        img.thumbnail((max_size, max_size), Image.LANCZOS)
+        out = io.BytesIO()
+        if tem_alpha:
+            img = img.convert('RGBA')
+            img.save(out, format='PNG', optimize=True)
+            return out.getvalue(), 'image/png', 'png'
+        img = img.convert('RGB')
+        img.save(out, format='JPEG', quality=88, optimize=True, progressive=True)
+        return out.getvalue(), 'image/jpeg', 'jpg'
+    except ValueError:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise ValueError(f'imagem invalida ou formato nao suportado ({e})') from e
+
+
 def normalizar_busca(s):
     """Normaliza string para busca: acento-insensível, case-insensitive.
 
