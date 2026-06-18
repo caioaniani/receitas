@@ -519,6 +519,15 @@ a:hover { text-decoration: underline; }
   margin: 8px 0 24px;
   font-family: var(--fonte-corpo);
 }
+.aviso-comprar.esgotado {
+  display: inline-block;
+  background: #efe7da;
+  color: #8a7a68;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 12px 20px;
+  border-radius: 8px;
+}
 .voltar {
   display: inline-block;
   color: var(--texto-suave);
