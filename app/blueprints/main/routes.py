@@ -2452,6 +2452,27 @@ def loja_online_catalogo_preco(tipo, id):
                                if obj.preco_site is not None else None))
 
 
+@main_bp.route('/admin/loja-online/catalogo/categoria/<tipo>/<int:id>',
+                methods=['POST'])
+@owner_required
+def loja_online_catalogo_categoria(tipo, id):
+    """Atualiza a categoria do item (edição inline). JSON: {categoria: str}.
+    Vazio limpa (item cai em 'Outros' na vitrine)."""
+    from app.extensions import db as _db
+    from app.models import Produto, Receita
+    if tipo == 'receita':
+        obj = Receita.query.get_or_404(id)
+    elif tipo == 'produto':
+        obj = Produto.query.get_or_404(id)
+    else:
+        return jsonify(ok=False, erro='tipo inválido'), 400
+    dados = request.get_json(silent=True) or {}
+    cat = (dados.get('categoria') or '').strip()[:50] or None
+    obj.categoria = cat
+    _db.session.commit()
+    return jsonify(ok=True, categoria=cat or '')
+
+
 @main_bp.route('/admin/loja-online/catalogo/foto/<tipo>/<int:id>',
                 methods=['POST'])
 @owner_required
