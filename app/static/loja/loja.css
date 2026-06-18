@@ -335,6 +335,38 @@ a:hover { text-decoration: underline; }
 }
 .card-foto-placeholder.grande { font-size: 96px; }
 
+/* Esgotado: nada some — selo + foto esmaecida + comprar desabilitado. */
+.selo-esgotado {
+  position: absolute;
+  top: 8px; left: 8px;
+  z-index: 2;
+  background: rgba(40, 33, 26, .82);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: 4px;
+}
+.selo-esgotado.grande { top: 12px; left: 12px; font-size: 13px; padding: 6px 12px; }
+.is-esgotado .card-foto img { filter: grayscale(.7); opacity: .6; }
+.is-esgotado .card-nome,
+.is-esgotado .card-preco { opacity: .55; }
+.card-esgotado {
+  margin-top: 8px;
+  text-align: center;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #efe7da;
+  color: #9a8d80;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: not-allowed;
+}
+
 .card-corpo { padding: 12px 4px 4px; }
 .card-nome {
   font-size: 15px;
