@@ -89,6 +89,57 @@ def produtos_publicados():
     return out
 
 
+def _estoque_site_map():
+    """{(kind, id): saldo} do EstoqueLoja da loja do site — a MESMA de onde
+    a entrega baixa (`loja_pagamento.loja_origem_site`). Só itens COM linha:
+    quem não tem linha não entra no mapa (= tratado como 0 pela regra do
+    dono: todo produto no site deve ter estoque preenchido).
+
+    Devolve None se a loja do site não está configurada — sinaliza "não dá
+    pra filtrar"; nesse caso a vitrine NÃO esconde nada (fail-open), pra não
+    esvaziar a loja por misconfig. Importação tardia evita ciclo com
+    loja_pagamento."""
+    from app.models import EstoqueLoja
+    from app.services.loja_pagamento import loja_origem_site
+    loja = loja_origem_site()
+    if not loja:
+        logger.warning('vitrine: loja do site não configurada — NÃO filtra '
+                       'por estoque (mostra tudo)')
+        return None
+    mapa = {}
+    for el in EstoqueLoja.query.filter_by(loja_id=loja.id).all():
+        if el.produto_id:
+            mapa[('produto', el.produto_id)] = el.quantidade or 0
+        elif el.receita_id:
+            mapa[('receita', el.receita_id)] = el.quantidade or 0
+    return mapa
+
+
+def produtos_disponiveis():
+    """Como `produtos_publicados()`, mas só os itens COM saldo > 0 na loja do
+    site. Regra do dono (18/06/2026): todo produto no site tem estoque
+    preenchido; saldo 0 (ou sem linha) = esgotado, some da vitrine.
+
+    NÃO substitui `produtos_publicados()` — a emissão de NF (`tiny_nf`)
+    precisa do catálogo CHEIO, porque a NF sai depois do pagamento, quando o
+    estoque já pode estar zerado."""
+    itens = produtos_publicados()
+    mapa = _estoque_site_map()
+    if mapa is None:
+        return itens  # loja do site não configurada → fail-open
+    return [it for it in itens if mapa.get((it['kind'], it['id']), 0) > 0]
+
+
+def tem_estoque_site(kind, item_id):
+    """True se o item tem saldo > 0 na loja do site (ou se a loja do site não
+    está configurada → fail-open). Usado pela página de produto e pelo
+    checkout pra não vender esgotado."""
+    mapa = _estoque_site_map()
+    if mapa is None:
+        return True
+    return mapa.get((kind, item_id), 0) > 0
+
+
 # Categoria especial: produtos com este nome de categoria abrem o modo
 # "monte sua cesta" na página de produto — cliente adiciona OUTROS itens
 # do catálogo ao carrinho junto da cesta. (Decisão do dono 17/06/2026.)
