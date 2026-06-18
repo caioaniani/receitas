@@ -65,7 +65,7 @@ def test_avanca_pra_a_caminho_dispara_email(app):
         assert PedidoOnline.query.filter_by(codigo='ST0002').first().status == 'a_caminho'
 
 
-def test_a_caminho_pra_entregue_nao_dispara_email(app):
+def test_a_caminho_pra_entregue_nao_dispara_email_a_caminho(app):
     from app.extensions import db
     c = _owner(app)
     _pedido(db, codigo='ST0003', status='a_caminho')
@@ -73,6 +73,38 @@ def test_a_caminho_pra_entregue_nao_dispara_email(app):
         c.post('/admin/loja-online/pedidos/ST0003/status',
                data={'novo_status': 'entregue'})
     ev.assert_not_called()
+
+
+def test_avanca_pra_entregue_dispara_email_entregue(app):
+    """Pedido vira 'entregue' → cliente recebe e-mail confirmando."""
+    from app.extensions import db
+    c = _owner(app)
+    _pedido(db, codigo='STENT1', status='a_caminho')
+    with patch('app.services.email.disponivel', return_value=True), \
+         patch('app.services.email.enviar_pedido_entregue') as ev:
+        r = c.post('/admin/loja-online/pedidos/STENT1/status',
+                    data={'novo_status': 'entregue'})
+    assert r.status_code == 302
+    ev.assert_called_once()
+    with app.app_context():
+        from app.models import PedidoOnline
+        assert PedidoOnline.query.filter_by(codigo='STENT1').first().status == 'entregue'
+
+
+def test_email_entregue_falhando_nao_quebra_status(app):
+    """E-mail entregue falhar NÃO impede a mudança (best-effort)."""
+    from app.extensions import db
+    c = _owner(app)
+    _pedido(db, codigo='STENT2', status='a_caminho')
+    with patch('app.services.email.disponivel', return_value=True), \
+         patch('app.services.email.enviar_pedido_entregue',
+               side_effect=RuntimeError('postmark down')):
+        r = c.post('/admin/loja-online/pedidos/STENT2/status',
+                    data={'novo_status': 'entregue'})
+    assert r.status_code == 302
+    with app.app_context():
+        from app.models import PedidoOnline
+        assert PedidoOnline.query.filter_by(codigo='STENT2').first().status == 'entregue'
 
 
 def test_status_invalido_rejeitado(app):
