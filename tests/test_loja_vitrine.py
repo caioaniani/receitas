@@ -144,6 +144,40 @@ def test_home_agrupa_por_categoria(app):
     assert b'categoria-titulo' in r.data
 
 
+def test_card_produto_tem_area_de_acao_com_dados(app):
+    """Cada card publicado gera um `<div class="card-add">` com os
+    data-attrs que o JS usa pra adicionar/ajustar quantidade no carrinho."""
+    from app.extensions import db
+    p = _criar_produto_publicado(db, nome='Box Mimo', preco=166.0)
+    c = _admin_logado(app)
+    r = c.get('/loja/')
+    assert r.status_code == 200
+    assert b'class="card-add"' in r.data
+    # Identificação do item viaja nos data-attrs
+    assert f'data-id="{p.id}"'.encode() in r.data
+    assert b'data-kind="produto"' in r.data
+    assert b'data-nome="Box Mimo"' in r.data
+    assert b'data-preco="166.0"' in r.data
+
+
+def test_card_sem_preco_nao_mostra_acao(app):
+    """Item sem preço não pode entrar no carrinho — nem mostra a área."""
+    from app.extensions import db
+    from app.models import Produto
+    with app.app_context():
+        # Sem preço_site → nem chega a publicar; mas se chegar, não tem area.
+        # Testamos via item publicado normalmente; o filtro de publicar já
+        # exige preco > 0, então este caminho é redundante mas trava regressão.
+        p = Produto(nome='Sem preço', preco_site=None, ativo=True,
+                    imagem_dropbox_url='https://x/y.jpg')
+        db.session.add(p)
+        db.session.commit()
+    c = _admin_logado(app)
+    r = c.get('/loja/')
+    # Nem o produto aparece (já está filtrado), então nem a área aparece.
+    assert b'Sem pre' not in r.data
+
+
 def test_home_tem_chips_de_navegacao_por_categoria(app):
     """O cliente precisa poder navegar por categoria pelos chips do topo
     (decisão do dono 17/06/2026). Cada categoria aparece como link âncora."""
