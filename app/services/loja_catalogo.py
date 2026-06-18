@@ -160,7 +160,7 @@ def itens_para_montar(excluir_item=None):
     referência (se passado)."""
     excluir_cats = {CATEGORIA_PERSONALIZADA.lower(), 'cestas'}
     out = []
-    for it in produtos_publicados():
+    for it in produtos_disponiveis():
         cat = (it.get('categoria') or '').strip().lower()
         if cat in excluir_cats:
             continue
