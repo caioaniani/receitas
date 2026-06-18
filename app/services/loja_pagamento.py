@@ -292,6 +292,58 @@ def reembolsar_pedido(pedido):
     return True, 'Pedido reembolsado e estornado.'
 
 
+def conciliar_pedido(codigo, aplicar=False):
+    """Conciliação manual (rede de segurança pra webhook que não chegou).
+
+    A fonte da verdade do pagamento é o GATEWAY, não o nosso retorno de
+    checkout nem a chegada do webhook. Esta função consulta o Pagar.me pelo
+    `pagarme_order_id` salvo e, se o gateway confirmar PAGO e `aplicar=True`,
+    marca o pedido como pago localmente — MESMA lógica do webhook
+    (`_marcar_pago`: baixa estoque + e-mail). Ignora a tabela de
+    idempotência (`PagarmeEvento`), então funciona mesmo quando um reenvio
+    do webhook viraria "duplicado". `_marcar_pago` é idempotente (no-op se
+    já pago), então rodar duas vezes — ou o webhook chegar depois — não
+    duplica baixa de estoque.
+
+    Sem `aplicar` = dry-run (só diz o que o gateway reporta). Nunca levanta."""
+    from app.models import PedidoOnline
+    from app.services import pagarme
+    p = PedidoOnline.query.filter_by(codigo=codigo).first()
+    if not p:
+        return {'ok': False, 'erro': 'pedido não encontrado', 'codigo': codigo}
+    pag = next((pg for pg in p.pagamentos if pg.pagarme_order_id), None)
+    if not pag:
+        return {'ok': False, 'erro': 'pedido sem pagarme_order_id (não '
+                'iniciado no Pagar.me?)', 'codigo': codigo,
+                'status_local': p.status}
+    consulta = pagarme.consultar_order(pag.pagarme_order_id)
+    if not consulta.get('ok'):
+        return {'ok': False, 'erro': 'falha ao consultar Pagar.me',
+                'detalhe': consulta, 'codigo': codigo}
+    out = {'ok': True, 'codigo': p.codigo, 'status_local': p.status,
+           'pagarme_status': consulta.get('status'),
+           'pagarme_pago': bool(consulta.get('pago')),
+           'order_id': pag.pagarme_order_id}
+    if not consulta.get('pago'):
+        out['acao'] = 'nada — Pagar.me NÃO confirma pago'
+        return out
+    if not aplicar:
+        out['acao'] = ('dry-run — Pagar.me confirma PAGO. '
+                       'Adicione ?aplicar=1 pra marcar.')
+        return out
+    try:
+        mudou = _marcar_pago(p, pag)
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        logger.exception('conciliar_pedido %s: _marcar_pago falhou', codigo)
+        return {'ok': False, 'erro': f'falha ao marcar pago: {exc}',
+                'codigo': codigo, 'status_local': p.status}
+    out['acao'] = 'MARCADO PAGO' if mudou else 'já estava pago (no-op)'
+    out['status_local'] = p.status
+    return out
+
+
 def processar_webhook(evento):
     """Recebe o JSON do webhook (já parsed). Idempotente por `id` do
     evento (PagarmeEvento). Retorna dict com o que foi feito (pra
