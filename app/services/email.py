@@ -261,11 +261,17 @@ def _texto_pedido_recebido(pedido, base):
         f'Continuar o pagamento: {link}\n')
 
 
-def _template_a_caminho(pedido, base):
+def _template_a_caminho(pedido, base, rastreio_url=None):
     onde, quando = _entrega_linha(pedido)
     link = f'{base}/loja/conta/pedidos/{pedido.codigo}' if base else ''
     link_html = (f'<a href="{link}" style="color:#8b5a2b;">Ver detalhes</a>'
                  if link else '')
+    rastreio_html = (
+        f'<p style="margin:18px 0 0;"><a href="{rastreio_url}" '
+        f'style="display:inline-block;background:#8b5a2b;color:#fff;'
+        f'text-decoration:none;padding:11px 20px;border-radius:8px;'
+        f'font-weight:600;">Acompanhar a entrega</a></p>'
+        if rastreio_url else '')
     return f"""\
 <!doctype html><html lang="pt-BR"><body style="margin:0;background:#fbf8f3;
 font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
@@ -277,16 +283,19 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
     <p style="margin:0 0 6px;font-weight:600;">Entrega</p>
     <p style="margin:0;font-size:14px;color:#6b5f54;">{onde}<br>{quando}</p>
   </div>
+  {rastreio_html}
   <p style="margin-top:20px;">{link_html}</p>
 </div></body></html>"""
 
 
-def _texto_a_caminho(pedido, base):
+def _texto_a_caminho(pedido, base, rastreio_url=None):
     onde, quando = _entrega_linha(pedido)
     link = f'{base}/loja/conta/pedidos/{pedido.codigo}' if base else ''
+    rastreio = f'Acompanhe a entrega: {rastreio_url}\n\n' if rastreio_url else ''
     return (
         f'Seu pedido {pedido.codigo} saiu pra entrega!\n\n'
         f'Entrega: {onde} {quando}\n\n'
+        f'{rastreio}'
         f'Detalhes: {link}\n')
 
 
