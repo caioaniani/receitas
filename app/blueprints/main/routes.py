@@ -2819,10 +2819,12 @@ def loja_online_dashboard():
                       PedidoOnline.criado_em.asc())
             .limit(15).all())
 
+    from app.models import AppConfig
     return render_template(
         'admin/loja_online_dashboard.html',
         janelas=janelas, contagens=contagens, fila=fila,
-        labels=_STATUS_PEDIDO_ONLINE_LABEL)
+        labels=_STATUS_PEDIDO_ONLINE_LABEL,
+        logo_url=AppConfig.get('loja_logo_url'))
 
 
 @main_bp.route('/admin/loja-online/pedidos')
