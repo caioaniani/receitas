@@ -2746,6 +2746,12 @@ def debug_pagarme():
     segredo. Útil pra saber se as chaves são reais ou placeholders."""
     from app.services import pagarme
     cfg = current_app.config
+    seg = (cfg.get('PAGARME_WEBHOOK_SECRET') or '').strip()
+    # Máscara do secret VIVO neste container (owner-only): len + 4 primeiros +
+    # 4 últimos. Serve pra confirmar que o redeploy do Railway já aplicou o
+    # valor novo (inicio muda) ANTES de reenviar o webhook no Pagar.me.
+    secret_mascara = ({'len': len(seg), 'inicio': seg[:4], 'fim': seg[-4:]}
+                      if len(seg) > 8 else {'len': len(seg)})
     return jsonify(
         configurado=pagarme.disponivel(),
         ambiente=pagarme.ambiente(),
@@ -2753,7 +2759,8 @@ def debug_pagarme():
         api_key_prefixo=pagarme.prefixo_chave(),
         public_key_len=len((cfg.get('PAGARME_PUBLIC_KEY') or '')),
         public_key_prefixo=pagarme.prefixo_public(),
-        webhook_secret_set=bool((cfg.get('PAGARME_WEBHOOK_SECRET') or '').strip()),
+        webhook_secret_set=bool(seg),
+        webhook_secret_mascara=secret_mascara,
         resultado=pagarme.validar_chave(),
     )
 
