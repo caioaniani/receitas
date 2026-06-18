@@ -1,13 +1,6 @@
 {% extends 'loja/_base.html' %}
 
 {% block content %}
-<section class="hero">
-  <div class="hero-texto">
-    <h1>Pão fresco<br>com fermentação<br>natural.</h1>
-    <p>Cestas, pães e doces feitos no dia. Entrega em São Paulo, todos os dias.</p>
-  </div>
-</section>
-
 {% if grupos %}
 <nav class="cat-nav" aria-label="Categorias">
   {% for cat, itens in grupos %}
