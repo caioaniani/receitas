@@ -21,7 +21,7 @@
 {% endif %}
 
 {% for cat, itens in grupos %}
-<section class="categoria" id="cat-{{ loop.index }}">
+<section class="categoria" id="cat-{{ cat|catslug }}">
   <h2 class="categoria-titulo">{{ cat }}</h2>
   <div class="grid-produtos">
     {% for it in itens %}
