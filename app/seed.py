@@ -960,21 +960,23 @@ def seed_site_products():
 
 
 def seed_cestas_categoria():
-    """Garante que toda CESTA tenha categoria de cesta (libera a cartinha no
-    checkout, cuja regra é 'categoria contém cesta').
+    """Cesta SEM categoria recebe 'Cestas' (libera a cartinha no checkout,
+    cuja regra é 'categoria contém cesta').
 
-    Cesta = Produto com composição (ProdutoItem) — sinal estrutural, pega
-    até alguma cesta esquecida sem depender de lista de nomes. SÓ corrige as
-    que NÃO têm 'cesta' na categoria (vazia ou errada); preserva 'Cestas' e
-    'Cestas Personalizadas' já setadas. Idempotente. Roda em TODOS os
-    ambientes (caso algum produto tenha sido criado sem a categoria).
+    Cesta = Produto com composição (ProdutoItem). **SÓ PREENCHE categoria
+    VAZIA — NUNCA sobrescreve uma categoria já definida.** A curadoria do
+    admin (`/admin/loja-online/catalogo`) é a fonte de verdade da categoria;
+    sobrescrever revertia, a cada deploy/restart, as mudanças manuais do dono
+    (ex.: mover um produto de 'Cestas' pra 'Acompanhamentos' voltava sozinho
+    — bug identificado pelo dono em 18/06/2026). Idempotente. Roda em todos
+    os ambientes (rede de segurança pra produto criado sem categoria).
     """
     ids_com_itens = {pi.produto_id for pi in ProdutoItem.query.all()}
     if not ids_com_itens:
         return 0
     n = 0
     for p in Produto.query.filter(Produto.id.in_(ids_com_itens)).all():
-        if 'cesta' not in (p.categoria or '').lower():
+        if not (p.categoria or '').strip():   # SÓ preenche vazio
             p.categoria = 'Cestas'
             n += 1
     if n:
