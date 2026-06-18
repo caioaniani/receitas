@@ -326,6 +326,9 @@ def api_painel_status(code):
             db.session.commit()
         except Exception:  # noqa: BLE001
             db.session.rollback()  # corrida entre 2 aparelhos: ja existe, ok
+    # Loja própria: "entregue" no painel sincroniza o PedidoOnline + e-mail.
+    if novo_status == 'entregue':
+        _sync_pedido_online_status(code, 'entregue')
     return jsonify(ok=True, status=novo_status)
 
 
