@@ -11,7 +11,7 @@
 {% if grupos %}
 <nav class="cat-nav" aria-label="Categorias">
   {% for cat, itens in grupos %}
-    <a href="#cat-{{ loop.index }}">{{ cat }}</a>
+    <a href="#cat-{{ cat|catslug }}">{{ cat }}</a>
   {% endfor %}
 </nav>
 {% else %}
