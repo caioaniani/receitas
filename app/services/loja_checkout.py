@@ -382,4 +382,13 @@ def criar_pedido(form, itens_raw, *, base=None):
         ))
     pedido.recalcular_total()
     db.session.commit()
+    # E-mail "recebemos seu pedido" — best-effort (não derruba o checkout).
+    try:
+        from app.services import email as email_svc
+        if email_svc.disponivel():
+            email_svc.enviar_pedido_recebido(pedido)
+    except Exception:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).exception(
+            'email pedido recebido falhou')
     return pedido, []
