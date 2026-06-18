@@ -2492,6 +2492,76 @@ def loja_online_catalogo_ordem(tipo, id):
     return jsonify(ok=True, ordem=obj.ordem_site)
 
 
+@main_bp.route('/admin/loja-online/categorias/ordem', methods=['POST'])
+@owner_required
+def loja_online_categorias_ordem():
+    """Salva a nova ordem das categorias em lote.
+    Body JSON: {ordem: ['Pães', 'Bebidas', 'Conservas']}.
+    Faz upsert pra cada (ordem = índice).
+    """
+    from app.models import CategoriaSite
+    dados = request.get_json(silent=True) or {}
+    nomes = dados.get('ordem') or []
+    if not isinstance(nomes, list):
+        return jsonify(ok=False, erro='ordem precisa ser lista'), 400
+    existentes = {c.nome: c for c in CategoriaSite.query.all()}
+    for i, nome in enumerate(nomes):
+        nome = (nome or '').strip()[:50]
+        if not nome:
+            continue
+        if nome in existentes:
+            existentes[nome].ordem = i
+        else:
+            db.session.add(CategoriaSite(nome=nome, ordem=i))
+    db.session.commit()
+    return jsonify(ok=True, salvas=len([n for n in nomes if n]))
+
+
+@main_bp.route('/admin/loja-online/produtos/ordem', methods=['POST'])
+@owner_required
+def loja_online_produtos_ordem():
+    """Salva a nova ordem dos PRODUTOS dentro de uma categoria em lote.
+    Body JSON: {itens: [{tipo: 'produto'|'receita', id: int}, ...]}.
+    O índice na lista vira o `ordem_site` (do menor pro maior).
+    """
+    from app.models import Produto, Receita
+    dados = request.get_json(silent=True) or {}
+    itens = dados.get('itens') or []
+    if not isinstance(itens, list):
+        return jsonify(ok=False, erro='itens precisa ser lista'), 400
+    salvas = 0
+    for i, it in enumerate(itens):
+        tipo = (it.get('tipo') or '').strip()
+        try:
+            iid = int(it.get('id'))
+        except (TypeError, ValueError):
+            continue
+        if tipo == 'produto':
+            obj = Produto.query.get(iid)
+        elif tipo == 'receita':
+            obj = Receita.query.get(iid)
+        else:
+            continue
+        if not obj:
+            continue
+        obj.ordem_site = i
+        salvas += 1
+    db.session.commit()
+    return jsonify(ok=True, salvas=salvas)
+
+
+@main_bp.route('/admin/loja-online/ordem-produtos')
+@owner_required
+def loja_online_ordem_produtos():
+    """Tela pra reordenar PRODUTOS por categoria via drag-and-drop.
+    Agrupa publicados pela categoria; cada grupo é uma lista sortable."""
+    from app.services import loja_catalogo
+    itens = loja_catalogo.produtos_publicados()
+    grupos = loja_catalogo.por_categorias(itens)
+    return render_template('admin/loja_online_ordem_produtos.html',
+                            grupos=grupos)
+
+
 @main_bp.route('/admin/loja-online/categorias', methods=['GET', 'POST'])
 @owner_required
 def loja_online_categorias():
