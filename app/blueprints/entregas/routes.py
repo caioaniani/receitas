@@ -433,6 +433,9 @@ def api_lalamove_chamar():
     db.session.commit()
     current_app.logger.info('lalamove chamada: pedido=%s order=%s por uid=%s',
                             e.pedido_code, e.order_id, current_user.id)
+    # Loja própria: motorista chamado = pedido "a caminho" (+ e-mail). VNDA
+    # não tem PedidoOnline → o sync é no-op silencioso.
+    _sync_pedido_online_status(e.pedido_code, 'a_caminho')
     return jsonify(ok=True, lalamove=_lalamove_json(e))
 
 
