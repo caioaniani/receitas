@@ -42,6 +42,42 @@
   {{ card_janela('Este mês', janelas.mes) }}
 </div>
 
+<div class="card mb-4">
+  <div class="card-header py-2 fw-bold">Logotipo da loja</div>
+  <div class="card-body d-flex flex-wrap align-items-center gap-3">
+    <div style="min-width:160px;min-height:56px;display:flex;align-items:center;
+                justify-content:center;background:#fbf8f3;border:1px solid #eee;
+                border-radius:8px;padding:8px 14px">
+      {% if logo_url %}
+        <img src="{{ logo_url }}" alt="Logo atual" style="max-height:48px;max-width:220px;object-fit:contain">
+      {% else %}
+        <span class="text-muted small">Sem logo — header mostra o texto</span>
+      {% endif %}
+    </div>
+    <div class="flex-grow-1">
+      <form method="POST" action="{{ url_for('main.loja_online_logo') }}"
+            enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="file" name="logo" accept="image/png,image/svg+xml,image/jpeg,image/webp"
+               class="form-control form-control-sm" style="max-width:280px" required>
+        <button type="submit" class="btn btn-sm btn-primary">Enviar logo</button>
+      </form>
+      <p class="text-muted small mt-2 mb-0">
+        PNG com fundo transparente fica melhor (ou SVG). Aparece no topo da
+        vitrine. {% if logo_url %}
+        <a href="#" onclick="document.getElementById('form-remover-logo').submit();return false;">Remover logo</a>.
+        {% endif %}
+      </p>
+      {% if logo_url %}
+      <form id="form-remover-logo" method="POST"
+            action="{{ url_for('main.loja_online_logo_remover') }}" class="d-none">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
 <div class="row g-3">
   <div class="col-12 col-md-5">
     <div class="card">
