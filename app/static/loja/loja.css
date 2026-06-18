@@ -59,9 +59,56 @@ a:hover { text-decoration: underline; }
   opacity: .6;
 }
 .topo .logo:hover { text-decoration: none; }
-.topo-nav { display: flex; gap: 22px; font-family: system-ui, sans-serif; font-size: 15px; }
+.topo .logo img {
+  display: block;
+  height: 40px;
+  width: auto;
+  max-width: 200px;
+  object-fit: contain;
+}
+@media (min-width: 600px) {
+  .topo .logo img { height: 48px; max-width: 260px; }
+}
+.topo-nav { display: flex; gap: 18px; align-items: center; font-family: system-ui, sans-serif; font-size: 15px; }
 .topo-nav a { color: var(--texto); }
 .topo-nav a.disabled { opacity: .35; cursor: not-allowed; pointer-events: none; }
+
+/* ── Dropdown "Produtos" no header ──────────────────────── */
+.topo-dropdown { position: relative; }
+.topo-dropdown-btn {
+  background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--texto); font-family: inherit; font-size: 15px;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.topo-dropdown-btn .seta { font-size: 11px; transition: transform .15s ease; }
+.topo-dropdown.aberto .topo-dropdown-btn .seta { transform: rotate(180deg); }
+.topo-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  min-width: 200px;
+  background: #fff;
+  border: 1px solid var(--linha);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(80, 50, 20, .14);
+  padding: 6px;
+  display: none;
+  z-index: 50;
+}
+.topo-dropdown.aberto .topo-dropdown-menu { display: block; }
+.topo-dropdown-menu a {
+  display: block;
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--texto);
+  white-space: nowrap;
+}
+.topo-dropdown-menu a:hover { background: var(--card-bg); text-decoration: none; }
+@media (max-width: 480px) {
+  /* No celular o menu encosta na direita pra não vazar a tela. */
+  .topo-dropdown-menu { left: auto; right: 0; }
+}
 
 /* ── Hero ──────────────────────────────────────────────── */
 .hero {
