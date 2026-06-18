@@ -200,7 +200,7 @@ def categorias_publicadas():
     O slug bate com o `id="cat-<slug>"` de cada seção na home, então o
     link `/loja/#cat-<slug>` pula direto pra categoria."""
     return [{'nome': cat, 'slug': _slugify(cat)}
-            for cat, _itens in por_categorias(produtos_publicados())]
+            for cat, _itens in por_categorias(produtos_disponiveis())]
 
 
 def por_id_publicado(kind, item_id):
