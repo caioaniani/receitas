@@ -166,32 +166,6 @@ def _pedidos_online_do_dia(target_date):
     return pedidos
 
 
-def _sync_pedido_online_status(code, novo_status):
-    """Best-effort: reflete no PedidoOnline a mudança feita no painel/Lalamove
-    e dispara o e-mail transacional. NÃO regride status, NÃO toca em
-    cancelado/aguardando, NUNCA quebra o caller. `novo_status` ∈
-    {'a_caminho','entregue'}."""
-    try:
-        from app.services import email as email_svc
-        p = PedidoOnline.query.filter_by(codigo=code).first()
-        if not p or p.status in ('cancelado', 'aguardando_pagamento'):
-            return
-        ordem = {'pago': 1, 'em_preparo': 2, 'a_caminho': 3, 'entregue': 4}
-        if ordem.get(novo_status, 0) <= ordem.get(p.status, 0):
-            return  # não regride (idempotente em reentrega)
-        p.status = novo_status
-        db.session.commit()
-        if email_svc.disponivel():
-            if novo_status == 'a_caminho':
-                email_svc.enviar_pedido_a_caminho(p)
-            elif novo_status == 'entregue':
-                email_svc.enviar_pedido_entregue(p)
-    except Exception:  # noqa: BLE001
-        db.session.rollback()
-        current_app.logger.exception('sync PedidoOnline %s -> %s falhou',
-                                     code, novo_status)
-
-
 @entregas_bp.route('/painel')
 @login_required
 def painel():
@@ -329,7 +303,8 @@ def api_painel_status(code):
             db.session.rollback()  # corrida entre 2 aparelhos: ja existe, ok
     # Loja própria: "entregue" no painel sincroniza o PedidoOnline + e-mail.
     if novo_status == 'entregue':
-        _sync_pedido_online_status(code, 'entregue')
+        from app.services.loja_entrega import avancar_status_entrega
+        avancar_status_entrega(code, 'entregue')
     return jsonify(ok=True, status=novo_status)
 
 
@@ -434,9 +409,10 @@ def api_lalamove_chamar():
     db.session.commit()
     current_app.logger.info('lalamove chamada: pedido=%s order=%s por uid=%s',
                             e.pedido_code, e.order_id, current_user.id)
-    # Loja própria: motorista chamado = pedido "a caminho" (+ e-mail). VNDA
-    # não tem PedidoOnline → o sync é no-op silencioso.
-    _sync_pedido_online_status(e.pedido_code, 'a_caminho')
+    # Loja própria: motorista chamado = pedido "a caminho" (+ e-mail com o
+    # link de rastreio do Lalamove). VNDA não tem PedidoOnline → no-op.
+    from app.services.loja_entrega import avancar_status_entrega
+    avancar_status_entrega(e.pedido_code, 'a_caminho', rastreio_url=e.share_link)
     return jsonify(ok=True, lalamove=_lalamove_json(e))
 
 
