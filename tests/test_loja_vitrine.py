@@ -196,9 +196,10 @@ def test_home_tem_chips_de_navegacao_por_categoria(app):
     assert r.status_code == 200
     # Chips de categoria presentes (nav)
     assert b'cat-nav' in r.data
-    # Cada categoria vira link âncora
-    assert b'href="#cat-1"' in r.data
-    assert b'href="#cat-2"' in r.data
+    # Cada categoria vira link âncora pelo SLUG da categoria (estável e
+    # idêntico ao do dropdown "Produtos" do header).
+    assert b'href="#cat-cestas"' in r.data
+    assert b'href="#cat-paes"' in r.data
 
 
 # ── Página de produto ────────────────────────────────────────────────
