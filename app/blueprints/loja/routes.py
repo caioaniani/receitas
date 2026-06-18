@@ -174,6 +174,30 @@ def pedido_status(codigo):
     return jsonify(status=p.status, codigo=p.codigo)
 
 
+_PAGARME_HIT_PATH = '/tmp/pagarme_webhook_ultimo.json'
+
+
+def _gravar_pagarme_hit(info):
+    """Best-effort: grava metadados do último hit do webhook pro debug ler.
+    NUNCA vaza o segredo — só comprimentos, primeiros e últimos 4 chars
+    (suficiente pra COMPARAR sem expor)."""
+    import time
+    try:
+        info['quando_epoch'] = time.time()
+        with open(_PAGARME_HIT_PATH, 'w') as f:
+            json.dump(info, f)
+    except OSError:
+        pass
+
+
+def _mascarar(s):
+    """4 primeiros + len + 4 últimos. NÃO mostra o meio."""
+    s = s or ''
+    if len(s) <= 8:
+        return {'len': len(s), 'amostra': '(curto demais p/ mascarar)'}
+    return {'len': len(s), 'inicio': s[:4], 'fim': s[-4:]}
+
+
 @loja_bp.route('/webhook/pagarme', methods=['POST'])
 @csrf.exempt
 def webhook_pagarme():
@@ -181,24 +205,54 @@ def webhook_pagarme():
     padrão de Chatwoot/Slack/Zapi nesse projeto.
 
     Idempotente (PagarmeEvento). 'order.paid'/'charge.paid' marca pago e
-    baixa estoque (venda_site). 'refunded'/'canceled' estorna. Reentrega do
-    mesmo evento devolve 200 sem dupli­car efeito."""
+    baixa estoque (venda_site). Refund/cancel é IGNORADO (decisão do dono
+    18/06/2026 — estorno é manual no admin). Reentrega do mesmo evento
+    devolve 200 sem dupli­car efeito."""
     import hmac
 
     from flask import current_app
     segredo_esperado = (current_app.config.get('PAGARME_WEBHOOK_SECRET')
                         or '').strip()
-    if not segredo_esperado:
-        return jsonify(ok=False, erro='webhook desabilitado'), 503
     fornecido = request.args.get('k') or ''
+    # Tentativa de leitura do tipo do evento (best-effort, só pro log — não
+    # serve pra autenticar).
+    try:
+        peek = request.get_json(silent=True, cache=True) or {}
+        tipo_peek = peek.get('type') or ''
+    except Exception:
+        tipo_peek = ''
+    hit = {'tipo': tipo_peek,
+           'esperado': _mascarar(segredo_esperado),
+           'fornecido': _mascarar(fornecido),
+           'bate': bool(segredo_esperado
+                        and hmac.compare_digest(segredo_esperado, fornecido))}
+    if not segredo_esperado:
+        hit['status'] = 503
+        _gravar_pagarme_hit(hit)
+        return jsonify(ok=False, erro='webhook desabilitado'), 503
     # Comparação constante — defesa contra timing attack.
-    if not hmac.compare_digest(segredo_esperado, fornecido):
+    if not hit['bate']:
+        hit['status'] = 401
+        _gravar_pagarme_hit(hit)
         return jsonify(ok=False, erro='unauthorized'), 401
+    hit['status'] = 200
+    _gravar_pagarme_hit(hit)
     evento = request.get_json(silent=True) or {}
     res = loja_pagamento.processar_webhook(evento)
     # Devolve 200 mesmo em "sem_pedido"/"ignorado" pra Pagar.me NÃO ficar
     # reentregando indefinidamente um evento que não vai processar.
     return jsonify(res), 200
+
+
+def ler_ultimo_hit_pagarme():
+    """Pro /admin/debug-pagarme/ultimo-webhook: último hit registrado neste
+    container (best-effort; pode estar vazio se ainda não recebeu nada
+    desde o último redeploy)."""
+    try:
+        with open(_PAGARME_HIT_PATH) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
 
 
 def _loja_visivel_publico():
