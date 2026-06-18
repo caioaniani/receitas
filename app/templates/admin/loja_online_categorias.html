@@ -12,6 +12,9 @@
 <a href="{{ url_for('main.loja_online_catalogo') }}" class="btn btn-sm btn-outline-secondary mb-3">
   &larr; Catálogo
 </a>
+<a href="{{ url_for('main.loja_online_dashboard') }}" class="btn btn-sm btn-outline-secondary mb-3">
+  Visão geral
+</a>
 
 <form method="POST" class="card">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
