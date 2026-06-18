@@ -213,6 +213,13 @@ def _em_teste():
     return not _loja_visivel_publico()
 
 
+@loja_bp.app_template_filter('catslug')
+def _filtro_catslug(s):
+    """Slug de categoria pro id da âncora `#cat-<slug>`. Idêntico ao slug
+    do dropdown (ambos via loja_catalogo._slugify) — o link pula certo."""
+    return loja_catalogo._slugify(s or '')
+
+
 @loja_bp.context_processor
 def _injetar_contexto_loja():
     """Expõe no header de TODA página da loja:
