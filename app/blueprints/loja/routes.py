@@ -214,9 +214,18 @@ def _em_teste():
 
 
 @loja_bp.context_processor
-def _injetar_cliente_atual():
-    """Expõe `cliente_atual` nos templates da loja (header + base usam)."""
-    return {'cliente_atual': loja_auth.cliente_atual()}
+def _injetar_contexto_loja():
+    """Expõe no header de TODA página da loja:
+    - `cliente_atual`: cliente logado (ou None)
+    - `categorias_loja`: [{nome, slug}] pro dropdown "Produtos"
+    - `loja_logo_url`: logo enviado no admin (ou None → wordmark de texto)
+    """
+    from app.models import AppConfig
+    return {
+        'cliente_atual': loja_auth.cliente_atual(),
+        'categorias_loja': loja_catalogo.categorias_publicadas(),
+        'loja_logo_url': AppConfig.get('loja_logo_url'),
+    }
 
 
 @loja_bp.before_request
