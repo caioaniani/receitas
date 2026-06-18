@@ -34,13 +34,25 @@ def disponivel():
 
 def ambiente():
     """'sandbox' | 'producao' | 'desconhecido' a partir do prefixo da chave.
-    Pagar.me v5 emite `sk_test_*` (sandbox) e `sk_live_*` (produção). Caso
-    fuja desses prefixos (chave nova ou colada cortada), devolve
-    'desconhecido' — combine com `prefixo_chave()` no debug."""
+
+    Reconhece 3 formatos do Pagar.me/Stone:
+    - `sk_test_*` → sandbox (v5 clássico)
+    - `sk_live_*` → produção (v5 clássico)
+    - `sk_<hash>` (sem test/live) → produção. Padrão novo confirmado em prod
+      18/06/2026 (chave do dono começava com `sk_f2f38…`, gerada no painel
+      de produção). Pagar.me não emite chave de sandbox neste formato — a
+      sandbox sempre tem `_test_` explícito. Defensivo: só decidimos
+      'producao' quando a chave de fato AUTENTICA na API (chamamos a API
+      antes em `validar_chave`); aqui apenas classificamos o formato.
+
+    Devolve 'desconhecido' pra formatos não-Pagar.me (chave de outro
+    serviço por engano)."""
     sk = _chave()
     if sk.startswith('sk_test_'):
         return 'sandbox'
     if sk.startswith('sk_live_'):
+        return 'producao'
+    if sk.startswith('sk_'):
         return 'producao'
     return 'desconhecido'
 
