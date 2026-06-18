@@ -444,6 +444,7 @@ a:hover { text-decoration: underline; }
   background: #efe7da;
   border-radius: 6px;
   overflow: hidden;
+  position: relative;
 }
 .produto-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
