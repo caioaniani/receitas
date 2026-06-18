@@ -213,8 +213,13 @@ def api_painel():
         target = hoje_brt()
 
     pedidos, erro = _painel_pedidos_do_dia(target)
-    if erro:
-        return jsonify(pedidos=[], data=data_str, erro=erro)
+    # Pedidos da loja própria (opao.online) entram SEMPRE — independem do
+    # VNDA. Se a API do VNDA cair, `erro` vem setado mas estes continuam
+    # aparecendo (o front trata `erro` como aviso, não esconde os cards).
+    try:
+        pedidos = list(pedidos) + _pedidos_online_do_dia(target)
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception('painel: pedidos da loja própria falharam')
 
     codes = [p['code'] for p in pedidos if p.get('code')]
     status_por_code = {}
