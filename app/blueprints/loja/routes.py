@@ -210,6 +210,7 @@ def _gate_acesso():
     if request.endpoint in (
             'loja.robots', 'loja.webhook_pagarme',
             'loja.entrar', 'loja.cadastrar', 'loja.sair',
+            'loja.esqueci_senha', 'loja.redefinir_senha',
     ):
         return None
     if _loja_visivel_publico():
