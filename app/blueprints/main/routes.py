@@ -2856,6 +2856,37 @@ _STATUS_PEDIDO_ONLINE_LABEL = {
 }
 
 
+@main_bp.route('/admin/loja-online/estoque-vitrine')
+@owner_required
+def loja_online_estoque_vitrine():
+    """Diagnóstico (owner): pra cada produto publicado no site, mostra o
+    saldo na loja do site e se ele APARECE ou some da vitrine pela regra de
+    estoque (saldo 0 ou sem linha = some). Use pra preencher o estoque em
+    `/pedidos/estoque-loja` antes de abrir — assim a vitrine não fica vazia
+    por engano."""
+    from app.services import loja_catalogo
+    from app.services.loja_pagamento import loja_origem_site
+    loja = loja_origem_site()
+    mapa = loja_catalogo._estoque_site_map() or {}
+    itens = []
+    for it in loja_catalogo.produtos_publicados():
+        saldo = mapa.get((it['kind'], it['id']))  # None = sem linha
+        itens.append({
+            'nome': it['nome'], 'kind': it['kind'], 'id': it['id'],
+            'categoria': it['categoria'], 'saldo': saldo,
+            'aparece': bool(saldo and saldo > 0),
+        })
+    escondidos = [i for i in itens if not i['aparece']]
+    return jsonify(
+        loja_site=(loja.nome if loja else None),
+        total_publicados=len(itens),
+        aparecem=len(itens) - len(escondidos),
+        escondidos=len(escondidos),
+        itens_escondidos=escondidos,
+        itens=itens,
+    )
+
+
 @main_bp.route('/admin/loja-online')
 @owner_required
 def loja_online_dashboard():
