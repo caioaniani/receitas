@@ -281,7 +281,7 @@ def test_conciliar_marca_pago_quando_gateway_confirma(app):
         el = _setup_loja_estoque(db, ped, p, qtd_atual=10)
         db.session.add(PagamentoOnline(
             pedido_id=ped.id, metodo='pix', status='pendente',
-            pagarme_order_id='or_concilia1'))
+            valor=ped.valor_total, pagarme_order_id='or_concilia1'))
         db.session.commit()
         confirma = {'ok': True, 'pago': True, 'status': 'paid'}
         # dry-run: reporta pago mas NÃO aplica
