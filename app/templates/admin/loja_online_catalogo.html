@@ -95,6 +95,9 @@
         <input type="text" class="categoria-input" placeholder="Categoria…"
                list="categorias-existentes"
                value="{{ i.categoria }}">
+        <input type="number" class="ordem-input" placeholder="ord"
+               value="{% if i.ordem_site is not none %}{{ i.ordem_site }}{% endif %}"
+               step="1" title="Ordem na vitrine (menor = mais cedo)">
         <span class="item-tipo">{{ i.tipo }}</span>
       </div>
       <div class="item-preco-row">
