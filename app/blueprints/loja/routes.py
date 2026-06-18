@@ -706,10 +706,10 @@ def produto(slug_completo):
     item = loja_catalogo.por_id_publicado(kind, item_id)
     if not item:
         abort(404)
-    # Esgotado some da vitrine (regra do dono 18/06/2026): saldo 0 na loja do
-    # site → 404, igual a não estar publicado. Volta sozinho quando reabastece.
-    if not loja_catalogo.tem_estoque_site(kind, item_id):
-        abort(404)
+    # Esgotado NÃO some (regra do dono 18/06/2026): aparece com selo
+    # "Esgotado" e botão de comprar desabilitado. Saldo 0 ou sem linha de
+    # estoque na loja do site → esgotado=True. Volta a vender quando reabastece.
+    item['esgotado'] = not loja_catalogo.tem_estoque_site(kind, item_id)
     # Slug desatualizado → 301 pra canônica (SEO + URLs sempre limpas)
     if slug_recebido != item['slug']:
         return redirect(url_for('loja.produto',
