@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}Ordem das categorias — Loja Online{% endblock %}
 
-{% block head_extra %}
+{% block content %}
 <style>
   .sortable-list { list-style: none; padding: 0; margin: 0; max-width: 520px; }
   .sortable-row {
@@ -10,6 +10,7 @@
     background: #fff; border: 1px solid #dee2e6; border-radius: 8px;
     cursor: grab; user-select: none;
     transition: box-shadow .15s ease, background .15s ease;
+    touch-action: none;
   }
   .sortable-row:hover { background: #f8f9fa; }
   .sortable-row.sortable-dragging {
@@ -32,9 +33,6 @@
   .save-pill.on { opacity: 1; }
   .save-pill.error { background: #c92a2a; }
 </style>
-{% endblock %}
-
-{% block content %}
 <h1 class="page-title"><span aria-hidden="true">🥐</span> Ordem das categorias</h1>
 <p class="text-muted">
   Arraste os blocos pra reordenar. Salva sozinho ao soltar.
