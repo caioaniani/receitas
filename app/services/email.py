@@ -160,6 +160,52 @@ def _texto_confirmacao(pedido):
         f'Entrega: {onde} {quando}\n')
 
 
+def enviar_reset_senha(cliente, token):
+    """Manda o link de redefinição pro cliente. Best-effort — falha silente.
+
+    Link aponta pra `/loja/redefinir-senha/<token>`. Expira em 1h."""
+    cfg = current_app.config
+    base = (cfg.get('APP_BASE_URL') or '').rstrip('/')
+    if not base:
+        return {'ok': False, 'erro': 'APP_BASE_URL não configurada'}
+    destinatario = (cliente.email or '').strip()
+    if not destinatario:
+        return {'ok': False, 'erro': 'cliente sem email'}
+    link = f'{base}/loja/redefinir-senha/{token}'
+    assunto = 'Redefinir sua senha — O Pão Padaria Artesanal'
+    html = _template_reset(cliente.nome, link)
+    texto = (f'Olá, {cliente.nome.split()[0] if cliente.nome else ""}!\n\n'
+             f'Recebemos um pedido pra redefinir sua senha. Use o link a '
+             f'seguir (vale por 1h):\n\n  {link}\n\n'
+             f'Se não foi você, ignore — sua senha continua a mesma.')
+    return enviar(destinatario, assunto, html, texto=texto)
+
+
+def _template_reset(nome, link):
+    primeiro = nome.split()[0] if nome else ''
+    return f"""\
+<!doctype html><html lang="pt-BR"><body style="margin:0;background:#fbf8f3;
+font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
+<div style="max-width:540px;margin:0 auto;padding:32px 24px;">
+  <h1 style="font-size:22px;margin:0 0 4px;">O Pão · Padaria Artesanal</h1>
+  <p style="color:#6b5f54;margin:0 0 20px;">Olá, {primeiro}! 👋</p>
+  <div style="background:#fff;border-radius:12px;padding:20px 22px;
+  box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:20px;">
+    <p style="margin:0 0 14px;font-size:15px;">Recebemos um pedido pra
+    redefinir a senha da sua conta. Clique abaixo (o link vale por 1h):</p>
+    <a href="{link}" style="display:inline-block;background:#8b5a2b;
+    color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;
+    font-weight:600;">Redefinir senha</a>
+    <p style="color:#6b5f54;font-size:13px;margin:14px 0 0;">
+      Se o botão não funcionar, copie e cole no navegador:<br>
+      <span style="word-break:break-all;color:#1971c2;">{link}</span></p>
+  </div>
+  <p style="color:#9a8d80;font-size:12px;margin-top:24px;">
+    Se você não pediu isso, ignore — sua senha continua a mesma. Email
+    automático, não responda.</p>
+</div></body></html>"""
+
+
 def enviar_boas_vindas(destinatario, nome, login, senha):
     """Email de convite pro novo usuário: senha do gestao.* + como entrar
     no atendimento (Chatwoot). Cadastro do Chatwoot ainda é manual (Super
