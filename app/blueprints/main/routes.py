@@ -2758,6 +2758,23 @@ def debug_pagarme():
     )
 
 
+@main_bp.route('/admin/debug-pagarme/ultimo-webhook')
+@owner_required
+def debug_pagarme_ultimo_webhook():
+    """Mostra metadados MASCARADOS do último hit do webhook (esperado vs
+    fornecido). Útil pra entender por que o Pagar.me marca "Falha":
+    `bate: false` + `status: 401` → secret divergente. Os campos
+    `inicio`/`fim` mostram só 4 chars de cada lado pra COMPARAÇÃO visual,
+    sem expor o valor."""
+    from app.blueprints.loja.routes import ler_ultimo_hit_pagarme
+    hit = ler_ultimo_hit_pagarme()
+    if not hit:
+        return jsonify(erro='nenhum hit registrado neste container ainda; '
+                       'reenvie um webhook pelo painel do Pagar.me e tente '
+                       'de novo')
+    return jsonify(hit)
+
+
 @main_bp.route('/admin/debug-pagarme/eventos')
 @owner_required
 def debug_pagarme_eventos():
