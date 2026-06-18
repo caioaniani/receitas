@@ -2534,6 +2534,59 @@ _STATUS_PEDIDO_ONLINE_LABEL = {
 }
 
 
+@main_bp.route('/admin/loja-online')
+@owner_required
+def loja_online_dashboard():
+    """Visão geral da loja online: contagens por status, faturamento por
+    janela (hoje/semana/mês) e fila do que precisa de ação do admin."""
+    from datetime import timedelta
+
+    from sqlalchemy import func as _func
+
+    from app.models import PedidoOnline
+    from app.utils import agora
+    hoje = agora().date()
+    ini_semana = hoje - timedelta(days=hoje.weekday())
+    ini_mes = hoje.replace(day=1)
+
+    def _stats(desde):
+        # Faturamento e contagem dos pedidos PAGOS (não cancelados) desde X.
+        q = db.session.query(
+            _func.coalesce(_func.sum(PedidoOnline.valor_total), 0),
+            _func.count(PedidoOnline.id),
+        ).filter(
+            PedidoOnline.criado_em >= desde,
+            PedidoOnline.status.in_(
+                ('pago', 'em_preparo', 'a_caminho', 'entregue')),
+        )
+        valor, count = q.first()
+        return {'valor': float(valor or 0), 'count': count or 0}
+
+    janelas = {
+        'hoje': _stats(hoje),
+        'semana': _stats(ini_semana),
+        'mes': _stats(ini_mes),
+    }
+
+    contagens = dict(db.session.query(PedidoOnline.status, _func.count())
+                     .group_by(PedidoOnline.status).all())
+
+    # Fila do admin: precisam de ação (pago = emitir NF + começar preparo;
+    # em_preparo + a_caminho = entregar). Aguardando pagamento NÃO entra
+    # (cliente é quem age — não atrapalha o admin).
+    fila = (PedidoOnline.query
+            .filter(PedidoOnline.status.in_(
+                ('pago', 'em_preparo', 'a_caminho')))
+            .order_by(PedidoOnline.data_entrega.asc().nullslast(),
+                      PedidoOnline.criado_em.asc())
+            .limit(15).all())
+
+    return render_template(
+        'admin/loja_online_dashboard.html',
+        janelas=janelas, contagens=contagens, fila=fila,
+        labels=_STATUS_PEDIDO_ONLINE_LABEL)
+
+
 @main_bp.route('/admin/loja-online/pedidos')
 @owner_required
 def loja_online_pedidos():
