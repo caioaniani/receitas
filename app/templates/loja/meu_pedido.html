@@ -1,0 +1,92 @@
+{% extends 'loja/_base.html' %}
+{% block title %}Pedido {{ pedido.codigo }} — O Pão Padaria Artesanal{% endblock %}
+{% set badge = {
+  'aguardando_pagamento': 'badge-warning',
+  'pago': 'badge-info',
+  'em_preparo': 'badge-secondary',
+  'a_caminho': 'badge-primary',
+  'entregue': 'badge-success',
+  'cancelado': 'badge-danger',
+} %}
+{% set label = {
+  'aguardando_pagamento': 'Aguardando pagamento', 'pago': 'Pago',
+  'em_preparo': 'Em preparo', 'a_caminho': 'A caminho',
+  'entregue': 'Entregue', 'cancelado': 'Cancelado',
+} %}
+{% set modo_label = {
+  'agendada': 'Entrega agendada',
+  'retirada': 'Retirada na loja',
+  'express': 'Express (em até 1h)',
+} %}
+{% block content %}
+<section class="checkout-pagina" style="max-width:760px">
+  <p><a href="{{ url_for('loja.meus_pedidos') }}">&larr; Meus pedidos</a></p>
+
+  <h1>🥐 Pedido <code>{{ pedido.codigo }}</code></h1>
+  <p>
+    <span class="badge {{ badge.get(pedido.status, 'badge-secondary') }}">
+      {{ label.get(pedido.status, pedido.status) }}</span>
+    <span class="small text-muted" style="margin-left:.5rem">
+      Feito em {{ pedido.criado_em.strftime('%d/%m/%Y %H:%M') if pedido.criado_em }}
+    </span>
+  </p>
+
+  <div class="checkout-bloco">
+    <h2>Itens</h2>
+    <table class="meus-pedidos-tbl">
+      <tbody>
+        {% for it in pedido.itens %}
+        <tr>
+          <td>{{ it.quantidade }}× {{ it.nome }}</td>
+          <td class="text-end small text-muted">R$ {{ '%.2f'|format(it.preco_unitario)|replace('.', ',') }}/un</td>
+          <td class="text-end fw-bold">R$ {{ '%.2f'|format(it.subtotal)|replace('.', ',') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr><td colspan="2" class="text-end">Subtotal</td>
+          <td class="text-end">R$ {{ '%.2f'|format(pedido.subtotal)|replace('.', ',') }}</td></tr>
+        <tr><td colspan="2" class="text-end">Frete</td>
+          <td class="text-end">R$ {{ '%.2f'|format(pedido.frete_valor)|replace('.', ',') }}</td></tr>
+        <tr class="fw-bold"><td colspan="2" class="text-end">Total</td>
+          <td class="text-end">R$ {{ '%.2f'|format(pedido.valor_total)|replace('.', ',') }}</td></tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="checkout-bloco">
+    <h2>{{ modo_label.get(pedido.modo_entrega, pedido.modo_entrega) }}</h2>
+    {% if pedido.nome_destinatario %}
+    <p>🎁 Para <strong>{{ pedido.nome_destinatario }}</strong>{% if pedido.telefone_destinatario %} · {{ pedido.telefone_destinatario }}{% endif %}</p>
+    {% endif %}
+    {% if pedido.modo_entrega == 'retirada' %}
+      <p><strong>{{ pedido.loja_retirada.nome if pedido.loja_retirada else '—' }}</strong>
+      {% if pedido.loja_retirada and pedido.loja_retirada.endereco %}<br>{{ pedido.loja_retirada.endereco }}{% endif %}</p>
+    {% else %}
+      <p>{{ pedido.endereco_entrega or '—' }}</p>
+    {% endif %}
+    {% if pedido.data_entrega %}
+    <p>📅 {{ pedido.data_entrega.strftime('%d/%m/%Y') }}
+      {% if pedido.janela_entrega %}· {{ pedido.janela_entrega }}{% endif %}</p>
+    {% endif %}
+  </div>
+
+  {% if pedido.nf_emitida_em %}
+  <div class="checkout-bloco">
+    <h2>Nota Fiscal</h2>
+    <p>NF emitida em {{ pedido.nf_emitida_em.strftime('%d/%m/%Y %H:%M') }}.</p>
+    <a class="btn-loja" target="_blank" rel="noopener"
+       href="{{ url_for('loja.meu_pedido_danfe', codigo=pedido.codigo) }}">
+      Ver nota fiscal (PDF)
+    </a>
+  </div>
+  {% endif %}
+
+  {% if pedido.cartinha %}
+  <div class="checkout-bloco">
+    <h2>Cartinha</h2>
+    <p><em>“{{ pedido.cartinha }}”</em></p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
