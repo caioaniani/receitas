@@ -263,6 +263,7 @@ def api_painel():
         vigia_resumo = {'pendentes': 0, 'ultimo': None}
     resp = jsonify(pedidos=out, data=data_str, total=len(out),
                    novos=sum(1 for p in out if p['novo']),
+                   erro=erro,   # aviso do VNDA (não bloqueia os cards da loja)
                    lalamove_saldo=(str(saldo.valor) if saldo and
                                    saldo.valor is not None else None),
                    vigia=vigia_resumo)
