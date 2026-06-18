@@ -148,4 +148,9 @@ def webhook():
         e.motorista_telefone = str(motorista['phone'])[:40]
     e.atualizado_em = agora()
     db.session.commit()
+    # Loja própria: corrida concluída = pedido ENTREGUE (status + painel +
+    # e-mail "entregue"), automático. Best-effort; VNDA é no-op silencioso.
+    if status == 'COMPLETED':
+        from app.services.loja_entrega import avancar_status_entrega
+        avancar_status_entrega(e.pedido_code, 'entregue')
     return jsonify(ok=True)
