@@ -531,12 +531,25 @@ def test_botao_emitir_nf_sobrevive_a_mudanca_de_status(app):
     entregue) ANTES de gerar a NF, o botão tem que continuar aparecendo
     — caso contrário a NF fica inalcançável pela UI."""
     from app.extensions import db
+    from app.models import Cliente, PedidoOnline, PedidoOnlineItem
     c = _owner(app)
     produto = _produto(db)
     for status in ('em_preparo', 'a_caminho', 'entregue'):
-        p = _pedido_pago(db, produto, sku='S')
-        p.codigo = f'ST{status[:3].upper()}1'
-        p.status = status
+        # Email único por status (Cliente.email é UNIQUE).
+        cli = Cliente(nome='X', email=f'{status}@x.com')
+        db.session.add(cli)
+        db.session.flush()
+        p = PedidoOnline(codigo=f'ST{status[:3].upper()}1',
+                         cliente_id=cli.id, nome_cliente='X',
+                         email_cliente=cli.email, telefone_cliente='',
+                         modo_entrega='retirada', status=status,
+                         subtotal=Decimal('10'), frete_valor=Decimal('0'),
+                         valor_total=Decimal('10'))
+        db.session.add(p)
+        db.session.flush()
+        p.itens.append(PedidoOnlineItem(
+            kind='produto', produto_id=produto.id, nome=produto.nome,
+            preco_unitario=Decimal('10'), quantidade=1, subtotal=Decimal('10')))
         db.session.commit()
         r = c.get(f'/admin/loja-online/pedidos/{p.codigo}')
         assert r.status_code == 200, status
