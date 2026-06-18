@@ -138,6 +138,17 @@ def por_categorias(itens):
     return [(cat, grupos[cat]) for cat in cats_ord if grupos[cat]]
 
 
+def categorias_publicadas():
+    """Categorias COM itens publicados, na ordem da vitrine. Devolve
+    [{'nome', 'slug'}] — usado pelo dropdown "Produtos" do header (que
+    aparece em todas as páginas da loja) e pelas âncoras da home.
+
+    O slug bate com o `id="cat-<slug>"` de cada seção na home, então o
+    link `/loja/#cat-<slug>` pula direto pra categoria."""
+    return [{'nome': cat, 'slug': _slugify(cat)}
+            for cat, _itens in por_categorias(produtos_publicados())]
+
+
 def por_id_publicado(kind, item_id):
     """`kind` = 'receita' (r) ou 'produto' (p). Devolve o dict do item se
     estiver publicado (preço > 0 + ativo); senão None."""
