@@ -33,14 +33,35 @@ def disponivel():
 
 
 def ambiente():
-    """'sandbox' | 'producao' | 'desconhecido' a partir do prefixo da chave
-    (sk_test_ = sandbox, sk_live_ = produção). Não expõe o segredo."""
+    """'sandbox' | 'producao' | 'desconhecido' a partir do prefixo da chave.
+    Pagar.me v5 emite `sk_test_*` (sandbox) e `sk_live_*` (produção). Caso
+    fuja desses prefixos (chave nova ou colada cortada), devolve
+    'desconhecido' — combine com `prefixo_chave()` no debug."""
     sk = _chave()
     if sk.startswith('sk_test_'):
         return 'sandbox'
     if sk.startswith('sk_live_'):
         return 'producao'
     return 'desconhecido'
+
+
+def prefixo_chave():
+    """Primeiros 8 chars da SECRET key (`sk_test_`/`sk_live_`/`sk_…`) +
+    elipse. NÃO expõe o segredo (o resto é cortado), mas permite ao owner
+    confirmar visualmente o ambiente no `/admin/debug-pagarme`."""
+    sk = _chave()
+    if not sk:
+        return ''
+    return (sk[:8] + '…') if len(sk) > 8 else '…'
+
+
+def prefixo_public():
+    """Primeiros 8 chars da PUBLIC key. Pública por definição — mostrar
+    o prefixo não compromete nada. `pk_test_*` ou `pk_live_*`."""
+    pk = (current_app.config.get('PAGARME_PUBLIC_KEY') or '').strip()
+    if not pk:
+        return ''
+    return (pk[:8] + '…') if len(pk) > 8 else '…'
 
 
 def _headers():
