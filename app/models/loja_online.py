@@ -328,3 +328,31 @@ class PagarmeEvento(db.Model):
 
     def __repr__(self):
         return f'<PagarmeEvento {self.tipo} {self.evento_id}>'
+
+
+class ClienteResetSenha(db.Model):
+    """Token de recuperação de senha do cliente (Fase 6 — PR 3).
+
+    Single-use + expira em 1h. Quando o cliente pede 'esqueci a senha', a
+    gente cria um registro com token aleatório (`secrets.token_urlsafe`) e
+    manda o link por e-mail. Cliente clica → valida → troca a senha → marca
+    `usado_em`. Token usado/expirado não vale mais.
+
+    NÃO confundir com `UsuarioResetSenha` do admin (se vier). Cliente final
+    e staff são autenticações separadas; cada uma tem sua tabela de reset.
+    """
+    __tablename__ = 'cliente_reset_senha'
+
+    id = db.Column(db.Integer, primary_key=True)
+    cliente_id = db.Column(
+        db.Integer, db.ForeignKey('cliente.id'),
+        nullable=False, index=True)
+    token = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False)
+    expira_em = db.Column(db.DateTime, nullable=False)
+    usado_em = db.Column(db.DateTime, nullable=True)
+
+    cliente = db.relationship('Cliente')
+
+    def valido(self, agora_dt):
+        return self.usado_em is None and self.expira_em > agora_dt
