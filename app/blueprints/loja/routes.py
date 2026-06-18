@@ -584,7 +584,7 @@ def meu_pedido_danfe(codigo):
 
 @loja_bp.route('/')
 def home():
-    itens = loja_catalogo.produtos_publicados()
+    itens = loja_catalogo.produtos_disponiveis()
     grupos = loja_catalogo.por_categorias(itens)
     return render_template(
         'loja/home.html',
