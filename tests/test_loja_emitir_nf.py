@@ -524,3 +524,20 @@ def test_detalhe_mostra_botao_emitir_pra_pago(app):
     r = c.get(f'/admin/loja-online/pedidos/{p.codigo}')
     assert r.status_code == 200
     assert b'Emitir NF' in r.data
+
+
+def test_botao_emitir_nf_sobrevive_a_mudanca_de_status(app):
+    """Quando o admin avança o status do pedido (em_preparo / a_caminho /
+    entregue) ANTES de gerar a NF, o botão tem que continuar aparecendo
+    — caso contrário a NF fica inalcançável pela UI."""
+    from app.extensions import db
+    c = _owner(app)
+    produto = _produto(db)
+    for status in ('em_preparo', 'a_caminho', 'entregue'):
+        p = _pedido_pago(db, produto, sku='S')
+        p.codigo = f'ST{status[:3].upper()}1'
+        p.status = status
+        db.session.commit()
+        r = c.get(f'/admin/loja-online/pedidos/{p.codigo}')
+        assert r.status_code == 200, status
+        assert b'Emitir NF' in r.data, f'status={status} sem botão de NF'
