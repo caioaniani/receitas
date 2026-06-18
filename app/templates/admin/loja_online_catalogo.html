@@ -81,7 +81,12 @@
     </label>
     <div class="item-body">
       <div class="item-nome">{{ i.nome }}</div>
-      <div class="item-cat">{{ i.categoria }} · {{ i.tipo }}</div>
+      <div class="item-cat-row">
+        <input type="text" class="categoria-input" placeholder="Categoria…"
+               list="categorias-existentes"
+               value="{{ i.categoria }}">
+        <span class="item-tipo">{{ i.tipo }}</span>
+      </div>
       <div class="item-preco-row">
         <label>R$</label>
         <input type="number" step="0.01" min="0" max="9999"
