@@ -231,41 +231,6 @@
     });
   });
 
-  // Salvar ordem inline (blur ou Enter).
-  var URL_ORDEM = "/admin/loja-online/catalogo/ordem/__TIPO__/__ID__";
-  document.querySelectorAll('.ordem-input').forEach(function(inp) {
-    var origem = inp.value;
-    function salvar() {
-      var v = inp.value.trim();
-      if (v === origem) return;
-      var card = inp.closest('.item-card');
-      var tipo = card.dataset.tipo, id = card.dataset.id;
-      inp.classList.remove('saved', 'error');
-      inp.classList.add('saving');
-      fetch(URL_ORDEM.replace('__TIPO__', tipo).replace('__ID__', id), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-        body: JSON.stringify({ ordem: v === '' ? null : v })
-      }).then(function(r) {
-        if (!r.ok) return extrairErro(r).then(function(m){ throw new Error(m); });
-        return r.json();
-      }).then(function() {
-        inp.classList.remove('saving');
-        inp.classList.add('saved');
-        origem = inp.value;
-        setTimeout(function() { inp.classList.remove('saved'); }, 1200);
-      }).catch(function(e) {
-        inp.classList.remove('saving');
-        inp.classList.add('error');
-        alert((e && e.message) || 'erro ao salvar ordem');
-      });
-    }
-    inp.addEventListener('blur', salvar);
-    inp.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
-    });
-  });
-
   // Salvar categoria inline (blur ou Enter) — mesmo padrão do preço.
   var URL_CAT = "/admin/loja-online/catalogo/categoria/__TIPO__/__ID__";
   document.querySelectorAll('.categoria-input').forEach(function(inp) {
