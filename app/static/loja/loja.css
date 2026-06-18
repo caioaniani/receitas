@@ -45,6 +45,18 @@ a:hover { text-decoration: underline; }
   padding: 18px 22px;
   border-bottom: 1px solid var(--linha);
   background: var(--bg);
+  /* Sticky: fica grudado no topo da janela quando rola — desktop e mobile.
+     O z-index > 50 garante que o dropdown "Produtos" e cards de produto
+     ficam por baixo. position:sticky precisa de elemento ancestral SEM
+     overflow auto/hidden — `body` é o sticking container. */
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topo.rolado {
+  /* Adiciona sombra suave só quando há rolagem — separa o header do
+     conteúdo sem pesar quando está no topo. */
+  box-shadow: 0 4px 14px rgba(80, 50, 20, .08);
 }
 .topo .logo {
   /* Flex item: `min-width:0` deixa encolher, `flex-shrink:1` permite
