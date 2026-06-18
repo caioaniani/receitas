@@ -595,6 +595,24 @@ def api_frete():
     return jsonify(frete_svc.consultar_frete(geo))
 
 
+@loja_bp.route('/pedido/<codigo>/nf')
+def pedido_danfe(codigo):
+    """Redireciona pro DANFE (PDF) do pedido. Escopado pelo código (o cliente
+    veio do email com o link); sem login pra guest funcionar."""
+    from app.models import PedidoOnline
+    from app.services import tiny_nf
+    p = PedidoOnline.query.filter_by(codigo=codigo).first()
+    if not p:
+        abort(404)
+    url = tiny_nf.link_danfe(p)
+    if not url:
+        from flask import flash
+        flash('A nota fiscal deste pedido ainda não está disponível.',
+              'warning')
+        return redirect(url_for('loja.pedido_confirmado', codigo=codigo))
+    return redirect(url)
+
+
 @loja_bp.route('/pedido/<codigo>')
 def pedido_confirmado(codigo):
     """Confirmação do pedido (PRG). Também é a base do 'meus pedidos'
