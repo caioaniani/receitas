@@ -309,10 +309,60 @@ def sair():
 @loja_bp.route('/conta')
 @loja_auth.cliente_required
 def minha_conta():
-    """Painel da conta. 'Meus pedidos' entra no PR 2."""
+    """Painel da conta do cliente."""
     return render_template('loja/minha_conta.html',
                            cliente=loja_auth.cliente_atual(),
                            em_teste=_em_teste())
+
+
+@loja_bp.route('/conta/pedidos')
+@loja_auth.cliente_required
+def meus_pedidos():
+    """Lista os pedidos do cliente (só os dele — não vaza dos outros)."""
+    from app.models import PedidoOnline
+    cli = loja_auth.cliente_atual()
+    pedidos = (PedidoOnline.query
+               .filter_by(cliente_id=cli.id)
+               .order_by(PedidoOnline.criado_em.desc())
+               .all())
+    return render_template('loja/meus_pedidos.html',
+                           pedidos=pedidos, em_teste=_em_teste())
+
+
+@loja_bp.route('/conta/pedidos/<codigo>')
+@loja_auth.cliente_required
+def meu_pedido(codigo):
+    """Detalhe de UM pedido. 404 se não for do cliente — assim o código não
+    confessa a existência de pedidos de OUTROS (enumeração)."""
+    from app.models import PedidoOnline
+    cli = loja_auth.cliente_atual()
+    p = PedidoOnline.query.filter_by(codigo=codigo,
+                                     cliente_id=cli.id).first()
+    if not p:
+        abort(404)
+    return render_template('loja/meu_pedido.html', pedido=p,
+                           em_teste=_em_teste())
+
+
+@loja_bp.route('/conta/pedidos/<codigo>/nf')
+@loja_auth.cliente_required
+def meu_pedido_danfe(codigo):
+    """Redireciona pro DANFE (PDF) do pedido. Mesmo escopo do detalhe:
+    404 se o pedido não for do cliente (segurança PII)."""
+    from app.models import PedidoOnline
+    from app.services import tiny_nf
+    cli = loja_auth.cliente_atual()
+    p = PedidoOnline.query.filter_by(codigo=codigo,
+                                     cliente_id=cli.id).first()
+    if not p:
+        abort(404)
+    url = tiny_nf.link_danfe(p)
+    if not url:
+        from flask import flash
+        flash('A nota fiscal deste pedido ainda não está disponível.',
+              'warning')
+        return redirect(url_for('loja.meu_pedido', codigo=codigo))
+    return redirect(url)
 
 
 @loja_bp.route('/')
