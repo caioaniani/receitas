@@ -28,6 +28,13 @@
 <h1 class="page-title"><span aria-hidden="true">🥐</span> Loja Online</h1>
 <p class="text-muted">Faturamento de pedidos pagos (inclui em preparo, a caminho e entregues; exclui cancelados).</p>
 
+<div class="mb-3 d-flex gap-2 flex-wrap">
+  <a href="{{ url_for('main.loja_online_catalogo') }}" class="btn btn-sm btn-outline-secondary">Catálogo</a>
+  <a href="{{ url_for('main.loja_online_categorias') }}" class="btn btn-sm btn-outline-secondary">Ordem das categorias</a>
+  <a href="{{ url_for('main.loja_online_pedidos') }}" class="btn btn-sm btn-outline-secondary">Pedidos</a>
+  <a href="{{ url_for('main.loja_online_tiny_skus') }}" class="btn btn-sm btn-outline-secondary">SKUs do Tiny</a>
+</div>
+
 <div class="row g-3 mb-4">
   {{ card_janela('Hoje', janelas.hoje) }}
   {{ card_janela('Esta semana', janelas.semana) }}
