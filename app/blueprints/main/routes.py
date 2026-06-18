@@ -2414,8 +2414,19 @@ def loja_online_catalogo():
         'sem_foto': sum(1 for r in receitas if not (r.imagem_dropbox_url or r.imagem_url))
                    + sum(1 for p in produtos if not (p.imagem_dropbox_url or p.imagem_url)),
     }
+    # Lista de categorias já cadastradas (Produtos + Receitas) — alimenta
+    # o autocomplete (datalist) na edição inline.
+    cats = set()
+    for r in receitas:
+        if r.categoria:
+            cats.add(r.categoria.strip())
+    for p in produtos:
+        if p.categoria:
+            cats.add(p.categoria.strip())
+    categorias_existentes = sorted(c for c in cats if c)
     return render_template('admin/loja_online_catalogo.html',
-                            itens=itens, filtro=filtro, contagens=contagens)
+                            itens=itens, filtro=filtro, contagens=contagens,
+                            categorias_existentes=categorias_existentes)
 
 
 @main_bp.route('/admin/loja-online/catalogo/preco/<tipo>/<int:id>',
