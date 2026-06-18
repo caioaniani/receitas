@@ -1140,6 +1140,12 @@ def _migrate_postgres(app):
                    ('endereco_uf', 'VARCHAR(2)')):
         _try(f"ALTER TABLE pedido_online ADD COLUMN IF NOT EXISTS {_c} {_t}")
 
+    # Ordem manual na vitrine (17/06/2026): produto/receita ganham
+    # `ordem_site`. NULL = vai pro fim alfabetico. Tabela `categoria_site`
+    # eh criada por db.create_all (sem ALTER necessario).
+    _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS ordem_site INTEGER")
+    _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS ordem_site INTEGER")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
