@@ -124,6 +124,21 @@ def enviar_pedido_a_caminho(pedido):
     return enviar(destinatario, assunto, html, texto=texto)
 
 
+def enviar_pedido_entregue(pedido):
+    """E-mail "pedido entregue" — confirmação + link da NF (se disponível)
+    + pista pra avaliar/comprar de novo.
+
+    Best-effort — falha silente."""
+    destinatario = (pedido.email_cliente or '').strip()
+    if not destinatario:
+        return {'ok': False, 'erro': 'pedido sem email'}
+    base = (current_app.config.get('APP_BASE_URL') or '').rstrip('/')
+    assunto = f'Pedido {pedido.codigo} entregue — O Pão Padaria Artesanal'
+    html = _template_entregue(pedido, base)
+    texto = _texto_entregue(pedido, base)
+    return enviar(destinatario, assunto, html, texto=texto)
+
+
 def _fmt_brl(v):
     from decimal import Decimal
     return f'R$ {Decimal(str(v or 0)):.2f}'.replace('.', ',')
@@ -268,6 +283,54 @@ def _texto_a_caminho(pedido, base):
         f'Seu pedido {pedido.codigo} saiu pra entrega!\n\n'
         f'Entrega: {onde} {quando}\n\n'
         f'Detalhes: {link}\n')
+
+
+def _template_entregue(pedido, base):
+    link_pedido = f'{base}/loja/pedido/{pedido.codigo}' if base else ''
+    link_loja = f'{base}/loja/' if base else ''
+    tem_nf = bool(getattr(pedido, 'nf_emitida_em', None))
+    link_nf = f'{base}/loja/pedido/{pedido.codigo}/nf' if base and tem_nf else ''
+    nf_html = (f'<p style="margin:14px 0 0"><a href="{link_nf}" '
+               f'style="color:#8b5a2b;">Ver nota fiscal (PDF)</a></p>'
+               if link_nf else '')
+    return f"""\
+<!doctype html><html lang="pt-BR"><body style="margin:0;background:#fbf8f3;
+font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
+<div style="max-width:540px;margin:0 auto;padding:32px 24px;">
+  <h1 style="font-size:22px;margin:0 0 4px;">O Pão · Padaria Artesanal</h1>
+  <p style="color:#6b5f54;margin:0 0 20px;">Pedido <strong>{pedido.codigo}</strong>
+    entregue! ✓ Esperamos que tenha gostado.</p>
+  <div style="background:#fff;border-radius:12px;padding:18px 20px;margin-bottom:18px;">
+    <p style="margin:0 0 6px;font-weight:600;">Obrigado pela preferência</p>
+    <p style="margin:0;font-size:14px;color:#6b5f54;">
+      Qualquer feedback é bem-vindo — responda este e-mail.</p>
+    {nf_html}
+  </div>
+  <p style="margin-top:20px;">
+    <a href="{link_loja}" style="display:inline-block;background:#8b5a2b;
+    color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;
+    font-weight:600;">Comprar de novo</a>
+  </p>
+  <p style="color:#9a8d80;font-size:12px;margin-top:24px;">
+    <a href="{link_pedido}" style="color:#9a8d80;">Detalhes do pedido</a>
+  </p>
+</div></body></html>"""
+
+
+def _texto_entregue(pedido, base):
+    link_pedido = f'{base}/loja/pedido/{pedido.codigo}' if base else ''
+    link_loja = f'{base}/loja/' if base else ''
+    tem_nf = bool(getattr(pedido, 'nf_emitida_em', None))
+    link_nf = f'{base}/loja/pedido/{pedido.codigo}/nf' if base and tem_nf else ''
+    linhas = [f'Pedido {pedido.codigo} entregue!',
+              '',
+              'Obrigado pela preferência. Qualquer feedback é bem-vindo — '
+              'responda este e-mail.']
+    if link_nf:
+        linhas += ['', f'Nota fiscal: {link_nf}']
+    linhas += ['', f'Comprar de novo: {link_loja}',
+               f'Detalhes do pedido: {link_pedido}']
+    return '\n'.join(linhas)
 
 
 def enviar_reset_senha(cliente, token):
