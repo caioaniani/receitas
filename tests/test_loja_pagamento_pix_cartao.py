@@ -265,6 +265,100 @@ def _setup_loja_estoque(db, ped, produto, qtd_atual=100):
     return el
 
 
+# ── Conciliação manual (rede de segurança pra webhook perdido) ────────
+
+def test_conciliar_marca_pago_quando_gateway_confirma(app):
+    """Webhook não chegou, mas o Pagar.me confirma pago → ?aplicar marca o
+    pedido pago + baixa estoque. Dry-run não toca em nada."""
+    from app.extensions import db
+    from app.models import MovEstoqueLoja, PagamentoOnline
+    from app.services import loja_pagamento
+    with app.app_context():
+        loja = _loja_site(db)
+        p = _produto(db)
+        ped = _pedido_com_item(db, p, qtd=2, modo='retirada',
+                                loja_retirada_id=loja.id)
+        el = _setup_loja_estoque(db, ped, p, qtd_atual=10)
+        db.session.add(PagamentoOnline(
+            pedido_id=ped.id, metodo='pix', status='pendente',
+            pagarme_order_id='or_concilia1'))
+        db.session.commit()
+        confirma = {'ok': True, 'pago': True, 'status': 'paid'}
+        # dry-run: reporta pago mas NÃO aplica
+        with patch('app.services.pagarme.consultar_order',
+                   return_value=confirma):
+            r_dry = loja_pagamento.conciliar_pedido(ped.codigo, aplicar=False)
+        assert r_dry['pagarme_pago'] is True
+        db.session.refresh(ped)
+        assert ped.status == 'aguardando_pagamento'
+        # aplicar=True: marca pago + baixa estoque
+        with patch('app.services.pagarme.consultar_order',
+                   return_value=confirma), \
+             patch('app.services.email.enviar_confirmacao_pedido',
+                   return_value={'ok': True}):
+            r = loja_pagamento.conciliar_pedido(ped.codigo, aplicar=True)
+        assert r['acao'] == 'MARCADO PAGO'
+        db.session.refresh(ped)
+        db.session.refresh(el)
+        assert ped.status == 'pago'
+        assert el.quantidade == 8  # baixou 2
+        assert MovEstoqueLoja.query.filter_by(tipo='venda_site').count() >= 1
+
+
+def test_conciliar_nao_marca_se_gateway_nao_confirma(app):
+    """Pagar.me NÃO confirma pago → conciliar não toca no pedido (não
+    inventa pagamento)."""
+    from app.extensions import db
+    from app.models import PagamentoOnline
+    from app.services import loja_pagamento
+    with app.app_context():
+        loja = _loja_site(db)
+        p = _produto(db)
+        ped = _pedido_com_item(db, p, qtd=1, modo='retirada',
+                                loja_retirada_id=loja.id)
+        db.session.add(PagamentoOnline(
+            pedido_id=ped.id, metodo='pix', status='pendente',
+            pagarme_order_id='or_naopago'))
+        db.session.commit()
+        with patch('app.services.pagarme.consultar_order',
+                   return_value={'ok': True, 'pago': False,
+                                 'status': 'pending'}):
+            r = loja_pagamento.conciliar_pedido(ped.codigo, aplicar=True)
+        assert r['pagarme_pago'] is False
+        assert 'NÃO confirma' in r['acao']
+        db.session.refresh(ped)
+        assert ped.status == 'aguardando_pagamento'
+
+
+def test_conciliar_idempotente_nao_baixa_duas_vezes(app):
+    """Rodar conciliar 2x (ou webhook chegar depois) não duplica baixa —
+    _marcar_pago é no-op se já pago."""
+    from app.extensions import db
+    from app.models import MovEstoqueLoja, PagamentoOnline
+    from app.services import loja_pagamento
+    with app.app_context():
+        loja = _loja_site(db)
+        p = _produto(db)
+        ped = _pedido_com_item(db, p, qtd=2, modo='retirada',
+                                loja_retirada_id=loja.id)
+        el = _setup_loja_estoque(db, ped, p, qtd_atual=10)
+        db.session.add(PagamentoOnline(
+            pedido_id=ped.id, metodo='pix', status='pendente',
+            pagarme_order_id='or_idem'))
+        db.session.commit()
+        confirma = {'ok': True, 'pago': True, 'status': 'paid'}
+        with patch('app.services.pagarme.consultar_order',
+                   return_value=confirma), \
+             patch('app.services.email.enviar_confirmacao_pedido',
+                   return_value={'ok': True}):
+            loja_pagamento.conciliar_pedido(ped.codigo, aplicar=True)
+            r2 = loja_pagamento.conciliar_pedido(ped.codigo, aplicar=True)
+        assert 'já estava pago' in r2['acao']
+        db.session.refresh(el)
+        assert el.quantidade == 8  # baixou 2 UMA vez só
+        assert MovEstoqueLoja.query.filter_by(tipo='venda_site').count() == 1
+
+
 def test_webhook_paid_marca_pago_e_baixa_estoque(app):
     from app.extensions import db
     from app.models import MovEstoqueLoja
