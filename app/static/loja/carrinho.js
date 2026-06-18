@@ -118,6 +118,65 @@
     return 'R$ ' + (Number(v) || 0).toFixed(2).replace('.', ',');
   }
 
+  // ── Cards na vitrine: botão "Adicionar" ↔ stepper (− N +) ───────────
+  // Cada `.card-add[data-kind][data-id]…` é renderizado conforme a qtd no
+  // carrinho. Clique em "Adicionar" → vira stepper. Stepper sincroniza o
+  // carrinho e some quando qtd cai pra 0.
+  function renderCardAdds() {
+    var addsEls = document.querySelectorAll('.card-add[data-kind][data-id]');
+    addsEls.forEach(function (el) {
+      var kind = el.getAttribute('data-kind');
+      var id = el.getAttribute('data-id');
+      var qtd = Carrinho.qtdDe(kind, id);
+      if (qtd > 0) {
+        el.innerHTML =
+          '<div class="stepper">' +
+          '<button type="button" data-acao="menos" aria-label="Diminuir">−</button>' +
+          '<div class="qtd">' + qtd + '</div>' +
+          '<button type="button" data-acao="mais" aria-label="Aumentar">+</button>' +
+          '</div>';
+      } else {
+        el.innerHTML =
+          '<button type="button" data-acao="add">+ Adicionar</button>';
+      }
+    });
+  }
+
+  function lerItemDoCardEl(el) {
+    return {
+      kind: el.getAttribute('data-kind'),
+      id: el.getAttribute('data-id'),
+      nome: el.getAttribute('data-nome'),
+      preco: el.getAttribute('data-preco'),
+      categoria: el.getAttribute('data-categoria') || '',
+      imagem: el.getAttribute('data-imagem') || '',
+    };
+  }
+
+  function ligarCardAdds() {
+    // Event delegation: 1 listener no document trata add/+/− de todos os
+    // cards (rebatem em qualquer re-render sem perder handlers).
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.card-add button[data-acao]');
+      if (!btn) return;
+      var el = btn.closest('.card-add');
+      if (!el) return;
+      e.preventDefault();
+      e.stopPropagation();   // não navega pro href do card
+      var acao = btn.getAttribute('data-acao');
+      var item = lerItemDoCardEl(el);
+      if (acao === 'add') {
+        Carrinho.adicionar(item, 1);
+      } else if (acao === 'mais') {
+        Carrinho.mudarQtd(item.kind, item.id,
+                          Carrinho.qtdDe(item.kind, item.id) + 1);
+      } else if (acao === 'menos') {
+        Carrinho.mudarQtd(item.kind, item.id,
+                          Carrinho.qtdDe(item.kind, item.id) - 1);
+      }
+    });
+  }
+
   // ── Wire dos botões "adicionar ao carrinho" (página de produto) ──────
   function ligarBotoesAdd() {
     var botoes = document.querySelectorAll('[data-add-carrinho]');
