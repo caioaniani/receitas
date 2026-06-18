@@ -342,9 +342,9 @@ def enviar_reset_senha(cliente, token):
 
     Link aponta pra `/loja/redefinir-senha/<token>`. Expira em 1h."""
     cfg = current_app.config
-    base = (cfg.get('APP_BASE_URL') or '').rstrip('/')
+    base = (cfg.get('LOJA_BASE_URL') or cfg.get('APP_BASE_URL') or '').rstrip('/')
     if not base:
-        return {'ok': False, 'erro': 'APP_BASE_URL não configurada'}
+        return {'ok': False, 'erro': 'LOJA_BASE_URL não configurada'}
     destinatario = (cliente.email or '').strip()
     if not destinatario:
         return {'ok': False, 'erro': 'cliente sem email'}
