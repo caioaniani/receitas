@@ -39,6 +39,17 @@ def _ctx_checkout(erros=None, form=None):
         form.setdefault('email', cli.email or '')
         form.setdefault('telefone', cli.telefone or '')
         form.setdefault('cpf', cli.cpf or '')
+        # Endereço principal salvo (último que ele recebeu entrega) →
+        # pré-preenche pra ele não redigitar.
+        end = loja_checkout.endereco_principal(cli)
+        if end:
+            form.setdefault('logradouro', end.logradouro or '')
+            form.setdefault('numero', end.numero or '')
+            form.setdefault('complemento', end.complemento or '')
+            form.setdefault('bairro', end.bairro or '')
+            form.setdefault('cidade', end.cidade or '')
+            form.setdefault('uf', end.uf or '')
+            form.setdefault('cep', end.cep or '')
     return dict(
         em_teste=_em_teste(),
         lojas=loja_checkout.lojas_retirada(),
