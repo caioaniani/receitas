@@ -11,7 +11,8 @@
 
   <div class="checkout-bloco">
     <h2>Meus pedidos</h2>
-    <p class="small">Em breve: lista dos seus pedidos com status e a nota fiscal.</p>
+    <p class="small">Acompanhe o status e abra a nota fiscal de cada pedido.</p>
+    <a class="btn-loja" href="{{ url_for('loja.meus_pedidos') }}">Ver meus pedidos</a>
   </div>
 
   <form method="POST" action="{{ url_for('loja.sair') }}" style="margin-top:1.5rem">
