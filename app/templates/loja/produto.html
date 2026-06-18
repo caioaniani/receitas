@@ -81,9 +81,10 @@
   </div>
   <div class="grid-produtos">
     {% for it in monte %}
-    <div class="produto-cell">
+    <div class="produto-cell{% if it.esgotado %} is-esgotado{% endif %}">
       <a class="card-produto" href="{{ it.href }}">
         <div class="card-foto">
+          {% if it.esgotado %}<span class="selo-esgotado">Esgotado</span>{% endif %}
           {% if it.imagem %}
           <img src="{{ it.imagem }}" alt="{{ it.nome }}" loading="lazy">
           {% else %}
@@ -98,11 +99,15 @@
         </div>
       </a>
       {% if it.preco is not none %}
-      <div class="card-add"
-           data-kind="{{ it.kind }}" data-id="{{ it.id }}"
-           data-nome="{{ it.nome }}" data-preco="{{ it.preco }}"
-           data-categoria="{{ it.categoria }}" data-imagem="{{ it.imagem }}">
-      </div>
+        {% if it.esgotado %}
+        <div class="card-esgotado" aria-disabled="true">Esgotado</div>
+        {% else %}
+        <div class="card-add"
+             data-kind="{{ it.kind }}" data-id="{{ it.id }}"
+             data-nome="{{ it.nome }}" data-preco="{{ it.preco }}"
+             data-categoria="{{ it.categoria }}" data-imagem="{{ it.imagem }}">
+        </div>
+        {% endif %}
       {% endif %}
     </div>
     {% endfor %}
