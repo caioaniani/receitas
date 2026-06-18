@@ -64,20 +64,22 @@ def produtos_publicados():
     """Devolve lista combinada (cestas + pães/doces) prontos pra vitrine.
 
     Filtro: `preco_site > 0` E item ativo (não arquivada / `ativo=True`).
-    Ordenação: cestas primeiro (chamariz visual), depois receitas por
-    categoria e nome. Não pagina — o catálogo é pequeno (dezenas, não
-    milhares). Quando crescer, paginar."""
+    Ordenação manual: `ordem_site` ASC (NULLS LAST), depois `nome` ASC.
+    Item sem `ordem_site` cai no fim alfabético da sua categoria. Não
+    pagina — o catálogo é pequeno (dezenas, não milhares)."""
     receitas = (Receita.query
                 .filter(Receita.arquivada_em.is_(None),
                         Receita.preco_site.isnot(None),
                         Receita.preco_site > 0)
-                .order_by(Receita.categoria, Receita.nome)
+                .order_by(Receita.ordem_site.asc().nullslast(),
+                          Receita.nome.asc())
                 .all())
     produtos = (Produto.query
                 .filter(Produto.ativo.is_(True),
                         Produto.preco_site.isnot(None),
                         Produto.preco_site > 0)
-                .order_by(Produto.nome)
+                .order_by(Produto.ordem_site.asc().nullslast(),
+                          Produto.nome.asc())
                 .all())
     out = [_serializar_produto(p) for p in produtos]
     out.extend(_serializar_receita(r) for r in receitas)
