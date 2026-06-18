@@ -318,7 +318,7 @@ def test_conciliar_nao_marca_se_gateway_nao_confirma(app):
                                 loja_retirada_id=loja.id)
         db.session.add(PagamentoOnline(
             pedido_id=ped.id, metodo='pix', status='pendente',
-            pagarme_order_id='or_naopago'))
+            valor=ped.valor_total, pagarme_order_id='or_naopago'))
         db.session.commit()
         with patch('app.services.pagarme.consultar_order',
                    return_value={'ok': True, 'pago': False,
