@@ -672,7 +672,22 @@
       .then(function (r) { return r.json(); })
       .then(function (data) {
         setConexao(true);
-        if (data.erro) { setErro('Não consegui atualizar agora. Mostrando o último que carregou.'); return; }
+        if (data.erro) {
+          // VNDA indisponível: NÃO esconde tudo. Mantém o último VNDA
+          // carregado e atualiza só os pedidos da loja própria (que vêm
+          // sempre, independem do VNDA).
+          setErro('VNDA indisponível agora — mantendo o último carregado; pedidos da loja própria atualizados.');
+          var online = (data.pedidos || []).filter(function (p) { return p.pedido_online; });
+          var restoVnda = pedidos.filter(function (p) { return !p.pedido_online; });
+          pedidos = restoVnda.concat(online);
+          render(); atualizarAlarme();
+          atualizarVigia(data.vigia);
+          if (abertoCode) {
+            var pa = pedidos.find(function (x) { return x.code === abertoCode; });
+            if (pa) abrirDetalhe(pa); else fecharDetalhe();
+          }
+          return;
+        }
         setErro('');
         // Preserva status local de quem acabou de mudar (evita "piscar" de volta
         // antes do servidor confirmar): o servidor e a fonte da verdade, mas se
