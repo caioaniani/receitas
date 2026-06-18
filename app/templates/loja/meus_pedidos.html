@@ -1,0 +1,47 @@
+{% extends 'loja/_base.html' %}
+{% block title %}Meus pedidos — O Pão Padaria Artesanal{% endblock %}
+{% set badge = {
+  'aguardando_pagamento': 'badge-warning',
+  'pago': 'badge-info',
+  'em_preparo': 'badge-secondary',
+  'a_caminho': 'badge-primary',
+  'entregue': 'badge-success',
+  'cancelado': 'badge-danger',
+} %}
+{% set label = {
+  'aguardando_pagamento': 'Aguardando pagamento', 'pago': 'Pago',
+  'em_preparo': 'Em preparo', 'a_caminho': 'A caminho',
+  'entregue': 'Entregue', 'cancelado': 'Cancelado',
+} %}
+{% block content %}
+<section class="checkout-pagina" style="max-width:760px">
+  <p><a href="{{ url_for('loja.minha_conta') }}">&larr; Minha conta</a></p>
+  <h1>Meus pedidos</h1>
+
+  {% if pedidos %}
+  <div class="checkout-bloco">
+    <table class="meus-pedidos-tbl">
+      <thead>
+        <tr><th>Quando</th><th>Pedido</th><th>Status</th><th class="text-end">Total</th></tr>
+      </thead>
+      <tbody>
+        {% for p in pedidos %}
+        <tr>
+          <td class="small">{{ p.criado_em.strftime('%d/%m/%Y %H:%M') if p.criado_em }}</td>
+          <td><a href="{{ url_for('loja.meu_pedido', codigo=p.codigo) }}"><code>{{ p.codigo }}</code></a></td>
+          <td><span class="badge {{ badge.get(p.status, 'badge-secondary') }}">
+            {{ label.get(p.status, p.status) }}</span></td>
+          <td class="text-end fw-bold">R$ {{ '%.2f'|format(p.valor_total)|replace('.', ',') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="checkout-bloco">
+    <p>Você ainda não tem pedidos.</p>
+    <a class="btn-loja" href="{{ url_for('loja.home') }}">Ver produtos</a>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
