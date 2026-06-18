@@ -516,15 +516,44 @@ a:hover { text-decoration: underline; }
 .rodape strong { color: var(--texto); font-weight: 600; }
 .rodape .small { font-size: 14px; }
 
-/* ── Carrinho: badge no header ─────────────────────────── */
-.topo-carrinho { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+/* ── Carrinho: ícone + badge no header ─────────────────── */
+.topo-carrinho {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 2px;   /* clique mais confortável em mobile */
+}
+.topo-carrinho .icon-bag {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  fill: none;
+  flex-shrink: 0;
+}
+.topo-carrinho-label { /* "Carrinho" — escondido no celular pra economizar largura */
+  display: none;
+}
+@media (min-width: 600px) {
+  .topo-carrinho-label { display: inline; }
+  .topo-carrinho .icon-bag { width: 20px; height: 20px; }
+}
 .cart-badge {
+  /* Sobre o ícone, no canto superior direito — clássico de e-commerce. */
+  position: absolute;
+  top: -2px;
+  right: -8px;
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 20px; height: 20px; padding: 0 6px;
+  min-width: 18px; height: 18px; padding: 0 5px;
   background: var(--acento); color: #fff;
   border-radius: 999px;
-  font-size: 12px; font-weight: 700;
+  font-size: 11px; font-weight: 700;
   font-family: system-ui, sans-serif;
+  line-height: 1;
+  box-shadow: 0 0 0 2px var(--bg); /* "fura" o ícone visualmente */
+}
+@media (min-width: 600px) {
+  .cart-badge { position: static; box-shadow: none; }
 }
 
 /* ── Bloco de compra (página de produto) ───────────────── */
