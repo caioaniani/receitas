@@ -124,11 +124,15 @@ def test_pagina_categorias_lista_em_uso(app):
 
 
 def test_pagina_categorias_salva_ordem(app):
+    from werkzeug.datastructures import MultiDict
+
     from app.models import CategoriaSite
     c = _owner(app)
     r = c.post('/admin/loja-online/categorias',
-                data=[('nome', 'Pães'), ('ordem', '1'),
-                      ('nome', 'Bebidas'), ('ordem', '2')])
+                data=MultiDict([
+                    ('nome', 'Pães'), ('ordem', '1'),
+                    ('nome', 'Bebidas'), ('ordem', '2'),
+                ]))
     assert r.status_code == 302
     with app.app_context():
         cats = {c.nome: c.ordem for c in CategoriaSite.query.all()}
@@ -137,12 +141,14 @@ def test_pagina_categorias_salva_ordem(app):
 
 def test_categorias_repost_atualiza(app):
     """POST com a mesma categoria de novo upserta (não cria duplicata)."""
+    from werkzeug.datastructures import MultiDict
+
     from app.models import CategoriaSite
     c = _owner(app)
     c.post('/admin/loja-online/categorias',
-           data=[('nome', 'Pães'), ('ordem', '1')])
+            data=MultiDict([('nome', 'Pães'), ('ordem', '1')]))
     c.post('/admin/loja-online/categorias',
-           data=[('nome', 'Pães'), ('ordem', '5')])
+            data=MultiDict([('nome', 'Pães'), ('ordem', '5')]))
     with app.app_context():
         regs = CategoriaSite.query.filter_by(nome='Pães').all()
         assert len(regs) == 1 and regs[0].ordem == 5
