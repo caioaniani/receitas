@@ -183,19 +183,24 @@ a:hover { text-decoration: underline; }
 }
 .card-foto-placeholder.grande { font-size: 96px; }
 
-.card-corpo { padding: 16px 4px 4px; }
+.card-corpo { padding: 12px 4px 4px; }
 .card-nome {
-  font-size: 19px;
+  font-size: 15px;
   font-weight: 500;
   margin: 0 0 4px;
-  line-height: 1.25;
+  line-height: 1.22;
   font-family: 'Georgia', serif;
 }
 .card-preco {
   color: var(--acento);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   font-family: system-ui, sans-serif;
+}
+@media (min-width: 600px) {
+  .card-corpo { padding: 16px 4px 4px; }
+  .card-nome { font-size: 19px; line-height: 1.25; }
+  .card-preco { font-size: 16px; }
 }
 
 /* ── Página de produto ─────────────────────────────────── */
