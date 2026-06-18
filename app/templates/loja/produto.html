@@ -41,7 +41,11 @@
     </div>
     {% endif %}
 
-    {% if item.preco is not none %}
+    {% if item.preco is none %}
+    <p class="aviso-comprar">Produto sem preço cadastrado — indisponível.</p>
+    {% elif item.esgotado %}
+    <p class="aviso-comprar esgotado">Esgotado no momento — volte em breve.</p>
+    {% else %}
     <div class="comprar-bloco">
       <div class="qtd-seletor">
         <label for="qtd-add">Quantidade</label>
@@ -61,8 +65,6 @@
         Ver carrinho →
       </a>
     </div>
-    {% else %}
-    <p class="aviso-comprar">Produto sem preço cadastrado — indisponível.</p>
     {% endif %}
 
     <a href="{{ url_for('loja.home') }}" class="voltar">← Voltar pra vitrine</a>
