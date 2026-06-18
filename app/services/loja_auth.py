@@ -10,6 +10,8 @@ visitante, mas não vira `cliente_atual` automaticamente.
 
 Senha em scrypt (`Cliente.set_senha`), mesmo padrão de `Usuario`.
 """
+import secrets
+from datetime import timedelta
 from functools import wraps
 
 from flask import g, redirect, request, session, url_for
@@ -70,8 +72,6 @@ def email_valido(email):
 # uma conta, mandamos um link"), independente de o email existir. Sem isso,
 # atacante varre a base por enumeração nos retornos diferentes.
 
-import secrets  # noqa: E402
-from datetime import timedelta  # noqa: E402
 
 
 def _hashear_email(email):
