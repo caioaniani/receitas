@@ -2782,6 +2782,20 @@ def debug_pagarme_ultimo_webhook():
     return jsonify(hit)
 
 
+@main_bp.route('/admin/debug-pagarme/conciliar/<codigo>')
+@owner_required
+def debug_pagarme_conciliar(codigo):
+    """Conciliação manual (owner) — rede de segurança pra webhook perdido.
+    Consulta o Pagar.me pelo order_id salvo; com ?aplicar=1 marca o pedido
+    pago se o gateway confirmar (baixa estoque + e-mail). Sem ?aplicar=1 =
+    dry-run. Idempotente: ignora a idempotência do webhook e _marcar_pago é
+    no-op se já pago."""
+    from app.services import loja_pagamento
+    aplicar = request.args.get('aplicar') == '1'
+    res = loja_pagamento.conciliar_pedido(codigo, aplicar=aplicar)
+    return jsonify(res), (200 if res.get('ok') else 400)
+
+
 @main_bp.route('/admin/debug-pagarme/eventos')
 @owner_required
 def debug_pagarme_eventos():
