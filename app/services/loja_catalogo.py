@@ -45,7 +45,11 @@ def _serializar_produto(p):
         'id': p.id,
         'kind': 'produto',
         'nome': p.nome,
-        'categoria': p.categoria or 'Cestas',
+        # Sem categoria → 'Outros' (não 'Cestas'). Antes o fallback era
+        # 'Cestas' porque todo Produto da loja era cesta — mas o dono começou
+        # a cadastrar conservas/geleias/molhos como Produto e elas caíam
+        # erradas na vitrine.
+        'categoria': p.categoria or 'Outros',
         'preco': float(p.preco_site) if p.preco_site else None,
         'imagem': p.imagem_dropbox_url or p.imagem_url or '',
         'descricao': p.descricao or '',
