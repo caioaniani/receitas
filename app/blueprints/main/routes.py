@@ -2758,6 +2758,50 @@ def debug_pagarme():
     )
 
 
+@main_bp.route('/admin/debug-pagarme/eventos')
+@owner_required
+def debug_pagarme_eventos():
+    """Lista os últimos eventos do webhook do Pagar.me recebidos pelo
+    servidor. Diagnóstico: webhook NÃO chegou = nada aqui (URL/secret/
+    seleção de eventos errados no painel do Pagar.me)."""
+    from app.models import PagarmeEvento
+    n = max(1, min(int(request.args.get('n', 20)), 200))
+    eventos = (PagarmeEvento.query
+               .order_by(PagarmeEvento.recebido_em.desc()).limit(n).all())
+    return jsonify(total=len(eventos), eventos=[
+        {'evento_id': e.evento_id, 'tipo': e.tipo,
+         'recebido_em': e.recebido_em.isoformat(sep=' ', timespec='seconds')
+                       if e.recebido_em else None}
+        for e in eventos])
+
+
+@main_bp.route('/admin/debug-pagarme/pedido/<codigo>')
+@owner_required
+def debug_pagarme_pedido(codigo):
+    """Raio-X de UM pedido pra entender por que o status não mudou:
+    status atual, pagamentos com order_id/charge_id do Pagar.me, e os
+    eventos do webhook por id (precisa bater pelo `data.id`/`data.code`)."""
+    from app.models import PagamentoOnline, PedidoOnline
+    p = PedidoOnline.query.filter_by(codigo=codigo).first()
+    if not p:
+        return jsonify(erro='pedido nao encontrado', codigo=codigo), 404
+    pagamentos = PagamentoOnline.query.filter_by(pedido_id=p.id).all()
+    return jsonify(
+        codigo=p.codigo, status=p.status,
+        valor_total=str(p.valor_total),
+        criado_em=p.criado_em.isoformat(sep=' ', timespec='seconds')
+                 if p.criado_em else None,
+        pagamentos=[{
+            'id': pg.id, 'metodo': pg.metodo, 'status': pg.status,
+            'pagarme_order_id': pg.pagarme_order_id,
+            'pagarme_charge_id': pg.pagarme_charge_id,
+            'criado_em': pg.criado_em.isoformat(sep=' ', timespec='seconds')
+                        if pg.criado_em else None,
+            'erro': pg.erro,
+        } for pg in pagamentos],
+    )
+
+
 # ── Pedidos do site (Fase 3): acompanhamento dos PedidoOnline ─────────────
 # Tela pra o dono acompanhar os pedidos que entram pelo checkout nativo. Read
 # + cancelar. Em Fase 3 o pedido nasce 'aguardando_pagamento' e NAO baixa
