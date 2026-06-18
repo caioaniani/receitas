@@ -22,6 +22,7 @@ from app.models import (
     PainelPedidoStatus,
     PedidoLocal,
     PedidoLocalItem,
+    PedidoOnline,
     Produto,
 )
 from app.services import dropbox_storage, vnda
@@ -89,6 +90,106 @@ def _painel_pedidos_do_dia(target):
     pedidos = resultado.get('pedidos', [])
     _aplicar_cartinhas(pedidos)
     return pedidos, None
+
+
+# ── Pedidos da LOJA PRÓPRIA (opao.online) no painel ───────────────────────
+# PedidoOnline (checkout nativo) entra no MESMO painel do VNDA, com o mesmo
+# formato de dict (code/destinatario/endereco/...) — assim o Lalamove (que
+# casa por `code` + endereço do card) funciona sem nenhuma mudança. São
+# INDEPENDENTES do VNDA: aparecem mesmo se a API do VNDA cair.
+
+# PedidoOnline.status -> status inicial do card no painel (quando ainda não
+# há PainelPedidoStatus). 'pago' = NOVO (toca o alarme); já entregue NÃO toca.
+_STATUS_ONLINE_PARA_PAINEL = {
+    'pago': 'novo',
+    'em_preparo': 'visto',
+    'a_caminho': 'pronto',
+    'entregue': 'entregue',
+}
+# Quais PedidoOnline entram no painel (pago em diante; nunca aguardando/cancelado).
+_STATUS_ONLINE_NO_PAINEL = ('pago', 'em_preparo', 'a_caminho', 'entregue')
+
+
+def _endereco_online(p):
+    """Endereço de uma linha pro card/Lalamove. Retirada não tem entrega."""
+    if p.modo_entrega == 'retirada':
+        loja = getattr(p, 'loja_retirada', None)
+        return f'Retirada: {loja.nome}' if loja else 'Retirada na loja'
+    base = (p.endereco_entrega or '').strip()
+    cep = (p.endereco_cep or '').strip()
+    if cep and cep not in base:
+        base = f'{base}, {cep}' if base else cep
+    return base
+
+
+def _serializar_pedido_online(p):
+    """PedidoOnline -> dict no formato do painel (igual VNDA/local)."""
+    return {
+        'id': p.id,
+        'pedido_online': True,
+        'code': p.codigo,
+        'destinatario': (p.nome_destinatario or p.nome_cliente or 'Sem nome'),
+        'comprador': p.nome_cliente or '',
+        'telefone': (p.telefone_destinatario or p.telefone_cliente or ''),
+        'endereco': _endereco_online(p),
+        'data_entrega': p.data_entrega.isoformat() if p.data_entrega else None,
+        'data_entrega_fmt': (p.data_entrega.strftime('%d/%m/%Y')
+                             if p.data_entrega else ''),
+        'periodo': p.janela_entrega or '',
+        'expresso': p.modo_entrega == 'express',
+        'retirada': p.modo_entrega == 'retirada',
+        'cartinha_vnda': p.cartinha or '',
+        'observacao': '',
+        'status_vnda': 'online',
+        # fallback do status do card quando não há PainelPedidoStatus ainda
+        'status_painel_fallback': _STATUS_ONLINE_PARA_PAINEL.get(p.status, 'novo'),
+        'itens': [
+            {'nome': i.nome, 'quantidade': i.quantidade,
+             'preco_unitario': float(i.preco_unitario or 0), 'sku': '',
+             'subtotal': float(i.subtotal or 0)}
+            for i in p.itens
+        ],
+        'total': float(p.valor_total or 0),
+    }
+
+
+def _pedidos_online_do_dia(target_date):
+    """Lista os PedidoOnline (loja própria) pra entregar/retirar na data —
+    pagos em diante. Aplica cartinha manual (mesma regra do VNDA)."""
+    online = (PedidoOnline.query
+              .filter(PedidoOnline.data_entrega == target_date,
+                      PedidoOnline.status.in_(_STATUS_ONLINE_NO_PAINEL))
+              .order_by(PedidoOnline.criado_em.asc())
+              .all())
+    pedidos = [_serializar_pedido_online(p) for p in online]
+    _aplicar_cartinhas(pedidos)
+    return pedidos
+
+
+def _sync_pedido_online_status(code, novo_status):
+    """Best-effort: reflete no PedidoOnline a mudança feita no painel/Lalamove
+    e dispara o e-mail transacional. NÃO regride status, NÃO toca em
+    cancelado/aguardando, NUNCA quebra o caller. `novo_status` ∈
+    {'a_caminho','entregue'}."""
+    try:
+        from app.services import email as email_svc
+        p = PedidoOnline.query.filter_by(codigo=code).first()
+        if not p or p.status in ('cancelado', 'aguardando_pagamento'):
+            return
+        ordem = {'pago': 1, 'em_preparo': 2, 'a_caminho': 3, 'entregue': 4}
+        if ordem.get(novo_status, 0) <= ordem.get(p.status, 0):
+            return  # não regride (idempotente em reentrega)
+        p.status = novo_status
+        db.session.commit()
+        if email_svc.disponivel():
+            if novo_status == 'a_caminho':
+                email_svc.enviar_pedido_a_caminho(p)
+            elif novo_status == 'entregue':
+                email_svc.enviar_pedido_entregue(p)
+    except Exception:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception('sync PedidoOnline %s -> %s falhou',
+                                     code, novo_status)
 
 
 @entregas_bp.route('/painel')
