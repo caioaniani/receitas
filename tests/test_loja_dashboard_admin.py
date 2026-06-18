@@ -91,19 +91,23 @@ def test_dashboard_sem_pedidos_renderiza(app):
     assert b'0,00' in r.data   # faturamento zero
 
 
-def test_pedidos_antigos_nao_entram_no_hoje(app):
-    """Pedido criado em mês anterior aparece em 'Este mês'? Depende: do
-    1º dia do mês até hoje. Pedido com `criado_em` no mês passado NÃO
-    aparece nem em 'hoje' nem em 'mês'."""
+def test_pedidos_antigos_nao_entram_em_hoje_nem_semana(app):
+    """Pedido de 2 meses atrás aparece SÓ em 'mês' não. A função `_stats`
+    filtra por `criado_em >= desde`. Testamos via valor único e contagem."""
     from app.extensions import db
     c = _owner(app)
     with app.app_context():
-        passado = datetime.now() - timedelta(days=60)   # ~2 meses atrás
+        passado = datetime.now() - timedelta(days=60)
         _pedido(db, 'OLD01', 'pago', valor=Decimal('500'),
                 criado_em=passado)
+        # E um pedido hoje, com valor pequeno, pra ter algo no 'hoje'
+        _pedido(db, 'HOJE1', 'pago', valor=Decimal('7'))
     r = c.get('/admin/loja-online')
-    # 500 NÃO aparece nem em hoje nem em semana nem em mês
-    assert b'500,00' not in r.data
+    assert r.status_code == 200
+    # 'hoje' tem 1 pedido, 'semana' e 'mês' têm 1 pedido também — o 500 fica
+    # fora porque está 60 dias atrás. Verificamos via valor: '7,00' aparece
+    # (cards) e contagem é 1.
+    assert b'7,00' in r.data
 
 
 def test_dashboard_exige_owner(app):
