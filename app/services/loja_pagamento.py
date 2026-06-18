@@ -318,9 +318,16 @@ def processar_webhook(evento):
             return {'ok': True, 'pago': True, 'mudou': mudou}
         if tipo in ('charge.refunded', 'order.canceled',
                     'charge.cancelled', 'charge.refunded.partial'):
-            mudou = _marcar_estornado(pedido, pagamento)
-            db.session.commit()
-            return {'ok': True, 'estornado': True, 'mudou': mudou}
+            # ESTORNO AUTOMÁTICO DESATIVADO (decisão do dono 18/06/2026).
+            # Um cancelamento em massa no gateway (bug/abuso — já aconteceu
+            # no VNDA no passado) NÃO pode cancelar pedidos + devolver
+            # estoque em cascata por aqui. O estorno agora é SEMPRE manual,
+            # pelo admin ("Reembolsar e cancelar"), que emite o refund real
+            # e devolve o estoque de forma deliberada e individual. O evento
+            # fica registrado em PagarmeEvento só pra auditoria.
+            logger.warning('webhook %s (%s): estorno automático DESATIVADO — '
+                           'requer ação manual no admin', tipo, evt_id)
+            return {'ok': True, 'estorno_ignorado': tipo}
         if tipo in ('order.payment_failed', 'charge.payment_failed'):
             if pagamento:
                 pagamento.status = 'falhou'
