@@ -91,10 +91,23 @@
 
     atualizarBadge: function () {
       var badge = document.getElementById('cart-badge');
-      if (!badge) return;
-      var n = this.contar();
-      badge.textContent = n;
-      badge.style.display = n > 0 ? 'inline-flex' : 'none';
+      if (badge) {
+        var n = this.contar();
+        badge.textContent = n;
+        badge.style.display = n > 0 ? 'inline-flex' : 'none';
+      }
+      renderCardAdds();
+    },
+
+    qtdDe: function (kind, id) {
+      var itens = this.ler();
+      var k = this._chaveItem(kind, id);
+      for (var i = 0; i < itens.length; i++) {
+        if (this._chaveItem(itens[i].kind, itens[i].id) === k) {
+          return parseInt(itens[i].qtd, 10) || 0;
+        }
+      }
+      return 0;
     },
   };
 
