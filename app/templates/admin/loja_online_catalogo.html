@@ -69,6 +69,10 @@
   </a>
 </div>
 
+<datalist id="categorias-existentes">
+  {% for c in categorias_existentes %}<option value="{{ c }}">{% endfor %}
+</datalist>
+
 {% if not itens %}
 <div class="alert alert-light text-muted">Nenhum item neste filtro.</div>
 {% else %}
