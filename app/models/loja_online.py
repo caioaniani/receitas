@@ -356,3 +356,26 @@ class ClienteResetSenha(db.Model):
 
     def valido(self, agora_dt):
         return self.usado_em is None and self.expira_em > agora_dt
+
+
+class CategoriaSite(db.Model):
+    """Ordenação das categorias na vitrine (Fase 6.5 — 17/06/2026).
+
+    `categoria` (texto livre em Produto/Receita) é só uma string — sem
+    primary key própria. Pra ordenar na vitrine, mantemos uma tabela
+    com o NOME da categoria + a posição.
+
+    Categoria detectada no catálogo mas SEM linha aqui = vai pro fim
+    (em ordem alfabética). Linha aqui sem categoria correspondente no
+    catálogo é ignorada na vitrine (não causa erro)."""
+    __tablename__ = 'categoria_site'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # Único (case-sensitive) — combinamos com `Produto.categoria` /
+    # `Receita.categoria` por texto exato.
+    nome = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    ordem = db.Column(db.Integer, nullable=False, default=0)
+    criado_em = db.Column(db.DateTime, default=agora)
+
+    def __repr__(self):
+        return f'<CategoriaSite {self.nome!r} ord={self.ordem}>'
