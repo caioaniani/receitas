@@ -233,6 +233,12 @@ def _gate_acesso():
             'loja.robots', 'loja.webhook_pagarme',
             'loja.entrar', 'loja.cadastrar', 'loja.sair',
             'loja.esqueci_senha', 'loja.redefinir_senha',
+            # Acompanhar pedido pelo CÓDIGO (link do email pra guests):
+            # qualquer um com o código vê o pedido. O código é random hex 8
+            # (16^8 = 4 bi) — não é adivinhável por enumeração realista.
+            'loja.pedido_confirmado', 'loja.pedido_pagamento',
+            'loja.pedido_status', 'loja.pedido_pix', 'loja.pedido_cartao',
+            'loja.pedido_danfe',
     ):
         return None
     if _loja_visivel_publico():
