@@ -178,7 +178,10 @@
               <i class="bi bi-arrow-repeat"></i> Refazer do zero
             </button>
           </form>
-        {% elif p.status == 'pago' %}
+        {% elif p.status in ('pago', 'em_preparo', 'a_caminho', 'entregue') %}
+          {# NF pode ser emitida em qualquer status pós-pago — o cliente pode
+             ter movido o pedido (em preparo / a caminho / entregue) antes da
+             gente lembrar de gerar a nota. #}
           <form method="POST" action="{{ url_for('main.loja_online_emitir_nf', codigo=p.codigo) }}"
                 onsubmit="return confirm('Emitir NF deste pedido no Tiny?');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
