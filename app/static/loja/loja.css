@@ -1,16 +1,44 @@
-/* Loja Online — primeira passada visual (Fase 2, 16/06/2026).
- * Editorial premium, paleta quente, mobile-first.
- * Iteramos vendo no ar — não é design final. */
+/* Loja Online — Identidade "Caminho 1" (manual Panora, aplicada 18/06/2026):
+ * paleta monocromática branco quente #F5F0E6 + cinza escuro #323133.
+ * Tipografia: Fraunces (títulos — substituta LIVRE da Editorial New, que é
+ * paga) + Funnel Sans (subtítulos/corpo). Fontes auto-hospedadas em
+ * fonts/ (woff2 variável, subset latin = cobre acentos PT) — CSP-safe,
+ * sem CDN externo. */
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 300 500;          /* arquivo variável cobre a faixa */
+  font-display: swap;
+  src: url('fonts/fraunces-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Funnel Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('fonts/funnel-sans-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Funnel Sans';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/funnel-sans-italic-latin.woff2') format('woff2');
+}
 
 :root {
-  --bg: #fbf8f3;          /* off-white quente */
-  --texto: #2a2520;       /* marrom-quase-preto */
-  --texto-suave: #6b5f54;
-  --acento: #8b5a2b;      /* marrom queimado (acento) */
-  --linha: #e8e0d5;
+  --bg: #F5F0E6;          /* branco quente (Pantone 7499) */
+  --texto: #323133;       /* cinza escuro (Pantone Cool Gray 11) */
+  --texto-suave: #76726c; /* cinza médio harmônico */
+  --acento: #323133;      /* Caminho 1 é "preto no branco" — sem cor de acento */
+  --linha: #e6ddcd;       /* linha sutil sobre o branco quente */
   --card-bg: #ffffff;
   --teste: #fff4a3;
   --teste-borda: #e0b800;
+  /* Georgia/system-ui ficam só como fallback enquanto a fonte carrega. */
+  --fonte-titulo: 'Fraunces', Georgia, serif;
+  --fonte-corpo: 'Funnel Sans', system-ui, -apple-system, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -20,7 +48,7 @@ html, body {
   margin: 0; padding: 0;
   background: var(--bg);
   color: var(--texto);
-  font-family: 'Georgia', 'Times New Roman', serif;
+  font-family: var(--fonte-corpo);
   font-size: 17px; line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
@@ -35,7 +63,7 @@ a:hover { text-decoration: underline; }
   padding: 9px 16px;
   text-align: center;
   font-size: 13px;
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
 }
 .teste-banner code { background: rgba(0,0,0,.08); padding: 1px 5px; border-radius: 3px; }
 
@@ -62,11 +90,11 @@ a:hover { text-decoration: underline; }
   /* Flex item: `min-width:0` deixa encolher, `flex-shrink:1` permite
      ceder espaço quando a nav precisa. Sem isso, o wordmark longo
      empurra a navegação pra fora da tela no celular. */
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 24px;
+  font-weight: 500;   /* Fraunces vai até 500 — evita faux-bold + bate o tom editorial */
   color: var(--texto);
-  letter-spacing: .3px;
-  font-family: 'Georgia', serif;
+  letter-spacing: .2px;
+  font-family: var(--fonte-titulo);
   min-width: 0;
   flex: 0 1 auto;
   overflow: hidden;
@@ -102,7 +130,7 @@ a:hover { text-decoration: underline; }
 @media (min-width: 600px) { .topo { padding: 18px 22px; gap: 20px; } }
 .topo-nav {
   display: flex; gap: 14px; align-items: center;
-  font-family: system-ui, sans-serif; font-size: 14px;
+  font-family: var(--fonte-corpo); font-size: 14px;
   flex-shrink: 0;   /* a nav NUNCA encolhe — o logo cede primeiro */
 }
 @media (min-width: 600px) { .topo-nav { gap: 20px; font-size: 15px; } }
@@ -159,7 +187,7 @@ a:hover { text-decoration: underline; }
   text-transform: uppercase;
   letter-spacing: 2px;
   color: var(--texto-suave);
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
   font-weight: 600;
   margin: 0 0 16px;
   padding-bottom: 8px;
@@ -192,7 +220,7 @@ a:hover { text-decoration: underline; }
   border-radius: 999px;
   background: var(--card-bg);
   color: var(--texto);
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
   font-size: 13px;
   font-weight: 500;
   letter-spacing: .3px;
@@ -239,7 +267,7 @@ a:hover { text-decoration: underline; }
   color: #fff;
   border: 0;
   border-radius: 4px;
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: .5px;
@@ -270,7 +298,7 @@ a:hover { text-decoration: underline; }
 .card-add .stepper button:hover { background: var(--acento); }
 .card-add .stepper .qtd {
   display: flex; align-items: center; justify-content: center;
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
   font-size: 15px;
   font-weight: 700;
   color: var(--texto);
@@ -313,13 +341,13 @@ a:hover { text-decoration: underline; }
   font-weight: 500;
   margin: 0 0 4px;
   line-height: 1.22;
-  font-family: 'Georgia', serif;
+  font-family: var(--fonte-titulo);
 }
 .card-preco {
   color: var(--acento);
   font-size: 14px;
   font-weight: 600;
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
 }
 @media (min-width: 600px) {
   .card-corpo { padding: 16px 4px 4px; }
@@ -343,7 +371,7 @@ a:hover { text-decoration: underline; }
   font-size: 22px;
   font-weight: 400;
   margin: 0 0 6px;
-  font-family: 'Georgia', serif;
+  font-family: var(--fonte-titulo);
 }
 .monte-cabecalho p {
   color: var(--texto-suave);
@@ -392,7 +420,7 @@ a:hover { text-decoration: underline; }
   letter-spacing: 2px;
   font-size: 12px;
   color: var(--texto-suave);
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
   margin: 0 0 6px;
 }
 .produto-info h1 {
@@ -400,13 +428,13 @@ a:hover { text-decoration: underline; }
   font-weight: 400;
   margin: 0 0 18px;
   line-height: 1.1;
-  font-family: 'Georgia', serif;
+  font-family: var(--fonte-titulo);
 }
 .produto-preco {
   font-size: 28px;
   color: var(--acento);
   font-weight: 600;
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
   margin-bottom: 18px;
 }
 .produto-descricao {
@@ -426,7 +454,7 @@ a:hover { text-decoration: underline; }
   text-transform: uppercase;
   letter-spacing: 2px;
   color: var(--texto-suave);
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
   margin: 0 0 10px;
   font-weight: 600;
 }
@@ -444,7 +472,7 @@ a:hover { text-decoration: underline; }
   border: 0;
   border-radius: 4px;
   cursor: pointer;
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
   letter-spacing: .3px;
 }
 .btn-comprar.disabled,
@@ -456,12 +484,12 @@ a:hover { text-decoration: underline; }
   font-size: 13px;
   color: var(--texto-suave);
   margin: 8px 0 24px;
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
 }
 .voltar {
   display: inline-block;
   color: var(--texto-suave);
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
   font-size: 14px;
 }
 
@@ -478,7 +506,7 @@ a:hover { text-decoration: underline; }
   padding: 38px 22px;
   display: grid;
   gap: 28px;
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
   font-size: 15px;
   color: var(--texto-suave);
   max-width: 1080px;
@@ -522,7 +550,7 @@ a:hover { text-decoration: underline; }
   background: var(--acento); color: #fff;
   border-radius: 999px;
   font-size: 11px; font-weight: 700;
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
   line-height: 1;
   box-shadow: 0 0 0 2px var(--bg); /* "fura" o ícone visualmente */
 }
@@ -535,19 +563,19 @@ a:hover { text-decoration: underline; }
 .qtd-seletor {
   display: flex; align-items: center; gap: 10px;
   margin-bottom: 12px;
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
 }
 .qtd-seletor label { font-size: 14px; color: var(--texto-suave); }
 .qtd-seletor input {
   width: 72px; padding: 9px 10px;
   font-size: 16px; text-align: center;
   border: 1px solid var(--linha); border-radius: 4px;
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
 }
 .btn-comprar.add-ok { background: #3c7a4a; }
 .ver-carrinho {
   display: inline-block; margin-top: 12px;
-  font-family: system-ui, sans-serif; font-size: 14px;
+  font-family: var(--fonte-corpo); font-size: 14px;
 }
 
 /* ── Botões da loja ────────────────────────────────────── */
@@ -556,7 +584,7 @@ a:hover { text-decoration: underline; }
   padding: 13px 22px;
   font-size: 16px; font-weight: 600;
   border-radius: 4px;
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
   cursor: pointer; border: 0;
 }
 .btn-loja { background: var(--acento); color: #fff; }
@@ -573,7 +601,7 @@ a:hover { text-decoration: underline; }
 }
 .carrinho-pagina h1, .checkout-pagina h1 {
   font-size: 32px; font-weight: 400; margin: 0 0 24px;
-  font-family: 'Georgia', serif;
+  font-family: var(--fonte-titulo);
 }
 .carrinho-vazio { text-align: center; color: var(--texto-suave); padding: 40px 0; }
 .carrinho-vazio .btn-loja { margin-top: 16px; }
@@ -590,10 +618,10 @@ a:hover { text-decoration: underline; }
 }
 .carrinho-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .carrinho-foto .card-foto-placeholder { font-size: 30px; }
-.carrinho-nome { font-size: 17px; font-family: 'Georgia', serif; }
+.carrinho-nome { font-size: 17px; font-family: var(--fonte-titulo); }
 .carrinho-preco-un {
   font-size: 13px; color: var(--texto-suave);
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
 }
 .carrinho-qtd { display: flex; align-items: center; gap: 4px; }
 .qtd-btn {
@@ -605,10 +633,10 @@ a:hover { text-decoration: underline; }
 .qtd-in {
   width: 48px; height: 30px; text-align: center;
   border: 1px solid var(--linha); border-radius: 4px;
-  font-family: system-ui, sans-serif; font-size: 15px;
+  font-family: var(--fonte-corpo); font-size: 15px;
 }
 .carrinho-sub {
-  font-family: system-ui, sans-serif; font-weight: 600;
+  font-family: var(--fonte-corpo); font-weight: 600;
   color: var(--acento); min-width: 80px; text-align: right;
 }
 .carrinho-remover {
@@ -620,12 +648,12 @@ a:hover { text-decoration: underline; }
 .carrinho-rodape { margin-top: 26px; }
 .carrinho-total {
   font-size: 20px; text-align: right;
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
 }
 .carrinho-total strong { color: var(--acento); }
 .carrinho-aviso {
   font-size: 13px; color: var(--texto-suave); text-align: right;
-  font-family: system-ui, sans-serif; margin: 6px 0 18px;
+  font-family: var(--fonte-corpo); margin: 6px 0 18px;
 }
 .carrinho-acoes {
   display: flex; justify-content: space-between; gap: 12px;
@@ -658,12 +686,12 @@ a:hover { text-decoration: underline; }
 }
 .checkout-bloco h2 {
   font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px;
-  color: var(--texto-suave); font-family: system-ui, sans-serif;
+  color: var(--texto-suave); font-family: var(--fonte-corpo);
   font-weight: 600; margin: 0 0 14px;
 }
 .checkout-bloco label {
   display: block; margin-bottom: 12px;
-  font-family: system-ui, sans-serif; font-size: 14px;
+  font-family: var(--fonte-corpo); font-size: 14px;
   color: var(--texto-suave);
 }
 .checkout-bloco input[type="text"],
@@ -674,7 +702,7 @@ a:hover { text-decoration: underline; }
   display: block; width: 100%; margin-top: 5px;
   padding: 11px 12px; font-size: 16px;
   border: 1px solid var(--linha); border-radius: 5px;
-  font-family: system-ui, sans-serif; background: #fff; color: var(--texto);
+  font-family: var(--fonte-corpo); background: #fff; color: var(--texto);
 }
 .checkout-bloco .opcional { text-transform: none; font-weight: 400; opacity: .7; }
 
@@ -683,7 +711,7 @@ a:hover { text-decoration: underline; }
   display: flex; gap: 12px; align-items: flex-start;
   border: 1px solid var(--linha); border-radius: 6px;
   padding: 14px; cursor: pointer; margin: 0;
-  font-family: system-ui, sans-serif; font-size: 14px; color: var(--texto);
+  font-family: var(--fonte-corpo); font-size: 14px; color: var(--texto);
 }
 .modo-opcao input { margin-top: 3px; }
 .modo-opcao:has(input:checked) {
@@ -693,7 +721,7 @@ a:hover { text-decoration: underline; }
 .modo-opcao.modo-desabilitado { opacity: .5; cursor: not-allowed; }
 
 .frete-resultado {
-  font-family: system-ui, sans-serif; font-size: 14px;
+  font-family: var(--fonte-corpo); font-size: 14px;
   margin: 10px 0 0; min-height: 1em;
 }
 .frete-resultado.ok { color: #2f6b3d; font-weight: 600; }
@@ -702,7 +730,7 @@ a:hover { text-decoration: underline; }
 .checkout-totais { gap: 8px; display: flex; flex-direction: column; }
 .linha-total {
   display: flex; justify-content: space-between;
-  font-family: system-ui, sans-serif; font-size: 15px; color: var(--texto-suave);
+  font-family: var(--fonte-corpo); font-size: 15px; color: var(--texto-suave);
 }
 .linha-total.grande {
   font-size: 20px; color: var(--texto); font-weight: 700;
@@ -713,20 +741,20 @@ a:hover { text-decoration: underline; }
 .checkout-itens-lista { list-style: none; margin: 0; padding: 0; }
 .checkout-itens-lista li {
   display: flex; justify-content: space-between; gap: 12px;
-  padding: 6px 0; font-family: system-ui, sans-serif; font-size: 15px;
+  padding: 6px 0; font-family: var(--fonte-corpo); font-size: 15px;
   border-bottom: 1px dashed var(--linha);
 }
 .checkout-itens-lista li:last-child { border-bottom: 0; }
 
 .aceite {
   display: flex; gap: 10px; align-items: flex-start;
-  font-family: system-ui, sans-serif; font-size: 14px; color: var(--texto-suave);
+  font-family: var(--fonte-corpo); font-size: 14px; color: var(--texto-suave);
 }
 .btn-finalizar { width: 100%; padding: 16px; font-size: 17px; }
 
 .checkout-erros {
   background: #fbe9e3; border: 1px solid #e0a892; border-radius: 6px;
-  padding: 14px 18px; font-family: system-ui, sans-serif; font-size: 14px;
+  padding: 14px 18px; font-family: var(--fonte-corpo); font-size: 14px;
   color: #8a3417;
 }
 .checkout-erros ul { margin: 8px 0 0; padding-left: 18px; }
@@ -739,12 +767,12 @@ a:hover { text-decoration: underline; }
   background: #2f6b3d; color: #fff; border-radius: 50%;
   font-size: 30px;
 }
-.confirmado-cabecalho p { color: var(--texto-suave); font-family: system-ui, sans-serif; }
+.confirmado-cabecalho p { color: var(--texto-suave); font-family: var(--fonte-corpo); }
 .confirmado .checkout-bloco { margin-bottom: 18px; }
 .confirmado-cartinha { color: var(--texto-suave); margin-top: 12px; }
 .confirmado-proximo {
   background: #f5efe5; border: 0;
-  font-family: system-ui, sans-serif; font-size: 14px; color: var(--texto-suave);
+  font-family: var(--fonte-corpo); font-size: 14px; color: var(--texto-suave);
 }
 
 /* ── Pix ───────────────────────────────────────────────── */
@@ -826,7 +854,7 @@ a:hover { text-decoration: underline; }
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px 22px 12px;
   border-bottom: 1px solid var(--linha);
-  font-family: 'Georgia', serif; font-size: 17px;
+  font-family: var(--fonte-titulo); font-size: 17px;
   flex-shrink: 0;
 }
 .cart-drawer-fechar {
@@ -860,7 +888,7 @@ a:hover { text-decoration: underline; }
 .cart-drawer-linha .nome { font-size: 15px; font-weight: 500; line-height: 1.2; }
 .cart-drawer-linha .preco-un {
   font-size: 12px; color: var(--texto-suave); margin-top: 2px;
-  font-family: system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
 }
 .cart-drawer-linha .stepper {
   display: grid; grid-template-columns: 30px 36px 30px;
@@ -872,12 +900,12 @@ a:hover { text-decoration: underline; }
 }
 .cart-drawer-linha .stepper .qtd {
   display: flex; align-items: center; justify-content: center;
-  background: #fff; font-family: system-ui, sans-serif;
+  background: #fff; font-family: var(--fonte-corpo);
   font-weight: 700; font-size: 14px;
 }
 .cart-drawer-vazio {
   padding: 24px 0; text-align: center; color: var(--texto-suave);
-  font-family: system-ui, sans-serif; font-size: 14px;
+  font-family: var(--fonte-corpo); font-size: 14px;
 }
 .cart-drawer-rodape {
   padding: 14px 22px 18px;
@@ -887,15 +915,15 @@ a:hover { text-decoration: underline; }
 .cart-drawer-total {
   display: flex; justify-content: space-between; align-items: baseline;
   margin-bottom: 4px;
-  font-family: system-ui, sans-serif; font-size: 15px;
+  font-family: var(--fonte-corpo); font-size: 15px;
 }
 .cart-drawer-total strong {
   font-size: 18px; color: var(--acento);
-  font-family: 'Georgia', serif;
+  font-family: var(--fonte-titulo);
 }
 .cart-drawer-aviso {
   color: var(--texto-suave); margin: 0 0 12px;
-  font-family: system-ui, sans-serif; font-size: 12px;
+  font-family: var(--fonte-corpo); font-size: 12px;
 }
 .cart-drawer-acoes {
   display: grid; gap: 8px;
