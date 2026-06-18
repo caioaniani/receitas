@@ -91,20 +91,25 @@ a:hover { text-decoration: underline; }
 
 /* ── Categorias ────────────────────────────────────────── */
 .categoria {
-  padding: 30px 22px 50px;
+  padding: 20px 14px 36px;
   max-width: 1080px;
   margin: 0 auto;
+  scroll-margin-top: 64px;  /* offset pro chip sticky não cobrir o título */
 }
 .categoria-titulo {
-  font-size: 14px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 2px;
   color: var(--texto-suave);
   font-family: system-ui, sans-serif;
   font-weight: 600;
-  margin: 0 0 22px;
-  padding-bottom: 10px;
+  margin: 0 0 16px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--linha);
+}
+@media (min-width: 600px) {
+  .categoria { padding: 30px 22px 50px; }
+  .categoria-titulo { font-size: 14px; margin-bottom: 22px; padding-bottom: 10px; }
 }
 
 /* ── Navegação de categorias (chips sticky) ─────────────── */
