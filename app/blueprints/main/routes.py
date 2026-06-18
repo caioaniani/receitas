@@ -2463,6 +2463,84 @@ def loja_online_catalogo_preco(tipo, id):
                                if obj.preco_site is not None else None))
 
 
+@main_bp.route('/admin/loja-online/catalogo/ordem/<tipo>/<int:id>',
+                methods=['POST'])
+@owner_required
+def loja_online_catalogo_ordem(tipo, id):
+    """Atualiza a `ordem_site` do item (edição inline). JSON:
+    {ordem: int|null}. Vazio/null = item vai pro fim alfabético."""
+    from app.extensions import db as _db
+    from app.models import Produto, Receita
+    if tipo == 'receita':
+        obj = Receita.query.get_or_404(id)
+    elif tipo == 'produto':
+        obj = Produto.query.get_or_404(id)
+    else:
+        return jsonify(ok=False, erro='tipo inválido'), 400
+    dados = request.get_json(silent=True) or {}
+    raw = dados.get('ordem')
+    if raw is None or raw == '':
+        obj.ordem_site = None
+    else:
+        try:
+            obj.ordem_site = int(raw)
+        except (TypeError, ValueError):
+            return jsonify(ok=False, erro='ordem precisa ser inteiro'), 400
+    _db.session.commit()
+    return jsonify(ok=True, ordem=obj.ordem_site)
+
+
+@main_bp.route('/admin/loja-online/categorias', methods=['GET', 'POST'])
+@owner_required
+def loja_online_categorias():
+    """Gestão da ordem das categorias na vitrine. GET mostra; POST salva."""
+    from app.models import CategoriaSite, Produto, Receita
+    # Coleta TODAS as categorias usadas no catálogo (Produto + Receita).
+    cats_uso = set()
+    for r in Receita.query.with_entities(Receita.categoria).distinct():
+        if r[0]:
+            cats_uso.add(r[0].strip())
+    for p in Produto.query.with_entities(Produto.categoria).distinct():
+        if p[0]:
+            cats_uso.add(p[0].strip())
+
+    if request.method == 'POST':
+        # Recebe pares (nome, ordem) e upserta. Categoria removida do form
+        # vira sem peso (vai pro fim alfabético).
+        nomes = request.form.getlist('nome')
+        ordens = request.form.getlist('ordem')
+        existentes = {c.nome: c for c in CategoriaSite.query.all()}
+        for nome, ord_str in zip(nomes, ordens):
+            nome = (nome or '').strip()[:50]
+            if not nome:
+                continue
+            try:
+                ordem = int(ord_str)
+            except (TypeError, ValueError):
+                ordem = 0
+            if nome in existentes:
+                existentes[nome].ordem = ordem
+            else:
+                db.session.add(CategoriaSite(nome=nome, ordem=ordem))
+        db.session.commit()
+        from flask import flash
+        flash('Ordem das categorias atualizada.', 'success')
+        return redirect(url_for('main.loja_online_categorias'))
+
+    existentes = {c.nome: c.ordem for c in CategoriaSite.query.all()}
+    # Combina: começa com as que TÊM ordem (em ordem), depois as outras
+    # (alfabética).
+    com_ordem = sorted(
+        ((n, o) for n, o in existentes.items() if n in cats_uso),
+        key=lambda x: (x[1], x[0].lower()))
+    sem_ordem = sorted(
+        ((n, 0) for n in cats_uso if n not in existentes),
+        key=lambda x: x[0].lower())
+    linhas = com_ordem + sem_ordem
+    return render_template('admin/loja_online_categorias.html',
+                            linhas=linhas)
+
+
 @main_bp.route('/admin/loja-online/catalogo/categoria/<tipo>/<int:id>',
                 methods=['POST'])
 @owner_required
