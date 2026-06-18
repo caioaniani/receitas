@@ -90,7 +90,8 @@ def enviar_pedido_recebido(pedido):
     destinatario = (pedido.email_cliente or '').strip()
     if not destinatario:
         return {'ok': False, 'erro': 'pedido sem email'}
-    base = (current_app.config.get('APP_BASE_URL') or '').rstrip('/')
+    base = (current_app.config.get('LOJA_BASE_URL')
+            or current_app.config.get('APP_BASE_URL') or '').rstrip('/')
     assunto = f'Recebemos seu pedido {pedido.codigo} — O Pão Padaria Artesanal'
     html = _template_pedido_recebido(pedido, base)
     texto = _texto_pedido_recebido(pedido, base)
@@ -103,7 +104,8 @@ def enviar_confirmacao_pedido(pedido):
     destinatario = (pedido.email_cliente or '').strip()
     if not destinatario:
         return {'ok': False, 'erro': 'pedido sem email'}
-    base = (current_app.config.get('APP_BASE_URL') or '').rstrip('/')
+    base = (current_app.config.get('LOJA_BASE_URL')
+            or current_app.config.get('APP_BASE_URL') or '').rstrip('/')
     assunto = f'Pedido {pedido.codigo} confirmado — O Pão Padaria Artesanal'
     html = _template_confirmacao(pedido, base)
     return enviar(destinatario, assunto, html, texto=_texto_confirmacao(pedido))
@@ -117,7 +119,8 @@ def enviar_pedido_a_caminho(pedido):
     destinatario = (pedido.email_cliente or '').strip()
     if not destinatario:
         return {'ok': False, 'erro': 'pedido sem email'}
-    base = (current_app.config.get('APP_BASE_URL') or '').rstrip('/')
+    base = (current_app.config.get('LOJA_BASE_URL')
+            or current_app.config.get('APP_BASE_URL') or '').rstrip('/')
     assunto = f'Pedido {pedido.codigo} a caminho — O Pão Padaria Artesanal'
     html = _template_a_caminho(pedido, base)
     texto = _texto_a_caminho(pedido, base)
@@ -132,7 +135,8 @@ def enviar_pedido_entregue(pedido):
     destinatario = (pedido.email_cliente or '').strip()
     if not destinatario:
         return {'ok': False, 'erro': 'pedido sem email'}
-    base = (current_app.config.get('APP_BASE_URL') or '').rstrip('/')
+    base = (current_app.config.get('LOJA_BASE_URL')
+            or current_app.config.get('APP_BASE_URL') or '').rstrip('/')
     assunto = f'Pedido {pedido.codigo} entregue — O Pão Padaria Artesanal'
     html = _template_entregue(pedido, base)
     texto = _texto_entregue(pedido, base)
