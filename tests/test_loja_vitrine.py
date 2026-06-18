@@ -148,10 +148,15 @@ def test_home_tem_chips_de_navegacao_por_categoria(app):
     """O cliente precisa poder navegar por categoria pelos chips do topo
     (decisão do dono 17/06/2026). Cada categoria aparece como link âncora."""
     from app.extensions import db
+    from app.models import Receita
     _criar_produto_publicado(db, nome='Box Mimo', categoria='Cestas',
                               preco=100.0)
-    _criar_receita_publicada(db, nome='Croissant', categoria='Pães',
-                              preco=20.0)
+    rec = Receita(nome='Croissant', preco_site=20.0,
+                  categoria='Pães',
+                  imagem_dropbox_url='https://x/y.jpg',
+                  rendimento_qtd=1, rendimento_unidade='un', peso_base=100.0)
+    db.session.add(rec)
+    db.session.commit()
     c = _admin_logado(app)
     r = c.get('/loja/')
     assert r.status_code == 200
