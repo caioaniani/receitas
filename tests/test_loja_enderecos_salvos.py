@@ -4,6 +4,7 @@ Auto-salva no fim do checkout (cliente logado + modo entrega) e
 pré-preenche no GET do próximo checkout.
 """
 from datetime import datetime
+from decimal import Decimal
 from unittest.mock import patch
 
 
@@ -95,6 +96,35 @@ def test_checkout_logado_pre_preenche_endereco_salvo(app, monkeypatch):
     assert b'Rua Salva' in r.data
     assert b'01001000' in r.data
     assert b'Centro' not in r.data or b'value="99"' in r.data  # número certo
+
+
+def test_fallback_endereco_do_ultimo_pedido_quando_sem_salvo(app, monkeypatch):
+    """Cliente cadastrou e seus pedidos antigos eram como guest — sem
+    `EnderecoCliente`. O checkout precisa usar o endereço do ÚLTIMO pedido
+    como fallback (senão o cliente tem que redigitar tudo)."""
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    from app.extensions import db
+    from app.models import PedidoOnline
+    c = app.test_client()
+    cli_id = _cliente_logado(app, c, email='fb@x.com')
+    with app.app_context():
+        # Pedido antigo de entrega com endereço estruturado mas SEM
+        # EnderecoCliente (cenário do usuário em prod 17/06/2026).
+        from app.utils import agora
+        p = PedidoOnline(codigo='OLD123', cliente_id=cli_id,
+                         nome_cliente='X', email_cliente='fb@x.com',
+                         modo_entrega='agendada', status='pago',
+                         endereco_logradouro='Rua Antiga', endereco_numero='42',
+                         endereco_bairro='Vila', endereco_cidade='São Paulo',
+                         endereco_uf='SP', endereco_cep='04077000',
+                         frete_valor=Decimal('5'), subtotal=Decimal('10'),
+                         valor_total=Decimal('15'), criado_em=agora())
+        db.session.add(p)
+        db.session.commit()
+    r = c.get('/loja/checkout')
+    assert r.status_code == 200
+    assert b'Rua Antiga' in r.data
+    assert b'04077000' in r.data
 
 
 def test_endereco_repetido_nao_duplica(app):
