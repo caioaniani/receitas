@@ -144,6 +144,24 @@ def test_home_agrupa_por_categoria(app):
     assert b'categoria-titulo' in r.data
 
 
+def test_home_tem_chips_de_navegacao_por_categoria(app):
+    """O cliente precisa poder navegar por categoria pelos chips do topo
+    (decisão do dono 17/06/2026). Cada categoria aparece como link âncora."""
+    from app.extensions import db
+    _criar_produto_publicado(db, nome='Box Mimo', categoria='Cestas',
+                              preco=100.0)
+    _criar_receita_publicada(db, nome='Croissant', categoria='Pães',
+                              preco=20.0)
+    c = _admin_logado(app)
+    r = c.get('/loja/')
+    assert r.status_code == 200
+    # Chips de categoria presentes (nav)
+    assert b'cat-nav' in r.data
+    # Cada categoria vira link âncora
+    assert b'href="#cat-1"' in r.data
+    assert b'href="#cat-2"' in r.data
+
+
 # ── Página de produto ────────────────────────────────────────────────
 
 def test_pagina_produto_carrega(app):
