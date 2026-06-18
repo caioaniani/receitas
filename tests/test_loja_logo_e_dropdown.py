@@ -132,12 +132,31 @@ def test_upload_logo_exige_owner(app):
 # ── Header: logo <img> vs wordmark ──────────────────────────────────────
 
 def test_header_mostra_wordmark_sem_logo(app, monkeypatch):
+    """Sem logo: as DUAS variantes do wordmark estão no HTML — CSS decide
+    qual aparece (curta no mobile, completa no desktop)."""
     monkeypatch.setenv('LOJA_VISIVEL', '1')
     c = app.test_client()
     r = c.get('/loja/')
     assert r.status_code == 200
-    assert b'Padaria' in r.data            # wordmark de texto
+    assert b'logo-curto' in r.data         # variante mobile
+    assert b'logo-completo' in r.data      # variante desktop
+    assert b'Padaria Artesanal' in r.data
     assert b'<img src="https://dropbox' not in r.data
+
+
+def test_wordmark_curto_so_o_pao_no_mobile(app, monkeypatch):
+    """A variante mobile do wordmark NÃO tem 'Padaria Artesanal' — só
+    'O Pão' (cabe sem estourar o header no celular)."""
+    import re
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    c = app.test_client()
+    r = c.get('/loja/')
+    # Extrai o conteúdo entre <span class="logo-curto"> e </span>
+    m = re.search(rb'<span class="logo-curto">([^<]*)</span>', r.data)
+    assert m, 'logo-curto não encontrado'
+    conteudo = m.group(1).strip()
+    assert conteudo == b'O P\xc3\xa3o'     # 'O Pão' em UTF-8
+    assert b'Padaria' not in conteudo
 
 
 def test_header_mostra_logo_img_quando_setado(app, monkeypatch):
