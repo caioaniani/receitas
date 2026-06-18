@@ -193,6 +193,37 @@
       </div>
     </div>
 
+    {% if p.status in ('pago', 'em_preparo', 'a_caminho') %}
+    <div class="card mb-3">
+      <div class="card-header py-2 fw-bold">Atualizar status</div>
+      <div class="card-body small d-grid gap-2">
+        {% if p.status == 'pago' %}
+        <form method="POST" action="{{ url_for('main.loja_online_pedido_status', codigo=p.codigo) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="novo_status" value="em_preparo">
+          <button class="btn btn-sm btn-secondary w-100">→ Em preparo</button>
+        </form>
+        {% endif %}
+        {% if p.status in ('pago', 'em_preparo') %}
+        <form method="POST" action="{{ url_for('main.loja_online_pedido_status', codigo=p.codigo) }}"
+              onsubmit="return confirm('Marcar como A CAMINHO? O cliente recebe um e-mail.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="novo_status" value="a_caminho">
+          <button class="btn btn-sm btn-primary w-100">🚚 Saiu pra entrega</button>
+        </form>
+        {% endif %}
+        {% if p.status == 'a_caminho' %}
+        <form method="POST" action="{{ url_for('main.loja_online_pedido_status', codigo=p.codigo) }}"
+              onsubmit="return confirm('Marcar como ENTREGUE?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="novo_status" value="entregue">
+          <button class="btn btn-sm btn-success w-100">✓ Entregue</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
     {% if p.status not in ('entregue', 'cancelado') %}
     {% set eh_pago = p.status == 'pago' %}
     <form method="POST" action="{{ url_for('main.loja_online_pedido_cancelar', codigo=p.codigo) }}"
