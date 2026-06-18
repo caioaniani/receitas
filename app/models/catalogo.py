@@ -75,6 +75,10 @@ class Receita(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(150), nullable=False)
     categoria = db.Column(db.String(50))
+    # Ordem manual na vitrine (menor = mais cedo). NULL = vai pro fim,
+    # ordenado por nome dentro de cada categoria. Setado pela tela de
+    # curadoria (campo "ordem" no card).
+    ordem_site = db.Column(db.Integer)
     # Familia define quais estados (assado/backup/cru) sao validos pra essa
     # receita. Ver app/constants.py:FAMILIAS_RECEITA. NULL = pao_sourdough.
     familia = db.Column(db.String(30), nullable=True, index=True)
