@@ -368,3 +368,37 @@ def cancelar_charge(charge_id, valor_decimal=None):
         return {'ok': True}
     detalhe = (r.text or '')[:200]
     return {'ok': False, 'erro': f'HTTP {r.status_code}: {detalhe}'}
+
+
+def consultar_order(order_id):
+    """Consulta um order no Pagar.me (GET /orders/<id>). Usado pela
+    conciliação manual (admin) quando o webhook não chega — a fonte da
+    verdade do pagamento é o gateway, não o nosso retorno de checkout.
+    Devolve {ok, status, pago, charge_id, charge_status, erro?}."""
+    if not disponivel():
+        return {'ok': False, 'erro': 'PAGARME_API_KEY não configurada'}
+    if not order_id:
+        return {'ok': False, 'erro': 'order_id ausente'}
+    try:
+        r = requests.get(f'{_BASE}/orders/{order_id}', headers=_headers(),
+                         timeout=_TIMEOUT)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('pagarme consultar_order falhou: %s', exc)
+        return {'ok': False, 'erro': str(exc)}
+    if r.status_code != 200:
+        return {'ok': False,
+                'erro': f'HTTP {r.status_code}: {(r.text or "")[:200]}'}
+    try:
+        body = r.json() or {}
+    except ValueError:
+        return {'ok': False, 'erro': 'resposta sem JSON'}
+    status = (body.get('status') or '').lower()
+    charge = _extrair_charge(body)
+    charge_status = (charge.get('status') or '').lower()
+    return {
+        'ok': True,
+        'status': status,
+        'pago': status == 'paid' or charge_status == 'paid',
+        'charge_id': charge.get('id'),
+        'charge_status': charge_status,
+    }
