@@ -118,8 +118,7 @@ def test_remover_logo_limpa_appconfig(app):
     r = c.post('/admin/loja-online/logo/remover', follow_redirects=False)
     assert r.status_code == 302
     with app.app_context():
-        assert AppConfig.get('loja_logo_url') in (None, '', 'None') or True
-        # Garantia forte: get() devolve None (set(None) grava NULL)
+        # set(None) grava NULL → get() devolve None → header volta ao texto
         assert AppConfig.get('loja_logo_url') is None
 
 
