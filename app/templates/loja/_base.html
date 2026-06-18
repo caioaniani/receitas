@@ -52,8 +52,13 @@
     {% else %}
       <a href="{{ url_for('loja.entrar') }}">Entrar</a>
     {% endif %}
-    <a href="{{ url_for('loja.carrinho') }}" class="topo-carrinho">
-      Carrinho
+    <a href="{{ url_for('loja.carrinho') }}" class="topo-carrinho" aria-label="Carrinho">
+      <svg class="icon-bag" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+        <line x1="3" x2="21" y1="6" y2="6"/>
+        <path d="M16 10a4 4 0 0 1-8 0"/>
+      </svg>
+      <span class="topo-carrinho-label">Carrinho</span>
       <span id="cart-badge" class="cart-badge" style="display:none">0</span>
     </a>
   </nav>
