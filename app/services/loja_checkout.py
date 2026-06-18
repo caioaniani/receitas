@@ -430,10 +430,38 @@ def _salvar_ou_atualizar_endereco_principal(cliente, dados):
 
 
 def endereco_principal(cliente):
-    """Devolve o endereço marcado como `principal` do cliente, ou None."""
+    """Devolve o endereço marcado como `principal` do cliente, ou None.
+
+    Fallback: se ainda não tem `EnderecoCliente` salvo (cliente recém
+    cadastrado / pedidos antigos que rodaram como guest), usa o último
+    pedido de entrega como fonte — assim a segunda compra já vem
+    pré-preenchida sem precisar do cliente "passar" pelo auto-salvar."""
     if not cliente:
         return None
-    from app.models import EnderecoCliente
-    return (EnderecoCliente.query
-            .filter_by(cliente_id=cliente.id, principal=True)
-            .first())
+    from app.models import EnderecoCliente, PedidoOnline
+    salvo = (EnderecoCliente.query
+             .filter_by(cliente_id=cliente.id, principal=True)
+             .first())
+    if salvo:
+        return salvo
+    # Sem endereço salvo: monta um "endereço virtual" do último pedido de
+    # entrega. Apenas leitura — não persiste (auto-salva só roda no fim do
+    # próximo checkout).
+    ultimo = (PedidoOnline.query
+              .filter(PedidoOnline.cliente_id == cliente.id,
+                      PedidoOnline.modo_entrega != 'retirada',
+                      PedidoOnline.endereco_logradouro.isnot(None))
+              .order_by(PedidoOnline.criado_em.desc())
+              .first())
+    if not ultimo:
+        return None
+    return EnderecoCliente(
+        cliente_id=cliente.id,
+        cep=ultimo.endereco_cep,
+        logradouro=ultimo.endereco_logradouro,
+        numero=ultimo.endereco_numero,
+        complemento=ultimo.endereco_complemento,
+        bairro=ultimo.endereco_bairro,
+        cidade=ultimo.endereco_cidade,
+        uf=ultimo.endereco_uf,
+    )
