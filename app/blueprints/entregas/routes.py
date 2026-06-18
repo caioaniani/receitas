@@ -232,7 +232,10 @@ def api_painel():
     out = []
     for p in pedidos:
         code = p.get('code')
-        status = status_por_code.get(code, 'novo')
+        # Sem PainelPedidoStatus, usa o fallback do pedido (online deriva do
+        # PedidoOnline.status; VNDA/local não têm fallback → 'novo').
+        status = (status_por_code.get(code)
+                  or p.get('status_painel_fallback') or 'novo')
         out.append({
             'code': code,
             'destinatario': p.get('destinatario') or p.get('comprador') or 'Sem nome',
