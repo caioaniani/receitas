@@ -58,9 +58,18 @@ def test_debug_pagarme_nao_vaza_segredo(app):
     assert b'segredo_que_nao_pode_vazar' not in r.data
 
 
-def test_ambiente_desconhecido_quando_nao_bate(app):
-    """Chave que não tem prefixo sk_test_/sk_live_ vira 'desconhecido' —
-    cobre o caso do Pagar.me Stone novo (`sk_*` simples)."""
+def test_ambiente_chave_sk_simples_e_producao(app):
+    """Pagar.me Stone (padrão novo, confirmado 18/06/2026): chave começa
+    com `sk_` direto, sem `test_` ou `live_`. É produção — sandbox sempre
+    tem `_test_` explícito."""
+    from app.services import pagarme
+    with app.app_context():
+        app.config['PAGARME_API_KEY'] = 'sk_HASH_QUALQUER'
+        assert pagarme.ambiente() == 'producao'
+
+
+def test_ambiente_desconhecido_quando_nao_e_pagarme(app):
+    """Chave que não começa com `sk_` (= não é Pagar.me) → desconhecido."""
     from app.services import pagarme
     with app.app_context():
         app.config['PAGARME_API_KEY'] = 'qualquer_outro_prefixo'
