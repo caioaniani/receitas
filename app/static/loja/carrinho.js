@@ -184,6 +184,124 @@
     });
   }
 
+  // ── Drawer (bottom sheet) do carrinho ───────────────────────────────
+  // Permanente no _base.html, escondido por padrão. Abre quando o cliente
+  // adiciona o primeiro item OU clica no ícone do carrinho no header.
+
+  function drawerEl() { return document.getElementById('cart-drawer'); }
+  function drawerCorpo() { return document.getElementById('cart-drawer-corpo'); }
+
+  function renderDrawer() {
+    var corpo = drawerCorpo();
+    if (!corpo) return;   // página sem drawer (ex: confirmação)
+    var itens = Carrinho.ler();
+    if (!itens.length) {
+      corpo.innerHTML = '<div class="cart-drawer-vazio">' +
+        'Seu carrinho está vazio.</div>';
+    } else {
+      var html = '';
+      itens.forEach(function (it) {
+        var foto = it.imagem
+          ? '<img src="' + it.imagem + '" alt="">'
+          : '<div class="ph">🥐</div>';
+        html +=
+          '<div class="cart-drawer-linha" data-kind="' + it.kind +
+          '" data-id="' + it.id + '">' + foto +
+          '<div><div class="nome">' + escapeHtml(it.nome) + '</div>' +
+          '<div class="preco-un">' + fmtBRL(it.preco) + ' cada</div></div>' +
+          '<div class="stepper">' +
+          '<button type="button" data-acao="menos" aria-label="Diminuir">−</button>' +
+          '<div class="qtd">' + it.qtd + '</div>' +
+          '<button type="button" data-acao="mais" aria-label="Aumentar">+</button>' +
+          '</div></div>';
+      });
+      corpo.innerHTML = html;
+    }
+    var totEl = document.getElementById('cart-drawer-total-valor');
+    if (totEl) totEl.textContent = fmtBRL(Carrinho.total());
+  }
+
+  function abrirDrawer() {
+    var dr = drawerEl();
+    if (!dr) return;
+    renderDrawer();
+    dr.hidden = false;
+    // Próximo frame: força reflow antes de aplicar a classe pra a transição
+    // de translate rodar (sem isso o painel "aparece" sem deslizar).
+    requestAnimationFrame(function () {
+      dr.classList.add('aberto');
+      dr.setAttribute('aria-hidden', 'false');
+    });
+    document.body.style.overflow = 'hidden'; // evita scroll do fundo
+  }
+
+  function fecharDrawer() {
+    var dr = drawerEl();
+    if (!dr) return;
+    dr.classList.remove('aberto');
+    dr.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    // Espera a transição terminar antes de esconder (mantém animação).
+    setTimeout(function () {
+      if (!dr.classList.contains('aberto')) dr.hidden = true;
+    }, 320);
+  }
+
+  function ligarDrawer() {
+    var dr = drawerEl();
+    if (!dr) return;
+    // Fecha: overlay, X, "continuar comprando" — qualquer [data-acao="fechar"]
+    dr.addEventListener('click', function (e) {
+      var fechar = e.target.closest('[data-acao="fechar"]');
+      if (fechar) {
+        e.preventDefault();
+        fecharDrawer();
+        return;
+      }
+      // Steppers nas linhas
+      var btn = e.target.closest('.cart-drawer-linha button[data-acao]');
+      if (!btn) return;
+      var linha = btn.closest('.cart-drawer-linha');
+      var kind = linha.getAttribute('data-kind');
+      var id = linha.getAttribute('data-id');
+      var atual = Carrinho.qtdDe(kind, id);
+      var acao = btn.getAttribute('data-acao');
+      if (acao === 'mais') Carrinho.mudarQtd(kind, id, atual + 1);
+      else if (acao === 'menos') Carrinho.mudarQtd(kind, id, atual - 1);
+      renderDrawer();
+    });
+    // ESC fecha
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && dr.classList.contains('aberto')) {
+        fecharDrawer();
+      }
+    });
+    // Ícone do carrinho no header abre o drawer (em vez de navegar pra
+    // página dedicada — UX clássico de e-commerce).
+    var iconeCarrinho = document.querySelector('.topo-carrinho');
+    if (iconeCarrinho) {
+      iconeCarrinho.addEventListener('click', function (e) {
+        // Página dedicada /loja/carrinho continua existindo. Só abre o
+        // drawer se NÃO já estamos lá (senão fica circular).
+        if (window.location.pathname === '/loja/carrinho') return;
+        e.preventDefault();
+        abrirDrawer();
+      });
+    }
+  }
+
+  // Expõe pra testes/console + pra outros scripts disparem se quiserem.
+  window.Carrinho.abrirDrawer = abrirDrawer;
+  window.Carrinho.fecharDrawer = fecharDrawer;
+
+  // Re-renderiza o drawer toda vez que o carrinho muda (mantém em sincronia
+  // com qualquer alteração — stepper do card, página do produto, etc).
+  var _salvarOriginal = Carrinho.salvar.bind(Carrinho);
+  Carrinho.salvar = function (itens) {
+    _salvarOriginal(itens);
+    if (drawerEl() && !drawerEl().hidden) renderDrawer();
+  };
+
   // ── Wire dos botões "adicionar ao carrinho" (página de produto) ──────
   function ligarBotoesAdd() {
     var botoes = document.querySelectorAll('[data-add-carrinho]');
