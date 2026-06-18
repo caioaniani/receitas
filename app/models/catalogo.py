@@ -173,6 +173,9 @@ class Produto(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(150), nullable=False)
     categoria = db.Column(db.String(50))
+    # Ordem manual na vitrine (menor = mais cedo). NULL = vai pro fim
+    # alfabético. Mesmo padrão da Receita.
+    ordem_site = db.Column(db.Integer)
     descricao = db.Column(db.String(300))
     preco_atacado = db.Column(db.Float)
     preco_loja = db.Column(db.Float)
