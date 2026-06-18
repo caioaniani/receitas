@@ -146,33 +146,6 @@ a:hover { text-decoration: underline; }
   .topo-dropdown-menu { left: auto; right: 0; }
 }
 
-/* ── Hero ──────────────────────────────────────────────── */
-.hero {
-  /* Hero mais compacto no mobile pra deixar 4 produtos visíveis no scroll
-     inicial (decisão do dono 17/06/2026). Volta ao normal no desktop. */
-  padding: 24px 22px 16px;
-  max-width: 1080px;
-  margin: 0 auto;
-}
-.hero h1 {
-  font-size: 28px;
-  font-weight: 400;
-  line-height: 1.05;
-  margin: 0 0 8px;
-  font-family: 'Georgia', serif;
-}
-.hero p {
-  color: var(--texto-suave);
-  font-size: 14px;
-  max-width: 540px;
-  margin: 0;
-}
-@media (min-width: 600px) {
-  .hero { padding: 60px 22px 30px; }
-  .hero h1 { font-size: 44px; margin-bottom: 14px; line-height: 1.05; }
-  .hero p { font-size: 17px; }
-}
-
 /* ── Categorias ────────────────────────────────────────── */
 .categoria {
   padding: 20px 14px 36px;
