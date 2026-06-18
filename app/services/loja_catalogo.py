@@ -115,19 +115,19 @@ def _estoque_site_map():
     return mapa
 
 
-def produtos_disponiveis():
-    """Como `produtos_publicados()`, mas só os itens COM saldo > 0 na loja do
-    site. Regra do dono (18/06/2026): todo produto no site tem estoque
-    preenchido; saldo 0 (ou sem linha) = esgotado, some da vitrine.
+def anotar_esgotado(itens):
+    """Marca cada item da lista com `esgotado` (bool). Regra do dono
+    (18/06/2026): NADA some da vitrine — saldo 0 (ou sem linha de estoque na
+    loja do site) vira 'Esgotado' e não pode ser comprado. Cestas incluídas:
+    também precisam de estoque e também aparecem como Esgotado quando zeram.
 
-    NÃO substitui `produtos_publicados()` — a emissão de NF (`tiny_nf`)
-    precisa do catálogo CHEIO, porque a NF sai depois do pagamento, quando o
-    estoque já pode estar zerado."""
-    itens = produtos_publicados()
+    Loja do site não configurada → ninguém esgotado (fail-open). Devolve a
+    MESMA lista (anota in-place) pra encadear com produtos_publicados()."""
     mapa = _estoque_site_map()
-    if mapa is None:
-        return itens  # loja do site não configurada → fail-open
-    return [it for it in itens if mapa.get((it['kind'], it['id']), 0) > 0]
+    for it in itens:
+        it['esgotado'] = (False if mapa is None
+                          else mapa.get((it['kind'], it['id']), 0) <= 0)
+    return itens
 
 
 def tem_estoque_site(kind, item_id):
@@ -160,7 +160,7 @@ def itens_para_montar(excluir_item=None):
     referência (se passado)."""
     excluir_cats = {CATEGORIA_PERSONALIZADA.lower(), 'cestas'}
     out = []
-    for it in produtos_disponiveis():
+    for it in produtos_publicados():
         cat = (it.get('categoria') or '').strip().lower()
         if cat in excluir_cats:
             continue
@@ -168,7 +168,7 @@ def itens_para_montar(excluir_item=None):
                 and excluir_item.get('id') == it['id']:
             continue
         out.append(it)
-    return out
+    return anotar_esgotado(out)
 
 
 def por_categorias(itens):
@@ -200,7 +200,7 @@ def categorias_publicadas():
     O slug bate com o `id="cat-<slug>"` de cada seção na home, então o
     link `/loja/#cat-<slug>` pula direto pra categoria."""
     return [{'nome': cat, 'slug': _slugify(cat)}
-            for cat, _itens in por_categorias(produtos_disponiveis())]
+            for cat, _itens in por_categorias(produtos_publicados())]
 
 
 def por_id_publicado(kind, item_id):
