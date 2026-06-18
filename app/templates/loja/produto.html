@@ -68,4 +68,42 @@
   </div>
 
 </article>
+
+{% if personalizada and monte %}
+<section class="monte-cesta">
+  <div class="monte-cabecalho">
+    <h2>Monte sua cesta</h2>
+    <p>Escolha os itens que vão dentro da <strong>{{ item.nome }}</strong>.
+      Eles entram no mesmo pedido — você fecha tudo de uma vez no checkout.</p>
+  </div>
+  <div class="grid-produtos">
+    {% for it in monte %}
+    <div class="produto-cell">
+      <a class="card-produto" href="{{ it.href }}">
+        <div class="card-foto">
+          {% if it.imagem %}
+          <img src="{{ it.imagem }}" alt="{{ it.nome }}" loading="lazy">
+          {% else %}
+          <div class="card-foto-placeholder">🥐</div>
+          {% endif %}
+        </div>
+        <div class="card-corpo">
+          <h3 class="card-nome">{{ it.nome }}</h3>
+          {% if it.preco is not none %}
+          <div class="card-preco">R$ {{ '%.2f'|format(it.preco)|replace('.', ',') }}</div>
+          {% endif %}
+        </div>
+      </a>
+      {% if it.preco is not none %}
+      <div class="card-add"
+           data-kind="{{ it.kind }}" data-id="{{ it.id }}"
+           data-nome="{{ it.nome }}" data-preco="{{ it.preco }}"
+           data-categoria="{{ it.categoria }}" data-imagem="{{ it.imagem }}">
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
 {% endblock %}
