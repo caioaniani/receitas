@@ -9,10 +9,13 @@ Os 'objetos públicos' devolvidos por este service são DICTS simples (não
 ORM) — isso obriga a vitrine a só ler o que a gente expôs aqui, evitando
 vazar campo interno (custo, modo de preparo, etc.) por engano.
 """
+import logging
 import re
 import unicodedata
 
 from app.models import Produto, Receita
+
+logger = logging.getLogger(__name__)
 
 
 def _slugify(texto):
