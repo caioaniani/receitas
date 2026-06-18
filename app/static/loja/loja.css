@@ -60,16 +60,21 @@ a:hover { text-decoration: underline; }
 }
 .topo .logo:hover { text-decoration: none; }
 .topo .logo img {
+  /* max-* (sem height fixo) preserva o aspecto e cabe na caixa sem
+     distorcer nem estourar a largura no celular. */
   display: block;
-  height: 40px;
-  width: auto;
-  max-width: 200px;
+  max-height: 38px;
+  max-width: 130px;
+  width: auto; height: auto;
   object-fit: contain;
 }
 @media (min-width: 600px) {
-  .topo .logo img { height: 48px; max-width: 260px; }
+  .topo .logo img { max-height: 50px; max-width: 280px; }
 }
-.topo-nav { display: flex; gap: 18px; align-items: center; font-family: system-ui, sans-serif; font-size: 15px; }
+.topo { padding: 14px 16px; }
+@media (min-width: 600px) { .topo { padding: 18px 22px; } }
+.topo-nav { display: flex; gap: 14px; align-items: center; font-family: system-ui, sans-serif; font-size: 14px; }
+@media (min-width: 600px) { .topo-nav { gap: 20px; font-size: 15px; } }
 .topo-nav a { color: var(--texto); }
 .topo-nav a.disabled { opacity: .35; cursor: not-allowed; pointer-events: none; }
 
