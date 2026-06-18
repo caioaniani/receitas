@@ -324,7 +324,11 @@ def test_webhook_paid_idempotente(app):
         assert len(movs) == 1  # NÃO duplicou
 
 
-def test_webhook_refunded_estorna_estoque(app):
+def test_webhook_refunded_NAO_estorna_automaticamente(app):
+    """Estorno automático DESATIVADO (decisão do dono 18/06/2026): um
+    cancelamento em massa no gateway (bug/abuso, como já ocorreu no VNDA)
+    NÃO pode cancelar pedido nem devolver estoque por aqui. O webhook só
+    registra o evento; o estorno é sempre manual (`reembolsar_pedido`)."""
     from app.extensions import db
     from app.models import MovEstoqueLoja
     from app.services import loja_pagamento
@@ -346,17 +350,17 @@ def test_webhook_refunded_estorna_estoque(app):
              'data': {'id': 'or_r', 'code': ped.codigo}})
         db.session.refresh(el)
         assert el.quantidade == 8  # baixou 2
-        # Agora reembolso
-        loja_pagamento.processar_webhook(
+        # Webhook de estorno chega: NÃO deve mexer no pedido nem no estoque.
+        res = loja_pagamento.processar_webhook(
             {'id': 'evt_ref', 'type': 'charge.refunded',
              'data': {'id': 'or_r', 'code': ped.codigo}})
+        assert res.get('estorno_ignorado') == 'charge.refunded'
         db.session.refresh(ped)
         db.session.refresh(el)
-        assert ped.status == 'cancelado'
-        assert el.quantidade == 10  # devolveu
-        estornos = MovEstoqueLoja.query.filter_by(
-            tipo='venda_site_estorno').all()
-        assert len(estornos) == 1 and estornos[0].quantidade == -2
+        assert ped.status != 'cancelado'   # pedido intacto
+        assert el.quantidade == 8          # estoque NÃO foi devolvido
+        assert MovEstoqueLoja.query.filter_by(
+            tipo='venda_site_estorno').count() == 0
 
 
 # ── Rotas + webhook seguro ────────────────────────────────────────────
