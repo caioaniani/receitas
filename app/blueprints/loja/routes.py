@@ -24,10 +24,21 @@ def _ctx_checkout(erros=None, form=None):
 
     Datas viram min/max pro <input type="date"> (calendário). O range é
     contíguo (entregamos todo dia) e respeita o corte das 17h, então
-    [min, max] bate exatamente com o conjunto que o servidor valida."""
+    [min, max] bate exatamente com o conjunto que o servidor valida.
+
+    Quando o cliente está logado, os campos do PAGADOR vêm pré-preenchidos
+    com os dados da conta (form da requisição prevalece se tiver — não
+    sobrescreve o que o cliente acabou de digitar)."""
     from app.utils import agora
     datas = loja_checkout.datas_disponiveis('agendada')
     base = agora()
+    form = dict(form or {})
+    cli = loja_auth.cliente_atual()
+    if cli:
+        form.setdefault('nome', cli.nome or '')
+        form.setdefault('email', cli.email or '')
+        form.setdefault('telefone', cli.telefone or '')
+        form.setdefault('cpf', cli.cpf or '')
     return dict(
         em_teste=_em_teste(),
         lojas=loja_checkout.lojas_retirada(),
@@ -39,7 +50,7 @@ def _ctx_checkout(erros=None, form=None):
         hoje_iso=base.date().isoformat(),
         min_hora_hoje=base.hour + loja_checkout.LEAD_HORAS,
         express_ok=loja_checkout.express_disponivel(),
-        erros=erros, form=(form or {}),
+        erros=erros, form=form,
     )
 
 
