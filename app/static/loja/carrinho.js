@@ -295,7 +295,8 @@
     if (document.getElementById('limpar-carrinho')) {
       Carrinho.salvar([]);  // salvar() já atualiza o badge
     }
-    Carrinho.atualizarBadge();
+    ligarCardAdds();           // event delegation — registra UMA vez
+    Carrinho.atualizarBadge(); // renderiza cards iniciais
     ligarBotoesAdd();
     renderCarrinho();
   });
