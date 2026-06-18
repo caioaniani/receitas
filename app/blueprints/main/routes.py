@@ -2593,6 +2593,44 @@ def loja_online_pedido_cancelar(codigo):
     return redirect(url_for('main.loja_online_pedido_detalhe', codigo=codigo))
 
 
+# Transições válidas de status pra UI (admin). 'cancelado' tem rota própria
+# (cancelar) porque envolve reembolso/estorno; aqui só os avanços manuais.
+_STATUS_AVANCO = ('em_preparo', 'a_caminho', 'entregue')
+
+
+@main_bp.route('/admin/loja-online/pedidos/<codigo>/status', methods=['POST'])
+@owner_required
+def loja_online_pedido_status(codigo):
+    """Avança o status do pedido manualmente. Dispara e-mail transacional
+    quando entra em `a_caminho`."""
+    from flask import flash
+
+    from app.models import PedidoOnline
+    from app.services import email as email_svc
+    p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    novo = (request.form.get('novo_status') or '').strip()
+    if novo not in _STATUS_AVANCO:
+        flash(f'Status inválido: {novo}', 'danger')
+        return redirect(url_for('main.loja_online_pedido_detalhe',
+                                codigo=codigo))
+    if p.status in ('cancelado', 'entregue') and novo != p.status:
+        flash(f'Pedido {p.codigo} já está {p.status} — não muda.', 'warning')
+        return redirect(url_for('main.loja_online_pedido_detalhe',
+                                codigo=codigo))
+    transicionou_para_caminho = (novo == 'a_caminho' and p.status != 'a_caminho')
+    p.status = novo
+    db.session.commit()
+    if transicionou_para_caminho:
+        # E-mail "saiu pra entrega" — best-effort, não derruba o request.
+        try:
+            if email_svc.disponivel():
+                email_svc.enviar_pedido_a_caminho(p)
+        except Exception:  # noqa: BLE001
+            current_app.logger.exception('email a_caminho falhou')
+    flash(f'Pedido {p.codigo}: status atualizado para {novo}.', 'success')
+    return redirect(url_for('main.loja_online_pedido_detalhe', codigo=codigo))
+
+
 # ── Loja Online — Fase 5: mapeamento de SKU do Tiny (NF-e) ────────────────
 # Liga cada item publicado no site ao SKU dele no Tiny. Pré-requisito da
 # emissão de NF (o Tiny aplica o fiscal do cadastro do produto; nós só
