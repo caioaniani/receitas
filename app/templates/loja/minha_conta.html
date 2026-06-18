@@ -19,5 +19,26 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="btn-loja btn-loja-outline">Sair</button>
   </form>
+
+  <details class="checkout-bloco" style="margin-top:2rem">
+    <summary style="cursor:pointer;font-weight:600">Privacidade (LGPD)</summary>
+    <div style="margin-top:1rem">
+      <p class="small">Você pode baixar todos os seus dados ou excluir a conta a qualquer momento.</p>
+      <p>
+        <a class="btn-loja btn-loja-outline"
+           href="{{ url_for('loja.exportar_dados') }}">Baixar meus dados (JSON)</a>
+      </p>
+      <form method="POST" action="{{ url_for('loja.excluir_conta') }}"
+            onsubmit="return confirm('Tem certeza? Sua conta vai ser excluída e o histórico de pedidos anonimizado. Esta ação é irreversível.');"
+            style="margin-top:1rem">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="small">Para confirmar, digite EXCLUIR:
+          <input type="text" name="confirmar" required style="margin-top:.3rem">
+        </label>
+        <p><button type="submit" class="btn-loja"
+                   style="background:#a33;margin-top:.5rem">Excluir minha conta</button></p>
+      </form>
+    </div>
+  </details>
 </section>
 {% endblock %}
