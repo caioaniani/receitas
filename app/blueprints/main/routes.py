@@ -2750,7 +2750,9 @@ def debug_pagarme():
         configurado=pagarme.disponivel(),
         ambiente=pagarme.ambiente(),
         api_key_len=len((cfg.get('PAGARME_API_KEY') or '')),
+        api_key_prefixo=pagarme.prefixo_chave(),
         public_key_len=len((cfg.get('PAGARME_PUBLIC_KEY') or '')),
+        public_key_prefixo=pagarme.prefixo_public(),
         webhook_secret_set=bool((cfg.get('PAGARME_WEBHOOK_SECRET') or '').strip()),
         resultado=pagarme.validar_chave(),
     )
