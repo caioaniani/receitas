@@ -250,6 +250,7 @@ def api_painel():
             'status': status,            # novo|visto|pronto|entregue
             'novo': status == 'novo',    # mantido pra o alerta sonoro
             'lalamove': lala_por_code.get(code),
+            'pedido_online': bool(p.get('pedido_online')),  # loja própria
         })
 
     saldo = db.session.get(LalamoveSaldo, 1)
