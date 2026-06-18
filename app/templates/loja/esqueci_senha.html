@@ -1,0 +1,31 @@
+{% extends 'loja/_base.html' %}
+{% block title %}Esqueci minha senha — O Pão Padaria Artesanal{% endblock %}
+{% block content %}
+<section class="checkout-pagina" style="max-width:480px">
+  <h1>Esqueci minha senha</h1>
+
+  {% if enviado %}
+    <div class="checkout-bloco">
+      <p>Se houver uma conta com esse e-mail, mandamos um link
+        pra redefinir a senha. <strong>Confira sua caixa de entrada</strong>
+        (e o spam, por garantia). O link vale por 1 hora.</p>
+      <p class="small"><a href="{{ url_for('loja.entrar') }}">&larr; Voltar para entrar</a></p>
+    </div>
+  {% else %}
+    <p class="small">Informe o e-mail da sua conta — mandamos um link pra
+      definir uma nova senha.</p>
+    <form method="POST" action="{{ url_for('loja.esqueci_senha') }}" class="checkout-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="checkout-bloco">
+        <label>E-mail
+          <input type="email" name="email" required autocomplete="email">
+        </label>
+      </div>
+      <button type="submit" class="btn-loja">Enviar link</button>
+    </form>
+    <p class="small" style="margin-top:1.5rem">
+      <a href="{{ url_for('loja.entrar') }}">&larr; Voltar para entrar</a>
+    </p>
+  {% endif %}
+</section>
+{% endblock %}
