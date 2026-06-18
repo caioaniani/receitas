@@ -1,0 +1,33 @@
+{% extends 'loja/_base.html' %}
+{% block title %}Redefinir senha — O Pão Padaria Artesanal{% endblock %}
+{% block content %}
+<section class="checkout-pagina" style="max-width:480px">
+  <h1>Redefinir senha</h1>
+
+  {% if invalido %}
+    <div class="checkout-erros">
+      <strong>Link expirado ou inválido.</strong>
+      Peça um <a href="{{ url_for('loja.esqueci_senha') }}">novo link</a>.
+    </div>
+  {% else %}
+    {% if erro %}
+      <div class="checkout-erros"><strong>{{ erro }}</strong></div>
+    {% endif %}
+    <form method="POST" action="{{ url_for('loja.redefinir_senha', token=token) }}"
+          class="checkout-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="checkout-bloco">
+        <label>Nova senha (mínimo 8 caracteres)
+          <input type="password" name="senha" required minlength="8"
+                 autocomplete="new-password">
+        </label>
+        <label>Confirmar nova senha
+          <input type="password" name="confirmar_senha" required minlength="8"
+                 autocomplete="new-password">
+        </label>
+      </div>
+      <button type="submit" class="btn-loja">Definir nova senha</button>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}
