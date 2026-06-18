@@ -54,6 +54,21 @@ def test_seed_cestas_nao_clobra_personalizadas(app):
         assert p.categoria == 'Cestas Personalizadas'  # preservada
 
 
+def test_seed_cestas_preserva_categoria_manual_do_dono(app):
+    """REGRESSÃO (18/06/2026): o dono move uma cesta (com composição) pra
+    'Acompanhamentos' na curadoria. O seed do startup NÃO pode reverter pra
+    'Cestas' — a curadoria é a fonte de verdade. (Antes, o seed clobrava
+    qualquer categoria sem 'cesta' no nome.)"""
+    from app.extensions import db
+    from app.seed import seed_cestas_categoria
+    with app.app_context():
+        p = _cesta(db, 'Iogurte Artesanal 600ml', categoria='Acompanhamentos')
+        n = seed_cestas_categoria()
+        db.session.refresh(p)
+        assert p.categoria == 'Acompanhamentos'  # NÃO virou 'Cestas'
+        assert n == 0  # nada foi alterado
+
+
 def test_seed_cestas_ignora_produto_sem_composicao(app):
     from app.extensions import db
     from app.models import Produto
