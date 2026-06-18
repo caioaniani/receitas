@@ -1,8 +1,9 @@
-"""Esconder produtos sem estoque da vitrine (18/06/2026).
+"""Estoque na vitrine: NADA some, esgotado aparece com selo (18/06/2026).
 
 Regra do dono: todo produto no site tem estoque preenchido; saldo 0 (ou sem
-linha de EstoqueLoja na loja do site) = esgotado, some da vitrine. A emissão
-de NF e o catálogo interno (`produtos_publicados`) continuam vendo TUDO —
+linha de EstoqueLoja na loja do site) = ESGOTADO — aparece na vitrine com
+selo "Esgotado" e sem botão de comprar, mas NÃO some. Cestas incluídas.
+A emissão de NF e o catálogo interno (`produtos_publicados`) veem TUDO,
 porque a NF sai depois do pagamento, com o estoque já podendo estar zerado.
 """
 
@@ -48,7 +49,7 @@ def _estoque(db, loja, produto, qtd):
     return el
 
 
-def test_produtos_disponiveis_esconde_sem_estoque(app):
+def test_anotar_esgotado_marca_zero_e_sem_linha(app):
     from app.extensions import db
     from app.services import loja_catalogo
     with app.app_context():
@@ -58,24 +59,26 @@ def test_produtos_disponiveis_esconde_sem_estoque(app):
         _produto(db, 'Geleia sem linha')  # sem EstoqueLoja
         _estoque(db, loja, com, 5)
         _estoque(db, loja, zero, 0)
-        nomes = [i['nome'] for i in loja_catalogo.produtos_disponiveis()]
-        assert 'Geleia com saldo' in nomes
-        assert 'Geleia zerada' not in nomes      # saldo 0 → some
-        assert 'Geleia sem linha' not in nomes   # sem linha → some
-        # A base NÃO filtra (NF/catálogo interno precisa do catálogo cheio).
-        nomes_base = {i['nome'] for i in loja_catalogo.produtos_publicados()}
+        itens = loja_catalogo.anotar_esgotado(
+            loja_catalogo.produtos_publicados())
+        por_nome = {i['nome']: i for i in itens}
+        # NADA some — os 3 continuam na lista
         assert {'Geleia com saldo', 'Geleia zerada',
-                'Geleia sem linha'} <= nomes_base
+                'Geleia sem linha'} <= set(por_nome)
+        assert por_nome['Geleia com saldo']['esgotado'] is False
+        assert por_nome['Geleia zerada']['esgotado'] is True   # saldo 0
+        assert por_nome['Geleia sem linha']['esgotado'] is True  # sem linha
 
 
-def test_produtos_disponiveis_fail_open_sem_loja_site(app):
-    """Sem loja do site configurada → NÃO filtra (não esvazia a vitrine)."""
+def test_anotar_esgotado_fail_open_sem_loja_site(app):
+    """Sem loja do site configurada → ninguém esgotado (fail-open)."""
     from app.extensions import db
     from app.services import loja_catalogo
     with app.app_context():
         _produto(db, 'Pao sem loja site')
-        nomes = [i['nome'] for i in loja_catalogo.produtos_disponiveis()]
-        assert 'Pao sem loja site' in nomes
+        itens = loja_catalogo.anotar_esgotado(
+            loja_catalogo.produtos_publicados())
+        assert all(i['esgotado'] is False for i in itens)
 
 
 def test_tem_estoque_site(app):
@@ -89,11 +92,10 @@ def test_tem_estoque_site(app):
         _estoque(db, loja, zero, 0)
         assert loja_catalogo.tem_estoque_site('produto', com.id) is True
         assert loja_catalogo.tem_estoque_site('produto', zero.id) is False
-        # item sem linha → False
         assert loja_catalogo.tem_estoque_site('produto', 999999) is False
 
 
-def test_pagina_produto_404_se_esgotado(app):
+def test_pagina_produto_mostra_esgotado_sem_404(app):
     from app.extensions import db
     from app.services import loja_catalogo
     with app.app_context():
@@ -106,9 +108,27 @@ def test_pagina_produto_404_se_esgotado(app):
                         if i['nome'] == 'Cesta com saldo')
         href_zero = next(i['href'] for i in loja_catalogo.produtos_publicados()
                          if i['nome'] == 'Cesta zerada')
-    c = _owner(app)  # logado → passa o gate; 404 vem do estoque, não do gate
-    assert c.get(href_com).status_code == 200
-    assert c.get(href_zero).status_code == 404
+    c = _owner(app)  # logado → passa o gate
+    r_com = c.get(href_com)
+    assert r_com.status_code == 200
+    assert b'Adicionar ao carrinho' in r_com.data
+    r_zero = c.get(href_zero)
+    assert r_zero.status_code == 200          # NÃO some (não é 404)
+    assert b'selo-esgotado' in r_zero.data    # tem o selo
+    assert b'Adicionar ao carrinho' not in r_zero.data  # sem botão de comprar
+
+
+def test_home_mostra_item_esgotado_com_selo(app):
+    from app.extensions import db
+    with app.app_context():
+        loja = _site_loja(db)
+        zero = _produto(db, 'Box zerado na home')
+        _estoque(db, loja, zero, 0)
+    c = _owner(app)
+    r = c.get('/loja/')
+    assert r.status_code == 200
+    assert 'Box zerado na home'.encode() in r.data  # aparece
+    assert b'selo-esgotado' in r.data               # com selo
 
 
 def test_checkout_remove_item_esgotado(app):
@@ -126,7 +146,7 @@ def test_checkout_remove_item_esgotado(app):
         ])
         nomes = [i['nome'] for i in itens]
         assert 'Box com saldo' in nomes
-        assert 'Box esgotado' not in nomes
+        assert 'Box esgotado' not in nomes      # esgotado não entra no pedido
         assert any('esgotou' in a for a in avisos)
 
 
@@ -135,14 +155,14 @@ def test_diagnostico_estoque_vitrine(app):
     with app.app_context():
         loja = _site_loja(db)
         com = _produto(db, 'Visivel')
-        _produto(db, 'Escondido sem linha')
+        _produto(db, 'Esgotado sem linha')
         _estoque(db, loja, com, 7)
     c = _owner(app)
     r = c.get('/admin/loja-online/estoque-vitrine')
     assert r.status_code == 200
     j = r.get_json()
     assert j['loja_site'] == 'Loja do Site'
-    assert j['aparecem'] == 1
-    assert j['escondidos'] == 1
-    nomes_escondidos = [i['nome'] for i in j['itens_escondidos']]
-    assert 'Escondido sem linha' in nomes_escondidos
+    assert j['em_estoque'] == 1
+    assert j['esgotados'] == 1
+    nomes_esgotados = [i['nome'] for i in j['itens_esgotados']]
+    assert 'Esgotado sem linha' in nomes_esgotados
