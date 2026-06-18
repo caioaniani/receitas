@@ -178,7 +178,8 @@ a:hover { text-decoration: underline; }
   padding: 20px 14px 36px;
   max-width: 1080px;
   margin: 0 auto;
-  scroll-margin-top: 64px;  /* offset pro chip sticky não cobrir o título */
+  /* offset pro header sticky não cobrir o título quando navega pela âncora */
+  scroll-margin-top: 78px;
 }
 .categoria-titulo {
   font-size: 13px;
