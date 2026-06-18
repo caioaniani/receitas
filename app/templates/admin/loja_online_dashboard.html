@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block title %}Loja Online — Visão geral{% endblock %}
+
+{% set badge = {
+  'aguardando_pagamento': 'bg-warning text-dark',
+  'pago': 'bg-info text-dark',
+  'em_preparo': 'bg-secondary',
+  'a_caminho': 'bg-primary',
+  'entregue': 'bg-success',
+  'cancelado': 'bg-danger',
+} %}
+
+{% macro card_janela(titulo, dados) %}
+<div class="col-12 col-md-4">
+  <div class="card h-100">
+    <div class="card-body">
+      <p class="text-muted small mb-1">{{ titulo }}</p>
+      <h2 class="mb-0 fw-bold" style="font-size:1.8rem">
+        R$ {{ '%.2f'|format(dados.valor)|replace('.', ',') }}
+      </h2>
+      <p class="text-muted small mb-0 mt-1">{{ dados.count }} pedido{{ 's' if dados.count != 1 }}</p>
+    </div>
+  </div>
+</div>
+{% endmacro %}
+
+{% block content %}
+<h1 class="page-title"><span aria-hidden="true">🥐</span> Loja Online</h1>
+<p class="text-muted">Faturamento de pedidos pagos (inclui em preparo, a caminho e entregues; exclui cancelados).</p>
+
+<div class="row g-3 mb-4">
+  {{ card_janela('Hoje', janelas.hoje) }}
+  {{ card_janela('Esta semana', janelas.semana) }}
+  {{ card_janela('Este mês', janelas.mes) }}
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-md-5">
+    <div class="card">
+      <div class="card-header py-2 fw-bold">Pedidos por status</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0 align-middle">
+          <tbody>
+            {% for chave, rotulo in labels.items() %}
+            <tr>
+              <td><span class="badge {{ badge.get(chave, 'bg-secondary') }}">{{ rotulo }}</span></td>
+              <td class="text-end fw-bold">{{ contagens.get(chave, 0) }}</td>
+              <td class="text-end" style="width:60px">
+                {% if contagens.get(chave) %}
+                <a href="{{ url_for('main.loja_online_pedidos', status=chave) }}"
+                   class="btn btn-sm btn-outline-secondary">Ver</a>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-md-7">
+    <div class="card">
+      <div class="card-header py-2 fw-bold d-flex justify-content-between align-items-center">
+        <span>Fila do admin (precisam de ação)</span>
+        <a href="{{ url_for('main.loja_online_pedidos') }}" class="btn btn-sm btn-outline-secondary">
+          Todos &rarr;
+        </a>
+      </div>
+      <div class="card-body p-0">
+        {% if fila %}
+        <table class="table table-sm mb-0 align-middle">
+          <thead class="table-light">
+            <tr><th>Pedido</th><th>Entrega</th><th>Status</th><th class="text-end">Total</th></tr>
+          </thead>
+          <tbody>
+            {% for p in fila %}
+            <tr>
+              <td><a href="{{ url_for('main.loja_online_pedido_detalhe', codigo=p.codigo) }}">
+                <code>{{ p.codigo }}</code></a></td>
+              <td class="small">
+                {% if p.data_entrega %}{{ p.data_entrega.strftime('%d/%m') }}
+                  {% if p.janela_entrega %}<br><span class="text-muted">{{ p.janela_entrega }}</span>{% endif %}
+                {% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+              <td><span class="badge {{ badge.get(p.status, 'bg-secondary') }}">
+                {{ labels.get(p.status, p.status) }}</span></td>
+              <td class="text-end fw-bold">R$ {{ '%.2f'|format(p.valor_total)|replace('.', ',') }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted small p-3 mb-0">Tudo em dia — nenhum pedido na fila.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
