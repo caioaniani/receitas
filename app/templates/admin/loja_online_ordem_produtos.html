@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block title %}Ordem dos produtos — Loja Online{% endblock %}
+
+{% block content %}
+<style>
+  .grupo-cat { margin-bottom: 32px; }
+  .grupo-cat h2 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: 2px;
+    color: #6c757d; font-weight: 600;
+    margin: 0 0 12px; padding-bottom: 8px;
+    border-bottom: 1px solid #dee2e6;
+  }
+  .prod-list { list-style: none; padding: 0; margin: 0; max-width: 720px; }
+  .prod-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; margin: 0 0 6px;
+    background: #fff; border: 1px solid #dee2e6; border-radius: 8px;
+    cursor: grab; user-select: none;
+    transition: box-shadow .15s ease, background .15s ease;
+    touch-action: none;
+  }
+  .prod-row:hover { background: #f8f9fa; }
+  .prod-row.sortable-dragging {
+    box-shadow: 0 8px 22px rgba(0,0,0,.18);
+    background: #fff8e1;
+  }
+  .prod-row .drag-handle { color: #adb5bd; font-size: 20px; line-height: 1; }
+  .prod-row img {
+    width: 44px; height: 44px; object-fit: cover; border-radius: 4px;
+    background: #efe7da;
+  }
+  .prod-row .ph { width: 44px; height: 44px; display: flex; align-items: center;
+    justify-content: center; background: #efe7da; border-radius: 4px; font-size: 22px; opacity: .4; }
+  .prod-row .nome { flex: 1; font-weight: 500; }
+  .prod-row .preco { color: #b06022; font-weight: 600; font-size: 13px; }
+  .prod-row .pos { color: #6c757d; font-size: 11px; min-width: 22px; text-align: right;
+    font-variant-numeric: tabular-nums; }
+  .save-pill {
+    position: fixed; bottom: 24px; right: 24px;
+    background: #1c7c3a; color: #fff;
+    padding: 10px 16px; border-radius: 999px;
+    font-size: 13px; font-weight: 600;
+    box-shadow: 0 6px 20px rgba(0,0,0,.18);
+    opacity: 0; pointer-events: none;
+    transition: opacity .2s ease;
+    z-index: 200;
+  }
+  .save-pill.on { opacity: 1; }
+  .save-pill.error { background: #c92a2a; }
+</style>
+
+<h1 class="page-title"><span aria-hidden="true">🥐</span> Ordem dos produtos</h1>
+<p class="text-muted">
+  Arraste pra reordenar produtos dentro de cada categoria.
+  Salva sozinho ao soltar. A ordem é <strong>de cima pra baixo</strong>.
+</p>
+
+<div class="mb-3 d-flex gap-2 flex-wrap">
+  <a href="{{ url_for('main.loja_online_dashboard') }}" class="btn btn-sm btn-outline-secondary">&larr; Visão geral</a>
+  <a href="{{ url_for('main.loja_online_categorias') }}" class="btn btn-sm btn-outline-secondary">Ordem das categorias</a>
+</div>
+
+{% if not grupos %}
+<div class="alert alert-light">Nenhum produto publicado.</div>
+{% endif %}
+
+{% for cat, itens in grupos %}
+<div class="grupo-cat">
+  <h2>{{ cat }}</h2>
+  <ul class="prod-list" data-categoria="{{ cat }}">
+    {% for it in itens %}
+    <li class="prod-row" data-id="{{ it.kind }}:{{ it.id }}" data-tipo="{{ it.kind }}" data-pid="{{ it.id }}">
+      <span class="drag-handle">≡</span>
+      {% if it.imagem %}
+      <img src="{{ it.imagem }}" alt="">
+      {% else %}
+      <div class="ph">🥐</div>
+      {% endif %}
+      <span class="nome">{{ it.nome }}</span>
+      {% if it.preco %}
+      <span class="preco">R$ {{ '%.2f'|format(it.preco)|replace('.', ',') }}</span>
+      {% endif %}
+      <span class="pos" data-pos>{{ loop.index }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endfor %}
+
+<div id="save-pill" class="save-pill">Salvando…</div>
+
+<script src="{{ url_for('static', filename='admin/sortable.js') }}"></script>
+<script>
+(function() {
+  var CSRF = "{{ csrf_token() }}";
+  var pill = document.getElementById('save-pill');
+
+  function mostrarPill(msg, erro) {
+    pill.textContent = msg;
+    pill.classList.toggle('error', !!erro);
+    pill.classList.add('on');
+    clearTimeout(pill._t);
+    pill._t = setTimeout(function() { pill.classList.remove('on'); }, 1500);
+  }
+
+  document.querySelectorAll('.prod-list').forEach(function(lista) {
+    sortable(lista, {
+      onSort: function() {
+        // Recalcula posições visíveis
+        lista.querySelectorAll('[data-pos]').forEach(function(el, i) {
+          el.textContent = i + 1;
+        });
+        // Monta payload
+        var itens = [];
+        lista.querySelectorAll('.prod-row').forEach(function(row) {
+          itens.push({
+            tipo: row.dataset.tipo,
+            id: parseInt(row.dataset.pid, 10)
+          });
+        });
+        mostrarPill('Salvando…');
+        fetch('/admin/loja-online/produtos/ordem', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+          body: JSON.stringify({ itens: itens })
+        }).then(function(r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        }).then(function(d) {
+          if (d.ok) mostrarPill('✓ Ordem salva');
+          else throw new Error('erro');
+        }).catch(function() {
+          mostrarPill('Erro ao salvar', true);
+        });
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}
