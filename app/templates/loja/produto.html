@@ -10,6 +10,7 @@
 <article class="produto">
 
   <div class="produto-foto">
+    {% if item.esgotado %}<span class="selo-esgotado grande">Esgotado</span>{% endif %}
     {% if item.imagem %}
     <img src="{{ item.imagem }}" alt="{{ item.nome }}">
     {% else %}
