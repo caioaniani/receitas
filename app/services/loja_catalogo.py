@@ -87,17 +87,24 @@ def produtos_publicados():
 
 
 def por_categorias(itens):
-    """Agrupa lista de itens publicados por categoria (mantém a ordem de
-    primeira aparição). Pula categorias vazias. Pra o template iterar."""
+    """Agrupa lista de itens publicados por categoria.
+
+    A ORDEM dos grupos vem da tabela `CategoriaSite` (configurável pelo
+    admin). Categorias sem linha em CategoriaSite vão pro fim, em ordem
+    alfabética. Dentro de cada grupo, mantém a ordem que veio em `itens`
+    (já vem ordenada por `ordem_site` ASC, nome ASC)."""
+    from app.models import CategoriaSite
+    pesos = {c.nome: c.ordem for c in CategoriaSite.query.all()}
     grupos = {}
-    ordem = []
     for it in itens:
         cat = it.get('categoria') or 'Outros'
-        if cat not in grupos:
-            grupos[cat] = []
-            ordem.append(cat)
-        grupos[cat].append(it)
-    return [(cat, grupos[cat]) for cat in ordem if grupos[cat]]
+        grupos.setdefault(cat, []).append(it)
+
+    def chave(cat):
+        # (peso explícito, alfabético). Sem peso → infinito, vai pro fim.
+        return (pesos.get(cat, 10**9), cat.lower())
+    cats_ord = sorted(grupos.keys(), key=chave)
+    return [(cat, grupos[cat]) for cat in cats_ord if grupos[cat]]
 
 
 def por_id_publicado(kind, item_id):
