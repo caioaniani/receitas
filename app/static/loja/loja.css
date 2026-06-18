@@ -198,9 +198,9 @@ a:hover { text-decoration: underline; }
 
 /* ── Navegação de categorias (chips sticky) ─────────────── */
 .cat-nav {
-  position: sticky;
-  top: 0;
-  z-index: 20;
+  /* Antes era sticky, mas o HEADER virou sticky (18/06/2026) e o
+     dropdown "Produtos ▾" dá acesso às categorias de qualquer página —
+     então os chips podem rolar com o conteúdo normalmente, sem empilhar. */
   background: var(--bg);
   border-bottom: 1px solid var(--linha);
   padding: 12px 14px;
