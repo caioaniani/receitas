@@ -74,10 +74,27 @@
       Ainda não pagou?
       <a href="{{ url_for('loja.pedido_pagamento', codigo=pedido.codigo) }}">
         Ir para o pagamento</a> (Pix ou cartão).</p>
+    {% elif pedido.status == 'em_preparo' %}
+    <p><strong>Em preparo.</strong> A equipe está preparando seu pedido.</p>
+    {% elif pedido.status == 'a_caminho' %}
+    <p><strong>🚚 A caminho!</strong> Seu pedido saiu pra entrega.</p>
+    {% elif pedido.status == 'entregue' %}
+    <p><strong>✓ Entregue.</strong> Esperamos que tenha gostado!</p>
     {% else %}
     <p>Status atual: <strong>{{ pedido.status }}</strong>.</p>
     {% endif %}
   </div>
+
+  {% if pedido.nf_emitida_em %}
+  <div class="checkout-bloco">
+    <h2>Nota fiscal</h2>
+    <p>NF emitida em {{ pedido.nf_emitida_em.strftime('%d/%m/%Y %H:%M') }}.</p>
+    <a class="btn-loja" target="_blank" rel="noopener"
+       href="{{ url_for('loja.pedido_danfe', codigo=pedido.codigo) }}">
+      Ver nota fiscal (PDF)
+    </a>
+  </div>
+  {% endif %}
 
   <a href="{{ url_for('loja.home') }}" class="btn-loja">Voltar à loja</a>
 </section>
