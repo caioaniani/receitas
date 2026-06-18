@@ -227,6 +227,31 @@ def test_home_secao_usa_slug_no_id(app, monkeypatch):
     assert b'href="#cat-paes"' in r.data
 
 
+def test_header_carrinho_tem_icone_sacola(app, monkeypatch):
+    """O carrinho no header tem ícone SVG (não só texto)."""
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    c = app.test_client()
+    r = c.get('/loja/')
+    assert r.status_code == 200
+    assert b'class="icon-bag"' in r.data
+    # Mantém o texto também (visível no desktop, escondido no mobile via CSS)
+    assert b'topo-carrinho-label' in r.data
+    # Badge continua presente (oculto até ter item)
+    assert b'id="cart-badge"' in r.data
+
+
+def test_header_sticky_e_scroll_listener_no_html(app, monkeypatch):
+    """O header da loja é sticky e tem o handler JS pra adicionar `.rolado`
+    quando rolar (visual de elevação)."""
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    c = app.test_client()
+    r = c.get('/loja/')
+    body = r.data
+    # Marcador do listener (sem rodar o CSS no pytest, validamos o hook)
+    assert b"classList.toggle('rolado'" in body
+    assert b'addEventListener(\'scroll\'' in body
+
+
 def test_anchor_dropdown_bate_com_secao_home(app, monkeypatch):
     """Mesma categoria → MESMO slug no dropdown (#cat-X) e na seção
     (id=cat-X). Trava regressão de divergência de slug."""
