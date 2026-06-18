@@ -2377,6 +2377,7 @@ def loja_online_catalogo():
         item = {
             'tipo': 'receita', 'id': r.id, 'nome': r.nome,
             'categoria': r.categoria or '',
+            'ordem_site': r.ordem_site,
             'preco_site': r.preco_site,
             'imagem': r.imagem_dropbox_url or r.imagem_url,
             'no_site': tem_foto and tem_preco,
@@ -2390,6 +2391,7 @@ def loja_online_catalogo():
         item = {
             'tipo': 'produto', 'id': p.id, 'nome': p.nome,
             'categoria': p.categoria or '(cesta/kit)',
+            'ordem_site': p.ordem_site,
             'preco_site': p.preco_site,
             'imagem': p.imagem_dropbox_url or p.imagem_url,
             'no_site': tem_foto and tem_preco,
