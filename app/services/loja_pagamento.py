@@ -4,13 +4,20 @@ Faz a ponte entre o PedidoOnline (Fase 3) e o serviço pagarme.py:
 - `iniciar_pix(pedido)` / `iniciar_cartao(pedido, token, parcelas)`:
   cria um `PagamentoOnline` e dispara o Order no Pagar.me.
 - `processar_webhook(evento)`: idempotente. 'order.paid'/'charge.paid'
-  → marca pago + baixa estoque (`venda_site`). 'charge.refunded' /
-  'order.canceled' → estorna pedido + estoca de volta (`venda_site_estorno`).
+  → marca pago + baixa estoque (`venda_site`). Eventos de estorno
+  ('charge.refunded' / 'order.canceled' / ...) são REGISTRADOS para
+  auditoria mas NÃO executam estorno automático (ver abaixo).
 
 DECISÕES DE DINHEIRO (não desviar sem perguntar — CLAUDE.md peso especial):
 - Pagar.me usa CENTAVOS; `pagarme._centavos` é o único conversor.
 - Baixa de estoque acontece SÓ pelo webhook 'paid'; nunca no retorno do
   checkout. Reentrega do mesmo evento é absorvida por `PagarmeEvento`.
+- ESTORNO AUTOMÁTICO DESATIVADO (decisão do dono 18/06/2026): o VNDA já
+  sofreu cancelamento em massa no gateway (bug/abuso). Por isso o webhook
+  de estorno NÃO cancela pedido nem devolve estoque — só loga. O reembolso
+  é SEMPRE manual via `reembolsar_pedido` (botão no admin), deliberado e
+  individual. `_marcar_estornado` continua existindo, mas só esse caminho
+  manual o aciona.
 - Loja de origem: a configurada em `AppConfig.loja_site_estoque_id`, com
   fallback pra mesma loja onde o VNDA baixa hoje (mantém a paridade).
 - Item sem FK (`receita_id`/`produto_id`) é pulado e logado — não erra
