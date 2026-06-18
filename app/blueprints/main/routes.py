@@ -2860,10 +2860,9 @@ _STATUS_PEDIDO_ONLINE_LABEL = {
 @owner_required
 def loja_online_estoque_vitrine():
     """Diagnóstico (owner): pra cada produto publicado no site, mostra o
-    saldo na loja do site e se ele APARECE ou some da vitrine pela regra de
-    estoque (saldo 0 ou sem linha = some). Use pra preencher o estoque em
-    `/pedidos/estoque-loja` antes de abrir — assim a vitrine não fica vazia
-    por engano."""
+    saldo na loja do site e se está EM ESTOQUE ou ESGOTADO (saldo 0 ou sem
+    linha = esgotado). Nada some da vitrine — esgotado aparece com selo e sem
+    botão de comprar. Use pra preencher estoque em `/pedidos/estoque-loja`."""
     from app.services import loja_catalogo
     from app.services.loja_pagamento import loja_origem_site
     loja = loja_origem_site()
@@ -2874,15 +2873,15 @@ def loja_online_estoque_vitrine():
         itens.append({
             'nome': it['nome'], 'kind': it['kind'], 'id': it['id'],
             'categoria': it['categoria'], 'saldo': saldo,
-            'aparece': bool(saldo and saldo > 0),
+            'esgotado': not (saldo and saldo > 0),
         })
-    escondidos = [i for i in itens if not i['aparece']]
+    esgotados = [i for i in itens if i['esgotado']]
     return jsonify(
         loja_site=(loja.nome if loja else None),
         total_publicados=len(itens),
-        aparecem=len(itens) - len(escondidos),
-        escondidos=len(escondidos),
-        itens_escondidos=escondidos,
+        em_estoque=len(itens) - len(esgotados),
+        esgotados=len(esgotados),
+        itens_esgotados=esgotados,
         itens=itens,
     )
 
