@@ -170,6 +170,60 @@ a:hover { text-decoration: underline; }
   overflow: hidden;
   transition: transform .15s ease, box-shadow .15s ease;
 }
+
+/* ── Ação no card (Adicionar / stepper) ─────────────────── */
+.card-add {
+  margin-top: 8px;
+}
+.card-add button {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--texto);
+  color: #fff;
+  border: 0;
+  border-radius: 4px;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.card-add button:hover { background: var(--acento); }
+.card-add .stepper {
+  display: grid;
+  grid-template-columns: 38px 1fr 38px;
+  align-items: stretch;
+  border: 1px solid var(--texto);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #fff;
+}
+.card-add .stepper button {
+  background: var(--texto);
+  color: #fff;
+  border-radius: 0;
+  text-transform: none;
+  font-size: 18px;
+  padding: 0;
+  width: 38px;
+  line-height: 38px;
+}
+.card-add .stepper button:hover { background: var(--acento); }
+.card-add .stepper .qtd {
+  display: flex; align-items: center; justify-content: center;
+  font-family: system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--texto);
+  background: #fff;
+}
+@media (min-width: 600px) {
+  .card-add button { padding: 12px 14px; font-size: 14px; }
+  .card-add .stepper { grid-template-columns: 44px 1fr 44px; }
+  .card-add .stepper button { width: 44px; line-height: 44px; font-size: 20px; }
+}
 .card-produto:hover {
   text-decoration: none;
   transform: translateY(-2px);
