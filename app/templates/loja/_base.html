@@ -23,9 +23,29 @@
 {% endif %}
 
 <header class="topo">
-  <a href="{{ url_for('loja.home') }}" class="logo">O Pão<span>·</span>Padaria Artesanal</a>
+  <a href="{{ url_for('loja.home') }}" class="logo">
+    {% if loja_logo_url %}
+      <img src="{{ loja_logo_url }}" alt="O Pão · Padaria Artesanal">
+    {% else %}
+      O Pão<span>·</span>Padaria Artesanal
+    {% endif %}
+  </a>
   <nav class="topo-nav">
+    {% if categorias_loja %}
+    <div class="topo-dropdown" id="dd-produtos">
+      <button type="button" class="topo-dropdown-btn" aria-haspopup="true" aria-expanded="false">
+        Produtos <span class="seta">▾</span>
+      </button>
+      <div class="topo-dropdown-menu" role="menu">
+        <a href="{{ url_for('loja.home') }}" role="menuitem">Todos os produtos</a>
+        {% for c in categorias_loja %}
+        <a href="{{ url_for('loja.home') }}#cat-{{ c.slug }}" role="menuitem">{{ c.nome }}</a>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
     <a href="{{ url_for('loja.home') }}">Produtos</a>
+    {% endif %}
     {% if cliente_atual %}
       <a href="{{ url_for('loja.minha_conta') }}">Minha conta</a>
     {% else %}
@@ -37,6 +57,33 @@
     </a>
   </nav>
 </header>
+
+<script>
+  // Dropdown "Produtos": clique abre/fecha; clicar fora fecha; selecionar
+  // categoria fecha (e o link navega pro #cat-<slug> da home).
+  (function () {
+    var dd = document.getElementById('dd-produtos');
+    if (!dd) return;
+    var btn = dd.querySelector('.topo-dropdown-btn');
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var aberto = dd.classList.toggle('aberto');
+      btn.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+    });
+    document.addEventListener('click', function (e) {
+      if (!dd.contains(e.target)) {
+        dd.classList.remove('aberto');
+        btn.setAttribute('aria-expanded', 'false');
+      }
+    });
+    dd.querySelectorAll('.topo-dropdown-menu a').forEach(function (a) {
+      a.addEventListener('click', function () {
+        dd.classList.remove('aberto');
+        btn.setAttribute('aria-expanded', 'false');
+      });
+    });
+  })();
+</script>
 
 <main>
   {% block content %}{% endblock %}
