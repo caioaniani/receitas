@@ -65,6 +65,25 @@
 </header>
 
 <script>
+  // Header sticky com sombra ao rolar — adiciona/remove classe `.rolado`.
+  // `requestAnimationFrame` evita disparar a cada scroll event (60+/s),
+  // mantém o scroll fluido. Sem libs.
+  (function () {
+    var topo = document.querySelector('.topo');
+    if (!topo) return;
+    var agendado = false;
+    function atualizar() {
+      agendado = false;
+      topo.classList.toggle('rolado', window.scrollY > 4);
+    }
+    window.addEventListener('scroll', function () {
+      if (agendado) return;
+      agendado = true;
+      requestAnimationFrame(atualizar);
+    }, { passive: true });
+    atualizar();
+  })();
+
   // Dropdown "Produtos": clique abre/fecha; clicar fora fecha; selecionar
   // categoria fecha (e o link navega pro #cat-<slug> da home).
   (function () {
