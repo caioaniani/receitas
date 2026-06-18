@@ -37,6 +37,7 @@
     adicionar: function (item, qtd) {
       qtd = parseInt(qtd, 10) || 1;
       if (qtd < 1) qtd = 1;
+      var antesQtd = this.contar();
       var itens = this.ler();
       var k = this._chaveItem(item.kind, item.id);
       var achou = false;
@@ -55,6 +56,12 @@
         });
       }
       this.salvar(itens);
+      // Primeiro item do carrinho (vazio -> com 1+ item): abre drawer
+      // automaticamente pra mostrar pro cliente que pode seguir pro
+      // checkout ou continuar comprando.
+      if (antesQtd === 0 && this.contar() > 0) {
+        abrirDrawer();
+      }
     },
 
     mudarQtd: function (kind, id, qtd) {
