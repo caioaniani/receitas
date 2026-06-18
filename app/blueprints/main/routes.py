@@ -2671,6 +2671,7 @@ def loja_online_pedido_status(codigo):
         return redirect(url_for('main.loja_online_pedido_detalhe',
                                 codigo=codigo))
     transicionou_para_caminho = (novo == 'a_caminho' and p.status != 'a_caminho')
+    transicionou_para_entregue = (novo == 'entregue' and p.status != 'entregue')
     p.status = novo
     db.session.commit()
     if transicionou_para_caminho:
@@ -2680,6 +2681,13 @@ def loja_online_pedido_status(codigo):
                 email_svc.enviar_pedido_a_caminho(p)
         except Exception:  # noqa: BLE001
             current_app.logger.exception('email a_caminho falhou')
+    if transicionou_para_entregue:
+        # E-mail "pedido entregue" — best-effort.
+        try:
+            if email_svc.disponivel():
+                email_svc.enviar_pedido_entregue(p)
+        except Exception:  # noqa: BLE001
+            current_app.logger.exception('email entregue falhou')
     flash(f'Pedido {p.codigo}: status atualizado para {novo}.', 'success')
     return redirect(url_for('main.loja_online_pedido_detalhe', codigo=codigo))
 
