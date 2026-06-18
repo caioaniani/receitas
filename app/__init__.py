@@ -299,6 +299,34 @@ def create_app(config_class=None):
             rid = uuid.uuid4().hex[:12]
         g.request_id = rid
 
+    @app.before_request
+    def _roteamento_por_host():
+        """Separa a LOJA (opao.online) do ADMIN (gestao.*).
+
+        Em hosts de loja (config LOJA_HOSTS): só `/loja/*` + assets respondem;
+        a raiz `/` redireciona pra `/loja/`; QUALQUER rota de admin/gestão
+        (login, /admin, /pedidos, etc.) vira 404 — o cliente nunca encontra a
+        tela de gestão. Em gestao.* (e qualquer outro host) nada muda: o
+        sistema responde inteiro como sempre.
+
+        Decisão do dono 18/06/2026: opao.online é só o site público."""
+        from flask import abort, redirect
+        hosts = {h.strip().lower()
+                 for h in (app.config.get('LOJA_HOSTS') or '').split(',')
+                 if h.strip()}
+        host = (request.host or '').split(':')[0].lower()
+        if host not in hosts:
+            return None  # gestao.* / railway.app / outros: comportamento full
+        p = request.path
+        # Liberados no host da loja: a própria loja + assets + infra básica.
+        if (p == '/loja' or p.startswith('/loja/')
+                or p.startswith('/static/')
+                or p in ('/health', '/favicon.ico')):
+            return None
+        if p == '/':
+            return redirect('/loja/', code=302)
+        abort(404)
+
     @app.after_request
     def add_security_headers(response):
         from flask import g
