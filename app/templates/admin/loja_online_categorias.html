@@ -1,49 +1,112 @@
 {% extends 'base.html' %}
 {% block title %}Ordem das categorias — Loja Online{% endblock %}
 
+{% block head_extra %}
+<style>
+  .sortable-list { list-style: none; padding: 0; margin: 0; max-width: 520px; }
+  .sortable-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px; margin: 0 0 8px;
+    background: #fff; border: 1px solid #dee2e6; border-radius: 8px;
+    cursor: grab; user-select: none;
+    transition: box-shadow .15s ease, background .15s ease;
+  }
+  .sortable-row:hover { background: #f8f9fa; }
+  .sortable-row.sortable-dragging {
+    box-shadow: 0 8px 22px rgba(0,0,0,.18);
+    background: #fff8e1;
+  }
+  .drag-handle { color: #adb5bd; font-size: 22px; line-height: 1; }
+  .row-nome { flex: 1; font-weight: 600; }
+  .row-pos { color: #6c757d; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .save-pill {
+    position: fixed; bottom: 24px; right: 24px;
+    background: #1c7c3a; color: #fff;
+    padding: 10px 16px; border-radius: 999px;
+    font-size: 13px; font-weight: 600;
+    box-shadow: 0 6px 20px rgba(0,0,0,.18);
+    opacity: 0; pointer-events: none;
+    transition: opacity .2s ease;
+    z-index: 200;
+  }
+  .save-pill.on { opacity: 1; }
+  .save-pill.error { background: #c92a2a; }
+</style>
+{% endblock %}
+
 {% block content %}
 <h1 class="page-title"><span aria-hidden="true">🥐</span> Ordem das categorias</h1>
 <p class="text-muted">
-  Define a ordem que cada categoria aparece na vitrine.
-  <strong>Menor = mais cedo.</strong>
-  Categoria sem ordem cadastrada cai no fim alfabético da página.
+  Arraste os blocos pra reordenar. Salva sozinho ao soltar.
+  A ordem é <strong>de cima pra baixo</strong> — quem está no topo aparece primeiro na vitrine.
 </p>
 
-<a href="{{ url_for('main.loja_online_catalogo') }}" class="btn btn-sm btn-outline-secondary mb-3">
-  &larr; Catálogo
-</a>
-<a href="{{ url_for('main.loja_online_dashboard') }}" class="btn btn-sm btn-outline-secondary mb-3">
-  Visão geral
-</a>
+<div class="mb-3 d-flex gap-2 flex-wrap">
+  <a href="{{ url_for('main.loja_online_dashboard') }}" class="btn btn-sm btn-outline-secondary">&larr; Visão geral</a>
+  <a href="{{ url_for('main.loja_online_ordem_produtos') }}" class="btn btn-sm btn-outline-secondary">Ordem dos produtos</a>
+</div>
 
-<form method="POST" class="card">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <table class="table table-sm align-middle mb-0">
-    <thead class="table-light">
-      <tr><th style="width:120px">Ordem</th><th>Categoria</th></tr>
-    </thead>
-    <tbody>
-      {% for nome, ordem in linhas %}
-      <tr>
-        <td>
-          <input type="number" name="ordem" class="form-control form-control-sm"
-                 value="{{ ordem }}" step="1" style="width:90px">
-          <input type="hidden" name="nome" value="{{ nome }}">
-        </td>
-        <td><strong>{{ nome }}</strong></td>
-      </tr>
-      {% else %}
-      <tr><td colspan="2" class="text-muted small p-3">
-        Nenhuma categoria no catálogo ainda. Cadastre categorias nos
-        produtos primeiro (em <a href="{{ url_for('main.loja_online_catalogo') }}">Catálogo</a>).
-      </td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% if linhas %}
-  <div class="card-footer">
-    <button type="submit" class="btn btn-primary">Salvar ordem</button>
-  </div>
-  {% endif %}
-</form>
+{% if linhas %}
+<ul id="lista-categorias" class="sortable-list">
+  {% for nome, _ord in linhas %}
+  <li class="sortable-row" data-id="{{ nome }}">
+    <span class="drag-handle">≡</span>
+    <span class="row-nome">{{ nome }}</span>
+    <span class="row-pos" data-pos>{{ loop.index }}</span>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<div class="alert alert-light">
+  Nenhuma categoria cadastrada ainda.
+  <a href="{{ url_for('main.loja_online_catalogo') }}">Cadastre categorias nos produtos</a>
+  primeiro.
+</div>
+{% endif %}
+
+<div id="save-pill" class="save-pill">Salvando…</div>
+
+<script src="{{ url_for('static', filename='admin/sortable.js') }}"></script>
+<script>
+(function() {
+  var CSRF = "{{ csrf_token() }}";
+  var lista = document.getElementById('lista-categorias');
+  var pill = document.getElementById('save-pill');
+  if (!lista) return;
+
+  function recalcularPos() {
+    lista.querySelectorAll('[data-pos]').forEach(function(el, i) {
+      el.textContent = i + 1;
+    });
+  }
+
+  function mostrarPill(msg, erro) {
+    pill.textContent = msg;
+    pill.classList.toggle('error', !!erro);
+    pill.classList.add('on');
+    clearTimeout(pill._t);
+    pill._t = setTimeout(function() { pill.classList.remove('on'); }, 1500);
+  }
+
+  sortable(lista, {
+    onSort: function(ordem) {
+      recalcularPos();
+      mostrarPill('Salvando…');
+      fetch('/admin/loja-online/categorias/ordem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ ordem: ordem })
+      }).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      }).then(function(d) {
+        if (d.ok) mostrarPill('✓ Ordem salva');
+        else throw new Error(d.erro || 'erro');
+      }).catch(function(e) {
+        mostrarPill('Erro ao salvar', true);
+      });
+    }
+  });
+})();
+</script>
 {% endblock %}
