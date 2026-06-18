@@ -641,8 +641,14 @@ def produto(slug_completo):
         return redirect(url_for('loja.produto',
                                  slug_completo=item['href'].split('/loja/')[-1]),
                          code=301)
+    # Cesta personalizada: cliente monta a cesta adicionando outros itens
+    # do catálogo (sem ser cesta) ao carrinho junto. (rodada C — 17/06/2026)
+    personalizada = loja_catalogo.eh_personalizada(item)
+    monte = (loja_catalogo.itens_para_montar(excluir_item=item)
+             if personalizada else [])
     return render_template(
         'loja/produto.html', item=item, em_teste=_em_teste(),
+        personalizada=personalizada, monte=monte,
     )
 
 
