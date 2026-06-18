@@ -382,6 +382,15 @@ def criar_pedido(form, itens_raw, *, base=None):
         ))
     pedido.recalcular_total()
     db.session.commit()
+    # Auto-salva o endereço estruturado do cliente logado pra ele reusar no
+    # próximo pedido. Só faz pra entrega (retirada não tem endereço).
+    if (cliente.tem_conta if hasattr(cliente, 'tem_conta') else False) \
+            and modo != 'retirada' and end_logradouro:
+        _salvar_ou_atualizar_endereco_principal(
+            cliente, dict(cep=endereco_cep, logradouro=end_logradouro,
+                          numero=end_numero, complemento=end_complemento,
+                          bairro=end_bairro, cidade=end_cidade, uf=end_uf,
+                          lat=None, lng=None))
     # E-mail "recebemos seu pedido" — best-effort (não derruba o checkout).
     try:
         from app.services import email as email_svc
@@ -392,3 +401,39 @@ def criar_pedido(form, itens_raw, *, base=None):
         logging.getLogger(__name__).exception(
             'email pedido recebido falhou')
     return pedido, []
+
+
+def _salvar_ou_atualizar_endereco_principal(cliente, dados):
+    """Salva o endereço como `principal` do cliente. Deduplica por
+    logradouro+numero+cep — se já existe, atualiza."""
+    from app.models import EnderecoCliente
+    existente = EnderecoCliente.query.filter_by(
+        cliente_id=cliente.id,
+        logradouro=dados['logradouro'],
+        numero=dados['numero'],
+        cep=dados['cep'],
+    ).first()
+    if existente:
+        end = existente
+    else:
+        end = EnderecoCliente(cliente_id=cliente.id)
+        db.session.add(end)
+    for k, v in dados.items():
+        setattr(end, k, v)
+    # Reset principal das outras, marca essa
+    EnderecoCliente.query.filter(
+        EnderecoCliente.cliente_id == cliente.id,
+        EnderecoCliente.id != (end.id if existente else None),
+    ).update({'principal': False})
+    end.principal = True
+    db.session.commit()
+
+
+def endereco_principal(cliente):
+    """Devolve o endereço marcado como `principal` do cliente, ou None."""
+    if not cliente:
+        return None
+    from app.models import EnderecoCliente
+    return (EnderecoCliente.query
+            .filter_by(cliente_id=cliente.id, principal=True)
+            .first())
