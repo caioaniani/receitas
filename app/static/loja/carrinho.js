@@ -421,6 +421,7 @@
       Carrinho.salvar([]);  // salvar() já atualiza o badge
     }
     ligarCardAdds();           // event delegation — registra UMA vez
+    ligarDrawer();             // handlers do drawer (1x por página)
     Carrinho.atualizarBadge(); // renderiza cards iniciais
     ligarBotoesAdd();
     renderCarrinho();
