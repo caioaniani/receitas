@@ -344,7 +344,7 @@ def test_conciliar_idempotente_nao_baixa_duas_vezes(app):
         el = _setup_loja_estoque(db, ped, p, qtd_atual=10)
         db.session.add(PagamentoOnline(
             pedido_id=ped.id, metodo='pix', status='pendente',
-            pagarme_order_id='or_idem'))
+            valor=ped.valor_total, pagarme_order_id='or_idem'))
         db.session.commit()
         confirma = {'ok': True, 'pago': True, 'status': 'paid'}
         with patch('app.services.pagarme.consultar_order',
