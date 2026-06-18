@@ -306,6 +306,44 @@ def sair():
     return redirect(url_for('loja.home'))
 
 
+@loja_bp.route('/esqueci-senha', methods=['GET', 'POST'])
+def esqueci_senha():
+    """Form pra pedir o link de redefinição. Anti-enumeração: SEMPRE
+    devolve a mesma mensagem (existindo ou não a conta)."""
+    enviado = False
+    if request.method == 'POST':
+        email = (request.form.get('email') or '').strip().lower()
+        loja_auth.iniciar_reset(email)
+        enviado = True
+    return render_template('loja/esqueci_senha.html',
+                           em_teste=_em_teste(), enviado=enviado)
+
+
+@loja_bp.route('/redefinir-senha/<token>', methods=['GET', 'POST'])
+def redefinir_senha(token):
+    """Form pra definir nova senha. Valida token; aplica."""
+    reg = loja_auth.token_reset_valido(token)
+    if not reg:
+        return render_template('loja/redefinir_senha.html',
+                               em_teste=_em_teste(),
+                               token=token, invalido=True), 400
+    erro = None
+    if request.method == 'POST':
+        nova = request.form.get('senha') or ''
+        confirmar = request.form.get('confirmar_senha') or ''
+        if nova != confirmar:
+            erro = 'As senhas não batem. Confira e tente de novo.'
+        else:
+            res = loja_auth.aplicar_reset(token, nova)
+            if res['ok']:
+                loja_auth.login_cliente(res['cliente'])
+                return redirect(url_for('loja.minha_conta'))
+            erro = res['erro']
+    return render_template('loja/redefinir_senha.html',
+                           em_teste=_em_teste(), token=token, erro=erro), \
+        (400 if erro else 200)
+
+
 @loja_bp.route('/conta')
 @loja_auth.cliente_required
 def minha_conta():
