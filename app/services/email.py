@@ -111,9 +111,10 @@ def enviar_confirmacao_pedido(pedido):
     return enviar(destinatario, assunto, html, texto=_texto_confirmacao(pedido))
 
 
-def enviar_pedido_a_caminho(pedido):
+def enviar_pedido_a_caminho(pedido, rastreio_url=None):
     """E-mail "seu pedido saiu pra entrega" — mudança de status pra
-    `a_caminho`. Inclui o endereço e a janela.
+    `a_caminho`. Inclui o endereço, a janela e (quando há corrida Lalamove)
+    o link de rastreio em tempo real.
 
     Best-effort — falha silente."""
     destinatario = (pedido.email_cliente or '').strip()
@@ -122,8 +123,8 @@ def enviar_pedido_a_caminho(pedido):
     base = (current_app.config.get('LOJA_BASE_URL')
             or current_app.config.get('APP_BASE_URL') or '').rstrip('/')
     assunto = f'Pedido {pedido.codigo} a caminho — O Pão Padaria Artesanal'
-    html = _template_a_caminho(pedido, base)
-    texto = _texto_a_caminho(pedido, base)
+    html = _template_a_caminho(pedido, base, rastreio_url=rastreio_url)
+    texto = _texto_a_caminho(pedido, base, rastreio_url=rastreio_url)
     return enviar(destinatario, assunto, html, texto=texto)
 
 
