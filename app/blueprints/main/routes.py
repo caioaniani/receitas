@@ -2681,6 +2681,62 @@ def loja_online_catalogo_foto(tipo, id):
                    imagem_url=(obj.imagem_dropbox_url or ''))
 
 
+@main_bp.route('/admin/loja-online/logo', methods=['POST'])
+@owner_required
+def loja_online_logo():
+    """Upload do logotipo da loja → Dropbox → URL guardada em AppConfig
+    (`loja_logo_url`). O header da vitrine renderiza o logo se setado, senão
+    cai no wordmark de texto. Preserva transparência (PNG/SVG) pra não ficar
+    caixa branca sobre o fundo creme."""
+    from flask import flash
+
+    from app.models import AppConfig
+    from app.services import dropbox_storage
+    from app.utils import comprimir_logo
+    f = request.files.get('logo')
+    if not f or not f.filename:
+        flash('Selecione um arquivo de imagem.', 'warning')
+        return redirect(url_for('main.loja_online_dashboard'))
+    if not (f.mimetype or '').startswith('image/'):
+        flash('O arquivo precisa ser uma imagem (PNG, SVG ou JPG).', 'warning')
+        return redirect(url_for('main.loja_online_dashboard'))
+    data = f.read()
+    if not data:
+        flash('Arquivo vazio.', 'warning')
+        return redirect(url_for('main.loja_online_dashboard'))
+    if len(data) > 10 * 1024 * 1024:
+        flash('Logo grande demais (máx 10MB).', 'warning')
+        return redirect(url_for('main.loja_online_dashboard'))
+    if not dropbox_storage.disponivel():
+        flash('Dropbox não configurado — não dá pra subir o logo agora.',
+              'danger')
+        return redirect(url_for('main.loja_online_dashboard'))
+    try:
+        proc, _mime, ext = comprimir_logo(data)
+        info = dropbox_storage.upload_publico(
+            proc, f'/loja/logo.{ext}', mode='overwrite', autorename=False)
+        AppConfig.set('loja_logo_url', info['url'])
+        db.session.commit()
+        flash('Logo atualizado!', 'success')
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        flash(f'Erro ao subir o logo: {exc}', 'danger')
+    return redirect(url_for('main.loja_online_dashboard'))
+
+
+@main_bp.route('/admin/loja-online/logo/remover', methods=['POST'])
+@owner_required
+def loja_online_logo_remover():
+    """Volta o header pro wordmark de texto (limpa `loja_logo_url`)."""
+    from flask import flash
+
+    from app.models import AppConfig
+    AppConfig.set('loja_logo_url', None)
+    db.session.commit()
+    flash('Logo removido — header volta ao texto.', 'success')
+    return redirect(url_for('main.loja_online_dashboard'))
+
+
 # ── Debug Pagar.me: valida a chave sem expor o segredo (Fase 4) ───────────
 @main_bp.route('/admin/debug-pagarme')
 @owner_required
