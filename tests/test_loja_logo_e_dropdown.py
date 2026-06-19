@@ -223,8 +223,8 @@ def test_home_secao_usa_slug_no_id(app, monkeypatch):
         _produto_pub(db, 'Pão', 'Pães')
     r = c.get('/loja/')
     assert b'id="cat-paes"' in r.data
-    # E o chip de navegação aponta pro mesmo anchor
-    assert b'href="#cat-paes"' in r.data
+    # E o dropdown "Produtos" aponta pro mesmo anchor (#cat-<slug>)
+    assert b'#cat-paes' in r.data
 
 
 def test_header_carrinho_tem_icone_sacola(app, monkeypatch):
