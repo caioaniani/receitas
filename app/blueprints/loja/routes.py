@@ -434,6 +434,7 @@ def esqueci_senha():
 
 
 @loja_bp.route('/redefinir-senha/<token>', methods=['GET', 'POST'])
+@limiter.limit('5 per minute', methods=['POST'])
 def redefinir_senha(token):
     """Form pra definir nova senha. Valida token; aplica."""
     reg = loja_auth.token_reset_valido(token)
