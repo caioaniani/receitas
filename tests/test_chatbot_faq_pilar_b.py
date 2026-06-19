@@ -5,8 +5,8 @@ Trava as 12 regras de FAQ confirmadas pelo dono em 14/06/2026:
   ingrediente/glúten/lactose/ovo sem chutar.
 - Alergia CONFIRMADA = handoff sempre (não chama tool pra tranquilizar).
 - Cesta com troca, encomenda de evento, modificação de pedido feito = humano.
-- Entrega: 8h-18h, corte 17h pra D+1, área 15 km.
-- Retirada: SÓ Anésio Pinto Rosa, 78. Fora dos 15 km = oferece retirada
+- Entrega: 8h-18h, corte 17h pra D+1, área 25 km.
+- Retirada: SÓ Anésio Pinto Rosa, 78. Fora dos 25 km = oferece retirada
   PRIMEIRO, só transfere se cliente recusar.
 - Pagamento: cartão crédito 1x, débito, Pix. Nada na entrega.
 - Atendimento chat: 06h-20h. Fora disso, bot avisa e nao chama API.
