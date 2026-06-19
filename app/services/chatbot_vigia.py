@@ -106,13 +106,13 @@ def _numero_destino():
 
 
 def _resumo_catalogo_site(limite=120):
-    """Catalogo do SITE (VNDA) — MESMA fonte que o bot consulta via
-    `consultar_produtos`. Cada linha = nome + estado (DISPONIVEL ou
-    ESGOTADO). E so essa fonte que o vigia pode usar pra contradizer
-    o bot quando ele diz 'esgotado' — estoque de loja fisica e outra
-    realidade (venda balcao) e gerava falso alerta (caso real
-    12/06/2026: Pain au Chocolat 872 un nas lojas mas VNDA disponivel
-    — o vigia avisou 'erro critico' quando bot e VNDA estavam alinhados).
+    """Catalogo do SITE (opao.online) — MESMA fonte que o bot consulta via
+    `consultar_produtos` (estoque REAL da loja do site). Cada linha = nome +
+    estado (DISPONIVEL ou ESGOTADO). E so essa fonte que o vigia pode usar pra
+    contradizer o bot quando ele diz 'esgotado' — estoque de loja fisica e
+    outra realidade (venda balcao) e gerava falso alerta (caso real
+    12/06/2026: Pain au Chocolat 872 un nas lojas mas site disponivel — o
+    vigia avisou 'erro critico' quando bot e site estavam alinhados).
 
     Lista TODOS os produtos do catalogo (disponiveis e esgotados) pro
     Haiku ter contexto pra distinguir os dois casos."""
@@ -121,13 +121,13 @@ def _resumo_catalogo_site(limite=120):
     except Exception:  # noqa: BLE001
         return ''
     try:
-        catalogo = bot_tools._carregar_catalogo()
+        catalogo = bot_tools.catalogo_disponibilidade()
     except Exception:  # noqa: BLE001
         logger.exception('vigia: _resumo_catalogo_site falhou')
         return ''
     if not catalogo:
-        return '(catalogo VNDA indisponivel agora)'
-    # Dedup por nome (variantes do mesmo produto somam disponibilidade)
+        return '(catalogo do site indisponivel agora)'
+    # Dedup por nome (mesma fonte do bot; soma disponibilidade)
     estado = {}
     for p in catalogo:
         nome = (p.get('nome') or '').strip()
