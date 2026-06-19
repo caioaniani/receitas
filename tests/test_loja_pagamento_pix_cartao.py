@@ -809,10 +809,12 @@ def test_checkout_redireciona_pra_pagamento(app, monkeypatch):
     monkeypatch.delenv('LOJA_VISIVEL', raising=False)
     c = _admin(app)
     p = _produto(db, preco=25.0)
-    from app.models import Loja
+    from app.models import AppConfig, Loja
     db.session.add(Loja(nome='Brooklin', ativa=True, endereco='r'))
     db.session.commit()
     loja = Loja.query.filter_by(nome='Brooklin').first()
+    AppConfig.set('loja_site_estoque_id', loja.id)  # loja permitida p/ retirada
+    db.session.commit()
     data = loja_checkout.datas_disponiveis('retirada')[-1].isoformat()
     r = c.post('/loja/checkout', data={
         'nome': 'João', 'email': 'j@x.com', 'cpf': '52998224725',
