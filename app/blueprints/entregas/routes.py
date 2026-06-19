@@ -141,6 +141,9 @@ def _serializar_pedido_online(p):
         'cartinha_vnda': p.cartinha or '',
         'observacao': '',
         'status_vnda': 'online',
+        # Campos que o /entregas (lista/impressão) espera — superset do local.
+        'data_override': False,
+        'tem_customizacao': False,
         # fallback do status do card quando não há PainelPedidoStatus ainda
         'status_painel_fallback': _STATUS_ONLINE_PARA_PAINEL.get(p.status, 'novo'),
         'itens': [
