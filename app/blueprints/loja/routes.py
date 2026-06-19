@@ -363,12 +363,21 @@ def entrar():
 
 
 @loja_bp.route('/cadastrar', methods=['GET', 'POST'])
+@limiter.limit('5 per minute', methods=['POST'])
 def cadastrar():
-    """Cadastro de cliente: cria conta nova OU vincula senha a um Cliente
-    que já existia como guest (mesmo email)."""
+    """Cadastro de cliente.
+
+    Dois caminhos pra evitar sequestro de pedido feito como guest:
+
+    - E-mail NOVO (sem Cliente): cria conta + login direto. Zero atrito.
+    - E-mail JÁ EXISTENTE como guest (Cliente sem senha): NÃO vincula na
+      hora — manda link de verificação pro próprio e-mail. Só quem lê o
+      e-mail consegue ativar a conta e ver o histórico/PII do pedido
+      anterior. Atrito focado nos ~5% dos casos onde havia risco real.
+    """
     if loja_auth.cliente_atual():
         return redirect(url_for('loja.minha_conta'))
-    erros, form = [], {}
+    erros, form, verificacao_enviada = [], {}, False
     if request.method == 'POST':
         from app.extensions import db
         from app.models import Cliente
@@ -392,15 +401,17 @@ def cadastrar():
             if c and c.senha_hash:
                 erros.append('Já existe uma conta com esse email. '
                              'Tente entrar.')
+            elif c:
+                # Guest reivindicando a conta: NÃO loga direto — manda link
+                # de verificação. Defende contra sequestro por e-mail
+                # adivinhado (atacante não recebe o e-mail da vítima).
+                loja_auth.iniciar_verificacao_cadastro(
+                    c, nome, telefone, senha)
+                verificacao_enviada = True
             else:
-                if not c:
-                    c = Cliente(nome=nome, email=email, telefone=telefone)
-                    db.session.add(c)
-                else:
-                    # Guest virou conta: preenche o que faltava sem
-                    # sobrescrever o que o cliente já tinha.
-                    c.nome = c.nome or nome
-                    c.telefone = c.telefone or telefone
+                # E-mail novo: cadastro instantâneo (mesmo de antes).
+                c = Cliente(nome=nome, email=email, telefone=telefone)
+                db.session.add(c)
                 c.set_senha(senha)
                 c.aceite_lgpd_em = c.aceite_lgpd_em or agora()
                 db.session.commit()
@@ -408,8 +419,23 @@ def cadastrar():
                 return redirect(url_for('loja.minha_conta'))
     return render_template('loja/cadastrar.html',
                            em_teste=_em_teste(),
-                           erros=erros, form=form), \
+                           erros=erros, form=form,
+                           verificacao_enviada=verificacao_enviada), \
         (400 if erros else 200)
+
+
+@loja_bp.route('/verificar-cadastro/<token>', methods=['GET'])
+def verificar_cadastro(token):
+    """Link do e-mail de verificação. Valida o token e ativa a conta:
+    promove os dados pendentes (nome/telefone/senha_hash) pro Cliente,
+    loga e redireciona pra minha-conta. Inválido/expirado: pede pra
+    cadastrar de novo."""
+    res = loja_auth.aplicar_verificacao(token)
+    if not res['ok']:
+        return render_template('loja/verificar_cadastro.html',
+                               em_teste=_em_teste(), erro=res['erro']), 400
+    loja_auth.login_cliente(res['cliente'])
+    return redirect(url_for('loja.minha_conta'))
 
 
 @loja_bp.route('/sair', methods=['POST'])
