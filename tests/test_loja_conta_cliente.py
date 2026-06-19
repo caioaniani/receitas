@@ -29,24 +29,101 @@ def test_cadastro_cria_cliente_e_loga(app):
         assert s.get('cliente_id') == cli.id
 
 
-def test_cadastro_guest_virou_conta(app):
-    """Cliente já existia como guest (sem senha) → cadastro vincula senha
-    sem perder o histórico (mesmo email = mesma linha)."""
+def test_cadastro_guest_dispara_verificacao(app):
+    """Cliente já existia como guest (sem senha) → cadastro NÃO vincula
+    senha na hora. Manda link de verificação pro próprio e-mail. Defesa
+    contra sequestro de pedido por adivinhação de e-mail (atacante não
+    recebe o e-mail da vítima). Senha só vira efetiva quando o link for
+    clicado."""
     from app.extensions import db
-    from app.models import Cliente
+    from app.models import Cliente, ClienteVerificacaoEmail
     with app.app_context():
         guest = Cliente(nome='Jo', email='jo@x.com', telefone='11')
         db.session.add(guest)
         db.session.commit()
         guest_id = guest.id
     c = app.test_client()
-    r = _cadastrar(c, email='jo@x.com', nome='João Completo')
-    assert r.status_code == 302
+    r = _cadastrar(c, email='jo@x.com', nome='João Completo',
+                   senha='senha-forte-1')
+    # NÃO loga (sem 302): fica na tela 'verifique seu e-mail'.
+    assert r.status_code == 200
+    assert b'Confirme seu e-mail' in r.data
     with app.app_context():
         cli = Cliente.query.filter_by(email='jo@x.com').first()
-        assert cli.id == guest_id   # MESMA linha, não duplicou
-        assert cli.tem_conta
-        assert cli.nome == 'Jo'     # não sobrescreve o que ele já tinha
+        assert cli.id == guest_id            # MESMA linha
+        assert cli.senha_hash is None        # senha NÃO ativada ainda
+        # Token de verificação criado com a senha pendente HASHADA
+        reg = ClienteVerificacaoEmail.query.filter_by(
+            cliente_id=guest_id).first()
+        assert reg and reg.usado_em is None
+        assert reg.senha_hash_pending  # não plaintext
+        assert 'senha-forte-1' not in (reg.senha_hash_pending or '')
+    # Sessão ainda anônima
+    with c.session_transaction() as s:
+        assert 'cliente_id' not in s
+
+
+def test_verificar_cadastro_token_valido_ativa_conta(app):
+    """Link do e-mail de verificação: aplica a senha pendente, marca o
+    token como usado, loga e redireciona pra /loja/conta."""
+    from app.extensions import db
+    from app.models import Cliente, ClienteVerificacaoEmail
+    with app.app_context():
+        guest = Cliente(nome='Pedro', email='pedro@x.com')
+        db.session.add(guest)
+        db.session.commit()
+    c = app.test_client()
+    _cadastrar(c, email='pedro@x.com', nome='Pedro Completo',
+               senha='senha-forte-1')
+    with app.app_context():
+        reg = ClienteVerificacaoEmail.query.filter_by(
+            cliente__email='pedro@x.com').first() if False else (
+            ClienteVerificacaoEmail.query.join(Cliente)
+            .filter(Cliente.email == 'pedro@x.com').first())
+        token = reg.token
+    r = c.get(f'/loja/verificar-cadastro/{token}', follow_redirects=False)
+    assert r.status_code == 302
+    assert r.headers['Location'].endswith('/loja/conta')
+    with app.app_context():
+        cli = Cliente.query.filter_by(email='pedro@x.com').first()
+        assert cli.check_senha('senha-forte-1')   # senha ativada
+        reg = ClienteVerificacaoEmail.query.filter_by(
+            cliente_id=cli.id).first()
+        assert reg.usado_em is not None
+    with c.session_transaction() as s:
+        assert s.get('cliente_id')
+
+
+def test_verificar_cadastro_token_invalido_rejeita(app):
+    """Token inexistente/curto/inválido → 400, sem ativar nada."""
+    c = app.test_client()
+    r = c.get('/loja/verificar-cadastro/tokeninexistente0123456789xxxxxxxxxx',
+              follow_redirects=False)
+    assert r.status_code == 400
+
+
+def test_verificar_cadastro_token_e_single_use(app):
+    """Token só funciona uma vez. Segundo clique vira inválido."""
+    from app.extensions import db
+    from app.models import Cliente, ClienteVerificacaoEmail
+    with app.app_context():
+        guest = Cliente(nome='Lia', email='lia@x.com')
+        db.session.add(guest)
+        db.session.commit()
+    c = app.test_client()
+    _cadastrar(c, email='lia@x.com', nome='Lia Completa',
+               senha='senha-forte-1')
+    with app.app_context():
+        token = (ClienteVerificacaoEmail.query.join(Cliente)
+                 .filter(Cliente.email == 'lia@x.com').first()).token
+    # 1º clique funciona
+    c2 = app.test_client()
+    r1 = c2.get(f'/loja/verificar-cadastro/{token}', follow_redirects=False)
+    assert r1.status_code == 302
+    # 2º clique do MESMO token cai como inválido
+    c3 = app.test_client()
+    r2 = c3.get(f'/loja/verificar-cadastro/{token}', follow_redirects=False)
+    assert r2.status_code == 400
 
 
 def test_cadastro_email_ja_com_conta_falha(app):
