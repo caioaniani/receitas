@@ -225,8 +225,9 @@ def consultar_produtos(busca):
                         d['itens'] = det['itens']
                 out.append(d)
             return {'produtos': out}
-    # Sem match: catálogo amplo, token-light.
-    return {'produtos': [_fmt_item_catalogo(it, base) for it in catalogo[:80]]}
+    # Sem match: catálogo amplo, token-light (sem descrição/itens).
+    return {'produtos': [{k: v for k, v in _fmt_item_catalogo(it, base).items()
+                          if k != 'descricao'} for it in catalogo[:80]]}
 
 
 def catalogo_disponibilidade():
