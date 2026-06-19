@@ -6,8 +6,21 @@
 {% block content %}
 <section class="carrinho-pagina">
   <h1>Seu carrinho</h1>
+  {% if prefill_esgotados %}
+  <div class="checkout-erros" role="alert">
+    {% if prefill_esgotados|length == 1 %}
+      “{{ prefill_esgotados[0] }}” está esgotado no momento e não foi adicionado.
+    {% else %}
+      Alguns itens estão esgotados e não foram adicionados:
+      {{ prefill_esgotados|join(', ') }}.
+    {% endif %}
+  </div>
+  {% endif %}
   <div id="carrinho-app">
     <div class="carrinho-vazio"><p>Carregando…</p></div>
   </div>
 </section>
+{% if prefill %}
+<script type="application/json" id="cart-prefill">{{ prefill|tojson }}</script>
+{% endif %}
 {% endblock %}
