@@ -168,29 +168,80 @@ def _carregar_catalogo():
     return produtos
 
 
+def _base_loja():
+    """Base URL pública da loja (opao.online) pra links ABSOLUTOS — o bot
+    atende canais externos (WhatsApp/IG), então o link tem que ser completo."""
+    from flask import current_app
+    return (current_app.config.get('LOJA_BASE_URL')
+            or 'https://opao.online').rstrip('/')
+
+
+def _fmt_item_catalogo(it, base):
+    """Item do `loja_catalogo` → dict enxuto pro bot. `disponivel` reflete o
+    ESTOQUE REAL da loja do site agora (não mais o flag bugado do VNDA)."""
+    return {
+        'nome': it['nome'],
+        'kind': it['kind'],
+        'id': it['id'],
+        'preco': it['preco'],
+        'disponivel': not it.get('esgotado', False),
+        'descricao': it.get('descricao') or '',
+        'categoria': it.get('categoria') or '',
+        'url': base + it['href'],
+    }
+
+
 def consultar_produtos(busca):
-    """Busca produtos no catalogo do VNDA por texto. Retorna
-    {'produtos': [{nome, sku, preco, disponivel, descricao?}]} ou {'erro': ...}.
+    """Busca no catálogo PRÓPRIO (opao.online, via `loja_catalogo`). Retorna
+    {'produtos': [{nome, kind, id, preco, disponivel, descricao, categoria,
+    url, itens?}]} ou {'erro': ...}.
 
-    Match focado (achou produto pelo termo): inclui a `descricao` — pra o bot
-    responder 'o que tem na cesta X?'. Sem match: devolve o catalogo amplo SEM
-    descricao (economiza token) pro Claude aplicar sinonimos (ex: "amendoas" ->
-    "Almond"). SKU sempre de variants[].sku."""
-    catalogo = _carregar_catalogo()
-    if catalogo is None:
-        return {'erro': 'VNDA indisponível no momento'}
-
+    `disponivel` = ESTOQUE REAL agora (fim do "bug do site"). Match focado
+    (achou pelo termo) inclui `descricao` e, em cesta, `itens` (composição) —
+    pra responder "o que vem na cesta X?". Sem match: catálogo amplo
+    token-light (sem descrição/itens) pro Claude aplicar sinônimos
+    ("amendoas" → "Almond"). Identidade = kind+id (não SKU)."""
+    from app.services import loja_catalogo
     from app.utils import normalizar_busca
+    try:
+        catalogo = loja_catalogo.anotar_esgotado(
+            loja_catalogo.produtos_publicados())
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('consultar_produtos (loja própria) falhou')
+        return {'erro': str(exc)}
+    base = _base_loja()
     termos = [t for t in normalizar_busca(busca or '').split()
               if len(t) > 2 and t not in _STOPWORDS]
     if termos:
-        filtrados = [p for p in catalogo
-                     if any(t in normalizar_busca(p['nome']) for t in termos)]
+        filtrados = [it for it in catalogo
+                     if any(t in normalizar_busca(it['nome']) for t in termos)]
         if filtrados:
-            return {'produtos': filtrados[:40]}  # com descricao (foco)
-    # Sem match: catalogo amplo SEM descricao (token-light).
-    leve = [{k: v for k, v in p.items() if k != 'descricao'} for p in catalogo[:80]]
-    return {'produtos': leve}
+            out = []
+            for it in filtrados[:40]:
+                d = _fmt_item_catalogo(it, base)
+                if it['kind'] == 'produto':  # cesta: anexa composição
+                    det = loja_catalogo.por_id_publicado('produto', it['id'])
+                    if det and det.get('itens'):
+                        d['itens'] = det['itens']
+                out.append(d)
+            return {'produtos': out}
+    # Sem match: catálogo amplo, token-light.
+    return {'produtos': [_fmt_item_catalogo(it, base) for it in catalogo[:80]]}
+
+
+def catalogo_disponibilidade():
+    """[{nome, disponivel}] do catálogo do site (ESTOQUE REAL) — usado pela
+    vigia pra comparar o que o bot disse com a MESMA fonte que o bot consulta
+    (antes era o VNDA). Devolve None se o catálogo falhar."""
+    from app.services import loja_catalogo
+    try:
+        catalogo = loja_catalogo.anotar_esgotado(
+            loja_catalogo.produtos_publicados())
+    except Exception:  # noqa: BLE001
+        logger.exception('catalogo_disponibilidade falhou')
+        return None
+    return [{'nome': it['nome'], 'disponivel': not it.get('esgotado', False)}
+            for it in catalogo]
 
 
 def consultar_ingredientes(nome_produto):
