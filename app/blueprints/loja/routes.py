@@ -280,12 +280,20 @@ def _injetar_contexto_loja():
     - `cliente_atual`: cliente logado (ou None)
     - `categorias_loja`: [{nome, slug}] pro dropdown "Produtos"
     - `loja_logo_url`: logo enviado no admin (ou None → wordmark de texto)
+    - `chatwoot_widget`: {url, token} pro widget de chat (None se desligado).
     """
+    from flask import current_app
+
     from app.models import AppConfig
+    cw_token = (current_app.config.get('CHATWOOT_WEBSITE_TOKEN') or '').strip()
+    cw_url = (current_app.config.get('CHATWOOT_PUBLIC_URL') or '').strip()
+    chatwoot_widget = ({'url': cw_url.rstrip('/'), 'token': cw_token}
+                       if cw_token and cw_url else None)
     return {
         'cliente_atual': loja_auth.cliente_atual(),
         'categorias_loja': loja_catalogo.categorias_publicadas(),
         'loja_logo_url': AppConfig.get('loja_logo_url'),
+        'chatwoot_widget': chatwoot_widget,
     }
 
 
