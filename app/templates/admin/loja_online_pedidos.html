@@ -158,28 +158,6 @@
     }
   });
 
-  // Excluir seleção (definitivo): monta os códigos marcados no form oculto
-  // e envia, após confirmar. Um checkbox só pode estar em UM form via `form=`
-  // (já está no de imprimir), então a exclusão coleta por JS.
-  if (btnExcluir && formExcluir) {
-    btnExcluir.addEventListener('click', function() {
-      var marcados = tbody.querySelectorAll('.chk-pedido:checked');
-      if (!marcados.length) return;
-      var msg = 'Excluir DEFINITIVAMENTE ' + marcados.length + ' pedido(s)?\n\n'
-        + 'Apaga o registro, os itens e os pagamentos — não dá pra desfazer.\n'
-        + 'Não cancela NF nem reembolsa. Use só pra pedidos de TESTE.';
-      if (!window.confirm(msg)) return;
-      formExcluir.querySelectorAll('input[name="codigos"]')
-        .forEach(function(el) { el.remove(); });
-      marcados.forEach(function(c) {
-        var h = document.createElement('input');
-        h.type = 'hidden'; h.name = 'codigos'; h.value = c.value;
-        formExcluir.appendChild(h);
-      });
-      formExcluir.submit();
-    });
-  }
-
   function restaurar() {
     tbody.innerHTML = tbodyInicial;
     if (!vazio) return;
