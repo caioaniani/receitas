@@ -667,6 +667,7 @@ def api_cep(cep):
 
 
 @loja_bp.route('/api/frete', methods=['POST'])
+@limiter.limit('30 per minute')
 def api_frete():
     """Cotação de frete pro checkout (anéis de distância do frete.py).
     Recebe JSON {endereco, cep}; devolve o dict do consultar_frete.
