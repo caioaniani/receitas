@@ -237,6 +237,14 @@ class Config:
     # redireciona pra /loja/). CSV. gestao.* NÃO entra aqui — continua full.
     LOJA_HOSTS = os.environ.get(
         'LOJA_HOSTS', 'opao.online,www.opao.online')
+    # Cutover: hosts que apenas REDIRECIONAM (302) pro site novo — ex: o
+    # domínio antigo do VNDA. CSV, vazio = desligado (chave liga/desliga sem
+    # deploy: setar/limpar no Railway). 302 (temporário) de propósito — pra
+    # poder CORTAR o redirecionamento sem ficar preso em cache de navegador
+    # (301 grudaria). Destino = SITE_REDIRECT_DESTINO.
+    SITE_REDIRECT_HOSTS = os.environ.get('SITE_REDIRECT_HOSTS', '')
+    SITE_REDIRECT_DESTINO = os.environ.get(
+        'SITE_REDIRECT_DESTINO', 'https://opao.online')
     # URL do Chatwoot pra instruir o atendente (reusa CHATWOOT_URL se setado).
     CHATWOOT_PUBLIC_URL = os.environ.get(
         'CHATWOOT_PUBLIC_URL', 'https://atendimento.opaopadariaartesanal.com.br')
