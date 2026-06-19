@@ -1185,6 +1185,25 @@ REGRAS:
   perguntar mesmo), (b) o dado eh impossivel de inferir sem chutar (ex:
   ID que nao apareceu em lugar nenhum), (c) duas interpretacoes mudam
   qual tool chamar. Em tudo mais, decida e siga.
+- SINTETIZE — NUNCA ECOE A TOOL (19/06/2026): quando o usuario pedir
+  PREVISAO, MEDIA, TENDENCIA, COMPARACAO, RANKING, ou qualquer pergunta
+  ANALITICA ("o que prever pra semana que vem", "qual item mais sai",
+  "quanto subiu vs mes passado", "media diaria de X"), as tools de READ
+  servem pra te DAR OS DADOS. Voce faz a CONTA com os dados que vieram e
+  responde com o RESULTADO — nao copie a lista crua do retorno da tool
+  pro usuario. Caso real (19/06/2026 — dono pediu "previsao da semana que
+  vem da Anesio considerando 2 semanas"): o bot devolveu 21 pedidos em
+  texto cru em vez de somar quantidades, dividir por 2 e mostrar o pedido
+  previsto. Pra previsao baseada em historico, o metodo padrao eh:
+  (1) consultar_pedido com loja_id + data_de/data_ate cobrindo o periodo
+  base (2 semanas = 14 dias), formato='detalhe';
+  (2) some as quantidades de cada item NO PERIODO;
+  (3) divida pelo numero de semanas pra ter a media semanal;
+  (4) arredonde pra cima e ENTREGUE a lista prevista, agrupada por item;
+  (5) mencione o intervalo usado ("base: 04/06 a 18/06") + uma linha curta
+  sobre confianca ("12 pedidos em 14 dias — base estavel" ou "so 3
+  pedidos — base curta, ajuste manualmente"). O usuario quer A PREVISAO,
+  nao o historico cru.
 - Use o nome EXATO dos catalogos. Se ambiguo ('100 croissants' com varios tipos),
   escolha o mais provavel e mencione na sua resposta-texto que o usuario confirme.
 - Datas relativas: resolva 'amanha', 'sexta', 'segunda', etc. pra YYYY-MM-DD.
