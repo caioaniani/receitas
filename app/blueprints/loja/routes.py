@@ -420,6 +420,7 @@ def sair():
 
 
 @loja_bp.route('/esqueci-senha', methods=['GET', 'POST'])
+@limiter.limit('5 per minute', methods=['POST'])
 def esqueci_senha():
     """Form pra pedir o link de redefinição. Anti-enumeração: SEMPRE
     devolve a mesma mensagem (existindo ou não a conta)."""
