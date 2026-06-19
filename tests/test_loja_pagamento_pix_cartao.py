@@ -527,6 +527,86 @@ def test_webhook_paid_dispara_email_confirmacao(app):
         envia.assert_called_once()
 
 
+# ── NF automática no pagamento (decisão do dono 19/06/2026) ───────────
+
+def test_paid_emite_nf_e_envia_email_da_nf(app):
+    """Webhook 'paid' → emite NF no Tiny + manda e-mail dedicado com link
+    da DANFE. Best-effort: ambos rodam dentro de _marcar_pago, depois do
+    estoque e do e-mail de confirmação."""
+    from unittest.mock import patch as _patch
+
+    from app.extensions import db
+    from app.services import loja_pagamento
+    with app.app_context():
+        app.config['PAGARME_API_KEY'] = 'sk_test_abc'
+        loja = _loja_site(db)
+        p = _produto(db)
+        ped = _pedido_com_item(db, p, qtd=1, modo='retirada',
+                                loja_retirada_id=loja.id)
+        _setup_loja_estoque(db, ped, p)
+        body = {'id': 'or_nf', 'charges': [{'id': 'ch_nf', 'status': 'pending',
+                'last_transaction': {'qr_code': 'E'}}]}
+        with _patch('app.services.pagarme.requests.post',
+                    return_value=_fake_resp(200, body)):
+            loja_pagamento.iniciar_pix(ped)
+        with _patch('app.services.tiny_nf.emitir_nf',
+                    return_value={'ok': True, 'nota_fiscal_id': 'nf-77'}) as emi, \
+             _patch('app.services.email.enviar_nf_emitida',
+                    return_value={'ok': True}) as mail:
+            loja_pagamento.processar_webhook(
+                {'id': 'evt_nf', 'type': 'order.paid',
+                 'data': {'id': 'or_nf', 'code': ped.codigo}})
+        emi.assert_called_once()
+        mail.assert_called_once()
+
+
+def test_paid_continua_pago_mesmo_se_nf_falhar(app):
+    """NF é BEST-EFFORT: se o Tiny rejeitar ou estiver fora, o pedido SEGUE
+    pago/estoque baixado, e o e-mail da NF NÃO sai (não vamos mandar e-mail
+    de NF que não existe). A NF fica pra reemitir manual depois."""
+    from unittest.mock import patch as _patch
+
+    from app.extensions import db
+    from app.models import PedidoOnline
+    from app.services import loja_pagamento
+    with app.app_context():
+        app.config['PAGARME_API_KEY'] = 'sk_test_abc'
+        loja = _loja_site(db)
+        p = _produto(db)
+        ped = _pedido_com_item(db, p, qtd=1, modo='retirada',
+                                loja_retirada_id=loja.id)
+        _setup_loja_estoque(db, ped, p, qtd_atual=10)
+        body = {'id': 'or_x', 'charges': [{'id': 'ch_x', 'status': 'pending',
+                'last_transaction': {'qr_code': 'E'}}]}
+        with _patch('app.services.pagarme.requests.post',
+                    return_value=_fake_resp(200, body)):
+            loja_pagamento.iniciar_pix(ped)
+        with _patch('app.services.tiny_nf.emitir_nf',
+                    return_value={'ok': False, 'msg': 'Tiny fora'}), \
+             _patch('app.services.email.enviar_nf_emitida') as mail:
+            loja_pagamento.processar_webhook(
+                {'id': 'evt_x', 'type': 'order.paid',
+                 'data': {'id': 'or_x', 'code': ped.codigo}})
+        mail.assert_not_called()
+        atual = PedidoOnline.query.filter_by(codigo=ped.codigo).first()
+        assert atual.status == 'pago'   # NF falhar não desfaz o pagamento
+
+
+def test_email_nf_tem_link_da_danfe(app):
+    """O e-mail dedicado da NF aponta pra rota pública /loja/pedido/<cod>/nf."""
+    from types import SimpleNamespace
+
+    from app.services.email import _template_nf, _texto_nf
+    pedido = SimpleNamespace(codigo='ABC123', tiny_nota_fiscal_id='nf-9',
+                             email_cliente='c@x.com')
+    base = 'https://opao.online'
+    html = _template_nf(pedido, base)
+    txt = _texto_nf(pedido, base)
+    link = f'{base}/loja/pedido/ABC123/nf'
+    assert link in html and link in txt
+    assert 'nf-9' in html
+
+
 def test_reembolsar_pedido_estorna(app):
     from unittest.mock import patch as _patch
 
