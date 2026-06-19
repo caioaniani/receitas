@@ -84,15 +84,35 @@ def _limpar_tabelas(db):
     db.session.commit()
 
 
-def loja_client(app):
-    """test_client cujos requests batem no host PÚBLICO da loja (opao.online).
+class _LojaTestClient:
+    """Envolve o test_client mandando todo request pro host PÚBLICO da loja
+    (opao.online) — a loja só responde a anônimo nesse host (em localhost o
+    gate trata como gestão e barra). `base_url` é o jeito que de fato fixa o
+    Host no Werkzeug (environ_base['HTTP_HOST'] é sobrescrito pelo base_url
+    default 'localhost'). Login feito via HTTP por aqui (cadastrar/entrar)
+    grava o cookie pra opao.online — consistente nos requests seguintes.
+    Métodos não-HTTP (session_transaction etc.) caem no client real."""
+    _BASE = 'http://opao.online'
 
-    A loja é pública (sem login) SÓ nos hosts de `LOJA_HOSTS` — em `localhost`
-    o gate trata como host de gestão e barra anônimo. Testes que exercitam a
-    vitrine como visitante (com LOJA_VISIVEL=1) precisam deste host."""
-    cli = app.test_client()
-    cli.environ_base['HTTP_HOST'] = 'opao.online'
-    return cli
+    def __init__(self, client):
+        self._c = client
+
+    def get(self, *a, **kw):
+        kw.setdefault('base_url', self._BASE)
+        return self._c.get(*a, **kw)
+
+    def post(self, *a, **kw):
+        kw.setdefault('base_url', self._BASE)
+        return self._c.post(*a, **kw)
+
+    def __getattr__(self, nome):
+        return getattr(self._c, nome)
+
+
+def loja_client(app):
+    """Client cujos requests batem no host PÚBLICO da loja (opao.online).
+    Use nos testes que exercitam a vitrine como VISITANTE (LOJA_VISIVEL=1)."""
+    return _LojaTestClient(app.test_client())
 
 
 @pytest.fixture
