@@ -284,8 +284,14 @@ def criar_pedido(form, itens_raw, *, base=None):
         except (TypeError, ValueError):
             loja_retirada_id = None
         loja = Loja.query.get(loja_retirada_id) if loja_retirada_id else None
+        permitida = loja_retirada_permitida()
         if not loja or not loja.ativa or loja.nome == 'Industria':
             erros.append('Escolha uma loja válida para retirada.')
+        elif not permitida or loja.id != permitida.id:
+            # Trava server-side: só a loja permitida aceita retirada, mesmo
+            # que alguém burle o <select> desabilitado do template.
+            erros.append(f'Retirada disponível apenas em {permitida.nome}.'
+                         if permitida else 'Retirada indisponível no momento.')
         else:
             endereco_entrega = f'Retirada: {loja.nome} — {loja.endereco or ""}'.strip()
     elif modo in ('agendada', 'express'):
