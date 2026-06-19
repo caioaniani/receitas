@@ -2364,6 +2364,8 @@ def estoque_loja_ajuste():
     filtro = {'loja_id': loja_id}
     if tipo == 'receita':
         filtro['receita_id'] = item_id
+    elif tipo == 'produto':
+        filtro['produto_id'] = item_id
     else:
         filtro['materia_prima_id'] = item_id
     el = EstoqueLoja.query.filter_by(**filtro).first()
