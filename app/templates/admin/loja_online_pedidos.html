@@ -63,6 +63,11 @@
             id="btn-imprimir-selecao" class="btn btn-sm btn-primary" disabled>
       🖨️ Imprimir seleção (cliente + motoboy)
     </button>
+    <button type="button" id="btn-excluir-selecao"
+            class="btn btn-sm btn-outline-danger" disabled
+            title="Exclui definitivamente — use só pra pedidos de teste">
+      🗑️ Excluir seleção
+    </button>
   </div>
 </div>
 
@@ -70,6 +75,13 @@
    pra mandar `codigos` no submit, sem aninhar form dentro da tabela. #}
 <form id="form-imprimir-selecao" method="POST" target="_blank"
       action="{{ url_for('main.loja_online_pedidos_imprimir_selecao') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+{# Exclusão (definitiva): o JS injeta os códigos marcados aqui e envia. Um
+   checkbox só pode pertencer a UM form via `form=`, então a seleção pra
+   excluir é montada por JS (lê `.chk-pedido:checked`). #}
+<form id="form-excluir-selecao" method="POST" class="d-none"
+      action="{{ url_for('main.loja_online_pedidos_excluir_selecao') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 </form>
 
