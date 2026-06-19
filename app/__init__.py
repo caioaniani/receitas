@@ -342,8 +342,19 @@ def create_app(config_class=None):
 
     @app.after_request
     def add_security_headers(response):
+        import os
+
         from flask import g
-        response.headers['X-Robots-Tag'] = 'noindex, nofollow'
+        # noindex global protege o admin. Pra /loja, quando a vitrine vira
+        # publica (LOJA_VISIVEL=1, Fase 8), tem que sumir senao o Google
+        # ignora a loja nova. Em modo teste (=0) o noindex CONTINUA pra nao
+        # vazar pra busca por engano.
+        loja_publica = (
+            os.environ.get('LOJA_VISIVEL', '0').strip() == '1'
+            and request.path.startswith('/loja')
+        )
+        if not loja_publica:
+            response.headers['X-Robots-Tag'] = 'noindex, nofollow'
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'DENY'
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
