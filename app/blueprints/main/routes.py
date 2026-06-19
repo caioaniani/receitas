@@ -3330,40 +3330,6 @@ def loja_online_pedidos_imprimir_selecao():
     return resp
 
 
-@main_bp.route('/admin/loja-online/pedidos/excluir-selecao', methods=['POST'])
-@owner_required
-def loja_online_pedidos_excluir_selecao():
-    """Exclui DEFINITIVAMENTE os pedidos selecionados — pra limpar pedidos de
-    TESTE antes de virar a chave. Apaga pagamentos + itens + o pedido.
-
-    Atenção (e é por isso que é owner-only + confirmação na tela): NÃO cancela
-    a NF na SEFAZ nem reembolsa no Pagar.me — é exclusão do NOSSO registro.
-    Para pedido real de cliente o caminho é 'Reembolsar e cancelar' (que
-    estorna de verdade), não isto."""
-    from flask import flash
-
-    from app.models import PedidoOnline
-    codigos = [c.strip() for c in request.form.getlist('codigos') if c.strip()]
-    if not codigos:
-        flash('Selecione ao menos um pedido pra excluir.', 'warning')
-        return redirect(url_for('main.loja_online_pedidos'))
-    pedidos = (PedidoOnline.query
-               .filter(PedidoOnline.codigo.in_(codigos)).all())
-    n = 0
-    for p in pedidos:
-        # `pagamentos` não tem cascade — apaga explícito antes do pedido.
-        for pag in list(p.pagamentos):
-            db.session.delete(pag)
-        db.session.delete(p)  # cascateia os itens (delete-orphan)
-        n += 1
-    db.session.commit()
-    current_app.logger.warning(
-        'loja-online: %d pedido(s) EXCLUIDO(S) por uid=%s: %s',
-        n, getattr(current_user, 'id', None), ','.join(codigos))
-    flash(f'{n} pedido(s) de teste excluído(s) definitivamente.', 'success')
-    return redirect(url_for('main.loja_online_pedidos'))
-
-
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/cancelar', methods=['POST'])
 @owner_required
 def loja_online_pedido_cancelar(codigo):
