@@ -70,6 +70,36 @@ def test_pedido_pago_aparece_no_painel_com_code(app):
     assert card['telefone'] == '11988887777'
 
 
+def test_pedido_online_aparece_uma_vez_so_no_painel(app):
+    """Regressão (18/06/2026): `_injetar_pedidos_locais` passou a incluir
+    PedidoOnline E o painel injetava DE NOVO em separado, transformando 1
+    pedido em N cards. Agora a injeção é em um único lugar; mesmo se houver
+    regressão futura, o dedupe no `api_painel` cobre."""
+    from app.extensions import db
+    c = _staff(app)
+    with app.app_context():
+        _pedido_online(db, codigo='UNQ01', status='pago')
+    data = _painel(c)
+    codes = [p['code'] for p in data['pedidos']]
+    assert codes.count('UNQ01') == 1
+
+
+def test_pedido_online_aparece_uma_vez_so_no_entregas(app):
+    """Mesmo invariante na lista de /entregas (api_pedidos)."""
+    from app.extensions import db
+    from app.utils import hoje
+    c = _staff(app)
+    with app.app_context():
+        _pedido_online(db, codigo='UNQ02', status='pago')
+        d = hoje().isoformat()
+    with patch('app.services.vnda.buscar_pedidos_do_dia',
+               return_value={'pedidos': []}):
+        r = c.get(f'/entregas/api/pedidos?data={d}')
+    assert r.status_code == 200
+    codes = [p['code'] for p in r.get_json()['pedidos']]
+    assert codes.count('UNQ02') == 1
+
+
 def test_aguardando_e_cancelado_nao_aparecem(app):
     from app.extensions import db
     c = _staff(app)
