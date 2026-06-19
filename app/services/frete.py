@@ -168,7 +168,7 @@ def consultar_frete(endereco_ou_cep):
       {'ok': True, 'valor': 15.0, 'gratis': False, 'fora_area': False,
        'distancia_km': 3.4, 'endereco': 'Rua X, Moema, São Paulo',
        'aviso': 'valor estimado — o definitivo é o do checkout'}
-      {'ok': True, 'fora_area': True, ...}  -> além de 15 km
+      {'ok': True, 'fora_area': True, ...}  -> além de RAIO_MAX_KM
       {'ok': False, 'erro': 'endereco_vazio'|'nao_encontrado'}
     """
     if not (endereco_ou_cep or '').strip():
