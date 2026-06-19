@@ -7,6 +7,10 @@
 """
 from decimal import Decimal
 
+import pytest
+
+pytestmark = pytest.mark.loja_host
+
 
 def _cadastrar(c, email='lgpd@x.com', nome='LGPD'):
     return c.post('/loja/cadastrar', data={
