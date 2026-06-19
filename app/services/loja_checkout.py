@@ -44,11 +44,23 @@ DIAS_AGENDA = 14
 
 
 def lojas_retirada():
-    """Lojas físicas onde dá pra retirar — ativas, fora a 'Industria'
-    (que existe só pra RH). Espelha o filtro de lojas operacionais."""
+    """Lojas físicas mostradas na opção de retirada — ativas, fora a
+    'Industria' (que existe só pra RH). TODAS aparecem na lista; só a
+    `loja_retirada_permitida()` é selecionável (as outras vêm desabilitadas
+    no template e bloqueadas no servidor)."""
     return (Loja.query
             .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
             .order_by(Loja.nome).all())
+
+
+def loja_retirada_permitida():
+    """ÚNICA loja que aceita retirada de pedido do site (decisão do dono
+    19/06/2026 — hoje a Anésio Pinto Rosa). É a mesma loja que fulfilla o
+    site (`loja_origem_site`), então fica amarrada à config existente
+    (`AppConfig.loja_site_estoque_id`) em vez de hardcodar o nome — mexer
+    num lugar só. Devolve a Loja ou None se não configurada."""
+    from app.services.loja_pagamento import loja_origem_site
+    return loja_origem_site()
 
 
 def express_disponivel(base=None):
