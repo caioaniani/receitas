@@ -516,10 +516,15 @@ def test_vigia_media_nao_pinga_so_registra(app):
     assert chatbot_vigia.ultimos()[0]['gravidade'] == 'media'   # fica pro resumo
 
 
-def test_gerar_link_carrinho():
+def test_gerar_link_carrinho(app):
     from app.services import bot_tools
-    r = bot_tools.gerar_link_carrinho([{'sku': '10007', 'qtd': 2}, {'sku': '10009', 'qtd': 1}])
-    assert r['link'].endswith('/carrinho?itens=10007:2,10009:1')
+    with app.app_context():
+        r = bot_tools.gerar_link_carrinho([
+            {'kind': 'receita', 'id': 5, 'quantidade': 2},
+            {'kind': 'produto', 'id': 83, 'quantidade': 1}])
+    # link de 1 clique no opao.online (r=receita, p=produto)
+    assert r['link'].endswith('/loja/carrinho?add=r5:2,p83:1')
+    assert r['link'].startswith('https://opao.online')
 
 
 def test_gerar_link_carrinho_vazio():
