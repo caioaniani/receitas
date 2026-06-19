@@ -243,9 +243,7 @@
               ? ' (' + Number(data.distancia_km).toFixed(1).replace('.', ',') + ' km)'
               : '';
             var base = data.gratis ? 'Frete grátis' : ('Frete: ' + fmtBRL(freteAtual));
-            var extra = (modoSelecionado() === 'express')
-              ? ' — estimativa, a equipe confirma' : '';
-            out.textContent = base + dist + extra;
+            out.textContent = base + dist;
             out.className = 'frete-resultado ok';
           }
           atualizarTotais();
