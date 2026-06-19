@@ -63,6 +63,35 @@ def hoje() -> date:
     return datetime.now(BRT).date()
 
 
+def hosts_loja():
+    """Conjunto de hosts (lower, sem porta) que servem a LOJA pública —
+    config `LOJA_HOSTS` (default 'opao.online,www.opao.online').
+
+    Centraliza o parsing pra a lista do roteamento por host
+    (`_roteamento_por_host`), do gate da loja e do header noindex serem a
+    MESMA — divergir aqui geraria loja pública num host e privada noutro."""
+    from flask import current_app
+    return {h.strip().lower()
+            for h in (current_app.config.get('LOJA_HOSTS') or '').split(',')
+            if h.strip()}
+
+
+def host_atual_eh_loja():
+    """True se o host da request atual é um domínio público da loja
+    (ex: opao.online). Em gestao.*/railway.app/outros é False — lá a loja
+    só responde pra admin logado e fica fora do Google (anti-duplicação).
+
+    Fallback defensivo: se `LOJA_HOSTS` estiver vazio, devolve True (não
+    barra acesso) — melhor não quebrar o site público do que travar tudo."""
+    from flask import request
+    hosts = hosts_loja()
+    if not hosts:
+        return True
+    host = (request.host or '').split(':')[0].lower()
+    return host in hosts
+
+
+
 def para_brt(dt):
     """Converte um datetime (aware ou naive-UTC legado) pra BRT naive.
 
