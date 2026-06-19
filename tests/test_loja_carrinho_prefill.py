@@ -8,6 +8,7 @@ inexistente e injeta o resto via JS. Aqui cobrimos a resolução server-side
 from decimal import Decimal
 
 import pytest
+from conftest import _make_receita
 
 pytestmark = pytest.mark.loja_host
 
@@ -15,7 +16,7 @@ pytestmark = pytest.mark.loja_host
 def _catalogo(db):
     """Loja do site + 1 produto e 1 receita publicados E estocados, + 1
     produto publicado SEM estoque (esgotado)."""
-    from app.models import AppConfig, EstoqueLoja, Loja, Produto, Receita
+    from app.models import AppConfig, EstoqueLoja, Loja, Produto
     loja = Loja(nome='Anesio', endereco='Anésio Pinto Rosa, 78', ativa=True)
     db.session.add(loja)
     db.session.commit()
@@ -25,8 +26,8 @@ def _catalogo(db):
                   imagem_dropbox_url='https://x/box.jpg', ativo=True)
     esgotado = Produto(nome='Caixa Especial', categoria='Cestas',
                        preco_site=Decimal('368'), ativo=True)
-    croissant = Receita(nome='Croissant Tradicional', categoria='Viennoiserie',
-                        preco_site=Decimal('22.50'))
+    croissant = _make_receita('Croissant Tradicional', categoria='Viennoiserie')
+    croissant.preco_site = Decimal('22.50')
     db.session.add_all([box, esgotado, croissant])
     db.session.commit()
     # Estoca SÓ o box e o croissant (a Caixa Especial fica esgotada).
