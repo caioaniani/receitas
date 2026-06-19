@@ -2474,6 +2474,53 @@ def loja_online_catalogo_preco(tipo, id):
                                if obj.preco_site is not None else None))
 
 
+@main_bp.route('/admin/loja-online/catalogo/estoque/<tipo>/<int:id>',
+                methods=['POST'])
+@owner_required
+def loja_online_catalogo_estoque(tipo, id):
+    """Define o estoque ATUAL do item na loja do site — a MESMA EstoqueLoja
+    que /pedidos/estoque-loja usa. JSON: {estoque: int}. SET absoluto: grava
+    a diferença como MovEstoqueLoja pra manter o histórico consistente.
+    Owner-only (estoque tem peso especial)."""
+    from app.extensions import db as _db
+    from app.models import EstoqueLoja, MovEstoqueLoja
+    from app.services.loja_pagamento import loja_origem_site
+    if tipo not in ('receita', 'produto'):
+        return jsonify(ok=False, erro='tipo inválido'), 400
+    loja = loja_origem_site()
+    if not loja:
+        return jsonify(ok=False, erro='loja do site não configurada'), 400
+    dados = request.get_json(silent=True) or {}
+    raw = dados.get('estoque')
+    if raw is None or str(raw).strip() == '':
+        return jsonify(ok=False, erro='quantidade obrigatória'), 400
+    try:
+        novo = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return jsonify(ok=False, erro='quantidade inválida'), 400
+    if novo < 0 or novo > 100000:
+        return jsonify(ok=False, erro='quantidade fora da faixa (0 a 100000)'), 400
+    filtro = {'loja_id': loja.id,
+              ('receita_id' if tipo == 'receita' else 'produto_id'): id}
+    el = EstoqueLoja.query.filter_by(**filtro).first()
+    atual = (el.quantidade or 0) if el else 0
+    if not el:
+        el = EstoqueLoja(quantidade=0, **filtro)
+        _db.session.add(el)
+        _db.session.flush()
+    delta = novo - atual
+    el.quantidade = novo
+    if delta != 0:
+        _db.session.add(MovEstoqueLoja(
+            estoque_loja_id=el.id,
+            tipo='entrada_manual' if delta > 0 else 'ajuste_negativo',
+            quantidade=abs(delta),
+            referencia='ajuste catálogo do site',
+            usuario_id=current_user.id))
+    _db.session.commit()
+    return jsonify(ok=True, estoque=el.quantidade)
+
+
 @main_bp.route('/admin/loja-online/catalogo/ordem/<tipo>/<int:id>',
                 methods=['POST'])
 @owner_required
