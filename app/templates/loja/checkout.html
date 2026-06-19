@@ -150,9 +150,13 @@
         <select name="loja_id" id="loja_id">
           <option value="">Selecione…</option>
           {% for l in lojas %}
+          {% set indisponivel = l.id != loja_retirada_permitida_id %}
           <option value="{{ l.id }}"
-            {{ 'selected' if form.get('loja_id') == l.id|string }}>
+            {{ 'disabled' if indisponivel }}
+            {{ 'selected' if (form.get('loja_id') == l.id|string)
+                or (not form.get('loja_id') and not indisponivel) }}>
             {{ l.nome }}{% if l.endereco %} — {{ l.endereco }}{% endif %}
+            {{ '(indisponível)' if indisponivel }}
           </option>
           {% endfor %}
         </select>
