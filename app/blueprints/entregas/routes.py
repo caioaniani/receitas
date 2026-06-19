@@ -198,6 +198,23 @@ def api_painel():
     except Exception:  # noqa: BLE001
         current_app.logger.exception('painel: pedidos da loja própria falharam')
 
+    # Deduplica por `code` — defesa contra qualquer caminho que injete o
+    # mesmo pedido duas vezes (já houve regressão assim em 18/06/2026:
+    # `_injetar_pedidos_locais` passou a incluir PedidoOnline E a chamada
+    # explícita acima injetava de novo → mesmo pedido virava N cards). Mantém
+    # a primeira ocorrência (VNDA/local antes de online); idempotente se a
+    # lista já estiver única.
+    vistos = set()
+    pedidos_uniq = []
+    for p in pedidos:
+        code = p.get('code')
+        if code and code in vistos:
+            continue
+        if code:
+            vistos.add(code)
+        pedidos_uniq.append(p)
+    pedidos = pedidos_uniq
+
     codes = [p['code'] for p in pedidos if p.get('code')]
     status_por_code = {}
     if codes:
