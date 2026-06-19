@@ -241,7 +241,9 @@ def _marcar_pago(pedido, pagamento):
         pagamento.pago_em = agora()
     _baixar_estoque(pedido)
     _enviar_confirmacao(pedido)
-    _emitir_nf_e_enviar(pedido)
+    # NF NÃO entra aqui: ela commita por dentro (tiny_nf.emitir_nf) e não pode
+    # rodar no meio da transação do pagamento. É chamada pelos callers DEPOIS
+    # do commit do pago/baixa (processar_webhook / conciliar_pedido).
     return True
 
 
