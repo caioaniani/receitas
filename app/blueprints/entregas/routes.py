@@ -555,11 +555,13 @@ def api_pedidos():
     if isinstance(resultado, dict) and resultado.get('erro'):
         erro_vnda = resultado['erro']
 
-    # base sem 'erro' → _injetar_pedidos_locais adiciona local + online.
+    # base sem 'erro' → _injetar_pedidos_locais adiciona LOCAIS. Online
+    # entra em separado (e DEPOIS), pra não acoplar com o helper.
     base = {} if erro_vnda else resultado
     try:
         _injetar_pedidos_locais(target, base)
-        pedidos = base.get('pedidos', [])
+        pedidos = base.get('pedidos', []) + _pedidos_online_do_dia(target)
+        base['pedidos'] = pedidos
         total_janela = base.get('total_janela', 0)
 
         _aplicar_cartinhas(pedidos)
