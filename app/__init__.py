@@ -311,10 +311,23 @@ def create_app(config_class=None):
 
         Decisão do dono 18/06/2026: opao.online é só o site público."""
         from flask import abort, redirect
+        host = (request.host or '').split(':')[0].lower()
+
+        # Cutover: domínio antigo (VNDA) → 302 pro site novo. Chave liga/desliga
+        # via env SITE_REDIRECT_HOSTS (vazio = inerte). Manda tudo pra raiz do
+        # destino (paths do VNDA não existem aqui — evita 404). 302 (não 301)
+        # pra poder CORTAR o redirecionamento sem cache grudado no navegador.
+        redirect_hosts = {h.strip().lower()
+                          for h in (app.config.get('SITE_REDIRECT_HOSTS') or '')
+                          .split(',') if h.strip()}
+        if host in redirect_hosts:
+            destino = (app.config.get('SITE_REDIRECT_DESTINO')
+                       or 'https://opao.online').rstrip('/')
+            return redirect(destino + '/', code=302)
+
         hosts = {h.strip().lower()
                  for h in (app.config.get('LOJA_HOSTS') or '').split(',')
                  if h.strip()}
-        host = (request.host or '').split(':')[0].lower()
         if host not in hosts:
             return None  # gestao.* / railway.app / outros: comportamento full
         p = request.path
