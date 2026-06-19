@@ -2388,6 +2388,8 @@ def loja_online_catalogo():
             'no_site': tem_foto and tem_preco,
             'falta_foto': not tem_foto,
             'falta_preco': not tem_preco,
+            'estoque': (None if estoque_map is None
+                        else estoque_map.get(('receita', r.id), 0)),
         }
         itens.append(item)
     for p in produtos:
