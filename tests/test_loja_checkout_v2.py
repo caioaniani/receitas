@@ -32,12 +32,19 @@ def _produto(db, nome='Box Mimo', preco=20.0):
 
 
 def _loja(db, nome='Brooklin'):
-    from app.models import AppConfig, Loja
+    from app.models import AppConfig, EstoqueLoja, Loja, Produto, Receita
     loja = Loja(nome=nome, endereco='Ribeiro do Vale, 455', ativa=True)
     db.session.add(loja)
     db.session.commit()
-    # Vira a loja do site = única permitida pra retirada (validação nova).
+    # Loja do site (permitida p/ retirada) + estoca o catálogo pra os itens
+    # não caírem como "esgotado" no checkout (a loja do site ativa o filtro).
     AppConfig.set('loja_site_estoque_id', loja.id)
+    for r in Receita.query.all():
+        db.session.add(EstoqueLoja(loja_id=loja.id, receita_id=r.id,
+                                   quantidade=999))
+    for pr in Produto.query.all():
+        db.session.add(EstoqueLoja(loja_id=loja.id, produto_id=pr.id,
+                                   quantidade=999))
     db.session.commit()
     return loja
 
