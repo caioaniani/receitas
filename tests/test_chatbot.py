@@ -532,6 +532,54 @@ def test_gerar_link_carrinho_vazio():
     assert 'erro' in bot_tools.gerar_link_carrinho([])
 
 
+def test_gerar_link_carrinho_cesta_e_avulso_um_link(app):
+    """Fluxo unificado: cesta + avulsos no MESMO link (acabou o 2 passos)."""
+    from app.services import bot_tools
+    with app.app_context():
+        r = bot_tools.gerar_link_carrinho([
+            {'kind': 'produto', 'id': 42, 'quantidade': 1},   # cesta
+            {'kind': 'receita', 'id': 7, 'quantidade': 3}])    # avulso
+    assert r['link'].endswith('/loja/carrinho?add=p42:1,r7:3')
+
+
+def test_gerar_link_carrinho_ignora_invalido(app):
+    """Item sem kind/id válido é descartado; sobra só o bom."""
+    from app.services import bot_tools
+    with app.app_context():
+        r = bot_tools.gerar_link_carrinho([
+            {'kind': 'xyz', 'id': 1, 'quantidade': 1},   # kind inválido
+            {'kind': 'produto', 'quantidade': 1},        # sem id
+            {'kind': 'produto', 'id': 9, 'quantidade': 2}])
+    assert r['link'].endswith('/loja/carrinho?add=p9:2')
+
+
+def test_consultar_produtos_esgotado_disponivel_false(app):
+    """Estoque REAL: item publicado sem saldo na loja do site vem
+    disponivel=False (acabou o "bug do site")."""
+    from decimal import Decimal
+
+    from app.extensions import db
+    from app.models import AppConfig, EstoqueLoja, Loja, Produto
+    from app.services import bot_tools
+    with app.app_context():
+        loja = Loja(nome='Anesio', endereco='x', ativa=True)
+        db.session.add(loja)
+        db.session.commit()
+        AppConfig.set('loja_site_estoque_id', loja.id)
+        com = Produto(nome='Family Box', categoria='Cestas',
+                      preco_site=Decimal('437'), ativo=True)
+        sem = Produto(nome='Caixa Especial', categoria='Cestas',
+                      preco_site=Decimal('368'), ativo=True)
+        db.session.add_all([com, sem])
+        db.session.commit()
+        db.session.add(EstoqueLoja(loja_id=loja.id, produto_id=com.id,
+                                   quantidade=5))  # só a Family Box tem saldo
+        db.session.commit()
+        r = bot_tools.consultar_produtos('caixa especial')
+    p = next(x for x in r['produtos'] if x['nome'] == 'Caixa Especial')
+    assert p['disponivel'] is False
+
+
 # ── Fase 5: auditor proativo (agente ativo) ──
 
 def test_auditor_dia_resumo_envia_mesmo_dia_tranquilo(app):
