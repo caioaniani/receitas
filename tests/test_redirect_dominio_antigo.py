@@ -68,3 +68,24 @@ def test_checkout_numero_abre_teclado_numerico(app):
     # o campo número pede teclado numérico no celular
     assert b'name="numero"' in r.data
     assert b'inputmode="numeric"' in r.data
+
+
+def test_prontidao_bloqueia_sem_loja_visivel(app):
+    """Pré-flight do cutover: com LOJA_VISIVEL desligada, prontidao acusa
+    BLOQUEIO (cliente anônimo veria 404)."""
+    import os
+    c = _staff(app)
+    old = os.environ.get('LOJA_VISIVEL')
+    os.environ['LOJA_VISIVEL'] = '0'
+    try:
+        r = c.get('/admin/loja-online/prontidao')
+    finally:
+        if old is None:
+            os.environ.pop('LOJA_VISIVEL', None)
+        else:
+            os.environ['LOJA_VISIVEL'] = old
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['loja_visivel'] is False
+    assert j['pronto'] is False
+    assert any('LOJA_VISIVEL' in p for p in j['pendencias'])
