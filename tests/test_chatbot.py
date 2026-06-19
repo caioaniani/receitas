@@ -441,36 +441,59 @@ def test_consultar_pedido_nao_encontrado(app):
     assert 'erro' in r
 
 
+def _catalogo_loja(db):
+    """Loja do site + 1 cesta (produto) e 1 pão (receita) publicados E
+    estocados — o catálogo PRÓPRIO (opao.online) que o bot consulta agora."""
+    from decimal import Decimal
+
+    from conftest import _make_receita
+
+    from app.models import AppConfig, EstoqueLoja, Loja, Produto
+    loja = Loja(nome='Anesio', endereco='Anésio Pinto Rosa, 78', ativa=True)
+    db.session.add(loja)
+    db.session.commit()
+    AppConfig.set('loja_site_estoque_id', loja.id)
+    box = Produto(nome='Cesta Monamour', categoria='Cestas',
+                  preco_site=Decimal('200'), ativo=True,
+                  descricao='Contém: 2 croissants, 1 geleia, suco de laranja')
+    cr = _make_receita('Croissant Almond', categoria='Viennoiserie')
+    cr.preco_site = Decimal('32.50')
+    db.session.add_all([box, cr])
+    db.session.commit()
+    db.session.add(EstoqueLoja(loja_id=loja.id, produto_id=box.id,
+                               quantidade=20))
+    db.session.add(EstoqueLoja(loja_id=loja.id, receita_id=cr.id,
+                               quantidade=20))
+    db.session.commit()
+    return {'box': box.id, 'cr': cr.id}
+
+
 def test_consultar_produtos_inclui_descricao(app):
-    """Match focado traz a descrição (conteúdo da cesta), com HTML limpo."""
+    """Match focado no catálogo PRÓPRIO traz descrição + kind/id + url."""
+    from app.extensions import db
     from app.services import bot_tools
-    bot_tools._catalogo_cache.clear()
-    fake = SimpleNamespace(json=lambda: {'products': [
-        {'name': 'Cesta Monamour', 'available': True,
-         'description': '<p>Contém: 2 croissants, 1 geleia, suco de laranja</p>',
-         'variants': [{'sku': '999', 'price': 200.0, 'available': True}]}]})
     with app.app_context():
-        with patch('app.services.vnda._get', return_value=fake):
-            r = bot_tools.consultar_produtos('monamour')
+        _catalogo_loja(db)
+        r = bot_tools.consultar_produtos('monamour')
     p = r['produtos'][0]
+    assert p['nome'] == 'Cesta Monamour'
     assert 'croissants' in p['descricao']
-    assert '<p>' not in p['descricao']   # HTML removido
+    assert p['kind'] == 'produto'
+    assert p['disponivel'] is True              # estoque REAL
+    assert p['url'].startswith('https://opao.online/loja/')
 
 
 def test_consultar_produtos_fallback_sem_descricao(app):
     """Sem match no nome, o catálogo amplo vem SEM descrição (token-light)."""
+    from app.extensions import db
     from app.services import bot_tools
-    bot_tools._catalogo_cache.clear()
-    fake = SimpleNamespace(json=lambda: {'products': [
-        {'name': 'Pão Sourdough', 'available': True,
-         'description': 'Pão de fermentação natural',
-         'variants': [{'sku': '111', 'price': 30.0, 'available': True}]}]})
     with app.app_context():
-        with patch('app.services.vnda._get', return_value=fake):
-            r = bot_tools.consultar_produtos('zzznadacasa')
+        _catalogo_loja(db)
+        r = bot_tools.consultar_produtos('zzznadacasa')
+    assert r['produtos']                        # catálogo amplo
     p = r['produtos'][0]
-    assert 'descricao' not in p   # stripado no fallback
-    assert p['sku'] == '111'
+    assert 'descricao' not in p                 # stripado no fallback
+    assert 'kind' in p and 'id' in p
 
 
 def test_vigia_media_nao_pinga_so_registra(app):
