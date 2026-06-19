@@ -10,8 +10,6 @@ Não dá pra rodar JS aqui, então a cobertura é:
 """
 import os
 
-from conftest import loja_client
-
 
 def _admin_logado(app):
     from app.extensions import db
@@ -20,7 +18,7 @@ def _admin_logado(app):
     u.set_senha('x' * 8)
     db.session.add(u)
     db.session.commit()
-    c = loja_client(app)
+    c = app.test_client()
     with c.session_transaction() as s:
         s['_user_id'] = str(u.id)
         s['_fresh'] = True
@@ -32,7 +30,7 @@ def test_drawer_presente_em_todas_paginas_da_loja(app, monkeypatch):
     produto, checkout, conta...). Verifica home + entrar (não exigem
     catálogo)."""
     monkeypatch.setenv('LOJA_VISIVEL', '1')
-    c = loja_client(app)
+    c = app.test_client()
     for path in ('/loja/', '/loja/entrar'):
         r = c.get(path)
         assert r.status_code == 200, path
@@ -45,7 +43,7 @@ def test_drawer_tem_acoes_checkout_e_continuar(app, monkeypatch):
     """O drawer mostra os 2 caminhos: continuar comprando (fecha) +
     ir pro checkout (navega)."""
     monkeypatch.setenv('LOJA_VISIVEL', '1')
-    c = loja_client(app)
+    c = app.test_client()
     r = c.get('/loja/')
     assert b'Continuar comprando' in r.data
     assert b'Ir para o checkout' in r.data
@@ -56,7 +54,7 @@ def test_drawer_hidden_por_padrao(app, monkeypatch):
     """O drawer começa escondido (`hidden` + `aria-hidden=true`) — JS
     abre quando o cliente adiciona o primeiro item."""
     monkeypatch.setenv('LOJA_VISIVEL', '1')
-    c = loja_client(app)
+    c = app.test_client()
     r = c.get('/loja/')
     # `hidden` é atributo booleano: aparece sozinho na tag.
     assert b'aria-hidden="true"' in r.data
@@ -64,7 +62,7 @@ def test_drawer_hidden_por_padrao(app, monkeypatch):
 
 def test_drawer_subtotal_inicia_zero(app, monkeypatch):
     monkeypatch.setenv('LOJA_VISIVEL', '1')
-    c = loja_client(app)
+    c = app.test_client()
     r = c.get('/loja/')
     assert b'id="cart-drawer-total-valor"' in r.data
     assert b'R$ 0,00' in r.data
@@ -74,7 +72,7 @@ def test_pagina_dedicada_carrinho_ainda_acessivel(app, monkeypatch):
     """Regressão: o drawer NÃO substitui a página `/loja/carrinho` —
     ela continua sendo a "view completa" do carrinho."""
     monkeypatch.setenv('LOJA_VISIVEL', '1')
-    c = loja_client(app)
+    c = app.test_client()
     r = c.get('/loja/carrinho')
     assert r.status_code == 200
 
