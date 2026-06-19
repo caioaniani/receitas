@@ -290,7 +290,7 @@ def test_prompt_retirada_so_anesio_pinto_rosa():
 
 def test_prompt_fora_area_oferece_retirada_antes_de_transferir():
     from app.services.chatbot_prompt import PROMPT
-    # Regra do Q7: fora dos 15 km, oferece retirada PRIMEIRO
+    # Regra do Q7: fora dos 25 km, oferece retirada PRIMEIRO
     fora_area_idx = PROMPT.find('fora_area')
     assert fora_area_idx > 0
     bloco = PROMPT[fora_area_idx:fora_area_idx + 800]
