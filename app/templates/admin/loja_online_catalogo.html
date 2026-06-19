@@ -285,6 +285,51 @@
     });
   });
 
+  // Salvar estoque inline (blur ou Enter) — grava na MESMA EstoqueLoja da
+  // loja do site (a que /pedidos/estoque-loja usa). SET absoluto.
+  var URL_ESTOQUE = "/admin/loja-online/catalogo/estoque/__TIPO__/__ID__";
+  document.querySelectorAll('.estoque-input').forEach(function(inp) {
+    if (inp.disabled) return;
+    if (Number(inp.value) === 0) inp.classList.add('zero');
+    var origem = inp.value;
+    function salvar() {
+      var v = inp.value.trim();
+      if (v === origem || v === '') return;
+      var card = inp.closest('.item-card');
+      var tipo = card.dataset.tipo, id = card.dataset.id;
+      inp.classList.remove('saved', 'error');
+      inp.classList.add('saving');
+      fetch(URL_ESTOQUE.replace('__TIPO__', tipo).replace('__ID__', id), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ estoque: v })
+      }).then(function(r) {
+        if (!r.ok) return extrairErro(r).then(function(m){ throw new Error(m); });
+        return r.json();
+      }).then(function(d) {
+        inp.classList.remove('saving');
+        if (d.ok) {
+          inp.classList.add('saved');
+          inp.value = d.estoque;
+          origem = inp.value;
+          inp.classList.toggle('zero', Number(d.estoque) === 0);
+          setTimeout(function() { inp.classList.remove('saved'); }, 1200);
+        } else {
+          inp.classList.add('error');
+          alert(d.erro || 'erro ao salvar estoque');
+        }
+      }).catch(function(e) {
+        inp.classList.remove('saving');
+        inp.classList.add('error');
+        alert((e && e.message) || 'erro ao salvar estoque');
+      });
+    }
+    inp.addEventListener('blur', salvar);
+    inp.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+    });
+  });
+
   // Upload foto direto do thumb (com compressão client-side)
   document.querySelectorAll('.foto-input').forEach(function(inp) {
     inp.addEventListener('change', function(e) {
