@@ -34,6 +34,8 @@ def test_copilot_prompt_tem_regra_sintetizar_em_vez_de_ecoar(app):
         system = _build_system_prompt(user)
     assert 'SINTETIZE' in system
     assert 'NUNCA ECOE' in system
+    # Anti-auto-imitação: não repetir o despejo cru de turnos anteriores.
+    assert 'NAO SE IMITE' in system
     # Cobre os 3 verbos-gatilho que mais vamos receber.
     for verbo in ('previsao', 'media', 'tendencia'):
         assert verbo in system.lower()
