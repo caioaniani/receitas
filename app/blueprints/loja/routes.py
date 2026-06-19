@@ -315,6 +315,7 @@ def _gate_acesso():
             'loja.robots', 'loja.webhook_pagarme',
             'loja.entrar', 'loja.cadastrar', 'loja.sair',
             'loja.esqueci_senha', 'loja.redefinir_senha',
+            'loja.verificar_cadastro',
             # Acompanhar pedido pelo CÓDIGO (link do email pra guests):
             # qualquer um com o código vê o pedido. O código é random hex 8
             # (16^8 = 4 bi) — não é adivinhável por enumeração realista.
