@@ -150,6 +150,60 @@ def test_checkout_remove_item_esgotado(app):
         assert any('esgotou' in a for a in avisos)
 
 
+def test_catalogo_set_estoque_grava_na_loja_do_site(app):
+    """Editar o estoque na tela de catálogo cria/atualiza a MESMA EstoqueLoja
+    que /pedidos/estoque-loja usa, e registra um movimento de auditoria."""
+    from app.extensions import db
+    from app.models import EstoqueLoja, MovEstoqueLoja
+    with app.app_context():
+        loja = _site_loja(db)
+        p = _produto(db, 'Box Mimo', categoria='Cestas')
+        pid, loja_id = p.id, loja.id
+    c = _owner(app)
+    r = c.post(f'/admin/loja-online/catalogo/estoque/produto/{pid}',
+               json={'estoque': 12})
+    assert r.status_code == 200 and r.get_json()['estoque'] == 12
+    with app.app_context():
+        el = EstoqueLoja.query.filter_by(loja_id=loja_id, produto_id=pid).first()
+        assert el is not None and el.quantidade == 12
+        assert el.materia_prima_id is None  # produto, não MP
+        assert MovEstoqueLoja.query.filter_by(estoque_loja_id=el.id).count() == 1
+
+
+def test_catalogo_set_estoque_registra_delta(app):
+    """SET absoluto: baixar de 10 pra 4 registra ajuste_negativo de 6."""
+    from app.extensions import db
+    from app.models import EstoqueLoja, MovEstoqueLoja
+    with app.app_context():
+        loja = _site_loja(db)
+        p = _produto(db, 'Geleia delta', categoria='Conservas')
+        _estoque(db, loja, p, 10)
+        pid, loja_id = p.id, loja.id
+    c = _owner(app)
+    r = c.post(f'/admin/loja-online/catalogo/estoque/produto/{pid}',
+               json={'estoque': 4})
+    assert r.get_json()['estoque'] == 4
+    with app.app_context():
+        el = EstoqueLoja.query.filter_by(loja_id=loja_id, produto_id=pid).first()
+        assert el.quantidade == 4
+        mov = MovEstoqueLoja.query.filter_by(
+            estoque_loja_id=el.id, tipo='ajuste_negativo').first()
+        assert mov is not None and mov.quantidade == 6
+
+
+def test_catalogo_mostra_campo_estoque(app):
+    from app.extensions import db
+    with app.app_context():
+        loja = _site_loja(db)
+        p = _produto(db, 'Item com estoque', categoria='Cestas')
+        _estoque(db, loja, p, 7)
+    c = _owner(app)
+    r = c.get('/admin/loja-online/catalogo?filtro=todos')
+    assert r.status_code == 200
+    assert b'estoque-input' in r.data
+    assert b'Item com estoque' in r.data
+
+
 def test_diagnostico_estoque_vitrine(app):
     from app.extensions import db
     with app.app_context():
