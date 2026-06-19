@@ -443,7 +443,30 @@
   }
 
   // ── Status ────────────────────────────────────────────
+  // Mudanças otimistas aguardando o servidor confirmar. Sem isso, o poll de
+  // 20s sobrescreve o card com o estado (ainda antigo) do servidor e o status
+  // "volta" antes do POST dar round-trip. Cada mudança fica pendente até o
+  // servidor devolver o MESMO status (confirmou) ou expirar (POST falhou).
+  var pendentes = {};            // { code: { status, ts } }
+  var PENDENTE_TTL = 30000;      // 30s — mais que um ciclo de poll (20s)
+
+  function marcarPendente(code, status) {
+    pendentes[code] = { status: status, ts: Date.now() };
+  }
+  function aplicarPendentes(lista) {
+    var agora = Date.now();
+    lista.forEach(function (p) {
+      var pend = pendentes[p.code];
+      if (!pend) return;
+      if (pend.status === p.status) delete pendentes[p.code];        // confirmou
+      else if (agora - pend.ts < PENDENTE_TTL) p.status = pend.status; // mantém
+      else delete pendentes[p.code];                                  // expirou
+    });
+    return lista;
+  }
+
   function mandarStatus(code, status) {
+    marcarPendente(code, status);
     fetch(STATUS_TMPL.replace('__CODE__', encodeURIComponent(code)) + '?status=' + status, {
       method: 'POST', headers: { 'X-CSRFToken': CSRF }
     }).catch(function () {});
