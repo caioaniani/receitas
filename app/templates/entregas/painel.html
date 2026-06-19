@@ -712,10 +712,10 @@
           return;
         }
         setErro('');
-        // Preserva status local de quem acabou de mudar (evita "piscar" de volta
-        // antes do servidor confirmar): o servidor e a fonte da verdade, mas se
-        // o detalhe esta aberto, nao sobrescreve o card aberto.
-        pedidos = data.pedidos || [];
+        // Preserva o status de quem acabou de mudar até o servidor confirmar
+        // (aplicarPendentes): o servidor é a fonte da verdade, mas uma mudança
+        // recente que ainda não deu round-trip não pode "voltar" no poll.
+        pedidos = aplicarPendentes(data.pedidos || []);
         lalaSaldo = data.lalamove_saldo || null;
         render(); atualizarAlarme();
         atualizarVigia(data.vigia);
