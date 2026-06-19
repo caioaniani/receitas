@@ -202,7 +202,9 @@ def test_minha_conta_exige_cliente_logado(app, monkeypatch):
     """/loja/conta sem login → 302 pra /loja/entrar (não 200, não 404)."""
     monkeypatch.setenv('LOJA_VISIVEL', '1')  # tirar o gate de visibilidade
     c = app.test_client()
-    r = c.get('/loja/conta', follow_redirects=False)
+    # host público da loja — senão o gate de host barra antes do cliente_required
+    r = c.get('/loja/conta', base_url='http://opao.online',
+              follow_redirects=False)
     assert r.status_code == 302
     assert '/loja/entrar' in r.headers['Location']
 
