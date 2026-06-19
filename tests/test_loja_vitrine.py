@@ -178,9 +178,10 @@ def test_card_sem_preco_nao_mostra_acao(app):
     assert b'Sem pre' not in r.data
 
 
-def test_home_tem_chips_de_navegacao_por_categoria(app):
-    """O cliente precisa poder navegar por categoria pelos chips do topo
-    (decisão do dono 17/06/2026). Cada categoria aparece como link âncora."""
+def test_home_sem_chips_mas_com_ancoras_de_categoria(app):
+    """Chips de categoria REMOVIDOS (decisão do dono 19/06/2026 — o dropdown
+    'Produtos' já navega). As SEÇÕES mantêm o id de âncora pra o dropdown
+    (#cat-<slug>) continuar pulando certo."""
     from app.extensions import db
     from app.models import Receita
     _criar_produto_publicado(db, nome='Box Mimo', categoria='Cestas',
@@ -194,12 +195,11 @@ def test_home_tem_chips_de_navegacao_por_categoria(app):
     c = _admin_logado(app)
     r = c.get('/loja/')
     assert r.status_code == 200
-    # Chips de categoria presentes (nav)
-    assert b'cat-nav' in r.data
-    # Cada categoria vira link âncora pelo SLUG da categoria (estável e
-    # idêntico ao do dropdown "Produtos" do header).
-    assert b'href="#cat-cestas"' in r.data
-    assert b'href="#cat-paes"' in r.data
+    # Chips removidos
+    assert b'cat-nav' not in r.data
+    # Mas as seções mantêm a âncora pelo SLUG (o dropdown aponta pra elas).
+    assert b'id="cat-cestas"' in r.data
+    assert b'id="cat-paes"' in r.data
 
 
 # ── Página de produto ────────────────────────────────────────────────
