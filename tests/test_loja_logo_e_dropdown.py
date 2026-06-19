@@ -9,6 +9,10 @@
 import io
 from unittest.mock import patch
 
+import pytest
+
+pytestmark = pytest.mark.loja_host
+
 
 def _png_com_alpha(size=(600, 200)):
     from PIL import Image
