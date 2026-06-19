@@ -64,31 +64,43 @@ def test_staff_logado_ve_200(app, monkeypatch):
 
 
 def test_LOJA_VISIVEL_um_libera_pra_anonimo(app, monkeypatch):
+    """No host PÚBLICO da loja (opao.online), LOJA_VISIVEL=1 libera anônimo."""
     monkeypatch.setenv('LOJA_VISIVEL', '1')
     c = app.test_client()
-    assert c.get('/loja/').status_code == 200
+    assert c.get('/loja/', base_url='http://opao.online').status_code == 200
 
 
-def test_X_Robots_some_quando_loja_publica(app, monkeypatch):
-    """No cutover (LOJA_VISIVEL=1), o header X-Robots-Tag não pode mais
-    bloquear indexação das rotas /loja — senão o Google ignora a loja nova
-    mesmo com a vitrine pública. Rotas FORA de /loja continuam noindex
-    (admin)."""
+def test_gestao_host_nao_vaza_loja_publica(app, monkeypatch):
+    """Mesmo com LOJA_VISIVEL=1, o host de GESTÃO (fora de LOJA_HOSTS) NÃO
+    mostra a loja pra anônimo — evita uma segunda URL pública/indexável da
+    mesma vitrine. Só admin logado vê lá (test_sessao_admin/staff)."""
     monkeypatch.setenv('LOJA_VISIVEL', '1')
     c = app.test_client()
-    r = c.get('/loja/')
-    assert r.status_code == 200
-    assert 'noindex' not in (r.headers.get('X-Robots-Tag') or '').lower()
+    # localhost = host fora de LOJA_HOSTS (representa o gestao.*)
+    assert c.get('/loja/', base_url='http://localhost').status_code == 404
+
+
+def test_X_Robots_some_so_no_host_da_loja(app, monkeypatch):
+    """noindex sai (deixa indexar) SÓ no host público (opao.online) com
+    LOJA_VISIVEL=1. No gestao.* (host não-loja) o noindex CONTINUA — a mesma
+    loja indexável nos dois domínios seria conteúdo duplicado pro Google."""
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    c = app.test_client()
+    # Host público: indexável (sem noindex)
+    r_pub = c.get('/loja/', base_url='http://opao.online')
+    assert r_pub.status_code == 200
+    assert 'noindex' not in (r_pub.headers.get('X-Robots-Tag') or '').lower()
+    # Host de gestão: robots.txt é a rota /loja liberada a anônimo; noindex segue
+    r_gestao = c.get('/loja/robots.txt', base_url='http://localhost')
+    assert 'noindex' in (r_gestao.headers.get('X-Robots-Tag') or '').lower()
 
 
 def test_X_Robots_continua_em_modo_teste(app, monkeypatch):
-    """LOJA_VISIVEL=0 (default em desenvolvimento): rotas /loja CONTINUAM
-    noindex pra não vazar pra busca por engano."""
+    """LOJA_VISIVEL=0 (default em desenvolvimento): noindex presente até no
+    host público. Usa /robots.txt (sempre liberada) pra ler o header."""
     monkeypatch.delenv('LOJA_VISIVEL', raising=False)
-    # Vista da loja só responde 200 pra logado em modo teste; usa /robots.txt
-    # (sempre liberada) pra checar o header em rota /loja/*.
     c = app.test_client()
-    r = c.get('/loja/robots.txt')
+    r = c.get('/loja/robots.txt', base_url='http://opao.online')
     assert r.status_code == 200
     assert 'noindex' in (r.headers.get('X-Robots-Tag') or '').lower()
 
