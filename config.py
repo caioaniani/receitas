@@ -250,9 +250,12 @@ class Config:
         'CHATWOOT_PUBLIC_URL', 'https://atendimento.opaopadariaartesanal.com.br')
     # Token PÚBLICO da "Website Inbox" do Chatwoot (Settings > Inboxes >
     # <inbox> > Configuration > "Website Token"). Vai no HTML do site, pode
-    # ser commitado sem risco (não é segredo). Vazio = widget de chat
-    # desligado na loja (fail-open).
-    CHATWOOT_WEBSITE_TOKEN = os.environ.get('CHATWOOT_WEBSITE_TOKEN', '')
+    # ser commitado sem risco (não é segredo — qualquer um vê no fonte da
+    # página). Default = inbox do site da padaria (19/06/2026), pra o chat
+    # ligar SEM depender de env var no Railway. Pra trocar/desligar, setar
+    # CHATWOOT_WEBSITE_TOKEN no Railway ('' desliga o widget — fail-open).
+    CHATWOOT_WEBSITE_TOKEN = os.environ.get(
+        'CHATWOOT_WEBSITE_TOKEN', 'GP6SHfZfjsCqEH1ZnPybdUpf')
 
     # ── Pagamento (Pagar.me / Stone) — Fase 4 loja online (17/06/2026) ──
     # API v5 (https://api.pagar.me/core/v5), Basic auth com a SECRET KEY
