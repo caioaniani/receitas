@@ -165,5 +165,26 @@
 <script src="{{ url_for('loja.static', filename='carrinho.js') }}"></script>
 {% block scripts %}{% endblock %}
 
+{# Chatwoot widget (botão de chat no canto). Só renderiza se a env
+   CHATWOOT_WEBSITE_TOKEN estiver setada. O token é PÚBLICO (vai no HTML);
+   o snippet é o padrão do Chatwoot v4. #}
+{% if chatwoot_widget %}
+<script>
+  (function(d,t) {
+    var BASE_URL = "{{ chatwoot_widget.url }}";
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = BASE_URL + "/packs/js/sdk.js";
+    g.defer = true; g.async = true;
+    s.parentNode.insertBefore(g, s);
+    g.onload = function() {
+      window.chatwootSDK.run({
+        websiteToken: "{{ chatwoot_widget.token }}",
+        baseUrl: BASE_URL
+      });
+    };
+  })(document, "script");
+</script>
+{% endif %}
+
 </body>
 </html>
