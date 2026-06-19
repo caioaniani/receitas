@@ -76,10 +76,8 @@ def test_verificar_cadastro_token_valido_ativa_conta(app):
     _cadastrar(c, email='pedro@x.com', nome='Pedro Completo',
                senha='senha-forte-1')
     with app.app_context():
-        reg = ClienteVerificacaoEmail.query.filter_by(
-            cliente__email='pedro@x.com').first() if False else (
-            ClienteVerificacaoEmail.query.join(Cliente)
-            .filter(Cliente.email == 'pedro@x.com').first())
+        reg = (ClienteVerificacaoEmail.query.join(Cliente)
+               .filter(Cliente.email == 'pedro@x.com').first())
         token = reg.token
     r = c.get(f'/loja/verificar-cadastro/{token}', follow_redirects=False)
     assert r.status_code == 302
