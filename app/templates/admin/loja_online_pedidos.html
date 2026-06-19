@@ -100,45 +100,106 @@
 
 <script>
 (function() {
-  var input = document.getElementById('busca-pedido');
-  if (!input) return;
   var tbody = document.getElementById('pedidos-tbody');
+  if (!tbody) return;
+  var input = document.getElementById('busca-pedido');
   var vazio = document.getElementById('pedidos-vazio');
+  var chkTodos = document.getElementById('chk-todos');
+  var btnImp = document.getElementById('btn-imprimir-selecao');
+  var contagem = document.getElementById('contagem-selecao');
   var tbodyInicial = tbody.innerHTML;
-  var vazioInicialOculto = vazio.hasAttribute('hidden');
-  var msgInicial = vazio.getAttribute('data-msg-inicial');
-  var timer = null, reqId = 0;
+  var vazioInicialOculto = vazio ? vazio.hasAttribute('hidden') : true;
+  var msgInicial = vazio ? vazio.getAttribute('data-msg-inicial') : '';
+
+  // Filtro de DATA ativo na tela: propaga pra busca AJAX (servidor respeita).
+  // Sem isso, digitar no busca traria pedidos de outros dias e atropelaria o filtro.
+  var filtroData = {
+    data: {{ data|tojson }},
+    data_ini: {{ data_ini|tojson }},
+    data_fim: {{ data_fim|tojson }}
+  };
+
+  function paramsData() {
+    var p = [];
+    for (var k in filtroData) {
+      if (filtroData[k]) p.push(k + '=' + encodeURIComponent(filtroData[k]));
+    }
+    return p.join('&');
+  }
+
+  function atualizarSelecao() {
+    var marcados = tbody.querySelectorAll('.chk-pedido:checked').length;
+    var total = tbody.querySelectorAll('.chk-pedido').length;
+    if (btnImp) btnImp.disabled = marcados === 0;
+    if (contagem) {
+      contagem.textContent = marcados === 0
+        ? 'Nenhum pedido selecionado.'
+        : (marcados === 1 ? '1 pedido selecionado.'
+                          : marcados + ' pedidos selecionados.');
+    }
+    if (chkTodos) {
+      chkTodos.checked = total > 0 && marcados === total;
+      chkTodos.indeterminate = marcados > 0 && marcados < total;
+    }
+  }
+
+  if (chkTodos) {
+    chkTodos.addEventListener('change', function() {
+      tbody.querySelectorAll('.chk-pedido').forEach(function(el) {
+        el.checked = chkTodos.checked;
+      });
+      atualizarSelecao();
+    });
+  }
+  // Delegação: pega checkboxes atuais E os que vierem pela busca AJAX.
+  tbody.addEventListener('change', function(e) {
+    if (e.target && e.target.classList.contains('chk-pedido')) {
+      atualizarSelecao();
+    }
+  });
 
   function restaurar() {
     tbody.innerHTML = tbodyInicial;
+    if (!vazio) return;
     vazio.textContent = msgInicial;
     if (vazioInicialOculto) vazio.setAttribute('hidden', '');
     else vazio.removeAttribute('hidden');
+    atualizarSelecao();
   }
 
+  var timer = null, reqId = 0;
   function buscar(q) {
     var meu = ++reqId;
-    fetch('/admin/loja-online/buscar-pedidos?q=' + encodeURIComponent(q), {
-      headers: { 'X-Requested-With': 'fetch' }
-    }).then(function(r) { return r.ok ? r.text() : ''; })
+    var url = '/admin/loja-online/buscar-pedidos?q=' + encodeURIComponent(q);
+    var pd = paramsData();
+    if (pd) url += '&' + pd;
+    fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
+      .then(function(r) { return r.ok ? r.text() : ''; })
       .then(function(html) {
         if (meu !== reqId) return;  // resposta velha (digitou mais) — ignora
         tbody.innerHTML = html;
-        if (html.trim() === '') {
-          vazio.textContent = 'Nenhum pedido encontrado pra “' + q + '”.';
-          vazio.removeAttribute('hidden');
-        } else {
-          vazio.setAttribute('hidden', '');
+        if (vazio) {
+          if (html.trim() === '') {
+            vazio.textContent = 'Nenhum pedido encontrado pra “' + q + '”.';
+            vazio.removeAttribute('hidden');
+          } else {
+            vazio.setAttribute('hidden', '');
+          }
         }
+        atualizarSelecao();
       }).catch(function() { /* silencioso — mantém a lista atual */ });
   }
 
-  input.addEventListener('input', function() {
-    var q = input.value.trim();
-    clearTimeout(timer);
-    if (q.length < 2) { reqId++; restaurar(); return; }
-    timer = setTimeout(function() { buscar(q); }, 250);
-  });
+  if (input) {
+    input.addEventListener('input', function() {
+      var q = input.value.trim();
+      clearTimeout(timer);
+      if (q.length < 2) { reqId++; restaurar(); return; }
+      timer = setTimeout(function() { buscar(q); }, 250);
+    });
+  }
+
+  atualizarSelecao();
 })();
 </script>
 {% endblock %}
