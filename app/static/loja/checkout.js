@@ -235,7 +235,7 @@
             out.className = 'frete-resultado erro';
           } else if (data.fora_area) {
             freteAtual = null;
-            out.textContent = 'Endereço fora da área de entrega (até 15 km).';
+            out.textContent = 'Endereço fora da nossa área de entrega.';
             out.className = 'frete-resultado erro';
           } else {
             freteAtual = Number(data.valor) || 0;
