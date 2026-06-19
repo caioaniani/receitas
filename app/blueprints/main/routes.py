@@ -2793,9 +2793,6 @@ def loja_online_logo_remover():
     return redirect(url_for('main.loja_online_dashboard'))
 
 
-# ── Debug Pagar.me: valida a chave sem expor o segredo (Fase 4) ───────────
-@main_bp.route('/admin/debug-pagarme')
-@owner_required
 @main_bp.route('/admin/debug-redirect-dominio')
 @owner_required
 def debug_redirect_dominio():
