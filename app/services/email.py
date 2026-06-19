@@ -452,6 +452,59 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
 </div></body></html>"""
 
 
+def enviar_verificacao_cadastro(cliente, token):
+    """Manda o link de verificação pra finalizar o cadastro. Best-effort.
+
+    Dispara SÓ quando o cadastro reivindicaria um pedido feito como guest
+    (mesmo e-mail já presente no Cliente sem senha). Cadastro de e-mail
+    "novo" não passa por aqui (segue instantâneo). Token vale 1h."""
+    cfg = current_app.config
+    base = (cfg.get('LOJA_BASE_URL') or cfg.get('APP_BASE_URL')
+            or '').rstrip('/')
+    if not base:
+        return {'ok': False, 'erro': 'LOJA_BASE_URL não configurada'}
+    destinatario = (cliente.email or '').strip()
+    if not destinatario:
+        return {'ok': False, 'erro': 'cliente sem email'}
+    link = f'{base}/loja/verificar-cadastro/{token}'
+    assunto = 'Confirme seu e-mail — O Pão Padaria Artesanal'
+    html = _template_verificacao(cliente.nome, link)
+    primeiro = cliente.nome.split()[0] if cliente.nome else ''
+    texto = (f'Olá, {primeiro}!\n\n'
+             f'Vimos que esse e-mail já fez um pedido antes. Pra finalizar a '
+             f'criação da sua conta, clique no link abaixo (vale por 1h):\n\n'
+             f'  {link}\n\n'
+             f'Se não foi você que tentou criar conta, ignore — nada vai '
+             f'mudar.')
+    return enviar(destinatario, assunto, html, texto=texto)
+
+
+def _template_verificacao(nome, link):
+    primeiro = nome.split()[0] if nome else ''
+    return f"""\
+<!doctype html><html lang="pt-BR"><body style="margin:0;background:#fbf8f3;
+font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
+<div style="max-width:540px;margin:0 auto;padding:32px 24px;">
+  <h1 style="font-size:22px;margin:0 0 4px;">O Pão · Padaria Artesanal</h1>
+  <p style="color:#6b5f54;margin:0 0 20px;">Olá, {primeiro}!</p>
+  <div style="background:#fff;border-radius:12px;padding:20px 22px;
+  box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:20px;">
+    <p style="margin:0 0 14px;font-size:15px;">Vimos que esse e-mail já
+    fez um pedido antes com a gente. Pra proteger seus dados, confirme
+    que é você antes de criar a conta. O link vale por 1h:</p>
+    <a href="{link}" style="display:inline-block;background:#8b5a2b;
+    color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;
+    font-weight:600;">Confirmar e-mail</a>
+    <p style="color:#6b5f54;font-size:13px;margin:14px 0 0;">
+      Se o botão não funcionar, copie e cole no navegador:<br>
+      <span style="word-break:break-all;color:#1971c2;">{link}</span></p>
+  </div>
+  <p style="color:#9a8d80;font-size:12px;margin-top:24px;">
+    Se não foi você, ignore — nada vai mudar. Email automático, não
+    responda.</p>
+</div></body></html>"""
+
+
 def enviar_boas_vindas(destinatario, nome, login, senha):
     """Email de convite pro novo usuário: senha do gestao.* + como entrar
     no atendimento (Chatwoot). Cadastro do Chatwoot ainda é manual (Super
