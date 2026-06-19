@@ -84,35 +84,16 @@ def _limpar_tabelas(db):
     db.session.commit()
 
 
-class _LojaTestClient:
-    """Envolve o test_client mandando todo request pro host PÚBLICO da loja
-    (opao.online) — a loja só responde a anônimo nesse host (em localhost o
-    gate trata como gestão e barra). `base_url` é o jeito que de fato fixa o
-    Host no Werkzeug (environ_base['HTTP_HOST'] é sobrescrito pelo base_url
-    default 'localhost'). Login feito via HTTP por aqui (cadastrar/entrar)
-    grava o cookie pra opao.online — consistente nos requests seguintes.
-    Métodos não-HTTP (session_transaction etc.) caem no client real."""
-    _BASE = 'http://opao.online'
-
-    def __init__(self, client):
-        self._c = client
-
-    def get(self, *a, **kw):
-        kw.setdefault('base_url', self._BASE)
-        return self._c.get(*a, **kw)
-
-    def post(self, *a, **kw):
-        kw.setdefault('base_url', self._BASE)
-        return self._c.post(*a, **kw)
-
-    def __getattr__(self, nome):
-        return getattr(self._c, nome)
-
-
-def loja_client(app):
-    """Client cujos requests batem no host PÚBLICO da loja (opao.online).
-    Use nos testes que exercitam a vitrine como VISITANTE (LOJA_VISIVEL=1)."""
-    return _LojaTestClient(app.test_client())
+@pytest.fixture(autouse=True)
+def _localhost_como_host_de_loja(request, _app_session, monkeypatch):
+    """Nos arquivos marcados `@pytest.mark.loja_host`, faz o host de teste
+    (localhost) contar como host PÚBLICO da loja (LOJA_HOSTS=localhost). A loja
+    só responde a anônimo nos hosts de LOJA_HOSTS — sem isso os testes de
+    vitrine pública (LOJA_VISIVEL=1) cairiam em 404 no gate. Fica tudo em
+    localhost (sem base_url/cookie). NÃO afeta os outros arquivos (gate de
+    host segue valendo, ex.: testes de admin)."""
+    if request.node.get_closest_marker('loja_host'):
+        monkeypatch.setitem(_app_session.config, 'LOJA_HOSTS', 'localhost')
 
 
 @pytest.fixture
