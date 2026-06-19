@@ -344,13 +344,18 @@ def create_app(config_class=None):
         import os
 
         from flask import g
-        # noindex global protege o admin. Pra /loja, quando a vitrine vira
-        # publica (LOJA_VISIVEL=1, Fase 8), tem que sumir senao o Google
-        # ignora a loja nova. Em modo teste (=0) o noindex CONTINUA pra nao
-        # vazar pra busca por engano.
+
+        from app.utils import host_atual_eh_loja
+        # noindex global protege o admin. So sai (deixa indexar) quando a
+        # vitrine esta publica (LOJA_VISIVEL=1, Fase 8) E o host e o dominio
+        # publico da loja (opao.online). No gestao.*/loja o noindex CONTINUA:
+        # e a mesma loja servida pelo dominio de gestao, e indexar os dois
+        # geraria conteudo duplicado pro Google. Em modo teste (=0) tambem
+        # continua, pra nao vazar pra busca por engano.
         loja_publica = (
             os.environ.get('LOJA_VISIVEL', '0').strip() == '1'
             and request.path.startswith('/loja')
+            and host_atual_eh_loja()
         )
         if not loja_publica:
             response.headers['X-Robots-Tag'] = 'noindex, nofollow'
