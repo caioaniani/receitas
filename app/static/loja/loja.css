@@ -90,7 +90,7 @@ a:hover { text-decoration: underline; }
   /* Flex item: `min-width:0` deixa encolher, `flex-shrink:1` permite
      ceder espaço quando a nav precisa. Sem isso, o wordmark longo
      empurra a navegação pra fora da tela no celular. */
-  font-size: 24px;
+  font-size: 30px;
   font-weight: 500;   /* Fraunces vai até 500 — evita faux-bold + bate o tom editorial */
   color: var(--texto);
   letter-spacing: .2px;
