@@ -1,18 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}Loja Online — Pedidos do site{% endblock %}
 
-{% set badge = {
-  'aguardando_pagamento': 'bg-warning text-dark',
-  'pago': 'bg-info text-dark',
-  'em_preparo': 'bg-secondary',
-  'a_caminho': 'bg-primary',
-  'entregue': 'bg-success',
-  'cancelado': 'bg-danger',
-} %}
-{% set modo_label = {
-  'agendada': 'Entrega agendada', 'retirada': 'Retirada', 'express': 'Express',
-} %}
-
 {% block content %}
 <h1 class="page-title"><span aria-hidden="true">🥐</span> Pedidos do site</h1>
 <p class="text-muted">
