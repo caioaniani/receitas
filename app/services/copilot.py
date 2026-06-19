@@ -2559,6 +2559,23 @@ def _read_consultar_funcionario(params, user):
     return {'texto': '\n'.join(linhas)}
 
 
+def _valor_mov_estoque(m):
+    """Valor REAL de uma MovimentacaoEstoque, respeitando a unidade da MP.
+
+    `quantidade` esta na unidade de estoque da MP (g/ml/kg/un); `preco_unitario`
+    eh sempre por kg (ou por un quando a MP eh 'un'). Multiplicar direto sem
+    fator inflava 1000x pra MPs em g/ml (caso real 19/06/2026: bot reportou
+    R$ 1.637.220 em 2 compras — eram R$ 1.637,22). Mesma logica de
+    `custos.py:_custo_unitario_mov` (custo / 1000 pra g/ml)."""
+    qtd = float(m.quantidade or 0)
+    preco = float(m.preco_unitario or 0)
+    mp = getattr(m, 'materia_prima', None)
+    unidade = (getattr(mp, 'unidade', '') or '').lower()
+    if unidade in ('g', 'ml'):
+        return qtd * preco / 1000.0
+    return qtd * preco   # 'kg' e 'un' multiplicam direto
+
+
 def _read_consultar_caixa(params, user):
     from sqlalchemy import func as sqlfunc
 
@@ -2576,13 +2593,25 @@ def _read_consultar_caixa(params, user):
         MovimentacaoEstoque.tipo == 'entrada',
         sqlfunc.date(MovimentacaoEstoque.data) == d,
     ).all()
-    valor_compras = sum((m.quantidade or 0) * (m.preco_unitario or 0) for m in movs)
+    valor_compras = sum(_valor_mov_estoque(m) for m in movs)
     linhas = [f'**Resumo de {d.strftime("%d/%m/%Y")}:**']
     linhas.append(f'- {len(locais)} pedido(s) local → R$ {valor_locais:.2f}')
     feitas = sum(1 for a in atribs if a.status == 'entregue')
     falhas = sum(1 for a in atribs if a.status == 'nao_entregue')
     linhas.append(f'- {len(atribs)} entregas atribuidas ({feitas} feitas, {falhas} falhas)')
     linhas.append(f'- {len(movs)} compras de MP → R$ {valor_compras:.2f}')
+    # Breakdown por MP (top por valor). Ajuda a achar entrada errada no banco
+    # — se um item domina o total, da pra ver na hora qual investigar.
+    if movs:
+        por_mp = {}
+        for m in movs:
+            nome = getattr(m.materia_prima, 'nome', '?') or '?'
+            por_mp[nome] = por_mp.get(nome, 0) + _valor_mov_estoque(m)
+        top = sorted(por_mp.items(), key=lambda x: -x[1])[:5]
+        for nome, val in top:
+            linhas.append(f'    • {nome} → R$ {val:.2f}')
+        if len(por_mp) > 5:
+            linhas.append(f'    • (+ {len(por_mp) - 5} outros)')
     return {'texto': '\n'.join(linhas)}
 
 
