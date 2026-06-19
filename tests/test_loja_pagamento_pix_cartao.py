@@ -539,6 +539,7 @@ def test_paid_emite_nf_e_envia_email_da_nf(app):
     from app.services import loja_pagamento
     with app.app_context():
         app.config['PAGARME_API_KEY'] = 'sk_test_abc'
+        app.config['POSTMARK_SERVER_TOKEN'] = 'tok'  # disponivel() → True
         loja = _loja_site(db)
         p = _produto(db)
         ped = _pedido_com_item(db, p, qtd=1, modo='retirada',
