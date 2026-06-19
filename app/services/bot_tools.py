@@ -307,21 +307,32 @@ def consultar_ingredientes(nome_produto):
 
 
 def gerar_link_carrinho(itens):
-    """itens: lista de dicts {'sku': str, 'qtd': int}. Monta o link de
-    carrinho do VNDA: /carrinho?itens=SKU:qtd,SKU:qtd (parametro 'itens' em
-    portugues). Retorna {'link': str} ou {'erro': ...}.
+    """itens: lista de {'kind': 'receita'|'produto', 'id': int, 'qtd': int}.
+    Monta o link de 1 CLIQUE que enche o carrinho do opao.online e leva pro
+    checkout: /loja/carrinho?add=r5:2,p83:1 (r=receita, p=produto). Cesta
+    também entra aqui (kind=produto) — um link só pra avulsos + cesta.
 
-    Determinístico de proposito — tira do Claude o risco de montar a URL
-    errada (a regra anti-erro de SKU do prompt vira garantia aqui)."""
+    Determinístico — tira do Claude o risco de montar URL errada. O carrinho
+    resolve preço/estoque no SERVIDOR (cliente não dita valor). kind+id vêm do
+    consultar_produtos."""
     partes = []
     for it in (itens or []):
-        sku = str(it.get('sku') or '').strip()
-        qtd = it.get('qtd') or it.get('quantidade') or 1
-        if sku:
-            partes.append(f'{sku}:{int(qtd)}')
+        kind = str(it.get('kind') or '').strip().lower()
+        letra = {'receita': 'r', 'produto': 'p'}.get(kind)
+        if not letra:
+            continue
+        try:
+            iid = int(it.get('id'))
+        except (TypeError, ValueError):
+            continue
+        try:
+            qtd = max(1, int(it.get('qtd') or it.get('quantidade') or 1))
+        except (TypeError, ValueError):
+            qtd = 1
+        partes.append(f'{letra}{iid}:{qtd}')
     if not partes:
-        return {'erro': 'nenhum SKU válido'}
-    return {'link': f'{SHOP}/carrinho?itens=' + ','.join(partes)}
+        return {'erro': 'nenhum item válido'}
+    return {'link': f'{_base_loja()}/loja/carrinho?add=' + ','.join(partes)}
 
 
 def _origem_e_vnda(pedido_tiny):
