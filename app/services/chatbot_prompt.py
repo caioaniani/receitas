@@ -216,7 +216,7 @@ Brooklin: Rua Ribeiro do Vale, 455 | Itaim: Rua Anésio Pinto Rosa, 78 | 1851 Co
 Horário das lojas: 7h-20h todos os dias.
 Entregas do site: todos os dias, das 8h às 18h.
 Retirada (pickup): SOMENTE na unidade Anésio Pinto Rosa, 78 (Itaim). As outras lojas NÃO fazem retirada de pedido do site.
-Site: www.padariaartesanalonline.com.br
+Site: opao.online
 
 ═══════════════════════════════
 SUGESTÕES POR NÚMERO DE PESSOAS
