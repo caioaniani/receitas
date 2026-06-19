@@ -144,6 +144,51 @@ def test_criar_pedido_retirada_ok(app):
         assert len(pedido.itens) == 1
 
 
+def test_retirada_so_aceita_loja_permitida(app):
+    """Retirada só pode na loja permitida (Anésio Pinto Rosa = loja do site).
+    Outra loja ativa é bloqueada no servidor mesmo burlando o <select>."""
+    from app.extensions import db
+    from app.models import Loja
+    from app.services import loja_checkout
+    with app.app_context():
+        p = _produto_pub(db, preco=20.0)
+        permitida = _loja(db)  # vira a loja do site (AppConfig)
+        outra = Loja(nome='Itaim Outra', endereco='X, 1', ativa=True)
+        db.session.add(outra)
+        db.session.commit()
+        base = datetime(2026, 6, 17, 10, 0)
+        data = loja_checkout.datas_disponiveis('retirada', base=base)[1].isoformat()
+        # Retirada na OUTRA loja → erro
+        form = _form(modo_entrega='retirada', loja_id=str(outra.id),
+                     data_entrega=data, janela_entrega='08:00–09:00')
+        pedido, erros = loja_checkout.criar_pedido(
+            form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+        assert pedido is None
+        assert any('apenas em' in e for e in erros)
+        # Retirada na PERMITIDA → ok
+        form2 = _form(modo_entrega='retirada', loja_id=str(permitida.id),
+                      data_entrega=data, janela_entrega='08:00–09:00')
+        pedido2, erros2 = loja_checkout.criar_pedido(
+            form2, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+        assert erros2 == [] and pedido2.loja_retirada_id == permitida.id
+
+
+def test_checkout_desabilita_lojas_nao_permitidas(app):
+    """Na tela de checkout, as lojas que não aceitam retirada aparecem como
+    (indisponível) e desabilitadas."""
+    from app.extensions import db
+    from app.models import Loja
+    with app.app_context():
+        _produto_pub(db, preco=20.0)
+        _loja(db, nome='Anesio Permitida')  # site loja
+        db.session.add(Loja(nome='Outra Loja', endereco='Y, 2', ativa=True))
+        db.session.commit()
+    c = _admin_logado(app)
+    r = c.get('/loja/checkout')
+    assert r.status_code == 200
+    assert b'(indispon\xc3\xadvel)' in r.data   # "(indisponível)" utf-8
+
+
 def test_criar_pedido_agendada_recomputa_frete_no_servidor(app):
     from app.extensions import db
     from app.services import loja_checkout
