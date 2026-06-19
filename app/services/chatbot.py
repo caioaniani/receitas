@@ -392,7 +392,7 @@ TOOLS = [
         'name': 'consultar_frete',
         'description': ('Estima o frete de entrega pra um CEP ou endereço do '
                         'cliente (anéis de distância a partir da padaria: '
-                        'grátis até 1 km, +R$5 por km, máximo 15 km). Prefira '
+                        'grátis até 1 km, +R$5 por km, máximo 25 km). Prefira '
                         'o CEP quando o cliente tiver. O valor é estimativa — '
                         'o definitivo é o do checkout do site.'),
         'input_schema': {
