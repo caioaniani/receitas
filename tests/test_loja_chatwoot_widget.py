@@ -40,7 +40,9 @@ def test_widget_ligado_renderiza_snippet(app):
     assert r.status_code == 200
     assert b'chatwootSDK' in r.data
     assert b'tok_publico_qualquer' in r.data
-    assert b'atendimento.opaopadariaartesanal.com.br/packs/js/sdk.js' in r.data
+    # BASE_URL é injetado e o sdk.js é carregado de BASE_URL + "/packs/js/sdk.js"
+    assert b'atendimento.opaopadariaartesanal.com.br' in r.data
+    assert b'/packs/js/sdk.js' in r.data
 
 
 def test_csp_libera_chatwoot_quando_ligado(app):
