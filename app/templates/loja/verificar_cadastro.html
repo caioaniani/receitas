@@ -1,0 +1,14 @@
+{% extends 'loja/_base.html' %}
+{% block title %}Confirmar e-mail — O Pão Padaria Artesanal{% endblock %}
+{% block content %}
+<section class="checkout-pagina" style="max-width:480px">
+  <h1>Confirmação do e-mail</h1>
+  <div class="checkout-erros">
+    <strong>{{ erro }}</strong>
+  </div>
+  <p style="margin-top:1rem">
+    Tente <a href="{{ url_for('loja.cadastrar') }}">criar a conta de
+    novo</a> — vamos te mandar um link novo.
+  </p>
+</section>
+{% endblock %}
