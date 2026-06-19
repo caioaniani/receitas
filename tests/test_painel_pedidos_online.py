@@ -264,3 +264,36 @@ def test_webhook_lalamove_completed_marca_entregue_e_email(app):
     ev.assert_called_once()
     with app.app_context():
         assert PedidoOnline.query.filter_by(codigo='WHCMP1').first().status == 'entregue'
+
+
+def test_webhook_lalamove_pop_nao_marca_entregue(app):
+    """Regressão (bug 19/06/2026): POP_STATUS_CHANGED (proof of pickup =
+    retirada) trazendo status COMPLETED NÃO pode marcar entregue. Só o evento
+    oficial ORDER_STATUS_CHANGED marca — senão o pedido vira entregue na
+    retirada/alocação, não na entrega ao cliente."""
+    from app.extensions import db
+    from app.models import LalamoveEntrega, PedidoOnline
+    from app.utils import hoje
+    c = app.test_client()
+    with app.app_context():
+        _pedido_online(db, codigo='WHPOP1', status='a_caminho')
+        e = LalamoveEntrega(
+            pedido_code='WHPOP1', data_ref=hoje(), status='ON_GOING',
+            order_id='ord-pop-1',
+            endereco_destino='Rua Michigan, 560',
+            destinatario='Caio Cliente', telefone_destino='11988887777')
+        db.session.add(e)
+        db.session.commit()
+    with patch('app.services.lalamove._cfg', return_value='chave-secreta'), \
+         patch('app.services.email.disponivel', return_value=True), \
+         patch('app.services.email.enviar_pedido_entregue') as ev:
+        r = c.post('/lalamove/webhook', json={
+            'apiKey': 'chave-secreta',
+            'eventType': 'POP_STATUS_CHANGED',
+            'data': {'order': {'orderId': 'ord-pop-1', 'status': 'COMPLETED'}}})
+    assert r.status_code == 200
+    ev.assert_not_called()                # nenhum e-mail de "entregue"
+    with app.app_context():
+        # continua 'a_caminho' — NÃO virou entregue por evento de retirada
+        assert PedidoOnline.query.filter_by(
+            codigo='WHPOP1').first().status == 'a_caminho'
