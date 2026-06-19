@@ -469,7 +469,11 @@
     marcarPendente(code, status);
     fetch(STATUS_TMPL.replace('__CODE__', encodeURIComponent(code)) + '?status=' + status, {
       method: 'POST', headers: { 'X-CSRFToken': CSRF }
-    }).catch(function () {});
+    }).then(function (r) {
+      // Não engole erro: 400 de CSRF expirado ou 4xx/5xx vira aviso no
+      // console (a pendência otimista reverte sozinha em 30s se não salvar).
+      if (!r.ok) console.warn('painel: status não salvou', code, status, r.status);
+    }).catch(function () { console.warn('painel: status sem rede', code, status); });
   }
   function setStatus(code, status) {
     var p = pedidos.find(function (x) { return x.code === code; });
