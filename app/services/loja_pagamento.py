@@ -268,7 +268,11 @@ def _emitir_nf_e_enviar(pedido):
     em `/admin/loja-online/pedidos/<codigo>` (mesmo botão de antes).
 
     `emitir_nf` já é IDEMPOTENTE: se a NF já foi emitida pra esse pedido, é
-    no-op — então uma reentrega do webhook 'paid' não duplica."""
+    no-op — então uma reentrega do webhook 'paid' não duplica.
+
+    DEVE ser chamada DEPOIS do commit do pago/baixa — `tiny_nf.emitir_nf`
+    commita por dentro, e qualquer falha aqui dá rollback pra NUNCA deixar a
+    sessão suja (senão polui o request/teste seguinte)."""
     try:
         from app.services import email as email_svc
         from app.services import tiny_nf
@@ -280,6 +284,7 @@ def _emitir_nf_e_enviar(pedido):
         if email_svc.disponivel():
             email_svc.enviar_nf_emitida(pedido)
     except Exception:  # noqa: BLE001
+        db.session.rollback()
         logger.exception('emissão automática de NF falhou (pedido %s)',
                          pedido.codigo)
 
