@@ -38,9 +38,12 @@ def _produto_pub(db, nome='Box Mimo', preco=20.0):
 
 
 def _loja(db, nome='Brooklin'):
-    from app.models import Loja
+    from app.models import AppConfig, Loja
     loja = Loja(nome=nome, endereco='Ribeiro do Vale, 455', ativa=True)
     db.session.add(loja)
+    db.session.commit()
+    # Vira a loja do site = única permitida pra retirada (validação nova).
+    AppConfig.set('loja_site_estoque_id', loja.id)
     db.session.commit()
     return loja
 
