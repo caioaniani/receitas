@@ -42,6 +42,10 @@ LINKS_CESTAS = {
 }
 
 
+# ── LEGADO VNDA (catálogo) — o bot NÃO usa mais isto desde 19/06/2026 (migrou
+# pra loja_catalogo/opao.online). Mantido durante a transição em paralelo do
+# VNDA: ainda referenciado pelo diag do PDV (`_catalogo_cache`) e por teste do
+# parser. Remover no cleanup quando o VNDA for desligado de vez. ─────────────
 def _iter_variants(variants):
     """Normaliza o campo `variants` do VNDA, que aparece em 3 formatos:
       - dict keyed por id:         {"61": {...}}
