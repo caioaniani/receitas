@@ -11,6 +11,22 @@
   </div>
   {% endif %}
 
+  {% if verificacao_enviada %}
+  <div class="checkout-bloco" style="background:#f5efe4;border-radius:8px;padding:18px 20px">
+    <strong>Confirme seu e-mail pra finalizar o cadastro.</strong>
+    <p style="margin:.5rem 0 0">
+      Esse e-mail já fez um pedido com a gente antes. Pra proteger seus
+      dados, mandamos um link de confirmação pro seu e-mail — abra e
+      clique pra ativar a conta. O link vale por 1h.
+    </p>
+    <p class="small" style="margin:.75rem 0 0;color:#6b5f54">
+      Não chegou? Confira a caixa de spam. Se preferir, peça pra
+      <a href="{{ url_for('loja.esqueci_senha') }}">redefinir a senha</a>
+      (também valida o e-mail).
+    </p>
+  </div>
+  {% else %}
+
   <form method="POST" action="{{ url_for('loja.cadastrar') }}" class="checkout-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="checkout-bloco">
