@@ -138,18 +138,29 @@
 
     // CEP -> BrasilAPI: preenche logradouro/bairro/cidade/UF
     var cepEl = document.getElementById('cep');
+    var ultimoCep = '';
     if (cepEl) {
       cepEl.addEventListener('blur', function () {
         var d = (cepEl.value || '').replace(/\D/g, '');
         if (d.length !== 8) return;
         // máscara visual
         cepEl.value = d.slice(0, 5) + '-' + d.slice(5);
+        if (d === ultimoCep) return;   // mesmo CEP, não re-busca
+        // CEP MUDOU: invalida o frete já calculado (força recalcular com o
+        // endereço novo) — sem isso o total ficava com o frete do CEP antigo.
+        freteAtual = null;
+        var outF = document.getElementById('frete-resultado');
+        if (outF) { outF.textContent = ''; outF.className = 'frete-resultado'; }
+        atualizarTotais();
         fetch('/loja/api/cep/' + d).then(function (r) { return r.json(); })
           .then(function (j) {
             if (!j.ok) return;
+            ultimoCep = d;
+            // SOBRESCREVE os campos do endereço (antes só preenchia se vazio,
+            // então trocar o CEP não atualizava o endereço já inserido).
             ['logradouro', 'bairro', 'cidade', 'uf'].forEach(function (k) {
               var el = document.getElementById(k);
-              if (el && !el.value) el.value = j[k] || '';
+              if (el) el.value = j[k] || '';
             });
             var num = document.getElementById('numero');
             if (num) num.focus();
