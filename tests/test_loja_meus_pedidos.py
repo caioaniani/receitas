@@ -7,6 +7,10 @@ pra não confessar que existe).
 from decimal import Decimal
 from unittest.mock import patch
 
+import pytest
+
+pytestmark = pytest.mark.loja_host
+
 
 def _cadastrar(client, email='maria@x.com', senha='senha-forte-1',
                nome='Maria'):
