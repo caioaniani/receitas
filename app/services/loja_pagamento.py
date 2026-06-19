@@ -249,22 +249,11 @@ def _marcar_pago(pedido, pagamento):
 
 def _enviar_confirmacao(pedido):
     """E-mail de confirmação pro cliente (best-effort — nunca derruba o
-    processamento do pagamento se o e-mail falhar). Loga o RESULTADO do
-    envio (sucesso ou erro do Postmark) pra dar visibilidade quando o
-    e-mail não chega — antes o resultado era silenciosamente descartado."""
+    processamento do pagamento se o e-mail falhar)."""
     try:
         from app.services import email as email_svc
-        if not email_svc.disponivel():
-            logger.warning('confirmacao_pedido(%s): email desabilitado '
-                           '(POSTMARK_SERVER_TOKEN ausente)', pedido.codigo)
-            return
-        res = email_svc.enviar_confirmacao_pedido(pedido)
-        if res and res.get('ok'):
-            logger.info('confirmacao_pedido(%s): email enviado (id=%s)',
-                        pedido.codigo, res.get('id'))
-        else:
-            logger.warning('confirmacao_pedido(%s): email NAO enviado: %s',
-                           pedido.codigo, (res or {}).get('erro'))
+        if email_svc.disponivel():
+            email_svc.enviar_confirmacao_pedido(pedido)
     except Exception:  # noqa: BLE001
         logger.exception('confirmacao de pedido por email falhou')
 
