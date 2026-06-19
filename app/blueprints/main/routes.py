@@ -3064,31 +3064,62 @@ def loja_online_dashboard():
 @main_bp.route('/admin/loja-online/pedidos')
 @owner_required
 def loja_online_pedidos():
-    """Lista os pedidos do site (mais recentes primeiro), com filtro por
-    status e contagem por status."""
+    """Lista os pedidos do site (mais recentes primeiro), com filtros por
+    status e por data de entrega (?data=YYYY-MM-DD ou intervalo
+    ?data_ini=&data_fim=). Mostra a contagem por status (sempre global —
+    bate com os botões de filtro)."""
+    from datetime import date as _date
+
     from sqlalchemy import func as _func
 
     from app.models import PedidoOnline
     status = (request.args.get('status') or '').strip()
+    data_str = (request.args.get('data') or '').strip()
+    data_ini_str = (request.args.get('data_ini') or '').strip()
+    data_fim_str = (request.args.get('data_fim') or '').strip()
+
+    def _parse(s):
+        try:
+            return _date.fromisoformat(s) if s else None
+        except ValueError:
+            return None
+
+    data = _parse(data_str)
+    data_ini = _parse(data_ini_str)
+    data_fim = _parse(data_fim_str)
+
     q = PedidoOnline.query
     if status:
         q = q.filter_by(status=status)
+    if data:
+        q = q.filter(PedidoOnline.data_entrega == data)
+    else:
+        if data_ini:
+            q = q.filter(PedidoOnline.data_entrega >= data_ini)
+        if data_fim:
+            q = q.filter(PedidoOnline.data_entrega <= data_fim)
+
     pedidos = q.order_by(PedidoOnline.criado_em.desc()).limit(200).all()
     contagens = dict(db.session.query(PedidoOnline.status, _func.count())
                      .group_by(PedidoOnline.status).all())
     return render_template(
         'admin/loja_online_pedidos.html',
         pedidos=pedidos, status=status, contagens=contagens,
-        total=sum(contagens.values()), labels=_STATUS_PEDIDO_ONLINE_LABEL)
+        total=sum(contagens.values()), labels=_STATUS_PEDIDO_ONLINE_LABEL,
+        data=data_str, data_ini=data_ini_str, data_fim=data_fim_str,
+        filtro_data_ativo=bool(data or data_ini or data_fim))
 
 
 @main_bp.route('/admin/loja-online/buscar-pedidos')
 @owner_required
 def loja_online_pedidos_buscar():
-    """Busca incremental (AJAX) por nome, telefone, e-mail ou código — em
-    TODOS os pedidos (não só os 200 da lista). Devolve só as linhas <tr> da
-    tabela (mesmo partial do carregamento). Path separado de
-    `/pedidos/<codigo>` pra não colidir com o detalhe."""
+    """Busca incremental (AJAX) por nome, telefone, e-mail ou código.
+    Respeita o filtro de data ATIVO (passado nos params) — sem isso a busca
+    sobrescreveria a lista filtrada por data com pedidos de outros dias,
+    confundindo o operador (CLAUDE.md: filtros não podem se ignorar). Sem
+    data ativa, busca em todos os pedidos."""
+    from datetime import date as _date
+
     from sqlalchemy import or_
 
     from app.models import PedidoOnline
@@ -3096,12 +3127,32 @@ def loja_online_pedidos_buscar():
     if len(q) < 2:
         return ''  # nada a buscar — o JS restaura a lista inicial
     termo = f'%{q}%'
-    pedidos = (PedidoOnline.query.filter(or_(
+
+    def _parse(s):
+        try:
+            return _date.fromisoformat(s) if s else None
+        except ValueError:
+            return None
+
+    data = _parse((request.args.get('data') or '').strip())
+    data_ini = _parse((request.args.get('data_ini') or '').strip())
+    data_fim = _parse((request.args.get('data_fim') or '').strip())
+
+    qry = PedidoOnline.query.filter(or_(
         PedidoOnline.nome_cliente.ilike(termo),
         PedidoOnline.telefone_cliente.ilike(termo),
         PedidoOnline.email_cliente.ilike(termo),
         PedidoOnline.codigo.ilike(termo),
-    )).order_by(PedidoOnline.criado_em.desc()).limit(50).all())
+    ))
+    if data:
+        qry = qry.filter(PedidoOnline.data_entrega == data)
+    else:
+        if data_ini:
+            qry = qry.filter(PedidoOnline.data_entrega >= data_ini)
+        if data_fim:
+            qry = qry.filter(PedidoOnline.data_entrega <= data_fim)
+    pedidos = (qry.order_by(PedidoOnline.criado_em.desc())
+               .limit(50).all())
     return render_template('admin/_loja_online_pedidos_rows.html',
                            pedidos=pedidos, labels=_STATUS_PEDIDO_ONLINE_LABEL)
 
