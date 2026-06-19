@@ -324,10 +324,15 @@ def _gate_acesso():
             'loja.pedido_danfe',
     ):
         return None
-    if _loja_visivel_publico():
-        return None  # liberada
+    from app.utils import host_atual_eh_loja
+    # Público (sem login) SÓ no domínio público da loja (opao.online). No
+    # gestao.*/loja a mesma loja responde só pra admin logado — assim o
+    # cliente usa a porta da frente (opao.online) e o gestao.* não vira uma
+    # segunda URL pública/indexável da mesma vitrine (conteúdo duplicado).
+    if _loja_visivel_publico() and host_atual_eh_loja():
+        return None  # loja pública no domínio público
     if current_user.is_authenticated:
-        return None  # staff logado vê pra testar
+        return None  # staff logado vê pra testar (em qualquer host)
     if loja_auth.cliente_atual():
         return None  # cliente logado pode entrar mesmo em modo teste
     abort(404)
