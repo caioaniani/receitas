@@ -416,6 +416,41 @@ def _avisar_dono_nf(resultado, cpf_digits, numero, conv_id, canal, *, detalhe=''
         logger.exception('aviso dono NF falhou')
 
 
+def _nf_pedido_online(cpf_digits, numero):
+    """NF de pedido NATIVO do site (PedidoOnline). Devolve:
+      - None: número não é nosso → o caller tenta o Tiny (VNDA legado).
+      - (resultado_log, detalhe, payload): caso resolvido (com ou sem NF).
+    Autoriza por CPF do comprador (Cliente.cpf) — sem isso NÃO expõe NF de
+    outro cliente."""
+    from app.models import PedidoOnline
+    p = PedidoOnline.query.filter_by(codigo=numero).first()
+    if not p:
+        return None
+    cpf_pedido = ''.join(
+        c for c in ((p.cliente.cpf if p.cliente else '') or '') if c.isdigit())
+    if not cpf_pedido or cpf_pedido != cpf_digits:
+        # Não confirma que o pedido existe — mesma resposta de "não bateu".
+        return ('nao_encontrado', 'cpf nao bate (pedido online)',
+                {'erro': 'nao_encontrado',
+                 'mensagem': 'Não encontrei pedido com esse CPF e número. '
+                             'Confere os dados, por favor.'})
+    if not p.tiny_nota_fiscal_id:
+        return ('sem_nf', f'pedido online {numero} sem NF (status={p.status})',
+                {'erro': 'sem_nf_ainda', 'situacao': p.status,
+                 'mensagem': 'Achei seu pedido, mas a nota ainda não foi '
+                             'emitida. Ela sai junto com o despacho — te aviso '
+                             'ou você pode pedir depois.'})
+    from app.services import tiny_nf
+    link = tiny_nf.link_danfe(p)
+    if not link:
+        return ('erro', f'link_danfe falhou (pedido online {numero})',
+                {'erro': 'link_falhou',
+                 'mensagem': 'Achei a nota mas não consegui gerar o link agora. '
+                             'Já passo pra um atendente.'})
+    return ('enviada', f'pedido online {numero}',
+            {'link': link, 'numero_pedido': p.codigo})
+
+
 def buscar_nota_fiscal(cpf, numero_pedido, *, conv_id=None, canal=None):
     """Busca a NF do pedido no Tiny por (CPF + numero do pedido). E o caminho
     SEGURO — sem CPF o bot nunca expoe dado fiscal de outro cliente.
@@ -463,6 +498,14 @@ def buscar_nota_fiscal(cpf, numero_pedido, *, conv_id=None, canal=None):
         return {'erro': 'dados_incompletos',
                 'mensagem': 'Preciso do CPF do pedido e do número do pedido.'}
 
+    # 1. Pedido NATIVO do site (PedidoOnline) primeiro.
+    online = _nf_pedido_online(cpf_d, numero)
+    if online is not None:
+        resultado, detalhe, payload = online
+        _log(resultado, detalhe)
+        return payload
+
+    # 2. Fallback Tiny (pedido do site antigo/VNDA, por CPF+numero).
     if not tiny.disponivel():
         _log('erro', 'TINY_API_TOKEN nao configurado')
         return {'erro': 'tiny_indisponivel',
