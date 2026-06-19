@@ -290,3 +290,14 @@ def test_topo_mostra_entrar_quando_deslogado_e_minha_conta_quando_logado(app):
     assert r.status_code == 200
     assert b'Minha conta' in r.data
     assert b'>Entrar<' not in r.data
+
+
+def test_rate_limit_login_cliente(app):
+    """6º POST em /loja/entrar dentro de 1min → 429. Sem rate limit, brute-
+    force de senha fica viável quando a loja vira pública. Espelha o admin
+    (5/min)."""
+    c = app.test_client()
+    for _ in range(5):
+        c.post('/loja/entrar', data={'email': 'x@y.z', 'senha': 'errada'})
+    r = c.post('/loja/entrar', data={'email': 'x@y.z', 'senha': 'errada'})
+    assert r.status_code == 429
