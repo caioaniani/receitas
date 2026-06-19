@@ -1363,13 +1363,16 @@ def migrar_entrega(code):
 # ── Pedidos manuais (fora do VNDA) ──
 
 def _injetar_pedidos_locais(target_date, resultado):
-    """Adiciona pedidos manuais (PedidoLocal) na lista de pedidos do dia."""
+    """Adiciona pedidos manuais (PedidoLocal) E da loja própria (PedidoOnline)
+    na lista de pedidos do dia. Online entra pago em diante (mesma regra do
+    painel) — assim o /entregas e a impressão veem os pedidos do site."""
     if 'erro' in resultado:
         return resultado
     locais = PedidoLocal.query.filter_by(data_entrega=target_date).all()
     pedidos = resultado.setdefault('pedidos', [])
     for p in locais:
         pedidos.append(_serializar_pedido_local(p))
+    pedidos.extend(_pedidos_online_do_dia(target_date))
     return resultado
 
 
