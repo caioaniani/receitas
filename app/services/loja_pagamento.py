@@ -231,7 +231,16 @@ def _estornar_estoque(pedido):
 
 def _marcar_pago(pedido, pagamento):
     """Idempotente em si: se já está pago, no-op. Aplica baixa de estoque
-    e seta `pago_em`/status."""
+    e seta `pago_em`/status.
+
+    Lock pessimista (`with_for_update`) pra evitar RACE entre os eventos
+    `order.paid` e `charge.paid` (que o Pagar.me dispara quase juntos):
+    sem o lock, os dois workers liam `aguardando_pagamento`, marcavam pago
+    em paralelo e mandavam DOIS e-mails de confirmação pro cliente (visto
+    em 19/06/2026 — pedido 1491A6B5 recebeu 2 e-mails 'pedido confirmado').
+
+    Em SQLite (testes/dev) o FOR UPDATE vira no-op silencioso — não quebra."""
+    db.session.refresh(pedido, with_for_update=True)
     if pedido.status == 'pago':
         return False  # já processado
     pedido.status = 'pago'
