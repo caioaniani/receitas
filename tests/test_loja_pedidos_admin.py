@@ -313,7 +313,7 @@ def test_imprimir_selecao_bloqueia_nao_owner(app):
 
 def test_lista_tem_checkbox_e_form_de_selecao(app):
     """Travas de UI: as linhas têm checkbox `.chk-pedido` apontando pro form
-    externo, e o botão 'Imprimir seleção' existe na página."""
+    externo, e os botões 'Imprimir seleção' e 'Excluir seleção' existem."""
     from app.extensions import db
     with app.app_context():
         _pedido_com_data(db, 'UI01', '2026-06-25')
@@ -322,4 +322,76 @@ def test_lista_tem_checkbox_e_form_de_selecao(app):
     assert r.status_code == 200
     assert b'chk-pedido' in r.data
     assert b'id="form-imprimir-selecao"' in r.data
+    assert b'id="form-excluir-selecao"' in r.data
     assert b'Imprimir sele' in r.data   # 'Imprimir seleção' (sem depender do acento UTF-8)
+    assert b'Excluir sele' in r.data
+
+
+# ── Excluir pedidos de teste (definitivo) ───────────────────────────────
+
+def test_excluir_selecao_apaga_pedido_itens_pagamentos(app):
+    """Exclusão definitiva: some o pedido + itens + pagamentos. Os outros
+    pedidos não selecionados ficam intactos."""
+    from decimal import Decimal
+
+    from app.extensions import db
+    from app.models import (
+        PagamentoOnline,
+        PedidoOnline,
+        PedidoOnlineItem,
+    )
+    with app.app_context():
+        p = _pedido(db, codigo='DEL01')          # já cria 1 item
+        db.session.add(PagamentoOnline(
+            pedido_id=p.id, metodo='pix', valor=Decimal('20'),
+            status='pago'))
+        _pedido(db, codigo='DEL02')              # NÃO selecionado
+        db.session.commit()
+    c = _owner(app)
+    r = c.post('/admin/loja-online/pedidos/excluir-selecao',
+               data={'codigos': ['DEL01']}, follow_redirects=False)
+    assert r.status_code == 302
+    with app.app_context():
+        assert PedidoOnline.query.filter_by(codigo='DEL01').first() is None
+        assert PedidoOnline.query.filter_by(codigo='DEL02').first() is not None
+        # Sem órfãos: itens e pagamentos do DEL01 também sumiram.
+        assert PedidoOnlineItem.query.count() == 1   # só o do DEL02
+        assert PagamentoOnline.query.count() == 0
+
+
+def test_excluir_selecao_multiplos(app):
+    from app.extensions import db
+    from app.models import PedidoOnline
+    with app.app_context():
+        _pedido(db, codigo='DELM1')
+        _pedido(db, codigo='DELM2')
+        _pedido(db, codigo='DELM3')
+    c = _owner(app)
+    r = c.post('/admin/loja-online/pedidos/excluir-selecao',
+               data={'codigos': ['DELM1', 'DELM3']}, follow_redirects=False)
+    assert r.status_code == 302
+    with app.app_context():
+        assert PedidoOnline.query.filter_by(codigo='DELM1').first() is None
+        assert PedidoOnline.query.filter_by(codigo='DELM2').first() is not None
+        assert PedidoOnline.query.filter_by(codigo='DELM3').first() is None
+
+
+def test_excluir_selecao_vazia_redireciona(app):
+    c = _owner(app)
+    r = c.post('/admin/loja-online/pedidos/excluir-selecao',
+               data={}, follow_redirects=False)
+    assert r.status_code == 302   # volta com flash de aviso
+
+
+def test_excluir_selecao_bloqueia_nao_owner(app):
+    from app.extensions import db
+    from app.models import PedidoOnline
+    with app.app_context():
+        _pedido(db, codigo='DELX1')
+    c = _admin_nao_owner(app)
+    r = c.post('/admin/loja-online/pedidos/excluir-selecao',
+               data={'codigos': ['DELX1']}, follow_redirects=False)
+    assert r.status_code in (302, 401, 403)
+    with app.app_context():
+        # bloqueado: o pedido continua lá
+        assert PedidoOnline.query.filter_by(codigo='DELX1').first() is not None
