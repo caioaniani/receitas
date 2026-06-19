@@ -408,6 +408,10 @@ def processar_webhook(evento):
         if tipo in ('order.paid', 'charge.paid'):
             mudou = _marcar_pago(pedido, pagamento)
             db.session.commit()
+            # NF + e-mail SÓ depois do commit (isolado; não suja a transação
+            # do pagamento). Idempotente: reenvio do webhook não duplica.
+            if mudou:
+                _emitir_nf_e_enviar(pedido)
             return {'ok': True, 'pago': True, 'mudou': mudou}
         if tipo in ('charge.refunded', 'order.canceled',
                     'charge.cancelled', 'charge.refunded.partial'):
