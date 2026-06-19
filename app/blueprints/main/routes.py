@@ -3279,6 +3279,57 @@ def loja_online_pedido_imprimir(codigo):
     return resp
 
 
+@main_bp.route('/admin/loja-online/pedidos/imprimir-selecao.pdf',
+               methods=['POST'])
+@owner_required
+def loja_online_pedidos_imprimir_selecao():
+    """PDF da SELEÇÃO da lista — N pedidos × 2 vias (cliente + motoboy).
+    Reusa o gerador do `/entregas/`. Recebe `codigos` (multi-value do form).
+
+    Data do cabeçalho do PDF: se a seleção é toda do mesmo dia, usa essa
+    data; misturada (vários dias), usa a data MAIS PRÓXIMA — vai imprimir
+    do mesmo lote no mesmo dia, na maioria das vezes."""
+    from app.blueprints.entregas.routes import (
+        _aplicar_cartinhas,
+        _serializar_pedido_online,
+    )
+    from app.models import PedidoOnline
+    from app.services import pdf as pdf_svc
+    from app.utils import hoje
+    codigos = [c.strip() for c in request.form.getlist('codigos') if c.strip()]
+    if not codigos:
+        from flask import flash
+        flash('Selecione ao menos um pedido pra imprimir.', 'warning')
+        return redirect(url_for('main.loja_online_pedidos'))
+    # Mantém a ordem que veio do form (operador escolhe a ordem na tela).
+    pedidos = (PedidoOnline.query
+               .filter(PedidoOnline.codigo.in_(codigos)).all())
+    por_codigo = {p.codigo: p for p in pedidos}
+    selecionados = [por_codigo[c] for c in codigos if c in por_codigo]
+    if not selecionados:
+        from flask import flash
+        flash('Nenhum dos pedidos selecionados foi encontrado.', 'warning')
+        return redirect(url_for('main.loja_online_pedidos'))
+    dicts = [_serializar_pedido_online(p) for p in selecionados]
+    _aplicar_cartinhas(dicts)
+    datas = sorted({p.data_entrega for p in selecionados if p.data_entrega})
+    hj = hoje()
+    if not datas:
+        data = hj
+    elif len(datas) == 1:
+        data = datas[0]
+    else:
+        # Mistura: usa a mais próxima de hoje (impressão do lote do dia).
+        data = min(datas, key=lambda d: abs((d - hj).days))
+    conteudo = pdf_svc.gerar_pedidos_pdf(
+        dicts, ['cliente', 'motorista'], data)
+    resp = current_app.response_class(conteudo, mimetype='application/pdf')
+    resp.headers['Content-Disposition'] = (
+        f'inline; filename="pedidos_selecao_{data.isoformat()}.pdf"')
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
+
+
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/cancelar', methods=['POST'])
 @owner_required
 def loja_online_pedido_cancelar(codigo):
