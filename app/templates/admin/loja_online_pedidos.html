@@ -23,7 +23,13 @@
   {% endfor %}
 </div>
 
-{% if pedidos %}
+{% if total %}
+<div class="mb-3" style="max-width:480px;">
+  <input type="search" id="busca-pedido" class="form-control" autocomplete="off"
+         placeholder="🔎 Buscar por nome, telefone ou código do pedido…">
+  <div class="form-text">Busca em todos os pedidos (não só os 200 da lista). Mínimo 2 letras.</div>
+</div>
+
 <div class="table-responsive">
   <table class="table table-sm table-hover bg-white align-middle">
     <thead class="thead-padaria">
@@ -32,28 +38,60 @@
         <th>Data entrega</th><th class="text-end">Total</th><th>Status</th>
       </tr>
     </thead>
-    <tbody>
-      {% for p in pedidos %}
-      <tr>
-        <td><a href="{{ url_for('main.loja_online_pedido_detalhe', codigo=p.codigo) }}">
-          <code>{{ p.codigo }}</code></a></td>
-        <td class="small text-muted">{{ p.criado_em.strftime('%d/%m %H:%M') if p.criado_em }}</td>
-        <td>{{ p.nome_cliente }}<br><span class="small text-muted">{{ p.telefone_cliente or p.email_cliente }}</span></td>
-        <td>{{ modo_label.get(p.modo_entrega, p.modo_entrega) }}</td>
-        <td class="small">
-          {% if p.data_entrega %}{{ p.data_entrega.strftime('%d/%m') }}
-            {% if p.janela_entrega %}· {{ p.janela_entrega }}{% endif %}
-          {% else %}—{% endif %}
-        </td>
-        <td class="text-end fw-bold">R$ {{ '%.2f'|format(p.valor_total)|replace('.', ',') }}</td>
-        <td><span class="badge {{ badge.get(p.status, 'bg-secondary') }}">
-          {{ labels.get(p.status, p.status) }}</span></td>
-      </tr>
-      {% endfor %}
+    <tbody id="pedidos-tbody">
+      {% include 'admin/_loja_online_pedidos_rows.html' %}
     </tbody>
   </table>
 </div>
+<div id="pedidos-vazio" class="alert alert-light border"{% if pedidos %} hidden{% endif %}
+     data-msg-inicial="Nenhum pedido {{ ('com status “' ~ labels.get(status, status) ~ '”') if status else 'ainda' }}.">
+  Nenhum pedido {{ ('com status “' ~ labels.get(status, status) ~ '”') if status else 'ainda' }}.
+</div>
 {% else %}
-<div class="alert alert-light border">Nenhum pedido {{ ('com status “' ~ labels.get(status, status) ~ '”') if status else 'ainda' }}.</div>
+<div class="alert alert-light border">Nenhum pedido ainda.</div>
 {% endif %}
+
+<script>
+(function() {
+  var input = document.getElementById('busca-pedido');
+  if (!input) return;
+  var tbody = document.getElementById('pedidos-tbody');
+  var vazio = document.getElementById('pedidos-vazio');
+  var tbodyInicial = tbody.innerHTML;
+  var vazioInicialOculto = vazio.hasAttribute('hidden');
+  var msgInicial = vazio.getAttribute('data-msg-inicial');
+  var timer = null, reqId = 0;
+
+  function restaurar() {
+    tbody.innerHTML = tbodyInicial;
+    vazio.textContent = msgInicial;
+    if (vazioInicialOculto) vazio.setAttribute('hidden', '');
+    else vazio.removeAttribute('hidden');
+  }
+
+  function buscar(q) {
+    var meu = ++reqId;
+    fetch('/admin/loja-online/buscar-pedidos?q=' + encodeURIComponent(q), {
+      headers: { 'X-Requested-With': 'fetch' }
+    }).then(function(r) { return r.ok ? r.text() : ''; })
+      .then(function(html) {
+        if (meu !== reqId) return;  // resposta velha (digitou mais) — ignora
+        tbody.innerHTML = html;
+        if (html.trim() === '') {
+          vazio.textContent = 'Nenhum pedido encontrado pra “' + q + '”.';
+          vazio.removeAttribute('hidden');
+        } else {
+          vazio.setAttribute('hidden', '');
+        }
+      }).catch(function() { /* silencioso — mantém a lista atual */ });
+  }
+
+  input.addEventListener('input', function() {
+    var q = input.value.trim();
+    clearTimeout(timer);
+    if (q.length < 2) { reqId++; restaurar(); return; }
+    timer = setTimeout(function() { buscar(q); }, 250);
+  });
+})();
+</script>
 {% endblock %}
