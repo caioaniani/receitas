@@ -2796,6 +2796,27 @@ def loja_online_logo_remover():
 # ── Debug Pagar.me: valida a chave sem expor o segredo (Fase 4) ───────────
 @main_bp.route('/admin/debug-pagarme')
 @owner_required
+@main_bp.route('/admin/debug-redirect-dominio')
+@owner_required
+def debug_redirect_dominio():
+    """Confirma como está o redirect do domínio antigo. Mostra os hosts
+    armados e o destino — sem segredos. Use pra checar que o
+    SITE_REDIRECT_HOSTS no Railway ficou certo ANTES de mexer no DNS."""
+    cfg = current_app.config
+    hosts = [h.strip().lower() for h in (cfg.get('SITE_REDIRECT_HOSTS') or '')
+             .split(',') if h.strip()]
+    destino = (cfg.get('SITE_REDIRECT_DESTINO')
+               or 'https://opao.online').rstrip('/') + '/'
+    return jsonify(
+        ativo=bool(hosts),
+        hosts=hosts,
+        destino=destino,
+        instrucao=('Hosts armados — vai responder 302 pro destino quando o '
+                   'DNS apontar pra cá.' if hosts else
+                   'Inerte — defina SITE_REDIRECT_HOSTS no Railway.'),
+    )
+
+
 def debug_pagarme():
     """Diagnóstico do Pagar.me (owner-only). Confirma se a chave cadastrada
     no Railway é válida e em qual ambiente (sandbox/produção), SEM expor o
