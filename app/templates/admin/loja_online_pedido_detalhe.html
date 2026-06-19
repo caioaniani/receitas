@@ -20,7 +20,13 @@
     <span aria-hidden="true">🥐</span> Pedido <code>{{ p.codigo }}</code>
     <span class="badge {{ badge.get(p.status, 'bg-secondary') }}">{{ labels.get(p.status, p.status) }}</span>
   </h1>
-  <a href="{{ url_for('main.loja_online_pedidos') }}" class="btn btn-sm btn-outline-secondary">← Todos os pedidos</a>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('main.loja_online_pedido_imprimir', codigo=p.codigo) }}"
+       class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">
+      <i class="bi bi-printer"></i> Imprimir (cliente + motoboy)
+    </a>
+    <a href="{{ url_for('main.loja_online_pedidos') }}" class="btn btn-sm btn-outline-secondary">← Todos os pedidos</a>
+  </div>
 </div>
 
 <div class="row g-3">
