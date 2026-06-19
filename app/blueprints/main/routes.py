@@ -3106,13 +3106,126 @@ def loja_online_pedidos_buscar():
                            pedidos=pedidos, labels=_STATUS_PEDIDO_ONLINE_LABEL)
 
 
+# Modos de entrega editáveis (espelha loja_checkout.criar_pedido).
+_MODOS_ENTREGA = ('agendada', 'retirada', 'express')
+
+
 @main_bp.route('/admin/loja-online/pedidos/<codigo>')
 @owner_required
 def loja_online_pedido_detalhe(codigo):
     from app.models import PedidoOnline
+    from app.services import loja_checkout
     p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
     return render_template('admin/loja_online_pedido_detalhe.html',
-                           p=p, labels=_STATUS_PEDIDO_ONLINE_LABEL)
+                           p=p, labels=_STATUS_PEDIDO_ONLINE_LABEL,
+                           lojas=loja_checkout.lojas_retirada(),
+                           modos=_MODOS_ENTREGA)
+
+
+@main_bp.route('/admin/loja-online/pedidos/<codigo>/editar', methods=['POST'])
+@owner_required
+def loja_online_pedido_editar(codigo):
+    """Edita os dados LOGÍSTICOS/CONTATO do pedido — o que a operação precisa
+    corrigir depois do pedido feito: cartinha, data/janela, endereço, contato,
+    destinatário, modo de entrega e loja de retirada.
+
+    NÃO mexe em DINHEIRO (itens, subtotal, frete, total ficam intactos —
+    CLAUDE.md: dinheiro tem peso especial; mudar valor é reembolso/novo
+    pedido). Trocar o endereço NÃO recalcula frete: o cliente já pagou; isto
+    é só correção de destino pra entrega."""
+    from datetime import date as _date
+
+    from flask import flash
+
+    from app.models import PedidoOnline
+    p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    f = request.form
+
+    def _s(k):
+        return (f.get(k) or '').strip()
+
+    erros = []
+    nome = _s('nome_cliente')
+    email = _s('email_cliente')
+    if not nome:
+        erros.append('Nome do cliente é obrigatório.')
+    if '@' not in email:
+        erros.append('E-mail do cliente inválido.')
+    modo = _s('modo_entrega') or p.modo_entrega
+    if modo not in _MODOS_ENTREGA:
+        erros.append('Modo de entrega inválido.')
+    data_str = _s('data_entrega')
+    data_entrega = None
+    if data_str:
+        try:
+            data_entrega = _date.fromisoformat(data_str)
+        except ValueError:
+            erros.append('Data de entrega inválida (use o seletor).')
+    if erros:
+        for e in erros:
+            flash(e, 'danger')
+        return redirect(url_for('main.loja_online_pedido_detalhe',
+                                codigo=codigo))
+
+    p.nome_cliente = nome
+    p.email_cliente = email
+    p.telefone_cliente = _s('telefone_cliente') or None
+    p.nome_destinatario = _s('nome_destinatario') or None
+    p.telefone_destinatario = _s('telefone_destinatario') or None
+    p.modo_entrega = modo
+    p.cartinha = _s('cartinha') or None
+    p.data_entrega = data_entrega
+    p.janela_entrega = _s('janela_entrega') or None
+
+    if modo == 'retirada':
+        try:
+            p.loja_retirada_id = int(f.get('loja_retirada_id')) or None
+        except (TypeError, ValueError):
+            p.loja_retirada_id = None
+    else:
+        p.loja_retirada_id = None
+        p.endereco_cep = _s('endereco_cep') or None
+        p.endereco_logradouro = _s('endereco_logradouro') or None
+        p.endereco_numero = _s('endereco_numero') or None
+        p.endereco_complemento = _s('endereco_complemento') or None
+        p.endereco_bairro = _s('endereco_bairro') or None
+        p.endereco_cidade = _s('endereco_cidade') or None
+        p.endereco_uf = (_s('endereco_uf')[:2].upper()) or None
+        partes = [p.endereco_logradouro, p.endereco_numero,
+                  p.endereco_complemento, p.endereco_bairro,
+                  p.endereco_cidade, p.endereco_uf]
+        p.endereco_entrega = ', '.join(x for x in partes if x) or None
+
+    db.session.commit()
+    current_app.logger.info('pedido online %s editado por uid=%s',
+                            codigo, getattr(current_user, 'id', None))
+    flash(f'Pedido {p.codigo} atualizado.', 'success')
+    return redirect(url_for('main.loja_online_pedido_detalhe', codigo=codigo))
+
+
+@main_bp.route('/admin/loja-online/pedidos/<codigo>/imprimir.pdf')
+@owner_required
+def loja_online_pedido_imprimir(codigo):
+    """PDF de impressão do pedido — MESMO layout do /entregas (via cliente +
+    via motoboy). Reusa o serializador e o gerador de PDF de entregas pra o
+    formato não divergir."""
+    from app.blueprints.entregas.routes import (
+        _aplicar_cartinhas,
+        _serializar_pedido_online,
+    )
+    from app.models import PedidoOnline
+    from app.services import pdf as pdf_svc
+    from app.utils import hoje
+    p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    d = _serializar_pedido_online(p)
+    _aplicar_cartinhas([d])  # resolve a cartinha (manual sobrepõe, igual painel)
+    data = p.data_entrega or hoje()
+    conteudo = pdf_svc.gerar_pedidos_pdf([d], ['cliente', 'motorista'], data)
+    resp = current_app.response_class(conteudo, mimetype='application/pdf')
+    resp.headers['Content-Disposition'] = (
+        f'inline; filename="pedido_{p.codigo}.pdf"')
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
 
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/cancelar', methods=['POST'])
