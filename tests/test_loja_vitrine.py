@@ -69,6 +69,30 @@ def test_LOJA_VISIVEL_um_libera_pra_anonimo(app, monkeypatch):
     assert c.get('/loja/').status_code == 200
 
 
+def test_X_Robots_some_quando_loja_publica(app, monkeypatch):
+    """No cutover (LOJA_VISIVEL=1), o header X-Robots-Tag não pode mais
+    bloquear indexação das rotas /loja — senão o Google ignora a loja nova
+    mesmo com a vitrine pública. Rotas FORA de /loja continuam noindex
+    (admin)."""
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    c = app.test_client()
+    r = c.get('/loja/')
+    assert r.status_code == 200
+    assert 'noindex' not in (r.headers.get('X-Robots-Tag') or '').lower()
+
+
+def test_X_Robots_continua_em_modo_teste(app, monkeypatch):
+    """LOJA_VISIVEL=0 (default em desenvolvimento): rotas /loja CONTINUAM
+    noindex pra não vazar pra busca por engano."""
+    monkeypatch.delenv('LOJA_VISIVEL', raising=False)
+    # Vista da loja só responde 200 pra logado em modo teste; usa /robots.txt
+    # (sempre liberada) pra checar o header em rota /loja/*.
+    c = app.test_client()
+    r = c.get('/loja/robots.txt')
+    assert r.status_code == 200
+    assert 'noindex' in (r.headers.get('X-Robots-Tag') or '').lower()
+
+
 def test_LOJA_VISIVEL_outros_valores_mantem_gate(app, monkeypatch):
     """Só '1' libera. 'true', 'yes', 'on' etc NÃO — evita que alguém
     libere acidentalmente."""
