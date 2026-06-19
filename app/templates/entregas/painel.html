@@ -700,7 +700,7 @@
           // carregado e atualiza só os pedidos da loja própria (que vêm
           // sempre, independem do VNDA).
           setErro('VNDA indisponível agora — mantendo o último carregado; pedidos da loja própria atualizados.');
-          var online = (data.pedidos || []).filter(function (p) { return p.pedido_online; });
+          var online = aplicarPendentes((data.pedidos || []).filter(function (p) { return p.pedido_online; }));
           var restoVnda = pedidos.filter(function (p) { return !p.pedido_online; });
           pedidos = restoVnda.concat(online);
           render(); atualizarAlarme();
