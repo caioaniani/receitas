@@ -249,7 +249,13 @@
     }
 
     // ── Submit ─────────────────────────────────────────────────────────
+    // Trava de duplo-envio: sem isso, um toque duplo (comum no celular com
+    // rede lenta) ou um Enter repetido manda o POST várias vezes e cria
+    // PEDIDOS DUPLICADOS. Em sucesso o servidor redireciona (página nova,
+    // botão volta a habilitar); em erro ele re-renderiza o form (idem).
+    var enviando = false;
     form.addEventListener('submit', function (e) {
+      if (enviando) { e.preventDefault(); return; }
       var atual = Carrinho.ler();
       if (!atual.length) {
         e.preventDefault();
@@ -259,6 +265,9 @@
         atual.map(function (it) {
           return { kind: it.kind, id: it.id, qtd: it.qtd };
         }));
+      enviando = true;
+      var btn = document.getElementById('btn-finalizar');
+      if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
       // Servidor valida tudo; deixa enviar.
     });
 
