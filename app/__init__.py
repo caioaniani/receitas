@@ -325,9 +325,8 @@ def create_app(config_class=None):
                        or 'https://opao.online').rstrip('/')
             return redirect(destino + '/', code=302)
 
-        hosts = {h.strip().lower()
-                 for h in (app.config.get('LOJA_HOSTS') or '').split(',')
-                 if h.strip()}
+        from app.utils import hosts_loja
+        hosts = hosts_loja()
         if host not in hosts:
             return None  # gestao.* / railway.app / outros: comportamento full
         p = request.path
