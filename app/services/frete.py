@@ -4,7 +4,7 @@ Fonte: mapa "Fretes O pão" do My Maps, exportado em KML pelo dono em
 10/06/2026 ("Faixas de frete O Pão sem sobreposição"). São anéis
 concêntricos de 1 km a partir da loja do Brooklin (Rua Ribeiro do Vale,
 455): grátis até 1 km, e a cada km adicional soma R$5, até o limite de
-15 km (R$70). Além de 15 km = fora da área de entrega do site.
+25 km (R$120). Além de 25 km = fora da área de entrega do site.
 
 O valor daqui é ESTIMATIVA pro atendimento (bot/equipe) — o valor que
 vale é o do checkout do site. Se o dono redesenhar o mapa, atualizar as
