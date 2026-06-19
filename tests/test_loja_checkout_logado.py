@@ -3,6 +3,9 @@
 Logado: nome/email/telefone/CPF vêm do `Cliente.*` sem precisar redigitar.
 O form do request prevalece (não sobrescreve o que ele acabou de mudar).
 """
+import pytest
+
+pytestmark = pytest.mark.loja_host
 
 
 def _cadastrar(client, email='c@x.com', nome='Caio Antinhani',
