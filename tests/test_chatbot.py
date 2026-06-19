@@ -1123,6 +1123,118 @@ def test_consultar_produtos_erro_catalogo_forca_handoff(app):
     assert 'erro' in r
 
 
+def _pedido_online_nf(db, codigo='ABC123', telefone='11988887777',
+                      cpf='52998224725', status='a_caminho', nf_id=None):
+    """Cria Cliente (com CPF) + PedidoOnline pra testar a Fase 3."""
+    from datetime import date
+    from decimal import Decimal
+
+    from app.models import Cliente, PedidoOnline, PedidoOnlineItem
+    cli = Cliente(nome='Maria', email='m@x.com', telefone=telefone, cpf=cpf)
+    db.session.add(cli)
+    db.session.commit()
+    p = PedidoOnline(
+        codigo=codigo, cliente_id=cli.id, nome_cliente='Maria',
+        email_cliente='m@x.com', telefone_cliente=telefone,
+        modo_entrega='agendada', status=status,
+        data_entrega=date(2026, 6, 25), janela_entrega='08:00–09:00',
+        subtotal=Decimal('40'), valor_total=Decimal('45'),
+        tiny_nota_fiscal_id=nf_id)
+    p.itens.append(PedidoOnlineItem(
+        kind='produto', nome='Box Mimo', preco_unitario=Decimal('40'),
+        quantidade=1, subtotal=Decimal('40')))
+    db.session.add(p)
+    db.session.commit()
+    return p
+
+
+def test_consultar_pedido_online_por_telefone(app):
+    """Pedido NATIVO do site: autoriza pelo telefone do canal e traz status
+    amigável + data + itens do NOSSO banco (sem tocar no VNDA)."""
+    from app.extensions import db
+    from app.services import bot_tools
+    with app.app_context():
+        _pedido_online_nf(db, codigo='ON123', telefone='11988887777',
+                          status='a_caminho')
+        r = bot_tools.consultar_pedido('ON123', telefone_contato='11988887777')
+    assert r['numero'] == 'ON123'
+    assert 'caminho' in r['status']
+    assert r['data_entrega'] == '25/06/2026'
+    assert r['itens'][0]['nome'] == 'Box Mimo'
+
+
+def test_consultar_pedido_online_por_cpf(app):
+    """Sem telefone do canal, autoriza pelo CPF do comprador."""
+    from app.extensions import db
+    from app.services import bot_tools
+    with app.app_context():
+        _pedido_online_nf(db, codigo='ON124', cpf='52998224725')
+        r0 = bot_tools.consultar_pedido('ON124')  # sem auth
+        assert r0.get('erro') == 'autorizacao_necessaria'
+        r = bot_tools.consultar_pedido('ON124', cpf_cliente='529.982.247-25')
+    assert r['numero'] == 'ON124'
+
+
+def test_consultar_pedido_online_nao_autorizado(app):
+    """Telefone e CPF errados → autorizacao_necessaria (não vaza o pedido)."""
+    from app.extensions import db
+    from app.services import bot_tools
+    with app.app_context():
+        _pedido_online_nf(db, codigo='ON125', telefone='11988887777',
+                          cpf='52998224725')
+        r = bot_tools.consultar_pedido('ON125', telefone_contato='11000000000',
+                                       cpf_cliente='11111111111')
+    assert r['erro'] == 'autorizacao_necessaria'
+
+
+def test_consultar_pedido_cai_pro_vnda_se_nao_for_nosso(app):
+    """Código que NÃO é PedidoOnline → fallback VNDA (transição em paralelo)."""
+    from app.services import bot_tools
+    order = {'code': 'VND9', 'status': 'shipped', 'total': 100,
+             'items': [{'product_name': 'Croissant', 'quantity': 2}]}
+    with app.app_context():
+        with patch('app.services.bot_tools._autorizar_pedido',
+                   return_value={'ok': True, 'order': order}), \
+             patch('app.services.vnda._extrair_data_entrega', return_value=None), \
+             patch('app.services.vnda._extrair_periodo', return_value=None):
+            r = bot_tools.consultar_pedido('VND9', telefone_contato='11999')
+    assert r['numero'] == 'VND9'
+    assert r['status'] == 'shipped'
+
+
+def test_nf_pedido_online_com_nota(app):
+    """NF de pedido nativo: CPF bate + NF emitida → devolve o link do DANFE."""
+    from app.extensions import db
+    from app.services import bot_tools
+    with app.app_context():
+        _pedido_online_nf(db, codigo='NF100', cpf='52998224725', nf_id='99')
+        with patch('app.services.tiny_nf.link_danfe',
+                   return_value='https://tiny/nf/99.pdf'):
+            r = bot_tools.buscar_nota_fiscal('529.982.247-25', 'NF100')
+    assert r['link'] == 'https://tiny/nf/99.pdf'
+    assert r['numero_pedido'] == 'NF100'
+
+
+def test_nf_pedido_online_sem_nota_ainda(app):
+    from app.extensions import db
+    from app.services import bot_tools
+    with app.app_context():
+        _pedido_online_nf(db, codigo='NF101', cpf='52998224725', nf_id=None)
+        r = bot_tools.buscar_nota_fiscal('529.982.247-25', 'NF101')
+    assert r['erro'] == 'sem_nf_ainda'
+
+
+def test_nf_pedido_online_cpf_errado_nao_vaza(app):
+    """CPF não bate no pedido nativo → 'nao_encontrado' (não confirma que
+    existe). NUNCA expõe NF de outro cliente."""
+    from app.extensions import db
+    from app.services import bot_tools
+    with app.app_context():
+        _pedido_online_nf(db, codigo='NF102', cpf='52998224725', nf_id='99')
+        r = bot_tools.buscar_nota_fiscal('11111111111', 'NF102')
+    assert r['erro'] == 'nao_encontrado'
+
+
 def test_responder_erro_produtos_forca_handoff(app):
     """Se consultar_produtos falha, o bot NUNCA repassa preço de memória —
     força handoff (salvaguarda de dinheiro)."""
