@@ -515,55 +515,63 @@ def api_pedidos():
     except ValueError:
         target = hoje_brt()
 
+    # VNDA pode cair — os pedidos LOCAIS e da LOJA PRÓPRIA (PedidoOnline)
+    # entram de qualquer forma (independentes do VNDA, igual o painel). O erro
+    # do VNDA vira aviso não-bloqueante.
+    overrides_full = {}
+    erro_vnda = None
+    resultado = {}
     try:
         overrides_full = _carregar_overrides_full()
         overrides_data = {code: o['data'] for code, o in overrides_full.items()}
-        resultado = _injetar_pedidos_locais(target, vnda.buscar_pedidos_do_dia(target, overrides=overrides_data))
+        resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides_data)
     except Exception as e:
         current_app.logger.exception('api_pedidos: erro carregando VNDA/overrides')
+        erro_vnda = f'{type(e).__name__}: {str(e)[:300]}'
+    if isinstance(resultado, dict) and resultado.get('erro'):
+        erro_vnda = resultado['erro']
+
+    # base sem 'erro' → _injetar_pedidos_locais adiciona local + online.
+    base = {} if erro_vnda else resultado
+    try:
+        _injetar_pedidos_locais(target, base)
+        pedidos = base.get('pedidos', [])
+        total_janela = base.get('total_janela', 0)
+
+        _aplicar_cartinhas(pedidos)
+
+        # Info adicional de override de data
+        for p in pedidos:
+            if p.get('data_override'):
+                ov = overrides_full.get(p['code'])
+                if ov:
+                    p['override_motivo'] = ov['motivo']
+                    p['override_autor'] = ov['autor']
+                    p['override_em'] = ov['em']
+
+        # Carrega driver atribuido (se houver)
+        codes = [p['code'] for p in pedidos if p['code']]
+        atribuicoes = {}
+        if codes:
+            for a in AtribuicaoEntrega.query.filter(AtribuicaoEntrega.pedido_code.in_(codes)).all():
+                if a.driver_id:
+                    drv = Driver.query.get(a.driver_id)
+                    if drv:
+                        atribuicoes[a.pedido_code] = {
+                            'id': drv.id, 'nome': drv.nome, 'cor': drv.cor,
+                        }
+        for p in pedidos:
+            drv = atribuicoes.get(p['code'])
+            if drv:
+                p['driver'] = drv
+
+        resp = jsonify(pedidos=pedidos, data=data_str,
+                       total_janela=total_janela, erro=erro_vnda)
+    except Exception as e:
+        current_app.logger.exception('api_pedidos: erro processando pedidos')
+        tb_short = traceback.format_exc().splitlines()[-3:]
         return jsonify(pedidos=[], data=data_str,
-                       erro=f'{type(e).__name__}: {str(e)[:300]}')
-
-    if 'erro' in resultado:
-        resp = jsonify(pedidos=[], data=data_str, erro=resultado['erro'])
-    else:
-        try:
-            pedidos = resultado.get('pedidos', [])
-            total_janela = resultado.get('total_janela', 0)
-
-            codes = [p['code'] for p in pedidos if p['code']]
-            _aplicar_cartinhas(pedidos)
-
-            # Info adicional de override de data
-            for p in pedidos:
-                if p.get('data_override'):
-                    ov = overrides_full.get(p['code'])
-                    if ov:
-                        p['override_motivo'] = ov['motivo']
-                        p['override_autor'] = ov['autor']
-                        p['override_em'] = ov['em']
-
-            # Carrega driver atribuido (se houver)
-            atribuicoes = {}
-            if codes:
-                for a in AtribuicaoEntrega.query.filter(AtribuicaoEntrega.pedido_code.in_(codes)).all():
-                    if a.driver_id:
-                        drv = Driver.query.get(a.driver_id)
-                        if drv:
-                            atribuicoes[a.pedido_code] = {
-                                'id': drv.id, 'nome': drv.nome, 'cor': drv.cor,
-                            }
-            for p in pedidos:
-                drv = atribuicoes.get(p['code'])
-                if drv:
-                    p['driver'] = drv
-
-            resp = jsonify(pedidos=pedidos, data=data_str, total_janela=total_janela)
-        except Exception as e:
-            current_app.logger.exception('api_pedidos: erro processando pedidos')
-            tb_short = traceback.format_exc().splitlines()[-3:]
-            return jsonify(pedidos=[], data=data_str,
-                           erro=f'{type(e).__name__}: {str(e)[:200]} | {" | ".join(tb_short)}')
+                       erro=f'{type(e).__name__}: {str(e)[:200]} | {" | ".join(tb_short)}')
 
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
     return resp
