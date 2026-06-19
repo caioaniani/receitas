@@ -527,6 +527,9 @@ a:hover { text-decoration: underline; }
 }
 .rodape strong { color: var(--texto); font-weight: 600; }
 .rodape .small { font-size: 14px; }
+/* Endereços das lojas: clicáveis → abrem no Google Maps. */
+.rodape-mapa { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.rodape-mapa:hover { color: var(--acento); }
 
 /* ── Carrinho: ícone + badge no header ─────────────────── */
 .topo-carrinho {
