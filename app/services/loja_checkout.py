@@ -204,7 +204,8 @@ def _frete_para(modo, endereco, base=None):
             'Confira o endereço ou o CEP.'
     if r.get('fora_area'):
         return None, r.get('distancia_km'), r.get('endereco'), \
-            'Esse endereço está fora da nossa área de entrega (até 15 km).'
+            ('Esse endereço está fora da nossa área de entrega '
+             f'(até {int(frete_svc.RAIO_MAX_KM)} km).')
     valor = Decimal(str(r.get('valor') or 0))
     # Express: o valor dos anéis é só uma ESTIMATIVA — a equipe confirma o
     # custo real (Lalamove faixa X ou entregador próprio) no painel.
