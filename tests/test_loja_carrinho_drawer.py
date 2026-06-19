@@ -10,6 +10,11 @@ Não dá pra rodar JS aqui, então a cobertura é:
 """
 import os
 
+import pytest
+
+# Vitrine pública é testada no host da loja; aqui localhost conta como tal.
+pytestmark = pytest.mark.loja_host
+
 
 def _admin_logado(app):
     from app.extensions import db
