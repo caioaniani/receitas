@@ -116,6 +116,17 @@
                value="{% if i.preco_site %}{{ '%.2f' % i.preco_site }}{% endif %}"
                placeholder="—">
       </div>
+      <div class="item-estoque-row">
+        <label>Estoque</label>
+        {% if i.estoque is none %}
+        <input type="number" class="estoque-input" disabled placeholder="—"
+               title="Loja do site não configurada">
+        {% else %}
+        <input type="number" min="0" max="100000" step="1"
+               class="estoque-input" value="{{ i.estoque }}">
+        {% endif %}
+        <span class="estoque-hint">un. · loja do site</span>
+      </div>
       <div class="item-badges">
         {% if i.no_site %}
         <span class="badge-mini badge-ok">✓ no site</span>
