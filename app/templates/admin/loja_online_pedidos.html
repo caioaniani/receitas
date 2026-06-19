@@ -8,7 +8,7 @@
   <em>aguardando pagamento</em> (o Pagar.me entra na próxima fase).
 </p>
 
-<div class="mb-3 d-flex flex-wrap gap-2">
+<div class="mb-2 d-flex flex-wrap gap-2">
   <a href="{{ url_for('main.loja_online_pedidos') }}"
      class="btn btn-sm {{ 'btn-dark' if not status else 'btn-outline-dark' }}">
     Todos <span class="badge bg-light text-dark">{{ total }}</span>
@@ -22,6 +22,33 @@
   {% endif %}
   {% endfor %}
 </div>
+
+{# Filtro por DATA DE ENTREGA — GET preserva o status atual. #}
+<form method="GET" action="{{ url_for('main.loja_online_pedidos') }}"
+      class="d-flex flex-wrap gap-2 align-items-end mb-3 small">
+  {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+  <div>
+    <label class="form-label mb-0 small">Data de entrega</label>
+    <input type="date" name="data" value="{{ data }}"
+           class="form-control form-control-sm" style="max-width:170px">
+  </div>
+  <div class="text-muted small mx-1">ou intervalo:</div>
+  <div>
+    <label class="form-label mb-0 small">De</label>
+    <input type="date" name="data_ini" value="{{ data_ini }}"
+           class="form-control form-control-sm" style="max-width:170px">
+  </div>
+  <div>
+    <label class="form-label mb-0 small">Até</label>
+    <input type="date" name="data_fim" value="{{ data_fim }}"
+           class="form-control form-control-sm" style="max-width:170px">
+  </div>
+  <button type="submit" class="btn btn-sm btn-dark">Filtrar</button>
+  {% if filtro_data_ativo %}
+  <a href="{{ url_for('main.loja_online_pedidos', status=status or None) }}"
+     class="btn btn-sm btn-outline-secondary">Limpar data</a>
+  {% endif %}
+</form>
 
 {% if total %}
 <div class="mb-3" style="max-width:480px;">
