@@ -415,11 +415,34 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  // Link de 1 clique (/loja/carrinho?add=...): o servidor já resolveu os
+  // itens (preço/estoque reais) e injetou aqui. Soma ao carrinho e LIMPA a
+  // query da URL — sem isso, um refresh somaria os itens de novo.
+  function aplicarPrefill() {
+    var el = document.getElementById('cart-prefill');
+    if (!el) return;
+    var itens;
+    try { itens = JSON.parse(el.textContent || '[]'); } catch (e) { return; }
+    if (!Array.isArray(itens) || !itens.length) return;
+    itens.forEach(function (it) {
+      Carrinho.adicionar({
+        kind: it.kind, id: it.id, nome: it.nome, preco: it.preco,
+        imagem: it.imagem || '', categoria: it.categoria || '',
+      }, it.qtd || 1);
+    });
+    try {
+      if (window.history && history.replaceState) {
+        history.replaceState(null, '', window.location.pathname);
+      }
+    } catch (e) { /* sem history API — segue (refresh re-adicionaria) */ }
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     // Página de confirmação: pedido criado no servidor -> esvazia o carrinho.
     if (document.getElementById('limpar-carrinho')) {
       Carrinho.salvar([]);  // salvar() já atualiza o badge
     }
+    aplicarPrefill();          // link de 1 clique enche o carrinho
     ligarCardAdds();           // event delegation — registra UMA vez
     ligarDrawer();             // handlers do drawer (1x por página)
     Carrinho.atualizarBadge(); // renderiza cards iniciais
