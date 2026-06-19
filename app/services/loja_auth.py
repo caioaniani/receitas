@@ -123,6 +123,80 @@ def token_reset_valido(token):
     return reg
 
 
+# ── Verificação de e-mail no cadastro (19/06/2026) ────────────────────
+# Dispara SÓ quando o cadastro reivindicaria pedidos feitos como guest
+# (mesmo e-mail já presente como Cliente sem senha). E-mail "novo" continua
+# com cadastro instantâneo — sem atrito pra 95% dos casos. Fecha o sequestro
+# de pedido por adivinhação de e-mail (PII + CPF + histórico ficariam expostos).
+
+
+def iniciar_verificacao_cadastro(cliente_guest, nome, telefone, senha):
+    """Cria token e dispara o e-mail. Senha vai pra `senha_hash_pending` JÁ
+    HASHADA (nunca em plaintext no banco) — `Cliente.set_senha` é o
+    hasher. Quando o cliente clicar no link, a gente promove o hash pro
+    Cliente. Token vale 1h, single-use.
+
+    `cliente_guest` precisa ter sido encontrado no banco (mesmo e-mail,
+    sem senha) — caller garante essa pré-condição."""
+    from werkzeug.security import generate_password_hash
+
+    from app.extensions import db
+    from app.models import ClienteVerificacaoEmail
+    from app.services import email as email_svc
+    from app.utils import agora
+    token = secrets.token_urlsafe(32)
+    reg = ClienteVerificacaoEmail(
+        cliente_id=cliente_guest.id,
+        token=token,
+        nome_pending=nome or None,
+        telefone_pending=telefone or None,
+        senha_hash_pending=generate_password_hash(senha, method='scrypt'),
+        expira_em=agora() + timedelta(hours=1),
+    )
+    db.session.add(reg)
+    db.session.commit()
+    try:
+        email_svc.enviar_verificacao_cadastro(cliente_guest, token)
+    except Exception:  # noqa: BLE001
+        pass  # best-effort
+    return True
+
+
+def token_verificacao_valido(token):
+    """Devolve `ClienteVerificacaoEmail` válido (não usado, não expirado) ou None."""
+    from app.models import ClienteVerificacaoEmail
+    from app.utils import agora
+    if not token or len(token) < 20:
+        return None
+    reg = ClienteVerificacaoEmail.query.filter_by(token=token).first()
+    if not reg or not reg.valido(agora()):
+        return None
+    return reg
+
+
+def aplicar_verificacao(token):
+    """Aplica os dados pendentes ao Cliente e marca o token como usado.
+    Devolve {ok, cliente?, erro?}."""
+    from app.extensions import db
+    from app.utils import agora
+    reg = token_verificacao_valido(token)
+    if not reg:
+        return {'ok': False, 'erro': 'Link expirado ou inválido. '
+                'Tente cadastrar de novo.'}
+    cli = reg.cliente
+    # Promove os dados pendentes pra Cliente real. Não sobrescreve nome/
+    # telefone existentes (cliente já tinha algo do checkout passado), só
+    # preenche o que falta.
+    cli.nome = cli.nome or reg.nome_pending
+    cli.telefone = cli.telefone or reg.telefone_pending
+    cli.senha_hash = reg.senha_hash_pending
+    if not cli.aceite_lgpd_em:
+        cli.aceite_lgpd_em = agora()
+    reg.usado_em = agora()
+    db.session.commit()
+    return {'ok': True, 'cliente': cli}
+
+
 def aplicar_reset(token, nova_senha):
     """Aplica o reset. Devolve {ok, erro?}. Marca token como usado mesmo
     se a senha não bater regras — não cria janela de retry com o mesmo
