@@ -2359,7 +2359,12 @@ def loja_online_catalogo():
     upload de foto. Filtros via query string: ?filtro=no-site|sem-preco|
     sem-foto|todos (default: todos)."""
     from app.models import Produto, Receita
+    from app.services import loja_catalogo
     filtro = (request.args.get('filtro') or 'todos').strip().lower()
+
+    # Estoque atual na loja do site (a mesma de /pedidos/estoque-loja). None =
+    # loja do site não configurada → não dá pra editar estoque aqui.
+    estoque_map = loja_catalogo._estoque_site_map()
 
     # Receitas ativas
     rec_q = Receita.query.filter(Receita.arquivada_em.is_(None))
