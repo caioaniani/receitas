@@ -368,9 +368,10 @@ TOOLS = [
     },
     {
         'name': 'gerar_link_carrinho',
-        'description': 'Monta o link do carrinho a partir dos itens (SKU + '
-                       'quantidade). Use os SKUs vindos do consultar_produtos. '
-                       'Nunca inclua SKU de cesta aqui.',
+        'description': 'Monta o link de 1 clique que JÁ enche o carrinho do '
+                       'site e leva pro checkout. Passe os itens com kind+id '
+                       '(vindos do consultar_produtos) + quantidade. Pode '
+                       'incluir cestas e avulsos juntos — um link só.',
         'input_schema': {
             'type': 'object',
             'properties': {
@@ -379,10 +380,12 @@ TOOLS = [
                     'items': {
                         'type': 'object',
                         'properties': {
-                            'sku': {'type': 'string'},
-                            'qtd': {'type': 'integer'},
+                            'kind': {'type': 'string',
+                                     'enum': ['receita', 'produto']},
+                            'id': {'type': 'integer'},
+                            'quantidade': {'type': 'integer'},
                         },
-                        'required': ['sku', 'qtd'],
+                        'required': ['kind', 'id', 'quantidade'],
                     },
                 },
             },
