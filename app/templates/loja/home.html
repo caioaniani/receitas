@@ -1,13 +1,7 @@
 {% extends 'loja/_base.html' %}
 
 {% block content %}
-{% if grupos %}
-<nav class="cat-nav" aria-label="Categorias">
-  {% for cat, itens in grupos %}
-    <a href="#cat-{{ cat|catslug }}">{{ cat }}</a>
-  {% endfor %}
-</nav>
-{% else %}
+{% if not grupos %}
 <section class="vazio">
   <p>Catálogo em montagem. Volte em alguns instantes.</p>
 </section>
