@@ -373,6 +373,8 @@ def conciliar_pedido(codigo, aplicar=False):
         logger.exception('conciliar_pedido %s: _marcar_pago falhou', codigo)
         return {'ok': False, 'erro': f'falha ao marcar pago: {exc}',
                 'codigo': codigo, 'status_local': p.status}
+    if mudou:
+        _emitir_nf_e_enviar(p)  # após commit; isolado
     out['acao'] = 'MARCADO PAGO' if mudou else 'já estava pago (no-op)'
     out['status_local'] = p.status
     return out
