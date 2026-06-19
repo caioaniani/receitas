@@ -310,8 +310,9 @@ TOOL_ENCERRAR = {
 TOOLS = [
     {
         'name': 'consultar_produtos',
-        'description': 'Busca produtos no catálogo do site (nome, preço, '
-                       'disponibilidade, SKU e DESCRIÇÃO/conteúdo da cesta). Use '
+        'description': 'Busca no catálogo do site (nome, preço, disponibilidade '
+                       'REAL/estoque, descrição e conteúdo da cesta). Cada item '
+                       'vem com kind+id — passe-os pro gerar_link_carrinho. Use '
                        'SEMPRE antes de sugerir um produto, montar um link, ou '
                        'responder o que vem numa cesta.',
         'input_schema': {
