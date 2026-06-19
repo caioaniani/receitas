@@ -239,12 +239,19 @@ def api_painel():
     except Exception:  # noqa: BLE001
         current_app.logger.exception('painel: resumo de alertas do vigia falhou')
         vigia_resumo = {'pendentes': 0, 'ultimo': None}
+    # Token CSRF FRESCO a cada poll (20s). O painel da cozinha fica aberto o
+    # dia todo; o token gerado no load da página expira em 1h (default do
+    # Flask-WTF) e os POSTs de status passam a levar 400 SILENCIOSO — o
+    # status muda na tela mas não salva, e "volta" no próximo reload. Mandar
+    # um token novo a cada poll mantém o painel sempre com token válido.
+    from flask_wtf.csrf import generate_csrf
     resp = jsonify(pedidos=out, data=data_str, total=len(out),
                    novos=sum(1 for p in out if p['novo']),
                    erro=erro,   # aviso do VNDA (não bloqueia os cards da loja)
                    lalamove_saldo=(str(saldo.valor) if saldo and
                                    saldo.valor is not None else None),
-                   vigia=vigia_resumo)
+                   vigia=vigia_resumo,
+                   csrf=generate_csrf())
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
     return resp
 
