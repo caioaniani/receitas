@@ -574,21 +574,68 @@ def _autorizar_pedido(code, telefone_contato, cpf_cliente):
     }
 
 
-def consultar_pedido(numero, *, telefone_contato=None, cpf_cliente=None):
-    """Status + DATA DE ENTREGA de um pedido pelo número (code do VNDA).
+# Status do PedidoOnline → texto amigável pro cliente final.
+_STATUS_ONLINE_CLIENTE = {
+    'aguardando_pagamento': 'aguardando pagamento',
+    'pago': 'pago, em preparo',
+    'em_preparo': 'em preparo',
+    'a_caminho': 'saiu para entrega (a caminho)',
+    'entregue': 'entregue',
+    'cancelado': 'cancelado',
+}
 
-    AUTORIZACAO: a partir de 14/06/2026 a tool exige que o solicitante
-    seja o dono do pedido — match por telefone do canal (Chatwoot)
-    OU CPF informado pelo cliente. Sem isso, retorna autorizacao_necessaria
-    (NAO expoe que o pedido existe). Ver `_autorizar_pedido`.
+_AUTORIZACAO_INSTRUCAO = (
+    'Peca o CPF do comprador do pedido pra confirmar que voce esta falando '
+    'com o dono. So depois chame a tool de novo passando cpf_cliente=<cpf '
+    'informado>.')
+
+
+def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
+    """Pedido NATIVO do site (PedidoOnline). Devolve:
+      - None: não é um pedido nosso → o caller tenta o VNDA (transição).
+      - {'erro': 'autorizacao_necessaria', ...}: é nosso, mas o dono não bate.
+      - dict do pedido: autorizado.
+    Autoriza por telefone do canal (cliente OU destinatário) ou pelo CPF do
+    comprador (Cliente.cpf) — mesma regra do VNDA."""
+    from app.models import PedidoOnline
+    from app.utils import telefone_chave
+    p = PedidoOnline.query.filter_by(codigo=code).first()
+    if not p:
+        return None
+    autorizado = False
+    tel_contato = telefone_chave(telefone_contato or '')
+    if tel_contato:
+        for tel in (p.telefone_cliente, p.telefone_destinatario):
+            if tel and telefone_chave(tel) == tel_contato:
+                autorizado = True
+                break
+    if not autorizado:
+        cpf_d = ''.join(c for c in (cpf_cliente or '') if c.isdigit())
+        cpf_pedido = ''.join(
+            c for c in ((p.cliente.cpf if p.cliente else '') or '')
+            if c.isdigit())
+        if cpf_d and cpf_pedido and cpf_d == cpf_pedido:
+            autorizado = True
+    if not autorizado:
+        return {'erro': 'autorizacao_necessaria',
+                'instrucao': _AUTORIZACAO_INSTRUCAO}
+    return {
+        'numero': p.codigo,
+        'status': _STATUS_ONLINE_CLIENTE.get(p.status, p.status),
+        'total': float(p.valor_total or 0),
+        'data_entrega': (p.data_entrega.strftime('%d/%m/%Y')
+                         if p.data_entrega else None),
+        'periodo': p.janela_entrega or None,
+        'itens': [{'nome': i.nome, 'qtd': i.quantidade} for i in p.itens],
+    }
+
+
+def _consultar_pedido_vnda(code, telefone_contato, cpf_cliente):
+    """Fallback VNDA (pedidos do site antigo, em paralelo na transição).
 
     A data vem de vnda._extrair_data_entrega, que prioriza a data AGENDADA no
     checkout (extra.DataDeEntrega) — e NAO o expected_delivery_date do VNDA, que
-    e o campo bugado por tras do "pedido pode ser entregue hoje" no site. Ou
-    seja: esta data e a correta pra desfazer essa confusao com o cliente."""
-    code = str(numero or '').strip()
-    if not code:
-        return {'erro': 'informe o número do pedido'}
+    e o campo bugado por tras do "pedido pode ser entregue hoje" no site."""
     auth = _autorizar_pedido(code, telefone_contato, cpf_cliente)
     if auth.get('erro'):
         return auth
@@ -604,3 +651,21 @@ def consultar_pedido(numero, *, telefone_contato=None, cpf_cliente=None):
         'periodo': vnda._extrair_periodo(order),
         'itens': itens,
     }
+
+
+def consultar_pedido(numero, *, telefone_contato=None, cpf_cliente=None):
+    """Status + DATA DE ENTREGA de um pedido pelo número.
+
+    Procura PRIMEIRO no NOSSO banco (PedidoOnline, opao.online); se o número
+    não for de lá, cai pro VNDA (site antigo, em paralelo na transição).
+
+    AUTORIZACAO (nos dois): exige que o solicitante seja o dono — match por
+    telefone do canal (Chatwoot) OU CPF informado. Sem isso devolve
+    autorizacao_necessaria (NAO expoe que o pedido existe)."""
+    code = str(numero or '').strip()
+    if not code:
+        return {'erro': 'informe o número do pedido'}
+    nativo = _consultar_pedido_online(code, telefone_contato, cpf_cliente)
+    if nativo is not None:
+        return nativo
+    return _consultar_pedido_vnda(code, telefone_contato, cpf_cliente)
