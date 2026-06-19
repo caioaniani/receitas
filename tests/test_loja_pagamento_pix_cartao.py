@@ -593,6 +593,45 @@ def test_paid_continua_pago_mesmo_se_nf_falhar(app):
         assert atual.status == 'pago'   # NF falhar não desfaz o pagamento
 
 
+def test_order_paid_e_charge_paid_so_mandam_um_email(app):
+    """Regressão (19/06/2026): o Pagar.me manda `order.paid` E `charge.paid`
+    em sequência. Sem o lock pessimista no `_marcar_pago`, os dois eventos
+    passavam pelo guard 'status == pago' (porque o segundo lia antes do
+    commit do primeiro em paralelo) e mandavam 2 e-mails de 'pedido
+    confirmado' (cliente Caio recebeu 2 e-mails idênticos)."""
+    from unittest.mock import patch as _patch
+
+    from app.extensions import db
+    from app.models import PedidoOnline
+    from app.services import loja_pagamento
+    with app.app_context():
+        app.config['PAGARME_API_KEY'] = 'sk_test_abc'
+        app.config['POSTMARK_SERVER_TOKEN'] = 'tok'
+        loja = _loja_site(db)
+        p = _produto(db)
+        ped = _pedido_com_item(db, p, qtd=1, modo='retirada',
+                                loja_retirada_id=loja.id)
+        _setup_loja_estoque(db, ped, p)
+        body = {'id': 'or_race', 'charges': [{'id': 'ch_race',
+                'status': 'pending', 'last_transaction': {'qr_code': 'E'}}]}
+        with _patch('app.services.pagarme.requests.post',
+                    return_value=_fake_resp(200, body)):
+            loja_pagamento.iniciar_pix(ped)
+        with _patch('app.services.email.enviar_confirmacao_pedido',
+                    return_value={'ok': True}) as envia:
+            # order.paid chega primeiro
+            loja_pagamento.processar_webhook(
+                {'id': 'evt_order_race', 'type': 'order.paid',
+                 'data': {'id': 'or_race', 'code': ped.codigo}})
+            # charge.paid logo em seguida — DEVE ser no-op (sem 2º e-mail)
+            loja_pagamento.processar_webhook(
+                {'id': 'evt_charge_race', 'type': 'charge.paid',
+                 'data': {'id': 'or_race', 'code': ped.codigo}})
+        envia.assert_called_once()   # UM e-mail só, não dois
+        atual = PedidoOnline.query.filter_by(codigo=ped.codigo).first()
+        assert atual.status == 'pago'
+
+
 def test_nf_que_levanta_excecao_nao_suja_a_sessao(app):
     """Regressão (19/06/2026): a emissão de NF rodava DENTRO da transação do
     pagamento e, ao falhar, deixava a sessão suja → poluía o teste/request
