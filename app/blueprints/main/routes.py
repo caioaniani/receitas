@@ -2814,6 +2814,49 @@ def debug_redirect_dominio():
     )
 
 
+@main_bp.route('/admin/loja-online/prontidao')
+@owner_required
+def loja_online_prontidao():
+    """Pré-flight do CUTOVER: o que precisa estar pronto ANTES de apontar o
+    domínio antigo pro site novo. GO/NO-GO + pendências. O bloqueio nº 1 é
+    LOJA_VISIVEL — sem ela, o cliente anônimo redirecionado vê 404."""
+    from app.blueprints.loja.routes import _loja_visivel_publico
+    from app.services import loja_catalogo, pagarme
+    cfg = current_app.config
+
+    loja_visivel = _loja_visivel_publico()
+    pg_ambiente = pagarme.ambiente()
+    pg_ok = pagarme.disponivel() and pg_ambiente == 'producao'
+    redirect_hosts = [h.strip() for h in (cfg.get('SITE_REDIRECT_HOSTS') or '')
+                      .split(',') if h.strip()]
+
+    # Produtos no site sem estoque (aparecem como "Esgotado") — aviso, não bloqueio.
+    mapa = loja_catalogo._estoque_site_map() or {}
+    esgotados = sum(1 for it in loja_catalogo.produtos_publicados()
+                    if not (mapa.get((it['kind'], it['id'])) or 0) > 0)
+
+    pendencias = []
+    if not loja_visivel:
+        pendencias.append('BLOQUEIO: LOJA_VISIVEL não é 1 — cliente anônimo vê '
+                          '404. Defina LOJA_VISIVEL=1 no Railway ANTES de trocar '
+                          'o DNS.')
+    if not pg_ok:
+        pendencias.append(f'BLOQUEIO: Pagar.me não está produção/ok '
+                          f'(ambiente={pg_ambiente}).')
+
+    return jsonify(
+        pronto=(loja_visivel and pg_ok),
+        loja_visivel=loja_visivel,
+        pagarme_ambiente=pg_ambiente,
+        pagarme_ok=pg_ok,
+        redirect_hosts_armados=redirect_hosts,
+        produtos_esgotados=esgotados,
+        pendencias=pendencias,
+        nota=('produtos_esgotados é AVISO (eles aparecem como "Esgotado" no '
+              'site até você preencher o estoque), não bloqueia o cutover.'),
+    )
+
+
 # ── Debug Pagar.me: valida a chave sem expor o segredo (Fase 4) ───────────
 @main_bp.route('/admin/debug-pagarme')
 @owner_required
