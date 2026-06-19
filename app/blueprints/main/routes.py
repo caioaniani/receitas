@@ -2814,6 +2814,9 @@ def debug_redirect_dominio():
     )
 
 
+# ── Debug Pagar.me: valida a chave sem expor o segredo (Fase 4) ───────────
+@main_bp.route('/admin/debug-pagarme')
+@owner_required
 def debug_pagarme():
     """Diagnóstico do Pagar.me (owner-only). Confirma se a chave cadastrada
     no Railway é válida e em qual ambiente (sandbox/produção), SEM expor o
