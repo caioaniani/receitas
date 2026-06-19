@@ -14,7 +14,7 @@ from flask import abort, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 
 from app.blueprints.loja import loja_bp
-from app.extensions import csrf
+from app.extensions import csrf, limiter
 from app.services import frete as frete_svc
 from app.services import loja_auth, loja_catalogo, loja_checkout, loja_pagamento
 
@@ -337,8 +337,10 @@ def _gate_acesso():
 # `_user_id` do Flask-Login. Nunca cruzam — privilégio NÃO escala.
 
 @loja_bp.route('/entrar', methods=['GET', 'POST'])
+@limiter.limit('5 per minute', methods=['POST'])
 def entrar():
-    """Login do cliente final."""
+    """Login do cliente final. Rate limit (5/min) trava brute-force de senha
+    sem atrapalhar cliente que erra a digitação — espelha o admin."""
     if loja_auth.cliente_atual():
         return redirect(loja_auth.safe_next() or url_for('loja.minha_conta'))
     erro = None
