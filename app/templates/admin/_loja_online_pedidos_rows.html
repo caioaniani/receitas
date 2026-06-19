@@ -1,0 +1,31 @@
+{# Linhas da tabela de pedidos do site. Reutilizado no carregamento inicial
+   (loja_online_pedidos.html) e na busca AJAX (loja_online_pedidos_buscar),
+   pra NÃO duplicar markup nem o mapa de badge/labels. #}
+{% set badge = {
+  'aguardando_pagamento': 'bg-warning text-dark',
+  'pago': 'bg-info text-dark',
+  'em_preparo': 'bg-secondary',
+  'a_caminho': 'bg-primary',
+  'entregue': 'bg-success',
+  'cancelado': 'bg-danger',
+} %}
+{% set modo_label = {
+  'agendada': 'Entrega agendada', 'retirada': 'Retirada', 'express': 'Express',
+} %}
+{% for p in pedidos %}
+<tr>
+  <td><a href="{{ url_for('main.loja_online_pedido_detalhe', codigo=p.codigo) }}">
+    <code>{{ p.codigo }}</code></a></td>
+  <td class="small text-muted">{{ p.criado_em.strftime('%d/%m %H:%M') if p.criado_em }}</td>
+  <td>{{ p.nome_cliente }}<br><span class="small text-muted">{{ p.telefone_cliente or p.email_cliente }}</span></td>
+  <td>{{ modo_label.get(p.modo_entrega, p.modo_entrega) }}</td>
+  <td class="small">
+    {% if p.data_entrega %}{{ p.data_entrega.strftime('%d/%m') }}
+      {% if p.janela_entrega %}· {{ p.janela_entrega }}{% endif %}
+    {% else %}—{% endif %}
+  </td>
+  <td class="text-end fw-bold">R$ {{ '%.2f'|format(p.valor_total)|replace('.', ',') }}</td>
+  <td><span class="badge {{ badge.get(p.status, 'bg-secondary') }}">
+    {{ labels.get(p.status, p.status) }}</span></td>
+</tr>
+{% endfor %}
