@@ -593,6 +593,43 @@ def test_paid_continua_pago_mesmo_se_nf_falhar(app):
         assert atual.status == 'pago'   # NF falhar não desfaz o pagamento
 
 
+def test_nf_que_levanta_excecao_nao_suja_a_sessao(app):
+    """Regressão (19/06/2026): a emissão de NF rodava DENTRO da transação do
+    pagamento e, ao falhar, deixava a sessão suja → poluía o teste/request
+    seguinte (suite ficou flaky com 34 falhas). Agora a NF roda DEPOIS do
+    commit, com rollback próprio: se levantar, o pedido segue pago E a sessão
+    fica limpa (dá pra consultar logo em seguida)."""
+    from unittest.mock import patch as _patch
+
+    from app.extensions import db
+    from app.models import PedidoOnline
+    from app.services import loja_pagamento
+    with app.app_context():
+        app.config['PAGARME_API_KEY'] = 'sk_test_abc'
+        loja = _loja_site(db)
+        p = _produto(db)
+        ped = _pedido_com_item(db, p, qtd=1, modo='retirada',
+                                loja_retirada_id=loja.id)
+        _setup_loja_estoque(db, ped, p, qtd_atual=10)
+        body = {'id': 'or_z', 'charges': [{'id': 'ch_z', 'status': 'pending',
+                'last_transaction': {'qr_code': 'E'}}]}
+        with _patch('app.services.pagarme.requests.post',
+                    return_value=_fake_resp(200, body)):
+            loja_pagamento.iniciar_pix(ped)
+        with _patch('app.services.tiny_nf.emitir_nf',
+                    side_effect=RuntimeError('Tiny explodiu')):
+            res = loja_pagamento.processar_webhook(
+                {'id': 'evt_z', 'type': 'order.paid',
+                 'data': {'id': 'or_z', 'code': ped.codigo}})
+        assert res.get('pago') is True
+        # Sessão limpa: esta consulta NÃO pode estourar PendingRollbackError.
+        atual = PedidoOnline.query.filter_by(codigo=ped.codigo).first()
+        assert atual.status == 'pago'
+        # E dá pra escrever também (sessão saudável).
+        atual.nome_cliente = 'Teste Sessao'
+        db.session.commit()
+
+
 def test_email_nf_tem_link_da_danfe(app):
     """O e-mail dedicado da NF aponta pra rota pública /loja/pedido/<cod>/nf."""
     from types import SimpleNamespace
