@@ -358,6 +358,37 @@ class ClienteResetSenha(db.Model):
         return self.usado_em is None and self.expira_em > agora_dt
 
 
+class ClienteVerificacaoEmail(db.Model):
+    """Verificação de e-mail no cadastro — DISPARA SÓ quando o cadastro
+    reivindicaria um pedido feito anteriormente como guest (decisão de
+    19/06/2026: e-mail novo continua com cadastro instantâneo; e-mail que
+    já tem `Cliente` guest exige confirmação por e-mail antes de virar conta
+    completa, pra fechar o sequestro de pedido por email-typing).
+
+    Pending data fica AQUI (nome_pending + senha_hash_pending) — não no
+    Cliente — pra cadastro não-confirmado NÃO virar conta utilizável.
+    Quando o cliente clica no link do e-mail, a gente promove os dados
+    pendentes pro Cliente. Token expira em 1h, single-use."""
+    __tablename__ = 'cliente_verificacao_email'
+
+    id = db.Column(db.Integer, primary_key=True)
+    cliente_id = db.Column(
+        db.Integer, db.ForeignKey('cliente.id'),
+        nullable=False, index=True)
+    token = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    nome_pending = db.Column(db.String(120), nullable=True)
+    telefone_pending = db.Column(db.String(30), nullable=True)
+    senha_hash_pending = db.Column(db.String(255), nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False)
+    expira_em = db.Column(db.DateTime, nullable=False)
+    usado_em = db.Column(db.DateTime, nullable=True)
+
+    cliente = db.relationship('Cliente')
+
+    def valido(self, agora_dt):
+        return self.usado_em is None and self.expira_em > agora_dt
+
+
 class CategoriaSite(db.Model):
     """Ordenação das categorias na vitrine (Fase 6.5 — 17/06/2026).
 
