@@ -645,8 +645,57 @@ def carrinho():
     """Página do carrinho. O estado vive no navegador (localStorage) —
     o servidor só serve a casca; o JS (carrinho.js) renderiza os itens.
     Persiste no banco só no checkout (cria PedidoOnline). Rota estática
-    tem prioridade sobre /<slug_completo> no roteamento do Werkzeug."""
-    return render_template('loja/carrinho.html', em_teste=_em_teste())
+    tem prioridade sobre /<slug_completo> no roteamento do Werkzeug.
+
+    LINK DE 1 CLIQUE (`?add=r5:2,p83:1`): o bot/atendimento manda um link que
+    JÁ enche o carrinho. O servidor resolve cada item (preço + estoque REAIS,
+    autoritativo — nunca confia em valor vindo de fora), descarta esgotado/
+    inexistente, e injeta o resto via JS. `r`=receita, `p`=produto."""
+    add = (request.args.get('add') or '').strip()
+    prefill, esgotados = ([], [])
+    if add:
+        prefill, esgotados = _resolver_prefill_carrinho(add)
+    return render_template('loja/carrinho.html', em_teste=_em_teste(),
+                           prefill=prefill, prefill_esgotados=esgotados)
+
+
+def _resolver_prefill_carrinho(add):
+    """`add` = 'r5:2,p83:1' (ou 'r5' = qtd 1). Devolve
+    ([{kind,id,nome,preco,imagem,categoria,qtd}], [nomes_esgotados]).
+
+    Resolve no SERVIDOR (preço/estoque do nosso catálogo) — o cliente nunca
+    dita preço. Item inexistente/não-publicado é ignorado; esgotado entra na
+    lista de avisos (some do carrinho mas o cliente fica sabendo)."""
+    itens, esgotados, vistos = [], [], set()
+    for parte in add.split(','):
+        token, _sep, q = parte.strip().partition(':')
+        token = token.strip().lower()
+        if len(token) < 2 or token[0] not in ('r', 'p'):
+            continue
+        kind = 'receita' if token[0] == 'r' else 'produto'
+        try:
+            iid = int(token[1:])
+        except ValueError:
+            continue
+        qtd = int(q) if q.strip().isdigit() else 1
+        qtd = max(1, min(qtd, 99))
+        chave = (kind, iid)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        item = loja_catalogo.por_id_publicado(kind, iid)
+        if not item:
+            continue
+        if not loja_catalogo.tem_estoque_site(kind, iid):
+            esgotados.append(item['nome'])
+            continue
+        itens.append({
+            'kind': kind, 'id': iid, 'nome': item['nome'],
+            'preco': item['preco'], 'imagem': item.get('imagem') or '',
+            'categoria': item.get('categoria') or '', 'qtd': qtd,
+        })
+    return itens, esgotados
+
 
 
 @loja_bp.route('/checkout', methods=['GET', 'POST'])
