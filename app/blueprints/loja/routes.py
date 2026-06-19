@@ -50,9 +50,13 @@ def _ctx_checkout(erros=None, form=None):
             form.setdefault('cidade', end.cidade or '')
             form.setdefault('uf', end.uf or '')
             form.setdefault('cep', end.cep or '')
+    permitida = loja_checkout.loja_retirada_permitida()
     return dict(
         em_teste=_em_teste(),
         lojas=loja_checkout.lojas_retirada(),
+        # Só ESSA loja pode receber retirada (decisão do dono 19/06/2026 —
+        # hoje é a Anésio Pinto Rosa). As outras aparecem desabilitadas.
+        loja_retirada_permitida_id=(permitida.id if permitida else None),
         data_min=(datas[0].isoformat() if datas else ''),
         data_max=(datas[-1].isoformat() if datas else ''),
         janelas=list(loja_checkout.JANELAS_HORARIAS),
