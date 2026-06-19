@@ -248,4 +248,125 @@
     {% endif %}
   </div>
 </div>
+
+{# ── Editar pedido (logística/contato; NÃO mexe em dinheiro) ──────────── #}
+<div class="card mt-3">
+  <div class="card-header py-2 fw-bold d-flex justify-content-between align-items-center">
+    <span>✏️ Editar pedido</span>
+    <span class="text-muted small fw-normal">Itens e valores não mudam aqui</span>
+  </div>
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('main.loja_online_pedido_editar', codigo=p.codigo) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="row g-3">
+
+        <div class="col-md-4">
+          <label class="form-label small mb-1">Nome do cliente</label>
+          <input type="text" name="nome_cliente" class="form-control form-control-sm"
+                 value="{{ p.nome_cliente or '' }}" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1">E-mail</label>
+          <input type="email" name="email_cliente" class="form-control form-control-sm"
+                 value="{{ p.email_cliente or '' }}" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1">Telefone (WhatsApp)</label>
+          <input type="text" name="telefone_cliente" class="form-control form-control-sm"
+                 value="{{ p.telefone_cliente or '' }}">
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label small mb-1">Destinatário (presente)</label>
+          <input type="text" name="nome_destinatario" class="form-control form-control-sm"
+                 value="{{ p.nome_destinatario or '' }}" placeholder="igual ao cliente">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1">Telefone do destinatário</label>
+          <input type="text" name="telefone_destinatario" class="form-control form-control-sm"
+                 value="{{ p.telefone_destinatario or '' }}">
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label small mb-1">Modo de entrega</label>
+          <select name="modo_entrega" class="form-select form-select-sm" id="edit-modo">
+            {% for m in modos %}
+            <option value="{{ m }}" {{ 'selected' if p.modo_entrega == m }}>
+              {{ modo_label.get(m, m) }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label small mb-1">Data de entrega</label>
+          <input type="date" name="data_entrega" class="form-control form-control-sm"
+                 value="{{ p.data_entrega.isoformat() if p.data_entrega else '' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small mb-1">Janela / horário</label>
+          <input type="text" name="janela_entrega" class="form-control form-control-sm"
+                 value="{{ p.janela_entrega or '' }}" placeholder="08:00–09:00">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small mb-1">Loja de retirada <span class="text-muted">(só no modo retirada)</span></label>
+          <select name="loja_retirada_id" class="form-select form-select-sm">
+            <option value="">—</option>
+            {% for l in lojas %}
+            <option value="{{ l.id }}" {{ 'selected' if p.loja_retirada_id == l.id }}>
+              {{ l.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-12"><hr class="my-1"><span class="text-muted small">Endereço de entrega (modos agendada/express)</span></div>
+        <div class="col-md-3">
+          <label class="form-label small mb-1">CEP</label>
+          <input type="text" name="endereco_cep" class="form-control form-control-sm"
+                 value="{{ p.endereco_cep or '' }}">
+        </div>
+        <div class="col-md-7">
+          <label class="form-label small mb-1">Logradouro</label>
+          <input type="text" name="endereco_logradouro" class="form-control form-control-sm"
+                 value="{{ p.endereco_logradouro or '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1">Número</label>
+          <input type="text" name="endereco_numero" class="form-control form-control-sm"
+                 value="{{ p.endereco_numero or '' }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1">Complemento</label>
+          <input type="text" name="endereco_complemento" class="form-control form-control-sm"
+                 value="{{ p.endereco_complemento or '' }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1">Bairro</label>
+          <input type="text" name="endereco_bairro" class="form-control form-control-sm"
+                 value="{{ p.endereco_bairro or '' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small mb-1">Cidade</label>
+          <input type="text" name="endereco_cidade" class="form-control form-control-sm"
+                 value="{{ p.endereco_cidade or '' }}">
+        </div>
+        <div class="col-md-1">
+          <label class="form-label small mb-1">UF</label>
+          <input type="text" name="endereco_uf" class="form-control form-control-sm"
+                 maxlength="2" value="{{ p.endereco_uf or '' }}">
+        </div>
+
+        <div class="col-12">
+          <label class="form-label small mb-1">Cartinha / observações</label>
+          <textarea name="cartinha" rows="2" class="form-control form-control-sm"
+                    placeholder="Mensagem de presente / observação da entrega">{{ p.cartinha or '' }}</textarea>
+        </div>
+
+        <div class="col-12">
+          <button type="submit" class="btn btn-primary btn-sm">Salvar alterações</button>
+          <span class="text-muted small ms-2">Trocar o endereço não recalcula o frete (o cliente já pagou).</span>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
 {% endblock %}
