@@ -131,7 +131,6 @@
     var marcados = tbody.querySelectorAll('.chk-pedido:checked').length;
     var total = tbody.querySelectorAll('.chk-pedido').length;
     if (btnImp) btnImp.disabled = marcados === 0;
-    if (btnExcluir) btnExcluir.disabled = marcados === 0;
     if (contagem) {
       contagem.textContent = marcados === 0
         ? 'Nenhum pedido selecionado.'
