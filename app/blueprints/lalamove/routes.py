@@ -136,9 +136,16 @@ def webhook():
         logger.warning('lalamove webhook de ordem desconhecida: %s', order_id)
         return jsonify(ok=True, ignorado='ordem desconhecida')
 
-    status = (ordem.get('status') or '').upper()
-    if status:
-        e.status = status
+    # O status do PEDIDO só vem do evento OFICIAL `ORDER_STATUS_CHANGED`.
+    # Outros eventos (POP_STATUS_CHANGED = retirada, DRIVER_ASSIGNED, etc.)
+    # podem trazer um `status` colateral no payload — se a gente agir nele, o
+    # pedido vira "entregue" cedo demais (bug 19/06/2026: marcava entregue na
+    # retirada/alocação). Aqui esses eventos só atualizam motorista/link.
+    status = ''
+    if event_type == 'ORDER_STATUS_CHANGED':
+        status = (ordem.get('status') or '').upper()
+        if status:
+            e.status = status
     if ordem.get('shareLink'):
         e.share_link = ordem['shareLink']
     motorista = data.get('driver') or {}
@@ -148,8 +155,8 @@ def webhook():
         e.motorista_telefone = str(motorista['phone'])[:40]
     e.atualizado_em = agora()
     db.session.commit()
-    # Loja própria: corrida concluída = pedido ENTREGUE (status + painel +
-    # e-mail "entregue"), automático. Best-effort; VNDA é no-op silencioso.
+    # ENTREGUE = corrida realmente concluída (entregue ao cliente). Só dispara
+    # no COMPLETED vindo do ORDER_STATUS_CHANGED — nunca por retirada/alocação.
     if status == 'COMPLETED':
         from app.services.loja_entrega import avancar_status_entrega
         avancar_status_entrega(e.pedido_code, 'entregue')
