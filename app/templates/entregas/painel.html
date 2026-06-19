@@ -695,6 +695,9 @@
       .then(function (r) { return r.json(); })
       .then(function (data) {
         setConexao(true);
+        // Renova o token CSRF a cada poll — sem isso ele expira em 1h e os
+        // POSTs de status falham silenciosamente (status não salva).
+        if (data.csrf) CSRF = data.csrf;
         if (data.erro) {
           // VNDA indisponível: NÃO esconde tudo. Mantém o último VNDA
           // carregado e atualiza só os pedidos da loja própria (que vêm
