@@ -37,6 +37,9 @@ known-first-party = ["app", "config"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "loja_host: trata o host de teste (localhost) como host PÚBLICO da loja (LOJA_HOSTS) — pra testar a vitrine como visitante sem base_url/cookie",
+]
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::sqlalchemy.exc.LegacyAPIWarning",
