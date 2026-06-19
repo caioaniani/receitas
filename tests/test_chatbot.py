@@ -807,21 +807,20 @@ def test_vigia_desligado_pula(app):
 
 
 def test_vigia_resumo_e_do_catalogo_do_site_nao_estoque_loja(app):
-    """Vigia compara contra o CATALOGO DO SITE (VNDA), mesma fonte que o
-    bot consulta. Caso real (12/06/2026): Pain au Chocolat 872 un em
-    estoque de loja fisica + VNDA disponivel=true; o vigia antigo
-    cruzava EstoqueLoja vs bot e mandava alerta 'esgotado mas tem 872',
-    quando o bot estava alinhado com o VNDA. Bot atende SITE; loja
-    fisica e outra fonte de venda."""
+    """Vigia compara contra o CATALOGO DO SITE (nosso, estoque REAL), mesma
+    fonte que o bot consulta. Caso real (12/06/2026): Pain au Chocolat 872 un
+    em estoque de loja fisica + site disponivel=true; o vigia antigo cruzava
+    EstoqueLoja vs bot e mandava alerta 'esgotado mas tem 872', quando o bot
+    estava alinhado com o site. Bot atende SITE; loja fisica e outra fonte."""
     from unittest.mock import patch
 
     from app.services import chatbot_vigia
     catalogo = [
-        {'nome': 'Pain au Chocolat', 'sku': 'PAC', 'disponivel': True},
-        {'nome': 'Croissant Tradicional', 'sku': 'CT', 'disponivel': True},
-        {'nome': 'Sourdough Especial', 'sku': 'SE', 'disponivel': False},
+        {'nome': 'Pain au Chocolat', 'disponivel': True},
+        {'nome': 'Croissant Tradicional', 'disponivel': True},
+        {'nome': 'Sourdough Especial', 'disponivel': False},
     ]
-    with patch('app.services.bot_tools._carregar_catalogo',
+    with patch('app.services.bot_tools.catalogo_disponibilidade',
                return_value=catalogo):
         with app.app_context():
             resumo = chatbot_vigia._resumo_catalogo_site()
@@ -831,11 +830,11 @@ def test_vigia_resumo_e_do_catalogo_do_site_nao_estoque_loja(app):
 
 
 def test_vigia_resumo_catalogo_indisponivel(app):
-    """VNDA fora → resumo informa sem quebrar."""
+    """Catálogo fora → resumo informa sem quebrar."""
     from unittest.mock import patch
 
     from app.services import chatbot_vigia
-    with patch('app.services.bot_tools._carregar_catalogo',
+    with patch('app.services.bot_tools.catalogo_disponibilidade',
                return_value=None):
         with app.app_context():
             resumo = chatbot_vigia._resumo_catalogo_site()
