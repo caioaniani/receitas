@@ -136,7 +136,7 @@ def test_header_mostra_wordmark_sem_logo(app, monkeypatch):
     qual aparece (curta no mobile, completa no desktop)."""
     monkeypatch.setenv('LOJA_VISIVEL', '1')
     c = app.test_client()
-    r = c.get('/loja/')
+    r = c.get('/loja/', base_url='http://opao.online')
     assert r.status_code == 200
     assert b'logo-curto' in r.data         # variante mobile
     assert b'logo-completo' in r.data      # variante desktop
@@ -150,7 +150,7 @@ def test_wordmark_curto_so_o_pao_no_mobile(app, monkeypatch):
     import re
     monkeypatch.setenv('LOJA_VISIVEL', '1')
     c = app.test_client()
-    r = c.get('/loja/')
+    r = c.get('/loja/', base_url='http://opao.online')
     # Extrai o conteúdo entre <span class="logo-curto"> e </span>
     m = re.search(rb'<span class="logo-curto">([^<]*)</span>', r.data)
     assert m, 'logo-curto não encontrado'
@@ -167,7 +167,7 @@ def test_header_mostra_logo_img_quando_setado(app, monkeypatch):
         AppConfig.set('loja_logo_url', 'https://dropbox/logo.png?raw=1')
         db.session.commit()
     c = app.test_client()
-    r = c.get('/loja/')
+    r = c.get('/loja/', base_url='http://opao.online')
     assert r.status_code == 200
     assert b'https://dropbox/logo.png?raw=1' in r.data
 
@@ -206,7 +206,7 @@ def test_header_dropdown_lista_categorias_com_anchor(app, monkeypatch):
     c = app.test_client()
     with app.app_context():
         _produto_pub(db, 'Pão', 'Pães')
-    r = c.get('/loja/')
+    r = c.get('/loja/', base_url='http://opao.online')
     assert r.status_code == 200
     assert b'topo-dropdown' in r.data
     # Link do dropdown aponta pro anchor da home com o slug
@@ -221,7 +221,7 @@ def test_home_secao_usa_slug_no_id(app, monkeypatch):
     c = app.test_client()
     with app.app_context():
         _produto_pub(db, 'Pão', 'Pães')
-    r = c.get('/loja/')
+    r = c.get('/loja/', base_url='http://opao.online')
     assert b'id="cat-paes"' in r.data
     # E o dropdown "Produtos" aponta pro mesmo anchor (#cat-<slug>)
     assert b'#cat-paes' in r.data
@@ -231,7 +231,7 @@ def test_header_carrinho_tem_icone_sacola(app, monkeypatch):
     """O carrinho no header tem ícone SVG (não só texto)."""
     monkeypatch.setenv('LOJA_VISIVEL', '1')
     c = app.test_client()
-    r = c.get('/loja/')
+    r = c.get('/loja/', base_url='http://opao.online')
     assert r.status_code == 200
     assert b'class="icon-bag"' in r.data
     # Mantém o texto também (visível no desktop, escondido no mobile via CSS)
@@ -245,7 +245,7 @@ def test_header_sticky_e_scroll_listener_no_html(app, monkeypatch):
     quando rolar (visual de elevação)."""
     monkeypatch.setenv('LOJA_VISIVEL', '1')
     c = app.test_client()
-    r = c.get('/loja/')
+    r = c.get('/loja/', base_url='http://opao.online')
     body = r.data
     # Marcador do listener (sem rodar o CSS no pytest, validamos o hook)
     assert b"classList.toggle('rolado'" in body
@@ -260,7 +260,7 @@ def test_anchor_dropdown_bate_com_secao_home(app, monkeypatch):
     c = app.test_client()
     with app.app_context():
         _produto_pub(db, 'Bolo', 'Doces & Sobremesas')
-    r = c.get('/loja/')
+    r = c.get('/loja/', base_url='http://opao.online')
     body = r.data
     assert b'/loja/#cat-doces-sobremesas' in body   # dropdown
     assert b'id="cat-doces-sobremesas"' in body      # seção
