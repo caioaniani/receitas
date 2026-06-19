@@ -241,6 +241,7 @@ def _marcar_pago(pedido, pagamento):
         pagamento.pago_em = agora()
     _baixar_estoque(pedido)
     _enviar_confirmacao(pedido)
+    _emitir_nf_e_enviar(pedido)
     return True
 
 
@@ -253,6 +254,32 @@ def _enviar_confirmacao(pedido):
             email_svc.enviar_confirmacao_pedido(pedido)
     except Exception:  # noqa: BLE001
         logger.exception('confirmacao de pedido por email falhou')
+
+
+def _emitir_nf_e_enviar(pedido):
+    """Emite a NF no Tiny e manda o e-mail com o link da DANFE pro cliente
+    (decisão do dono 19/06/2026 — NF automática logo após o pagamento).
+
+    Best-effort: NUNCA derruba o processamento do pagamento. Se a emissão
+    falhar (Tiny fora, item sem SKU mapeado, rejeição fiscal), o pedido
+    continua pago + estoque baixado; a NF fica pendente pra reemitir manual
+    em `/admin/loja-online/pedidos/<codigo>` (mesmo botão de antes).
+
+    `emitir_nf` já é IDEMPOTENTE: se a NF já foi emitida pra esse pedido, é
+    no-op — então uma reentrega do webhook 'paid' não duplica."""
+    try:
+        from app.services import email as email_svc
+        from app.services import tiny_nf
+        res = tiny_nf.emitir_nf(pedido)
+        if not res.get('ok'):
+            logger.warning('NF do pedido %s não foi emitida automaticamente: %s',
+                           pedido.codigo, res.get('msg'))
+            return
+        if email_svc.disponivel():
+            email_svc.enviar_nf_emitida(pedido)
+    except Exception:  # noqa: BLE001
+        logger.exception('emissão automática de NF falhou (pedido %s)',
+                         pedido.codigo)
 
 
 def _marcar_estornado(pedido, pagamento):
