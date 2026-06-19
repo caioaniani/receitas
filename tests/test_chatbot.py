@@ -1049,61 +1049,28 @@ def test_build_messages_imagem_so_na_ultima(app):
     bi.assert_called_once_with('https://cw/atual.png')
 
 
-def test_consultar_produtos_parse(app):
+def test_consultar_produtos_cesta_traz_kind_id_e_url(app):
+    """Catálogo PRÓPRIO: cesta (produto) vem com kind+id e url do opao.online
+    — é o que o bot passa pro gerar_link_carrinho (não mais SKU)."""
+    from app.extensions import db
     from app.services import bot_tools
-    bot_tools._catalogo_cache.clear()
-    fake = SimpleNamespace(json=lambda: {'products': [
-        {'name': 'Croissant Almond', 'available': True,
-         'variants': [{'sku': '10007', 'price': 32.5, 'available': True}]}]})
     with app.app_context():
-        with patch('app.services.vnda._get', return_value=fake):
-            r = bot_tools.consultar_produtos('croissant')
-    assert r['produtos'][0]['sku'] == '10007'
-    assert r['produtos'][0]['disponivel'] is True
-
-
-def test_consultar_produtos_variants_dict(app):
-    """VNDA devolve variants como DICT keyed por id — o parser lê o sku certo,
-    nunca o id do produto nem o id da variante."""
-    from app.services import bot_tools
-    bot_tools._catalogo_cache.clear()
-    fake = SimpleNamespace(json=lambda: {'products': [
-        {'id': 10, 'name': 'Box Mimo', 'available': True,
-         'variants': {'11': {'sku': '10007', 'price': 166.0, 'available': True}}}]})
-    with app.app_context():
-        with patch('app.services.vnda._get', return_value=fake):
-            r = bot_tools.consultar_produtos('box mimo')
-    assert 'erro' not in r
+        ids = _catalogo_loja(db)
+        r = bot_tools.consultar_produtos('monamour')
     p = r['produtos'][0]
-    assert p['sku'] == '10007'   # nunca '10' (produto) nem '11' (variante)
-    assert p['preco'] == 166.0
+    assert p['kind'] == 'produto'
+    assert p['id'] == ids['box']
+    assert float(p['preco']) == 200.0
+    assert p['url'].endswith('-p%d' % ids['box'])
 
 
-def test_consultar_produtos_variants_lista_de_id(app):
-    """Formato REAL do VNDA: variants = lista de {id: variante}. O parser tem
-    que mergulhar no wrapper e pegar o sku — senão volta catálogo vazio."""
+def test_consultar_produtos_erro_catalogo_forca_handoff(app):
+    """Falha ao carregar o catálogo -> {'erro'}, pra o bot passar pro humano
+    (nunca inventar preço)."""
     from app.services import bot_tools
-    bot_tools._catalogo_cache.clear()
-    fake = SimpleNamespace(json=lambda: {'products': [
-        {'id': 59, 'name': 'Lancheira Especial', 'available': True,
-         'variants': [{'61': {'id': 61, 'sku': '10054', 'sale_price': 57.0,
-                              'price': 57.0, 'available': True, 'name': ''}}]}]})
     with app.app_context():
-        with patch('app.services.vnda._get', return_value=fake):
-            r = bot_tools.consultar_produtos('lancheira')
-    assert 'erro' not in r
-    assert r['produtos'], 'catálogo não pode vir vazio'
-    p = r['produtos'][0]
-    assert p['sku'] == '10054'   # extraído de dentro do wrapper {id: variante}
-    assert p['preco'] == 57.0    # sale_price
-
-
-def test_consultar_produtos_vnda_fora_retorna_erro(app):
-    """VNDA fora -> {'erro'}, pra o bot passar pro humano (nunca inventar)."""
-    from app.services import bot_tools
-    bot_tools._catalogo_cache.clear()
-    with app.app_context():
-        with patch('app.services.vnda._get', return_value=None):
+        with patch('app.services.loja_catalogo.produtos_publicados',
+                   side_effect=RuntimeError('db fora')):
             r = bot_tools.consultar_produtos('cesta')
     assert 'erro' in r
 
