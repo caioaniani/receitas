@@ -85,6 +85,17 @@ def test_fluxo_status_pronto_entregue(admin_logado):
         assert p['status'] == 'entregue'
 
 
+def test_api_painel_devolve_csrf_fresco(admin_logado):
+    """O painel renova o token CSRF a cada poll. Sem isso, o token gerado no
+    load expira em 1h (default Flask-WTF) e, no display sempre-ligado da
+    cozinha, os POSTs de status passam a falhar em silêncio → status muda na
+    tela mas não salva e 'volta' no reload."""
+    with patch('app.services.vnda.buscar_pedidos_do_dia',
+               return_value={'pedidos': []}):
+        j = admin_logado.get('/entregas/api/painel').get_json()
+    assert j.get('csrf')  # token presente e não vazio a cada poll
+
+
 def test_status_invalido_recusado(admin_logado):
     r = admin_logado.post('/entregas/api/painel/status/AB1?status=banana')
     assert r.status_code == 400
