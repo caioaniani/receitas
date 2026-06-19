@@ -380,16 +380,31 @@ def create_app(config_class=None):
         # o CSP precisa liberar esse script + connect. QR do Pix é data-URI
         # (já coberto por img-src data:).
         if request.path.startswith('/loja'):
+            # Chatwoot widget na loja: precisa permitir o sdk.js, o
+            # WebSocket de realtime (ActionCable), iframe interna do widget e
+            # avatares dos atendentes. Só libera se o widget estiver ligado
+            # (CHATWOOT_WEBSITE_TOKEN setado) — senão mantém o CSP fechado.
+            cw_token = (app.config.get('CHATWOOT_WEBSITE_TOKEN') or '').strip()
+            cw_origin = ((app.config.get('CHATWOOT_PUBLIC_URL') or '')
+                         .strip().rstrip('/'))
+            cw_ws = cw_origin.replace('https://', 'wss://') if cw_origin else ''
+            cw_extra_script = f' {cw_origin}' if cw_token and cw_origin else ''
+            cw_extra_connect = (f' {cw_origin} {cw_ws}'
+                                if cw_token and cw_origin else '')
+            cw_extra_frame = f' {cw_origin}' if cw_token and cw_origin else ''
+            cw_extra_img = f' {cw_origin}' if cw_token and cw_origin else ''
+            cw_extra_style = f' {cw_origin}' if cw_token and cw_origin else ''
             response.headers['Content-Security-Policy'] = (
                 "default-src 'self'; "
-                "script-src 'self' https://cdn.jsdelivr.net "
-                "https://checkout.pagar.me 'unsafe-inline'; "
-                "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+                f"script-src 'self' https://cdn.jsdelivr.net "
+                f"https://checkout.pagar.me{cw_extra_script} 'unsafe-inline'; "
+                f"style-src 'self' https://cdn.jsdelivr.net{cw_extra_style} "
+                "'unsafe-inline'; "
                 "font-src 'self' https://cdn.jsdelivr.net; "
-                "img-src 'self' data: https://*.dropbox.com "
-                "https://*.dropboxusercontent.com; "
-                "connect-src 'self' https://api.pagar.me; "
-                "frame-src https://checkout.pagar.me;"
+                f"img-src 'self' data: https://*.dropbox.com "
+                f"https://*.dropboxusercontent.com{cw_extra_img}; "
+                f"connect-src 'self' https://api.pagar.me{cw_extra_connect}; "
+                f"frame-src https://checkout.pagar.me{cw_extra_frame};"
             )
         if request.is_secure:
             response.headers['Strict-Transport-Security'] = (
