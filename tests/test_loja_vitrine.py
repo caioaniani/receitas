@@ -202,6 +202,19 @@ def test_home_sem_chips_mas_com_ancoras_de_categoria(app):
     assert b'id="cat-paes"' in r.data
 
 
+def test_rodape_enderecos_abrem_google_maps(app):
+    """Endereços das lojas no rodapé são links pro Google Maps (decisão do
+    dono 19/06/2026)."""
+    from app.extensions import db
+    _criar_produto_publicado(db, nome='Pão', categoria='Pães', preco=10.0)
+    c = _admin_logado(app)
+    r = c.get('/loja/')
+    assert r.status_code == 200
+    assert b'rodape-mapa' in r.data
+    assert b'google.com/maps' in r.data
+    assert b'Ribeiro' in r.data  # um dos endereços continua visível
+
+
 # ── Página de produto ────────────────────────────────────────────────
 
 def test_pagina_produto_carrega(app):
