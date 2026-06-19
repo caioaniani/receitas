@@ -27,7 +27,7 @@ CENTRO_LAT = -23.598678
 CENTRO_LNG = -46.693661
 KM_GRATIS = 1.0          # até aqui, frete grátis
 VALOR_POR_KM = 5.0       # cada km adicional (anel de 1 km) soma R$5
-RAIO_MAX_KM = 15.0       # além disso, fora da área de entrega do site
+RAIO_MAX_KM = 25.0       # além disso, fora da área de entrega do site
 
 _TIMEOUT = 8
 # Nominatim exige User-Agent identificável (politica de uso do OSM).
