@@ -641,6 +641,7 @@ def checkout():
 
 
 @loja_bp.route('/api/cep/<cep>', methods=['GET'])
+@limiter.limit('30 per minute')
 def api_cep(cep):
     """Lookup de CEP via BrasilAPI pra autocompletar logradouro/bairro/
     cidade/UF no checkout. Faz cache simples no servidor não — devolve
