@@ -183,7 +183,8 @@ def consultar_frete(endereco_ou_cep):
     if valor is None:
         return {'ok': True, 'fora_area': True, 'distancia_km': round(km, 1),
                 'endereco': rotulo,
-                'aviso': 'fora do raio de 15 km — confirmar com a equipe'}
+                'aviso': f'fora do raio de {int(RAIO_MAX_KM)} km — '
+                         'confirmar com a equipe'}
     return {'ok': True, 'fora_area': False, 'valor': valor,
             'gratis': valor == 0.0, 'distancia_km': round(km, 1),
             'endereco': rotulo,
