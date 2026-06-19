@@ -84,6 +84,17 @@ def _limpar_tabelas(db):
     db.session.commit()
 
 
+def loja_client(app):
+    """test_client cujos requests batem no host PÚBLICO da loja (opao.online).
+
+    A loja é pública (sem login) SÓ nos hosts de `LOJA_HOSTS` — em `localhost`
+    o gate trata como host de gestão e barra anônimo. Testes que exercitam a
+    vitrine como visitante (com LOJA_VISIVEL=1) precisam deste host."""
+    cli = app.test_client()
+    cli.environ_base['HTTP_HOST'] = 'opao.online'
+    return cli
+
+
 @pytest.fixture
 def app(_app_session, _config_baseline):
     from app.extensions import db, limiter
