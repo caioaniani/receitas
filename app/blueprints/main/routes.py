@@ -3018,6 +3018,30 @@ def loja_online_pedidos():
         total=sum(contagens.values()), labels=_STATUS_PEDIDO_ONLINE_LABEL)
 
 
+@main_bp.route('/admin/loja-online/buscar-pedidos')
+@owner_required
+def loja_online_pedidos_buscar():
+    """Busca incremental (AJAX) por nome, telefone, e-mail ou código — em
+    TODOS os pedidos (não só os 200 da lista). Devolve só as linhas <tr> da
+    tabela (mesmo partial do carregamento). Path separado de
+    `/pedidos/<codigo>` pra não colidir com o detalhe."""
+    from sqlalchemy import or_
+
+    from app.models import PedidoOnline
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return ''  # nada a buscar — o JS restaura a lista inicial
+    termo = f'%{q}%'
+    pedidos = (PedidoOnline.query.filter(or_(
+        PedidoOnline.nome_cliente.ilike(termo),
+        PedidoOnline.telefone_cliente.ilike(termo),
+        PedidoOnline.email_cliente.ilike(termo),
+        PedidoOnline.codigo.ilike(termo),
+    )).order_by(PedidoOnline.criado_em.desc()).limit(50).all())
+    return render_template('admin/_loja_online_pedidos_rows.html',
+                           pedidos=pedidos, labels=_STATUS_PEDIDO_ONLINE_LABEL)
+
+
 @main_bp.route('/admin/loja-online/pedidos/<codigo>')
 @owner_required
 def loja_online_pedido_detalhe(codigo):
