@@ -14,6 +14,11 @@
 } %}
 {% for p in pedidos %}
 <tr>
+  <td class="text-center" style="width:34px">
+    <input type="checkbox" class="form-check-input chk-pedido"
+           name="codigos" value="{{ p.codigo }}" form="form-imprimir-selecao"
+           aria-label="Selecionar pedido {{ p.codigo }}">
+  </td>
   <td><a href="{{ url_for('main.loja_online_pedido_detalhe', codigo=p.codigo) }}">
     <code>{{ p.codigo }}</code></a></td>
   <td class="small text-muted">{{ p.criado_em.strftime('%d/%m %H:%M') if p.criado_em }}</td>
