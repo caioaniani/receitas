@@ -92,7 +92,7 @@ def gerar_xlsx_pedidos(loja_nome, de, ate, pedidos, totais, por_item):
         cell.fill = header_fill
         cell.border = border
         cell.alignment = Alignment(horizontal='center')
-    for nome, d in por_item:
+    for nome, d in por_item.items():
         ws.append([nome, d['quantidade'], d['recebido'], _money(d['valor'])])
         for cell in ws[ws.max_row]:
             cell.border = border
@@ -169,7 +169,7 @@ def gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item, incluir_fot
     pdf.cell(40, 6, 'Valor', fill=True, border=1, align='R', new_x='LMARGIN', new_y='NEXT')
     pdf.set_text_color(0, 0, 0)
     pdf.set_font('Helvetica', '', 9)
-    for nome, d in por_item:
+    for nome, d in por_item.items():
         if pdf.get_y() > 270:
             pdf.add_page()
         pdf.cell(80, 5, nome[:42], border=1)
