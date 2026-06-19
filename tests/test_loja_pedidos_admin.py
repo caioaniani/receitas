@@ -222,3 +222,104 @@ def test_editar_nao_owner_bloqueado(app):
     with app.app_context():
         p = PedidoOnline.query.filter_by(codigo='EDIT05').first()
         assert p.nome_cliente == 'Maria'   # bloqueado: não editou
+
+
+# ── Filtro por DATA de entrega + impressão da seleção ───────────────────
+
+def _pedido_com_data(db, codigo, data_iso, status='pago'):
+    from datetime import date as _date
+    p = _pedido(db, codigo=codigo, status=status)
+    p.data_entrega = _date.fromisoformat(data_iso)
+    db.session.commit()
+    return p
+
+
+def test_filtro_data_unica_filtra_lista(app):
+    from app.extensions import db
+    with app.app_context():
+        _pedido_com_data(db, 'DT01', '2026-06-25')
+        _pedido_com_data(db, 'DT02', '2026-06-26')
+    c = _owner(app)
+    r = c.get('/admin/loja-online/pedidos?data=2026-06-25')
+    assert r.status_code == 200
+    assert b'DT01' in r.data
+    assert b'DT02' not in r.data
+
+
+def test_filtro_intervalo_de_datas(app):
+    from app.extensions import db
+    with app.app_context():
+        _pedido_com_data(db, 'INT01', '2026-06-20')   # antes do intervalo
+        _pedido_com_data(db, 'INT02', '2026-06-25')   # dentro
+        _pedido_com_data(db, 'INT03', '2026-06-30')   # depois
+    c = _owner(app)
+    r = c.get('/admin/loja-online/pedidos'
+              '?data_ini=2026-06-23&data_fim=2026-06-27')
+    assert r.status_code == 200
+    assert b'INT02' in r.data
+    assert b'INT01' not in r.data
+    assert b'INT03' not in r.data
+
+
+def test_busca_respeita_filtro_de_data_ativo(app):
+    """Sem isso, digitar no busca traria pedidos de outros dias e
+    atropelaria o filtro de data — confunde a operação."""
+    from app.extensions import db
+    with app.app_context():
+        _pedido_com_data(db, 'BD01', '2026-06-25', status='pago')
+        _pedido_com_data(db, 'BD02', '2026-06-26', status='pago')
+        # ambos têm o mesmo cliente 'Maria' (default do _pedido) →
+        # buscar 'mar' bateria nos dois sem filtro de data.
+    c = _owner(app)
+    r = c.get('/admin/loja-online/buscar-pedidos?q=mar&data=2026-06-25')
+    assert r.status_code == 200
+    assert b'BD01' in r.data
+    assert b'BD02' not in r.data
+
+
+def test_imprimir_selecao_gera_pdf_multipaginas(app):
+    """Seleção de N pedidos × 2 vias (cliente + motoboy) = 2N páginas."""
+    from app.extensions import db
+    with app.app_context():
+        _pedido_com_data(db, 'SEL01', '2026-06-25')
+        _pedido_com_data(db, 'SEL02', '2026-06-25')
+        _pedido_com_data(db, 'SEL03', '2026-06-25')   # NÃO selecionado
+    c = _owner(app)
+    r = c.post('/admin/loja-online/pedidos/imprimir-selecao.pdf',
+               data={'codigos': ['SEL01', 'SEL02']})
+    assert r.status_code == 200
+    assert r.mimetype == 'application/pdf'
+    assert r.data[:4] == b'%PDF'
+    # 2 pedidos × 2 vias = 4 páginas. fpdf2 grava '/Count 4' no PDF.
+    assert b'/Count 4' in r.data
+
+
+def test_imprimir_selecao_vazia_redireciona(app):
+    c = _owner(app)
+    r = c.post('/admin/loja-online/pedidos/imprimir-selecao.pdf',
+               data={}, follow_redirects=False)
+    assert r.status_code == 302   # volta com flash de aviso
+
+
+def test_imprimir_selecao_bloqueia_nao_owner(app):
+    from app.extensions import db
+    with app.app_context():
+        _pedido_com_data(db, 'SEL10', '2026-06-25')
+    c = _admin_nao_owner(app)
+    r = c.post('/admin/loja-online/pedidos/imprimir-selecao.pdf',
+               data={'codigos': ['SEL10']}, follow_redirects=False)
+    assert r.status_code in (302, 401, 403)
+
+
+def test_lista_tem_checkbox_e_form_de_selecao(app):
+    """Travas de UI: as linhas têm checkbox `.chk-pedido` apontando pro form
+    externo, e o botão 'Imprimir seleção' existe na página."""
+    from app.extensions import db
+    with app.app_context():
+        _pedido_com_data(db, 'UI01', '2026-06-25')
+    c = _owner(app)
+    r = c.get('/admin/loja-online/pedidos')
+    assert r.status_code == 200
+    assert b'chk-pedido' in r.data
+    assert b'id="form-imprimir-selecao"' in r.data
+    assert b'Imprimir sele' in r.data   # 'Imprimir seleção' (sem depender do acento UTF-8)
