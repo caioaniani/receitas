@@ -51,16 +51,36 @@
 </form>
 
 {% if total %}
-<div class="mb-3" style="max-width:480px;">
-  <input type="search" id="busca-pedido" class="form-control" autocomplete="off"
-         placeholder="🔎 Buscar por nome, telefone ou código do pedido…">
-  <div class="form-text">Busca em todos os pedidos (não só os 200 da lista). Mínimo 2 letras.</div>
+<div class="mb-3 d-flex flex-wrap gap-3 align-items-end">
+  <div style="flex:1; min-width:280px; max-width:480px;">
+    <input type="search" id="busca-pedido" class="form-control" autocomplete="off"
+           placeholder="🔎 Buscar por nome, telefone ou código do pedido…">
+    <div class="form-text">Busca em todos os pedidos (não só os 200 da lista). Mínimo 2 letras.</div>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <span id="contagem-selecao" class="small text-muted">Nenhum pedido selecionado.</span>
+    <button type="submit" form="form-imprimir-selecao"
+            id="btn-imprimir-selecao" class="btn btn-sm btn-primary" disabled>
+      🖨️ Imprimir seleção (cliente + motoboy)
+    </button>
+  </div>
 </div>
+
+{# Form EXTERNO: cada checkbox de linha usa `form="form-imprimir-selecao"`
+   pra mandar `codigos` no submit, sem aninhar form dentro da tabela. #}
+<form id="form-imprimir-selecao" method="POST" target="_blank"
+      action="{{ url_for('main.loja_online_pedidos_imprimir_selecao') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
 
 <div class="table-responsive">
   <table class="table table-sm table-hover bg-white align-middle">
     <thead class="thead-padaria">
       <tr>
+        <th class="text-center" style="width:34px">
+          <input type="checkbox" id="chk-todos" class="form-check-input"
+                 aria-label="Selecionar todos">
+        </th>
         <th>Código</th><th>Quando</th><th>Cliente</th><th>Entrega</th>
         <th>Data entrega</th><th class="text-end">Total</th><th>Status</th>
       </tr>
