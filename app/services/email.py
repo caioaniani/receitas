@@ -144,6 +144,23 @@ def enviar_pedido_entregue(pedido):
     return enviar(destinatario, assunto, html, texto=texto)
 
 
+def enviar_nf_emitida(pedido):
+    """E-mail "sua nota fiscal foi emitida" — disparado logo após a emissão
+    automática (pós-pagamento). Inclui o link público pra DANFE (PDF).
+
+    Best-effort — falha silente. Se chegar antes da NF estar persistida com
+    `nf_emitida_em`, ainda assim manda (a rota pública busca por código)."""
+    destinatario = (pedido.email_cliente or '').strip()
+    if not destinatario:
+        return {'ok': False, 'erro': 'pedido sem email'}
+    base = (current_app.config.get('LOJA_BASE_URL')
+            or current_app.config.get('APP_BASE_URL') or '').rstrip('/')
+    assunto = f'Nota fiscal do pedido {pedido.codigo} — O Pão Padaria Artesanal'
+    html = _template_nf(pedido, base)
+    texto = _texto_nf(pedido, base)
+    return enviar(destinatario, assunto, html, texto=texto)
+
+
 def _fmt_brl(v):
     from decimal import Decimal
     return f'R$ {Decimal(str(v or 0)):.2f}'.replace('.', ',')
@@ -297,6 +314,48 @@ def _texto_a_caminho(pedido, base, rastreio_url=None):
         f'Entrega: {onde} {quando}\n\n'
         f'{rastreio}'
         f'Detalhes: {link}\n')
+
+
+def _template_nf(pedido, base):
+    """E-mail dedicado da NF — disparado logo após a emissão automática."""
+    link_nf = f'{base}/loja/pedido/{pedido.codigo}/nf' if base else ''
+    link_pedido = f'{base}/loja/pedido/{pedido.codigo}' if base else ''
+    nota_id = getattr(pedido, 'tiny_nota_fiscal_id', None) or ''
+    nota_html = (f'<p style="margin:0 0 6px;font-size:13px;color:#6b5f54;">'
+                 f'Identificador: <code>{nota_id}</code></p>' if nota_id else '')
+    botao_html = (f'<p style="margin-top:18px;"><a href="{link_nf}" '
+                  f'style="display:inline-block;background:#8b5a2b;color:#fff;'
+                  f'text-decoration:none;padding:12px 24px;border-radius:6px;'
+                  f'font-weight:600;">Baixar nota fiscal (PDF)</a></p>'
+                  if link_nf else '')
+    rodape_html = (f'<p style="color:#9a8d80;font-size:12px;margin-top:24px;">'
+                   f'<a href="{link_pedido}" style="color:#9a8d80;">Detalhes do '
+                   f'pedido</a></p>' if link_pedido else '')
+    return f"""\
+<!doctype html><html lang="pt-BR"><body style="margin:0;background:#fbf8f3;
+font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
+<div style="max-width:540px;margin:0 auto;padding:32px 24px;">
+  <h1 style="font-size:22px;margin:0 0 4px;">O Pão · Padaria Artesanal</h1>
+  <p style="color:#6b5f54;margin:0 0 20px;">Sua nota fiscal do pedido
+    <strong>{pedido.codigo}</strong> foi emitida. 🧾</p>
+  <div style="background:#fff;border-radius:12px;padding:18px 20px;">
+    <p style="margin:0 0 6px;font-weight:600;">Nota fiscal eletrônica</p>
+    {nota_html}
+    {botao_html}
+  </div>
+  {rodape_html}
+</div></body></html>"""
+
+
+def _texto_nf(pedido, base):
+    link_nf = f'{base}/loja/pedido/{pedido.codigo}/nf' if base else ''
+    link_pedido = f'{base}/loja/pedido/{pedido.codigo}' if base else ''
+    linhas = [f'Sua nota fiscal do pedido {pedido.codigo} foi emitida.']
+    if link_nf:
+        linhas += ['', f'Baixar a NF (PDF): {link_nf}']
+    if link_pedido:
+        linhas += ['', f'Detalhes do pedido: {link_pedido}']
+    return '\n'.join(linhas)
 
 
 def _template_entregue(pedido, base):
