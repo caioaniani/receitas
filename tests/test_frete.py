@@ -1,5 +1,5 @@
-"""Faixas de frete por distância (mapa "Fretes O pão", KML de 10/06/2026):
-anéis de 1 km a partir do Brooklin — grátis até 1 km, +R$5/km, máx 15 km.
+"""Faixas de frete por distância: anéis de 1 km a partir do Brooklin —
+grátis até 1 km, +R$5/km, máx 25 km (decisão do dono 19/06/2026; era 15 km).
 Geocodificação: BrasilAPI (CEP) com fallback Nominatim (endereço livre)."""
 from unittest.mock import patch
 
@@ -7,15 +7,17 @@ from app.services import frete
 
 
 def test_valor_para_distancia_limites_dos_aneis():
-    # limites batem com o KML: anel fecha no km cheio
+    # anel fecha no km cheio
     assert frete.valor_para_distancia(0.0) == 0.0
     assert frete.valor_para_distancia(1.0) == 0.0      # grátis até 1 km
-    assert frete.valor_para_distancia(1.01) == 5.0     # anel 1-2 km
+    assert frete.valor_para_distancia(1.01) == 5.0     # anel 1-2 km (2º km)
     assert frete.valor_para_distancia(2.0) == 5.0
     assert frete.valor_para_distancia(2.5) == 10.0
     assert frete.valor_para_distancia(14.2) == 70.0
-    assert frete.valor_para_distancia(15.0) == 70.0    # último anel
-    assert frete.valor_para_distancia(15.1) is None    # fora da área
+    # Novo raio = 25 km: o que antes era "fora" (>15) agora entrega.
+    assert frete.valor_para_distancia(20.0) == 95.0    # 5 * (20-1)
+    assert frete.valor_para_distancia(25.0) == 120.0   # último anel (5*24)
+    assert frete.valor_para_distancia(25.1) is None    # fora da área
     assert frete.valor_para_distancia(None) is None
 
 
