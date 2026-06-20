@@ -749,3 +749,35 @@ def test_prompt_NAO_tem_mais_peca_o_cep_1_pergunta_so_isolado():
     # O literal antigo NUNCA aparece sozinho como passo 1.
     # A nova versão tem "SE — e SÓ se — o cliente não deu nenhuma pista"
     assert 'SE — e SÓ se' in PROMPT or 'SE — e SO se' in PROMPT
+
+
+# ── Anti-handoff preguiçoso (auditoria 19-20/06/2026) ──────────────────
+
+def test_prompt_proibe_handoff_sem_tool_anterior():
+    """Trava: o bot nao pode chamar transferir_para_humano como PRIMEIRA
+    tool da conversa (caso Livia 20/06/2026 — handoff sem ferramenta)."""
+    from app.services.chatbot_prompt import PROMPT
+    assert 'PRIMEIRA tool' in PROMPT
+    # E lista as poucas excecoes legitimas (alergia/cliente pediu humano).
+    assert 'alergia' in PROMPT.lower()
+    assert 'PROIBIDO' in PROMPT
+
+
+def test_prompt_exige_consultar_pedido_em_reclamacao_de_entrega():
+    """Reclamacao de entrega incompleta com numero do pedido → o bot tem
+    que chamar consultar_pedido ANTES de transferir (caso Maria Fernanda
+    #329 20/06/2026 — D33BF3F27D transferido sem verificar)."""
+    from app.services.chatbot_prompt import PROMPT
+    assert 'RECLAMAÇÃO DE ENTREGA' in PROMPT
+    # Referencia ao caso real (trava — se a secao for refatorada, nao some).
+    assert 'D33BF3F27D' in PROMPT
+    # E exige consultar_pedido + listar os itens reais do pedido.
+    assert 'consultar_pedido' in PROMPT
+
+
+def test_prompt_trata_vou_passar_ai_como_despedida():
+    """'Vou passar aí' / 'vou aí na loja' = visita futura → encerrar,
+    NAO transferir pra humano (caso da auditoria 19/06/2026)."""
+    from app.services.chatbot_prompt import PROMPT
+    assert 'vou passar aí' in PROMPT.lower() or 'vou passar a' in PROMPT.lower()
+    assert 'DESPEDIDA, NÃO\nHANDOFF' in PROMPT or 'DESPEDIDA, NÃO HANDOFF' in PROMPT.replace('\n', ' ')
