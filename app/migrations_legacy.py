@@ -1146,6 +1146,23 @@ def _migrate_postgres(app):
     _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS ordem_site INTEGER")
     _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS ordem_site INTEGER")
 
+    # Reserva de estoque (21/06/2026 — cutover loja propria, race condition):
+    # `quantidade_reservada` segura saldo entre checkout e webhook pagar.me
+    # pago (Pix expira 30min). Catalogo expoe `quantidade - quantidade_reservada`
+    # como disponivel. NOT NULL DEFAULT 0 — todas as linhas existentes ficam
+    # 0 (nada reservado retroativamente). `reserva_expira_em` no pedido
+    # dispara liberacao via cron quando o cliente abandona o checkout.
+    # ALTER no mesmo commit do modelo: _migrate roda no startup do gunicorn
+    # ANTES de aceitar request, entao a coluna existe quando o codigo SELECT
+    # nela. Padrao igual ao priority_fee (linha 1106) e usuario.email (1110).
+    _try("ALTER TABLE estoque_loja ADD COLUMN IF NOT EXISTS "
+         "quantidade_reservada INTEGER NOT NULL DEFAULT 0")
+    _try("ALTER TABLE pedido_online ADD COLUMN IF NOT EXISTS "
+         "reserva_expira_em TIMESTAMP")
+    _try("CREATE INDEX IF NOT EXISTS ix_pedido_online_reserva_expira "
+         "ON pedido_online(reserva_expira_em) "
+         "WHERE reserva_expira_em IS NOT NULL")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
