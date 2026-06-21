@@ -1414,6 +1414,16 @@ def _migrate_sqlite(app):
     cols_el = [row[1] for row in cursor.fetchall()]
     if cols_el and 'nome_pendente' not in cols_el:
         cursor.execute("ALTER TABLE estoque_loja ADD COLUMN nome_pendente VARCHAR(200)")
+    # Reserva de estoque (21/06/2026 — race condition no cutover).
+    if cols_el and 'quantidade_reservada' not in cols_el:
+        cursor.execute("ALTER TABLE estoque_loja ADD COLUMN "
+                       "quantidade_reservada INTEGER NOT NULL DEFAULT 0")
+
+    cursor.execute("PRAGMA table_info(pedido_online)")
+    cols_po = [row[1] for row in cursor.fetchall()]
+    if cols_po and 'reserva_expira_em' not in cols_po:
+        cursor.execute("ALTER TABLE pedido_online ADD COLUMN "
+                       "reserva_expira_em TIMESTAMP")
 
     # seru_produto_map.fator_quantidade
     cursor.execute("PRAGMA table_info(seru_produto_map)")
