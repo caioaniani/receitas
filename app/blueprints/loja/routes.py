@@ -285,6 +285,9 @@ def _injetar_contexto_loja():
     - `categorias_loja`: [{nome, slug}] pro dropdown "Produtos"
     - `loja_logo_url`: logo enviado no admin (ou None → wordmark de texto)
     - `chatwoot_widget`: {url, token} pro widget de chat (None se desligado).
+    - `cookies_aceitos` / `cookies_recusados`: estado do consentimento
+      LGPD (cookie `cookies_consent` = aceitar|recusar). Sem cookie, banner
+      aparece; com aceite, GA4/Pixel sao carregados.
     """
     from flask import current_app
 
@@ -293,11 +296,14 @@ def _injetar_contexto_loja():
     cw_url = (current_app.config.get('CHATWOOT_PUBLIC_URL') or '').strip()
     chatwoot_widget = ({'url': cw_url.rstrip('/'), 'token': cw_token}
                        if cw_token and cw_url else None)
+    consent = request.cookies.get('cookies_consent') or ''
     return {
         'cliente_atual': loja_auth.cliente_atual(),
         'categorias_loja': loja_catalogo.categorias_publicadas(),
         'loja_logo_url': AppConfig.get('loja_logo_url'),
         'chatwoot_widget': chatwoot_widget,
+        'cookies_aceitos': consent == 'aceitar',
+        'cookies_recusados': consent == 'recusar',
     }
 
 
