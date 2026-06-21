@@ -205,6 +205,12 @@ class PedidoOnline(db.Model):
     atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
     pago_em = db.Column(db.DateTime, nullable=True)
     cancelado_em = db.Column(db.DateTime, nullable=True)
+    # Reserva de estoque (21/06/2026): a partir do checkout,
+    # `EstoqueLoja.quantidade_reservada` segura o saldo. `reserva_expira_em`
+    # marca quando o cron deve liberar caso o cliente nunca pague (Pix vence
+    # em 30min — a reserva fica 35min, margem de 5min pro webhook chegar).
+    # NULL = pedido nunca reservou (legado pre-cutover ou pedido cancelado).
+    reserva_expira_em = db.Column(db.DateTime, nullable=True, index=True)
 
     # NF-e (Fase 5, via Tiny). Setados quando o admin clica "Emitir NF"
     # — o Tiny aplica NCM/CFOP/CST do cadastro do produto.
