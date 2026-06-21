@@ -1,0 +1,59 @@
+{% extends 'loja/legal/_base_legal.html' %}
+
+{% block corpo_legal %}
+<section>
+  <h2>Fale com a gente</h2>
+  <p>Antes de entrar em contato, vale conferir nossas
+    <a href="{{ url_for('loja.trocas') }}">políticas de troca</a> e nossos
+    <a href="{{ url_for('loja.termos') }}">termos de uso</a> — boa parte
+    das dúvidas já está respondida lá.</p>
+</section>
+
+<section>
+  <h2>Atendimento ao cliente (SAC)</h2>
+  <ul>
+    <li><strong>WhatsApp e telefone</strong>:
+      <a href="https://wa.me/5511993325672">(11) 99332-5672</a></li>
+    <li><strong>E-mail</strong>:
+      <a href="mailto:contato@opao.online">contato@opao.online</a></li>
+    <li><strong>Horário</strong>: segunda a sábado, das 8h às 18h.</li>
+    <li><strong>Prazo de resposta</strong>: até 24 horas úteis.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Endereço administrativo</h2>
+  <p><strong>O Pão Padaria Artesanal Ltda.</strong><br>
+    CNPJ 40.646.899/0001-39<br>
+    Rua Ribeiro do Vale, 455 — Brooklin Paulista<br>
+    São Paulo/SP — CEP 04568-001</p>
+</section>
+
+<section>
+  <h2>Nossas lojas</h2>
+  <p>Visite-nos pessoalmente — funcionamos das 7h às 20h, todos os dias.</p>
+  <ul>
+    <li><strong>Brooklin</strong> — Rua Ribeiro do Vale, 455.
+      <a target="_blank" rel="noopener"
+        href="https://www.google.com/maps/search/?api=1&query=Rua+Ribeiro+do+Vale+455+S%C3%A3o+Paulo">Como
+        chegar</a>.</li>
+    <li><strong>Itaim Bibi</strong> — Rua Anésio Pinto Rosa, 78.
+      <a target="_blank" rel="noopener"
+        href="https://www.google.com/maps/search/?api=1&query=An%C3%A9sio+Pinto+Rosa+78+S%C3%A3o+Paulo">Como
+        chegar</a>.</li>
+    <li><strong>1851 Coffee</strong> — Rua Nebraska, 294.
+      <a target="_blank" rel="noopener"
+        href="https://www.google.com/maps/search/?api=1&query=Rua+Nebraska+294+S%C3%A3o+Paulo">Como
+        chegar</a>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Imprensa, parcerias e B2B</h2>
+  <p>Para encomendas corporativas, café da manhã em escala, cestas para
+    presentes em volume, parcerias e imprensa, escreva direto para
+    <a href="mailto:contato@opao.online">contato@opao.online</a> com o
+    assunto começando por <em>"Parceria"</em>, <em>"Imprensa"</em> ou
+    <em>"B2B"</em>.</p>
+</section>
+{% endblock %}
