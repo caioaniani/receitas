@@ -113,6 +113,13 @@ class EstoqueLoja(db.Model):
     produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
     materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'), nullable=True)
     quantidade = db.Column(db.Integer, default=0)
+    # Reservado pra pedido online em `aguardando_pagamento` — segura o
+    # estoque entre o checkout e a confirmacao do pagamento (Pix 30min).
+    # O catalogo expoe `quantidade - quantidade_reservada` como
+    # disponivel. NOT NULL DEFAULT 0 (decisao 21/06/2026 — cutover loja
+    # propria, ver `app/services/loja_estoque_reserva.py`).
+    quantidade_reservada = db.Column(db.Integer, nullable=False,
+                                     default=0, server_default='0')
     # Nome digitado em entrada-em-lote quando nao houve match com nenhum
     # cadastro. Mesma logica do EstoqueProducao.nome_pendente.
     nome_pendente = db.Column(db.String(200), nullable=True)
