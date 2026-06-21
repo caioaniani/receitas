@@ -1,0 +1,12 @@
+{% extends 'loja/_base.html' %}
+
+{% block title %}{{ titulo }} — O Pão Padaria Artesanal{% endblock %}
+{% block description %}{{ descricao or titulo }}.{% endblock %}
+
+{% block content %}
+<article class="pagina-legal">
+  <h1>{{ titulo }}</h1>
+  <p class="pagina-legal-meta small">Última atualização: {{ atualizada }}</p>
+  {% block corpo_legal %}{% endblock %}
+</article>
+{% endblock %}
