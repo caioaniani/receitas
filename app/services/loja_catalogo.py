@@ -108,10 +108,15 @@ def _estoque_site_map():
         return None
     mapa = {}
     for el in EstoqueLoja.query.filter_by(loja_id=loja.id).all():
+        # Disponivel pro site = quantidade fisica - quantidade reservada
+        # por pedidos online em aguardando_pagamento. Sem isso, dois
+        # clientes simultaneos viam o mesmo saldo e podiam sobrevender
+        # (race condition no cutover, 21/06/2026).
+        disp = max(0, (el.quantidade or 0) - (el.quantidade_reservada or 0))
         if el.produto_id:
-            mapa[('produto', el.produto_id)] = el.quantidade or 0
+            mapa[('produto', el.produto_id)] = disp
         elif el.receita_id:
-            mapa[('receita', el.receita_id)] = el.quantidade or 0
+            mapa[('receita', el.receita_id)] = disp
     return mapa
 
 
