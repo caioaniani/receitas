@@ -510,6 +510,15 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
+    # Libera reservas de estoque de pedidos online abandonados (Pix
+    # expira em 30min, reserva em 35min). Cancela o pedido + devolve
+    # saldo virtual ao catalogo. Idempotente.
+    _scheduler.add_job(
+        lambda app=app: _run_liberar_reservas_expiradas(app),
+        'cron', minute='*/5', id='loja-reservas-expiradas',
+        max_instances=1, coalesce=True,
+    )
+
     _scheduler.start()
     logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h · zapi tarefas 07:00 · desperdicio slack 20:10/15/20/25 + whatsapp 20:30 · backup 04:00 · automacoes whatsapp 5min')
 
