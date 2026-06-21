@@ -404,6 +404,30 @@ def criar_pedido(form, itens_raw, *, base=None):
             quantidade=it['qtd'], subtotal=it['subtotal'],
         ))
     pedido.recalcular_total()
+    db.session.flush()
+    # Reserva estoque ANTES do commit (race condition no cutover loja
+    # propria, 21/06/2026). Se um dos itens nao tem disponivel suficiente,
+    # rollback de tudo e devolve a lista pra o caller mostrar o que faltou.
+    # Em SQLite (dev/teste), FOR UPDATE da reserva vira no-op silencioso.
+    from app.services import loja_estoque_reserva
+    from app.services.loja_pagamento import _loja_baixa as _origem_baixa
+    loja_origem = _origem_baixa(pedido)
+    if loja_origem:
+        r = loja_estoque_reserva.reservar(pedido, loja_id=loja_origem.id)
+        if not r['ok']:
+            db.session.rollback()
+            faltas = [
+                f"{f['nome']}: pedido {f['pedido']}, disponivel {f['disponivel']}"
+                for f in r.get('sem_estoque', [])
+            ]
+            if faltas:
+                erros.append(
+                    'Algum item saiu de estoque enquanto voce finalizava. '
+                    'Reveja seu carrinho: ' + '; '.join(faltas) + '.')
+            else:
+                erros.append('Nao foi possivel reservar estoque agora. '
+                             'Tente novamente em alguns segundos.')
+            return None, erros
     db.session.commit()
     # Auto-salva o endereço estruturado do cliente logado pra ele reusar no
     # próximo pedido. Só faz pra entrega (retirada não tem endereço).
