@@ -165,6 +165,12 @@ class EstoqueLoja(db.Model):
         return (self.receita_id is None and self.produto_id is None
                 and self.materia_prima_id is None and bool(self.nome_pendente))
 
+    @property
+    def disponivel(self):
+        """Quantidade que pode ser vendida AGORA = quantidade fisica
+        menos o que esta reservado pra pedidos aguardando pagamento."""
+        return max(0, (self.quantidade or 0) - (self.quantidade_reservada or 0))
+
 class FotoRecebimento(db.Model):
     __tablename__ = 'foto_recebimento'
 
