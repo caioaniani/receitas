@@ -316,12 +316,18 @@ def _gate_acesso():
     `/loja/robots.txt` é exceção: precisa estar sempre acessível pra dizer
     pro Google "não indexa" enquanto a loja está em teste."""
     # Sempre liberadas: rotas de auth (cliente precisa entrar/cadastrar) +
-    # robots + webhook do gateway.
+    # robots + webhook do gateway + paginas legais (CDC/LGPD exigem
+    # acessibilidade publica independente do estado de cutover).
     if request.endpoint in (
             'loja.robots', 'loja.webhook_pagarme',
             'loja.entrar', 'loja.cadastrar', 'loja.sair',
             'loja.esqueci_senha', 'loja.redefinir_senha',
             'loja.verificar_cadastro',
+            # Paginas legais: nao podem ser 404 nem mesmo em modo teste —
+            # cliente precisa conseguir ler antes de comprar (Decreto
+            # 7.962/2013 Art. 2 IV). Sitemap fica fora porque so vale com
+            # loja publica (a propria rota retorna 404 se !visivel).
+            'loja.privacidade', 'loja.termos', 'loja.trocas', 'loja.contato',
             # Acompanhar pedido pelo CÓDIGO (link do email pra guests):
             # qualquer um com o código vê o pedido. O código é random hex 8
             # (16^8 = 4 bi) — não é adivinhável por enumeração realista.
