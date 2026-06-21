@@ -267,3 +267,13 @@ class Config:
     # Pagar.me). Independe da assinatura interna deles — mesmo padrao do
     # Chatwoot/Slack/Zapi. Vazio = webhook recusa tudo.
     PAGARME_WEBHOOK_SECRET = os.environ.get('PAGARME_WEBHOOK_SECRET', '')
+
+    # ── Analytics e remarketing (Fase 8 — cutover VNDA → loja propria) ──
+    # Ambos opt-in por env var. Sem env, o template NAO injeta nada (zero
+    # impacto LGPD e zero requisicao a terceiro). Carregamento condicionado
+    # ao aceite no banner de cookies (`cookies_consent=aceitar`); sem aceite,
+    # so o cookie de sessao e o de carrinho ficam ativos.
+    # GA4: cria propriedade em https://analytics.google.com -> ID 'G-XXXXXXXXXX'.
+    GA4_ID = os.environ.get('GA4_ID', '')
+    # Meta Pixel: Business Manager -> Events Manager -> ID de 15 digitos.
+    META_PIXEL_ID = os.environ.get('META_PIXEL_ID', '')
