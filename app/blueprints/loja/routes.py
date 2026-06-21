@@ -827,7 +827,7 @@ def produto(slug_completo):
 
 @loja_bp.route('/robots.txt')
 def robots():
-    """Enquanto em teste, nada indexável. Quando virar pública (Fase 8),
+    """Enquanto em teste, nada indexavel. Quando virar publica (Fase 8),
     troca pra um sitemap real."""
     if _loja_visivel_publico():
         body = ('User-agent: *\nAllow: /\n'
@@ -835,3 +835,83 @@ def robots():
     else:
         body = 'User-agent: *\nDisallow: /\n'
     return body, 200, {'Content-Type': 'text/plain; charset=utf-8'}
+
+
+# ── Paginas legais (CDC + LGPD + Decreto 7.962/2013) ───────────────────
+# Obrigatorias pra e-commerce no Brasil. Renderizadas a partir de templates
+# estaticos em templates/loja/legal/. Conteudo revisado pelo dono — texto
+# referencia leis brasileiras, nao adaptar pra outro pais sem revisao.
+# A data de atualizacao bate com a do ultimo deploy intencional dessas
+# paginas; quando mudar o texto, atualizar `_LEGAL_ATUALIZADA`.
+_LEGAL_ATUALIZADA = '21 de junho de 2026'
+
+
+def _render_legal(template, titulo, descricao=None):
+    return render_template(
+        f'loja/legal/{template}',
+        titulo=titulo,
+        descricao=descricao,
+        atualizada=_LEGAL_ATUALIZADA,
+        em_teste=_em_teste(),
+    )
+
+
+@loja_bp.route('/privacidade')
+def privacidade():
+    return _render_legal('privacidade.html', 'Politica de Privacidade',
+                         'Como tratamos seus dados pessoais (LGPD).')
+
+
+@loja_bp.route('/termos')
+def termos():
+    return _render_legal('termos.html', 'Termos de Uso',
+                         'Regras de uso do site e da compra.')
+
+
+@loja_bp.route('/trocas')
+def trocas():
+    return _render_legal('trocas.html', 'Troca e Devolucao',
+                         'Como pedir troca, devolucao ou reembolso (CDC).')
+
+
+@loja_bp.route('/contato')
+def contato():
+    return _render_legal('contato.html', 'Atendimento ao Cliente',
+                         'Telefone, WhatsApp, e-mail e enderecos.')
+
+
+@loja_bp.route('/sitemap.xml')
+def sitemap():
+    """Sitemap dinamico (XML). Inclui home, paginas legais e cada produto
+    publicado. Google indexa via robots.txt -> sitemap. Quando a loja
+    estiver oculta (`LOJA_VISIVEL=0`), devolve 404 — nao queremos vazar
+    URLs antes do cutover.
+    """
+    from app.utils import hoje
+    if not _loja_visivel_publico():
+        abort(404)
+    hoje_iso = hoje().isoformat()
+    urls = [
+        (url_for('loja.home', _external=True), '1.0', 'daily'),
+        (url_for('loja.privacidade', _external=True), '0.3', 'monthly'),
+        (url_for('loja.termos', _external=True), '0.3', 'monthly'),
+        (url_for('loja.trocas', _external=True), '0.3', 'monthly'),
+        (url_for('loja.contato', _external=True), '0.5', 'monthly'),
+    ]
+    # Produtos publicados (preco_site > 0). categorias_loja vem do mesmo
+    # caminho que o catalogo publico usa.
+    for cat in loja_catalogo.categorias_publicadas():
+        for it in cat.get('itens', []):
+            url = request.url_root.rstrip('/') + it['href']
+            urls.append((url, '0.8', 'weekly'))
+    linhas = ['<?xml version="1.0" encoding="UTF-8"?>',
+              '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for loc, prio, freq in urls:
+        linhas.append(
+            f'  <url><loc>{loc}</loc><lastmod>{hoje_iso}</lastmod>'
+            f'<changefreq>{freq}</changefreq>'
+            f'<priority>{prio}</priority></url>'
+        )
+    linhas.append('</urlset>')
+    return ('\n'.join(linhas), 200,
+            {'Content-Type': 'application/xml; charset=utf-8'})
