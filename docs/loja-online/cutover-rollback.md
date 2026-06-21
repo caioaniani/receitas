@@ -43,10 +43,39 @@ está confirmado pelo tooltip.
 | 3 | Páginas legais (privacidade/termos/trocas/contato) | ✅ | no ar, acessíveis mesmo com loja oculta |
 | 4 | `GA4_ID` + `META_PIXEL_ID` no Railway | ⏳ | dono cria contas e seta (sem deploy — lidos de env) |
 | 5 | Razão social exata no texto legal | ⏳ | hoje placeholder "O Pão Padaria Artesanal Ltda." em 4 lugares; confirmar com contrato social |
-| 6 | DNS swap (`opao.online` → Railway) | ⏳ | dono faz |
+| 6 | DNS swap → Railway | 🟡 em curso | `www.padariaartesanalonline.com.br` apontado e propagado (ver "Estado do DNS" abaixo); apex pendente |
 | 7a | DKIM + Return-Path (Postmark) | ✅ | ambos "Verified" no painel 21/06 |
-| 7b | **Upgrade Postmark (100 → 10k/mês)** | ⚠️ **bloqueador** | grátis = 100 e-mails/mês; 1 pedido completo = até 5 e-mails → ~20 pedidos/mês estoura. Falha é SILENCIOSA (best-effort). US$15/mês resolve |
+| 7b | **Upgrade Postmark (100 → 10k/mês)** | ⚠️ **bloqueador — confirmar** | grátis = 100 e-mails/mês; 1 pedido completo = até 5 e-mails → ~20 pedidos/mês estoura. Falha é SILENCIOSA (best-effort). US$15/mês resolve. NÃO confundir com Sentry |
 | 7c | DMARC `p=none` em `_dmarc.opao.online` | 🔵 opcional | boas-práticas, fase 2. TXT: `v=DMARC1; p=none; rua=mailto:caio@opao.online` |
+
+## 🌐 Estado do DNS (21/06/2026, ~23:20)
+
+**Mudança de plano**: a loja vai viver no domínio do VNDA
+(`padariaartesanalonline.com.br`), não só no `opao.online`. Os dois
+domínios estão no Railway. Consequência: `LOJA_HOSTS` precisa incluir
+AMBOS, senão o domínio fora da lista serve a tela de ADMIN pro público
+(`app/__init__.py:330-331`).
+
+| Host | Resolve pra | Status |
+|---|---|---|
+| `www.padariaartesanalonline.com.br` | Railway (`s8kr0sma.up.railway.app`, IP `69.46.46.90`) | ✅ propagado nos 4 resolvedores públicos |
+| `padariaartesanalonline.com.br` (apex, sem www) | `52.21.216.0` (infra antiga, não-Railway) | ❌ **pendente** — apontar/redirecionar pro www |
+| `www.opao.online` | Railway | ✅ (verde no painel) |
+
+**Pendências antes de divulgar:**
+1. **`LOJA_HOSTS`** deve conter
+   `padariaartesanalonline.com.br,www.padariaartesanalonline.com.br`
+   além do `opao.online`. **A confirmar** — se faltar, público vê admin.
+2. **Apex sem www** ainda na infra antiga — redirect (Wix forwarding)
+   `padariaartesanalonline.com.br` → `https://www.padariaartesanalonline.com.br`
+   (apex não aceita CNAME).
+3. **Painel do Railway pode mostrar "Current: ...vnda..." + "Cloudflare
+   detected" mesmo com o DNS já certo** — é cache do checker do Railway
+   (TTL 30min do registro antigo). NÃO reverter o `www` por causa disso;
+   o valor real já é Railway. Esperar o re-check ficar verde.
+4. **Teste de validação**: abrir `www.padariaartesanalonline.com.br` no
+   celular em 4G (DNS sem cache local). Loja = OK; tela de admin = falta
+   `LOJA_HOSTS`.
 
 ## 📧 E-mails por pedido (impacto no teto Postmark)
 
