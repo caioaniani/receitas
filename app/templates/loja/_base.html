@@ -12,6 +12,35 @@
 {% if em_teste %}<meta name="robots" content="noindex,nofollow">{% endif %}
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <link rel="stylesheet" href="{{ url_for('loja.static', filename='loja.css') }}">
+
+{# ── Analytics / Pixel ───────────────────────────────────────────────
+   GA4 e Meta Pixel sao opt-in por env var. Sem env, nada e' carregado
+   (zero impacto em performance e em LGPD). Quando estiver com tracking,
+   o banner de cookies pode controlar consentimento — por enquanto,
+   carrega so apos aceite (ver `cookie-consent.js`). #}
+{% if config.GA4_ID and cookies_aceitos %}
+<script async src="https://www.googletagmanager.com/gtag/js?id={{ config.GA4_ID }}"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', '{{ config.GA4_ID }}', { 'anonymize_ip': true });
+</script>
+{% endif %}
+{% if config.META_PIXEL_ID and cookies_aceitos %}
+<script>
+  !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+  n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+  document,'script','https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', '{{ config.META_PIXEL_ID }}');
+  fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none"
+  src="https://www.facebook.com/tr?id={{ config.META_PIXEL_ID }}&ev=PageView&noscript=1"
+  alt=""/></noscript>
+{% endif %}
 </head>
 <body>
 
