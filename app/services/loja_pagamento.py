@@ -34,7 +34,7 @@ from app.models import (
     PagarmeEvento,
     PedidoOnline,
 )
-from app.services import estoque_helpers, pagarme
+from app.services import pagarme
 from app.utils import agora
 
 logger = logging.getLogger(__name__)
@@ -174,34 +174,21 @@ def _encontrar_pedido(payload_data):
 
 
 def _baixar_estoque(pedido, usuario_id=None):
-    """Aplica MovEstoqueLoja('venda_site') por item do pedido. Itens sem
-    FK (receita_id/produto_id) são pulados (sinal de catálogo solto —
-    logado WARNING, igual seru_sync)."""
+    """Consome a reserva criada no checkout: baixa estoque DE VERDADE
+    (decrementa `quantidade` e `quantidade_reservada` juntos) e registra
+    MovEstoqueLoja('venda_site') por item.
+
+    Idempotente — se o pedido ja tem mov 'venda_site', no-op (defesa em
+    profundidade contra retry de webhook). Itens sem FK pulam (WARNING).
+    """
+    from app.services import loja_estoque_reserva
     loja = _loja_baixa(pedido)
     if not loja:
         logger.warning('venda_site: sem loja de origem (codigo=%s)',
                        pedido.codigo)
         return {'baixado': 0, 'faltou': 0, 'pulado': len(pedido.itens)}
-    ref = f'Site #{pedido.codigo}'
-    total = {'baixado': 0, 'faltou': 0, 'pulado': 0}
-    for it in pedido.itens:
-        if it.receita_id:
-            chave = {'loja_id': loja.id, 'receita_id': it.receita_id}
-        elif it.produto_id:
-            chave = {'loja_id': loja.id, 'produto_id': it.produto_id}
-        else:
-            logger.warning('venda_site: item sem FK em pedido %s (%s)',
-                           pedido.codigo, it.nome)
-            total['pulado'] += 1
-            continue
-        r = estoque_helpers.baixar_loja_por_prioridade(
-            chave, int(it.quantidade),
-            tipo_mov='venda_site',
-            sem_estoque_tipo='venda_site_sem_estoque',
-            referencia=ref, usuario_id=usuario_id)
-        total['baixado'] += r['baixado']
-        total['faltou'] += r['faltou']
-    return total
+    return loja_estoque_reserva.consumir(
+        pedido, loja_id=loja.id, usuario_id=usuario_id)
 
 
 def _estornar_estoque(pedido):
