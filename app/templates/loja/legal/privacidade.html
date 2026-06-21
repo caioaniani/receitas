@@ -1,0 +1,135 @@
+{% extends 'loja/legal/_base_legal.html' %}
+
+{% block corpo_legal %}
+<section>
+  <h2>Quem somos</h2>
+  <p>
+    Esta loja é operada por <strong>O Pão Padaria Artesanal Ltda.</strong>
+    (a "Padaria"), inscrita no CNPJ sob o n.º <strong>40.646.899/0001-39</strong>,
+    com sede na Rua Ribeiro do Vale, 455, São Paulo/SP, CEP 04568-001.
+    Esta política descreve como tratamos os seus dados pessoais nos termos
+    da Lei Geral de Proteção de Dados (Lei 13.709/2018 — LGPD).
+  </p>
+</section>
+
+<section>
+  <h2>Quais dados coletamos</h2>
+  <ul>
+    <li><strong>Cadastro e compra</strong>: nome completo, e-mail, telefone, CPF
+      e endereço de entrega. O CPF é exigido pela legislação fiscal para
+      emissão da Nota Fiscal Eletrônica.</li>
+    <li><strong>Pagamento</strong>: dados do cartão são processados diretamente
+      pela operadora de pagamento (Pagar.me). <strong>A Padaria não armazena
+      número de cartão, CVV nem validade.</strong></li>
+    <li><strong>Navegação</strong>: IP, tipo de dispositivo, navegador, páginas
+      visitadas, identificadores de cookie para sessão, carrinho e métricas
+      agregadas (Google Analytics, Meta Pixel).</li>
+    <li><strong>Atendimento</strong>: histórico de conversas com nossa equipe
+      por chat, WhatsApp ou e-mail.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Para que usamos os dados</h2>
+  <ul>
+    <li>Executar o contrato de compra e venda (processar pedido, cobrar,
+      entregar, emitir nota fiscal).</li>
+    <li>Cumprir obrigações legais e fiscais (guarda de NF-e por 5 anos).</li>
+    <li>Oferecer suporte e responder dúvidas.</li>
+    <li>Medir desempenho do site e melhorar a experiência (analytics).</li>
+    <li>Comunicar promoções e novidades — apenas se você consentir
+      explicitamente; pode descadastrar a qualquer momento.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Bases legais (LGPD Art. 7º e 11)</h2>
+  <ul>
+    <li>Execução de contrato (compra e venda).</li>
+    <li>Cumprimento de obrigação legal (fiscal e contábil).</li>
+    <li>Legítimo interesse (segurança, prevenção de fraude, métricas
+      agregadas).</li>
+    <li>Consentimento (marketing direto, cookies opcionais).</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Com quem compartilhamos</h2>
+  <p>Compartilhamos seus dados apenas com operadores que executam serviços
+    necessários para o pedido funcionar:</p>
+  <ul>
+    <li><strong>Pagar.me</strong> (Stone) — processamento de pagamento.</li>
+    <li><strong>Tiny ERP</strong> — emissão e armazenamento da NF-e.</li>
+    <li><strong>Postmark</strong> — envio de e-mail transacional.</li>
+    <li><strong>Lalamove</strong> e parceiros logísticos — entrega.</li>
+    <li><strong>Google Analytics</strong> e <strong>Meta Pixel</strong> —
+      métricas e remarketing (somente se você aceitar cookies).</li>
+    <li><strong>Autoridades públicas</strong> — quando exigido por lei,
+      ordem judicial ou requisição da Receita Federal.</li>
+  </ul>
+  <p>Nenhum dado é vendido a terceiros.</p>
+</section>
+
+<section>
+  <h2>Por quanto tempo guardamos</h2>
+  <ul>
+    <li>Dados do pedido e nota fiscal: <strong>5 anos</strong> (Decreto
+      6.022/2007 — guarda fiscal).</li>
+    <li>Conta do cliente: enquanto ativa; após pedido de exclusão,
+      anonimizamos em até <strong>15 dias</strong> (mantendo o histórico
+      fiscal exigido por lei, sem identificação pessoal).</li>
+    <li>Logs de acesso e segurança: até <strong>6 meses</strong>.</li>
+    <li>Cookies opcionais: até <strong>12 meses</strong> ou até você
+      apagar no navegador.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Seus direitos (LGPD Art. 18)</h2>
+  <p>A qualquer momento você pode:</p>
+  <ul>
+    <li><strong>Acessar seus dados</strong> — exportação em
+      <a href="{{ url_for('loja.exportar_dados') if false else '#' }}">
+      <code>/conta/dados.json</code></a> (cliente logado).</li>
+    <li><strong>Corrigir</strong> dados desatualizados — em
+      <a href="{{ url_for('loja.minha_conta') }}">Minha conta</a>.</li>
+    <li><strong>Excluir</strong> sua conta — em
+      <a href="{{ url_for('loja.minha_conta') }}">Minha conta → Excluir</a>.
+      Pedidos finalizados são anonimizados; nota fiscal continua
+      arquivada por exigência legal, sem identificação pessoal.</li>
+    <li><strong>Portabilidade</strong>, <strong>revogação</strong> de
+      consentimento e <strong>oposição</strong> ao tratamento — por
+      e-mail à equipe (abaixo).</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Encarregado de dados (DPO)</h2>
+  <p>Para questões sobre privacidade, escreva para
+    <a href="mailto:contato@opao.online">contato@opao.online</a>.
+    Resposta em até 15 dias corridos.</p>
+</section>
+
+<section>
+  <h2>Cookies</h2>
+  <p>Usamos cookies próprios (necessários para login e carrinho) e cookies
+    de terceiros (analytics e marketing). Você pode aceitar ou recusar os
+    cookies opcionais no banner que aparece na primeira visita, ou
+    apagá-los a qualquer momento nas configurações do seu navegador.</p>
+</section>
+
+<section>
+  <h2>Segurança</h2>
+  <p>Aplicamos medidas técnicas e organizacionais para proteger seus dados:
+    transmissão por HTTPS, senhas armazenadas com hash (não em texto puro),
+    controle de acesso restrito à equipe interna e backups criptografados.</p>
+</section>
+
+<section>
+  <h2>Alterações desta política</h2>
+  <p>Podemos atualizar este texto para refletir mudanças na lei ou no nosso
+    serviço. A versão vigente é sempre a publicada aqui, com a data de
+    atualização no topo. Mudanças relevantes são comunicadas por e-mail aos
+    clientes cadastrados.</p>
+</section>
+{% endblock %}
