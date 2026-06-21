@@ -192,7 +192,69 @@
       href="https://www.google.com/maps/search/?api=1&amp;query={{ 'Rua Nebraska, 294, São Paulo' | urlencode }}">Nebraska, 294</a><br>
     Lojas: 7h–20h todos os dias.
   </div>
+  <div class="rodape-col small">
+    <strong>Atendimento</strong><br>
+    WhatsApp/telefone:
+    <a href="https://wa.me/5511993325672" rel="noopener">(11) 99332-5672</a><br>
+    E-mail: <a href="mailto:contato@opao.online">contato@opao.online</a><br>
+    Seg a sáb · 8h às 18h<br><br>
+    <a href="{{ url_for('loja.contato') }}">Contato e SAC</a> ·
+    <a href="{{ url_for('loja.trocas') }}">Troca e devolução</a> ·
+    <a href="{{ url_for('loja.termos') }}">Termos de uso</a> ·
+    <a href="{{ url_for('loja.privacidade') }}">Privacidade</a>
+  </div>
+  <div class="rodape-legal small">
+    O Pão Padaria Artesanal Ltda. · CNPJ 40.646.899/0001-39 ·
+    Rua Ribeiro do Vale, 455 — Brooklin Paulista, São Paulo/SP, CEP 04568-001
+  </div>
 </footer>
+
+{# ── Banner de cookies (LGPD + ePrivacy) ─────────────────────────────
+   Exige aceite explicito antes de carregar GA/Pixel. Sem aceite, esses
+   scripts NAO sao injetados (ver bloco no <head>). O estado vai no
+   localStorage E num cookie (pra o servidor saber via context processor).
+   Recusar tambem e' valido — armazenamos a opcao pra nao reperguntar. #}
+{% if not cookies_aceitos and not cookies_recusados %}
+<div id="cookie-banner" class="cookie-banner" role="dialog" aria-labelledby="cookie-banner-titulo">
+  <div class="cookie-banner-texto">
+    <strong id="cookie-banner-titulo">Cookies e privacidade</strong>
+    <p class="small">
+      Usamos cookies necessários para o site funcionar e cookies opcionais
+      para medir o desempenho e melhorar sua experiência. Você pode aceitar
+      ou recusar os opcionais. Saiba mais na nossa
+      <a href="{{ url_for('loja.privacidade') }}">Política de Privacidade</a>.
+    </p>
+  </div>
+  <div class="cookie-banner-acoes">
+    <button type="button" class="btn-loja btn-loja-outline"
+            data-cookies="recusar">Apenas necessários</button>
+    <button type="button" class="btn-loja"
+            data-cookies="aceitar">Aceitar todos</button>
+  </div>
+</div>
+<script>
+  (function () {
+    var banner = document.getElementById('cookie-banner');
+    if (!banner) return;
+    function definir(valor) {
+      var max = 60 * 60 * 24 * 365;  // 1 ano
+      document.cookie = 'cookies_consent=' + valor +
+        '; path=/; max-age=' + max + '; samesite=lax';
+      try { localStorage.setItem('cookies_consent', valor); } catch (e) {}
+      banner.style.display = 'none';
+      if (valor === 'aceitar') {
+        // Recarrega pra o servidor re-renderizar com GA/Pixel injetados.
+        window.location.reload();
+      }
+    }
+    banner.querySelectorAll('[data-cookies]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        definir(btn.getAttribute('data-cookies'));
+      });
+    });
+  })();
+</script>
+{% endif %}
 
 <script src="{{ url_for('loja.static', filename='carrinho.js') }}"></script>
 {% block scripts %}{% endblock %}
