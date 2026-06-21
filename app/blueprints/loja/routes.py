@@ -898,12 +898,10 @@ def sitemap():
         (url_for('loja.trocas', _external=True), '0.3', 'monthly'),
         (url_for('loja.contato', _external=True), '0.5', 'monthly'),
     ]
-    # Produtos publicados (preco_site > 0). categorias_loja vem do mesmo
-    # caminho que o catalogo publico usa.
-    for cat in loja_catalogo.categorias_publicadas():
-        for it in cat.get('itens', []):
-            url = request.url_root.rstrip('/') + it['href']
-            urls.append((url, '0.8', 'weekly'))
+    # Produtos publicados (preco_site > 0).
+    for it in loja_catalogo.produtos_publicados():
+        url = request.url_root.rstrip('/') + it['href']
+        urls.append((url, '0.8', 'weekly'))
     linhas = ['<?xml version="1.0" encoding="UTF-8"?>',
               '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
     for loc, prio, freq in urls:
