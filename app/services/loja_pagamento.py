@@ -296,6 +296,13 @@ def _marcar_estornado(pedido, pagamento):
     # Só estorna estoque se já havia sido pago (= baixou).
     if estado_anterior == 'pago':
         _estornar_estoque(pedido)
+    elif estado_anterior == 'aguardando_pagamento':
+        # Pedido nunca chegou a pago — libera reserva (Pix expirado,
+        # cancelamento manual antes do pagamento, etc).
+        from app.services import loja_estoque_reserva
+        loja = _loja_baixa(pedido)
+        if loja:
+            loja_estoque_reserva.liberar(pedido, loja_id=loja.id)
     return True
 
 
