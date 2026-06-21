@@ -1,0 +1,136 @@
+{% extends 'loja/legal/_base_legal.html' %}
+
+{% block corpo_legal %}
+<section>
+  <h2>1. Identificação</h2>
+  <p>Estes Termos de Uso regulam a relação entre os visitantes/clientes deste
+    site e <strong>O Pão Padaria Artesanal Ltda.</strong>, CNPJ
+    40.646.899/0001-39, sede na Rua Ribeiro do Vale, 455, São Paulo/SP,
+    CEP 04568-001 (a "Padaria"). Ao usar este site ou realizar uma compra,
+    você declara ter lido, entendido e aceito estes termos.</p>
+</section>
+
+<section>
+  <h2>2. Objeto</h2>
+  <p>A Padaria vende, por este site, produtos artesanais de panificação,
+    confeitaria e cafeteria, com entrega em São Paulo (raio descrito na
+    página de Checkout) ou retirada nas unidades indicadas.</p>
+</section>
+
+<section>
+  <h2>3. Cadastro e conta</h2>
+  <ul>
+    <li>O cadastro exige informações verídicas. Você é responsável pelos
+      dados informados e pela guarda do seu login e senha.</li>
+    <li>É permitida a compra como visitante (guest checkout), também sujeita
+      a estes termos.</li>
+    <li>A Padaria pode suspender ou encerrar contas que usem o serviço de
+      forma fraudulenta, ilegal ou em desacordo com estes termos.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>4. Produtos, preços e estoque</h2>
+  <ul>
+    <li>Imagens dos produtos são meramente ilustrativas; pequenas variações
+      de formato, peso e tom podem ocorrer pela natureza artesanal do
+      processo.</li>
+    <li>Os preços e a disponibilidade vigentes são os exibidos no momento
+      da finalização do pedido. Erros tipográficos manifestos (ex.: preço
+      "R$ 0,01") podem implicar cancelamento, com reembolso integral.</li>
+    <li>Estoque é exibido em tempo real, mas podem ocorrer pequenas
+      diferenças quando dois pedidos chegam quase simultaneamente. Nesses
+      casos, entramos em contato e oferecemos substituição ou reembolso.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>5. Pagamento</h2>
+  <ul>
+    <li>Aceitamos <strong>Pix</strong> (à vista) e <strong>cartão de
+      crédito</strong> à vista, processados pela Pagar.me.</li>
+    <li>O pedido só é confirmado após a aprovação do pagamento.</li>
+    <li>Para Pix, a cobrança expira em 30 minutos. Após esse prazo, o
+      pedido é cancelado automaticamente.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>6. Entrega e retirada</h2>
+  <p>Os modos disponíveis são:</p>
+  <ul>
+    <li><strong>Entrega agendada</strong>: data e janela escolhidas no
+      checkout, dentro da área atendida.</li>
+    <li><strong>Retirada na loja</strong>: somente nas unidades indicadas
+      no momento do checkout.</li>
+    <li><strong>Entrega expressa</strong>: enquanto disponível no horário
+      de funcionamento e com cobertura confirmada pelo CEP.</li>
+  </ul>
+  <p>Endereços fora da área de cobertura ou com restrição de acesso podem
+    ser recusados; nesse caso, comunicamos antes do pagamento ou, se
+    detectado depois, reembolsamos integralmente.</p>
+</section>
+
+<section>
+  <h2>7. Cancelamento e direito de arrependimento</h2>
+  <p>Por se tratar de produtos perecíveis, aplicam-se regras específicas
+    explicadas na nossa
+    <a href="{{ url_for('loja.trocas') }}">Política de Troca e
+    Devolução</a>. Em resumo:</p>
+  <ul>
+    <li>O cliente pode cancelar enquanto o pedido ainda está
+      <strong>aguardando pagamento</strong> ou <strong>em preparo</strong>,
+      sem custo, com reembolso integral.</li>
+    <li>Após a saída para entrega, o cancelamento depende de cada caso
+      (CDC Art. 49, ressalvada a natureza perecível dos itens).</li>
+  </ul>
+</section>
+
+<section>
+  <h2>8. Avaliação, fotos e conteúdo do cliente</h2>
+  <p>Ao enviar uma avaliação ou foto, você concede à Padaria licença
+    gratuita, não exclusiva e por tempo indeterminado para reproduzir o
+    conteúdo nos canais oficiais (site e redes sociais), preservando a
+    sua autoria. Você pode pedir a remoção a qualquer momento por e-mail.</p>
+</section>
+
+<section>
+  <h2>9. Propriedade intelectual</h2>
+  <p>Marca, logotipo, textos, fotografias e código-fonte deste site são de
+    propriedade da Padaria ou licenciados a ela. É vedada qualquer
+    reprodução comercial sem autorização escrita.</p>
+</section>
+
+<section>
+  <h2>10. Limitação de responsabilidade</h2>
+  <p>A Padaria responde pelos defeitos do produto nos termos do Código de
+    Defesa do Consumidor. Não nos responsabilizamos por:</p>
+  <ul>
+    <li>Atrasos causados por força maior (clima severo, restrições viárias,
+      bloqueios, eventos imprevisíveis).</li>
+    <li>Recusa de entrega por endereço inválido informado pelo cliente.</li>
+    <li>Conservação inadequada do produto após a entrega.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>11. Privacidade</h2>
+  <p>O tratamento dos seus dados pessoais segue nossa
+    <a href="{{ url_for('loja.privacidade') }}">Política de
+    Privacidade</a>, que faz parte destes termos.</p>
+</section>
+
+<section>
+  <h2>12. Alterações</h2>
+  <p>Podemos atualizar estes termos quando necessário. A versão vigente é
+    sempre a publicada nesta página. Mudanças relevantes serão comunicadas
+    com antecedência razoável.</p>
+</section>
+
+<section>
+  <h2>13. Foro</h2>
+  <p>Fica eleito o foro do <strong>domicílio do consumidor</strong> para
+    dirimir controvérsias decorrentes destes termos, conforme o Código de
+    Defesa do Consumidor.</p>
+</section>
+{% endblock %}
