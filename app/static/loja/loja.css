@@ -950,3 +950,69 @@ a:hover { text-decoration: underline; }
   border: 1px solid var(--texto) !important;
 }
 .btn-loja-outline:hover { background: var(--card-bg) !important; }
+
+/* ── Rodape: linha legal (CNPJ + razao social + endereco sede) ─────
+   Largura total do rodape (ocupa o grid inteiro), texto bem pequeno e
+   neutro — atende Decreto 7.962/2013 sem competir visualmente. */
+.rodape-legal {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--linha);
+  padding-top: 14px; margin-top: 6px;
+  color: var(--texto-suave);
+  font-size: 12px; line-height: 1.5;
+}
+
+/* ── Paginas legais (privacidade / termos / trocas / contato) ─────
+   Layout simples, foco em legibilidade. Coluna estreita pra texto longo
+   nao virar parede ilegivel em desktop. */
+.pagina-legal {
+  max-width: 720px;
+  margin: 32px auto 56px;
+  padding: 0 22px;
+  font-family: var(--fonte-corpo);
+}
+.pagina-legal h1 {
+  font-family: var(--fonte-titulo);
+  font-weight: 400;
+  font-size: clamp(28px, 4vw, 40px);
+  margin: 0 0 4px;
+}
+.pagina-legal-meta { color: var(--texto-suave); margin: 0 0 28px; }
+.pagina-legal h2 {
+  font-family: var(--fonte-titulo);
+  font-weight: 500;
+  font-size: 20px;
+  margin: 32px 0 10px;
+}
+.pagina-legal p, .pagina-legal li { font-size: 16px; line-height: 1.65; }
+.pagina-legal ul { padding-left: 22px; margin: 8px 0 16px; }
+.pagina-legal li + li { margin-top: 6px; }
+.pagina-legal section + section { margin-top: 8px; }
+.pagina-legal a { text-decoration: underline; }
+
+/* ── Banner de cookies (LGPD) ──────────────────────────────────────
+   Fixo no rodape da viewport, com leve elevacao. Z-index alto pra
+   sobrepor widget do Chatwoot ate aceite. */
+.cookie-banner {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  z-index: 9000;
+  background: var(--card-bg);
+  border-top: 1px solid var(--linha);
+  box-shadow: 0 -2px 16px rgba(0,0,0,.08);
+  padding: 14px 22px;
+  display: grid; gap: 12px; align-items: center;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 720px) {
+  .cookie-banner { grid-template-columns: 1fr auto; gap: 22px; }
+}
+.cookie-banner strong { font-family: var(--fonte-titulo); font-size: 16px; }
+.cookie-banner p { margin: 4px 0 0; }
+.cookie-banner-acoes {
+  display: grid; gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+@media (min-width: 720px) {
+  .cookie-banner-acoes { grid-template-columns: auto auto; }
+}
+.cookie-banner-acoes .btn-loja { padding: 8px 16px; font-size: 14px; }
