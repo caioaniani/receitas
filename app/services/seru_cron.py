@@ -589,6 +589,19 @@ def _run_followup_bot(app):
                   'followup bot')
 
 
+def _run_liberar_reservas_expiradas(app):
+    """Job: libera reservas de estoque de pedidos online que abandonaram o
+    checkout (Pix expira em 30min, reserva em 35min, cron varre a cada
+    5min). Marca o pedido como cancelado e devolve o saldo virtual ao
+    catalogo. Idempotente."""
+    from app.services import loja_estoque_reserva
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_RESERVA_EXPIRA,
+                  loja_estoque_reserva.liberar_expirados,
+                  'libera reservas expiradas')
+
+
 def _run_vigia_chatwoot(app):
     """Job: vigia de infra do Chatwoot (15 em 15 min). Criado em
     12/06/2026 apos a equipe de atendimento descobrir o Chatwoot quebrado
