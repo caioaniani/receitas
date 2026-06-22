@@ -267,6 +267,42 @@
   </div>
 </aside>
 
+<!-- Aba lateral: Pedidos do site (liberada a todos os usuarios) -->
+<button id="ped-toggle" type="button" title="Pedidos do site">📦 Pedidos do site</button>
+<div id="ped-bg"></div>
+<aside id="ped-drawer">
+  <div class="drawer-topo">
+    <h2>📦 Pedidos do site</h2>
+    <button class="x" id="ped-x" type="button" aria-label="Fechar">×</button>
+  </div>
+  <div id="ped-busca-wrap">
+    <input id="ped-busca" type="search" autocomplete="off"
+           placeholder="🔎 Buscar por nome, telefone ou código…">
+  </div>
+  <div id="ped-tabela-wrap">
+    <table class="ped-tabela">
+      <thead><tr>
+        <th>Data de entrega</th><th>Hora de entrega</th>
+        <th>Destinatário</th><th>Cliente</th><th>Número do Pedido</th>
+      </tr></thead>
+      <tbody id="ped-tbody">
+        <tr><td colspan="5" class="ped-vazio">Carregando…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</aside>
+
+<!-- Popup: detalhe + edição do pedido (iframe da página admin em modo embed) -->
+<div id="ped-popup">
+  <div class="ped-popup-box">
+    <div class="ped-popup-topo">
+      <h2 id="ped-popup-tit">Pedido</h2>
+      <button class="x" id="ped-popup-x" type="button" aria-label="Fechar">×</button>
+    </div>
+    <iframe id="ped-iframe" title="Detalhe do pedido" src="about:blank"></iframe>
+  </div>
+</div>
+
 <script>
 (function () {
   var ENDPOINT = "{{ url_for('entregas.api_painel') }}";
