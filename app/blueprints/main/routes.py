@@ -2820,6 +2820,8 @@ def loja_online_prontidao():
     """Pré-flight do CUTOVER: o que precisa estar pronto ANTES de apontar o
     domínio antigo pro site novo. GO/NO-GO + pendências. O bloqueio nº 1 é
     LOJA_VISIVEL — sem ela, o cliente anônimo redirecionado vê 404."""
+    import os
+
     from app.blueprints.loja.routes import _loja_visivel_publico
     from app.services import loja_catalogo, pagarme
     cfg = current_app.config
@@ -2829,6 +2831,15 @@ def loja_online_prontidao():
     pg_ok = pagarme.disponivel() and pg_ambiente == 'producao'
     redirect_hosts = [h.strip() for h in (cfg.get('SITE_REDIRECT_HOSTS') or '')
                       .split(',') if h.strip()]
+    loja_hosts = sorted(h.strip().lower()
+                        for h in (cfg.get('LOJA_HOSTS') or '').split(',')
+                        if h.strip())
+    host_atual = (request.host or '').split(':')[0].lower()
+    host_atual_eh_loja_publica = host_atual in loja_hosts if loja_hosts else False
+    postmark_ok = bool((cfg.get('POSTMARK_SERVER_TOKEN') or '').strip())
+    sentry_ok = bool(os.environ.get('SENTRY_DSN', '').strip())
+    ga4_set = bool((cfg.get('GA4_ID') or '').strip())
+    pixel_set = bool((cfg.get('META_PIXEL_ID') or '').strip())
 
     # Produtos no site sem estoque (aparecem como "Esgotado") — aviso, não bloqueio.
     mapa = loja_catalogo._estoque_site_map() or {}
@@ -2843,15 +2854,38 @@ def loja_online_prontidao():
     if not pg_ok:
         pendencias.append(f'BLOQUEIO: Pagar.me não está produção/ok '
                           f'(ambiente={pg_ambiente}).')
+    if not loja_hosts:
+        pendencias.append('BLOQUEIO: LOJA_HOSTS vazio — qualquer domínio cai '
+                          'no fallback fail-open (loja serve em todo host, '
+                          'incluindo gestao.*). Defina LOJA_HOSTS com os '
+                          'domínios públicos.')
+    if not postmark_ok:
+        pendencias.append('BLOQUEIO: POSTMARK_SERVER_TOKEN ausente — cliente '
+                          'não recebe confirmação de pedido nem NF.')
+    avisos = []
+    if not sentry_ok:
+        avisos.append('AVISO: SENTRY_DSN ausente — erros 500 passam em '
+                      'silêncio. Não bloqueia, mas atrasa diagnóstico.')
+    if not (ga4_set or pixel_set):
+        avisos.append('AVISO: nem GA4_ID nem META_PIXEL_ID configurados — '
+                      'site sobe sem analytics/remarketing. Opcional.')
 
     return jsonify(
-        pronto=(loja_visivel and pg_ok),
+        pronto=(loja_visivel and pg_ok and bool(loja_hosts) and postmark_ok),
         loja_visivel=loja_visivel,
+        loja_hosts=loja_hosts,
+        host_atual=host_atual,
+        host_atual_eh_loja_publica=host_atual_eh_loja_publica,
         pagarme_ambiente=pg_ambiente,
         pagarme_ok=pg_ok,
+        postmark_ok=postmark_ok,
+        sentry_ok=sentry_ok,
+        ga4_configurado=ga4_set,
+        meta_pixel_configurado=pixel_set,
         redirect_hosts_armados=redirect_hosts,
         produtos_esgotados=esgotados,
         pendencias=pendencias,
+        avisos=avisos,
         nota=('produtos_esgotados é AVISO (eles aparecem como "Esgotado" no '
               'site até você preencher o estoque), não bloqueia o cutover.'),
     )
