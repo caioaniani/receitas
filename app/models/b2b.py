@@ -257,6 +257,9 @@ class Orcamento(db.Model):
     # `valor_total` = subtotal - desconto.
     subtotal = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     desconto_valor = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    # Frete: valor SOMADO ao total (subtotal - desconto + frete). Default 0
+    # = retirada / sem frete. Dinheiro -> Numeric(10,2) + Decimal sempre.
+    frete_valor = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     valor_total = db.Column(db.Numeric(10, 2), nullable=False, default=0)
 
     observacao = db.Column(db.Text)  # condicoes, prazo de entrega, etc
