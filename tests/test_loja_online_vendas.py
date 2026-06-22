@@ -115,7 +115,7 @@ def test_faturamento_respeita_intervalo_por_pago_em(app):
         assert fat2['total'] == 139.00
 
 
-def test_consolidado_soma_online_no_total(app):
+def test_consolidado_soma_online_no_total(app, monkeypatch):
     from app.extensions import db
     from app.services import vendas_itens
     from app.utils import hoje
@@ -124,6 +124,12 @@ def test_consolidado_soma_online_no_total(app):
         prod = _produto(db, 'Pao Consolidado')
         _pedido(db, codigo='CS01', prod=prod, qtd=4, subtotal='80.00',
                 frete='10.00')
+        # Seru nao tem credencial no teste -> simula PDV vazio pra isolar
+        # a contribuicao da loja online.
+        monkeypatch.setattr(vendas_itens, 'agregar_itens', lambda i, f: {
+            'produtos': [], 'total_pedidos': 0, 'faturamento_total': 0.0,
+            'lojas_no_intervalo': [],
+        })
         h = hoje()
         data = vendas_itens.agregar_itens_consolidado(h, h)
         # Sem Seru/VNDA no teste, o total = so o online (subtotal, sem frete).
