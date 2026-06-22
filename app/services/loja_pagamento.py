@@ -149,6 +149,32 @@ def iniciar_cartao(pedido, card_token, parcelas=1, billing=None):
     return pag, []
 
 
+def iniciar_link(pedido, *, success_url=None):
+    """Cria PagamentoOnline(metodo='link') e gera um link de pagamento
+    HOSPEDADO no Pagar.me (Apple Pay + Pix + cartao na pagina deles).
+    Devolve (payment_url, []) ou (None, [erros]).
+
+    O 'pago' chega pelo MESMO webhook do Pix/cartao (casa por order_id/code),
+    entao a baixa de estoque e o e-mail seguem o caminho unico de verdade."""
+    _zerar_pagamento_anterior(pedido)
+    pag = PagamentoOnline(pedido_id=pedido.id, metodo='link',
+                          valor=pedido.valor_total)
+    db.session.add(pag)
+    db.session.flush()
+
+    res = pagarme.criar_link_pagamento(pedido, success_url=success_url)
+    if not res.get('ok'):
+        pag.status = 'falhou'
+        pag.erro = res.get('erro') or 'falha desconhecida'
+        pag.pagarme_order_id = res.get('order_id')
+        db.session.commit()
+        return None, [res.get('erro') or 'Erro ao gerar o link de pagamento.']
+
+    pag.pagarme_order_id = res.get('order_id')
+    db.session.commit()
+    return res['payment_url'], []
+
+
 # ── Webhook ──────────────────────────────────────────────────────────
 
 def _encontrar_pedido(payload_data):
