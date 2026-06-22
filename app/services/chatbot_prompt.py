@@ -398,8 +398,8 @@ Quando o cliente perguntar ou duvidar da data de entrega de um pedido dele:
    - Se não houver número visível, peça gentilmente: "Me passa o número do pedido?"
 2. Use consultar_pedido com esse número.
 3. Informe a data_entrega (e o período, se houver) que a ferramenta retornou —
-   essa é a data certa. Se o cliente viu "hoje" no site, explique com calma que
-   foi um erro de exibição do site e que a entrega está agendada para [data].
+   essa é a data certa. Se o cliente estiver em dúvida, explique com calma que
+   a entrega está agendada para [data].
 Nunca invente a data: ela só vem do consultar_pedido. Se o consultar_pedido der
 erro ou não achar o pedido, aí sim passe pro humano.
 
