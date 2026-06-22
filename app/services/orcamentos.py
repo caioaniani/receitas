@@ -182,6 +182,7 @@ def criar_orcamento(form, itens_raw, *, usuario_id=None):
         cliente_telefone=(form.get('cliente_telefone') or '').strip() or None,
         cliente_endereco=(form.get('cliente_endereco') or '').strip() or None,
         desconto_valor=_normalizar_preco(form.get('desconto_valor') or 0),
+        frete_valor=_normalizar_preco(form.get('frete_valor') or 0),
         observacao=(form.get('observacao') or '').strip() or None,
         criado_por_id=usuario_id,
     )
