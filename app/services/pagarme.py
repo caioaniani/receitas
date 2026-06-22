@@ -166,9 +166,9 @@ def _payload_customer(pedido):
     if cpf:
         payload['document'] = cpf
         payload['document_type'] = 'cpf'
-    tel = _so_digitos(pedido.telefone_cliente or '')
-    if len(tel) >= 10:
-        ddd, num = tel[:2], tel[2:]
+    fone = _telefone_br(pedido.telefone_cliente)
+    if fone:
+        ddd, num = fone
         payload['phones'] = {
             'mobile_phone': {
                 'country_code': '55', 'area_code': ddd, 'number': num,
