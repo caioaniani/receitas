@@ -37,7 +37,10 @@ def _serializar_receita(r):
         'categoria': r.categoria or '',
         'preco': float(r.preco_site) if r.preco_site else None,
         'imagem': r.imagem_dropbox_url or r.imagem_url or '',
-        'descricao': '',  # Receita não tem campo de descrição editorial (v1)
+        # descricao_seo: editorial, gerada com IA e revisada pelo dono em
+        # /admin/seo/descricoes. Quando vazia, o template cai no fallback
+        # generico "Nome — Categoria" no <meta description>/JSON-LD.
+        'descricao': r.descricao_seo or '',
         'slug': _slugify(r.nome),
         'href': f'/loja/{_slugify(r.nome)}-r{r.id}',
     }
