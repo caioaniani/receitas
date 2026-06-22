@@ -2275,7 +2275,7 @@ def vigia_teste():
 
 
 @main_bp.route('/admin/loja-online/auditoria-catalogo')
-@owner_required
+@login_required
 def loja_online_auditoria_catalogo():
     """Fase 0 da Loja Online (16/06/2026): auditoria de pre-requisitos do
     catalogo. Quantos produtos ja estao 'prontos pra vitrine' (preco_site +
@@ -2371,7 +2371,7 @@ def loja_online_auditoria_catalogo():
 # colunas `preco_site` / `imagem_dropbox_url` ja existentes. Sem schema novo.
 
 @main_bp.route('/admin/loja-online/catalogo')
-@owner_required
+@login_required
 def loja_online_catalogo():
     """Lista combinada de Receitas + Produtos com edicao rapida de preco e
     upload de foto. Filtros via query string: ?filtro=no-site|sem-preco|
@@ -2460,7 +2460,7 @@ def loja_online_catalogo():
 
 @main_bp.route('/admin/loja-online/catalogo/preco/<tipo>/<int:id>',
                 methods=['POST'])
-@owner_required
+@login_required
 def loja_online_catalogo_preco(tipo, id):
     """Atualiza preco_site via AJAX. JSON: {preco: float|null}. Aceita
     null/0 pra TIRAR do site. Owner-only — dinheiro."""
@@ -2494,7 +2494,7 @@ def loja_online_catalogo_preco(tipo, id):
 
 @main_bp.route('/admin/loja-online/catalogo/estoque/<tipo>/<int:id>',
                 methods=['POST'])
-@owner_required
+@login_required
 def loja_online_catalogo_estoque(tipo, id):
     """Define o estoque ATUAL do item na loja do site — a MESMA EstoqueLoja
     que /pedidos/estoque-loja usa. JSON: {estoque: int}. SET absoluto: grava
@@ -2541,7 +2541,7 @@ def loja_online_catalogo_estoque(tipo, id):
 
 @main_bp.route('/admin/loja-online/catalogo/ordem/<tipo>/<int:id>',
                 methods=['POST'])
-@owner_required
+@login_required
 def loja_online_catalogo_ordem(tipo, id):
     """Atualiza a `ordem_site` do item (edição inline). JSON:
     {ordem: int|null}. Vazio/null = item vai pro fim alfabético."""
@@ -2567,7 +2567,7 @@ def loja_online_catalogo_ordem(tipo, id):
 
 
 @main_bp.route('/admin/loja-online/categorias/ordem', methods=['POST'])
-@owner_required
+@login_required
 def loja_online_categorias_ordem():
     """Salva a nova ordem das categorias em lote.
     Body JSON: {ordem: ['Pães', 'Bebidas', 'Conservas']}.
@@ -2592,7 +2592,7 @@ def loja_online_categorias_ordem():
 
 
 @main_bp.route('/admin/loja-online/produtos/ordem', methods=['POST'])
-@owner_required
+@login_required
 def loja_online_produtos_ordem():
     """Salva a nova ordem dos PRODUTOS dentro de uma categoria em lote.
     Body JSON: {itens: [{tipo: 'produto'|'receita', id: int}, ...]}.
@@ -2625,7 +2625,7 @@ def loja_online_produtos_ordem():
 
 
 @main_bp.route('/admin/loja-online/ordem-produtos')
-@owner_required
+@login_required
 def loja_online_ordem_produtos():
     """Tela pra reordenar PRODUTOS por categoria via drag-and-drop.
     Agrupa publicados pela categoria; cada grupo é uma lista sortable."""
@@ -2637,7 +2637,7 @@ def loja_online_ordem_produtos():
 
 
 @main_bp.route('/admin/loja-online/categorias', methods=['GET', 'POST'])
-@owner_required
+@login_required
 def loja_online_categorias():
     """Gestão da ordem das categorias na vitrine. GET mostra; POST salva."""
     from app.models import CategoriaSite, Produto, Receita
@@ -2689,7 +2689,7 @@ def loja_online_categorias():
 
 @main_bp.route('/admin/loja-online/catalogo/categoria/<tipo>/<int:id>',
                 methods=['POST'])
-@owner_required
+@login_required
 def loja_online_catalogo_categoria(tipo, id):
     """Atualiza a categoria do item (edição inline). JSON: {categoria: str}.
     Vazio limpa (item cai em 'Outros' na vitrine)."""
@@ -2710,7 +2710,7 @@ def loja_online_catalogo_categoria(tipo, id):
 
 @main_bp.route('/admin/loja-online/catalogo/foto/<tipo>/<int:id>',
                 methods=['POST'])
-@owner_required
+@login_required
 def loja_online_catalogo_foto(tipo, id):
     """Upload de foto via AJAX. JSON de resposta: {ok, imagem_url}. Reusa
     `comprimir_imagem` + `dropbox_storage.upload_publico` (padrão de
@@ -2756,7 +2756,7 @@ def loja_online_catalogo_foto(tipo, id):
 
 
 @main_bp.route('/admin/loja-online/logo', methods=['POST'])
-@owner_required
+@login_required
 def loja_online_logo():
     """Upload do logotipo da loja → Dropbox → URL guardada em AppConfig
     (`loja_logo_url`). O header da vitrine renderiza o logo se setado, senão
@@ -2799,7 +2799,7 @@ def loja_online_logo():
 
 
 @main_bp.route('/admin/loja-online/logo/remover', methods=['POST'])
-@owner_required
+@login_required
 def loja_online_logo_remover():
     """Volta o header pro wordmark de texto (limpa `loja_logo_url`)."""
     from flask import flash
@@ -2833,7 +2833,7 @@ def debug_redirect_dominio():
 
 
 @main_bp.route('/admin/loja-online/prontidao')
-@owner_required
+@login_required
 def loja_online_prontidao():
     """Pré-flight do CUTOVER: o que precisa estar pronto ANTES de apontar o
     domínio antigo pro site novo. GO/NO-GO + pendências. O bloqueio nº 1 é
@@ -3029,7 +3029,7 @@ _STATUS_PEDIDO_ONLINE_LABEL = {
 
 
 @main_bp.route('/admin/loja-online/estoque-vitrine')
-@owner_required
+@login_required
 def loja_online_estoque_vitrine():
     """Diagnóstico (owner): pra cada produto publicado no site, mostra o
     saldo na loja do site e se está EM ESTOQUE ou ESGOTADO (saldo 0 ou sem
@@ -3059,7 +3059,7 @@ def loja_online_estoque_vitrine():
 
 
 @main_bp.route('/admin/loja-online')
-@owner_required
+@login_required
 def loja_online_dashboard():
     """Visão geral da loja online: contagens por status, faturamento por
     janela (hoje/semana/mês) e fila do que precisa de ação do admin."""
@@ -3470,7 +3470,7 @@ def loja_online_pedido_status(codigo):
 # mandamos SKU + quantidade + valor).
 
 @main_bp.route('/admin/loja-online/tiny-skus')
-@owner_required
+@login_required
 def loja_online_tiny_skus():
     from app.services import tiny_nf
     itens = tiny_nf.itens_para_mapear()
@@ -3481,7 +3481,7 @@ def loja_online_tiny_skus():
 
 
 @main_bp.route('/admin/loja-online/tiny-skus/sync', methods=['POST'])
-@owner_required
+@login_required
 def loja_online_tiny_sync():
     """Busca o catálogo do Tiny e sugere SKUs por nome pros não mapeados."""
     from flask import flash
@@ -3499,7 +3499,7 @@ def loja_online_tiny_sync():
 
 
 @main_bp.route('/admin/loja-online/tiny-skus/importar', methods=['POST'])
-@owner_required
+@login_required
 def loja_online_tiny_importar():
     """Importa o export de produtos do Tiny (.xls/.csv) e mapeia SKUs por
     nome. Nome idêntico confirma automático; parecido vira sugestão."""
@@ -3561,7 +3561,7 @@ def loja_online_danfe(codigo):
 
 
 @main_bp.route('/admin/loja-online/tiny-skus/definir', methods=['POST'])
-@owner_required
+@login_required
 def loja_online_tiny_definir():
     """Define/limpa o SKU de um item (kind + item_id + sku)."""
     from flask import flash
