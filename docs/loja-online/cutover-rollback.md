@@ -118,13 +118,33 @@ sem "From Name" não é problema.
 4. Conferir NF emitida via Tiny + e-mail com link da DANFE.
 5. Só então apontar `opao.online` pro Railway.
 
-## 🌿 Apex (domínio sem www) → plano Cloudflare (22/06/2026)
+## 🌿 Apex (domínio sem www) — pendente (22/06/2026)
 
 **Problema**: `padariaartesanalonline.com.br` (sem www) ainda aponta pra
 `52.21.216.0` (= `ec2-...amazonaws.com`, infra antiga do VNDA). CNAME não
-pode existir no apex e a Railway não dá IP fixo oficial, então o caminho
-robusto é mover o DNS pro **Cloudflare** (free, faz CNAME flattening +
-redirect + SSL do apex).
+pode existir no apex e a Railway não dá IP fixo oficial.
+
+**❌ Cloudflare BLOQUEADO (descoberto 22/06)**: o domínio é **registrado/
+gerenciado pelo Wix** (está na conta Wix do dono — ele É dono, não precisa
+recuperar nada). O Wix **trava os nameservers** (`ns8/ns9.wixdns.net`, o
+painel diz "Registros NS não podem ser editados"). Cloudflare exige trocar
+NS → só seria possível **transferindo o domínio pra fora do Wix**, operação
+lenta (dias) e arriscada (desliga auto-renovação, pode derrubar o `www` que
+funciona). **Decisão: NÃO transferir agora.**
+
+**Opções reais pro apex (todas dentro do Wix DNS, que o dono controla)**:
+- **(a) Deixar pra depois** — `www` funciona; naked domain mostra a loja
+  velha. Resolver junto de um eventual transfer-out → Cloudflare, com calma.
+- **(b) A record no Wix → Railway**: trocar o A do apex `52.21.216.0` →
+  `69.46.46.90` + adicionar o apex como domínio no Railway (ordem importa:
+  registrar no Railway + verify TXT ANTES de trocar o A, senão o apex cai).
+  Ressalvas: SSL do apex pela Railway não é garantido; IP da Railway pode
+  mudar (sem A record estável). Reversível (voltar o A pra 52.21.216.0).
+
+**Sem e-mail no domínio** (MX vazio) — qualquer mexida no DNS é segura
+quanto a e-mail. E-mail da loja sai de `noreply@opao.online` (Postmark).
+
+**Plano Cloudflare (arquivado, só se transferir o domínio um dia)**:
 
 **De-risco confirmado (22/06)**: o domínio **NÃO tem e-mail** — sem MX,
 sem DKIM, sem DMARC. Só há um TXT SPF (`v=spf1 include:_spf.google.com
