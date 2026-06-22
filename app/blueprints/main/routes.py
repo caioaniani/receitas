@@ -3417,7 +3417,7 @@ _STATUS_AVANCO = ('em_preparo', 'a_caminho', 'entregue')
 
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/status', methods=['POST'])
-@owner_required
+@login_required
 def loja_online_pedido_status(codigo):
     """Avança o status do pedido manualmente. Dispara e-mail transacional
     quando entra em `a_caminho`."""
