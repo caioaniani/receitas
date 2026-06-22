@@ -61,12 +61,23 @@
     </script>
   {% else %}
     <!-- Escolha do método -->
+    <form method="POST" action="{{ url_for('loja.pedido_link', codigo=pedido.codigo) }}"
+          class="checkout-bloco">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <h2>Apple Pay, carteira e mais</h2>
+      <p class="text-muted small">
+        Página segura do nosso provedor de pagamento com Apple Pay, Pix e
+        cartão. Ideal pra pagar pelo celular com um toque.
+      </p>
+      <button type="submit" class="btn-loja">Pagar com Apple Pay / carteira</button>
+    </form>
+
     <form method="POST" action="{{ url_for('loja.pedido_pix', codigo=pedido.codigo) }}"
           class="checkout-bloco">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <h2>Pix</h2>
       <p class="text-muted small">
-        Gera um QR Code e o código copia-e-cola. Pagamento na hora.
+        Gera um QR Code e o código copia-e-cola aqui mesmo. Pagamento na hora.
       </p>
       <button type="submit" class="btn-loja">Gerar Pix</button>
     </form>
