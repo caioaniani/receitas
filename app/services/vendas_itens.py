@@ -228,35 +228,55 @@ def agregar_itens_consolidado(data_inicial, data_final):
             seru_orfaos.append(p)
 
     linhas = []
-    chaves_vnda_usadas = set()
+    chaves_seru = set()
     for chave, p in seru_por_chave.items():
         qtd_vnda = vendas_vnda.get(chave, 0)
-        chaves_vnda_usadas.add(chave)
+        qtd_online = vendas_online.get(chave, 0)
+        chaves_seru.add(chave)
         p = dict(p)  # copia rasa pra nao mutar seru_data
         p['qtd_seru'] = p['qtd']
         p['qtd_vnda'] = qtd_vnda
-        p['qtd'] = p['qtd_seru'] + qtd_vnda
-        p['fonte'] = 'seru+vnda' if qtd_vnda > 0 else 'seru'
+        p['qtd_online'] = qtd_online
+        p['qtd'] = p['qtd_seru'] + qtd_vnda + qtd_online
+        fontes = ['seru']
+        if qtd_vnda > 0:
+            fontes.append('vnda')
+        if qtd_online > 0:
+            fontes.append('site')
+        p['fonte'] = '+'.join(fontes)
         linhas.append(p)
 
-    for chave, qtd in vendas_vnda.items():
-        if chave in chaves_vnda_usadas or qtd <= 0:
+    # Itens que vendem so no site (VNDA historico e/ou loja propria), sem Seru.
+    for chave in set(vendas_vnda) | set(vendas_online):
+        if chave in chaves_seru:
+            continue
+        qtd_vnda = vendas_vnda.get(chave, 0)
+        qtd_online = vendas_online.get(chave, 0)
+        qtd = qtd_vnda + qtd_online
+        if qtd <= 0:
             continue
         tipo_v, id_v = chave
         nome = _resolver_nome_item(tipo_v, id_v)
         if not nome:
             continue
+        fontes = []
+        if qtd_vnda > 0:
+            fontes.append('vnda')
+        if qtd_online > 0:
+            fontes.append('site')
+        fonte = '+'.join(fontes)
         linhas.append({
             'nome': nome,
             'sku': None,
             'qtd': qtd,
             'qtd_seru': 0,
-            'qtd_vnda': qtd,
+            'qtd_vnda': qtd_vnda,
+            'qtd_online': qtd_online,
             'faturamento': 0,
             'pct_faturamento': 0,
             'n_pedidos': 0,
-            'fonte': 'vnda',
-            'estado_map': 'vnda_only',
+            'fonte': fonte,
+            'estado_map': f'{fonte}_only',
             'mapeado_para': {'tipo': tipo_v, 'id': id_v, 'nome': nome},
             'match': {'tipo': tipo_v, 'id': id_v, 'nome': nome, 'kind': 'exato'},
         })
