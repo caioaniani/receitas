@@ -392,6 +392,23 @@ def create_app(config_class=None):
             "img-src 'self' data: https://*.dropbox.com "
             "https://*.dropboxusercontent.com;"
         )
+        # Popup do painel de entregas: o detalhe do pedido (?embed=1) e embutido
+        # num iframe de MESMA ORIGEM (gestao.*). X-Frame-Options=DENY bloquearia
+        # ate o same-origin — troca por SAMEORIGIN + frame-ancestors 'self'
+        # (cross-origin/clickjacking segue bloqueado). Escopado ao detalhe do
+        # pedido pra nao afrouxar o resto do admin.
+        if (request.values.get('embed')
+                and request.path.startswith('/admin/loja-online/pedidos')):
+            response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+            response.headers['Content-Security-Policy'] = (
+                "default-src 'self'; "
+                "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+                "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+                "font-src 'self' https://cdn.jsdelivr.net; "
+                "img-src 'self' data: https://*.dropbox.com "
+                "https://*.dropboxusercontent.com; "
+                "frame-ancestors 'self';"
+            )
         # Excecao: o card do CRM (/crm/card) e embutido como iframe DENTRO do
         # Chatwoot (outro dominio). X-Frame-Options=DENY bloquearia; e
         # ALLOW-FROM nao whitelista cross-origin de forma confiavel. Usamos
