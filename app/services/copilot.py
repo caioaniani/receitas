@@ -2644,9 +2644,10 @@ def _read_consultar_vendas_itens(params, user):
             loja_obj = resolver_loja_por_nome(loja)
             lv = loja_vnda()
             if loja_obj and lv and loja_obj.id == lv.id:
-                # Loja do site (Anesio): nao tem PDV Seru — vendas vem do VNDA.
+                # Loja do site (Anesio): nao tem PDV Seru — vendas vem da
+                # loja propria (PedidoOnline; VNDA desligado no cutover).
                 data = vendas_itens.vendas_vnda_loja(ini, fim)
-                fonte_label = 'e-commerce/VNDA'
+                fonte_label = 'e-commerce/site'
             else:
                 # Filtro por loja Seru — versao crua, so Seru
                 data = vendas_itens.agregar_itens(ini, fim, loja_seru=loja,

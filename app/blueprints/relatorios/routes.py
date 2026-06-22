@@ -135,6 +135,14 @@ def api_vendas_por_dia():
         .filter(VendaManualLoja.data_venda >= ini)
         .group_by(VendaManualLoja.data_venda).all())
 
+    # Loja propria (PedidoOnline): pedidos pagos, por data de pagamento.
+    onlines = (db.session.query(
+            func.date(PedidoOnline.pago_em).label('dia'),
+            func.count(PedidoOnline.id).label('n'))
+        .filter(PedidoOnline.pago_em >= ini,
+                PedidoOnline.status != 'cancelado')
+        .group_by('dia').all())
+
     por_dia = {}
     for s in serus:
         d = str(s.dia) if not hasattr(s.dia, 'isoformat') else s.dia.isoformat()
@@ -142,6 +150,9 @@ def api_vendas_por_dia():
     for m in manuais:
         d = m.dia.isoformat()
         por_dia[d] = por_dia.get(d, 0) + m.n
+    for o in onlines:
+        d = str(o.dia) if not hasattr(o.dia, 'isoformat') else o.dia.isoformat()
+        por_dia[d] = por_dia.get(d, 0) + o.n
 
     # Preenche dias zerados
     labels = []
