@@ -3312,7 +3312,7 @@ def loja_online_pedido_editar(codigo):
     current_app.logger.info('pedido online %s editado por uid=%s',
                             codigo, getattr(current_user, 'id', None))
     flash(f'Pedido {p.codigo} atualizado.', 'success')
-    return redirect(url_for('main.loja_online_pedido_detalhe', codigo=codigo))
+    return _detalhe_redirect(codigo)
 
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/imprimir.pdf')
@@ -3417,7 +3417,7 @@ def loja_online_pedido_cancelar(codigo):
         p.cancelado_em = agora()
         db.session.commit()
         flash(f'Pedido {p.codigo} cancelado.', 'success')
-    return redirect(url_for('main.loja_online_pedido_detalhe', codigo=codigo))
+    return _detalhe_redirect(codigo)
 
 
 # Transições válidas de status pra UI (admin). 'cancelado' tem rota própria
@@ -3461,7 +3461,7 @@ def loja_online_pedido_status(codigo):
         except Exception:  # noqa: BLE001
             current_app.logger.exception('email entregue falhou')
     flash(f'Pedido {p.codigo}: status atualizado para {novo}.', 'success')
-    return redirect(url_for('main.loja_online_pedido_detalhe', codigo=codigo))
+    return _detalhe_redirect(codigo)
 
 
 # ── Loja Online — Fase 5: mapeamento de SKU do Tiny (NF-e) ────────────────
@@ -3539,7 +3539,7 @@ def loja_online_emitir_nf(codigo):
     recriar = request.form.get('recriar') in ('1', 'true', 'on')
     res = tiny_nf.emitir_nf(p, user_id=current_user.id, recriar=recriar)
     flash(f'{p.codigo}: {res["msg"]}', 'success' if res.get('ok') else 'danger')
-    return redirect(url_for('main.loja_online_pedido_detalhe', codigo=codigo))
+    return _detalhe_redirect(codigo)
 
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/danfe')
@@ -3556,7 +3556,7 @@ def loja_online_danfe(codigo):
     if not url:
         flash(f'{p.codigo}: não consegui obter o link do DANFE no Tiny '
               '(a NF precisa estar autorizada).', 'warning')
-        return redirect(url_for('main.loja_online_pedido_detalhe', codigo=codigo))
+        return _detalhe_redirect(codigo)
     return redirect(url)
 
 
