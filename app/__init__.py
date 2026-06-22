@@ -330,10 +330,15 @@ def create_app(config_class=None):
         if host not in hosts:
             return None  # gestao.* / railway.app / outros: comportamento full
         p = request.path
-        # Liberados no host da loja: a própria loja + assets + infra básica.
+        # Liberados no host da loja: a propria loja + assets + infra basica.
+        # /sitemap.xml e /robots.txt na RAIZ sao padrao Google/RFC — crawlers
+        # buscam ali; sem isso vira 404 HTML e o Search Console acusa
+        # "sitemap em HTML". A rota mora em /loja/sitemap.xml mas Google
+        # espera /sitemap.xml — servimos os dois (alias top-level).
         if (p == '/loja' or p.startswith('/loja/')
                 or p.startswith('/static/')
-                or p in ('/health', '/favicon.ico')):
+                or p in ('/health', '/favicon.ico',
+                         '/sitemap.xml', '/robots.txt')):
             return None
         if p == '/':
             return redirect('/loja/', code=302)
