@@ -33,7 +33,8 @@
     </style>
     {% endif %}
 </head>
-<body>
+<body{% if embed %} class="embed-mode"{% endif %}>
+    {% if not embed %}
     <!-- Mobile header -->
     <div class="mobile-header d-md-none">
         <button class="btn btn-sm p-1" id="btn-sidebar-toggle" aria-label="Menu" style="border:0;">
