@@ -38,6 +38,24 @@ from app.utils import agora
 from app.utils import hoje as hoje_brt
 
 
+# ── SEO: sitemap.xml e robots.txt na RAIZ do dominio ──────────────────
+# Google e qualquer crawler sempre busca em /sitemap.xml e /robots.txt
+# (RFC + Sitemaps Protocol). O conteudo de fato mora no blueprint da loja
+# (/loja/sitemap.xml, /loja/robots.txt) porque eh la que o catalogo vive
+# — aqui na raiz so reusamos a mesma funcao. Sem isso, o Search Console
+# acusa "sitemap em HTML" (cai em 404 do roteamento por host).
+@main_bp.route('/sitemap.xml')
+def sitemap_root():
+    from app.blueprints.loja.routes import sitemap as _loja_sitemap
+    return _loja_sitemap()
+
+
+@main_bp.route('/robots.txt')
+def robots_root():
+    from app.blueprints.loja.routes import robots as _loja_robots
+    return _loja_robots()
+
+
 @main_bp.route('/')
 @login_required
 def index():
