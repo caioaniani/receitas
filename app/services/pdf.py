@@ -482,7 +482,9 @@ def gerar_orcamento_pdf(orc):
         PADARIA_RAZAO_SOCIAL,
     )
     pdf.set_font('Helvetica', 'B', 9)
-    pdf.cell(0, 5, 'PAGAMENTO — PIX', new_x='LMARGIN', new_y='NEXT')
+    # Hifen ASCII no titulo: em-dash (—) nao existe na Helvetica latin-1
+    # e quebra o render. `_latin1` substituiria por '?' — pior.
+    pdf.cell(0, 5, 'PAGAMENTO - PIX', new_x='LMARGIN', new_y='NEXT')
     pdf.set_font('Helvetica', '', 9)
     pdf.cell(0, 5, _latin1(
         f'Chave PIX ({PADARIA_PIX_TIPO}): {PADARIA_CHAVE_PIX}'),
