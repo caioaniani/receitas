@@ -2682,12 +2682,16 @@ def _read_consultar_vendas_itens(params, user):
             match_str = f' ↔ {p["match"]["nome"]}{kind}'
         else:
             match_str = ' ⚠ sem match no sistema'
-        fonte = p.get('fonte', 'seru')
-        fonte_tag = ''
-        if fonte == 'seru+vnda':
-            fonte_tag = f' [Seru {int(p.get("qtd_seru", 0))} + VNDA {int(p.get("qtd_vnda", 0))}]'
-        elif fonte == 'vnda':
-            fonte_tag = ' [só VNDA]'
+        # Tag de canais so quando o item vendeu por mais de uma fonte
+        # (Seru/VNDA/site). Fonte unica dispensa tag (o cabecalho ja diz).
+        partes = []
+        if int(p.get('qtd_seru', 0) or 0):
+            partes.append(f'Seru {int(p["qtd_seru"])}')
+        if int(p.get('qtd_vnda', 0) or 0):
+            partes.append(f'VNDA {int(p["qtd_vnda"])}')
+        if int(p.get('qtd_online', 0) or 0):
+            partes.append(f'site {int(p["qtd_online"])}')
+        fonte_tag = f' [{" + ".join(partes)}]' if len(partes) > 1 else ''
         fat = p.get('faturamento') or 0
         fat_str = f' · R$ {fat:.2f}' if fat else ''
         linhas.append(
