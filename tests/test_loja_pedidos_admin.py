@@ -347,14 +347,16 @@ def test_imprimir_selecao_vazia_redireciona(app):
     assert r.status_code == 302   # volta com flash de aviso
 
 
-def test_imprimir_selecao_bloqueia_nao_owner(app):
+def test_imprimir_selecao_nao_owner_ok(app):
+    """Impressão da seleção liberada a todos (22/06/2026) — antes owner-only."""
     from app.extensions import db
     with app.app_context():
         _pedido_com_data(db, 'SEL10', '2026-06-25')
     c = _admin_nao_owner(app)
     r = c.post('/admin/loja-online/pedidos/imprimir-selecao.pdf',
                data={'codigos': ['SEL10']}, follow_redirects=False)
-    assert r.status_code in (302, 401, 403)
+    assert r.status_code == 200
+    assert r.mimetype == 'application/pdf'
 
 
 def test_lista_tem_checkbox_e_form_de_selecao(app):
