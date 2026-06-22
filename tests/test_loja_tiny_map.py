@@ -131,7 +131,9 @@ def test_definir_sku_via_rota(app):
         assert tiny_nf.sku_do_item('produto', p.id) == 'FAM-1'
 
 
-def test_tela_skus_nao_owner_bloqueado(app):
+def test_tela_skus_nao_owner_agora_libera(app):
+    """22/06/2026: a tela de mapeamento de SKUs do Tiny passou a ser acessível
+    a qualquer usuário logado (a EMISSÃO da NF segue só com o dono)."""
     from app.extensions import db
     from app.models import Usuario
     u = Usuario(nome='G', login='g', papel='admin', is_owner=False)
@@ -142,4 +144,4 @@ def test_tela_skus_nao_owner_bloqueado(app):
     with c.session_transaction() as s:
         s['_user_id'] = str(u.id)
         s['_fresh'] = True
-    assert c.get('/admin/loja-online/tiny-skus').status_code in (302, 403)
+    assert c.get('/admin/loja-online/tiny-skus').status_code == 200
