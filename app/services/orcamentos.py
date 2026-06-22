@@ -7,7 +7,7 @@ parcela financeira. So vira "real" se aprovado e convertido em venda
 
 Dinheiro em Decimal sempre (CLAUDE.md, peso especial).
 """
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import func
@@ -118,6 +118,17 @@ def montar_item_payload(linha):
     }
 
 
+def _parse_data(raw):
+    """ISO 'YYYY-MM-DD' do <input type=date> -> date. Vazio/invalido -> None."""
+    s = (raw or '').strip()
+    if not s:
+        return None
+    try:
+        return date.fromisoformat(s)
+    except ValueError:
+        return None
+
+
 def criar_orcamento(form, itens_raw, *, usuario_id=None):
     """Cria orcamento + itens dentro de UMA transacao. Devolve (orc, erros).
 
@@ -163,6 +174,7 @@ def criar_orcamento(form, itens_raw, *, usuario_id=None):
         codigo=proximo_codigo(),
         data=hoje(),
         valido_ate=hoje() + timedelta(days=validade_dias),
+        data_entrega=_parse_data(form.get('data_entrega')),
         cliente_id=cliente_id,
         cliente_nome=cliente_nome or None,
         cliente_documento=(form.get('cliente_documento') or '').strip() or None,
@@ -203,6 +215,8 @@ def atualizar_orcamento(orc, form, itens_raw):
     orc.cliente_endereco = (form.get('cliente_endereco') or '').strip() or None
     orc.observacao = (form.get('observacao') or '').strip() or None
     orc.desconto_valor = _normalizar_preco(form.get('desconto_valor') or 0)
+    # data_entrega: explicitamente aceita '' como "limpar" (None).
+    orc.data_entrega = _parse_data(form.get('data_entrega'))
     raw_val = (form.get('validade_dias') or '').strip()
     if raw_val:
         try:
