@@ -710,12 +710,21 @@ a:hover { text-decoration: underline; }
 .checkout-bloco input[type="text"],
 .checkout-bloco input[type="email"],
 .checkout-bloco input[type="tel"],
+.checkout-bloco input[type="date"],
 .checkout-bloco select,
 .checkout-bloco textarea {
   display: block; width: 100%; margin-top: 5px;
   padding: 11px 12px; font-size: 16px;
   border: 1px solid var(--linha); border-radius: 5px;
   font-family: var(--fonte-corpo); background: #fff; color: var(--texto);
+}
+/* iOS/Safari renderiza input[type=date] compacto (vira "chip"). Forçar a
+   mesma altura/aparência do select pra o campo Dia ficar tão visível quanto
+   a Janela de horário (pedido do dono 22/06). `appearance:none` tira o
+   estilo nativo; min-height casa com a altura do select. */
+.checkout-bloco input[type="date"] {
+  -webkit-appearance: none; appearance: none;
+  min-height: 44px; text-align: left;
 }
 .checkout-bloco .opcional { text-transform: none; font-weight: 400; opacity: .7; }
 
