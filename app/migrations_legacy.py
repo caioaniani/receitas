@@ -1201,6 +1201,12 @@ def _migrate_sqlite(app):
     cursor = conn.cursor()
     cursor.execute("PRAGMA table_info(receita)")
     colunas = [row[1] for row in cursor.fetchall()]
+    if 'descricao_seo' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN descricao_seo TEXT")
+    cursor.execute("PRAGMA table_info(produto)")
+    cols_prod = [row[1] for row in cursor.fetchall()]
+    if 'descricao_seo' not in cols_prod:
+        cursor.execute("ALTER TABLE produto ADD COLUMN descricao_seo TEXT")
     if 'perda_percentual' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN perda_percentual REAL DEFAULT 0")
     if 'preco_loja' not in colunas:
