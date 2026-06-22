@@ -142,6 +142,13 @@ toca em e-mail** — risco baixo.
    ele auto-importar; conferir que `www` CNAME veio. Pôr os registros que
    apontam pra Railway/externos como **"DNS only" (nuvem cinza)**, nunca
    proxied (nuvem laranja interfere no SSL da Railway).
+
+**Nameservers atribuídos a esta zona (Cloudflare, 22/06/2026)**:
+- `anderson.ns.cloudflare.com`
+- `uma.ns.cloudflare.com`
+
+(Cloudflare atribui um par fixo POR ZONA — esse par fica permanente
+enquanto o site existir lá.)
 2. Apex → www: criar A `@` → `192.0.2.1` (IP dummy) **proxied (laranja)**
    + uma **Redirect Rule**: hostname = `padariaartesanalonline.com.br` →
    `https://www.padariaartesanalonline.com.br` (301). O Cloudflare emite o
