@@ -3213,6 +3213,16 @@ def loja_online_pedidos_buscar():
 _MODOS_ENTREGA = ('agendada', 'retirada', 'express')
 
 
+def _detalhe_redirect(codigo):
+    """Redireciona pro detalhe do pedido preservando o modo `embed` (popup do
+    painel de entregas). Sem isso, ao salvar/avançar status dentro do iframe
+    do painel a página voltaria com a sidebar do admin (embed perdido no
+    redirect). Lê de `request.values` (cobre form POST e query string)."""
+    embed = '1' if request.values.get('embed') else None
+    return redirect(url_for('main.loja_online_pedido_detalhe',
+                            codigo=codigo, embed=embed))
+
+
 @main_bp.route('/admin/loja-online/pedidos/<codigo>')
 @login_required
 def loja_online_pedido_detalhe(codigo):
