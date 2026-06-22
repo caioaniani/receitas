@@ -111,8 +111,8 @@ def dashboards():
 @login_required
 @admin_required
 def api_vendas_por_dia():
-    """Total de vendas (R$) e quantidade de pedidos por dia nos últimos 30 dias.
-    Soma Seru (PDV) + VNDA (site) + pedidos manuais."""
+    """Quantidade de pedidos por dia nos últimos 30 dias.
+    Soma Seru (PDV) + loja própria (site, PedidoOnline) + pedidos manuais."""
 
     from sqlalchemy import func
 
