@@ -136,23 +136,6 @@ def pedido_pix(codigo):
     return redirect(url_for('loja.pedido_pagamento', codigo=codigo))
 
 
-@loja_bp.route('/pedido/<codigo>/link', methods=['POST'])
-def pedido_link(codigo):
-    """Gera um link de pagamento HOSPEDADO no Pagar.me (Apple Pay + Pix +
-    cartão) e redireciona o cliente pra página deles. O 'pago' volta pelo
-    webhook (mesma fonte de verdade do Pix/cartão)."""
-    pedido = _pedido_aguardando(codigo)
-    if pedido.status != 'aguardando_pagamento':
-        return redirect(url_for('loja.pedido_confirmado', codigo=codigo))
-    success_url = url_for('loja.pedido_status', codigo=codigo, _external=True)
-    url, erros = loja_pagamento.iniciar_link(pedido, success_url=success_url)
-    if erros:
-        return render_template(
-            'loja/pagamento.html',
-            **_ctx_pagamento(pedido, erros=erros)), 400
-    return redirect(url)
-
-
 @loja_bp.route('/pedido/<codigo>/cartao', methods=['POST'])
 def pedido_cartao(codigo):
     """Processa pagamento em cartão. Recebe `card_token` (já tokenizado no
