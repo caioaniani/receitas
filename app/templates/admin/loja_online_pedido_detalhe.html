@@ -15,6 +15,11 @@
 } %}
 
 {% block content %}
+{# `embed` = popup do painel de entregas (iframe). Esconde a navegação interna
+   pra a janela ficar limpa; os forms levam o flag adiante pra o redirect
+   pós-POST manter o modo (ver _detalhe_redirect em main/routes.py). #}
+{% set embed = request.args.get('embed') %}
+{% macro embed_field() %}{% if embed %}<input type="hidden" name="embed" value="1">{% endif %}{% endmacro %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="page-title mb-0">
     <span aria-hidden="true">🥐</span> Pedido <code>{{ p.codigo }}</code>
