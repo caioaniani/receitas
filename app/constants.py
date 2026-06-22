@@ -174,3 +174,16 @@ LALAMOVE_SALDO_MIN_REAIS = 200
 # rápido (ex: alertou em R$190, caiu pra R$80 → vale realertar).
 LALAMOVE_SALDO_ALERTA_DEDUPE_HORAS = 12
 LALAMOVE_SALDO_ALERTA_DEDUPE_DELTA_REAIS = 50
+
+
+# ── Dados fiscais/legais da padaria ────────────────────────────────────
+# Centralizados aqui pra eliminar copy-paste em templates/PDF/services.
+# Hoje (22/06/2026) os templates legais ainda usam hardcoded — refatorar
+# pra ler daqui quando passar pela proxima rodada de edicao.
+PADARIA_RAZAO_SOCIAL = 'O Pão Padaria Artesanal Ltda.'
+PADARIA_CNPJ = '40.646.899/0001-39'
+PADARIA_ENDERECO = 'Rua Ribeiro do Vale, 455 — Brooklin Paulista, São Paulo/SP, CEP 04568-001'
+# Chave PIX = CNPJ. Mesmo formato exibido pra o cliente; o PSP normaliza
+# os pontos/barra ao processar.
+PADARIA_CHAVE_PIX = '40.646.899/0001-39'
+PADARIA_PIX_TIPO = 'CNPJ'  # rotulo legivel ("Chave PIX (CNPJ): ...")
