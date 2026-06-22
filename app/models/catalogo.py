@@ -182,6 +182,9 @@ class Produto(db.Model):
     # alfabético. Mesmo padrão da Receita.
     ordem_site = db.Column(db.Integer)
     descricao = db.Column(db.String(300))
+    # Descricao SEO (espelha Receita.descricao_seo) — quando preenchida,
+    # prevalece sobre `descricao` no SEO/JSON-LD do site.
+    descricao_seo = db.Column(db.Text, nullable=True)
     preco_atacado = db.Column(db.Float)
     preco_loja = db.Column(db.Float)
     preco_site = db.Column(db.Float)
