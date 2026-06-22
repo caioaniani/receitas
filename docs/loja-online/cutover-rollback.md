@@ -181,3 +181,25 @@ enquanto o site existir lá.)
    verificado (fallback).
 
 **Sem mudança de código** — o redirect apex→www fica no Cloudflare.
+
+## 📇 Titularidade do domínio (WHOIS, 22/06/2026)
+
+Confirmado no painel WHOIS do Wix:
+- **Titular (registrante)**: caio antinhani (= o dono, Caio). **O domínio é
+  DELE** — ninguém de terceiro controla. O "não aparece na minha conta
+  Registro.br" é só porque está gerenciado via Wix/registrador parceiro,
+  não porque outro seja dono.
+- **Registrador**: TOWEB-BRASIL (parceiro `.br` do Wix).
+- **Criado**: 10/04/2020 · **Expira**: 10/04/2027 (sem urgência de renovação).
+- **NS**: ns8/ns9.wixdns.net (travados no Wix).
+
+**Implicação**: como o Caio é o titular, ele TEM o direito de assumir o
+controle. Caminho definitivo pro apex (e pra ser dono de fato do DNS):
+1. Acessar o **Registro.br com o CPF/CNPJ do titular** (criar login se não
+   existir — é amarrado ao CPF). O domínio deve aparecer.
+2. Se der pra editar NS lá → apontar pro Cloudflare (fim — definitivo).
+3. Se estiver preso ao registrador TOWEB → pedir a transferência do
+   registrador pro Registro.br (direito do titular; pode precisar de suporte
+   Registro.br/TOWEB).
+**Regra de ouro**: deixar o Cloudflare 100% pronto (registros já lá) ANTES
+de trocar o NS, pra o `www` nunca cair na janela de propagação.
