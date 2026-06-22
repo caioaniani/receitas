@@ -291,25 +291,32 @@ def agregar_itens_consolidado(data_inicial, data_final):
 
     linhas.sort(key=lambda x: -x['qtd'])
 
-    # Faturamento VNDA por data de venda (mesma base do /api/bot/faturamento),
-    # pra o "faturamento total" do copilot bater com o atalho do celular.
-    # Best-effort: se o site cair, mantem so o Seru (vnda_aviso ja sinaliza).
+    # Faturamento do site por data de venda. VNDA = historico (pre-cutover,
+    # best-effort se a API ainda responder); loja propria (PedidoOnline) =
+    # vendas novas. Somam sem dupla contagem (pedidos/periodos distintos).
     from app.services import vnda_sync
     fat_vnda = 0.0
     try:
         fat_vnda = vnda_sync.faturamento_por_dia(data_inicial, data_final)['total']
     except Exception:  # noqa: BLE001
         fat_vnda = 0.0
+    try:
+        fat_online = loja_online_vendas.faturamento_por_dia(
+            data_inicial, data_final)['total']
+    except Exception:  # noqa: BLE001
+        fat_online = 0.0
 
     fat_seru = seru_data['faturamento_total'] or 0
+    fat_site = fat_vnda + fat_online
     return {
         'inicio': data_inicial.isoformat(),
         'fim': data_final.isoformat(),
         'total_pedidos_seru': seru_data['total_pedidos'],
-        'faturamento_total': round(fat_seru + fat_vnda, 2),
+        'faturamento_total': round(fat_seru + fat_site, 2),
         'faturamento_seru': round(fat_seru, 2),
         'faturamento_vnda': round(fat_vnda, 2),
-        'faturamento_fonte': 'seru+vnda' if fat_vnda > 0 else 'seru_apenas',
+        'faturamento_online': round(fat_online, 2),
+        'faturamento_fonte': 'seru+site' if fat_site > 0 else 'seru_apenas',
         'produtos': linhas,
         'vnda_aviso': vnda_aviso,
         'lojas_no_intervalo': seru_data['lojas_no_intervalo'],
