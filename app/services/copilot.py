@@ -2654,9 +2654,9 @@ def _read_consultar_vendas_itens(params, user):
                                                   expandir_dias_frente=dias_extra)
                 fonte_label = 'PDV/Seru'
         else:
-            # Sem filtro de loja → consolida Seru + VNDA
+            # Sem filtro de loja → consolida Seru + site (loja propria) + VNDA
             data = vendas_itens.agregar_itens_consolidado(ini, fim)
-            fonte_label = 'PDV/Seru + e-commerce/VNDA'
+            fonte_label = 'PDV/Seru + e-commerce/site'
     except Exception as e:
         logger.exception('consultar_vendas_itens falhou')
         return {'erro': f'{type(e).__name__}: {str(e)[:300]}'}
