@@ -106,7 +106,8 @@
            class="sidebar-link {% if request.path.startswith('/notas') %}active{% endif %}">
             Notas (memória do agente)
         </a>
-        {% if current_user.is_owner %}
+        {# Loja Online: liberada a todos os usuários logados (22/06/2026). Só
+           reembolso/cancelar e emissão de NF continuam restritos ao dono. #}
         <a href="{{ url_for('main.loja_online_dashboard') }}"
            class="sidebar-link {% if request.path == '/admin/loja-online' %}active{% endif %}">
             🥐 Loja Online
@@ -123,6 +124,7 @@
            class="sidebar-link {% if request.path.startswith('/admin/loja-online/tiny') %}active{% endif %}">
             SKUs do Tiny (NF)
         </a>
+        {% if current_user.is_owner %}
         <a href="{{ url_for('projetos.painel') }}"
            class="sidebar-link {% if request.path.startswith('/projetos') %}active{% endif %}">
             Projetos
