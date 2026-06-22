@@ -3277,8 +3277,7 @@ def loja_online_pedido_editar(codigo):
     if erros:
         for e in erros:
             flash(e, 'danger')
-        return redirect(url_for('main.loja_online_pedido_detalhe',
-                                codigo=codigo))
+        return _detalhe_redirect(codigo)
 
     p.nome_cliente = nome
     p.email_cliente = email
@@ -3439,12 +3438,10 @@ def loja_online_pedido_status(codigo):
     novo = (request.form.get('novo_status') or '').strip()
     if novo not in _STATUS_AVANCO:
         flash(f'Status inválido: {novo}', 'danger')
-        return redirect(url_for('main.loja_online_pedido_detalhe',
-                                codigo=codigo))
+        return _detalhe_redirect(codigo)
     if p.status in ('cancelado', 'entregue') and novo != p.status:
         flash(f'Pedido {p.codigo} já está {p.status} — não muda.', 'warning')
-        return redirect(url_for('main.loja_online_pedido_detalhe',
-                                codigo=codigo))
+        return _detalhe_redirect(codigo)
     transicionou_para_caminho = (novo == 'a_caminho' and p.status != 'a_caminho')
     transicionou_para_entregue = (novo == 'entregue' and p.status != 'entregue')
     p.status = novo
