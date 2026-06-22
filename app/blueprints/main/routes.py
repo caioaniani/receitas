@@ -3307,7 +3307,7 @@ def loja_online_pedido_editar(codigo):
 
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/imprimir.pdf')
-@owner_required
+@login_required
 def loja_online_pedido_imprimir(codigo):
     """PDF de impressão do pedido — MESMO layout do /entregas (via cliente +
     via motoboy). Reusa o serializador e o gerador de PDF de entregas pra o
