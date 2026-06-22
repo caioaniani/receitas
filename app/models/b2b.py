@@ -287,14 +287,16 @@ class Orcamento(db.Model):
         return self.status not in ('aprovado', 'recusado') and hoje() > self.valido_ate
 
     def recalcular_total(self):
-        """Soma itens -> subtotal; subtotal - desconto -> valor_total.
-        Tudo em Decimal pra precisao exata (centavos)."""
+        """Soma itens -> subtotal; (subtotal - desconto) + frete -> total.
+        Desconto nao deixa os produtos negativos (max 0); frete soma em
+        cima. Tudo em Decimal pra precisao exata (centavos)."""
         from decimal import Decimal
         sub = sum((Decimal(str(i.subtotal or 0)) for i in self.itens),
                   Decimal('0'))
         self.subtotal = sub
         desc = Decimal(str(self.desconto_valor or 0))
-        self.valor_total = max(Decimal('0'), sub - desc)
+        frete = Decimal(str(self.frete_valor or 0))
+        self.valor_total = max(Decimal('0'), sub - desc) + frete
         return self.valor_total
 
 
