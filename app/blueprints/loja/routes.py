@@ -839,11 +839,13 @@ def produto(slug_completo):
 
 @loja_bp.route('/robots.txt')
 def robots():
-    """Enquanto em teste, nada indexavel. Quando virar publica (Fase 8),
-    troca pra um sitemap real."""
+    """Robots.txt servido aqui E em /robots.txt (raiz, via alias no main
+    blueprint). Aponta o `Sitemap:` pra raiz tambem — eh o padrao Google,
+    e o Search Console acusou "sitemap em HTML" antes quando apontava
+    pra /loja/sitemap.xml. Com loja em teste, bloqueia tudo."""
     if _loja_visivel_publico():
         body = ('User-agent: *\nAllow: /\n'
-                f'Sitemap: {request.url_root}loja/sitemap.xml\n')
+                f'Sitemap: {request.url_root}sitemap.xml\n')
     else:
         body = 'User-agent: *\nDisallow: /\n'
     return body, 200, {'Content-Type': 'text/plain; charset=utf-8'}
