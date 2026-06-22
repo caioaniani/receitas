@@ -5,10 +5,70 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{% block title %}O Pão — Padaria Artesanal{% endblock %}</title>
 <meta name="description" content="{% block description %}Pães de fermentação natural, croissants, cestas e café da manhã. Entrega em São Paulo.{% endblock %}">
-<meta property="og:type" content="website">
+
+{# ── SEO essencial — canonical, OpenGraph, Twitter Card ─────────────
+   Canonical evita conteudo duplicado entre URLs com query/UTM e entre
+   apex/www (Google ja unifica via redirect apex→www, mas canonical e
+   defesa em profundidade). OpenGraph + Twitter Card geram preview rico
+   em WhatsApp/Instagram/Twitter (taxa de clique ~+30% em links com
+   preview vs sem). #}
+<link rel="canonical" href="{% block canonical %}{{ request.base_url }}{% endblock %}">
+<meta property="og:type" content="{% block og_type %}website{% endblock %}">
 <meta property="og:title" content="{% block og_title %}{{ self.title() }}{% endblock %}">
 <meta property="og:description" content="{% block og_description %}{{ self.description() }}{% endblock %}">
+<meta property="og:url" content="{{ request.base_url }}">
+<meta property="og:site_name" content="O Pão Padaria Artesanal">
+<meta property="og:locale" content="pt_BR">
+<meta name="twitter:card" content="{% block twitter_card %}summary_large_image{% endblock %}">
+<meta name="twitter:title" content="{{ self.title() }}">
+<meta name="twitter:description" content="{{ self.description() }}">
 {% block og_extra %}{% endblock %}
+
+{# Schema.org Organization/Bakery — Google usa pra cartao da empresa nas
+   buscas ("knowledge panel"). Vale incluir telefone, endereco e horario.
+   `priceRange` ajuda a calibrar o ranking pra "padaria pretendida" vs
+   "padaria barata/cara". #}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Bakery",
+  "name": "O Pão Padaria Artesanal",
+  "url": "https://www.padariaartesanalonline.com.br",
+  "image": "https://www.padariaartesanalonline.com.br{{ url_for('loja.static', filename='og-default.jpg') }}",
+  "telephone": "+5511971097090",
+  "email": "contato@opao.online",
+  "priceRange": "R$$",
+  "currenciesAccepted": "BRL",
+  "paymentAccepted": "Cash, Credit Card, Pix",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "Rua Ribeiro do Vale, 455",
+    "addressLocality": "São Paulo",
+    "addressRegion": "SP",
+    "postalCode": "04568-001",
+    "addressCountry": "BR"
+  },
+  "openingHoursSpecification": [{
+    "@type": "OpeningHoursSpecification",
+    "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday",
+                  "Friday", "Saturday", "Sunday"],
+    "opens": "07:00", "closes": "20:00"
+  }],
+  "sameAs": [
+    "https://www.instagram.com/opao.padariaartesanal/"
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "O Pão Padaria Artesanal",
+  "url": "https://www.padariaartesanalonline.com.br/",
+  "inLanguage": "pt-BR"
+}
+</script>
+
 {% if em_teste %}<meta name="robots" content="noindex,nofollow">{% endif %}
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <link rel="stylesheet" href="{{ url_for('loja.static', filename='loja.css') }}">
