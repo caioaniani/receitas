@@ -3333,7 +3333,7 @@ def loja_online_pedido_imprimir(codigo):
 
 @main_bp.route('/admin/loja-online/pedidos/imprimir-selecao.pdf',
                methods=['POST'])
-@owner_required
+@login_required
 def loja_online_pedidos_imprimir_selecao():
     """PDF da SELEÇÃO da lista — N pedidos × 2 vias (cliente + motoboy).
     Reusa o gerador do `/entregas/`. Recebe `codigos` (multi-value do form).
