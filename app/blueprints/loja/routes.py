@@ -350,7 +350,7 @@ def _gate_acesso():
             # (16^8 = 4 bi) — não é adivinhável por enumeração realista.
             'loja.pedido_confirmado', 'loja.pedido_pagamento',
             'loja.pedido_status', 'loja.pedido_pix', 'loja.pedido_cartao',
-            'loja.pedido_danfe',
+            'loja.pedido_link', 'loja.pedido_danfe',
     ):
         return None
     from app.utils import host_atual_eh_loja
