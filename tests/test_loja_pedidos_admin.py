@@ -106,12 +106,55 @@ def test_cancelar_pedido_entregue_nao_muda(app):
     assert atual.status == 'entregue'  # não cancelou
 
 
-def test_nao_owner_bloqueado(app):
+def test_nao_owner_ve_pedidos(app):
+    """Liberado a TODOS os usuários logados (22/06/2026): ver lista e detalhe."""
     from app.extensions import db
     c = _admin_nao_owner(app)
-    _pedido(db)
+    p = _pedido(db, codigo='SEE0001', nome='Cliente Teste')
     r = c.get('/admin/loja-online/pedidos')
-    assert r.status_code in (302, 403)  # owner_required barra
+    assert r.status_code == 200
+    assert b'Cliente Teste' in r.data
+    assert c.get(f'/admin/loja-online/pedidos/{p.codigo}').status_code == 200
+
+
+def test_cancelar_bloqueia_nao_owner(app):
+    """Reembolso/cancelamento mexe em dinheiro → continua exclusivo do dono."""
+    from app.extensions import db
+    from app.models import PedidoOnline
+    with app.app_context():
+        _pedido(db, codigo='CANC99', status='pago')
+    c = _admin_nao_owner(app)
+    r = c.post('/admin/loja-online/pedidos/CANC99/cancelar',
+               follow_redirects=False)
+    assert r.status_code == 403
+    with app.app_context():
+        p = PedidoOnline.query.filter_by(codigo='CANC99').first()
+        assert p.status == 'pago'   # não cancelou nem reembolsou
+
+
+def test_emitir_nf_bloqueia_nao_owner(app):
+    """Emissão de NF (fiscal) → continua exclusiva do dono."""
+    from app.extensions import db
+    with app.app_context():
+        _pedido(db, codigo='NF99', status='pago')
+    c = _admin_nao_owner(app)
+    r = c.post('/admin/loja-online/pedidos/NF99/emitir-nf',
+               follow_redirects=False)
+    assert r.status_code == 403
+
+
+def test_painel_pedidos_online_json_nao_owner(app):
+    """Drawer do painel de entregas: lista/busca JSON liberada a qualquer
+    usuário logado (mesmo público do /entregas/painel)."""
+    from app.extensions import db
+    with app.app_context():
+        _pedido(db, codigo='PJ0001', nome='Joana Painel')
+    c = _admin_nao_owner(app)
+    r = c.get('/entregas/api/painel/pedidos-online')
+    assert r.status_code == 200
+    assert any(p['codigo'] == 'PJ0001' for p in r.get_json()['pedidos'])
+    r2 = c.get('/entregas/api/painel/pedidos-online?q=Joana')
+    assert any(p['cliente'] == 'Joana Painel' for p in r2.get_json()['pedidos'])
 
 
 def test_pedido_inexistente_404(app):
