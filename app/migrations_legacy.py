@@ -1163,6 +1163,11 @@ def _migrate_postgres(app):
          "ON pedido_online(reserva_expira_em) "
          "WHERE reserva_expira_em IS NOT NULL")
 
+    # Orcamento B2B (22/06/2026) — data prevista de entrega. A tabela
+    # `orcamento` eh criada por db.create_all no mesmo deploy; este ALTER
+    # cobre o caso de ela ter sido criada em deploy anterior sem a coluna.
+    _try("ALTER TABLE orcamento ADD COLUMN IF NOT EXISTS data_entrega DATE")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
