@@ -17,7 +17,7 @@
         <div class="card-foto">
           {% if it.esgotado %}<span class="selo-esgotado">Esgotado</span>{% endif %}
           {% if it.imagem %}
-          <img src="{{ it.imagem }}" alt="{{ it.nome }}" loading="lazy">
+          <img src="{{ it.imagem }}" alt="{{ it.nome }} — {{ it.categoria or 'padaria artesanal' }} d'O Pão" loading="lazy">
           {% else %}
           <div class="card-foto-placeholder">🥐</div>
           {% endif %}
