@@ -174,7 +174,7 @@
           </div>
           {# Primário: reenvia/verifica a MESMA nota (não duplica) #}
           <form method="POST" action="{{ url_for('main.loja_online_emitir_nf', codigo=p.codigo) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
             <button type="submit" class="btn btn-sm btn-primary w-100">
               <i class="bi bi-arrow-clockwise"></i> Reenviar / verificar
             </button>
@@ -183,7 +183,7 @@
           <form method="POST" action="{{ url_for('main.loja_online_emitir_nf', codigo=p.codigo) }}"
                 class="mt-2"
                 onsubmit="return confirm('Refazer do ZERO? A NF atual é descartada e uma nova é criada. NÃO faça isso se a nota já pode ter autorizado — geraria duplicidade.');">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
             <input type="hidden" name="recriar" value="1">
             <button type="submit" class="btn btn-sm btn-outline-warning w-100">
               <i class="bi bi-arrow-repeat"></i> Refazer do zero
@@ -195,7 +195,7 @@
              gente lembrar de gerar a nota. #}
           <form method="POST" action="{{ url_for('main.loja_online_emitir_nf', codigo=p.codigo) }}"
                 onsubmit="return confirm('Emitir NF deste pedido no Tiny?');">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
             <button type="submit" class="btn btn-sm btn-primary w-100">
               <i class="bi bi-file-earmark-text"></i> Emitir NF
             </button>
@@ -213,7 +213,7 @@
       <div class="card-body small d-grid gap-2">
         {% if p.status == 'pago' %}
         <form method="POST" action="{{ url_for('main.loja_online_pedido_status', codigo=p.codigo) }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
           <input type="hidden" name="novo_status" value="em_preparo">
           <button class="btn btn-sm btn-secondary w-100">→ Em preparo</button>
         </form>
@@ -221,7 +221,7 @@
         {% if p.status in ('pago', 'em_preparo') %}
         <form method="POST" action="{{ url_for('main.loja_online_pedido_status', codigo=p.codigo) }}"
               onsubmit="return confirm('Marcar como A CAMINHO? O cliente recebe um e-mail.');">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
           <input type="hidden" name="novo_status" value="a_caminho">
           <button class="btn btn-sm btn-primary w-100">🚚 Saiu pra entrega</button>
         </form>
@@ -229,7 +229,7 @@
         {% if p.status == 'a_caminho' %}
         <form method="POST" action="{{ url_for('main.loja_online_pedido_status', codigo=p.codigo) }}"
               onsubmit="return confirm('Marcar como ENTREGUE?');">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
           <input type="hidden" name="novo_status" value="entregue">
           <button class="btn btn-sm btn-success w-100">✓ Entregue</button>
         </form>
@@ -242,7 +242,7 @@
     {% set eh_pago = p.status == 'pago' %}
     <form method="POST" action="{{ url_for('main.loja_online_pedido_cancelar', codigo=p.codigo) }}"
           onsubmit="return confirm('{{ 'Reembolsar e cancelar? O valor volta pro cliente.' if eh_pago else 'Cancelar o pedido?' }}');">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
       <button type="submit" class="btn btn-outline-danger btn-sm w-100">
         {{ 'Reembolsar e cancelar' if eh_pago else 'Cancelar pedido' }}
       </button>
@@ -262,7 +262,7 @@
   </div>
   <div class="card-body">
     <form method="POST" action="{{ url_for('main.loja_online_pedido_editar', codigo=p.codigo) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
       <div class="row g-3">
 
         <div class="col-md-4">
