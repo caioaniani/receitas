@@ -246,7 +246,8 @@
     </div>
     {% endif %}
 
-    {% if p.status not in ('entregue', 'cancelado') %}
+    {# Reembolso/cancelamento mexe em dinheiro — só o dono (decisão 22/06/2026). #}
+    {% if current_user.is_owner and p.status not in ('entregue', 'cancelado') %}
     {% set eh_pago = p.status == 'pago' %}
     <form method="POST" action="{{ url_for('main.loja_online_pedido_cancelar', codigo=p.codigo) }}"
           onsubmit="return confirm('{{ 'Reembolsar e cancelar? O valor volta pro cliente.' if eh_pago else 'Cancelar o pedido?' }}');">
