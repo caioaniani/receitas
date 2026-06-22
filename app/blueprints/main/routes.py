@@ -3214,7 +3214,7 @@ _MODOS_ENTREGA = ('agendada', 'retirada', 'express')
 
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>')
-@owner_required
+@login_required
 def loja_online_pedido_detalhe(codigo):
     from app.models import PedidoOnline
     from app.services import loja_checkout
