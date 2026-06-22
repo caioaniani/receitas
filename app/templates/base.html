@@ -250,6 +250,15 @@
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Vendas & Entregas</div>
 
+        {# Pedidos do site liberado a todos (22/06/2026). O dono já tem o link no
+           bloco "Loja Online"; aqui é pra os demais usuários. #}
+        {% if not current_user.is_owner %}
+        <a href="{{ url_for('main.loja_online_pedidos') }}"
+           class="sidebar-link {% if request.path.startswith('/admin/loja-online/pedidos') %}active{% endif %}">
+            🥐 Pedidos do site
+        </a>
+        {% endif %}
+
         {% if current_user.pode_pdv() %}
         <a href="{{ url_for('pdv.index') }}"
            class="sidebar-link {% if request.path == '/pdv/' or request.path == '/pdv' %}active{% endif %}">
