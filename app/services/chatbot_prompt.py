@@ -4,7 +4,7 @@ adaptado pro Claude e pras ferramentas que existem hoje:
   consultar_produtos, consultar_pedido, gerar_link_carrinho, transferir_para_humano
 
 Entrega/CEP/agendamento → transferir_para_humano (a consulta automatica de
-frete entra depois de validar o endpoint do VNDA).
+frete pode entrar depois).
 """
 
 PROMPT = r"""Você é o Padeiro, assistente de atendimento da O Pão Padaria Artesanal.
