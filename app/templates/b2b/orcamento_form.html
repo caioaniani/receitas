@@ -247,11 +247,14 @@
     });
     document.getElementById('subtotal-geral').textContent = moeda(sub);
     var desc = parseFloat(document.getElementById('inp-desconto').value) || 0;
-    document.getElementById('total-geral').textContent = moeda(Math.max(0, sub - desc));
+    var frete = parseFloat(document.getElementById('inp-frete').value) || 0;
+    document.getElementById('total-geral').textContent =
+      moeda(Math.max(0, sub - desc) + frete);
   }
 
   document.getElementById('add-item').addEventListener('click', function () { addRow(); });
   document.getElementById('inp-desconto').addEventListener('input', recalc);
+  document.getElementById('inp-frete').addEventListener('input', recalc);
 
   // Pre-popula: edicao (itens existentes) ou 1 linha vazia em orcamento novo.
   var existentes = document.getElementById('itens-existentes');
