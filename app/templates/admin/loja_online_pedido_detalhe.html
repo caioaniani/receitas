@@ -30,7 +30,7 @@
        class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">
       <i class="bi bi-printer"></i> Imprimir (cliente + motoboy)
     </a>
-    <a href="{{ url_for('main.loja_online_pedidos') }}" class="btn btn-sm btn-outline-secondary">← Todos os pedidos</a>
+    {% if not embed %}<a href="{{ url_for('main.loja_online_pedidos') }}" class="btn btn-sm btn-outline-secondary">← Todos os pedidos</a>{% endif %}
   </div>
 </div>
 
