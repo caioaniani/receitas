@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Orcamentos B2B — Industria{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-file-earmark-text"></i> Orcamentos B2B</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('b2b.orcamento_novo') }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-circle"></i> Novo orcamento
+        </a>
+        <a href="{{ url_for('b2b.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+            Voltar pro B2B
+        </a>
+    </div>
+</div>
+
+<div class="btn-group btn-group-sm mb-3" role="group" aria-label="Filtro de status">
+    <a href="{{ url_for('b2b.orcamentos') }}"
+       class="btn btn-{{ 'primary' if not filtro_status else 'outline-secondary' }}">
+        Todos
+    </a>
+    {% for s in ['rascunho', 'enviado', 'aprovado', 'recusado'] %}
+    <a href="{{ url_for('b2b.orcamentos', status=s) }}"
+       class="btn btn-{{ 'primary' if filtro_status == s else 'outline-secondary' }}">
+        {{ STATUS_LABEL[s] }} ({{ contagens[s] }})
+    </a>
+    {% endfor %}
+</div>
+
+{% if orcamentos %}
+<div class="table-responsive">
+<table class="table table-sm table-hover align-middle">
+    <thead class="table-light">
+        <tr>
+            <th>Codigo</th>
+            <th>Data</th>
+            <th>Cliente</th>
+            <th>Status</th>
+            <th class="text-end">Total</th>
+            <th>Valido ate</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for o in orcamentos %}
+        <tr>
+            <td><code>{{ o.codigo }}</code></td>
+            <td>{{ o.data.strftime('%d/%m/%y') }}</td>
+            <td>{{ o.cliente_display }}</td>
+            <td>
+                <span class="badge bg-{% if o.status == 'aprovado' %}success{% elif o.status == 'recusado' %}secondary{% elif o.status == 'enviado' %}info{% else %}warning text-dark{% endif %}">
+                    {{ STATUS_LABEL[o.status] }}
+                </span>
+                {% if o.venceu %}<span class="badge bg-danger ms-1">vencido</span>{% endif %}
+            </td>
+            <td class="text-end">R$ {{ '%.2f'|format(o.valor_total or 0) }}</td>
+            <td>{{ o.valido_ate.strftime('%d/%m/%y') }}</td>
+            <td>
+                <a href="{{ url_for('b2b.orcamento_detalhe', oid=o.id) }}"
+                   class="btn btn-sm btn-outline-primary">Abrir</a>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% else %}
+<div class="alert alert-light">Nenhum orcamento {% if filtro_status %}com status "{{ STATUS_LABEL[filtro_status] }}"{% endif %}. <a href="{{ url_for('b2b.orcamento_novo') }}">Criar o primeiro</a>?</div>
+{% endif %}
+{% endblock %}
