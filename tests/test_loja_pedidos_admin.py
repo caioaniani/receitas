@@ -256,17 +256,18 @@ def test_imprimir_pedido_pdf(app):
     assert r.data[:4] == b'%PDF'
 
 
-def test_editar_nao_owner_bloqueado(app):
+def test_editar_nao_owner_agora_permitido(app):
+    """Editar logística/contato (não mexe em dinheiro) liberado a todos."""
     from app.extensions import db
     from app.models import PedidoOnline
     with app.app_context():
         _pedido(db, codigo='EDIT05', nome='Maria')
     c = _admin_nao_owner(app)
     r = _post_editar(c, 'EDIT05')
-    assert r.status_code in (302, 401, 403)
+    assert r.status_code == 302
     with app.app_context():
         p = PedidoOnline.query.filter_by(codigo='EDIT05').first()
-        assert p.nome_cliente == 'Maria'   # bloqueado: não editou
+        assert p.nome_cliente == 'Maria Souza'   # editou (liberado)
 
 
 # ── Filtro por DATA de entrega + impressão da seleção ───────────────────
