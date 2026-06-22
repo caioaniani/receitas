@@ -216,6 +216,7 @@ def atualizar_orcamento(orc, form, itens_raw):
     orc.cliente_endereco = (form.get('cliente_endereco') or '').strip() or None
     orc.observacao = (form.get('observacao') or '').strip() or None
     orc.desconto_valor = _normalizar_preco(form.get('desconto_valor') or 0)
+    orc.frete_valor = _normalizar_preco(form.get('frete_valor') or 0)
     # data_entrega: explicitamente aceita '' como "limpar" (None).
     orc.data_entrega = _parse_data(form.get('data_entrega'))
     raw_val = (form.get('validade_dias') or '').strip()
