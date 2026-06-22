@@ -452,6 +452,7 @@ def gerar_orcamento_pdf(orc):
     # Totais
     sub = float(Decimal(str(orc.subtotal or 0)))
     desc = float(Decimal(str(orc.desconto_valor or 0)))
+    frete = float(Decimal(str(orc.frete_valor or 0)))
     tot = float(Decimal(str(orc.valor_total or 0)))
     pdf.set_font('Helvetica', '', 10)
     pdf.cell(155, 6, 'Subtotal:', align='R')
@@ -460,6 +461,10 @@ def gerar_orcamento_pdf(orc):
     if desc > 0:
         pdf.cell(155, 6, 'Desconto:', align='R')
         pdf.cell(25, 6, f'- R$ {desc:.2f}'.replace('.', ','),
+                 align='R', new_x='LMARGIN', new_y='NEXT')
+    if frete > 0:
+        pdf.cell(155, 6, 'Frete:', align='R')
+        pdf.cell(25, 6, f'+ R$ {frete:.2f}'.replace('.', ','),
                  align='R', new_x='LMARGIN', new_y='NEXT')
     pdf.set_font('Helvetica', 'B', 11)
     pdf.cell(155, 8, 'TOTAL:', align='R')
