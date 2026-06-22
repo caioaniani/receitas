@@ -428,3 +428,139 @@ def contas_receber():
     total_aberto = sum(p.saldo for p in parcelas)
     return render_template('b2b/contas_receber.html', parcelas=parcelas,
                            total_aberto=total_aberto, hoje=hoje())
+
+
+# ── Orcamentos B2B (encomendas corporativas, eventos, cestas em volume) ──
+
+from app.models import Orcamento, Produto, Receita
+from app.services import orcamentos as orc_svc
+
+
+def _parse_itens_form(form):
+    """Extrai linhas de item do form: itens[i][kind|id|nome|qtd|...].
+
+    O form do template envia um nome estavel por indice (i=0,1,2...) e o JS
+    permite adicionar/remover linhas. Aqui agrupamos por indice sem assumir
+    contiguidade — linhas removidas no front simplesmente nao chegam.
+    """
+    import re
+    pat = re.compile(r'^itens\[(\d+)\]\[([a-z_]+)\]$')
+    grupos = {}
+    for k, v in form.items():
+        m = pat.match(k)
+        if not m:
+            continue
+        idx, campo = int(m.group(1)), m.group(2)
+        grupos.setdefault(idx, {})[campo] = v
+    return [grupos[i] for i in sorted(grupos)]
+
+
+def _ctx_form(form=None, erros=None, orc=None):
+    """Contexto compartilhado entre GET e POST do form."""
+    return dict(
+        clientes=ClienteB2B.query
+            .filter_by(ativo=True).order_by(ClienteB2B.nome).all(),
+        receitas=Receita.query
+            .filter(Receita.arquivada_em.is_(None))
+            .order_by(Receita.nome).all(),
+        produtos=Produto.query
+            .filter_by(ativo=True).order_by(Produto.nome).all(),
+        form=form or {},
+        erros=erros or [],
+        orc=orc,
+    )
+
+
+@b2b_bp.route('/orcamentos')
+@login_required
+@admin_required
+def orcamentos():
+    status = (request.args.get('status') or '').strip() or None
+    q = Orcamento.query
+    if status and status in orc_svc.STATUS_VALIDOS:
+        q = q.filter_by(status=status)
+    lista = q.order_by(Orcamento.criado_em.desc()).limit(200).all()
+    contagens = {s: Orcamento.query.filter_by(status=s).count()
+                 for s in orc_svc.STATUS_VALIDOS}
+    return render_template('b2b/orcamentos.html', orcamentos=lista,
+                           filtro_status=status, contagens=contagens,
+                           STATUS_LABEL=orc_svc.STATUS_LABEL,
+                           hoje_=hoje())
+
+
+@b2b_bp.route('/orcamentos/novo', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def orcamento_novo():
+    if request.method == 'POST':
+        itens_raw = _parse_itens_form(request.form)
+        orc, erros = orc_svc.criar_orcamento(
+            request.form, itens_raw,
+            usuario_id=getattr(current_user, 'id', None))
+        if erros:
+            flash('; '.join(erros), 'danger')
+            return render_template(
+                'b2b/orcamento_form.html',
+                **_ctx_form(form=request.form, erros=erros))
+        flash(f'Orcamento {orc.codigo} criado.', 'success')
+        return redirect(url_for('b2b.orcamento_detalhe', oid=orc.id))
+    return render_template('b2b/orcamento_form.html', **_ctx_form())
+
+
+@b2b_bp.route('/orcamentos/<int:oid>')
+@login_required
+@admin_required
+def orcamento_detalhe(oid):
+    orc = Orcamento.query.get_or_404(oid)
+    return render_template('b2b/orcamento_detalhe.html', orc=orc,
+                           STATUS_LABEL=orc_svc.STATUS_LABEL)
+
+
+@b2b_bp.route('/orcamentos/<int:oid>/editar', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def orcamento_editar(oid):
+    orc = Orcamento.query.get_or_404(oid)
+    if orc.status not in ('rascunho', 'enviado'):
+        flash('Orcamento ja finalizado — nao editavel.', 'warning')
+        return redirect(url_for('b2b.orcamento_detalhe', oid=orc.id))
+    if request.method == 'POST':
+        itens_raw = _parse_itens_form(request.form)
+        ok, erros = orc_svc.atualizar_orcamento(orc, request.form, itens_raw)
+        if not ok:
+            flash('; '.join(erros), 'danger')
+            return render_template(
+                'b2b/orcamento_form.html',
+                **_ctx_form(form=request.form, erros=erros, orc=orc))
+        flash(f'Orcamento {orc.codigo} atualizado.', 'success')
+        return redirect(url_for('b2b.orcamento_detalhe', oid=orc.id))
+    return render_template('b2b/orcamento_form.html',
+                           **_ctx_form(orc=orc))
+
+
+@b2b_bp.route('/orcamentos/<int:oid>/status', methods=['POST'])
+@login_required
+@admin_required
+def orcamento_status(oid):
+    orc = Orcamento.query.get_or_404(oid)
+    novo = (request.form.get('status') or '').strip()
+    ok, erro = orc_svc.marcar_status(orc, novo,
+                                     usuario_id=getattr(current_user, 'id', None))
+    if not ok:
+        flash(f'Erro: {erro}', 'danger')
+    else:
+        flash(f'Orcamento marcado como {orc_svc.STATUS_LABEL[novo]}.', 'success')
+    return redirect(url_for('b2b.orcamento_detalhe', oid=orc.id))
+
+
+@b2b_bp.route('/orcamentos/<int:oid>/pdf')
+@login_required
+@admin_required
+def orcamento_pdf(oid):
+    orc = Orcamento.query.get_or_404(oid)
+    from app.services.pdf import gerar_orcamento_pdf
+    pdf_bytes = gerar_orcamento_pdf(orc)
+    from flask import Response
+    return Response(pdf_bytes, mimetype='application/pdf',
+                    headers={'Content-Disposition':
+                             f'inline; filename="{orc.codigo}.pdf"'})

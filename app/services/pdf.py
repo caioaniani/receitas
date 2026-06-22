@@ -361,3 +361,119 @@ def montar_pedidos_pdf(pedidos, vias, data):
 def gerar_pedidos_pdf(pedidos, vias, data):
     """PDF de impressao de pedidos: bytes prontos pro browser."""
     return bytes(montar_pedidos_pdf(pedidos, vias, data).output())
+
+
+# ── Orcamento B2B ─────────────────────────────────────────────────────
+def gerar_orcamento_pdf(orc):
+    """PDF de orcamento B2B (1 pagina, A4). Cabecalho com identificacao
+    da padaria, dados do cliente, tabela de itens, totais, observacao
+    e validade. Pronto pra mandar via WhatsApp/e-mail.
+    """
+    from decimal import Decimal
+
+    pdf = PadariaPDF(orientation='P', unit='mm', format='A4')
+    pdf.set_margins(15, 15, 15)
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page()
+
+    # Cabecalho (PadariaPDF.header ja imprimiu "O Pao Padaria Artesanal").
+    pdf.set_font('Helvetica', 'B', 13)
+    pdf.cell(0, 8, _latin1(f'ORCAMENTO {orc.codigo}'),
+             new_x='LMARGIN', new_y='NEXT')
+    pdf.set_font('Helvetica', '', 9)
+    pdf.cell(0, 5, _latin1(f'Emitido em {orc.data.strftime("%d/%m/%Y")} · '
+                           f'Valido ate {orc.valido_ate.strftime("%d/%m/%Y")}'),
+             new_x='LMARGIN', new_y='NEXT')
+    pdf.ln(2)
+
+    # Cliente
+    pdf.set_font('Helvetica', 'B', 10)
+    pdf.cell(0, 6, 'CLIENTE', new_x='LMARGIN', new_y='NEXT')
+    pdf.set_font('Helvetica', '', 9)
+    nome = orc.cliente.nome if orc.cliente else (orc.cliente_nome or '-')
+    pdf.cell(0, 5, _latin1(nome), new_x='LMARGIN', new_y='NEXT')
+    extras = []
+    cnpj = (orc.cliente.cnpj_cpf if orc.cliente else None) or orc.cliente_documento
+    if cnpj:
+        extras.append(f'CNPJ/CPF: {cnpj}')
+    tel = (orc.cliente.telefone if orc.cliente else None) or orc.cliente_telefone
+    if tel:
+        extras.append(f'Tel: {tel}')
+    email = (orc.cliente.email if orc.cliente else None) or orc.cliente_email
+    if email:
+        extras.append(email)
+    if extras:
+        pdf.cell(0, 5, _latin1(' · '.join(extras)),
+                 new_x='LMARGIN', new_y='NEXT')
+    end = (orc.cliente.endereco if orc.cliente else None) or orc.cliente_endereco
+    if end:
+        pdf.cell(0, 5, _latin1(end), new_x='LMARGIN', new_y='NEXT')
+    pdf.ln(3)
+
+    # Tabela de itens
+    pdf.set_font('Helvetica', 'B', 9)
+    pdf.set_fill_color(230, 230, 230)
+    pdf.cell(95, 7, 'ITEM', border=1, fill=True)
+    pdf.cell(20, 7, 'QTD', border=1, align='R', fill=True)
+    pdf.cell(15, 7, 'UN', border=1, align='C', fill=True)
+    pdf.cell(25, 7, 'PRECO', border=1, align='R', fill=True)
+    pdf.cell(25, 7, 'SUBTOTAL', border=1, align='R', fill=True,
+             new_x='LMARGIN', new_y='NEXT')
+    pdf.set_font('Helvetica', '', 9)
+    for it in orc.itens:
+        qtd = float(Decimal(str(it.quantidade or 0)))
+        qtd_str = (f'{qtd:.0f}' if qtd == int(qtd) else f'{qtd:.3f}'.rstrip('0').rstrip('.'))
+        preco = float(Decimal(str(it.preco_unitario or 0)))
+        sub = float(Decimal(str(it.subtotal or 0)))
+        nome = (it.nome or '')
+        if it.observacao:
+            nome = f'{nome}  ({it.observacao})'
+        # Quebra de linha se o item for muito longo: usa multi_cell pra
+        # primeira coluna, depois reposiciona y pra alinhar as outras.
+        y_ini = pdf.get_y()
+        x_ini = pdf.get_x()
+        pdf.multi_cell(95, 6, _latin1(nome), border=1)
+        y_fim = pdf.get_y()
+        altura = max(6, y_fim - y_ini)
+        pdf.set_xy(x_ini + 95, y_ini)
+        pdf.cell(20, altura, qtd_str, border=1, align='R')
+        pdf.cell(15, altura, _latin1(it.unidade or '-'), border=1, align='C')
+        pdf.cell(25, altura, f'R$ {preco:.2f}'.replace('.', ','),
+                 border=1, align='R')
+        pdf.cell(25, altura, f'R$ {sub:.2f}'.replace('.', ','),
+                 border=1, align='R', new_x='LMARGIN', new_y='NEXT')
+
+    pdf.ln(2)
+
+    # Totais
+    sub = float(Decimal(str(orc.subtotal or 0)))
+    desc = float(Decimal(str(orc.desconto_valor or 0)))
+    tot = float(Decimal(str(orc.valor_total or 0)))
+    pdf.set_font('Helvetica', '', 10)
+    pdf.cell(155, 6, 'Subtotal:', align='R')
+    pdf.cell(25, 6, f'R$ {sub:.2f}'.replace('.', ','),
+             align='R', new_x='LMARGIN', new_y='NEXT')
+    if desc > 0:
+        pdf.cell(155, 6, 'Desconto:', align='R')
+        pdf.cell(25, 6, f'- R$ {desc:.2f}'.replace('.', ','),
+                 align='R', new_x='LMARGIN', new_y='NEXT')
+    pdf.set_font('Helvetica', 'B', 11)
+    pdf.cell(155, 8, 'TOTAL:', align='R')
+    pdf.cell(25, 8, f'R$ {tot:.2f}'.replace('.', ','),
+             align='R', new_x='LMARGIN', new_y='NEXT')
+    pdf.ln(4)
+
+    if orc.observacao:
+        pdf.set_font('Helvetica', 'B', 9)
+        pdf.cell(0, 5, 'OBSERVACOES', new_x='LMARGIN', new_y='NEXT')
+        pdf.set_font('Helvetica', '', 9)
+        pdf.multi_cell(0, 5, _latin1(orc.observacao))
+        pdf.ln(2)
+
+    # Rodape com aceite
+    pdf.set_font('Helvetica', 'I', 8)
+    pdf.cell(0, 5,
+             _latin1('Proposta valida ate a data indicada. Pagamento e prazo '
+                     'a combinar.'),
+             new_x='LMARGIN', new_y='NEXT')
+    return bytes(pdf.output())

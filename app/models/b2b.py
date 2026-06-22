@@ -211,3 +211,112 @@ class VendaManualLoja(db.Model):
         if self.materia_prima:
             return self.materia_prima.nome
         return '?'
+
+
+# ── Orcamento B2B (encomendas corporativas, eventos, cestas em volume) ──
+#
+# Pre-pedido: atendente monta lista pra mandar pro cliente em PDF.
+# Cliente aceita -> pode virar VendaB2B (Fase 2). Por enquanto o que
+# importa e o ORCAMENTO em si (PDF + historico).
+#
+# Diferenca chave pra VendaB2B: orcamento NAO baixa estoque e NAO gera
+# parcela. So vira "real" quando aprovado e convertido em venda.
+
+class Orcamento(db.Model):
+    __tablename__ = 'orcamento'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # Codigo curto, legivel pelo telefone (ex: 'ORC-2026-0042'). Gerado
+    # no service ao criar (ano + sequencial reseta anualmente).
+    codigo = db.Column(db.String(20), unique=True, index=True, nullable=False)
+    data = db.Column(db.Date, nullable=False, default=hoje, index=True)
+    # Validade da proposta (default 7 dias). Vencido = aviso na lista,
+    # nao bloqueia aprovar manual.
+    valido_ate = db.Column(db.Date, nullable=False,
+                           default=lambda: hoje() + __import__('datetime').timedelta(days=7))
+
+    # Cliente: pode ser ClienteB2B cadastrado OU avulso (so nome+contato).
+    cliente_id = db.Column(db.Integer, db.ForeignKey('cliente_b2b.id'),
+                           nullable=True, index=True)
+    cliente_nome = db.Column(db.String(150))   # avulso
+    cliente_documento = db.Column(db.String(30))  # CNPJ/CPF do avulso
+    cliente_email = db.Column(db.String(120))
+    cliente_telefone = db.Column(db.String(30))
+    cliente_endereco = db.Column(db.String(250))
+
+    # Status do orcamento (rascunho -> enviado -> aprovado/recusado/expirado).
+    # Strings (nao Enum) pelo mesmo motivo dos outros dominios.
+    status = db.Column(db.String(20), nullable=False, default='rascunho', index=True)
+
+    # Dinheiro: Numeric(10,2) + Decimal sempre (CLAUDE.md, peso especial).
+    # `subtotal` = soma dos itens; `desconto_valor` = desconto absoluto;
+    # `valor_total` = subtotal - desconto.
+    subtotal = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    desconto_valor = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    valor_total = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+
+    observacao = db.Column(db.Text)  # condicoes, prazo de entrega, etc
+
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    criado_em = db.Column(db.DateTime, default=agora)
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
+    enviado_em = db.Column(db.DateTime, nullable=True)
+    aprovado_em = db.Column(db.DateTime, nullable=True)
+    recusado_em = db.Column(db.DateTime, nullable=True)
+
+    cliente = db.relationship('ClienteB2B')
+    itens = db.relationship('OrcamentoItem', backref='orcamento',
+                            cascade='all, delete-orphan', order_by='OrcamentoItem.id')
+    criado_por = db.relationship('Usuario', foreign_keys=[criado_por_id])
+
+    @property
+    def cliente_display(self):
+        if self.cliente:
+            return self.cliente.nome
+        return self.cliente_nome or '(avulso)'
+
+    @property
+    def venceu(self):
+        return self.status not in ('aprovado', 'recusado') and hoje() > self.valido_ate
+
+    def recalcular_total(self):
+        """Soma itens -> subtotal; subtotal - desconto -> valor_total.
+        Tudo em Decimal pra precisao exata (centavos)."""
+        from decimal import Decimal
+        sub = sum((Decimal(str(i.subtotal or 0)) for i in self.itens),
+                  Decimal('0'))
+        self.subtotal = sub
+        desc = Decimal(str(self.desconto_valor or 0))
+        self.valor_total = max(Decimal('0'), sub - desc)
+        return self.valor_total
+
+
+class OrcamentoItem(db.Model):
+    __tablename__ = 'orcamento_item'
+
+    id = db.Column(db.Integer, primary_key=True)
+    orcamento_id = db.Column(db.Integer, db.ForeignKey('orcamento.id'),
+                             nullable=False, index=True)
+
+    # Vinculo opcional ao catalogo: linha livre (sem FK) e suportada pra
+    # itens fora do catalogo ("Servico de buffet", "Decoracao", etc).
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
+
+    # Snapshot do nome (pra item livre OU pra preservar o que foi enviado
+    # mesmo se o catalogo mudar). Editavel pelo atendente.
+    nome = db.Column(db.String(200), nullable=False)
+    quantidade = db.Column(db.Numeric(10, 3), nullable=False, default=1)
+    unidade = db.Column(db.String(20))  # un, kg, cx, dz, ...
+    preco_unitario = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    subtotal = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    observacao = db.Column(db.String(200))
+
+    receita = db.relationship('Receita')
+    produto = db.relationship('Produto')
+
+    def recalcular_subtotal(self):
+        from decimal import Decimal
+        self.subtotal = (Decimal(str(self.quantidade or 0))
+                         * Decimal(str(self.preco_unitario or 0)))
+        return self.subtotal
