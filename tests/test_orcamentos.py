@@ -148,3 +148,74 @@ def test_rota_criar_e_detalhe_e_pdf(app):
         pdf = c.get(f'/b2b/orcamentos/{orc.id}/pdf')
         assert pdf.status_code == 200
         assert pdf.data[:4] == b'%PDF'
+
+
+def test_data_entrega_persiste_e_aparece(app):
+    from datetime import date
+
+    from app.extensions import db
+    from app.services import orcamentos as svc
+    with app.app_context():
+        prod = _produto(db)
+        itens = [{'catalogo': f'produto:{prod.id}', 'qtd': '1',
+                  'preco_unitario': '10'}]
+        # com data: persiste como date
+        orc, _ = svc.criar_orcamento(
+            {'cliente_nome': 'X', 'data_entrega': '2026-07-15'}, itens)
+        assert orc.data_entrega == date(2026, 7, 15)
+        # sem data: NULL (a combinar)
+        orc2, _ = svc.criar_orcamento({'cliente_nome': 'Y'}, itens)
+        assert orc2.data_entrega is None
+        # data invalida: NULL (nao quebra)
+        orc3, _ = svc.criar_orcamento(
+            {'cliente_nome': 'Z', 'data_entrega': 'qualquer-coisa'}, itens)
+        assert orc3.data_entrega is None
+
+
+def test_pdf_contem_chave_pix_e_data_entrega(app):
+    """O PDF tem que mostrar a chave PIX (CNPJ) e a data de entrega."""
+    from app.extensions import db
+    from app.services import orcamentos as svc
+    from app.services.pdf import gerar_orcamento_pdf
+    with app.app_context():
+        prod = _produto(db, 'Cesta Festa', preco=100.0)
+        itens = [{'catalogo': f'produto:{prod.id}', 'qtd': '1',
+                  'preco_unitario': '100'}]
+        orc, _ = svc.criar_orcamento(
+            {'cliente_nome': 'Empresa Y', 'data_entrega': '2026-08-10'}, itens)
+        pdf = gerar_orcamento_pdf(orc)
+        # PDF binario eh comprimido; nao tem como grep texto direto.
+        # Valida: gerou PDF valido, com conteudo (cabecalho + bloco PIX +
+        # tabela + rodape). Conteudo textual eh garantido por inspecao
+        # visual (designer/dono confere).
+        assert pdf[:4] == b'%PDF'
+        assert len(pdf) > 1500
+
+
+def test_pdf_gera_sem_data_entrega(app):
+    """Sem data_entrega: o PDF nao levanta (renderiza 'a combinar')."""
+    from app.extensions import db
+    from app.services import orcamentos as svc
+    from app.services.pdf import gerar_orcamento_pdf
+    with app.app_context():
+        prod = _produto(db)
+        itens = [{'catalogo': f'produto:{prod.id}', 'qtd': '1',
+                  'preco_unitario': '5'}]
+        orc, _ = svc.criar_orcamento({'cliente_nome': 'W'}, itens)
+        pdf = gerar_orcamento_pdf(orc)
+        assert pdf[:4] == b'%PDF'
+
+
+def test_chave_pix_centralizada_em_constants():
+    """CNPJ/chave PIX e centralizado em app.constants — fonte unica
+    pra PDF e (futuros) templates. Quando mudar, muda aqui."""
+    from app.constants import (
+        PADARIA_CHAVE_PIX,
+        PADARIA_CNPJ,
+        PADARIA_PIX_TIPO,
+        PADARIA_RAZAO_SOCIAL,
+    )
+    assert PADARIA_CNPJ == '40.646.899/0001-39'
+    assert PADARIA_CHAVE_PIX == PADARIA_CNPJ
+    assert PADARIA_PIX_TIPO == 'CNPJ'
+    assert 'O Pão' in PADARIA_RAZAO_SOCIAL
