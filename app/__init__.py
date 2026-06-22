@@ -1,7 +1,7 @@
 import logging
 import os
 
-from flask import Flask, Response, render_template, request
+from flask import Flask, render_template, request
 
 from app.extensions import csrf, db, limiter, login_manager, migrate
 from app.migrations_legacy import _migrate
@@ -260,9 +260,13 @@ def create_app(config_class=None):
             cestas_orfaos_count=cestas_orfaos_count,
         )
 
-    @app.route('/robots.txt')
-    def robots_txt():
-        return Response("User-agent: *\nDisallow: /\n", mimetype='text/plain')
+    # NOTA: /robots.txt foi REMOVIDO daqui (22/06/2026). Antes devolvia
+    # Disallow: / fixo, o que vazava pro Search Console ("sitemap em HTML")
+    # quando a loja virou publica. Agora /robots.txt eh servido por
+    # `main_bp.routes.robots_root` (alias do robots da loja), que respeita
+    # `LOJA_VISIVEL`: visivel -> Allow + aponta o Sitemap; em teste ->
+    # Disallow. Decisao de mover do app/__init__.py pro blueprint:
+    # centraliza a politica de SEO em UM lugar.
 
     @app.route('/health')
     def health():
