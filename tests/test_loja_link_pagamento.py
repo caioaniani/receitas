@@ -158,11 +158,15 @@ def test_webhook_paga_pedido_via_link_baixa_estoque(app):
                                  'payment_url': 'https://pag.link/or_WH'}):
             loja_pagamento.iniciar_link(ped)
 
-        # webhook 'order.paid' chega com o order_id
-        tratado = loja_pagamento.processar_webhook(
-            'order.paid', {'id': 'or_WH', 'code': ped.codigo,
-                           'status': 'paid'})
-        assert tratado is True
+        # webhook 'order.paid' chega com o order_id (evento completo).
+        # Patch da NF/e-mail pós-commit pra isolar de Tiny/Postmark.
+        with patch.object(loja_pagamento, '_emitir_nf_e_enviar',
+                          lambda p: None):
+            res = loja_pagamento.processar_webhook({
+                'id': 'evt_WH_1', 'type': 'order.paid',
+                'data': {'id': 'or_WH', 'code': ped.codigo, 'status': 'paid'},
+            })
+        assert res.get('pago') is True
         db.session.refresh(ped)
         assert ped.status == 'pago'
         db.session.refresh(el)
