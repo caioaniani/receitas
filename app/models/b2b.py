@@ -234,6 +234,10 @@ class Orcamento(db.Model):
     # nao bloqueia aprovar manual.
     valido_ate = db.Column(db.Date, nullable=False,
                            default=lambda: hoje() + __import__('datetime').timedelta(days=7))
+    # Data prevista de entrega do que esta sendo orcado. NULL = "a combinar".
+    # Vai no PDF e na tela de detalhe. Diferente de VendaB2B.data_entrega:
+    # orcamento NAO entra na fila do padeiro (so quando virar venda).
+    data_entrega = db.Column(db.Date, nullable=True)
 
     # Cliente: pode ser ClienteB2B cadastrado OU avulso (so nome+contato).
     cliente_id = db.Column(db.Integer, db.ForeignKey('cliente_b2b.id'),
