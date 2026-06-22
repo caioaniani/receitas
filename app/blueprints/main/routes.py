@@ -3114,7 +3114,7 @@ def loja_online_dashboard():
 
 
 @main_bp.route('/admin/loja-online/pedidos')
-@owner_required
+@login_required
 def loja_online_pedidos():
     """Lista os pedidos do site (mais recentes primeiro), com filtros por
     status e por data de entrega (?data=YYYY-MM-DD ou intervalo
