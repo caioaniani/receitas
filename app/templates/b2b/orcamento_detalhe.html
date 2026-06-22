@@ -76,9 +76,16 @@
                 <div class="row">
                     <div class="col-6">Emitido: <strong>{{ orc.data.strftime('%d/%m/%Y') }}</strong></div>
                     <div class="col-6">Valido ate: <strong>{{ orc.valido_ate.strftime('%d/%m/%Y') }}</strong></div>
+                    <div class="col-6">Entrega prevista:
+                        <strong>{{ orc.data_entrega.strftime('%d/%m/%Y') if orc.data_entrega else 'a combinar' }}</strong>
+                    </div>
                     {% if orc.criado_por %}<div class="col-6">Por: {{ orc.criado_por.nome }}</div>{% endif %}
                     {% if orc.enviado_em %}<div class="col-6">Enviado: {{ orc.enviado_em.strftime('%d/%m/%Y %H:%M') }}</div>{% endif %}
                 </div>
+                <hr class="my-2">
+                <div><strong>Pagamento:</strong> PIX</div>
+                <div>Chave PIX (CNPJ): <code>40.646.899/0001-39</code></div>
+                <div class="text-muted">O Pão Padaria Artesanal Ltda.</div>
             </div>
         </div>
     </div>
