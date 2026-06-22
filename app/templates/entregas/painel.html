@@ -840,5 +840,95 @@
   dataHoje(); tick(); setInterval(tick, 10000);
 })();
 </script>
+
+<script>
+// ── Aba lateral "Pedidos do site": lista/busca + popup de edição ──────────
+// Independente do IIFE do painel (escopo próprio). Lista via JSON; o popup é
+// um iframe da página admin do pedido em modo embed (mesma edição, fonte
+// única — sem reimplementar formulário de dinheiro/fiscal).
+(function () {
+  var PED_LISTA = "{{ url_for('entregas.api_painel_pedidos_online') }}";
+  var PED_DETALHE_TMPL = "{{ url_for('main.loja_online_pedido_detalhe', codigo='__CODE__') }}";
+  var tbody = document.getElementById('ped-tbody');
+  var busca = document.getElementById('ped-busca');
+  var drawer = document.getElementById('ped-drawer');
+  var bg = document.getElementById('ped-bg');
+  var popup = document.getElementById('ped-popup');
+  var iframe = document.getElementById('ped-iframe');
+  var popupTit = document.getElementById('ped-popup-tit');
+  var timer = null, reqId = 0;
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function render(pedidos) {
+    if (!pedidos || !pedidos.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="ped-vazio">Nenhum pedido encontrado.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = pedidos.map(function (p) {
+      return '<tr class="ped-row" data-code="' + esc(p.codigo) + '">' +
+        '<td>' + esc(p.data_entrega) + '</td>' +
+        '<td>' + esc(p.hora) + '</td>' +
+        '<td>' + esc(p.destinatario) + '</td>' +
+        '<td>' + esc(p.cliente) + '</td>' +
+        '<td class="ped-codigo">' + esc(p.codigo) + '</td></tr>';
+    }).join('');
+    Array.prototype.forEach.call(tbody.querySelectorAll('.ped-row'), function (tr) {
+      tr.addEventListener('click', function () { abrirPedido(tr.getAttribute('data-code')); });
+    });
+  }
+
+  function carregar(q) {
+    var meu = ++reqId;
+    tbody.innerHTML = '<tr><td colspan="5" class="ped-vazio">Carregando…</td></tr>';
+    var url = PED_LISTA + (q ? ('?q=' + encodeURIComponent(q)) : '');
+    fetch(url, { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : { pedidos: [] }; })
+      .then(function (d) { if (meu === reqId) render(d.pedidos); })
+      .catch(function () {
+        if (meu === reqId) tbody.innerHTML =
+          '<tr><td colspan="5" class="ped-vazio">Erro ao carregar. Tente de novo.</td></tr>';
+      });
+  }
+
+  function abrirDrawer() {
+    bg.classList.add('on'); drawer.classList.add('on');
+    carregar(busca.value.trim());
+  }
+  function fecharDrawer() { bg.classList.remove('on'); drawer.classList.remove('on'); }
+
+  function abrirPedido(code) {
+    if (!code) return;
+    popupTit.textContent = 'Pedido ' + code;
+    iframe.src = PED_DETALHE_TMPL.replace('__CODE__', encodeURIComponent(code)) + '?embed=1';
+    popup.classList.add('on');
+  }
+  function fecharPopup() {
+    popup.classList.remove('on');
+    iframe.src = 'about:blank';
+    carregar(busca.value.trim());  // reflete na lista o que foi editado no popup
+  }
+
+  document.getElementById('ped-toggle').addEventListener('click', abrirDrawer);
+  document.getElementById('ped-x').addEventListener('click', fecharDrawer);
+  bg.addEventListener('click', fecharDrawer);
+  document.getElementById('ped-popup-x').addEventListener('click', fecharPopup);
+  popup.addEventListener('click', function (e) { if (e.target === popup) fecharPopup(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (popup.classList.contains('on')) fecharPopup();
+    else if (drawer.classList.contains('on')) fecharDrawer();
+  });
+
+  busca.addEventListener('input', function () {
+    clearTimeout(timer);
+    var q = busca.value.trim();
+    timer = setTimeout(function () { carregar(q); }, 250);
+  });
+})();
+</script>
 </body>
 </html>
