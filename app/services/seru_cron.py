@@ -350,11 +350,15 @@ def iniciar(app):
         'interval', minutes=15, id='seru-sync',
         max_instances=1, coalesce=True,
     )
-    _scheduler.add_job(
-        lambda: _run_vnda_sync(app),
-        'interval', minutes=15, id='vnda-sync',
-        max_instances=1, coalesce=True,
-    )
+    # VNDA desligado no cutover (22/06/2026) — a loja propria (PedidoOnline)
+    # substituiu a fonte de vendas do site. O sync VNDA so faz sentido se o
+    # VNDA voltar: religar com VNDA_AUTO_SYNC=1.
+    if os.environ.get('VNDA_AUTO_SYNC', '0') == '1':
+        _scheduler.add_job(
+            lambda: _run_vnda_sync(app),
+            'interval', minutes=15, id='vnda-sync',
+            max_instances=1, coalesce=True,
+        )
 
     # Resumo diario de pedidos no Slack as 04:00 BRT
     _scheduler.add_job(
