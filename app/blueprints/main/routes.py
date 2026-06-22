@@ -3536,7 +3536,7 @@ def loja_online_emitir_nf(codigo):
 
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/danfe')
-@owner_required
+@login_required
 def loja_online_danfe(codigo):
     """Redireciona pro DANFE (PDF) da NF no Tiny. Link temporário — busca sob
     demanda (não a cada abertura do pedido)."""
