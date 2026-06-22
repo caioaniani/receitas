@@ -1170,6 +1170,12 @@ def _migrate_postgres(app):
     _try("ALTER TABLE orcamento ADD COLUMN IF NOT EXISTS "
          "frete_valor NUMERIC(10, 2) NOT NULL DEFAULT 0")
 
+    # Descricao SEO (22/06/2026) — Receita nao tinha campo de descricao;
+    # Produto tinha `descricao` curta. `descricao_seo` (TEXT) eh o que vira
+    # publico na vitrine/JSON-LD/meta description.
+    _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS descricao_seo TEXT")
+    _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS descricao_seo TEXT")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
