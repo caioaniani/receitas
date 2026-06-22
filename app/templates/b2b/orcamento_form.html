@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block title %}{% if orc %}Editar orcamento {{ orc.codigo }}{% else %}Novo orcamento{% endif %}{% endblock %}
+{% block content %}
+<h1 class="page-title mb-3">
+    {% if orc %}<i class="bi bi-pencil-square"></i> Editar orcamento {{ orc.codigo }}
+    {% else %}<i class="bi bi-plus-circle"></i> Novo orcamento B2B{% endif %}
+</h1>
+
+{% if erros %}
+<div class="alert alert-danger"><ul class="mb-0">
+    {% for e in erros %}<li>{{ e }}</li>{% endfor %}
+</ul></div>
+{% endif %}
+
+<form method="POST"
+      action="{% if orc %}{{ url_for('b2b.orcamento_editar', oid=orc.id) }}{% else %}{{ url_for('b2b.orcamento_novo') }}{% endif %}"
+      id="form-orc">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {# ── Cliente ── #}
+    <div class="card mb-3">
+        <div class="card-header py-2"><strong>Cliente</strong></div>
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-5">
+                    <label class="form-label small">Cliente cadastrado</label>
+                    <select name="cliente_id" class="form-select form-select-sm" id="sel-cliente">
+                        <option value="">— avulso (preencher abaixo) —</option>
+                        {% for c in clientes %}
+                        <option value="{{ c.id }}"
+                          {% if (orc and orc.cliente_id == c.id) or form.get('cliente_id')|string == c.id|string %}selected{% endif %}>
+                          {{ c.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">Ou nome avulso</label>
+                    <input type="text" name="cliente_nome" class="form-control form-control-sm"
+                           placeholder="ex: Hotel Y" value="{{ (orc.cliente_nome if orc else form.get('cliente_nome')) or '' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">CNPJ/CPF</label>
+                    <input type="text" name="cliente_documento" class="form-control form-control-sm"
+                           value="{{ (orc.cliente_documento if orc else form.get('cliente_documento')) or '' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">E-mail</label>
+                    <input type="email" name="cliente_email" class="form-control form-control-sm"
+                           value="{{ (orc.cliente_email if orc else form.get('cliente_email')) or '' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Telefone</label>
+                    <input type="text" name="cliente_telefone" class="form-control form-control-sm"
+                           value="{{ (orc.cliente_telefone if orc else form.get('cliente_telefone')) or '' }}">
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label small">Endereco</label>
+                    <input type="text" name="cliente_endereco" class="form-control form-control-sm"
+                           value="{{ (orc.cliente_endereco if orc else form.get('cliente_endereco')) or '' }}">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Itens ── #}
+    <div class="card mb-3">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <strong>Itens</strong>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="add-item">
+                <i class="bi bi-plus"></i> Adicionar item
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+            <table class="table table-sm align-middle" id="tbl-itens">
+                <thead class="table-light">
+                    <tr>
+                        <th style="min-width:200px">Catalogo</th>
+                        <th style="min-width:160px">Nome (editavel)</th>
+                        <th style="width:90px">Qtd</th>
+                        <th style="width:80px">Un</th>
+                        <th style="width:110px">Preco unit.</th>
+                        <th style="width:110px" class="text-end">Subtotal</th>
+                        <th style="min-width:120px">Obs</th>
+                        <th style="width:40px"></th>
+                    </tr>
+                </thead>
+                <tbody id="itens-body"></tbody>
+            </table>
+            </div>
+            <div class="text-end">
+                <span class="text-muted small">Subtotal: </span>
+                <strong id="subtotal-geral">R$ 0,00</strong>
+            </div>
+        </div>
+    </div>
+
+    {# ── Condicoes ── #}
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <label class="form-label small">Desconto (R$)</label>
+                    <input type="number" step="0.01" min="0" name="desconto_valor"
+                           class="form-control form-control-sm" id="inp-desconto"
+                           value="{{ (orc.desconto_valor if orc else form.get('desconto_valor')) or '' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Validade (dias)</label>
+                    <input type="number" min="1" max="90" name="validade_dias"
+                           class="form-control form-control-sm"
+                           value="{{ form.get('validade_dias') or 7 }}">
+                </div>
+                <div class="col-md-6 text-end d-flex flex-column justify-content-end">
+                    <div><span class="text-muted">TOTAL: </span>
+                        <strong class="fs-5" id="total-geral">R$ 0,00</strong></div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small">Observacoes (condicoes, prazo de entrega, forma de pagamento)</label>
+                    <textarea name="observacao" rows="2" class="form-control form-control-sm">{{ (orc.observacao if orc else form.get('observacao')) or '' }}</textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg"></i> {% if orc %}Salvar{% else %}Criar orcamento{% endif %}
+        </button>
+        <a href="{% if orc %}{{ url_for('b2b.orcamento_detalhe', oid=orc.id) }}{% else %}{{ url_for('b2b.orcamentos') }}{% endif %}"
+           class="btn btn-outline-secondary">Cancelar</a>
+    </div>
+</form>
+
+{# Catalogo serializado pro JS (nome + preco sugerido por item). #}
+<script type="application/json" id="catalogo-json">
+{
+  "receita": [
+    {% for r in receitas %}{"id": {{ r.id }}, "nome": {{ r.nome|tojson }}, "preco": {{ (r.preco_loja or r.preco_site or 0)|float }}}{% if not loop.last %},{% endif %}{% endfor %}
+  ],
+  "produto": [
+    {% for p in produtos %}{"id": {{ p.id }}, "nome": {{ p.nome|tojson }}, "preco": {{ (p.preco_site or 0)|float }}}{% if not loop.last %},{% endif %}{% endfor %}
+  ]
+}
+</script>
+{% if orc %}
+<script type="application/json" id="itens-existentes">
+[
+  {% for it in orc.itens %}
+  {"catalogo": "{% if it.receita_id %}receita:{{ it.receita_id }}{% elif it.produto_id %}produto:{{ it.produto_id }}{% else %}livre{% endif %}",
+   "nome": {{ it.nome|tojson }}, "qtd": {{ (it.quantidade or 0)|float }},
+   "unidade": {{ (it.unidade or '')|tojson }}, "preco": {{ (it.preco_unitario or 0)|float }},
+   "obs": {{ (it.observacao or '')|tojson }}}{% if not loop.last %},{% endif %}
+  {% endfor %}
+]
+</script>
+{% endif %}
+
+<script>
+(function () {
+  var CAT = JSON.parse(document.getElementById('catalogo-json').textContent);
+  var body = document.getElementById('itens-body');
+  var idx = 0;
+
+  function moeda(v) {
+    return 'R$ ' + (v || 0).toFixed(2).replace('.', ',');
+  }
+
+  function opcoesCatalogo(selecionado) {
+    var html = '<option value="livre">— Item livre —</option>';
+    ['receita', 'produto'].forEach(function (kind) {
+      var label = kind === 'receita' ? 'Receitas' : 'Produtos/Cestas';
+      html += '<optgroup label="' + label + '">';
+      CAT[kind].forEach(function (o) {
+        var val = kind + ':' + o.id;
+        var sel = (val === selecionado) ? ' selected' : '';
+        html += '<option value="' + val + '"' + sel + '>' + o.nome + '</option>';
+      });
+      html += '</optgroup>';
+    });
+    return html;
+  }
+
+  function buscaCat(catalogo) {
+    if (!catalogo || catalogo === 'livre' || catalogo.indexOf(':') < 0) return null;
+    var p = catalogo.split(':'), kind = p[0], id = parseInt(p[1], 10);
+    return (CAT[kind] || []).find(function (o) { return o.id === id; }) || null;
+  }
+
+  function addRow(dados) {
+    dados = dados || {};
+    var i = idx++;
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><select name="itens[' + i + '][catalogo]" class="form-select form-select-sm cat">' +
+        opcoesCatalogo(dados.catalogo || 'livre') + '</select></td>' +
+      '<td><input name="itens[' + i + '][nome]" class="form-control form-control-sm nome" value="' + (dados.nome || '').replace(/"/g, '&quot;') + '"></td>' +
+      '<td><input name="itens[' + i + '][qtd]" type="number" step="0.001" min="0" class="form-control form-control-sm qtd" value="' + (dados.qtd || '') + '"></td>' +
+      '<td><input name="itens[' + i + '][unidade]" class="form-control form-control-sm" value="' + (dados.unidade || '') + '" placeholder="un"></td>' +
+      '<td><input name="itens[' + i + '][preco_unitario]" type="number" step="0.01" min="0" class="form-control form-control-sm preco" value="' + (dados.preco || '') + '"></td>' +
+      '<td class="text-end subtotal">R$ 0,00</td>' +
+      '<td><input name="itens[' + i + '][observacao]" class="form-control form-control-sm" value="' + (dados.obs || '').replace(/"/g, '&quot;') + '"></td>' +
+      '<td><button type="button" class="btn btn-sm btn-outline-danger rm">&times;</button></td>';
+    body.appendChild(tr);
+
+    var cat = tr.querySelector('.cat');
+    var nome = tr.querySelector('.nome');
+    var preco = tr.querySelector('.preco');
+    var qtd = tr.querySelector('.qtd');
+
+    cat.addEventListener('change', function () {
+      var o = buscaCat(cat.value);
+      if (o) {
+        if (!nome.value.trim()) nome.value = o.nome;
+        if (!preco.value) preco.value = o.preco ? o.preco.toFixed(2) : '';
+      }
+      recalc();
+    });
+    [qtd, preco].forEach(function (el) { el.addEventListener('input', recalc); });
+    tr.querySelector('.rm').addEventListener('click', function () {
+      tr.remove(); recalc();
+    });
+    recalc();
+  }
+
+  function recalc() {
+    var sub = 0;
+    body.querySelectorAll('tr').forEach(function (tr) {
+      var q = parseFloat(tr.querySelector('.qtd').value) || 0;
+      var p = parseFloat(tr.querySelector('.preco').value) || 0;
+      var s = q * p;
+      tr.querySelector('.subtotal').textContent = moeda(s);
+      sub += s;
+    });
+    document.getElementById('subtotal-geral').textContent = moeda(sub);
+    var desc = parseFloat(document.getElementById('inp-desconto').value) || 0;
+    document.getElementById('total-geral').textContent = moeda(Math.max(0, sub - desc));
+  }
+
+  document.getElementById('add-item').addEventListener('click', function () { addRow(); });
+  document.getElementById('inp-desconto').addEventListener('input', recalc);
+
+  // Pre-popula: edicao (itens existentes) ou 1 linha vazia em orcamento novo.
+  var existentes = document.getElementById('itens-existentes');
+  if (existentes) {
+    JSON.parse(existentes.textContent).forEach(addRow);
+  } else {
+    addRow();
+  }
+})();
+</script>
+{% endblock %}
