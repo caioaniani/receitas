@@ -325,9 +325,20 @@ def create_app(config_class=None):
                           for h in (app.config.get('SITE_REDIRECT_HOSTS') or '')
                           .split(',') if h.strip()}
         if host in redirect_hosts:
-            destino = (app.config.get('SITE_REDIRECT_DESTINO')
-                       or 'https://opao.online').rstrip('/')
-            return redirect(destino + '/', code=302)
+            # NUNCA redirecionar paths essenciais pra crawlers/integracoes
+            # (Google Search Console, validacao Apple Pay, robots/sitemap),
+            # senao ferra SEO e merchant validation. Bug 22/06/2026: env
+            # ficou setada apos cutover, sitemap.xml virou 302 -> opao.online
+            # e Search Console acusava "sitemap em HTML".
+            p = request.path
+            essenciais = (p in ('/sitemap.xml', '/robots.txt',
+                                '/favicon.ico', '/health')
+                          or p.startswith('/.well-known/')
+                          or p.startswith('/static/'))
+            if not essenciais:
+                destino = (app.config.get('SITE_REDIRECT_DESTINO')
+                           or 'https://opao.online').rstrip('/')
+                return redirect(destino + '/', code=302)
 
         from app.utils import hosts_loja
         hosts = hosts_loja()
