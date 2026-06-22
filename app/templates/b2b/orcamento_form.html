@@ -111,6 +111,13 @@
                            class="form-control form-control-sm"
                            value="{{ form.get('validade_dias') or 7 }}">
                 </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Data de entrega</label>
+                    <input type="date" name="data_entrega"
+                           class="form-control form-control-sm"
+                           value="{{ (orc.data_entrega.isoformat() if orc and orc.data_entrega else form.get('data_entrega')) or '' }}">
+                    <div class="form-text" style="font-size:11px;">Deixe vazio se for "a combinar".</div>
+                </div>
                 <div class="col-md-6 text-end d-flex flex-column justify-content-end">
                     <div><span class="text-muted">TOTAL: </span>
                         <strong class="fs-5" id="total-geral">R$ 0,00</strong></div>
