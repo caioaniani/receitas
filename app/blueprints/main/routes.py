@@ -3639,3 +3639,94 @@ def debug_email():
     return jsonify(
         ok=True, status=status,
         dica='Abra /admin/debug-email?para=seu@email.com&enviar=1 pra testar')
+
+
+# ── SEO: descricoes geradas com IA (22/06/2026) ───────────────────────
+# Lista produtos publicados com `descricao_seo` vazia, gera sugestao com
+# Claude Haiku, dono revisa e salva. Controle total — nunca publica
+# automaticamente. Service: app/services/seo_descricoes.py.
+
+@main_bp.route('/admin/seo/descricoes')
+@owner_required
+def seo_descricoes():
+    from app.services import seo_descricoes as svc
+    receitas = (Receita.query
+                .filter(Receita.preco_site.isnot(None),
+                        Receita.preco_site > 0,
+                        Receita.arquivada_em.is_(None))
+                .order_by(Receita.descricao_seo.is_(None).desc(),
+                          Receita.categoria, Receita.nome)
+                .all())
+    produtos = (Produto.query
+                .filter(Produto.preco_site.isnot(None),
+                        Produto.preco_site > 0,
+                        Produto.ativo.is_(True))
+                .order_by(Produto.descricao_seo.is_(None).desc(),
+                          Produto.nome)
+                .all())
+    n_vazias_r = sum(1 for r in receitas if not r.descricao_seo)
+    n_vazias_p = sum(1 for p in produtos if not p.descricao_seo)
+    return render_template(
+        'admin/seo_descricoes.html',
+        receitas=receitas, produtos=produtos,
+        n_vazias_r=n_vazias_r, n_vazias_p=n_vazias_p,
+        api_disponivel=svc.disponivel(),
+    )
+
+
+@main_bp.route('/admin/seo/descricoes/sugerir', methods=['POST'])
+@owner_required
+def seo_descricoes_sugerir():
+    """API: dado {kind:'receita'|'produto', id:int}, gera uma sugestao com
+    Claude e devolve {ok, sugestao} ou {ok:False, erro}. NAO salva no banco
+    — quem salva eh o /salvar abaixo (apos revisao humana)."""
+    from app.services import seo_descricoes as svc
+    kind = (request.form.get('kind') or '').strip()
+    try:
+        id_ = int(request.form.get('id') or 0)
+    except ValueError:
+        return jsonify(ok=False, erro='id invalido')
+    if kind == 'receita':
+        obj = Receita.query.get(id_)
+        if not obj:
+            return jsonify(ok=False, erro='receita nao encontrada')
+        texto = svc.sugerir_para_receita(obj)
+    elif kind == 'produto':
+        obj = Produto.query.get(id_)
+        if not obj:
+            return jsonify(ok=False, erro='produto nao encontrado')
+        texto = svc.sugerir_para_produto(obj)
+    else:
+        return jsonify(ok=False, erro='kind invalido')
+    if not texto:
+        return jsonify(ok=False,
+                       erro='IA indisponivel (cheque ANTHROPIC_API_KEY)')
+    return jsonify(ok=True, sugestao=texto)
+
+
+@main_bp.route('/admin/seo/descricoes/salvar', methods=['POST'])
+@owner_required
+def seo_descricoes_salvar():
+    """Persiste descricao_seo revisada pelo dono. Aceita string vazia pra
+    LIMPAR (volta ao fallback automatico)."""
+    kind = (request.form.get('kind') or '').strip()
+    try:
+        id_ = int(request.form.get('id') or 0)
+    except ValueError:
+        return jsonify(ok=False, erro='id invalido')
+    texto = (request.form.get('descricao') or '').strip()
+    # Limite defensivo (DB eh TEXT, sem limite, mas SEO description ideal
+    # eh ate ~300 chars).
+    if len(texto) > 500:
+        texto = texto[:500]
+    if kind == 'receita':
+        obj = Receita.query.get(id_)
+    elif kind == 'produto':
+        obj = Produto.query.get(id_)
+    else:
+        return jsonify(ok=False, erro='kind invalido')
+    if not obj:
+        return jsonify(ok=False, erro='nao encontrado')
+    obj.descricao_seo = texto or None
+    db.session.commit()
+    return jsonify(ok=True, salvo=bool(texto), len=len(texto))
