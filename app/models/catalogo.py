@@ -75,6 +75,11 @@ class Receita(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(150), nullable=False)
     categoria = db.Column(db.String(50))
+    # Descricao SEO (2-3 frases, ate ~300 chars) usada no <meta description>,
+    # no JSON-LD Product e no card do site. Gerada com IA pela tela admin
+    # /admin/seo/descricoes a partir do nome + ingredientes; revisada pelo
+    # dono antes de virar publica. NULL = fallback "Nome — Categoria".
+    descricao_seo = db.Column(db.Text, nullable=True)
     # Ordem manual na vitrine (menor = mais cedo). NULL = vai pro fim,
     # ordenado por nome dentro de cada categoria. Setado pela tela de
     # curadoria (campo "ordem" no card).
