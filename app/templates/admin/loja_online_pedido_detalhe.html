@@ -197,6 +197,7 @@
           {# NF pode ser emitida em qualquer status pós-pago — o cliente pode
              ter movido o pedido (em preparo / a caminho / entregue) antes da
              gente lembrar de gerar a nota. #}
+          {% if current_user.is_owner %}
           <form method="POST" action="{{ url_for('main.loja_online_emitir_nf', codigo=p.codigo) }}"
                 onsubmit="return confirm('Emitir NF deste pedido no Tiny?');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
@@ -205,6 +206,9 @@
             </button>
           </form>
           <p class="text-muted mt-2 mb-0">O Tiny aplica NCM/CFOP/CST do cadastro.</p>
+          {% else %}
+          <span class="text-muted">A NF é emitida pelo dono.</span>
+          {% endif %}
         {% else %}
           <span class="text-muted">Disponível após o pagamento.</span>
         {% endif %}
