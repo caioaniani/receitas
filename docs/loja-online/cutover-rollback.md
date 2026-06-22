@@ -3,6 +3,11 @@
 > Estado vivo do corte do VNDA pra loja nativa. Qualquer sessão Claude/dono
 > entra aqui pra saber **como virar** e **como voltar** se der ruim.
 > Criado em 21/06/2026.
+>
+> 🎉 **Cutover concluído em 22/06/2026** (~01h BRT). A loja própria está
+> servindo o tráfego de `www.padariaartesanalonline.com.br`. VNDA segue
+> existindo na infra dele caso precise reverter — basta voltar o CNAME
+> abaixo.
 
 ## ⏪ Rollback DNS — voltar pro VNDA
 
