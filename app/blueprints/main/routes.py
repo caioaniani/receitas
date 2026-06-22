@@ -3163,7 +3163,7 @@ def loja_online_pedidos():
 
 
 @main_bp.route('/admin/loja-online/buscar-pedidos')
-@owner_required
+@login_required
 def loja_online_pedidos_buscar():
     """Busca incremental (AJAX) por nome, telefone, e-mail ou código.
     Respeita o filtro de data ATIVO (passado nos params) — sem isso a busca
