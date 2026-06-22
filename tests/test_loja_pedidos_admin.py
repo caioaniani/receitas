@@ -1,6 +1,8 @@
 """Tela admin de acompanhamento dos pedidos do site (Fase 3).
 
-Lista + detalhe + cancelar. Owner-only (mesma seção do Catálogo do site).
+Lista + detalhe + editar + imprimir + avanço de status liberados a TODOS os
+usuários logados (22/06/2026, pra a equipe usar pelo painel de entregas).
+Reembolso/cancelamento (dinheiro) e emissão de NF (fiscal) continuam owner-only.
 """
 from decimal import Decimal
 
