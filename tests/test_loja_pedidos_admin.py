@@ -402,6 +402,21 @@ def test_detalhe_nao_owner_esconde_acoes_de_dinheiro(app):
     assert 'Salvar altera'.encode() in r.data   # edição continua disponível
 
 
+def test_detalhe_embed_permite_iframe_same_origin(app):
+    """Popup do painel: o detalhe em ?embed=1 pode ser embutido em iframe
+    same-origin (SAMEORIGIN + frame-ancestors 'self'); sem embed segue DENY."""
+    from app.extensions import db
+    with app.app_context():
+        _pedido(db, codigo='FRM001')
+    c = _owner(app)
+    r_embed = c.get('/admin/loja-online/pedidos/FRM001?embed=1')
+    assert r_embed.headers.get('X-Frame-Options') == 'SAMEORIGIN'
+    assert "frame-ancestors 'self'" in r_embed.headers.get(
+        'Content-Security-Policy', '')
+    r_normal = c.get('/admin/loja-online/pedidos/FRM001')
+    assert r_normal.headers.get('X-Frame-Options') == 'DENY'
+
+
 def test_detalhe_owner_pago_ve_acoes(app):
     """Owner (status pago) continua vendo reembolso e emissão de NF."""
     from app.extensions import db
