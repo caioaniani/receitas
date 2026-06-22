@@ -117,3 +117,40 @@ sem "From Name" não é problema.
 3. Conferir baixa de estoque (reserva → consumo) no pedido pago.
 4. Conferir NF emitida via Tiny + e-mail com link da DANFE.
 5. Só então apontar `opao.online` pro Railway.
+
+## 🌿 Apex (domínio sem www) → plano Cloudflare (22/06/2026)
+
+**Problema**: `padariaartesanalonline.com.br` (sem www) ainda aponta pra
+`52.21.216.0` (= `ec2-...amazonaws.com`, infra antiga do VNDA). CNAME não
+pode existir no apex e a Railway não dá IP fixo oficial, então o caminho
+robusto é mover o DNS pro **Cloudflare** (free, faz CNAME flattening +
+redirect + SSL do apex).
+
+**De-risco confirmado (22/06)**: o domínio **NÃO tem e-mail** — sem MX,
+sem DKIM, sem DMARC. Só há um TXT SPF (`v=spf1 include:_spf.google.com
+~all`) que é sobra inofensiva. E-mail da loja sai de `noreply@opao.online`
+(Postmark, outro domínio). Logo, a migração de DNS pro Cloudflare **não
+toca em e-mail** — risco baixo.
+
+**Registros que importam hoje na zona** (resto é sobra):
+- `www` CNAME → `s8kr0sma.up.railway.app` (a loja viva)
+- `_railway-verify.www` TXT → `railway-verify=092601af...`
+- (apex SPF TXT: copiar ou descartar, tanto faz — sem e-mail não age)
+
+**Passo a passo**:
+1. Cloudflare (free) → Add site → `padariaartesanalonline.com.br`. Deixar
+   ele auto-importar; conferir que `www` CNAME veio. Pôr os registros que
+   apontam pra Railway/externos como **"DNS only" (nuvem cinza)**, nunca
+   proxied (nuvem laranja interfere no SSL da Railway).
+2. Apex → www: criar A `@` → `192.0.2.1` (IP dummy) **proxied (laranja)**
+   + uma **Redirect Rule**: hostname = `padariaartesanalonline.com.br` →
+   `https://www.padariaartesanalonline.com.br` (301). O Cloudflare emite o
+   cert do apex e faz o 301 na borda; a Railway nem é envolvida no apex.
+3. Trocar os nameservers **no Registro.br** (não no Wix): de
+   `ns8/ns9.wixdns.net` pros 2 do Cloudflare. Propagação: ~30min a algumas
+   horas.
+4. Verificar: `www` carrega a loja; apex faz 301→www; cadeado OK nos dois.
+5. **NÃO apagar a zona no Wix** até o Cloudflare estar "Active" e
+   verificado (fallback).
+
+**Sem mudança de código** — o redirect apex→www fica no Cloudflare.
