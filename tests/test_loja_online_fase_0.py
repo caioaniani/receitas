@@ -106,8 +106,9 @@ def test_curadoria_carrega_owner(app):
     assert b'Cat' in r.data  # 'Catálogo'
 
 
-def test_curadoria_owner_only(app):
-    """Admin comum não vê (proteção de dinheiro: edita preço_site)."""
+def test_curadoria_liberada_admin(app):
+    """Admin comum também vê (22/06/2026 — dono liberou a admin da loja
+    online pra toda a equipe; só reembolso e emissão de NF ficam restritos)."""
     from app.extensions import db
     from app.models import Usuario
     u = Usuario(nome='A', login='adm', papel='admin')
@@ -118,7 +119,7 @@ def test_curadoria_owner_only(app):
     with c.session_transaction() as s:
         s['_user_id'] = str(u.id)
         s['_fresh'] = True
-    assert c.get('/admin/loja-online/catalogo').status_code in (302, 403)
+    assert c.get('/admin/loja-online/catalogo').status_code == 200
 
 
 def test_preco_ajax_salva_e_devolve_json(app):
