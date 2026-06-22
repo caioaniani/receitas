@@ -285,6 +285,7 @@ def agregar_itens_consolidado(data_inicial, data_final):
         p = dict(p)
         p['qtd_seru'] = p['qtd']
         p['qtd_vnda'] = 0
+        p['qtd_online'] = 0
         p['fonte'] = 'seru'
         linhas.append(p)
 
