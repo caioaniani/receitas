@@ -116,7 +116,7 @@ def api_vendas_por_dia():
 
     from sqlalchemy import func
 
-    from app.models import SeruPedidoProcessado, VendaManualLoja
+    from app.models import PedidoOnline, SeruPedidoProcessado, VendaManualLoja
     fim = hoje_brt()
     ini = fim - timedelta(days=30)
 
