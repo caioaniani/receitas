@@ -273,6 +273,41 @@ def api_painel():
     return resp
 
 
+@entregas_bp.route('/api/painel/pedidos-online')
+@login_required
+def api_painel_pedidos_online():
+    """Lista/busca PedidoOnline pro drawer 'Pedidos do site' do painel.
+
+    Liberado a qualquer usuário logado (mesmo público do painel). Devolve JSON
+    enxuto (o painel não usa Bootstrap). Sem `q` (ou < 2 letras): os 100 mais
+    recentes. Com `q`: busca por nome, telefone, e-mail ou código em TODOS os
+    pedidos (mesma busca da tela admin /admin/loja-online/pedidos)."""
+    from sqlalchemy import or_
+    q = (request.args.get('q') or '').strip()
+    qry = PedidoOnline.query
+    if len(q) >= 2:
+        termo = f'%{q}%'
+        qry = qry.filter(or_(
+            PedidoOnline.nome_cliente.ilike(termo),
+            PedidoOnline.telefone_cliente.ilike(termo),
+            PedidoOnline.email_cliente.ilike(termo),
+            PedidoOnline.codigo.ilike(termo),
+        ))
+    pedidos = qry.order_by(PedidoOnline.criado_em.desc()).limit(100).all()
+    out = [{
+        'codigo': p.codigo,
+        'data_entrega': (p.data_entrega.strftime('%d/%m/%Y')
+                         if p.data_entrega else '—'),
+        'data_entrega_iso': (p.data_entrega.isoformat()
+                             if p.data_entrega else ''),
+        'hora': p.janela_entrega or '—',
+        'destinatario': p.nome_destinatario or p.nome_cliente or '—',
+        'cliente': p.nome_cliente or '—',
+        'status': p.status,
+    } for p in pedidos]
+    return jsonify(pedidos=out)
+
+
 @entregas_bp.route('/api/painel/vigia/reconhecer', methods=['POST'])
 @login_required
 def api_painel_vigia_reconhecer():
