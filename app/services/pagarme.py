@@ -125,6 +125,34 @@ def _so_digitos(s):
     return ''.join(c for c in (s or '') if c.isdigit())
 
 
+def _telefone_br(raw):
+    """(area_code, number) de um telefone BR pro Pagar.me, ou None se invalido.
+
+    Pagar.me monta +55{area_code}{number} e valida contra '+' seguido de
+    7-15 digitos. Numero local BR valido = DDD(2) + 8 (fixo) ou 9 (movel)
+    = 10 ou 11 digitos.
+
+    Telefone e OPCIONAL no customer: se nao normalizar, retorna None e o
+    caller OMITE o telefone — NUNCA manda numero invalido, que derruba a
+    cobranca INTEIRA. Incidente 22/06/2026: cliente digitou com codigo de
+    operadora ('015 11 96421-8592') -> Pagar.me montou +5501511964218592
+    (16 digitos) -> recusou -> venda de R$426 falhou.
+    """
+    d = _so_digitos(raw)
+    # Codigo de pais 55 na frente (deixa um local plausivel) -> remove.
+    if d.startswith('55') and len(d) >= 12:
+        d = d[2:]
+    # Prefixo de tronco/operadora: '0' (e ate 2 digitos de operadora) -> remove.
+    if d.startswith('0'):
+        d = d[1:]
+        if len(d) >= 12:          # ainda longo: tinha codigo de operadora (2 dig)
+            d = d[2:]
+    # Esperado: DDD(2) + 8/9 digitos.
+    if len(d) not in (10, 11):
+        return None
+    return d[:2], d[2:]
+
+
 def _payload_customer(pedido):
     """Customer (cliente final). E-mail é obrigatório; document/phones se
     tiverem. Pagar.me usa esse customer pra associar e contatar."""
