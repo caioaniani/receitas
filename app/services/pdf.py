@@ -384,6 +384,10 @@ def gerar_orcamento_pdf(orc):
     pdf.cell(0, 5, _latin1(f'Emitido em {orc.data.strftime("%d/%m/%Y")} · '
                            f'Valido ate {orc.valido_ate.strftime("%d/%m/%Y")}'),
              new_x='LMARGIN', new_y='NEXT')
+    entrega_txt = (orc.data_entrega.strftime('%d/%m/%Y')
+                   if orc.data_entrega else 'a combinar')
+    pdf.cell(0, 5, _latin1(f'Entrega prevista: {entrega_txt}'),
+             new_x='LMARGIN', new_y='NEXT')
     pdf.ln(2)
 
     # Cliente
