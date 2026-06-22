@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Orcamento {{ orc.codigo }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0">
+        <i class="bi bi-file-earmark-text"></i> Orcamento {{ orc.codigo }}
+        <span class="badge bg-{% if orc.status == 'aprovado' %}success{% elif orc.status == 'recusado' %}secondary{% elif orc.status == 'enviado' %}info{% else %}warning text-dark{% endif %} align-middle">
+            {{ STATUS_LABEL[orc.status] }}
+        </span>
+        {% if orc.venceu %}<span class="badge bg-danger align-middle">vencido</span>{% endif %}
+    </h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('b2b.orcamento_pdf', oid=orc.id) }}" target="_blank"
+           class="btn btn-danger btn-sm"><i class="bi bi-file-pdf"></i> Abrir PDF</a>
+        {% if orc.status in ('rascunho', 'enviado') %}
+        <a href="{{ url_for('b2b.orcamento_editar', oid=orc.id) }}"
+           class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil"></i> Editar</a>
+        {% endif %}
+        <a href="{{ url_for('b2b.orcamentos') }}" class="btn btn-outline-secondary btn-sm">Voltar</a>
+    </div>
+</div>
+
+{# ── Acoes de status ── #}
+<div class="card mb-3">
+    <div class="card-body d-flex flex-wrap gap-2 align-items-center">
+        <span class="text-muted small me-2">Acoes:</span>
+        {% if orc.status == 'rascunho' %}
+        <form method="POST" action="{{ url_for('b2b.orcamento_status', oid=orc.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="enviado">
+            <button class="btn btn-sm btn-info"><i class="bi bi-send"></i> Marcar como enviado</button>
+        </form>
+        {% elif orc.status == 'enviado' %}
+        <form method="POST" action="{{ url_for('b2b.orcamento_status', oid=orc.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="aprovado">
+            <button class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> Aprovado</button>
+        </form>
+        <form method="POST" action="{{ url_for('b2b.orcamento_status', oid=orc.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="recusado">
+            <button class="btn btn-sm btn-outline-secondary">Recusado</button>
+        </form>
+        <form method="POST" action="{{ url_for('b2b.orcamento_status', oid=orc.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="rascunho">
+            <button class="btn btn-sm btn-outline-warning">Voltar pra rascunho</button>
+        </form>
+        {% else %}
+        <span class="text-muted small">Orcamento finalizado ({{ STATUS_LABEL[orc.status] }}).</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-5">
+        <div class="card h-100">
+            <div class="card-header py-2"><strong>Cliente</strong></div>
+            <div class="card-body">
+                <p class="mb-1"><strong>{{ orc.cliente_display }}</strong></p>
+                {% set doc = (orc.cliente.cnpj_cpf if orc.cliente else None) or orc.cliente_documento %}
+                {% set tel = (orc.cliente.telefone if orc.cliente else None) or orc.cliente_telefone %}
+                {% set eml = (orc.cliente.email if orc.cliente else None) or orc.cliente_email %}
+                {% set end = (orc.cliente.endereco if orc.cliente else None) or orc.cliente_endereco %}
+                {% if doc %}<div class="small">CNPJ/CPF: {{ doc }}</div>{% endif %}
+                {% if tel %}<div class="small">Tel: {{ tel }}</div>{% endif %}
+                {% if eml %}<div class="small">{{ eml }}</div>{% endif %}
+                {% if end %}<div class="small">{{ end }}</div>{% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-7">
+        <div class="card h-100">
+            <div class="card-header py-2"><strong>Dados</strong></div>
+            <div class="card-body small">
+                <div class="row">
+                    <div class="col-6">Emitido: <strong>{{ orc.data.strftime('%d/%m/%Y') }}</strong></div>
+                    <div class="col-6">Valido ate: <strong>{{ orc.valido_ate.strftime('%d/%m/%Y') }}</strong></div>
+                    {% if orc.criado_por %}<div class="col-6">Por: {{ orc.criado_por.nome }}</div>{% endif %}
+                    {% if orc.enviado_em %}<div class="col-6">Enviado: {{ orc.enviado_em.strftime('%d/%m/%Y %H:%M') }}</div>{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header py-2"><strong>Itens</strong></div>
+    <div class="card-body">
+        <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Item</th>
+                    <th class="text-end">Qtd</th>
+                    <th>Un</th>
+                    <th class="text-end">Preco unit.</th>
+                    <th class="text-end">Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for it in orc.itens %}
+                <tr>
+                    <td>{{ it.nome }}{% if it.observacao %}<br><span class="text-muted small">{{ it.observacao }}</span>{% endif %}</td>
+                    <td class="text-end">{{ '%g'|format(it.quantidade or 0) }}</td>
+                    <td>{{ it.unidade or '-' }}</td>
+                    <td class="text-end">R$ {{ '%.2f'|format(it.preco_unitario or 0) }}</td>
+                    <td class="text-end">R$ {{ '%.2f'|format(it.subtotal or 0) }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="4" class="text-end">Subtotal</td>
+                    <td class="text-end">R$ {{ '%.2f'|format(orc.subtotal or 0) }}</td>
+                </tr>
+                {% if orc.desconto_valor and orc.desconto_valor > 0 %}
+                <tr>
+                    <td colspan="4" class="text-end">Desconto</td>
+                    <td class="text-end">- R$ {{ '%.2f'|format(orc.desconto_valor) }}</td>
+                </tr>
+                {% endif %}
+                <tr class="fw-bold">
+                    <td colspan="4" class="text-end">TOTAL</td>
+                    <td class="text-end fs-6">R$ {{ '%.2f'|format(orc.valor_total or 0) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+        </div>
+        {% if orc.observacao %}
+        <div class="mt-2"><strong class="small">Observacoes:</strong>
+            <div class="small text-muted" style="white-space:pre-wrap">{{ orc.observacao }}</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
