@@ -1,5 +1,9 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+{# `embed` = página carregada num iframe (popup do painel de entregas). Esconde
+   a sidebar e o cabeçalho mobile pra a janela ficar limpa. Ativado por
+   ?embed=1 na URL. #}
+{% set embed = request.args.get('embed') %}
 <script>
 (function(){var t=localStorage.getItem('theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();
 </script>
