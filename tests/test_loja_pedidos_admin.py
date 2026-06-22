@@ -371,3 +371,44 @@ def test_lista_tem_checkbox_e_form_de_selecao(app):
     assert b'chk-pedido' in r.data
     assert b'id="form-imprimir-selecao"' in r.data
     assert b'Imprimir sele' in r.data   # 'Imprimir seleção' (sem depender do acento UTF-8)
+
+
+# ── Popup do painel: modo embed + visibilidade das ações por papel ──────────
+
+def test_detalhe_embed_esconde_sidebar(app):
+    """Modo embed (iframe do popup do painel): sem sidebar; o form leva o flag
+    adiante pra o redirect pós-POST manter a janela limpa."""
+    from app.extensions import db
+    with app.app_context():
+        _pedido(db, codigo='EMB001')
+    c = _owner(app)
+    r = c.get('/admin/loja-online/pedidos/EMB001?embed=1')
+    assert r.status_code == 200
+    assert b'class="embed-mode"' in r.data
+    assert b'id="sidebar"' not in r.data
+    assert b'name="embed" value="1"' in r.data
+
+
+def test_detalhe_nao_owner_esconde_acoes_de_dinheiro(app):
+    """Não-owner vê o pedido e edita logística, mas NÃO vê reembolso/NF."""
+    from app.extensions import db
+    with app.app_context():
+        _pedido(db, codigo='HIDE01', status='pago')
+    c = _admin_nao_owner(app)
+    r = c.get('/admin/loja-online/pedidos/HIDE01')
+    assert r.status_code == 200
+    assert 'Reembolsar e cancelar'.encode() not in r.data
+    assert b'Emitir NF' not in r.data
+    assert 'Salvar altera'.encode() in r.data   # edição continua disponível
+
+
+def test_detalhe_owner_pago_ve_acoes(app):
+    """Owner (status pago) continua vendo reembolso e emissão de NF."""
+    from app.extensions import db
+    with app.app_context():
+        _pedido(db, codigo='OWN01', status='pago')
+    c = _owner(app)
+    r = c.get('/admin/loja-online/pedidos/OWN01')
+    assert r.status_code == 200
+    assert 'Reembolsar e cancelar'.encode() in r.data
+    assert b'Emitir NF' in r.data
