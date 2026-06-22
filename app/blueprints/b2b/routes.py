@@ -432,7 +432,7 @@ def contas_receber():
 
 # ── Orcamentos B2B (encomendas corporativas, eventos, cestas em volume) ──
 
-from app.models import Orcamento, Produto, Receita
+from app.models import Orcamento
 from app.services import orcamentos as orc_svc
 
 
