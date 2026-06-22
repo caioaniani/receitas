@@ -168,3 +168,32 @@ parece tentador, mas:
   `https://padariaartesanalonline.com.br`.
 - Resultado: cliente que digita sem www vê "site inseguro" — pior que
   hoje. Por isso o caminho canônico (Cloudflare) é o único definitivo.
+
+---
+
+## ✅ RESOLVIDO em 22/06/2026 (caminho real, mais simples que o playbook acima)
+
+NÃO foi preciso transferir o domínio. O domínio já estava na conta
+**Registro.br** do titular (caio antinhani). O caminho que funcionou:
+
+1. **Cloudflare**: zona pronta (www CNAME→railway cinza; A `@`→192.0.2.1
+   laranja; TXT `_railway-verify.www`; TXT SPF). Redirect Rule
+   "Apex para www" (301, wildcard, preserva path) ativa.
+2. **Registro.br** → página do domínio → seção Provedor de Serviços →
+   **"Cancelar seleção do provedor atual"** (tira do TOWEB-BRASIL → vira
+   autogestão NIC.br / "Novo provedor: NENHUM"). Isso DESTRAVOU a edição
+   do DNS (com provedor, só o provedor edita).
+3. **Registro.br** → seção DNS/Servidores → trocou os NS:
+   `ns8/ns9.wixdns.net` → `anderson.ns.cloudflare.com` /
+   `uma.ns.cloudflare.com`.
+4. **Cloudflare** → "Active" ("Your domain is now protected by Cloudflare").
+5. **Cloudflare** → SSL/TLS → Edge Certificates → **Always Use HTTPS** ON
+   (cobre o `http://` no apex).
+
+Validação (15:55, propagação parcial mas correta): apex → Cloudflare edge
+(104.21.x/172.67.x); www → Railway (69.46.46.90); NS → Cloudflare (Google
+já via; resto em cache, ~1-2h). Resultado final: apex 301→www com SSL.
+
+**Estado de domínios do dono (Registro.br)**:
+- `padariaartesanalonline.com.br` — loja (Railway via Cloudflare). Expira 10/04/2027.
+- `opaopadariaartesanal.com.br` — marca/gestão. Expira 01/04/2027. NÃO mexido.
