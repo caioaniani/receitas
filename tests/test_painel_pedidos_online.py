@@ -327,3 +327,16 @@ def test_webhook_lalamove_pop_nao_marca_entregue(app):
         # continua 'a_caminho' — NÃO virou entregue por evento de retirada
         assert PedidoOnline.query.filter_by(
             codigo='WHPOP1').first().status == 'a_caminho'
+
+
+def test_painel_renderiza_drawer_pedidos_do_site(app):
+    """A página do painel renderiza (url_for OK) com a aba lateral 'Pedidos do
+    site', o popup (iframe) e a referência ao endpoint de listagem. Trava
+    regressão de endpoint inexistente em url_for."""
+    c = _staff(app)
+    r = c.get('/entregas/painel')
+    assert r.status_code == 200
+    for marker in (b'id="ped-toggle"', b'id="ped-drawer"', b'id="ped-iframe"',
+                   b'/entregas/api/painel/pedidos-online',
+                   'Pedidos do site'.encode()):
+        assert marker in r.data
