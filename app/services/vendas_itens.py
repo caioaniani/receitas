@@ -207,10 +207,13 @@ def agregar_itens_consolidado(data_inicial, data_final):
     NAO substitui `agregar_itens` — a tela /pdv/itens-vendidos continua
     usando a versao crua porque depende dos campos de mapeamento Seru.
     """
+    from app.services import loja_online_vendas
     from app.services.vendas_manuais import _agregar_vendas_vnda_api
 
     seru_data = agregar_itens(data_inicial, data_final)
     vendas_vnda, vnda_aviso = _agregar_vendas_vnda_api(data_inicial, data_final)
+    # Loja propria (PedidoOnline) — fonte do site desde o cutover (VNDA off).
+    vendas_online = loja_online_vendas.vendas_por_produto(data_inicial, data_final)
 
     seru_por_chave = {}
     seru_orfaos = []
