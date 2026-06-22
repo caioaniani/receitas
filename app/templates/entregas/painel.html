@@ -176,6 +176,48 @@
   .al-badge { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px;
     background: #ffe3e3; color: #c92a2a; }
   .al-badge.lido { background: #e9ecef; color: #868e96; }
+
+  /* ── Aba lateral "Pedidos do site" (estilo /padeiro): tab vertical + drawer ── */
+  #ped-toggle { position: fixed; right: 0; top: 50%; transform: translateY(-50%); z-index: 45;
+    background: #1971c2; color: #fff; border: 0; padding: 18px 12px; font-weight: 800;
+    font-size: 16px; border-radius: 12px 0 0 12px; cursor: pointer; writing-mode: vertical-rl;
+    box-shadow: -2px 0 10px rgba(0,0,0,.25); }
+  #ped-bg { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.45); display: none; }
+  #ped-bg.on { display: block; }
+  /* "um pouco mais que a metade" da tela; em celular ocupa quase tudo */
+  #ped-drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 61; width: 58vw; max-width: 96vw;
+    background: #fff; box-shadow: -4px 0 18px rgba(0,0,0,.2); display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform .22s ease; }
+  #ped-drawer.on { transform: translateX(0); }
+  @media (max-width: 700px) { #ped-drawer { width: 94vw; } }
+  #ped-drawer .drawer-topo { background: #1f2933; color: #fff; padding: 14px 18px; display: flex;
+    align-items: center; justify-content: space-between; }
+  #ped-drawer .drawer-topo h2 { font-size: 18px; margin: 0; font-weight: 800; }
+  #ped-drawer .drawer-topo .x { background: none; border: 0; color: #fff; font-size: 28px; cursor: pointer; line-height: 1; }
+  #ped-busca-wrap { padding: 12px 14px; border-bottom: 1px solid #e9ecef; }
+  #ped-busca { width: 100%; font-size: 17px; padding: 12px 14px; border: 2px solid #ced4da; border-radius: 10px; }
+  #ped-busca:focus { outline: none; border-color: #1971c2; }
+  #ped-tabela-wrap { flex: 1; overflow-y: auto; }
+  table.ped-tabela { width: 100%; border-collapse: collapse; font-size: 15px; }
+  table.ped-tabela th { position: sticky; top: 0; background: #f1f3f5; text-align: left; padding: 11px 12px;
+    font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: #495057; z-index: 1; }
+  table.ped-tabela td { padding: 13px 12px; border-bottom: 1px solid #f1f3f5; }
+  table.ped-tabela tr.ped-row { cursor: pointer; }
+  table.ped-tabela tr.ped-row:hover { background: #e7f5ff; }
+  table.ped-tabela tr.ped-row:active { background: #d0ebff; }
+  .ped-codigo { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: #1971c2; }
+  .ped-vazio { text-align: center; color: #868e96; padding: 40px 12px; font-size: 15px; }
+  /* Popup: detalhe/edição do pedido (iframe da página admin em modo embed) */
+  #ped-popup { position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,.55); display: none;
+    align-items: center; justify-content: center; padding: 16px; }
+  #ped-popup.on { display: flex; }
+  #ped-popup .ped-popup-box { background: #fff; border-radius: 14px; width: 96vw; max-width: 1100px;
+    height: 92vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,.4); }
+  #ped-popup .ped-popup-topo { background: #1f2933; color: #fff; padding: 12px 16px; display: flex;
+    align-items: center; justify-content: space-between; }
+  #ped-popup .ped-popup-topo h2 { font-size: 17px; margin: 0; font-weight: 800; }
+  #ped-popup .ped-popup-topo .x { background: none; border: 0; color: #fff; font-size: 28px; cursor: pointer; line-height: 1; }
+  #ped-popup iframe { flex: 1; width: 100%; border: 0; background: #fff; }
 </style>
 </head>
 <body>
