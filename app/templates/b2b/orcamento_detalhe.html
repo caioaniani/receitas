@@ -127,6 +127,12 @@
                     <td class="text-end">- R$ {{ '%.2f'|format(orc.desconto_valor) }}</td>
                 </tr>
                 {% endif %}
+                {% if orc.frete_valor and orc.frete_valor > 0 %}
+                <tr>
+                    <td colspan="4" class="text-end">Frete</td>
+                    <td class="text-end">+ R$ {{ '%.2f'|format(orc.frete_valor) }}</td>
+                </tr>
+                {% endif %}
                 <tr class="fw-bold">
                     <td colspan="4" class="text-end">TOTAL</td>
                     <td class="text-end fs-6">R$ {{ '%.2f'|format(orc.valor_total or 0) }}</td>
