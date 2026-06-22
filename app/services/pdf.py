@@ -474,10 +474,27 @@ def gerar_orcamento_pdf(orc):
         pdf.multi_cell(0, 5, _latin1(orc.observacao))
         pdf.ln(2)
 
+    # Bloco PIX — pagamento. Constantes em app.constants pra ficar 1
+    # fonte de verdade do CNPJ/razao social.
+    from app.constants import (
+        PADARIA_CHAVE_PIX,
+        PADARIA_PIX_TIPO,
+        PADARIA_RAZAO_SOCIAL,
+    )
+    pdf.set_font('Helvetica', 'B', 9)
+    pdf.cell(0, 5, 'PAGAMENTO — PIX', new_x='LMARGIN', new_y='NEXT')
+    pdf.set_font('Helvetica', '', 9)
+    pdf.cell(0, 5, _latin1(
+        f'Chave PIX ({PADARIA_PIX_TIPO}): {PADARIA_CHAVE_PIX}'),
+        new_x='LMARGIN', new_y='NEXT')
+    pdf.cell(0, 5, _latin1(f'Favorecido: {PADARIA_RAZAO_SOCIAL}'),
+             new_x='LMARGIN', new_y='NEXT')
+    pdf.ln(2)
+
     # Rodape com aceite
     pdf.set_font('Helvetica', 'I', 8)
     pdf.cell(0, 5,
-             _latin1('Proposta valida ate a data indicada. Pagamento e prazo '
-                     'a combinar.'),
+             _latin1('Proposta valida ate a data indicada. Apos confirmar o '
+                     'PIX, envie o comprovante para fechar o pedido.'),
              new_x='LMARGIN', new_y='NEXT')
     return bytes(pdf.output())
