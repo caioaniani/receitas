@@ -58,7 +58,10 @@ def _serializar_produto(p):
         'categoria': p.categoria or 'Outros',
         'preco': float(p.preco_site) if p.preco_site else None,
         'imagem': p.imagem_dropbox_url or p.imagem_url or '',
-        'descricao': p.descricao or '',
+        # descricao_seo (editorial) prevalece sobre `descricao` curta — vai
+        # no <meta description>/JSON-LD/card do site. Quando ambas vazias,
+        # template cai no fallback "Nome — Categoria".
+        'descricao': p.descricao_seo or p.descricao or '',
         'slug': _slugify(p.nome),
         'href': f'/loja/{_slugify(p.nome)}-p{p.id}',
         # No detalhe, vamos expandir os itens da cesta (mas não no listing
