@@ -3226,7 +3226,7 @@ def loja_online_pedido_detalhe(codigo):
 
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/editar', methods=['POST'])
-@owner_required
+@login_required
 def loja_online_pedido_editar(codigo):
     """Edita os dados LOGÍSTICOS/CONTATO do pedido — o que a operação precisa
     corrigir depois do pedido feito: cartinha, data/janela, endereço, contato,
