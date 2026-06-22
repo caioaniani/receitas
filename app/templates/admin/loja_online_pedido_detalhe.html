@@ -172,6 +172,7 @@
             pode ter autorizado). Só use <strong>Refazer do zero</strong> se a nota
             estiver realmente <em>rejeitada</em>.
           </div>
+          {% if current_user.is_owner %}
           {# Primário: reenvia/verifica a MESMA nota (não duplica) #}
           <form method="POST" action="{{ url_for('main.loja_online_emitir_nf', codigo=p.codigo) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
@@ -189,6 +190,9 @@
               <i class="bi bi-arrow-repeat"></i> Refazer do zero
             </button>
           </form>
+          {% else %}
+          <p class="text-muted small mb-0">A emissão/reenvio da NF é feita pelo dono.</p>
+          {% endif %}
         {% elif p.status in ('pago', 'em_preparo', 'a_caminho', 'entregue') %}
           {# NF pode ser emitida em qualquer status pós-pago — o cliente pode
              ter movido o pedido (em preparo / a caminho / entregue) antes da
