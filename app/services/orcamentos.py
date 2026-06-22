@@ -66,13 +66,24 @@ def montar_item_payload(linha):
     pro PedidoOnlineItem-like. Resolve catalogo se kind+id vier; senao,
     item livre (sem FK) com nome digitado.
 
-    Aceita:
-      kind: 'receita'|'produto'|'livre'
-      id:   id do catalogo (se kind != 'livre')
+    Aceita duas formas de identificar o catalogo:
+      - `catalogo`: 'receita:5' | 'produto:3' | 'livre' (forma do form HTML,
+        1 campo so — robusto, nao depende de JS pra separar)
+      - `kind` + `id`: 'receita'|'produto'|'livre' + id (forma do copilot/API)
+    Mais:
       nome: texto (sempre — pode sobrescrever o do catalogo)
       qtd, unidade, preco_unitario, observacao
     """
-    kind = (linha.get('kind') or 'livre').strip()
+    # Forma combinada do form ('receita:5') tem prioridade se vier.
+    catalogo = (linha.get('catalogo') or '').strip()
+    if catalogo and ':' in catalogo:
+        kind, _, _cid = catalogo.partition(':')
+        kind = kind.strip()
+        linha = {**linha, 'id': _cid.strip()}
+    elif catalogo in ('receita', 'produto', 'livre'):
+        kind = catalogo
+    else:
+        kind = (linha.get('kind') or 'livre').strip()
     nome = (linha.get('nome') or '').strip()
     receita_id = None
     produto_id = None
