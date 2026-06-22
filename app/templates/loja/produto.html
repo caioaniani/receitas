@@ -1,10 +1,39 @@
 {% extends 'loja/_base.html' %}
 
 {% block title %}{{ item.nome }} — O Pão Padaria Artesanal{% endblock %}
-{% block description %}{{ item.descricao or (item.nome ~ ' — ' ~ item.categoria) }}{% endblock %}
+{% block description %}{{ item.descricao or (item.nome ~ ' — ' ~ item.categoria ~ ' artesanal com entrega em São Paulo.') }}{% endblock %}
+{% block og_type %}product{% endblock %}
 {% block og_extra %}
-  {% if item.imagem %}<meta property="og:image" content="{{ item.imagem }}">{% endif %}
+  {% if item.imagem %}<meta property="og:image" content="{{ item.imagem }}">
+  <meta name="twitter:image" content="{{ item.imagem }}">{% endif %}
+  <meta property="product:price:amount" content="{{ '%.2f'|format(item.preco or 0) }}">
+  <meta property="product:price:currency" content="BRL">
+  <meta property="product:availability" content="{{ 'out of stock' if item.esgotado else 'in stock' }}">
 {% endblock %}
+
+{# Schema.org Product — Google mostra preco, disponibilidade e nome do
+   produto direto na pagina de busca (rich result). Aumenta CTR
+   significativamente vs link normal. #}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": {{ item.nome|tojson }},
+  "description": {{ (item.descricao or (item.nome ~ ' — ' ~ item.categoria))|tojson }},
+  {% if item.imagem %}"image": {{ item.imagem|tojson }},{% endif %}
+  "category": {{ (item.categoria or 'Padaria')|tojson }},
+  "brand": {"@type": "Brand", "name": "O Pão Padaria Artesanal"},
+  "offers": {
+    "@type": "Offer",
+    "url": {{ request.base_url|tojson }},
+    "priceCurrency": "BRL",
+    "price": "{{ '%.2f'|format(item.preco or 0) }}",
+    "availability": "{{ 'https://schema.org/OutOfStock' if item.esgotado else 'https://schema.org/InStock' }}",
+    "itemCondition": "https://schema.org/NewCondition",
+    "seller": {"@type": "Organization", "name": "O Pão Padaria Artesanal"}
+  }
+}
+</script>
 
 {% block content %}
 <article class="produto">
