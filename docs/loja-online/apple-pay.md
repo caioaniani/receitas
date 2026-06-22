@@ -37,8 +37,28 @@ DECRIPTOGRAFA e processa.
    criptografado do token Apple Pay).
 5. Testes e homologação.
 
-Custo extra do nativo: conta Apple Developer (US$ 99/ano). Esforço: ~2-3 dias
-+ esperas (Apple credenciamento, Stone habilitação, homologação).
+### Detalhes técnicos do nativo (doc Pagar.me, etapas 2-4)
+- **ETAPA 2 (frontend)**: usar `ApplePaySession` (self-service, doc da Apple).
+  Ao iniciar a sessão, indicar **só Visa e Mastercard** (bandeiras do
+  credenciador Stone). A Apple devolve um JSON; os campos usados depois são
+  **`paymentData.data`** e **`ephemeralPublicKey.header.EphemeralPublicKey`**.
+- **NÃO decriptografar** o payload da Apple no nosso lado — a doc é explícita:
+  "esse trabalho é feito pela API do Pagar.me". A gente só repassa o token.
+- **ETAPA 3 (Stone)**: habilitar na página "Gestão de Certificados" do
+  Pagar.me (upload do .CER gerado na ETAPA 1).
+- **ETAPA 4 (backend v5)**: criar Order no método **cartão** (`credit_card`)
+  com as especificidades da Apple (o token criptografado no lugar do
+  card_token). Mesmo `_post_order` que já usamos.
+
+### Bloqueios REAIS do nativo (não são código — são você)
+- **ETAPA 1**: credenciamento Apple → conta Apple Developer (US$ 99/ano) +
+  geração do certificado `.CER`.
+- **ETAPA 3**: habilitação na Stone (upload do cert + pedido).
+Sem essas duas, o código (etapas 2+4) não funciona. O LINK não tem esses
+gates — por isso é o "agora".
+
+Custo extra do nativo: conta Apple Developer (US$ 99/ano). Esforço de código:
+~2-3 dias (etapas 2+4) + esperas externas (Apple credenciamento, Stone, homolog.).
 
 **Quando fazer**: só se o Apple Pay (via link) trouxer volume que justifique
 a UX embutida.
