@@ -21,16 +21,16 @@ def _owner_logado(app):
     return c, u
 
 
-def test_rota_owner_only(app):
-    """Sem login OU sem ser owner: 403/302. PII de catálogo + preço não
-    pode vazar pra qualquer staff."""
+def test_rota_login_required(app):
+    """Sem login: bloqueado (302/401/403). Logado: passa, mesmo sem ser owner —
+    decisão do dono 22/06/2026, liberar admin da loja online a toda a equipe."""
     from app.extensions import db
     from app.models import Usuario
     # Sem login
     c = app.test_client()
     assert c.get('/admin/loja-online/auditoria-catalogo').status_code in (302, 401, 403)
 
-    # Admin comum (não-owner): também não
+    # Admin comum (não-owner) agora vê.
     u = Usuario(nome='Admin', login='adm', papel='admin')
     u.set_senha('x' * 8)
     db.session.add(u)
@@ -39,9 +39,7 @@ def test_rota_owner_only(app):
     with c2.session_transaction() as s:
         s['_user_id'] = str(u.id)
         s['_fresh'] = True
-    # owner_required redireciona pra index ou retorna 403 — ambos aceitos
-    r = c2.get('/admin/loja-online/auditoria-catalogo')
-    assert r.status_code in (302, 403)
+    assert c2.get('/admin/loja-online/auditoria-catalogo').status_code == 200
 
 
 def test_rota_owner_carrega(app):
