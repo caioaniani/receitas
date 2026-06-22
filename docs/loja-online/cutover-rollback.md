@@ -45,7 +45,7 @@ está confirmado pelo tooltip.
 | 5 | Razão social exata no texto legal | ⏳ | hoje placeholder "O Pão Padaria Artesanal Ltda." em 4 lugares; confirmar com contrato social |
 | 6 | DNS swap → Railway | 🟡 em curso | `www.padariaartesanalonline.com.br` apontado e propagado (ver "Estado do DNS" abaixo); apex pendente |
 | 7a | DKIM + Return-Path (Postmark) | ✅ | ambos "Verified" no painel 21/06 |
-| 7b | **Upgrade Postmark (100 → 10k/mês)** | ⚠️ **bloqueador — confirmar** | grátis = 100 e-mails/mês; 1 pedido completo = até 5 e-mails → ~20 pedidos/mês estoura. Falha é SILENCIOSA (best-effort). US$15/mês resolve. NÃO confundir com Sentry |
+| 7b | **Upgrade Postmark (100 → 10k/mês)** | ✅ | assinatura confirmada pelo dono 21/06 ~23h |
 | 7c | DMARC `p=none` em `_dmarc.opao.online` | 🔵 opcional | boas-práticas, fase 2. TXT: `v=DMARC1; p=none; rua=mailto:caio@opao.online` |
 
 ## 🌐 Estado do DNS (21/06/2026, ~23:20)
