@@ -219,3 +219,37 @@ def test_chave_pix_centralizada_em_constants():
     assert PADARIA_CHAVE_PIX == PADARIA_CNPJ
     assert PADARIA_PIX_TIPO == 'CNPJ'
     assert 'O Pão' in PADARIA_RAZAO_SOCIAL
+
+
+def test_frete_soma_no_total(app):
+    """Total = (subtotal - desconto) + frete."""
+    from decimal import Decimal
+
+    from app.extensions import db
+    from app.services import orcamentos as svc
+    with app.app_context():
+        prod = _produto(db, 'Box', preco=100.0)
+        itens = [{'catalogo': f'produto:{prod.id}', 'qtd': '2',
+                  'preco_unitario': '100'}]
+        orc, erros = svc.criar_orcamento(
+            {'cliente_nome': 'Hotel', 'desconto_valor': '30',
+             'frete_valor': '45'}, itens)
+        assert erros == []
+        # subtotal 200; (200 - 30) + 45 = 215
+        assert orc.subtotal == Decimal('200.00')
+        assert orc.frete_valor == Decimal('45.00')
+        assert orc.valor_total == Decimal('215.00')
+
+
+def test_frete_default_zero(app):
+    from decimal import Decimal
+
+    from app.extensions import db
+    from app.services import orcamentos as svc
+    with app.app_context():
+        prod = _produto(db)
+        itens = [{'catalogo': f'produto:{prod.id}', 'qtd': '1',
+                  'preco_unitario': '10'}]
+        orc, _ = svc.criar_orcamento({'cliente_nome': 'X'}, itens)
+        assert orc.frete_valor == Decimal('0')
+        assert orc.valor_total == Decimal('10.00')
