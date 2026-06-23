@@ -75,6 +75,7 @@ def _ctx_checkout(erros=None, form=None):
         # criar_pedido.
         corte_km=loja_checkout.DISTANCIA_CORTE_PRIMEIRA_JANELA_KM,
         janelas_cortadas_longe=list(loja_checkout.JANELAS_CORTADAS_LONGE),
+        express_longe_km=loja_checkout.DISTANCIA_EXPRESS_2H_KM,
         erros=erros, form=form,
     )
 
