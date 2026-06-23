@@ -104,8 +104,8 @@ def test_qtd_formatada_usa_unidade_real(app):
     from app.models import MateriaPrima, Produto, ProdutoItem, Receita
 
     # MP em gramas (peito de peru, mussarela): mostra "100g"
-    mp_peru = MateriaPrima(nome='Peito de peru', unidade='g')
-    mp_leite = MateriaPrima(nome='Leite', unidade='ml')
+    mp_peru = MateriaPrima(nome='Peito de peru', unidade='g', custo_por_kg=0)
+    mp_leite = MateriaPrima(nome='Leite', unidade='ml', custo_por_kg=0)
     rec = Receita(nome='Pão Sourdough', categoria='Paes',
                   rendimento_qtd=1, rendimento_unidade='un', peso_base=500.0)
     db.session.add_all([mp_peru, mp_leite, rec])
