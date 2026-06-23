@@ -337,6 +337,7 @@ def _gate_acesso():
             # API publica de disponibilidade por dia (chamada pelo JS da
             # pagina de produto). Read-only e nao expoe nada sensivel.
             'loja.api_disponibilidade_dia',
+            'loja.api_disponibilidade_checkout',
     ):
         return None
     from app.utils import host_atual_eh_loja
