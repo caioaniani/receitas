@@ -88,9 +88,10 @@
           <input type="radio" name="modo_entrega" value="express"
                  {{ 'checked' if modo_sel == 'express' }}
                  {{ 'disabled' if not express_ok }}>
-          <span><strong>Express (por volta de 1h)</strong><br>
+          <span><strong>Express (1 a 2h)</strong><br>
             {% if express_ok %}
-              Entrega no mesmo dia, por volta de 1 hora.
+              Entrega no mesmo dia, por volta de 1 hora — dependendo do
+              endereço (mais distante), pode levar até 2 horas.
             {% else %}
               Indisponível agora (fora do horário de entrega 8h–18h).
             {% endif %}</span>
