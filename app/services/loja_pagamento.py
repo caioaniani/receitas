@@ -173,6 +173,59 @@ def _encontrar_pedido(payload_data):
     return None, None
 
 
+def _reservar_no_plano_do_dia(pedido):
+    """Reserva no plano de estoque do site (EstoqueSitePlano) por DATA DE
+    ENTREGA. Independente do EstoqueLoja fisico — controla so DISPONIBILIDADE
+    no site (se a foccacia esta esgotada pra terca-feira ou nao). Sem
+    data_entrega: pula sem erro (cliente sem prazo escolhido). Cestas: reserva
+    a CESTA inteira (1 unid); componentes ficam dentro dela e nao consomem
+    saldo individual do plano. Decisao do dono 22/06/2026."""
+    if not pedido.data_entrega:
+        return
+    from app.services import loja_plano_dia
+    for it in pedido.itens:
+        if it.receita_id:
+            kind, item_id = 'receita', it.receita_id
+        elif it.produto_id:
+            kind, item_id = 'produto', it.produto_id
+        else:
+            continue
+        try:
+            qtd = int(round(float(it.quantidade or 0)))
+        except (TypeError, ValueError):
+            qtd = 0
+        if qtd <= 0:
+            continue
+        # `reservar` AUTO-CRIA linha com saldo virtual negativo quando nao tem
+        # plano cadastrado — deixa rastro pra auditoria de "vendeu sem
+        # planejar", mas NAO bloqueia a venda (paginas / validacao do checkout
+        # cuidam disso ANTES).
+        loja_plano_dia.reservar(kind, item_id, pedido.data_entrega, qtd)
+
+
+def _devolver_ao_plano_do_dia(pedido):
+    """Espelho do `_reservar_no_plano_do_dia`: cancelamento/reembolso devolve
+    a reserva pra o saldo daquele dia. Idempotente: pode rodar varias vezes
+    sem cair pra negativo (devolver trunca em 0)."""
+    if not pedido.data_entrega:
+        return
+    from app.services import loja_plano_dia
+    for it in pedido.itens:
+        if it.receita_id:
+            kind, item_id = 'receita', it.receita_id
+        elif it.produto_id:
+            kind, item_id = 'produto', it.produto_id
+        else:
+            continue
+        try:
+            qtd = int(round(float(it.quantidade or 0)))
+        except (TypeError, ValueError):
+            qtd = 0
+        if qtd <= 0:
+            continue
+        loja_plano_dia.devolver(kind, item_id, pedido.data_entrega, qtd)
+
+
 def _baixar_estoque(pedido, usuario_id=None):
     """Consome a reserva criada no checkout: baixa estoque DE VERDADE
     (decrementa `quantidade` e `quantidade_reservada` juntos) e registra
