@@ -69,6 +69,12 @@ def _ctx_checkout(erros=None, form=None):
         hoje_iso=base.date().isoformat(),
         min_hora_hoje=base.hour + loja_checkout.LEAD_HORAS,
         express_ok=loja_checkout.express_disponivel(),
+        # Corte por distância: pro JS cortar a 1ª janela quando a cotação
+        # chegar e for >= corte_km (motoboy não chega a tempo). Servidor é
+        # autoridade — esses dados sao DICA do front, validação real em
+        # criar_pedido.
+        corte_km=loja_checkout.DISTANCIA_CORTE_PRIMEIRA_JANELA_KM,
+        janelas_cortadas_longe=list(loja_checkout.JANELAS_CORTADAS_LONGE),
         erros=erros, form=form,
     )
 
