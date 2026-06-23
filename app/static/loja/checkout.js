@@ -31,8 +31,26 @@
     });
   }
 
+  // Contador da cartinha (limite 250 — clientes empolgam). maxlength já
+  // bloqueia no input; isso aqui é só feedback visual.
+  function _cartinhaContador() {
+    var ta = document.getElementById('cartinha');
+    var out = document.getElementById('cartinha-contador');
+    if (!ta || !out) return;
+    var limite = parseInt(ta.getAttribute('maxlength') || '250', 10);
+    function atualizar() {
+      var n = (ta.value || '').length;
+      out.textContent = n + '/' + limite + ' caracteres';
+      out.style.color = (n >= limite) ? '#c92a2a'
+                      : (n >= limite * 0.85) ? '#a06200' : '';
+    }
+    ta.addEventListener('input', atualizar);
+    atualizar();
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     _blindarNomes();
+    _cartinhaContador();
     var form = document.getElementById('checkout-form');
     if (!form || !window.Carrinho) return;
 
