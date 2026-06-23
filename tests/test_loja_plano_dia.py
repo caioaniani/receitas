@@ -364,9 +364,14 @@ def test_pagina_produto_mostra_seletor_quando_esgotado_so_hoje(app):
     db.session.add(r)
     db.session.commit()
 
+    # Plano restrito: hoje + os 2 dias seguintes esgotados; primeira data
+    # com saldo eh hoje+3. Sem plano cadastrado, o fallback eh "disponivel"
+    # (default 99999 — decisao 23/06/2026), entao a primeira data sem plano
+    # tambem contaria; precisa preencher pra simular o cenario real.
     dia_hoje = hoje()
     proxima = dia_hoje + timedelta(days=3)
-    loja_plano_dia.definir('receita', r.id, dia_hoje, 0)
+    for i in range(3):
+        loja_plano_dia.definir('receita', r.id, dia_hoje + timedelta(days=i), 0)
     loja_plano_dia.definir('receita', r.id, proxima, 5)
 
     # Loja em modo teste: precisa logar pra ver a vitrine (gate _gate_acesso)
