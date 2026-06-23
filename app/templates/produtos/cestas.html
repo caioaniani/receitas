@@ -37,7 +37,7 @@
                         <td class="text-center"><span class="badge bg-success">{{ c.n_componentes }}</span></td>
                         <td class="small text-muted">
                             {% for it in p.itens[:5] %}
-                            {{ it.quantidade|int if it.quantidade == it.quantidade|int else '%.1f'|format(it.quantidade) }}× {{ it.item_nome }}{% if not loop.last %} · {% endif %}
+                            {{ it.qtd_formatada }} {{ it.item_nome }}{% if not loop.last %} · {% endif %}
                             {% endfor %}
                             {% if p.itens|length > 5 %}<em> · +{{ p.itens|length - 5 }} item(ns)</em>{% endif %}
                         </td>
