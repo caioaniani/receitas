@@ -628,6 +628,41 @@ a:hover { text-decoration: underline; }
 .dispon-status.ok { color: #2b7a36; }
 .dispon-status.ko { color: #c92a2a; font-weight: 700; }
 
+/* Bloco de disponibilidade no checkout: lista itens sem saldo pra a data
+   escolhida + botoes "remover" / "trocar data" (23/06/2026). */
+.dispon-checkout {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-family: var(--fonte-corpo);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.dispon-checkout.verificando {
+  background: #f1f3f5; color: var(--texto-suave);
+}
+.dispon-checkout.ok {
+  background: #e7f5e8; color: #2b7a36;
+}
+.dispon-checkout.ko {
+  background: #fff4cc; color: #6a4200; border: 1px solid #f5c451;
+}
+.dispon-checkout .btn-link-vermelho {
+  background: none; border: 0; padding: 0;
+  color: #c92a2a; text-decoration: underline; cursor: pointer;
+  font-family: inherit; font-size: 13px;
+}
+.dispon-checkout .btn-link-vermelho:hover { color: #8a1d1d; }
+.dispon-checkout .btn-trocar-data {
+  display: inline-block; margin-top: 4px;
+  padding: 10px 16px;
+  border: 0; border-radius: 6px;
+  background: #2b7a36; color: #fff;
+  font-family: inherit; font-size: 14px; font-weight: 700;
+  cursor: pointer;
+}
+.dispon-checkout .btn-trocar-data:hover { background: #1f5a27; }
+
 .qtd-seletor {
   display: flex; align-items: center; gap: 10px;
   margin-bottom: 12px;
