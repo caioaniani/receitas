@@ -67,6 +67,12 @@
         <td class="text-center fw-bold plano-saldo">
           {% if it.saldo is none %}<span class="text-muted">—</span>{% else %}{{ it.saldo }}{% endif %}
         </td>
+        <td class="text-center">
+          <button type="button" class="btn btn-sm btn-outline-secondary plano-replicar"
+                  title="Replicar este valor pros próximos 14 dias">
+            ↔
+          </button>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
