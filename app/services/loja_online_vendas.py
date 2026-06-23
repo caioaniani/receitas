@@ -87,6 +87,79 @@ def vendas_por_produto(data_inicial, data_final):
     return agg
 
 
+def contagem_para_dia(dia):
+    """Pra cada item da producao, quanto temos que entregar no dia X — somando
+    pedidos do site (PedidoOnline pago/em_preparo/a_caminho/entregue) com
+    data_entrega=X. CESTAS sao DESEMPACOTADAS: 5 Family Box × 1 sourdough
+    cada = +5 sourdoughs na contagem. Cancelados e aguardando_pagamento
+    ficam de fora — so o que vai mesmo virar producao.
+
+    Retorna [{'tipo': 'receita'|'produto'|'mp', 'id': int, 'nome': str,
+              'qtd': int, 'detalhes': [...]}] ordenado por qtd desc.
+    """
+    from collections import defaultdict
+
+    from app.models import Produto
+    from app.services.vnda_sync import _componentes_de_cesta
+
+    pedidos = (PedidoOnline.query
+               .filter(PedidoOnline.data_entrega == dia,
+                       PedidoOnline.status.in_(
+                           ('pago', 'em_preparo', 'a_caminho', 'entregue')))
+               .all())
+
+    # (tipo, id) -> {'nome': str, 'qtd': int, 'detalhes': [(origem, qtd)]}
+    # `detalhes` ajuda a auditar "de onde veio a qtd": ex `[('Family Box', 5),
+    # ('venda direta', 2)]` mostra que 5 sairam de cestas e 2 da venda solta.
+    agg = defaultdict(lambda: {'nome': '', 'qtd': 0, 'detalhes': []})
+
+    for p in pedidos:
+        for it in p.itens:
+            qtd_compra = int(round(float(it.quantidade or 0)))
+            if qtd_compra <= 0:
+                continue
+            # Se for cesta (Produto com itens), explode.
+            cesta = None
+            if it.produto_id:
+                cesta = Produto.query.get(it.produto_id)
+                if cesta and not cesta.itens:
+                    cesta = None  # produto simples (sem composicao)
+            if cesta:
+                origem = cesta.nome
+                for tipo_c, id_c, nome_c, qtd_no_item in _componentes_de_cesta(cesta):
+                    if not id_c:
+                        continue
+                    total = int(round(qtd_compra * float(qtd_no_item or 1)))
+                    if total <= 0:
+                        continue
+                    e = agg[(tipo_c, id_c)]
+                    e['nome'] = nome_c
+                    e['qtd'] += total
+                    e['detalhes'].append((origem, total))
+            else:
+                # Item direto (receita ou produto simples)
+                if it.receita_id:
+                    chave = ('receita', it.receita_id)
+                elif it.produto_id:
+                    chave = ('produto', it.produto_id)
+                else:
+                    continue
+                e = agg[chave]
+                e['nome'] = it.nome
+                e['qtd'] += qtd_compra
+                e['detalhes'].append(('venda direta', qtd_compra))
+
+    out = []
+    for (tipo, id_), v in agg.items():
+        out.append({
+            'tipo': tipo, 'id': id_,
+            'nome': v['nome'], 'qtd': v['qtd'],
+            'detalhes': v['detalhes'],
+        })
+    out.sort(key=lambda x: (-x['qtd'], x['nome']))
+    return out
+
+
 def produtos_vendidos(data_inicial, data_final):
     """Lista por produto pra a visao da loja do site (espelha o formato de
     `vnda_sync.agregar_vendas`): [{nome, sku, qtd, tipo, id}] + total_pedidos.
