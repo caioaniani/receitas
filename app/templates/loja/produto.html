@@ -75,14 +75,22 @@
     {% elif item.esgotado %}
     <p class="aviso-comprar esgotado">Esgotado no momento — volte em breve.</p>
     {% else %}
-    {# Disponibilidade por dia (22/06/2026): cliente escolhe a data de
-       entrega e ve se tem saldo. Default = hoje (entrega no mesmo dia ou
-       proxima janela). #}
+    {# Disponibilidade por dia (22/06/2026 - etapa 4): cliente escolhe a data
+       de entrega e ve em tempo real se tem saldo. Default = HOJE se tem
+       saldo; senao a PRIMEIRA data futura disponivel (server-side decide
+       em data_padrao_iso). #}
     <div class="comprar-bloco">
+      {% if item.esgotado_hoje %}
+      <p class="aviso-comprar" style="background:#fff4cc; color:#92500c;
+              border:1px solid #f5c451; padding:10px 14px; border-radius:8px;
+              margin-bottom:10px;">
+        <strong>Esgotado hoje</strong> — compre pra entrega nos próximos dias.
+      </p>
+      {% endif %}
       <div class="dispon-dia">
         <label for="dispon-data">Disponível para entregar em</label>
         <input type="date" id="dispon-data"
-               value="{{ data_hoje_iso }}"
+               value="{{ data_padrao_iso }}"
                min="{{ data_hoje_iso }}"
                max="{{ data_max_iso }}">
         <div class="dispon-status" id="dispon-status">verificando…</div>
