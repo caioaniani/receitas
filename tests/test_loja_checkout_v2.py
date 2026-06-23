@@ -504,3 +504,20 @@ def test_cartinha_no_limite_passa_inteira(app):
             form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
         assert pedido is not None, erros
         assert pedido.cartinha == msg
+
+
+# ── Express por distância: >10km vira 2h (23/06/2026) ─────────────────────
+
+def test_janela_express_por_distancia():
+    from app.services.loja_checkout import (
+        DISTANCIA_EXPRESS_2H_KM,
+        JANELA_EXPRESS,
+        JANELA_EXPRESS_LONGE,
+        janela_express_para_distancia,
+    )
+    assert janela_express_para_distancia(3.0) == JANELA_EXPRESS
+    assert janela_express_para_distancia(None) == JANELA_EXPRESS
+    assert janela_express_para_distancia(
+        DISTANCIA_EXPRESS_2H_KM + 0.1) == JANELA_EXPRESS_LONGE
+    assert janela_express_para_distancia(
+        DISTANCIA_EXPRESS_2H_KM) == JANELA_EXPRESS_LONGE

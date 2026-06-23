@@ -158,3 +158,36 @@ def test_alerta_persistido_em_VigiaVeredito_pro_banner_do_painel(app):
         assert vv.alerta is True
         assert vv.gravidade == 'alta'
         assert 'Venda em risco' in (vv.motivo_vigia or '')
+
+
+# ── Falsos positivos reportados pelo dono 23/06/2026 ─────────────────────
+
+def test_reclamacao_de_tamanho_nao_e_handoff_preguicoso(app):
+    """Croissant 'pequenininho' = reclamação pós-venda. O bot fez handoff
+    direto (correto) e o vigia NÃO pode marcar como venda perdida."""
+    from app.services.chatbot_vigia import _e_handoff_preguicoso_em_compra
+    hist = [{'role': 'user',
+             'content': 'Peguei um croissant agora mas tá tão pequenininho. '
+                        'Todos estão assim?'}]
+    rb = {'acao': 'handoff', 'tools_usadas': []}
+    assert _e_handoff_preguicoso_em_compra(hist, rb) is False
+
+
+def test_compra_real_ainda_alerta(app):
+    """Não enfraquece o detector: compra ativa sem tool segue alertando."""
+    from app.services.chatbot_vigia import _e_handoff_preguicoso_em_compra
+    hist = [{'role': 'user', 'content': 'quero comprar 10 croissants'}]
+    rb = {'acao': 'handoff', 'tools_usadas': []}
+    assert _e_handoff_preguicoso_em_compra(hist, rb) is True
+
+
+def test_fechamento_nao_dispara_espera(app):
+    """'Ok' depois do humano resolver = encerramento, não 'cliente esperando'."""
+    from app.services.chatbot_vigia import _e_fechamento
+    assert _e_fechamento('Ok') is True
+    assert _e_fechamento('ok obrigada') is True
+    assert _e_fechamento('valeu mesmo!') is True
+    assert _e_fechamento('👍') is True
+    # mensagem que PRECISA de resposta não é fechamento
+    assert _e_fechamento('ok, mas e a entrega?') is False
+    assert _e_fechamento('Bem e vcs?') is False
