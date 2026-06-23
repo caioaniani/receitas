@@ -456,3 +456,51 @@ def test_corte_so_vale_agendada(app):
     # Retirada: cliente vai buscar — não corta
     ret = janelas_disponiveis('retirada', amanha, base=base, distancia_km=20.0)
     assert '08:00–09:00' in ret
+
+
+# ── Cartinha: limite de 250 caracteres (23/06/2026) ──────────────────────
+
+def test_cartinha_grande_e_truncada_nao_recusa(app):
+    """Cliente empolgou e escreveu 400 chars: trunca em 250, não rejeita."""
+    from app.extensions import db
+    from app.services import loja_checkout
+    from app.services.loja_checkout import CARTINHA_MAX_CHARS
+    with app.app_context():
+        p = _produto(db)
+        loja = _loja(db)
+        base = datetime(2026, 6, 17, 10, 0)
+        data = loja_checkout.datas_disponiveis(
+            'retirada', base=base)[1].isoformat()
+        msg = 'A' * 400
+        form = {'nome': 'Maria', 'sobrenome': 'Silva', 'email': 'm@x.com',
+                'cpf': '52998224725', 'aceite_lgpd': '1',
+                'modo_entrega': 'retirada', 'loja_id': str(loja.id),
+                'data_entrega': data, 'janela_entrega': '08:00–09:00',
+                'cartinha': msg}
+        pedido, erros = loja_checkout.criar_pedido(
+            form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+        assert pedido is not None, erros
+        assert len(pedido.cartinha) <= CARTINHA_MAX_CHARS
+
+
+def test_cartinha_no_limite_passa_inteira(app):
+    """Exatos 250 chars: vai inteira."""
+    from app.extensions import db
+    from app.services import loja_checkout
+    from app.services.loja_checkout import CARTINHA_MAX_CHARS
+    with app.app_context():
+        p = _produto(db)
+        loja = _loja(db)
+        base = datetime(2026, 6, 17, 10, 0)
+        data = loja_checkout.datas_disponiveis(
+            'retirada', base=base)[1].isoformat()
+        msg = 'B' * CARTINHA_MAX_CHARS
+        form = {'nome': 'Maria', 'sobrenome': 'Silva', 'email': 'm@x.com',
+                'cpf': '52998224725', 'aceite_lgpd': '1',
+                'modo_entrega': 'retirada', 'loja_id': str(loja.id),
+                'data_entrega': data, 'janela_entrega': '08:00–09:00',
+                'cartinha': msg}
+        pedido, erros = loja_checkout.criar_pedido(
+            form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+        assert pedido is not None, erros
+        assert pedido.cartinha == msg
