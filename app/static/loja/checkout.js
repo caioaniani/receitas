@@ -375,6 +375,10 @@
             var base = data.gratis ? 'Frete grátis' : ('Frete: ' + fmtBRL(freteAtual));
             out.textContent = base + dist;
             out.className = 'frete-resultado ok';
+            // Atualiza distância e repopula janelas (corta 1ª manhã se longe).
+            ultimaDistKm = data.distancia_km != null
+              ? Number(data.distancia_km) : null;
+            popularJanelas(modoSelecionado());
           }
           atualizarTotais();
         }).catch(function () {
