@@ -290,8 +290,13 @@
             -
         </td>
         <td>
-            <input type="number" name="quantidade[]" value="1"
-                   step="any" min="0.01" class="form-control form-control-sm input-blue text-center item-qtd" required>
+            <div class="input-group input-group-sm">
+                <input type="number" name="quantidade[]" value="1"
+                       step="any" min="0.01" class="form-control input-blue text-center item-qtd" required>
+                {# Unidade preenchida pelo JS quando o item e' escolhido. #}
+                <span class="input-group-text item-unidade px-2"
+                      style="background:#fff8e1; font-weight:700; font-size:12px;">un</span>
+            </div>
         </td>
         <td class="text-end item-custo-total fw-bold" style="background:#fff8e1; vertical-align:middle; font-size:12px;">
             -
