@@ -354,6 +354,27 @@ def criar_pedido(form, itens_raw, *, base=None):
                 erros.append('Escolha uma janela de horário válida '
                              '(o horário escolhido já passou).')
 
+    # Plano por dia (22/06/2026): valida cada item contra o saldo do plano
+    # da data_entrega escolhida. Mensagem CLARA com nome do produto + data
+    # pra cliente saber o que tirar/o que mudar.
+    if data_entrega and itens:
+        esgotados = []
+        for it in itens:
+            if not loja_catalogo.tem_estoque_para_dia(
+                    it['kind'], it['id'], data_entrega):
+                esgotados.append(it['nome'])
+        if esgotados:
+            data_fmt = data_entrega.strftime('%d/%m/%Y')
+            if len(esgotados) == 1:
+                erros.append(
+                    f'"{esgotados[0]}" não está disponível pra entrega em '
+                    f'{data_fmt}. Escolha outra data ou tire o item do carrinho.')
+            else:
+                erros.append(
+                    f'Os seguintes itens não estão disponíveis pra entrega '
+                    f'em {data_fmt}: {", ".join(esgotados)}. Escolha outra '
+                    'data ou tire-os do carrinho.')
+
     if erros:
         return None, erros
 
