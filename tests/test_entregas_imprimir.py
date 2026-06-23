@@ -728,26 +728,29 @@ def test_pdf_presente_mostra_enviado_por(app):
         'periodo': '08:00-09:00',
         'itens': [{'nome': 'Box', 'qtd': 1}],
     }
-    saida = pdf_svc.gerar_pedidos_pdf([presente], ['cliente'], date(2026, 6, 22))
-    # PDF comprimido — extraimos texto via pypdf
+    # PDF do fpdf2 sai comprimido — usa pdfplumber pra extrair texto.
     import io
 
-    from pypdf import PdfReader
-    texto = PdfReader(io.BytesIO(saida)).pages[0].extract_text()
+    import pdfplumber
+
+    def _txt(b):
+        with pdfplumber.open(io.BytesIO(b)) as doc:
+            return ' '.join((p.extract_text() or '') for p in doc.pages)
+
+    saida = pdf_svc.gerar_pedidos_pdf([presente], ['cliente'], date(2026, 6, 22))
+    texto = _txt(saida)
     assert 'Enviado por: Joana da Silva' in texto
     assert 'Tati, Lu e Papai' in texto
 
     # Via do motoboy NAO mostra (a via vai com o presente, motoboy nao precisa)
     saida_mot = pdf_svc.gerar_pedidos_pdf(
         [presente], ['motorista'], date(2026, 6, 22))
-    texto_mot = PdfReader(io.BytesIO(saida_mot)).pages[0].extract_text()
-    assert 'Enviado por' not in texto_mot
+    assert 'Enviado por' not in _txt(saida_mot)
 
     # NAO-presente (destinatario == comprador): linha NAO aparece
     mesmo = dict(presente, destinatario='Joana da Silva', code='SELF01')
     saida2 = pdf_svc.gerar_pedidos_pdf([mesmo], ['cliente'], date(2026, 6, 22))
-    texto2 = PdfReader(io.BytesIO(saida2)).pages[0].extract_text()
-    assert 'Enviado por' not in texto2
+    assert 'Enviado por' not in _txt(saida2)
 
 
 def test_writes_de_atribuicao_continuam_guardados(app):
