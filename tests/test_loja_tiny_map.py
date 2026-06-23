@@ -131,9 +131,10 @@ def test_definir_sku_via_rota(app):
         assert tiny_nf.sku_do_item('produto', p.id) == 'FAM-1'
 
 
-def test_tela_skus_nao_owner_agora_libera(app):
-    """22/06/2026: a tela de mapeamento de SKUs do Tiny passou a ser acessível
-    a qualquer usuário logado (a EMISSÃO da NF segue só com o dono)."""
+def test_tela_skus_owner_only(app):
+    """SKUs do Tiny mapeam pra NF — dono confirmou 22/06/2026 que essa tela
+    fica owner-only (junto com 'Ordem das categorias' e 'Ordem dos produtos').
+    Equipe nao mexe em config fiscal."""
     from app.extensions import db
     from app.models import Usuario
     u = Usuario(nome='G', login='g', papel='admin', is_owner=False)
@@ -144,4 +145,4 @@ def test_tela_skus_nao_owner_agora_libera(app):
     with c.session_transaction() as s:
         s['_user_id'] = str(u.id)
         s['_fresh'] = True
-    assert c.get('/admin/loja-online/tiny-skus').status_code == 200
+    assert c.get('/admin/loja-online/tiny-skus').status_code == 403
