@@ -382,9 +382,17 @@ def bot_webhook():
                     chatbot.salvar_historico(conv_id, historico,
                                              resultado.get('texto') or '')
                     if resultado['acao'] == 'handoff':
-                        chatwoot.definir_status(conv_id, 'open')
-                        logger.info('crm bot handoff conv=%s motivo=%s',
-                                    conv_id, resultado.get('motivo'))
+                        res_status = chatwoot.definir_status(conv_id, 'open')
+                        if res_status.get('ok'):
+                            logger.info('crm bot handoff conv=%s motivo=%s',
+                                        conv_id, resultado.get('motivo'))
+                        else:
+                            # NUNCA silenciar: se o status nao mudou, a conversa
+                            # fica presa no bot e o cliente espera. ERROR -> Sentry.
+                            logger.error(
+                                'crm bot handoff conv=%s: definir_status FALHOU '
+                                '(%s) — conversa pode ter ficado presa no bot',
+                                conv_id, res_status.get('erro'))
                     elif resultado['acao'] == 'encerrar':
                         # Cliente fechou com "obrigada/valeu" e o bot ja tinha
                         # resolvido — silencio + resolved no Chatwoot. Quando
