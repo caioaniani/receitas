@@ -87,6 +87,10 @@ DISTANCIA_CORTE_PRIMEIRA_JANELA_KM = float(
 # IMPORTANTE: usa en-dash (–) pra bater com JANELAS_HORARIAS (NÃO hífen).
 JANELAS_CORTADAS_LONGE = ('08:00–09:00',)
 
+# Cartinha de presente: limite de caracteres (23/06/2026, decisão do dono —
+# clientes empolgavam e enchiam o cupom da entrega).
+CARTINHA_MAX_CHARS = int(os.environ.get('LOJA_CARTINHA_MAX', '250') or '250')
+
 
 def janelas_disponiveis(modo, data=None, base=None, *, distancia_km=None):
     """Janelas válidas pro modo numa data. Quando a data é HOJE, remove as
@@ -276,6 +280,11 @@ def criar_pedido(form, itens_raw, *, base=None):
     cpf = _so_digitos(form.get('cpf') or '')
     modo = (form.get('modo_entrega') or '').strip()
     cartinha = (form.get('cartinha') or '').strip() or None
+    # Cartinha tem limite (23/06/2026, decisão do dono — clientes empolgavam).
+    # Trunca em vez de rejeitar o pedido: o presente é opcional, melhor cortar
+    # do que perder a venda. Aviso ao cliente fica no front (maxlength + contador).
+    if cartinha and len(cartinha) > CARTINHA_MAX_CHARS:
+        cartinha = cartinha[:CARTINHA_MAX_CHARS].rstrip()
     aceite = form.get('aceite_lgpd') in ('1', 'on', 'true', True)
 
     # Destinatário diferente do pagador (presente)
