@@ -180,6 +180,10 @@
         <select name="janela_entrega" id="janela_entrega"
                 data-sel="{{ form.get('janela_entrega', '') }}"></select>
       </label>
+      {# Disponibilidade pra a data escolhida — preenchido pelo JS via
+         /loja/api/disponibilidade-checkout. Mostra itens esgotados + opcoes
+         de remover ou trocar pra proxima data com saldo (23/06/2026). #}
+      <div id="checkout-disponibilidade" class="dispon-checkout" style="display:none;"></div>
     </div>
 
     <div class="checkout-bloco" id="bloco-express" style="display:none">
