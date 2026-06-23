@@ -35,7 +35,11 @@ def _ctx_checkout(erros=None, form=None):
     form = dict(form or {})
     cli = loja_auth.cliente_atual()
     if cli:
-        form.setdefault('nome', cli.nome or '')
+        # Nome salvo (campo único) → divide em nome + sobrenome pros 2 campos
+        # do checkout (1ª palavra = nome; resto = sobrenome).
+        _partes = (cli.nome or '').strip().split(None, 1)
+        form.setdefault('nome', _partes[0] if _partes else '')
+        form.setdefault('sobrenome', _partes[1] if len(_partes) > 1 else '')
         form.setdefault('email', cli.email or '')
         form.setdefault('telefone', cli.telefone or '')
         form.setdefault('cpf', cli.cpf or '')

@@ -29,7 +29,9 @@ def test_checkout_logado_preenche_dados(app, monkeypatch):
         db.session.commit()
     r = c.get('/loja/checkout')
     assert r.status_code == 200
-    assert b'Caio Antinhani' in r.data
+    # Nome salvo (campo único) divide em nome + sobrenome nos 2 campos
+    assert b'value="Caio"' in r.data
+    assert b'value="Antinhani"' in r.data
     assert b'c@x.com' in r.data
     assert b'11999998888' in r.data
 

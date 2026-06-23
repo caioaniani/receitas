@@ -14,7 +14,25 @@
 
   function $(sel) { return document.querySelector(sel); }
 
+  // Campos de nome: bloqueia dígitos enquanto digita (cliente colocava o CPF
+  // no nome — 23/06/2026). O servidor também valida (autoridade), isso é só UX.
+  function _blindarNomes() {
+    var campos = document.querySelectorAll('[data-nome-field]');
+    campos.forEach(function (el) {
+      el.addEventListener('input', function () {
+        var limpo = el.value.replace(/[0-9]/g, '');
+        if (limpo !== el.value) {
+          var delta = el.value.length - limpo.length;
+          var pos = Math.max(0, (el.selectionStart || limpo.length) - delta);
+          el.value = limpo;
+          try { el.setSelectionRange(pos, pos); } catch (e) { /* noop */ }
+        }
+      });
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
+    _blindarNomes();
     var form = document.getElementById('checkout-form');
     if (!form || !window.Carrinho) return;
 

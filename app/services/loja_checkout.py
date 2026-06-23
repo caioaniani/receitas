@@ -262,12 +262,15 @@ def criar_pedido(form, itens_raw, *, base=None):
     telefone_destinatario = ((form.get('telefone_destinatario') or '').strip()
                              if e_presente else None) or None
 
-    if not _nome_valido(nome_dado):
-        erros.append('Informe seu nome (apenas letras, sem números).')
-    if not _nome_valido(sobrenome_dado):
-        erros.append('Informe seu sobrenome (apenas letras, sem números).')
-    # Nome completo = nome + sobrenome (o resto do código usa `nome`).
+    # Nome completo = nome + sobrenome. O servidor valida o CONJUNTO (sem
+    # dígitos, com letras) — bloqueia o CPF no campo de nome. O "sobrenome
+    # obrigatório" é garantido pelos 2 campos `required` do formulário web;
+    # aqui aceitamos também o nome completo vindo num campo só (compat com
+    # chamadas que mandam o nome inteiro).
     nome = f'{nome_dado} {sobrenome_dado}'.strip()
+    if not _nome_valido(nome):
+        erros.append('Informe seu nome e sobrenome (apenas letras, '
+                     'sem números).')
     if not _email_valido(email):
         erros.append('Informe um email válido.')
     # CPF é exigência do Pagar.me pra Pix e da NF-e (Fase 5) — pedir aqui

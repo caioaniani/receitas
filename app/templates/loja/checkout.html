@@ -38,10 +38,19 @@
         Esse é o nome de <strong>quem paga</strong> — sai na nota fiscal.
         Se for um presente, mais abaixo você diz pra <strong>quem vai entregar</strong>.
       </p>
-      <label>Nome completo do comprador
+      <label>Nome do comprador
         <input type="text" name="nome" required
                value="{{ form.get('nome', '') }}"
-               placeholder="Como aparece no seu CPF">
+               autocomplete="given-name"
+               pattern="[^0-9]+" title="Apenas letras, sem números"
+               placeholder="Ex: Maria" data-nome-field>
+      </label>
+      <label>Sobrenome do comprador
+        <input type="text" name="sobrenome" required
+               value="{{ form.get('sobrenome', '') }}"
+               autocomplete="family-name"
+               pattern="[^0-9]+" title="Apenas letras, sem números"
+               placeholder="Ex: Silva" data-nome-field>
       </label>
       <label>Email
         <input type="email" name="email" required
@@ -102,7 +111,8 @@
       <div id="bloco-destinatario" style="display:none">
         <label>Nome de quem vai receber
           <input type="text" name="nome_destinatario"
-                 value="{{ form.get('nome_destinatario', '') }}">
+                 pattern="[^0-9]+" title="Apenas letras, sem números"
+                 value="{{ form.get('nome_destinatario', '') }}" data-nome-field>
         </label>
         <label>Telefone do destinatário (opcional)
           <input type="tel" name="telefone_destinatario" inputmode="tel"
