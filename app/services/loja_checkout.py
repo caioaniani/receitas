@@ -408,10 +408,11 @@ def criar_pedido(form, itens_raw, *, base=None):
     janela = (form.get('janela_entrega') or '').strip()
     data_entrega = None
     if modo == 'express':
-        # Express é hoje, imediato — ignora o que vier do form.
+        # Express é hoje, imediato — ignora o que vier do form. A janela
+        # reflete a distância (>10km = 2h; o motoboy percorre mais).
         if express_disponivel(base):
             data_entrega = base.date()
-            janela = JANELA_EXPRESS
+            janela = janela_express_para_distancia(distancia_km)
     else:
         disponiveis = {d.isoformat() for d in datas_disponiveis(modo, base=base)}
         if data_str not in disponiveis:
