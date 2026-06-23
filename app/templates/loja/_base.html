@@ -400,5 +400,78 @@
   }
 </script>
 
+{# Botão "Instalar app" no rodapé (23/06/2026). 3 estados:
+   - Android Chrome: captura beforeinstallprompt → botão mostra prompt nativo
+   - iPhone Safari: mostra modal de instruções (iOS bloqueia prompt)
+   - Já instalado (display-mode: standalone): esconde tudo
+   Esconde sozinho se NENHUM dos caminhos for viável (browser sem suporte). #}
+<script>
+(function () {
+  var bloco = document.getElementById('rodape-instalar');
+  var botao = document.getElementById('btn-instalar-pwa');
+  var modalIos = document.getElementById('modal-instalar-ios');
+  if (!bloco || !botao) return;
+
+  // Detecta já instalado (modo standalone ou iOS standalone)
+  var jaInstalado = (window.matchMedia
+                     && window.matchMedia('(display-mode: standalone)').matches)
+                    || window.navigator.standalone === true;
+  if (jaInstalado) return;
+
+  // iOS Safari: prompt programático não existe — mostra modal.
+  var ua = navigator.userAgent || '';
+  var ehIos = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  var ehSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+
+  var promptCapturado = null;
+
+  // Android Chrome: navegador dispara beforeinstallprompt quando o PWA
+  // está apto. A gente salva o evento e mostra o botão.
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    promptCapturado = e;
+    bloco.style.display = '';
+  });
+
+  // iOS: mostra o botão na hora (já sabemos o caminho).
+  if (ehIos && ehSafari) {
+    bloco.style.display = '';
+  }
+
+  botao.addEventListener('click', function () {
+    if (promptCapturado) {
+      promptCapturado.prompt();
+      promptCapturado.userChoice.finally(function () {
+        promptCapturado = null;
+        bloco.style.display = 'none';
+      });
+      return;
+    }
+    if (ehIos && modalIos) {
+      modalIos.style.display = 'flex';
+      return;
+    }
+    // Fallback: navegador sem suporte — abre modal mesmo assim (cliente lê
+    // as instruções e tenta no menu do próprio navegador).
+    if (modalIos) modalIos.style.display = 'flex';
+  });
+
+  // Esconde quando o cliente DE FATO instala (Android dispara appinstalled).
+  window.addEventListener('appinstalled', function () {
+    bloco.style.display = 'none';
+  });
+
+  // Fechar modal
+  if (modalIos) {
+    var fechar = function () { modalIos.style.display = 'none'; };
+    modalIos.querySelector('.modal-instalar-fechar')
+      .addEventListener('click', fechar);
+    modalIos.addEventListener('click', function (e) {
+      if (e.target === modalIos) fechar();
+    });
+  }
+})();
+</script>
+
 </body>
 </html>
