@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Contagem do dia (site) — {{ data.strftime('%d/%m/%Y') }}{% endblock %}
+
+{% block content %}
+<h1 class="page-title"><i class="bi bi-calendar-check"></i> Contagem do dia (site)</h1>
+<p class="text-muted">
+  O que tem que sair de produção pra os pedidos do site com data de entrega
+  <strong>{{ data.strftime('%d/%m/%Y') }}</strong>. Cestas vêm desempacotadas:
+  cada componente já entra somado. Exclui pedidos aguardando pagamento e
+  cancelados.
+</p>
+
+<form method="GET" class="d-flex flex-wrap gap-2 align-items-end mb-3">
+  <div>
+    <label class="form-label mb-0 small">Data de entrega</label>
+    <input type="date" name="data" value="{{ data_str }}"
+           class="form-control form-control-sm" style="max-width:180px">
+  </div>
+  <button type="submit" class="btn btn-sm btn-dark">Atualizar</button>
+  <a href="{{ url_for('pedidos.lista') }}" class="btn btn-sm btn-outline-secondary">
+    ← Voltar
+  </a>
+</form>
+
+{% if not itens %}
+<div class="alert alert-light">
+  Nenhum pedido pago pra entregar em {{ data.strftime('%d/%m/%Y') }}.
+</div>
+{% else %}
+<div class="table-responsive">
+  <table class="table table-sm table-hover bg-white align-middle">
+    <thead class="thead-padaria">
+      <tr>
+        <th class="text-end" style="width:90px">Qtd</th>
+        <th>Item</th>
+        <th>Vindo de</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in itens %}
+      <tr>
+        <td class="text-end fw-bold" style="font-size:18px;">{{ it.qtd }}</td>
+        <td>{{ it.nome }}<br><small class="text-muted">{{ it.tipo }}</small></td>
+        <td class="small text-muted">
+          {% for origem, q in it.detalhes %}
+            <span class="badge bg-light text-dark border me-1 mb-1">
+              {{ q }} · {{ origem }}
+            </span>
+          {% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot class="table-light">
+      <tr>
+        <td class="text-end fw-bold">{{ itens | sum(attribute='qtd') }}</td>
+        <td colspan="2" class="text-muted small">total de unidades</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
