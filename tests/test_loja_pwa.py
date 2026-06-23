@@ -83,3 +83,30 @@ def test_manifest_e_sw_sao_publicos_em_modo_teste(app, monkeypatch):
     c = app.test_client()
     assert c.get('/loja/manifest.webmanifest').status_code == 200
     assert c.get('/loja/sw.js').status_code == 200
+
+
+def test_botao_instalar_no_rodape(app):
+    """Botão 'Instalar como app' aparece no rodapé com handlers do
+    beforeinstallprompt (Android) e modal pra iOS (23/06/2026)."""
+    from app.extensions import db
+    from app.models import Usuario
+    u = Usuario(nome='Op', login='oppwabtn', papel='admin', is_owner=True)
+    u.set_senha('x' * 8)
+    db.session.add(u)
+    db.session.commit()
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(u.id)
+        s['_fresh'] = True
+    html = c.get('/loja/').data
+    # botão + bloco do rodapé
+    assert b'id="btn-instalar-pwa"' in html
+    assert b'id="rodape-instalar"' in html
+    # modal de instruções pra iOS
+    assert b'id="modal-instalar-ios"' in html
+    assert b'Adicionar \xc3\xa0 Tela de In\xc3\xadcio' in html
+    # captura prompt nativo do Chrome + esconde quando instala
+    assert b'beforeinstallprompt' in html
+    assert b'appinstalled' in html
+    # display-mode standalone esconde o botão
+    assert b'display-mode: standalone' in html
