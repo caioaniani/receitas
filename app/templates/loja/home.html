@@ -12,10 +12,19 @@
   <h2 class="categoria-titulo">{{ cat }}</h2>
   <div class="grid-produtos">
     {% for it in itens %}
-    <div class="produto-cell{% if it.esgotado %} is-esgotado{% endif %}">
+    {# 3 estados (22/06/2026): `esgotado` (sem saldo em nenhum dos 14 dias) ->
+       etiqueta vermelha + bloqueia. `esgotado_hoje` E tem_em_outros_dias ->
+       etiqueta amarela "esgotado hoje, compre pra outro dia" (cliente pode
+       comprar mas precisa escolher data > hoje). Normal -> botao Adicionar
+       comum. #}
+    <div class="produto-cell{% if it.esgotado %} is-esgotado{% elif it.esgotado_hoje %} is-esgotado-hoje{% endif %}">
       <a class="card-produto" href="{{ it.href }}">
         <div class="card-foto">
-          {% if it.esgotado %}<span class="selo-esgotado">Esgotado</span>{% endif %}
+          {% if it.esgotado %}
+          <span class="selo-esgotado">Esgotado</span>
+          {% elif it.esgotado_hoje %}
+          <span class="selo-esgotado-hoje">Esgotado hoje</span>
+          {% endif %}
           {% if it.imagem %}
           <img src="{{ it.imagem }}" alt="{{ it.nome }} — {{ it.categoria or 'padaria artesanal' }} d'O Pão" loading="lazy">
           {% else %}
@@ -32,6 +41,12 @@
       {% if it.preco is not none %}
         {% if it.esgotado %}
         <div class="card-esgotado" aria-disabled="true">Esgotado</div>
+        {% elif it.esgotado_hoje %}
+        {# Esgotado hoje mas tem em outros dias: leva o cliente pra pagina do
+           produto pra ele escolher uma data com saldo. #}
+        <a class="card-esgotado-hoje" href="{{ it.href }}">
+          Esgotado hoje — compre pra outro dia →
+        </a>
         {% else %}
         <div class="card-add"
              data-kind="{{ it.kind }}" data-id="{{ it.id }}"
