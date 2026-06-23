@@ -3063,7 +3063,7 @@ def loja_online_estoque_vitrine():
 
 
 @main_bp.route('/admin/loja-online')
-@login_required
+@owner_required
 def loja_online_dashboard():
     """Visão geral da loja online: contagens por status, faturamento por
     janela (hoje/semana/mês) e fila do que precisa de ação do admin."""
