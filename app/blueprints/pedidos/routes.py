@@ -128,6 +128,30 @@ def buscar_itens():
     return jsonify(itens=out[:50])
 
 
+@pedidos_bp.route('/contagem-dia-site')
+@login_required
+@pedidos_required
+def contagem_dia_site():
+    """Pra o dia X, mostra TUDO que tem que sair de producao por causa de
+    pedidos do site (PedidoOnline). Cestas sao DESEMPACOTADAS — Family Box ja
+    aparece como N croissants + N sourdoughs + ... Decisao do dono 22/06/2026:
+    o operacional precisava saber quanto produzir por dia, considerando o
+    que vai dentro das cestas."""
+    from datetime import date as _date
+
+    from app.services import loja_online_vendas
+    from app.utils import hoje
+    data_str = (request.args.get('data') or '').strip()
+    try:
+        alvo = _date.fromisoformat(data_str) if data_str else hoje()
+    except ValueError:
+        alvo = hoje()
+    itens = loja_online_vendas.contagem_para_dia(alvo)
+    return render_template('pedidos/contagem_dia_site.html',
+                           itens=itens, data=alvo,
+                           data_str=alvo.isoformat())
+
+
 @pedidos_bp.route('/')
 @login_required
 @pedidos_required
