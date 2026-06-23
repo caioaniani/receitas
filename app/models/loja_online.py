@@ -416,3 +416,62 @@ class CategoriaSite(db.Model):
 
     def __repr__(self):
         return f'<CategoriaSite {self.nome!r} ord={self.ordem}>'
+
+
+class EstoqueSitePlano(db.Model):
+    """Plano de estoque do site por DATA DE ENTREGA (22/06/2026, decisao do
+    dono).
+
+    Cada linha = quantos itens X esto disponiveis pra entregar no dia Y.
+    Cliente que escolhe data Y no checkout so consegue comprar produtos com
+    saldo nessa data (qtd_planejada - qtd_reservada > 0).
+
+    Diferente de `EstoqueLoja`:
+    - EstoqueLoja = estoque FISICO da loja (foi produzido / esta na prateleira).
+      Continua sendo a fonte de verdade pra movimentacoes fisicas (separacao,
+      entrega).
+    - EstoqueSitePlano = quantos VOU TER pra entregar em cada dia. Pode planejar
+      no futuro (sexta vou ter 20 foccacia) sem precisar produzir agora. So
+      controla DISPONIBILIDADE no site; baixa/historico fisico segue em
+      EstoqueLoja.
+
+    Reserva acontece quando o pedido eh PAGO (igual EstoqueLoja). Se a gente
+    reservasse no checkout (status aguardando_pagamento), 30min de pix nao
+    paga seguraria o saldo de outros clientes — entao usa o webhook do Pagar.me
+    pra reservar so o que de fato vendeu.
+    """
+    __tablename__ = 'estoque_site_plano'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # 'receita' | 'produto' — bate com PedidoOnlineItem.kind.
+    kind = db.Column(db.String(10), nullable=False)
+    item_id = db.Column(db.Integer, nullable=False)
+    data = db.Column(db.Date, nullable=False, index=True)
+
+    qtd_planejada = db.Column(db.Integer, nullable=False, default=0,
+                               server_default='0')
+    qtd_reservada = db.Column(db.Integer, nullable=False, default=0,
+                               server_default='0')
+
+    criado_em = db.Column(db.DateTime, default=agora)
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
+
+    __table_args__ = (
+        # (kind, item_id, data) eh unico — uma linha por item por dia.
+        db.UniqueConstraint('kind', 'item_id', 'data',
+                            name='uq_estoque_site_plano_item_data'),
+        # Indice extra pra consulta "qual saldo pra esse dia" (vitrine).
+        db.Index('ix_estoque_site_plano_data_kind_item',
+                 'data', 'kind', 'item_id'),
+    )
+
+    @property
+    def saldo(self):
+        """Disponivel = planejado - reservado (nunca negativo aqui no display;
+        race condition de over-reserva eh travada no service `reservar`)."""
+        return max(0, (self.qtd_planejada or 0) - (self.qtd_reservada or 0))
+
+    def __repr__(self):
+        return (f'<EstoqueSitePlano {self.kind}:{self.item_id} '
+                f'{self.data.isoformat() if self.data else "?"} '
+                f'plan={self.qtd_planejada} res={self.qtd_reservada}>')
