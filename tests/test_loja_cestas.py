@@ -155,7 +155,11 @@ def test_contagem_para_dia_explode_cestas(app):
 
     from app.extensions import db
     from app.models import (
-        PedidoOnline, PedidoOnlineItem, Produto, ProdutoItem, Receita,
+        PedidoOnline,
+        PedidoOnlineItem,
+        Produto,
+        ProdutoItem,
+        Receita,
     )
     from app.services.loja_online_vendas import contagem_para_dia
 
