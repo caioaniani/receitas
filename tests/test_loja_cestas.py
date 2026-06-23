@@ -145,3 +145,90 @@ def test_qtd_formatada_usa_unidade_real(app):
     assert formatadas['Peito de peru'] == '100g'
     assert formatadas['Leite'] == '200ml'
     assert formatadas['Pão Sourdough'] == '2x'
+
+
+def test_contagem_para_dia_explode_cestas(app):
+    """Botao 'Contagem do dia' em /pedidos: pra um dia X, somar TODOS os
+    componentes que vao sair de producao. Cestas DESEMPACOTADAS."""
+    from datetime import date, datetime, timedelta
+    from decimal import Decimal
+
+    from app.extensions import db
+    from app.models import (
+        PedidoOnline, PedidoOnlineItem, Produto, ProdutoItem, Receita,
+    )
+    from app.services.loja_online_vendas import contagem_para_dia
+
+    dia = date(2026, 6, 26)
+
+    # Catalogo: 1 receita (sourdough) + 1 cesta (family box) com 3 sourdoughs
+    sourdough = Receita(nome='Sourdough', categoria='Paes',
+                        rendimento_qtd=1, rendimento_unidade='un',
+                        peso_base=500.0, preco_site=Decimal('25'))
+    db.session.add(sourdough)
+    db.session.flush()
+
+    box = Produto(nome='Family Box', categoria='Cestas',
+                  preco_site=Decimal('437'), ativo=True)
+    db.session.add(box)
+    db.session.flush()
+    db.session.add(ProdutoItem(produto_id=box.id, tipo='receita',
+                               receita_id=sourdough.id,
+                               item_nome='Sourdough', quantidade=3))
+    db.session.commit()
+
+    # Pedidos pra o dia: 2 boxes pagos + 4 sourdoughs avulsos pago
+    def _ped(codigo, status, items):
+        p = PedidoOnline(codigo=codigo, nome_cliente='C',
+                         email_cliente='c@x.com', modo_entrega='agendada',
+                         status=status, subtotal=Decimal('0'),
+                         valor_total=Decimal('0'),
+                         data_entrega=dia,
+                         pago_em=datetime(2026, 6, 25, 12, 0))
+        db.session.add(p)
+        db.session.flush()
+        for it in items:
+            db.session.add(PedidoOnlineItem(pedido_id=p.id, **it))
+        return p
+
+    # 2 family boxes pago = 2 × 3 sourdough = 6
+    _ped('A', 'pago', [{
+        'kind': 'produto', 'produto_id': box.id, 'nome': 'Family Box',
+        'quantidade': 2, 'preco_unitario': Decimal('437'),
+        'subtotal': Decimal('874')}])
+    # 4 sourdoughs avulso direto
+    _ped('B', 'em_preparo', [{
+        'kind': 'receita', 'receita_id': sourdough.id, 'nome': 'Sourdough',
+        'quantidade': 4, 'preco_unitario': Decimal('25'),
+        'subtotal': Decimal('100')}])
+    # Cancelado e aguardando_pagamento NAO contam
+    _ped('C', 'cancelado', [{
+        'kind': 'receita', 'receita_id': sourdough.id, 'nome': 'Sourdough',
+        'quantidade': 99, 'preco_unitario': Decimal('25'),
+        'subtotal': Decimal('2475')}])
+    _ped('D', 'aguardando_pagamento', [{
+        'kind': 'receita', 'receita_id': sourdough.id, 'nome': 'Sourdough',
+        'quantidade': 99, 'preco_unitario': Decimal('25'),
+        'subtotal': Decimal('2475')}])
+    # Outro dia NAO conta
+    p_outro = PedidoOnline(codigo='OUTRO', nome_cliente='C',
+                           email_cliente='c@x.com', modo_entrega='agendada',
+                           status='pago', subtotal=Decimal('25'),
+                           valor_total=Decimal('25'),
+                           data_entrega=dia + timedelta(days=1))
+    db.session.add(p_outro)
+    db.session.flush()
+    db.session.add(PedidoOnlineItem(
+        pedido_id=p_outro.id, kind='receita', receita_id=sourdough.id,
+        nome='Sourdough', quantidade=99,
+        preco_unitario=Decimal('25'), subtotal=Decimal('2475')))
+    db.session.commit()
+
+    itens = contagem_para_dia(dia)
+    # 2 boxes × 3 sourdoughs + 4 sourdoughs = 10
+    sd = next(i for i in itens if i['nome'] == 'Sourdough')
+    assert sd['qtd'] == 10
+    # Detalhe deve ter as 2 origens
+    origens = {o for o, _ in sd['detalhes']}
+    assert 'Family Box' in origens
+    assert 'venda direta' in origens
