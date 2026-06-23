@@ -2378,7 +2378,11 @@ def loja_online_catalogo():
     sem-foto|todos (default: todos)."""
     from app.models import Produto, Receita
     from app.services import loja_catalogo
-    filtro = (request.args.get('filtro') or 'todos').strip().lower()
+    # Default 'todos' pro dono (curadoria); 'no-site' pros demais (so veem o
+    # que ja esta vendendo no site — nao tem o que fazer com sem-preco/sem-foto
+    # pois nao podem editar). Decisao do dono 22/06/2026.
+    default_filtro = 'todos' if getattr(current_user, 'is_owner', False) else 'no-site'
+    filtro = (request.args.get('filtro') or default_filtro).strip().lower()
 
     # Estoque atual na loja do site (a mesma de /pedidos/estoque-loja). None =
     # loja do site não configurada → não dá pra editar estoque aqui.
