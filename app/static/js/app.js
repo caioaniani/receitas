@@ -935,6 +935,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 var qtd = row.querySelector('.item-qtd');
                 var custoUnCell = row.querySelector('.item-custo-un');
                 var custoTotalCell = row.querySelector('.item-custo-total');
+                var unidadeBadge = row.querySelector('.item-unidade');
 
                 if (!tipo || !nome || !qtd) return;
 
@@ -942,6 +943,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 var quantidade = parseFloat(qtd.value) || 0;
                 var custoLinha = custoUn * quantidade;
                 custoTotal += custoLinha;
+
+                // Unidade ao lado da qtd: vem da MP cadastrada (g/ml/kg/l) ou
+                // 'un' pra receita/produto. Sem isso o operador nao sabe se
+                // "0,4" e' 0,4 kg ou 0,4 g (incidente 22/06/2026).
+                if (unidadeBadge) {
+                    var un = 'un';
+                    if (tipo.value === 'mp') {
+                        var md = _findMp(nome.value);
+                        if (md && md.unidade) un = md.unidade;
+                    }
+                    unidadeBadge.textContent = un;
+                }
 
                 // Mostrar custo/kg para itens em gramas, custo/un para unitários
                 if (tipo.value === 'mp') {
