@@ -106,6 +106,9 @@
   {% for i in itens %}
   <div class="item-card {% if i.no_site %}no-site{% elif i.falta_preco %}falta-preco{% elif i.falta_foto %}falta-foto{% endif %}"
        data-tipo="{{ i.tipo }}" data-id="{{ i.id }}">
+    {# `pode_editar` (set no topo) controla foto/preco: dono edita; demais
+       so visualizam — sem overlay "Trocar foto" e sem o input file. #}
+    {% if pode_editar %}
     <label class="item-thumb" title="Clique pra trocar a foto">
       {% if i.imagem %}
       <img src="{{ i.imagem }}" alt="" class="thumb-img">
@@ -115,6 +118,15 @@
       <span class="overlay">Trocar foto</span>
       <input type="file" accept="image/*" capture="environment" class="foto-input">
     </label>
+    {% else %}
+    <div class="item-thumb" style="cursor:default;">
+      {% if i.imagem %}
+      <img src="{{ i.imagem }}" alt="" class="thumb-img">
+      {% else %}
+      <span class="empty">📷</span>
+      {% endif %}
+    </div>
+    {% endif %}
     <div class="item-body">
       <div class="item-nome">{{ i.nome }}</div>
       <div class="item-cat-row">
