@@ -140,6 +140,49 @@
     });
   });
 
+  // Replicar valor pros proximos 14 dias (por linha — botao "↔").
+  document.querySelectorAll('tr[data-kind] .plano-replicar').forEach(function (btn) {
+    var row = btn.closest('tr');
+    var inp = row.querySelector('.plano-input');
+    btn.addEventListener('click', function () {
+      var v = inp.value.trim();
+      if (v === '') { alert('Preencha o valor primeiro.'); return; }
+      var n = parseInt(v, 10);
+      if (isNaN(n) || n < 0) { alert('Valor inválido.'); return; }
+      var nome = (row.querySelector('td strong') || {}).textContent || '';
+      if (!confirm('Replicar "' + nome + ' = ' + n + '" pros próximos 14 dias\n'
+                   + '(a partir de ' + DATA_STR + ', inclusive)?')) return;
+      btn.disabled = true;
+      var status = row.querySelector('.plano-status');
+      status.textContent = 'replicando…';
+      status.style.color = '';
+      var fd = new FormData();
+      fd.append('csrf_token', CSRF);
+      fd.append('kind', row.dataset.kind);
+      fd.append('item_id', row.dataset.id);
+      fd.append('qtd_planejada', n);
+      fd.append('data_inicio', DATA_STR);
+      fetch(URL_REPLICAR, { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          btn.disabled = false;
+          if (j.ok) {
+            status.textContent = '✓ replicado em ' + j.dias + ' dia(s)';
+            status.style.color = '#198754';
+            setTimeout(function () { status.textContent = ''; }, 4000);
+          } else {
+            status.textContent = '✗ ' + (j.erro || 'erro');
+            status.style.color = '#dc3545';
+          }
+        })
+        .catch(function () {
+          btn.disabled = false;
+          status.textContent = '✗ rede';
+          status.style.color = '#dc3545';
+        });
+    });
+  });
+
   // Copiar semana passada (idempotente — não sobrescreve quem já tem).
   var btnCopiar = document.getElementById('btn-copiar-anterior');
   if (btnCopiar) {
