@@ -169,6 +169,19 @@ def _email_valido(email):
     return '@' in email and '.' in email.split('@')[-1] and len(email) >= 6
 
 
+def _nome_valido(s):
+    """Nome de pessoa: pelo menos 2 caracteres, sem dígitos, com letras.
+    Bloqueia o caso real (23/06/2026) do cliente digitar o CPF no campo de
+    nome — o campo aceitava qualquer coisa."""
+    import re
+    s = (s or '').strip()
+    if len(s) < 2:
+        return False
+    if re.search(r'\d', s):
+        return False
+    return any(ch.isalpha() for ch in s)
+
+
 def _so_digitos(s):
     return ''.join(c for c in (s or '') if c.isdigit())
 
@@ -233,7 +246,8 @@ def criar_pedido(form, itens_raw, *, base=None):
     base = base or agora()
     erros = []
 
-    nome = (form.get('nome') or '').strip()
+    nome_dado = (form.get('nome') or '').strip()
+    sobrenome_dado = (form.get('sobrenome') or '').strip()
     email = (form.get('email') or '').strip()
     telefone = (form.get('telefone') or '').strip()
     cpf = _so_digitos(form.get('cpf') or '')
@@ -248,8 +262,12 @@ def criar_pedido(form, itens_raw, *, base=None):
     telefone_destinatario = ((form.get('telefone_destinatario') or '').strip()
                              if e_presente else None) or None
 
-    if not nome:
-        erros.append('Informe seu nome.')
+    if not _nome_valido(nome_dado):
+        erros.append('Informe seu nome (apenas letras, sem números).')
+    if not _nome_valido(sobrenome_dado):
+        erros.append('Informe seu sobrenome (apenas letras, sem números).')
+    # Nome completo = nome + sobrenome (o resto do código usa `nome`).
+    nome = f'{nome_dado} {sobrenome_dado}'.strip()
     if not _email_valido(email):
         erros.append('Informe um email válido.')
     # CPF é exigência do Pagar.me pra Pix e da NF-e (Fase 5) — pedir aqui
@@ -262,6 +280,9 @@ def criar_pedido(form, itens_raw, *, base=None):
         erros.append('Escolha um modo de entrega.')
     if e_presente and not nome_destinatario:
         erros.append('Informe o nome de quem vai receber.')
+    elif e_presente and not _nome_valido(nome_destinatario):
+        erros.append('O nome de quem vai receber deve ter só letras '
+                     '(sem números).')
 
     itens, avisos = montar_itens(itens_raw)
     if not itens:
