@@ -715,7 +715,9 @@ def test_pdf_presente_mostra_enviado_por(app):
     nao assinou a cartinha. Fix: PDF da via do cliente agora SEMPRE mostra
     'Enviado por: [comprador]' quando destinatario != comprador.
 
-    Trava: mesmo presente sem cartinha tem que mostrar 'Enviado por'."""
+    Testa a funcao PURA `linha_enviado_por` (sem parsear PDF — assim CI nao
+    depende de pdfplumber/pypdf). Tambem confirma que o PDF e' gerado sem
+    erro pros 3 cenarios."""
     from datetime import date
 
     from app.services import pdf as pdf_svc
@@ -728,29 +730,26 @@ def test_pdf_presente_mostra_enviado_por(app):
         'periodo': '08:00-09:00',
         'itens': [{'nome': 'Box', 'qtd': 1}],
     }
-    # PDF do fpdf2 sai comprimido — usa pdfplumber pra extrair texto.
-    import io
 
-    import pdfplumber
+    # Logica pura
+    assert pdf_svc.linha_enviado_por(presente) == 'Enviado por: Joana da Silva'
+    # Via do motoboy: nao mostra (a via vai com o presente, motoboy nao precisa)
+    assert pdf_svc.linha_enviado_por(presente, motorista=True) is None
+    # NAO-presente (destinatario == comprador): nao mostra
+    mesmo = dict(presente, destinatario='Joana da Silva')
+    assert pdf_svc.linha_enviado_por(mesmo) is None
+    # Comprador vazio: nao mostra (nao da pra atribuir)
+    assert pdf_svc.linha_enviado_por(
+        dict(presente, comprador='')) is None
+    # Case-insensitive: 'JOANA' == 'joana' = nao presente
+    assert pdf_svc.linha_enviado_por(
+        dict(presente, destinatario='JOANA DA SILVA',
+             comprador='joana da silva')) is None
 
-    def _txt(b):
-        with pdfplumber.open(io.BytesIO(b)) as doc:
-            return ' '.join((p.extract_text() or '') for p in doc.pages)
-
-    saida = pdf_svc.gerar_pedidos_pdf([presente], ['cliente'], date(2026, 6, 22))
-    texto = _txt(saida)
-    assert 'Enviado por: Joana da Silva' in texto
-    assert 'Tati, Lu e Papai' in texto
-
-    # Via do motoboy NAO mostra (a via vai com o presente, motoboy nao precisa)
-    saida_mot = pdf_svc.gerar_pedidos_pdf(
-        [presente], ['motorista'], date(2026, 6, 22))
-    assert 'Enviado por' not in _txt(saida_mot)
-
-    # NAO-presente (destinatario == comprador): linha NAO aparece
-    mesmo = dict(presente, destinatario='Joana da Silva', code='SELF01')
-    saida2 = pdf_svc.gerar_pedidos_pdf([mesmo], ['cliente'], date(2026, 6, 22))
-    assert 'Enviado por' not in _txt(saida2)
+    # Sanity: PDFs sao gerados sem erro pros 3 modos.
+    for vias in (['cliente'], ['motorista'], ['cliente', 'motorista']):
+        b = pdf_svc.gerar_pedidos_pdf([presente], vias, date(2026, 6, 22))
+        assert b[:4] == b'%PDF'
 
 
 def test_writes_de_atribuicao_continuam_guardados(app):
