@@ -700,6 +700,9 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
         # Ultima do atendente = atendimento em andamento, nao alertar.
         if historico[-1].get('role') != 'user':
             continue
+        # "Ok"/"obrigada"/"valeu" = encerramento, cliente nao espera resposta.
+        if _e_fechamento(historico[-1].get('content')):
+            continue
         avaliadas += 1
         ultima = (historico[-1].get('content') or '')[:120]
         nome = c.get('nome_contato') or '(sem nome)'
