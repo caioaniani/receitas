@@ -342,3 +342,52 @@ def test_replicar_qtd_negativa_rejeita(app):
     with pytest.raises(ValueError):
         loja_plano_dia.replicar_para_proximos_dias(
             'receita', 1, -1, data_inicio=date(2026, 6, 26))
+
+
+def test_pagina_produto_mostra_seletor_quando_esgotado_so_hoje(app):
+    """Cenario do incidente 23/06/2026: cliente entrou na pagina do produto,
+    plano hoje=0 mas sexta=5. A pagina ANTES caia em 'Esgotado no momento'
+    porque usava tem_estoque_site (so olha estoque fisico de hoje). Agora
+    usa anotar_esgotado (plano + janela de 14 dias) — mostra seletor de
+    data + aviso 'Esgotado hoje, escolha proxima'."""
+    from datetime import timedelta
+
+    from app.extensions import db
+    from app.models import Receita
+    from app.services import loja_plano_dia
+    from app.services.loja_catalogo import _slugify
+    from app.utils import hoje
+
+    r = Receita(nome='Foccacia Gorgonzola', categoria='Paes',
+                preco_site=52.0, imagem_dropbox_url='https://x/f.jpg',
+                rendimento_qtd=1, rendimento_unidade='un', peso_base=300.0)
+    db.session.add(r)
+    db.session.commit()
+
+    dia_hoje = hoje()
+    proxima = dia_hoje + timedelta(days=3)
+    loja_plano_dia.definir('receita', r.id, dia_hoje, 0)
+    loja_plano_dia.definir('receita', r.id, proxima, 5)
+
+    # Loja em modo teste: precisa logar pra ver a vitrine (gate _gate_acesso)
+    from app.models import Usuario
+    u = Usuario(nome='Adm', login='adx', papel='admin', is_owner=True)
+    u.set_senha('x' * 8)
+    db.session.add(u)
+    db.session.commit()
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(u.id)
+        s['_fresh'] = True
+    url = f'/loja/{_slugify(r.nome)}-r{r.id}'
+    resp = c.get(url)
+    assert resp.status_code == 200
+    html = resp.data.decode()
+    # NAO mostra "Esgotado no momento" (= bloqueio)
+    assert 'Esgotado no momento' not in html
+    # MOSTRA seletor de data
+    assert 'dispon-data' in html
+    # Default eh a primeira data com saldo (proxima), nao hoje
+    assert f'value="{proxima.isoformat()}"' in html
+    # Aviso amarelo "Esgotado hoje"
+    assert 'Esgotado hoje' in html
