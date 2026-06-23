@@ -10,6 +10,12 @@
         <i class="bi bi-file-earmark-bar-graph"></i> relatório
     </a>
     {% endif %}
+    {# Contagem por dia: pedidos do site (PedidoOnline) com cestas explodidas,
+       agrupados por item — pra a producao saber o que tem que fazer pra o dia. #}
+    <a href="{{ url_for('pedidos.contagem_dia_site') }}"
+       class="btn-pill btn-pill-outline">
+        <i class="bi bi-calendar-check"></i> contagem do dia (site)
+    </a>
     <a href="{{ url_for('pedidos.novo') }}" class="btn-pill btn-pill-primary">
         <i class="bi bi-plus-lg"></i> novo pedido
     </a>
