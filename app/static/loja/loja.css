@@ -605,6 +605,29 @@ a:hover { text-decoration: underline; }
 
 /* ── Bloco de compra (página de produto) ───────────────── */
 .comprar-bloco { margin-bottom: 24px; }
+/* Seletor de "Disponivel para entregar em" (22/06/2026): cliente escolhe a
+   data e ve em tempo real se tem saldo no plano daquele dia. */
+.dispon-dia {
+  margin-bottom: 14px;
+  font-family: var(--fonte-corpo);
+}
+.dispon-dia label {
+  display: block;
+  font-size: 13px; color: var(--texto-suave);
+  margin-bottom: 4px;
+}
+.dispon-dia input[type="date"] {
+  padding: 9px 10px; font-size: 15px;
+  border: 1px solid var(--linha); border-radius: 4px;
+  font-family: var(--fonte-corpo);
+}
+.dispon-status {
+  margin-top: 4px;
+  font-size: 13px; color: var(--texto-suave);
+}
+.dispon-status.ok { color: #2b7a36; }
+.dispon-status.ko { color: #c92a2a; font-weight: 700; }
+
 .qtd-seletor {
   display: flex; align-items: center; gap: 10px;
   margin-bottom: 12px;
