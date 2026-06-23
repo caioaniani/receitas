@@ -1,8 +1,15 @@
 {% extends 'base.html' %}
-{% block title %}Plano do dia — Loja Online{% endblock %}
+{% block title %}Disponibilidade do dia — Loja Online{% endblock %}
 
 {% block content %}
-<h1 class="page-title"><i class="bi bi-calendar3-week"></i> Plano do dia (estoque do site)</h1>
+<h1 class="page-title"><i class="bi bi-calendar3-week"></i> Disponibilidade do dia (quanto o site pode vender)</h1>
+<div class="alert alert-light border small mb-3">
+  <strong>Esta tela controla o que o cliente CONSEGUE COMPRAR no site</strong> —
+  define quantos de cada item podem ser vendidos pra entrega em cada dia
+  (quando zera, vira "Esgotado" no site). Não confunda com
+  <a href="{{ url_for('main.loja_online_producao_dia') }}">Produção do dia</a>,
+  que mostra o que já foi vendido e precisa ser <strong>preparado</strong>.
+</div>
 <p class="text-muted">
   Defina quantos de cada item você vai ter disponível pra
   <strong>entregar em {{ data.strftime('%d/%m/%Y (%A)')|lower }}</strong>.

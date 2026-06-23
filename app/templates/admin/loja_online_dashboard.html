@@ -28,12 +28,35 @@
 <h1 class="page-title"><span aria-hidden="true">🥐</span> Loja Online</h1>
 <p class="text-muted">Faturamento de pedidos pagos (inclui em preparo, a caminho e entregues; exclui cancelados).</p>
 
+{% if current_user.is_owner %}
+{# Duas telas "por dia", lado a lado e rotuladas pra nao confundir (decisao
+   do dono 23/06/2026): PRODUCAO = o que preparar (vindo das vendas);
+   DISPONIBILIDADE = quanto pode vender (controla o "esgotado"). #}
+<div class="row g-2 mb-3">
+  <div class="col-12 col-md-6">
+    <a href="{{ url_for('main.loja_online_producao_dia') }}"
+       class="card h-100 text-decoration-none text-reset border">
+      <div class="card-body py-2">
+        <div class="fw-bold"><i class="bi bi-calendar-check"></i> Produção do dia</div>
+        <div class="small text-muted">O que <strong>preparar</strong> num dia, somando o que foi vendido no site (cestas desempacotadas).</div>
+      </div>
+    </a>
+  </div>
+  <div class="col-12 col-md-6">
+    <a href="{{ url_for('main.loja_online_plano_dia') }}"
+       class="card h-100 text-decoration-none text-reset border">
+      <div class="card-body py-2">
+        <div class="fw-bold"><i class="bi bi-calendar3-week"></i> Disponibilidade do dia</div>
+        <div class="small text-muted">Quanto o site <strong>pode vender</strong> de cada item por dia (controla o "Esgotado").</div>
+      </div>
+    </a>
+  </div>
+</div>
+{% endif %}
+
 <div class="mb-3 d-flex gap-2 flex-wrap">
   <a href="{{ url_for('main.loja_online_catalogo') }}" class="btn btn-sm btn-outline-secondary">Catálogo</a>
   {% if current_user.is_owner %}
-  <a href="{{ url_for('main.loja_online_plano_dia') }}" class="btn btn-sm btn-outline-secondary">
-    <i class="bi bi-calendar3-week"></i> Plano do dia
-  </a>
   <a href="{{ url_for('main.loja_online_categorias') }}" class="btn btn-sm btn-outline-secondary">Ordem das categorias</a>
   <a href="{{ url_for('main.loja_online_ordem_produtos') }}" class="btn btn-sm btn-outline-secondary">Ordem dos produtos</a>
   {% endif %}
