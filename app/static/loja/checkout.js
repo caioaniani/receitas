@@ -397,6 +397,7 @@
             ultimaDistKm = data.distancia_km != null
               ? Number(data.distancia_km) : null;
             popularJanelas(modoSelecionado());
+            atualizarExpressTempo();
           }
           atualizarTotais();
         }).catch(function () {
