@@ -45,6 +45,14 @@
         <small class="ms-auto me-2 text-muted">
             <i class="bi bi-person-circle"></i> {{ current_user.nome }}
         </small>
+        {# Sair direto no header mobile: a sidebar e' longa e a opcao "Sair"
+           fica no fim. Aqui resolve em 1 toque, sem rolar. #}
+        <a href="{{ url_for('auth.logout') }}"
+           class="btn btn-sm btn-outline-danger me-2 py-0 px-2"
+           style="font-size:12px;"
+           title="Sair">
+            <i class="bi bi-box-arrow-right"></i>
+        </a>
         {% endif %}
     </div>
 
