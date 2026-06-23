@@ -3340,7 +3340,7 @@ def loja_online_pedido_imprimir(codigo):
     d = _serializar_pedido_online(p)
     _aplicar_cartinhas([d])  # resolve a cartinha (manual sobrepõe, igual painel)
     data = p.data_entrega or hoje()
-    conteudo = pdf_svc.gerar_pedidos_pdf([d], ['cliente', 'motorista'], data)
+    conteudo = pdf_svc.gerar_pedidos_pdf([d], ['motorista', 'cliente'], data)
     resp = current_app.response_class(conteudo, mimetype='application/pdf')
     resp.headers['Content-Disposition'] = (
         f'inline; filename="pedido_{p.codigo}.pdf"')
@@ -3391,7 +3391,7 @@ def loja_online_pedidos_imprimir_selecao():
         # Mistura: usa a mais próxima de hoje (impressão do lote do dia).
         data = min(datas, key=lambda d: abs((d - hj).days))
     conteudo = pdf_svc.gerar_pedidos_pdf(
-        dicts, ['cliente', 'motorista'], data)
+        dicts, ['motorista', 'cliente'], data)
     resp = current_app.response_class(conteudo, mimetype='application/pdf')
     resp.headers['Content-Disposition'] = (
         f'inline; filename="pedidos_selecao_{data.isoformat()}.pdf"')
