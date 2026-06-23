@@ -124,6 +124,48 @@ def test_curadoria_liberada_admin(app):
     assert c.get('/admin/loja-online/catalogo').status_code == 200
 
 
+def test_preco_e_foto_bloqueados_para_nao_owner(app):
+    """22/06/2026 — admin comum vê o catálogo mas NÃO edita preço nem
+    foto. Backend trava com 403; template não mostra os filtros de curadoria
+    (sem-preço/sem-foto/todos) nem o input de upload de foto."""
+    from app.extensions import db
+    from app.models import Receita, Usuario
+    rec = Receita(nome='Cookie', preco_site=13.0,
+                  imagem_dropbox_url='https://x/y.jpg',
+                  rendimento_qtd=1, rendimento_unidade='un', peso_base=100.0)
+    u = Usuario(nome='G', login='gerz', papel='gerente', is_owner=False)
+    u.set_senha('x' * 8)
+    db.session.add_all([rec, u])
+    db.session.commit()
+    rid = rec.id
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(u.id)
+        s['_fresh'] = True
+
+    # POST de preço: 403
+    r = c.post(f'/admin/loja-online/catalogo/preco/receita/{rid}',
+               json={'preco': '99'})
+    assert r.status_code == 403
+    # Preço NÃO mudou
+    assert float(Receita.query.get(rid).preco_site) == 13.0
+
+    # POST de foto: 403
+    r = c.post(f'/admin/loja-online/catalogo/foto/receita/{rid}', data={})
+    assert r.status_code == 403
+
+    # Template: filtros de curadoria não aparecem; "No site" aparece
+    r = c.get('/admin/loja-online/catalogo')
+    assert r.status_code == 200
+    html = r.data.decode()
+    assert '?filtro=no-site' in html        # tab "No site" mantida
+    assert '?filtro=sem-preco' not in html  # tab de curadoria escondida
+    assert '?filtro=sem-foto' not in html
+    assert '?filtro=todos' not in html
+    assert 'type="file"' not in html        # sem upload de foto
+    assert 'preco-input' in html and 'disabled' in html  # preço bloqueado
+
+
 def test_preco_ajax_salva_e_devolve_json(app):
     """POST de preço pelo JSON retorna {ok, preco_site} e persiste."""
     from app.extensions import db
