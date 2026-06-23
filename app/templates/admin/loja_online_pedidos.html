@@ -28,9 +28,14 @@
   {% if chave == 'todos' or contagens.get(chave) %}
   {% set ativo = (status == chave) %}
   {% set conta = total if chave == 'todos' else contagens.get(chave, 0) %}
-  {% set classe_btn = ('btn-' ~ cor) if ativo else ('btn-outline-' ~ cor) %}
-  {# 'light' selecionado fica meio sumido — borda escura ajuda a destacar. #}
-  {% if chave == 'todos' and ativo %}{% set classe_btn = 'btn-light border-dark' %}{% endif %}
+  {# 'Todos' fica BRANCO (sem cor) — outline-light some no fundo branco do
+     admin. Usamos btn-outline-dark quando inativo (texto/borda escuros sobre
+     branco) e branco com borda escura grossa quando selecionado. #}
+  {% if chave == 'todos' %}
+    {% set classe_btn = 'btn-light border border-2 border-dark text-dark' if ativo else 'btn-outline-dark' %}
+  {% else %}
+    {% set classe_btn = ('btn-' ~ cor) if ativo else ('btn-outline-' ~ cor) %}
+  {% endif %}
   <a href="{{ url_for('main.loja_online_pedidos', status=chave) }}"
      class="btn btn-sm {{ classe_btn }}">
     {% if icone %}{{ icone }} {% endif %}{{ rotulo }}
