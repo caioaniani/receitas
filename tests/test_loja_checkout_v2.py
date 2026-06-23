@@ -314,3 +314,64 @@ def test_payload_customer_envia_cpf_do_cliente(app):
         payload = pagarme._payload_customer(ped)
         assert payload['document'] == '52998224725'
         assert payload['document_type'] == 'cpf'
+
+
+# ── Nome: bloquear CPF/números no campo de nome (23/06/2026) ──────────────
+
+def _form_retirada(loja, base, **over):
+    """Form válido de retirada pra isolar a validação de nome."""
+    from app.services import loja_checkout
+    data = loja_checkout.datas_disponiveis('retirada', base=base)[1].isoformat()
+    f = {'nome': 'Maria', 'sobrenome': 'Silva',
+         'email': 'm@x.com', 'cpf': '52998224725', 'aceite_lgpd': '1',
+         'modo_entrega': 'retirada', 'loja_id': str(loja.id),
+         'data_entrega': data, 'janela_entrega': '08:00–09:00'}
+    f.update(over)
+    return f
+
+
+def test_nome_com_cpf_e_recusado(app):
+    """Cliente digitou o CPF no nome — sistema tem que recusar."""
+    from app.extensions import db
+    from app.services import loja_checkout
+    with app.app_context():
+        p = _produto(db)
+        loja = _loja(db)
+        base = datetime(2026, 6, 17, 10, 0)
+        form = _form_retirada(loja, base, nome='04821886693', sobrenome='')
+        pedido, erros = loja_checkout.criar_pedido(
+            form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+        assert pedido is None
+        assert any('nome' in e.lower() for e in erros)
+
+
+def test_nome_e_sobrenome_concatenam(app):
+    """Nome + sobrenome viram o nome completo do pedido."""
+    from app.extensions import db
+    from app.services import loja_checkout
+    with app.app_context():
+        p = _produto(db)
+        loja = _loja(db)
+        base = datetime(2026, 6, 17, 10, 0)
+        form = _form_retirada(loja, base, nome='Maria', sobrenome='Silva')
+        pedido, erros = loja_checkout.criar_pedido(
+            form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+        assert pedido is not None, erros
+        assert pedido.nome_cliente == 'Maria Silva'
+
+
+def test_destinatario_com_numero_recusado(app):
+    """Nome de quem recebe (presente) também bloqueia números."""
+    from app.extensions import db
+    from app.services import loja_checkout
+    with app.app_context():
+        p = _produto(db)
+        loja = _loja(db)
+        base = datetime(2026, 6, 17, 10, 0)
+        form = _form_retirada(loja, base, e_presente='1',
+                              nome_destinatario='Joao 123',
+                              telefone_destinatario='11988887777')
+        pedido, erros = loja_checkout.criar_pedido(
+            form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+        assert pedido is None
+        assert any('recebe' in e.lower() for e in erros)
