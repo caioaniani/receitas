@@ -185,13 +185,108 @@
       r.addEventListener('change', aplicarModo);
     });
 
-    // Mudou a data -> repopular janelas (filtra passadas se for hoje)
+    // Mudou a data -> repopular janelas (filtra passadas se for hoje) +
+    // checar disponibilidade de cada item do carrinho pra essa data.
+    // Decisao do dono 23/06/2026: cliente precisa SABER no momento da
+    // escolha qual item nao tem saldo pra aquela data (em vez de descobrir
+    // so ao submeter), com opcoes pra trocar data ou remover do carrinho.
     var dataEl = document.getElementById('data_entrega');
     if (dataEl) {
       dataEl.addEventListener('change', function () {
         popularJanelas(modoSelecionado());
+        checarDisponibilidadeData();
       });
+      checarDisponibilidadeData();  // estado inicial
     }
+
+    function checarDisponibilidadeData() {
+      var aviso = document.getElementById('checkout-disponibilidade');
+      if (!aviso) return;
+      var data = dataEl.value;
+      if (!data) { aviso.style.display = 'none'; return; }
+      var itensCart = Carrinho.ler().map(function (it) {
+        return { kind: it.kind, id: it.id };
+      });
+      if (!itensCart.length) { aviso.style.display = 'none'; return; }
+      aviso.style.display = 'block';
+      aviso.className = 'dispon-checkout verificando';
+      aviso.innerHTML = '<em>verificando disponibilidade…</em>';
+      fetch('/loja/api/disponibilidade-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: data, itens: itensCart })
+      }).then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (!j.ok) {
+            aviso.className = 'dispon-checkout ko';
+            aviso.textContent = 'Não consegui verificar — tente outra data.';
+            travarSubmit(true);
+            return;
+          }
+          if (!j.esgotados || !j.esgotados.length) {
+            aviso.className = 'dispon-checkout ok';
+            aviso.innerHTML = '✓ Todos os itens disponíveis pra essa data.';
+            travarSubmit(false);
+            setTimeout(function () { aviso.style.display = 'none'; }, 2500);
+            return;
+          }
+          // Tem item(ns) esgotado(s) — mostra lista + acoes.
+          var html = '<strong>⚠ Itens sem disponibilidade pra essa data:</strong><ul style="margin:8px 0 10px 18px;">';
+          j.esgotados.forEach(function (it) {
+            html += '<li>' + escapeHtml(it.nome) +
+              ' <button type="button" class="btn-link-vermelho" ' +
+              'data-remover-kind="' + escapeHtml(it.kind) +
+              '" data-remover-id="' + escapeHtml(String(it.id)) +
+              '">remover do carrinho</button></li>';
+          });
+          html += '</ul>';
+          if (j.proxima_disponivel) {
+            var d = j.proxima_disponivel;
+            var br = d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4);
+            html += '<button type="button" class="btn-trocar-data" ' +
+              'data-data="' + escapeHtml(d) + '">' +
+              'Trocar pra ' + br + ' (todos disponíveis)</button>';
+          } else {
+            html += '<p style="margin:6px 0 0; font-size:13px;">' +
+              'Nenhuma data nos próximos 30 dias tem todos os itens — ' +
+              'tire o esgotado ou tente uma data específica.</p>';
+          }
+          aviso.className = 'dispon-checkout ko';
+          aviso.innerHTML = html;
+          travarSubmit(true);
+        })
+        .catch(function () {
+          aviso.className = 'dispon-checkout ko';
+          aviso.textContent = 'Erro ao verificar — tente outra data.';
+          travarSubmit(true);
+        });
+    }
+
+    function travarSubmit(travar) {
+      var btn = form.querySelector('button[type="submit"]');
+      if (!btn) return;
+      btn.disabled = !!travar;
+      btn.style.opacity = travar ? '0.55' : '';
+      btn.title = travar ? 'Resolva os itens esgotados antes de continuar' : '';
+    }
+
+    // Cliques nos botoes do aviso (remover do carrinho / trocar data).
+    document.addEventListener('click', function (e) {
+      var btnRm = e.target.closest && e.target.closest('[data-remover-kind]');
+      if (btnRm) {
+        var k = btnRm.getAttribute('data-remover-kind');
+        var id = btnRm.getAttribute('data-remover-id');
+        Carrinho.remover(k, id);
+        // Re-renderiza o resumo e re-checa a data.
+        window.location.reload();
+        return;
+      }
+      var btnTr = e.target.closest && e.target.closest('[data-data]');
+      if (btnTr && dataEl) {
+        dataEl.value = btnTr.getAttribute('data-data');
+        dataEl.dispatchEvent(new Event('change'));
+      }
+    });
 
     // Monta o endereço estruturado em uma linha pra cotar o frete.
     function enderecoMontado() {
