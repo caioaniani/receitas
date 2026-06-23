@@ -117,6 +117,57 @@ def _detectar_injection(texto):
     return False
 
 
+# Pedido EXPLICITO de atendimento humano. NAO e seguranca (como o injection) —
+# e a rede de seguranca do HANDOFF. O prompt manda o Claude chamar
+# transferir_para_humano quando o cliente pede humano (chatbot_prompt.py:176),
+# mas LLM as vezes ESCREVE "vou te transferir" SEM chamar a tool — ai o
+# `acao` fica 'responder', a rota nao muda o status e a conversa fica presa
+# no bot (caso real 23/06/2026: bot prometeu, ficou 'pending', o follow-up
+# cutucou o cliente 9min depois). Aqui forcamos o handoff de forma
+# deterministica. Conservador: so dispara em pedido claro, com guarda de
+# negacao ("nao quero falar com atendente" NAO dispara).
+_HUMANO_PATTERNS = [
+    # "(quero) falar/conversar com (um) atendente/humano/pessoa/alguem/gente"
+    re.compile(
+        r'(?i)\b(falar|conversar|fala|falo|atend[ae])\s+com\s+'
+        r'(um|uma|o|a|algum|alguma)?\s*'
+        r'(atendente|humano|pessoa|algu[eé]m|gente|operador|vendedor)'),
+    # "quero/queria/preciso/gostaria (de) (um) atendente/humano/operador"
+    re.compile(
+        r'(?i)\b(quero|queria|preciso|gostaria|kero)\s+'
+        r'(de\s+)?(um\s+|uma\s+)?'
+        r'(atendente|humano|operador|atendimento\s+humano)\b'),
+    # "(me) transfere/passa/encaminha pra (um) atendente/humano/pessoa/setor"
+    re.compile(
+        r'(?i)\b(me\s+)?(transfere|transferir|passa|passar|encaminha|'
+        r'encaminhar|chama|chamar|chame)\s+'
+        r'(pra|para|pro|pa|um|uma|o|a)\s+'
+        r'(um\s+|uma\s+|o\s+|a\s+)?'
+        r'(atendente|humano|pessoa|algu[eé]m|gente|setor|equipe|'
+        r'respons[aá]vel|operador)'),
+    # frases fixas inequivocas
+    re.compile(
+        r'(?i)\b(atendente\s+humano|atendimento\s+humano|'
+        r'(pessoa|gente|humano|atendente)\s+de\s+verdade|humano\s+real)\b'),
+]
+
+# Guarda de negacao: "nao quero/preciso falar com atendente" — deixa o Claude
+# tratar a nuance em vez de transferir errado.
+_HUMANO_NEGACAO = re.compile(
+    r'(?i)\bn[aã]o\s+(quero|queria|precis\w*|quer|gostaria|gostei)\b')
+
+
+def _quer_humano(texto):
+    """True quando o cliente PEDE explicitamente um humano. Usado pra forcar
+    handoff de forma deterministica, sem depender do Claude chamar a tool."""
+    t = (texto or '').strip()
+    if len(t) < 4:
+        return False
+    if _HUMANO_NEGACAO.search(t):
+        return False
+    return any(p.search(t) for p in _HUMANO_PATTERNS)
+
+
 # Frases-padrao do system prompt que NUNCA deveriam aparecer literais na
 # resposta do bot (a nao ser que ele esteja regurgitando o prompt).
 _OUTPUT_VAZOU_MARCADORES = (
