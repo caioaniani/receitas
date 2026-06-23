@@ -54,8 +54,9 @@ def _pedido(db, codigo=None, status='aguardando_pagamento', nome='Maria'):
 def test_lista_pedidos_owner_200(app):
     from app.extensions import db
     c = _owner(app)
-    _pedido(db, nome='Cliente Teste')
-    r = c.get('/admin/loja-online/pedidos')
+    _pedido(db, nome='Cliente Teste')   # nasce 'aguardando_pagamento'
+    # Default da tela e' 'pago' (22/06/2026); pra ver o aguardando, vai pra aba Todos.
+    r = c.get('/admin/loja-online/pedidos?status=todos')
     assert r.status_code == 200
     assert b'Cliente Teste' in r.data
     assert b'Pedidos do site' in r.data
