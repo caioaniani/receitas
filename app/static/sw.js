@@ -2,7 +2,7 @@
 // Cache estratégia: Network First para HTML/JSON (dados sempre frescos),
 // Cache First para assets estáticos (CSS, JS, fontes, imagens).
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE_STATIC = `padaria-static-${VERSION}`;
 const CACHE_RUNTIME = `padaria-runtime-${VERSION}`;
 
