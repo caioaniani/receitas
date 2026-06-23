@@ -76,11 +76,25 @@ def express_disponivel(base=None):
 # decisão 17/06/2026 (o dono quis que janelas passadas sumam, não deem erro).
 LEAD_HORAS = int(os.environ.get('LOJA_LEAD_HORAS', '2') or '2')
 
+# Distância (km) a partir da qual a PRIMEIRA janela da manhã (08:00-09:00) é
+# cortada — motoboy demora pra ser alocado de manhã e cliente >10km não recebe
+# a tempo (decisão do dono 23/06/2026). Default 10km; ajustável por env sem
+# deploy. A loja é o Brooklin (frete.py); 'distancia_km' vem do consultar_frete.
+DISTANCIA_CORTE_PRIMEIRA_JANELA_KM = float(
+    os.environ.get('LOJA_CORTE_1A_JANELA_KM', '10') or '10')
+# Quais janelas considerar "primeira da manhã" pra cortar quando o cliente
+# está longe. Hoje só 08-09; se um dia tiver janelas <8h, listamos aqui.
+JANELAS_CORTADAS_LONGE = ('08:00-09:00',)
 
-def janelas_disponiveis(modo, data=None, base=None):
+
+def janelas_disponiveis(modo, data=None, base=None, *, distancia_km=None):
     """Janelas válidas pro modo numa data. Quando a data é HOJE, remove as
     janelas que já passaram (início < agora + LEAD_HORAS). Em dias futuros,
-    todas as janelas. `data` aceita date ou str ISO."""
+    todas as janelas. `data` aceita date ou str ISO.
+
+    `distancia_km` (opcional, vem do `consultar_frete`): quando informado e
+    >= DISTANCIA_CORTE_PRIMEIRA_JANELA_KM, corta a 1ª janela (08-09) — o
+    motoboy não chega a tempo (caso real Alphaville)."""
     if modo == 'express':
         return [JANELA_EXPRESS]
     base = base or agora()
@@ -93,6 +107,14 @@ def janelas_disponiveis(modo, data=None, base=None):
     if data and data == base.date():
         limite = base.hour + LEAD_HORAS
         janelas = [j for j in janelas if int(j[:2]) >= limite]
+    # Corte de janelas matinais por distância (só agendada — express é por
+    # horário; retirada não tem distância). Aplica EM QUALQUER dia (não só
+    # hoje): pra a quinta às 8h o motoboy já passa pelo mesmo gargalo de
+    # alocação matinal.
+    if (modo == 'agendada'
+            and distancia_km is not None
+            and distancia_km >= DISTANCIA_CORTE_PRIMEIRA_JANELA_KM):
+        janelas = [j for j in janelas if j not in JANELAS_CORTADAS_LONGE]
     return janelas
 
 
