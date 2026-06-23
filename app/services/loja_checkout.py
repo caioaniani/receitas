@@ -395,10 +395,26 @@ def criar_pedido(form, itens_raw, *, base=None):
         else:
             data_entrega = date.fromisoformat(data_str)
             # Janela tem que ser válida PARA AQUELA DATA (janelas passadas de
-            # hoje são rejeitadas — espelha o filtro do front).
-            if janela not in janelas_disponiveis(modo, data_entrega, base=base):
-                erros.append('Escolha uma janela de horário válida '
-                             '(o horário escolhido já passou).')
+            # hoje são rejeitadas — espelha o filtro do front). Distância
+            # corta a 1ª janela quando o cliente está longe (motoboy não
+            # chega — caso real Alphaville 23/06/2026).
+            janelas_ok = janelas_disponiveis(
+                modo, data_entrega, base=base,
+                distancia_km=distancia_km)
+            if janela not in janelas_ok:
+                # Mensagem diferenciada quando o motivo é a distância (cliente
+                # entende por que sumiu a 1ª janela).
+                if (modo == 'agendada' and distancia_km is not None
+                        and distancia_km >= DISTANCIA_CORTE_PRIMEIRA_JANELA_KM
+                        and janela in JANELAS_CORTADAS_LONGE):
+                    erros.append(
+                        f'Para o seu endereço ({distancia_km:.1f} km da loja), '
+                        'não conseguimos entregar na janela das '
+                        f'{janela.split("-")[0]} — '
+                        'escolha a partir das 09:00.')
+                else:
+                    erros.append('Escolha uma janela de horário válida '
+                                 '(o horário escolhido já passou).')
 
     # Plano por dia (22/06/2026): valida cada item contra o saldo do plano
     # da data_entrega escolhida. Mensagem CLARA com nome do produto + data
