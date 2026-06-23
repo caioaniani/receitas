@@ -162,6 +162,16 @@ def test_emitir_nf_bloqueia_nao_owner(app):
     assert r.status_code == 403
 
 
+def test_dashboard_e_logo_owner_only(app):
+    """Dashboard /admin/loja-online (mostra FATURAMENTO) e config do logo
+    da loja ficam owner-only — decisao 22/06/2026: equipe nao precisa ver
+    valor de venda nem mexer no logo."""
+    c = _admin_nao_owner(app)
+    assert c.get('/admin/loja-online').status_code == 403
+    assert c.post('/admin/loja-online/logo', data={}).status_code == 403
+    assert c.post('/admin/loja-online/logo/remover').status_code == 403
+
+
 def test_ordenacao_e_tiny_continuam_owner_only(app):
     """Decisao do dono 22/06/2026: ordenar produtos, ordenar categorias e
     SKUs do Tiny ficam SO com ele. Pedidos do site fica liberado, mas essas
