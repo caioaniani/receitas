@@ -62,6 +62,24 @@ def test_lista_pedidos_owner_200(app):
     assert b'Pedidos do site' in r.data
 
 
+def test_default_lista_eh_pagos(app):
+    """22/06/2026 — sem ?status= na URL, a tela mostra SO pagos (verde, foco
+    da operacao). Pra ver todos, o usuario clica em 'Todos' (?status=todos)."""
+    from app.extensions import db
+    _pedido(db, codigo='AGU01', status='aguardando_pagamento')
+    _pedido(db, codigo='PAG01', status='pago')
+    c = _owner(app)
+    # Sem ?status= -> default = pago
+    r = c.get('/admin/loja-online/pedidos')
+    assert r.status_code == 200
+    assert b'PAG01' in r.data
+    assert b'AGU01' not in r.data
+    # ?status=todos -> mostra tudo (incluindo aguardando)
+    r2 = c.get('/admin/loja-online/pedidos?status=todos')
+    assert b'PAG01' in r2.data
+    assert b'AGU01' in r2.data
+
+
 def test_lista_filtra_por_status(app):
     from app.extensions import db
     c = _owner(app)
