@@ -911,6 +911,7 @@ PAPEIS_POR_TOOL = {
     'consultar_funcionario': {'owner'},
     'consultar_caixa': {'admin', 'gerente'},
     'consultar_vendas_itens': {'admin', 'gerente'},
+    'prever_pedido': {'admin', 'gerente'},
     'consultar_desperdicio': {'admin', 'gerente', 'funcionario'},
     'consultar_catalogo_site': {'admin', 'gerente', 'funcionario'},
     'consultar_cartinhas': {'admin', 'gerente'},
