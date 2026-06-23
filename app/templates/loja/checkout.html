@@ -206,8 +206,9 @@
     <!-- ─── 6) Cartinha (só se cesta) ────────────────────────── -->
     <div class="checkout-bloco" id="bloco-cartinha" style="display:none">
       <h2>Cartinha <span class="opcional">(opcional)</span></h2>
-      <textarea name="cartinha" rows="3"
-        placeholder="Mensagem de presente para acompanhar a cesta.">{{ form.get('cartinha', '') }}</textarea>
+      <textarea name="cartinha" id="cartinha" rows="3" maxlength="250"
+        placeholder="Mensagem de presente para acompanhar a cesta (máx. 250 caracteres).">{{ form.get('cartinha', '') }}</textarea>
+      <div class="cartinha-contador small text-muted" id="cartinha-contador" aria-live="polite"></div>
     </div>
 
     <!-- ─── 7) Totais ────────────────────────────────────────── -->
