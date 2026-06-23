@@ -349,6 +349,11 @@ def _gate_acesso():
             # pagina de produto). Read-only e nao expoe nada sensivel.
             'loja.api_disponibilidade_dia',
             'loja.api_disponibilidade_checkout',
+            # PWA: manifest + service worker da loja. Tem que ser publico
+            # pra o navegador buscar mesmo com loja em modo teste; nao
+            # expoem dado sensivel (manifest e estatico; SW e script).
+            'loja.pwa_manifest_loja',
+            'loja.pwa_service_worker_loja',
     ):
         return None
     from app.utils import host_atual_eh_loja
