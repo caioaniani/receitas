@@ -117,12 +117,15 @@
            class="sidebar-link {% if request.path.startswith('/notas') %}active{% endif %}">
             Notas (memória do agente)
         </a>
-        {# Loja Online: liberada a todos os usuários logados (22/06/2026). Só
-           reembolso/cancelar e emissão de NF continuam restritos ao dono. #}
+        {# Loja Online: liberada a todos os usuários logados (22/06/2026), porém
+           o DASHBOARD (com faturamento) e a config de logo seguem owner-only.
+           Por isso o link "🥐 Loja Online" só aparece pro dono. #}
+        {% if current_user.is_owner %}
         <a href="{{ url_for('main.loja_online_dashboard') }}"
            class="sidebar-link {% if request.path == '/admin/loja-online' %}active{% endif %}">
             🥐 Loja Online
         </a>
+        {% endif %}
         <a href="{{ url_for('main.loja_online_catalogo') }}"
            class="sidebar-link {% if request.path.startswith('/admin/loja-online/catalogo') or request.path.startswith('/admin/loja-online/auditoria') %}active{% endif %}">
             Catálogo do site
