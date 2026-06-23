@@ -2803,7 +2803,7 @@ def loja_online_logo():
 
 
 @main_bp.route('/admin/loja-online/logo/remover', methods=['POST'])
-@login_required
+@owner_required
 def loja_online_logo_remover():
     """Volta o header pro wordmark de texto (limpa `loja_logo_url`)."""
     from flask import flash
