@@ -710,6 +710,46 @@ def test_apis_leitura_da_operacao_abertas_pra_funcionario(app):
         [m.stop() for m in mocks]
 
 
+def test_pdf_presente_mostra_enviado_por(app):
+    """Incidente real 22/06/2026: presente chegou anonimo pq o comprador
+    nao assinou a cartinha. Fix: PDF da via do cliente agora SEMPRE mostra
+    'Enviado por: [comprador]' quando destinatario != comprador.
+
+    Trava: mesmo presente sem cartinha tem que mostrar 'Enviado por'."""
+    from datetime import date
+
+    from app.services import pdf as pdf_svc
+    presente = {
+        'code': 'GIFT01',
+        'destinatario': 'Tati, Lu e Papai',
+        'comprador': 'Joana da Silva',
+        'endereco': 'Rua X, 1',
+        'cartinha': '',                 # comprador esqueceu de assinar
+        'periodo': '08:00-09:00',
+        'itens': [{'nome': 'Box', 'qtd': 1}],
+    }
+    saida = pdf_svc.gerar_pedidos_pdf([presente], ['cliente'], date(2026, 6, 22))
+    # PDF comprimido — extraimos texto via pypdf
+    import io
+
+    from pypdf import PdfReader
+    texto = PdfReader(io.BytesIO(saida)).pages[0].extract_text()
+    assert 'Enviado por: Joana da Silva' in texto
+    assert 'Tati, Lu e Papai' in texto
+
+    # Via do motoboy NAO mostra (a via vai com o presente, motoboy nao precisa)
+    saida_mot = pdf_svc.gerar_pedidos_pdf(
+        [presente], ['motorista'], date(2026, 6, 22))
+    texto_mot = PdfReader(io.BytesIO(saida_mot)).pages[0].extract_text()
+    assert 'Enviado por' not in texto_mot
+
+    # NAO-presente (destinatario == comprador): linha NAO aparece
+    mesmo = dict(presente, destinatario='Joana da Silva', code='SELF01')
+    saida2 = pdf_svc.gerar_pedidos_pdf([mesmo], ['cliente'], date(2026, 6, 22))
+    texto2 = PdfReader(io.BytesIO(saida2)).pages[0].extract_text()
+    assert 'Enviado por' not in texto2
+
+
 def test_writes_de_atribuicao_continuam_guardados(app):
     """Abrir os reads NAO abre os writes: funcionario sem loja segue 403
     em POST de atribuicao (mexe na operacao de entrega)."""
