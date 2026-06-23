@@ -1179,31 +1179,28 @@ def _migrate_postgres(app):
     # Plano de estoque do site por dia (22/06/2026). NAO sai por db.create_all
     # em ambientes ja existentes (so cria tabela nova; nao toca em prod).
     # Tabela canonica vem do modelo `EstoqueSitePlano`.
-    try:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS estoque_site_plano (
-                id SERIAL PRIMARY KEY,
-                kind VARCHAR(10) NOT NULL,
-                item_id INTEGER NOT NULL,
-                data DATE NOT NULL,
-                qtd_planejada INTEGER NOT NULL DEFAULT 0,
-                qtd_reservada INTEGER NOT NULL DEFAULT 0,
-                criado_em TIMESTAMP,
-                atualizado_em TIMESTAMP,
-                CONSTRAINT uq_estoque_site_plano_item_data
-                    UNIQUE (kind, item_id, data)
-            )
-        """))
-        conn.execute(text("""
-            CREATE INDEX IF NOT EXISTS ix_estoque_site_plano_data
-                ON estoque_site_plano(data)
-        """))
-        conn.execute(text("""
-            CREATE INDEX IF NOT EXISTS ix_estoque_site_plano_data_kind_item
-                ON estoque_site_plano(data, kind, item_id)
-        """))
-    except Exception as e:  # noqa: BLE001
-        app.logger.warning('migrate estoque_site_plano: %s', e)
+    _try("""
+        CREATE TABLE IF NOT EXISTS estoque_site_plano (
+            id SERIAL PRIMARY KEY,
+            kind VARCHAR(10) NOT NULL,
+            item_id INTEGER NOT NULL,
+            data DATE NOT NULL,
+            qtd_planejada INTEGER NOT NULL DEFAULT 0,
+            qtd_reservada INTEGER NOT NULL DEFAULT 0,
+            criado_em TIMESTAMP,
+            atualizado_em TIMESTAMP,
+            CONSTRAINT uq_estoque_site_plano_item_data
+                UNIQUE (kind, item_id, data)
+        )
+    """)
+    _try("""
+        CREATE INDEX IF NOT EXISTS ix_estoque_site_plano_data
+            ON estoque_site_plano(data)
+    """)
+    _try("""
+        CREATE INDEX IF NOT EXISTS ix_estoque_site_plano_data_kind_item
+            ON estoque_site_plano(data, kind, item_id)
+    """)
 
     # Backfill de tokens em drivers existentes (sem token)
     try:
