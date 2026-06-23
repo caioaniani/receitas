@@ -91,22 +91,37 @@ def enviar_mensagem(conversation_id, content):
         return {'ok': False, 'erro': str(exc)}
 
 
-def definir_status(conversation_id, status):
+def definir_status(conversation_id, status, tentativas=3):
     """Muda o status da conversa. 'open' = passa pro humano (sai do bot);
-    'pending' = devolve pro bot; 'resolved' = encerra."""
+    'pending' = devolve pro bot; 'resolved' = encerra.
+
+    Retry (default 3x, backoff 0.5s/1s) porque ESTE caminho e critico pro
+    handoff: uma falha transitoria aqui deixava a conversa presa no bot e o
+    cliente esperando (caso 23/06/2026). Devolve {'ok': bool, 'erro': str} —
+    o caller DEVE checar e NAO pode silenciar a falha."""
     if not bot_disponivel():
         return {'ok': False, 'erro': 'Chatwoot bot nao configurado'}
     url = f'{_base()}/conversations/{conversation_id}/toggle_status'
-    try:
-        r = requests.post(url, json={'status': status},
-                          headers=_bot_headers(), timeout=10)
-        if r.status_code not in (200, 201):
-            logger.warning('chatwoot definir_status %s: %s', r.status_code, r.text[:200])
-            return {'ok': False, 'erro': f'HTTP {r.status_code}'}
-        return {'ok': True}
-    except Exception as exc:  # noqa: BLE001
-        logger.exception('chatwoot definir_status falhou')
-        return {'ok': False, 'erro': str(exc)}
+    ultimo_erro = '?'
+    for tentativa in range(1, tentativas + 1):
+        try:
+            r = requests.post(url, json={'status': status},
+                              headers=_bot_headers(), timeout=10)
+            if r.status_code in (200, 201):
+                return {'ok': True}
+            ultimo_erro = f'HTTP {r.status_code}'
+            logger.warning('chatwoot definir_status %s (tentativa %d/%d): %s',
+                           r.status_code, tentativa, tentativas, r.text[:200])
+        except Exception as exc:  # noqa: BLE001
+            ultimo_erro = str(exc)
+            logger.warning('chatwoot definir_status erro (tentativa %d/%d): %s',
+                           tentativa, tentativas, exc)
+        if tentativa < tentativas:
+            import time as _t
+            _t.sleep(0.5 * tentativa)
+    logger.error('chatwoot definir_status FALHOU apos %d tentativas: %s',
+                 tentativas, ultimo_erro)
+    return {'ok': False, 'erro': ultimo_erro}
 
 
 def buscar_historico(conversation_id, limite=20):
