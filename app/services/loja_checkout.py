@@ -38,6 +38,20 @@ HORA_FECHA = 18
 JANELAS_HORARIAS = tuple(
     f'{h:02d}:00–{h + 1:02d}:00' for h in range(HORA_ABRE, HORA_FECHA))
 JANELA_EXPRESS = 'em até 1h'
+# Express pra cliente longe (>= limiar km) leva mais tempo — o motoboy
+# percorre mais (decisão do dono 23/06/2026: >10km o express vira 2h).
+JANELA_EXPRESS_LONGE = 'em até 2h'
+DISTANCIA_EXPRESS_2H_KM = float(
+    os.environ.get('LOJA_EXPRESS_2H_KM', '10') or '10')
+
+
+def janela_express_para_distancia(distancia_km):
+    """Texto da janela express conforme a distância. >= DISTANCIA_EXPRESS_2H_KM
+    → 'em até 2h'; senão 'em até 1h'. Distância None (sem cotação) → 1h."""
+    if (distancia_km is not None
+            and distancia_km >= DISTANCIA_EXPRESS_2H_KM):
+        return JANELA_EXPRESS_LONGE
+    return JANELA_EXPRESS
 
 # Quantos dias de agenda oferecer a partir da primeira data válida.
 DIAS_AGENDA = 14
