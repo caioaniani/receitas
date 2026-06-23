@@ -625,6 +625,18 @@ def responder(historico, *, telefone_contato=None):
             'Vou te conectar com nossa equipe agora. 🙂',
             'tentativa de bypass', tools_usadas=[])
 
+    # Pedido explicito de humano: handoff deterministico ANTES do Claude. Sem
+    # isso, o handoff dependia 100% do Claude chamar transferir_para_humano —
+    # e quando ele so ESCREVIA a frase sem chamar a tool, a conversa ficava
+    # presa no bot (caso 23/06/2026). Caso operacional legitimo de transferir
+    # direto (chatbot_prompt.py:176), entao nao e "handoff preguicoso".
+    if _quer_humano(texto_user):
+        logger.info('chatbot: pedido explicito de humano -> handoff forcado '
+                    'msg=%r', texto_user[:120])
+        return _resp_handoff(
+            'Claro! Já estou te passando pra um atendente. Só um instante. 🙂',
+            'cliente pediu atendente', tools_usadas=[])
+
     api_key = (os.environ.get('ANTHROPIC_API_KEY')
                or current_app.config.get('ANTHROPIC_API_KEY'))
     if not api_key:
