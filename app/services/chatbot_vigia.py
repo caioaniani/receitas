@@ -641,6 +641,26 @@ def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_re
     return res
 
 
+# Encerramentos: "ok", "obrigada", "valeu" — o cliente NÃO está esperando
+# resposta (caso 23/06/2026: humano resolveu, cliente respondeu "Ok" e o
+# vigia alertou como se alguém precisasse olhar).
+_FECHAMENTO_RE = re.compile(
+    r'^(ok(ay)?|t[aá]\s*(bom|certo|joia|j[oó]ia|ok)?|blz|beleza|valeu|vlw|'
+    r'obrigad[oa]?|obg|brigad[oa]?|grat[oa]|perfeito|show|[oó]timo|maravilha|'
+    r'combinado|fechado|isso( mesmo)?|certo|sim|entendi|top|legal|'
+    r'👍|🙏|❤️|💛|🥰|😊|👏|🙌)'
+    r'[\s!.,👍🙏❤️💛🥰😊👏🙌]*$',
+    re.IGNORECASE,
+)
+
+
+def _e_fechamento(texto):
+    """True pra mensagens curtas de encerramento/agradecimento — cliente não
+    aguarda resposta, não deve disparar 'esperando atendente'."""
+    t = (texto or '').strip()
+    return bool(t) and len(t) <= 30 and bool(_FECHAMENTO_RE.match(t))
+
+
 def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
                                        max_por_ciclo=5):
     """Detector C (12/06/2026, conv #198): cliente manda mensagem em
