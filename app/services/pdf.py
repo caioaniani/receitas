@@ -156,6 +156,25 @@ def _total_pedido(p):
         return 0.0
 
 
+def linha_enviado_por(p, *, motorista=False):
+    """Devolve a string "Enviado por: [Comprador]" quando o pedido eh um
+    presente (destinatario != comprador) E estamos na via do cliente
+    (motoboy nao precisa saber quem mandou). Senao devolve None.
+
+    Funcao pura — sem dependencia de fpdf — pra ser testavel direto sem
+    parsear PDF binario (incidente 22/06/2026: 'presente chegou anonimo'
+    porque o comprador esqueceu de assinar a cartinha)."""
+    if motorista:
+        return None
+    comprador = (p.get('comprador') or '').strip()
+    destinatario = (p.get('destinatario') or '').strip()
+    if not comprador or not destinatario:
+        return None
+    if comprador.lower() == destinatario.lower():
+        return None
+    return f'Enviado por: {comprador}'
+
+
 def itens_sem_valor(p):
     """True quando o VNDA nao informou valor por item (todos zerados)
     mas o pedido tem total > 0 — acontece com produtos tipo kit/box
@@ -233,17 +252,12 @@ def _folha_pedido(pdf, p, via, data_fmt):
         pdf.cell(0, 7, _latin1(f'Tel: {p["telefone"]}'),
                  new_x='LMARGIN', new_y='NEXT')
 
-    # "Enviado por" — so quando e' PRESENTE (destinatario != comprador) e na
-    # via do cliente (motoboy nao precisa saber). Resolve o caso "presente
-    # chegou anonimo": mesmo que o comprador esqueca de assinar a cartinha,
-    # o destinatario sabe quem mandou. Incidente real 22/06/2026.
-    comprador = (p.get('comprador') or '').strip()
-    destinatario = (p.get('destinatario') or '').strip()
-    eh_presente = (comprador and destinatario
-                   and comprador.lower() != destinatario.lower())
-    if eh_presente and not motorista:
+    # "Enviado por" — logica em funcao pura (testavel sem parsear PDF) pra
+    # cobrir o caso "presente chegou anonimo" (incidente 22/06/2026).
+    enviado_por = linha_enviado_por(p, motorista=motorista)
+    if enviado_por:
         pdf.set_font('Helvetica', 'B', 11)
-        pdf.cell(0, 7, _latin1(f'Enviado por: {comprador}'),
+        pdf.cell(0, 7, _latin1(enviado_por),
                  new_x='LMARGIN', new_y='NEXT')
     pdf.ln(3)
 
