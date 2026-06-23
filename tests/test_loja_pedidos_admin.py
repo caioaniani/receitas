@@ -111,8 +111,8 @@ def test_nao_owner_ve_pedidos(app):
     """Liberado a TODOS os usuários logados (22/06/2026): ver lista e detalhe."""
     from app.extensions import db
     c = _admin_nao_owner(app)
-    p = _pedido(db, codigo='SEE0001', nome='Cliente Teste')
-    r = c.get('/admin/loja-online/pedidos')
+    p = _pedido(db, codigo='SEE0001', nome='Cliente Teste')   # aguardando_pagamento
+    r = c.get('/admin/loja-online/pedidos?status=todos')  # default e' 'pago'
     assert r.status_code == 200
     assert b'Cliente Teste' in r.data
     assert c.get(f'/admin/loja-online/pedidos/{p.codigo}').status_code == 200
