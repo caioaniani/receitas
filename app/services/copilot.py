@@ -4115,6 +4115,7 @@ _READ_HANDLERS = {
     'consultar_funcionario': _read_consultar_funcionario,
     'consultar_caixa': _read_consultar_caixa,
     'consultar_vendas_itens': _read_consultar_vendas_itens,
+    'prever_pedido': _read_prever_pedido,
     'consultar_foco': _read_consultar_foco,
     'consultar_tarefas': _read_consultar_tarefas,
     'consultar_desperdicio': _read_consultar_desperdicio,
