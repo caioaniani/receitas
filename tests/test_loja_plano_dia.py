@@ -396,3 +396,53 @@ def test_pagina_produto_mostra_seletor_quando_esgotado_so_hoje(app):
     assert f'value="{proxima.isoformat()}"' in html
     # Aviso amarelo "Esgotado hoje"
     assert 'Esgotado hoje' in html
+
+
+def test_api_disponibilidade_checkout(app):
+    """Checkout JS pergunta /loja/api/disponibilidade-checkout ao trocar a data;
+    devolve lista de itens esgotados pra essa data + proxima data com TUDO
+    disponivel. (Decisao 23/06/2026: cliente precisa decidir entre trocar
+    data ou remover item.)"""
+    from datetime import timedelta
+
+    from app.extensions import db
+    from app.models import Receita
+    from app.services import loja_plano_dia
+    from app.utils import hoje
+
+    foccacia = Receita(nome='Foccacia', categoria='Paes', preco_site=52.0,
+                      rendimento_qtd=1, rendimento_unidade='un',
+                      peso_base=300.0)
+    sourdough = Receita(nome='Sourdough', categoria='Paes', preco_site=25.0,
+                       rendimento_qtd=1, rendimento_unidade='un',
+                       peso_base=500.0)
+    db.session.add_all([foccacia, sourdough])
+    db.session.commit()
+
+    dia_hoje = hoje()
+    # hoje + os 4 dias seguintes: tudo zerado pra foccacia.
+    # dia+5: foccacia 5, sourdough sem plano (default = disponivel).
+    for i in range(5):
+        loja_plano_dia.definir('receita', foccacia.id,
+                                dia_hoje + timedelta(days=i), 0)
+    loja_plano_dia.definir('receita', foccacia.id,
+                            dia_hoje + timedelta(days=5), 5)
+
+    c = app.test_client()
+    body = {
+        'data': dia_hoje.isoformat(),
+        'itens': [
+            {'kind': 'receita', 'id': foccacia.id},
+            {'kind': 'receita', 'id': sourdough.id},
+        ],
+    }
+    r = c.post('/loja/api/disponibilidade-checkout',
+               json=body)
+    j = r.get_json()
+    assert j['ok'] is True
+    # Foccacia esgotada hoje; sourdough nao
+    nomes = {it['nome'] for it in j['esgotados']}
+    assert 'Foccacia' in nomes
+    assert 'Sourdough' not in nomes
+    # Proxima data com TUDO disponivel = dia+5 (primeiro dia com foccacia>0)
+    assert j['proxima_disponivel'] == (dia_hoje + timedelta(days=5)).isoformat()
