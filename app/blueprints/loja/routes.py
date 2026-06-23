@@ -150,9 +150,11 @@ def pedido_pix(codigo):
 
 
 @loja_bp.route('/pedido/<codigo>/cartao', methods=['POST'])
+@limiter.limit('10 per minute')
 def pedido_cartao(codigo):
     """Processa pagamento em cartão. Recebe `card_token` (já tokenizado no
-    front via pk_ do Pagar.me) — servidor NUNCA vê o número do cartão."""
+    front via pk_ do Pagar.me) — servidor NUNCA vê o número do cartão.
+    Rate limit pra evitar spam (achado da auditoria 23/06/2026)."""
     pedido = _pedido_aguardando(codigo)
     if pedido.status != 'aguardando_pagamento':
         return redirect(url_for('loja.pedido_confirmado', codigo=codigo))
