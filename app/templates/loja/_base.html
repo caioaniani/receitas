@@ -354,5 +354,17 @@
 </script>
 {% endif %}
 
+{# Registra o Service Worker da loja (PWA). Roda só em HTTPS (e localhost).
+   Falha silenciosa em navegadores sem suporte — não quebra o site. #}
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('{{ url_for("loja.pwa_service_worker_loja") }}',
+        { scope: '/loja/' })
+        .catch(function (e) { console.warn('SW da loja não registrou:', e); });
+    });
+  }
+</script>
+
 </body>
 </html>
