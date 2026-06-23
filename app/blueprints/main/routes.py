@@ -2710,7 +2710,7 @@ def loja_online_catalogo_categoria(tipo, id):
 
 @main_bp.route('/admin/loja-online/catalogo/foto/<tipo>/<int:id>',
                 methods=['POST'])
-@login_required
+@owner_required
 def loja_online_catalogo_foto(tipo, id):
     """Upload de foto via AJAX. JSON de resposta: {ok, imagem_url}. Reusa
     `comprimir_imagem` + `dropbox_storage.upload_publico` (padrão de
