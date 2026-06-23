@@ -298,12 +298,21 @@ _SINAIS_COMPRA = re.compile(
 
 # Reclamacao = handoff humano e correto (nao alerta como preguicoso).
 _SINAIS_RECLAMACAO = re.compile(
-    r'\b('
-    r'n[aã]o chegou|n[aã]o (recebi|veio)|atras(ou|ado|ando|o)|'
-    r'veio (errado|quebrado|estragado|diferente|faltando|amassado)|'
-    r'reembolso|reclamar|reclama[cç][aã]o|cancelar (meu )?pedido|'
-    r'devolver|trocar|t[aá] estragado|t[aá] quebrado|p[eé]ssimo|'
-    r'falar com (gerente|dono|respons[aá]vel)'
+    r'('
+    r'\bn[aã]o chegou|\bn[aã]o (recebi|veio)|\batras(ou|ado|ando|o)|'
+    r'\bveio (errado|quebrado|estragado|diferente|faltando|amassado|'
+    r'murcho|seco|menor|assim)|'
+    r'\breembolso|\breclamar|\breclama[cç][aã]o|\bcancelar (meu )?pedido|'
+    r'\bdevolver|\btrocar|\bt[aá] estragado|\bt[aá] quebrado|\bp[eé]ssim\w*|'
+    r'\bfalar com (gerente|dono|respons[aá]vel)|'
+    # Qualidade/tamanho do produto JÁ recebido (caso 23/06/2026: croissant
+    # "tão pequenininho", "todos estão assim?") — reclamação pós-venda, o
+    # handoff humano é CORRETO, não "venda perdida".
+    r'\bpequen\w*|\bmin[uú]scul\w*|\btamanho|\bmenor\b|'
+    r'\bmurch\w*|\bressecad\w*|\bqueimad\w*|\bmofad\w*|\bazed\w*|'
+    r'\bestragad\w*|\bestranho|\bhorr[ií]vel|\bqualidade|'
+    r'\bdur[oa]\b|\bsec[oa]\b|\bcru[a]?\b|\bruim\b|'
+    r'\btodos? (est[aã]o|s[aã]o|v[eê]m|vem) assim|\bveio assim|\bvieram assim'
     r')',
     re.IGNORECASE,
 )
