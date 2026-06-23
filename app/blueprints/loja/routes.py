@@ -134,8 +134,10 @@ def pedido_pagamento(codigo):
 
 
 @loja_bp.route('/pedido/<codigo>/pix', methods=['POST'])
+@limiter.limit('10 per minute')
 def pedido_pix(codigo):
-    """Gera Pix (QR + copia-e-cola) pro pedido."""
+    """Gera Pix (QR + copia-e-cola) pro pedido. Rate limit pra evitar spam
+    de tentativa de pagamento no Pagar.me (achado da auditoria 23/06/2026)."""
     pedido = _pedido_aguardando(codigo)
     if pedido.status != 'aguardando_pagamento':
         return redirect(url_for('loja.pedido_confirmado', codigo=codigo))
