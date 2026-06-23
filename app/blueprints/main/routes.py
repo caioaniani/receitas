@@ -3587,9 +3587,43 @@ def loja_online_tiny_definir():
     return redirect(url_for('main.loja_online_tiny_skus'))
 
 
-# ── Loja Online: plano de estoque por dia (22/06/2026, decisao do dono) ──
-# Permite "hoje 0 foccacia, sexta 20" sem mexer no estoque fisico. Reserva
-# acontece no webhook pagar.me; devolve no cancelamento. Owner-only.
+# ── Loja Online: Produção do dia (o que PREPARAR, vindo das vendas) ──
+# Decisao do dono 23/06/2026: a tela "o que preparar para o dia X de acordo
+# com o que foi vendido pra entregar pelo site" tem que viver aqui no
+# /admin/loja-online (antes so existia escondida em /pedidos/contagem-dia-site).
+# Reusa o servico contagem_para_dia (cestas desempacotadas) e o mesmo template,
+# so trocando o link de voltar. NAO confundir com a "Disponibilidade do dia"
+# (abaixo), que define quanto PODE VENDER.
+
+@main_bp.route('/admin/loja-online/producao-do-dia')
+@owner_required
+def loja_online_producao_dia():
+    """O que precisa sair de producao pra os pedidos do site de um dia X
+    (cestas desempacotadas). Mesma logica do /pedidos/contagem-dia-site,
+    surfaceada no painel da Loja Online."""
+    from datetime import date as _date
+
+    from app.services import loja_online_vendas
+    from app.utils import hoje
+    data_str = (request.args.get('data') or '').strip()
+    try:
+        alvo = _date.fromisoformat(data_str) if data_str else hoje()
+    except ValueError:
+        alvo = hoje()
+    itens = loja_online_vendas.contagem_para_dia(alvo)
+    return render_template(
+        'pedidos/contagem_dia_site.html',
+        itens=itens, data=alvo, data_str=alvo.isoformat(),
+        titulo='Produção do dia',
+        voltar_url=url_for('main.loja_online_dashboard'),
+        voltar_label='Loja Online')
+
+
+# ── Loja Online: Disponibilidade por dia (22/06/2026, decisao do dono) ──
+# Permite "hoje 0 foccacia, sexta 20" sem mexer no estoque fisico. Controla
+# o "Esgotado" no site. Reserva acontece no webhook pagar.me; devolve no
+# cancelamento. Owner-only. NAO confundir com "Producao do dia" (acima),
+# que mostra o que PREPARAR; esta aqui define quanto PODE VENDER.
 
 @main_bp.route('/admin/loja-online/plano-do-dia')
 @owner_required

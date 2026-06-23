@@ -17,8 +17,8 @@
            class="form-control form-control-sm" style="max-width:180px">
   </div>
   <button type="submit" class="btn btn-sm btn-dark">Atualizar</button>
-  <a href="{{ url_for('pedidos.lista') }}" class="btn btn-sm btn-outline-secondary">
-    ← Voltar
+  <a href="{{ voltar_url|default(url_for('pedidos.lista')) }}" class="btn btn-sm btn-outline-secondary">
+    ← {{ voltar_label|default('Voltar') }}
   </a>
 </form>
 
