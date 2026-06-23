@@ -64,7 +64,7 @@
       <h3>O que vem nessa cesta</h3>
       <ul>
         {% for sub in item.itens %}
-        <li><strong>{{ sub.quantidade|int if sub.quantidade == sub.quantidade|int else '%.1f'|format(sub.quantidade) }}×</strong> {{ sub.nome }}</li>
+        <li><strong>{{ sub.qtd_formatada }}</strong> {{ sub.nome }}</li>
         {% endfor %}
       </ul>
     </div>
