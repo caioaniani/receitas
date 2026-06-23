@@ -215,6 +215,7 @@ def _mascarar(s):
 
 @loja_bp.route('/webhook/pagarme', methods=['POST'])
 @csrf.exempt
+@limiter.exempt
 def webhook_pagarme():
     """Webhook do Pagar.me. Protegido por segredo na URL (?k=) — mesmo
     padrão de Chatwoot/Slack/Zapi nesse projeto.
