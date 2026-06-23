@@ -446,16 +446,37 @@ def create_app(config_class=None):
             cw_extra_frame = f' {cw_origin}' if cw_token and cw_origin else ''
             cw_extra_img = f' {cw_origin}' if cw_token and cw_origin else ''
             cw_extra_style = f' {cw_origin}' if cw_token and cw_origin else ''
+            # Analytics/marketing (GA4 + Meta Pixel): só afrouxa o CSP quando a
+            # env var existe (sem tracking, CSP segue fechado). Sem estes
+            # dominios o navegador BLOQUEIA o gtag.js e o fbevents.js e os
+            # eventos nunca saem (bug 23/06/2026: Pixel "eventos nunca
+            # recebidos" porque connect.facebook.net não estava no script-src).
+            an_script = an_img = an_connect = ''
+            if (app.config.get('GA4_ID') or '').strip():
+                an_script += ' https://www.googletagmanager.com'
+                an_img += (' https://www.google-analytics.com'
+                           ' https://*.google-analytics.com')
+                an_connect += (' https://www.googletagmanager.com'
+                               ' https://www.google-analytics.com'
+                               ' https://*.google-analytics.com'
+                               ' https://*.analytics.google.com')
+            if (app.config.get('META_PIXEL_ID') or '').strip():
+                an_script += ' https://connect.facebook.net'
+                an_img += ' https://www.facebook.com https://*.facebook.com'
+                an_connect += (' https://connect.facebook.net'
+                               ' https://www.facebook.com')
             response.headers['Content-Security-Policy'] = (
                 "default-src 'self'; "
                 f"script-src 'self' https://cdn.jsdelivr.net "
-                f"https://checkout.pagar.me{cw_extra_script} 'unsafe-inline'; "
+                f"https://checkout.pagar.me{cw_extra_script}{an_script} "
+                "'unsafe-inline'; "
                 f"style-src 'self' https://cdn.jsdelivr.net{cw_extra_style} "
                 "'unsafe-inline'; "
                 "font-src 'self' https://cdn.jsdelivr.net; "
                 f"img-src 'self' data: https://*.dropbox.com "
-                f"https://*.dropboxusercontent.com{cw_extra_img}; "
-                f"connect-src 'self' https://api.pagar.me{cw_extra_connect}; "
+                f"https://*.dropboxusercontent.com{cw_extra_img}{an_img}; "
+                f"connect-src 'self' https://api.pagar.me"
+                f"{cw_extra_connect}{an_connect}; "
                 f"frame-src https://checkout.pagar.me{cw_extra_frame};"
             )
         if request.is_secure:
