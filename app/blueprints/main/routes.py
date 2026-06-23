@@ -3667,6 +3667,33 @@ def loja_online_plano_dia_definir():
     return jsonify(ok=True, saldo=saldo, qtd_planejada=qtd)
 
 
+@main_bp.route('/admin/loja-online/plano-do-dia/replicar', methods=['POST'])
+@owner_required
+def loja_online_plano_dia_replicar():
+    """Replica `qtd_planejada` pros proximos N dias a partir de `data_inicio`
+    pra UM item. SOBRESCREVE — vai com o que o usuario digitou."""
+    from datetime import date as _date
+
+    from app.services import loja_plano_dia
+    kind = (request.form.get('kind') or '').strip()
+    if kind not in ('receita', 'produto'):
+        return jsonify(ok=False, erro='kind invalido'), 400
+    try:
+        item_id = int(request.form.get('item_id'))
+        qtd = int(request.form.get('qtd_planejada'))
+        data_inicio = _date.fromisoformat(request.form.get('data_inicio'))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, erro='parametros invalidos'), 400
+    if qtd < 0:
+        return jsonify(ok=False, erro='qtd nao pode ser negativa'), 400
+    try:
+        n = loja_plano_dia.replicar_para_proximos_dias(
+            kind, item_id, qtd, data_inicio=data_inicio, dias=14)
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 400
+    return jsonify(ok=True, dias=n)
+
+
 @main_bp.route('/admin/loja-online/plano-do-dia/copiar-semana-passada',
                methods=['POST'])
 @owner_required
