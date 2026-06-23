@@ -31,6 +31,9 @@
 <div class="mb-3 d-flex gap-2 flex-wrap">
   <a href="{{ url_for('main.loja_online_catalogo') }}" class="btn btn-sm btn-outline-secondary">Catálogo</a>
   {% if current_user.is_owner %}
+  <a href="{{ url_for('main.loja_online_plano_dia') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-calendar3-week"></i> Plano do dia
+  </a>
   <a href="{{ url_for('main.loja_online_categorias') }}" class="btn btn-sm btn-outline-secondary">Ordem das categorias</a>
   <a href="{{ url_for('main.loja_online_ordem_produtos') }}" class="btn btn-sm btn-outline-secondary">Ordem dos produtos</a>
   {% endif %}
