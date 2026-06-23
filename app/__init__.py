@@ -312,7 +312,10 @@ def create_app(config_class=None):
         """Defesa em profundidade: se a request chegar via HTTP em prod
         (proxy mal configurado, rota nova esquecida), redireciona pra HTTPS.
         Hoje a Railway força HTTPS por config dela; isso não depende disso.
-        Usa o X-Forwarded-Proto via ProxyFix; em dev (localhost) não age."""
+        Usa o X-Forwarded-Proto via ProxyFix; em dev (localhost) e em testes
+        não age (testes usam test_client em HTTP por design)."""
+        if app.config.get('TESTING') or os.environ.get('PYTEST_RUNNING'):
+            return None
         from flask import redirect
         host = (request.host or '').split(':')[0].lower()
         if host in ('localhost', '127.0.0.1', '0.0.0.0'):
