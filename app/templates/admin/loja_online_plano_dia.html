@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+{% block title %}Plano do dia — Loja Online{% endblock %}
+
+{% block content %}
+<h1 class="page-title"><i class="bi bi-calendar3-week"></i> Plano do dia (estoque do site)</h1>
+<p class="text-muted">
+  Defina quantos de cada item você vai ter disponível pra
+  <strong>entregar em {{ data.strftime('%d/%m/%Y (%A)')|lower }}</strong>.
+  Edita direto no campo "planejado" — salva sozinho. <em>Reservado</em> é o que
+  já foi vendido pra esse dia; <em>sobra</em> é o que ainda dá pra vender.
+</p>
+
+<form method="GET" class="d-flex flex-wrap gap-2 align-items-end mb-3">
+  <div>
+    <label class="form-label mb-0 small">Data de entrega</label>
+    <input type="date" name="data" value="{{ data_str }}"
+           class="form-control form-control-sm" style="max-width:180px"
+           onchange="this.form.submit()">
+  </div>
+  <button type="submit" class="btn btn-sm btn-dark">Ver</button>
+  {% if tem_plano_anterior %}
+  <button type="button" id="btn-copiar-anterior"
+          class="btn btn-sm btn-outline-secondary"
+          data-url="{{ url_for('main.loja_online_plano_dia_copiar') }}"
+          data-data="{{ data_str }}">
+    <i class="bi bi-arrow-left-square"></i>
+    Copiar plano de {{ data_anterior|replace('-','/') }} (semana passada)
+  </button>
+  {% endif %}
+  <a href="{{ url_for('main.loja_online_dashboard') }}" class="btn btn-sm btn-outline-secondary">← Loja Online</a>
+</form>
+
+{% if not itens %}
+<div class="alert alert-light">
+  Nenhum item publicado no site. Configure preços e fotos em
+  <a href="{{ url_for('main.loja_online_catalogo') }}">Catálogo do site</a>.
+</div>
+{% else %}
+<div class="table-responsive">
+  <table class="table table-sm table-hover bg-white align-middle">
+    <thead class="thead-padaria">
+      <tr>
+        <th>Item</th>
+        <th>Categoria</th>
+        <th class="text-center" style="width:140px">Planejado</th>
+        <th class="text-center" style="width:90px">Reservado</th>
+        <th class="text-center" style="width:90px">Sobra</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in itens %}
+      <tr data-kind="{{ it.kind }}" data-id="{{ it.id }}">
+        <td><strong>{{ it.nome }}</strong></td>
+        <td class="small text-muted">{{ it.categoria }}</td>
+        <td class="text-center">
+          <input type="number" min="0" max="99999"
+                 class="form-control form-control-sm text-center plano-input"
+                 value="{{ it.qtd_planejada if it.qtd_planejada is not none else '' }}"
+                 placeholder="—" style="max-width:100px; display:inline-block;">
+          <div class="small plano-status text-muted" style="min-height:14px;"></div>
+        </td>
+        <td class="text-center fw-bold text-warning plano-reservado">{{ it.qtd_reservada }}</td>
+        <td class="text-center fw-bold plano-saldo">
+          {% if it.saldo is none %}<span class="text-muted">—</span>{% else %}{{ it.saldo }}{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<script>
+(function () {
+  var URL_DEFINIR = "{{ url_for('main.loja_online_plano_dia_definir') }}";
+  var DATA_STR = "{{ data_str }}";
+  var CSRF = "{{ csrf_token() }}";
+
+  function salvar(row, valor) {
+    var status = row.querySelector('.plano-status');
+    status.textContent = 'salvando…';
+    status.style.color = '';
+    var fd = new FormData();
+    fd.append('csrf_token', CSRF);
+    fd.append('kind', row.dataset.kind);
+    fd.append('item_id', row.dataset.id);
+    fd.append('qtd_planejada', valor);
+    fd.append('data', DATA_STR);
+    fetch(URL_DEFINIR, { method: 'POST', body: fd })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j.ok) {
+          status.textContent = '✗ ' + (j.erro || 'erro');
+          status.style.color = '#dc3545';
+          return;
+        }
+        status.textContent = '✓ salvo';
+        status.style.color = '#198754';
+        var saldo = row.querySelector('.plano-saldo');
+        saldo.textContent = j.saldo;
+        setTimeout(function () { status.textContent = ''; }, 2500);
+      })
+      .catch(function () {
+        status.textContent = '✗ rede';
+        status.style.color = '#dc3545';
+      });
+  }
+
+  // Debounce por linha (1s depois do último input) — evita salvar a cada tecla.
+  var timers = {};
+  document.querySelectorAll('tr[data-kind] .plano-input').forEach(function (inp) {
+    var row = inp.closest('tr');
+    var key = row.dataset.kind + ':' + row.dataset.id;
+    inp.addEventListener('input', function () {
+      var v = inp.value.trim();
+      if (v === '') return;  // ignora enquanto digita (deixa zerar com 0)
+      var n = parseInt(v, 10);
+      if (isNaN(n) || n < 0) return;
+      clearTimeout(timers[key]);
+      timers[key] = setTimeout(function () { salvar(row, n); }, 1000);
+    });
+    inp.addEventListener('blur', function () {
+      var v = inp.value.trim();
+      if (v === '') return;
+      var n = parseInt(v, 10);
+      if (isNaN(n) || n < 0) return;
+      clearTimeout(timers[key]);
+      salvar(row, n);
+    });
+  });
+
+  // Copiar semana passada (idempotente — não sobrescreve quem já tem).
+  var btnCopiar = document.getElementById('btn-copiar-anterior');
+  if (btnCopiar) {
+    btnCopiar.addEventListener('click', function () {
+      if (!confirm('Copiar o plano da mesma data da semana passada? Itens que '
+                   + 'já estão preenchidos hoje NÃO são tocados.')) return;
+      btnCopiar.disabled = true;
+      var fd = new FormData();
+      fd.append('csrf_token', CSRF);
+      fd.append('data', btnCopiar.dataset.data);
+      fetch(btnCopiar.dataset.url, { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          btnCopiar.disabled = false;
+          if (j.ok) {
+            alert(j.copiados + ' item(ns) copiados de ' + j.origem
+                  + '. Atualizando…');
+            window.location.reload();
+          } else {
+            alert('Erro: ' + (j.erro || 'falha'));
+          }
+        })
+        .catch(function () {
+          btnCopiar.disabled = false;
+          alert('Erro de rede');
+        });
+    });
+  }
+})();
+</script>
+{% endblock %}
