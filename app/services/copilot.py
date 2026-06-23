@@ -2644,6 +2644,49 @@ def _read_consultar_caixa(params, user):
     return {'texto': '\n'.join(linhas)}
 
 
+def _read_prever_pedido(params, user):
+    """Previsao de pedido de reposicao por loja (media semanal do historico
+    de PedidoLoja). Conta determinista server-side — o modelo so apresenta."""
+    from app.services.previsao_demanda import prever_pedido_por_loja
+    from app.utils import resolver_loja_por_nome
+
+    try:
+        semanas = int(params.get('semanas') or 3)
+    except (TypeError, ValueError):
+        semanas = 3
+    semanas = max(1, min(semanas, 12))
+    data_ref = (params.get('data_ref') or '').strip() or None
+
+    loja_nome = (params.get('loja') or '').strip() or None
+    loja_id = None
+    if loja_nome:
+        loja_obj = resolver_loja_por_nome(loja_nome)
+        if not loja_obj:
+            return {'texto': f'Não achei a loja "{loja_nome}". '
+                             'Tente o nome como aparece no sistema.'}
+        loja_id = loja_obj.id
+
+    prev = prever_pedido_por_loja(semanas=semanas, data_ref=data_ref,
+                                   loja_id=loja_id)
+    if not prev:
+        return {'texto': f'Nenhum pedido nas últimas {semanas} semana(s) '
+                         'pra calcular a previsão.'}
+
+    blocos = []
+    for lid in sorted(prev, key=lambda k: prev[k]['loja_nome']):
+        d = prev[lid]
+        linhas = [
+            f'**{d["loja_nome"]}** — previsão p/ a semana que vem '
+            f'(base: {d["pedidos_considerados"]} pedido(s) em {d["semanas"]} '
+            f'semana(s), {d["desde"]} a {d["ate"]})']
+        for it in d['itens']:
+            linhas.append(
+                f'  • {it["sugerido"]}× {it["nome"]} '
+                f'(média {it["media_semanal"]}/sem, {it["total"]} no período)')
+        blocos.append('\n'.join(linhas))
+    return {'texto': '\n\n'.join(blocos)}
+
+
 def _read_consultar_vendas_itens(params, user):
     """Agrega itens vendidos da Seru no intervalo (e loja opcional)."""
     from app.services import vendas_itens
