@@ -3587,6 +3587,115 @@ def loja_online_tiny_definir():
     return redirect(url_for('main.loja_online_tiny_skus'))
 
 
+# ── Loja Online: plano de estoque por dia (22/06/2026, decisao do dono) ──
+# Permite "hoje 0 foccacia, sexta 20" sem mexer no estoque fisico. Reserva
+# acontece no webhook pagar.me; devolve no cancelamento. Owner-only.
+
+@main_bp.route('/admin/loja-online/plano-do-dia')
+@owner_required
+def loja_online_plano_dia():
+    """Mostra a lista de itens publicados no site com o plano (qtd disponivel)
+    pra a data selecionada. Edicao inline via POST AJAX."""
+    from datetime import date as _date
+
+    from app.services import loja_catalogo, loja_plano_dia
+    from app.utils import hoje
+    data_str = (request.args.get('data') or '').strip()
+    try:
+        alvo = _date.fromisoformat(data_str) if data_str else hoje()
+    except ValueError:
+        alvo = hoje()
+
+    # Itens publicados (Receitas + Produtos com preco_site > 0).
+    itens_publicados = loja_catalogo.produtos_publicados()
+
+    # Plano atual pra essa data — map de (kind, id) -> row.
+    from app.models import EstoqueSitePlano
+    rows = {(r.kind, r.item_id): r
+            for r in EstoqueSitePlano.query.filter_by(data=alvo).all()}
+
+    # Plano da semana anterior (mesmo dia da semana, -7 dias) — fonte do
+    # botao "Copiar da semana passada".
+    from datetime import timedelta
+    semana_anterior = alvo - timedelta(days=7)
+    plano_anterior = {(r.kind, r.item_id): r.qtd_planejada
+                      for r in EstoqueSitePlano.query
+                      .filter_by(data=semana_anterior).all()}
+
+    itens = []
+    for it in itens_publicados:
+        row = rows.get((it['kind'], it['id']))
+        itens.append({
+            'kind': it['kind'], 'id': it['id'],
+            'nome': it['nome'], 'categoria': it['categoria'],
+            'qtd_planejada': row.qtd_planejada if row else None,
+            'qtd_reservada': row.qtd_reservada if row else 0,
+            'saldo': loja_plano_dia.saldo(it['kind'], it['id'], alvo),
+            'plano_anterior': plano_anterior.get((it['kind'], it['id'])),
+        })
+
+    return render_template('admin/loja_online_plano_dia.html',
+                           itens=itens, data=alvo,
+                           data_str=alvo.isoformat(),
+                           data_anterior=semana_anterior.isoformat(),
+                           tem_plano_anterior=bool(plano_anterior))
+
+
+@main_bp.route('/admin/loja-online/plano-do-dia/definir', methods=['POST'])
+@owner_required
+def loja_online_plano_dia_definir():
+    """Salva qtd_planejada de UM item pra UMA data. AJAX/JSON."""
+    from datetime import date as _date
+
+    from app.services import loja_plano_dia
+    kind = (request.form.get('kind') or '').strip()
+    if kind not in ('receita', 'produto'):
+        return jsonify(ok=False, erro='kind invalido'), 400
+    try:
+        item_id = int(request.form.get('item_id'))
+        qtd = int(request.form.get('qtd_planejada'))
+        data = _date.fromisoformat(request.form.get('data'))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, erro='parametros invalidos'), 400
+    if qtd < 0:
+        return jsonify(ok=False, erro='qtd nao pode ser negativa'), 400
+    try:
+        loja_plano_dia.definir(kind, item_id, data, qtd)
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 400
+    saldo = loja_plano_dia.saldo(kind, item_id, data)
+    return jsonify(ok=True, saldo=saldo, qtd_planejada=qtd)
+
+
+@main_bp.route('/admin/loja-online/plano-do-dia/copiar-semana-passada',
+               methods=['POST'])
+@owner_required
+def loja_online_plano_dia_copiar():
+    """Copia o plano da MESMA data 7 dias atras pra a data informada.
+    NAO sobrescreve se ja houver linha (idempotente — clicar 2x nao
+    duplica nem zera valor digitado pelo dono)."""
+    from datetime import date as _date
+    from datetime import timedelta
+
+    from app.models import EstoqueSitePlano
+    from app.services import loja_plano_dia
+    try:
+        data = _date.fromisoformat(request.form.get('data'))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, erro='data invalida'), 400
+    origem = data - timedelta(days=7)
+    rows_origem = EstoqueSitePlano.query.filter_by(data=origem).all()
+    existentes = {(r.kind, r.item_id)
+                  for r in EstoqueSitePlano.query.filter_by(data=data).all()}
+    copiados = 0
+    for r in rows_origem:
+        if (r.kind, r.item_id) in existentes:
+            continue
+        loja_plano_dia.definir(r.kind, r.item_id, data, r.qtd_planejada)
+        copiados += 1
+    return jsonify(ok=True, copiados=copiados, origem=origem.isoformat())
+
+
 # ── Debug VNDA: o que campo a Loja usa pra marcar RETIRADA? (16/06/2026) ──
 #
 # Bug do dono: "pedidos de retirada nao aparecem em lugar nenhum". Causa
