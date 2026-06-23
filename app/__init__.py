@@ -308,6 +308,25 @@ def create_app(config_class=None):
         return resp
 
     @app.before_request
+    def _redireciona_para_https():
+        """Defesa em profundidade: se a request chegar via HTTP em prod
+        (proxy mal configurado, rota nova esquecida), redireciona pra HTTPS.
+        Hoje a Railway força HTTPS por config dela; isso não depende disso.
+        Usa o X-Forwarded-Proto via ProxyFix; em dev (localhost) não age."""
+        from flask import redirect
+        host = (request.host or '').split(':')[0].lower()
+        if host in ('localhost', '127.0.0.1', '0.0.0.0'):
+            return None
+        if request.scheme == 'https':
+            return None
+        # GET/HEAD redireciona; POST com HTTP é abortado (não reenviar
+        # corpo pra outra URL — atacante poderia ter capturado credenciais).
+        if request.method not in ('GET', 'HEAD'):
+            return ('HTTPS required', 400)
+        return redirect(request.url.replace('http://', 'https://', 1),
+                        code=301)
+
+    @app.before_request
     def assign_request_id():
         """Atribui ID curto por request pra correlacionar logs.
         Se o cliente mandou X-Request-ID (proxy / load balancer), usa esse."""
