@@ -195,7 +195,7 @@ def test_vitrine_marca_esgotado_hoje_mas_disponivel_outro_dia(app):
     """Cliente vai na home. Item com plano hoje=0 e plano sexta=5: vitrine
     marca `esgotado_hoje=True` E `tem_em_outros_dias=True` E `esgotado=False`
     (etiqueta amarela 'Esgotado HOJE - compre pra outro dia')."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from app.extensions import db
     from app.models import Receita
@@ -221,7 +221,7 @@ def test_vitrine_marca_esgotado_hoje_mas_disponivel_outro_dia(app):
 def test_vitrine_esgotado_duro_quando_zerado_em_todos(app):
     """Sem saldo em nenhum dos proximos 14 dias = esgotado duro
     (etiqueta vermelha + bloqueia compra)."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from app.extensions import db
     from app.models import Receita
@@ -247,7 +247,7 @@ def test_vitrine_esgotado_duro_quando_zerado_em_todos(app):
 def test_api_disponibilidade_dia(app):
     """Pagina de produto: cliente muda data, JS pergunta /api/disponibilidade-dia
     e ve 'disponivel' ou nao."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from app.extensions import db
     from app.models import Receita
