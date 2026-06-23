@@ -820,10 +820,11 @@ def produto(slug_completo):
     item = loja_catalogo.por_id_publicado(kind, item_id)
     if not item:
         abort(404)
-    # Esgotado NÃO some (regra do dono 18/06/2026): aparece com selo
-    # "Esgotado" e botão de comprar desabilitado. Saldo 0 ou sem linha de
-    # estoque na loja do site → esgotado=True. Volta a vender quando reabastece.
-    item['esgotado'] = not loja_catalogo.tem_estoque_site(kind, item_id)
+    # 3 estados (22/06/2026 — etapa 4 plano por dia): `esgotado` so vira True
+    # se NAO tiver saldo em NENHUM dia da janela. Esgotado-hoje-mas-disponivel-
+    # em-outro-dia mostra o seletor de data direto, em vez do bloqueio "Esgotado
+    # no momento". `anotar_esgotado` faz o calculo (plano > EstoqueLoja).
+    loja_catalogo.anotar_esgotado([item])
     # Slug desatualizado → 301 pra canônica (SEO + URLs sempre limpas)
     if slug_recebido != item['slug']:
         return redirect(url_for('loja.produto',
@@ -834,17 +835,27 @@ def produto(slug_completo):
     personalizada = loja_catalogo.eh_personalizada(item)
     monte = (loja_catalogo.itens_para_montar(excluir_item=item)
              if personalizada else [])
-    # Datas pro seletor de disponibilidade (janela de 14 dias a partir de hoje).
+    # Datas pro seletor de disponibilidade (janela de 14 dias). Default = HOJE
+    # se ainda tem saldo, senao PRIMEIRO dia futuro com saldo (cliente nao
+    # precisa ficar trocando o seletor sozinho ate achar uma data viavel).
     from datetime import timedelta
 
     from app.utils import hoje
     data_hoje = hoje()
     data_max = data_hoje + timedelta(days=14)
+    data_padrao = data_hoje
+    if item['esgotado_hoje'] and item['tem_em_outros_dias']:
+        for i in range(1, 15):
+            d = data_hoje + timedelta(days=i)
+            if loja_catalogo.tem_estoque_para_dia(kind, item_id, d):
+                data_padrao = d
+                break
     return render_template(
         'loja/produto.html', item=item, em_teste=_em_teste(),
         personalizada=personalizada, monte=monte,
         data_hoje_iso=data_hoje.isoformat(),
         data_max_iso=data_max.isoformat(),
+        data_padrao_iso=data_padrao.isoformat(),
     )
 
 
