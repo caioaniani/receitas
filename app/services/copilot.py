@@ -374,6 +374,33 @@ TOOL_CONSULTAR_VENDAS_ITENS = {
     },
 }
 
+TOOL_PREVER_PEDIDO = {
+    "name": "prever_pedido",
+    "description": (
+        "PREVISAO DE PEDIDO DE REPOSICAO por loja, calculada server-side a "
+        "partir do historico de pedidos das lojas (PedidoLoja). Use SEMPRE "
+        "que o usuario pedir 'previsao de pedido', 'quanto pedir pra semana "
+        "que vem', 'previsao das lojas', 'baseado nas ultimas N semanas'. "
+        "NAO faca essa conta na mao com consultar_pedido — esta tool ja soma "
+        "as quantidades por item e divide pelas semanas. Retorna, por loja, a "
+        "lista de itens com total no periodo, media semanal e 'sugerido' (o "
+        "que pedir pra proxima semana). Sem `loja`, devolve TODAS as lojas com "
+        "pedido no periodo (use pra 'as 3 lojas'). Apresente o RESULTADO "
+        "(lista sugerida por loja), nunca o historico cru."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "semanas": {"type": ["integer", "null"],
+                        "description": "Quantas semanas de historico considerar (default 3, max 12)."},
+            "loja": {"type": ["string", "null"],
+                     "description": "Nome da loja (opcional). Vazio = todas as lojas com pedido no periodo."},
+            "data_ref": {"type": ["string", "null"],
+                         "description": "YYYY-MM-DD de referencia (default hoje). A janela vai de data_ref - semanas*7 ate data_ref."},
+        },
+    },
+}
+
 # ───── Tools de Planejamento (PARA + 12 Week Year) ─────────────────────
 
 TOOL_CONSULTAR_FOCO = {
