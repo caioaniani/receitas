@@ -13,19 +13,22 @@
    com bandeira; "Cancelado" vermelho. Em preparo / A caminho ficam entre
    Pago e Entregue, na cronologia natural. Cada aba mostra a versao SOLIDA
    da cor quando esta selecionada e a OUTLINE quando nao esta. #}
+{# `sempre`=True: aba aparece com a contagem mesmo quando 0 (Pago, Todos,
+   Aguardando, Entregue, Cancelado — os 5 que o dono quer enxergar sempre).
+   `sempre`=False: aparece so quando ha pedido (Em preparo / A caminho, que
+   sao estados de passagem). #}
 {% set abas = [
-    ('pago',                 'Pago',                  'success', None),
-    ('todos',                'Todos',                 'light',   None),
-    ('aguardando_pagamento', 'Aguardando pagamento',  'warning', None),
-    ('em_preparo',           'Em preparo',            'secondary', None),
-    ('a_caminho',            'A caminho',             'primary', None),
-    ('entregue',             'Entregue',              'info',    '🏁'),
-    ('cancelado',            'Cancelado',             'danger',  None),
+    ('pago',                 'Pago',                  'success',   None,  True),
+    ('todos',                'Todos',                 'light',     None,  True),
+    ('aguardando_pagamento', 'Aguardando pagamento',  'warning',   None,  True),
+    ('em_preparo',           'Em preparo',            'secondary', None,  False),
+    ('a_caminho',            'A caminho',             'primary',   None,  False),
+    ('entregue',             'Entregue',              'info',      '🏁',  True),
+    ('cancelado',            'Cancelado',             'danger',    None,  True),
 ] %}
 <div class="mb-2 d-flex flex-wrap gap-2">
-  {% for chave, rotulo, cor, icone in abas %}
-  {# 'Todos' sempre aparece; demais so quando ha pedidos do status. #}
-  {% if chave == 'todos' or contagens.get(chave) %}
+  {% for chave, rotulo, cor, icone, sempre in abas %}
+  {% if sempre or contagens.get(chave) %}
   {% set ativo = (status == chave) %}
   {% set conta = total if chave == 'todos' else contagens.get(chave, 0) %}
   {# 'Todos' fica BRANCO (sem cor) — outline-light some no fundo branco do
