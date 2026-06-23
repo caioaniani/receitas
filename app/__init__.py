@@ -495,10 +495,22 @@ def create_app(config_class=None):
                 f"{cw_extra_connect}{an_connect}; "
                 f"frame-src https://checkout.pagar.me{cw_extra_frame};"
             )
-        if request.is_secure:
+        # HSTS: força HTTPS no navegador por 1 ano. Liga em qualquer host
+        # exceto localhost (dev). Antes era `if request.is_secure`, mas atrás
+        # do proxy do Railway esse flag era False → HSTS NUNCA saía em prod.
+        # Agora com ProxyFix funciona; ligar sempre fora de dev é defesa em
+        # profundidade caso o ProxyFix algum dia falhe.
+        host = (request.host or '').split(':')[0].lower()
+        if host not in ('localhost', '127.0.0.1', '0.0.0.0'):
             response.headers['Strict-Transport-Security'] = (
                 'max-age=31536000; includeSubDomains'
             )
+        # Permissions-Policy: nega APIs sensíveis que o site não usa
+        # (mitiga XSS escalando pra microfone/câmera/GPS do cliente).
+        response.headers['Permissions-Policy'] = (
+            'camera=(), microphone=(), geolocation=(), payment=(self), '
+            'usb=(), magnetometer=(), gyroscope=(), accelerometer=()'
+        )
         # Cache agressivo para assets estaticos (CSS/JS/fonts/imagens)
         if request.path.startswith('/static/'):
             response.headers['Cache-Control'] = 'public, max-age=86400, stale-while-revalidate=604800'
