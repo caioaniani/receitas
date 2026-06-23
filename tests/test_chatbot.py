@@ -43,15 +43,52 @@ def test_responder_texto(app):
 
 
 def test_responder_handoff_via_tool(app):
+    """Caminho do Claude chamando a tool transferir_para_humano. Usa uma
+    mensagem que NAO casa o detector deterministico de 'quero humano' (senao
+    o handoff sairia antes de chamar o Claude) — aqui o handoff vem da
+    DECISAO do modelo, nao do detector."""
     from app.services import chatbot
     with app.app_context():
         app.config['ANTHROPIC_API_KEY'] = 'test'
         with patch('anthropic.Anthropic') as M:
             M.return_value.messages.create.return_value = _resp_tool('Já te passo pra um atendente!')
-            r = chatbot.responder([{'role': 'user', 'content': 'quero falar com uma pessoa'}])
+            r = chatbot.responder([{'role': 'user',
+                                    'content': 'esse pão é sem glúten?'}])
     assert r['acao'] == 'handoff'
     assert 'atendente' in r['texto'].lower()
     assert r['motivo']
+
+
+def test_responder_detector_quer_humano_forca_handoff(app):
+    """Pedido explicito de humano -> handoff deterministico ANTES do Claude.
+    Regressao 23/06/2026: o bot ESCREVEU 'vou te conectar' mas NAO chamou a
+    tool, conversa ficou presa em 'pending' e o follow-up cutucou o cliente.
+    Agora o detector forca o handoff sem depender do Claude."""
+    from app.services import chatbot
+    with app.app_context():
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        # Claude NEM e chamado — se fosse, o mock estouraria (sem return_value).
+        with patch('anthropic.Anthropic') as M:
+            r = chatbot.responder([{'role': 'user',
+                                    'content': 'quero falar com um atendente'}])
+        M.return_value.messages.create.assert_not_called()
+    assert r['acao'] == 'handoff'
+    assert r['motivo'] == 'cliente pediu atendente'
+
+
+def test_responder_detector_variacoes_quer_humano(app):
+    """Variacoes que DEVEM disparar e negacoes que NAO devem."""
+    from app.services import chatbot
+    assert chatbot._quer_humano('quero falar com uma pessoa')
+    assert chatbot._quer_humano('me passa pra um atendente')
+    assert chatbot._quer_humano('chama um humano por favor')
+    assert chatbot._quer_humano('quero um atendente humano')
+    assert chatbot._quer_humano('pode me transferir pra alguém?')
+    # Negacao: NAO dispara (deixa o Claude tratar a nuance)
+    assert not chatbot._quer_humano('não quero falar com atendente, me ajuda')
+    # Mencao de passagem: NAO dispara
+    assert not chatbot._quer_humano('o atendente de ontem foi ótimo')
+    assert not chatbot._quer_humano('vocês têm atendimento aos domingos?')
 
 
 def test_responder_sem_api_key_faz_handoff(app):
