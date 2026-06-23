@@ -438,6 +438,30 @@
     bloco.style.display = '';
   }
 
+  function abrirModal() {
+    if (!modalIos) return;
+    modalIos.style.display = 'flex';
+    document.body.classList.add('modal-instalar-aberto');
+    // Defesa em profundidade: se algum ancestor quebrou o position:fixed
+    // (transform/filter num pai), o modal cai dentro do fluxo da página.
+    // scrollIntoView garante que o usuário VÊ o modal, esteja onde estiver.
+    // Em navegadores com position:fixed funcionando, scrollIntoView é
+    // no-op visual (modal já cobre a tela). Sem custo.
+    requestAnimationFrame(function () {
+      try {
+        modalIos.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (e) { /* navegador sem smooth scroll */ }
+      var fechar = modalIos.querySelector('.modal-instalar-fechar');
+      if (fechar) fechar.focus({ preventScroll: true });
+    });
+  }
+
+  function fecharModal() {
+    if (!modalIos) return;
+    modalIos.style.display = 'none';
+    document.body.classList.remove('modal-instalar-aberto');
+  }
+
   botao.addEventListener('click', function () {
     if (promptCapturado) {
       promptCapturado.prompt();
@@ -447,13 +471,8 @@
       });
       return;
     }
-    if (ehIos && modalIos) {
-      modalIos.style.display = 'flex';
-      return;
-    }
-    // Fallback: navegador sem suporte — abre modal mesmo assim (cliente lê
-    // as instruções e tenta no menu do próprio navegador).
-    if (modalIos) modalIos.style.display = 'flex';
+    // iOS + qualquer outro caso onde não temos prompt nativo: abre modal.
+    abrirModal();
   });
 
   // Esconde quando o cliente DE FATO instala (Android dispara appinstalled).
@@ -463,11 +482,16 @@
 
   // Fechar modal
   if (modalIos) {
-    var fechar = function () { modalIos.style.display = 'none'; };
     modalIos.querySelector('.modal-instalar-fechar')
-      .addEventListener('click', fechar);
+      .addEventListener('click', fecharModal);
     modalIos.addEventListener('click', function (e) {
-      if (e.target === modalIos) fechar();
+      if (e.target === modalIos) fecharModal();
+    });
+    // ESC fecha (acessibilidade)
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && modalIos.style.display === 'flex') {
+        fecharModal();
+      }
     });
   }
 })();
