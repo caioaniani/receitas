@@ -289,6 +289,7 @@ def _marcar_pago(pedido, pagamento):
         pagamento.status = 'pago'
         pagamento.pago_em = agora()
     _baixar_estoque(pedido)
+    _reservar_no_plano_do_dia(pedido)
     _enviar_confirmacao(pedido)
     # NF NÃO entra aqui: ela commita por dentro (tiny_nf.emitir_nf) e não pode
     # rodar no meio da transação do pagamento. É chamada pelos callers DEPOIS
