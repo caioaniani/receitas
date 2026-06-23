@@ -398,7 +398,7 @@ def test_janelas_disponiveis_corta_primeira_se_longe(app):
     for j in JANELAS_CORTADAS_LONGE:
         assert j not in longe
     # Restante das janelas continua presente
-    assert '09:00-10:00' in longe
+    assert '09:00–10:00' in longe
 
 
 def test_janelas_sem_distancia_nao_corta(app):
