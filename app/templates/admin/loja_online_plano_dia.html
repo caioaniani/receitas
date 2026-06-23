@@ -45,6 +45,7 @@
         <th class="text-center" style="width:140px">Planejado</th>
         <th class="text-center" style="width:90px">Reservado</th>
         <th class="text-center" style="width:90px">Sobra</th>
+        <th class="text-center" style="width:50px"></th>
       </tr>
     </thead>
     <tbody>
@@ -53,10 +54,13 @@
         <td><strong>{{ it.nome }}</strong></td>
         <td class="small text-muted">{{ it.categoria }}</td>
         <td class="text-center">
+          {# Default 99999 quando nao tem linha — interpretado como "sem
+             limite". A dona so altera o que de fato tem restricao;
+             botao "replicar" copia o valor pros proximos dias. #}
           <input type="number" min="0" max="99999"
                  class="form-control form-control-sm text-center plano-input"
-                 value="{{ it.qtd_planejada if it.qtd_planejada is not none else '' }}"
-                 placeholder="—" style="max-width:100px; display:inline-block;">
+                 value="{{ it.qtd_planejada if it.qtd_planejada is not none else 99999 }}"
+                 placeholder="99999" style="max-width:100px; display:inline-block;">
           <div class="small plano-status text-muted" style="min-height:14px;"></div>
         </td>
         <td class="text-center fw-bold text-warning plano-reservado">{{ it.qtd_reservada }}</td>
