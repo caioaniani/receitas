@@ -350,6 +350,7 @@ def _marcar_estornado(pedido, pagamento):
     # Só estorna estoque se já havia sido pago (= baixou).
     if estado_anterior == 'pago':
         _estornar_estoque(pedido)
+        _devolver_ao_plano_do_dia(pedido)
     elif estado_anterior == 'aguardando_pagamento':
         # Pedido nunca chegou a pago — libera reserva (Pix expirado,
         # cancelamento manual antes do pagamento, etc).
