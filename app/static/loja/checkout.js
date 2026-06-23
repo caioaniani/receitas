@@ -211,9 +211,13 @@
       aviso.style.display = 'block';
       aviso.className = 'dispon-checkout verificando';
       aviso.innerHTML = '<em>verificando disponibilidade…</em>';
+      var meta = document.querySelector('meta[name="csrf-token"]');
       fetch('/loja/api/disponibilidade-checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': meta ? meta.getAttribute('content') : '',
+        },
         body: JSON.stringify({ data: data, itens: itensCart })
       }).then(function (r) { return r.json(); })
         .then(function (j) {
