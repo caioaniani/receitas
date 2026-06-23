@@ -132,7 +132,8 @@
       <div class="item-cat-row">
         <input type="text" class="categoria-input" placeholder="Categoria…"
                list="categorias-existentes"
-               value="{{ i.categoria }}">
+               value="{{ i.categoria }}"
+               {% if not pode_editar %}disabled title="Edição de categoria é restrita ao dono"{% endif %}>
         <span class="item-tipo">{{ i.tipo }}</span>
       </div>
       <div class="item-preco-row">
