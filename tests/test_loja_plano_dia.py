@@ -309,3 +309,36 @@ def test_checkout_recusa_com_nome_e_data_quando_sem_saldo(app):
     msg = ' '.join(erros)
     assert 'Foccacia' in msg
     assert dia_alvo.strftime('%d/%m/%Y') in msg
+
+
+def test_replicar_para_proximos_dias_sobrescreve(app):
+    """Botao '↔' na tela: replica o valor de UM item pros proximos 14 dias.
+    Sobrescreve valores existentes (decisao do dono 23/06/2026)."""
+    from datetime import date, timedelta
+
+    from app.services import loja_plano_dia
+    inicio = date(2026, 6, 26)
+    # Pre-existente: dia +3 ja tem 7 — vai ser sobrescrito.
+    loja_plano_dia.definir('receita', 1, inicio + timedelta(days=3), 7)
+
+    n = loja_plano_dia.replicar_para_proximos_dias(
+        'receita', 1, 100, data_inicio=inicio, dias=14)
+    assert n == 14
+    # Cada um dos 14 dias agora vale 100 (incluindo o sobrescrito)
+    for i in range(14):
+        d = inicio + timedelta(days=i)
+        assert loja_plano_dia.saldo('receita', 1, d) == 100
+    # Dia fora da janela (15) NAO foi tocado
+    assert loja_plano_dia.saldo(
+        'receita', 1, inicio + timedelta(days=15)) is None
+
+
+def test_replicar_qtd_negativa_rejeita(app):
+    from datetime import date
+
+    import pytest
+
+    from app.services import loja_plano_dia
+    with pytest.raises(ValueError):
+        loja_plano_dia.replicar_para_proximos_dias(
+            'receita', 1, -1, data_inicio=date(2026, 6, 26))
