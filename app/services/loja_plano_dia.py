@@ -147,6 +147,26 @@ def _hoje_brt():
     return hoje()
 
 
+def replicar_para_proximos_dias(kind, item_id, qtd_planejada, *,
+                                  data_inicio, dias=14):
+    """Cria/atualiza linhas pra (item, data_inicio..data_inicio+dias-1) com o
+    mesmo `qtd_planejada`. SOBRESCREVE valores existentes — o usuario clicou
+    em "replicar" sabendo o que quer.
+
+    Decisao do dono 23/06/2026 — fluxo padrao = "default 99999, eu altero e
+    peco pra replicar". Sem sobrescrita, replicar so afetaria dias virgens
+    e nao bate a expectativa."""
+    from datetime import timedelta
+    if qtd_planejada < 0:
+        raise ValueError('qtd_planejada nao pode ser negativa')
+    n = 0
+    for i in range(dias):
+        d = data_inicio + timedelta(days=i)
+        definir(kind, item_id, d, qtd_planejada)
+        n += 1
+    return n
+
+
 def planos_proximos_dias(dias=14, comeco=None):
     """Pra a tela admin de planejamento: devolve {(kind, item_id, data): row}
     pra todos os planos nos proximos `dias` dias a partir de `comeco`
