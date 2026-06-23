@@ -138,8 +138,14 @@
                         {% endif %}
                     </td>
                     <td>
-                        <input type="number" name="quantidade[]" value="{{ item.quantidade | int if item.quantidade == item.quantidade | int else item.quantidade }}"
-                               step="any" min="0.01" class="form-control form-control-sm input-blue text-center item-qtd" required>
+                        {# Unidade ao lado do campo: sem isso a pessoa nao sabe
+                           se "0,4" e' kg/g/ml/un (incidente 22/06/2026). #}
+                        <div class="input-group input-group-sm">
+                            <input type="number" name="quantidade[]" value="{{ item.quantidade | int if item.quantidade == item.quantidade | int else item.quantidade }}"
+                                   step="any" min="0.01" class="form-control input-blue text-center item-qtd" required>
+                            <span class="input-group-text item-unidade px-2"
+                                  style="background:#fff8e1; font-weight:700; font-size:12px;">{{ item.unidade or 'un' }}</span>
+                        </div>
                     </td>
                     <td class="text-end item-custo-total fw-bold" style="background:#fff8e1; vertical-align:middle; font-size:12px;">
                         {{ (item.custo_un * item.quantidade) | brl }}
