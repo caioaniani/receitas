@@ -232,6 +232,19 @@ def _folha_pedido(pdf, p, via, data_fmt):
         pdf.set_font('Helvetica', 'B', 12)
         pdf.cell(0, 7, _latin1(f'Tel: {p["telefone"]}'),
                  new_x='LMARGIN', new_y='NEXT')
+
+    # "Enviado por" — so quando e' PRESENTE (destinatario != comprador) e na
+    # via do cliente (motoboy nao precisa saber). Resolve o caso "presente
+    # chegou anonimo": mesmo que o comprador esqueca de assinar a cartinha,
+    # o destinatario sabe quem mandou. Incidente real 22/06/2026.
+    comprador = (p.get('comprador') or '').strip()
+    destinatario = (p.get('destinatario') or '').strip()
+    eh_presente = (comprador and destinatario
+                   and comprador.lower() != destinatario.lower())
+    if eh_presente and not motorista:
+        pdf.set_font('Helvetica', 'B', 11)
+        pdf.cell(0, 7, _latin1(f'Enviado por: {comprador}'),
+                 new_x='LMARGIN', new_y='NEXT')
     pdf.ln(3)
 
     # Cartinha (so via do cliente)
