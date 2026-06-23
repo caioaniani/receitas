@@ -71,6 +71,15 @@ a:hover { text-decoration: underline; }
 .topo {
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px 22px;
+  /* PWA standalone no iPhone: a status bar fica TRANSPARENTE (notch +
+     ícones do sistema) sobre o conteúdo (decisão do meta status-bar-style).
+     Sem padding-top extra, o logo/menu ficam embaixo dos ícones do sistema
+     (caso real 23/06/2026 — print do dono). `env(safe-area-inset-top)`
+     vale 0 em browser normal (sem efeito) e 44-59px no iPhone standalone.
+     Padding lateral também respeita safe-area (notch em landscape). */
+  padding-top: calc(18px + env(safe-area-inset-top, 0px));
+  padding-left: max(22px, env(safe-area-inset-left, 0px));
+  padding-right: max(22px, env(safe-area-inset-right, 0px));
   border-bottom: 1px solid var(--linha);
   background: var(--bg);
   /* Sticky: fica grudado no topo da janela quando rola — desktop e mobile.
