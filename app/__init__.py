@@ -38,6 +38,22 @@ def create_app(config_class=None):
     app = Flask(__name__)
     app.config.from_object(config_class or Config)
 
+    # ProxyFix: confia nos headers X-Forwarded-* do proxy do Railway (1 hop).
+    # Sem isso, `request.is_secure`/`request.remote_addr` ficam falsos atras
+    # do proxy → HSTS nao era enviado, rate-limit-por-IP via no IP do proxy
+    # (todos os clientes iguais). Encontrado 23/06/2026.
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+    # Cookies de sessao: Secure (so via HTTPS), HttpOnly (JS nao le) e
+    # SameSite=Lax (browser nao envia cookie em POST cross-site → barra
+    # CSRF de form em outro dominio). Em dev local (HTTP), Secure
+    # impediria login → so liga em prod.
+    if not app.config.get('TESTING') and not os.environ.get('PYTEST_RUNNING'):
+        app.config.setdefault('SESSION_COOKIE_SECURE', True)
+    app.config.setdefault('SESSION_COOKIE_HTTPONLY', True)
+    app.config.setdefault('SESSION_COOKIE_SAMESITE', 'Lax')
+
     if not os.environ.get('SECRET_KEY'):
         # Em prod o config.py ja levanta RuntimeError. Aqui so avisa em dev.
         logger.warning('SECRET_KEY nao definida — sessoes expiram a cada restart.')
