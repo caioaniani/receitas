@@ -2460,7 +2460,7 @@ def loja_online_catalogo():
 
 @main_bp.route('/admin/loja-online/catalogo/preco/<tipo>/<int:id>',
                 methods=['POST'])
-@login_required
+@owner_required
 def loja_online_catalogo_preco(tipo, id):
     """Atualiza preco_site via AJAX. JSON: {preco: float|null}. Aceita
     null/0 pra TIRAR do site. Owner-only — dinheiro."""
