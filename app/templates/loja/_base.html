@@ -6,6 +6,20 @@
 <title>{% block title %}O Pão — Padaria Artesanal{% endblock %}</title>
 <meta name="description" content="{% block description %}Pães de fermentação natural, croissants, cestas e café da manhã. Entrega em São Paulo.{% endblock %}">
 
+{# ── PWA (Progressive Web App) — instalável na home como app nativo ───
+   Manifest define nome, ícone, escopo (/loja/) e cor. Service Worker em
+   /loja/sw.js cacheia assets pra abrir rápido + offline básico.
+   Separado do PWA da gestão (/manifest.webmanifest) pra não conflitar. #}
+<link rel="manifest" href="{{ url_for('loja.pwa_manifest_loja') }}">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="O Pão">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/favicon-32.png') }}">
+<link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='icons/favicon-16.png') }}">
+
 {# ── SEO essencial — canonical, OpenGraph, Twitter Card ─────────────
    Canonical evita conteudo duplicado entre URLs com query/UTM e entre
    apex/www (Google ja unifica via redirect apex→www, mas canonical e
