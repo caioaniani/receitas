@@ -966,6 +966,16 @@ def api_disponibilidade_dia():
     return jsonify(disponivel=ok)
 
 
+@loja_bp.route('/manifest.webmanifest')
+def pwa_manifest_loja():
+    """Manifest do PWA da LOJA (separado do PWA da gestão). Escopo /loja/ —
+    quando o cliente "instala", o app abre direto na vitrine, não no admin."""
+    from flask import current_app, send_from_directory
+    return send_from_directory(
+        current_app.static_folder, 'loja/manifest.webmanifest',
+        mimetype='application/manifest+json')
+
+
 @loja_bp.route('/robots.txt')
 def robots():
     """Robots.txt servido aqui E em /robots.txt (raiz, via alias no main
