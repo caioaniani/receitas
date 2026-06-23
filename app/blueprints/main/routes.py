@@ -3129,7 +3129,11 @@ def loja_online_pedidos():
     from sqlalchemy import func as _func
 
     from app.models import PedidoOnline
-    status = (request.args.get('status') or '').strip()
+    # Default ao abrir = "pago" (verde) — a operação do dia trabalha em cima
+    # dos pagos. Pra ver tudo, clica na aba "Todos" (vai com ?status=todos).
+    # Decisão do dono 22/06/2026.
+    status_raw = request.args.get('status')
+    status = 'pago' if status_raw is None else status_raw.strip()
     data_str = (request.args.get('data') or '').strip()
     data_ini_str = (request.args.get('data_ini') or '').strip()
     data_fim_str = (request.args.get('data_fim') or '').strip()
@@ -3145,7 +3149,7 @@ def loja_online_pedidos():
     data_fim = _parse(data_fim_str)
 
     q = PedidoOnline.query
-    if status:
+    if status and status != 'todos':
         q = q.filter_by(status=status)
     if data:
         q = q.filter(PedidoOnline.data_entrega == data)
