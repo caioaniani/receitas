@@ -55,30 +55,44 @@
   .badge-bad { background: #ffe3e3; color: #c92a2a; }
 </style>
 
+{# Edicao de preco/foto eh owner-only (decisao do dono 22/06/2026). Pros
+   demais, pagina vira somente-leitura: nada de filtros de curadoria
+   (sem-preco/sem-foto/todos), input de preco desabilitado, foto nao clicavel. #}
+{% set pode_editar = current_user.is_owner %}
 <h1 class="page-title"><i class="bi bi-shop"></i> Catálogo do site</h1>
 <p class="text-muted">
+  {% if pode_editar %}
   "Tem <code>preco_site</code> + foto = vende no site." Edite o preço clicando no
   campo, e suba foto clicando no quadrado da esquerda. Tudo salva sem recarregar.
+  {% else %}
+  Itens publicados no site. <em>Edição de preço e foto é restrita ao dono.</em>
+  {% endif %}
 </p>
 
 <div class="cat-topo">
   <div class="cat-filtros">
+    {% if pode_editar %}
     <a href="?filtro=todos" class="cat-filtro {% if filtro == 'todos' %}active{% endif %}">
       Todos <span class="cnt">{{ contagens.todos }}</span>
     </a>
+    {% endif %}
     <a href="?filtro=no-site" class="cat-filtro {% if filtro == 'no-site' %}active{% endif %}">
       ✓ No site <span class="cnt">{{ contagens.no_site }}</span>
     </a>
+    {% if pode_editar %}
     <a href="?filtro=sem-preco" class="cat-filtro {% if filtro == 'sem-preco' %}active{% endif %}">
       ⚠ Sem preço <span class="cnt">{{ contagens.sem_preco }}</span>
     </a>
     <a href="?filtro=sem-foto" class="cat-filtro {% if filtro == 'sem-foto' %}active{% endif %}">
       📷 Sem foto <span class="cnt">{{ contagens.sem_foto }}</span>
     </a>
+    {% endif %}
   </div>
+  {% if pode_editar %}
   <a href="{{ url_for('main.loja_online_auditoria_catalogo') }}" class="btn btn-sm btn-outline-secondary">
     Auditoria
   </a>
+  {% endif %}
 </div>
 
 <datalist id="categorias-existentes">
