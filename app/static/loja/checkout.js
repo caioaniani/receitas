@@ -100,6 +100,22 @@
     // longe (>=corteKm). Repopular ao cotar frete. Servidor é autoridade.
     var ultimaDistKm = null;
 
+    // Express longe (>=expressLongeKm): vira "em até 2 horas" (motoboy
+    // percorre mais — decisão do dono 23/06/2026). Servidor grava a janela
+    // certa; isso aqui é só o aviso visual.
+    function atualizarExpressTempo() {
+      var alvo = document.getElementById('express-tempo');
+      var aviso = document.getElementById('express-aviso-longe');
+      if (!alvo) return;
+      var limite = dados.expressLongeKm;
+      var longe = (limite != null && ultimaDistKm != null
+                   && ultimaDistKm >= limite);
+      alvo.textContent = longe
+        ? 'hoje, por volta de 2 horas'
+        : 'hoje, por volta de 1 hora';
+      if (aviso) aviso.style.display = longe ? 'block' : 'none';
+    }
+
     function popularJanelas(modo) {
       var sel = document.getElementById('janela_entrega');
       if (!sel) return;
