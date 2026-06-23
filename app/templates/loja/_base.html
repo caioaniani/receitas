@@ -277,11 +277,45 @@
     <a href="{{ url_for('loja.termos') }}">Termos de uso</a> ·
     <a href="{{ url_for('loja.privacidade') }}">Privacidade</a>
   </div>
+  {# Botão "Instalar app" (PWA, 23/06/2026). Aparece só quando dá pra
+     instalar: Android Chrome (beforeinstallprompt) ou iPhone Safari
+     (instruções). Esconde sozinho quando já instalado. #}
+  <div class="rodape-col small" id="rodape-instalar" style="display:none;">
+    <strong>Instalar como app</strong><br>
+    <button type="button" id="btn-instalar-pwa" class="btn-instalar-pwa">
+      📱 Adicionar à tela inicial
+    </button>
+    <div class="small text-muted mt-1" style="margin-top:6px;">
+      Abre mais rápido, ocupa pouco espaço, vira ícone na home.
+    </div>
+  </div>
   <div class="rodape-legal small">
     O Pão Padaria Artesanal Ltda. · CNPJ 40.646.899/0001-39 ·
     Rua Ribeiro do Vale, 455 — Brooklin Paulista, São Paulo/SP, CEP 04568-001
   </div>
 </footer>
+
+{# Modal de instruções pra iOS (Safari não permite prompt programático;
+   única opção é guiar o cliente pelo Share Sheet). #}
+<div id="modal-instalar-ios" class="modal-instalar" style="display:none;"
+     role="dialog" aria-labelledby="modal-instalar-titulo" aria-modal="true">
+  <div class="modal-instalar-conteudo">
+    <button type="button" class="modal-instalar-fechar" aria-label="Fechar">×</button>
+    <h3 id="modal-instalar-titulo">Instalar no iPhone</h3>
+    <p>No Safari, em 3 passos:</p>
+    <ol>
+      <li>Toque no botão <strong>Compartilhar</strong>
+        <span aria-hidden="true">(quadrado com a seta pra cima, embaixo)</span>.
+      </li>
+      <li>Role e toque em <strong>Adicionar à Tela de Início</strong>.</li>
+      <li>Confirma — o ícone aparece na home como qualquer app.</li>
+    </ol>
+    <p class="small text-muted">
+      Se você está em outro navegador (Chrome, Firefox), abra esta página
+      no Safari pra instalar — é restrição do iOS.
+    </p>
+  </div>
+</div>
 
 {# ── Banner de cookies (LGPD + ePrivacy) ─────────────────────────────
    Exige aceite explicito antes de carregar GA/Pixel. Sem aceite, esses
