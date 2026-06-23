@@ -297,19 +297,9 @@ def test_topo_mostra_entrar_quando_deslogado_e_minha_conta_quando_logado(app):
 def test_rate_limit_login_cliente(app):
     """6º POST em /loja/entrar dentro de 1min → 429. Sem rate limit, brute-
     force de senha fica viável quando a loja vira pública. Espelha o admin
-    (5/min).
-
-    O limiter fica DESLIGADO em PYTEST_RUNNING (default global de 300/min
-    estouraria suite inteira de 1450+ testes). Aqui ligamos pontualmente
-    pra testar a regra específica do login."""
-    from app.extensions import limiter
-    limiter.enabled = True
-    try:
-        c = app.test_client()
-        for _ in range(5):
-            c.post('/loja/entrar', data={'email': 'x@y.z', 'senha': 'errada'})
-        r = c.post('/loja/entrar', data={'email': 'x@y.z', 'senha': 'errada'})
-        assert r.status_code == 429
-    finally:
-        limiter.enabled = False
-        limiter.reset()
+    (5/min)."""
+    c = app.test_client()
+    for _ in range(5):
+        c.post('/loja/entrar', data={'email': 'x@y.z', 'senha': 'errada'})
+    r = c.post('/loja/entrar', data={'email': 'x@y.z', 'senha': 'errada'})
+    assert r.status_code == 429
