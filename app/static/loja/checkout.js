@@ -78,6 +78,10 @@
       return r ? r.value : 'agendada';
     }
 
+    // Última distância cotada — corta a 1ª janela quando o cliente está
+    // longe (>=corteKm). Repopular ao cotar frete. Servidor é autoridade.
+    var ultimaDistKm = null;
+
     function popularJanelas(modo) {
       var sel = document.getElementById('janela_entrega');
       if (!sel) return;
@@ -89,6 +93,15 @@
       if (dataVal && dataVal === dados.hojeIso) {
         lista = lista.filter(function (j) {
           return parseInt(j.slice(0, 2), 10) >= (dados.minHoraHoje || 0);
+        });
+      }
+      // Corte por distância (>= corteKm tira a 1ª janela da manhã).
+      var corte = dados.corteKm;
+      var janelasCortadas = dados.janelasCortadasLonge || [];
+      if (modo === 'agendada' && corte != null && ultimaDistKm != null
+          && ultimaDistKm >= corte && janelasCortadas.length) {
+        lista = lista.filter(function (j) {
+          return janelasCortadas.indexOf(j) === -1;
         });
       }
       var preferida = sel.getAttribute('data-sel') || sel.value || '';
