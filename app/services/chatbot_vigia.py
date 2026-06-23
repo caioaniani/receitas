@@ -644,11 +644,16 @@ def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_re
 # Encerramentos: "ok", "obrigada", "valeu" — o cliente NÃO está esperando
 # resposta (caso 23/06/2026: humano resolveu, cliente respondeu "Ok" e o
 # vigia alertou como se alguém precisasse olhar).
-_FECHAMENTO_RE = re.compile(
-    r'^(ok(ay)?|t[aá]\s*(bom|certo|joia|j[oó]ia|ok)?|blz|beleza|valeu|vlw|'
+# Um "token" de encerramento; a mensagem pode ter vários em sequência
+# ("ok obrigada", "valeu mesmo", "tá bom show").
+_FECHAMENTO_TOKEN = (
+    r'(ok(ay)?|t[aá]|bom|certo|joia|j[oó]ia|blz|beleza|valeu|vlw|'
     r'obrigad[oa]?|obg|brigad[oa]?|grat[oa]|perfeito|show|[oó]timo|maravilha|'
-    r'combinado|fechado|isso( mesmo)?|certo|sim|entendi|top|legal|'
+    r'combinado|fechado|isso|mesmo|sim|entendi|top|legal|muito|demais|'
     r'👍|🙏|❤️|💛|🥰|😊|👏|🙌)'
+)
+_FECHAMENTO_RE = re.compile(
+    r'^' + _FECHAMENTO_TOKEN + r'([\s,!.]+' + _FECHAMENTO_TOKEN + r')*'
     r'[\s!.,👍🙏❤️💛🥰😊👏🙌]*$',
     re.IGNORECASE,
 )
