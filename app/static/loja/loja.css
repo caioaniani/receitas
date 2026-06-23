@@ -555,6 +555,12 @@ a:hover { text-decoration: underline; }
 .rodape {
   border-top: 1px solid var(--linha);
   padding: 38px 22px;
+  /* PWA standalone no iPhone: o "home indicator" (barrinha embaixo) ocupa
+     ~34px no fundo da tela. Sem padding-bottom extra, o rodapé fica
+     embaixo dele. env(safe-area-inset-bottom) vale 0 em browser normal. */
+  padding-bottom: calc(38px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(22px, env(safe-area-inset-left, 0px));
+  padding-right: max(22px, env(safe-area-inset-right, 0px));
   display: grid;
   gap: 28px;
   font-family: var(--fonte-corpo);
