@@ -1,0 +1,64 @@
+{
+  "name": "O Pão Padaria Artesanal",
+  "short_name": "O Pão",
+  "description": "Pães e cestas artesanais com entrega em São Paulo. Encomende pelo nosso site e receba em casa.",
+  "start_url": "/loja/",
+  "scope": "/loja/",
+  "id": "/loja/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fafafa",
+  "theme_color": "#0a0a0a",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["food", "shopping", "lifestyle"],
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Ver vitrine",
+      "short_name": "Vitrine",
+      "description": "Catálogo de produtos",
+      "url": "/loja/",
+      "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]
+    },
+    {
+      "name": "Meu carrinho",
+      "short_name": "Carrinho",
+      "description": "Itens do meu pedido",
+      "url": "/loja/carrinho",
+      "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]
+    },
+    {
+      "name": "Minha conta",
+      "short_name": "Conta",
+      "description": "Histórico de pedidos",
+      "url": "/loja/conta",
+      "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]
+    }
+  ]
+}
