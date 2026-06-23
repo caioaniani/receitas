@@ -126,29 +126,111 @@ def _estoque_site_map():
     return mapa
 
 
-def anotar_esgotado(itens):
-    """Marca cada item da lista com `esgotado` (bool). Regra do dono
-    (18/06/2026): NADA some da vitrine — saldo 0 (ou sem linha de estoque na
-    loja do site) vira 'Esgotado' e não pode ser comprado. Cestas incluídas:
-    também precisam de estoque e também aparecem como Esgotado quando zeram.
+# Janela usada pra "tem em outros dias" — quantos dias o cliente PODE escolher
+# como entrega futura. 14 cobre a janela do calendario de planejamento e
+# evita expor saldos muito distantes que ainda nao foram planejados.
+_JANELA_DIAS_FUTUROS = 14
 
-    Loja do site não configurada → ninguém esgotado (fail-open). Devolve a
-    MESMA lista (anota in-place) pra encadear com produtos_publicados()."""
-    mapa = _estoque_site_map()
+
+def _saldo_para_dia(kind, item_id, data, *, mapa_loja=None,
+                    saldos_dia_cache=None):
+    """Saldo disponivel pra vender no site na data X.
+
+    Ordem: (1) se ha plano cadastrado pra esse item naquela data → usa plano.
+    (2) senao → cai no EstoqueLoja (estoque fisico atual; comportamento de
+    antes da fase de plano por dia). Devolve None se NEM plano NEM mapa_loja
+    estao configurados (= fail-open na vitrine).
+
+    `mapa_loja` e `saldos_dia_cache` sao caches passados pelo caller pra
+    evitar re-querar o banco em loop (anotar_esgotado processa N itens)."""
+    from app.services import loja_plano_dia
+    if saldos_dia_cache is None:
+        saldos_dia_cache = {}
+    if data not in saldos_dia_cache:
+        saldos_dia_cache[data] = loja_plano_dia.saldos_para_dia(data)
+    saldos = saldos_dia_cache[data]
+    if (kind, item_id) in saldos:
+        return saldos[(kind, item_id)]
+    if mapa_loja is None:
+        return None  # sem controle
+    return mapa_loja.get((kind, item_id), 0)
+
+
+def _datas_janela_futura(inicio):
+    """Lista [hoje, hoje+1, ..., hoje+JANELA-1] em date."""
+    from datetime import timedelta
+    return [inicio + timedelta(days=i) for i in range(_JANELA_DIAS_FUTUROS)]
+
+
+def anotar_esgotado(itens):
+    """Marca cada item com 3 flags pra a vitrine sinalizar disponibilidade:
+
+    - `esgotado_hoje`: sem saldo pra HOJE (plano de hoje se cadastrado;
+      EstoqueLoja como fallback).
+    - `tem_em_outros_dias`: tem saldo em algum dos proximos 14 dias (no
+      plano). Default True quando nao ha plano cadastrado pra nenhum dos
+      proximos 14 (cliente pode comprar pra outro dia usando o estoque
+      fisico — mesma logica de antes).
+    - `esgotado`: a "esgotado dura" (sem saldo em nenhum dia). Pra o template
+      mostrar a etiqueta vermelha.
+
+    Loja do site nao configurada E sem plano → todos com flags False
+    (fail-open). Devolve a mesma lista (anota in-place)."""
+    from app.utils import hoje
+    mapa_loja = _estoque_site_map()
+    dia_hoje = hoje()
+    datas = _datas_janela_futura(dia_hoje)
+    saldos_cache = {}
     for it in itens:
-        it['esgotado'] = (False if mapa is None
-                          else mapa.get((it['kind'], it['id']), 0) <= 0)
+        kind, item_id = it['kind'], it['id']
+        saldo_hoje = _saldo_para_dia(
+            kind, item_id, dia_hoje,
+            mapa_loja=mapa_loja, saldos_dia_cache=saldos_cache)
+        if saldo_hoje is None:
+            it['esgotado_hoje'] = False
+            it['tem_em_outros_dias'] = True
+            it['esgotado'] = False
+            continue
+        it['esgotado_hoje'] = saldo_hoje <= 0
+        # Olha os PROXIMOS dias (sem incluir hoje) pra saber se ainda da pra
+        # comprar pra outra data.
+        tem_outros = False
+        for d in datas[1:]:
+            s = _saldo_para_dia(
+                kind, item_id, d,
+                mapa_loja=mapa_loja, saldos_dia_cache=saldos_cache)
+            if s is None:
+                # Sem plano pra esse dia E sem EstoqueLoja: trata como sem
+                # controle → considera disponivel.
+                tem_outros = True
+                break
+            if s > 0:
+                tem_outros = True
+                break
+        it['tem_em_outros_dias'] = tem_outros
+        it['esgotado'] = it['esgotado_hoje'] and not tem_outros
     return itens
 
 
 def tem_estoque_site(kind, item_id):
     """True se o item tem saldo > 0 na loja do site (ou se a loja do site não
-    está configurada → fail-open). Usado pela página de produto e pelo
-    checkout pra não vender esgotado."""
+    está configurada → fail-open). Compat: continua existindo pra callers que
+    NAO precisam de data (ex: bot, integrações antigas). Pra a vitrine /
+    checkout use `tem_estoque_para_dia(kind, item_id, data)`."""
     mapa = _estoque_site_map()
     if mapa is None:
         return True
     return mapa.get((kind, item_id), 0) > 0
+
+
+def tem_estoque_para_dia(kind, item_id, data):
+    """True se da pra vender o item pra entregar na data X. Plano > EstoqueLoja.
+    Fail-open (sem plano + sem EstoqueLoja → True) — mesma regra do
+    `tem_estoque_site`."""
+    s = _saldo_para_dia(kind, item_id, data, mapa_loja=_estoque_site_map())
+    if s is None:
+        return True
+    return s > 0
 
 
 # Categoria especial: produtos com este nome de categoria abrem o modo
