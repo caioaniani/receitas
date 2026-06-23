@@ -187,3 +187,125 @@ def test_pagar_sem_data_entrega_nao_quebra(app):
     db.session.commit()
     loja_pagamento._marcar_pago(p, None)  # nao pode levantar
     assert p.status == 'pago'
+
+
+# ── Etapa 4: vitrine + pagina produto + checkout usam o plano por dia ──────
+
+def test_vitrine_marca_esgotado_hoje_mas_disponivel_outro_dia(app):
+    """Cliente vai na home. Item com plano hoje=0 e plano sexta=5: vitrine
+    marca `esgotado_hoje=True` E `tem_em_outros_dias=True` E `esgotado=False`
+    (etiqueta amarela 'Esgotado HOJE - compre pra outro dia')."""
+    from datetime import date, timedelta
+
+    from app.extensions import db
+    from app.models import Receita
+    from app.services import loja_catalogo, loja_plano_dia
+    from app.utils import hoje
+
+    r = Receita(nome='Foccacia', categoria='Paes', preco_site=18.0,
+                imagem_dropbox_url='https://x/f.jpg',
+                rendimento_qtd=1, rendimento_unidade='un', peso_base=300.0)
+    db.session.add(r)
+    db.session.commit()
+
+    dia_hoje = hoje()
+    loja_plano_dia.definir('receita', r.id, dia_hoje, 0)              # 0 hoje
+    loja_plano_dia.definir('receita', r.id, dia_hoje + timedelta(days=3), 5)
+    itens = [{'kind': 'receita', 'id': r.id, 'nome': 'Foccacia'}]
+    loja_catalogo.anotar_esgotado(itens)
+    assert itens[0]['esgotado_hoje'] is True
+    assert itens[0]['tem_em_outros_dias'] is True
+    assert itens[0]['esgotado'] is False  # nao mostra "esgotado duro"
+
+
+def test_vitrine_esgotado_duro_quando_zerado_em_todos(app):
+    """Sem saldo em nenhum dos proximos 14 dias = esgotado duro
+    (etiqueta vermelha + bloqueia compra)."""
+    from datetime import date, timedelta
+
+    from app.extensions import db
+    from app.models import Receita
+    from app.services import loja_catalogo, loja_plano_dia
+    from app.utils import hoje
+
+    r = Receita(nome='Foccacia', categoria='Paes', preco_site=18.0,
+                rendimento_qtd=1, rendimento_unidade='un', peso_base=300.0)
+    db.session.add(r)
+    db.session.commit()
+
+    dia = hoje()
+    for i in range(14):
+        loja_plano_dia.definir('receita', r.id, dia + timedelta(days=i), 0)
+
+    itens = [{'kind': 'receita', 'id': r.id, 'nome': 'Foccacia'}]
+    loja_catalogo.anotar_esgotado(itens)
+    assert itens[0]['esgotado_hoje'] is True
+    assert itens[0]['tem_em_outros_dias'] is False
+    assert itens[0]['esgotado'] is True
+
+
+def test_api_disponibilidade_dia(app):
+    """Pagina de produto: cliente muda data, JS pergunta /api/disponibilidade-dia
+    e ve 'disponivel' ou nao."""
+    from datetime import date, timedelta
+
+    from app.extensions import db
+    from app.models import Receita
+    from app.services import loja_plano_dia
+    from app.utils import hoje
+
+    r = Receita(nome='Foccacia', categoria='Paes', preco_site=18.0,
+                rendimento_qtd=1, rendimento_unidade='un', peso_base=300.0)
+    db.session.add(r)
+    db.session.commit()
+
+    dia_hoje = hoje()
+    loja_plano_dia.definir('receita', r.id, dia_hoje, 0)
+    loja_plano_dia.definir('receita', r.id, dia_hoje + timedelta(days=2), 5)
+    c = app.test_client()
+    # Hoje: esgotado
+    j = c.get(f'/loja/api/disponibilidade-dia?kind=receita&item_id={r.id}'
+              f'&data={dia_hoje.isoformat()}').get_json()
+    assert j['disponivel'] is False
+    # +2 dias: disponivel
+    j2 = c.get(f'/loja/api/disponibilidade-dia?kind=receita&item_id={r.id}'
+               f'&data={(dia_hoje + timedelta(days=2)).isoformat()}').get_json()
+    assert j2['disponivel'] is True
+
+
+def test_checkout_recusa_com_nome_e_data_quando_sem_saldo(app):
+    """Cliente escolhe data Y mas algum item nao tem saldo no plano de Y.
+    Erro do checkout DEVE mencionar o NOME do item e a DATA pra ficar claro
+    qual produto/qual data quebrou."""
+    from datetime import timedelta
+
+    from app.extensions import db
+    from app.models import Receita
+    from app.services import loja_checkout, loja_plano_dia
+    from app.utils import agora, hoje
+
+    r = Receita(nome='Foccacia', categoria='Paes', preco_site=18.0,
+                imagem_dropbox_url='https://x/f.jpg',
+                rendimento_qtd=1, rendimento_unidade='un', peso_base=300.0)
+    db.session.add(r)
+    db.session.commit()
+
+    dia_alvo = hoje() + timedelta(days=2)
+    loja_plano_dia.definir('receita', r.id, dia_alvo, 0)  # esgotado pra esse dia
+
+    form = {
+        'nome': 'Cliente', 'email': 'c@x.com', 'cpf': '11111111111',
+        'telefone': '11999999999',
+        'modo_entrega': 'agendada',
+        'aceite_lgpd': '1',
+        'data_entrega': dia_alvo.isoformat(),
+        'janela_entrega': '08:00-09:00',
+        'cep': '04077000', 'logradouro': 'Rua X', 'numero': '1',
+        'cidade': 'São Paulo',
+    }
+    itens_raw = [{'kind': 'receita', 'id': r.id, 'qtd': 1}]
+    _, erros = loja_checkout.criar_pedido(form, itens_raw, base=agora())
+    # A msg precisa identificar o produto + a data
+    msg = ' '.join(erros)
+    assert 'Foccacia' in msg
+    assert dia_alvo.strftime('%d/%m/%Y') in msg
