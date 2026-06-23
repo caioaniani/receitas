@@ -275,6 +275,36 @@ class ProdutoItem(db.Model):
         return self.item_nome  # orfao
 
     @property
+    def unidade_resolvida(self):
+        """Unidade real do componente (vem do alvo da FK).
+        Sem alvo (orfao) → 'un'. Receita usa `rendimento_unidade` (geralmente
+        'un'); MateriaPrima usa `unidade` (geralmente 'g'/'ml')."""
+        if self.tipo == 'receita' and self.receita:
+            return (self.receita.rendimento_unidade or 'un').strip().lower()
+        if self.tipo == 'mp' and self.materia_prima:
+            return (self.materia_prima.unidade or 'g').strip().lower()
+        # 'produto' componente nao tem unidade clara — assumimos 'un'.
+        return 'un'
+
+    @property
+    def qtd_formatada(self):
+        """`quantidade` + unidade em string humano-legivel.
+        - peso/volume (g, ml, kg, l) → "100g" / "1kg" (junto, sem espaco)
+        - unidade ('un', '') → "2x" (formato classico das cestas)
+        Incidente 22/06/2026: 'Family Box' mostrava "100x peito de peru"
+        quando era 100g de peito de peru. Sem unidade, fica ambiguo."""
+        qtd = self.quantidade or 0
+        # Sem decimais quando inteiro; senao 1-3 casas sem zeros a direita.
+        if qtd == int(qtd):
+            num = f'{int(qtd)}'
+        else:
+            num = f'{qtd:.3f}'.rstrip('0').rstrip('.')
+        un = self.unidade_resolvida
+        if un in ('g', 'ml', 'kg', 'l'):
+            return f'{num}{un}'
+        return f'{num}x'
+
+    @property
     def orfao(self):
         """True se nao tem FK setada — precisa vinculacao manual."""
         if self.tipo == 'receita':
