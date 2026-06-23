@@ -2760,7 +2760,7 @@ def loja_online_catalogo_foto(tipo, id):
 
 
 @main_bp.route('/admin/loja-online/logo', methods=['POST'])
-@login_required
+@owner_required
 def loja_online_logo():
     """Upload do logotipo da loja → Dropbox → URL guardada em AppConfig
     (`loja_logo_url`). O header da vitrine renderiza o logo se setado, senão
