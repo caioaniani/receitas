@@ -75,12 +75,23 @@
     {% elif item.esgotado %}
     <p class="aviso-comprar esgotado">Esgotado no momento — volte em breve.</p>
     {% else %}
+    {# Disponibilidade por dia (22/06/2026): cliente escolhe a data de
+       entrega e ve se tem saldo. Default = hoje (entrega no mesmo dia ou
+       proxima janela). #}
     <div class="comprar-bloco">
+      <div class="dispon-dia">
+        <label for="dispon-data">Disponível para entregar em</label>
+        <input type="date" id="dispon-data"
+               value="{{ data_hoje_iso }}"
+               min="{{ data_hoje_iso }}"
+               max="{{ data_max_iso }}">
+        <div class="dispon-status" id="dispon-status">verificando…</div>
+      </div>
       <div class="qtd-seletor">
         <label for="qtd-add">Quantidade</label>
         <input type="number" id="qtd-add" min="1" value="1" inputmode="numeric">
       </div>
-      <button class="btn-comprar"
+      <button class="btn-comprar" id="btn-comprar-produto"
               data-add-carrinho
               data-kind="{{ item.kind }}"
               data-id="{{ item.id }}"
@@ -94,6 +105,44 @@
         Ver carrinho →
       </a>
     </div>
+    <script>
+    (function () {
+      var KIND = "{{ item.kind }}";
+      var ITEM_ID = {{ item.id }};
+      var URL = "{{ url_for('loja.api_disponibilidade_dia') }}";
+      var input = document.getElementById('dispon-data');
+      var status = document.getElementById('dispon-status');
+      var btn = document.getElementById('btn-comprar-produto');
+      function checar() {
+        var d = input.value;
+        if (!d) return;
+        status.textContent = 'verificando…';
+        status.className = 'dispon-status';
+        btn.disabled = true;
+        fetch(URL + '?kind=' + KIND + '&item_id=' + ITEM_ID + '&data=' + d)
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            btn.disabled = false;
+            if (j.disponivel) {
+              status.textContent = '✓ disponível pra essa data';
+              status.className = 'dispon-status ok';
+              btn.dataset.dataEntrega = d;
+            } else {
+              status.textContent = '✗ esgotado pra essa data — escolha outra';
+              status.className = 'dispon-status ko';
+              btn.disabled = true;
+            }
+          })
+          .catch(function () {
+            status.textContent = 'erro ao verificar';
+            status.className = 'dispon-status ko';
+            btn.disabled = false;
+          });
+      }
+      input.addEventListener('change', checar);
+      checar();   // estado inicial pra hoje
+    })();
+    </script>
     {% endif %}
 
     <a href="{{ url_for('loja.home') }}" class="voltar">← Voltar pra vitrine</a>
