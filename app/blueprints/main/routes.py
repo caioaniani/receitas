@@ -2545,7 +2545,7 @@ def loja_online_catalogo_estoque(tipo, id):
 
 @main_bp.route('/admin/loja-online/catalogo/ordem/<tipo>/<int:id>',
                 methods=['POST'])
-@login_required
+@owner_required
 def loja_online_catalogo_ordem(tipo, id):
     """Atualiza a `ordem_site` do item (edição inline). JSON:
     {ordem: int|null}. Vazio/null = item vai pro fim alfabético."""
@@ -2571,7 +2571,7 @@ def loja_online_catalogo_ordem(tipo, id):
 
 
 @main_bp.route('/admin/loja-online/categorias/ordem', methods=['POST'])
-@login_required
+@owner_required
 def loja_online_categorias_ordem():
     """Salva a nova ordem das categorias em lote.
     Body JSON: {ordem: ['Pães', 'Bebidas', 'Conservas']}.
@@ -2596,7 +2596,7 @@ def loja_online_categorias_ordem():
 
 
 @main_bp.route('/admin/loja-online/produtos/ordem', methods=['POST'])
-@login_required
+@owner_required
 def loja_online_produtos_ordem():
     """Salva a nova ordem dos PRODUTOS dentro de uma categoria em lote.
     Body JSON: {itens: [{tipo: 'produto'|'receita', id: int}, ...]}.
@@ -2629,7 +2629,7 @@ def loja_online_produtos_ordem():
 
 
 @main_bp.route('/admin/loja-online/ordem-produtos')
-@login_required
+@owner_required
 def loja_online_ordem_produtos():
     """Tela pra reordenar PRODUTOS por categoria via drag-and-drop.
     Agrupa publicados pela categoria; cada grupo é uma lista sortable."""
@@ -2641,7 +2641,7 @@ def loja_online_ordem_produtos():
 
 
 @main_bp.route('/admin/loja-online/categorias', methods=['GET', 'POST'])
-@login_required
+@owner_required
 def loja_online_categorias():
     """Gestão da ordem das categorias na vitrine. GET mostra; POST salva."""
     from app.models import CategoriaSite, Produto, Receita
@@ -2693,7 +2693,7 @@ def loja_online_categorias():
 
 @main_bp.route('/admin/loja-online/catalogo/categoria/<tipo>/<int:id>',
                 methods=['POST'])
-@login_required
+@owner_required
 def loja_online_catalogo_categoria(tipo, id):
     """Atualiza a categoria do item (edição inline). JSON: {categoria: str}.
     Vazio limpa (item cai em 'Outros' na vitrine)."""
@@ -3478,7 +3478,7 @@ def loja_online_pedido_status(codigo):
 # mandamos SKU + quantidade + valor).
 
 @main_bp.route('/admin/loja-online/tiny-skus')
-@login_required
+@owner_required
 def loja_online_tiny_skus():
     from app.services import tiny_nf
     itens = tiny_nf.itens_para_mapear()
@@ -3489,7 +3489,7 @@ def loja_online_tiny_skus():
 
 
 @main_bp.route('/admin/loja-online/tiny-skus/sync', methods=['POST'])
-@login_required
+@owner_required
 def loja_online_tiny_sync():
     """Busca o catálogo do Tiny e sugere SKUs por nome pros não mapeados."""
     from flask import flash
@@ -3507,7 +3507,7 @@ def loja_online_tiny_sync():
 
 
 @main_bp.route('/admin/loja-online/tiny-skus/importar', methods=['POST'])
-@login_required
+@owner_required
 def loja_online_tiny_importar():
     """Importa o export de produtos do Tiny (.xls/.csv) e mapeia SKUs por
     nome. Nome idêntico confirma automático; parecido vira sugestão."""
@@ -3569,7 +3569,7 @@ def loja_online_danfe(codigo):
 
 
 @main_bp.route('/admin/loja-online/tiny-skus/definir', methods=['POST'])
-@login_required
+@owner_required
 def loja_online_tiny_definir():
     """Define/limpa o SKU de um item (kind + item_id + sku)."""
     from flask import flash
