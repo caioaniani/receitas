@@ -859,6 +859,76 @@ def produto(slug_completo):
     )
 
 
+@loja_bp.route('/api/disponibilidade-checkout', methods=['POST'])
+def api_disponibilidade_checkout():
+    """Pro checkout AO MUDAR A DATA: verifica quais itens do carrinho NAO tem
+    saldo pra essa data. Devolve a lista dos esgotados (nome + kind + id) e a
+    proxima data disponivel pra TODOS — pra o cliente decidir entre trocar a
+    data ou remover o(s) item(ns).
+
+    Body JSON: {data: "YYYY-MM-DD", itens: [{kind, id}, ...]}.
+    Decisao do dono 23/06/2026: incidente "checkout avancava sem avisar quais
+    produtos esgotaram pra data escolhida"."""
+    from datetime import date, timedelta
+
+    from app.utils import hoje
+    dados = request.get_json(silent=True) or {}
+    try:
+        d = date.fromisoformat(dados.get('data') or '')
+    except (TypeError, ValueError):
+        return jsonify(ok=False, erro='data invalida'), 400
+    if d < hoje() or d > hoje() + timedelta(days=30):
+        return jsonify(ok=False, erro='data fora da janela'), 400
+
+    itens_raw = dados.get('itens') or []
+    esgotados = []
+    nomes_esgotados = []
+    for raw in itens_raw:
+        kind = str(raw.get('kind') or '').strip()
+        if kind not in ('receita', 'produto'):
+            continue
+        try:
+            item_id = int(raw.get('id'))
+        except (TypeError, ValueError):
+            continue
+        if loja_catalogo.tem_estoque_para_dia(kind, item_id, d):
+            continue
+        # Esgotado: pega o nome canonico do catalogo (nao confia no nome do
+        # carrinho que pode estar desatualizado).
+        cat = loja_catalogo.por_id_publicado(kind, item_id)
+        nome = (cat or {}).get('nome') or 'produto'
+        esgotados.append({'kind': kind, 'id': item_id, 'nome': nome})
+        nomes_esgotados.append(nome)
+
+    # Proxima data em que TODOS os itens do carrinho tem saldo (ate +30 dias).
+    proxima = None
+    if esgotados:
+        ids_carrinho = []
+        for raw in itens_raw:
+            kind = str(raw.get('kind') or '').strip()
+            if kind not in ('receita', 'produto'):
+                continue
+            try:
+                ids_carrinho.append((kind, int(raw.get('id'))))
+            except (TypeError, ValueError):
+                continue
+        for i in range(1, 31):
+            d2 = hoje() + timedelta(days=i)
+            if d2 == d:
+                continue
+            todos_ok = all(
+                loja_catalogo.tem_estoque_para_dia(k, iid, d2)
+                for k, iid in ids_carrinho)
+            if todos_ok:
+                proxima = d2.isoformat()
+                break
+
+    return jsonify(ok=True,
+                   esgotados=esgotados,
+                   nomes=nomes_esgotados,
+                   proxima_disponivel=proxima)
+
+
 @loja_bp.route('/api/disponibilidade-dia')
 def api_disponibilidade_dia():
     """JSON pro seletor da pagina de produto: dado (kind, item_id, data),
