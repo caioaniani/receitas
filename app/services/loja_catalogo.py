@@ -233,9 +233,13 @@ def por_id_publicado(kind, item_id):
         if not p:
             return None
         d = _serializar_produto(p)
-        # Detalhe inclui composição da cesta (nomes só, sem custos)
+        # Detalhe inclui composição da cesta (nomes só, sem custos). Mostra a
+        # quantidade JA FORMATADA com unidade (g/ml/un) — sem isso, peso virava
+        # "100x peito de peru" (incidente 22/06/2026, era 100g).
         d['itens'] = [
-            {'nome': it.nome_resolvido, 'quantidade': float(it.quantidade or 1)}
+            {'nome': it.nome_resolvido,
+             'quantidade': float(it.quantidade or 1),
+             'qtd_formatada': it.qtd_formatada}
             for it in p.itens
         ]
         return d
