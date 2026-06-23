@@ -976,6 +976,20 @@ def pwa_manifest_loja():
         mimetype='application/manifest+json')
 
 
+@loja_bp.route('/sw.js')
+def pwa_service_worker_loja():
+    """Service Worker da loja (escopo /loja/). Servido aqui em vez de
+    /static/loja/sw.js pra ter escopo `/loja/` natural (SW só controla URLs
+    no mesmo path/abaixo de onde foi servido)."""
+    from flask import current_app, send_from_directory
+    resp = send_from_directory(
+        current_app.static_folder, 'loja/sw.js',
+        mimetype='application/javascript')
+    resp.headers['Cache-Control'] = 'no-cache'
+    # Não precisa de Service-Worker-Allowed porque já é servido sob /loja/.
+    return resp
+
+
 @loja_bp.route('/robots.txt')
 def robots():
     """Robots.txt servido aqui E em /robots.txt (raiz, via alias no main
