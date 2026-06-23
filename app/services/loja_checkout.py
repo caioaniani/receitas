@@ -84,7 +84,8 @@ DISTANCIA_CORTE_PRIMEIRA_JANELA_KM = float(
     os.environ.get('LOJA_CORTE_1A_JANELA_KM', '10') or '10')
 # Quais janelas considerar "primeira da manhã" pra cortar quando o cliente
 # está longe. Hoje só 08-09; se um dia tiver janelas <8h, listamos aqui.
-JANELAS_CORTADAS_LONGE = ('08:00-09:00',)
+# IMPORTANTE: usa en-dash (–) pra bater com JANELAS_HORARIAS (NÃO hífen).
+JANELAS_CORTADAS_LONGE = ('08:00–09:00',)
 
 
 def janelas_disponiveis(modo, data=None, base=None, *, distancia_km=None):
