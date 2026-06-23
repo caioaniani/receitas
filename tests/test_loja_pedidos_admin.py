@@ -162,6 +162,24 @@ def test_emitir_nf_bloqueia_nao_owner(app):
     assert r.status_code == 403
 
 
+def test_ordenacao_e_tiny_continuam_owner_only(app):
+    """Decisao do dono 22/06/2026: ordenar produtos, ordenar categorias e
+    SKUs do Tiny ficam SO com ele. Pedidos do site fica liberado, mas essas
+    tres funcoes de curadoria/config fiscal nao."""
+    c = _admin_nao_owner(app)
+    # ordem dos produtos
+    assert c.get('/admin/loja-online/ordem-produtos').status_code == 403
+    # ordem das categorias
+    assert c.get('/admin/loja-online/categorias').status_code == 403
+    # SKUs do Tiny
+    assert c.get('/admin/loja-online/tiny-skus').status_code == 403
+    # POSTs relacionados tambem
+    assert c.post('/admin/loja-online/produtos/ordem',
+                  json={'itens': []}).status_code == 403
+    assert c.post('/admin/loja-online/categorias/ordem',
+                  json={'categorias': []}).status_code == 403
+
+
 def test_painel_pedidos_online_json_nao_owner(app):
     """Drawer do painel de entregas: lista/busca JSON liberada a qualquer
     usuário logado (mesmo público do /entregas/painel)."""
