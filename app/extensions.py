@@ -27,9 +27,11 @@ import os as _os
 _TESTING = bool(_os.environ.get('PYTEST_RUNNING'))
 limiter = Limiter(
     key_func=get_remote_address,
+    # Em testes: sem default global (estouraria a suite de 1450+ testes).
+    # Limits por-rota (@limiter.limit) continuam ATIVOS — o conftest reseta
+    # estado entre testes (limiter.reset()).
     default_limits=[] if _TESTING else ['300 per minute', '5000 per hour'],
     storage_uri="memory://",
-    enabled=not _TESTING,
 )
 login_manager = LoginManager()
 login_manager.login_view = 'auth.login'
