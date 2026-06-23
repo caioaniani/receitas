@@ -831,10 +831,43 @@ def produto(slug_completo):
     personalizada = loja_catalogo.eh_personalizada(item)
     monte = (loja_catalogo.itens_para_montar(excluir_item=item)
              if personalizada else [])
+    # Datas pro seletor de disponibilidade (janela de 14 dias a partir de hoje).
+    from datetime import timedelta
+
+    from app.utils import hoje
+    data_hoje = hoje()
+    data_max = data_hoje + timedelta(days=14)
     return render_template(
         'loja/produto.html', item=item, em_teste=_em_teste(),
         personalizada=personalizada, monte=monte,
+        data_hoje_iso=data_hoje.isoformat(),
+        data_max_iso=data_max.isoformat(),
     )
+
+
+@loja_bp.route('/api/disponibilidade-dia')
+def api_disponibilidade_dia():
+    """JSON pro seletor da pagina de produto: dado (kind, item_id, data),
+    devolve `disponivel` (bool). Usa o plano_dia com fallback no EstoqueLoja
+    (mesma regra de `tem_estoque_para_dia`).
+
+    Publica — nao precisa de auth. Limita data a 30 dias pra frente pra evitar
+    consultas absurdas."""
+    from datetime import date, timedelta
+
+    from app.utils import hoje
+    kind = (request.args.get('kind') or '').strip()
+    if kind not in ('receita', 'produto'):
+        return jsonify(disponivel=False, erro='kind invalido'), 400
+    try:
+        item_id = int(request.args.get('item_id'))
+        d = date.fromisoformat(request.args.get('data'))
+    except (TypeError, ValueError):
+        return jsonify(disponivel=False, erro='parametros invalidos'), 400
+    if d < hoje() or d > hoje() + timedelta(days=30):
+        return jsonify(disponivel=False, erro='data fora da janela'), 400
+    ok = loja_catalogo.tem_estoque_para_dia(kind, item_id, d)
+    return jsonify(disponivel=ok)
 
 
 @loja_bp.route('/robots.txt')
