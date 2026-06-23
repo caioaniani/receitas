@@ -106,3 +106,76 @@ def prever_semana(loja_id, data_inicio=None):
         d = data_inicio + timedelta(days=i)
         out[d.isoformat()] = prever_demanda(loja_id, d)
     return out
+
+
+def prever_pedido_por_loja(semanas=3, data_ref=None, loja_id=None):
+    """Previsao do PEDIDO DE REPOSICAO por loja, baseada no historico de
+    PedidoLoja das ultimas `semanas` semanas (media semanal por item).
+
+    DIFERENTE de prever_demanda (que usa venda POS / MovEstoqueLoja): aqui a
+    base e o que cada loja PEDIU (PedidoLoja). Esse e o processo real de
+    reposicao do dono e existe pra TODA loja, inclusive as que nao tem PDV
+    (caso 23/06/2026: dono pediu "previsao de pedidos das 3 lojas
+    considerando as ultimas 3 semanas" e o bot despejou o historico cru em
+    vez de calcular). Conta determinista, server-side.
+
+    Janela: pedidos com `data_entrega` em [data_ref - semanas*7, data_ref).
+    Exclui cancelados. Retorna dict:
+      {loja_id: {'loja_nome', 'pedidos_considerados', 'semanas', 'desde',
+                 'ate', 'itens': [{'nome', 'total', 'media_semanal',
+                 'sugerido'}]}}
+    `media_semanal` = total / semanas; `sugerido` = ceil(media_semanal)
+    (o que pedir pra proxima semana). Itens ordenados por media desc.
+    """
+    import math
+    from collections import defaultdict
+
+    from app.models import PedidoLoja
+    from app.utils import hoje as _hoje_brt
+
+    semanas = max(1, int(semanas or 1))
+    if data_ref is None:
+        data_ref = _hoje_brt()
+    elif isinstance(data_ref, str):
+        data_ref = date.fromisoformat(data_ref)
+    desde = data_ref - timedelta(days=semanas * 7)
+
+    q = (PedidoLoja.query
+         .filter(PedidoLoja.data_entrega >= desde,
+                 PedidoLoja.data_entrega < data_ref,
+                 PedidoLoja.status != 'cancelado'))
+    if loja_id:
+        q = q.filter(PedidoLoja.loja_id == loja_id)
+    pedidos = q.all()
+
+    por_loja_item = defaultdict(lambda: defaultdict(int))  # lid -> nome -> qtd
+    por_loja_nome = {}
+    por_loja_npedidos = defaultdict(int)
+    for p in pedidos:
+        lid = p.loja_id
+        por_loja_nome[lid] = p.loja.nome if p.loja else '?'
+        por_loja_npedidos[lid] += 1
+        for it in p.itens:
+            por_loja_item[lid][it.nome_item] += int(it.quantidade or 0)
+
+    out = {}
+    for lid, itens in por_loja_item.items():
+        lista = []
+        for nome, total in itens.items():
+            media = total / semanas
+            lista.append({
+                'nome': nome,
+                'total': total,
+                'media_semanal': round(media, 1),
+                'sugerido': int(math.ceil(media)),
+            })
+        lista.sort(key=lambda x: -x['media_semanal'])
+        out[lid] = {
+            'loja_nome': por_loja_nome.get(lid, '?'),
+            'pedidos_considerados': por_loja_npedidos[lid],
+            'semanas': semanas,
+            'desde': desde.isoformat(),
+            'ate': data_ref.isoformat(),
+            'itens': lista,
+        }
+    return out
