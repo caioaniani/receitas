@@ -10,7 +10,7 @@
 //
 // Atualizar pra forçar refresh: bumpar VERSION + clientes recarregam.
 
-const VERSION = 'loja-v1';
+const VERSION = 'loja-v2';
 const CACHE_STATIC = `opao-loja-static-${VERSION}`;
 const CACHE_RUNTIME = `opao-loja-runtime-${VERSION}`;
 
