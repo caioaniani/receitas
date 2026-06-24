@@ -110,6 +110,7 @@
                           action="{{ url_for('producao.criar_plano_do_deficit') }}"
                           onsubmit="return confirm('Criar plano de produção com as {{ balanco.total_produzir_itens }} receita(s) em déficit? Você poderá revisar e ajustar antes de baixar o estoque.');"
                           class="mb-0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="horizonte" value="{{ horizonte }}">
                         <input type="hidden" name="janela" value="{{ janela }}">
                         <button type="submit" class="btn btn-warning btn-sm">
