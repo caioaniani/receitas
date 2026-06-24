@@ -89,6 +89,13 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True):
     receitas = {r.id: r for r in Receita.query
                 .filter(Receita.arquivada_em.is_(None)).all()}
     nomes_loja = {l.id: l.nome for l in Loja.query.all()}
+    # Lojas OPERACIONAIS (ativas + sem a "Industria"). Usada no breakdown
+    # pra listar TODAS as lojas que VAO ser olhadas (mesmo com qtd=0) — sem
+    # essa lista o usuario nao consegue distinguir "loja nao pediu essa
+    # receita" de "motor filtrou a loja".
+    lojas_op = (Loja.query
+                .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
+                .order_by(Loja.nome).all())
 
     # 1. Estoque da industria por receita.
     em_estoque = defaultdict(int)
