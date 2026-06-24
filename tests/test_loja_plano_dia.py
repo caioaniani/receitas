@@ -42,9 +42,13 @@ def test_reservar_e_devolver(app):
     assert loja_plano_dia.saldo('produto', 10, d) == 1
 
 
-def test_reservar_sem_plano_cria_linha_negativa(app):
-    """Cliente compra item sem plano — vende mesmo assim mas deixa rastro de
-    saldo negativo virtual (qtd_planejada=0, qtd_reservada=qtd) pra auditoria."""
+def test_reservar_sem_plano_usa_default_99999(app):
+    """Cliente compra item sem plano cadastrado: cria linha com
+    qtd_planejada=DEFAULT_QTD_PLANEJADA (99999), reservando qtd. Saldo
+    continua positivo — item NÃO fica esgotado por falta de plano manual.
+
+    Caso pre-24/06/2026 era qtd_planejada=0 → Bonjura e Box Mimo zeraram
+    no site assim que tiveram primeira venda."""
     from app.extensions import db
     from app.models import EstoqueSitePlano
     from app.services import loja_plano_dia
@@ -52,9 +56,50 @@ def test_reservar_sem_plano_cria_linha_negativa(app):
     assert loja_plano_dia.reservar('receita', 99, d, 2) is True
     row = (db.session.query(EstoqueSitePlano)
            .filter_by(kind='receita', item_id=99, data=d).one())
-    assert row.qtd_planejada == 0
+    assert row.qtd_planejada == loja_plano_dia.DEFAULT_QTD_PLANEJADA
     assert row.qtd_reservada == 2
-    # Saldo continua 0 (max(0, 0-2)=0) — exibicao ok; auditoria pega no row.
+    # Saldo positivo — venda nao deixa item esgotado
+    assert loja_plano_dia.saldo('receita', 99, d) == 99999 - 2
+
+
+def test_reparar_linhas_orfas(app):
+    """Linhas legadas (planejada=0, reservada>0) viram (planejada=99999+
+    reservada, reservada) — saldo = 99999 restaurado. Linhas normais nao
+    sao tocadas (idempotente)."""
+    from app.extensions import db
+    from app.models import EstoqueSitePlano
+    from app.services import loja_plano_dia
+    d = date(2026, 6, 26)
+    # Linha 'orfa' — bug pre-24/06: dono não cadastrou, vendeu, ficou 0+1
+    orfa = EstoqueSitePlano(kind='produto', item_id=10, data=d,
+                             qtd_planejada=0, qtd_reservada=1)
+    # Linha normal — dono cadastrou explicitamente
+    normal = EstoqueSitePlano(kind='produto', item_id=11, data=d,
+                               qtd_planejada=5, qtd_reservada=2)
+    # Linha planejada=0 sem reservada (legitima: dono setou 0 mesmo)
+    zerada_intencional = EstoqueSitePlano(kind='produto', item_id=12, data=d,
+                                           qtd_planejada=0, qtd_reservada=0)
+    db.session.add_all([orfa, normal, zerada_intencional])
+    db.session.commit()
+
+    corrigidas = loja_plano_dia.reparar_linhas_orfas()
+    assert len(corrigidas) == 1
+    assert corrigidas[0]['kind'] == 'produto'
+    assert corrigidas[0]['item_id'] == 10
+
+    db.session.refresh(orfa); db.session.refresh(normal); db.session.refresh(zerada_intencional)
+    # órfã: planejada vira 99999 + reservada = 100000, saldo = 99999
+    assert orfa.qtd_planejada == 100000
+    assert orfa.qtd_reservada == 1
+    # normal: intocada
+    assert normal.qtd_planejada == 5
+    assert normal.qtd_reservada == 2
+    # zerada_intencional: intocada (não tem venda; dono setou 0 mesmo)
+    assert zerada_intencional.qtd_planejada == 0
+    assert zerada_intencional.qtd_reservada == 0
+
+    # Idempotente: rodar de novo não faz nada
+    assert loja_plano_dia.reparar_linhas_orfas() == []
 
 
 def test_devolver_sem_linha_no_op(app):
