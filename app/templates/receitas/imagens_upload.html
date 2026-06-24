@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}Upload de imagens (zip){% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-images"></i> Imagens de receitas (zip)</h1>
+    <a href="{{ url_for('receitas.padeiro_lista') }}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+</div>
+
+<div class="alert alert-info">
+    Envie um <code>.zip</code> com as fotos das receitas. Cada arquivo dentro deve estar nomeado
+    com o nome exato da receita (ex: <code>Croissant Tradicional.jpg</code>, <code>Sourdough.png</code>).
+    <ul class="mb-0 mt-2 small">
+        <li>Extensões aceitas: <code>.jpg</code>, <code>.jpeg</code>, <code>.png</code>, <code>.webp</code></li>
+        <li>Cada imagem: até 5 MB</li>
+        <li>O zip todo: até 10 MB (limite do servidor)</li>
+        <li>Casa por nome exato (sem caixa). Se não bater, tenta fuzzy (similaridade ≥ 85 %).</li>
+        <li>Arquivos que não casarem aparecem no relatório — sem erro, só ignorados.</li>
+    </ul>
+</div>
+
+<form method="POST" action="{{ url_for('receitas.imagens_upload') }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card card-padaria mb-3">
+        <div class="card-body">
+            <label class="form-label">Arquivo .zip</label>
+            <input type="file" name="zipfile" accept=".zip,application/zip" class="form-control" required>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-upload"></i> Enviar e processar
+        </button>
+        <a href="{{ url_for('receitas.padeiro_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+    </div>
+</form>
+{% endblock %}

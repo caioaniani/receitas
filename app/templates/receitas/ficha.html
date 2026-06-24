@@ -3,6 +3,23 @@
 {% block title %}{{ receita.nome }} - Ficha Técnica{% endblock %}
 
 {% block content %}
+{% if receita.arquivada_em %}
+<div class="alert alert-warning d-flex justify-content-between align-items-center py-2 flex-wrap gap-2">
+    <div>
+        <i class="bi bi-archive"></i> <b>Receita arquivada</b>
+        em {{ receita.arquivada_em.strftime('%d/%m/%Y') }} —
+        fora das listas e seletores; o histórico continua intacto.
+    </div>
+    {% if current_user.is_admin() %}
+    <form method="POST" action="{{ url_for('receitas.arquivar', id=receita.id) }}" class="mb-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-outline-dark">
+            <i class="bi bi-box-arrow-up"></i> Desarquivar
+        </button>
+    </form>
+    {% endif %}
+</div>
+{% endif %}
 <form method="POST" action="{{ url_for('receitas.salvar', id=receita.id) }}" id="ficha-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
@@ -16,6 +33,27 @@
             <div class="col-md-2">
                 <label class="form-label small text-muted">Categoria</label>
                 <input type="text" name="categoria" value="{{ receita.categoria or '' }}" class="form-control form-control-sm input-blue">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted" title="Define quais estados (backup/assado) a receita aceita em pedidos/estoque.">
+                    Família
+                </label>
+                <select name="familia" class="form-select form-select-sm input-blue">
+                    <option value="" {% if not receita.familia %}selected{% endif %}>— Padrão (pão / sourdough) —</option>
+                    <option value="viennoiserie" {% if receita.familia == 'viennoiserie' %}selected{% endif %}>Viennoiserie (3 estados)</option>
+                    <option value="pao_sourdough" {% if receita.familia == 'pao_sourdough' %}selected{% endif %}>Pão / Sourdough</option>
+                    <option value="fornada_especial" {% if receita.familia == 'fornada_especial' %}selected{% endif %}>Fornada especial</option>
+                </select>
+            </div>
+            <div class="col">
+                <label class="form-label small text-muted" title="Vai pra tela de pré-preparo do padeiro automaticamente">
+                    Estado padrão (pré-preparo)
+                </label>
+                <select name="estado_padrao" class="form-select form-select-sm input-blue">
+                    <option value="" {% if not receita.estado_padrao %}selected{% endif %}>— Não vai pro pré-preparo —</option>
+                    <option value="assado" {% if receita.estado_padrao == 'assado' %}selected{% endif %}>Assado</option>
+                    <option value="backup" {% if receita.estado_padrao == 'backup' %}selected{% endif %}>Backup</option>
+                </select>
             </div>
             <div class="col">
                 <label class="form-label small text-muted">Preco Atacado (R$)</label>
@@ -107,6 +145,7 @@
         <table class="table table-sm table-bordered tabela-ficha" id="ficha-table">
             <thead>
                 <tr>
+                    <th style="width:26px"></th>
                     <th style="width:8%">Tipo</th>
                     <th style="width:22%">Ingrediente</th>
                     <th style="width:10%">
@@ -125,7 +164,7 @@
             <tbody id="ficha-body">
                 {% if not receita.ingredientes %}
                 <tr>
-                    <td colspan="8" class="text-center py-3" style="background:#fff8e1;">
+                    <td colspan="9" class="text-center py-3" style="background:#fff8e1;">
                         <i class="bi bi-exclamation-triangle text-warning"></i>
                         <strong>Ficha vazia</strong> — destrave o cadeado <i class="bi bi-lock-fill"></i> e adicione os ingredientes.
                     </td>
@@ -133,10 +172,15 @@
                 {% endif %}
                 {% for ing in receita.ingredientes %}
                 <tr class="ingrediente-row" data-base="{{ '1' if ing.eh_base else '0' }}">
+                    <td class="text-center align-middle">
+                        <span class="ing-drag text-muted" title="Arraste para reordenar"
+                              style="cursor:grab; touch-action:none;"><i class="bi bi-grip-vertical"></i></span>
+                    </td>
                     <td>
                         <select name="ingrediente_tipo[]" class="form-select form-select-sm ing-tipo" style="font-size:10px;">
                             <option value="mp" {{ 'selected' if (ing.tipo or 'mp') == 'mp' }}>MP (%)</option>
                             <option value="mp_direto" {{ 'selected' if ing.tipo == 'mp_direto' }}>MP (g)</option>
+                            <option value="mp_un" {{ 'selected' if ing.tipo == 'mp_un' }}>MP (un)</option>
                             <option value="receita" {{ 'selected' if ing.tipo == 'receita' }}>Receita</option>
                         </select>
                     </td>
@@ -167,6 +211,7 @@
             </tbody>
             <tfoot id="ficha-foot">
                 <tr class="table-dark">
+                    <td></td>
                     <td></td>
                     <td class="fw-bold">TOTAL</td>
                     <td class="text-end fw-bold" id="total-pct">-</td>
@@ -269,11 +314,72 @@
         </div>
     </div>
 
-    <!-- Modo de Preparo -->
+    <!-- Imagem pro cardapio digital — apenas o input URL fica DENTRO do form -->
+    <!-- principal (upload/remover sao forms separados depois do </form>) -->
+    <div class="mb-3 p-2 border rounded bg-light">
+        <label class="form-label small fw-bold mb-1">
+            <i class="bi bi-image"></i> Imagem pro cardápio digital
+        </label>
+        {% if receita.imagem_blob or receita.imagem_dropbox_url %}
+        <div class="mb-2">
+            <img src="{{ url_for('main.cardapio_img', tipo='receita', id=receita.id) }}"
+                 alt="" style="max-height:120px;border-radius:6px;border:1px solid #ddd;">
+        </div>
+        {% endif %}
+        <label class="form-label small text-muted mb-0">URL externa (fallback)</label>
+        <input type="url" name="imagem_url" value="{{ receita.imagem_url or '' }}"
+               class="form-control form-control-sm input-blue" placeholder="https://...">
+        <small class="text-muted">Pra fazer upload de foto, role pro fim da página.</small>
+    </div>
+
+    <!-- Modo de Preparo (1 modulo por etapa; o salvar junta com linha em branco) -->
     <div class="mb-3">
         <label class="form-label fw-bold"><i class="bi bi-journal-text"></i> Modo de Preparo</label>
-        <textarea name="modo_preparo" class="form-control input-blue" rows="5"
-                  placeholder="Descreva o passo a passo do preparo...">{{ receita.modo_preparo or '' }}</textarea>
+        <input type="hidden" name="tem_etapas" value="1">
+        <div id="etapas-box">
+            {% for etapa in etapas_preparo %}
+            <div class="etapa-modulo d-flex gap-2 align-items-start mb-2">
+                <span class="etapa-drag text-muted mt-2" title="Arraste para reordenar"
+                      style="cursor:grab; touch-action:none;"><i class="bi bi-grip-vertical"></i></span>
+                <span class="badge bg-dark etapa-num mt-2">{{ loop.index }}</span>
+                <textarea name="modo_preparo_etapa[]" class="form-control input-blue" rows="2"
+                          placeholder="Descreva esta etapa...">{{ etapa }}</textarea>
+                <button type="button" class="btn btn-sm btn-outline-danger btn-remove-etapa mt-1"
+                        title="Remover etapa"><i class="bi bi-x"></i></button>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-add-etapa">
+            <i class="bi bi-plus-lg"></i> Adicionar etapa
+        </button>
+    </div>
+
+    <template id="etapa-template">
+        <div class="etapa-modulo d-flex gap-2 align-items-start mb-2">
+            <span class="etapa-drag text-muted mt-2" title="Arraste para reordenar"
+                  style="cursor:grab; touch-action:none;"><i class="bi bi-grip-vertical"></i></span>
+            <span class="badge bg-dark etapa-num mt-2">?</span>
+            <textarea name="modo_preparo_etapa[]" class="form-control input-blue" rows="2"
+                      placeholder="Descreva esta etapa..."></textarea>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-etapa mt-1"
+                    title="Remover etapa"><i class="bi bi-x"></i></button>
+        </div>
+    </template>
+
+    <!-- Reaproveitavel -->
+    <div class="mb-3">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="reaproveitavel" id="reaproveitavel-receita"
+                   value="1" {% if receita.reaproveitavel %}checked{% endif %}>
+            <label class="form-check-label" for="reaproveitavel-receita">
+                <strong>Reaproveitavel quando vence / nao vende</strong>
+                <div class="text-muted small">
+                    Quando essa receita vencer ou sobrar do dia, ela <strong>vira outra coisa</strong>
+                    em vez de ir pro lixo. Ex: Croissant Tradicional vira Croissant Almond.
+                    Desperdicio com motivo "validade" ou "nao_vendeu" NAO baixa do estoque.
+                </div>
+            </label>
+        </div>
     </div>
 
     <!-- Observações / Pendências -->
@@ -284,7 +390,7 @@
                   placeholder="Anote o que precisa ser atualizado nesta receita...">{{ receita.observacao or '' }}</textarea>
     </div>
 
-    <!-- Botoes -->
+    <!-- Botoes do form principal -->
     <div class="d-flex gap-2 flex-wrap">
         <button type="submit" class="btn btn-primary">
             <i class="bi bi-check-lg"></i> Salvar Ficha
@@ -292,60 +398,154 @@
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
             <i class="bi bi-printer"></i> Imprimir
         </button>
-        {% if current_user.is_authenticated and current_user.is_admin() %}
-        <form method="POST" action="{{ url_for('receitas.duplicar', id=receita.id) }}" class="d-inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-outline-info btn-sm">
-                <i class="bi bi-copy"></i> Duplicar Receita
-            </button>
-        </form>
-        <form method="POST" action="{{ url_for('receitas.excluir', id=receita.id) }}" class="d-inline"
-              onsubmit="return confirm('Excluir {{ receita.nome }}?')">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-outline-danger btn-sm">
-                <i class="bi bi-trash"></i> Excluir Produto
-            </button>
-        </form>
-        {% endif %}
     </div>
+</form>
 
-    <!-- Atribuir a funcionário (só admin) -->
-    {% if current_user.is_authenticated and current_user.is_admin() and funcionarios %}
-    <div class="mt-3 p-2 border rounded" style="background:#f5f5f5; max-width:400px;">
-        <form method="POST" action="{{ url_for('auth.atribuir', receita_id=receita.id) }}" class="d-flex gap-2 align-items-center">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <i class="bi bi-send" style="color:#1565c0;"></i>
-            <select name="usuario_id" class="form-select form-select-sm" style="width:auto;" required>
-                <option value="">Funcionario...</option>
-                {% for f in funcionarios %}
-                <option value="{{ f.id }}">{{ f.nome }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit" class="btn btn-sm btn-primary">
-                <i class="bi bi-send"></i> Atribuir
-            </button>
-        </form>
-        {% if receita.atribuicoes %}
-        <div class="mt-1 small text-muted">
-            Atribuida a:
-            {% for a in receita.atribuicoes %}
-                <span class="badge {{ 'bg-success' if a.status == 'concluida' else 'bg-warning text-dark' }}">
-                    {{ a.usuario.nome }} ({{ a.status }})
-                </span>
-            {% endfor %}
+<!-- Forms de imagem do cardapio — FORA do form principal (HTML nao permite aninhamento) -->
+<div class="card mt-3 mb-3">
+    <div class="card-header py-2"><strong><i class="bi bi-image"></i> Foto do cardápio digital</strong></div>
+    <div class="card-body">
+        {% set tem_foto = receita.imagem_blob or receita.imagem_dropbox_url %}
+        {% if tem_foto %}
+        <div class="mb-2 d-flex align-items-start gap-2">
+            <img src="{{ url_for('main.cardapio_img', tipo='receita', id=receita.id) }}"
+                 alt="" style="max-height:120px;border-radius:6px;border:1px solid #ddd;">
+            <form method="POST" action="{{ url_for('main.cardapio_img_remover', tipo='receita', id=receita.id) }}"
+                  onsubmit="return confirm('Remover imagem?')" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Remover</button>
+            </form>
         </div>
         {% endif %}
+        <form method="POST" action="{{ url_for('main.cardapio_img_upload', tipo='receita', id=receita.id) }}"
+              enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="file" name="imagem_arquivo" accept="image/*" class="form-control form-control-sm" required>
+            <button type="submit" class="btn btn-sm btn-primary">
+                <i class="bi bi-upload"></i> {% if tem_foto %}Trocar foto{% else %}Enviar foto{% endif %}
+            </button>
+        </form>
+        <small class="text-muted d-block mt-1">Comprime pra ~700×700 JPEG. Se subir foto aqui, ignora a URL no campo de cima.</small>
+    </div>
+</div>
+
+<!-- Acoes admin (fora do form principal — HTML nao permite forms aninhados) -->
+{% if current_user.is_authenticated and current_user.is_admin() %}
+<div class="d-flex gap-2 flex-wrap mt-2">
+    <form method="POST" action="{{ url_for('receitas.duplicar', id=receita.id) }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-info btn-sm">
+            <i class="bi bi-copy"></i> Duplicar Receita
+        </button>
+    </form>
+    <form method="POST" action="{{ url_for('receitas.excluir', id=receita.id) }}" class="d-inline"
+          id="form-excluir-receita" data-vinculos-url="{{ url_for('receitas.vinculos', id=receita.id) }}"
+          data-resolver-url="{{ url_for('receitas.vinculos_resolver', id=receita.id) }}"
+          data-nome="{{ receita.nome }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-trash"></i> Excluir Produto
+        </button>
+    </form>
+</div>
+
+<!-- Modal: vinculos que impedem a exclusao (resolve na propria janela) -->
+<div class="modal fade" id="modal-vinculos" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header py-2 bg-danger text-white">
+                <h6 class="modal-title"><i class="bi bi-link-45deg"></i>
+                    "{{ receita.nome }}" ainda está vinculada</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="vinculos-body">
+                    <div class="text-muted small">Carregando vínculos...</div>
+                </div>
+                <div class="border-top pt-2 mt-2" id="vinculos-transferir-box" style="display:none;">
+                    <label class="form-label small fw-bold mb-1">
+                        <i class="bi bi-arrow-right-circle"></i>
+                        Transferir TODOS os vínculos para outra receita
+                    </label>
+                    <div class="small text-muted mb-1">
+                        Pedidos, vendas, estoque (somado), cestas e mapeamentos passam a
+                        apontar pra receita escolhida — aí esta aqui fica livre pra excluir.
+                        Use pra juntar duplicatas.
+                    </div>
+                    <div class="d-flex gap-2">
+                        <input type="text" id="transferir-destino" class="form-control form-control-sm"
+                               list="receita-list" placeholder="nome exato da receita destino"
+                               autocomplete="off">
+                        <button type="button" class="btn btn-sm btn-warning text-nowrap" id="btn-transferir-vinculos"
+                                data-url="{{ url_for('receitas.vinculos_transferir', id=receita.id) }}">
+                            Transferir
+                        </button>
+                    </div>
+                    <div class="small mt-1" id="transferir-feedback"></div>
+                </div>
+            </div>
+            <div class="modal-footer py-1">
+                {% if not receita.arquivada_em %}
+                <form method="POST" action="{{ url_for('receitas.arquivar', id=receita.id) }}"
+                      class="me-auto mb-0"
+                      onsubmit="return confirm('Arquivar a receita? Ela sai das listas e seletores; pedidos, vendas e estoque ficam intactos. Dá pra desarquivar depois na ficha.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-dark" data-no-loading="1">
+                        <i class="bi bi-archive"></i> Arquivar receita
+                    </button>
+                </form>
+                {% endif %}
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-sm btn-danger" id="btn-excluir-liberado" style="display:none;">
+                    <i class="bi bi-trash"></i> Excluir agora
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Atribuir a funcionário (só admin) -->
+{% if current_user.is_authenticated and current_user.is_admin() and funcionarios %}
+<div class="mt-3 p-2 border rounded" style="background:#f5f5f5; max-width:400px;">
+    <form method="POST" action="{{ url_for('auth.atribuir', receita_id=receita.id) }}" class="d-flex gap-2 align-items-center">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <i class="bi bi-send" style="color:#1565c0;"></i>
+        <select name="usuario_id" class="form-select form-select-sm" style="width:auto;" required>
+            <option value="">Funcionario...</option>
+            {% for f in funcionarios %}
+            <option value="{{ f.id }}">{{ f.nome }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-sm btn-primary">
+            <i class="bi bi-send"></i> Atribuir
+        </button>
+    </form>
+    {% if receita.atribuicoes %}
+    <div class="mt-1 small text-muted">
+        Atribuida a:
+        {% for a in receita.atribuicoes %}
+            <span class="badge {{ 'bg-success' if a.status == 'concluida' else 'bg-warning text-dark' }}">
+                {{ a.usuario.nome }} ({{ a.status }})
+            </span>
+        {% endfor %}
     </div>
     {% endif %}
-</form>
+</div>
+{% endif %}
 
 <!-- Template para nova linha de ingrediente -->
 <template id="ing-row-template">
     <tr class="ingrediente-row" data-base="0">
+        <td class="text-center align-middle">
+            <span class="ing-drag text-muted" title="Arraste para reordenar"
+                  style="cursor:grab; touch-action:none;"><i class="bi bi-grip-vertical"></i></span>
+        </td>
         <td>
             <select name="ingrediente_tipo[]" class="form-select form-select-sm ing-tipo" style="font-size:10px;">
                 <option value="mp">MP (%)</option>
                 <option value="mp_direto">MP (g)</option>
+                <option value="mp_un">MP (un)</option>
                 <option value="receita">Receita</option>
             </select>
         </td>
@@ -405,7 +605,7 @@
 
 <!-- Dados de custos de receitas para JS -->
 <script>
-const RECEITA_CUSTOS = {{ receita_custos_json | safe }};
-const RECEITA_PESOS = {{ receita_pesos_json | safe }};
+const RECEITA_CUSTOS = {{ receita_custos | tojson }};
+const RECEITA_PESOS = {{ receita_pesos | tojson }};
 </script>
 {% endblock %}

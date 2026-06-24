@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+{% set editing = venda %}
+{% block title %}{% if editing %}Editar venda B2B #{{ venda.id }}{% else %}Nova venda B2B{% endif %}{% endblock %}
+{% block content %}
+<h1 class="page-title mb-3">
+    {% if editing %}<i class="bi bi-pencil-square"></i> Editar venda B2B #{{ venda.id }}
+    {% else %}<i class="bi bi-plus-circle"></i> Nova venda B2B{% endif %}
+</h1>
+
+{% if pago %}
+<div class="alert alert-warning small"><i class="bi bi-lock-fill"></i>
+    Esta venda já tem pagamento registrado. <strong>Itens e valores ficam travados</strong> —
+    aqui você edita só cliente, datas e observação. Para mexer nos itens, estorne os pagamentos primeiro.
+</div>
+{% endif %}
+
+<form method="POST" action="{% if editing %}{{ url_for('b2b.venda_editar_post', vid=venda.id) }}{% else %}{{ url_for('b2b.venda_criar') }}{% endif %}" id="form-venda">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-5">
+                    <label class="form-label small">Cliente cadastrado</label>
+                    <select name="cliente_id" class="form-select form-select-sm" id="sel-cliente">
+                        <option value="">— avulso —</option>
+                        {% for c in clientes %}
+                        <option value="{{ c.id }}" data-desc="{{ c.desconto_percentual or 0 }}"{% if editing and venda.cliente_id == c.id %} selected{% endif %}>{{ c.nome }}{% if c.desconto_percentual %} ({{ '%.0f'|format(c.desconto_percentual) }}% desc){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">Ou nome avulso</label>
+                    <input type="text" name="cliente_nome" class="form-control form-control-sm" placeholder="ex: Restaurante X" value="{% if editing %}{{ venda.cliente_nome or '' }}{% endif %}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Data da venda</label>
+                    <input type="date" name="data_venda" class="form-control form-control-sm" value="{% if editing %}{{ venda.data_venda.isoformat() }}{% else %}{{ hoje }}{% endif %}" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Entrega ao padeiro *</label>
+                    <input type="date" name="data_entrega" class="form-control form-control-sm" value="{% if editing %}{{ venda.data_entrega.isoformat() if venda.data_entrega else '' }}{% else %}{{ hoje }}{% endif %}" required>
+                    <div class="form-text" style="font-size:11px;">Dia que vai pra fila do padeiro produzir/separar.</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Nº NF (opcional)</label>
+                    <input type="text" name="nf_numero" class="form-control form-control-sm" value="{% if editing %}{{ venda.nf_numero or '' }}{% endif %}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small">Observação</label>
+                    <input type="text" name="observacao" class="form-control form-control-sm" placeholder="..." value="{% if editing %}{{ venda.observacao or '' }}{% endif %}">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header py-2 d-flex justify-content-between"><strong>Itens</strong><button type="button" class="btn btn-sm btn-outline-primary" id="btn-add-item"><i class="bi bi-plus"></i> Adicionar item</button></div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0" id="tbl-itens">
+                <thead><tr><th>Item</th><th style="width:120px;">Estado</th><th style="width:90px;" class="text-end">Estoque</th><th style="width:80px;">Qtd</th><th style="width:110px;">Preço unit.</th><th style="width:80px;">Desc %</th><th style="width:140px;">Obs.</th><th style="width:110px;" class="text-end">Subtotal</th><th></th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="card-footer text-end fw-bold">
+            Total: <span id="venda-total">R$ 0,00</span>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header py-2 d-flex justify-content-between"><strong>Parcelas</strong><button type="button" class="btn btn-sm btn-outline-primary" id="btn-add-parcela"><i class="bi bi-plus"></i> Adicionar parcela</button></div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0" id="tbl-parcelas">
+                <thead><tr><th style="width:160px;">Vencimento</th><th style="width:140px;">Valor</th><th>Forma</th><th></th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="card-footer small text-muted">Sem parcela = 1 única no dia da venda pelo total.</div>
+    </div>
+
+    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i>
+        {% if editing %}Salvar alterações{% else %}Criar venda + baixar estoque{% endif %}</button>
+    <a href="{% if editing %}{{ url_for('b2b.venda_detalhe', vid=venda.id) }}{% else %}{{ url_for('b2b.dashboard') }}{% endif %}" class="btn btn-outline-secondary">Cancelar</a>
+</form>
+
+<style>
+  .ta-wrap { position: relative; }
+  .ta-results { position:absolute; z-index:1050;
+                background:var(--bg-card,#fff); color:var(--text-main,#212529);
+                border:1px solid var(--border-color,#ced4da);
+                border-radius:var(--radius-md,8px);
+                max-height:280px; overflow-y:auto; box-shadow:0 6px 14px rgba(0,0,0,.3); }
+  .ta-opt { padding:9px 12px; cursor:pointer; font-size:.9rem; }
+  .ta-opt:hover { background:var(--bg-card-hover,#f4f4f5); }
+</style>
+<script>
+(function() {
+    var PRECOS = {{ precos_map|tojson }};
+    var ESTOQUE = {{ estoque_map|tojson }};
+    var SEED_ITENS = {{ itens_seed|tojson }};
+    var SEED_PARCELAS = {{ parcelas_seed|tojson }};
+    var LOCKED = {{ pago|tojson }};
+    var RECEITAS = [{% for r in receitas %}{ref:'receita:{{r.id}}', nome:'{{ r.categoria }} — {{ r.nome|replace("'", "\\'") }}'}{% if not loop.last %},{% endif %}{% endfor %}];
+    var PRODUTOS = [{% for p in produtos %}{ref:'produto:{{p.id}}', nome:'{{ p.nome|replace("'", "\\'") }}'}{% if not loop.last %},{% endif %}{% endfor %}];
+    function norm(s){ return (s==null?'':String(s)).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); }
+    function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+    var TODOS = RECEITAS.concat(PRODUTOS).map(function(o){ return {ref:o.ref, nome:o.nome, q:norm(o.nome)}; });
+
+    var tbody = document.querySelector('#tbl-itens tbody');
+    var parcBody = document.querySelector('#tbl-parcelas tbody');
+    var selCliente = document.getElementById('sel-cliente');
+
+    function getDescCliente() {
+        var opt = selCliente.options[selCliente.selectedIndex];
+        return opt ? parseFloat(opt.dataset.desc || '0') : 0;
+    }
+
+    function aplicarItem(tr, ref) {
+        var preco = PRECOS[ref] || 0;
+        var desc = getDescCliente();
+        tr.querySelector('.preco').value = preco.toFixed(2);
+        tr.querySelector('.desc').value = desc || '';
+        tr.querySelector('.estoque-cel').textContent = (ESTOQUE[ref] !== undefined) ? ESTOQUE[ref] : '—';
+        atualizar(tr);
+    }
+
+    function rowItem(data) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+            '<td><div class="ta-wrap">' +
+              '<input type="text" class="form-control form-control-sm ta-input" placeholder="Digite pra buscar (ex: pao)" autocomplete="off">' +
+              '<input type="hidden" name="item_ref[]" class="item-ref">' +
+              '<div class="ta-results" style="display:none;"></div>' +
+            '</div></td>' +
+            '<td><select name="item_estado[]" class="form-select form-select-sm"><option value="">Padrão</option><option value="backup">Backup</option><option value="assado">Assado</option></select></td>' +
+            '<td class="text-end estoque-cel text-muted">—</td>' +
+            '<td><input type="number" name="item_qtd[]" min="1" value="1" class="form-control form-control-sm qtd"></td>' +
+            '<td><input type="number" step="0.01" name="item_preco[]" value="0" class="form-control form-control-sm preco"></td>' +
+            '<td><input type="number" step="0.01" name="item_desc[]" value="" placeholder="0" class="form-control form-control-sm desc"></td>' +
+            '<td><input type="text" name="item_obs[]" maxlength="200" class="form-control form-control-sm obs" placeholder="ex: fatiado"></td>' +
+            '<td class="text-end subt fw-bold">R$ 0,00</td>' +
+            '<td><button type="button" class="btn btn-sm btn-outline-danger remover">×</button></td>';
+        tbody.appendChild(tr);
+        atualizar(tr);
+
+        var input = tr.querySelector('.ta-input');
+        var hidden = tr.querySelector('.item-ref');
+        var box = tr.querySelector('.ta-results');
+        // Move o dropdown pro <body>: escapa do overflow da tabela E de qualquer
+        // ancestral com transform/filter (que quebrava o position:fixed).
+        document.body.appendChild(box);
+
+        input.addEventListener('input', function() {
+            hidden.value = '';  // mudou o texto -> precisa re-selecionar uma opcao
+            var q = norm(input.value);
+            if (!q) { box.style.display = 'none'; box.innerHTML = ''; return; }
+            var terms = q.split(/\s+/).filter(Boolean);
+            var res = TODOS.filter(function(o) {
+                return terms.every(function(t) { return o.q.indexOf(t) !== -1; });
+            }).slice(0, 30);
+            box.innerHTML = res.length
+                ? res.map(function(o) {
+                    return '<div class="ta-opt" data-ref="' + o.ref + '" data-nome="' + esc(o.nome) + '">' + esc(o.nome) + '</div>';
+                  }).join('')
+                : '<div class="ta-opt text-muted">nenhum item encontrado</div>';
+            var rect = input.getBoundingClientRect();
+            box.style.left = (rect.left + window.pageXOffset) + 'px';
+            box.style.top = (rect.bottom + window.pageYOffset) + 'px';
+            box.style.width = rect.width + 'px';
+            box.style.display = 'block';
+        });
+
+        // mousedown (nao click) dispara antes do blur do input esconder a lista
+        box.addEventListener('mousedown', function(e) {
+            var opt = e.target.closest('.ta-opt[data-ref]');
+            if (!opt) return;
+            e.preventDefault();
+            hidden.value = opt.getAttribute('data-ref');
+            input.value = opt.getAttribute('data-nome');
+            box.style.display = 'none'; box.innerHTML = '';
+            aplicarItem(tr, hidden.value);
+        });
+        input.addEventListener('blur', function() {
+            setTimeout(function() { box.style.display = 'none'; }, 150);
+        });
+
+        ['input', 'change'].forEach(ev => {
+            tr.querySelectorAll('.qtd, .preco, .desc').forEach(i => i.addEventListener(ev, () => atualizar(tr)));
+        });
+        tr.querySelector('.remover').addEventListener('click', function() {
+            box.remove();  // o dropdown foi movido pro body; tira junto
+            tr.remove();
+            recalcTotal();
+        });
+
+        // Pre-preenche (modo edicao): mantem preco/desc/obs gravados, sem
+        // sobrescrever pelo preco de catalogo.
+        if (data) {
+            input.value = data.nome || '';
+            hidden.value = data.ref || '';
+            tr.querySelector('.qtd').value = (data.qtd != null ? data.qtd : 1);
+            tr.querySelector('.preco').value = (data.preco != null ? data.preco : 0);
+            tr.querySelector('.desc').value = (data.desc || '');
+            tr.querySelector('select[name="item_estado[]"]').value = (data.estado || '');
+            tr.querySelector('.obs').value = (data.obs || '');
+            if (data.ref && ESTOQUE[data.ref] !== undefined) {
+                tr.querySelector('.estoque-cel').textContent = ESTOQUE[data.ref];
+            }
+            atualizar(tr);
+        }
+    }
+
+    function atualizar(tr) {
+        var qtd = parseFloat(tr.querySelector('.qtd').value) || 0;
+        var preco = parseFloat(tr.querySelector('.preco').value) || 0;
+        var desc = parseFloat(tr.querySelector('.desc').value) || 0;
+        var subtotal = qtd * preco * (1 - desc / 100);
+        tr.querySelector('.subt').textContent = 'R$ ' + subtotal.toFixed(2).replace('.', ',');
+        recalcTotal();
+    }
+
+    function recalcTotal() {
+        var total = 0;
+        tbody.querySelectorAll('tr').forEach(tr => {
+            var qtd = parseFloat(tr.querySelector('.qtd').value) || 0;
+            var preco = parseFloat(tr.querySelector('.preco').value) || 0;
+            var desc = parseFloat(tr.querySelector('.desc').value) || 0;
+            total += qtd * preco * (1 - desc / 100);
+        });
+        document.getElementById('venda-total').textContent = 'R$ ' + total.toFixed(2).replace('.', ',');
+    }
+
+    function rowParcela(data) {
+        var tr = document.createElement('tr');
+        var hojeStr = new Date().toISOString().slice(0, 10);
+        tr.innerHTML =
+            '<td><input type="date" name="parcela_venc[]" class="form-control form-control-sm" value="' + hojeStr + '"></td>' +
+            '<td><input type="number" step="0.01" name="parcela_valor[]" class="form-control form-control-sm"></td>' +
+            '<td><select name="parcela_forma[]" class="form-select form-select-sm"><option value="">—</option><option>pix</option><option>boleto</option><option>dinheiro</option><option>transferencia</option><option>cheque</option></select></td>' +
+            '<td><button type="button" class="btn btn-sm btn-outline-danger remover">×</button></td>';
+        parcBody.appendChild(tr);
+        tr.querySelector('.remover').addEventListener('click', () => tr.remove());
+        if (data) {
+            tr.querySelector('input[name="parcela_venc[]"]').value = data.venc || hojeStr;
+            tr.querySelector('input[name="parcela_valor[]"]').value = (data.valor != null ? data.valor : '');
+            tr.querySelector('select[name="parcela_forma[]"]').value = (data.forma || '');
+        }
+    }
+
+    function lockForm() {
+        document.querySelectorAll('#tbl-itens input, #tbl-itens select, #tbl-parcelas input, #tbl-parcelas select')
+            .forEach(function(el) { el.disabled = true; });
+        ['btn-add-item', 'btn-add-parcela'].forEach(function(id) {
+            var b = document.getElementById(id); if (b) b.style.display = 'none';
+        });
+        document.querySelectorAll('#tbl-itens .remover, #tbl-parcelas .remover')
+            .forEach(function(b) { b.style.display = 'none'; });
+    }
+
+    document.getElementById('btn-add-item').addEventListener('click', function() { rowItem(); });
+    document.getElementById('btn-add-parcela').addEventListener('click', function() { rowParcela(); });
+    selCliente.addEventListener('change', function() {
+        var desc = getDescCliente();
+        tbody.querySelectorAll('tr').forEach(tr => {
+            tr.querySelector('.desc').value = desc || '';
+            atualizar(tr);
+        });
+    });
+
+    if (SEED_ITENS.length) { SEED_ITENS.forEach(function(d) { rowItem(d); }); }
+    else { rowItem(); }  // 1 linha inicial (modo criar)
+    SEED_PARCELAS.forEach(function(d) { rowParcela(d); });
+    if (LOCKED) { lockForm(); }
+})();
+</script>
+{% endblock %}

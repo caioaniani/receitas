@@ -8,17 +8,16 @@ memória do processo (com pequeno safety margin) e renovamos sob demanda.
 import base64
 import logging
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 import requests
 from flask import current_app
 
+from app.utils import BRT
+
 logger = logging.getLogger(__name__)
 
 BASE = 'https://integration.plataformaseru.com.br/v1'
-
-# Fuso de Sao Paulo (Brasil nao tem horario de verao desde 2019).
-BRT = timezone(timedelta(hours=-3))
 
 
 def data_local(iso_utc):
@@ -35,7 +34,7 @@ def data_local(iso_utc):
         s = iso_utc.replace('Z', '+00:00')
         dt = datetime.fromisoformat(s)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt.astimezone(BRT).date()
     except (ValueError, TypeError):
         return None
@@ -105,7 +104,7 @@ def _iso_dia(data, fim=False):
         dt_brt = datetime.combine(data, datetime.max.time().replace(microsecond=0), tzinfo=BRT)
     else:
         dt_brt = datetime.combine(data, datetime.min.time(), tzinfo=BRT)
-    return dt_brt.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    return dt_brt.astimezone(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 def listar_pedidos(data_inicial, data_final, page=1, limit=100, hasCanceledItem=None,
@@ -140,7 +139,7 @@ def listar_pedidos_completo(data_inicial, data_final, expandir_dias_frente=0, de
     Caller deve filtrar pelo createdAt depois pra precisao.
     """
     from concurrent.futures import ThreadPoolExecutor
-    from datetime import timedelta
+
     from flask import current_app
     app = current_app._get_current_object()
 
@@ -199,3 +198,64 @@ def listar_pedidos_completo(data_inicial, data_final, expandir_dias_frente=0, de
 
 def detalhes_pedido(pedido_id):
     return _get(f'/orders/{pedido_id}')
+
+
+def extrair_itens(pedido):
+    """Normaliza a lista de itens de um pedido Seru.
+
+    A Seru pode usar 'items', 'orderItems' ou 'products' pra lista, e cada
+    item pode ter o nome em 'name', 'productName', 'product.name' etc.
+    Tentamos varios campos pra ser robusto a variacoes da API/conta.
+
+    Retorna [{nome, sku, qtd, preco_unit, total, cancelado}].
+    """
+    if not isinstance(pedido, dict):
+        return []
+    itens_raw = (pedido.get('items') or pedido.get('orderItems')
+                 or pedido.get('products') or [])
+    if not isinstance(itens_raw, list):
+        return []
+
+    def _f(v, default=0.0):
+        try:
+            return float(v) if v is not None else default
+        except (TypeError, ValueError):
+            return default
+
+    def _s(v):
+        if v is None:
+            return ''
+        if isinstance(v, str):
+            return v.strip()
+        if isinstance(v, dict):
+            return str(v.get('name') or v.get('label') or v.get('description')
+                       or v.get('sku') or v.get('code') or '').strip()
+        return str(v).strip()
+
+    out = []
+    for it in itens_raw:
+        if not isinstance(it, dict):
+            continue
+        # Nome — tenta varios campos
+        nome = (_s(it.get('name')) or _s(it.get('productName'))
+                or _s(it.get('product')) or _s(it.get('description'))
+                or _s(it.get('title')))
+        if not nome:
+            continue
+        sku = (_s(it.get('sku')) or _s(it.get('code'))
+               or _s(it.get('productCode')) or _s(it.get('barcode')))
+        qtd = _f(it.get('quantity') or it.get('qty') or it.get('amount'), 0.0)
+        if qtd <= 0:
+            continue
+        preco_unit = _f(it.get('unitPrice') or it.get('price')
+                        or it.get('value'), 0.0)
+        total = _f(it.get('total') or it.get('subtotal')
+                   or it.get('totalPrice'), preco_unit * qtd)
+        cancelado = bool(it.get('canceledAt') or it.get('canceled')
+                         or it.get('status') == 'canceled')
+        out.append({
+            'nome': nome, 'sku': sku, 'qtd': qtd,
+            'preco_unit': preco_unit, 'total': total,
+            'cancelado': cancelado,
+        })
+    return out

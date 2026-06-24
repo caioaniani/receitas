@@ -1,24 +1,54 @@
-import json
+import logging
 import os
-from datetime import datetime
 
 from flask import Flask, Response, render_template, request
 
-from app.extensions import db, csrf, login_manager, limiter
+from app.extensions import csrf, db, limiter, login_manager, migrate
+from app.migrations_legacy import _migrate
+from app.utils import agora as agora_brt
 from config import Config
+
+logger = logging.getLogger(__name__)
+
+
+def _init_sentry():
+    """Opt-in: so inicia se SENTRY_DSN estiver setado. Captura exceptions
+    nao tratadas + breadcrumbs do Flask. PII desligado por default — nao
+    queremos vazar nome de cliente em stack trace."""
+    dsn = os.environ.get('SENTRY_DSN', '').strip()
+    if not dsn:
+        return
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.flask import FlaskIntegration
+        from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+        sentry_sdk.init(
+            dsn=dsn,
+            integrations=[FlaskIntegration(), SqlalchemyIntegration()],
+            traces_sample_rate=float(os.environ.get('SENTRY_TRACES', '0.05')),
+            send_default_pii=False,
+            environment=os.environ.get('SENTRY_ENV', 'production'),
+        )
+    except ImportError:
+        logger.warning('sentry-sdk nao instalada — `pip install sentry-sdk[flask]`')
 
 
 def create_app(config_class=None):
+    _init_sentry()
     app = Flask(__name__)
     app.config.from_object(config_class or Config)
 
     if not os.environ.get('SECRET_KEY'):
-        print('⚠️  SECRET_KEY não definida. Sessões expiram a cada restart. Defina no Railway.')
+        # Em prod o config.py ja levanta RuntimeError. Aqui so avisa em dev.
+        logger.warning('SECRET_KEY nao definida — sessoes expiram a cada restart.')
 
     db.init_app(app)
     csrf.init_app(app)
     login_manager.init_app(app)
     limiter.init_app(app)
+    # Flask-Migrate (Alembic). Coexiste com _migrate_postgres/_migrate_sqlite
+    # legados ate todas as mudancas futuras de schema irem pela Alembic.
+    migrate.init_app(app, db)
 
     @login_manager.user_loader
     def load_user(user_id):
@@ -34,19 +64,29 @@ def create_app(config_class=None):
         formatted = formatted.replace(',', 'X').replace('.', ',').replace('X', '.')
         return f'R$ {formatted}'
 
+    @app.template_filter('brt')
+    def brt_filter(dt, fmt='%d/%m %H:%M'):
+        """Formata datetime ja em BRT (sistema todo armazena BRT naive).
+
+        Mantido como filtro pra padronizar o display de data/hora nos templates.
+        """
+        if not dt:
+            return ''
+        return dt.strftime(fmt)
+
     @app.context_processor
     def inject_now():
-        return {'now': datetime.now}
+        return {'now': agora_brt}
 
     @app.context_processor
     def inject_static_version():
         """Versionamento de arquivos estaticos para cache busting.
         Usa hash MD5 do conteudo (8 chars) — muda sempre que arquivo muda,
         independente de mtime (Railway deploy nao preserva mtime original)."""
-        import os
         import hashlib
+        import os
         versions = {}
-        for rel in ('js/projetos.js', 'js/app.js', 'js/entregas.js', 'js/copilot.js', 'css/style.css'):
+        for rel in ('js/projetos.js', 'js/app.js', 'js/entregas.js', 'css/style.css'):
             try:
                 p = os.path.join(app.static_folder, rel)
                 with open(p, 'rb') as f:
@@ -77,8 +117,9 @@ def create_app(config_class=None):
 
     # ── Auto-invalidação: limpa o cache quando algum modelo cacheado muda ──
     from sqlalchemy import event as _sa_event
-    from app.models import Receita, MateriaPrima, Usuario, TarefaProjeto
-    _MODELOS_CACHEADOS = (Receita, MateriaPrima, Usuario, TarefaProjeto)
+
+    from app.models import MateriaPrima, Produto, Receita, TarefaProjeto, Usuario
+    _MODELOS_CACHEADOS = (Receita, MateriaPrima, Produto, Usuario, TarefaProjeto)
 
     @_sa_event.listens_for(db.session, 'before_commit')
     def _invalidate_on_change(session):
@@ -89,22 +130,38 @@ def create_app(config_class=None):
             _SIDEBAR_CACHE.clear()
 
     @app.context_processor
+    def inject_historico_humano():
+        """Expoe rotulos amigaveis (tipos de mov, etapas de handshake, etc.)
+        pra qualquer template — evita duplicar dicts inline em cada .html."""
+        from app.services import historico_humano
+        return {'historico_humano': historico_humano}
+
+    @app.context_processor
     def inject_sidebar():
         from flask_login import current_user
-        from app.models import Receita, MateriaPrima, Usuario, Atribuicao
+
+        from app.models import Atribuicao, MateriaPrima, Receita, Usuario
 
         # Sem queries para usuários não autenticados (ex: página de login)
         if not current_user.is_authenticated:
             return dict(
-                sidebar_categorias={}, mp_json='{}', mp_nomes=[],
-                receita_nomes=[], funcionarios=[],
+                sidebar_categorias={}, mp_info={}, mp_nomes=[],
+                receita_nomes=[], produto_nomes=[], funcionarios=[],
             )
 
         # ── Receitas + categorias (cache 60s) ──
         def _carrega_receitas_globais():
+            # defer(imagem_blob/mimetype) — sidebar nao usa essas colunas e elas
+            # podem ter 100KB+ cada, estourando memoria do worker.
+            from sqlalchemy.orm import defer
+            # Arquivadas ficam fora da sidebar e dos datalists (selecao de
+            # uso ativo) — historico/telas de registro nao passam por aqui.
             recs = Receita.query.options(
-                db.joinedload(Receita.ingredientes)
-            ).order_by(Receita.categoria, Receita.nome).all()
+                db.joinedload(Receita.ingredientes),
+                defer(Receita.imagem_blob),
+                defer(Receita.imagem_mimetype),
+            ).filter(Receita.arquivada_em.is_(None)
+                     ).order_by(Receita.categoria, Receita.nome).all()
             cats = {}
             for r in recs:
                 cat = r.categoria or 'Outros'
@@ -135,10 +192,10 @@ def create_app(config_class=None):
         # ── MP data (cache 60s) ──
         def _carrega_mp_data():
             mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
-            mp_dict = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade,
+            mp_info = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade,
                                   'peso_unidade': mp.peso_unidade} for mp in mps}
             return {
-                'json': json.dumps(mp_dict, ensure_ascii=False),
+                'info': mp_info,
                 'nomes': [mp.nome for mp in mps],
             }
         mp_data = _cache('mps', 60, _carrega_mp_data)
@@ -158,29 +215,49 @@ def create_app(config_class=None):
             try:
                 def _carrega_proj_count():
                     from app.models import TarefaProjeto
-                    from datetime import date as _date
+                    from app.utils import hoje as _hoje_brt
                     a = TarefaProjeto.query.filter(
                         TarefaProjeto.prazo.isnot(None),
-                        TarefaProjeto.prazo < _date.today(),
+                        TarefaProjeto.prazo < _hoje_brt(),
                         ~TarefaProjeto.status.in_(['feito', 'cancelado']),
                     ).count()
                     f = TarefaProjeto.query.filter_by(status='fazendo').count()
                     return (a, f)
                 proj_atrasadas, proj_fazendo = _cache('proj_count', 10, _carrega_proj_count)
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001
+                logger.debug('inject_sidebar: falha ao contar projetos', exc_info=True)
 
-        mp_json = mp_data['json']
-        mp_nomes = mp_data['nomes']
+        # ── Cestas orfas (cache 60s, admin+owner) ──
+        # Sinal critico: ProdutoItem com FK NULL nao baixa estoque na venda
+        # da cesta. Banner global em base.html consome este contador.
+        cestas_orfaos_count = 0
+        if current_user.is_admin():
+            try:
+                def _carrega_cestas_orfaos():
+                    from app.services.cestas import contar_produto_itens_orfaos
+                    return contar_produto_itens_orfaos()
+                cestas_orfaos_count = _cache('cestas_orfaos', 60, _carrega_cestas_orfaos)
+            except Exception:  # noqa: BLE001
+                logger.debug('inject_sidebar: falha ao contar cestas orfas', exc_info=True)
+
+        # ── Produtos nomes (cache 60s, pra datalist em criar cesta) ──
+        def _carrega_produto_nomes():
+            from app.models import Produto
+            return [p.nome for p in Produto.query
+                    .filter(Produto.ativo.is_(True))
+                    .order_by(Produto.nome).all()]
+        produto_nomes = _cache('produto_nomes', 60, _carrega_produto_nomes)
 
         return dict(
             sidebar_categorias=categorias,
-            mp_json=mp_json,
-            mp_nomes=mp_nomes,
+            mp_info=mp_data['info'],
+            mp_nomes=mp_data['nomes'],
             receita_nomes=receita_nomes,
+            produto_nomes=produto_nomes,
             funcionarios=funcionarios,
             proj_atrasadas=proj_atrasadas,
             proj_fazendo=proj_fazendo,
+            cestas_orfaos_count=cestas_orfaos_count,
         )
 
     @app.route('/robots.txt')
@@ -192,19 +269,74 @@ def create_app(config_class=None):
         """Endpoint leve para uptime checkers (pinga aqui pra evitar cold start)."""
         return 'ok', 200
 
+    @app.route('/manifest.webmanifest')
+    def pwa_manifest():
+        """PWA manifest na raiz (browsers procuram aqui por convenção)."""
+        from flask import send_from_directory
+        return send_from_directory(app.static_folder, 'manifest.webmanifest',
+                                    mimetype='application/manifest+json')
+
+    @app.route('/sw.js')
+    def pwa_service_worker():
+        """Service worker precisa estar na raiz para ter escopo / (Service Workers
+        só controlam URLs no mesmo path ou abaixo de onde foram registrados)."""
+        from flask import send_from_directory
+        resp = send_from_directory(app.static_folder, 'sw.js',
+                                    mimetype='application/javascript')
+        resp.headers['Service-Worker-Allowed'] = '/'
+        resp.headers['Cache-Control'] = 'no-cache'
+        return resp
+
+    @app.before_request
+    def assign_request_id():
+        """Atribui ID curto por request pra correlacionar logs.
+        Se o cliente mandou X-Request-ID (proxy / load balancer), usa esse."""
+        import uuid
+
+        from flask import g
+        rid = (request.headers.get('X-Request-ID') or '').strip()
+        if not rid or len(rid) > 64:
+            rid = uuid.uuid4().hex[:12]
+        g.request_id = rid
+
     @app.after_request
     def add_security_headers(response):
+        from flask import g
         response.headers['X-Robots-Tag'] = 'noindex, nofollow'
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'DENY'
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        if hasattr(g, 'request_id'):
+            response.headers['X-Request-ID'] = g.request_id
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
             "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
             "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
             "font-src 'self' https://cdn.jsdelivr.net; "
-            "img-src 'self' data:;"
+            "img-src 'self' data: https://*.dropbox.com "
+            "https://*.dropboxusercontent.com;"
         )
+        # Excecao: o card do CRM (/crm/card) e embutido como iframe DENTRO do
+        # Chatwoot (outro dominio). X-Frame-Options=DENY bloquearia; e
+        # ALLOW-FROM nao whitelista cross-origin de forma confiavel. Usamos
+        # CSP frame-ancestors com a URL do Chatwoot. Sem CHATWOOT_URL setado,
+        # mantemos DENY (card inutilizavel ate configurar).
+        if request.path.startswith('/crm/card'):
+            chatwoot = (app.config.get('CHATWOOT_URL') or '').strip().rstrip('/')
+            if chatwoot:
+                response.headers.pop('X-Frame-Options', None)
+                response.headers['Content-Security-Policy'] = (
+                    "default-src 'self'; "
+                    "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+                    "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+                    "img-src 'self' data: https://*.dropbox.com "
+                    "https://*.dropboxusercontent.com; "
+                    f"frame-ancestors 'self' {chatwoot};"
+                )
+        if request.is_secure:
+            response.headers['Strict-Transport-Security'] = (
+                'max-age=31536000; includeSubDomains'
+            )
         # Cache agressivo para assets estaticos (CSS/JS/fonts/imagens)
         if request.path.startswith('/static/'):
             response.headers['Cache-Control'] = 'public, max-age=86400, stale-while-revalidate=604800'
@@ -224,19 +356,22 @@ def create_app(config_class=None):
         return render_template('errors/500.html'), 500
 
     # ── Blueprints ──
+    from app.blueprints.auth import auth_bp
+    from app.blueprints.b2b import b2b_bp
+    from app.blueprints.comprovante import comprovante_bp
+    from app.blueprints.driver import driver_bp
+    from app.blueprints.entregas import entregas_bp
+    from app.blueprints.handshake import handshake_bp
+    from app.blueprints.lalamove import lalamove_bp
     from app.blueprints.main import main_bp
     from app.blueprints.materias_primas import materias_primas_bp
-    from app.blueprints.receitas import receitas_bp
-    from app.blueprints.produtos import produtos_bp
-    from app.blueprints.auth import auth_bp
-    from app.blueprints.rh import rh_bp
-    from app.blueprints.producao import producao_bp
-    from app.blueprints.relatorios import relatorios_bp
     from app.blueprints.pedidos import pedidos_bp
-    from app.blueprints.entregas import entregas_bp
-    from app.blueprints.driver import driver_bp
-    from app.blueprints.comprovante import comprovante_bp
+    from app.blueprints.producao import producao_bp
+    from app.blueprints.produtos import produtos_bp
     from app.blueprints.projetos import projetos_bp
+    from app.blueprints.receitas import receitas_bp
+    from app.blueprints.relatorios import relatorios_bp
+    from app.blueprints.rh import rh_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(materias_primas_bp, url_prefix='/materias-primas')
@@ -246,8 +381,11 @@ def create_app(config_class=None):
     app.register_blueprint(rh_bp, url_prefix='/rh')
     app.register_blueprint(producao_bp, url_prefix='/producao')
     app.register_blueprint(relatorios_bp, url_prefix='/relatorios')
+    app.register_blueprint(b2b_bp, url_prefix='/b2b')
+    app.register_blueprint(handshake_bp, url_prefix='/handshake')
     app.register_blueprint(pedidos_bp)
     app.register_blueprint(entregas_bp, url_prefix='/entregas')
+    app.register_blueprint(lalamove_bp)
     app.register_blueprint(driver_bp, url_prefix='/driver')
     app.register_blueprint(comprovante_bp, url_prefix='/entrega')
     app.register_blueprint(projetos_bp)
@@ -255,10 +393,26 @@ def create_app(config_class=None):
     app.register_blueprint(pdv_bp, url_prefix='/pdv')
     from app.blueprints.bot import bot_bp
     app.register_blueprint(bot_bp)
-    from app.blueprints.copilot import copilot_bp
-    app.register_blueprint(copilot_bp)
+    # Copilot WEB desativado em 10/06/2026 — decisao do dono: usar so o
+    # Slack bot (servico copilot.py) e o bot pessoal no WhatsApp (bot_bp).
     from app.blueprints.fornecedores import fornecedores_bp
     app.register_blueprint(fornecedores_bp)
+    from app.blueprints.contas_pagar import contas_pagar_bp
+    app.register_blueprint(contas_pagar_bp)
+    from app.blueprints.lista_compras import lista_compras_bp
+    app.register_blueprint(lista_compras_bp)
+    from app.blueprints.notificacoes import notificacoes_bp
+    app.register_blueprint(notificacoes_bp)
+    from app.blueprints.slack import slack_bp
+    app.register_blueprint(slack_bp)
+    from app.blueprints.zapi_bot import zapi_bot_bp
+    app.register_blueprint(zapi_bot_bp)
+    from app.blueprints.padeiro import padeiro_bp
+    app.register_blueprint(padeiro_bp, url_prefix='/padeiro')
+    from app.blueprints.avisos import avisos_bp
+    app.register_blueprint(avisos_bp)
+    from app.blueprints.crm import crm_bp
+    app.register_blueprint(crm_bp)
 
     # Ativa audit log (listeners SQLAlchemy)
     from app.services.audit import init_audit
@@ -267,657 +421,128 @@ def create_app(config_class=None):
     with app.app_context():
         db.create_all()
         _migrate(app)
+        _alembic_stamp_se_necessario(app)
 
-        # Seed só roda localmente (SQLite) — em produção os dados já existem
-        if app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite'):
-            from app.seed import seed_database, seed_cardapio, seed_update_v2
-            seed_database()
-            seed_cardapio()
-            seed_update_v2()
+        # Seeds populam catalogo/RH/projetos no startup. Em teste o conftest
+        # faz drop_all+create_all logo apos create_app(), descartando tudo isso
+        # — semear so desperdicaria ~3s por teste (×374 = ~19min de suite). Pula
+        # via PYTEST_RUNNING; cada teste usa as proprias fixtures. Producao nunca
+        # seta PYTEST_RUNNING, entao o comportamento la fica inalterado.
+        if not os.environ.get('PYTEST_RUNNING'):
+            # Seed só roda localmente (SQLite) — em produção os dados já existem
+            if app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite'):
+                from app.seed import seed_cardapio, seed_database, seed_update_v2
+                seed_database()
+                seed_cardapio()
+                seed_update_v2()
 
-        # Produtos do site — roda em todos os ambientes (SQLite + PostgreSQL)
-        from app.seed import seed_site_products
-        seed_site_products()
+            # Produtos do site — roda em todos os ambientes (SQLite + PostgreSQL)
+            from app.seed import seed_site_products
+            seed_site_products()
 
-        # RH: lojas + funcionários — roda em todos os ambientes
-        from app.seed import seed_rh, seed_rh_escala
-        seed_rh()
-        seed_rh_escala()
+            # RH: lojas + funcionários — roda em todos os ambientes
+            from app.seed import seed_rh, seed_rh_escala
+            seed_rh()
+            seed_rh_escala()
 
-        # Gestão de Projetos — seed inicial em todos os ambientes
-        from app.seed import seed_projetos
-        seed_projetos()
+            # Gestão de Projetos — seed inicial em todos os ambientes
+            from app.seed import seed_projetos
+            seed_projetos()
+
+            # Catalogo da Lista de Compras semanal por loja — idempotente.
+            from app.seed import seed_lista_compras
+            seed_lista_compras()
 
         _criar_admin()
+
+    # Cron de auto-sync Seru → EstoqueLoja (15min). Roda dentro de
+    # cada worker gunicorn mas usa pg_try_advisory_lock pra deduplicate.
+    # Em teste o conftest seta TESTING só DEPOIS de create_app(), então o
+    # scheduler escaparia o guard acima e um job VNDA dispararia no meio da
+    # suite (mutando estado de modulo, deixando test_pdv_saude flaky). Pula
+    # via PYTEST_RUNNING, mesmo padrao de migrations_legacy.py.
+    if not app.config.get('TESTING') and not os.environ.get('PYTEST_RUNNING'):
+        try:
+            from app.services import seru_cron
+            seru_cron.iniciar(app)
+        except Exception as e:
+            app.logger.warning('Nao foi possivel iniciar seru auto-sync: %s', e)
 
     return app
 
 
 def _criar_admin():
-    """Cria usuário admin padrão se não existir nenhum."""
+    """Cria usuário admin padrão se não existir nenhum.
+
+    Se ADMIN_PASSWORD nao estiver no env, gera senha aleatoria e a
+    imprime no log uma unica vez (no primeiro start). Anote no momento —
+    nao ha como recuperar depois sem reset manual.
+    """
     from app.models import Usuario
     if not Usuario.query.filter_by(papel='admin').first():
-        senha = os.environ.get('ADMIN_PASSWORD', 'admin')
+        senha_env = os.environ.get('ADMIN_PASSWORD')
+        if senha_env:
+            senha = senha_env
+        else:
+            import secrets as _secrets
+            senha = _secrets.token_urlsafe(16)
+            logger.warning('=' * 60)
+            logger.warning('ADMIN criado com senha aleatoria: %s', senha)
+            logger.warning('ANOTE AGORA — nao sera mostrada de novo.')
+            logger.warning('Pra controlar, defina ADMIN_PASSWORD no env antes do 1o start.')
+            logger.warning('=' * 60)
         admin = Usuario(nome='Admin', login='admin', papel='admin', is_owner=True)
         admin.set_senha(senha)
         db.session.add(admin)
         db.session.commit()
-        if senha == 'admin':
-            print('⚠️  Admin criado com senha padrão. Defina ADMIN_PASSWORD no Railway.')
 
 
-def _migrate(app):
-    """Adiciona colunas novas sem perder dados existentes."""
-    uri = app.config['SQLALCHEMY_DATABASE_URI']
+def _alembic_stamp_se_necessario(app):
+    """Sincroniza Alembic com o banco no startup.
 
-    if uri.startswith('sqlite'):
-        _migrate_sqlite(app)
-    elif 'postgresql' in uri:
-        _migrate_postgres(app)
+    Duas fases:
+    1) Stamp baseline (uma vez): se ha tabela `usuario` mas nao
+       `alembic_version`, eh o primeiro startup apos adocao do Alembic
+       em schema legado. Marca como ja estando na baseline.
+    2) Upgrade (sempre): aplica migrations pendentes. Se Alembic ja esta
+       na head, eh no-op rapido. Se houve migration nova (ex: B9 SeruDebitoMov),
+       cria a tabela aqui em prod.
 
+    Em testes (SQLite in-memory), `db.create_all()` ja deixou tudo no
+    estado mais novo — `upgrade` detecta que esta na head e nao faz nada.
 
-def _migrate_postgres(app):
-    """Adiciona colunas novas no PostgreSQL. Cada ALTER em commit isolado
-    para que falhas pontuais não abortem migrations seguintes."""
-    from sqlalchemy import text
-    import logging
-    log = logging.getLogger(__name__)
-
-    def _try(stmt):
-        """Executa um DDL em sub-conexão isolada com commit imediato."""
-        try:
-            with db.engine.connect() as c:
-                c.execute(text(stmt))
-                c.commit()
-        except Exception as e:
-            log.warning('migrate skip (%s): %s', stmt[:60], e)
-
-    def _cols(table):
-        try:
-            with db.engine.connect() as c:
-                r = c.execute(text(
-                    "SELECT column_name FROM information_schema.columns "
-                    "WHERE table_name = :t"), {'t': table})
-                return {row[0] for row in r}
-        except Exception:
-            return set()
-
-    with db.engine.connect() as conn:
-        # Verificar e adicionar colunas faltantes em receita
-        result = conn.execute(text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'receita'"
-        ))
-        colunas = {row[0] for row in result}
-
-        migrações_receita = {
-            'perda_percentual': 'ALTER TABLE receita ADD COLUMN perda_percentual REAL DEFAULT 0',
-            'preco_loja': 'ALTER TABLE receita ADD COLUMN preco_loja REAL',
-            'preco_site': 'ALTER TABLE receita ADD COLUMN preco_site REAL',
-            'custo_embalagem': 'ALTER TABLE receita ADD COLUMN custo_embalagem REAL DEFAULT 0',
-            'modo_preparo': 'ALTER TABLE receita ADD COLUMN modo_preparo TEXT',
-            'observacao': 'ALTER TABLE receita ADD COLUMN observacao TEXT',
-        }
-        for col, sql in migrações_receita.items():
-            if col not in colunas:
-                conn.execute(text(sql))
-
-        # receita_ingrediente
-        result = conn.execute(text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'receita_ingrediente'"
-        ))
-        cols_ing = {row[0] for row in result}
-        if cols_ing and 'tipo' not in cols_ing:
-            conn.execute(text("ALTER TABLE receita_ingrediente ADD COLUMN tipo TEXT DEFAULT 'mp'"))
-
-        # produto
-        result = conn.execute(text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'produto'"
-        ))
-        cols_prod = {row[0] for row in result}
-        if cols_prod:
-            migrações_produto = {
-                'custo_direto': 'ALTER TABLE produto ADD COLUMN custo_direto REAL',
-                'custo_embalagem': 'ALTER TABLE produto ADD COLUMN custo_embalagem REAL DEFAULT 0',
-                'modo_preparo': 'ALTER TABLE produto ADD COLUMN modo_preparo TEXT',
-                'observacao': 'ALTER TABLE produto ADD COLUMN observacao TEXT',
-            }
-            for col, sql in migrações_produto.items():
-                if col not in cols_prod:
-                    conn.execute(text(sql))
-
-        # funcionario
-        result = conn.execute(text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'funcionario'"
-        ))
-        cols_func = {row[0] for row in result}
-        if cols_func:
-            migrações_func = {
-                'funcao_operacional': 'ALTER TABLE funcionario ADD COLUMN funcao_operacional VARCHAR(100)',
-                'periodo': 'ALTER TABLE funcionario ADD COLUMN periodo VARCHAR(20)',
-                'cadastro_pendente': 'ALTER TABLE funcionario ADD COLUMN cadastro_pendente BOOLEAN DEFAULT FALSE',
-                'data_nascimento': 'ALTER TABLE funcionario ADD COLUMN data_nascimento DATE',
-                'horas_extras': 'ALTER TABLE funcionario ADD COLUMN horas_extras REAL DEFAULT 0',
-            }
-            for col, sql in migrações_func.items():
-                if col not in cols_func:
-                    conn.execute(text(sql))
-
-        # loja
-        result = conn.execute(text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'loja'"
-        ))
-        cols_loja = {row[0] for row in result}
-        if cols_loja:
-            if 'planta_imagem' not in cols_loja:
-                conn.execute(text("ALTER TABLE loja ADD COLUMN planta_imagem BYTEA"))
-            if 'planta_mimetype' not in cols_loja:
-                conn.execute(text("ALTER TABLE loja ADD COLUMN planta_mimetype VARCHAR(100)"))
-
-        # slot_mapa
-        result = conn.execute(text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'slot_mapa'"
-        ))
-        cols_slot = {row[0] for row in result}
-        if cols_slot:
-            if 'largura' not in cols_slot:
-                conn.execute(text("ALTER TABLE slot_mapa ADD COLUMN largura REAL DEFAULT 15"))
-            if 'altura' not in cols_slot:
-                conn.execute(text("ALTER TABLE slot_mapa ADD COLUMN altura REAL DEFAULT 8"))
-
-        # usuario.loja_id
-        result = conn.execute(text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'usuario'"
-        ))
-        cols_user = {row[0] for row in result}
-        if cols_user and 'loja_id' not in cols_user:
-            conn.execute(text("ALTER TABLE usuario ADD COLUMN loja_id INTEGER REFERENCES loja(id)"))
-
-        # posicao.origem
-        result = conn.execute(text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'posicao'"
-        ))
-        cols_pos = {row[0] for row in result}
-        if cols_pos and 'origem' not in cols_pos:
-            conn.execute(text("ALTER TABLE posicao ADD COLUMN origem VARCHAR(10) DEFAULT 'manual'"))
-            conn.execute(text(
-                "UPDATE posicao SET origem = 'mapa' WHERE EXISTS ("
-                "  SELECT 1 FROM slot_mapa WHERE slot_mapa.loja_id = posicao.loja_id "
-                "  AND slot_mapa.nome = posicao.nome_posicao)"
-            ))
-
-        # materia_prima.estoque_atual
-        result = conn.execute(text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'materia_prima'"
-        ))
-        cols_mp = {row[0] for row in result}
-        if cols_mp and 'estoque_atual' not in cols_mp:
-            conn.execute(text("ALTER TABLE materia_prima ADD COLUMN estoque_atual REAL DEFAULT 0"))
-        if cols_mp and 'peso_unidade' not in cols_mp:
-            conn.execute(text("ALTER TABLE materia_prima ADD COLUMN peso_unidade REAL"))
-
-        # pedido_item.quantidade_recebida + materia_prima_id
-        result = conn.execute(text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'pedido_item'"
-        ))
-        cols_pi = {row[0] for row in result}
-        if cols_pi and 'quantidade_recebida' not in cols_pi:
-            conn.execute(text("ALTER TABLE pedido_item ADD COLUMN quantidade_recebida INTEGER"))
-        if cols_pi and 'materia_prima_id' not in cols_pi:
-            conn.execute(text("ALTER TABLE pedido_item ADD COLUMN materia_prima_id INTEGER REFERENCES materia_prima(id)"))
-
-        # estoque_loja.materia_prima_id
-        result = conn.execute(text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'estoque_loja'"
-        ))
-        cols_el = {row[0] for row in result}
-        if cols_el and 'materia_prima_id' not in cols_el:
-            conn.execute(text("ALTER TABLE estoque_loja ADD COLUMN materia_prima_id INTEGER REFERENCES materia_prima(id)"))
-
-        conn.commit()
-
-    # Migrações resilientes (cada ALTER em sua própria transação)
-    cols_user2 = _cols('usuario')
-    if cols_user2 and 'is_owner' not in cols_user2:
-        _try("ALTER TABLE usuario ADD COLUMN is_owner BOOLEAN DEFAULT FALSE")
-        _try("UPDATE usuario SET is_owner = TRUE WHERE id = "
-             "(SELECT id FROM usuario WHERE papel = 'admin' ORDER BY id LIMIT 1)")
-
-    cols_pa = _cols('projeto_area')
-    if cols_pa and 'cor' not in cols_pa:
-        _try("ALTER TABLE projeto_area ADD COLUMN cor VARCHAR(20)")
-
-    cols_tp = _cols('tarefa_projeto')
-    if cols_tp and 'observacao' not in cols_tp:
-        _try("ALTER TABLE tarefa_projeto ADD COLUMN observacao TEXT")
-    if cols_tp and 'recorrencia' not in cols_tp:
-        _try("ALTER TABLE tarefa_projeto ADD COLUMN recorrencia VARCHAR(20)")
-
-    cols_func_res = _cols('funcionario')
-    if cols_func_res and 'horas_extras' not in cols_func_res:
-        _try("ALTER TABLE funcionario ADD COLUMN horas_extras REAL DEFAULT 0")
-    if cols_func_res and 'tem_cargo_confianca' not in cols_func_res:
-        _try("ALTER TABLE funcionario ADD COLUMN tem_cargo_confianca BOOLEAN DEFAULT FALSE")
-        # Liga a flag para quem ja tinha cargo_confianca > 0 (preserva comportamento)
-        _try("UPDATE funcionario SET tem_cargo_confianca = TRUE WHERE cargo_confianca > 0")
-
-    # Cargo: cria a coluna FK + popula cargos a partir das funcoes existentes
-    if cols_func_res and 'cargo_id' not in cols_func_res:
-        _try("ALTER TABLE funcionario ADD COLUMN cargo_id INTEGER REFERENCES cargo(id)")
-        # Cria 1 cargo por funcao distinta com o salario MAIS COMUM (moda) de quem tem essa funcao
-        _try("""
-        INSERT INTO cargo (nome, salario_base, ativo)
-        SELECT funcao, MAX(salario_base), TRUE
-        FROM funcionario
-        WHERE funcao IS NOT NULL AND TRIM(funcao) <> ''
-        GROUP BY funcao
-        ON CONFLICT (nome) DO NOTHING
-        """)
-        # Liga cada funcionario ao cargo correspondente
-        _try("""
-        UPDATE funcionario SET cargo_id = (
-            SELECT id FROM cargo WHERE cargo.nome = funcionario.funcao
-        ) WHERE funcao IS NOT NULL AND TRIM(funcao) <> ''
-        """)
-
-    # ── Override de data de entrega de pedido VNDA (local) ──
-    _try("""
-    CREATE TABLE IF NOT EXISTS override_entrega (
-        id SERIAL PRIMARY KEY,
-        pedido_code VARCHAR(50) NOT NULL UNIQUE,
-        data_entrega DATE NOT NULL,
-        motivo TEXT,
-        atualizado_em TIMESTAMP DEFAULT NOW(),
-        atualizado_por INTEGER REFERENCES usuario(id)
-    )
-    """)
-    _try("CREATE INDEX IF NOT EXISTS idx_override_entrega_code ON override_entrega(pedido_code)")
-
-    # ── Cache de geocoding (CEP/endereco -> lat/lng) ──
-    _try("""
-    CREATE TABLE IF NOT EXISTS geocode_cache (
-        id SERIAL PRIMARY KEY,
-        chave VARCHAR(200) NOT NULL UNIQUE,
-        lat DOUBLE PRECISION,
-        lng DOUBLE PRECISION,
-        fonte VARCHAR(50),
-        criado_em TIMESTAMP DEFAULT NOW()
-    )
-    """)
-    _try("CREATE INDEX IF NOT EXISTS idx_geocode_cache_chave ON geocode_cache(chave)")
-    # Aumenta coluna fonte caso ja exista com VARCHAR(20)
-    _try("ALTER TABLE geocode_cache ALTER COLUMN fonte TYPE VARCHAR(50)")
-    # Limpa cache de falhas legacy (Nominatim/BrasilAPI/AwesomeAPI/google_fail).
-    # Endereco volta a ser geocodado na proxima execucao via Google.
-    _try("DELETE FROM geocode_cache WHERE lat IS NULL")
-
-    # ── Drivers de entrega + atribuicoes pedido<->driver ──
-    _try("""
-    CREATE TABLE IF NOT EXISTS driver_entrega (
-        id SERIAL PRIMARY KEY,
-        nome VARCHAR(80) NOT NULL UNIQUE,
-        cor VARCHAR(20),
-        telefone VARCHAR(30),
-        ativo BOOLEAN DEFAULT TRUE,
-        criado_em TIMESTAMP DEFAULT NOW()
-    )
-    """)
-    _try("""
-    CREATE TABLE IF NOT EXISTS atribuicao_entrega (
-        id SERIAL PRIMARY KEY,
-        pedido_code VARCHAR(50) NOT NULL UNIQUE,
-        driver_id INTEGER REFERENCES driver_entrega(id) ON DELETE SET NULL,
-        data_entrega DATE,
-        ordem INTEGER DEFAULT 0,
-        atualizado_em TIMESTAMP DEFAULT NOW(),
-        atualizado_por INTEGER REFERENCES usuario(id)
-    )
-    """)
-    _try("CREATE INDEX IF NOT EXISTS idx_atribuicao_pedido ON atribuicao_entrega(pedido_code)")
-    _try("CREATE INDEX IF NOT EXISTS idx_atribuicao_data ON atribuicao_entrega(data_entrega)")
-
-    # ── Comprovante de entrega: token+pin no driver, status+geo+fotos na atribuicao ──
-    _try("ALTER TABLE driver_entrega ADD COLUMN token VARCHAR(32)")
-    _try("CREATE UNIQUE INDEX IF NOT EXISTS idx_driver_token ON driver_entrega(token)")
-    _try("ALTER TABLE driver_entrega ADD COLUMN pin VARCHAR(8)")
-    _try("ALTER TABLE driver_entrega ADD COLUMN capacidade INTEGER DEFAULT 999")
-    _try("ALTER TABLE atribuicao_entrega ADD COLUMN status VARCHAR(20) DEFAULT 'pendente'")
-    _try("ALTER TABLE atribuicao_entrega ADD COLUMN entregue_em TIMESTAMP")
-    _try("ALTER TABLE atribuicao_entrega ADD COLUMN nota VARCHAR(500)")
-    _try("ALTER TABLE atribuicao_entrega ADD COLUMN motivo_falha VARCHAR(50)")
-    _try("ALTER TABLE atribuicao_entrega ADD COLUMN geo_lat DOUBLE PRECISION")
-    _try("ALTER TABLE atribuicao_entrega ADD COLUMN geo_lng DOUBLE PRECISION")
-    _try("ALTER TABLE atribuicao_entrega ADD COLUMN proof_hash VARCHAR(32)")
-    _try("CREATE UNIQUE INDEX IF NOT EXISTS idx_atribuicao_proof_hash ON atribuicao_entrega(proof_hash)")
-    _try("""
-    CREATE TABLE IF NOT EXISTS entrega_foto (
-        id SERIAL PRIMARY KEY,
-        atribuicao_id INTEGER NOT NULL REFERENCES atribuicao_entrega(id) ON DELETE CASCADE,
-        url VARCHAR(500) NOT NULL,
-        storage_path VARCHAR(500),
-        tirada_em TIMESTAMP DEFAULT NOW(),
-        tamanho_bytes INTEGER
-    )
-    """)
-    _try("CREATE INDEX IF NOT EXISTS idx_entrega_foto_atribuicao ON entrega_foto(atribuicao_id)")
-
-    # ── Lotes de saída ──
-    _try("""
-    CREATE TABLE IF NOT EXISTS lote_saida (
-        id SERIAL PRIMARY KEY,
-        nome VARCHAR(120) NOT NULL,
-        data_entrega DATE NOT NULL,
-        criado_em TIMESTAMP DEFAULT NOW(),
-        janelas_json TEXT,
-        status VARCHAR(20) DEFAULT 'aberto',
-        criado_por INTEGER REFERENCES usuario(id)
-    )
-    """)
-    _try("CREATE INDEX IF NOT EXISTS idx_lote_saida_data ON lote_saida(data_entrega)")
-    _try("CREATE INDEX IF NOT EXISTS idx_lote_saida_status ON lote_saida(status)")
-    _try("ALTER TABLE atribuicao_entrega ADD COLUMN lote_id INTEGER REFERENCES lote_saida(id)")
-    _try("CREATE INDEX IF NOT EXISTS idx_atribuicao_lote ON atribuicao_entrega(lote_id)")
-
-    # ── Audit Log estruturado ──
-    _try("""
-    CREATE TABLE IF NOT EXISTS audit_log (
-        id SERIAL PRIMARY KEY,
-        usuario_id INTEGER REFERENCES usuario(id),
-        criado_em TIMESTAMP DEFAULT NOW(),
-        tabela VARCHAR(60) NOT NULL,
-        registro_id INTEGER,
-        acao VARCHAR(10) NOT NULL,
-        antes TEXT,
-        depois TEXT,
-        ip VARCHAR(45),
-        user_agent VARCHAR(300)
-    )
-    """)
-    _try("CREATE INDEX IF NOT EXISTS idx_audit_usuario ON audit_log(usuario_id)")
-    _try("CREATE INDEX IF NOT EXISTS idx_audit_criado ON audit_log(criado_em)")
-    _try("CREATE INDEX IF NOT EXISTS idx_audit_tabela ON audit_log(tabela)")
-    _try("CREATE INDEX IF NOT EXISTS idx_audit_registro ON audit_log(tabela, registro_id)")
-
-    # ── Fornecedores + historico de preco MP ──
-    _try("""
-    CREATE TABLE IF NOT EXISTS fornecedor (
-        id SERIAL PRIMARY KEY,
-        nome VARCHAR(150) NOT NULL UNIQUE,
-        cnpj VARCHAR(20),
-        telefone VARCHAR(30),
-        email VARCHAR(120),
-        contato VARCHAR(100),
-        observacao TEXT,
-        ativo BOOLEAN DEFAULT TRUE,
-        criado_em TIMESTAMP DEFAULT NOW()
-    )
-    """)
-    _try("CREATE INDEX IF NOT EXISTS idx_fornecedor_ativo ON fornecedor(ativo)")
-    _try("""
-    CREATE TABLE IF NOT EXISTS historico_preco_mp (
-        id SERIAL PRIMARY KEY,
-        materia_prima_id INTEGER NOT NULL REFERENCES materia_prima(id),
-        fornecedor_id INTEGER NOT NULL REFERENCES fornecedor(id),
-        preco_unitario DOUBLE PRECISION NOT NULL,
-        quantidade DOUBLE PRECISION NOT NULL,
-        data TIMESTAMP DEFAULT NOW(),
-        referencia VARCHAR(200),
-        usuario_id INTEGER REFERENCES usuario(id)
-    )
-    """)
-    _try("CREATE INDEX IF NOT EXISTS idx_hpm_mp ON historico_preco_mp(materia_prima_id)")
-    _try("CREATE INDEX IF NOT EXISTS idx_hpm_fornecedor ON historico_preco_mp(fornecedor_id)")
-    _try("CREATE INDEX IF NOT EXISTS idx_hpm_data ON historico_preco_mp(data)")
-    _try("ALTER TABLE movimentacao_estoque ADD COLUMN fornecedor_id INTEGER REFERENCES fornecedor(id)")
-
-    # ── Copilot conversas (audit trail das interacoes com LLM) ──
-    _try("""
-    CREATE TABLE IF NOT EXISTS copilot_conversa (
-        id SERIAL PRIMARY KEY,
-        usuario_id INTEGER NOT NULL REFERENCES usuario(id),
-        criado_em TIMESTAMP DEFAULT NOW(),
-        prompt TEXT NOT NULL,
-        interpretacao_json TEXT,
-        tipo_acao VARCHAR(40),
-        status VARCHAR(20) DEFAULT 'pendente',
-        executado_em TIMESTAMP,
-        registro_tipo VARCHAR(40),
-        registro_id INTEGER,
-        erro TEXT
-    )
-    """)
-    _try("CREATE INDEX IF NOT EXISTS idx_copilot_usuario ON copilot_conversa(usuario_id)")
-    _try("CREATE INDEX IF NOT EXISTS idx_copilot_criado ON copilot_conversa(criado_em)")
-    _try("CREATE INDEX IF NOT EXISTS idx_copilot_status ON copilot_conversa(status)")
-
-    # Backfill: cada data com atribuicoes orfas vira 1 lote 'Histórico DD/MM' concluido.
-    # Idempotente — so cria se ainda houver lote_id NULL.
-    _try("""
-    INSERT INTO lote_saida (nome, data_entrega, criado_em, status)
-    SELECT
-        'Histórico ' || TO_CHAR(data_entrega, 'DD/MM/YYYY'),
-        data_entrega,
-        COALESCE(MIN(atualizado_em), NOW()),
-        'concluido'
-    FROM atribuicao_entrega
-    WHERE lote_id IS NULL AND data_entrega IS NOT NULL
-    GROUP BY data_entrega
-    """)
-    _try("""
-    UPDATE atribuicao_entrega a
-    SET lote_id = l.id
-    FROM lote_saida l
-    WHERE a.lote_id IS NULL
-      AND a.data_entrega = l.data_entrega
-      AND l.nome LIKE 'Histórico %'
-    """)
-
-    # ── Pedidos cadastrados fora do VNDA (manuais) ──
-    _try("""
-    CREATE TABLE IF NOT EXISTS pedido_local (
-        id SERIAL PRIMARY KEY,
-        code VARCHAR(50) NOT NULL UNIQUE,
-        destinatario VARCHAR(200) NOT NULL,
-        telefone VARCHAR(50) NOT NULL,
-        endereco VARCHAR(500) NOT NULL,
-        data_entrega DATE NOT NULL,
-        periodo VARCHAR(80),
-        cartinha TEXT,
-        observacao TEXT,
-        criado_em TIMESTAMP DEFAULT NOW(),
-        criado_por INTEGER REFERENCES usuario(id)
-    )
-    """)
-    _try("CREATE INDEX IF NOT EXISTS idx_pedido_local_data ON pedido_local(data_entrega)")
-    _try("""
-    CREATE TABLE IF NOT EXISTS pedido_local_item (
-        id SERIAL PRIMARY KEY,
-        pedido_local_id INTEGER NOT NULL REFERENCES pedido_local(id) ON DELETE CASCADE,
-        nome VARCHAR(200) NOT NULL,
-        quantidade INTEGER DEFAULT 1,
-        preco_unitario REAL DEFAULT 0
-    )
-    """)
-    _try("CREATE INDEX IF NOT EXISTS idx_pedido_local_item_pedido ON pedido_local_item(pedido_local_id)")
-
-    # Backfill de tokens em drivers existentes (sem token)
+    Idempotente. Race-safe em multi-worker porque Alembic usa UPDATE
+    atomico do `alembic_version` dentro de transacao.
+    """
+    # Pula em testes: conftest seta PYTEST_RUNNING. Em pytest com SQLite
+    # :memory:, Alembic abre conexao propria e nao ve as tabelas criadas
+    # por `db.create_all()`. Como conftest ja faz create_all no estado
+    # final, nao precisa do upgrade.
+    if os.environ.get('PYTEST_RUNNING'):
+        return
+    from sqlalchemy import inspect
     try:
-        import secrets
-        from app.models import Driver
-        sem_token = Driver.query.filter(
-            (Driver.token == None) | (Driver.token == '')  # noqa: E711
-        ).all()
-        for drv in sem_token:
-            drv.token = secrets.token_urlsafe(16)
-        if sem_token:
-            db.session.commit()
-    except Exception as e:
-        app.logger.warning('backfill token driver falhou: %s', e)
-        db.session.rollback()
-
-
-def _migrate_sqlite(app):
-    """Adiciona colunas novas no SQLite."""
-    import sqlite3
-    uri = app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')
-    conn = sqlite3.connect(uri)
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA table_info(receita)")
-    colunas = [row[1] for row in cursor.fetchall()]
-    if 'perda_percentual' not in colunas:
-        cursor.execute("ALTER TABLE receita ADD COLUMN perda_percentual REAL DEFAULT 0")
-    if 'preco_loja' not in colunas:
-        cursor.execute("ALTER TABLE receita ADD COLUMN preco_loja REAL")
-    if 'preco_site' not in colunas:
-        cursor.execute("ALTER TABLE receita ADD COLUMN preco_site REAL")
-    if 'custo_embalagem' not in colunas:
-        cursor.execute("ALTER TABLE receita ADD COLUMN custo_embalagem REAL DEFAULT 0")
-
-    # Migração tabela receita_ingrediente
-    cursor.execute("PRAGMA table_info(receita_ingrediente)")
-    cols_ing = [row[1] for row in cursor.fetchall()]
-    if cols_ing and 'tipo' not in cols_ing:
-        cursor.execute("ALTER TABLE receita_ingrediente ADD COLUMN tipo TEXT DEFAULT 'mp'")
-
-    # Migração tabela produto
-    cursor.execute("PRAGMA table_info(produto)")
-    cols_prod = [row[1] for row in cursor.fetchall()]
-    if cols_prod and 'custo_direto' not in cols_prod:
-        cursor.execute("ALTER TABLE produto ADD COLUMN custo_direto REAL")
-    if cols_prod and 'custo_embalagem' not in cols_prod:
-        cursor.execute("ALTER TABLE produto ADD COLUMN custo_embalagem REAL DEFAULT 0")
-    if cols_prod and 'modo_preparo' not in cols_prod:
-        cursor.execute("ALTER TABLE produto ADD COLUMN modo_preparo TEXT")
-
-    # Migração receita.modo_preparo
-    if 'modo_preparo' not in colunas:
-        cursor.execute("ALTER TABLE receita ADD COLUMN modo_preparo TEXT")
-    if 'observacao' not in colunas:
-        cursor.execute("ALTER TABLE receita ADD COLUMN observacao TEXT")
-
-    # Migração produto.observacao
-    if cols_prod and 'observacao' not in cols_prod:
-        cursor.execute("ALTER TABLE produto ADD COLUMN observacao TEXT")
-
-    # Migração funcionario
-    cursor.execute("PRAGMA table_info(funcionario)")
-    cols_func = [row[1] for row in cursor.fetchall()]
-    if cols_func and 'funcao_operacional' not in cols_func:
-        cursor.execute("ALTER TABLE funcionario ADD COLUMN funcao_operacional VARCHAR(100)")
-    if cols_func and 'periodo' not in cols_func:
-        cursor.execute("ALTER TABLE funcionario ADD COLUMN periodo VARCHAR(20)")
-    if cols_func and 'cadastro_pendente' not in cols_func:
-        cursor.execute("ALTER TABLE funcionario ADD COLUMN cadastro_pendente BOOLEAN DEFAULT 0")
-    if cols_func and 'data_nascimento' not in cols_func:
-        cursor.execute("ALTER TABLE funcionario ADD COLUMN data_nascimento DATE")
-    if cols_func and 'horas_extras' not in cols_func:
-        cursor.execute("ALTER TABLE funcionario ADD COLUMN horas_extras REAL DEFAULT 0")
-    if cols_func and 'tem_cargo_confianca' not in cols_func:
-        cursor.execute("ALTER TABLE funcionario ADD COLUMN tem_cargo_confianca BOOLEAN DEFAULT 0")
-        cursor.execute("UPDATE funcionario SET tem_cargo_confianca = 1 WHERE cargo_confianca > 0")
-    if cols_func and 'cargo_id' not in cols_func:
-        cursor.execute("ALTER TABLE funcionario ADD COLUMN cargo_id INTEGER REFERENCES cargo(id)")
-        cursor.execute("""
-            INSERT OR IGNORE INTO cargo (nome, salario_base, ativo)
-            SELECT funcao, MAX(salario_base), 1
-            FROM funcionario
-            WHERE funcao IS NOT NULL AND TRIM(funcao) <> ''
-            GROUP BY funcao
-        """)
-        cursor.execute("""
-            UPDATE funcionario SET cargo_id = (
-                SELECT id FROM cargo WHERE cargo.nome = funcionario.funcao
-            ) WHERE funcao IS NOT NULL AND TRIM(funcao) <> ''
-        """)
-
-    # Migração loja
-    cursor.execute("PRAGMA table_info(loja)")
-    cols_loja = [row[1] for row in cursor.fetchall()]
-    if cols_loja and 'planta_imagem' not in cols_loja:
-        cursor.execute("ALTER TABLE loja ADD COLUMN planta_imagem BLOB")
-    if cols_loja and 'planta_mimetype' not in cols_loja:
-        cursor.execute("ALTER TABLE loja ADD COLUMN planta_mimetype VARCHAR(100)")
-
-    # Migração slot_mapa
-    cursor.execute("PRAGMA table_info(slot_mapa)")
-    cols_slot = [row[1] for row in cursor.fetchall()]
-    if cols_slot and 'largura' not in cols_slot:
-        cursor.execute("ALTER TABLE slot_mapa ADD COLUMN largura REAL DEFAULT 15")
-    if cols_slot and 'altura' not in cols_slot:
-        cursor.execute("ALTER TABLE slot_mapa ADD COLUMN altura REAL DEFAULT 8")
-
-    # Migração usuario.loja_id
-    cursor.execute("PRAGMA table_info(usuario)")
-    cols_user = [row[1] for row in cursor.fetchall()]
-    if cols_user and 'loja_id' not in cols_user:
-        cursor.execute("ALTER TABLE usuario ADD COLUMN loja_id INTEGER REFERENCES loja(id)")
-
-    # Migração posicao.origem
-    cursor.execute("PRAGMA table_info(posicao)")
-    cols_pos = [row[1] for row in cursor.fetchall()]
-    if cols_pos and 'origem' not in cols_pos:
-        cursor.execute("ALTER TABLE posicao ADD COLUMN origem VARCHAR(10) DEFAULT 'manual'")
-        cursor.execute(
-            "UPDATE posicao SET origem = 'mapa' WHERE EXISTS ("
-            "  SELECT 1 FROM slot_mapa WHERE slot_mapa.loja_id = posicao.loja_id "
-            "  AND slot_mapa.nome = posicao.nome_posicao)"
+        insp = inspect(db.engine)
+        tabelas = set(insp.get_table_names())
+        if 'usuario' not in tabelas:
+            return  # banco novo/vazio
+        # Fase 1: stamp BASELINE (nao head!) se Alembic nunca foi inicializado.
+        # Stampar 'head' pularia migrations posteriores que devem ser aplicadas
+        # no banco prod (ex: B4 muda Float pra Numeric, B5 adiciona FKs).
+        if 'alembic_version' not in tabelas:
+            from flask_migrate import stamp
+            stamp(directory='migrations', revision='69d82afed149')
+            logger.warning(
+                'Alembic: baseline marcada — schema legado adotado. '
+                'Upgrade pra head vai rodar a seguir.'
+            )
+        # Fase 2: aplica migrations pendentes ate head
+        from flask_migrate import upgrade as _upgrade
+        _upgrade(directory='migrations')
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            'Alembic stamp/upgrade falhou. Verificar manualmente com '
+            '`railway run flask db current` e `flask db upgrade`.'
         )
 
-    # Migração materia_prima.estoque_atual + peso_unidade
-    cursor.execute("PRAGMA table_info(materia_prima)")
-    cols_mp = [row[1] for row in cursor.fetchall()]
-    if cols_mp and 'estoque_atual' not in cols_mp:
-        cursor.execute("ALTER TABLE materia_prima ADD COLUMN estoque_atual REAL DEFAULT 0")
-    if cols_mp and 'peso_unidade' not in cols_mp:
-        cursor.execute("ALTER TABLE materia_prima ADD COLUMN peso_unidade REAL")
 
-    # Migração pedido_item.quantidade_recebida + materia_prima_id
-    cursor.execute("PRAGMA table_info(pedido_item)")
-    cols_pi = [row[1] for row in cursor.fetchall()]
-    if cols_pi and 'quantidade_recebida' not in cols_pi:
-        cursor.execute("ALTER TABLE pedido_item ADD COLUMN quantidade_recebida INTEGER")
-    if cols_pi and 'materia_prima_id' not in cols_pi:
-        cursor.execute("ALTER TABLE pedido_item ADD COLUMN materia_prima_id INTEGER REFERENCES materia_prima(id)")
-
-    # Migração estoque_loja.materia_prima_id
-    cursor.execute("PRAGMA table_info(estoque_loja)")
-    cols_el = [row[1] for row in cursor.fetchall()]
-    if cols_el and 'materia_prima_id' not in cols_el:
-        cursor.execute("ALTER TABLE estoque_loja ADD COLUMN materia_prima_id INTEGER REFERENCES materia_prima(id)")
-
-    # Migração usuario.is_owner
-    cursor.execute("PRAGMA table_info(usuario)")
-    cols_user2 = [row[1] for row in cursor.fetchall()]
-    if cols_user2 and 'is_owner' not in cols_user2:
-        cursor.execute("ALTER TABLE usuario ADD COLUMN is_owner BOOLEAN DEFAULT 0")
-        cursor.execute(
-            "UPDATE usuario SET is_owner = 1 WHERE id = "
-            "(SELECT id FROM usuario WHERE papel = 'admin' ORDER BY id LIMIT 1)"
-        )
-
-    # Migração projeto_area.cor
-    cursor.execute("PRAGMA table_info(projeto_area)")
-    cols_pa = [row[1] for row in cursor.fetchall()]
-    if cols_pa and 'cor' not in cols_pa:
-        cursor.execute("ALTER TABLE projeto_area ADD COLUMN cor VARCHAR(20)")
-
-    # Migração tarefa_projeto.observacao + recorrencia
-    cursor.execute("PRAGMA table_info(tarefa_projeto)")
-    cols_tp = [row[1] for row in cursor.fetchall()]
-    if cols_tp and 'observacao' not in cols_tp:
-        cursor.execute("ALTER TABLE tarefa_projeto ADD COLUMN observacao TEXT")
-    if cols_tp and 'recorrencia' not in cols_tp:
-        cursor.execute("ALTER TABLE tarefa_projeto ADD COLUMN recorrencia VARCHAR(20)")
-
-    conn.commit()
-    conn.close()

@@ -5,8 +5,20 @@
 </script>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>{% block title %}Padaria{% endblock %}</title>
+
+    {# ── PWA — instalável no celular ── #}
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#0a0a0a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="O Pão">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/favicon-32.png') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='icons/favicon-16.png') }}">
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/style.css') }}?v={{ static_v['css/style.css'] }}" rel="stylesheet">
@@ -28,6 +40,19 @@
     <!-- Overlay para fechar sidebar no mobile -->
     <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
+    <!-- Mobile menu toggle -->
+    {% if current_user.is_authenticated %}
+    <button type="button" class="mobile-menu-toggle" id="mobile-menu-toggle"
+            onclick="document.getElementById('sidebar').classList.toggle('aberta');
+                     document.getElementById('sidebar-overlay').classList.toggle('visible');"
+            aria-label="Abrir menu">
+        <i class="bi bi-list" style="font-size:20px;"></i>
+    </button>
+    <div class="sidebar-overlay" id="sidebar-overlay"
+         onclick="document.getElementById('sidebar').classList.remove('aberta');
+                  this.classList.remove('visible');"></div>
+    {% endif %}
+
     <!-- Sidebar -->
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -35,219 +60,349 @@
         </div>
 
         {% if current_user.is_authenticated %}
-        <div class="px-3 pb-2">
+        <div class="px-3 pb-2 d-flex justify-content-between align-items-center">
             <small class="text-muted">
                 <i class="bi bi-person-circle"></i> {{ current_user.nome }}
                 {% if current_user.is_admin() %}<span class="badge-status ms-1" style="font-size:9px;"><span class="bullet" style="background:var(--cor-azul);"></span>admin</span>{% endif %}
             </small>
+            <div class="form-check form-switch mb-0" style="padding-left:2.2rem;" title="Modo escuro">
+                <input class="form-check-input" type="checkbox" id="dark-mode-switch"
+                       style="width:2rem; height:1.1rem; margin-left:-2.2rem; cursor:pointer;">
+                <label class="form-check-label" for="dark-mode-switch" style="cursor:pointer; font-size:11px;">
+                    <i class="bi bi-moon-stars"></i>
+                </label>
+            </div>
         </div>
         {% endif %}
 
-        {% if current_user.is_authenticated and current_user.is_admin() %}
+        {% if current_user.is_authenticated %}
+        <button type="button" onclick="window.abrirCommandPalette && window.abrirCommandPalette()"
+                class="sidebar-link" style="border:0; background:transparent; text-align:left; width:100%;
+                       justify-content:space-between; color:var(--text-muted);">
+            <span><i class="bi bi-search"></i> Buscar…</span>
+            <kbd style="font-size:10px; padding:1px 5px; border:1px solid var(--border-color);
+                       border-radius:3px; background:var(--bg-card-hover); color:var(--text-soft);">⌘K</kbd>
+        </button>
         <a href="{{ url_for('main.index') }}"
            class="sidebar-link {% if request.path == '/' %}active{% endif %}">
-            <i class="bi bi-stars"></i> Início
+            Início
         </a>
-        <a href="{{ url_for('main.dashboard') }}"
-           class="sidebar-link {% if request.path == '/dashboard' %}active{% endif %}">
-            <i class="bi bi-speedometer2"></i> Painel
+        <a href="{{ url_for('avisos.index') }}"
+           class="sidebar-link {% if request.path.startswith('/avisos') %}active{% endif %}">
+            Avisos à produção
         </a>
+        {% if current_user.is_owner %}
         <a href="{{ url_for('projetos.painel') }}"
            class="sidebar-link {% if request.path.startswith('/projetos') %}active{% endif %}">
-            <i class="bi bi-kanban"></i> Projetos
+            Projetos
             {% if proj_atrasadas %}<span class="badge bg-danger ms-1" style="font-size:9px;" title="Tarefas atrasadas">{{ proj_atrasadas }}</span>{% endif %}
         </a>
+        {% endif %}
 
+        {# ── 1. LOJAS (gerente) ── #}
+        {% if current_user.pode_lojas() %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Lojas</div>
 
         <a href="{{ url_for('pedidos.lista') }}"
            class="sidebar-link {% if request.path == '/pedidos/' or request.path == '/pedidos' %}active{% endif %}">
-            <i class="bi bi-cart3"></i> Pedidos
+            Pedidos
         </a>
         <a href="{{ url_for('pedidos.estoque_loja') }}"
-           class="sidebar-link {% if '/pedidos/estoque-loja' in request.path %}active{% endif %}">
-            <i class="bi bi-box-seam"></i> Estoque Loja
+           class="sidebar-link {% if request.path == '/pedidos/estoque-loja' %}active{% endif %}">
+            Estoque Loja
         </a>
-        <a href="{{ url_for('pedidos.relatorio') }}"
-           class="sidebar-link {% if '/pedidos/relatorio' in request.path %}active{% endif %}">
-            <i class="bi bi-file-earmark-bar-graph"></i> Relatório de Pedidos
+        <a href="{{ url_for('pedidos.estoque_loja_diario') }}"
+           class="sidebar-link {% if request.path == '/pedidos/estoque-loja/diario' %}active{% endif %}">
+            Movimento do Dia
         </a>
+        <a href="{{ url_for('pedidos.estoque_loja_historico') }}"
+           class="sidebar-link {% if request.path == '/pedidos/estoque-loja/historico' %}active{% endif %}">
+            Histórico do estoque
+        </a>
+        <a href="{{ url_for('pedidos.desperdicio') }}"
+           class="sidebar-link {% if '/pedidos/desperdicio' in request.path %}active{% endif %}">
+            Desperdício
+        </a>
+        <a href="{{ url_for('lista_compras.index') }}"
+           class="sidebar-link {% if request.path == '/lista-compras' or request.path == '/lista-compras/' %}active{% endif %}">
+            Lista de Compras
+        </a>
+        {% if current_user.is_owner %}
+        <a href="{{ url_for('lista_compras.consolidada') }}"
+           class="sidebar-link ps-4 small {% if request.path == '/lista-compras/consolidada' %}active{% endif %}">
+            Consolidar compras
+        </a>
+        <a href="{{ url_for('lista_compras.catalogo') }}"
+           class="sidebar-link ps-4 small {% if request.path == '/lista-compras/catalogo' %}active{% endif %}">
+            Catálogo de compras
+        </a>
+        {% endif %}
+        {% endif %}
 
+        {# ── 2. PRODUÇÃO (industria) ── #}
+        {% if current_user.pode_producao() %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Produção</div>
 
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('producao.painel') }}"
+           class="sidebar-link {% if '/producao/painel' in request.path %}active{% endif %}">
+            <i class="bi bi-clipboard-data"></i> Planejamento da produção
+        </a>
+        {% endif %}
         <a href="{{ url_for('producao.lista') }}"
-           class="sidebar-link {% if request.path.startswith('/producao') %}active{% endif %}">
-            <i class="bi bi-calendar-check"></i> Plano de Produção
+           class="sidebar-link {% if request.path.startswith('/producao') and '/painel' not in request.path %}active{% endif %}">
+            Plano de Produção
         </a>
         <a href="{{ url_for('pedidos.congelados') }}"
            class="sidebar-link {% if '/pedidos/congelados' in request.path %}active{% endif %}">
-            <i class="bi bi-snow2"></i> Congelados
+            Congelados
         </a>
         <a href="{{ url_for('pedidos.separacao') }}"
            class="sidebar-link {% if '/pedidos/separacao' in request.path %}active{% endif %}">
-            <i class="bi bi-clipboard-data"></i> Separação do Dia
-        </a>
-
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Insumos</div>
-
-        <a href="{{ url_for('materias_primas.banco') }}"
-           class="sidebar-link {% if request.path == '/materias-primas/' or request.path == '/materias-primas' %}active{% endif %}">
-            <i class="bi bi-box-seam"></i> Banco de MP
-        </a>
-        <a href="{{ url_for('materias_primas.estoque') }}"
-           class="sidebar-link {% if '/materias-primas/estoque' in request.path %}active{% endif %}">
-            <i class="bi bi-boxes"></i> Estoque MP
-        </a>
-        <a href="{{ url_for('fornecedores.lista') }}"
-           class="sidebar-link {% if request.path.startswith('/fornecedores') %}active{% endif %}">
-            <i class="bi bi-truck-front"></i> Fornecedores
-        </a>
-
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Receitas & Produtos</div>
-
-        <a href="{{ url_for('produtos.lista') }}"
-           class="sidebar-link {% if request.path.startswith('/produtos') %}active{% endif %}">
-            <i class="bi bi-basket3"></i> Produtos / Cestas
-        </a>
-        <a href="{{ url_for('main.cardapio', tipo='atacado') }}"
-           class="sidebar-link {% if request.path == '/cardapio' %}active{% endif %}">
-            <i class="bi bi-file-earmark-pdf"></i> Cardápio PDF
-        </a>
-
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Site</div>
-
-        <a href="{{ url_for('entregas.index') }}"
-           class="sidebar-link {% if request.path.startswith('/entregas') %}active{% endif %}">
-            <i class="bi bi-truck"></i> Entregas Site
-        </a>
-
-        {% if current_user.is_admin() %}
-        <a href="{{ url_for('pdv.index') }}"
-           class="sidebar-link {% if request.path.startswith('/pdv') %}active{% endif %}">
-            <i class="bi bi-shop-window"></i> Vendas PDV
+            Pedidos a Separar
         </a>
         {% endif %}
 
+        {# ── 3. CATÁLOGO ── #}
+        {% if current_user.pode_catalogo() %}
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">Catálogo</div>
+
+        <a href="{{ url_for('materias_primas.banco') }}"
+           class="sidebar-link {% if request.path == '/materias-primas/' or request.path == '/materias-primas' %}active{% endif %}">
+            Matérias-primas
+        </a>
+        <a href="{{ url_for('materias_primas.estoque') }}"
+           class="sidebar-link {% if '/materias-primas/estoque' in request.path %}active{% endif %}">
+            Estoque de matérias-primas
+        </a>
+        <a href="{{ url_for('fornecedores.lista') }}"
+           class="sidebar-link {% if request.path.startswith('/fornecedores') %}active{% endif %}">
+            Fornecedores
+        </a>
+        <a href="{{ url_for('produtos.lista') }}"
+           class="sidebar-link {% if request.path.startswith('/produtos') %}active{% endif %}">
+            Produtos / Cestas
+        </a>
+        <a href="{{ url_for('main.cardapio', tipo='atacado') }}"
+           class="sidebar-link {% if request.path == '/cardapio' %}active{% endif %}">
+            Cardápio PDF
+        </a>
+        <a href="{{ url_for('receitas.precos') }}"
+           class="sidebar-link {% if request.path == '/receitas/precos' %}active{% endif %}">
+            Editar preços em massa
+        </a>
+        <a href="{{ url_for('receitas.reaproveitavel') }}"
+           class="sidebar-link {% if request.path == '/receitas/reaproveitavel' %}active{% endif %}">
+            Marcar reaproveitáveis
+        </a>
+        <a href="{{ url_for('receitas.modos_preparo') }}"
+           class="sidebar-link {% if request.path.startswith('/receitas/modos-preparo') %}active{% endif %}">
+            Modo de preparo
+        </a>
+        <a href="{{ url_for('receitas.imagens_upload') }}"
+           class="sidebar-link {% if request.path.startswith('/receitas/imagens') %}active{% endif %}">
+            Subir imagens (zip)
+        </a>
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('main.todo') }}"
+           class="sidebar-link {% if request.path == '/todo' %}active{% endif %}">
+            Pendências do catálogo
+        </a>
+        {% endif %}
+        {% endif %}
+
+        {# ── 4. VENDAS & ENTREGAS ── #}
+        {% if current_user.pode_pdv() or current_user.is_admin() or current_user.pode_lojas() %}
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">Vendas & Entregas</div>
+
+        {% if current_user.pode_pdv() %}
+        <a href="{{ url_for('pdv.index') }}"
+           class="sidebar-link {% if request.path == '/pdv/' or request.path == '/pdv' %}active{% endif %}">
+            Vendas do Caixa (PDV)
+        </a>
+        <a href="{{ url_for('pdv.itens_vendidos') }}"
+           class="sidebar-link ps-4 small {% if '/pdv/itens-vendidos' in request.path %}active{% endif %}">
+            Itens Vendidos
+        </a>
+        <a href="{{ url_for('pdv.mapeamentos') }}"
+           class="sidebar-link ps-4 small {% if '/pdv/mapeamentos' in request.path %}active{% endif %}">
+            Vincular produtos do caixa
+        </a>
+        {# VNDA aposentado em 24/06/2026 — link removido. Rota /pdv/vnda/...
+           continua existindo (codigo morto) mas nao aparece mais no menu. #}
+        <a href="{{ url_for('pdv.saude') }}"
+           class="sidebar-link ps-4 small {% if '/pdv/saude' in request.path %}active{% endif %}">
+            Saúde do sync de vendas
+        </a>
+        <a href="{{ url_for('pdv.reconciliacao') }}"
+           class="sidebar-link ps-4 small {% if '/pdv/reconciliacao' in request.path %}active{% endif %}">
+            Conferência de vendas
+        </a>
+        {% endif %}
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('b2b.dashboard') }}"
+           class="sidebar-link {% if request.path.startswith('/b2b') %}active{% endif %}">
+            Vendas B2B (Indústria)
+        </a>
+        <a href="{{ url_for('entregas.painel') }}" target="_blank" class="sidebar-link">
+            🔔 Painel do Dia
+        </a>
+        <a href="{{ url_for('entregas.index') }}"
+           class="sidebar-link {% if request.path.startswith('/entregas') and '/painel' not in request.path and '/drivers/bulk' not in request.path %}active{% endif %}">
+            Entregas do site
+        </a>
+        <a href="{{ url_for('entregas.drivers_bulk') }}"
+           class="sidebar-link {% if request.path == '/entregas/drivers/bulk' %}active{% endif %}">
+            Motoristas
+        </a>
+        {% endif %}
+        {% if current_user.pode_lojas() %}
+        <a href="{{ url_for('pedidos.relatorio') }}"
+           class="sidebar-link {% if '/pedidos/relatorio' in request.path %}active{% endif %}">
+            Relatório de Pedidos
+        </a>
+        {% endif %}
+        {% endif %}
+
+        {# ── 5. FINANCEIRO (admin) ── #}
+        {% if current_user.is_admin() %}
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">Financeiro</div>
+
+        <a href="{{ url_for('contas_pagar.lista') }}"
+           class="sidebar-link {% if request.path == '/contas-pagar/' or request.path == '/contas-pagar' %}active{% endif %}">
+            Contas a Pagar
+        </a>
+        <a href="{{ url_for('contas_pagar.canais') }}"
+           class="sidebar-link ps-4 small {% if request.path.startswith('/contas-pagar/canais') %}active{% endif %}"
+           title="Qual canal do Slack pertence a qual loja">
+            Canais do Slack
+        </a>
+        <a href="{{ url_for('contas_pagar.mapeamentos') }}"
+           class="sidebar-link ps-4 small {% if request.path.startswith('/contas-pagar/mapeamentos') %}active{% endif %}"
+           title="Ligar cada item das notas fiscais à matéria-prima do estoque">
+            Vincular itens de NF
+        </a>
+        <a href="{{ url_for('contas_pagar.variacoes') }}"
+           class="sidebar-link ps-4 small {% if request.path.startswith('/contas-pagar/variacoes') %}active{% endif %}"
+           title="Preço dos insumos subindo/caindo, nota a nota">
+            Preços dos insumos
+        </a>
+        <a href="{{ url_for('main.caixa') }}"
+           class="sidebar-link {% if request.path == '/caixa' %}active{% endif %}">
+            Caixa Diário
+        </a>
+        <a href="{{ url_for('main.rentabilidade') }}"
+           class="sidebar-link {% if request.path == '/rentabilidade' %}active{% endif %}">
+            Rentabilidade
+        </a>
+        {% endif %}
+
+        {# ── 6. RH ── (temporariamente owner-only) #}
+        {% if current_user.is_owner %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">RH</div>
 
         <a href="{{ url_for('rh.dashboard') }}"
            class="sidebar-link {% if request.path == '/rh/' %}active{% endif %}">
-            <i class="bi bi-speedometer2"></i> Painel RH
+            Painel RH
         </a>
         <a href="{{ url_for('rh.funcionarios') }}"
            class="sidebar-link {% if '/rh/funcionarios' in request.path %}active{% endif %}">
-            <i class="bi bi-person-badge"></i> Funcionários
+            Funcionários
         </a>
         {% if current_user.is_owner %}
         <a href="{{ url_for('rh.folha') }}"
            class="sidebar-link {% if '/rh/folha' in request.path %}active{% endif %}">
-            <i class="bi bi-file-earmark-text"></i> Folha de Pagamento
+            Folha de Pagamento
         </a>
         {% endif %}
         <a href="{{ url_for('rh.lojas') }}"
            class="sidebar-link {% if request.path == '/rh/lojas' %}active{% endif %}">
-            <i class="bi bi-shop-window"></i> Lojas
+            Cadastro de lojas
         </a>
         {% if current_user.is_owner %}
         <a href="{{ url_for('rh.cargos') }}"
            class="sidebar-link {% if request.path == '/rh/cargos' %}active{% endif %}">
-            <i class="bi bi-briefcase"></i> Cargos
+            Cargos
         </a>
         {% endif %}
         <a href="{{ url_for('rh.escala') }}"
            class="sidebar-link {% if '/rh/escala' in request.path and '/mapa' not in request.path %}active{% endif %}">
-            <i class="bi bi-diagram-3"></i> Escala Operacional
+            Escala Operacional
         </a>
         <a href="{{ url_for('rh.mapa_index') }}"
            class="sidebar-link {% if '/rh/mapa' in request.path %}active{% endif %}">
-            <i class="bi bi-map"></i> Mapa das Lojas
+            Mapa das Lojas
         </a>
         <a href="{{ url_for('rh.ponto') }}"
            class="sidebar-link {% if '/rh/ponto' in request.path %}active{% endif %}">
-            <i class="bi bi-clock"></i> Ponto
+            Ponto
         </a>
         <a href="{{ url_for('rh.ferias') }}"
            class="sidebar-link {% if '/rh/ferias' in request.path %}active{% endif %}">
-            <i class="bi bi-calendar-heart"></i> Férias / Folgas
+            Férias / Folgas
         </a>
+        {% endif %}
 
+        {# ── 7. RELATÓRIOS (admin) — números pra decidir ── #}
+        {% if current_user.is_admin() %}
         <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Análise</div>
+        <div class="sidebar-section-title">Relatórios</div>
 
-        <a href="{{ url_for('main.caixa') }}"
-           class="sidebar-link {% if request.path == '/caixa' %}active{% endif %}">
-            <i class="bi bi-cash-coin"></i> Caixa Diário
-        </a>
-        <a href="{{ url_for('main.rentabilidade') }}"
-           class="sidebar-link {% if request.path == '/rentabilidade' %}active{% endif %}">
-            <i class="bi bi-graph-up"></i> Rentabilidade
+        <a href="{{ url_for('relatorios.dashboards') }}"
+           class="sidebar-link {% if request.path == '/relatorios/dashboards' %}active{% endif %}">
+            Dashboards
         </a>
         <a href="{{ url_for('relatorios.custos') }}"
-           class="sidebar-link {% if request.path.startswith('/relatorios') %}active{% endif %}">
-            <i class="bi bi-file-earmark-bar-graph"></i> Relatórios de Custos
+           class="sidebar-link {% if request.path == '/relatorios/custos' %}active{% endif %}">
+            Custos
         </a>
-        <a href="{{ url_for('main.todo') }}"
-           class="sidebar-link {% if request.path == '/todo' %}active{% endif %}">
-            <i class="bi bi-check2-square"></i> TO-DO
+        <a href="{{ url_for('relatorios.previsao') }}"
+           class="sidebar-link {% if request.path.startswith('/relatorios/previsao') %}active{% endif %}">
+            Previsão de demanda
         </a>
 
+        {# ── 8. ADMINISTRAÇÃO (admin) — usuários, permissões e integrações ── #}
         <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Sistema</div>
+        <div class="sidebar-section-title">Administração</div>
 
-        <a href="{{ url_for('auth.painel') }}"
-           class="sidebar-link {% if request.path == '/auth/painel' %}active{% endif %}">
-            <i class="bi bi-kanban"></i> Atribuições
-        </a>
         <a href="{{ url_for('auth.usuarios') }}"
            class="sidebar-link {% if request.path == '/auth/usuarios' %}active{% endif %}">
-            <i class="bi bi-people"></i> Usuários
+            Usuários
         </a>
+        {% if current_user.is_owner %}
+        <a href="{{ url_for('main.permissoes_editar') }}"
+           class="sidebar-link {% if request.path == '/admin/permissoes' %}active{% endif %}">
+            Permissões por papel
+        </a>
+        {% endif %}
         <a href="{{ url_for('main.audit') }}"
-           class="sidebar-link {% if request.path == '/audit' %}active{% endif %}">
-            <i class="bi bi-shield-check"></i> Audit Log
+           class="sidebar-link {% if request.path == '/audit' %}active{% endif %}"
+           title="Quem mudou o quê e quando">
+            Histórico de alterações
         </a>
-        {% elif current_user.is_authenticated %}
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Lojas</div>
-
-        <a href="{{ url_for('pedidos.lista') }}"
-           class="sidebar-link {% if request.path == '/pedidos/' or request.path == '/pedidos' %}active{% endif %}">
-            <i class="bi bi-cart3"></i> Pedidos
+        <a href="{{ url_for('slack.install') }}"
+           class="sidebar-link {% if request.path.startswith('/slack') %}active{% endif %}">
+            Slack Bot
         </a>
-        <a href="{{ url_for('pedidos.estoque_loja') }}"
-           class="sidebar-link {% if '/pedidos/estoque-loja' in request.path %}active{% endif %}">
-            <i class="bi bi-box-seam"></i> Estoque Loja
-        </a>
-
-        {% if current_user.loja_id %}
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Site</div>
-
-        <a href="{{ url_for('entregas.index') }}"
-           class="sidebar-link {% if request.path.startswith('/entregas') %}active{% endif %}">
-            <i class="bi bi-truck"></i> Entregas Site
-        </a>
-
-        {% if current_user.is_admin() %}
-        <a href="{{ url_for('pdv.index') }}"
-           class="sidebar-link {% if request.path.startswith('/pdv') %}active{% endif %}">
-            <i class="bi bi-shop-window"></i> Vendas PDV
+        <a href="{{ url_for('notificacoes.index') }}"
+           class="sidebar-link {% if request.path.startswith('/notificacoes') %}active{% endif %}">
+            Notificações WhatsApp
         </a>
         {% endif %}
-        {% endif %}
 
+        {% if not current_user.is_admin() %}
         <div class="sidebar-divider"></div>
-
         <a href="{{ url_for('auth.minhas_fichas') }}"
            class="sidebar-link {% if request.path == '/auth/minhas-fichas' %}active{% endif %}">
-            <i class="bi bi-clipboard-check"></i> Minhas Fichas
+            Minhas Fichas
         </a>
+        {% endif %}
         {% endif %}
 
         <div class="sidebar-divider"></div>
@@ -255,8 +410,19 @@
 
         <a href="{{ url_for('receitas.padeiro_lista') }}"
            class="sidebar-link {% if request.path == '/receitas/padeiro' %}active{% endif %}">
-            <i class="bi bi-calculator"></i> Modo Padeiro
+            Modo Padeiro
         </a>
+        {% if current_user.is_authenticated and current_user.is_admin() %}
+        <a href="{{ url_for('auth.painel') }}"
+           class="sidebar-link {% if request.path == '/auth/painel' %}active{% endif %}"
+           title="Fichas técnicas atribuídas a funcionários">
+            Fichas atribuídas
+        </a>
+        <a href="{{ url_for('receitas.familias') }}"
+           class="sidebar-link {% if request.path == '/receitas/familias' %}active{% endif %}">
+            Famílias de receitas
+        </a>
+        {% endif %}
 
         <!-- Busca de receitas -->
         <div class="px-3 pb-2">
@@ -288,33 +454,26 @@
             </button>
         </form>
 
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-section-title">Dados</div>
-
         <a href="{{ url_for('main.exportar') }}" class="sidebar-link">
-            <i class="bi bi-download"></i> Exportar JSON
+            Exportar JSON
         </a>
-
         <label class="sidebar-link" style="cursor:pointer">
-            <i class="bi bi-upload"></i> Importar JSON
+            Importar JSON
             <input type="file" id="import-file" accept=".json" style="display:none">
         </label>
         {% endif %}
 
-        <div class="sidebar-divider"></div>
-        <div class="dark-mode-toggle">
-            <div class="form-check form-switch mb-0">
-                <input class="form-check-input" type="checkbox" id="dark-mode-switch">
-                <label class="form-check-label" for="dark-mode-switch">
-                    <i class="bi bi-moon-stars"></i> Modo Escuro
-                </label>
-            </div>
-        </div>
-
         {% if current_user.is_authenticated %}
         <div class="sidebar-divider"></div>
+        <button type="button" id="pwa-install-btn" onclick="window.instalarApp()"
+                class="sidebar-link" style="display:none; border:0; background:transparent; text-align:left; width:100%;">
+            <i class="bi bi-download"></i> Instalar como app
+        </button>
+        <a href="{{ url_for('auth.minha_senha') }}" class="sidebar-link">
+            <i class="bi bi-key"></i> Trocar minha senha
+        </a>
         <a href="{{ url_for('auth.logout') }}" class="sidebar-link" style="color:var(--cor-vermelho);">
-            <i class="bi bi-box-arrow-left"></i> Sair
+            Sair
         </a>
         {% endif %}
     </nav>
@@ -332,33 +491,28 @@
             {% endif %}
         {% endwith %}
 
+        {% if cestas_orfaos_count and cestas_orfaos_count > 0 %}
+        <div class="alert alert-danger d-flex align-items-center justify-content-between mb-3" role="alert"
+             style="border-left:4px solid #b02a37;">
+            <div>
+                <i class="bi bi-exclamation-octagon-fill"></i>
+                <strong>{{ cestas_orfaos_count }} componente{{ 's' if cestas_orfaos_count > 1 }} de cesta sem vinculo.</strong>
+                Vendas/desperdicios dessas cestas <strong>NAO baixam estoque</strong> — corrigir agora.
+            </div>
+            <a href="{{ url_for('produtos.cestas_orfaos') }}" class="btn btn-sm btn-danger">
+                <i class="bi bi-tools"></i> Resolver
+            </a>
+        </div>
+        {% endif %}
+
         {% block content %}{% endblock %}
     </main>
 
-    {% if current_user.is_authenticated %}
-    <!-- Copilot — botao flutuante + painel lateral. Tools sao filtradas
-         pelo papel no backend (admin/gerente/funcionario). -->
-    <button id="copilot-fab" type="button" title="Copilot (Cmd/Ctrl+K)" aria-label="Copilot">
-        <i class="bi bi-stars"></i>
-    </button>
-    <div id="copilot-overlay" class="d-none"></div>
-    <aside id="copilot-panel" class="d-none" aria-hidden="true">
-        <header>
-            <strong>copilot</strong>
-            <button type="button" id="copilot-close" aria-label="Fechar" title="Fechar (Esc)">
-                <i class="bi bi-x-lg"></i>
-            </button>
-        </header>
-        <div id="copilot-history"></div>
-        <form id="copilot-form">
-            <input type="text" id="copilot-input" placeholder="ex: preciso pedir 100 croissants pra amanhã"
-                   maxlength="2000" autocomplete="off">
-            <button type="submit" id="copilot-send" title="Enviar">
-                <i class="bi bi-arrow-up"></i>
-            </button>
-        </form>
-    </aside>
-    {% endif %}
+    <!-- Copilot do sistema removido em 10/06/2026 (decisao do dono):
+         o servico copilot.py continua, mas a UI web foi desativada.
+         Pontos de entrada do bot continuam ativos: Slack (DM/@mention via
+         slack_bot.py) e o bot pessoal no WhatsApp (blueprint bot/, auth
+         por BOT_API_TOKEN + whitelist em BOT_ALLOWED_PHONES). -->
 
     <!-- Legenda de cores -->
     <div class="legenda-cores">
@@ -369,13 +523,17 @@
     </div>
 
     <!-- MP data para JavaScript -->
-    <script>const MP_DATA = {{ mp_json | safe }};</script>
+    <script>const MP_DATA = {{ mp_info | tojson }};</script>
     <script>const CSRF_TOKEN = "{{ csrf_token() }}";</script>
+    {% if current_user.is_authenticated %}
+    <script>const RECEITA_NOMES = {{ receita_nomes|tojson }};</script>
+    {% endif %}
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}?v={{ static_v['js/app.js'] }}"></script>
-    {% if current_user.is_authenticated and current_user.is_admin() %}
-    <script src="{{ url_for('static', filename='js/copilot.js') }}?v={{ static_v.get('js/copilot.js', '0') }}"></script>
+    {% if current_user.is_authenticated %}
+    <script src="{{ url_for('static', filename='js/command-palette.js') }}"></script>
     {% endif %}
+    {# copilot.js intencionalmente fora — UI desativada em 10/06/2026 #}
     <script>
     (function(){
         var sw = document.getElementById('dark-mode-switch');
@@ -394,6 +552,38 @@
     </script>
     {% block scripts %}{% endblock %}
 
+    <!-- PWA: registra service worker + botão de instalação -->
+    <script>
+    (function() {
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                    .catch(function(err) { console.log('SW falha:', err); });
+            });
+        }
+
+        // Salva o evento do "Add to Home Screen" para mostrar o nosso botão depois
+        let promptInstalacao = null;
+        window.addEventListener('beforeinstallprompt', function(e) {
+            e.preventDefault();
+            promptInstalacao = e;
+            var btn = document.getElementById('pwa-install-btn');
+            if (btn) btn.style.display = 'inline-flex';
+        });
+
+        // Botão "Instalar app" (criar na sidebar/header — opcional)
+        window.instalarApp = function() {
+            if (!promptInstalacao) return;
+            promptInstalacao.prompt();
+            promptInstalacao.userChoice.then(function() {
+                promptInstalacao = null;
+                var btn = document.getElementById('pwa-install-btn');
+                if (btn) btn.style.display = 'none';
+            });
+        };
+    })();
+    </script>
+
     <!-- Datalists globais para autocomplete -->
     <datalist id="mp-list">
         {% for nome in mp_nomes %}
@@ -402,6 +592,11 @@
     </datalist>
     <datalist id="receita-list">
         {% for nome in receita_nomes %}
+        <option value="{{ nome }}">
+        {% endfor %}
+    </datalist>
+    <datalist id="produto-list">
+        {% for nome in produto_nomes %}
         <option value="{{ nome }}">
         {% endfor %}
     </datalist>

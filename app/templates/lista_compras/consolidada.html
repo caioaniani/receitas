@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}Lista de Compras — Consolidada{% endblock %}
+
+{% block content %}
+<style>
+.cons-loja-th { font-size: 12px; text-transform: uppercase; color: var(--text-muted); }
+.cons-tenho { background: var(--bg-card-hover); font-weight: 600; }
+.cons-input {
+    width: 60px; padding: 4px 6px; text-align: center; border: 1px solid var(--border-input);
+    border-radius: 4px; background: var(--bg-input); color: var(--text-main); font-size: 14px;
+}
+.cons-input.dirty { border-color: #ffc107; }
+.cons-input.saved { border-color: #28a745; }
+.cons-input.erro  { border-color: #dc3545; }
+.chip-status {
+    display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px;
+    font-weight: 600; text-transform: uppercase;
+}
+.chip-aberta  { background: #fff3cd; color: #664d03; }
+.chip-enviada { background: #d1e7dd; color: #0a3622; }
+.chip-fechada { background: #e2e3e5; color: #41464b; }
+.chip-sem     { background: #f8d7da; color: #58151c; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0">
+        <i class="bi bi-cart-check"></i> Lista de Compras — Consolidada
+    </h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('lista_compras.consolidada', semana=semana_anterior.isoformat()) }}"
+           class="btn btn-sm btn-outline-secondary">← Semana anterior</a>
+        <span class="btn btn-sm btn-light disabled">
+            <strong>Semana de {{ data_alvo.strftime('%d/%m/%Y') }}</strong>
+        </span>
+        <a href="{{ url_for('lista_compras.consolidada', semana=semana_proxima.isoformat()) }}"
+           class="btn btn-sm btn-outline-secondary">Próxima semana →</a>
+        <a href="{{ url_for('lista_compras.catalogo') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-gear"></i> Catálogo
+        </a>
+    </div>
+</div>
+
+<div class="row g-2 mb-3">
+    {% for loja in lojas %}
+    {% set info = por_loja[loja.id] %}
+    <div class="col-md-3 col-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body py-2 px-3">
+                <div class="small text-muted">{{ loja.nome }}</div>
+                {% if info.semana %}
+                    {% set st = info.semana.status %}
+                    <span class="chip-status chip-{{ st }}">{{ st }}</span>
+                    {% if st in ('enviada', 'fechada') and info.semana.enviada_em %}
+                    <div class="small text-muted mt-1">
+                        enviada {{ info.semana.enviada_em.strftime('%d/%m %H:%M') }}
+                    </div>
+                    {% endif %}
+                    {% if st != 'fechada' %}
+                    <form method="POST" action="{{ url_for('lista_compras.fechar') }}"
+                          class="mt-1" onsubmit="return confirm('Marcar a semana de {{ loja.nome }} como comprada?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="semana_id" value="{{ info.semana.id }}">
+                        <input type="hidden" name="voltar" value="{{ request.full_path }}">
+                        <button type="submit" class="btn btn-sm btn-outline-success"
+                                style="font-size:11px; padding:2px 8px;">Marcar comprada</button>
+                    </form>
+                    {% endif %}
+                {% else %}
+                    <span class="chip-status chip-sem">sem dados</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<p class="text-muted small mb-3">
+    Cada linha = 1 item. Coluna "Tenho" = o que a loja contou. Colunas "Pedido" e "Sobrou" são suas
+    (editáveis, salvam sozinhas). Use "Sobrou" no fim da semana pra ajustar o histórico que aparece
+    pros gerentes na próxima.
+</p>
+
+{% for loja in lojas %}
+{% set info = por_loja[loja.id] %}
+{% if info.itens %}
+<details class="mb-3" {% if loop.first %}open{% endif %}>
+    <summary class="fw-bold py-2" style="cursor:pointer; font-size:16px;">
+        {{ loja.nome }} <span class="text-muted small">({{ info.itens|length }} itens)</span>
+    </summary>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead class="thead-padaria">
+                <tr>
+                    <th style="width:30%">Grupo / Item</th>
+                    <th class="text-center cons-loja-th" style="width:80px;">Tenho</th>
+                    <th class="text-center cons-loja-th" style="width:90px;">Pedido</th>
+                    <th class="text-center cons-loja-th" style="width:90px;">Sobrou</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set ns = namespace(grupo=None) %}
+                {% for item in info.itens %}
+                    {% if item.grupo != ns.grupo %}
+                    <tr class="table-active">
+                        <td colspan="4"><strong>{{ item.grupo }}</strong></td>
+                    </tr>
+                    {% set ns.grupo = item.grupo %}
+                    {% endif %}
+                    {% set q = info.qtds.get(item.id) %}
+                    <tr>
+                        <td>{{ item.nome_item }}</td>
+                        <td class="text-center cons-tenho">{{ q.tenho if q else 0 }}</td>
+                        <td class="text-center">
+                            {% if info.semana %}
+                            <input type="number" inputmode="numeric" min="0" class="cons-input"
+                                   data-semana-id="{{ info.semana.id }}"
+                                   data-item-id="{{ item.id }}" data-campo="pedido"
+                                   value="{{ q.pedido if q else 0 }}">
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if info.semana %}
+                            <input type="number" inputmode="numeric" min="0" class="cons-input"
+                                   data-semana-id="{{ info.semana.id }}"
+                                   data-item-id="{{ item.id }}" data-campo="sobrou"
+                                   value="{{ q.sobrou if q else 0 }}">
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</details>
+{% endif %}
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var URL = '{{ url_for("lista_compras.consolidar_json") }}';
+    var CSRF = '{{ csrf_token() }}';
+    var timers = new WeakMap();
+
+    function salvar(inp) {
+        inp.classList.remove('saved', 'erro');
+        inp.classList.add('dirty');
+        var fd = new FormData();
+        fd.append('csrf_token', CSRF);
+        fd.append('semana_id', inp.dataset.semanaId);
+        fd.append('item_id', inp.dataset.itemId);
+        fd.append(inp.dataset.campo, inp.value || '0');
+        fetch(URL, {method: 'POST', body: fd,
+                    headers: {'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': CSRF}})
+        .then(function (r) {
+            inp.classList.remove('dirty');
+            inp.classList.add(r.ok ? 'saved' : 'erro');
+            setTimeout(function () { inp.classList.remove('saved'); }, 1200);
+        }).catch(function () {
+            inp.classList.remove('dirty'); inp.classList.add('erro');
+        });
+    }
+
+    document.querySelectorAll('.cons-input').forEach(function (inp) {
+        inp.addEventListener('input', function () {
+            clearTimeout(timers.get(inp));
+            timers.set(inp, setTimeout(function () { salvar(inp); }, 600));
+        });
+        inp.addEventListener('blur', function () {
+            clearTimeout(timers.get(inp));
+            salvar(inp);
+        });
+    });
+})();
+</script>
+{% endblock %}

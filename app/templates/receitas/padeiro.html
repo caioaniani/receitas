@@ -149,12 +149,42 @@
     </div>
 </div>
 
-<!-- Modo de Preparo (read-only) -->
-{% if receita.modo_preparo %}
+<!-- Modo de Preparo -->
+{% set pode_editar_mp = current_user.is_admin() or current_user.is_owner or current_user.is_padeiro() %}
+{% if pode_editar_mp or receita.modo_preparo %}
 <div class="mb-3">
-    <h6 class="fw-bold"><i class="bi bi-journal-text"></i> Modo de Preparo</h6>
+    <h6 class="fw-bold d-flex align-items-center gap-2">
+        <i class="bi bi-journal-text"></i> Modo de Preparo
+        {% if pode_editar_mp %}
+        <span id="mp-status" class="small text-muted" style="font-weight:normal;"></span>
+        {% endif %}
+    </h6>
     <div class="card border-0 shadow-sm">
-        <div class="card-body" style="white-space:pre-wrap;">{{ receita.modo_preparo }}</div>
+        {% if pode_editar_mp %}
+        <div class="card-body p-2">
+            <textarea id="mp-textarea" class="form-control input-blue"
+                      data-receita-id="{{ receita.id }}"
+                      rows="10"
+                      placeholder="Passo 1: ...&#10;Passo 2: ...">{{ receita.modo_preparo or '' }}</textarea>
+            <div class="d-flex align-items-center justify-content-between mt-2">
+                <span id="mp-feedback" class="small" style="min-height:24px;"></span>
+                <button type="button" id="mp-salvar"
+                        class="btn btn-success"
+                        style="font-size:18px; padding:12px 24px; min-width:160px;">
+                    <i class="bi bi-check-circle"></i> Salvar
+                </button>
+            </div>
+        </div>
+        {% else %}
+        <div class="card-body">
+            {% for etapa in etapas_preparo %}
+            <div class="d-flex gap-2 align-items-start {% if not loop.last %}mb-2 pb-2 border-bottom{% endif %}">
+                <span class="badge bg-dark mt-1">{{ loop.index }}</span>
+                <div style="white-space:pre-wrap;">{{ etapa }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endif %}
@@ -168,7 +198,97 @@
 
 <!-- Dados de custos de receitas para JS (sub-receitas) -->
 <script>
-const RECEITA_CUSTOS = {{ receita_custos_json | safe }};
-const RECEITA_PESOS = {{ receita_pesos_json | safe }};
+const RECEITA_CUSTOS = {{ receita_custos | tojson }};
+const RECEITA_PESOS = {{ receita_pesos | tojson }};
 </script>
+
+{% if pode_editar_mp %}
+<script>
+(function () {
+    var ta = document.getElementById('mp-textarea');
+    if (!ta) return;
+    var status = document.getElementById('mp-status');
+    var feedback = document.getElementById('mp-feedback');
+    var btn = document.getElementById('mp-salvar');
+    var URL = '{{ url_for("receitas.modos_preparo_salvar") }}';
+    var CSRF = '{{ csrf_token() }}';
+    var timer = null;
+    var sujo = false;
+
+    function mostrarStatus(texto, cor) {
+        if (!status) return;
+        status.textContent = texto;
+        status.style.color = cor || '';
+    }
+
+    function mostrarFeedback(texto, cor) {
+        if (!feedback) return;
+        feedback.textContent = texto;
+        feedback.style.color = cor || '';
+    }
+
+    function salvar(origem) {
+        var fd = new FormData();
+        fd.append('csrf_token', CSRF);
+        fd.append('receita_id', ta.dataset.receitaId);
+        fd.append('texto', ta.value || '');
+        mostrarStatus('Salvando...', '#666');
+        ta.classList.remove('is-valid', 'is-invalid');
+        if (origem === 'botao' && btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Salvando...';
+        }
+        return fetch(URL, {
+            method: 'POST', body: fd,
+            headers: {'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': CSRF},
+        }).then(function (r) {
+            if (r.ok) {
+                sujo = false;
+                ta.classList.add('is-valid');
+                mostrarStatus('Salvo', '#198754');
+                if (origem === 'botao') {
+                    mostrarFeedback('Modo de preparo salvo!', '#198754');
+                }
+                setTimeout(function () {
+                    ta.classList.remove('is-valid');
+                    mostrarStatus('', '');
+                    if (origem === 'botao') mostrarFeedback('', '');
+                }, 2500);
+            } else {
+                ta.classList.add('is-invalid');
+                mostrarStatus('Erro ao salvar', '#dc3545');
+                mostrarFeedback('Erro ao salvar. Tente de novo.', '#dc3545');
+            }
+        }).catch(function () {
+            ta.classList.add('is-invalid');
+            mostrarStatus('Erro de conexão', '#dc3545');
+            mostrarFeedback('Sem conexão. Tente de novo.', '#dc3545');
+        }).finally(function () {
+            if (origem === 'botao' && btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-check-circle"></i> Salvar';
+            }
+        });
+    }
+
+    ta.addEventListener('input', function () {
+        sujo = true;
+        clearTimeout(timer);
+        timer = setTimeout(function () { salvar('auto'); }, 1500);
+    });
+    if (btn) {
+        btn.addEventListener('click', function () {
+            clearTimeout(timer);
+            salvar('botao');
+        });
+    }
+    window.addEventListener('beforeunload', function (ev) {
+        if (sujo) {
+            ev.preventDefault();
+            ev.returnValue = 'Voce tem alteracoes nao salvas no modo de preparo.';
+        }
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}

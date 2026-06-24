@@ -1,29 +1,309 @@
-from datetime import date, datetime
-
-from flask import render_template, request, jsonify, abort, current_app
-from flask_login import login_required, current_user
+import json
+from datetime import datetime
 
 import requests as http_requests
+from flask import abort, current_app, jsonify, render_template, request
+from flask_login import current_user, login_required
 
 from app.blueprints.entregas import entregas_bp
 from app.decorators import entrega_access_required
 from app.extensions import db
-from app.models import CartinhaEntrega, OverrideEntrega, Driver, AtribuicaoEntrega, LoteSaida, EntregaFoto, PedidoLocal, PedidoLocalItem, Produto, MateriaPrima
-from app.services import vnda, rotas as rotas_svc, dropbox_storage
+from app.models import (
+    AtribuicaoEntrega,
+    CartinhaEntrega,
+    Driver,
+    EntregaFoto,
+    LalamoveEntrega,
+    LalamoveSaldo,
+    LoteSaida,
+    MateriaPrima,
+    OverrideEntrega,
+    PainelPedidoStatus,
+    PedidoLocal,
+    PedidoLocalItem,
+    Produto,
+)
+from app.services import dropbox_storage, vnda
+from app.services import rotas as rotas_svc
+from app.utils import agora
+from app.utils import hoje as hoje_brt
 
 
 @entregas_bp.route('/')
 @login_required
-@entrega_access_required
 def index():
     resp = current_app.make_response(
-        render_template('entregas/index.html', hoje=date.today().isoformat())
+        render_template('entregas/index.html', hoje=hoje_brt().isoformat())
     )
     # Evita cache do HTML (Safari teima muito com inline JS)
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     resp.headers['Pragma'] = 'no-cache'
     resp.headers['Expires'] = '0'
     return resp
+
+
+def _aplicar_cartinhas(pedidos):
+    """Resolve a cartinha de cada pedido: a manual (CartinhaEntrega, editada
+    por humano) tem prioridade sobre a do VNDA. Muta os dicts in-place.
+
+    Centralizado aqui porque a tela de entregas E o Painel do Dia precisam da
+    mesma regra de prioridade — duplicar geraria divergencia silenciosa."""
+    codes = [p['code'] for p in pedidos if p.get('code')]
+    manuais = {}
+    if codes:
+        for c in CartinhaEntrega.query.filter(
+                CartinhaEntrega.pedido_code.in_(codes)).all():
+            manuais[c.pedido_code] = c.texto or ''
+    for p in pedidos:
+        manual = manuais.get(p.get('code'), '')
+        auto = p.get('cartinha_vnda', '')
+        p['cartinha'] = manual or auto
+        p['cartinha_origem'] = 'manual' if manual else ('vnda' if auto else None)
+    return pedidos
+
+
+# ── Painel do Dia (tela simples pra equipe de preparo) ────────────────────
+#
+# Objetivo: a equipe para de olhar pedidos no VNDA e passa a olhar aqui.
+# Requisitos (turma com baixa familiaridade com tela): UI grande e obvia,
+# alerta SONORO quando cai pedido novo do dia, e o som so para quando alguem
+# CLICA no pedido (marca como visto). O "visto" eh server-side: se uma pessoa
+# clica, silencia em todos os aparelhos da equipe.
+
+def _painel_pedidos_do_dia(target):
+    """Busca pedidos do dia no VNDA (com overrides + locais) e resolve a
+    cartinha. Retorna (pedidos, erro_str|None). Reusa o mesmo caminho da tela
+    de entregas pra nao divergir."""
+    try:
+        overrides_data = {code: o['data']
+                          for code, o in _carregar_overrides_full().items()}
+        resultado = _injetar_pedidos_locais(
+            target, vnda.buscar_pedidos_do_dia(target, overrides=overrides_data))
+    except Exception as e:  # noqa: BLE001
+        current_app.logger.exception('painel: erro carregando VNDA')
+        return [], f'{type(e).__name__}: {str(e)[:200]}'
+    if 'erro' in resultado:
+        return [], resultado['erro']
+    pedidos = resultado.get('pedidos', [])
+    _aplicar_cartinhas(pedidos)
+    return pedidos, None
+
+
+@entregas_bp.route('/painel')
+@login_required
+def painel():
+    from app.services import lalamove as lala_svc
+    resp = current_app.make_response(
+        render_template('entregas/painel.html', hoje=hoje_brt().isoformat(),
+                        lala_veiculos=lala_svc.OPCOES_VEICULO))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return resp
+
+
+@entregas_bp.route('/api/painel')
+@login_required
+def api_painel():
+    data_str = request.args.get('data', hoje_brt().isoformat())
+    try:
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        target = hoje_brt()
+
+    pedidos, erro = _painel_pedidos_do_dia(target)
+    if erro:
+        return jsonify(pedidos=[], data=data_str, erro=erro)
+
+    codes = [p['code'] for p in pedidos if p.get('code')]
+    status_por_code = {}
+    if codes:
+        for s in PainelPedidoStatus.query.filter(
+                PainelPedidoStatus.pedido_code.in_(codes)).all():
+            status_por_code[s.pedido_code] = s.status or 'visto'
+    lala_por_code = _lalamove_por_code(codes)
+
+    out = []
+    for p in pedidos:
+        code = p.get('code')
+        status = status_por_code.get(code, 'novo')
+        out.append({
+            'code': code,
+            'destinatario': p.get('destinatario') or p.get('comprador') or 'Sem nome',
+            'endereco': p.get('endereco') or '',
+            'periodo': p.get('periodo') or '',
+            'expresso': bool(p.get('expresso')),
+            'telefone': p.get('telefone') or '',
+            'cartinha': p.get('cartinha') or '',
+            'itens': [{'nome': it.get('nome') or '', 'qtd': it.get('quantidade') or 1}
+                      for it in (p.get('itens') or [])],
+            'status': status,            # novo|visto|pronto|entregue
+            'novo': status == 'novo',    # mantido pra o alerta sonoro
+            'lalamove': lala_por_code.get(code),
+        })
+
+    saldo = db.session.get(LalamoveSaldo, 1)
+    resp = jsonify(pedidos=out, data=data_str, total=len(out),
+                   novos=sum(1 for p in out if p['novo']),
+                   lalamove_saldo=(str(saldo.valor) if saldo and
+                                   saldo.valor is not None else None))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    return resp
+
+
+@entregas_bp.route('/api/painel/status/<code>', methods=['POST'])
+@login_required
+def api_painel_status(code):
+    """Muda o status de preparo de um pedido (visto/pronto/entregue).
+
+    'visto' eh o que o clique automatico manda (silencia o alerta). 'pronto' e
+    'entregue' vem dos botoes. Idempotente: upsert por pedido_code."""
+    code = (code or '').strip()
+    novo_status = (request.args.get('status')
+                   or (request.get_json(silent=True) or {}).get('status')
+                   or 'visto').strip().lower()
+    if not code:
+        return jsonify(ok=False, erro='code vazio'), 400
+    if novo_status not in PainelPedidoStatus.STATUS_VALIDOS:
+        return jsonify(ok=False, erro='status invalido'), 400
+
+    uid = current_user.id if current_user.is_authenticated else None
+    s = PainelPedidoStatus.query.filter_by(pedido_code=code).first()
+    if s:
+        # Nao regride de pronto/entregue pra visto por um clique acidental de
+        # abertura — so o 'visto' automatico nao deve rebaixar status maior.
+        ordem = {'visto': 1, 'pronto': 2, 'entregue': 3}
+        if not (novo_status == 'visto' and ordem.get(s.status, 0) >= 2):
+            s.status = novo_status
+            s.atualizado_por = uid
+        db.session.commit()
+    else:
+        s = PainelPedidoStatus(pedido_code=code, status=novo_status,
+                               data_ref=hoje_brt(), atualizado_por=uid)
+        db.session.add(s)
+        try:
+            db.session.commit()
+        except Exception:  # noqa: BLE001
+            db.session.rollback()  # corrida entre 2 aparelhos: ja existe, ok
+    return jsonify(ok=True, status=novo_status)
+
+
+# ── Lalamove (entregador sob demanda a partir do painel) ──────────────────
+
+def _lalamove_json(e):
+    """Resumo de uma LalamoveEntrega pro front do painel."""
+    from app.services import lalamove as lala_svc
+    return {
+        'id': e.id,
+        'status': e.status,
+        'rotulo': ('Cotação feita — confirme a chamada'
+                   if e.status == 'cotacao' else lala_svc.rotulo_status(e.status)),
+        'valor': str(e.valor) if e.valor is not None else None,
+        'moeda': e.moeda or 'BRL',
+        'veiculo': lala_svc.ROTULO_VEICULO.get(e.service_type, e.service_type),
+        'share_link': e.share_link,
+        'motorista': e.motorista_nome,
+        'motorista_fone': e.motorista_telefone,
+        'pode_cancelar': e.status in ('ASSIGNING_DRIVER', 'ON_GOING'),
+        'encerrada': e.status in ('COMPLETED', 'CANCELED', 'REJECTED', 'EXPIRED'),
+    }
+
+
+def _lalamove_por_code(codes):
+    """{code: resumo} da corrida mais recente JÁ CHAMADA (com order_id) de
+    cada pedido. Cotações não confirmadas ficam de fora do card."""
+    if not codes:
+        return {}
+    out = {}
+    rows = (LalamoveEntrega.query
+            .filter(LalamoveEntrega.pedido_code.in_(codes),
+                    LalamoveEntrega.order_id.isnot(None))
+            .order_by(LalamoveEntrega.criado_em.asc()).all())
+    for e in rows:           # asc + sobrescrita = vence a mais recente
+        out[e.pedido_code] = _lalamove_json(e)
+    return out
+
+
+@entregas_bp.route('/api/painel/lalamove/cotar', methods=['POST'])
+@login_required
+def api_lalamove_cotar():
+    """Cota uma corrida pro endereço do pedido. JSON: {code, endereco,
+    destinatario, telefone, veiculo: moto|carro}. Guarda a cotação
+    (status='cotacao') e devolve id+preço pro atendente confirmar."""
+    from app.services import lalamove as lala_svc
+    dados = request.get_json(silent=True) or {}
+    code = (dados.get('code') or '').strip()
+    endereco = (dados.get('endereco') or '').strip()
+    veiculo = (dados.get('veiculo') or 'moto').strip().lower()
+    if not code or not endereco:
+        return jsonify(ok=False, erro='pedido sem código ou sem endereço'), 400
+    r = lala_svc.cotar(endereco, veiculo)
+    if not r.get('ok'):
+        return jsonify(ok=False, erro=r.get('erro')), 502
+    e = LalamoveEntrega(
+        pedido_code=code, data_ref=hoje_brt(),
+        quotation_id=r['quotation_id'],
+        sender_stop_id=r['sender_stop_id'],
+        recipient_stop_id=r['recipient_stop_id'],
+        status='cotacao', service_type=r['service_type'],
+        valor=r.get('valor'), moeda=r.get('moeda'),
+        distancia_m=r.get('distancia_m'),
+        endereco_destino=endereco,
+        destinatario=(dados.get('destinatario') or '')[:200] or None,
+        telefone_destino=(dados.get('telefone') or '')[:40] or None,
+        criado_por_id=current_user.id)
+    db.session.add(e)
+    db.session.commit()
+    km = (f'{r["distancia_m"] / 1000:.1f} km' if r.get('distancia_m') else '')
+    rotulo_veic = lala_svc.ROTULO_VEICULO.get(r['service_type'], veiculo)
+    return jsonify(ok=True, entrega_id=e.id, valor=r.get('valor'),
+                   moeda=r.get('moeda') or 'BRL', distancia=km,
+                   veiculo=rotulo_veic)
+
+
+@entregas_bp.route('/api/painel/lalamove/chamar', methods=['POST'])
+@login_required
+def api_lalamove_chamar():
+    """Confirma a corrida de uma cotação feita. JSON: {entrega_id}."""
+    from app.services import lalamove as lala_svc
+    dados = request.get_json(silent=True) or {}
+    e = db.session.get(LalamoveEntrega, dados.get('entrega_id'))
+    if not e or e.status != 'cotacao':
+        return jsonify(ok=False, erro='cotação não encontrada ou já usada'), 400
+    r = lala_svc.criar_ordem(
+        e.quotation_id, e.sender_stop_id, e.recipient_stop_id,
+        e.destinatario, e.telefone_destino,
+        observacao=f'Pedido {e.pedido_code} — O Pão Padaria Artesanal')
+    if not r.get('ok'):
+        return jsonify(ok=False, erro=r.get('erro')), 502
+    e.order_id = r['order_id']
+    e.status = r.get('status') or 'ASSIGNING_DRIVER'
+    e.share_link = r.get('share_link')
+    if r.get('valor') is not None:
+        e.valor = r['valor']
+    e.atualizado_em = agora()
+    db.session.commit()
+    current_app.logger.info('lalamove chamada: pedido=%s order=%s por uid=%s',
+                            e.pedido_code, e.order_id, current_user.id)
+    return jsonify(ok=True, lalamove=_lalamove_json(e))
+
+
+@entregas_bp.route('/api/painel/lalamove/cancelar', methods=['POST'])
+@login_required
+def api_lalamove_cancelar():
+    """Cancela uma corrida já chamada. JSON: {entrega_id}."""
+    from app.services import lalamove as lala_svc
+    dados = request.get_json(silent=True) or {}
+    e = db.session.get(LalamoveEntrega, dados.get('entrega_id'))
+    if not e or not e.order_id:
+        return jsonify(ok=False, erro='corrida não encontrada'), 400
+    r = lala_svc.cancelar(e.order_id)
+    if not r.get('ok'):
+        return jsonify(ok=False, erro=r.get('erro')), 502
+    e.status = 'CANCELED'
+    e.atualizado_em = agora()
+    db.session.commit()
+    current_app.logger.info('lalamove cancelada: pedido=%s order=%s por uid=%s',
+                            e.pedido_code, e.order_id, current_user.id)
+    return jsonify(ok=True, lalamove=_lalamove_json(e))
 
 
 def _carregar_overrides_data():
@@ -46,14 +326,13 @@ def _carregar_overrides_full():
 
 @entregas_bp.route('/api/pedidos')
 @login_required
-@entrega_access_required
 def api_pedidos():
     import traceback
-    data_str = request.args.get('data', date.today().isoformat())
+    data_str = request.args.get('data', hoje_brt().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
-        target = date.today()
+        target = hoje_brt()
 
     try:
         overrides_full = _carregar_overrides_full()
@@ -72,19 +351,10 @@ def api_pedidos():
             total_janela = resultado.get('total_janela', 0)
 
             codes = [p['code'] for p in pedidos if p['code']]
-            cartinhas_manuais = {}
-            if codes:
-                for c in CartinhaEntrega.query.filter(CartinhaEntrega.pedido_code.in_(codes)).all():
-                    cartinhas_manuais[c.pedido_code] = c.texto or ''
+            _aplicar_cartinhas(pedidos)
 
-            # Cartinha manual (editada pelo usuario) tem prioridade sobre a do VNDA
+            # Info adicional de override de data
             for p in pedidos:
-                manual = cartinhas_manuais.get(p['code'], '')
-                auto = p.get('cartinha_vnda', '')
-                p['cartinha'] = manual or auto
-                p['cartinha_origem'] = 'manual' if manual else ('vnda' if auto else None)
-
-                # Info adicional de override de data
                 if p.get('data_override'):
                     ov = overrides_full.get(p['code'])
                     if ov:
@@ -118,16 +388,118 @@ def api_pedidos():
     return resp
 
 
+@entregas_bp.route('/imprimir', methods=['GET', 'POST'])
+@login_required
+def imprimir():
+    """Folha A4 por pedido pra impressao fisica.
+
+    POST (caminho default do JS): manda `pedidos_json` com os dados ja
+    carregados na tela (estado em memoria da aba Operacao). Servidor NAO
+    chama VNDA — evita o caso real 11/06/2026 de "Nenhum pedido selecionado"
+    quando a data nao bate exato (override de data, cache, polling
+    re-renderizando entre marcacao e clique).
+
+    GET (legado): `codes=A,B,C&data=YYYY-MM-DD` — busca no VNDA pela data.
+    Mantido pra compat com bookmarks/abas abertas com o link antigo.
+
+    Comum: `vias=cliente,motorista` (default 'cliente').
+
+    Via do entregador OMITE valores comerciais e cartinha (decisao do dono).
+    """
+    src = request.form if request.method == 'POST' else request.args
+    data_str = src.get('data') or hoje_brt().isoformat()
+    try:
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        target = hoje_brt()
+    vias_param = (src.get('vias') or 'cliente').strip().lower()
+    vias = [v for v in (s.strip() for s in vias_param.split(','))
+            if v in ('cliente', 'motorista')]
+    if not vias:
+        vias = ['cliente']
+
+    pedidos = []
+    if request.method == 'POST':
+        pj = src.get('pedidos_json') or '[]'
+        try:
+            pedidos = json.loads(pj)
+            if not isinstance(pedidos, list):
+                pedidos = []
+        except (ValueError, TypeError):
+            current_app.logger.warning(
+                'imprimir: pedidos_json invalido (%d bytes)', len(pj))
+            pedidos = []
+    else:
+        codes_param = (src.get('codes') or '').strip()
+        codes_sel = {c.strip() for c in codes_param.split(',') if c.strip()}
+        try:
+            overrides_full = _carregar_overrides_full()
+            overrides_data = {code: o['data']
+                              for code, o in overrides_full.items()}
+            resultado = _injetar_pedidos_locais(
+                target,
+                vnda.buscar_pedidos_do_dia(target, overrides=overrides_data))
+            pedidos = (resultado.get('pedidos', [])
+                       if 'erro' not in resultado else [])
+        except Exception:  # noqa: BLE001
+            current_app.logger.exception('imprimir: falha carregando pedidos')
+            pedidos = []
+        if codes_sel:
+            codes_carregados = {p.get('code') for p in pedidos if p.get('code')}
+            ausentes = codes_sel - codes_carregados
+            if ausentes:
+                current_app.logger.warning(
+                    'imprimir: %d code(s) selecionado(s) nao bateram com a '
+                    'data %s: %s', len(ausentes), target.isoformat(),
+                    ', '.join(sorted(ausentes))[:500])
+        pedidos = [p for p in pedidos if p.get('code') in codes_sel]
+    _aplicar_cartinhas(pedidos)
+
+    # Driver atribuido (so aparece na via do cliente; entregador nao precisa)
+    codes_p = [p['code'] for p in pedidos if p.get('code')]
+    drv_por_code = {}
+    if codes_p:
+        for a in AtribuicaoEntrega.query.filter(
+                AtribuicaoEntrega.pedido_code.in_(codes_p)).all():
+            if a.driver_id:
+                d = Driver.query.get(a.driver_id)
+                if d:
+                    drv_por_code[a.pedido_code] = d.nome
+    for p in pedidos:
+        p['driver_nome'] = drv_por_code.get(p.get('code'))
+
+    # Rede de seguranca: se um pedido especifico estourar o template (ex:
+    # campo com tipo inesperado), nao deixa 500 levar toda a impressao —
+    # renderiza um a um e descarta o que falhou (com log pra diagnostico).
+    try:
+        return render_template('entregas/imprimir.html',
+                               pedidos=pedidos, vias=vias, data=target)
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception(
+            'imprimir: render em lote falhou — isolando pedido com defeito')
+        bons = []
+        for p in pedidos:
+            try:
+                render_template('entregas/imprimir.html',
+                                pedidos=[p], vias=vias, data=target)
+                bons.append(p)
+            except Exception:  # noqa: BLE001
+                current_app.logger.warning(
+                    'imprimir: pedido %s nao renderiza, descartado',
+                    p.get('code'))
+        return render_template('entregas/imprimir.html',
+                               pedidos=bons, vias=vias, data=target)
+
+
 @entregas_bp.route('/api/calendario')
 @login_required
-@entrega_access_required
 def api_calendario():
     mes_str = request.args.get('mes', '')
     try:
         parts = mes_str.split('-')
         year, month = int(parts[0]), int(parts[1])
     except (ValueError, IndexError):
-        year, month = date.today().year, date.today().month
+        year, month = hoje_brt().year, hoje_brt().month
 
     overrides = _carregar_overrides_data()
     dias = vnda.contar_pedidos_por_dia(year, month, overrides=overrides)
@@ -295,36 +667,63 @@ def atualizar_driver(did):
     return jsonify(ok=True, token=d.token)
 
 
+def _limpar_referencias_driver(did, apagar_atribuicoes):
+    """Remove/zera TODAS as FKs que apontam pro driver, pra o delete nao quebrar
+    no Postgres (FK pendente -> IntegrityError -> 500 que o front engolia, e o
+    driver nunca era excluido — bug visto em prod 2026-06-09).
+
+    - `DriverMagicToken` (driver_id NOT NULL, link efemero diario): DELETE.
+    - `PedidoLoja.driver_id` (handshake de coleta) / `PedidoItemFoto.
+      criado_por_driver_id` (foto do motorista) — ambos nullable: zera (preserva
+      o registro, perde so a atribuicao ao motorista).
+    - `AtribuicaoEntrega`: DELETE so com force (e a 'historia' de entregas)."""
+    from app.models import DriverMagicToken, PedidoItemFoto, PedidoLoja
+    DriverMagicToken.query.filter_by(driver_id=did).delete(synchronize_session=False)
+    PedidoLoja.query.filter_by(driver_id=did).update(
+        {'driver_id': None}, synchronize_session=False)
+    PedidoItemFoto.query.filter_by(criado_por_driver_id=did).update(
+        {'criado_por_driver_id': None}, synchronize_session=False)
+    if apagar_atribuicoes:
+        AtribuicaoEntrega.query.filter_by(driver_id=did).delete(synchronize_session=False)
+
+
 @entregas_bp.route('/api/drivers/<int:did>', methods=['DELETE'])
 @login_required
 @entrega_access_required
 def remover_driver(did):
-    """Exclui o driver de vez se nao tem historico; senao apenas desativa.
-    Forca exclusao com ?force=1 (cuidado: apaga atribuicoes)."""
+    """Exclui o driver de vez se nao tem historico de entregas; senao apenas
+    desativa. Forca exclusao com ?force=1 (cuidado: apaga atribuicoes)."""
     d = Driver.query.get_or_404(did)
     force = request.args.get('force') == '1'
 
     n_atrib = AtribuicaoEntrega.query.filter_by(driver_id=did).count()
 
-    if n_atrib == 0:
-        # Sem historico — exclui de vez
-        nome = d.nome
-        db.session.delete(d)
-        db.session.commit()
-        return jsonify(ok=True, acao='excluido', nome=nome)
+    try:
+        if n_atrib == 0:
+            # Sem historico de entregas — exclui de vez (limpando magic tokens
+            # e zerando refs nullable de pedido/foto, que senao travam a FK).
+            nome = d.nome
+            _limpar_referencias_driver(did, apagar_atribuicoes=False)
+            db.session.delete(d)
+            db.session.commit()
+            return jsonify(ok=True, acao='excluido', nome=nome)
 
-    if force:
-        # Apaga as atribuicoes tambem (cuidado!)
-        AtribuicaoEntrega.query.filter_by(driver_id=did).delete()
-        nome = d.nome
-        db.session.delete(d)
-        db.session.commit()
-        return jsonify(ok=True, acao='excluido_com_historico', nome=nome, atribuicoes_apagadas=n_atrib)
+        if force:
+            nome = d.nome
+            _limpar_referencias_driver(did, apagar_atribuicoes=True)
+            db.session.delete(d)
+            db.session.commit()
+            return jsonify(ok=True, acao='excluido_com_historico', nome=nome,
+                           atribuicoes_apagadas=n_atrib)
 
-    # Tem historico mas sem force — apenas desativa
-    d.ativo = False
-    db.session.commit()
-    return jsonify(ok=True, acao='desativado', nome=d.nome, atribuicoes=n_atrib)
+        # Tem historico mas sem force — apenas desativa
+        d.ativo = False
+        db.session.commit()
+        return jsonify(ok=True, acao='desativado', nome=d.nome, atribuicoes=n_atrib)
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception('remover_driver %s falhou', did)
+        return jsonify(ok=False, erro=f'Falha ao excluir: {exc}'), 500
 
 
 # ── Atribuicao pedido <-> driver ──
@@ -388,7 +787,7 @@ def tile_proxy(z, x, y):
 
     Cache no proxy + browser pra reduzir trafego."""
     import requests as r
-    from flask import Response, abort
+    from flask import Response
     if z < 0 or z > 19 or x < 0 or y < 0:
         abort(400)
     try:
@@ -766,17 +1165,17 @@ def atribuir_lote():
                     data_str = it['data_entrega']
                     break
         try:
-            data_lote = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else date.today()
+            data_lote = datetime.strptime(data_str, '%Y-%m-%d').date() if data_str else hoje_brt()
         except ValueError:
-            data_lote = date.today()
+            data_lote = hoje_brt()
         janelas = criar.get('janelas') or []
         if not isinstance(janelas, list):
             janelas = []
         nome = (criar.get('nome') or '').strip()
         if not nome:
-            agora = datetime.now()
+            ag = agora()
             jan_str = ' + '.join(j or '(sem janela)' for j in janelas) if janelas else 'todas as janelas'
-            nome = data_lote.strftime('%d/%m') + ' ' + agora.strftime('%H:%M') + ' · ' + jan_str
+            nome = data_lote.strftime('%d/%m') + ' ' + ag.strftime('%H:%M') + ' · ' + jan_str
         novo = LoteSaida(
             nome=nome[:120],
             data_entrega=data_lote,
@@ -889,11 +1288,11 @@ def listar_lotes():
     """Lista lotes de uma data (?data=YYYY-MM-DD).
     Retorna metadados + contadores por status."""
     import json as _json
-    data_str = request.args.get('data', date.today().isoformat())
+    data_str = request.args.get('data', hoje_brt().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
-        target = date.today()
+        target = hoje_brt()
     lotes = LoteSaida.query.filter_by(data_entrega=target).order_by(LoteSaida.criado_em).all()
 
     # Conta atribuicoes por lote em 1 query
@@ -970,7 +1369,7 @@ def salvar_cartinha(code):
         db.session.add(c)
 
     c.texto = texto
-    c.atualizado_em = datetime.utcnow()
+    c.atualizado_em = agora()
     c.atualizado_por = current_user.id
     db.session.commit()
 
@@ -984,11 +1383,11 @@ def api_produtos():
     """Agrega itens dos pedidos do dia. Retorna duas listas:
     - 'vendidos': como veio do VNDA (cestas como produto unico)
     - 'producao': cestas explodidas em componentes (usa Produto+ProdutoItem do banco)"""
-    data_str = request.args.get('data', date.today().isoformat())
+    data_str = request.args.get('data', hoje_brt().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
-        target = date.today()
+        target = hoje_brt()
 
     janelas = [j for j in request.args.getlist('janela') if j]
 
@@ -1135,11 +1534,11 @@ def api_produtos():
 @entrega_access_required
 def api_atribuidos():
     """Lista pedidos do dia agrupados por driver atribuido + secao 'sem driver'."""
-    data_str = request.args.get('data', date.today().isoformat())
+    data_str = request.args.get('data', hoje_brt().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
-        target = date.today()
+        target = hoje_brt()
 
     overrides = _carregar_overrides_data()
     resultado = _injetar_pedidos_locais(target, vnda.buscar_pedidos_do_dia(target, overrides=overrides))
@@ -1149,6 +1548,7 @@ def api_atribuidos():
         return resp
 
     pedidos = resultado.get('pedidos', [])
+    _aplicar_cartinhas(pedidos)   # resolve p['cartinha'] (manual > VNDA) p/ a aba Operacao
     codes = [p['code'] for p in pedidos if p.get('code')]
 
     atribuicoes_por_code = {}
@@ -1196,7 +1596,12 @@ def api_atribuidos():
     for d in drivers_db:
         if d.id not in paradas_por_driver:
             continue
-        paradas_list = sorted(paradas_por_driver[d.id], key=lambda x: (x[0], x[1].get('periodo') or ''))
+        # Ordena por JANELA (expresso primeiro, depois por horario) e, dentro
+        # da janela, pela ordem salva da rota. Respeita o SLA de horario mesmo
+        # antes de re-otimizar.
+        paradas_list = sorted(
+            paradas_por_driver[d.id],
+            key=lambda x: (rotas_svc.janela_rank(x[1]), x[0]))
         drivers_resp.append({
             'id': d.id,
             'nome': d.nome,
@@ -1206,6 +1611,10 @@ def api_atribuidos():
             'paradas': [p for _, p in paradas_list],
             'qtd': len(paradas_list),
         })
+
+    # "Sem driver" tambem por janela: expresso no topo, depois por horario —
+    # quem prepara/atribui ve primeiro o que tem SLA mais apertado.
+    sem_driver.sort(key=rotas_svc.janela_rank)
 
     return jsonify(
         data=data_str,
@@ -1227,11 +1636,11 @@ def api_atribuidos():
 def api_rotas():
     """Distribui pedidos entre drivers nominais (cadastrados em /api/drivers).
     Pedidos com atribuicao salva (AtribuicaoEntrega) preservam o driver."""
-    data_str = request.args.get('data', date.today().isoformat())
+    data_str = request.args.get('data', hoje_brt().isoformat())
     try:
         target = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
-        target = date.today()
+        target = hoje_brt()
 
     janelas = [j for j in request.args.getlist('janela') if j]
 
@@ -1389,7 +1798,7 @@ def salvar_data_override(code):
 
     o.data_entrega = nova_data
     o.motivo = motivo
-    o.atualizado_em = datetime.utcnow()
+    o.atualizado_em = agora()
     o.atualizado_por = current_user.id
     db.session.commit()
 
@@ -1473,8 +1882,8 @@ def api_debug_pedido(code):
             de = _extrair_data_entrega(order)
             info['data_entrega_extraida'] = de.isoformat() if de else None
             info['periodo_extraido'] = _extrair_periodo(order)
-            info['hoje'] = date.today().isoformat()
-            info['entrega_e_hoje'] = (de == date.today()) if de else False
+            info['hoje'] = hoje_brt().isoformat()
+            info['entrega_e_hoje'] = (de == hoje_brt()) if de else False
         else:
             info['body'] = resp.text[:500]
     except http_requests.RequestException as e:
@@ -1715,3 +2124,118 @@ def api_debug():
         info['erro_conexao'] = str(e)
 
     return jsonify(info)
+
+
+@entregas_bp.route('/drivers/magic')
+@login_required
+@entrega_access_required
+def drivers_magic_status():
+    """Status dos magic tokens diarios de cada motorista ativo.
+
+    Mostra ultimo token, quando criado/expira, se foi enviado, se Z-API
+    confirmou ok. Permite regerar+reenviar pra um motorista especifico
+    (ex: ele perdeu o link / trocou de celular)."""
+    from app.models import Driver, DriverMagicToken
+    from app.services import driver_magic
+    from app.services import zapi as zapi_svc
+
+    drivers = Driver.query.filter_by(ativo=True).order_by(Driver.nome).all()
+    rows = []
+    for d in drivers:
+        mt = (DriverMagicToken.query
+              .filter_by(driver_id=d.id, revogado=False)
+              .filter(DriverMagicToken.expira_em > agora())
+              .order_by(DriverMagicToken.criado_em.desc())
+              .first())
+        ultimo = (DriverMagicToken.query
+                  .filter_by(driver_id=d.id)
+                  .order_by(DriverMagicToken.criado_em.desc())
+                  .first())
+        rows.append({
+            'driver': d,
+            'ativo': mt,
+            'ultimo': ultimo,
+        })
+    zapi_ok = zapi_svc.disponivel()
+    whitelist = sorted(driver_magic.telefones_drivers_ativos())
+    return render_template('entregas/drivers_magic.html',
+                            rows=rows, zapi_ok=zapi_ok, whitelist=whitelist)
+
+
+@entregas_bp.route('/drivers/magic/<int:did>/regerar', methods=['POST'])
+@login_required
+@entrega_access_required
+def drivers_magic_regerar(did):
+    """Forca regerar+reenviar magic link pra um motorista (botao na UI)."""
+    from flask import flash, redirect, url_for
+
+    from app.models import Driver
+    from app.services import driver_magic
+    d = Driver.query.get_or_404(did)
+    if not d.ativo:
+        flash(f'{d.nome} esta inativo. Reative antes.', 'warning')
+        return redirect(url_for('entregas.drivers_magic_status'))
+    try:
+        mt = driver_magic.gerar_token(d)
+        # forcar=True: admin clicou manualmente, ignora guarda de pedido pendente
+        ok, msg = driver_magic.enviar_whatsapp(mt, forcar=True)
+        if ok:
+            flash(f'Link enviado pra {d.nome}.', 'success')
+        else:
+            flash(f'Token gerado mas falha no envio: {msg}', 'warning')
+    except Exception as exc:  # noqa: BLE001
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('entregas.drivers_magic_status'))
+
+
+@entregas_bp.route('/drivers/bulk', methods=['GET', 'POST'])
+@login_required
+@entrega_access_required
+def drivers_bulk():
+    """Edicao em massa de drivers: telefone, pin, capacidade, ativo.
+
+    O regerar+enviar magic link continua em rota propria (botao por linha
+    aciona /drivers/magic/<did>/regerar)."""
+    from flask import flash, redirect, url_for
+
+    if request.method == 'POST':
+        atualizados = 0
+        erros = []
+        for d in Driver.query.all():
+            tel = (request.form.get(f'telefone_{d.id}', '') or '').strip() or None
+            pin = (request.form.get(f'pin_{d.id}', '') or '').strip() or None
+            cap_raw = (request.form.get(f'capacidade_{d.id}', '') or '').strip()
+            ativo = bool(request.form.get(f'ativo_{d.id}'))
+
+            if pin is not None and not (pin.isdigit() and 4 <= len(pin) <= 6):
+                erros.append(f'{d.nome}: PIN deve ter 4-6 digitos')
+                continue
+            try:
+                cap = max(1, int(cap_raw)) if cap_raw else (d.capacidade or 999)
+            except ValueError:
+                erros.append(f'{d.nome}: capacidade invalida')
+                continue
+
+            antes = (d.telefone, d.pin, d.capacidade, d.ativo)
+            d.telefone = tel
+            d.pin = pin
+            d.capacidade = cap
+            d.ativo = ativo
+            if (d.telefone, d.pin, d.capacidade, d.ativo) != antes:
+                atualizados += 1
+
+        if erros:
+            db.session.rollback()
+            for e in erros:
+                flash(e, 'danger')
+            return redirect(url_for('entregas.drivers_bulk'))
+
+        if atualizados:
+            db.session.commit()
+            flash(f'{atualizados} motorista(s) atualizado(s).', 'success')
+        else:
+            flash('Nenhuma mudança.', 'info')
+        return redirect(url_for('entregas.drivers_bulk'))
+
+    drivers = Driver.query.order_by(Driver.ativo.desc(), Driver.nome).all()
+    return render_template('entregas/drivers_bulk.html', drivers=drivers)

@@ -1,12 +1,11 @@
-from datetime import datetime
 
-from flask import render_template, redirect, url_for, flash, request, jsonify
-from flask_login import login_required, current_user
+from flask import flash, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 
 from app.blueprints.materias_primas import materias_primas_bp
-from app.decorators import admin_required
+from app.decorators import admin_required, catalogo_required
 from app.extensions import db
-from app.models import MateriaPrima, ReceitaIngrediente, MovimentacaoEstoque, AlertaEstoque
+from app.models import AlertaEstoque, MateriaPrima, MovimentacaoEstoque, ReceitaIngrediente
 
 
 @materias_primas_bp.route('/')
@@ -94,16 +93,48 @@ def excluir(id):
 
 @materias_primas_bp.route('/estoque')
 @login_required
-@admin_required
+@catalogo_required
 def estoque():
     materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
     alertas = {a.materia_prima_id: a.estoque_minimo for a in AlertaEstoque.query.all()}
     return render_template('materias_primas/estoque.html', materias=materias, alertas=alertas)
 
 
+@materias_primas_bp.route('/estoque/ocr-nota', methods=['POST'])
+@login_required
+@catalogo_required
+def estoque_ocr_nota():
+    """Recebe upload de imagem de nota/cupom e devolve itens extraidos +
+    sugestao de match com MPs cadastradas. JSON pra ser consumido por JS
+    no /estoque ou na pagina de entrada."""
+    from app.services.copilot import _resolver_mp
+    from app.services.ocr_nota import extrair_itens_nota
+    f = request.files.get('imagem')
+    if not f or not f.filename:
+        return jsonify(ok=False, erro='sem_imagem'), 400
+    mimetype = f.mimetype or 'image/jpeg'
+    if not mimetype.startswith('image/'):
+        return jsonify(ok=False, erro='arquivo_nao_eh_imagem'), 400
+    data = f.read()
+    if len(data) > 8 * 1024 * 1024:
+        return jsonify(ok=False, erro='imagem_muito_grande'), 400
+    dados = extrair_itens_nota(data, mimetype=mimetype)
+    if dados.get('erro'):
+        return jsonify(ok=False, erro=dados['erro'],
+                       raw=dados.get('raw', '')), 422
+    # Enriquece cada item com sugestao de match no cadastro de MPs.
+    for it in dados.get('itens', []) or []:
+        nome = (it.get('nome') or '').strip()
+        if nome:
+            matches = _resolver_mp(nome)
+            it['matches'] = matches
+            it['resolvido'] = matches[0] if matches else None
+    return jsonify(ok=True, dados=dados)
+
+
 @materias_primas_bp.route('/estoque/entrada', methods=['POST'])
 @login_required
-@admin_required
+@catalogo_required
 def estoque_entrada():
     mp_id = int(request.form['mp_id'])
     quantidade = float(request.form['quantidade'].replace(',', '.'))
@@ -135,7 +166,7 @@ def estoque_entrada():
 
 @materias_primas_bp.route('/estoque/saida', methods=['POST'])
 @login_required
-@admin_required
+@catalogo_required
 def estoque_saida():
     mp_id = int(request.form['mp_id'])
     quantidade = float(request.form['quantidade'].replace(',', '.'))
@@ -160,7 +191,7 @@ def estoque_saida():
 
 @materias_primas_bp.route('/estoque/<int:mp_id>/historico')
 @login_required
-@admin_required
+@catalogo_required
 def estoque_historico(mp_id):
     mp = MateriaPrima.query.get_or_404(mp_id)
     movimentacoes = MovimentacaoEstoque.query.filter_by(
@@ -171,7 +202,7 @@ def estoque_historico(mp_id):
 
 @materias_primas_bp.route('/estoque/alertas', methods=['POST'])
 @login_required
-@admin_required
+@catalogo_required
 def estoque_alertas():
     mp_ids = request.form.getlist('mp_id[]')
     minimos = request.form.getlist('estoque_minimo[]')

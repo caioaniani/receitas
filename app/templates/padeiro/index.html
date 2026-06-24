@@ -1,0 +1,881 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Padeiro — Pedidos de hoje</title>
+<style>
+  :root { --verde:#198754; --azul:#0d6efd; --cinza:#6c757d; --amarelo:#ffc107; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:#f1f3f5; color:#212529; padding-bottom:50px; }
+  header { background:#212529; color:#fff; padding:12px 20px; display:flex;
+           align-items:center; gap:16px; position:sticky; top:0; z-index:10; }
+  header h1 { font-size:22px; margin:0; white-space:nowrap; }
+  header .sair { color:#fff; text-decoration:none; font-size:16px; background:#495057;
+                 padding:10px 16px; border-radius:10px; white-space:nowrap; }
+  .wrap { padding:16px; max-width:1100px; margin:0 auto; }
+  .sec-title { font-size:20px; font-weight:800; margin:24px 0 10px; text-transform:uppercase;
+               letter-spacing:.5px; color:#343a40; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
+  .card { background:#fff; border-radius:16px; padding:18px; box-shadow:0 1px 4px rgba(0,0,0,.1);
+          border-left:8px solid var(--cinza); }
+  .card.sep { border-left-color:var(--amarelo); }
+  .card.b2b { border-left-color:#6f42c1; }
+  .card .loja { font-size:24px; font-weight:800; margin:0 0 4px; }
+  .card .meta { font-size:16px; color:#6c757d; margin-bottom:12px; }
+  .card .itens { font-size:15px; color:#495057; margin:0 0 14px; line-height:1.6; }
+  .card .itens .obs-item { font-weight:800; color:#b45309; background:#fff3cd;
+                           padding:1px 6px; border-radius:6px; }
+  /* Check por item: o padeiro toca pra marcar "já separei". */
+  .card .itens .item-chk { display:block; font-size:16px; padding:8px 10px;
+                           margin:3px 0; border-radius:8px; cursor:pointer;
+                           user-select:none; -webkit-user-select:none; }
+  .card .itens .item-chk .tick::before { content:'\2610'; margin-right:6px; }
+  .card .itens .item-chk.done { color:#9aa0a6; text-decoration:line-through;
+                                background:#e9f7ef; }
+  .card .itens .item-chk.done .tick::before { content:'\2611'; }
+  .card .meta .chk-count { font-weight:800; color:var(--verde,#198754); }
+  .btn { display:block; width:100%; border:none; border-radius:14px; padding:20px;
+         font-size:22px; font-weight:800; color:#fff; cursor:pointer; margin:0; }
+  .btn-sep { background:var(--verde); }
+  .btn-mot { background:var(--azul); }
+  .drivers { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:10px; }
+  .drivers .lbl { grid-column:1/-1; font-size:16px; font-weight:700; color:#343a40; margin-bottom:2px; }
+  .vazio { color:#868e96; font-size:18px; padding:20px; text-align:center; }
+  .flash { padding:14px 18px; border-radius:12px; margin-bottom:12px; font-size:18px; font-weight:600; }
+  .flash.success { background:#d1e7dd; color:#0f5132; }
+  .flash.warning { background:#fff3cd; color:#664d03; }
+  .flash.danger  { background:#f8d7da; color:#842029; }
+  .flash.info    { background:#cff4fc; color:#055160; }
+  form { margin:0; }
+  .datenav { flex:1; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  .dnav { text-align:center; text-decoration:none; background:#495057; color:#fff;
+          font-weight:800; font-size:16px; padding:10px 18px; border-radius:12px; }
+  .dnav.hoje { background:#0d6efd; }
+  .btn-juntar { display:block; width:100%; border:none; border-radius:14px; padding:18px;
+                font-size:20px; font-weight:800; color:#fff; background:#fd7e14;
+                cursor:pointer; margin-bottom:16px; }
+  #som-bar { text-align:center; padding:8px; background:#fff3cd; }
+  #btn-som { background:#ffc107; color:#212529; border:none; border-radius:10px;
+             padding:12px 20px; font-weight:800; cursor:pointer; font-size:17px; }
+  #avisos-bar { background:#dc3545; color:#fff; padding:12px 16px; }
+  .aviso-ticker { overflow:hidden; white-space:nowrap; }
+  .aviso-ticker span { display:inline-block; padding-left:100%;
+                       animation:aviso-ticker 18s linear infinite;
+                       font-size:24px; font-weight:800; }
+  @keyframes aviso-ticker { from { transform:translateX(0); } to { transform:translateX(-100%); } }
+  #aviso-botoes { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+  .aviso-li { background:#fff; color:#b02a37; border:none; border-radius:10px;
+              padding:12px 18px; font-weight:800; font-size:16px; cursor:pointer; }
+  #hist-toggle { position:fixed; right:0; top:25%; transform:translateY(-50%); z-index:30;
+                 background:#0d6efd; color:#fff; border:none; padding:18px 12px;
+                 font-weight:800; font-size:16px; border-radius:12px 0 0 12px;
+                 cursor:pointer; writing-mode:vertical-rl; }
+  #hist-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:35; display:none; }
+  #hist-backdrop.aberto { display:block; }
+  #hist-drawer { position:fixed; top:0; right:0; height:100%; width:380px; max-width:92vw;
+                 background:#fff; box-shadow:-2px 0 14px rgba(0,0,0,.25); z-index:40;
+                 transform:translateX(100%); transition:transform .25s ease; overflow-y:auto; }
+  #hist-drawer.aberto { transform:translateX(0); }
+  .hist-head { display:flex; justify-content:space-between; align-items:center; padding:16px;
+               background:#212529; color:#fff; position:sticky; top:0; }
+  .hist-x { background:transparent; border:none; color:#fff; font-size:30px; cursor:pointer; line-height:1; }
+  .hist-item { padding:14px 16px; border-bottom:1px solid #eee; }
+  .hist-item .t { font-size:17px; font-weight:600; color:#212529; }
+  .hist-item .m { font-size:13px; color:#6c757d; margin-top:4px; }
+  #cong-toggle { position:fixed; right:0; top:40%; transform:translateY(-50%); z-index:30;
+                 background:#0d9bb8; color:#fff; border:none; padding:18px 12px;
+                 font-weight:800; font-size:16px; border-radius:12px 0 0 12px;
+                 cursor:pointer; writing-mode:vertical-rl; }
+  #cong-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:35; display:none; }
+  #cong-backdrop.aberto { display:block; }
+  #cong-drawer { position:fixed; top:0; right:0; height:100%; width:380px; max-width:92vw;
+                 background:#fff; box-shadow:-2px 0 14px rgba(0,0,0,.25); z-index:40;
+                 transform:translateX(100%); transition:transform .25s ease; overflow-y:auto; }
+  #cong-drawer.aberto { transform:translateX(0); }
+  .cong-item { display:flex; justify-content:space-between; align-items:center; gap:12px;
+               padding:14px 16px; border-bottom:1px solid #eee; font-size:18px; color:#212529; }
+  .cong-item .q { font-weight:800; color:#0d9bb8; font-size:20px; white-space:nowrap; }
+  #prep-toggle { position:fixed; right:0; top:55%; transform:translateY(-50%); z-index:30;
+                 background:#fd7e14; color:#fff; border:none; padding:18px 12px;
+                 font-weight:800; font-size:16px; border-radius:12px 0 0 12px;
+                 cursor:pointer; writing-mode:vertical-rl; }
+  #prep-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:35; display:none; }
+  #prep-backdrop.aberto { display:block; }
+  #prep-drawer { position:fixed; top:0; right:0; height:100%; width:50vw; max-width:96vw;
+                 background:#fff; box-shadow:-2px 0 14px rgba(0,0,0,.25); z-index:40;
+                 transform:translateX(100%); transition:transform .25s ease; overflow-y:auto; }
+  #prep-drawer.aberto { transform:translateX(0); }
+  .prep-loja-grupo { background:#212529; color:#fff; font-weight:800; padding:12px 16px;
+                     font-size:22px; position:sticky; top:60px; }
+  .prep-item { padding:14px 16px 14px 24px; border-bottom:1px solid #eee;
+               font-size:24px; font-weight:600; color:#212529; }
+  .prep-q { font-weight:800; color:#0d6efd; }
+  #prep-alert { display:none; align-items:center; justify-content:space-between; gap:16px;
+                background:#fd7e14; color:#fff; padding:16px; font-size:20px; font-weight:800; }
+  #prep-alert button { background:#fff; color:#b45309; border:none; border-radius:10px;
+                       padding:14px 32px; font-weight:800; font-size:18px; cursor:pointer; }
+  /* Banner piscante de pré-preparo (independente do bloco de avisos). */
+  #prep-ticker { background:#fd7e14; color:#fff; padding:12px 16px; cursor:pointer;
+                 animation:prep-blink 1.1s steps(1, end) infinite; }
+  .prep-ticker-track { overflow:hidden; white-space:nowrap; }
+  .prep-ticker-track span { display:inline-block; padding-left:100%; font-size:24px;
+                            font-weight:800; animation:prep-scroll 16s linear infinite; }
+  @keyframes prep-scroll { from { transform:translateX(0); } to { transform:translateX(-100%); } }
+  @keyframes prep-blink { 50% { opacity:.35; } }
+  #upd-badge { position:fixed; left:8px; bottom:8px; z-index:25; background:rgba(33,37,41,.72);
+               color:#fff; font-size:13px; padding:6px 10px; border-radius:8px;
+               transition:background .3s ease; }
+  #upd-badge.pulse { background:rgba(25,135,84,.9); }
+  #prod-toggle { position:fixed; right:0; top:70%; transform:translateY(-50%); z-index:30;
+                 background:var(--verde); color:#fff; border:none; padding:18px 12px;
+                 font-weight:800; font-size:16px; border-radius:12px 0 0 12px;
+                 cursor:pointer; writing-mode:vertical-rl; }
+  #fichas-toggle { position:fixed; right:0; top:85%; transform:translateY(-50%); z-index:30;
+                   background:#5d4037; color:#fff; border:none; padding:18px 12px;
+                   font-weight:800; font-size:16px; border-radius:12px 0 0 12px;
+                   cursor:pointer; writing-mode:vertical-rl; text-decoration:none;
+                   display:inline-block; }
+  #prod-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:35; display:none; }
+  #prod-backdrop.aberto { display:block; }
+  #prod-drawer { position:fixed; top:0; right:0; height:100%; width:50vw; max-width:96vw;
+                 background:#fff; box-shadow:-2px 0 14px rgba(0,0,0,.25); z-index:40;
+                 transform:translateX(100%); transition:transform .25s ease; overflow-y:auto;
+                 display:flex; flex-direction:column; }
+  #prod-drawer.aberto { transform:translateX(0); }
+  #prod-rows { flex:1; }
+  .prod-row { position:relative; display:flex; gap:10px; align-items:flex-start;
+              padding:10px 16px; border-bottom:1px solid #f1f3f5; }
+  .prod-nome-wrap { flex:1; position:relative; }
+  .prod-row input { font-size:22px; padding:14px; border:2px solid #ced4da; border-radius:10px; }
+  .prod-row input.nome { width:100%; }
+  .prod-row input.qtd { width:90px; text-align:center; }
+  .prod-row.sem-receita input.nome { border-color:#dc3545; }
+  .prod-row .rm { background:#f8d7da; color:#842029; border:none; border-radius:10px;
+                  font-size:24px; font-weight:800; padding:0 16px; cursor:pointer; }
+  .prod-results { position:absolute; left:0; right:0; top:100%; z-index:50; background:#fff;
+                  border:1px solid #ced4da; border-radius:0 0 10px 10px; max-height:50vh;
+                  overflow-y:auto; box-shadow:0 6px 14px rgba(0,0,0,.18); }
+  .prod-opt { padding:16px; font-size:20px; border-bottom:1px solid #f1f3f5; cursor:pointer; }
+  .prod-opt:active { background:#e7f1ff; }
+  #prod-msg { padding:0 16px 8px; color:#842029; font-weight:700; font-size:16px; min-height:0; }
+  .prod-acoes { display:flex; gap:10px; padding:16px; position:sticky; bottom:0;
+                background:#fff; border-top:1px solid #eee; }
+  .prod-acoes .btn { margin:0; }
+  .btn-cinza { background:#6c757d; }
+  .prod-head { display:flex; gap:10px; padding:10px 16px 0; font-size:14px;
+               font-weight:800; color:#6c757d; text-transform:uppercase; letter-spacing:.5px; }
+  .prod-head .ph-nome { flex:1; }
+  .prod-head .ph-qtd { width:130px; }
+  .prod-row.sem-qtd input.qtd { border-color:#dc3545; }
+  #prod-confirm, #prod-hist { display:none; position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.5);
+                  align-items:center; justify-content:center; }
+  #prod-confirm.aberto, #prod-hist.aberto { display:flex; }
+  #prod-confirm .box, #prod-hist .box { background:#fff; border-radius:16px; width:min(520px,92vw);
+                       max-height:86vh; overflow-y:auto; padding:20px; }
+  #prod-confirm h3, #prod-hist h3 { margin:0 0 12px; font-size:22px; }
+  #prod-confirm .linha, #prod-hist .linha { font-size:20px; padding:10px 0; border-bottom:1px solid #eee; }
+  #prod-confirm .linha b, #prod-hist .linha b { color:#0d6efd; }
+  #prod-confirm .cta, #prod-hist .cta { display:flex; gap:10px; margin-top:16px; }
+  #prod-hist .linha .q { color:#198754; font-weight:800; }
+  #prod-hist .linha .qd { color:#6c757d; font-size:15px; }
+  #prod-hist .box-head { display:flex; justify-content:space-between; align-items:center;
+                         position:sticky; top:0; margin:-20px -20px 12px;
+                         padding:14px 20px; background:#fff; z-index:1;
+                         border-bottom:1px solid #eee; }
+  #prod-hist .box-head h3 { margin:0; }
+  #prod-hist .close-x { background:none; border:none; font-size:32px; line-height:1;
+                        cursor:pointer; color:#6c757d; padding:4px 12px; }
+  #prod-hist .close-x:active { color:#000; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pedidos {% if eh_hoje %}de hoje{% endif %}— {{ dia.strftime('%d/%m') }}</h1>
+  <div class="datenav">
+    <a class="dnav" href="{{ url_for('padeiro.index', data=dia_anterior) }}">← Dia anterior</a>
+    {% if not eh_hoje %}<a class="dnav hoje" href="{{ url_for('padeiro.index') }}">Hoje</a>{% endif %}
+    <a class="dnav" href="{{ url_for('padeiro.index', data=dia_seguinte) }}">Dia seguinte →</a>
+  </div>
+  <a class="sair" href="{{ url_for('auth.logout') }}">Sair</a>
+</header>
+<div id="som-bar">
+  <button id="btn-som" onclick="ativarSom()">Tocar aqui pra ativar o som dos avisos</button>
+</div>
+<div id="avisos-bar" style="display:none;">
+  <div class="aviso-ticker"><span id="aviso-ticker-txt"></span></div>
+  <div id="aviso-botoes"></div>
+</div>
+<div id="prep-alert">
+  <span>Tem itens <u>[BACKUP]/[ASSADO]</u> pra amanhã — comece o pré-preparo!</span>
+  <button onclick="okPrep()">OK, entendi</button>
+</div>
+<div id="prep-ticker" style="display:none;" onclick="togglePrep()" role="button">
+  <div class="prep-ticker-track"><span>Pedido para preparar para amanhã já disponível</span></div>
+</div>
+<div class="wrap">
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in msgs %}
+      <div class="flash {{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div id="listas">
+    {% include 'padeiro/_listas.html' %}
+  </div>
+</div>
+<button id="hist-toggle" onclick="toggleHist()">Avisos 24h</button>
+<div id="hist-backdrop" onclick="toggleHist()"></div>
+<div id="hist-drawer">
+  <div class="hist-head">
+    <strong>Avisos — últimas 24h</strong>
+    <button class="hist-x" onclick="toggleHist()" aria-label="Fechar">×</button>
+  </div>
+  <div id="hist-lista"></div>
+</div>
+<button id="cong-toggle" onclick="toggleCong()">Congelados</button>
+<div id="cong-backdrop" onclick="toggleCong()"></div>
+<div id="cong-drawer">
+  <div class="hist-head">
+    <strong>Congelados — em estoque</strong>
+    <button class="hist-x" onclick="toggleCong()" aria-label="Fechar">×</button>
+  </div>
+  <div id="cong-lista"></div>
+</div>
+<button id="prep-toggle" onclick="togglePrep()">Pré-preparo</button>
+<div id="prep-backdrop" onclick="togglePrep()"></div>
+<div id="prep-drawer">
+  <div class="hist-head">
+    <strong>Pré-preparo — <span id="prep-dia"></span> · [BACKUP]/[ASSADO]</strong>
+    <button class="hist-x" onclick="togglePrep()" aria-label="Fechar">×</button>
+  </div>
+  <div id="prep-lista"></div>
+</div>
+<button id="prod-toggle" onclick="toggleProd()">Produzir</button>
+<div id="prod-backdrop" onclick="toggleProd()"></div>
+<div id="prod-drawer">
+  <div class="hist-head">
+    <strong>Produzir — entra no congelado</strong>
+    <button class="hist-x" onclick="toggleProd()" aria-label="Fechar">×</button>
+  </div>
+  <div class="prod-head"><span class="ph-nome">Produto</span><span class="ph-qtd">Quantidade</span></div>
+  <div id="prod-rows"></div>
+  <div id="prod-msg"></div>
+  <div class="prod-acoes">
+    <button class="btn btn-cinza" onclick="prodAddRow()">+ Item</button>
+    <button class="btn btn-cinza" onclick="prodHist()">Histórico</button>
+    <button class="btn btn-sep" onclick="prodEnviar()">Enviar</button>
+  </div>
+</div>
+<a id="fichas-toggle" href="{{ url_for('receitas.padeiro_lista') }}">Fichas</a>
+<div id="prod-confirm">
+  <div class="box">
+    <h3>Confirmar produção?</h3>
+    <div id="prod-confirm-lista"></div>
+    <div class="cta">
+      <button class="btn btn-cinza" onclick="prodCancelar()">Voltar</button>
+      <button class="btn btn-sep" id="prod-confirm-ok" onclick="prodConfirmar()">Confirmar</button>
+    </div>
+  </div>
+</div>
+<div id="prod-hist" onclick="prodHistBackdrop(event)">
+  <div class="box">
+    <div class="box-head">
+      <h3>Histórico de produção</h3>
+      <button type="button" class="close-x" onclick="prodHistFechar()" aria-label="Fechar">×</button>
+    </div>
+    <div id="prod-hist-lista"></div>
+  </div>
+</div>
+<div id="upd-badge">atualizado —</div>
+<script>
+  var CSRF = "{{ csrf_token() }}";
+  var audioCtx = null, somAtivo = false, loopId = null, avisosAtivos = [];
+  var ultimoToque = 0;
+  function marcarToque() { ultimoToque = Date.now(); }
+  document.addEventListener('click', marcarToque, true);
+  document.addEventListener('touchstart', marcarToque, true);
+  document.addEventListener('keydown', marcarToque, true);
+  document.addEventListener('input', marcarToque, true);
+
+  function _ctx() {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch (e) { audioCtx = null; }
+    }
+    return audioCtx;
+  }
+
+  function ativarSom() {
+    if (!_ctx()) return;
+    audioCtx.resume();
+    tocarCampainha();
+    setTimeout(atualizarBotaoSom, 300);
+  }
+
+  // O navegador so libera audio apos um gesto, EXCETO em modo kiosk com autoplay
+  // liberado. Por isso o botao "Ativar som" aparece SO quando o audio esta de
+  // fato bloqueado; com autoplay liberado o botao some e o som toca em toda
+  // recarga (trocar de dia, separar, etc.) sem precisar tocar em nada.
+  function atualizarBotaoSom() {
+    var sb = document.getElementById('som-bar');
+    if (!audioCtx) return;
+    if (audioCtx.state === 'running') {
+      somAtivo = true;
+      if (sb) sb.style.display = 'none';
+      if (avisosAtivos.length) iniciarLoop();
+      tratarAlertaPrep();
+    } else {
+      somAtivo = false;
+      if (sb) sb.style.display = '';
+    }
+  }
+
+  function initSom() {
+    if (!_ctx()) return;
+    audioCtx.resume();  // funciona sozinho em kiosk; senao fica 'suspended'
+    var resumir = function () {
+      if (audioCtx) { audioCtx.resume(); setTimeout(atualizarBotaoSom, 200); }
+    };
+    document.addEventListener('click', resumir);
+    document.addEventListener('touchstart', resumir);
+    setTimeout(atualizarBotaoSom, 800);
+  }
+
+  function tocarCampainha() {
+    if (!somAtivo || !audioCtx) return;
+    var t0 = audioCtx.currentTime;
+    [0, 0.22].forEach(function (off, i) {
+      var osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = (i === 0) ? 880 : 1175;
+      g.gain.setValueAtTime(0.0001, t0 + off);
+      g.gain.exponentialRampToValueAtTime(0.35, t0 + off + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + off + 0.45);
+      osc.connect(g); g.connect(audioCtx.destination);
+      osc.start(t0 + off); osc.stop(t0 + off + 0.45);
+    });
+  }
+
+  function iniciarLoop() {
+    if (loopId || !somAtivo || !avisosAtivos.length) return;
+    tocarCampainha();
+    loopId = setInterval(tocarCampainha, 6000);
+  }
+  function pararLoop() { if (loopId) { clearInterval(loopId); loopId = null; } }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  function renderAvisos(avisos) {
+    avisosAtivos = avisos || [];
+    var bar = document.getElementById('avisos-bar');
+    if (!avisosAtivos.length) { bar.style.display = 'none'; pararLoop(); return; }
+    bar.style.display = 'block';
+    document.getElementById('aviso-ticker-txt').innerHTML =
+      avisosAtivos.map(function (a) {
+        return esc(a.texto) + (a.por ? ' (' + esc(a.por) + ')' : '');
+      }).join('     •     ');
+    document.getElementById('aviso-botoes').innerHTML =
+      avisosAtivos.map(function (a) {
+        return '<button class="aviso-li" onclick="confirmarAviso(' + a.id + ')">Li:'
+          + esc(String(a.texto).substring(0, 40)) + '</button>';
+      }).join('');
+    iniciarLoop();
+  }
+
+  function confirmarAviso(id) {
+    fetch('/padeiro/avisos/' + id + '/confirmar', {
+      method: 'POST', headers: { 'X-CSRFToken': CSRF }
+    }).then(function () { carregarAvisos(); }).catch(function () {});
+  }
+
+  function carregarAvisos() {
+    fetch('{{ url_for("padeiro.avisos_json") }}')
+      .then(function (r) { return r.json(); })
+      .then(function (d) { renderAvisos(d.avisos); })
+      .catch(function () {});
+  }
+
+  // Atualiza os cards de pedidos sozinho (a TV nao precisa de ninguem mexendo).
+  // Troca so o #listas via fetch — sem recarregar a pagina, pra nao reiniciar o
+  // audio. Pula quando a aba esta oculta, um painel lateral esta aberto, ou
+  // alguem tocou na tela ha menos de 4s (pra nao mover botao sob o dedo).
+  function atualizarListas() {
+    if (document.hidden) return;
+    if (Date.now() - ultimoToque < 4000) return;
+    var hist = document.getElementById('hist-drawer');
+    var cong = document.getElementById('cong-drawer');
+    var prep = document.getElementById('prep-drawer');
+    var prod = document.getElementById('prod-drawer');
+    if ((hist && hist.classList.contains('aberto'))
+        || (cong && cong.classList.contains('aberto'))
+        || (prep && prep.classList.contains('aberto'))
+        || (prod && prod.classList.contains('aberto'))) return;
+    fetch('{{ url_for("padeiro.listas_html") }}?data={{ dia.isoformat() }}')
+      .then(function (r) {
+        if (r.redirected || !r.ok) return null;  // sessao caiu/erro: nao injeta lixo
+        return r.text();
+      })
+      .then(function (html) {
+        if (html == null) return;
+        var alvo = document.getElementById('listas');
+        if (alvo) alvo.innerHTML = html;
+        aplicarChecks();  // o rebuild apaga o estado do DOM; re-aplica do localStorage
+        var b = document.getElementById('upd-badge');
+        if (b) {
+          b.textContent = 'atualizado ' + new Date().toLocaleTimeString('pt-BR');
+          b.classList.add('pulse');
+          setTimeout(function () { b.classList.remove('pulse'); }, 600);
+        }
+      }).catch(function () {});
+  }
+
+  function fecharDrawers() {
+    ['hist-drawer', 'hist-backdrop', 'cong-drawer', 'cong-backdrop',
+     'prep-drawer', 'prep-backdrop',
+     'prod-drawer', 'prod-backdrop'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.remove('aberto');
+    });
+  }
+  // Auto-recupera a TV: se um painel/pop-up ficar aberto e ninguem tocar na tela
+  // por 60s, fecha sozinho — os botoes da tela principal voltam a funcionar sem
+  // ninguem precisar fazer nada. Nao mexe no som (nenhum toque necessario).
+  function autoFecharOcioso() {
+    // Nunca fecha enquanto um campo esta em uso (digitando receita/quantidade).
+    var ae = document.activeElement;
+    if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
+    if (Date.now() - ultimoToque < 120000) return;
+    var algumAberto = ['hist-drawer', 'cong-drawer', 'prep-drawer', 'prod-drawer'].some(function (id) {
+      var el = document.getElementById(id);
+      return el && el.classList.contains('aberto');
+    });
+    var conf = document.getElementById('prod-confirm');
+    var hist = document.getElementById('prod-hist');
+    var overlayAberto = (conf && conf.classList.contains('aberto'))
+      || (hist && hist.classList.contains('aberto'));
+    if (algumAberto || overlayAberto) {
+      fecharDrawers();
+      if (conf) conf.classList.remove('aberto');
+      if (hist) hist.classList.remove('aberto');
+    }
+  }
+  function toggleHist() {
+    var abrindo = !document.getElementById('hist-drawer').classList.contains('aberto');
+    fecharDrawers();
+    if (abrindo) {
+      document.getElementById('hist-drawer').classList.add('aberto');
+      document.getElementById('hist-backdrop').classList.add('aberto');
+      carregarHist();
+    }
+  }
+  var prepItens = [], prepAlvoIso = '', prepAlertarUltimo = false, prepLoopId = null;
+
+  function togglePrep() {
+    var abrindo = !document.getElementById('prep-drawer').classList.contains('aberto');
+    fecharDrawers();
+    if (abrindo) {
+      document.getElementById('prep-drawer').classList.add('aberto');
+      document.getElementById('prep-backdrop').classList.add('aberto');
+      renderPrep();
+      atualizarPrep();
+    }
+  }
+  function atualizarPrep() {
+    fetch('{{ url_for("padeiro.preparar_json") }}?data={{ dia.isoformat() }}')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        prepItens = d.itens || [];
+        prepAlvoIso = d.alvo_iso || '';
+        prepAlertarUltimo = !!d.alertar;
+        var pd = document.getElementById('prep-dia');
+        if (pd) pd.textContent = d.dia || '';
+        if (document.getElementById('prep-drawer').classList.contains('aberto')) renderPrep();
+        tratarAlertaPrep();
+        tratarPrepTicker();
+      }).catch(function () {});
+  }
+  // Banner piscante (independente dos avisos): aparece sempre que houver itens
+  // [BACKUP]/[ASSADO] de amanhã pra pré-preparar; some quando não há mais nada.
+  function tratarPrepTicker() {
+    var t = document.getElementById('prep-ticker');
+    if (t) t.style.display = (prepItens && prepItens.length > 0) ? 'block' : 'none';
+  }
+  function renderPrep() {
+    if (!prepItens.length) {
+      document.getElementById('prep-lista').innerHTML =
+        '<div class="prep-item" style="font-weight:400;color:#6c757d;">Nenhum item [BACKUP] ou [ASSADO] pro dia seguinte.</div>';
+      return;
+    }
+    var grupos = {}, ordem = [];
+    prepItens.forEach(function (it) {
+      if (!grupos[it.loja]) { grupos[it.loja] = []; ordem.push(it.loja); }
+      grupos[it.loja].push(it);
+    });
+    var html = '';
+    ordem.forEach(function (loja) {
+      html += '<div class="prep-loja-grupo">' + esc(loja) + '</div>';
+      grupos[loja].forEach(function (it) {
+        html += '<div class="prep-item"><span class="prep-q">' + it.qtd + '×</span> '
+          + esc(it.nome) + ' [' + esc(it.estado_label) + ']</div>';
+      });
+    });
+    document.getElementById('prep-lista').innerHTML = html;
+  }
+  function prepDismissado() {
+    try { return localStorage.getItem('prep_ok_' + prepAlvoIso) === '1'; } catch (e) { return false; }
+  }
+  function tratarAlertaPrep() {
+    var banner = document.getElementById('prep-alert');
+    if (prepAlertarUltimo && !prepDismissado()) {
+      if (banner) banner.style.display = 'flex';
+      iniciarPrepLoop();
+    } else {
+      if (banner) banner.style.display = 'none';
+      pararPrepLoop();
+    }
+  }
+  function okPrep() {
+    try { localStorage.setItem('prep_ok_' + prepAlvoIso, '1'); } catch (e) {}
+    var banner = document.getElementById('prep-alert');
+    if (banner) banner.style.display = 'none';
+    pararPrepLoop();
+  }
+  function tocarAlertaPrep() {
+    if (!somAtivo || !audioCtx) return;
+    var t0 = audioCtx.currentTime;
+    [0, 0.25, 0.5].forEach(function (off) {
+      var osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+      osc.type = 'square'; osc.frequency.value = 440;
+      g.gain.setValueAtTime(0.0001, t0 + off);
+      g.gain.exponentialRampToValueAtTime(0.25, t0 + off + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + off + 0.2);
+      osc.connect(g); g.connect(audioCtx.destination);
+      osc.start(t0 + off); osc.stop(t0 + off + 0.2);
+    });
+  }
+  function iniciarPrepLoop() {
+    if (prepLoopId || !somAtivo) return;
+    tocarAlertaPrep();
+    prepLoopId = setInterval(tocarAlertaPrep, 12000);
+  }
+  function pararPrepLoop() { if (prepLoopId) { clearInterval(prepLoopId); prepLoopId = null; } }
+  function carregarHist() {
+    fetch('{{ url_for("padeiro.avisos_24h_json") }}')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var avisos = d.avisos || [];
+        document.getElementById('hist-lista').innerHTML = avisos.length
+          ? avisos.map(function (a) {
+              return '<div class="hist-item"><div class="t">' + esc(a.texto) + '</div>'
+                + '<div class="m">' + esc(a.por) + ' · ' + esc(a.quando)
+                + (a.confirmado ? ' · lido' : ' · na TV') + '</div></div>';
+            }).join('')
+          : '<div class="hist-item"><div class="m">Nenhum aviso nas últimas 24h.</div></div>';
+      }).catch(function () {});
+  }
+  function toggleCong() {
+    var abrindo = !document.getElementById('cong-drawer').classList.contains('aberto');
+    fecharDrawers();
+    if (abrindo) {
+      document.getElementById('cong-drawer').classList.add('aberto');
+      document.getElementById('cong-backdrop').classList.add('aberto');
+      carregarCong();
+    }
+  }
+  function carregarCong() {
+    fetch('{{ url_for("padeiro.congelados_json") }}')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var itens = d.itens || [];
+        document.getElementById('cong-lista').innerHTML = itens.length
+          ? itens.map(function (it) {
+              return '<div class="cong-item"><span class="t">' + esc(it.nome)
+                + '</span><span class="q">' + it.qtd + '</span></div>';
+            }).join('')
+          : '<div class="cong-item"><span class="t" style="color:#6c757d;">Nenhum congelado em estoque.</span></div>';
+      }).catch(function () {});
+  }
+
+  // ── Painel Produzir: receita (typeahead) + qtd -> entrada no congelado ──
+  var prodRows = {}, prodSeq = 0, prodEnviando = false, prodPendentes = [];
+
+  function toggleProd() {
+    var abrindo = !document.getElementById('prod-drawer').classList.contains('aberto');
+    fecharDrawers();
+    if (abrindo) {
+      document.getElementById('prod-drawer').classList.add('aberto');
+      document.getElementById('prod-backdrop').classList.add('aberto');
+      if (!Object.keys(prodRows).length) prodAddRow();
+    }
+  }
+
+  function prodAddRow() {
+    if (Object.keys(prodRows).length >= 30) return;
+    var rid = 'R' + (++prodSeq);
+    prodRows[rid] = { ref: null, nome: '', results: [], timer: null };
+    var div = document.createElement('div');
+    div.className = 'prod-row';
+    div.id = 'row-' + rid;
+    div.innerHTML =
+      '<div class="prod-nome-wrap">'
+      + '<input class="nome" type="text" placeholder="Buscar receita ou produto..." autocomplete="off" '
+      +   'oninput="prodBuscar(\'' + rid + '\', this.value)">'
+      + '<div class="prod-results" id="res-' + rid + '" style="display:none;"></div>'
+      + '</div>'
+      + '<input class="qtd" type="number" inputmode="numeric" min="1" placeholder="qtd" '
+      +   'onfocus="this.select()" onclick="this.select()" id="qtd-' + rid + '">'
+      + '<button type="button" class="rm" onclick="prodRemove(\'' + rid + '\')">×</button>';
+    document.getElementById('prod-rows').appendChild(div);
+  }
+
+  function prodRemove(rid) {
+    delete prodRows[rid];
+    var el = document.getElementById('row-' + rid);
+    if (el) el.remove();
+  }
+
+  function prodBuscar(rid, valor) {
+    var row = prodRows[rid];
+    if (!row) return;
+    row.nome = valor;
+    row.ref = null;  // mudou o texto: precisa re-selecionar
+    var rowEl = document.getElementById('row-' + rid);
+    if (rowEl) rowEl.classList.remove('sem-receita');
+    if (row.timer) clearTimeout(row.timer);
+    var q = valor.trim();
+    var box = document.getElementById('res-' + rid);
+    if (q.length < 2) { if (box) { box.style.display = 'none'; box.innerHTML = ''; } return; }
+    row.timer = setTimeout(function () {
+      fetch('/padeiro/buscar-receitas.json?q=' + encodeURIComponent(q))
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          // ignora se a linha sumiu ou se o texto mudou desde a busca (resposta obsoleta)
+          if (!d || prodRows[rid] !== row || (row.nome || '').trim() !== q) return;
+          row.results = d.itens || [];
+          prodRenderResults(rid);
+        }).catch(function () {});
+    }, 250);
+  }
+
+  function prodRenderResults(rid) {
+    var row = prodRows[rid], box = document.getElementById('res-' + rid);
+    if (!box) return;
+    if (!row.results.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.innerHTML = row.results.map(function (r, i) {
+      return '<div class="prod-opt" onclick="prodPick(\'' + rid + '\',' + i + ')">' + esc(r.nome) + '</div>';
+    }).join('');
+    box.style.display = 'block';
+  }
+
+  function prodPick(rid, idx) {
+    var row = prodRows[rid];
+    if (!row || !row.results[idx]) return;
+    var rec = row.results[idx];
+    row.ref = rec.ref;
+    row.nome = rec.nome;
+    var rowEl = document.getElementById('row-' + rid);
+    if (rowEl) {
+      rowEl.querySelector('input.nome').value = rec.nome;
+      rowEl.classList.remove('sem-receita');
+    }
+    var box = document.getElementById('res-' + rid);
+    if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+  }
+
+  function prodColetar() {
+    var itens = [];
+    Object.keys(prodRows).forEach(function (rid) {
+      var row = prodRows[rid], rowEl = document.getElementById('row-' + rid);
+      var qel = document.getElementById('qtd-' + rid);
+      var qtd = parseInt(qel ? qel.value : '0', 10);
+      if (row.ref && qtd > 0) {
+        itens.push({ ref: row.ref, quantidade: qtd, nome: row.nome });
+        if (rowEl) rowEl.classList.remove('sem-receita', 'sem-qtd');
+      } else if (row.ref && !(qtd > 0) && rowEl) {
+        rowEl.classList.add('sem-qtd');      // escolheu item mas faltou a quantidade
+        rowEl.classList.remove('sem-receita');
+      } else if ((row.nome || '').trim() && !row.ref && rowEl) {
+        rowEl.classList.add('sem-receita');  // digitou mas nao escolheu no dropdown
+      }
+    });
+    return itens;
+  }
+
+  function prodEnviar() {
+    var msg = document.getElementById('prod-msg');
+    var itens = prodColetar();
+    if (!itens.length) {
+      if (msg) { msg.style.color = ''; msg.textContent =
+        'Escolha ao menos um item (toque no resultado) e a quantidade.'; }
+      return;
+    }
+    if (msg) msg.textContent = '';
+    document.getElementById('prod-confirm-lista').innerHTML = itens.map(function (it) {
+      return '<div class="linha"><b>' + it.quantidade + '×</b> ' + esc(it.nome) + '</div>';
+    }).join('');
+    prodPendentes = itens.map(function (it) {
+      return { ref: it.ref, quantidade: it.quantidade };
+    });
+    document.getElementById('prod-confirm').classList.add('aberto');
+  }
+
+  function prodCancelar() {
+    document.getElementById('prod-confirm').classList.remove('aberto');
+  }
+
+  function prodHist() {
+    var ov = document.getElementById('prod-hist');
+    var lista = document.getElementById('prod-hist-lista');
+    lista.innerHTML = '<div class="linha qd">carregando…</div>';
+    ov.classList.add('aberto');
+    fetch('{{ url_for("padeiro.producao_historico") }}')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        var h = (d && d.historico) || [];
+        lista.innerHTML = h.length
+          ? h.map(function (it) {
+              return '<div class="linha"><span class="q">' + it.qtd + '×</span> '
+                + esc(it.item) + ' <span class="qd">· ' + esc(it.quando) + '</span></div>';
+            }).join('')
+          : '<div class="linha qd">Nada lançado ainda.</div>';
+      }).catch(function () {
+        lista.innerHTML = '<div class="linha qd">Erro ao carregar.</div>';
+      });
+  }
+  function prodHistFechar() {
+    document.getElementById('prod-hist').classList.remove('aberto');
+  }
+  function prodHistBackdrop(ev) {
+    if (ev.target === ev.currentTarget) prodHistFechar();
+  }
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape'
+        && document.getElementById('prod-hist').classList.contains('aberto')) {
+      prodHistFechar();
+    }
+  });
+
+  function prodConfirmar() {
+    if (prodEnviando) return;
+    prodEnviando = true;
+    var btn = document.getElementById('prod-confirm-ok');
+    if (btn) btn.disabled = true;
+    fetch('/padeiro/produzir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ itens: prodPendentes })
+    })
+      // Mantemos o status pra mostrar uma mensagem util quando o servidor
+      // responder 500 com HTML (ex: rota lança antes de chegar no
+      // jsonify, gateway derruba) — assim o padeiro nao ve "Erro ao
+      // registrar. Tente de novo." sem pista nenhuma do que aconteceu.
+      .then(function (r) {
+        return r.text().then(function (txt) {
+          var d = { ok: false, status: r.status };
+          try { Object.assign(d, JSON.parse(txt)); }
+          catch (_) { d.raw = (txt || '').slice(0, 200); }
+          return d;
+        });
+      })
+      .then(function (d) {
+        document.getElementById('prod-confirm').classList.remove('aberto');
+        var msg = document.getElementById('prod-msg');
+        if (d && d.ok) {
+          prodReset();
+          if (msg) { msg.style.color = '#0f5132';
+                     msg.textContent = 'Produção registrada no congelado.'; }
+          setTimeout(function () { if (msg) { msg.textContent = ''; msg.style.color = ''; } }, 4000);
+        } else if (msg) {
+          msg.style.color = '';
+          if (d && d.erro) {
+            msg.textContent = d.erro;
+          } else if (d && d.status === 403) {
+            msg.textContent = 'Sem permissão (precisa ser padeiro). '
+              + 'Avise o Caio.';
+          } else if (d && d.status >= 500) {
+            msg.textContent = 'Servidor com erro (' + d.status + '). '
+              + 'Tente em 1 minuto; se persistir, avise o Caio.';
+          } else {
+            msg.textContent = 'Erro ao registrar (HTTP '
+              + ((d && d.status) || '?') + '). Tente de novo.';
+          }
+        }
+      })
+      .catch(function () {
+        document.getElementById('prod-confirm').classList.remove('aberto');
+        var m = document.getElementById('prod-msg');
+        if (m) { m.style.color = ''; m.textContent = 'Falha de rede. Tente de novo.'; }
+      })
+      .finally(function () {
+        prodEnviando = false;
+        if (btn) btn.disabled = false;
+      });
+  }
+
+  function prodReset() {
+    prodRows = {};
+    document.getElementById('prod-rows').innerHTML = '';
+    prodAddRow();
+  }
+
+  // ── Check por item ("já separei isto"): apoio visual do padeiro, por aparelho.
+  // Guarda no localStorage (chk_<tipo>-<id> = "itemid,itemid"); re-aplica a cada
+  // rebuild do #listas (o refresh AJAX troca innerHTML e apaga o estado do DOM).
+  function lerChecks(order) {
+    try { return (localStorage.getItem('chk_' + order) || '').split(',').filter(Boolean); }
+    catch (e) { return []; }
+  }
+  function salvarChecks(order, ids) {
+    try {
+      if (ids.length) localStorage.setItem('chk_' + order, ids.join(','));
+      else localStorage.removeItem('chk_' + order);
+    } catch (e) {}
+  }
+  function atualizarContador(card) {
+    var total = card.querySelectorAll('.item-chk').length;
+    var feitos = card.querySelectorAll('.item-chk.done').length;
+    var el = card.querySelector('[data-chk-count]');
+    if (el) el.textContent = total ? (feitos + '/' + total + ' separados') : '';
+  }
+  function aplicarChecks() {
+    document.querySelectorAll('#listas .card[data-order]').forEach(function (card) {
+      var ids = lerChecks(card.getAttribute('data-order'));
+      card.querySelectorAll('.item-chk').forEach(function (it) {
+        it.classList.toggle('done', ids.indexOf(it.getAttribute('data-item')) !== -1);
+      });
+      atualizarContador(card);
+    });
+  }
+  // Toggle delegado no documento: sobrevive à troca de innerHTML do #listas.
+  document.addEventListener('click', function (e) {
+    var it = e.target.closest && e.target.closest('.item-chk');
+    if (!it) return;
+    var card = it.closest('.card[data-order]');
+    if (!card) return;
+    var order = card.getAttribute('data-order');
+    var id = it.getAttribute('data-item');
+    var ids = lerChecks(order);
+    var pos = ids.indexOf(id);
+    if (pos === -1) ids.push(id); else ids.splice(pos, 1);
+    salvarChecks(order, ids);
+    it.classList.toggle('done', pos === -1);
+    atualizarContador(card);
+  });
+
+  initSom();
+  carregarAvisos();
+  setInterval(carregarAvisos, 15000);
+  atualizarPrep();
+  setInterval(atualizarPrep, 60000);
+  aplicarChecks();  // estado inicial (o #listas já vem renderizado do servidor)
+  setInterval(atualizarListas, 15000);
+  setInterval(autoFecharOcioso, 10000);
+</script>
+</body>
+</html>

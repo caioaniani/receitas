@@ -1,0 +1,43 @@
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+exclude = [
+    "migrations/",       # gerado pelo Alembic
+    "deploy/backups/",
+    ".venv/", "venv/",
+    "__pycache__/",
+]
+
+[tool.ruff.lint]
+# Comeco conservador: so falha em bugs REAIS (pyflakes "F"). Estilo
+# cosmetico (E, W, SIM, BLE, UP) vai como warning — atacar gradualmente.
+# Quando o codebase estiver mais limpo, ampliar o "select".
+select = [
+    "F",     # pyflakes — bugs reais (variavel nao definida, import nao usado, etc.)
+    "B",     # bugbear — armadilhas comuns
+    "I",     # isort — organizacao de imports
+]
+ignore = [
+    "E501",  # line too long
+    "B008",  # function calls in defaults
+    "B007",  # unused loop variable
+    "B904",  # raise from
+    "B905",  # zip strict
+    "F841",  # local variable assigned but never used — codigo defensivo
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/services/copilot.py" = ["E402"]   # imports tardios pra evitar circular
+"app/__init__.py" = ["E402"]            # idem
+"tests/*.py" = ["F841"]                 # testes as vezes guardam refs sem usar
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "config"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::sqlalchemy.exc.LegacyAPIWarning",
+]

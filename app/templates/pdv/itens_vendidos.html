@@ -1,0 +1,553 @@
+{% extends "base.html" %}
+
+{% block title %}Itens Vendidos (Seru){% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-bag-check"></i> Itens Vendidos
+        <small class="text-muted" style="font-size:11px;font-weight:normal;">via Seru</small>
+    </h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('pdv.mapeamentos') }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-link-45deg"></i> Mapeamentos
+        </a>
+        <a href="{{ url_for('pdv.historico_sync') }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-clock-history"></i> Historico
+        </a>
+        <button type="button" id="btn-sync" class="btn btn-sm btn-success" title="Processa vendas dos ultimos N dias e baixa estoque dos itens mapeados">
+            <i class="bi bi-arrow-repeat"></i> Sincronizar (<select id="sync-dias" style="border:0;background:transparent;color:white;font-size:13px;" onclick="event.stopPropagation();"><option value="1">hoje</option><option value="3">3d</option><option value="7" selected>7d</option><option value="14">14d</option></select>)
+        </button>
+        <a href="{{ url_for('pdv.index') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Vendas PDV
+        </a>
+    </div>
+</div>
+<div id="sync-status"></div>
+{% if cron_status and cron_status.ativo %}
+<div class="alert alert-success py-1 px-2 small mb-2" style="font-size:11px;">
+    <i class="bi bi-clock-history"></i>
+    <strong>Sync automatica ativa</strong> — rodando a cada 15 minutos em background.
+    {% if cron_status.ultimo_run %}Ultima execucao: <code>{{ cron_status.ultimo_run | brt }}</code> (horario Brasilia).{% else %}Aguardando primeira execucao.{% endif %}
+</div>
+{% endif %}
+
+<form id="filtros" class="row g-2 align-items-end mb-3">
+    <div class="col-auto">
+        <label class="form-label small text-muted">De</label>
+        <input type="date" id="inicio" class="form-control form-control-sm input-blue" value="{{ hoje }}">
+    </div>
+    <div class="col-auto">
+        <label class="form-label small text-muted">Até</label>
+        <input type="date" id="fim" class="form-control form-control-sm input-blue" value="{{ hoje }}">
+    </div>
+    <div class="col">
+        <label class="form-label small text-muted">Loja Seru</label>
+        <select id="loja" class="form-select form-select-sm input-blue">
+            <option value="">Todas</option>
+        </select>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-search"></i> Buscar
+        </button>
+    </div>
+</form>
+
+<div id="alerta-erro"></div>
+<div id="loading" class="text-muted small d-none">
+    <i class="bi bi-hourglass-split"></i> consultando Seru...
+</div>
+
+<div id="resultado" class="d-none">
+    <div class="row g-2 mb-3">
+        <div class="col-md-3">
+            <div class="card border-success">
+                <div class="card-body py-2 px-3">
+                    <small class="text-muted d-block" style="font-size:11px;">Faturamento total</small>
+                    <div class="fw-bold" style="font-size:22px;">R$ <span id="kpi-faturamento">0,00</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-primary">
+                <div class="card-body py-2 px-3">
+                    <small class="text-muted d-block" style="font-size:11px;">Pedidos</small>
+                    <div class="fw-bold" style="font-size:22px;"><span id="kpi-pedidos">0</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body py-2 px-3">
+                    <small class="text-muted d-block" style="font-size:11px;">Unidades vendidas</small>
+                    <div class="fw-bold" style="font-size:22px;"><span id="kpi-itens">0</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-warning">
+                <div class="card-body py-2 px-3">
+                    <small class="text-muted d-block" style="font-size:11px;">Pendentes (a decidir)</small>
+                    <div class="fw-bold" style="font-size:22px;"><span id="kpi-pendentes">0</span></div>
+                    <small class="text-muted" style="font-size:11px;">nao baixam ate voce vincular ou ignorar</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <span class="fw-bold"><i class="bi bi-list-ol"></i> Produtos vendidos</span>
+            <input type="text" id="filtro-nome" class="form-control form-control-sm" placeholder="filtrar..." style="max-width:220px;">
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="thead-padaria" style="position:sticky;top:0;">
+                    <tr>
+                        <th>#</th>
+                        <th>Produto (Seru)</th>
+                        <th>Vinculo no sistema</th>
+                        <th class="text-end">Unidades</th>
+                        <th class="text-end">Faturamento</th>
+                        <th class="text-end">% fat.</th>
+                        <th class="text-end">Pedidos</th>
+                        <th style="width:110px;"></th>
+                    </tr>
+                </thead>
+                <tbody id="tbody-produtos"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<!-- Modal de Vincular -->
+<div class="modal fade" id="modal-mapear" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-link-45deg"></i> Vincular produto Seru</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label small text-muted">Produto Seru</label>
+                    <div class="fw-bold" id="mm-nome">—</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Acao</label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="mm-acao" id="mm-acao-vincular" value="vincular" checked>
+                        <label class="btn btn-outline-primary" for="mm-acao-vincular">Vincular</label>
+                        <input type="radio" class="btn-check" name="mm-acao" id="mm-acao-ignorar" value="ignorar">
+                        <label class="btn btn-outline-secondary" for="mm-acao-ignorar">Ignorar</label>
+                        <input type="radio" class="btn-check" name="mm-acao" id="mm-acao-desfazer" value="desfazer">
+                        <label class="btn btn-outline-warning" for="mm-acao-desfazer">Desfazer</label>
+                    </div>
+                    <small class="text-muted mt-1 d-block" id="mm-acao-help">Vincular: aponta pra uma receita/produto e baixa estoque automatico nas proximas vendas.</small>
+                </div>
+                <div id="mm-vincular-fields">
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <label class="form-label small text-muted">Tipo</label>
+                            <select id="mm-tipo" class="form-select form-select-sm">
+                                <option value="receita">Receita</option>
+                                <option value="produto">Produto</option>
+                            </select>
+                        </div>
+                        <div class="col-8">
+                            <label class="form-label small text-muted">Item</label>
+                            <select id="mm-alvo" class="form-select form-select-sm"></select>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <label class="form-label small text-muted">
+                            Fator de composicao
+                            <i class="bi bi-info-circle" title="Quantas unidades do item cima sao consumidas em 1 venda Seru. Ex: NOZES COM MANTEIGA = 2 fatias / 10 fatias por pao = 0.2"></i>
+                        </label>
+                        <div class="d-flex gap-2 align-items-center">
+                            <input type="text" inputmode="decimal" id="mm-fator" class="form-control form-control-sm" value="1" style="max-width:120px;" placeholder="ex: 0.2">
+                            <small class="text-muted" id="mm-fator-help">1 venda = 1 unidade (default)</small>
+                        </div>
+                        <details class="mt-1">
+                            <summary class="small text-primary" style="cursor:pointer;">Calcular como X fatias de Y</summary>
+                            <div class="d-flex gap-1 align-items-center mt-1">
+                                <span class="small">1 venda usa</span>
+                                <input type="text" inputmode="numeric" id="mm-fator-x" class="form-control form-control-sm" placeholder="X" style="width:70px;">
+                                <span class="small">partes de uma unidade dividida em</span>
+                                <input type="text" inputmode="numeric" id="mm-fator-y" class="form-control form-control-sm" placeholder="Y" style="width:70px;">
+                                <span class="small">partes</span>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" id="mm-salvar">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var __RECEITAS = [
+    {% for r in receitas %}
+    {id: {{ r.id }}, nome: {{ r.nome|tojson }}, cat: {{ (r.categoria or '')|tojson }}},
+    {% endfor %}
+];
+var __PRODUTOS = [
+    {% for p in produtos %}
+    {id: {{ p.id }}, nome: {{ p.nome|tojson }}},
+    {% endfor %}
+];
+
+(function() {
+    var form = document.getElementById('filtros');
+    var inicio = document.getElementById('inicio');
+    var fim = document.getElementById('fim');
+    var lojaSel = document.getElementById('loja');
+    var loading = document.getElementById('loading');
+    var resultado = document.getElementById('resultado');
+    var alerta = document.getElementById('alerta-erro');
+    var tbody = document.getElementById('tbody-produtos');
+    var filtroNome = document.getElementById('filtro-nome');
+
+    function fmtBRL(v) {
+        return Number(v || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+    function fmtInt(v) {
+        return Math.round(Number(v || 0)).toLocaleString('pt-BR');
+    }
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+        });
+    }
+
+    function buscar(opts) {
+        opts = opts || {};
+        // Em refreshes apos mapeamento/sync, mantem a posicao do scroll
+        // pra o usuario nao perder onde estava.
+        var savedScroll = opts.preserveScroll ? window.scrollY : null;
+        alerta.innerHTML = '';
+        if (!opts.preserveScroll) {
+            resultado.classList.add('d-none');
+        }
+        loading.classList.remove('d-none');
+        var qs = new URLSearchParams({
+            inicio: inicio.value, fim: fim.value, loja: lojaSel.value
+        });
+        fetch('/pdv/api/itens-vendidos?' + qs, {credentials: 'same-origin'})
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                loading.classList.add('d-none');
+                if (!d.ok) {
+                    alerta.innerHTML = '<div class="alert alert-danger py-2 small">' +
+                        '<i class="bi bi-exclamation-triangle"></i> ' + esc(d.erro || 'erro') + '</div>';
+                    return;
+                }
+                document.getElementById('kpi-faturamento').textContent = fmtBRL(d.faturamento_total);
+                document.getElementById('kpi-pedidos').textContent = fmtInt(d.total_pedidos);
+                document.getElementById('kpi-itens').textContent = fmtInt(d.total_itens_vendidos);
+                document.getElementById('kpi-pendentes').textContent = fmtInt(d.pendentes_count != null ? d.pendentes_count : d.sem_match_count);
+
+                // popula dropdown de lojas (preserva selecao)
+                var prevLoja = lojaSel.value;
+                lojaSel.innerHTML = '<option value="">Todas</option>';
+                (d.lojas_no_intervalo || []).forEach(function(nome) {
+                    var opt = document.createElement('option');
+                    opt.value = nome;
+                    opt.textContent = nome;
+                    if (nome === prevLoja) opt.selected = true;
+                    lojaSel.appendChild(opt);
+                });
+
+                tbody.innerHTML = '';
+                (d.produtos || []).forEach(function(p, idx) {
+                    // Coluna 'Vinculo': mostra estado autoritativo (SeruProdutoMap)
+                    // + sugestao fuzzy se ainda nao mapeado.
+                    var vinculoHtml;
+                    var btnLabel, btnClass;
+                    if (p.estado_map === 'mapeado' && p.mapeado_para) {
+                        var tipoBadge = p.mapeado_para.tipo === 'receita'
+                            ? '<span class="badge bg-primary" style="font-size:9px;">R</span>'
+                            : '<span class="badge bg-secondary" style="font-size:9px;">P</span>';
+                        var fatorBadge = (p.fator && Math.abs(p.fator - 1) > 0.001)
+                            ? ' <span class="badge bg-warning text-dark" style="font-size:9px;" title="1 venda = ' + p.fator + ' unidade do item">×' + p.fator + '</span>'
+                            : '';
+                        vinculoHtml = '<span class="badge bg-success" style="font-size:9px;margin-right:4px;">✓ mapeado</span>'
+                            + tipoBadge + ' ' + esc(p.mapeado_para.nome) + fatorBadge;
+                        btnLabel = 'Editar';
+                        btnClass = 'btn-outline-secondary';
+                    } else if (p.estado_map === 'ignorado') {
+                        vinculoHtml = '<span class="badge bg-secondary" style="font-size:9px;">ignorado</span> <small class="text-muted">nao baixa estoque</small>';
+                        btnLabel = 'Editar';
+                        btnClass = 'btn-outline-secondary';
+                    } else {
+                        var sugestao = '';
+                        if (p.match) {
+                            var fuzzy = p.match.kind === 'fuzzy' ? ' <small style="font-size:9px;">(fuzzy)</small>' : '';
+                            sugestao = '<small class="text-muted d-block" style="font-size:10px;">sugestao: ' + esc(p.match.nome) + fuzzy + '</small>';
+                        }
+                        vinculoHtml = '<span class="badge bg-warning text-dark" style="font-size:9px;">sem vinculo</span>' + sugestao;
+                        btnLabel = '+ Vincular';
+                        btnClass = 'btn-primary';
+                    }
+                    var btn = '<button type="button" class="btn btn-sm ' + btnClass + ' btn-mapear" '
+                        + 'data-nome="' + esc(p.nome) + '" '
+                        + 'data-estado="' + esc(p.estado_map || 'sem_map') + '" '
+                        + 'data-sugestao-tipo="' + esc(p.match ? p.match.tipo : '') + '" '
+                        + 'data-sugestao-id="' + esc(p.match ? p.match.id : '') + '" '
+                        + 'data-alvo-tipo="' + esc(p.mapeado_para ? p.mapeado_para.tipo : '') + '" '
+                        + 'data-alvo-id="' + esc(p.mapeado_para ? p.mapeado_para.id : '') + '" '
+                        + 'data-fator="' + esc(p.fator || 1) + '" '
+                        + 'style="font-size:11px; white-space:nowrap;">' + btnLabel + '</button>';
+
+                    var sku = p.sku ? '<small class="text-muted d-block" style="font-size:10px;">sku: ' + esc(p.sku) + '</small>' : '';
+                    var tr = document.createElement('tr');
+                    tr.dataset.nome = (p.nome || '').toLowerCase();
+                    tr.innerHTML =
+                        '<td class="text-muted">' + (idx + 1) + '</td>' +
+                        '<td><div class="fw-semibold">' + esc(p.nome) + '</div>' + sku + '</td>' +
+                        '<td>' + vinculoHtml + '</td>' +
+                        '<td class="text-end fw-bold">' + fmtInt(p.qtd) + '</td>' +
+                        '<td class="text-end">R$ ' + fmtBRL(p.faturamento) + '</td>' +
+                        '<td class="text-end text-muted">' + (p.pct_faturamento || 0).toFixed(1) + '%</td>' +
+                        '<td class="text-end text-muted">' + fmtInt(p.n_pedidos) + '</td>' +
+                        '<td>' + btn + '</td>';
+                    tbody.appendChild(tr);
+                });
+                if (!d.produtos || !d.produtos.length) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Nenhum item vendido no intervalo.</td></tr>';
+                }
+                resultado.classList.remove('d-none');
+                if (savedScroll !== null) {
+                    requestAnimationFrame(function() {
+                        window.scrollTo(0, savedScroll);
+                    });
+                }
+            })
+            .catch(function(e) {
+                loading.classList.add('d-none');
+                alerta.innerHTML = '<div class="alert alert-danger py-2 small">' +
+                    '<i class="bi bi-exclamation-triangle"></i> erro de rede: ' + esc(e.message) + '</div>';
+            });
+    }
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        buscar();
+    });
+
+    filtroNome.addEventListener('input', function() {
+        var termo = this.value.toLowerCase().trim();
+        tbody.querySelectorAll('tr[data-nome]').forEach(function(tr) {
+            tr.style.display = (!termo || tr.dataset.nome.indexOf(termo) >= 0) ? '' : 'none';
+        });
+    });
+
+    // auto-busca no load
+    buscar();
+
+    // ── Modal de Mapeamento inline ──
+    var modalEl = document.getElementById('modal-mapear');
+    var modal = new bootstrap.Modal(modalEl);
+    var mmNome = document.getElementById('mm-nome');
+    var mmTipo = document.getElementById('mm-tipo');
+    var mmAlvo = document.getElementById('mm-alvo');
+    var mmFator = document.getElementById('mm-fator');
+    var mmFatorX = document.getElementById('mm-fator-x');
+    var mmFatorY = document.getElementById('mm-fator-y');
+    var mmFatorHelp = document.getElementById('mm-fator-help');
+    var mmVincFields = document.getElementById('mm-vincular-fields');
+    var mmHelp = document.getElementById('mm-acao-help');
+    var mmSalvar = document.getElementById('mm-salvar');
+    var currentNome = null;
+
+    function parseFator(raw) {
+        // Aceita ponto OU virgula como separador decimal (PT-BR).
+        var s = String(raw || '1').trim().replace(',', '.');
+        var f = parseFloat(s);
+        if (!isFinite(f) || f <= 0) return 1;
+        return f;
+    }
+    function atualizarFatorHelp() {
+        var f = parseFator(mmFator.value);
+        if (Math.abs(f - 1) < 0.001) {
+            mmFatorHelp.textContent = '1 venda = 1 unidade (default)';
+            mmFatorHelp.className = 'text-muted';
+        } else if (f < 1) {
+            mmFatorHelp.textContent = '1 venda = ' + f + ' unidade (composto: ' + Math.round(1/f) + ' vendas baixam 1 inteiro)';
+            mmFatorHelp.className = 'text-info';
+        } else {
+            mmFatorHelp.textContent = '1 venda = ' + f + ' unidades';
+            mmFatorHelp.className = 'text-info';
+        }
+    }
+    mmFator.addEventListener('input', atualizarFatorHelp);
+    function recalcDeFracao() {
+        var x = parseFloat(String(mmFatorX.value || '').replace(',', '.'));
+        var y = parseFloat(String(mmFatorY.value || '').replace(',', '.'));
+        if (x > 0 && y > 0) {
+            var f = x / y;
+            mmFator.value = f.toFixed(4).replace(/\.?0+$/, '');
+            atualizarFatorHelp();
+        }
+    }
+    mmFatorX.addEventListener('input', recalcDeFracao);
+    mmFatorY.addEventListener('input', recalcDeFracao);
+
+    function popularAlvo(tipo, selectedId) {
+        mmAlvo.innerHTML = '';
+        var list = tipo === 'receita' ? __RECEITAS : __PRODUTOS;
+        list.forEach(function(item) {
+            var opt = document.createElement('option');
+            opt.value = item.id;
+            opt.textContent = item.cat ? item.cat + ' — ' + item.nome : item.nome;
+            if (selectedId && String(item.id) === String(selectedId)) opt.selected = true;
+            mmAlvo.appendChild(opt);
+        });
+    }
+
+    function atualizarFieldsConformeAcao() {
+        var acao = document.querySelector('input[name="mm-acao"]:checked').value;
+        if (acao === 'vincular') {
+            mmVincFields.style.display = '';
+            mmHelp.textContent = 'Vincular: aponta pra uma receita/produto e baixa estoque automatico nas proximas vendas.';
+        } else if (acao === 'ignorar') {
+            mmVincFields.style.display = 'none';
+            mmHelp.textContent = 'Ignorar: nunca processa este produto (use pra cafe, agua, items que voce nao controla).';
+        } else {
+            mmVincFields.style.display = 'none';
+            mmHelp.textContent = 'Desfazer: volta o produto pra estado pendente.';
+        }
+    }
+    document.querySelectorAll('input[name="mm-acao"]').forEach(function(r) {
+        r.addEventListener('change', atualizarFieldsConformeAcao);
+    });
+    mmTipo.addEventListener('change', function() { popularAlvo(this.value); });
+
+    // delegação no tbody (botoes renderizados dinamicamente)
+    tbody.addEventListener('click', function(e) {
+        var btn = e.target.closest('.btn-mapear');
+        if (!btn) return;
+        currentNome = btn.dataset.nome;
+        mmNome.textContent = currentNome;
+        var estado = btn.dataset.estado;
+        if (estado === 'ignorado') {
+            document.getElementById('mm-acao-desfazer').checked = true;
+        } else {
+            document.getElementById('mm-acao-vincular').checked = true;
+        }
+        // pre-popula: prefere alvo ja mapeado, senao a sugestao do fuzzy
+        var alvoTipo = btn.dataset.alvoTipo || btn.dataset.sugestaoTipo || 'receita';
+        if (alvoTipo === 'mp') alvoTipo = 'receita';  // fuzzy local pode sugerir mp; modal so trata r/p
+        var alvoId = btn.dataset.alvoId || btn.dataset.sugestaoId || '';
+        mmTipo.value = (alvoTipo === 'produto') ? 'produto' : 'receita';
+        popularAlvo(mmTipo.value, alvoId);
+        // Pre-fill fator (se ja vinculado, vem no dataset; senao 1)
+        var fatorAtual = parseFloat(btn.dataset.fator) || 1;
+        mmFator.value = fatorAtual;
+        mmFatorX.value = '';
+        mmFatorY.value = '';
+        atualizarFatorHelp();
+        atualizarFieldsConformeAcao();
+        modal.show();
+    });
+
+    mmSalvar.addEventListener('click', function() {
+        if (!currentNome) {
+            alert('Nenhum produto selecionado.');
+            return;
+        }
+        var acao = (document.querySelector('input[name="mm-acao"]:checked') || {}).value;
+        if (!acao) { alert('Escolha uma acao.'); return; }
+
+        // Validacao manual (evita o erro chato do Safari com type=number)
+        if (acao === 'vincular') {
+            if (!mmAlvo.value) {
+                alert('Selecione um item no dropdown.');
+                return;
+            }
+        }
+        var fator = parseFator(mmFator.value);
+
+        var fd = new FormData();
+        fd.append('csrf_token', CSRF_TOKEN || '');
+        fd.append('seru_nome', currentNome);
+        fd.append('acao', acao);
+        if (acao === 'vincular') {
+            fd.append('alvo_tipo', mmTipo.value || 'receita');
+            fd.append('alvo_id', mmAlvo.value || '');
+            fd.append('fator', String(fator));
+        }
+        mmSalvar.disabled = true;
+        fetch('/pdv/api/mapear', {method: 'POST', body: fd, credentials: 'same-origin'})
+            .then(function(r) {
+                if (!r.ok && r.status !== 200) {
+                    return r.text().then(function(t) {
+                        throw new Error('HTTP ' + r.status + ': ' + (t || '').slice(0, 200));
+                    });
+                }
+                return r.json();
+            })
+            .then(function(d) {
+                mmSalvar.disabled = false;
+                if (!d.ok) {
+                    alert('Erro: ' + (d.erro || 'desconhecido'));
+                    return;
+                }
+                modal.hide();
+                buscar({preserveScroll: true});
+            })
+            .catch(function(e) {
+                mmSalvar.disabled = false;
+                console.error('Erro ao salvar mapeamento:', e);
+                var msg = (e && e.message) ? e.message : String(e);
+                alert('Falhou ao salvar: ' + msg + '\n\nSe persistir, abra o /pdv/mapeamentos no navegador (Safari/Chrome normal — nao dentro de app) e tente la.');
+            });
+    });
+
+    // ── Sincronizar (Fase 2) ──
+    var btnSync = document.getElementById('btn-sync');
+    var syncStatus = document.getElementById('sync-status');
+    var syncDias = document.getElementById('sync-dias');
+    btnSync.addEventListener('click', function() {
+        if (!confirm('Sincronizar vendas dos ultimos ' + syncDias.value + ' dia(s) e baixar estoque?')) return;
+        btnSync.disabled = true;
+        syncStatus.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-hourglass-split"></i> processando, isso pode levar 30s...</div>';
+        var fd = new FormData();
+        fd.append('csrf_token', CSRF_TOKEN);
+        fd.append('dias', syncDias.value);
+        fetch('/pdv/sync', {method: 'POST', body: fd, credentials: 'same-origin'})
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                btnSync.disabled = false;
+                if (!d.ok) {
+                    syncStatus.innerHTML = '<div class="alert alert-danger py-2 small"><i class="bi bi-exclamation-triangle"></i> ' + esc(d.erro) + '</div>';
+                    return;
+                }
+                var alertClass = (d.pedidos_aguardando_loja || d.pedidos_sem_loja_mapeada) ? 'alert-warning' : 'alert-success';
+                var html = '<div class="alert ' + alertClass + ' py-2 small">' +
+                    '<strong>Sincronizado:</strong> ' +
+                    d.pedidos_novos + ' pedido(s) novo(s) · ' +
+                    d.itens_baixados + ' itens baixados';
+                if (d.pedidos_aguardando_loja) html += ' · <strong class="text-warning">' + d.pedidos_aguardando_loja + ' pedido(s) aguardando confirmacao de loja</strong> — vai em <a href="/pdv/mapeamentos">Mapeamentos</a> e clique OK';
+                if (d.itens_pendentes_novos) html += ' · <strong>' + d.itens_pendentes_novos + ' produto(s) novo(s)</strong> em <a href="/pdv/mapeamentos">Mapeamentos</a>';
+                if (d.itens_ignorados) html += ' · ' + d.itens_ignorados + ' ignorados';
+                if (d.itens_sem_estoque) html += ' · <span class="text-warning">' + d.itens_sem_estoque + ' sem estoque</span>';
+                if (d.pedidos_sem_loja_mapeada) html += ' · <span class="text-warning">' + d.pedidos_sem_loja_mapeada + ' pedido(s) sem loja mapeada</span>';
+                if (d.pedidos_cancelados_estornados) html += ' · ' + d.pedidos_cancelados_estornados + ' estornados';
+                html += '</div>';
+                syncStatus.innerHTML = html;
+                buscar({preserveScroll: true});  // re-renderiza relatorio (matches atualizados)
+            })
+            .catch(function(e) {
+                btnSync.disabled = false;
+                syncStatus.innerHTML = '<div class="alert alert-danger py-2 small"><i class="bi bi-exclamation-triangle"></i> erro de rede: ' + esc(e.message) + '</div>';
+            });
+    });
+})();
+</script>
+{% endblock %}

@@ -9,13 +9,13 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <div class="row g-3 mb-3">
-        {% if current_user.is_admin() %}
+        {% if current_user.is_admin() or current_user.is_gerente() %}
         <div class="col-md-4">
             <label class="form-label fw-semibold">Loja</label>
             <select name="loja_id" class="form-select form-select-sm" required>
                 <option value="">Selecione...</option>
                 {% for l in lojas %}
-                <option value="{{ l.id }}">{{ l.nome }}</option>
+                <option value="{{ l.id }}" {% if loja_id == l.id %}selected{% endif %}>{{ l.nome }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -23,7 +23,7 @@
         <div class="col-md-3">
             <label class="form-label fw-semibold">Data de Entrega</label>
             <input type="date" name="data_entrega" class="form-control form-control-sm"
-                   value="{{ amanha }}" min="{{ amanha }}" required>
+                   value="{{ amanha }}" min="{{ data_min }}" required>
         </div>
         <div class="col-md-5">
             <label class="form-label fw-semibold">Observacao</label>
@@ -39,6 +39,7 @@
                 <tr>
                     <th>Produto</th>
                     <th style="width:100px">Qtd</th>
+                    <th style="width:130px">Estado</th>
                     <th>Obs</th>
                     <th style="width:40px"></th>
                 </tr>
@@ -46,29 +47,19 @@
             <tbody id="itens-body">
                 <tr class="item-row">
                     <td>
-                        <select name="item_id[]" class="form-select form-select-sm item-sel" required>
-                            <option value="">Selecione...</option>
-                            {% set ns = namespace(cat_atual=None) %}
-                            {% for r in receitas %}
-                                {% if r.categoria != ns.cat_atual %}
-                                    {% if ns.cat_atual is not none %}</optgroup>{% endif %}
-                                    <optgroup label="Paes &mdash; {{ r.categoria or 'Outros' }}">
-                                    {% set ns.cat_atual = r.categoria %}
-                                {% endif %}
-                                <option value="r_{{ r.id }}">{{ r.nome }}</option>
-                            {% endfor %}
-                            {% if ns.cat_atual is not none %}</optgroup>{% endif %}
-                            {% if materias %}
-                            <optgroup label="Materias-primas">
-                                {% for mp in materias %}
-                                <option value="mp_{{ mp.id }}">{{ mp.nome }}{% if mp.unidade %} ({{ mp.unidade }}){% endif %}</option>
-                                {% endfor %}
-                            </optgroup>
-                            {% endif %}
-                        </select>
+                        <input type="text" class="form-control form-control-sm item-busca"
+                               placeholder="Digite o nome..." autocomplete="off">
+                        <input type="hidden" name="item_id[]" class="item-id">
                     </td>
                     <td>
                         <input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1">
+                    </td>
+                    <td>
+                        <select name="item_estado[]" class="form-select form-select-sm">
+                            <option value="">Padrão</option>
+                            <option value="backup">Backup</option>
+                            <option value="assado">Assado</option>
+                        </select>
                     </td>
                     <td>
                         <input type="text" name="item_obs[]" class="form-control form-control-sm" placeholder="">
@@ -96,19 +87,125 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+.item-results {
+    background: var(--bg-card);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    max-height: 300px;
+    overflow-y: auto;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    z-index: 3000;
+}
+.item-result-opt {
+    padding: 10px 12px;
+    cursor: pointer;
+    color: var(--text-main);
+    border-bottom: 1px solid var(--border-color);
+}
+.item-result-opt:hover {
+    background-color: var(--bg-card-hover);
+}
+.item-result-opt:last-child {
+    border-bottom: none;
+}
+</style>
 <script>
-var itemOpts = document.querySelector('.item-row .item-sel').innerHTML;
-
-document.getElementById('btn-add-item').addEventListener('click', function() {
+(function () {
     var tbody = document.getElementById('itens-body');
-    var tr = document.createElement('tr');
-    tr.className = 'item-row';
-    tr.innerHTML =
-        '<td><select name="item_id[]" class="form-select form-select-sm item-sel" required>' + itemOpts + '</select></td>' +
-        '<td><input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1"></td>' +
-        '<td><input type="text" name="item_obs[]" class="form-control form-control-sm" placeholder=""></td>' +
-        '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-item" onclick="this.closest(\'tr\').remove()"><i class="bi bi-x"></i></button></td>';
-    tbody.appendChild(tr);
-});
+    var timer;
+    var activeInput = null;
+    var activeHidden = null;
+
+    // Dropdown unico anexado ao <body>: flutua livre acima de tudo, sem
+    // clipping do .table-responsive nem de contexto de empilhamento.
+    var pop = document.createElement('div');
+    pop.className = 'item-results';
+    pop.style.display = 'none';
+    document.body.appendChild(pop);
+
+    function hidePop() {
+        pop.style.display = 'none';
+        activeInput = null;
+        activeHidden = null;
+    }
+
+    function positionPop(input) {
+        var rect = input.getBoundingClientRect();
+        pop.style.position = 'fixed';
+        pop.style.top = rect.bottom + 'px';
+        pop.style.left = rect.left + 'px';
+        pop.style.width = rect.width + 'px';
+    }
+
+    function renderPop(input, hidden, itens) {
+        if (!itens || itens.length === 0) { hidePop(); return; }
+        pop.innerHTML = '';
+        itens.forEach(function (item) {
+            var opt = document.createElement('div');
+            opt.className = 'item-result-opt';
+            opt.dataset.id = item.id;
+            opt.textContent = item.nome;  // textContent escapa o nome
+            pop.appendChild(opt);
+        });
+        activeInput = input;
+        activeHidden = hidden;
+        positionPop(input);
+        pop.style.display = 'block';
+    }
+
+    // Digitar: zera o id antigo (so volta a valer ao escolher) e busca.
+    tbody.addEventListener('input', function (e) {
+        if (!e.target.classList.contains('item-busca')) return;
+        var input = e.target;
+        var hidden = input.closest('td').querySelector('.item-id');
+        hidden.value = '';
+        var val = input.value.trim();
+        clearTimeout(timer);
+        if (val.length < 2) { hidePop(); return; }
+        timer = setTimeout(function () {
+            fetch('/pedidos/buscar-itens.json?q=' + encodeURIComponent(val))
+                .then(function (r) { return r.json(); })
+                .then(function (data) { renderPop(input, hidden, data.itens); })
+                .catch(hidePop);
+        }, 250);
+    });
+
+    // Escolher uma opcao: preenche o texto visivel + o hidden da linha ativa.
+    pop.addEventListener('click', function (e) {
+        var opt = e.target.closest('.item-result-opt');
+        if (!opt || !activeInput) return;
+        activeInput.value = opt.textContent;
+        activeHidden.value = opt.dataset.id;
+        hidePop();
+    });
+
+    // Clicar fora (nem no campo de busca, nem no dropdown) fecha.
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('.item-busca') || pop.contains(e.target)) return;
+        hidePop();
+    });
+
+    // Rolagem/redimensionamento: reposiciona o dropdown aberto.
+    function reposition() {
+        if (pop.style.display === 'block' && activeInput) positionPop(activeInput);
+    }
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+
+    // Adicionar linha: a delegation no tbody ja cobre a nova linha.
+    document.getElementById('btn-add-item').addEventListener('click', function () {
+        var tr = document.createElement('tr');
+        tr.className = 'item-row';
+        tr.innerHTML =
+            '<td><input type="text" class="form-control form-control-sm item-busca" placeholder="Digite o nome..." autocomplete="off"><input type="hidden" name="item_id[]" class="item-id"></td>' +
+            '<td><input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1"></td>' +
+            '<td><select name="item_estado[]" class="form-select form-select-sm"><option value="">Padrão</option><option value="backup">Backup</option><option value="assado">Assado</option></select></td>' +
+            '<td><input type="text" name="item_obs[]" class="form-control form-control-sm" placeholder=""></td>' +
+            '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-item" onclick="this.closest(\'tr\').remove()"><i class="bi bi-x"></i></button></td>';
+        tbody.appendChild(tr);
+    });
+})();
 </script>
 {% endblock %}

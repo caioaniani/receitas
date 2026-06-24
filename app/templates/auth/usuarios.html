@@ -25,7 +25,11 @@
                 </div>
                 <div class="col-md-2">
                     <select name="papel" class="form-select form-select-sm">
-                        <option value="funcionario">Func.</option>
+                        <option value="funcionario">Funcionario</option>
+                        <option value="gerente">Gerente</option>
+                        <option value="producao">Producao</option>
+                        <option value="padeiro">Padeiro</option>
+                        <option value="rh">RH</option>
                         <option value="admin">Admin</option>
                     </select>
                 </div>
@@ -55,10 +59,20 @@
                 <td class="fw-bold">{{ u.nome }}</td>
                 <td><code>{{ u.login }}</code></td>
                 <td>
-                    {% if u.papel == 'admin' %}
-                        <span class="badge bg-primary">Admin</span>
+                    {% if u.is_owner %}
+                        <span class="badge bg-dark">Owner</span>
                     {% else %}
-                        <span class="badge bg-secondary">Funcionario</span>
+                        <form method="POST" action="{{ url_for('auth.alterar_papel', id=u.id) }}" class="d-flex gap-1">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <select name="papel" class="form-select form-select-sm" style="width:130px; font-size:11px;" onchange="this.form.submit()">
+                                <option value="funcionario" {% if u.papel == 'funcionario' %}selected{% endif %}>Funcionario</option>
+                                <option value="gerente" {% if u.papel == 'gerente' %}selected{% endif %}>Gerente</option>
+                                <option value="producao" {% if u.papel == 'producao' %}selected{% endif %}>Producao</option>
+                                <option value="padeiro" {% if u.papel == 'padeiro' %}selected{% endif %}>Padeiro</option>
+                                <option value="rh" {% if u.papel == 'rh' %}selected{% endif %}>RH</option>
+                                <option value="admin" {% if u.papel == 'admin' %}selected{% endif %}>Admin</option>
+                            </select>
+                        </form>
                     {% endif %}
                 </td>
                 <td>
@@ -75,7 +89,11 @@
                     {% endif %}
                 </td>
                 <td>
-                    {% if u.id != current_user.id %}
+                    {% if u.id == current_user.id %}
+                        <span class="text-muted small">(voce)</span>
+                    {% elif u.is_owner and not current_user.is_owner %}
+                        <span class="text-muted small">(owner — protegido)</span>
+                    {% else %}
                     <!-- Reset senha -->
                     <form method="POST" action="{{ url_for('auth.reset_senha', id=u.id) }}" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -94,8 +112,6 @@
                             <i class="bi bi-trash"></i>
                         </button>
                     </form>
-                    {% else %}
-                        <span class="text-muted small">(voce)</span>
                     {% endif %}
                 </td>
             </tr>

@@ -1,25 +1,51 @@
 import json
-from datetime import date
+from datetime import datetime, timedelta
 
-from flask import redirect, url_for, jsonify, request, Response, render_template
-from flask_login import login_required, current_user
+from flask import (
+    Response,
+    current_app,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
+from flask_login import current_user, login_required
+from sqlalchemy.orm import joinedload
 
 from app.blueprints.main import main_bp
-from app.decorators import admin_required
+from app.decorators import admin_required, owner_required
 from app.extensions import db
-from app.models import (MateriaPrima, Receita, ReceitaIngrediente, Produto, ProdutoItem,
-                        Funcionario, Atribuicao, AlertaEstoque, PlanejamentoProducao,
-                        AuditLog, Usuario, PedidoLoja, PedidoLocal, AtribuicaoEntrega,
-                        MovimentacaoEstoque, Driver, Loja, Fornecedor, HistoricoPrecoMP)
+from app.models import (
+    AlertaEstoque,
+    Atribuicao,
+    AtribuicaoEntrega,
+    AuditLog,
+    Funcionario,
+    MateriaPrima,
+    MovimentacaoEstoque,
+    PedidoLocal,
+    PedidoLoja,
+    PlanejamentoProducao,
+    Produto,
+    ProdutoItem,
+    Receita,
+    ReceitaIngrediente,
+    Usuario,
+)
 from app.services.custos import calcular_custos_receitas, calcular_rendimento
+from app.utils import agora
+from app.utils import hoje as hoje_brt
 
 
 @main_bp.route('/')
 @login_required
 def index():
-    if not current_user.is_admin():
-        return redirect(url_for('auth.minhas_fichas'))
-    return render_template('main/home.html')
+    if current_user.is_padeiro():
+        return redirect(url_for('padeiro.index'))
+    if current_user.is_admin():
+        return render_template('main/home.html')
+    return render_template('main/inicio.html')
 
 
 @main_bp.route('/dashboard')
@@ -33,7 +59,10 @@ def dashboard():
     custo_mp_total = sum(custos_map.values())
     receita_estimada = sum((r.preco_venda or 0) for r in receitas if r.preco_venda)
 
-    funcionarios_ativos = Funcionario.query.filter_by(ativo=True).all()
+    # Eager load do cargo evita N+1 — `custo_total()` acessa `self.cargo.salario_base`.
+    funcionarios_ativos = (Funcionario.query
+                            .options(joinedload(Funcionario.cargo))
+                            .filter_by(ativo=True).all())
     custo_mao_obra = sum(f.custo_total() for f in funcionarios_ativos)
 
     margem_geral = 0
@@ -47,7 +76,23 @@ def dashboard():
     producoes_pendentes = PlanejamentoProducao.query.filter_by(status='rascunho').count()
     atribuicoes_pendentes = Atribuicao.query.filter_by(status='pendente').count()
 
-    hoje = date.today()
+    # ProdutoItem orfaos: cestas com componente sem FK vinculada.
+    # Esses componentes NAO baixam estoque na venda — owner precisa
+    # vincular manualmente em /cestas/orfaos.
+    from app.services.cestas import contar_produto_itens_orfaos
+    cestas_orfaos = contar_produto_itens_orfaos() if current_user.is_owner else 0
+
+    # Pendencias do sync PDV (lojas/produtos nao mapeados travam baixa de
+    # estoque na venda). So owner ve — link pro painel /pdv/saude.
+    pdv_pendencias = 0
+    if current_user.is_owner:
+        try:
+            from app.services import pdv_saude
+            pdv_pendencias = pdv_saude.contar_pendencias()
+        except Exception:  # noqa: BLE001
+            pdv_pendencias = 0
+
+    hoje = hoje_brt()
     aniversariantes = [f for f in funcionarios_ativos
                        if f.data_nascimento and f.data_nascimento.month == hoje.month]
 
@@ -59,6 +104,8 @@ def dashboard():
                            alertas_estoque=alertas_estoque,
                            producoes_pendentes=producoes_pendentes,
                            atribuicoes_pendentes=atribuicoes_pendentes,
+                           cestas_orfaos=cestas_orfaos,
+                           pdv_pendencias=pdv_pendencias,
                            aniversariantes=aniversariantes,
                            total_funcionarios=len(funcionarios_ativos))
 
@@ -113,8 +160,25 @@ def rentabilidade():
 @login_required
 def cardapio():
     tipo = request.args.get('tipo', 'atacado')
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
-    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.categoria, Produto.nome).all()
+    # defer(imagem_blob) — listagem nao precisa do blob (pode ter 100KB+ cada).
+    # IDs com foto (blob OU Dropbox URL) vem em query separada.
+    from sqlalchemy.orm import defer
+    receitas = Receita.query.options(
+        defer(Receita.imagem_blob),
+        defer(Receita.imagem_mimetype),
+    ).order_by(Receita.categoria, Receita.nome).all()
+    produtos = Produto.query.options(
+        defer(Produto.imagem_blob),
+        defer(Produto.imagem_mimetype),
+    ).filter_by(ativo=True).order_by(Produto.categoria, Produto.nome).all()
+
+    from sqlalchemy import or_
+    receitas_com_foto = {r[0] for r in db.session.query(Receita.id).filter(
+        or_(Receita.imagem_blob.isnot(None),
+            Receita.imagem_dropbox_url.isnot(None))).all()}
+    produtos_com_foto = {p[0] for p in db.session.query(Produto.id).filter(
+        or_(Produto.imagem_blob.isnot(None),
+            Produto.imagem_dropbox_url.isnot(None))).all()}
 
     campo = {'atacado': 'preco_venda', 'loja': 'preco_loja', 'site': 'preco_site'}
     attr = campo.get(tipo, 'preco_venda')
@@ -129,11 +193,16 @@ def cardapio():
         cat = r.categoria or 'Outros'
         if cat not in categorias:
             categorias[cat] = []
+        if r.id in receitas_com_foto:
+            img = url_for('main.cardapio_img', tipo='receita', id=r.id)
+        else:
+            img = r.imagem_url
         categorias[cat].append({
             'nome': r.nome,
             'peso_unitario': r.peso_unitario,
             'descricao': None,
             'preco_venda': preco,
+            'imagem_url': img,
         })
 
     # Produtos cadastrados (cestas, kits, etc.)
@@ -146,14 +215,194 @@ def cardapio():
         cat = p.categoria or 'Outros'
         if cat not in categorias:
             categorias[cat] = []
+        if p.id in produtos_com_foto:
+            img = url_for('main.cardapio_img', tipo='produto', id=p.id)
+        else:
+            img = p.imagem_url
         categorias[cat].append({
             'nome': p.nome,
             'peso_unitario': None,
             'descricao': p.descricao,
             'preco_venda': preco,
+            'imagem_url': img,
         })
 
     return render_template('main/cardapio.html', categorias=categorias, tipo=tipo)
+
+
+@main_bp.route('/cardapio-img/<tipo>/<int:id>')
+def cardapio_img(tipo, id):
+    """Serve imagem de receita/produto. Prioriza Dropbox URL (M6+).
+
+    Fallback pra BLOB do banco se foto ainda nao foi migrada.
+    """
+    import hashlib
+
+    from flask import abort, make_response
+    from flask import request as flask_request
+    from sqlalchemy.orm import load_only
+
+    from app.models import Produto, Receita
+    if tipo == 'receita':
+        obj = (Receita.query.options(
+            load_only(Receita.imagem_blob, Receita.imagem_mimetype,
+                      Receita.imagem_dropbox_url)
+        ).get(id))
+    elif tipo == 'produto':
+        obj = (Produto.query.options(
+            load_only(Produto.imagem_blob, Produto.imagem_mimetype,
+                      Produto.imagem_dropbox_url)
+        ).get(id))
+    else:
+        abort(404)
+    if not obj:
+        abort(404)
+    if obj.imagem_dropbox_url:
+        return redirect(obj.imagem_dropbox_url, code=302)
+    if not obj.imagem_blob:
+        abort(404)
+    etag = hashlib.md5(obj.imagem_blob).hexdigest()[:16]
+    if flask_request.headers.get('If-None-Match') == etag:
+        return ('', 304)
+    resp = make_response(obj.imagem_blob)
+    resp.mimetype = obj.imagem_mimetype or 'image/jpeg'
+    resp.headers['Cache-Control'] = 'public, max-age=86400'
+    resp.headers['ETag'] = etag
+    return resp
+
+
+@main_bp.route('/cardapio-img/<tipo>/<int:id>/upload', methods=['POST'])
+@login_required
+def cardapio_img_upload(tipo, id):
+    """Recebe upload de foto pra receita/produto. PIL comprime
+    automaticamente: redimensiona pra 700px max + JPEG quality 82.
+    Aceita ate 25MB no upload (celular tira fotos enormes), mas o que
+    fica no banco e ~50-150KB."""
+    from flask import abort, flash, redirect, url_for
+
+    from app.extensions import db as _db
+    from app.models import Produto, Receita
+    if not current_user.is_admin():
+        abort(403)
+    if tipo == 'receita':
+        obj = Receita.query.get_or_404(id)
+        url_back = url_for('receitas.ficha', id=id)
+    elif tipo == 'produto':
+        obj = Produto.query.get_or_404(id)
+        url_back = url_for('produtos.detalhe', id=id)
+    else:
+        abort(404)
+
+    f = request.files.get('imagem_arquivo')
+    if not f or not f.filename:
+        flash('Selecione um arquivo de imagem.', 'danger')
+        return redirect(url_back)
+    if not (f.mimetype or '').startswith('image/'):
+        flash('Arquivo nao eh imagem.', 'danger')
+        return redirect(url_back)
+    data = f.read()
+    if not data:
+        flash('Arquivo vazio.', 'danger')
+        return redirect(url_back)
+    if len(data) > 25 * 1024 * 1024:
+        flash(f'Imagem muito grande ({len(data)//1024//1024}MB > 25MB). '
+              'Tira de novo com qualidade menor.', 'danger')
+        return redirect(url_back)
+
+    from app.services import dropbox_storage
+    from app.utils import comprimir_imagem
+    try:
+        final = comprimir_imagem(data)
+        tamanho_kb = len(final) // 1024
+        if dropbox_storage.disponivel():
+            # Path deterministico — overwrite ao re-upload do mesmo item.
+            path = f'/cardapio/{tipo}/{obj.id}.jpg'
+            info = dropbox_storage.upload_publico(
+                final, path, mode='overwrite', autorename=False)
+            obj.imagem_dropbox_url = info['url']
+            obj.imagem_storage_path = info['storage_path']
+            obj.imagem_blob = None  # libera legado
+        else:
+            obj.imagem_blob = final
+        obj.imagem_mimetype = 'image/jpeg'
+    except Exception as e:  # noqa: BLE001
+        flash(f'Erro processando imagem: {e}', 'danger')
+        return redirect(url_back)
+
+    _db.session.commit()
+    flash(f'Imagem salva ({tamanho_kb} KB apos compressao).', 'success')
+    return redirect(url_back)
+
+
+def _norm(s):
+    import unicodedata
+    if not s:
+        return ''
+    nfd = unicodedata.normalize('NFD', s)
+    return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn').lower().strip()
+
+
+@main_bp.route('/cardapio-img/revisar')
+@login_required
+def cardapio_img_revisar():
+    """Grid de revisao das fotos atribuidas. Admin ve thumbnail + nome,
+    identifica matches errados e remove com 1 clique. Defer blob pra nao
+    estourar RAM — o thumbnail eh servido pela rota /cardapio-img/<tipo>/<id>."""
+    from flask import abort
+    from sqlalchemy import or_
+    from sqlalchemy.orm import defer
+    if not current_user.is_admin():
+        abort(403)
+    receitas_com_foto = (Receita.query
+                         .options(defer(Receita.imagem_blob),
+                                  defer(Receita.imagem_mimetype))
+                         .filter(or_(Receita.imagem_blob.isnot(None),
+                                     Receita.imagem_dropbox_url.isnot(None)))
+                         .order_by(Receita.categoria, Receita.nome).all())
+    produtos_com_foto = (Produto.query
+                         .options(defer(Produto.imagem_blob),
+                                  defer(Produto.imagem_mimetype))
+                         .filter(Produto.ativo.is_(True))
+                         .filter(or_(Produto.imagem_blob.isnot(None),
+                                     Produto.imagem_dropbox_url.isnot(None)))
+                         .order_by(Produto.categoria, Produto.nome).all())
+    return render_template('main/cardapio_revisar.html',
+                            receitas=receitas_com_foto,
+                            produtos=produtos_com_foto)
+
+
+@main_bp.route('/cardapio-img/<tipo>/<int:id>/remover', methods=['POST'])
+@login_required
+def cardapio_img_remover(tipo, id):
+    from flask import abort, flash, redirect, url_for
+
+    from app.extensions import db as _db
+    from app.models import Produto, Receita
+    if not current_user.is_admin():
+        abort(403)
+    if tipo == 'receita':
+        obj = Receita.query.get_or_404(id)
+        url_back = url_for('receitas.ficha', id=id)
+    elif tipo == 'produto':
+        obj = Produto.query.get_or_404(id)
+        url_back = url_for('produtos.detalhe', id=id)
+    else:
+        abort(404)
+    # Permite redirect pra revisar (next=revisar) em vez da ficha
+    if request.form.get('next') == 'revisar':
+        url_back = url_for('main.cardapio_img_revisar')
+    # Delete Dropbox file best-effort antes de limpar refs
+    if obj.imagem_storage_path:
+        from app.services import dropbox_storage
+        dropbox_storage.deletar(obj.imagem_storage_path)
+    obj.imagem_blob = None
+    obj.imagem_mimetype = None
+    obj.imagem_url = None
+    obj.imagem_dropbox_url = None
+    obj.imagem_storage_path = None
+    _db.session.commit()
+    flash('Imagem removida.', 'info')
+    return redirect(url_back)
 
 
 @main_bp.route('/api/exportar')
@@ -265,10 +514,24 @@ def importar():
             db.session.flush()
 
             for item_data in p_data.get('itens', []):
+                # Resolve FK por nome — item orfao (sem match) entra com
+                # FK NULL e admin resolve em /cestas/orfaos.
+                tipo_item = item_data['tipo']
+                nome_item = item_data['item_nome']
+                receita_id = None
+                materia_prima_id = None
+                if tipo_item == 'receita':
+                    r = Receita.query.filter_by(nome=nome_item).first()
+                    receita_id = r.id if r else None
+                elif tipo_item == 'mp':
+                    m = MateriaPrima.query.filter_by(nome=nome_item).first()
+                    materia_prima_id = m.id if m else None
                 item = ProdutoItem(
                     produto_id=produto.id,
-                    tipo=item_data['tipo'],
-                    item_nome=item_data['item_nome'],
+                    tipo=tipo_item,
+                    item_nome=nome_item,
+                    receita_id=receita_id,
+                    materia_prima_id=materia_prima_id,
                     quantidade=item_data['quantidade'],
                 )
                 db.session.add(item)
@@ -303,6 +566,7 @@ def audit():
     tabela_f = request.args.get("tabela") or None
     usuario_f = request.args.get("usuario_id", type=int)
     acao_f = request.args.get("acao") or None
+    registro_f = request.args.get("registro_id", type=int)
     q = AuditLog.query
     if tabela_f:
         q = q.filter_by(tabela=tabela_f)
@@ -310,8 +574,11 @@ def audit():
         q = q.filter_by(usuario_id=usuario_f)
     if acao_f in ("insert", "update", "delete"):
         q = q.filter_by(acao=acao_f)
+    if registro_f:
+        q = q.filter_by(registro_id=registro_f)
     logs = q.order_by(AuditLog.criado_em.desc()).limit(200).all()
-    # Parse JSON dos campos antes/depois pra exibir formatado
+    # Parse JSON dos campos antes/depois + tradução em linguagem natural.
+    from app.services import historico_humano
     rows = []
     for l in logs:
         try:
@@ -322,15 +589,27 @@ def audit():
             depois = _json.loads(l.depois) if l.depois else None
         except Exception:
             depois = None
+        traducao = historico_humano.traduzir_audit(l, antes, depois)
         rows.append({
-            "log": l, "antes": antes, "depois": depois,
+            "log": l, "antes": antes, "depois": depois, "traducao": traducao,
         })
     # Lista de tabelas e usuarios pra filtros
     tabelas = [r[0] for r in db.session.query(AuditLog.tabela).distinct().all()]
     usuarios = Usuario.query.order_by(Usuario.nome).all()
+    # Cartinhas atualizadas nas ultimas 48h — pra rastrear pedidos com
+    # cartinha cadastrada manualmente (relatorio do auditor "cliente pediu
+    # cartinha em pedido ja feito" usa a conversa do Chatwoot; aqui voce
+    # ve o que o atendente efetivamente CADASTROU no banco).
+    from app.models import CartinhaEntrega
+    cartinhas = (CartinhaEntrega.query
+                 .filter(CartinhaEntrega.atualizado_em >= agora() - timedelta(hours=48))
+                 .order_by(CartinhaEntrega.atualizado_em.desc())
+                 .limit(50).all())
     return render_template("main/audit.html", rows=rows, tabelas=sorted(tabelas),
-                           usuarios=usuarios, filtros={"tabela": tabela_f,
-                           "usuario_id": usuario_f, "acao": acao_f})
+                           usuarios=usuarios, cartinhas=cartinhas,
+                           filtros={"tabela": tabela_f,
+                           "usuario_id": usuario_f, "acao": acao_f,
+                           "registro_id": registro_f})
 
 
 
@@ -341,14 +620,13 @@ def caixa():
     """Dashboard de caixa diario: agrega dados LOCAIS do banco.
     Vendas PDV (Seru) NAO entram aqui pra evitar chamadas externas
     lentas — use /pdv pra esse detalhe."""
-    from datetime import date, timedelta
     from sqlalchemy import func as sqlfunc
 
-    data_str = request.args.get('data', date.today().isoformat())
+    data_str = request.args.get('data', hoje_brt().isoformat())
     try:
         data_alvo = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
-        data_alvo = date.today()
+        data_alvo = hoje_brt()
 
     ontem = data_alvo - timedelta(days=1)
     semana_atras = data_alvo - timedelta(days=7)
@@ -407,3 +685,1366 @@ def caixa():
                            semana_data=semana_atras,
                            delta_locais=delta_pct(hoje_m['valor_locais'], ontem_m['valor_locais']),
                            delta_entregas=delta_pct(hoje_m['n_entregas'], ontem_m['n_entregas']))
+
+
+@main_bp.route('/admin/debug-papeis')
+@owner_required
+def debug_papeis():
+    """Lista usuarios + papel + tools que o copilot vai oferecer pra cada um.
+
+    Usado pra diagnostico quando alguem reclama 'copilot disse que nao
+    posso fazer X'. Owner-only.
+    """
+    from app.models import SlackVinculo, Usuario
+    from app.services.copilot import papel_efetivo, tools_permitidas
+
+    users = Usuario.query.order_by(Usuario.papel, Usuario.nome).all()
+    # Indexa vinculos por usuario_id — pode haver MAIS DE UM por user, em
+    # tese (slack_user_id diferentes). Lista pra ver todos.
+    vinculos_por_user = {}
+    for v in SlackVinculo.query.filter_by(ativo=True).all():
+        vinculos_por_user.setdefault(v.usuario_id, []).append(v.slack_user_id)
+
+    linhas = []
+    for u in users:
+        papel = papel_efetivo(u)
+        tools = sorted([t['name'] for t in tools_permitidas(u)])
+        slacks = vinculos_por_user.get(u.id, [])
+        linhas.append({
+            'id': u.id,
+            'nome': u.nome,
+            'login': u.login,
+            'papel_db': u.papel,
+            'is_owner': bool(getattr(u, 'is_owner', False)),
+            'papel_efetivo': papel,
+            'loja_id': u.loja_id,
+            'tools_count': len(tools),
+            'tem_criar_pedido': 'criar_pedido' in tools,
+            'tem_receber_mp': 'receber_mp' in tools,
+            'tem_registrar_desperdicio': 'registrar_desperdicio' in tools,
+            'slack_user_ids': slacks,
+        })
+
+    # Tabela secundaria: TODOS os vinculos slack ativos com slack_user_id
+    # e quem cada um aponta. Util pra detectar vinculo apontando pra
+    # usuario errado (ex: slack do Kelvin vinculado a um funcionario).
+    todos_vinculos = []
+    user_por_id = {u.id: u for u in users}
+    for v in SlackVinculo.query.filter_by(ativo=True).order_by(SlackVinculo.slack_user_id).all():
+        alvo = user_por_id.get(v.usuario_id)
+        todos_vinculos.append({
+            'slack_user_id': v.slack_user_id,
+            'usuario_id': v.usuario_id,
+            'alvo_nome': alvo.nome if alvo else '(usuario nao encontrado!)',
+            'alvo_papel': alvo.papel if alvo else '?',
+        })
+    return render_template('main/debug_papeis.html', linhas=linhas,
+                           todos_vinculos=todos_vinculos)
+
+
+@main_bp.route('/admin/permissoes', methods=['GET', 'POST'])
+@owner_required
+def permissoes_editar():
+    """Matriz editavel papel x capacidade (web + copilot + Slack). Owner-only.
+
+    Admin/owner nao aparecem na matriz (acesso total fixo). Os padroes espelham
+    o comportamento legado — so o que voce mudar aqui passa a valer (na hora)."""
+    from flask import flash
+
+    from app.services import permissoes as perm_svc
+
+    if request.method == 'POST':
+        perm_svc.salvar(request.form)
+        flash('Permissões atualizadas.', 'success')
+        return redirect(url_for('main.permissoes_editar'))
+
+    return render_template('main/permissoes.html',
+                           linhas=perm_svc.estado_atual(),
+                           papeis=perm_svc.PAPEIS_EDITAVEIS,
+                           papel_label=perm_svc.PAPEL_LABEL)
+
+
+@main_bp.route('/admin/debug-schema')
+@owner_required
+def debug_schema():
+    """Diagnostico de schema/migrations Alembic. Owner-only."""
+
+    from flask import current_app as _app
+    from sqlalchemy import inspect, text
+
+    from app.services import chatbot_vigia, seru_cron
+
+    info = {
+        'alembic_current': None,
+        'alembic_heads': [],
+        'pendentes': [],
+        'erro_alembic': None,
+        'colunas': [],
+        'erro_colunas': None,
+        'last_upgrade_log': request.args.get('log'),
+        'last_upgrade_ok': request.args.get('ok'),
+        'backup_status': seru_cron.status_backup(),
+        'vigia_status': {
+            'ligado': bool(_app.config.get('CHATBOT_VIGIA')),
+            'numero_destino': chatbot_vigia._numero_destino(),
+        },
+    }
+
+    # 1. Alembic current vs heads
+    try:
+        from alembic.config import Config
+        from alembic.runtime.migration import MigrationContext
+        from alembic.script import ScriptDirectory
+
+        cfg = Config('migrations/alembic.ini')
+        cfg.set_main_option('script_location', 'migrations')
+        script = ScriptDirectory.from_config(cfg)
+        info['alembic_heads'] = list(script.get_heads())
+
+        with db.engine.connect() as conn:
+            ctx = MigrationContext.configure(conn)
+            current = ctx.get_current_revision()
+            info['alembic_current'] = current
+
+        if info['alembic_heads']:
+            # walk_revisions vai de HEAD pra BASE. Pendentes = tudo desde
+            # head ate (exclusive) o current. Se current=None, tudo eh
+            # pendente. Se current=head, nada.
+            pendentes_revs = []
+            for rev in script.walk_revisions(base='base', head='heads'):
+                if rev.revision == info['alembic_current']:
+                    break
+                pendentes_revs.append({
+                    'revision': rev.revision,
+                    'down': rev.down_revision,
+                    'doc': (rev.doc or '')[:120],
+                })
+            # walk vai do head pra base, mas queremos mostrar a ordem de
+            # aplicacao (base → head): inverte.
+            info['pendentes'] = list(reversed(pendentes_revs))
+    except Exception as e:  # noqa: BLE001
+        info['erro_alembic'] = f'{type(e).__name__}: {e}'
+
+    # 2. Colunas criticas (resultado das migrations B4/B5)
+    try:
+        insp = inspect(db.engine)
+
+        def col_info(tabela, coluna):
+            try:
+                cols = {c['name']: c for c in insp.get_columns(tabela)}
+                if coluna not in cols:
+                    return {'tabela': tabela, 'coluna': coluna, 'existe': False,
+                            'tipo': None, 'nullable': None}
+                c = cols[coluna]
+                return {'tabela': tabela, 'coluna': coluna, 'existe': True,
+                        'tipo': str(c.get('type')), 'nullable': c.get('nullable')}
+            except Exception as e:  # noqa: BLE001
+                return {'tabela': tabela, 'coluna': coluna, 'existe': None,
+                        'tipo': f'ERRO: {type(e).__name__}: {e}',
+                        'nullable': None}
+
+        info['colunas'] = [
+            col_info('produto_item', 'receita_id'),
+            col_info('produto_item', 'materia_prima_id'),
+            col_info('produto_item', 'item_nome'),
+            col_info('venda_b2b', 'valor_total'),
+            col_info('venda_b2b_item', 'preco_unitario'),
+            col_info('venda_b2b_parcela', 'valor'),
+            col_info('venda_b2b_parcela', 'valor_pago'),
+            col_info('venda_manual_loja', 'valor_unitario'),
+            col_info('seru_debito_mov', 'fracao'),
+        ]
+    except Exception as e:  # noqa: BLE001
+        info['erro_colunas'] = f'{type(e).__name__}: {e}'
+
+    # 3. Detecta estado misto: DDL aplicado parcialmente mas alembic_version
+    # atrasado. Usado pra sugerir stamp manual antes de tentar upgrade.
+    info['estado_misto'] = None
+    try:
+        insp = inspect(db.engine)
+        tabelas = set(insp.get_table_names())
+        cols_pi = {c['name'] for c in insp.get_columns('produto_item')}
+        cols_vb2b = {c['name']: c for c in insp.get_columns('venda_b2b')}
+        vt = cols_vb2b.get('valor_total', {})
+        vt_tipo = str(vt.get('type', '')) if vt else ''
+
+        b9_ddl = 'seru_debito_mov' in tabelas
+        b4_ddl = 'NUMERIC' in vt_tipo.upper()
+        b5_ddl = 'receita_id' in cols_pi
+
+        # Calcula qual e a revision mais avancada que ja teve seu DDL aplicado
+        ddl_avancado_em = '69d82afed149'  # baseline
+        if b9_ddl:
+            ddl_avancado_em = 'ac57b6648ec4'  # B9
+        if b9_ddl and b4_ddl:
+            ddl_avancado_em = '643bd66e89c3'  # B4
+        if b9_ddl and b4_ddl and b5_ddl:
+            ddl_avancado_em = 'efb6e5837fd0'  # B5 (head)
+
+        if info['alembic_current'] != ddl_avancado_em:
+            info['estado_misto'] = {
+                'alembic_diz': info['alembic_current'],
+                'ddl_real': ddl_avancado_em,
+                'b9_ddl': b9_ddl,
+                'b4_ddl': b4_ddl,
+                'b5_ddl': b5_ddl,
+            }
+    except Exception as e:  # noqa: BLE001
+        info['estado_misto'] = {'erro': f'{type(e).__name__}: {e}'}
+
+    # 4. Contagem rapida de orfaos (so se B5 ja aplicou)
+    info['orfaos'] = None
+    try:
+        cols_pi = {c['name'] for c in inspect(db.engine).get_columns('produto_item')}
+        if 'receita_id' in cols_pi:
+            with db.engine.connect() as conn:
+                o_r = conn.execute(text(
+                    "SELECT COUNT(*) FROM produto_item "
+                    "WHERE tipo = 'receita' AND receita_id IS NULL"
+                )).scalar() or 0
+                o_m = conn.execute(text(
+                    "SELECT COUNT(*) FROM produto_item "
+                    "WHERE tipo = 'mp' AND materia_prima_id IS NULL"
+                )).scalar() or 0
+                info['orfaos'] = {'receita': o_r, 'mp': o_m}
+    except Exception as e:  # noqa: BLE001
+        info['orfaos'] = {'erro': f'{type(e).__name__}: {e}'}
+
+    return render_template('main/debug_schema.html', info=info)
+
+
+@main_bp.route('/admin/debug-tiny')
+@owner_required
+def debug_tiny():
+    """Owner-only: testa busca no Tiny pra (CPF, numero). Mostra exatamente o
+    que a API v2 do Tiny retornou — util pra debugar bot achando 'nao
+    encontrado' quando o pedido existe no painel."""
+    from app.services import tiny
+    cpf = (request.args.get('cpf') or '').strip()
+    numero = (request.args.get('numero') or '').strip()
+    resultado: dict = {'cpf': cpf, 'numero': numero,
+                       'tiny_disponivel': tiny.disponivel()}
+    if cpf and numero:
+        try:
+            cpf_d = ''.join(c for c in cpf if c.isdigit())
+            # 1. Pesquisa por CPF (v2 ignora filtros de numero — visto antes)
+            r_pesq = tiny._get('pedidos.pesquisa.php',
+                                params={'cpf_cnpj': cpf_d, 'pagina': '1'})
+            pesq_dict = r_pesq if isinstance(r_pesq, dict) else {}
+            primeiros = pesq_dict.get('pedidos') or []
+            campos = []
+            if primeiros and isinstance(primeiros[0], dict):
+                p0 = primeiros[0].get('pedido') or {}
+                if isinstance(p0, dict):
+                    campos = list(p0.keys())
+            resultado['pesquisa'] = {
+                'status': pesq_dict.get('status'),
+                'qtd': len(primeiros),
+                'campos_disponiveis': campos,
+            }
+
+            # 2. Funcao de alto nivel — o que o bot enxerga
+            pedido = tiny.buscar_pedido_por_cpf_e_numero(cpf, numero)
+            resultado['pedido_resolvido'] = pedido
+
+            # 3. Se achou o pedido, traz o detalhe CRU
+            if pedido and pedido.get('id'):
+                r_det = tiny._get('pedido.obter.php',
+                                   params={'id': pedido['id']})
+                resultado['detalhe_cru'] = r_det if isinstance(r_det, dict) else None
+                if isinstance(r_det, dict):
+                    p_det = r_det.get('pedido') or {}
+                    if not isinstance(p_det, dict):
+                        p_det = {}
+                    # v2 retorna nota_fiscal (sing) OU notas_fiscais (lista)
+                    nf = p_det.get('nota_fiscal')
+                    if not isinstance(nf, dict):
+                        nf = {}
+                    if not nf:
+                        lista = p_det.get('notas_fiscais') or []
+                        if isinstance(lista, list) and lista:
+                            primeiro = lista[0]
+                            if isinstance(primeiro, dict):
+                                nf = primeiro.get('nota_fiscal') or primeiro
+                                if not isinstance(nf, dict):
+                                    nf = {}
+                    resultado['nota_fiscal_extraida'] = nf
+                    nf_id = nf.get('id') if isinstance(nf, dict) else None
+                    if nf_id:
+                        r_link = tiny._get('nota.fiscal.obter.link.php',
+                                            params={'id': str(nf_id)})
+                        resultado['link_resposta'] = r_link if isinstance(r_link, dict) else None
+                        resultado['link_resolvido'] = tiny.obter_link_nota_fiscal(nf_id)
+        except Exception as exc:  # noqa: BLE001
+            resultado['erro_exception'] = f'{type(exc).__name__}: {exc}'
+            import traceback
+            resultado['traceback'] = traceback.format_exc()[-1500:]
+
+    return jsonify(resultado), 200
+
+
+@main_bp.route('/admin/debug-nflog')
+@owner_required
+def debug_nflog():
+    """Owner-only: ultimas 50 entradas do NFLog (audit das solicitacoes de NF
+    pelo bot). Util pra ver POR QUE o bot disse 'nao encontrei' num caso real:
+    o `resultado` + `detalhe` revelam onde foi recusado e com qual numero."""
+    from app.models import NFLog
+    qs = NFLog.query.order_by(NFLog.id.desc()).limit(50).all()
+    return jsonify([{
+        'id': r.id,
+        'em': r.criado_em.isoformat() if r.criado_em else None,
+        'conv': r.conv_id, 'canal': r.canal,
+        'cpf_4': r.cpf_4ultimos,
+        'numero_buscado': r.numero_pedido,
+        'resultado': r.resultado,
+        'detalhe': r.detalhe,
+    } for r in qs]), 200
+
+
+@main_bp.route('/admin/debug-vnda-cartinha')
+@owner_required
+def debug_vnda_cartinha():
+    """Owner-only: sonda a API VNDA pra descobrir se da pra ESCREVER a cartinha
+    (customization) de um pedido ja fechado. So GET + OPTIONS — NAO grava nada.
+
+    A cartinha no VNDA se grava no CARRINHO (/carts/...), nao no pedido
+    (/orders/... e read-only). Esta rota investiga se o carrinho do pedido
+    ainda eh alcancavel/gravavel depois de fechado.
+
+    Uso: /admin/debug-vnda-cartinha?code=CODIGO_DO_PEDIDO
+    """
+    import requests
+
+    from app.services import vnda
+    code = (request.args.get('code') or '').strip()
+    out: dict = {'code': code}
+    if not code:
+        out['erro'] = 'passe ?code=CODIGO_DO_PEDIDO (ex: ?code=DA19F38765)'
+        return jsonify(out), 200
+
+    base = vnda._base_url()
+    headers = vnda._headers()
+
+    def _probe(method, path, **kw):
+        """GET/OPTIONS seguro. Devolve status + Allow + corpo (truncado)."""
+        try:
+            r = requests.request(method, f'{base}{path}', headers=headers,
+                                  timeout=10, **kw)
+            try:
+                body = r.json()
+            except ValueError:
+                body = (r.text or '')[:400]
+            return {'status': r.status_code, 'allow': r.headers.get('Allow'),
+                    'body': body}
+        except requests.RequestException as e:
+            return {'erro': str(e)}
+
+    try:
+        # 1. Pedido completo: chaves + campos candidatos a ligar no carrinho
+        ped = _probe('GET', f'/orders/{code}')
+        out['pedido_status'] = ped.get('status')
+        body = ped.get('body') if isinstance(ped.get('body'), dict) else {}
+        out['pedido_chaves'] = sorted(body.keys()) if body else None
+        # Campos que tipicamente referenciam o carrinho (sem despejar PII)
+        out['campos_cart'] = {k: body.get(k) for k in
+                              ('token', 'cart_id', 'cart_token', 'cart', 'id',
+                               'number', 'code')
+                              if k in body}
+        itens = body.get('items') or []
+        out['itens'] = [{'id': it.get('id'), 'sku': it.get('sku'),
+                         'nome': it.get('product_name') or it.get('name'),
+                         'has_customizations': it.get('has_customizations')}
+                        for it in itens]
+
+        # Campos de NIVEL DE PEDIDO que poderiam conter a "cartinha escondida"
+        # (mensagem de entrega / observacao). Se o texto da cartinha aparecer
+        # aqui, da pra editar via PATCH /orders — bem mais facil que o carrinho.
+        out['campos_mensagem'] = {k: body.get(k) for k in
+                                  ('note', 'delivery_message', 'extra',
+                                   'user_code', 'agent', 'channel')
+                                  if k in body}
+
+        # 2. Customizations atuais (READ — ja sabemos que funciona)
+        cust = {}
+        for it in itens[:5]:
+            iid = it.get('id')
+            if iid:
+                cust[str(iid)] = _probe(
+                    'GET', f'/orders/{code}/items/{iid}/customizations')
+        out['customizations_pedido'] = cust
+
+        # 3. Tenta alcancar o CARRINHO por token E por cart_id numerico.
+        # (O token deu carrinho vazio antes; o cart_id numerico pode diferir.)
+        out['cart_por_token'] = None
+        out['cart_por_id'] = None
+        tok = body.get('token')
+        cid = body.get('cart_id')
+        if tok:
+            out['cart_por_token'] = _probe('GET', f'/carts/{tok}/items')
+        if cid:
+            out['cart_por_id_meta'] = _probe('GET', f'/carts/{cid}')
+            out['cart_por_id'] = _probe('GET', f'/carts/{cid}/items')
+    except Exception as exc:  # noqa: BLE001
+        import traceback
+        out['erro_exception'] = f'{type(exc).__name__}: {exc}'
+        out['traceback'] = traceback.format_exc()[-1500:]
+
+    return jsonify(out), 200
+
+
+@main_bp.route('/admin/debug-vnda-cartinha-write')
+@owner_required
+def debug_vnda_cartinha_write():
+    """Owner-only TESTE DE ESCRITA da cartinha no pedido. Tenta um metodo HTTP
+    (POST/PUT/DELETE) no endpoint de customizations do PEDIDO e reporta o
+    status cru do VNDA. ESCREVE de verdade — por isso exige ?confirmo=sim.
+
+    ⚠️ USE EM PEDIDO DE TESTE. Pode alterar/duplicar a cartinha real.
+
+    Parametros:
+      code, item_id   obrigatorios (vem do sondador read-only)
+      metodo          post (default) | put | delete
+      texto           texto da cartinha de teste
+      grupo           group_name (default 'Cartinha')
+      cust_id         id da customization (pra put/delete em recurso especifico)
+      formato         body1 (default {group_name,name}) | body2 ({customizations:[...]})
+    """
+    import requests
+
+    from app.services import vnda
+    code = (request.args.get('code') or '').strip()
+    item_id = (request.args.get('item_id') or '').strip()
+    metodo = (request.args.get('metodo') or 'post').lower()
+    texto = (request.args.get('texto') or 'TESTE BOT - pode apagar').strip()
+    grupo = (request.args.get('grupo') or 'Cartinha').strip()
+    cust_id = (request.args.get('cust_id') or '').strip()
+    formato = (request.args.get('formato') or 'body1').strip()
+
+    out: dict = {'code': code, 'item_id': item_id, 'metodo': metodo,
+                 'formato': formato}
+    if request.args.get('confirmo') != 'sim':
+        out['erro'] = ('Faltou ?confirmo=sim. ATENCAO: esta rota ESCREVE no '
+                       'VNDA. Rode so em pedido de TESTE.')
+        return jsonify(out), 200
+    if not code or not item_id:
+        out['erro'] = 'precisa de ?code=...&item_id=... (pegue do sondador read-only)'
+        return jsonify(out), 200
+
+    base = vnda._base_url()
+    headers = vnda._headers()
+    path = f'/orders/{code}/items/{item_id}/customizations'
+    if metodo in ('put', 'delete') and cust_id:
+        path = f'{path}/{cust_id}'
+
+    # Dois palpites de corpo — VNDA pode querer chave plana ou aninhada.
+    if formato == 'body2':
+        payload = {'customizations': [{'group_name': grupo, 'name': texto}]}
+    else:
+        payload = {'group_name': grupo, 'name': texto}
+
+    out['url'] = f'{base}{path}'
+    out['payload_enviado'] = payload
+    try:
+        kwargs = {} if metodo == 'delete' else {'json': payload}
+        r = requests.request(metodo.upper(), f'{base}{path}',
+                             headers=headers, timeout=12, **kwargs)
+        try:
+            rbody = r.json()
+        except ValueError:
+            rbody = (r.text or '')[:600]
+        out['resposta'] = {'status': r.status_code,
+                           'allow': r.headers.get('Allow'), 'body': rbody}
+    except requests.RequestException as e:
+        out['erro_req'] = str(e)
+
+    return jsonify(out), 200
+
+
+@main_bp.route('/admin/debug-schema/upgrade', methods=['POST'])
+@owner_required
+def debug_schema_upgrade():
+    """Aplica migrations pendentes manualmente. Owner-only."""
+    import io
+    import logging
+    import traceback as _tb
+
+    log_buf = io.StringIO()
+    handler = logging.StreamHandler(log_buf)
+    handler.setLevel(logging.INFO)
+    root = logging.getLogger()
+    root.addHandler(handler)
+    original_level = root.level
+    root.setLevel(logging.INFO)
+
+    ok = '1'
+    try:
+        from flask_migrate import upgrade as _upgrade
+        _upgrade(directory='migrations')
+        log_buf.write('\nOK: upgrade concluido sem exception.')
+    except Exception:  # noqa: BLE001
+        ok = '0'
+        log_buf.write('\n--- TRACEBACK ---\n')
+        log_buf.write(_tb.format_exc())
+    finally:
+        root.removeHandler(handler)
+        root.setLevel(original_level)
+
+    return redirect(url_for('main.debug_schema',
+                            log=log_buf.getvalue()[-3000:], ok=ok))
+
+
+@main_bp.route('/admin/debug-schema/stamp', methods=['POST'])
+@owner_required
+def debug_schema_stamp():
+    """Marca alembic_version pra revision indicada SEM aplicar DDL.
+
+    Uso: quando DDL ja foi aplicado por outro caminho (ex: tabela
+    seru_debito_mov foi criada mas alembic_version voltou pra baseline
+    por algum reset). Stamp realinha o controle sem executar migration.
+    """
+    import io
+    import traceback as _tb
+
+    revision = (request.form.get('revision') or '').strip()
+    log_buf = io.StringIO()
+    log_buf.write(f'Stamp pedido: revision={revision!r}\n')
+
+    if not revision or len(revision) > 32 or not revision.replace('_', '').isalnum():
+        log_buf.write('ERRO: revision invalida (precisa ser ID alfanumerico).')
+        return redirect(url_for('main.debug_schema',
+                                log=log_buf.getvalue(), ok='0'))
+
+    ok = '1'
+    try:
+        from flask_migrate import stamp as _stamp
+        _stamp(directory='migrations', revision=revision)
+        log_buf.write(f'OK: alembic_version stampada em {revision}.\n')
+    except Exception:  # noqa: BLE001
+        ok = '0'
+        log_buf.write('\n--- TRACEBACK ---\n')
+        log_buf.write(_tb.format_exc())
+
+    return redirect(url_for('main.debug_schema',
+                            log=log_buf.getvalue()[-3000:], ok=ok))
+
+
+@main_bp.route('/admin/slack/diagnostico')
+@owner_required
+def slack_diagnostico():
+    """Diagnostico dos avisos via Slack (canais, envio, alerta de desperdicio).
+
+    Resolve o caso comum: "recebi WhatsApp mas nao vi no Slack".
+    Mostra config + permite disparar alerta na hora pra ler o motivo real.
+    """
+    from flask import current_app
+
+    from app.services import desperdicio_alerta, slack
+
+    cfg = current_app.config
+    canais = [
+        ('Resumo diario (04:00)', 'SLACK_CANAL_RESUMO_DIARIO',
+         (cfg.get('SLACK_CANAL_RESUMO_DIARIO') or '').strip()),
+        ('Lembretes pedido amanha (9/12/16/19h)', 'SLACK_CANAL_PEDIDOS',
+         (cfg.get('SLACK_CANAL_PEDIDOS') or '').strip()),
+        ('Alerta desperdicio (20:10/15/20/25)', 'SLACK_CANAL_COPILOT',
+         (cfg.get('SLACK_CANAL_COPILOT') or '').strip()),
+    ]
+    info = {
+        'bot_token_setado': bool((cfg.get('SLACK_BOT_TOKEN') or '').strip()),
+        'signing_setado': bool((cfg.get('SLACK_SIGNING_SECRET') or '').strip()),
+        'disponivel': slack.disponivel(),
+        'canais': canais,
+        'lojas_sem_desperdicio': desperdicio_alerta.lojas_sem_desperdicio(),
+        'ultimo_resultado': request.args.get('resultado'),
+    }
+    return render_template('main/slack_diagnostico.html', info=info)
+
+
+@main_bp.route('/admin/slack/diagnostico/testar-canal', methods=['POST'])
+@owner_required
+def slack_diagnostico_testar_canal():
+    from flask import flash
+
+    from app.services import slack
+
+    canal = (request.form.get('canal') or '').strip()
+    if not canal:
+        flash('Canal vazio — configure a env var antes.', 'warning')
+        return redirect(url_for('main.slack_diagnostico'))
+    res = slack.post_message(
+        canal, ':test_tube: Teste de envio do diagnostico Slack.')
+    if res.get('ok'):
+        msg = f'OK: mensagem postada no canal {canal} (ts={res.get("ts")}).'
+        nivel = 'success'
+    else:
+        msg = f'FALHA ao postar em {canal}: {res.get("erro")}'
+        nivel = 'danger'
+    flash(msg, nivel)
+    return redirect(url_for('main.slack_diagnostico'))
+
+
+@main_bp.route('/admin/slack/diagnostico/disparar-desperdicio', methods=['POST'])
+@owner_required
+def slack_diagnostico_disparar_desperdicio():
+    """Dispara `alertar_slack_pendentes` na hora e mostra retorno bruto.
+
+    Util pra entender por que o cron 20:10/15/20/25 nao apareceu no canal.
+    """
+    from flask import flash
+
+    from app.services import desperdicio_alerta
+
+    res = desperdicio_alerta.alertar_slack_pendentes()
+    if res.get('enviado'):
+        flash(f'Alerta enviado no Slack ({res.get("pendentes")} loja[s] pendente[s]).',
+              'success')
+    else:
+        motivo = res.get('motivo')
+        erro = res.get('erro')
+        flash(f'NAO enviado. motivo={motivo}'
+              + (f' · erro={erro}' if erro else ''),
+              'warning' if motivo == 'sem_pendencias' else 'danger')
+    return redirect(url_for('main.slack_diagnostico'))
+
+
+@main_bp.route('/admin/backup/debug-env')
+@owner_required
+def backup_debug_env():
+    """Diagnostico do ambiente — mostra PATH, locais com pg_dump, versao.
+
+    Usado quando backup falha com "pg_dump nao encontrado" pra entender se
+    o nixpacks.toml aplicou ou se o binario esta noutro lugar.
+    """
+    import os as _os
+    import shutil
+    import subprocess
+
+    info = {
+        'PATH': _os.environ.get('PATH', ''),
+        'which_pg_dump': shutil.which('pg_dump'),
+    }
+
+    # Procura pg_dump em locais comuns
+    locais = []
+    for caminho in ['/usr/bin', '/usr/local/bin', '/nix/store', '/usr/lib/postgresql']:
+        try:
+            r = subprocess.run(['bash', '-c', f'ls -la {caminho} 2>/dev/null | grep -i pg_'],
+                               capture_output=True, text=True, timeout=5)
+            if r.stdout:
+                locais.append(f'{caminho}:\n{r.stdout}')
+        except Exception as e:  # noqa: BLE001
+            locais.append(f'{caminho}: ERRO {e}')
+
+    # Procura recursiva no /nix/store (Nixpacks instala la)
+    try:
+        r = subprocess.run(['bash', '-c', 'find /nix/store -name pg_dump 2>/dev/null | head -5'],
+                           capture_output=True, text=True, timeout=15)
+        info['find_nix_pg_dump'] = r.stdout or '(nada encontrado)'
+    except Exception as e:  # noqa: BLE001
+        info['find_nix_pg_dump'] = f'ERRO: {e}'
+
+    # Tenta executar
+    try:
+        r = subprocess.run(['pg_dump', '--version'], capture_output=True, text=True, timeout=5)
+        info['pg_dump_version'] = r.stdout or r.stderr
+    except FileNotFoundError:
+        info['pg_dump_version'] = '(nao encontrado no PATH)'
+    except Exception as e:  # noqa: BLE001
+        info['pg_dump_version'] = f'ERRO: {e}'
+
+    # Diagnostico extra: identifica se imagem eh Dockerfile-based ou Nixpacks
+    try:
+        r = subprocess.run(['bash', '-c',
+                            'ls -la / 2>&1 | head -30; echo ---; '
+                            'cat /etc/os-release 2>&1 | head -5; echo ---; '
+                            'dpkg -l 2>/dev/null | grep -iE "postgres|libpq" || echo "(sem dpkg ou sem postgres)"'],
+                           capture_output=True, text=True, timeout=10)
+        info['ambiente'] = r.stdout
+    except Exception as e:  # noqa: BLE001
+        info['ambiente'] = f'ERRO: {e}'
+
+    info['locais_listagem'] = '\n\n'.join(locais)
+
+    # Onde fotos de entrega DEVERIAM estar indo
+    from flask import current_app, jsonify
+
+    from app.models import EntregaFoto
+    info['dropbox_pasta_base_config'] = (
+        current_app.config.get('DROPBOX_PASTA_BASE') or '(usando default /Apps/Receitas-Entregas)'
+    )
+    info['dropbox_backup_pasta_config'] = (
+        current_app.config.get('DROPBOX_BACKUP_PASTA') or '(usando default /backups-postgres)'
+    )
+    info['entrega_foto_count'] = EntregaFoto.query.count()
+    foto_recente = EntregaFoto.query.order_by(EntregaFoto.id.desc()).first()
+    if foto_recente:
+        info['entrega_foto_amostra'] = {
+            'id': foto_recente.id,
+            'storage_path': foto_recente.storage_path,
+            'url': foto_recente.url,
+            'tirada_em': str(foto_recente.tirada_em),
+        }
+    else:
+        info['entrega_foto_amostra'] = '(sem fotos no banco)'
+
+    # M6 debug: URL de uma receita migrada
+    from app.models import Produto, Receita
+    r = (Receita.query
+         .filter(Receita.imagem_dropbox_url.isnot(None))
+         .order_by(Receita.id.desc()).first())
+    if r:
+        info['receita_amostra'] = {
+            'id': r.id, 'nome': r.nome,
+            'imagem_dropbox_url': r.imagem_dropbox_url,
+            'imagem_storage_path': r.imagem_storage_path,
+            'tem_blob': r.imagem_blob is not None,
+        }
+    else:
+        info['receita_amostra'] = '(nenhuma receita migrada)'
+
+    p = (Produto.query
+         .filter(Produto.imagem_dropbox_url.isnot(None))
+         .order_by(Produto.id.desc()).first())
+    if p:
+        info['produto_amostra'] = {
+            'id': p.id, 'nome': p.nome,
+            'imagem_dropbox_url': p.imagem_dropbox_url,
+            'imagem_storage_path': p.imagem_storage_path,
+            'tem_blob': p.imagem_blob is not None,
+        }
+    else:
+        info['produto_amostra'] = '(nenhum produto migrado)'
+
+    return jsonify(info)
+
+
+@main_bp.route('/admin/blobs/migrar/<modelo>', methods=['POST'])
+@owner_required
+def blobs_migrar(modelo):
+    """Backfill de BLOBs antigos pra Dropbox (M6). Owner-only.
+
+    Modelos suportados: pedido_item_foto.
+    Idempotente. Processa em batches, advisory lock single-worker.
+    """
+    from flask import flash
+
+    from app.services import blob_migrator
+
+    if modelo == 'pedido_item_foto':
+        resultado = blob_migrator.migrar_pedido_item_foto()
+    elif modelo == 'foto_recebimento':
+        resultado = blob_migrator.migrar_foto_recebimento()
+    elif modelo == 'receita':
+        resultado = blob_migrator.migrar_receita_imagem()
+    elif modelo == 'produto':
+        resultado = blob_migrator.migrar_produto_imagem()
+    else:
+        flash(f'Modelo invalido: {modelo}', 'danger')
+        return redirect(url_for('main.debug_schema'))
+
+    if not resultado.get('ok'):
+        flash(f'Migracao falhou: {resultado.get("motivo")}', 'danger')
+    else:
+        msg = (f'Migracao {modelo}: {resultado["migradas"]}/{resultado["total"]} '
+               f'migradas, {resultado["erros"]} erros')
+        if resultado.get('detalhes'):
+            msg += '. Primeiros detalhes: ' + ' | '.join(resultado['detalhes'][:3])
+        cat = 'success' if resultado['erros'] == 0 else 'warning'
+        flash(msg, cat)
+    return redirect(url_for('main.debug_schema'))
+
+
+@main_bp.route('/admin/blobs/fix-urls-dropbox', methods=['POST'])
+@owner_required
+def blobs_fix_urls():
+    """One-shot: substitui dl=0 por raw=1 em URLs Dropbox ja populadas.
+
+    Bug originalmente em `_converter_para_raw` deixou URLs com formato
+    `...?rlkey=X&dl=0&raw=1`. Dropbox prioriza dl=0 e serve HTML preview.
+    Esta rota corrige UPDATE direto no banco — sem precisar reupload.
+    """
+    from flask import flash
+    from sqlalchemy import text
+
+    from app.extensions import db as _db
+
+    tabelas = [
+        ('pedido_item_foto', 'imagem_url'),
+        ('foto_recebimento', 'imagem_url'),
+        ('receita', 'imagem_dropbox_url'),
+        ('produto', 'imagem_dropbox_url'),
+    ]
+    # Normalizacao: itera linhas com URL Dropbox e aplica
+    # _converter_para_raw (robusto a dl=0, raw=1 duplicado, etc).
+    from app.services.dropbox_storage import _converter_para_raw
+    resumo = []
+    for tabela, coluna in tabelas:
+        with _db.engine.begin() as conn:
+            rows = conn.execute(text(
+                f"SELECT id, {coluna} FROM {tabela} "
+                f"WHERE {coluna} IS NOT NULL"
+            )).fetchall()
+            corrigidas = 0
+            for row in rows:
+                nova_url = _converter_para_raw(row[1])
+                if nova_url != row[1]:
+                    conn.execute(
+                        text(f"UPDATE {tabela} SET {coluna} = :u "
+                             f"WHERE id = :i"),
+                        {'u': nova_url, 'i': row[0]})
+                    corrigidas += 1
+            resumo.append(f'{tabela}.{coluna}: {corrigidas}/{len(rows)}')
+    flash('URLs Dropbox corrigidas: ' + ' · '.join(resumo), 'success')
+    return redirect(url_for('main.debug_schema'))
+
+
+@main_bp.route('/admin/backup/run', methods=['POST'])
+@owner_required
+def backup_run():
+    """Dispara backup manual do Postgres pro Dropbox. Owner-only.
+
+    Uso: pra testar a configuracao e gerar dump on-demand. O job
+    automatico roda diariamente as 04:00 BRT via APScheduler.
+    """
+    from flask import flash
+
+    from app.services import backup as backup_svc
+
+    resultado = backup_svc.executar_backup(forcar=True)
+    if resultado['ok']:
+        mb = resultado['tamanho'] / 1024 / 1024
+        flash(f'Backup OK: {mb:.2f} MB em {resultado["arquivo"]}', 'success')
+    else:
+        flash(f'Backup falhou: {resultado.get("motivo") or "ver logs"}', 'danger')
+    return redirect(url_for('main.debug_schema'))
+
+
+@main_bp.route('/admin/backup/drill')
+@owner_required
+def backup_drill():
+    """Drill de restore do backup (owner-only): prova que o dump do Dropbox
+    eh restauravel. Sem parametro = mostra status do ultimo drill.
+
+    ?iniciar=1     baixa o dump mais recente + valida estrutura (pg_restore
+                   --list). Rapido (~1 min), nao toca em banco nenhum.
+    ?iniciar=full  alem do acima, restaura num banco temporario
+                   (drill_restore_tmp), conta linhas de tabelas-chave e dropa.
+                   Prova completa. Pode levar varios minutos — acompanhe
+                   recarregando esta rota.
+
+    O status fica em arquivo compartilhado (/tmp) — qualquer worker gunicorn
+    responde o mesmo estado, e o resultado sobrevive a reinicio de worker.
+    """
+    from app.services import backup as backup_svc
+
+    iniciar = (request.args.get('iniciar') or '').strip().lower()
+    if iniciar in ('1', 'full'):
+        out = backup_svc.iniciar_drill(full=(iniciar == 'full'))
+        out['status'] = backup_svc.drill_status()
+        return jsonify(out), 200
+    return jsonify(backup_svc.drill_status()), 200
+
+
+@main_bp.route('/admin/dropbox/reauth')
+@owner_required
+def dropbox_reauth():
+    """Re-autorizacao OAuth da app Dropbox (owner-only), pra quando os ESCOPOS
+    mudam — permissao nova (ex: files.content.read pro drill de restore) NAO
+    vale pra refresh token ja emitido; precisa autorizar de novo.
+
+    Fluxo em 2 passos, sem curl:
+      1. GET sem parametro: mostra o link de autorizacao do Dropbox. Abra,
+         clique em Permitir, copie o codigo exibido.
+      2. GET ?code=<codigo>: troca o codigo por um refresh token NOVO e mostra
+         o valor pra voce colar em Railway -> Variables -> DROPBOX_REFRESH_TOKEN.
+    """
+    import requests as _requests
+    app_key = (current_app.config.get('DROPBOX_APP_KEY') or '').strip()
+    app_secret = (current_app.config.get('DROPBOX_APP_SECRET') or '').strip()
+    if not app_key or not app_secret:
+        return jsonify(erro='DROPBOX_APP_KEY/SECRET nao configurados no env'), 200
+
+    code = (request.args.get('code') or '').strip()
+    if not code:
+        url_auth = ('https://www.dropbox.com/oauth2/authorize'
+                    f'?client_id={app_key}&response_type=code'
+                    '&token_access_type=offline')
+        return jsonify(
+            passo_1=('Confirme ANTES no App Console que o escopo novo esta '
+                     'marcado (Permissions -> files.content.read -> Submit).'),
+            passo_2=f'Abra e autorize: {url_auth}',
+            passo_3=('Copie o codigo que o Dropbox mostrar e volte aqui com '
+                     '?code=<codigo>'),
+        ), 200
+
+    r = _requests.post(
+        'https://api.dropbox.com/oauth2/token',
+        data={'grant_type': 'authorization_code', 'code': code},
+        auth=(app_key, app_secret),
+        timeout=15,
+    )
+    if r.status_code != 200:
+        return jsonify(erro=f'troca do codigo falhou: HTTP {r.status_code}',
+                       detalhe=(r.text or '')[:300],
+                       dica=('Codigo expira em minutos e so vale 1 vez — '
+                             'gere outro no link do passo 2.')), 200
+    body = r.json()
+    novo_refresh = body.get('refresh_token') or ''
+    if not novo_refresh:
+        return jsonify(erro='resposta sem refresh_token',
+                       detalhe=str(body)[:300]), 200
+    return jsonify(
+        ok=True,
+        refresh_token=novo_refresh,
+        proximo_passo=('Railway -> servico web -> Variables -> substitua '
+                       'DROPBOX_REFRESH_TOKEN por este valor e salve. Apos o '
+                       'redeploy, rode o drill de novo: '
+                       '/admin/backup/drill?iniciar=full'),
+    ), 200
+
+
+@main_bp.route('/admin/teste-aviso-recebimento')
+@owner_required
+def teste_aviso_recebimento():
+    """Teste end-to-end do aviso de pedido recebido (owner-only).
+
+    Sem parametro: cria um PedidoLoja de TESTE (sem itens — nao toca
+    estoque), sobe 2 fotos geradas pra /recebimento/<id>/ no Dropbox, marca
+    'entregue' e dispara o aviso pro WhatsApp do dono com o link da pasta.
+
+    ?limpar=<id>: apaga o pedido de teste (so se tiver o marcador de teste
+    na observacao — pedido real e recusado), as fotos do banco e os
+    arquivos do Dropbox.
+    """
+    import io
+    import time as _time
+
+    from app.models import FotoRecebimento, Loja, PedidoLoja
+    from app.services import dropbox_storage, pedidos_notificacao
+
+    MARCADOR = '[PEDIDO-TESTE-AVISO]'
+
+    limpar_id = request.args.get('limpar')
+    if limpar_id:
+        p = PedidoLoja.query.get(int(limpar_id))
+        if not p:
+            return jsonify(erro='pedido nao encontrado'), 200
+        if MARCADOR not in (p.observacao or ''):
+            return jsonify(erro='esse pedido NAO eh de teste — recusado'), 200
+        for f in list(p.fotos or []):
+            if f.imagem_storage_path:
+                dropbox_storage.deletar(f.imagem_storage_path)
+        db.session.delete(p)   # cascade apaga FotoRecebimento
+        db.session.commit()
+        return jsonify(ok=True, apagado=int(limpar_id)), 200
+
+    loja = Loja.query.filter_by(ativa=True).first()
+    if not loja:
+        return jsonify(erro='nenhuma loja ativa'), 200
+
+    p = PedidoLoja(loja_id=loja.id, status='entregue',
+                   observacao=f'{MARCADOR} criado via /admin/teste-aviso-recebimento',
+                   criado_por=current_user.id)
+    db.session.add(p)
+    db.session.flush()
+
+    # 2 fotos geradas (quadrados coloridos) pra pasta ter conteudo real
+    fotos_ok = 0
+    if dropbox_storage.disponivel():
+        from PIL import Image
+        for cor in ((220, 60, 90), (60, 140, 220)):
+            img = Image.new('RGB', (320, 320), cor)
+            buf = io.BytesIO()
+            img.save(buf, format='JPEG', quality=80)
+            try:
+                info = dropbox_storage.upload_publico(
+                    buf.getvalue(),
+                    f'/recebimento/{p.id}/teste_{int(_time.time() * 1000)}.jpg',
+                    mode='add', autorename=True)
+                db.session.add(FotoRecebimento(
+                    pedido_id=p.id, imagem_url=info['url'],
+                    imagem_storage_path=info['storage_path'],
+                    mimetype='image/jpeg', enviada_por=current_user.id))
+                fotos_ok += 1
+            except RuntimeError:
+                current_app.logger.exception('teste-aviso: upload falhou')
+    db.session.commit()
+
+    pedidos_notificacao.notificar_pedido_recebido(p)
+
+    return jsonify(
+        ok=True,
+        pedido_id=p.id,
+        loja=loja.nome,
+        fotos_enviadas=fotos_ok,
+        confira='o aviso deve ter chegado no seu WhatsApp',
+        limpar_depois=f'/admin/teste-aviso-recebimento?limpar={p.id}',
+    ), 200
+
+
+@main_bp.route('/admin/saude')
+@owner_required
+def saude_negocio_admin():
+    """Radar de saude do negocio (owner-only): contas a pagar + receitas.
+
+    O mesmo conteudo chega as 07:30 no WhatsApp do dono (job
+    `zapi-digest-saude`; DIGEST_SAUDE=0 desliga). Aqui e a versao on-demand
+    com os detalhes completos (listas, nao so contagens).
+    ?enviar=1 dispara o digest no WhatsApp agora (teste)."""
+    from app.services import saude_negocio
+
+    out = {
+        'contas': saude_negocio.resumo_contas(),
+        'receitas': saude_negocio.resumo_receitas(),
+    }
+    if request.args.get('enviar') == '1':
+        out['envio'] = saude_negocio.enviar_digest_saude()
+    return jsonify(out), 200
+
+
+@main_bp.route('/admin/debug-handshake-bypass')
+@owner_required
+def debug_handshake_bypass():
+    """Owner-only: pedidos que avancaram (em_transporte/entregue) SEM o
+    handshake de QR — responde "alguem pulou o QR?".
+
+    Bypasses LEGITIMOS aparecem identificados: forcar_entrega (admin, gera
+    HandshakeAudit proprio) e copilot via Slack (sem HandshakeAudit nenhum).
+    ?dias=N (default 30) controla a janela. Atribuir motorista NAO e bypass
+    (e o passo anterior ao QR)."""
+    from datetime import timedelta as _td
+
+    from app.models import HandshakeAudit, PedidoLoja
+    from app.utils import agora as _agora
+    dias = request.args.get('dias', 30, type=int)
+    corte = _agora() - _td(days=dias)
+
+    pedidos = (PedidoLoja.query
+               .filter(PedidoLoja.status.in_(('em_transporte', 'entregue')))
+               .filter(PedidoLoja.criado_em >= corte)
+               .order_by(PedidoLoja.id.desc()).all())
+    ids = [p.id for p in pedidos]
+    audits = {}
+    if ids:
+        for a in HandshakeAudit.query.filter(
+                HandshakeAudit.pedido_id.in_(ids)).all():
+            audits.setdefault(a.pedido_id, []).append(a)
+
+    suspeitos = []
+    com_handshake = 0
+    forcados = 0
+    for p in pedidos:
+        regs = audits.get(p.id, [])
+        sucessos = [a for a in regs if a.etapa == 'sucesso']
+        forcou = [a for a in regs if a.etapa == 'forcar_entrega']
+        if forcou:
+            forcados += 1
+            suspeitos.append({
+                'pedido_id': p.id, 'status': p.status,
+                'classificacao': 'forcado_pelo_admin',
+                'detalhe': (forcou[0].detalhe or '')[:120],
+                'quando': forcou[0].momento.isoformat() if forcou[0].momento else None,
+            })
+        elif sucessos:
+            com_handshake += 1
+        else:
+            suspeitos.append({
+                'pedido_id': p.id, 'status': p.status,
+                'classificacao': 'sem_handshake (provavel copilot/Slack)',
+                'loja_id': p.loja_id,
+                'driver_id': p.driver_id,
+                'criado_em': p.criado_em.isoformat() if p.criado_em else None,
+            })
+
+    return jsonify(
+        janela_dias=dias,
+        total_avancados=len(pedidos),
+        com_handshake_ok=com_handshake,
+        forcados_pelo_admin=forcados,
+        sem_handshake=len(suspeitos) - forcados,
+        suspeitos=suspeitos[:100],
+        dica=('sem_handshake = avancou sem NENHUM scan de QR. Caminho '
+              'legitimo: copilot/Slack ("recebi o pedido X"). Se nao foi '
+              'copilot, investigue no /audit filtrando o pedido.'),
+    ), 200
+
+
+@main_bp.route('/admin/debug-chapa')
+@owner_required
+def debug_chapa():
+    """Owner-only: raio-X da baixa fracionaria (itens de chapa) no Seru.
+
+    Responde "o desconto de fatias de pao esta funcionando?" com dados reais:
+    mapeamentos com fator fracionario, debitos acumulados (fatias aguardando
+    fechar 1 pao), orfaos (FK morta) e movimentos fracionarios recentes
+    (prova de execucao)."""
+    from datetime import timedelta as _td
+
+    from app.models import (
+        MovEstoqueLoja,
+        Receita,
+        SeruDebito,
+        SeruProdutoMap,
+    )
+    from app.utils import agora as _agora
+
+    out = {}
+
+    mapeados = SeruProdutoMap.query.filter(
+        (SeruProdutoMap.receita_id.isnot(None))
+        | (SeruProdutoMap.produto_id.isnot(None))).all()
+    com_fator = []
+    orfaos = []
+    for m in mapeados:
+        fator = float(m.fator_quantidade or 1.0)
+        alvo = None
+        if m.receita_id:
+            r = Receita.query.get(m.receita_id)
+            alvo = r.nome if r else None
+            if r is None:
+                orfaos.append({'map_id': m.id, 'seru_nome': m.seru_nome,
+                               'problema': f'receita_id={m.receita_id} nao existe'})
+        if fator != 1.0:
+            com_fator.append({'seru_nome': m.seru_nome, 'fator': fator,
+                              'alvo': alvo})
+    out['mapeados_total'] = len(mapeados)
+    out['com_fator_fracionario'] = sorted(com_fator,
+                                          key=lambda x: x['seru_nome'])
+    out['orfaos_fk_morta'] = orfaos
+
+    debitos = SeruDebito.query.filter(
+        SeruDebito.fracao_pendente > 0.001).all()
+    out['debitos_acumulados'] = [
+        {'loja_id': d.loja_id, 'map_id': d.seru_produto_map_id,
+         'fracao_pendente': round(float(d.fracao_pendente or 0), 3)}
+        for d in debitos]
+
+    corte = _agora() - _td(days=7)
+    out['movs_fracionarios_7d'] = (
+        MovEstoqueLoja.query
+        .filter(MovEstoqueLoja.tipo == 'venda_seru')
+        .filter(MovEstoqueLoja.referencia.like('%(fator%'))
+        .filter(MovEstoqueLoja.data >= corte).count())
+    out['interpretacao'] = (
+        'com_fator_fracionario vazio = NENHUM item de chapa configurado '
+        '(va em /pdv/mapeamentos e ajuste o fator de cada item de chapa). '
+        'movs_fracionarios_7d > 0 = o desconto ESTA rodando. '
+        'debitos_acumulados = fatias ja vendidas aguardando fechar 1 pao '
+        'inteiro pra baixar do estoque.')
+    return jsonify(out), 200
+
+
+@main_bp.route('/admin/retencao')
+@owner_required
+def retencao_admin():
+    """Retencao de dados (owner-only). Sem parametro = DRY-RUN: mostra o que
+    SERIA apagado por alvo, sem tocar em nada. ?executar=1 apaga de verdade.
+
+    O ciclo automatico roda no cron diario apos o backup OK (RETENCAO_AUTO=0
+    desliga). Prazos via env: RETENCAO_LOGS_DIAS(365) /
+    RETENCAO_CONVERSAS_DIAS(180) / RETENCAO_EVENTOS_DIAS(7) /
+    RETENCAO_BACKUPS_DIAS(90).
+    """
+    from app.services import retencao
+
+    executar = request.args.get('executar') == '1'
+    rel = retencao.executar_limpeza(dry_run=not executar)
+    rel['prazos_dias'] = {
+        'logs': current_app.config['RETENCAO_LOGS_DIAS'],
+        'conversas': current_app.config['RETENCAO_CONVERSAS_DIAS'],
+        'eventos': current_app.config['RETENCAO_EVENTOS_DIAS'],
+        'backups': current_app.config['RETENCAO_BACKUPS_DIAS'],
+    }
+    rel['auto_diaria'] = bool(current_app.config.get('RETENCAO_AUTO', True))
+    return jsonify(rel), 200
+
+
+def _saldo_lalamove_json():
+    from app.models import LalamoveSaldo
+    s = db.session.get(LalamoveSaldo, 1)
+    if not s:
+        return ('ainda sem evento de carteira — chega no primeiro '
+                'debito/recarga apos ativar o webhook')
+    return {'valor': str(s.valor) if s.valor is not None else None,
+            'moeda': s.moeda,
+            'atualizado_em': s.atualizado_em.isoformat(sep=' ',
+                                                       timespec='seconds')
+            if s.atualizado_em else None,
+            'payload_cru': (s.payload_json or '')[:400]}
+
+
+@main_bp.route('/admin/debug-lalamove')
+@owner_required
+def debug_lalamove():
+    """Diagnóstico das credenciais Lalamove (owner-only). Mostra prefixos
+    (nunca a chave inteira) e bate num endpoint autenticado neutro
+    (GET /v3/cities): 200 = chave+assinatura OK; 401 = credencial/conta;
+    outro = corpo do erro pra leitura."""
+    from app.services import lalamove
+    key = lalamove._cfg('LALAMOVE_API_KEY') or ''
+    secret = lalamove._cfg('LALAMOVE_API_SECRET') or ''
+    from app.blueprints.lalamove.routes import ultimo_hit
+    out = {
+        'configurado': lalamove.disponivel(),
+        # ultimo acesso registrado no /lalamove/webhook deste container —
+        # diz se o probe do portal chegou ao servidor ou morreu no caminho.
+        'webhook_ultimo_hit': (ultimo_hit() or
+                               'nenhum acesso DESDE O ULTIMO DEPLOY (o '
+                               'rastro zera a cada deploy) — abra '
+                               '/lalamove/webhook no navegador e recarregue '
+                               'aqui pra testar o caminho de entrada'),
+        'saldo_carteira': _saldo_lalamove_json(),
+        'key_prefixo': key[:8] + '...' if key else None,
+        'key_tamanho': len(key),
+        'secret_prefixo': secret[:8] + '...' if secret else None,
+        'secret_tamanho': len(secret),
+        # espaco/quebra de linha copiado junto e causa classica de 401
+        'key_tem_espaco': key != key.strip(),
+        'secret_tem_espaco': secret != secret.strip(),
+        'base_url': lalamove._base_url(),
+        'market': lalamove._cfg('LALAMOVE_MARKET', 'BR') or 'BR',
+        'origem_latlng_env': bool(lalamove._cfg('LALAMOVE_ORIGEM_LATLNG')),
+    }
+    if not out['configurado']:
+        out['erro'] = 'LALAMOVE_API_KEY/SECRET ausentes'
+        return jsonify(out), 200
+    try:
+        status, corpo = lalamove._request('GET', '/v3/cities')
+        out['teste_cities_status'] = status
+        out['teste_cities_ok'] = status == 200
+        if status == 200:
+            dados = corpo.get('data') or []
+            out['cidades'] = [c.get('locode') or c.get('id') for c in dados][:10]
+            out['conclusao'] = ('Credenciais e assinatura OK. Se a cotação '
+                                'ainda falhar, o problema é no payload — me '
+                                'mande este JSON.')
+        else:
+            out['teste_cities_corpo'] = str(corpo)[:600]
+            out['conclusao'] = ('401/erro também no endpoint neutro = chave/'
+                                'secret não conferem ou conta sem produção '
+                                'ativa (Wallet/aprovação no portal). Não é '
+                                'problema do payload de cotação.')
+    except Exception as exc:  # noqa: BLE001
+        out['erro'] = f'{type(exc).__name__}: {exc}'
+    return jsonify(out), 200
+
+
+@main_bp.route('/admin/debug-sentry')
+@owner_required
+def debug_sentry():
+    """Status do monitoramento de erros (owner-only). ?testar=1 manda um
+    evento de teste pro Sentry — confira se chegou no painel sentry.io."""
+    import os as _os
+    dsn = (_os.environ.get('SENTRY_DSN') or '').strip()
+    out = {
+        'dsn_configurado': bool(dsn),
+        'ambiente': _os.environ.get('SENTRY_ENV', 'production'),
+    }
+    try:
+        import sentry_sdk
+        out['sdk_instalado'] = True
+        client = sentry_sdk.Hub.current.client
+        out['sdk_ativo'] = client is not None
+        if request.args.get('testar') == '1':
+            if not out['sdk_ativo']:
+                out['teste'] = ('NAO enviado: SDK inativo. Configure SENTRY_DSN '
+                                'no Railway e redeploye.')
+            else:
+                event_id = sentry_sdk.capture_message(
+                    'Teste manual via /admin/debug-sentry', level='warning')
+                out['teste'] = f'enviado (event_id={event_id}) — confira no sentry.io'
+    except ImportError:
+        out['sdk_instalado'] = False
+    if not dsn:
+        out['como_ativar'] = (
+            '1) Crie projeto Flask gratis em sentry.io; 2) copie o DSN; '
+            '3) Railway -> Variables -> SENTRY_DSN=<dsn>; 4) aguarde redeploy; '
+            '5) volte aqui com ?testar=1.')
+    return jsonify(out), 200
+
+
+@main_bp.route('/admin/vigia/diag')
+@owner_required
+def vigia_diag():
+    """Diagnostico do vigia do chatbot: mostra config + ultimos veredictos.
+
+    Owner-only. Pra confirmar que o vigia esta avaliando conversas e que o
+    pipeline (Haiku -> Z-API -> WhatsApp do dono) esta funcionando."""
+    import os as _os
+
+    from flask import current_app, jsonify
+
+    from app.services import chatbot_vigia
+    cfg = current_app.config
+    return jsonify({
+        'ligado': bool(cfg.get('CHATBOT_VIGIA')),
+        'anthropic_api_key_configurada': bool(cfg.get('ANTHROPIC_API_KEY')
+                                              or _os.environ.get('ANTHROPIC_API_KEY')),
+        'numero_destino': chatbot_vigia._numero_destino(),
+        'modelo': chatbot_vigia.MODELO,
+        'ultimos_veredictos': chatbot_vigia.ultimos(),
+        'tip': ('Pra disparar alerta de teste no seu WhatsApp: '
+                'POST /admin/vigia/teste?cenario=estoque '
+                '(ou cenario=irritado, ou cenario=silencio)'),
+    })
+
+
+@main_bp.route('/admin/auditor/run', methods=['POST'])
+@owner_required
+def auditor_run():
+    """Roda o auditor proativo do bot AGORA (varre o dia ate este momento) e
+    envia o relatorio pro WhatsApp do dono. Owner-only."""
+    from flask import flash
+
+    from app.services import chatbot_auditor
+    r = chatbot_auditor.auditar_hoje(enviar=True)
+    if r.get('enviado'):
+        flash('Auditor rodou e enviou o relatorio pro seu WhatsApp.', 'success')
+    elif r.get('pulou'):
+        flash(f'Auditor pulou: {r["pulou"]}', 'warning')
+    elif r.get('erro'):
+        flash(f'Auditor falhou: {r["erro"]}', 'danger')
+    elif r.get('ok') and not r.get('rel', {}).get('problemas'):
+        flash('Auditor rodou: nenhum problema relevante encontrado no periodo.',
+              'info')
+    else:
+        flash(f'Auditor rodou mas nao enviou (sem destino?): {r}', 'warning')
+    return redirect(url_for('main.debug_schema'))
+
+
+@main_bp.route('/admin/vigia/teste', methods=['POST'])
+@owner_required
+def vigia_teste():
+    """Dispara o vigia com conversa SINTETICA pra confirmar que tudo funciona
+    de ponta a ponta. Owner-only.
+
+    Cenarios:
+      estoque  - bot afirma esgotado pra item que tem nas lojas (ALERTA ALTA)
+      irritado - cliente irritado com o atendimento (ALERTA ALTA)
+      silencio - conversa normal (NAO deve disparar — controle)
+    """
+    from flask import flash, jsonify, request
+
+    from app.services import chatbot_vigia
+    cenario = (request.args.get('cenario') or request.form.get('cenario')
+               or 'estoque').strip().lower()
+    if cenario not in ('estoque', 'irritado', 'silencio'):
+        cenario = 'estoque'
+    resultado = chatbot_vigia.disparar_teste(cenario)
+    if request.headers.get('Accept', '').startswith('application/json'):
+        return jsonify({'cenario': cenario, 'resultado': resultado})
+    if resultado.get('enviado'):
+        flash(f'Vigia OK: alerta de TESTE ({cenario}) enviado pro seu WhatsApp.',
+              'success')
+    elif resultado.get('silencio'):
+        flash(f'Vigia avaliou ({cenario}) e decidiu NAO alertar — confere se '
+              'o cenario era pra disparar. Veredicto: '
+              f'{resultado.get("veredicto")}', 'warning')
+    elif resultado.get('pulou'):
+        flash(f'Vigia pulou: {resultado["pulou"]} (cheque CHATBOT_VIGIA e '
+              'ANTHROPIC_API_KEY)', 'warning')
+    else:
+        flash(f'Vigia teste falhou: {resultado.get("erro") or resultado}',
+              'danger')
+    return redirect(url_for('main.debug_schema'))

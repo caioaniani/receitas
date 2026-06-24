@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+{% block title %}Debug schema{% endblock %}
+{% block content %}
+<h1 class="page-title"><i class="bi bi-bug"></i> Debug schema / migrations</h1>
+
+{% if info.last_upgrade_log %}
+<div class="card mb-3">
+    <div class="card-header py-2">
+        <strong>Resultado do ultimo upgrade</strong>
+        {% if info.last_upgrade_ok == '1' %}
+        <span class="badge bg-success">OK</span>
+        {% else %}
+        <span class="badge bg-danger">FALHOU</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <pre class="mb-0 small" style="white-space:pre-wrap;max-height:400px;overflow:auto;">{{ info.last_upgrade_log }}</pre>
+    </div>
+</div>
+{% endif %}
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header py-2"><strong>Alembic state</strong></div>
+            <div class="card-body">
+                {% if info.erro_alembic %}
+                <div class="alert alert-danger small mb-2">{{ info.erro_alembic }}</div>
+                {% endif %}
+                <table class="table table-sm mb-2">
+                    <tbody>
+                        <tr><th>Revision atual (banco)</th><td><code>{{ info.alembic_current or '—' }}</code></td></tr>
+                        <tr><th>Head(s) no codigo</th><td>
+                            {% for h in info.alembic_heads %}<code>{{ h }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+                            {% if not info.alembic_heads %}—{% endif %}
+                        </td></tr>
+                        <tr><th>Pendentes</th><td>
+                            {% if info.pendentes %}
+                            <span class="badge bg-danger">{{ info.pendentes|length }}</span>
+                            {% else %}
+                            <span class="badge bg-success">0 (na head)</span>
+                            {% endif %}
+                        </td></tr>
+                    </tbody>
+                </table>
+                {% if info.pendentes %}
+                <div class="small">
+                    <strong>Migrations pendentes:</strong>
+                    <ul class="mb-2">
+                    {% for p in info.pendentes %}
+                        <li><code>{{ p.revision }}</code> — {{ p.doc }}</li>
+                    {% endfor %}
+                    </ul>
+                    <form method="POST" action="{{ url_for('main.debug_schema_upgrade') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-danger"
+                                onclick="return confirm('Aplicar migrations pendentes em PROD?');">
+                            <i class="bi bi-play-fill"></i> Aplicar upgrade
+                        </button>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        {% if info.estado_misto and not info.estado_misto.erro %}
+        {% if info.estado_misto.alembic_diz != info.estado_misto.ddl_real %}
+        <div class="card border-warning mb-2">
+            <div class="card-header py-2 bg-warning text-dark"><strong>Estado misto detectado</strong></div>
+            <div class="card-body small">
+                <p class="mb-1"><strong>alembic_version</strong> diz: <code>{{ info.estado_misto.alembic_diz or '(vazio)' }}</code></p>
+                <p class="mb-1"><strong>DDL real</strong> ja avancou ate: <code>{{ info.estado_misto.ddl_real }}</code></p>
+                <p class="mb-2">
+                    B9 (seru_debito_mov): {% if info.estado_misto.b9_ddl %}<span class="badge bg-success">aplicada</span>{% else %}<span class="badge bg-secondary">nao</span>{% endif %}
+                    B4 (Numeric): {% if info.estado_misto.b4_ddl %}<span class="badge bg-success">aplicada</span>{% else %}<span class="badge bg-secondary">nao</span>{% endif %}
+                    B5 (FK): {% if info.estado_misto.b5_ddl %}<span class="badge bg-success">aplicada</span>{% else %}<span class="badge bg-secondary">nao</span>{% endif %}
+                </p>
+                <p class="mb-2">
+                    Antes de aplicar upgrade, realinhe o controle: <strong>Stamp</strong>
+                    marca o alembic_version sem rodar DDL. Apos stamp, o upgrade so vai
+                    aplicar o que falta de verdade.
+                </p>
+                <form method="POST" action="{{ url_for('main.debug_schema_stamp') }}" class="mb-0">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="revision" value="{{ info.estado_misto.ddl_real }}">
+                    <button type="submit" class="btn btn-sm btn-warning"
+                            onclick="return confirm('Stampar alembic_version em {{ info.estado_misto.ddl_real }} (sem rodar DDL)?');">
+                        <i class="bi bi-bookmark-check"></i> Stamp em {{ info.estado_misto.ddl_real }}
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+        {% endif %}
+
+        <div class="card">
+            <div class="card-header py-2"><strong>Orfaos ProdutoItem</strong></div>
+            <div class="card-body">
+                {% if info.orfaos %}
+                    {% if info.orfaos.erro %}
+                    <div class="alert alert-warning small mb-0">{{ info.orfaos.erro }}</div>
+                    {% else %}
+                    <p class="mb-1">Receita sem FK: <strong>{{ info.orfaos.receita }}</strong></p>
+                    <p class="mb-0">MP sem FK: <strong>{{ info.orfaos.mp }}</strong></p>
+                    {% endif %}
+                {% else %}
+                <p class="text-muted small mb-0">B5 ainda nao aplicada (colunas FK nao existem).</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header py-2"><strong>Colunas criticas</strong></div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Tabela</th>
+                    <th>Coluna</th>
+                    <th>Existe?</th>
+                    <th>Tipo atual</th>
+                    <th>Nullable</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for c in info.colunas %}
+                <tr>
+                    <td><code>{{ c.tabela }}</code></td>
+                    <td><code>{{ c.coluna }}</code></td>
+                    <td>
+                        {% if c.existe is sameas true %}
+                        <span class="badge bg-success">SIM</span>
+                        {% elif c.existe is sameas false %}
+                        <span class="badge bg-danger">NAO</span>
+                        {% else %}
+                        <span class="badge bg-warning">erro</span>
+                        {% endif %}
+                    </td>
+                    <td><code>{{ c.tipo }}</code></td>
+                    <td>{{ c.nullable }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header py-2"><strong>Diagnostico Slack</strong></div>
+    <div class="card-body">
+        <p class="small mb-2">
+            Mostra canais Slack configurados e permite testar envio.
+            Use quando o WhatsApp avisar mas o Slack nao (ex: alerta de desperdicio).
+        </p>
+        <a href="{{ url_for('main.slack_diagnostico') }}" class="btn btn-sm btn-outline-primary">
+            Abrir diagnostico
+        </a>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header py-2">
+        <strong>Backup do Postgres → Dropbox</strong>
+        {% if info.backup_status.ativo %}
+        <span class="badge bg-success">scheduler ativo</span>
+        {% else %}
+        <span class="badge bg-secondary">scheduler off</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <p class="small mb-2">
+            Backup automatico roda diariamente as <strong>04:00 BRT</strong>.
+            Destino: pasta <code>/backups-postgres/</code> no Dropbox.
+            {% if info.backup_status.ultimo_run %}
+            <br>Ultima execucao: <code>{{ info.backup_status.ultimo_run|brt }}</code>
+            {% else %}
+            <br><span class="text-muted">Sem execucao registrada nesta sessao do app.</span>
+            {% endif %}
+        </p>
+        <form method="POST" action="{{ url_for('main.backup_run') }}" class="mb-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-primary"
+                    onclick="return confirm('Rodar backup agora? Pode demorar alguns segundos.');">
+                <i class="bi bi-cloud-arrow-up"></i> Rodar backup agora
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header py-2">
+        <strong>Vigia do chatbot</strong>
+        {% if info.vigia_status.ligado %}
+        <span class="badge bg-success">ligado</span>
+        {% else %}
+        <span class="badge bg-secondary">desligado</span>
+        {% endif %}
+        {% if info.vigia_status.numero_destino %}
+        <span class="badge bg-info">→ {{ info.vigia_status.numero_destino }}</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <p class="small mb-2">
+            Supervisor automático que assiste cada conversa do bot e alerta no
+            seu WhatsApp via Z-API quando vê problema (cliente irritado, bot
+            dizendo esgotado pra item que tem, perda de venda).
+            Modelo: <code>Haiku 4.5</code>.
+            <br>
+            <a href="{{ url_for('main.vigia_diag') }}" target="_blank">
+                Abrir diagnóstico JSON (últimos veredictos)
+            </a>
+        </p>
+        <p class="small text-muted mb-2">
+            Disparar alerta de TESTE no seu WhatsApp — escolha o cenário:
+        </p>
+        <div class="d-flex gap-2 flex-wrap">
+            <form method="POST" action="{{ url_for('main.vigia_teste') }}?cenario=estoque" class="mb-0">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-danger"
+                        onclick="return confirm('Disparar alerta de TESTE (estoque) no seu WhatsApp?');">
+                    Cenário: esgotado mas tem na loja (ALTA)
+                </button>
+            </form>
+            <form method="POST" action="{{ url_for('main.vigia_teste') }}?cenario=irritado" class="mb-0">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-danger"
+                        onclick="return confirm('Disparar alerta de TESTE (cliente irritado) no seu WhatsApp?');">
+                    Cenário: cliente irritado (ALTA)
+                </button>
+            </form>
+            <form method="POST" action="{{ url_for('main.vigia_teste') }}?cenario=silencio" class="mb-0">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline-secondary">
+                    Cenário: conversa normal (NÃO deve disparar — controle)
+                </button>
+            </form>
+        </div>
+
+        <hr>
+        <p class="small mb-2">
+            <strong>Auditor proativo</strong> — lê as conversas do dia, acha
+            padrões (handoff evitável, perda de venda, cliente irritado) e te
+            manda no WhatsApp. Roda automático às <strong>19h BRT</strong>;
+            use o botão pra rodar agora.
+        </p>
+        <form method="POST" action="{{ url_for('main.auditor_run') }}" class="mb-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-primary"
+                    onclick="return confirm('Rodar auditor do dia agora? Vai analisar e mandar resumo no seu WhatsApp.');">
+                <i class="bi bi-clipboard-check"></i> Rodar auditor agora
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header py-2"><strong>Migracao BLOB → Dropbox (M6)</strong></div>
+    <div class="card-body">
+        <p class="small mb-2">
+            Migra fotos antigas guardadas como BLOB no Postgres pra Dropbox.
+            Idempotente — pode rodar varias vezes (só processa pendentes).
+            Comprime cada foto pra ~150KB (700px JPEG 82) antes de subir.
+        </p>
+        <form method="POST"
+              action="{{ url_for('main.blobs_migrar', modelo='pedido_item_foto') }}"
+              class="mb-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-warning"
+                    onclick="return confirm('Migrar TODAS as fotos de conferencia (PedidoItemFoto) do banco pro Dropbox? Pode demorar varios minutos.');">
+                <i class="bi bi-arrow-up-right-square"></i>
+                Migrar PedidoItemFoto (conferencia saida/entrega)
+            </button>
+        </form>
+        <form method="POST"
+              action="{{ url_for('main.blobs_migrar', modelo='foto_recebimento') }}"
+              class="mb-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-warning"
+                    onclick="return confirm('Migrar TODAS as fotos de recebimento (FotoRecebimento) do banco pro Dropbox?');">
+                <i class="bi bi-arrow-up-right-square"></i>
+                Migrar FotoRecebimento (loja apos receber)
+            </button>
+        </form>
+        <form method="POST"
+              action="{{ url_for('main.blobs_migrar', modelo='receita') }}"
+              class="mb-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-warning"
+                    onclick="return confirm('Migrar TODAS as imagens de Receita pro Dropbox?');">
+                <i class="bi bi-arrow-up-right-square"></i>
+                Migrar Receita.imagem_blob (cardapio)
+            </button>
+        </form>
+        <form method="POST"
+              action="{{ url_for('main.blobs_migrar', modelo='produto') }}"
+              class="mb-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-warning"
+                    onclick="return confirm('Migrar TODAS as imagens de Produto pro Dropbox?');">
+                <i class="bi bi-arrow-up-right-square"></i>
+                Migrar Produto.imagem_blob (cardapio)
+            </button>
+        </form>
+        <hr class="my-2">
+        <form method="POST"
+              action="{{ url_for('main.blobs_fix_urls') }}"
+              class="mb-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary"
+                    onclick="return confirm('Corrigir URLs Dropbox legadas (substituir dl=0 por raw=1)?');">
+                <i class="bi bi-wrench"></i>
+                Fix URLs Dropbox (dl=0 → raw=1)
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="alert alert-info small mt-3 mb-0">
+    <strong>Esperado apos B4 + B5:</strong>
+    <ul class="mb-0">
+        <li><code>produto_item.receita_id</code>, <code>materia_prima_id</code>: existem (INTEGER)</li>
+        <li><code>venda_b2b.valor_total</code>, <code>venda_b2b_item.preco_unitario</code>, <code>venda_b2b_parcela.valor</code>: tipo <code>NUMERIC(10, 2)</code></li>
+        <li>Alembic na head <code>efb6e5837fd0</code></li>
+    </ul>
+</div>
+{% endblock %}

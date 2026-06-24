@@ -1,4 +1,4 @@
-from app.models import Receita, MateriaPrima, ReceitaIngrediente
+from app.models import MateriaPrima, Receita
 from app.services.custos import calcular_custos_receitas
 
 

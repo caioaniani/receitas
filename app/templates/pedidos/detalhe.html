@@ -21,7 +21,7 @@
         <span style="font-size:13px;">A quantidade recebida pela loja foi diferente da separada pela industria. Detalhes:</span>
         <ul class="mb-0 mt-1" style="font-size:13px;">
             {% for i in pedido.itens_divergentes %}
-            <li><strong>{{ i.nome_item }}</strong>: pedido <strong>{{ i.quantidade }}</strong>, recebido <strong>{{ i.quantidade_recebida }}</strong>
+            <li><strong>{{ i.nome_item_com_estado }}</strong>: pedido <strong>{{ i.quantidade }}</strong>, recebido <strong>{{ i.quantidade_recebida }}</strong>
                 <span class="text-muted">({{ 'faltou' if i.quantidade_recebida < i.quantidade else 'sobrou' }} {{ (i.quantidade - i.quantidade_recebida)|abs }})</span>
             </li>
             {% endfor %}
@@ -63,6 +63,15 @@
                 <span>{{ pedido.criador.nome if pedido.criador else '-' }}</span>
             </div>
         </div>
+        {% if pedido.modificado_em %}
+        <div class="mt-2 text-muted" style="font-size:12px;">
+            Ultima edicao: {{ pedido.modificado_em.strftime('%d/%m/%Y %H:%M') }}
+            {% if pedido.modificado_por %}por {{ pedido.modificado_por.nome }}{% endif %}
+            {% if current_user.papel in ('admin', 'gerente') %}
+            — <a href="{{ url_for('main.audit', tabela='pedido_loja', registro_id=pedido.id) }}">historico completo</a>
+            {% endif %}
+        </div>
+        {% endif %}
         {% if pedido.observacao %}
         <div class="mt-2">
             <small class="text-muted d-block">Observacao</small>
@@ -101,7 +110,7 @@
         <tbody>
             {% for item in pedido.itens %}
             <tr>
-                <td>{{ item.nome_item }}</td>
+                <td>{{ item.nome_item_com_estado }}</td>
                 <td class="text-center fw-bold">{{ item.quantidade }}</td>
                 {% if pedido.status == 'em_transporte' %}
                 <td>
@@ -121,6 +130,12 @@
 </div>
 
 <div class="d-flex gap-2 mt-3 flex-wrap">
+    {% if (current_user.is_admin() or current_user.is_gerente()) and pedido.status in ('pendente', 'confirmado') %}
+    <a href="{{ url_for('pedidos.editar', id=pedido.id) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-pencil"></i> Editar
+    </a>
+    {% endif %}
+
     {% if current_user.is_admin() %}
         {% if pedido.status == 'pendente' %}
         <form method="POST" action="{{ url_for('pedidos.confirmar', id=pedido.id) }}">
@@ -141,13 +156,47 @@
         {% endif %}
 
         {% if pedido.status == 'separado' %}
-        <form method="POST" action="{{ url_for('pedidos.enviar', id=pedido.id) }}"
-              onsubmit="return confirm('Saiu para entrega? O estoque da industria sera baixado agora.')">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-sm" style="background:#6f42c1;color:#fff;">
-                <i class="bi bi-truck"></i> Saiu para Entrega
-            </button>
-        </form>
+        <div class="w-100 mb-2">
+            <label class="form-label fw-semibold" style="font-size:13px;">
+                <i class="bi bi-truck"></i> Motorista responsavel
+                {% if pedido.driver %}
+                    <span class="badge bg-info text-dark">Atual: {{ pedido.driver.nome }}</span>
+                {% else %}
+                    <span class="badge bg-warning text-dark">Obrigatorio antes do QR</span>
+                {% endif %}
+            </label>
+            <form method="POST" action="{{ url_for('pedidos.atribuir_motorista', id=pedido.id) }}"
+                  class="d-flex gap-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <select name="driver_id" class="form-select form-select-sm" required>
+                    <option value="">— Selecionar motorista —</option>
+                    {% for d in drivers %}
+                    <option value="{{ d.id }}" {% if pedido.driver_id == d.id %}selected{% endif %}>
+                        {{ d.nome }}{% if not d.telefone %} (sem telefone){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-sm btn-primary">
+                    <i class="bi bi-send"></i> Atribuir + Avisar
+                </button>
+            </form>
+            {% if pedido.driver_id %}
+            <small class="text-muted">
+                Clicar de novo reatribui (envia outra mensagem). Atribuir libera o botao do QR abaixo.
+            </small>
+            {% endif %}
+        </div>
+
+        {% if pedido.driver_id %}
+        <a href="{{ url_for('pedidos.qr_saida', id=pedido.id) }}" class="btn btn-sm" style="background:#6f42c1;color:#fff;">
+            <i class="bi bi-qr-code"></i> Gerar QR Saída
+        </a>
+        {% else %}
+        <button type="button" class="btn btn-sm" style="background:#aaa;color:#fff;" disabled
+                title="Atribua o motorista primeiro">
+            <i class="bi bi-qr-code"></i> Gerar QR Saída
+        </button>
+        {% endif %}
         {% endif %}
     {% endif %}
 
@@ -172,6 +221,32 @@
             <i class="bi bi-x-circle"></i> Cancelar
         </button>
     </form>
+    {% endif %}
+
+    {% if current_user.is_admin() and pedido.status in ('confirmado', 'separado', 'em_transporte', 'entregue', 'recebido') %}
+    {% set msgs = {
+        'entregue': 'Voltar pra Em Transporte? Vai estornar o que somou no estoque da loja.',
+        'recebido': 'Voltar pra Em Transporte? Vai estornar o que somou no estoque da loja.',
+        'em_transporte': 'Voltar pra Separado? Vai estornar a baixa do estoque da industria/MP.',
+        'separado': 'Voltar pra Confirmado? (sem efeito no estoque)',
+        'confirmado': 'Voltar pra Pendente? (sem efeito no estoque)',
+    } %}
+    <form method="POST" action="{{ url_for('pedidos.voltar_status', id=pedido.id) }}"
+          onsubmit="return confirm('{{ msgs[pedido.status] }}')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-secondary btn-sm" title="Volta 1 status pra tras">
+            <i class="bi bi-arrow-counterclockwise"></i> Voltar status
+        </button>
+    </form>
+    {% endif %}
+
+    {# "Forçar entrega" REMOVIDO em 2026-06-10 por ordem do dono: entrega
+       passa SEMPRE pelo QR (handshake). Historico antigo segue no Audit QR. #}
+    {% if current_user.is_admin() %}
+    <a href="{{ url_for('pedidos.handshake_audit', id=pedido.id) }}" class="btn btn-outline-info btn-sm"
+       title="Ver histórico de tentativas de QR Code">
+        <i class="bi bi-shield-check"></i> Audit QR
+    </a>
     {% endif %}
 
     {% if current_user.is_admin() %}
@@ -201,4 +276,23 @@
     {% endfor %}
 </div>
 {% endif %}
+
+{# Fotos de conferencia por SKU: saida (industria/motorista) e entrega (loja) #}
+{% for etapa, titulo in [('saida', 'Conferência na saída (indústria → motorista)'), ('entrega', 'Conferência na entrega (motorista → loja)')] %}
+{% if fotos_conf[etapa] %}
+<h6 class="fw-bold mt-4 mb-2"><i class="bi bi-camera2"></i> {{ titulo }}</h6>
+<div class="d-flex flex-wrap gap-2">
+    {% for f in fotos_conf[etapa] %}
+    <a href="{{ url_for('pedidos.conferencia_foto', foto_id=f.id) }}" target="_blank" rel="noopener"
+       title="{{ f.pedido_item.nome_item }} — {{ f.criado_em.strftime('%d/%m/%Y %H:%M') if f.criado_em else '' }}">
+        <div style="text-align:center;">
+            <img src="{{ url_for('pedidos.conferencia_foto', foto_id=f.id) }}" alt="Foto de conferência"
+                 style="max-height:160px; max-width:200px; border:1px solid var(--border-color); border-radius:6px; object-fit:cover;">
+            <div class="small text-muted" style="max-width:200px;">{{ f.pedido_item.nome_item }}</div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+{% endfor %}
 {% endblock %}

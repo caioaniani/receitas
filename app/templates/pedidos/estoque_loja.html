@@ -3,7 +3,15 @@
 {% block title %}Estoque da Loja{% endblock %}
 
 {% block content %}
-<h1 class="page-title mb-3"><i class="bi bi-box-seam"></i> Estoque da Loja</h1>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="page-title mb-0"><i class="bi bi-box-seam"></i> Estoque da Loja</h1>
+  {% if current_user.is_admin() %}
+  <a href="{{ url_for('pedidos.estoque_loja_saude') }}" class="btn btn-outline-dark btn-sm"
+     title="Diagnóstico: órfãos/pendentes, última conferência e saída por loja">
+    <i class="bi bi-heart-pulse"></i> Saúde por loja
+  </a>
+  {% endif %}
+</div>
 
 {% if current_user.is_admin() %}
 <form method="GET" class="mb-3 d-flex align-items-center gap-2">
@@ -24,6 +32,32 @@
         <a href="{{ url_for('pedidos.precos_loja', loja_id=loja.id) }}" class="btn btn-outline-dark btn-sm">
             <i class="bi bi-tag"></i> Precos
         </a>
+        <a href="{{ url_for('pedidos.estoque_loja_entrada_lote', loja=loja.id) }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-box-arrow-in-down"></i> Entrada em lote
+        </a>
+        <a href="{{ url_for('pedidos.estoque_loja_saida_lote', loja=loja.id) }}" class="btn btn-outline-warning btn-sm">
+            <i class="bi bi-box-arrow-up"></i> Saída em lote
+        </a>
+        <a href="{{ url_for('pedidos.conferencia', loja=loja.id) }}" class="btn btn-outline-warning btn-sm"
+           title="Bater o estoque físico com o sistema">
+            <i class="bi bi-clipboard-check"></i> Conferência
+        </a>
+        <a href="{{ url_for('pedidos.estoque_loja_historico', loja=loja.id) }}" class="btn btn-outline-secondary btn-sm"
+           title="Todas as movimentacoes desta loja">
+            <i class="bi bi-clock-history"></i> Historico
+        </a>
+        <a href="{{ url_for('pedidos.estoque_loja_mapeamentos') }}" class="btn btn-outline-dark btn-sm"
+           title="Mapeamentos dos nomes digitados em Saída em Lote">
+            <i class="bi bi-link-45deg"></i> Mapeamentos saída
+        </a>
+        <a href="{{ url_for('pedidos.vendas_manuais', loja_id=loja.id) }}" class="btn btn-outline-info btn-sm"
+           title="Lance vendas de loja sem PDV API (so historico, nao baixa estoque)">
+            <i class="bi bi-cash-stack"></i> Vendas manuais
+        </a>
+        <a href="{{ url_for('pedidos.sugerir_pedido', loja_id=loja.id) }}" class="btn btn-success btn-sm"
+           title="Sugere pedido baseado em vendas + estoque atual">
+            <i class="bi bi-magic"></i> Sugerir pedido
+        </a>
         <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modal-ajuste">
             <i class="bi bi-plus-slash-minus"></i> Entrada / Ajuste
         </button>
@@ -31,7 +65,86 @@
     {% endif %}
 </div>
 
-{% if itens %}
+{% set pendentes = itens | selectattr('pendente') | list if itens else [] %}
+{% set vinculados = itens | rejectattr('pendente') | list if itens else [] %}
+
+{% if pendentes and current_user.is_admin() %}
+<div class="card mb-3 border-warning">
+    <div class="card-header bg-warning bg-opacity-10 fw-bold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-link-45deg"></i> Pendentes de vinculação ({{ pendentes|length }})</span>
+        <small class="text-muted fw-normal">Itens entrados em lote sem cadastro. Vincule a uma receita/produto/MP.</small>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead class="thead-padaria">
+                <tr>
+                    <th>Nome digitado</th>
+                    <th class="text-center" style="width:100px">Quantidade</th>
+                    <th style="width:480px">Vincular a...</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for el in pendentes %}
+                {% set sug = sugestoes.get(el.id) %}
+                <tr class="table-warning">
+                    <td class="fw-semibold">
+                        <span class="badge bg-warning text-dark me-1" style="font-size:10px;">Pendente</span>
+                        {{ el.nome_item }}
+                        {% if sug %}
+                        <div class="small text-muted mt-1">
+                            <i class="bi bi-magic"></i> sugestão:
+                            <span class="fw-semibold">{{ sug.nome }}</span>
+                            <span class="badge bg-light text-dark border" style="font-size:9px;">
+                                {{ sug.tipo }}{% if sug.match == 'apelido' %} · apelido salvo{% elif sug.match == 'fuzzy' %} · aproximação{% endif %}
+                            </span>
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td class="text-center fw-bold">{{ el.quantidade }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('pedidos.estoque_loja_vincular') }}" class="d-flex gap-1 align-items-center">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="estoque_id" value="{{ el.id }}">
+                            <select name="alvo_tipo" class="form-select form-select-sm" style="width:100px;"
+                                    onchange="atualizarVincLoja(this)">
+                                <option value="receita" {% if sug and sug.tipo == 'receita' %}selected{% endif %}>Receita</option>
+                                <option value="produto" {% if sug and sug.tipo == 'produto' %}selected{% endif %}>Produto</option>
+                                <option value="mp" {% if sug and sug.tipo == 'mp' %}selected{% endif %}>MP</option>
+                            </select>
+                            <select name="alvo_id" class="form-select form-select-sm vinc-item-loja" required>
+                                {% if sug and sug.tipo == 'receita' %}
+                                    {% for r in receitas %}
+                                    <option value="{{ r.id }}" {% if r.id == sug.id %}selected{% endif %}>{{ r.categoria }} — {{ r.nome }}</option>
+                                    {% endfor %}
+                                {% elif sug and sug.tipo == 'produto' %}
+                                    {% for p in produtos %}
+                                    <option value="{{ p.id }}" {% if p.id == sug.id %}selected{% endif %}>{{ p.nome }}</option>
+                                    {% endfor %}
+                                {% elif sug and sug.tipo == 'mp' %}
+                                    {% for m in materias %}
+                                    <option value="{{ m.id }}" {% if m.id == sug.id %}selected{% endif %}>{{ m.nome }}</option>
+                                    {% endfor %}
+                                {% else %}
+                                    {% for r in receitas %}
+                                    <option value="{{ r.id }}">{{ r.categoria }} — {{ r.nome }}</option>
+                                    {% endfor %}
+                                {% endif %}
+                            </select>
+                            <button type="submit" class="btn btn-sm {% if sug %}btn-success{% else %}btn-primary{% endif %}"
+                                    onclick="return confirm('Vincular este pendente?')">
+                                <i class="bi {% if sug %}bi-check2-circle{% else %}bi-link{% endif %}"></i> {% if sug %}Confirmar{% else %}Vincular{% endif %}
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if vinculados %}
 <form method="POST" action="{{ url_for('pedidos.estoque_loja_registrar') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if current_user.is_admin() %}
@@ -49,7 +162,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for el in itens %}
+                {% for el in vinculados %}
                 <tr>
                     <td class="fw-semibold">{{ el.nome_item }}</td>
                     <td class="text-center fw-bold">{{ el.quantidade }}</td>
@@ -147,5 +260,43 @@
         </form>
     </div>
 </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if loja and current_user.is_admin() %}
+<script>
+var vincReceitas = [
+    {% for r in receitas %}
+    {id: {{ r.id }}, nome: {{ r.nome|tojson }}, cat: {{ (r.categoria or '')|tojson }}},
+    {% endfor %}
+];
+var vincProdutos = [
+    {% for p in produtos %}
+    {id: {{ p.id }}, nome: {{ p.nome|tojson }}},
+    {% endfor %}
+];
+var vincMaterias = [
+    {% for m in materias %}
+    {id: {{ m.id }}, nome: {{ m.nome|tojson }}},
+    {% endfor %}
+];
+
+function atualizarVincLoja(tipoSel) {
+    var form = tipoSel.closest('form');
+    var sel = form.querySelector('.vinc-item-loja');
+    sel.innerHTML = '';
+    var list = [];
+    if (tipoSel.value === 'receita') list = vincReceitas;
+    else if (tipoSel.value === 'produto') list = vincProdutos;
+    else if (tipoSel.value === 'mp') list = vincMaterias;
+    list.forEach(function(item) {
+        var opt = document.createElement('option');
+        opt.value = item.id;
+        opt.textContent = item.cat ? item.cat + ' — ' + item.nome : item.nome;
+        sel.appendChild(opt);
+    });
+}
+</script>
 {% endif %}
 {% endblock %}

@@ -12,7 +12,7 @@
     letter-spacing: -0.01em;
 }
 .home-input-wrap {
-    background: var(--card-bg, #fff);
+    background: var(--bg-card, #fff);
     border: 1px solid var(--border-color, #d0d0d0);
     border-radius: 18px;
     padding: 0.4rem 0.4rem 0.4rem 0.5rem;
@@ -21,7 +21,7 @@
     transition: border-color .15s ease, box-shadow .15s ease;
 }
 .home-input-wrap:focus-within {
-    border-color: var(--bs-primary, #0d6efd);
+    border-color: var(--cor-azul, #0d6efd);
     box-shadow: 0 0 0 3px rgba(13,110,253,0.12);
 }
 .home-input-wrap textarea {
@@ -31,7 +31,7 @@
 }
 .home-input-wrap textarea::placeholder { color: var(--text-muted, #888); }
 .home-input-wrap .send-btn {
-    border: 0; background: var(--bs-primary, #0d6efd); color: #fff; border-radius: 12px;
+    border: 0; background: var(--cor-azul, #0d6efd); color: #fff; border-radius: 12px;
     width: 40px; height: 40px; cursor: pointer; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
     font-size: 18px; transition: background .15s ease;
@@ -39,13 +39,15 @@
 .home-input-wrap .send-btn:hover { background: #0b5ed7; }
 .home-input-wrap .send-btn:disabled { background: #aaa; cursor: not-allowed; }
 .home-keytip {
-    text-align: center; margin-top: 0.9rem; font-size: 11.5px;
-    color: var(--text-muted, #888);
+    text-align: center; margin-top: 0.9rem; font-size: 12.5px;
+    color: var(--text-muted, #555);
 }
 .home-keytip kbd {
-    background: var(--card-bg, #f2f2f2); border: 1px solid var(--border-color, #ddd);
-    padding: 1px 6px; border-radius: 4px; font-family: inherit; font-size: 10.5px;
-    box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+    background: var(--bg-card, #fff);
+    border: 1px solid var(--border-color, #bbb);
+    color: var(--text-main, #222);
+    padding: 1px 6px; border-radius: 4px; font-family: inherit; font-size: 11.5px;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.08);
 }
 
 .suggestions { max-width: 880px; margin: 2.5rem auto 4rem; padding: 0 1rem; }
@@ -58,16 +60,17 @@
     gap: 0.6rem;
 }
 .suggestion {
-    background: var(--card-bg, #fff);
+    background: var(--bg-card, #fff);
     border: 1px solid var(--border-color, #e5e5e5);
     border-radius: 14px; padding: 0.8rem 1rem;
     display: flex; align-items: center; gap: 0.7rem;
-    cursor: pointer; font-size: 13.5px; text-align: left; color: inherit;
+    cursor: pointer; font-size: 13.5px; text-align: left;
+    color: var(--text-main, inherit);
     transition: all .15s ease;
 }
 .suggestion:hover {
-    border-color: var(--bs-primary, #0d6efd);
-    background: rgba(13,110,253,0.04);
+    border-color: var(--cor-azul, #0d6efd);
+    background: var(--bg-card-hover, rgba(13,110,253,0.04));
     transform: translateY(-1px);
 }
 .suggestion .icon { font-size: 20px; flex-shrink: 0; }

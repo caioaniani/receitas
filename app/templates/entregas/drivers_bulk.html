@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% block title %}Motoristas (bulk){% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-bicycle"></i> Motoristas (edição em massa)</h1>
+    <a href="{{ url_for('entregas.index') }}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+</div>
+
+<div class="alert alert-info small mb-3">
+    Edite telefone, PIN, capacidade e status de todos os motoristas de uma vez.
+    O botão <strong>Regerar link</strong> em cada linha aciona a rotina de magic-link individual (não salva o resto do form — salve antes se houver mudanças pendentes).
+    PIN: 4-6 dígitos numéricos; vazio = acesso livre (sem PIN).
+</div>
+
+<form method="POST" action="{{ url_for('entregas.drivers_bulk') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card card-padaria mb-3">
+        <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th style="width:160px">Telefone</th>
+                        <th style="width:110px">PIN</th>
+                        <th style="width:100px">Capacidade</th>
+                        <th style="width:80px">Ativo</th>
+                        <th style="width:130px">Magic link</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for d in drivers %}
+                    <tr {% if not d.ativo %}class="text-muted"{% endif %}>
+                        <td>{{ d.nome }}</td>
+                        <td>
+                            <input type="text" name="telefone_{{ d.id }}"
+                                   value="{{ d.telefone or '' }}"
+                                   class="form-control form-control-sm" autocomplete="off">
+                        </td>
+                        <td>
+                            <input type="text" name="pin_{{ d.id }}"
+                                   value="{{ d.pin or '' }}"
+                                   class="form-control form-control-sm"
+                                   inputmode="numeric" pattern="[0-9]{4,6}" autocomplete="off"
+                                   placeholder="vazio = sem PIN">
+                        </td>
+                        <td>
+                            <input type="number" name="capacidade_{{ d.id }}"
+                                   value="{{ d.capacidade or 999 }}"
+                                   class="form-control form-control-sm text-end"
+                                   min="1" max="9999">
+                        </td>
+                        <td class="text-center">
+                            <input type="checkbox" name="ativo_{{ d.id }}" class="form-check-input"
+                                   {% if d.ativo %}checked{% endif %}>
+                        </td>
+                        <td>
+                            <button type="submit" form="regerar_{{ d.id }}"
+                                    class="btn btn-sm btn-outline-warning"
+                                    {% if not d.ativo %}disabled title="Reative antes"{% endif %}>
+                                <i class="bi bi-arrow-clockwise"></i> Regerar
+                            </button>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 sticky-bottom bg-white border-top py-2" style="position:sticky;bottom:0;z-index:10;">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg"></i> Salvar todos
+        </button>
+        <a href="{{ url_for('entregas.index') }}" class="btn btn-outline-secondary">Cancelar</a>
+    </div>
+</form>
+
+{# Forms isolados pra cada botao regerar (fora do form principal pra evitar nested forms) #}
+{% for d in drivers %}
+{% if d.ativo %}
+<form id="regerar_{{ d.id }}" method="POST"
+      action="{{ url_for('entregas.drivers_magic_regerar', did=d.id) }}" style="display:none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+{% endif %}
+{% endfor %}
+{% endblock %}

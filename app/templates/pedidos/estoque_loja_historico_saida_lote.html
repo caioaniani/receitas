@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Historico — Saída em Lote{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-clock-history"></i> Historico — Saída em Lote</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('pedidos.estoque_loja_saida_lote') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Saída em Lote
+        </a>
+        <a href="{{ url_for('pedidos.estoque_loja_mapeamentos') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-link-45deg"></i> Mapeamentos
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-info" style="font-size:13px;">
+    <i class="bi bi-info-circle"></i>
+    Cada linha = 1 movimentacao de saida (PDV manual). Verde = baixou estoque,
+    vermelho = item identificado mas faltou estoque na loja.
+</div>
+
+<form method="GET" class="card mb-3">
+    <div class="card-body py-2 d-flex gap-2 align-items-center flex-wrap">
+        <label class="small mb-0">Loja:</label>
+        <select name="loja" class="form-select form-select-sm" style="max-width:240px;">
+            <option value="">Todas</option>
+            {% for l in lojas %}
+            <option value="{{ l.id }}" {% if sel_loja == l.id %}selected{% endif %}>{{ l.nome }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+        {% if sel_loja %}
+        <a href="{{ url_for('pedidos.estoque_loja_historico_saida_lote') }}" class="btn btn-sm btn-outline-secondary">Limpar</a>
+        {% endif %}
+    </div>
+</form>
+
+<div class="d-flex justify-content-between align-items-center mb-2 mt-3">
+    <h5 class="mb-0"><i class="bi bi-list-ul"></i> Movimentações</h5>
+    <small class="text-muted">{{ linhas|length }} registro{{ '' if linhas|length == 1 else 's' }} (últimas 300)</small>
+</div>
+
+{% if linhas %}
+{% set ns = namespace(grupos={}, ordem=[]) %}
+{% for l in linhas %}
+    {% set chave = l.mov.data.strftime('%Y-%m-%d') if l.mov.data else 'sem-data' %}
+    {% if chave not in ns.grupos %}
+        {% set _ = ns.ordem.append(chave) %}
+        {% set _ = ns.grupos.update({chave: []}) %}
+    {% endif %}
+    {% set _ = ns.grupos[chave].append(l) %}
+{% endfor %}
+{% set dias_pt = {0:'segunda', 1:'terça', 2:'quarta', 3:'quinta', 4:'sexta', 5:'sábado', 6:'domingo'} %}
+
+{% for chave in ns.ordem %}
+    {% set lista_dia = ns.grupos[chave] %}
+    {% set data_obj = lista_dia[0].mov.data %}
+    {% set total_qtd = lista_dia | sum(attribute='mov.quantidade') %}
+    <details class="dia-grupo" {% if loop.first %}open{% endif %}>
+        <summary>
+            <span class="dia-data">
+                <strong>{{ data_obj.strftime('%d/%m/%Y') if data_obj else 'Sem data' }}</strong>
+                {% if data_obj %}· <span class="text-muted">{{ dias_pt.get(data_obj.weekday(), '') }}</span>{% endif %}
+            </span>
+            <span class="dia-resumo">{{ lista_dia|length }} mov</span>
+            <span class="dia-total">{{ total_qtd }} un</span>
+        </summary>
+        <div class="dia-corpo table-responsive">
+            <table class="table table-sm mb-0">
+                <thead class="thead-padaria">
+                    <tr>
+                        <th style="width:80px;">Hora</th>
+                        <th style="width:120px;">Loja</th>
+                        <th>Item</th>
+                        <th style="width:80px;" class="text-end">Qtd</th>
+                        <th style="width:140px;">Tipo</th>
+                        <th>Referência</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for l in lista_dia %}
+                    <tr class="{% if l.mov.tipo == 'venda_loja_sem_estoque' %}table-warning{% endif %}">
+                        <td class="small text-muted">{{ l.mov.data.strftime('%H:%M') if l.mov.data else '—' }}</td>
+                        <td><small>{{ l.loja.nome if l.loja else '?' }}</small></td>
+                        <td class="fw-semibold">{{ l.item_nome }}</td>
+                        <td class="text-end fw-bold">{{ l.mov.quantidade }}</td>
+                        <td>
+                            {% set cor = 'success' if l.mov.tipo == 'saida_lote' else ('danger' if l.mov.tipo == 'venda_loja_sem_estoque' else 'secondary') %}
+                            <span class="badge bg-{{ cor }}" style="font-size:10px;">{{ historico_humano.mov_loja_label(l.mov.tipo) }}</span>
+                        </td>
+                        <td><small class="text-muted">{{ l.mov.referencia or '—' }}</small></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+{% endfor %}
+{% else %}
+<div class="card">
+    <div class="card-body text-muted text-center py-3">
+        Nenhuma saída em lote registrada ainda.
+    </div>
+</div>
+{% endif %}
+{% endblock %}

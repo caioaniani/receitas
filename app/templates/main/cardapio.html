@@ -1,305 +1,418 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cardápio - Padaria Artesanal</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@300;400;500;600&display=swap');
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>O Pão — Padaria Artesanal</title>
+<meta name="description" content="Padaria artesanal no Itaim Bibi. Pão de fermentação natural, croissants, café e mais."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"/>
+<style>
+:root {
+    --bg:        #fafaf7;
+    --fg:        #1a1410;
+    --primary:   #7a4e2a;
+    --accent:    #b8895a;
+    --border:    #e8e3d7;
+    --card:      #ffffff;
+    --muted:     #6b5d4c;
+    --soft:      #9a8b75;
+    --tag-bg:    #f3eee2;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+img { max-width: 100%; display: block; }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+/* ── TOOLBAR (admin, hidden on print) ── */
+.toolbar {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(26, 20, 16, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #fff;
+    padding: 10px 24px;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.toolbar > span { opacity: 0.8; margin-right: auto; }
+.toolbar .tipo-btn {
+    color: rgba(255,255,255,0.85);
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    padding: 5px 12px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 500;
+    transition: background 0.15s, border-color 0.15s;
+}
+.toolbar .tipo-btn:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.2); }
+.toolbar .tipo-btn.active { background: #fff; border-color: #fff; color: #1a1410; font-weight: 600; }
+@media print { .toolbar { display: none; } }
 
-        body {
-            font-family: 'Inter', sans-serif;
-            color: #2c2c2c;
-            background: #fff;
-            line-height: 1.5;
-        }
+/* ── HERO ── */
+.hero {
+    position: relative;
+    min-height: 420px;
+    overflow: hidden;
+    display: flex; align-items: flex-end;
+    background-image: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.55) 100%),
+                      url('https://images.rappi.com.br/restaurants_background/opaohome-1699368330099.png');
+    background-size: cover; background-position: center;
+}
+.hero-content {
+    position: relative;
+    padding: 0 32px 56px;
+    max-width: 760px;
+    color: #fff;
+    width: 100%;
+}
+.hero-tag {
+    display: inline-block;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.7);
+    margin-bottom: 14px;
+    font-weight: 500;
+}
+.hero h1 {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: clamp(2.4rem, 7vw, 4.5rem);
+    line-height: 1.0; font-weight: 800;
+    margin-bottom: 18px;
+    letter-spacing: -0.02em;
+}
+.hero p {
+    font-size: 0.95rem;
+    color: rgba(255,255,255,0.85);
+    max-width: 440px;
+    line-height: 1.5;
+}
 
-        /* ── Barra de ferramentas (não aparece no PDF) ── */
-        .toolbar {
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            background: #1a1a2e;
-            color: #fff;
-            padding: 10px 24px;
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            z-index: 100;
-            font-size: 13px;
-        }
+/* ── CARDÁPIO ── */
+.cardapio-section {
+    background: var(--bg);
+    padding: 72px 32px 96px;
+}
+.section-label {
+    text-align: center;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--soft);
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+.section-title {
+    text-align: center;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    font-weight: 700;
+    margin-bottom: 40px;
+    letter-spacing: -0.02em;
+    color: var(--fg);
+}
 
-        .toolbar a { color: #8ab4f8; text-decoration: none; }
-        .toolbar a:hover { color: #fff; }
+/* ── PILLS DE CATEGORIA (sticky no scroll) ── */
+.pills-wrap {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: var(--bg);
+    padding: 12px 0;
+    margin: 0 -32px 32px;
+    border-bottom: 1px solid var(--border);
+}
+.pills {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 6px;
+    padding: 0 32px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.pills::-webkit-scrollbar { display: none; }
+.pill {
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+}
+.pill:hover {
+    background: var(--tag-bg);
+    border-color: var(--accent);
+    color: var(--fg);
+}
+.pill.active {
+    background: var(--fg);
+    color: var(--bg);
+    border-color: var(--fg);
+}
 
-        .toolbar-spacer { padding-top: 52px; }
+.cat-section { display: none; animation: fadeIn 0.3s ease; }
+.cat-section.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* ── Capa / Header ── */
-        .cardapio-header {
-            text-align: center;
-            padding: 60px 40px 40px;
-            border-bottom: 3px double #c9a96e;
-            margin-bottom: 10px;
-        }
+/* ── GRID DE CARDS (com foto) ── */
+.menu-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    max-width: 1180px;
+    margin: 0 auto;
+}
+.product-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    transition: border-color 0.2s, transform 0.2s;
+}
+.product-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
+.card-img {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background: var(--tag-bg);
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+}
+.card-img img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s ease;
+}
+.product-card:hover .card-img img { transform: scale(1.05); }
+.card-img.placeholder {
+    background: linear-gradient(135deg, #f3eee2 0%, #e6dec8 100%);
+    font-size: 2rem;
+    color: var(--soft);
+}
+.card-body {
+    padding: 12px 14px 14px;
+    flex: 1;
+    display: flex; flex-direction: column;
+    justify-content: space-between;
+    gap: 8px;
+}
+.card-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--fg);
+}
+.card-desc {
+    font-size: 0.73rem;
+    color: var(--muted);
+    line-height: 1.4;
+}
+.card-price {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--primary);
+    letter-spacing: -0.01em;
+}
 
-        .cardapio-header h1 {
-            font-family: 'Playfair Display', serif;
-            font-size: 2.8rem;
-            font-weight: 700;
-            color: #1a1a2e;
-            letter-spacing: 2px;
-            margin-bottom: 8px;
-        }
+/* ── LISTA (categorias sem foto) ── */
+.list-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 8px;
+    max-width: 980px;
+    margin: 0 auto;
+}
+.list-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    transition: border-color 0.15s;
+}
+.list-item:hover { border-color: var(--accent); }
+.list-item-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--fg);
+}
+.list-item-desc {
+    font-size: 0.76rem;
+    color: var(--muted);
+    margin-top: 3px;
+    line-height: 1.4;
+}
+.list-item-price {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--primary);
+    white-space: nowrap;
+    letter-spacing: -0.01em;
+}
 
-        .cardapio-header .subtitulo {
-            font-size: 1rem;
-            color: #888;
-            letter-spacing: 4px;
-            text-transform: uppercase;
-            font-weight: 300;
-        }
+/* ── EMPTY STATE ── */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
 
-        .cardapio-header .contato {
-            margin-top: 16px;
-            font-size: 0.85rem;
-            color: #999;
-        }
+/* ── FOOTER ── */
+footer {
+    border-top: 1px solid var(--border);
+    padding: 40px 32px;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--soft);
+    background: var(--bg);
+}
+footer p { margin: 0; }
 
-        .cardapio-header .contato span {
-            margin: 0 12px;
-        }
-
-        /* ── Editáveis ── */
-        .editavel {
-            border: none;
-            background: transparent;
-            text-align: center;
-            font: inherit;
-            color: inherit;
-            width: 100%;
-            outline: none;
-        }
-
-        .editavel:focus {
-            background: #fffde7;
-            border-radius: 4px;
-        }
-
-        .editavel-nome {
-            font-family: 'Playfair Display', serif;
-            font-size: 2.8rem;
-            font-weight: 700;
-            color: #1a1a2e;
-            letter-spacing: 2px;
-        }
-
-        .editavel-sub {
-            font-size: 1rem;
-            color: #888;
-            letter-spacing: 4px;
-            text-transform: uppercase;
-            font-weight: 300;
-        }
-
-        .editavel-contato {
-            font-size: 0.85rem;
-            color: #999;
-        }
-
-        /* ── Corpo do cardápio ── */
-        .cardapio-body {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 0 40px 40px;
-        }
-
-        /* ── Categoria ── */
-        .categoria-section {
-            margin-top: 36px;
-            page-break-inside: avoid;
-        }
-
-        .categoria-titulo {
-            font-family: 'Playfair Display', serif;
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #1a1a2e;
-            text-transform: uppercase;
-            letter-spacing: 3px;
-            padding-bottom: 8px;
-            border-bottom: 2px solid #c9a96e;
-            margin-bottom: 16px;
-        }
-
-        /* ── Produto ── */
-        .produto-item {
-            display: flex;
-            align-items: baseline;
-            padding: 8px 0;
-            border-bottom: 1px dotted #ddd;
-        }
-
-        .produto-item:last-child {
-            border-bottom: none;
-        }
-
-        .produto-nome {
-            font-weight: 600;
-            font-size: 1rem;
-            color: #2c2c2c;
-            flex-shrink: 0;
-        }
-
-        .produto-detalhe {
-            font-size: 0.8rem;
-            color: #999;
-            margin-left: 8px;
-            flex-shrink: 0;
-        }
-
-        .produto-dots {
-            flex: 1;
-            border-bottom: 1px dotted #ccc;
-            margin: 0 8px;
-            min-width: 20px;
-            height: 1em;
-        }
-
-        .produto-preco {
-            font-weight: 600;
-            font-size: 1.05rem;
-            color: #1a1a2e;
-            white-space: nowrap;
-            flex-shrink: 0;
-        }
-
-        /* ── Rodapé ── */
-        .cardapio-footer {
-            text-align: center;
-            padding: 30px 40px;
-            border-top: 3px double #c9a96e;
-            margin-top: 40px;
-            color: #999;
-            font-size: 0.8rem;
-        }
-
-        .cardapio-footer .editavel-footer {
-            font-size: 0.8rem;
-            color: #999;
-        }
-
-        /* ── Aviso de preço ── */
-        .aviso-preco {
-            text-align: center;
-            margin-top: 20px;
-            padding: 12px;
-            background: #fff8e1;
-            border: 1px dashed #f9a825;
-            border-radius: 6px;
-            font-size: 0.8rem;
-            color: #666;
-        }
-
-        /* ── Print ── */
-        @media print {
-            .toolbar, .toolbar-spacer, .aviso-preco { display: none !important; }
-
-            body { font-size: 12pt; }
-
-            .cardapio-header { padding-top: 40px; }
-
-            .editavel { border: none !important; background: transparent !important; }
-
-            .categoria-section { page-break-inside: avoid; }
-
-            @page {
-                margin: 15mm 20mm;
-                size: A4;
-            }
-        }
-
-        /* ── Screen ── */
-        @media screen {
-            .cardapio-body {
-                padding-bottom: 60px;
-            }
-        }
-    </style>
+/* ── MOBILE ── */
+@media (max-width: 640px) {
+    .hero { min-height: 320px; }
+    .hero-content { padding: 0 20px 36px; }
+    .cardapio-section { padding: 48px 20px 64px; }
+    .pills-wrap { margin: 0 -20px 24px; }
+    .pills { padding: 0 20px; }
+    .section-title { margin-bottom: 28px; }
+    .menu-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    .list-grid { grid-template-columns: 1fr; }
+    .card-body { padding: 10px 12px 12px; }
+    .card-name { font-size: 0.8rem; }
+    .card-price { font-size: 0.85rem; }
+}
+</style>
 </head>
 <body>
-    <!-- Barra de ferramentas (não aparece no PDF) -->
-    <div class="toolbar">
-        <a href="{{ url_for('materias_primas.banco') }}"><i class="bi bi-arrow-left"></i> Voltar</a>
-        <span>|</span>
-        <a href="{{ url_for('main.cardapio', tipo='atacado') }}" style="{{ 'font-weight:700; color:#fff' if tipo == 'atacado' else '' }}">Atacado</a>
-        <span>|</span>
-        <a href="{{ url_for('main.cardapio', tipo='loja') }}" style="{{ 'font-weight:700; color:#fff' if tipo == 'loja' else '' }}">Loja</a>
-        <span>|</span>
-        <a href="{{ url_for('main.cardapio', tipo='site') }}" style="{{ 'font-weight:700; color:#fff' if tipo == 'site' else '' }}">Site</a>
-        <span style="flex:1"></span>
-        <span style="color:#aaa; font-size:11px;">Edite os textos. Depois clique em Exportar PDF.</span>
-        <button onclick="window.print()" style="background:#c9a96e; color:#fff; border:none; padding:6px 20px; border-radius:4px; cursor:pointer; font-weight:600;">
-            <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
-        </button>
-    </div>
-    <div class="toolbar-spacer"></div>
 
-    <!-- Header do cardápio -->
-    <div class="cardapio-header">
-        <input type="text" class="editavel editavel-nome" value="Padaria Artesanal">
-        <br>
-        <input type="text" class="editavel editavel-sub" value="Produtos Artesanais de Fermentacao Natural">
-        <div class="contato" style="margin-top:16px;">
-            <input type="text" class="editavel editavel-contato" value="Tel: (11) 9999-9999  |  @padaria  |  pedidos@padaria.com.br" style="width:80%;">
+{% set tipos_label = {'atacado': 'Atacado', 'loja': 'Loja', 'site': 'Site/Delivery'} %}
+
+<div class="toolbar">
+    <span>{{ tipos_label.get(tipo, 'Atacado') }}</span>
+    <a href="{{ url_for('main.cardapio', tipo='atacado') }}" class="tipo-btn {% if tipo == 'atacado' %}active{% endif %}">Atacado</a>
+    <a href="{{ url_for('main.cardapio', tipo='loja') }}" class="tipo-btn {% if tipo == 'loja' %}active{% endif %}">Loja</a>
+    <a href="{{ url_for('main.cardapio', tipo='site') }}" class="tipo-btn {% if tipo == 'site' %}active{% endif %}">Site</a>
+    {% if current_user.is_admin() %}
+    <a href="{{ url_for('main.cardapio_img_revisar') }}" class="tipo-btn">
+        <i class="bi bi-check2-square"></i> Revisar fotos
+    </a>
+    {% endif %}
+    <a href="javascript:window.print()" class="tipo-btn"><i class="bi bi-printer"></i> Imprimir</a>
+</div>
+
+<section class="hero">
+    <div class="hero-content">
+        <span class="hero-tag">Padaria Artesanal · Itaim Bibi</span>
+        <h1>O Pão</h1>
+        <p>Tempo. Fermento. Cuidado. Pão de verdade, feito com fermentação natural.</p>
+    </div>
+</section>
+
+<section class="cardapio-section">
+    <p class="section-label">Cardápio</p>
+    <h2 class="section-title">Escolha sua categoria</h2>
+
+    {% if categorias %}
+    <div class="pills-wrap">
+        <div class="pills">
+            {% for cat in categorias.keys() %}
+            <button class="pill {% if loop.first %}active{% endif %}" onclick="showCat('{{ loop.index0 }}', this)">{{ cat }}</button>
+            {% endfor %}
         </div>
     </div>
 
-    <!-- Corpo -->
-    <div class="cardapio-body">
-
-        {% for cat, produtos in categorias.items() %}
-        <div class="categoria-section">
-            <div class="categoria-titulo">{{ cat }}</div>
-
-            {% for p in produtos %}
-            <div class="produto-item">
-                <span class="produto-nome">{{ p.nome }}</span>
-                {% if p.peso_unitario %}
-                <span class="produto-detalhe">{{ p.peso_unitario | int }}g</span>
-                {% elif p.descricao %}
-                <span class="produto-detalhe">{{ p.descricao }}</span>
+    {% for cat, itens in categorias.items() %}
+    <div id="cat-{{ loop.index0 }}" class="cat-section {% if loop.first %}active{% endif %}">
+        {% set tem_foto = itens | selectattr('imagem_url') | list | length > 0 %}
+        {% if tem_foto %}
+        <div class="menu-grid">
+            {% for it in itens %}
+            <article class="product-card">
+                {% if it.imagem_url %}
+                <div class="card-img">
+                    <img src="{{ it.imagem_url }}" alt="{{ it.nome }}" loading="lazy"
+                         onerror="this.parentElement.classList.add('placeholder');this.remove();this.parentElement.innerHTML='&#127844;';"/>
+                </div>
+                {% else %}
+                <div class="card-img placeholder">&#127844;</div>
                 {% endif %}
-                <span class="produto-dots"></span>
-                <span class="produto-preco">R$ {{ ('%.2f' % p.preco_venda) | replace('.', ',') }}</span>
+                <div class="card-body">
+                    <div>
+                        <div class="card-name">{{ it.nome }}</div>
+                        {% if it.descricao %}<div class="card-desc">{{ it.descricao }}</div>{% endif %}
+                    </div>
+                    <span class="card-price">R$ {{ ('%.2f' % it.preco_venda) | replace('.', ',') }}</span>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="list-grid">
+            {% for it in itens %}
+            <div class="list-item">
+                <div>
+                    <div class="list-item-name">{{ it.nome }}</div>
+                    {% if it.descricao %}<div class="list-item-desc">{{ it.descricao }}</div>{% endif %}
+                </div>
+                <span class="list-item-price">R$ {{ ('%.2f' % it.preco_venda) | replace('.', ',') }}</span>
             </div>
             {% endfor %}
         </div>
-        {% endfor %}
-
-        {% if not categorias %}
-        <div class="aviso-preco" style="margin-top:60px;">
-            <i class="bi bi-exclamation-triangle"></i>
-            <strong>Nenhum produto com preco de venda cadastrado.</strong><br>
-            Preencha o campo "Preco de Venda" nas fichas tecnicas para os produtos aparecerem aqui.
-        </div>
         {% endif %}
     </div>
+    {% endfor %}
 
-    <!-- Rodapé -->
-    <div class="cardapio-footer">
-        <input type="text" class="editavel editavel-footer" value="Precos para atacado. Pedido minimo: consulte. Entrega sob consulta." style="width:80%;">
-        <br>
-        <input type="text" class="editavel editavel-footer" value="Validade dos precos: Abril/2026" style="width:40%; margin-top:4px;">
-    </div>
-
-    {% if categorias %}
-    <div class="aviso-preco" style="max-width:800px; margin:0 auto 40px;">
-        <i class="bi bi-info-circle"></i>
-        <strong>Dica:</strong> Clique em qualquer texto (nome da padaria, telefone, rodape) para personalizar antes de exportar.
-        Para salvar como PDF: clique "Exportar PDF", na janela de impressao escolha <strong>"Salvar como PDF"</strong> como destino.
+    {% else %}
+    <div class="empty-state">
+        Nenhum item cadastrado com preço para <strong>{{ tipos_label.get(tipo, tipo) }}</strong>.
     </div>
     {% endif %}
+</section>
+
+<footer>
+    <p>© O Pão Padaria Artesanal · Itaim Bibi, São Paulo</p>
+</footer>
+
+<script>
+function showCat(idx, btn) {
+    document.querySelectorAll('.cat-section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.pill').forEach(b => b.classList.remove('active'));
+    document.getElementById('cat-' + idx).classList.add('active');
+    btn.classList.add('active');
+    // Scroll suave para a posição da pill (mobile)
+    btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+}
+</script>
 </body>
 </html>

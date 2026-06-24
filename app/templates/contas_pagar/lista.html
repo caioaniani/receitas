@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_header %}
+
+{% block title %}Contas a Pagar{% endblock %}
+
+{% block content %}
+{% call page_header('Contas a Pagar', 'bi-receipt') %}
+    {% if current_user.is_owner %}
+    <form method="POST" action="{{ url_for('contas_pagar.importar_historico') }}" class="mb-0"
+          onsubmit="return confirm('Importar os últimos 30 dias de NF/boleto de todos os canais configurados? É idempotente (não duplica o que já existe) e não mexe no estoque — só cria as contas e os itens a vincular.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-clock-history"></i> Importar histórico (30d)
+        </button>
+    </form>
+    {% endif %}
+    <form method="POST" action="{{ url_for('contas_pagar.juntar_automatico') }}" class="mb-0"
+          onsubmit="return confirm('Juntar NF + boleto do mesmo recebimento (mesma loja, valor e vencimento)?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-link-45deg"></i> Juntar NF + boleto
+        </button>
+    </form>
+{% endcall %}
+
+<div class="alert alert-light border small py-2">
+    <i class="bi bi-info-circle"></i>
+    Geradas a partir das fotos de NF/boleto enviadas no Slack. NF e boleto do
+    mesmo recebimento aparecem como uma linha só. A IA faz a primeira leitura —
+    confira e edite antes de pagar.
+</div>
+
+{% if mapa_lojas %}
+<div class="mb-2 d-flex flex-wrap gap-2 align-items-center">
+    <span class="small text-muted me-1">Loja:</span>
+    <a class="btn btn-sm {% if not loja_sel %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+       href="{{ url_for('contas_pagar.lista', aba=aba_atual) }}">Todas</a>
+    {% for cid, nome in mapa_lojas.items() %}
+    <a class="btn btn-sm {% if loja_sel == cid %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+       href="{{ url_for('contas_pagar.lista', aba=aba_atual, loja=cid) }}">
+        {{ nome }}
+        {% if total_por_loja.get(cid) %}<span class="badge rounded-pill bg-light text-dark">{{ total_por_loja[cid] }}</span>{% endif %}
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
+<ul class="nav nav-tabs mb-3" role="tablist">
+    {% for slug, label, _ in abas %}
+    <li class="nav-item">
+        <a class="nav-link {% if slug == aba_atual %}active{% endif %}"
+           href="{{ url_for('contas_pagar.lista', aba=slug, loja=loja_sel) }}">
+            {{ label }}
+            {% if contagens.get(slug) %}
+            <span class="badge rounded-pill {% if slug == aba_atual %}bg-primary{% else %}bg-secondary{% endif %}">{{ contagens[slug] }}</span>
+            {% endif %}
+        </a>
+    </li>
+    {% endfor %}
+</ul>
+
+<div class="list-group">
+    {% for c in contas %}
+    {% set extras = grupo_docs.get(c.id, []) %}
+    {% set tipos = ([c.tipo_documento] + (extras | map(attribute='tipo_documento') | list)) | unique | list %}
+    <a href="{{ url_for('contas_pagar.detalhe', id=c.id) }}"
+       class="list-group-item list-group-item-action py-2">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+            <div class="flex-grow-1" style="min-width:0">
+                <div class="fw-semibold text-truncate">{{ c.fornecedor_nome or 'Sem fornecedor' }}</div>
+                <div class="small mt-1">
+                    {% for t in tipos %}<span class="badge bg-light text-dark">{{ t }}</span> {% endfor %}
+                    {% if extras %}<i class="bi bi-link-45deg text-primary" title="NF + boleto juntos ({{ extras|length + 1 }} documentos)"></i>{% endif %}
+                    {% if c.nf_numero %}<span class="text-muted">NF {{ c.nf_numero }}</span>{% endif %}
+                    {% if c.status == 'aberto' and not c.revisada %}
+                    <span class="badge bg-warning text-dark" title="Ninguém conferiu — os dados podem ser só a leitura da IA"><i class="bi bi-eye"></i> conferir</span>
+                    {% elif c.revisada %}
+                    <span class="badge bg-success-subtle text-success" title="Conferida por {{ c.revisada_por.nome if c.revisada_por else '?' }}{% if c.revisada_em %} em {{ c.revisada_em.strftime('%d/%m') }}{% endif %}"><i class="bi bi-check2"></i></span>
+                    {% endif %}
+                </div>
+                <div class="small text-muted mt-1">
+                    {% if c.vencimento %}
+                    <span class="{% if c.atrasado %}text-danger fw-bold{% endif %}"><i class="bi bi-calendar-event"></i> {{ c.vencimento.strftime('%d/%m/%Y') }}{% if c.atrasado %} <i class="bi bi-exclamation-triangle"></i>{% endif %}</span>
+                    {% else %}<span class="text-warning">sem vencimento</span>{% endif %}
+                    · {{ mapa_lojas.get(c.origem_canal, c.origem_canal) or '—' }}
+                </div>
+            </div>
+            <div class="text-end flex-shrink-0">
+                <span class="fw-bold {% if not c.valor_total %}text-danger small{% endif %}">
+                    {% if c.valor_total %}R$ {{ '%.2f'|format(c.valor_total) }}{% else %}sem valor{% endif %}
+                </span>
+            </div>
+        </div>
+    </a>
+    {% else %}
+    <div class="list-group-item text-muted text-center py-3">Nenhuma conta nesta aba.</div>
+    {% endfor %}
+</div>
+{% endblock %}

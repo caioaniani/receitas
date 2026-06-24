@@ -61,6 +61,21 @@
                    value="{{ '%.2f' % produto.preco_site if produto.preco_site else '' }}"
                    step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
         </div>
+        <div class="col-md-12 mt-2 p-2 border rounded bg-light">
+            <label class="form-label small fw-bold mb-1">
+                <i class="bi bi-image"></i> Imagem pro cardápio digital
+            </label>
+            {% if produto.imagem_blob or produto.imagem_dropbox_url %}
+            <div class="mb-2">
+                <img src="{{ url_for('main.cardapio_img', tipo='produto', id=produto.id) }}"
+                     alt="" style="max-height:120px;border-radius:6px;border:1px solid #ddd;">
+            </div>
+            {% endif %}
+            <label class="form-label small text-muted mb-0">URL externa (fallback)</label>
+            <input type="url" name="imagem_url" value="{{ produto.imagem_url or '' }}"
+                   class="form-control form-control-sm input-blue" placeholder="https://...">
+            <small class="text-muted">Pra fazer upload, role pro fim da página.</small>
+        </div>
         <div class="col-md-2">
             <label class="form-label small fw-bold" style="color:#e65100;">Custo Direto (R$/un)</label>
             <input type="number" name="custo_direto" id="custo_direto"
@@ -106,13 +121,14 @@
                     <td>
                         <select name="item_tipo[]" class="form-select form-select-sm item-tipo">
                             <option value="receita" {{ 'selected' if item.tipo == 'receita' }}>Receita</option>
+                            <option value="produto" {{ 'selected' if item.tipo == 'produto' }}>Produto</option>
                             <option value="mp" {{ 'selected' if item.tipo == 'mp' }}>Mat. Prima</option>
                         </select>
                     </td>
                     <td>
                         <input type="text" name="item_nome[]" value="{{ item.item_nome }}"
                                class="form-control form-control-sm input-blue item-nome fw-bold"
-                               list="{{ 'receita-list' if item.tipo == 'receita' else 'mp-list' }}" required>
+                               list="{% if item.tipo == 'receita' %}receita-list{% elif item.tipo == 'produto' %}produto-list{% else %}mp-list{% endif %}" required>
                     </td>
                     <td class="text-end item-custo-un" style="background:#f5f5f5; vertical-align:middle; font-size:12px;">
                         {% if item.unidade in ('g', 'ml') and item.custo_por_kg %}
@@ -186,6 +202,22 @@
                   placeholder="Descreva o passo a passo do preparo...">{{ produto.modo_preparo or '' }}</textarea>
     </div>
 
+    <!-- Reaproveitavel -->
+    <div class="mb-4">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="reaproveitavel" id="reaproveitavel-produto"
+                   value="1" {% if produto.reaproveitavel %}checked{% endif %}>
+            <label class="form-check-label" for="reaproveitavel-produto">
+                <strong>Reaproveitavel quando vence / nao vende</strong>
+                <div class="text-muted small">
+                    Marca quando esse produto vencido ou nao vendido <strong>vira outra coisa</strong>
+                    em vez de ir pro lixo. Ex: sourdough tradicional vira chapa.
+                    Desperdicio registrado com motivo "validade" ou "nao_vendeu" NAO baixa do estoque.
+                </div>
+            </label>
+        </div>
+    </div>
+
     <!-- Observações / Pendências -->
     <div class="mb-4">
         <label class="form-label fw-bold"><i class="bi bi-exclamation-triangle text-warning"></i> Observações / Pendências</label>
@@ -205,12 +237,41 @@
     </div>
 </form>
 
+<!-- Forms de imagem do cardapio — FORA do form principal (HTML nao permite aninhamento) -->
+<div class="card mt-3 mb-3">
+    <div class="card-header py-2"><strong><i class="bi bi-image"></i> Foto do cardápio digital</strong></div>
+    <div class="card-body">
+        {% set tem_foto = produto.imagem_blob or produto.imagem_dropbox_url %}
+        {% if tem_foto %}
+        <div class="mb-2 d-flex align-items-start gap-2">
+            <img src="{{ url_for('main.cardapio_img', tipo='produto', id=produto.id) }}"
+                 alt="" style="max-height:120px;border-radius:6px;border:1px solid #ddd;">
+            <form method="POST" action="{{ url_for('main.cardapio_img_remover', tipo='produto', id=produto.id) }}"
+                  onsubmit="return confirm('Remover imagem?')" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Remover</button>
+            </form>
+        </div>
+        {% endif %}
+        <form method="POST" action="{{ url_for('main.cardapio_img_upload', tipo='produto', id=produto.id) }}"
+              enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="file" name="imagem_arquivo" accept="image/*" class="form-control form-control-sm" required>
+            <button type="submit" class="btn btn-sm btn-primary">
+                <i class="bi bi-upload"></i> {% if tem_foto %}Trocar foto{% else %}Enviar foto{% endif %}
+            </button>
+        </form>
+        <small class="text-muted d-block mt-1">Comprime pra ~700×700 JPEG.</small>
+    </div>
+</div>
+
 <!-- Template para nova linha -->
 <template id="item-row-template">
     <tr>
         <td>
             <select name="item_tipo[]" class="form-select form-select-sm item-tipo">
                 <option value="receita">Receita</option>
+                <option value="produto">Produto</option>
                 <option value="mp">Mat. Prima</option>
             </select>
         </td>
@@ -268,5 +329,6 @@
 </div>
 
 <!-- Dados para JS -->
-<script>const RECEITA_CUSTOS = {{ receita_custos_json | safe }};</script>
+<script>const RECEITA_CUSTOS = {{ receita_custos | tojson }};
+const PRODUTO_CUSTOS = {{ produto_custos | tojson }};</script>
 {% endblock %}

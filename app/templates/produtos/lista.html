@@ -5,6 +5,9 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="page-title"><i class="bi bi-basket3"></i> Catalogo de Produtos</h1>
+    <a href="{{ url_for('produtos.cestas') }}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-box-seam"></i> Cestas (componentes)
+    </a>
 </div>
 
 <!-- ── Produtos Fabricados (vindos das fichas tecnicas) ── -->
@@ -122,10 +125,26 @@
     </table>
 </div>
 
-<form method="POST" action="{{ url_for('produtos.novo') }}" class="mb-4">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" class="btn btn-outline-primary btn-sm">
-        <i class="bi bi-plus-lg"></i> Adicionar Cesta/Kit
-    </button>
-</form>
+<div class="d-flex gap-2 flex-wrap mb-4">
+    <form method="POST" action="{{ url_for('produtos.novo') }}" class="mb-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="tipo" value="cesta">
+        <button type="submit" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-plus-lg"></i> Adicionar Cesta/Kit
+        </button>
+    </form>
+    <form method="POST" action="{{ url_for('produtos.novo') }}" class="mb-0 d-flex gap-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="tipo" value="simples">
+        <input type="text" name="nome" class="form-control form-control-sm" style="max-width:240px"
+               placeholder="nome do produto de revenda" required>
+        <input type="text" name="categoria" class="form-control form-control-sm" style="max-width:140px"
+               placeholder="categoria" value="Revenda">
+        <button type="submit" class="btn btn-outline-success btn-sm text-nowrap">
+            <i class="bi bi-plus-lg"></i> Produto de revenda
+        </button>
+    </form>
+</div>
+<p class="small text-muted">Produto de <b>revenda</b> = comprado pronto (água, chiclete, iogurte...):
+sem composição, só custo e preço — define os dois na tela do produto. Cesta/Kit = montagem com componentes.</p>
 {% endblock %}

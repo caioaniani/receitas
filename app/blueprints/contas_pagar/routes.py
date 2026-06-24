@@ -1,0 +1,933 @@
+"""Contas a pagar — geradas a partir de fotos de NF/boleto no Slack.
+
+A IA faz a primeira extracao; aqui o usuario confere, edita e marca pago.
+Documento original sempre no Dropbox (imagem_url).
+"""
+import json
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
+
+from flask import (
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
+from flask_login import current_user, login_required
+
+from app.blueprints.contas_pagar import contas_pagar_bp
+from app.decorators import admin_required, owner_required
+from app.extensions import db
+from app.models import (
+    ContaPagar,
+    ContaPagarItemMap,
+    Fornecedor,
+    Loja,
+    MateriaPrima,
+    VariacaoPrecoMP,
+)
+from app.utils import agora
+
+# Abas por status (slug, label, status no banco).
+ABAS = (
+    ('aberto', 'Em aberto', 'aberto'),
+    ('pago', 'Pagos', 'pago'),
+    ('ignorado', 'Ignorados', 'ignorado'),
+)
+
+
+def _parse_valor(raw):
+    """Parseia valor do form. Aceita ponto (input number) ou virgula (BR)."""
+    if raw is None or str(raw).strip() == '':
+        return None
+    s = str(raw).strip()
+    if ',' in s:  # formato BR: tira milhar, troca decimal
+        s = s.replace('.', '').replace(',', '.')
+    try:
+        return Decimal(s)
+    except InvalidOperation:
+        return None
+
+
+def _parse_data(raw):
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, '%Y-%m-%d').date()
+    except ValueError:
+        return None
+
+
+def _mapa_lojas_nf():
+    """OrderedDict {canal_id: nome_loja} dos canais de NF. Prioriza o vinculo
+    confirmado na tela Canais -> Loja (SlackCanalLojaMap); senao o nome do
+    config SLACK_CANAIS_NF_NOMES; senao o nome do canal no Slack (e por fim o ID)."""
+    from collections import OrderedDict
+
+    from app.models import SlackCanalLojaMap
+
+    cfg = {}
+    raw = (current_app.config.get('SLACK_CANAIS_NF_NOMES') or '').strip()
+    for par in raw.split(';'):
+        par = par.strip()
+        if '=' in par:
+            cid, nome = par.split('=', 1)
+            if cid.strip():
+                cfg[cid.strip()] = nome.strip()
+
+    vinc = {}
+    for m in SlackCanalLojaMap.query.all():
+        if m.eh_industria:
+            vinc[m.canal_id] = 'Indústria'
+        elif m.loja_id and m.loja:
+            vinc[m.canal_id] = m.loja.nome
+
+    mapa = OrderedDict()
+    ids = (current_app.config.get('SLACK_CANAIS_NF') or '').strip()
+    canais = [c.strip() for c in ids.split(',') if c.strip()]
+    for cid in cfg:                  # canais que so estao no config tambem entram
+        if cid not in canais:
+            canais.append(cid)
+    for cid in canais:
+        if cid in vinc:
+            mapa[cid] = vinc[cid]
+        elif cid in cfg:
+            mapa[cid] = cfg[cid]
+        else:
+            from app.services import slack as slack_api
+            mapa[cid] = slack_api.nome_canal(cid)
+    return mapa
+
+
+def _nome_loja(canal_id, mapa_lojas):
+    """Nome amigavel de um canal: config > nome do canal Slack > ID."""
+    if not canal_id:
+        return None
+    if canal_id in mapa_lojas:
+        return mapa_lojas[canal_id]
+    from app.services import slack as slack_api
+    return slack_api.nome_canal(canal_id)
+
+
+@contas_pagar_bp.route('/')
+@login_required
+@admin_required
+def lista():
+    from sqlalchemy import func
+
+    aba = request.args.get('aba', 'aberto')
+    if aba not in {s for s, _, _ in ABAS}:
+        aba = 'aberto'
+    status_filtro = {s: st for s, _, st in ABAS}[aba]
+
+    mapa_lojas = _mapa_lojas_nf()
+    loja_sel = (request.args.get('loja') or '').strip()
+    if loja_sel and loja_sel not in mapa_lojas:
+        loja_sel = ''
+
+    def _por_loja(q):
+        return q.filter(ContaPagar.origem_canal == loja_sel) if loja_sel else q
+
+    # Mostra so os "principais" (relacionado_id NULL). NF+boleto do mesmo
+    # recebimento contam como UMA linha (o secundario aponta pro principal).
+    def _principais(q):
+        return q.filter(ContaPagar.relacionado_id.is_(None))
+
+    cont = dict(_principais(_por_loja(db.session.query(ContaPagar.status, func.count())))
+                .group_by(ContaPagar.status).all())
+    contagens = {slug: cont.get(st, 0) for slug, _, st in ABAS}
+    por_loja = dict(_principais(db.session.query(ContaPagar.origem_canal, func.count()))
+                    .group_by(ContaPagar.origem_canal).all())
+
+    contas = (_principais(_por_loja(
+                  ContaPagar.query.filter(ContaPagar.status == status_filtro)))
+              .order_by(ContaPagar.vencimento.is_(None),
+                        ContaPagar.vencimento.asc(),
+                        ContaPagar.criado_em.desc())
+              .limit(200).all())
+    # Documentos secundarios de cada grupo (pra mostrar "NF + boleto" na linha).
+    ids = [c.id for c in contas]
+    grupo_docs = {}
+    if ids:
+        for s in ContaPagar.query.filter(ContaPagar.relacionado_id.in_(ids)).all():
+            grupo_docs.setdefault(s.relacionado_id, []).append(s)
+    return render_template('contas_pagar/lista.html', contas=contas,
+                           abas=ABAS, aba_atual=aba, contagens=contagens,
+                           mapa_lojas=mapa_lojas, loja_sel=loja_sel,
+                           total_por_loja=por_loja, grupo_docs=grupo_docs)
+
+
+@contas_pagar_bp.route('/<int:id>')
+@login_required
+@admin_required
+def detalhe(id):
+    from app.services.conta_pagar_estoque import (
+        normalizar_item_nome,
+        prefill_sugestao,
+        sugerir_para_item,
+    )
+    conta = ContaPagar.query.get_or_404(id)
+    itens = []
+    if conta.itens_json:
+        try:
+            itens = json.loads(conta.itens_json)
+        except (json.JSONDecodeError, TypeError):
+            itens = []
+    # Anexa o vinculo (ContaPagarItemMap por nome) a cada item, pra vincular a
+    # MP direto aqui, vendo a nota. Sugestao da IA pros ainda nao vinculados
+    # (inclusive quando o mapa pendente ja existe — sem MP escolhida).
+    norms = [normalizar_item_nome(it.get('nome') or '') for it in itens]
+    mapas = {}
+    presentes = [n for n in norms if n]
+    if presentes:
+        for m in ContaPagarItemMap.query.filter(
+                ContaPagarItemMap.item_nome_norm.in_(presentes)).all():
+            mapas[m.item_nome_norm] = m
+    itens_vinc = []
+    for i, (it, n) in enumerate(zip(itens, norms)):
+        mp_map = mapas.get(n)
+        sem_vinculo = not (mp_map and (mp_map.materia_prima_id or mp_map.ignorar))
+        sug = (sugerir_para_item(it.get('nome') or '',
+                                 unidade_nf=it.get('unidade'))[:3]
+               if (n and sem_vinculo) else [])
+        # Mesma traducao da sugestao da IA da tela de mapeamentos (kg->g etc.)
+        ia_f = (mp_map.ia_fator_sugerido if mp_map else None) or it.get('fator_embalagem')
+        ia_u = ((mp_map.ia_unidade_sugerida if mp_map else None)
+                or it.get('unidade_base_sugerida'))
+        unid_mp = (mp_map.materia_prima.unidade
+                   if (mp_map and mp_map.materia_prima)
+                   else (sug[0]['unidade'] if sug else None))
+        f, u = prefill_sugestao(ia_f, ia_u, unid_mp, it.get('unidade'))
+        itens_vinc.append({'indice': i, 'item': it, 'mapa': mp_map, 'sugestoes': sug,
+                           'prefill': {'fator': f'{f:g}' if f else '',
+                                       'unidade': u or ''}})
+    mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    from app.models import Produto
+    produtos = (Produto.query.filter_by(ativo=True)
+                .order_by(Produto.nome).all())
+    fornecedores = Fornecedor.query.filter_by(ativo=True).order_by(Fornecedor.nome).all()
+    # Candidatos pra vincular (mesmo... outro documento ainda nao relacionado)
+    relacionaveis = (ContaPagar.query
+                     .filter(ContaPagar.id != conta.id)
+                     .filter(ContaPagar.status != 'ignorado')
+                     .order_by(ContaPagar.criado_em.desc())
+                     .limit(50).all())
+    mapa_lojas = _mapa_lojas_nf()
+    return render_template('contas_pagar/detalhe.html', conta=conta, itens=itens,
+                           itens_vinc=itens_vinc, mps=mps, produtos=produtos,
+                           fornecedores=fornecedores, relacionaveis=relacionaveis,
+                           loja_nome=_nome_loja(conta.origem_canal, mapa_lojas))
+
+
+@contas_pagar_bp.route('/<int:id>/editar', methods=['POST'])
+@login_required
+@admin_required
+def editar(id):
+    conta = ContaPagar.query.get_or_404(id)
+    conta.fornecedor_nome = (request.form.get('fornecedor_nome') or '').strip() or None
+    fid = request.form.get('fornecedor_id')
+    conta.fornecedor_id = int(fid) if fid and fid.isdigit() else None
+    conta.tipo_documento = request.form.get('tipo_documento') or conta.tipo_documento
+    conta.valor_total = _parse_valor(request.form.get('valor_total'))
+    conta.vencimento = _parse_data(request.form.get('vencimento'))
+    conta.nf_numero = (request.form.get('nf_numero') or '').strip() or None
+    conta.codigo_barras = (request.form.get('codigo_barras') or '').strip() or None
+    conta.linha_digitavel = (request.form.get('linha_digitavel') or '').strip() or None
+    conta.info_pagamento = (request.form.get('info_pagamento') or '').strip() or None
+    rel = request.form.get('relacionado_id')
+    conta.relacionado_id = int(rel) if rel and rel.isdigit() else None
+    conta.editado_em = agora()
+    conta.editado_por_id = current_user.id
+    # Editar = humano olhou o documento e os campos -> conta conferida.
+    if conta.revisada_em is None:
+        conta.revisada_em = agora()
+        conta.revisada_por_id = current_user.id
+    db.session.commit()
+    flash('Conta atualizada.', 'success')
+    return redirect(url_for('contas_pagar.detalhe', id=id))
+
+
+@contas_pagar_bp.route('/<int:id>/revisar', methods=['POST'])
+@login_required
+@admin_required
+def revisar(id):
+    """Marca/desmarca a conta como CONFERIDA por humano (Fase 2).
+
+    Conferida = alguem olhou o documento e validou que a extracao da IA
+    (valor, vencimento, fornecedor) esta certa. O radar diario conta as
+    abertas nao-conferidas."""
+    conta = ContaPagar.query.get_or_404(id)
+    if conta.revisada_em is None:
+        conta.revisada_em = agora()
+        conta.revisada_por_id = current_user.id
+        flash('Conta marcada como conferida.', 'success')
+    else:
+        conta.revisada_em = None
+        conta.revisada_por_id = None
+        flash('Conferencia desfeita.', 'info')
+    db.session.commit()
+    return redirect(url_for('contas_pagar.detalhe', id=id))
+
+
+@contas_pagar_bp.route('/<int:id>/reextrair', methods=['POST'])
+@login_required
+@admin_required
+def reextrair(id):
+    """Re-le o documento com a IA (rebaixa a imagem do Dropbox). Sobrescreve
+    os campos de leitura; preserva decisoes humanas (status, pago, vinculo,
+    fornecedor cadastrado). Util pra corrigir leitura errada (ex: data)."""
+    import requests
+
+    from app.services import conta_pagar_ia, conta_pagar_slack
+
+    conta = ContaPagar.query.get_or_404(id)
+    if not conta.imagem_url:
+        flash('Sem imagem pra reprocessar.', 'warning')
+        return redirect(url_for('contas_pagar.detalhe', id=id))
+    try:
+        resp = requests.get(conta.imagem_url, timeout=30)
+        resp.raise_for_status()
+    except Exception:
+        flash('Nao consegui baixar a imagem do Dropbox.', 'danger')
+        return redirect(url_for('contas_pagar.detalhe', id=id))
+
+    dados = conta_pagar_ia.extrair_documento(
+        resp.content, resp.headers.get('Content-Type') or 'image/jpeg')
+    if dados.get('erro'):
+        flash(f"IA nao conseguiu reler: {dados['erro']}", 'warning')
+        return redirect(url_for('contas_pagar.detalhe', id=id))
+
+    conta.tipo_documento = dados.get('tipo_documento') or conta.tipo_documento
+    conta.fornecedor_nome = dados.get('fornecedor') or conta.fornecedor_nome
+    if dados.get('valor_total') is not None:
+        conta.valor_total = dados['valor_total']
+    venc = conta_pagar_slack._parse_vencimento(dados)
+    if venc:
+        conta.vencimento = venc
+    if dados.get('nf_numero'):
+        conta.nf_numero = str(dados['nf_numero'])
+    conta.codigo_barras = dados.get('codigo_barras') or conta.codigo_barras
+    conta.linha_digitavel = dados.get('linha_digitavel') or conta.linha_digitavel
+    conta.info_pagamento = dados.get('info_pagamento') or conta.info_pagamento
+    if dados.get('itens'):
+        conta.itens_json = json.dumps(dados['itens'], ensure_ascii=False)
+    conta.dados_ia_json = json.dumps(dados, ensure_ascii=False)[:8000]
+    conta.editado_em = agora()
+    conta.editado_por_id = current_user.id
+    db.session.commit()
+    # A re-leitura pode ter preenchido o numero do documento (boleto) — tenta
+    # juntar ao par (NF <-> boleto) automaticamente.
+    from app.services import conta_pagar as cp_dominio
+    if cp_dominio.tentar_agrupar(conta):
+        flash('Documento relido e vinculado ao seu par (NF ↔ boleto).', 'success')
+    else:
+        flash('Documento relido pela IA. Confira os campos, principalmente o '
+              'vencimento.', 'success')
+    return redirect(url_for('contas_pagar.detalhe', id=id))
+
+
+@contas_pagar_bp.route('/<int:id>/pagar', methods=['POST'])
+@login_required
+@admin_required
+def pagar(id):
+    conta = ContaPagar.query.get_or_404(id)
+    forma = (request.form.get('forma_pagamento') or '').strip() or None
+    agora_ts = agora()
+    # Marca o grupo inteiro (NF + boleto sao a mesma obrigacao).
+    for alvo in [conta, *conta.ligados]:
+        alvo.status = 'pago'
+        alvo.valor_pago = alvo.valor_total
+        alvo.pago_em = agora_ts
+        alvo.forma_pagamento = forma
+        alvo.editado_em = agora_ts
+        alvo.editado_por_id = current_user.id
+    db.session.commit()
+    flash('Conta marcada como paga.', 'success')
+    return redirect(url_for('contas_pagar.detalhe', id=id))
+
+
+@contas_pagar_bp.route('/importar-historico', methods=['POST'])
+@login_required
+@owner_required
+def importar_historico():
+    """Varre os ultimos 30 dias dos canais de NF e cria as contas. Roda em
+    background (a IA por imagem demora). As contas aparecem aos poucos.
+
+    Com `canal_id` no form, importa so aquele canal (botao por canal na tela
+    /canais); sem, importa todos os canais configurados."""
+    import threading
+
+    from app.services import conta_pagar_slack
+
+    app_obj = current_app._get_current_object()
+    canal_id = (request.form.get('canal_id') or '').strip() or None
+    canais = [canal_id] if canal_id else None
+
+    def _runner():
+        try:
+            conta_pagar_slack.importar_historico(app_obj, dias=30, canais=canais)
+        except Exception:
+            app_obj.logger.exception('importar_historico falhou')
+
+    threading.Thread(target=_runner, daemon=True).start()
+    alvo = 'deste canal' if canal_id else 'de todos os canais'
+    flash(f'Importacao do historico (30 dias) {alvo} iniciada. As contas vao '
+          'aparecer conforme forem processadas.', 'info')
+    return redirect(url_for('contas_pagar.canais' if canal_id else 'contas_pagar.lista'))
+
+
+@contas_pagar_bp.route('/<int:id>/status', methods=['POST'])
+@login_required
+@admin_required
+def mudar_status(id):
+    conta = ContaPagar.query.get_or_404(id)
+    novo = request.form.get('status')
+    if novo in ('aberto', 'pago', 'ignorado'):
+        agora_ts = agora()
+        for alvo in [conta, *conta.ligados]:
+            alvo.status = novo
+            if novo != 'pago':
+                alvo.pago_em = None
+                alvo.valor_pago = 0
+            alvo.editado_em = agora_ts
+            alvo.editado_por_id = current_user.id
+        db.session.commit()
+        flash(f'Status alterado para {novo}.', 'success')
+    return redirect(url_for('contas_pagar.detalhe', id=id))
+
+
+@contas_pagar_bp.route('/juntar-automatico', methods=['POST'])
+@login_required
+@admin_required
+def juntar_automatico():
+    """Junta NF + boleto do mesmo recebimento (mesma loja, valor e
+    vencimento). Retroativo e idempotente."""
+    from app.services import conta_pagar as cp_dominio
+    n = cp_dominio.agrupar_automatico()
+    if n:
+        flash(f'{n} documento(s) agrupado(s) ao seu par (NF ↔ boleto).', 'success')
+    else:
+        flash('Nenhum novo par encontrado pra juntar.', 'info')
+    return redirect(url_for('contas_pagar.lista'))
+
+
+def _parse_fator(raw):
+    """Fator de conversao do form (aceita virgula BR). Retorna float ou None."""
+    if raw is None or str(raw).strip() == '':
+        return None
+    s = str(raw).strip().replace(',', '.')
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _erro_unidade_metrica(nome_item, unidade_compra, fator, mp):
+    """Trava de fisica: "1 kg = 1,8 g" nao existe. Quando a unidade de compra
+    e a da MP sao ambas metricas, o unico fator valido e a conversao fisica
+    (kg->g: 1000). Caso real (Toddy, 2026-06-10): a IA sugeriu o conteudo da
+    embalagem ('CX 1,8KG' -> 1.8) e confirmar daria entrada de 1,8 g por
+    caixa em vez de 1800 g. Estoque tem peso especial — bloquear e explicar,
+    nunca converter por conta propria."""
+    from app.services.conta_pagar_estoque import conversao_metrica
+    if not mp:
+        return None
+    conv = conversao_metrica(unidade_compra, mp.unidade)
+    if conv is None or abs(fator - conv) <= 1e-9:
+        return None
+    certo = fator * conv
+    return (f'Não confirmei "{nome_item}": '
+            f'"1 {unidade_compra} = {fator:g} {mp.unidade}" '
+            f'não fecha — 1 {unidade_compra} = {conv:g} {mp.unidade}, '
+            f'sempre. Se a embalagem contém {fator:g} '
+            f'{unidade_compra}, troque a unidade de compra pela da NF '
+            f'(cx, un, fd...) e use fator {certo:g}.')
+
+
+def _parse_alvo(bruto):
+    """Valor do select de alvo -> (materia_prima_id, produto_id).
+    'mp-12' -> (12, None); 'prod-7' -> (None, 7); '12' (legado/bulk antigo)
+    -> (12, None); invalido -> (None, None)."""
+    b = str(bruto or '').strip()
+    if b.startswith('mp-') and b[3:].isdigit():
+        return int(b[3:]), None
+    if b.startswith('prod-') and b[5:].isdigit():
+        return None, int(b[5:])
+    if b.isdigit():
+        return int(b), None
+    return None, None
+
+
+def _aplicar_vinculo(m, acao, materia_prima_id=None, unidade_compra=None,
+                     fator_raw=None, exigir_completo=False):
+    """Nucleo de vincular/ignorar/desfazer num ContaPagarItemMap — usado pelo
+    form individual e pelo lote. VALIDA ANTES de mexer: em caso de erro o
+    registro fica intacto (essencial pro lote, que commita os que passaram).
+    `exigir_completo` (lote): vincular sem MP ou sem fator e recusado — no
+    individual o humano esta olhando a linha; no lote nao, entao nada de
+    default silencioso de fator 1.0. Retorna None ok / str erro."""
+    if acao == 'ignorar':
+        m.ignorar = True
+        m.materia_prima_id = None
+        m.produto_id = None
+        m.confirmado_em = None
+        return None
+    if acao == 'desfazer':
+        m.materia_prima_id = None
+        m.produto_id = None
+        m.confirmado_em = None
+        m.confirmado_por = None
+        m.ignorar = False
+        return None
+    # vincular — alvo pode ser materia-prima ('mp-12'/'12') ou produto de
+    # revenda ('prod-7').
+    mid, pid = _parse_alvo(materia_prima_id)
+    unidade = (unidade_compra or '').strip() or None
+    fator = _parse_fator(fator_raw)
+    if exigir_completo:
+        if not (mid or pid):
+            return f'"{m.item_nome_exemplo}": sem matéria-prima/produto selecionado'
+        if not fator or fator <= 0:
+            return (f'"{m.item_nome_exemplo}": sem fator de conversão — '
+                    'preencha o "1 un = X" antes de confirmar')
+    fator = fator if (fator and fator > 0) else 1.0
+    if mid:
+        mp = db.session.get(MateriaPrima, mid)
+        erro = _erro_unidade_metrica(m.item_nome_exemplo, unidade, fator, mp)
+        if erro:
+            return erro
+    # Produto e contado em unidades — trava de fisica nao se aplica.
+    m.materia_prima_id = mid
+    m.produto_id = pid
+    m.unidade_compra = unidade
+    m.fator_conversao = fator
+    m.ignorar = False
+    if mid or pid:
+        m.confirmado_em = agora()
+        m.confirmado_por = current_user.id
+    else:
+        m.confirmado_em = None
+    return None
+
+
+def _aplicar_acao_mapa(m):
+    """Acao do form individual (telas de mapeamentos e detalhe da conta).
+    Retorna None se ok, ou a mensagem de erro (caller faz rollback+flash)."""
+    return _aplicar_vinculo(
+        m, request.form.get('acao'),
+        materia_prima_id=(request.form.get('alvo')
+                          or request.form.get('materia_prima_id')),
+        unidade_compra=request.form.get('unidade_compra'),
+        fator_raw=request.form.get('fator_conversao'))
+
+
+# ── Vinculo canal -> loja (cada canal = 1 empresa = 1 estoque) ──
+
+@contas_pagar_bp.route('/canais')
+@login_required
+@admin_required
+def canais():
+    from app.services.conta_pagar_estoque import normalizar_item_nome, resolver_canal_map
+    mapa_lojas = _mapa_lojas_nf()
+    linhas = []
+    for cid, nome in mapa_lojas.items():
+        m = resolver_canal_map(cid)
+        linhas.append({'canal_id': cid, 'nome_canal': nome, 'mapa': m})
+    db.session.commit()  # persiste mapas criados (auto-fuzzy) na 1a visita
+    # Industria nao entra na lista: e escolhida pela opcao dedicada do seletor
+    # (estoque global de producao), nunca como uma EstoqueLoja.
+    lojas = [lj for lj in Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+             if normalizar_item_nome(lj.nome) != 'industria']
+    return render_template('contas_pagar/canais.html', linhas=linhas, lojas=lojas)
+
+
+@contas_pagar_bp.route('/canais/<canal_id>', methods=['POST'])
+@login_required
+@admin_required
+def canal_vincular(canal_id):
+    from app.services.conta_pagar_estoque import normalizar_item_nome, resolver_canal_map
+    m = resolver_canal_map(canal_id)
+    acao = request.form.get('acao')
+    if acao == 'ignorar':
+        m.ignorar = True
+        m.confirmado_em = None
+    elif acao == 'desfazer':
+        m.loja_id = None
+        m.eh_industria = False
+        m.ignorar = False
+        m.confirmado_em = None
+        m.confirmado_por = None
+    else:  # vincular — seletor unico: 'ind' (estoque global) ou id de loja
+        destino = (request.form.get('destino') or '').strip()
+        if destino == 'ind':
+            m.eh_industria = True
+            m.loja_id = None
+        elif destino.isdigit():
+            m.loja_id = int(destino)
+            loja = db.session.get(Loja, m.loja_id)
+            # Loja "Industria" sempre roteia pro estoque global, nunca EstoqueLoja.
+            m.eh_industria = bool(loja and normalizar_item_nome(loja.nome) == 'industria')
+            if m.eh_industria:
+                m.loja_id = None
+        else:
+            m.eh_industria = False
+            m.loja_id = None
+        m.ignorar = False
+        m.auto_match = False
+        if m.loja_id or m.eh_industria:
+            m.confirmado_em = agora()
+            m.confirmado_por = current_user.id
+        else:
+            m.confirmado_em = None
+    db.session.commit()
+    flash('Vinculo do canal atualizado.', 'success')
+    return redirect(url_for('contas_pagar.canais'))
+
+
+# ── Mapeamento item de NF -> materia-prima ──
+
+def _exemplos_itens_nf():
+    """{nome_norm: {quantidade, valor_unitario, valor_total, unidade, n_notas,
+    conta_id}} dos itens_json de todas as contas — pra mostrar na tela de
+    mapeamentos os dados que vieram da nota (ajuda a bater o fator).
+    Exemplo (e conta_id, pro link "ver NF") = nota mais recente."""
+    from app.services.conta_pagar_estoque import normalizar_item_nome
+    ex = {}
+    contas = (ContaPagar.query
+              .filter(ContaPagar.itens_json.isnot(None))
+              .order_by(ContaPagar.criado_em.desc()).all())
+    for c in contas:
+        try:
+            itens = json.loads(c.itens_json or '[]')
+        except (json.JSONDecodeError, TypeError):
+            continue
+        for it in itens:
+            if not isinstance(it, dict):
+                continue
+            norm = normalizar_item_nome(it.get('nome') or '')
+            if not norm:
+                continue
+            if norm not in ex:
+                ex[norm] = {'quantidade': it.get('quantidade'),
+                            'valor_unitario': it.get('valor_unitario'),
+                            'valor_total': it.get('valor_total'),
+                            'unidade': it.get('unidade'), 'n_notas': 0,
+                            'conta_id': c.id}
+            ex[norm]['n_notas'] += 1
+    return ex
+
+
+@contas_pagar_bp.route('/mapeamentos')
+@login_required
+@admin_required
+def mapeamentos():
+    from app.services.conta_pagar_estoque import prefill_sugestao, sugerir_para_item
+    estado = request.args.get('estado', 'pendente')
+    todos = ContaPagarItemMap.query.order_by(ContaPagarItemMap.item_nome_exemplo).all()
+    contagens = {'pendente': 0, 'mapeado': 0, 'ignorado': 0}
+    for m in todos:
+        contagens[m.estado] = contagens.get(m.estado, 0) + 1
+    maps = [m for m in todos if m.estado == estado] if estado in contagens else todos
+    # exemplos antes das sugestoes — re-rank usa a unidade da NF pra priorizar
+    # MPs da mesma grandeza (un x g x ml).
+    exemplos = _exemplos_itens_nf()
+    sugestoes = {}
+    for m in maps:
+        if m.estado == 'pendente':
+            unid_nf = (exemplos.get(m.item_nome_norm) or {}).get('unidade')
+            sugestoes[m.id] = sugerir_para_item(m.item_nome_exemplo,
+                                                unidade_nf=unid_nf)[:3]
+    mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    from app.models import Produto
+    produtos = (Produto.query.filter_by(ativo=True)
+                .order_by(Produto.nome).all())
+    # Sugestao da IA traduzida pra unidade da MP (kg->g etc.) antes de
+    # pre-encher o form — ver prefill_sugestao. So pra itens sem vinculo.
+    prefill = {}
+    for m in maps:
+        if m.materia_prima_id or m.produto_id:
+            continue
+        sug = sugestoes.get(m.id) or []
+        ex = exemplos.get(m.item_nome_norm) or {}
+        f, u = prefill_sugestao(m.ia_fator_sugerido, m.ia_unidade_sugerida,
+                                sug[0]['unidade'] if sug else None,
+                                ex.get('unidade'))
+        prefill[m.id] = {'fator': f'{f:g}' if f else '', 'unidade': u or ''}
+    return render_template('contas_pagar/mapeamentos.html', maps=maps, mps=mps,
+                           produtos=produtos,
+                           estado=estado, contagens=contagens, sugestoes=sugestoes,
+                           exemplos=exemplos, prefill=prefill)
+
+
+@contas_pagar_bp.route('/mapeamentos/limpar-nomes', methods=['POST'])
+@login_required
+@owner_required
+def mapeamentos_limpar_nomes():
+    """Re-normaliza os nomes dos itens (ignora validade/lote), junta os
+    vinculos duplicados e remove pendentes orfaos (item que nao existe em
+    nenhuma NF — sobra de leitura da IA corrigida). Preserva os confirmados."""
+    from app.services.conta_pagar_estoque import limpar_mapas_orfaos, migrar_nomes_itens
+    stats = migrar_nomes_itens()
+    orfaos = limpar_mapas_orfaos()
+    msg = (f"{stats['mesclados']} duplicado(s) juntado(s), "
+           f"{stats['atualizados']} nome(s) limpo(s), "
+           f"{orfaos} pendente(s) órfão(s) removido(s).")
+    if stats['conflitos']:
+        msg += (f" {stats['conflitos']} grupo(s) com vinculos divergentes "
+                "ficaram sem mesclar (revise).")
+    flash(msg, 'success')
+    return redirect(url_for('contas_pagar.mapeamentos'))
+
+
+@contas_pagar_bp.route('/mapeamentos/lote', methods=['POST'])
+@login_required
+@admin_required
+def mapeamentos_lote():
+    """Acao em lote nos mapeamentos selecionados (checkboxes da tela).
+
+    JSON: {"acao": "vincular"|"ignorar",
+           "itens": [{"id", "materia_prima_id", "unidade_compra",
+                      "fator_conversao"}, ...]}
+    Vincular em lote exige MP + fator preenchidos em CADA linha (sem default
+    silencioso — estoque tem peso especial); linha invalida fica como esta e
+    volta em `falhas`. Um commit so pros que passaram."""
+    dados = request.get_json(silent=True) or {}
+    acao = dados.get('acao')
+    itens = dados.get('itens') or []
+    if acao not in ('vincular', 'ignorar') or not isinstance(itens, list):
+        return jsonify(erro='payload inválido'), 400
+    ok = 0
+    falhas = []
+    for item in itens[:500]:
+        if not isinstance(item, dict):
+            continue
+        m = db.session.get(ContaPagarItemMap, item.get('id'))
+        if not m:
+            continue
+        erro = _aplicar_vinculo(
+            m, acao,
+            materia_prima_id=item.get('alvo') or item.get('materia_prima_id'),
+            unidade_compra=item.get('unidade_compra'),
+            fator_raw=item.get('fator_conversao'),
+            exigir_completo=True)
+        if erro:
+            falhas.append(erro)
+        else:
+            ok += 1
+    db.session.commit()
+    return jsonify(ok=ok, falhas=falhas)
+
+
+@contas_pagar_bp.route('/mapeamentos/<int:id>/criar-mp', methods=['POST'])
+@login_required
+@admin_required
+def mapeamento_criar_mp(id):
+    """Cria a matéria-prima NA HORA e já vincula o item — elimina o
+    vai-e-vem (sair pra /materias-primas, cadastrar, voltar, procurar o
+    item de novo), que era a maior fricção da tela de mapeamentos.
+
+    JSON: {nome, unidade (g/ml/un/kg/l), peso_unidade?, unidade_compra,
+    fator_conversao}. `peso_unidade` (conteúdo em g/ml de 1 unidade) é o
+    que permite as FICHAS converterem MP contada em 'un' — sem ele o custo
+    na receita sai zero. Custo inicial 0: a primeira NF processada define.
+    Mesmas travas do vínculo individual (fator obrigatório + física)."""
+    m = ContaPagarItemMap.query.get_or_404(id)
+    dados = request.get_json(silent=True) or {}
+    nome = (dados.get('nome') or '').strip()
+    unidade = (dados.get('unidade') or '').strip().lower()
+    if not nome or unidade not in ('g', 'ml', 'un', 'kg', 'l'):
+        return jsonify(erro='nome e unidade (g/ml/un/kg/l) são obrigatórios'), 400
+    # lower() em Python — func.lower() do SQLite nao dobra acentos.
+    nome_lower = nome.lower()
+    if any((mp.nome or '').lower() == nome_lower
+           for mp in MateriaPrima.query.all()):
+        return jsonify(erro=f'"{nome}" já existe no banco de MP — '
+                            'selecione no menu da linha'), 400
+    peso_unidade = None
+    bruto = str(dados.get('peso_unidade') or '').strip()
+    if bruto:
+        try:
+            peso_unidade = float(bruto.replace(',', '.'))
+        except ValueError:
+            return jsonify(erro='peso por unidade inválido'), 400
+    mp = MateriaPrima(nome=nome, unidade=unidade, custo_por_kg=0,
+                      peso_unidade=peso_unidade)
+    db.session.add(mp)
+    db.session.flush()
+    erro = _aplicar_vinculo(m, 'vincular', materia_prima_id=mp.id,
+                            unidade_compra=dados.get('unidade_compra'),
+                            fator_raw=dados.get('fator_conversao'),
+                            exigir_completo=True)
+    if erro:
+        db.session.rollback()   # MP não fica criada se o vínculo falhou
+        return jsonify(erro=erro), 400
+    db.session.commit()
+    return jsonify(ok=True, mp_id=mp.id, nome=mp.nome, unidade=mp.unidade)
+
+
+@contas_pagar_bp.route('/mapeamentos/<int:id>/criar-produto', methods=['POST'])
+@login_required
+@admin_required
+def mapeamento_criar_produto(id):
+    """Cadastro rapido de PRODUTO de revenda direto do mapeamento (espelho
+    do criar-mp). JSON: {nome, custo_direto?, unidade_compra,
+    fator_conversao}. Custo e opcional — a primeira NF processada atualiza
+    de qualquer forma (custo = valor da nota / fator)."""
+    from app.models import Produto
+    m = ContaPagarItemMap.query.get_or_404(id)
+    dados = request.get_json(silent=True) or {}
+    nome = (dados.get('nome') or '').strip()
+    if not nome:
+        return jsonify(erro='nome é obrigatório'), 400
+    # Comparacao em Python: func.lower() do SQLite so dobra ASCII ("Água"
+    # != "água") — em Postgres funciona, mas a checagem tem que valer nos
+    # dois. Catalogo e pequeno, varrer e barato.
+    nome_lower = nome.lower()
+    if any((p.nome or '').lower() == nome_lower
+           for p in Produto.query.filter_by(ativo=True).all()):
+        return jsonify(erro=f'"{nome}" já existe em Produtos — '
+                            'selecione no menu da linha'), 400
+    custo = None
+    bruto = str(dados.get('custo_direto') or '').strip()
+    if bruto:
+        try:
+            custo = float(bruto.replace(',', '.'))
+        except ValueError:
+            return jsonify(erro='custo inválido'), 400
+    prod = Produto(nome=nome, categoria='Revenda', custo_direto=custo or 0)
+    db.session.add(prod)
+    db.session.flush()
+    erro = _aplicar_vinculo(m, 'vincular', materia_prima_id=f'prod-{prod.id}',
+                            unidade_compra=dados.get('unidade_compra'),
+                            fator_raw=dados.get('fator_conversao'),
+                            exigir_completo=True)
+    if erro:
+        db.session.rollback()   # produto nao fica criado se o vinculo falhou
+        return jsonify(erro=erro), 400
+    db.session.commit()
+    return jsonify(ok=True, produto_id=prod.id, nome=prod.nome)
+
+
+@contas_pagar_bp.route('/reprocessar', methods=['POST'])
+@login_required
+@admin_required
+def reprocessar():
+    """Dá entrada nas NFs RECENTES depois de vincular itens pendentes.
+
+    `processar_conta` só roda na captura — item vinculado depois ficava sem
+    entrada até a PRÓXIMA nota. Este botão reprocessa as contas dos últimos
+    N dias (default 2, teto 7): janela curta de propósito — nota velha já
+    teve a mercadoria consumida e o estoque acertado por balanço; entrada
+    retroativa inflaria. Idempotente (item já processado não duplica);
+    ordem cronológica pra o preço final ser o da nota mais nova."""
+    from datetime import timedelta
+
+    from app.services.conta_pagar_estoque import processar_conta
+    try:
+        dias = min(max(int(request.form.get('dias', 2)), 1), 7)
+    except (TypeError, ValueError):
+        dias = 2
+    corte = agora() - timedelta(days=dias)
+    contas = (ContaPagar.query
+              .filter(ContaPagar.itens_json.isnot(None),
+                      ContaPagar.criado_em >= corte,
+                      ContaPagar.status != 'ignorado')
+              .order_by(ContaPagar.criado_em.asc()).all())
+    total = {}
+    for c in contas:
+        for k, v in processar_conta(c, user_id=current_user.id).items():
+            total[k] = total.get(k, 0) + v
+    flash(f'{len(contas)} NF(s) dos últimos {dias} dia(s) reprocessada(s): '
+          f"{total.get('processados', 0)} item(ns) deram entrada, "
+          f"{total.get('ja_processados', 0)} já estavam, "
+          f"{total.get('pendentes', 0)} seguem pendentes de vínculo.",
+          'success')
+    return redirect(url_for('contas_pagar.mapeamentos'))
+
+
+@contas_pagar_bp.route('/mapeamentos/<int:id>', methods=['POST'])
+@login_required
+@admin_required
+def mapeamento_vincular(id):
+    m = ContaPagarItemMap.query.get_or_404(id)
+    erro = _aplicar_acao_mapa(m)
+    if erro:
+        db.session.rollback()
+        flash(erro, 'warning')
+    else:
+        db.session.commit()
+        flash('Mapeamento atualizado.', 'success')
+    return redirect(url_for('contas_pagar.mapeamentos',
+                            estado=request.form.get('estado') or 'pendente'))
+
+
+@contas_pagar_bp.route('/<int:id>/item/<int:indice>/vincular', methods=['POST'])
+@login_required
+@admin_required
+def item_vincular(id, indice):
+    """Vincula/ignora um item de NF a uma MP direto da tela de detalhe da conta
+    (vendo a nota). Cria o ContaPagarItemMap por nome se ainda nao existir; o
+    vinculo vale pra todas as NFs com o mesmo nome de item."""
+    from app.services.conta_pagar_estoque import normalizar_item_nome
+    conta = ContaPagar.query.get_or_404(id)
+    try:
+        itens = json.loads(conta.itens_json or '[]')
+    except (json.JSONDecodeError, TypeError):
+        itens = []
+    if not (0 <= indice < len(itens)):
+        flash('Item nao encontrado.', 'warning')
+        return redirect(url_for('contas_pagar.detalhe', id=id))
+    nome = (itens[indice].get('nome') or '').strip()
+    norm = normalizar_item_nome(nome)
+    if not norm:
+        flash('Item sem nome — nao da pra vincular.', 'warning')
+        return redirect(url_for('contas_pagar.detalhe', id=id))
+    m = ContaPagarItemMap.query.filter_by(item_nome_norm=norm).first()
+    if not m:
+        m = ContaPagarItemMap(item_nome_norm=norm, item_nome_exemplo=nome)
+        db.session.add(m)
+    erro = _aplicar_acao_mapa(m)
+    if erro:
+        db.session.rollback()
+        flash(erro, 'warning')
+    else:
+        db.session.commit()
+        flash('Item atualizado.', 'success')
+    return redirect(url_for('contas_pagar.detalhe', id=id))
+
+
+# ── Avisos de variacao de preco ──
+
+@contas_pagar_bp.route('/variacoes')
+@login_required
+@admin_required
+def variacoes():
+    from sqlalchemy import func
+    filtro = request.args.get('f', 'todos')
+    q = VariacaoPrecoMP.query.filter_by(status='novo')
+    if filtro == 'subiu':
+        q = q.filter(VariacaoPrecoMP.variacao_pct > 0)
+    elif filtro == 'caiu':
+        q = q.filter(VariacaoPrecoMP.variacao_pct < 0)
+    itens = q.order_by(func.abs(VariacaoPrecoMP.variacao_pct).desc()).limit(200).all()
+    novos = VariacaoPrecoMP.query.filter_by(status='novo').count()
+    return render_template('contas_pagar/variacoes.html', itens=itens,
+                           filtro=filtro, novos=novos)
+
+
+@contas_pagar_bp.route('/variacoes/<int:id>', methods=['POST'])
+@login_required
+@admin_required
+def variacao_acao(id):
+    v = VariacaoPrecoMP.query.get_or_404(id)
+    acao = request.form.get('acao')
+    if acao in ('aprovar', 'ignorar'):
+        v.status = 'aprovado' if acao == 'aprovar' else 'ignorado'
+        v.revisado_em = agora()
+        v.revisado_por_id = current_user.id
+        db.session.commit()
+        flash('Variacao revisada.', 'success')
+    return redirect(url_for('contas_pagar.variacoes', f=request.form.get('f') or 'todos'))

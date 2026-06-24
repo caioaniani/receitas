@@ -221,6 +221,20 @@
 
     // ── Render ──
 
+    // Extrai a hora inicial de "8h às 9h" → 8. Usada pra ordenar janelas.
+    function horaInicio(periodo) {
+        var m = String(periodo || '').match(/(\d{1,2})/);
+        return m ? parseInt(m[1], 10) : 99;
+    }
+    // Janela do pedido: chave de ordenacao + titulo do cabecalho. Expresso
+    // sempre primeiro (ordem -1); "sem horario" sempre no fim.
+    function janelaDoPedido(p) {
+        if (p.expresso) return { ordem: -1, titulo: '⚡ EXPRESSO (entrega em 1h)' };
+        var per = (p.periodo || '').trim();
+        if (!per) return { ordem: 999, titulo: 'Sem horário' };
+        return { ordem: horaInicio(per), titulo: '🕐 ' + per };
+    }
+
     function renderPedidos() {
         var container = document.getElementById('pedidos-container');
         var dataStr = document.getElementById('data-entrega').value;
@@ -228,9 +242,19 @@
         var counts = {todos: 0, pendente: 0, separado: 0, entregue: 0};
         var totalDia = 0;
 
+        // Ordena por janela (Expresso → 7h → 8h → ... → Sem horário) e, dentro
+        // da janela, alfabetico pelo destinatario. A turma de preparo le de
+        // cima pra baixo seguindo o relogio.
+        var pedidosOrd = pedidos.slice().sort(function (a, b) {
+            var ka = janelaDoPedido(a), kb = janelaDoPedido(b);
+            if (ka.ordem !== kb.ordem) return ka.ordem - kb.ordem;
+            return (a.destinatario || '').localeCompare(b.destinatario || '');
+        });
+
         var html = '';
-        for (var i = 0; i < pedidos.length; i++) {
-            var p = pedidos[i];
+        var janelaAtualTitulo = null;
+        for (var i = 0; i < pedidosOrd.length; i++) {
+            var p = pedidosOrd[i];
             var status = getStatus(dataStr, p.code);
             counts.todos++;
             counts[status] = (counts[status] || 0) + 1;
@@ -239,6 +263,19 @@
             if (filtroAtual !== 'todos' && status !== filtroAtual) continue;
             var buscaTexto = (p.destinatario + ' ' + p.comprador + ' ' + p.code).toLowerCase();
             if (busca && buscaTexto.indexOf(busca) === -1) continue;
+
+            // Cabecalho da janela quando muda
+            var jn = janelaDoPedido(p);
+            if (jn.titulo !== janelaAtualTitulo) {
+                var corHeader = p.expresso ? '#fff4e6' : '#f1f3f5';
+                var corText = p.expresso ? '#e8590c' : '#495057';
+                html += '<div class="d-flex align-items-center mt-3 mb-2 px-2 py-1" ' +
+                        'style="background:' + corHeader + ';border-radius:8px;' +
+                        'border-left:5px solid ' + corText + ';">' +
+                        '<strong style="color:' + corText + ';font-size:15px;">' +
+                        escapeHtml(jn.titulo) + '</strong></div>';
+                janelaAtualTitulo = jn.titulo;
+            }
 
             var statusBadge = '';
             if (status === 'pendente') statusBadge = '<span class="status-badge status-pendente">Pendente</span>';
@@ -251,27 +288,58 @@
                 itensHtml += '<span class="me-3">' + it.quantidade + 'x ' + escapeHtml(it.nome) + '</span>';
             }
 
-            var cartinhaClass = (p.cartinha || p.tem_customizacao) ? 'has-text' : '';
-            var cartinhaBadge = p.tem_customizacao ? ' <span class="badge bg-warning text-dark" style="font-size:10px;"><i class="bi bi-envelope-heart"></i> Cartinha</span>' : '';
-
             var compradorLine = '';
             if (p.comprador && p.comprador !== p.destinatario) {
                 compradorLine = '<div class="text-muted" style="font-size:11px;"><i class="bi bi-person"></i> Comprador: ' + escapeHtml(p.comprador) + '</div>';
             }
 
+            // Cartinha SEMPRE visivel quando tem texto (antes ficava
+            // escondida atras de um botao que so aparecia se `tem_customizacao`
+            // — cartinha manual nunca aparecia). Banner amarelo de leitura;
+            // botao Editar abre o textarea pra corrigir.
+            var temCart = (p.cartinha || '').trim().length > 0;
+            var cartinhaBloco = '';
+            if (temCart) {
+                cartinhaBloco =
+                    '<div class="mt-2 px-3 py-2" ' +
+                    'style="background:#fff9db;border:1px dashed #f0c000;border-radius:8px;">' +
+                        '<div style="font-size:11px;font-weight:700;color:#b8860b;' +
+                        'text-transform:uppercase;letter-spacing:1px;">💌 Cartinha' +
+                        (p.cartinha_origem === 'vnda' ? ' <span class="text-muted">(do VNDA)</span>' : ' <span class="text-muted">(editada)</span>') +
+                        '</div>' +
+                        '<div style="font-size:15px;line-height:1.35;white-space:pre-wrap;' +
+                        'word-break:break-word;margin-top:3px;">' + escapeHtml(p.cartinha) + '</div>' +
+                    '</div>';
+            }
+            // Area de edicao (textarea + salvar) — escondida por padrao,
+            // abre clicando no botao "Editar/Corrigir cartinha".
+            var cartinhaEdit =
+                '<div class="cartinha-area mt-2 d-none" id="cartinha-' + p.code + '">' +
+                    (temCart ? '' : '<small class="text-muted d-block mb-1">' +
+                        (p.tem_customizacao ? '<i class="bi bi-magic"></i> Cartinha automática do VNDA — edite se quiser sobrescrever' : 'Adicione uma cartinha manual abaixo:') +
+                        '</small>') +
+                    '<textarea class="form-control form-control-sm mb-1" rows="3" id="cartinha-txt-' + p.code + '" placeholder="Texto da cartinha...">' + escapeHtml(p.cartinha || '') + '</textarea>' +
+                    '<button class="btn btn-sm btn-warning d-print-none" onclick="salvarCartinha(\'' + p.code + '\')"><i class="bi bi-save"></i> Salvar</button>' +
+                '</div>';
+
             html += '<div class="card mb-2">' +
                 '<div class="card-body py-2 px-3">' +
                     '<div class="d-flex justify-content-between align-items-start">' +
+                        '<div class="d-flex gap-2 align-items-start">' +
+                            '<input type="checkbox" class="form-check-input mt-1 chk-imprimir d-print-none" ' +
+                                'data-code="' + encodeURIComponent(p.code) + '" ' +
+                                'title="selecionar pra imprimir">' +
                         '<div>' +
                             '<a href="https://www.padariaartesanalonline.com.br/admin/pedido?id=' + encodeURIComponent(p.code) + '" target="_blank" rel="noopener" class="text-decoration-none" title="Abrir no VNDA" style="color: var(--accent);">' +
                                 '<strong style="font-size:13px; color: var(--accent);">[' + escapeHtml(p.code) + '] <i class="bi bi-box-arrow-up-right" style="font-size:11px;"></i></strong>' +
                             '</a> ' +
                             '<span class="fw-semibold"><i class="bi bi-person-fill"></i> ' + escapeHtml(p.destinatario) + '</span>' +
-                            cartinhaBadge +
                             (p.data_override ? ' <span class="badge bg-warning text-dark" title="Data alterada — original: ' + escapeHtml(p.data_entrega_original_fmt || '') + (p.override_motivo ? ' · Motivo: ' + escapeHtml(p.override_motivo) : '') + (p.override_autor ? ' · Por: ' + escapeHtml(p.override_autor) : '') + '" style="font-size:10px;"><i class="bi bi-pencil-square"></i> Data alterada</span>' : '') +
                             (p.driver ? ' <span class="badge text-white" style="font-size:10px;background:' + (p.driver.cor || '#3cb44b') + ';" title="Driver atribuído"><i class="bi bi-person-badge"></i> ' + escapeHtml(p.driver.nome) + '</span>' : '') +
                         '</div>' +
+                        '</div>' +
                         '<div class="d-flex align-items-center gap-2">' +
+                            (p.expresso ? '<span class="badge" style="background:#e8590c;color:#fff;font-size:11px;"><i class="bi bi-lightning-fill"></i> Expresso</span>' : '') +
                             (p.periodo ? '<span class="badge bg-light text-dark" style="font-size:11px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>' : '') +
                             statusBadge +
                         '</div>' +
@@ -282,22 +350,19 @@
                         (p.telefone ? ' &nbsp;<i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) : '') +
                     '</div>' +
                     '<div class="mt-1" style="font-size:13px;">' + itensHtml + '</div>' +
-                    '<div class="d-flex justify-content-between align-items-center mt-1">' +
+                    cartinhaBloco +
+                    '<div class="d-flex justify-content-between align-items-center mt-2">' +
                         '<strong>R$ ' + formatMoney(p.total) + '</strong>' +
                         '<div class="d-print-none d-flex gap-1">' +
                             (status !== 'separado' ? '<button class="btn btn-sm btn-outline-info" onclick="marcarStatus(\'' + p.code + '\',\'separado\')"><i class="bi bi-check"></i> Separar</button>' : '') +
                             (status !== 'entregue' ? '<button class="btn btn-sm btn-outline-success" onclick="marcarStatus(\'' + p.code + '\',\'entregue\')"><i class="bi bi-check-all"></i> Entregar</button>' : '') +
                             (status !== 'pendente' ? '<button class="btn btn-sm btn-outline-secondary" onclick="marcarStatus(\'' + p.code + '\',\'pendente\')"><i class="bi bi-arrow-counterclockwise"></i></button>' : '') +
                             '<button class="btn btn-sm btn-outline-warning" onclick="editarData(\'' + p.code + '\',\'' + (p.data_entrega || '') + '\',' + (p.data_override ? 'true' : 'false') + ')" title="Mudar data de entrega"><i class="bi bi-calendar-event"></i></button>' +
-                            (p.tem_customizacao ? '<button class="btn btn-sm btn-outline-warning" onclick="toggleCartinha(\'' + p.code + '\')"><i class="bi bi-envelope-heart"></i></button>' : '') +
+                            '<button class="btn btn-sm btn-outline-warning" onclick="toggleCartinha(\'' + p.code + '\')" title="' + (temCart ? 'Corrigir cartinha' : 'Adicionar cartinha') + '"><i class="bi bi-envelope-heart"></i></button>' +
                             '<a class="btn btn-sm btn-outline-dark" href="https://www.padariaartesanalonline.com.br/admin/pedido?id=' + encodeURIComponent(p.code) + '" target="_blank" rel="noopener" title="Abrir pedido no VNDA"><i class="bi bi-box-arrow-up-right"></i> VNDA</a>' +
                         '</div>' +
                     '</div>' +
-                    '<div class="cartinha-area ' + cartinhaClass + ' mt-2 d-none" id="cartinha-' + p.code + '">' +
-                        (p.cartinha_origem === 'vnda' ? '<small class="text-muted d-block mb-1"><i class="bi bi-magic"></i> Cartinha automática do VNDA — edite se quiser sobrescrever</small>' : '') +
-                        '<textarea class="form-control form-control-sm mb-1" rows="3" id="cartinha-txt-' + p.code + '" placeholder="Cole a cartinha do admin Vnda...">' + escapeHtml(p.cartinha || '') + '</textarea>' +
-                        '<button class="btn btn-sm btn-warning d-print-none" onclick="salvarCartinha(\'' + p.code + '\')"><i class="bi bi-save"></i> Salvar</button>' +
-                    '</div>' +
+                    cartinhaEdit +
                 '</div>' +
             '</div>';
         }
@@ -342,6 +407,10 @@
                 }
                 var btn = document.querySelector('#cartinha-' + code + ' .btn');
                 if (btn) { btn.textContent = ' Salvo!'; setTimeout(function(){ btn.innerHTML = '<i class="bi bi-save"></i> Salvar'; }, 1500); }
+                // Recarrega a aba Operacao (onde a equipe ve a cartinha) pra
+                // refletir o texto corrigido na hora — o array `pedidos` acima
+                // so atualiza a aba legada.
+                if (typeof opCarregar === 'function') { try { opCarregar(); } catch (e) {} }
             }
         });
     };
@@ -425,9 +494,169 @@
         });
     });
 
-    window.imprimirPedidos = function() {
-        window.print();
+    // ── Imprimir (selecao + modal "incluir via do entregador") ──────────
+    //
+    // A aba Operacao ja desenha checkboxes em cada card (.op-check, ver
+    // opRenderItem). A aba legada "Pedidos do Dia" tem .chk-imprimir (que
+    // eu adicionei). codesSelecionados() considera as duas — funciona em
+    // qualquer aba sem duplicar UI.
+    function codesSelecionados() {
+        var nodes = document.querySelectorAll(
+            '.op-check:checked, .chk-imprimir:checked');
+        var vistos = {};
+        var codes = [];
+        Array.prototype.forEach.call(nodes, function(c) {
+            var code = decodeURIComponent(c.dataset.code || '');
+            if (code && !vistos[code]) {
+                vistos[code] = true;
+                codes.push(code);
+            }
+        });
+        return codes;
+    }
+    function atualizarBarraImprimir() {
+        var sel = codesSelecionados();
+        var info = document.getElementById('sel-imprimir-info');
+        var btn = document.getElementById('btn-imprimir-sel');
+        if (info) info.textContent = sel.length
+            ? sel.length + ' selecionado(s)' : '';
+        if (btn) btn.disabled = sel.length === 0;
+    }
+    document.addEventListener('change', function(e) {
+        var t = e.target;
+        if (!t || !t.classList) return;
+        // op-check-secao marca/desmarca .op-check em lote via .checked direto
+        // (NAO dispara change), entao escutamos AQUI tambem — senao o
+        // "selecionar todos da secao" deixava o botao desabilitado.
+        if (t.classList.contains('chk-imprimir')
+                || t.classList.contains('op-check')
+                || t.classList.contains('op-check-secao')) {
+            atualizarBarraImprimir();
+        }
+    });
+    // Como recurso final: clique direto re-avalia. Cobre "selecionar todos"
+    // em qualquer caminho — incluindo botoes futuros que setem .checked sem
+    // disparar evento.
+    document.addEventListener('click', function(e) {
+        var t = e.target;
+        if (t && t.matches && (t.matches('.op-check-secao')
+                                || t.closest('[data-op-sel-todos]'))) {
+            setTimeout(atualizarBarraImprimir, 0);
+        }
+    });
+    // Polling leve: o render da Operacao acontece em varios pontos
+    // (opRenderLista, ?lote=, callbacks de atribuicao). Em vez de embrulhar
+    // cada um, observo o container e re-avalio quando muda.
+    document.addEventListener('DOMContentLoaded', function() {
+        var alvos = ['op-container', 'pedidos-container'];
+        alvos.forEach(function(id) {
+            var n = document.getElementById(id);
+            if (!n || !window.MutationObserver) return;
+            new MutationObserver(atualizarBarraImprimir).observe(
+                n, { childList: true, subtree: true });
+        });
+        atualizarBarraImprimir();
+    });
+
+    // SNAPSHOT: codes + DADOS dos pedidos capturados ao abrir o modal.
+    // Bug real (11/06/2026): mandar so codes pro servidor fazia ele rebuscar
+    // do VNDA por data — se a data nao bate exato (override, fuso, polling
+    // re-renderizando entre marcacao e clique) volta vazio "Nenhum pedido
+    // selecionado". Agora mandamos os DADOS direto via POST: o servidor nao
+    // precisa do VNDA pra imprimir o que ja esta na tela.
+    var pedidosSnapshot = [];
+
+    function pedidoDoEstado(code) {
+        // opUltimoResultado eh a variavel local da MESMA IIFE (linha
+        // 1926+); var e' hoisted, entao acessivel daqui. Bug real
+        // (11/06/2026): eu estava lendo window.opUltimoResultado — que
+        // nunca foi exposto — entao retornava null sempre e o snapshot
+        // ficava vazio ("Marque ao menos um pedido antes" com checkbox
+        // marcado).
+        var estado = (typeof opUltimoResultado !== 'undefined'
+                      && opUltimoResultado) ? opUltimoResultado : null;
+        if (!estado) return null;
+        var fontes = [estado.sem_driver || []];
+        (estado.drivers || []).forEach(function(dr) {
+            fontes.push(dr.paradas || []);
+        });
+        for (var i = 0; i < fontes.length; i++) {
+            for (var j = 0; j < fontes[i].length; j++) {
+                if (fontes[i][j].code === code) return fontes[i][j];
+            }
+        }
+        return null;
+    }
+
+    window.abrirModalImprimir = function() {
+        var codes = codesSelecionados();
+        pedidosSnapshot = [];
+        codes.forEach(function(c) {
+            var p = pedidoDoEstado(c);
+            if (p) pedidosSnapshot.push(p);
+        });
+        if (!pedidosSnapshot.length) {
+            alert('Marque ao menos um pedido antes (e aguarde a tela '
+                  + 'carregar a lista do dia).');
+            return;
+        }
+        var el = document.getElementById('modal-imprimir-qt');
+        if (el) el.textContent = pedidosSnapshot.length;
+        var m = document.getElementById('modalImprimirVias');
+        if (m && window.bootstrap) {
+            bootstrap.Modal.getOrCreateInstance(m).show();
+        } else {
+            imprimirSelecionados('cliente,motorista');
+        }
     };
+    window.imprimirSelecionados = function(vias) {
+        if (!pedidosSnapshot.length) return;
+        var data = document.getElementById('op-data');
+        var dataVal = (data && data.value) || '';
+
+        // POST via form com TARGET NOMEADO — abre nova aba E o submit
+        // navega ela. Bug real (11/06/2026): window.open(_blank) +
+        // form.target='_blank' criava DUAS abas (a aberta ficava
+        // about:blank, a do submit recebia a impressao). Com nome unico,
+        // window.open e form.target apontam pra MESMA janela. E nao
+        // removemos o form na hora — esperamos o submit despachar.
+        var nomeAba = 'imprimir-' + Date.now();
+        window.open('', nomeAba);   // abre/encontra a aba pelo nome
+        var f = document.createElement('form');
+        f.method = 'POST';
+        f.action = '/entregas/imprimir';
+        f.target = nomeAba;
+        var addInput = function(name, value) {
+            var i = document.createElement('input');
+            i.type = 'hidden';
+            i.name = name;
+            i.value = value;
+            f.appendChild(i);
+        };
+        // CSRF_TOKEN é declarado como `const` no base.html (top-level
+        // binding, NÃO está em window). Acessar via `window.CSRF_TOKEN`
+        // dava undefined → '' → Flask-WTF rejeitava o POST com 400.
+        addInput('csrf_token', (typeof CSRF_TOKEN !== 'undefined' ? CSRF_TOKEN : ''));
+        addInput('pedidos_json', JSON.stringify(pedidosSnapshot));
+        addInput('vias', vias || 'cliente');
+        if (dataVal) addInput('data', dataVal);
+        document.body.appendChild(f);
+        var m = document.getElementById('modalImprimirVias');
+        if (m && window.bootstrap) {
+            var inst = bootstrap.Modal.getInstance(m);
+            if (inst) inst.hide();
+        }
+        f.submit();
+        // Limpa o form depois do submit despachar (browsers nao gostam
+        // que removamos antes da navegacao iniciar).
+        setTimeout(function() {
+            if (f.parentNode) f.parentNode.removeChild(f);
+        }, 1500);
+    };
+    // Compat: chamada antiga do botão "imprimir" topo direita E botao
+    // "imprimir" da barra da Operacao (que chamava window.print() puro —
+    // imprimia a tela toda sem filtrar nem montar A4 por pedido).
+    window.imprimirPedidos = function() { window.abrirModalImprimir(); };
 
     // ── Filtros ──
 
@@ -1670,11 +1899,17 @@
                     fetch('/entregas/api/drivers/' + id, {
                         method: 'DELETE',
                         headers: {'X-CSRFToken': CSRF_TOKEN},
-                    }).then(function(r) { return r.json(); })
+                    }).then(function(r) {
+                          // Erro do servidor (ex: FK) nao pode ser engolido — antes
+                          // o r.json() num 500 falhava em silencio e "nada acontecia".
+                          if (!r.ok) {
+                              return r.json().catch(function(){ return {}; })
+                                  .then(function(d){ throw new Error(d.erro || ('HTTP ' + r.status)); });
+                          }
+                          return r.json();
+                      })
                       .then(function(d) {
-                          if (d.acao === 'excluido') {
-                              carregarDrivers();
-                          } else if (d.acao === 'desativado') {
+                          if (d.acao === 'desativado') {
                               var msg = 'Esse driver tem ' + d.atribuicoes + ' pedido(s) no histórico. ' +
                                         'Foi apenas DESATIVADO (não aparece mais nas rotas novas).\n\n' +
                                         'Quer apagar o driver E o histórico de atribuições? (irreversível)';
@@ -1682,14 +1917,25 @@
                                   fetch('/entregas/api/drivers/' + id + '?force=1', {
                                       method: 'DELETE',
                                       headers: {'X-CSRFToken': CSRF_TOKEN},
-                                  }).then(function(r) { return r.json(); })
-                                    .then(function() { carregarDrivers(); });
+                                  }).then(function(r) {
+                                        if (!r.ok) {
+                                            return r.json().catch(function(){ return {}; })
+                                                .then(function(d){ throw new Error(d.erro || ('HTTP ' + r.status)); });
+                                        }
+                                        return r.json();
+                                    })
+                                    .then(function() { carregarDrivers(); })
+                                    .catch(function(err) { alert('Não consegui excluir: ' + err.message); });
                               } else {
                                   carregarDrivers();
                               }
                           } else {
+                              // 'excluido' ou 'excluido_com_historico'
                               carregarDrivers();
                           }
+                      })
+                      .catch(function(err) {
+                          alert('Não consegui excluir o driver: ' + err.message + '\nTente de novo.');
                       });
                 }
             });
@@ -2167,12 +2413,33 @@
         html += '<span class="fw-semibold"><i class="bi bi-person-fill"></i> ' + escapeHtml(p.destinatario || '—') + '</span>';
         if (stBadge) html += ' ' + stBadge;
         if (badgeOrigem) html += badgeOrigem;
+        if (p.expresso) html += ' <span class="badge" style="background:#e8590c;color:#fff;font-size:10px;"><i class="bi bi-lightning-fill"></i> Expresso</span>';
         if (p.periodo) html += ' <span class="badge bg-light text-dark" style="font-size:10px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>';
         html += totalHtml + proofLink + adminBtns + btnData + editLocal;
         html += '<div class="text-muted small mt-1"><i class="bi bi-geo-alt"></i> ' + escapeHtml(p.endereco || '') + '</div>';
         if (p.telefone) html += '<div class="text-muted small"><i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) + '</div>';
         if (p.nota_driver) html += '<div class="text-muted small fst-italic mt-1"><i class="bi bi-chat-left-quote"></i> ' + escapeHtml(p.nota_driver) + '</div>';
         html += itensHtml;
+        // Cartinha: faixa amarela sempre visivel quando ha texto (manual > VNDA).
+        // E aqui que a equipe le pra escrever a mao. Botao Editar usa o mesmo
+        // toggleCartinha/salvarCartinha das outras telas.
+        if ((p.cartinha || '').trim().length > 0) {
+            html += '<div class="mt-2 px-2 py-2" style="background:#fff9db;border:1px dashed #f0c000;border-radius:8px;">' +
+                '<div style="font-size:10px;font-weight:700;color:#b8860b;text-transform:uppercase;letter-spacing:1px;">💌 Cartinha' +
+                (p.cartinha_origem === 'vnda' ? ' <span class="text-muted">(do VNDA)</span>' : ' <span class="text-muted">(editada)</span>') + '</div>' +
+                '<div style="font-size:15px;line-height:1.35;white-space:pre-wrap;word-break:break-word;margin-top:2px;">' + escapeHtml(p.cartinha) + '</div>' +
+                '<button class="btn btn-link btn-sm p-0 mt-1 d-print-none" onclick="toggleCartinha(\'' + p.code + '\')" style="font-size:11px;"><i class="bi bi-pencil"></i> Corrigir</button>' +
+                '<div class="cartinha-area d-none mt-1" id="cartinha-' + p.code + '">' +
+                    '<textarea class="form-control form-control-sm mb-1" rows="2" id="cartinha-txt-' + p.code + '">' + escapeHtml(p.cartinha) + '</textarea>' +
+                    '<button class="btn btn-sm btn-warning d-print-none" onclick="salvarCartinha(\'' + p.code + '\')"><i class="bi bi-save"></i> Salvar</button>' +
+                '</div></div>';
+        } else {
+            html += '<div class="mt-1 d-print-none"><button class="btn btn-link btn-sm p-0" onclick="toggleCartinha(\'' + p.code + '\')" style="font-size:11px;color:#94a3b8;"><i class="bi bi-envelope-heart"></i> + cartinha</button>' +
+                '<div class="cartinha-area d-none mt-1" id="cartinha-' + p.code + '">' +
+                    '<textarea class="form-control form-control-sm mb-1" rows="2" id="cartinha-txt-' + p.code + '" placeholder="Texto da cartinha..."></textarea>' +
+                    '<button class="btn btn-sm btn-warning d-print-none" onclick="salvarCartinha(\'' + p.code + '\')"><i class="bi bi-save"></i> Salvar</button>' +
+                '</div></div>';
+        }
         html += fotosHtml;
         html += '</div></div>';
         html += '<div class="d-print-none">';

@@ -1,25 +1,45 @@
 from datetime import datetime
 from urllib.parse import quote
 
-from flask import render_template, redirect, url_for, flash, request, Response, abort
-from flask_login import login_required, current_user
+from flask import Response, abort, current_app, flash, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 from sqlalchemy.orm import defer, joinedload, selectinload
 from werkzeug.utils import secure_filename
 
 from app.blueprints.rh import rh_bp
-from app.decorators import admin_required, owner_required
+from app.decorators import owner_required, rh_required
 from app.extensions import db
-from flask import jsonify
-from app.models import (Funcionario, Loja, FolhaPagamento, Feedback, Posicao,
-                        Atestado, SlotMapa, funcionario_loja, Ferias, RegistroPonto, Cargo)
-from app.utils import parse_float_br
+from app.models import (
+    Atestado,
+    Cargo,
+    Feedback,
+    Ferias,
+    FolhaPagamento,
+    Funcionario,
+    Loja,
+    Posicao,
+    RegistroPonto,
+    SlotMapa,
+)
+from app.utils import agora, parse_float_br
+from app.utils import hoje as hoje_brt
 
 ALLOWED_MIMETYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'}
 
 
+@rh_bp.before_request
+def _rh_restrito_ao_owner():
+    # RH temporariamente acessivel apenas ao owner. Reverter: remover este
+    # guard + trocar is_owner por pode_rh() na sidebar (base.html).
+    if not current_user.is_authenticated:
+        return current_app.login_manager.unauthorized()
+    if not current_user.is_dono():
+        abort(403)
+
+
 @rh_bp.route('/')
 @login_required
-@admin_required
+@rh_required
 def dashboard():
     # Eager load de cargo + lojas evita N+1 ao calcular custo_total() e
     # custo por loja (cada Funcionario acessa cargo.salario_base e lojas).
@@ -42,14 +62,14 @@ def dashboard():
             'custo': sum(f.custo_total() for f in funcs_loja),
         }
 
-    hoje = datetime.now()
+    h = agora()
     aniversariantes = [
         f for f in funcionarios
-        if f.data_nascimento and f.data_nascimento.month == hoje.month
+        if f.data_nascimento and f.data_nascimento.month == h.month
     ]
     aniversarios_casa = [
         f for f in funcionarios
-        if f.data_admissao and f.data_admissao.month == hoje.month
+        if f.data_admissao and f.data_admissao.month == h.month
     ]
 
     atestados_recentes = (
@@ -72,7 +92,7 @@ def dashboard():
 
 @rh_bp.route('/funcionarios')
 @login_required
-@admin_required
+@rh_required
 def funcionarios():
     loja_id = request.args.get('loja', type=int)
     apenas_ativos = request.args.get('ativos', '1') == '1'
@@ -95,7 +115,7 @@ def funcionarios():
 
 @rh_bp.route('/funcionarios/novo', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@rh_required
 def novo_funcionario():
     if request.method == 'POST':
         # Salario so e' aceito do form se user e' owner; senao usa 0
@@ -149,7 +169,7 @@ def novo_funcionario():
 
 @rh_bp.route('/funcionarios/<int:id>')
 @login_required
-@admin_required
+@rh_required
 def detalhe_funcionario(id):
     func = Funcionario.query.get_or_404(id)
     lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
@@ -166,7 +186,7 @@ def detalhe_funcionario(id):
 
 @rh_bp.route('/funcionarios/<int:id>/salvar', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def salvar_funcionario(id):
     func = Funcionario.query.get_or_404(id)
 
@@ -237,7 +257,7 @@ def salvar_funcionario(id):
 
 @rh_bp.route('/funcionarios/<int:id>/feedback', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def add_feedback(id):
     func = Funcionario.query.get_or_404(id)
     texto = request.form.get('texto', '').strip()
@@ -261,7 +281,7 @@ def add_feedback(id):
 
 @rh_bp.route('/funcionarios/<int:id>/feedback/<int:fb_id>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def excluir_feedback(id, fb_id):
     fb = Feedback.query.get_or_404(fb_id)
     db.session.delete(fb)
@@ -272,7 +292,7 @@ def excluir_feedback(id, fb_id):
 
 @rh_bp.route('/lojas')
 @login_required
-@admin_required
+@rh_required
 def lojas():
     lista = Loja.query.options(defer(Loja.planta_imagem)).order_by(Loja.nome).all()
     return render_template('rh/lojas.html', lojas=lista)
@@ -340,12 +360,13 @@ def excluir_cargo(id):
 
 @rh_bp.route('/lojas/salvar', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def salvar_lojas():
     ids = request.form.getlist('loja_id[]')
     nomes = request.form.getlist('loja_nome[]')
     enderecos = request.form.getlist('loja_endereco[]')
     telefones = request.form.getlist('loja_telefone[]')
+    pins = request.form.getlist('loja_pin[]')
 
     for i in range(len(nomes)):
         nome = nomes[i].strip()
@@ -353,6 +374,7 @@ def salvar_lojas():
             continue
         endereco = enderecos[i].strip() if i < len(enderecos) else ''
         telefone = telefones[i].strip() if i < len(telefones) else ''
+        pin = pins[i].strip() if i < len(pins) else ''
         lid = ids[i].strip() if i < len(ids) else ''
 
         if lid:
@@ -361,11 +383,13 @@ def salvar_lojas():
                 loja.nome = nome
                 loja.endereco = endereco or None
                 loja.telefone = telefone or None
+                loja.pin = pin or None
         else:
             db.session.add(Loja(
                 nome=nome,
                 endereco=endereco or None,
                 telefone=telefone or None,
+                pin=pin or None,
             ))
 
     db.session.commit()
@@ -375,7 +399,7 @@ def salvar_lojas():
 
 @rh_bp.route('/lojas/excluir/<int:id>', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def excluir_loja(id):
     loja = Loja.query.get_or_404(id)
     if loja.funcionarios:
@@ -395,8 +419,8 @@ def excluir_loja(id):
 @login_required
 @owner_required
 def folha():
-    mes = request.args.get('mes', type=int, default=datetime.now().month)
-    ano = request.args.get('ano', type=int, default=datetime.now().year)
+    mes = request.args.get('mes', type=int, default=agora().month)
+    ano = request.args.get('ano', type=int, default=agora().year)
 
     folhas = FolhaPagamento.query.filter_by(mes=mes, ano=ano).all()
     funcionarios_ativos = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
@@ -411,8 +435,8 @@ def folha():
 @login_required
 @owner_required
 def gerar_folha():
-    mes = int(request.form.get('mes', datetime.now().month))
-    ano = int(request.form.get('ano', datetime.now().year))
+    mes = int(request.form.get('mes', agora().month))
+    ano = int(request.form.get('ano', agora().year))
 
     existente = FolhaPagamento.query.filter_by(mes=mes, ano=ano).first()
     if existente:
@@ -458,7 +482,7 @@ def salvar_folha_item(folha_id):
 
 @rh_bp.route('/escala')
 @login_required
-@admin_required
+@rh_required
 def escala():
     modo = request.args.get('modo', 'tabela')
     lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
@@ -501,7 +525,7 @@ def escala():
 
 @rh_bp.route('/escala/<int:pos_id>/atribuir', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def atribuir_posicao(pos_id):
     pos = Posicao.query.get_or_404(pos_id)
     func_id = request.form.get('funcionario_id', '').strip()
@@ -523,7 +547,7 @@ def atribuir_posicao(pos_id):
 
 @rh_bp.route('/escala/posicao/nova', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def nova_posicao():
     loja_id = int(request.form.get('loja_id'))
     periodo = request.form.get('periodo', 'Manhã')
@@ -557,7 +581,7 @@ def nova_posicao():
 
 @rh_bp.route('/escala/posicao/<int:pos_id>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def excluir_posicao(pos_id):
     pos = Posicao.query.get_or_404(pos_id)
     db.session.delete(pos)
@@ -593,7 +617,7 @@ def excluir_folha_item(folha_id):
 
 @rh_bp.route('/folha/excluir-mes', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def excluir_folha_mes():
     mes = int(request.form.get('mes', 0))
     ano = int(request.form.get('ano', 0))
@@ -605,7 +629,7 @@ def excluir_folha_mes():
 
 @rh_bp.route('/atestado/novo', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def novo_atestado():
     func_id = request.form.get('funcionario_id', '').strip()
     data_str = request.form.get('data', '').strip()
@@ -645,7 +669,7 @@ def novo_atestado():
 
 @rh_bp.route('/atestado/<int:id>/arquivo')
 @login_required
-@admin_required
+@rh_required
 def ver_atestado(id):
     at = Atestado.query.get_or_404(id)
     if not at.arquivo:
@@ -660,7 +684,7 @@ def ver_atestado(id):
 
 @rh_bp.route('/atestado/<int:id>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def excluir_atestado(id):
     at = Atestado.query.get_or_404(id)
     db.session.delete(at)
@@ -671,7 +695,7 @@ def excluir_atestado(id):
 
 @rh_bp.route('/feedback/novo', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def novo_feedback_dashboard():
     func_id = request.form.get('funcionario_id', '').strip()
     texto = request.form.get('texto', '').strip()
@@ -697,7 +721,7 @@ def novo_feedback_dashboard():
 
 @rh_bp.route('/mapa')
 @login_required
-@admin_required
+@rh_required
 def mapa_index():
     loja = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).first()
     if loja:
@@ -708,7 +732,7 @@ def mapa_index():
 
 @rh_bp.route('/mapa/<int:loja_id>')
 @login_required
-@admin_required
+@rh_required
 def mapa(loja_id):
     loja = Loja.query.get_or_404(loja_id)
     lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
@@ -719,7 +743,7 @@ def mapa(loja_id):
 
 @rh_bp.route('/mapa/<int:loja_id>/planta', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def upload_planta(loja_id):
     loja = Loja.query.get_or_404(loja_id)
     arquivo = request.files.get('planta')
@@ -741,7 +765,7 @@ def upload_planta(loja_id):
 
 @rh_bp.route('/mapa/<int:loja_id>/planta/excluir', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def excluir_planta(loja_id):
     loja = Loja.query.get_or_404(loja_id)
     Posicao.query.filter(
@@ -768,7 +792,7 @@ def ver_planta(loja_id):
 
 @rh_bp.route('/mapa/api/slots/<int:loja_id>')
 @login_required
-@admin_required
+@rh_required
 def api_slots(loja_id):
     periodo = request.args.get('periodo', 'manha')
     slots = SlotMapa.query.filter_by(loja_id=loja_id).all()
@@ -794,7 +818,7 @@ def api_slots(loja_id):
 
 @rh_bp.route('/mapa/api/slot', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def api_criar_slot():
     data = request.get_json()
     slot = SlotMapa(
@@ -812,7 +836,7 @@ def api_criar_slot():
 
 @rh_bp.route('/mapa/api/slot/<int:slot_id>', methods=['DELETE'])
 @login_required
-@admin_required
+@rh_required
 def api_excluir_slot(slot_id):
     slot = SlotMapa.query.get_or_404(slot_id)
     Posicao.query.filter_by(loja_id=slot.loja_id, nome_posicao=slot.nome).delete()
@@ -823,7 +847,7 @@ def api_excluir_slot(slot_id):
 
 @rh_bp.route('/mapa/api/alocar', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def api_alocar():
     data = request.get_json()
     slot = SlotMapa.query.get_or_404(data['slot_id'])
@@ -851,10 +875,9 @@ def api_alocar():
 
 @rh_bp.route('/ferias')
 @login_required
-@admin_required
+@rh_required
 def ferias():
-    from datetime import date
-    hoje = date.today()
+    hoje = hoje_brt()
     mes = int(request.args.get('mes', hoje.month))
     ano = int(request.args.get('ano', hoje.year))
 
@@ -876,7 +899,7 @@ def ferias():
 
 @rh_bp.route('/ferias/nova', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def ferias_nova():
     func_id = int(request.form['funcionario_id'])
     data_inicio = datetime.strptime(request.form['data_inicio'], '%Y-%m-%d').date()
@@ -900,7 +923,7 @@ def ferias_nova():
 
 @rh_bp.route('/ferias/<int:id>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def ferias_excluir(id):
     f = Ferias.query.get_or_404(id)
     db.session.delete(f)
@@ -913,10 +936,9 @@ def ferias_excluir(id):
 
 @rh_bp.route('/ponto')
 @login_required
-@admin_required
+@rh_required
 def ponto():
-    from datetime import date
-    hoje = date.today()
+    hoje = hoje_brt()
     dia = request.args.get('dia', hoje.strftime('%Y-%m-%d'))
 
     try:
@@ -934,7 +956,7 @@ def ponto():
 
 @rh_bp.route('/ponto/registrar', methods=['POST'])
 @login_required
-@admin_required
+@rh_required
 def ponto_registrar():
     func_id = int(request.form['funcionario_id'])
     dia_str = request.form['dia']
@@ -978,16 +1000,15 @@ def ponto_registrar():
     reg.horas_extras = max(0, reg.horas_trabalhadas - 8)
 
     db.session.commit()
-    flash(f'Ponto registrado.', 'success')
+    flash('Ponto registrado.', 'success')
     return redirect(url_for('rh.ponto', dia=dia_str))
 
 
 @rh_bp.route('/ponto/resumo')
 @login_required
-@admin_required
+@rh_required
 def ponto_resumo():
-    from datetime import date
-    hoje = date.today()
+    hoje = hoje_brt()
     mes = int(request.args.get('mes', hoje.month))
     ano = int(request.args.get('ano', hoje.year))
 

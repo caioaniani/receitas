@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Pedido #{{ pedido.id }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-pencil-square"></i> Editar Pedido #{{ pedido.id }}</h1>
+    <a href="{{ url_for('pedidos.detalhe', id=pedido.id) }}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+</div>
+
+<div class="alert alert-warning small mb-3">
+    Status atual: <strong>{{ pedido.status }}</strong>. Edição disponível só em <em>pendente</em>/<em>confirmado</em>.
+    Loja (<strong>{{ pedido.loja.nome }}</strong>) e motorista não mudam aqui — cancele e recrie se precisar trocar de loja.
+    Os itens são <strong>substituídos por completo</strong> ao salvar.
+</div>
+
+<form method="POST" id="form-pedido">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <label class="form-label fw-semibold">Loja</label>
+            <input type="text" class="form-control form-control-sm" value="{{ pedido.loja.nome }}" readonly disabled>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">Data de Entrega</label>
+            <input type="date" name="data_entrega" class="form-control form-control-sm"
+                   value="{{ pedido.data_entrega.strftime('%Y-%m-%d') }}" min="{{ data_min }}" required>
+        </div>
+        <div class="col-md-5">
+            <label class="form-label fw-semibold">Observação</label>
+            <input type="text" name="observacao" class="form-control form-control-sm"
+                   value="{{ pedido.observacao or '' }}" placeholder="Opcional...">
+        </div>
+    </div>
+
+    <h6 class="fw-bold mb-2">Itens do Pedido</h6>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered bg-white" id="itens-table">
+            <thead class="thead-padaria">
+                <tr>
+                    <th>Produto</th>
+                    <th style="width:100px">Qtd</th>
+                    <th style="width:130px">Estado</th>
+                    <th>Obs</th>
+                    <th style="width:40px"></th>
+                </tr>
+            </thead>
+            <tbody id="itens-body">
+                {# Linha modelo escondida — só pro JS pegar o template do <select> de produtos #}
+                <tr class="item-row d-none" id="row-template">
+                    <td>
+                        <select name="item_id[]" class="form-select form-select-sm item-sel">
+                            <option value="">Selecione...</option>
+                            {% set ns = namespace(cat_atual=None) %}
+                            {% for r in receitas %}
+                                {% if r.categoria != ns.cat_atual %}
+                                    {% if ns.cat_atual is not none %}</optgroup>{% endif %}
+                                    <optgroup label="Paes &mdash; {{ r.categoria or 'Outros' }}">
+                                    {% set ns.cat_atual = r.categoria %}
+                                {% endif %}
+                                <option value="r_{{ r.id }}">{{ r.nome }}</option>
+                            {% endfor %}
+                            {% if ns.cat_atual is not none %}</optgroup>{% endif %}
+                            {% if produtos %}
+                            <optgroup label="Produtos">
+                                {% for p in produtos %}
+                                <option value="p_{{ p.id }}">{{ p.nome }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+                            {% if materias %}
+                            <optgroup label="Materias-primas">
+                                {% for mp in materias %}
+                                <option value="mp_{{ mp.id }}">{{ mp.nome }}{% if mp.unidade %} ({{ mp.unidade }}){% endif %}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+                        </select>
+                    </td>
+                    <td><input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1"></td>
+                    <td>
+                        <select name="item_estado[]" class="form-select form-select-sm">
+                            <option value="">Padrão</option>
+                            <option value="backup">Backup</option>
+                            <option value="assado">Assado</option>
+                        </select>
+                    </td>
+                    <td><input type="text" name="item_obs[]" class="form-control form-control-sm" placeholder=""></td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()"><i class="bi bi-x"></i></button>
+                    </td>
+                </tr>
+
+                {# Itens existentes do pedido #}
+                {% for it in pedido.itens %}
+                <tr class="item-row">
+                    <td>
+                        <select name="item_id[]" class="form-select form-select-sm item-sel" required>
+                            <option value="">Selecione...</option>
+                            {% set ns2 = namespace(cat_atual=None) %}
+                            {% for r in receitas %}
+                                {% if r.categoria != ns2.cat_atual %}
+                                    {% if ns2.cat_atual is not none %}</optgroup>{% endif %}
+                                    <optgroup label="Paes &mdash; {{ r.categoria or 'Outros' }}">
+                                    {% set ns2.cat_atual = r.categoria %}
+                                {% endif %}
+                                <option value="r_{{ r.id }}" {% if it.receita_id == r.id %}selected{% endif %}>{{ r.nome }}</option>
+                            {% endfor %}
+                            {% if ns2.cat_atual is not none %}</optgroup>{% endif %}
+                            {% if produtos %}
+                            <optgroup label="Produtos">
+                                {% for p in produtos %}
+                                <option value="p_{{ p.id }}" {% if it.produto_id == p.id %}selected{% endif %}>{{ p.nome }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+                            {% if materias %}
+                            <optgroup label="Materias-primas">
+                                {% for mp in materias %}
+                                <option value="mp_{{ mp.id }}" {% if it.materia_prima_id == mp.id %}selected{% endif %}>{{ mp.nome }}{% if mp.unidade %} ({{ mp.unidade }}){% endif %}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+                        </select>
+                    </td>
+                    <td><input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="{{ it.quantidade }}"></td>
+                    <td>
+                        <select name="item_estado[]" class="form-select form-select-sm">
+                            <option value="" {% if not it.estado %}selected{% endif %}>Padrão</option>
+                            <option value="backup" {% if it.estado == 'backup' %}selected{% endif %}>Backup</option>
+                            <option value="assado" {% if it.estado == 'assado' %}selected{% endif %}>Assado</option>
+                        </select>
+                    </td>
+                    <td><input type="text" name="item_obs[]" class="form-control form-control-sm" value="{{ it.observacao or '' }}" placeholder=""></td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()"><i class="bi bi-x"></i></button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-add-item">
+            <i class="bi bi-plus-lg"></i> Adicionar Item
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-check-lg"></i> Salvar alterações
+        </button>
+        <a href="{{ url_for('pedidos.detalhe', id=pedido.id) }}" class="btn btn-outline-secondary btn-sm">Cancelar</a>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var template = document.getElementById('row-template');
+    var itemOpts = template.querySelector('.item-sel').innerHTML;
+    var tbody = document.getElementById('itens-body');
+
+    document.getElementById('btn-add-item').addEventListener('click', function() {
+        var tr = document.createElement('tr');
+        tr.className = 'item-row';
+        tr.innerHTML =
+            '<td><select name="item_id[]" class="form-select form-select-sm item-sel" required>' + itemOpts + '</select></td>' +
+            '<td><input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1"></td>' +
+            '<td><select name="item_estado[]" class="form-select form-select-sm"><option value="">Padrão</option><option value="backup">Backup</option><option value="assado">Assado</option></select></td>' +
+            '<td><input type="text" name="item_obs[]" class="form-control form-control-sm" placeholder=""></td>' +
+            '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest(\'tr\').remove()"><i class="bi bi-x"></i></button></td>';
+        tbody.appendChild(tr);
+    });
+})();
+</script>
+{% endblock %}

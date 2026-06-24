@@ -11,7 +11,6 @@ import unicodedata
 from app.extensions import db
 from app.models import EstoqueProducao, MovEstoqueProducao, Produto, Receita
 
-
 # Abreviacoes comuns que aparecem em listas manuscritas — expandidas
 # antes do fuzzy match. Tudo minusculo, sem acento.
 EXPANSOES = {
@@ -87,21 +86,50 @@ def parsear_lista(texto):
 
 
 def _carregar_catalogo():
-    """Carrega todas receitas/produtos uma vez, com versao ascii pra match."""
+    """Carrega todas receitas/produtos + orfaos do estoque (EstoqueProducao
+    sem receita/produto vinculado) + apelidos globais confirmados
+    (LojaProdutoMap mapeado pra receita/produto). Apelidos sao globais —
+    o mesmo apelido vinculado em /pedidos/estoque-loja vale aqui."""
+    from app.models import LojaProdutoMap
     receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.query.all()]
     produtos = [(p.id, p.nome, _ascii(p.nome)) for p in Produto.query.all()]
-    return receitas, produtos
+    orfaos = [
+        (ep.id, ep.nome_pendente, _ascii(ep.nome_pendente))
+        for ep in EstoqueProducao.query.filter(
+            EstoqueProducao.nome_pendente.isnot(None),
+            EstoqueProducao.receita_id.is_(None),
+            EstoqueProducao.produto_id.is_(None),
+        ).all()
+        if ep.nome_pendente
+    ]
+    apelidos = []
+    for mp in LojaProdutoMap.query.filter(
+        LojaProdutoMap.confirmado_em.isnot(None),
+        LojaProdutoMap.ignorar.is_(False),
+    ).all():
+        # MP nao se aplica aqui (congelados so vincula receita/produto).
+        if mp.receita_id:
+            apelidos.append((mp.nome_digitado, _ascii(mp.nome_digitado),
+                              'receita', mp.receita_id,
+                              mp.receita.nome if mp.receita else mp.nome_digitado))
+        elif mp.produto_id:
+            apelidos.append((mp.nome_digitado, _ascii(mp.nome_digitado),
+                              'produto', mp.produto_id,
+                              mp.produto.nome if mp.produto else mp.nome_digitado))
+    return receitas, produtos, orfaos, apelidos
 
 
-def _matches_para(nome, receitas, produtos):
+def _matches_para(nome, receitas, produtos, orfaos=(), apelidos=()):
     """Resolve 1 nome contra o catalogo carregado.
 
     Estrategias em ordem:
-    1. Match exato (ascii)
+    0. Apelido global confirmado (LojaProdutoMap) — match exato ascii
+    1. Match exato no catalogo (ascii)
     2. Substring direta (ascii)
     3. Substring com abreviacoes expandidas (CRO -> croissant, TRD -> mini)
 
-    Retorna [{tipo, id, nome, match}] (max 10).
+    Em todas as fases, orfaos (EstoqueProducao pendentes) sao candidatos
+    junto com receitas e produtos. Retorna [{tipo, id, nome, match}] (max 10).
     """
     alvo = _ascii(nome)
     if not alvo:
@@ -115,7 +143,17 @@ def _matches_para(nome, receitas, produtos):
         seen.add(key)
         out.append({'tipo': tipo, 'id': _id, 'nome': nome_real, 'match': kind})
 
-    # 1. exato
+    # 0. apelido global confirmado — match exato ascii vira atalho direto
+    for ap_digitado, ap_asc, ap_tipo, ap_id, ap_nome in apelidos:
+        if ap_asc == alvo:
+            add(ap_tipo, ap_id, ap_nome, 'apelido')
+    if out:
+        return out
+
+    # 1. exato — orfaos primeiro pra colar nele se for reaplicar o balanco
+    for oid, onome, oasc in orfaos:
+        if oasc == alvo:
+            add('pendente', oid, onome, 'exato')
     for rid, rnome, rasc in receitas:
         if rasc == alvo:
             add('receita', rid, rnome, 'exato')
@@ -126,6 +164,9 @@ def _matches_para(nome, receitas, produtos):
         return out
 
     # 2. substring direta — ambos os sentidos (alvo dentro do catalogo OU vice-versa)
+    for oid, onome, oasc in orfaos:
+        if alvo in oasc or oasc in alvo:
+            add('pendente', oid, onome, 'fuzzy')
     for rid, rnome, rasc in receitas:
         if alvo in rasc or rasc in alvo:
             add('receita', rid, rnome, 'fuzzy')
@@ -138,6 +179,9 @@ def _matches_para(nome, receitas, produtos):
     # 3. com abreviacoes expandidas
     expandido = _expandir_abreviacoes(alvo)
     if expandido != alvo:
+        for oid, onome, oasc in orfaos:
+            if expandido in oasc or oasc in expandido:
+                add('pendente', oid, onome, 'fuzzy')
         for rid, rnome, rasc in receitas:
             if expandido in rasc or rasc in expandido:
                 add('receita', rid, rnome, 'fuzzy')
@@ -148,25 +192,54 @@ def _matches_para(nome, receitas, produtos):
     return out[:10]
 
 
+def sugerir_para_pendentes(estoques_pendentes):
+    """Pra cada EstoqueProducao pendente, retorna {ep_id: melhor_match}.
+
+    Usado em /pedidos/congelados pra pre-selecionar o dropdown do
+    vincular. Match pode ser receita ou produto — MP nao se aplica aqui.
+    """
+    if not estoques_pendentes:
+        return {}
+    receitas, produtos, _, apelidos = _carregar_catalogo()
+    # Filtra apelidos que apontam pra MP (nao aplicavel em congelados).
+    apelidos = [a for a in apelidos if a[2] in ('receita', 'produto')]
+    out = {}
+    for ep in estoques_pendentes:
+        nome = ep.nome_pendente if hasattr(ep, 'nome_pendente') else None
+        if not nome:
+            continue
+        # Nao passa orfaos pra nao sugerir o proprio pendente.
+        matches = _matches_para(nome, receitas, produtos, (), apelidos)
+        if matches:
+            out[ep.id] = matches[0]
+    return out
+
+
 def resolver_lista(linhas_parseadas):
     """Enriquece cada item com matches, resolvido (primeiro match),
-    estoque_atual e delta. Itens com 'erro' passam intactos."""
-    receitas, produtos = _carregar_catalogo()
+    estoque_atual e delta. Itens com 'erro' passam intactos.
+
+    Itens sem match nao sao mais 'erro' — entram no balanco como pendentes
+    e ganham linha em EstoqueProducao com nome_pendente preenchido."""
+    receitas, produtos, orfaos, apelidos = _carregar_catalogo()
     enriq = []
     for item in linhas_parseadas:
         if item.get('erro'):
             enriq.append(item)
             continue
-        matches = _matches_para(item['nome'], receitas, produtos)
+        matches = _matches_para(item['nome'], receitas, produtos, orfaos, apelidos)
         resolvido = matches[0] if matches else None
         atual = 0
         if resolvido:
-            ep = EstoqueProducao.query.filter_by(
-                receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
-                produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
-            ).first()
+            if resolvido['tipo'] == 'pendente':
+                ep = EstoqueProducao.query.get(resolvido['id'])
+            else:
+                ep = EstoqueProducao.query.filter_by(
+                    receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
+                    produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
+                ).first()
             atual = ep.quantidade if ep else 0
-        delta = (item['quantidade'] - atual) if resolvido else None
+        delta = item['quantidade'] - atual
         enriq.append({
             **item,
             'matches': matches,
@@ -182,7 +255,10 @@ def aplicar_balanco(itens_resolvidos, user, referencia=None):
 
     - tipo='balanco_entrada' se nova > anterior, 'balanco_saida' se menor.
     - quantidade da mov = |delta|; nao registra movimento se delta == 0.
-    - Pula itens sem resolvido ou com erro de parse (entram em 'ignorados').
+    - Itens sem match no catalogo (receita/produto/orfao existente) sao
+      gravados como EstoqueProducao pendente — guardam a contagem fisica e
+      ficam disponiveis pra serem vinculados a uma receita/produto depois.
+    - So entram em 'ignorados' linhas com erro de parse.
 
     Retorna {aplicados:[{nome,tipo,anterior,novo,delta}], ignorados:[{linha,motivo}]}.
     """
@@ -194,29 +270,56 @@ def aplicar_balanco(itens_resolvidos, user, referencia=None):
         if item.get('erro'):
             ignorados.append({'linha': item.get('linha', '?'), 'motivo': item['erro']})
             continue
-        resolvido = item.get('resolvido')
-        if not resolvido or not resolvido.get('id'):
-            ignorados.append({'linha': item.get('linha') or item.get('nome', '?'),
-                              'motivo': 'nao_encontrado'})
-            continue
         try:
             nova_qtd = int(item['quantidade'])
         except (KeyError, TypeError, ValueError):
             ignorados.append({'linha': item.get('linha', '?'), 'motivo': 'quantidade_invalida'})
             continue
 
-        ep = EstoqueProducao.query.filter_by(
-            receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
-            produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
-        ).first()
-        if not ep:
-            ep = EstoqueProducao(
-                receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
-                produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
-                quantidade=0,
-            )
-            db.session.add(ep)
-            db.session.flush()
+        resolvido = item.get('resolvido')
+        ep = None
+
+        if resolvido and resolvido.get('id'):
+            if resolvido['tipo'] == 'pendente':
+                ep = EstoqueProducao.query.get(resolvido['id'])
+            else:
+                ep = EstoqueProducao.query.filter_by(
+                    receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
+                    produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
+                ).first()
+                if not ep:
+                    ep = EstoqueProducao(
+                        receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
+                        produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
+                        quantidade=0,
+                    )
+                    db.session.add(ep)
+                    db.session.flush()
+            tipo_resultado = resolvido['tipo']
+            nome_resultado = resolvido['nome']
+        else:
+            # Sem match — cria orfao guardando o nome digitado.
+            nome_digitado = (item.get('nome') or '').strip()
+            if not nome_digitado:
+                ignorados.append({'linha': item.get('linha', '?'), 'motivo': 'sem_nome'})
+                continue
+            # Reusa linha pendente existente com mesmo nome — evita
+            # fragmentar em multiplas linhas no balanco repetido. Consistente
+            # com o tratamento de itens resolvidos (sobrescreve quantidade).
+            # EstoqueProducao so tem receita_id e produto_id (sem MP).
+            ep = EstoqueProducao.query.filter_by(
+                nome_pendente=nome_digitado,
+                receita_id=None, produto_id=None,
+            ).first()
+            if not ep:
+                ep = EstoqueProducao(
+                    nome_pendente=nome_digitado,
+                    quantidade=0,
+                )
+                db.session.add(ep)
+                db.session.flush()
+            tipo_resultado = 'pendente'
+            nome_resultado = nome_digitado
 
         anterior = ep.quantidade or 0
         delta = nova_qtd - anterior
@@ -232,8 +335,8 @@ def aplicar_balanco(itens_resolvidos, user, referencia=None):
             ))
 
         aplicados.append({
-            'nome': resolvido['nome'],
-            'tipo': resolvido['tipo'],
+            'nome': nome_resultado,
+            'tipo': tipo_resultado,
             'anterior': anterior,
             'novo': nova_qtd,
             'delta': delta,
@@ -243,3 +346,71 @@ def aplicar_balanco(itens_resolvidos, user, referencia=None):
         db.session.commit()
 
     return {'aplicados': aplicados, 'ignorados': ignorados}
+
+
+def obter_linha_producao(*, receita_id=None, produto_id=None, usuario_id=None):
+    """Retorna a UNICA linha de EstoqueProducao do produto (estado ignorado).
+
+    A industria so mantem congelado padrao — backup/assado sao preparados sob
+    demanda, nunca estocados. Consolida linhas legadas duplicadas (qualquer
+    estado) na canonica (menor id), somando quantidade, reatribuindo o historico
+    de movimentos e removendo as sobras. Idempotente. NAO commita.
+    """
+    if (receita_id is None) == (produto_id is None):
+        raise ValueError('Informe exatamente um de receita_id/produto_id.')
+    filtro = {'receita_id': receita_id, 'produto_id': produto_id}
+    linhas = EstoqueProducao.query.filter_by(**filtro).order_by(EstoqueProducao.id).all()
+    if not linhas:
+        nova = EstoqueProducao(**filtro, estado=None, quantidade=0)
+        db.session.add(nova)
+        db.session.flush()
+        return nova
+
+    canonica = linhas[0]
+    for extra in linhas[1:]:
+        qtd = extra.quantidade or 0
+        if qtd:
+            canonica.quantidade = (canonica.quantidade or 0) + qtd
+            tag = f' [{extra.estado}]' if extra.estado else ''
+            db.session.add(MovEstoqueProducao(
+                estoque_producao_id=canonica.id, tipo='consolidacao_estado',
+                quantidade=qtd,
+                referencia=f'Consolidacao da linha #{extra.id}{tag} (+{qtd})',
+                usuario_id=usuario_id))
+        for mov in list(extra.movimentacoes):
+            mov.estoque = canonica
+        db.session.delete(extra)
+
+    if canonica.estado is not None:
+        canonica.estado = None
+    db.session.flush()
+    return canonica
+
+
+def entrada_producao(*, receita_id=None, produto_id=None, estado=None,
+                     quantidade, usuario_id, referencia='Entrada de produção'):
+    """Soma `quantidade` ao congelado da industria (EstoqueProducao) e registra
+    um MovEstoqueProducao(tipo='producao'). Caminho canonico de ENTRADA — usado
+    pela rota /congelados/entrada e pelo painel Produzir da TV do padeiro.
+
+    O estoque da industria eh por PRODUTO (sem estado): o param `estado` eh
+    aceito por compat com chamadores antigos, mas ignorado — a soma vai sempre
+    pra linha unica do produto (via `obter_linha_producao`). Entrada pura — NAO
+    baixa materia-prima (intencional). Nao commita: quem chama controla a transacao.
+    """
+    if (receita_id is None) == (produto_id is None):
+        raise ValueError('Informe exatamente um de receita_id/produto_id.')
+    try:
+        quantidade = int(quantidade)
+    except (TypeError, ValueError):
+        raise ValueError('quantidade invalida.') from None
+    if quantidade <= 0:
+        raise ValueError('quantidade deve ser positiva.')
+
+    ep = obter_linha_producao(receita_id=receita_id, produto_id=produto_id,
+                              usuario_id=usuario_id)
+    ep.quantidade = (ep.quantidade or 0) + quantidade
+    db.session.add(MovEstoqueProducao(
+        estoque_producao_id=ep.id, tipo='producao', quantidade=quantidade,
+        referencia=referencia, usuario_id=usuario_id))
+    return ep

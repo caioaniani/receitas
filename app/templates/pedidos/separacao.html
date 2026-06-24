@@ -41,6 +41,9 @@
         </div>
     </div>
     <div class="card-body p-0">
+        <div class="px-3 pt-2 pb-1" style="background:#f8f9fa; font-size:12px; color:#666; text-transform:uppercase; letter-spacing:0.04em;">
+            visão geral (total a separar)
+        </div>
         <table class="table-dense">
             <thead>
                 <tr>
@@ -73,6 +76,33 @@
                 {% endfor %}
             </tbody>
         </table>
+
+        <div class="px-3 pt-3 pb-1 mt-2" style="background:#f8f9fa; font-size:12px; color:#666; text-transform:uppercase; letter-spacing:0.04em; border-top:1px solid #eee;">
+            separar por loja
+        </div>
+        <div class="row g-3 p-3 m-0">
+            {% set lojas_data = por_data_loja.get(data, {}) %}
+            {% for loja_nome, itens_loja in lojas_data|dictsort %}
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border" style="border-color:#dee2e6 !important;">
+                    <div class="card-header py-2 d-flex justify-content-between align-items-center bg-light">
+                        <strong style="font-size:13px;">
+                            <i class="bi bi-shop"></i> {{ loja_nome }}
+                        </strong>
+                        <span class="badge bg-secondary">{{ itens_loja|length }} item{{ '' if itens_loja|length == 1 else 'ns' }}</span>
+                    </div>
+                    <ul class="list-group list-group-flush" style="font-size:13px;">
+                        {% for it in itens_loja %}
+                        <li class="list-group-item py-2 d-flex justify-content-between">
+                            <span>{{ it.item }}</span>
+                            <strong>{{ it.qtd }}</strong>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
     </div>
 </div>
 {% endfor %}

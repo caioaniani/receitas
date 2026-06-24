@@ -15,8 +15,8 @@
     <strong>Como funciona:</strong> cole a contagem física e o sistema vai
     <strong>sobrescrever</strong> o estoque pra bater com o que você contou.
     Cada diferença gera um registro de auditoria (entrada ou saída).
-    Use isso pra inventário — pra registrar produção do dia use
-    <a href="{{ url_for('pedidos.congelados') }}">Entrada de Produção</a>.
+    Itens sem cadastro entram como <strong>pendentes</strong> — depois vincule
+    a uma receita/produto em <a href="{{ url_for('pedidos.congelados') }}">Estoque</a>.
 </div>
 
 <form method="POST" action="{{ url_for('pedidos.congelados_balanco') }}">
@@ -64,8 +64,8 @@
     <div class="card-header bg-white d-flex justify-content-between align-items-center">
         <span class="fw-bold"><i class="bi bi-list-check"></i> Pré-visualização</span>
         <span>
-            <span class="badge bg-success">{{ n_ok }} pronto(s)</span>
-            {% if n_naoresolvido %}<span class="badge bg-warning text-dark">{{ n_naoresolvido }} sem match</span>{% endif %}
+            <span class="badge bg-success">{{ n_ok }} com match</span>
+            {% if n_naoresolvido %}<span class="badge bg-warning text-dark">{{ n_naoresolvido }} pendente(s)</span>{% endif %}
             {% if n_erro %}<span class="badge bg-danger">{{ n_erro }} com erro</span>{% endif %}
         </span>
     </div>
@@ -114,7 +114,9 @@
                                     </details>
                                 {% endif %}
                             {% else %}
-                                <span class="text-warning">⚠ não encontrado</span>
+                                <span class="text-warning">
+                                    <i class="bi bi-link-45deg"></i> sem match — vai entrar como <strong>pendente</strong>
+                                </span>
                             {% endif %}
                         </td>
                         <td class="text-center">
@@ -151,20 +153,25 @@
     </div>
     <div class="card-footer bg-white d-flex justify-content-between align-items-center">
         <small class="text-muted">
-            {% if n_naoresolvido or n_erro %}
-                Itens sem match ou com erro serão <strong>ignorados</strong>.
-                Edite o nome no textarea e pré-visualize de novo se quiser corrigir.
-            {% else %}
-                Tudo certo. Pode aplicar.
+            {% if n_erro %}
+                Linhas com <strong>erro</strong> serão ignoradas. Corrija o texto e pré-visualize.
+            {% endif %}
+            {% if n_naoresolvido %}
+                Itens sem match entram como <strong>pendentes</strong> — depois você
+                vincula a uma receita/produto na tela de estoque.
+            {% endif %}
+            {% if not n_erro and not n_naoresolvido %}
+                Tudo com match. Pode aplicar.
             {% endif %}
         </small>
+        {% set n_aplicaveis = n_ok + n_naoresolvido %}
         <form method="POST" action="{{ url_for('pedidos.congelados_balanco_aplicar') }}"
               onsubmit="return confirm('Aplicar o balanço? Os valores atuais serão sobrescritos.');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="texto" value="{{ texto|e }}">
             <input type="hidden" name="referencia" value="{{ referencia|e }}">
-            <button type="submit" class="btn btn-success" {% if not n_ok %}disabled{% endif %}>
-                <i class="bi bi-check-circle"></i> Aplicar Balanço ({{ n_ok }} item(ns))
+            <button type="submit" class="btn btn-success" {% if not n_aplicaveis %}disabled{% endif %}>
+                <i class="bi bi-check-circle"></i> Aplicar Balanço ({{ n_aplicaveis }} item(ns))
             </button>
         </form>
     </div>

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Previsão de demanda{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0">
+        <i class="bi bi-graph-up-arrow"></i> Previsão de demanda
+    </h1>
+    <small class="text-muted">média móvel das últimas 8 semanas, por dia da semana · só vendas PDV/Seru</small>
+</div>
+
+<form method="GET" class="row g-2 mb-3">
+    <div class="col-sm-4">
+        <label class="form-label small mb-0">Loja</label>
+        <select name="loja" class="form-select form-select-sm" onchange="this.form.submit()">
+            {% for l in lojas %}
+            <option value="{{ l.id }}" {% if l.id == loja_id %}selected{% endif %}>{{ l.nome }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-sm-4">
+        <label class="form-label small mb-0">A partir de</label>
+        <input type="date" name="data" class="form-control form-control-sm"
+               value="{{ data_inicio.isoformat() }}" onchange="this.form.submit()">
+    </div>
+</form>
+
+{% if not semana %}
+<div class="alert alert-warning">
+    Sem histórico de vendas Seru pra essa loja nas últimas 8 semanas.
+    Aguarde o sync ou confirme se a loja tem PDV ativo.
+</div>
+{% else %}
+{% for data_iso, itens in semana.items() %}
+{% set dt = data_iso %}
+<div class="card mb-2">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <strong>{{ data_iso }}</strong>
+        <small class="text-muted">{{ itens|length }} item(ns) com histórico</small>
+    </div>
+    {% if itens %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Item</th>
+                    <th class="text-end" style="width:90px;">Previsão</th>
+                    <th class="text-end" style="width:90px;">Estoque atual</th>
+                    <th class="text-center" style="width:110px;">Falta</th>
+                    <th class="text-end small text-muted" style="width:120px;">Histórico (qtd)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for it in itens %}
+                {% set falta = it.previsao - it.estoque_atual %}
+                <tr>
+                    <td>
+                        {{ it.nome }}
+                        <small class="text-muted">· n={{ it.observacoes_n }}</small>
+                    </td>
+                    <td class="text-end fw-bold">{{ '%.1f'|format(it.previsao) }}</td>
+                    <td class="text-end">{{ it.estoque_atual }}</td>
+                    <td class="text-center">
+                        {% if falta > 0 %}
+                            <span class="badge bg-danger">-{{ '%.0f'|format(falta) }}</span>
+                        {% elif it.estoque_atual > it.previsao * 2 %}
+                            <span class="badge bg-warning text-dark">excesso</span>
+                        {% else %}
+                            <span class="badge bg-success">ok</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end small text-muted">
+                        {% for d, q in it.historico[:5] %}{{ q }}{% if not loop.last %}, {% endif %}{% endfor %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body small text-muted">Sem itens com histórico nesse dia da semana.</div>
+    {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

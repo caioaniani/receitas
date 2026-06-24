@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Historico de Sync Seru{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-clock-history"></i> Historico de Sync Seru</h1>
+    <div class="d-flex gap-2 flex-wrap">
+        <button type="button" id="btn-reprocessar" class="btn btn-sm btn-warning" title="Apaga registros de hoje que processaram sem baixa e re-roda com mapeamentos atuais. Yesterday e anteriores nao sao tocados. Pedidos ja-baixados nao sao apagados (zero risco de duplo desconto).">
+            <i class="bi bi-arrow-counterclockwise"></i> Reprocessar (so hoje)
+        </button>
+        <a href="{{ url_for('pdv.itens_vendidos') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-bag-check"></i> Itens Vendidos
+        </a>
+        <a href="{{ url_for('pdv.mapeamentos') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-link-45deg"></i> Mapeamentos
+        </a>
+    </div>
+</div>
+<div id="rep-status"></div>
+
+<div class="alert alert-info py-2 small">
+    <i class="bi bi-info-circle"></i>
+    Cada linha = 1 pedido Seru processado pelo cron ou pela sincronizacao manual.
+    Mostra ate 200 mais recentes. Pedidos ja processados nunca reprocessam (idempotencia).
+</div>
+
+<form method="GET" class="row g-2 mb-3 align-items-end">
+    <div class="col-auto">
+        <label class="form-label small text-muted">Loja</label>
+        <select name="loja" class="form-select form-select-sm input-blue" onchange="this.form.submit()">
+            <option value="">Todas</option>
+            {% for l in lojas %}
+            <option value="{{ l.id }}" {% if sel_loja == l.id %}selected{% endif %}>{{ l.nome }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label small text-muted">Status</label>
+        <select name="status" class="form-select form-select-sm input-blue" onchange="this.form.submit()">
+            <option value="" {% if not sel_status %}selected{% endif %}>Todos</option>
+            <option value="baixados" {% if sel_status == 'baixados' %}selected{% endif %}>Com baixa</option>
+            <option value="estornados" {% if sel_status == 'estornados' %}selected{% endif %}>Estornados</option>
+            <option value="cancelados" {% if sel_status == 'cancelados' %}selected{% endif %}>Cancelados</option>
+            <option value="sem_loja" {% if sel_status == 'sem_loja' %}selected{% endif %}>Sem loja mapeada</option>
+        </select>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('pdv.historico_sync') }}" class="btn btn-sm btn-outline-secondary">Limpar filtros</a>
+    </div>
+</form>
+
+<div class="card">
+    <div class="card-header bg-white">
+        <strong>{{ pedidos|length }} pedido(s) processado(s)</strong>
+        {% if pedidos|length >= 200 %}<small class="text-muted">(limitado a 200 mais recentes)</small>{% endif %}
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead class="thead-padaria" style="position:sticky;top:0;">
+                <tr>
+                    <th style="width:150px;">Processado em</th>
+                    <th>Pedido Seru</th>
+                    <th>Loja</th>
+                    <th class="text-end" style="width:80px;">Itens</th>
+                    <th class="text-end" style="width:90px;">Baixados</th>
+                    <th>Status</th>
+                    <th>Movimentacoes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in pedidos %}
+                <tr class="{% if p.estornado_em %}table-warning{% elif p.cancelado_em %}text-muted{% elif not p.loja_id %}table-light{% endif %}">
+                    <td>
+                        <small>{{ p.processado_em | brt }}</small>
+                        <small class="text-muted d-block" style="font-size:10px;">horario Brasilia</small>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('pdv.venda_seru_detalhe', pedido_id=p.seru_pedido_id) }}"
+                           title="Ver detalhe do pedido com mapeamentos">
+                            <code style="font-size:11px;">#{{ p.seru_pedido_id }}</code>
+                        </a>
+                    </td>
+                    <td>
+                        {% if p.loja_id %}
+                            {% for l in lojas %}{% if l.id == p.loja_id %}{{ l.nome }}{% endif %}{% endfor %}
+                        {% else %}
+                            <span class="badge bg-warning text-dark" style="font-size:9px;">sem loja</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">{{ p.n_itens_total or 0 }}</td>
+                    <td class="text-end {% if p.n_itens_baixados %}fw-bold text-success{% else %}text-muted{% endif %}">
+                        {{ p.n_itens_baixados or 0 }}
+                    </td>
+                    <td>
+                        {% if p.estornado_em %}
+                            <span class="badge bg-warning text-dark" style="font-size:9px;">
+                                ↩ ESTORNADO {{ p.estornado_em | brt('%d/%m') }}
+                            </span>
+                        {% elif p.cancelado_em %}
+                            <span class="badge bg-secondary" style="font-size:9px;">CANCELADO</span>
+                        {% elif p.n_itens_baixados %}
+                            <span class="badge bg-success" style="font-size:9px;">PROCESSADO</span>
+                        {% elif not p.loja_id %}
+                            <span class="badge bg-warning text-dark" style="font-size:9px;">sem loja</span>
+                        {% else %}
+                            <span class="badge bg-secondary" style="font-size:9px;">SEM BAIXA</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size:11px;">
+                        {% set movs = movs_por_pedido.get(p.seru_pedido_id, []) %}
+                        {% if movs %}
+                            <details>
+                                <summary class="text-primary" style="cursor:pointer;">{{ movs|length }} mov(s)</summary>
+                                <ul class="mb-0 mt-1" style="padding-left:18px;">
+                                {% for m in movs %}
+                                    <li>
+                                        <span class="badge" style="font-size:9px; background:
+                                            {%- if m.tipo == 'venda_seru' %}#198754
+                                            {%- elif m.tipo == 'venda_seru_estorno' %}#fd7e14
+                                            {%- elif m.tipo == 'venda_seru_sem_estoque' %}#dc3545
+                                            {%- else %}#6c757d{% endif -%};color:#fff;">{{ historico_humano.mov_loja_label(m.tipo) }}</span>
+                                        <strong>{{ m.quantidade }}</strong>
+                                        un de {{ m.estoque.nome_item if m.estoque else '?' }}
+                                    </li>
+                                {% endfor %}
+                                </ul>
+                            </details>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="text-center text-muted py-3">
+                    Nenhum pedido processado ainda. Aguarde o cron rodar (15min) ou clique
+                    <a href="{{ url_for('pdv.itens_vendidos') }}">Sincronizar agora</a>.
+                </td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var btn = document.getElementById('btn-reprocessar');
+    var status = document.getElementById('rep-status');
+    if (!btn) return;
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+        });
+    }
+    btn.addEventListener('click', function() {
+        if (!confirm('Reprocessar pedidos de HOJE?\n\n' +
+                     'Apaga registros de hoje que processaram sem baixa ' +
+                     'e re-roda a sincronizacao com os mapeamentos atuais.\n\n' +
+                     'Yesterday e anteriores nao sao tocados. ' +
+                     'Pedidos que ja baixaram tambem nao sao afetados.')) return;
+        btn.disabled = true;
+        status.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-hourglass-split"></i> reprocessando, pode levar 30s...</div>';
+        var fd = new FormData();
+        fd.append('csrf_token', CSRF_TOKEN);
+        fetch('/pdv/reprocessar', {method:'POST', body:fd, credentials:'same-origin'})
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                btn.disabled = false;
+                if (!d.ok) {
+                    status.innerHTML = '<div class="alert alert-danger py-2 small"><i class="bi bi-exclamation-triangle"></i> ' + esc(d.erro) + '</div>';
+                    return;
+                }
+                var html = '<div class="alert alert-success py-2 small">' +
+                    '<strong>Reprocessado:</strong> ' +
+                    d.n_apagados + ' pedido(s) liberado(s) · ' +
+                    d.pedidos_novos + ' agora processado(s) · ' +
+                    '<strong>' + d.itens_baixados + ' itens baixados</strong>';
+                if (d.itens_pendentes_novos) html += ' · ' + d.itens_pendentes_novos + ' produtos ainda pendentes';
+                if (d.pedidos_aguardando_loja) html += ' · ' + d.pedidos_aguardando_loja + ' aguardando confirmacao de loja';
+                if (d.pedidos_sem_loja_mapeada) html += ' · ' + d.pedidos_sem_loja_mapeada + ' sem loja';
+                html += '. Recarregando lista...</div>';
+                status.innerHTML = html;
+                setTimeout(function() { window.location.reload(); }, 2000);
+            })
+            .catch(function(e) {
+                btn.disabled = false;
+                status.innerHTML = '<div class="alert alert-danger py-2 small"><i class="bi bi-exclamation-triangle"></i> erro: ' + esc(e.message) + '</div>';
+            });
+    });
+})();
+</script>
+{% endblock %}

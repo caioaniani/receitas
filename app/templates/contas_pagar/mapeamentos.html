@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+
+{% block title %}Itens NF → Matéria-prima{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h1 class="page-title mb-0"><i class="bi bi-link-45deg"></i> Itens de NF → Matéria-prima</h1>
+  <div class="d-flex gap-2 flex-wrap">
+    <form method="POST" action="{{ url_for('contas_pagar.reprocessar') }}" class="mb-0"
+          onsubmit="return confirm('Dar entrada de estoque/preço nas NFs dos últimos 2 dias com os vínculos atuais? Item já processado não duplica. NFs mais antigas ficam de fora de propósito: o estoque delas já foi acertado por balanço.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="dias" value="2">
+      <button class="btn btn-sm btn-success"><i class="bi bi-arrow-repeat"></i>
+        Dar entrada nas NFs recentes</button>
+    </form>
+    {% if current_user.is_owner %}
+    <form method="POST" action="{{ url_for('contas_pagar.mapeamentos_limpar_nomes') }}" class="mb-0"
+          onsubmit="return confirm('Juntar itens duplicados (mesmo produto com lote/validade diferentes), limpar os nomes e remover pendentes órfãos (item que não existe em nenhuma NF)? Os vínculos já confirmados são preservados.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-sm btn-outline-dark"><i class="bi bi-stars"></i> Limpar e juntar duplicados</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="alert alert-light border small py-2">
+  <i class="bi bi-info-circle"></i>
+  Vincule o item da NF a uma matéria-prima e complete a frase
+  <b>“1 unidade de compra = X na unidade da matéria-prima”</b>. Exemplos reais:
+  <ul class="mb-1 mt-1">
+    <li><b>Açaí Natural 10L</b> (vem em caixa, MP em ml): 1 <b>cx</b> = <b>10000</b> ml</li>
+    <li><b>Abacaxi</b> (vem por unidade, MP em g): 1 <b>un</b> = <b>1400</b> g (peso médio de 1 abacaxi)</li>
+    <li><b>Toddy CX 1,8KG</b> (MP em g): 1 <b>cx</b> = <b>1800</b> g</li>
+  </ul>
+  O rendimento (quanto suco sai do abacaxi) <b>não</b> entra aqui — aqui é o peso/volume
+  <b>bruto</b> que entra no estoque; rendimento é assunto da ficha da receita.
+  O fator é <b>sempre na unidade da matéria-prima</b>: caixa de 1,8 <b>kg</b> com MP em
+  gramas = fator <b>1800</b> (o sistema já sugere convertido e bloqueia confirmação impossível).
+  Confira o <b>custo por unidade</b> que aparece embaixo: se ficar absurdo, o fator está errado.
+</div>
+
+<ul class="nav nav-tabs mb-3">
+  {% for slug, label in [('pendente','Pendentes'),('mapeado','Vinculados'),('ignorado','Ignorados')] %}
+  <li class="nav-item">
+    <a class="nav-link {% if estado == slug %}active{% endif %}"
+       href="{{ url_for('contas_pagar.mapeamentos', estado=slug) }}">
+      {{ label }}
+      {% if contagens.get(slug) %}
+      <span class="badge rounded-pill {% if estado == slug %}bg-primary{% else %}bg-secondary{% endif %}">{{ contagens[slug] }}</span>
+      {% endif %}
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+
+{% if maps %}
+<div class="d-flex align-items-center gap-2 mb-2 p-2 border rounded bg-light sticky-top"
+     id="lote-bar" style="top:0; z-index:5;">
+  <input type="checkbox" id="lote-todos" class="form-check-input mt-0" title="selecionar todos">
+  <label for="lote-todos" class="small mb-0 text-muted">todos</label>
+  <span class="small fw-bold" id="lote-contagem"></span>
+  <button type="button" class="btn btn-sm btn-primary" id="btn-lote-confirmar"
+          data-url="{{ url_for('contas_pagar.mapeamentos_lote') }}" disabled>
+    Confirmar selecionados
+  </button>
+  <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-lote-ignorar" disabled>
+    Ignorar selecionados
+  </button>
+  <span class="small text-muted">— confirma só linha com alvo (MP ou produto) e fator preenchidos</span>
+</div>
+{% endif %}
+
+{% for m in maps %}
+{% set sug = sugestoes.get(m.id) %}
+<form method="POST" action="{{ url_for('contas_pagar.mapeamento_vincular', id=m.id) }}"
+      class="card mb-2 mapa-form" data-mapa-id="{{ m.id }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="estado" value="{{ estado }}">
+  <div class="card-body py-2">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <input type="checkbox" class="form-check-input mt-0 lote-sel" title="selecionar pra ação em lote">
+      <div class="flex-grow-1" style="min-width:180px">
+        <b>{{ m.item_nome_exemplo }}</b>
+        {% if m.estado == 'mapeado' %}
+          <span class="badge bg-success">{{ m.alvo_nome }}</span>
+        {% elif m.estado == 'ignorado' %}
+          <span class="badge bg-secondary">ignorado</span>
+        {% endif %}
+        {% set ex = exemplos.get(m.item_nome_norm) %}
+        {% if ex %}
+        <div class="small text-muted">
+          NF: qtd <b>{{ ex.quantidade if ex.quantidade is not none else '—' }}</b>{% if ex.unidade %} {{ ex.unidade }}{% endif %}
+          · unit R$ {{ ex.valor_unitario if ex.valor_unitario is not none else '—' }}
+          · total R$ {{ ex.valor_total if ex.valor_total is not none else '—' }}
+          {% if ex.n_notas and ex.n_notas > 1 %}· em {{ ex.n_notas }} notas{% endif %}
+          {% if ex.conta_id %}
+          · <a href="{{ url_for('contas_pagar.detalhe', id=ex.conta_id) }}"
+               target="_blank" rel="noopener">ver NF <i class="bi bi-box-arrow-up-right"></i></a>
+          {% endif %}
+        </div>
+        {% elif m.estado == 'pendente' %}
+        <div class="small text-muted fst-italic">
+          nenhuma NF atual tem esse item — sobrou de uma leitura antiga da IA
+          que já foi corrigida; pode Ignorar (ou use "Limpar e juntar
+          duplicados", que remove esses órfãos)
+        </div>
+        {% endif %}
+      </div>
+      <select name="alvo" class="form-select form-select-sm mapa-mp" style="max-width:240px">
+        <option value="" data-unid="?">— vincular a —</option>
+        <optgroup label="Matérias-primas (ingrediente)">
+          {% for mp in mps %}
+          <option value="mp-{{ mp.id }}" data-unid="{{ mp.unidade }}"
+            {% if m.materia_prima_id == mp.id or (not m.materia_prima_id and not m.produto_id and sug and sug[0].id == mp.id) %}selected{% endif %}>
+            {{ mp.nome }} ({{ mp.unidade }})
+          </option>
+          {% endfor %}
+        </optgroup>
+        <optgroup label="Produtos (revenda — água, chiclete...)">
+          {% for pr in produtos %}
+          <option value="prod-{{ pr.id }}" data-unid="un"
+            {% if m.produto_id == pr.id %}selected{% endif %}>
+            {{ pr.nome }} (produto)
+          </option>
+          {% endfor %}
+        </optgroup>
+      </select>
+      {# Frase-viva: "1 [cx] = [10000] [ml]" — traduz o fator pra linguagem
+         humana, com a unidade da MP acompanhando o dropdown em tempo real. #}
+      <div class="d-flex align-items-center gap-1 flex-nowrap">
+        <span class="small text-muted">1</span>
+        <input type="text" name="unidade_compra" class="form-control form-control-sm mapa-uncompra"
+               style="max-width:90px" placeholder="cx / un / fardo"
+               value="{{ m.unidade_compra or prefill.get(m.id, {}).get('unidade') or '' }}"
+               title="unidade de compra como vem na NF (cx, un, fardo, kg...)">
+        <span class="small text-muted">=</span>
+        <input type="number" step="any" name="fator_conversao" class="form-control form-control-sm mapa-fator"
+               style="max-width:100px" placeholder="quanto?"
+               value="{{ m.fator_conversao if m.materia_prima_id else prefill.get(m.id, {}).get('fator', '') }}"
+               title="quanto 1 unidade de compra representa na unidade da matéria-prima">
+        <span class="small fw-bold mapa-unid-mp">?</span>
+      </div>
+      <button class="btn btn-sm btn-primary" name="acao" value="vincular">Confirmar</button>
+      <button class="btn btn-sm btn-outline-secondary" name="acao" value="ignorar">Ignorar</button>
+      {% if m.estado == 'pendente' %}
+      <button type="button" class="btn btn-sm btn-outline-success btn-nova-mp-toggle"
+              title="A matéria-prima ainda não existe? Cadastre aqui mesmo.">
+        + nova MP
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-primary btn-novo-prod-toggle"
+              title="Item de revenda (água, chiclete...)? Cadastre o produto aqui mesmo.">
+        + novo Produto
+      </button>
+      {% endif %}
+      {% if m.confirmado_em or m.ignorar %}
+      <button class="btn btn-sm btn-outline-danger" name="acao" value="desfazer">Desfazer</button>
+      {% endif %}
+    </div>
+    {% if m.estado == 'pendente' %}
+    <div class="nova-mp-box border rounded p-2 mt-2 bg-light" style="display:none;"
+         data-url="{{ url_for('contas_pagar.mapeamento_criar_mp', id=m.id) }}">
+      <div class="small fw-bold mb-1">Nova matéria-prima (cria e já vincula com o fator da linha)</div>
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <input type="text" class="form-control form-control-sm nova-mp-nome" style="max-width:260px"
+               value="{{ m.item_nome_exemplo|title }}" placeholder="nome da matéria-prima">
+        <select class="form-select form-select-sm nova-mp-unidade" style="max-width:90px"
+                title="unidade de ESTOQUE da matéria-prima">
+          <option value="g">g</option>
+          <option value="ml">ml</option>
+          <option value="un">un</option>
+          <option value="kg">kg</option>
+          <option value="l">l</option>
+        </select>
+        <input type="text" class="form-control form-control-sm nova-mp-peso" style="max-width:230px"
+               placeholder="conteúdo de 1 un em g/ml (opcional)"
+               title="Só pra MP em 'un': quanto 1 unidade contém (ex.: caixinha de 1L = 1000). É o que faz a FICHA calcular custo — sem isso, receita que usa essa MP fica com custo zero.">
+        <button type="button" class="btn btn-sm btn-success nova-mp-criar">Criar e vincular</button>
+      </div>
+      <div class="small text-danger mt-1 nova-mp-erro"></div>
+    </div>
+    <div class="novo-prod-box border rounded p-2 mt-2 bg-light" style="display:none;"
+         data-url="{{ url_for('contas_pagar.mapeamento_criar_produto', id=m.id) }}">
+      <div class="small fw-bold mb-1">Novo produto de revenda (cria e já vincula com o fator da linha)</div>
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <input type="text" class="form-control form-control-sm novo-prod-nome" style="max-width:260px"
+               value="{{ m.item_nome_exemplo|title }}" placeholder="nome do produto">
+        <input type="text" class="form-control form-control-sm novo-prod-custo" style="max-width:210px"
+               placeholder="custo por unidade R$ (opcional)"
+               title="Opcional: a primeira NF processada atualiza o custo sozinha (valor da nota ÷ fator).">
+        <button type="button" class="btn btn-sm btn-primary novo-prod-criar">Criar e vincular</button>
+      </div>
+      <div class="small text-danger mt-1 novo-prod-erro"></div>
+    </div>
+    {% endif %}
+    {% set ex = exemplos.get(m.item_nome_norm) %}
+    <div class="small mt-1 mapa-preview" style="color:#0a7d33; min-height:1em;"
+         data-qtd="{{ ex.quantidade if ex and ex.quantidade is not none else '' }}"
+         data-vunit="{{ ex.valor_unitario if ex and ex.valor_unitario is not none else '' }}"></div>
+    {% if sug %}
+    <div class="small text-muted mt-1">
+      Sugestões: {% for s in sug %}<span class="badge bg-light text-dark border">{{ s.nome }} ({{ s.unidade }})</span> {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</form>
+{% else %}
+<p class="text-muted">Nenhum item nesta aba.</p>
+{% endfor %}
+
+{% include 'contas_pagar/_fator_vivo_js.html' %}
+
+<script>
+// Acoes em lote: junta os selecionados e manda pro /mapeamentos/lote.
+// "Confirmar" usa o que esta preenchido em CADA linha (MP + unidade + fator);
+// linha incompleta/invalida volta em `falhas` e fica intacta na tela.
+(function () {
+  var bar = document.getElementById('lote-bar');
+  if (!bar) return;
+  var todos = document.getElementById('lote-todos');
+  var contagem = document.getElementById('lote-contagem');
+  var btnConfirmar = document.getElementById('btn-lote-confirmar');
+  var btnIgnorar = document.getElementById('btn-lote-ignorar');
+
+  function selecionados() {
+    return Array.prototype.slice.call(
+      document.querySelectorAll('.lote-sel:checked'));
+  }
+  function atualizarBarra() {
+    var n = selecionados().length;
+    contagem.textContent = n ? n + ' selecionado(s)' : '';
+    btnConfirmar.disabled = !n;
+    btnIgnorar.disabled = !n;
+  }
+  document.addEventListener('change', function (e) {
+    if (e.target.classList.contains('lote-sel')) atualizarBarra();
+  });
+  todos.addEventListener('change', function () {
+    document.querySelectorAll('.lote-sel').forEach(function (c) {
+      c.checked = todos.checked;
+    });
+    atualizarBarra();
+  });
+
+  function enviar(acao) {
+    var sel = selecionados();
+    if (!sel.length) return;
+    var verbo = acao === 'ignorar' ? 'Ignorar' : 'Confirmar';
+    if (!confirm(verbo + ' ' + sel.length + ' item(ns) selecionado(s)?')) return;
+    var itens = sel.map(function (c) {
+      var form = c.closest('.mapa-form');
+      return {
+        id: parseInt(form.dataset.mapaId, 10),
+        alvo: form.querySelector('.mapa-mp').value,
+        unidade_compra: form.querySelector('.mapa-uncompra').value,
+        fator_conversao: form.querySelector('.mapa-fator').value
+      };
+    });
+    btnConfirmar.disabled = btnIgnorar.disabled = true;
+    fetch(btnConfirmar.dataset.url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify({acao: acao, itens: itens})
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var msg = (data.ok || 0) + ' resolvido(s).';
+        if (data.falhas && data.falhas.length) {
+          msg += '\n\nFicaram pendentes:\n• ' + data.falhas.join('\n• ');
+        }
+        alert(msg);
+        location.reload();
+      })
+      .catch(function () {
+        alert('Falha na ação em lote — tente de novo.');
+        atualizarBarra();
+      });
+  }
+  btnConfirmar.addEventListener('click', function () { enviar('vincular'); });
+  btnIgnorar.addEventListener('click', function () { enviar('ignorar'); });
+})();
+
+// "+ nova MP": cria a materia-prima na hora e vincula com a unidade/fator
+// que ja estao preenchidos na linha — sem sair da tela.
+(function () {
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest('.btn-nova-mp-toggle');
+    if (t) {
+      var box = t.closest('.mapa-form').querySelector('.nova-mp-box');
+      box.style.display = box.style.display === 'none' ? '' : 'none';
+      return;
+    }
+    var tp = e.target.closest('.btn-novo-prod-toggle');
+    if (tp) {
+      var boxP = tp.closest('.mapa-form').querySelector('.novo-prod-box');
+      boxP.style.display = boxP.style.display === 'none' ? '' : 'none';
+      return;
+    }
+    var criarProd = e.target.closest('.novo-prod-criar');
+    if (criarProd) {
+      var boxQ = criarProd.closest('.novo-prod-box');
+      var formQ = criarProd.closest('.mapa-form');
+      var erroQ = boxQ.querySelector('.novo-prod-erro');
+      erroQ.textContent = '';
+      criarProd.disabled = true;
+      fetch(boxQ.dataset.url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+        body: JSON.stringify({
+          nome: boxQ.querySelector('.novo-prod-nome').value,
+          custo_direto: boxQ.querySelector('.novo-prod-custo').value,
+          unidade_compra: formQ.querySelector('.mapa-uncompra').value,
+          fator_conversao: formQ.querySelector('.mapa-fator').value
+        })
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          criarProd.disabled = false;
+          if (d.erro) { erroQ.textContent = d.erro; return; }
+          location.reload();
+        })
+        .catch(function () {
+          criarProd.disabled = false;
+          erroQ.textContent = 'Falha de conexão — tente de novo.';
+        });
+      return;
+    }
+    var criar = e.target.closest('.nova-mp-criar');
+    if (!criar) return;
+    var box = criar.closest('.nova-mp-box');
+    var form = criar.closest('.mapa-form');
+    var erroEl = box.querySelector('.nova-mp-erro');
+    erroEl.textContent = '';
+    criar.disabled = true;
+    fetch(box.dataset.url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify({
+        nome: box.querySelector('.nova-mp-nome').value,
+        unidade: box.querySelector('.nova-mp-unidade').value,
+        peso_unidade: box.querySelector('.nova-mp-peso').value,
+        unidade_compra: form.querySelector('.mapa-uncompra').value,
+        fator_conversao: form.querySelector('.mapa-fator').value
+      })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        criar.disabled = false;
+        if (d.erro) { erroEl.textContent = d.erro; return; }
+        location.reload();
+      })
+      .catch(function () {
+        criar.disabled = false;
+        erroEl.textContent = 'Falha de conexão — tente de novo.';
+      });
+  });
+})();
+</script>
+{% endblock %}

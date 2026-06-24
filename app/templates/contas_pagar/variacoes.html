@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Variações de Preço{% endblock %}
+
+{% block content %}
+<h1 class="page-title mb-3"><i class="bi bi-graph-up-arrow"></i> Variações de Preço</h1>
+
+<div class="alert alert-light border small py-2">
+  <i class="bi bi-info-circle"></i>
+  Quando uma NF muda o preço de uma matéria-prima, o novo preço já é aplicado e a
+  mudança aparece aqui pra você conferir (mais caro ou mais barato). Aprovar ou
+  ignorar só fecha o aviso — não altera o preço.
+</div>
+
+<div class="mb-3 d-flex gap-2">
+  {% for slug, label in [('todos','Todas'),('subiu','Subiram'),('caiu','Caíram')] %}
+  <a class="btn btn-sm {% if filtro == slug %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+     href="{{ url_for('contas_pagar.variacoes', f=slug) }}">{{ label }}</a>
+  {% endfor %}
+  <span class="ms-auto text-muted small align-self-center">{{ novos }} aviso(s) em aberto</span>
+</div>
+
+{% for v in itens %}
+<form method="POST" action="{{ url_for('contas_pagar.variacao_acao', id=v.id) }}" class="card mb-2">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="f" value="{{ filtro }}">
+  <div class="card-body py-2 d-flex flex-wrap gap-2 align-items-center">
+    <div class="flex-grow-1" style="min-width:200px">
+      <b>{{ v.materia_prima.nome if v.materia_prima else '?' }}</b>
+      {% if v.fornecedor %}<span class="text-muted small">· {{ v.fornecedor.nome }}</span>{% endif %}
+      {% if v.conta_pagar_id %}
+      <a class="small" href="{{ url_for('contas_pagar.detalhe', id=v.conta_pagar_id) }}">ver NF</a>
+      {% endif %}
+    </div>
+    <div class="text-nowrap">
+      <span class="text-muted">R$ {{ '%.2f'|format(v.custo_anterior or 0) }}</span>
+      <i class="bi bi-arrow-right"></i>
+      <b>R$ {{ '%.2f'|format(v.custo_novo or 0) }}</b>
+      {% if (v.variacao_pct or 0) > 0 %}
+      <span class="badge bg-danger">+{{ '%.1f'|format(v.variacao_pct) }}%</span>
+      {% else %}
+      <span class="badge bg-success">{{ '%.1f'|format(v.variacao_pct or 0) }}%</span>
+      {% endif %}
+    </div>
+    <button class="btn btn-sm btn-outline-success" name="acao" value="aprovar">OK</button>
+    <button class="btn btn-sm btn-outline-secondary" name="acao" value="ignorar">Ignorar</button>
+  </div>
+</form>
+{% else %}
+<p class="text-muted">Nenhuma variação de preço em aberto.</p>
+{% endfor %}
+{% endblock %}

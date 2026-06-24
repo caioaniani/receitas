@@ -1,0 +1,10 @@
+{% extends 'handshake/_base_mobile.html' %}
+{% block title %}Erro{% endblock %}
+{% block content %}
+<div class="card card-soft p-4 mt-4 text-center">
+    <div style="font-size:48px; color:#dc3545;"><i class="bi bi-x-circle-fill"></i></div>
+    <h1 class="h1-mini mt-2 mb-2" style="font-size:20px;">Não foi possível confirmar</h1>
+    <p class="kv mb-0">{{ msg }}</p>
+    <p class="small text-muted mt-3 mb-0">Peça pra produção ou admin gerar um novo QR Code.</p>
+</div>
+{% endblock %}

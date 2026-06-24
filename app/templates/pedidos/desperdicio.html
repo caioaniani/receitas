@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block title %}Desperdicio (Sobra do dia){% endblock %}
+
+{% block content %}
+<h1 class="page-title mb-3"><i class="bi bi-trash3"></i> Desperdicio (sobra do dia)</h1>
+
+{% if current_user.is_admin() or current_user.is_gerente() %}
+<form method="GET" class="mb-3 d-flex align-items-center gap-2">
+    <select name="loja" class="form-select form-select-sm" style="max-width:250px;" onchange="this.form.submit()">
+        <option value="">Selecione uma loja...</option>
+        {% for l in lojas %}
+        <option value="{{ l.id }}" {% if sel_loja == l.id %}selected{% endif %}>{{ l.nome }}</option>
+        {% endfor %}
+    </select>
+</form>
+{% endif %}
+
+{% if loja %}
+<div class="card mb-3">
+    <div class="card-header bg-light fw-bold">
+        <i class="bi bi-plus-circle"></i> Registrar desperdicio em <strong>{{ loja.nome }}</strong>
+    </div>
+    <div class="card-body">
+        <form method="POST" class="row g-2 align-items-end">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if current_user.is_admin() or current_user.is_gerente() %}
+            <input type="hidden" name="loja_id" value="{{ loja.id }}">
+            {% endif %}
+
+            <div class="col-md-4">
+                <label class="form-label small mb-1">Item</label>
+                <select name="item_id" class="form-select form-select-sm" required>
+                    <option value="">Selecione...</option>
+                    <optgroup label="Receitas">
+                        {% for r in receitas %}
+                        <option value="r_{{ r.id }}">{{ r.nome }}</option>
+                        {% endfor %}
+                    </optgroup>
+                    <optgroup label="Produtos">
+                        {% for p in produtos %}
+                        <option value="p_{{ p.id }}">{{ p.nome }}</option>
+                        {% endfor %}
+                    </optgroup>
+                    <optgroup label="Materias-primas">
+                        {% for mp in materias %}
+                        <option value="mp_{{ mp.id }}">{{ mp.nome }}</option>
+                        {% endfor %}
+                    </optgroup>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Quantidade</label>
+                <input type="number" name="quantidade" min="1" class="form-control form-control-sm" required>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Data</label>
+                <input type="date" name="data" class="form-control form-control-sm" value="{{ hoje }}" required>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Motivo</label>
+                <select name="motivo" class="form-select form-select-sm">
+                    <option value="vencido" selected>Vencido</option>
+                    <option value="estragado">Estragado</option>
+                    <option value="queimado">Queimado</option>
+                    <option value="caiu">Caiu/derrubou</option>
+                    <option value="outro">Outro</option>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-warning btn-sm w-100">
+                    <i class="bi bi-trash3"></i> Registrar
+                </button>
+            </div>
+
+            <div class="col-12">
+                <input type="text" name="observacao" class="form-control form-control-sm"
+                       placeholder="Observacao (opcional)">
+            </div>
+        </form>
+    </div>
+</div>
+{% else %}
+<p class="text-muted">Selecione uma loja para registrar desperdicios.</p>
+{% endif %}
+
+<div class="d-flex justify-content-between align-items-center mb-2 mt-3">
+    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Histórico — últimos 30 dias</h5>
+    <small class="text-muted">{{ registros|length }} registro{{ '' if registros|length == 1 else 's' }}</small>
+</div>
+
+{% if registros %}
+{# Agrupa por data (registros ja vem ordenados por data desc, criado_em desc) #}
+{% set ns = namespace(grupos={}, ordem=[]) %}
+{% for d in registros %}
+    {% set chave = d.data.strftime('%Y-%m-%d') %}
+    {% if chave not in ns.grupos %}
+        {% set _ = ns.ordem.append(chave) %}
+        {% set _ = ns.grupos.update({chave: []}) %}
+    {% endif %}
+    {% set _ = ns.grupos[chave].append(d) %}
+{% endfor %}
+
+{# Nomes dos dias da semana em PT #}
+{% set dias_pt = {0:'segunda', 1:'terça', 2:'quarta', 3:'quinta', 4:'sexta', 5:'sábado', 6:'domingo'} %}
+
+{% for chave in ns.ordem %}
+    {% set lista_dia = ns.grupos[chave] %}
+    {% set data_obj = lista_dia[0].data %}
+    {% set total_qtd = lista_dia | sum(attribute='quantidade') %}
+    <details class="dia-grupo" {% if loop.first %}open{% endif %}>
+        <summary>
+            <span class="dia-data">
+                <strong>{{ data_obj.strftime('%d/%m/%Y') }}</strong>
+                · <span class="text-muted">{{ dias_pt.get(data_obj.weekday(), '') }}</span>
+            </span>
+            <span class="dia-resumo">
+                {{ lista_dia|length }} item{{ '' if lista_dia|length == 1 else 's' }}
+                {% if not loja and (lista_dia | map(attribute='loja.nome') | unique | list | length) > 1 %}
+                · <span class="text-muted">{{ (lista_dia | map(attribute='loja.nome') | unique | list | length) }} loja(s)</span>
+                {% endif %}
+            </span>
+            <span class="dia-total dia-total-warn">{{ total_qtd }} un</span>
+        </summary>
+        <div class="dia-corpo table-responsive">
+            <table class="table table-sm mb-0">
+                <thead class="thead-padaria">
+                    <tr>
+                        {% if not loja %}<th>Loja</th>{% endif %}
+                        <th>Item</th>
+                        <th class="text-center" style="width:80px;">Qtd</th>
+                        <th style="width:100px;">Motivo</th>
+                        <th>Observação</th>
+                        <th class="text-muted small" style="width:140px;">Registrado</th>
+                        {% if current_user.is_admin() or current_user.is_gerente() %}<th style="width:50px;"></th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for d in lista_dia %}
+                    <tr>
+                        {% if not loja %}<td>{{ d.loja.nome if d.loja else '—' }}</td>{% endif %}
+                        <td>{{ d.nome_item }}</td>
+                        <td class="text-center fw-bold">{{ d.quantidade }}</td>
+                        <td><span class="badge bg-warning text-dark">{{ d.motivo }}</span></td>
+                        <td class="text-muted small">{{ d.observacao or '' }}</td>
+                        <td class="text-muted small">
+                            {{ d.criado_em.strftime('%H:%M') if d.criado_em else '' }}
+                            {% if d.criado_por %}<br><span style="font-size:11px;">{{ d.criado_por.nome }}</span>{% endif %}
+                        </td>
+                        {% if current_user.is_admin() or current_user.is_gerente() %}
+                        <td>
+                            <form method="POST" action="{{ url_for('pedidos.desperdicio_excluir', id=d.id) }}"
+                                  onsubmit="return confirm('Excluir e estornar {{ d.quantidade }} un de {{ d.nome_item }}?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-link btn-sm text-danger p-0" title="Excluir e estornar">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </form>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+{% endfor %}
+{% else %}
+<div class="card">
+    <div class="card-body text-center text-muted py-4">
+        Nenhum desperdício registrado nos últimos 30 dias.
+    </div>
+</div>
+{% endif %}
+{% endblock %}

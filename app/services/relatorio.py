@@ -3,7 +3,7 @@
 import io
 
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from app.services.pdf import PadariaPDF
@@ -13,10 +13,24 @@ def _money(v):
     return f'R$ {v:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
 
 
+def _foto_bytes(foto):
+    """Le bytes da foto: prioriza Dropbox URL, fallback BLOB legado."""
+    import requests
+    if foto.imagem_url:
+        try:
+            r = requests.get(foto.imagem_url, timeout=10)
+            if r.status_code == 200:
+                return r.content
+        except Exception:  # noqa: BLE001
+            pass
+    return foto.imagem  # pode ser None apos M6
+
+
 def _render_fotos(pdf, fotos, largura=45, altura=35, por_linha=4, margem=2):
     """Renderiza miniaturas das fotos em grade dentro do PDF.
 
     Quebra de pagina automatica quando o bloco nao cabe no restante.
+    Fotos podem estar no Dropbox (M6+) ou BLOB legado.
     """
     pdf.set_font('Helvetica', 'I', 8)
     pdf.cell(0, 4, f'Fotos do recebimento ({len(fotos)}):', new_x='LMARGIN', new_y='NEXT')
@@ -32,7 +46,10 @@ def _render_fotos(pdf, fotos, largura=45, altura=35, por_linha=4, margem=2):
             y = pdf.get_y()
         x = x0 + col * (largura + margem)
         try:
-            pdf.image(io.BytesIO(foto.imagem), x=x, y=y, w=largura, h=altura)
+            bytes_ = _foto_bytes(foto)
+            if not bytes_:
+                raise ValueError('foto sem bytes')
+            pdf.image(io.BytesIO(bytes_), x=x, y=y, w=largura, h=altura)
         except Exception:
             pdf.set_xy(x, y)
             pdf.cell(largura, altura, '[foto invalida]', border=1, align='C')

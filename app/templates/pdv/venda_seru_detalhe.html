@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Venda Seru #{{ pedido_id[:8] }}{% endblock %}
+
+{% set ESTADO_LABEL = {
+    'mapeado': ('Mapeado', 'success'),
+    'pendente': ('Pendente mapeamento', 'warning'),
+    'ignorado': ('Ignorado', 'secondary'),
+    'novo': ('Nunca visto antes', 'info'),
+} %}
+
+{% block content %}
+<h1 class="page-title mb-3"><i class="bi bi-receipt"></i> Venda Seru</h1>
+
+<p class="text-muted">
+    <code>#{{ pedido_id }}</code>
+    <a href="{{ url_for('pdv.itens_vendidos') }}" class="ms-2 small">← voltar</a>
+</p>
+
+{% if processado %}
+<div class="card mb-3">
+    <div class="card-header bg-light fw-bold">
+        <i class="bi bi-database-check"></i> Como o nosso sistema processou
+    </div>
+    <div class="card-body py-2">
+        <div class="row">
+            <div class="col-md-3"><small class="text-muted">Processado em</small><br><strong>{{ processado.processado_em.strftime('%d/%m/%Y %H:%M') if processado.processado_em else '—' }}</strong></div>
+            <div class="col-md-2"><small class="text-muted">Itens total</small><br><strong>{{ processado.n_itens_total }}</strong></div>
+            <div class="col-md-2"><small class="text-muted">Baixados</small><br><strong class="text-success">{{ processado.n_itens_baixados }}</strong></div>
+            <div class="col-md-2"><small class="text-muted">Nao baixados</small><br><strong class="text-warning">{{ processado.n_itens_total - processado.n_itens_baixados }}</strong></div>
+            <div class="col-md-3">
+                <small class="text-muted">Status</small><br>
+                {% if processado.cancelado_em %}<span class="badge bg-danger">Cancelado</span>{% endif %}
+                {% if processado.estornado_em %}<span class="badge bg-secondary">Estornado</span>{% endif %}
+                {% if not processado.cancelado_em and not processado.estornado_em %}<span class="badge bg-success">Processado</span>{% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-warning">Este pedido ainda nao foi processado pelo nosso sistema.</div>
+{% endif %}
+
+<div class="card mb-3">
+    <div class="card-header bg-light fw-bold">
+        <i class="bi bi-list-ul"></i> Itens ({{ itens|length }})
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead class="thead-padaria">
+                <tr>
+                    <th>Item (nome Seru)</th>
+                    <th class="text-center">Qtd</th>
+                    <th class="text-end">Total</th>
+                    <th>Status no sistema</th>
+                    <th>Vinculado a</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for it in itens %}
+                {% set label, color = ESTADO_LABEL.get(it.estado, (it.estado, 'secondary')) %}
+                <tr {% if it.cancelado %}class="text-muted"{% endif %}>
+                    <td>
+                        {{ it.nome }}
+                        {% if it.cancelado %}<span class="badge bg-danger ms-1">cancelado</span>{% endif %}
+                        {% if it.sku %}<br><small class="text-muted">SKU: {{ it.sku }}</small>{% endif %}
+                    </td>
+                    <td class="text-center fw-bold">{{ it.qtd }}</td>
+                    <td class="text-end">R$ {{ '%.2f' | format(it.total) }}</td>
+                    <td><span class="badge bg-{{ color }}">{{ label }}</span></td>
+                    <td>
+                        {% if it.alvo %}
+                            {{ it.alvo[1] }}
+                            <small class="text-muted">({{ it.alvo[0] }})</small>
+                            {% if it.fator and it.fator != 1.0 %}
+                            <br><small>fator: {{ it.fator }}</small>
+                            {% endif %}
+                        {% else %}
+                            <a href="{{ url_for('pdv.mapeamentos') }}" class="small">vincular →</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<details class="mb-3">
+    <summary class="text-muted small">Raw JSON do pedido na Seru (para debug)</summary>
+    <pre class="bg-light p-3 small" style="max-height:400px; overflow:auto;">{{ pedido_raw | tojson(indent=2) }}</pre>
+</details>
+{% endblock %}

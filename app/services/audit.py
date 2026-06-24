@@ -68,7 +68,14 @@ def _request_meta():
     return ip, ua
 
 
-def _current_user_id():
+def _current_user_id(session=None):
+    # Caminho Slack (thread async, so app_context): handler seta
+    # session.info['audit_user_id'] = Usuario.id antes do commit.
+    if session is not None:
+        sess_uid = session.info.get('audit_user_id')
+        if sess_uid:
+            return sess_uid
+    # Caminho web: pega Flask-Login.
     if not has_request_context():
         return None
     try:
@@ -86,7 +93,7 @@ def _registrar(session, obj, acao, antes=None, depois=None):
         return
     ip, ua = _request_meta()
     log = AuditLog(
-        usuario_id=_current_user_id(),
+        usuario_id=_current_user_id(session),
         tabela=tabela,
         registro_id=getattr(obj, 'id', None),
         acao=acao,

@@ -2,7 +2,7 @@
 
 import logging
 import re
-from datetime import datetime, date, timedelta
+from datetime import date, datetime, timedelta
 
 import requests
 from flask import current_app
@@ -25,8 +25,9 @@ _PEDIDOS_CACHE_TTL = 300  # 5 minutos — reduz hit no VNDA quando varios usuari
 _PEDIDOS_ERROR_CACHE_TTL = 30  # segundos
 
 
-def _headers():
-    token = current_app.config.get('VNDA_API_TOKEN', '')
+def _headers(token=None):
+    token = token if token is not None else current_app.config.get('VNDA_API_TOKEN', '')
+    token = token or ''
     if token.lower().startswith('bearer '):
         token = token[7:]
     host = current_app.config.get('VNDA_SHOP_HOST', 'www.padariaartesanalonline.com.br')
@@ -38,24 +39,47 @@ def _headers():
     }
 
 
+def _produtos_token():
+    """Token dedicado ao catalogo (/products). O token principal pode nao ter o
+    escopo 'produtos' habilitado (so pedidos -> 403). Se VNDA_PRODUTOS_TOKEN
+    estiver setado, usa ele; senao retorna None (cai no token principal)."""
+    return (current_app.config.get('VNDA_PRODUTOS_TOKEN') or '').strip() or None
+
+
 def _base_url():
     return 'https://api.vnda.com.br/api/v2'
 
 
-def _get(endpoint, params=None):
+def _get(endpoint, params=None, token=None):
     """Faz GET no VNDA. Sem retry — chamadas em massa (buscar cliente +
     shipping pra dezenas de pedidos) viram problema rapido se cada uma
     retentar. Falhas individuais sao toleradas pelos callers (pedido
     fica incompleto mas o resto continua). Frontend tem seu proprio
-    retry com cache de 30s pro caso de falha total."""
+    retry com cache de 30s pro caso de falha total.
+
+    `token`: sobrescreve o token padrao (ex: catalogo usa _produtos_token)."""
     url = f'{_base_url()}{endpoint}'
     try:
-        resp = requests.get(url, headers=_headers(), params=params, timeout=10)
+        resp = requests.get(url, headers=_headers(token), params=params, timeout=10)
         resp.raise_for_status()
         return resp
     except requests.RequestException as e:
         logger.error('Erro API Vnda %s: %s', endpoint, e)
         return None
+
+
+def _get_strict(endpoint, params=None, timeout=5):
+    """Como `_get` mas LEVANTA a exception em vez de engolir.
+
+    Caller usa quando quer mensagem de erro especifica (status code, corpo)
+    em vez de None opaco. Util em telas pro admin debugar configuracao do
+    token VNDA, rate limit, etc. Timeout default mais curto (5s vs 10s)
+    pra nao travar paginas que consomem isso sincronamente.
+    """
+    url = f'{_base_url()}{endpoint}'
+    resp = requests.get(url, headers=_headers(), params=params, timeout=timeout)
+    resp.raise_for_status()
+    return resp
 
 
 def _is_entrega_expressa(order):
@@ -102,7 +126,8 @@ def _extrair_data_de_label(label, ref_year=None):
         return None
     label_lower = label.lower()
     if not ref_year:
-        ref_year = date.today().year
+        from app.utils import hoje as _hoje_brt
+        ref_year = _hoje_brt().year
 
     # 1. DD/MM/YYYY explicito
     m = re.search(r'(\d{1,2})/(\d{1,2})/(\d{4})', label)
@@ -145,7 +170,8 @@ def _extrair_data_entrega(order):
 
     # 2. shipping_label com data explicita ou keyword de feriado
     # (formato novo de checkout que nao preenche extra.DataDeEntrega)
-    ref = _parse_iso_date(order.get('confirmed_at')) or _parse_iso_date(order.get('paid_at')) or date.today()
+    from app.utils import hoje as _hoje_brt
+    ref = _parse_iso_date(order.get('confirmed_at')) or _parse_iso_date(order.get('paid_at')) or _hoje_brt()
     label_data = _extrair_data_de_label(order.get('shipping_label', ''), ref.year)
     if label_data:
         return label_data
@@ -330,6 +356,7 @@ def _normalizar_pedido(order, client_data=None, shipping_data=None, items_custom
         'data_entrega': data_entrega.isoformat() if data_entrega else None,
         'data_entrega_fmt': data_entrega.strftime('%d/%m/%Y') if data_entrega else '',
         'periodo': _extrair_periodo(order),
+        'expresso': _is_entrega_expressa(order),
         'comprador': comprador,
         'destinatario': destinatario,
         'telefone': telefone_dest,
@@ -367,6 +394,12 @@ class VndaUnavailableError(Exception):
 def _buscar_pedidos_janela(start_date, end_date):
     """Busca todos os pedidos numa janela de datas (com paginacao).
     Levanta VndaUnavailableError se a 1a pagina falhar (rede/timeout)."""
+    # Valida token antes — sem token, mensagem clara em vez de 401 opaco.
+    if not current_app.config.get('VNDA_API_TOKEN'):
+        raise VndaUnavailableError(
+            'VNDA_API_TOKEN nao configurado no ambiente. '
+            'Defina em Settings → Variables no Railway.'
+        )
     todos = []
     page = 1
     per_page = 100
@@ -377,13 +410,30 @@ def _buscar_pedidos_janela(start_date, end_date):
             'start': start_date.isoformat(),
             'finish': end_date.isoformat(),
         }
-        resp = _get('/orders', params=params)
-        if not resp:
-            if page == 1:
-                # Falha na 1a pagina = VNDA fora do ar. Propaga em vez de
-                # retornar lista vazia silenciosamente.
-                raise VndaUnavailableError('Falha ao consultar Vnda /orders')
-            break
+        if page == 1:
+            # Primeira pagina: levanta exception especifica (status code,
+            # corpo da resposta) em vez de mascarar como None. Paginas
+            # seguintes: tolerantes (vide _get abaixo).
+            try:
+                resp = _get_strict('/orders', params=params)
+            except requests.HTTPError as e:
+                status = getattr(e.response, 'status_code', '?')
+                body = ''
+                try:
+                    body = (e.response.text or '')[:200]
+                except Exception:  # noqa: BLE001
+                    pass
+                raise VndaUnavailableError(
+                    f'HTTP {status} em /orders. Resposta: {body}'
+                ) from e
+            except requests.RequestException as e:
+                raise VndaUnavailableError(
+                    f'{type(e).__name__}: {e}'
+                ) from e
+        else:
+            resp = _get('/orders', params=params)
+            if not resp:
+                break
         try:
             data = resp.json()
         except ValueError:

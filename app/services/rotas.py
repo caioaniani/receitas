@@ -31,6 +31,24 @@ def _extrair_cep(endereco):
     return ''
 
 
+def janela_rank(p):
+    """Prioridade de entrega por janela de horario, pra a rota NUNCA entregar
+    fora do horario sem querer:
+
+        EXPRESSO (1h)  -> -1  (sempre primeiro, SLA apertado)
+        '8h as 9h'     ->  8  (pela hora de inicio da janela)
+        '9h as 10h'    ->  9
+        sem horario    -> 99  (por ultimo)
+
+    Usada como chave PRIMARIA de ordenacao das paradas; a otimizacao
+    geografica vira chave secundaria (preservada dentro de cada janela via
+    sort estavel)."""
+    if p.get('expresso'):
+        return -1
+    m = re.search(r'(\d{1,2})', (p.get('periodo') or ''))
+    return int(m.group(1)) if m else 99
+
+
 def origem_endereco(app=None):
     if app is None:
         from flask import current_app
@@ -448,6 +466,14 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None):
                 if chunks_ok:
                     km = round(km_total, 1)
                     minutos = min_total
+
+        # Respeita a janela de horario: EXPRESSO primeiro, depois por horario.
+        # Sort ESTAVEL -> preserva a ordem geografica otimizada DENTRO de cada
+        # janela. Sem isso, a otimizacao puramente geografica podia enterrar um
+        # expresso no fim da rota ou visitar um pedido das 8h depois das 14h.
+        # km/minutos ficam como estimativa do melhor caso (ordem geo-otima);
+        # a janela pode alongar um pouco, mas SLA de horario > distancia exata.
+        todas.sort(key=janela_rank)
 
         paradas = [{**p, 'ordem': idx + 1} for idx, p in enumerate(todas)]
         rotas.append({

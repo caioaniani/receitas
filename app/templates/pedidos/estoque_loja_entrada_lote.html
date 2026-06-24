@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}Entrada em Lote — Estoque de Loja{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-box-arrow-in-down"></i> Entrada em Lote — Estoque de Loja</h1>
+    <a href="{{ url_for('pedidos.estoque_loja', loja=sel_loja or None) }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar ao estoque
+    </a>
+</div>
+
+<div class="alert alert-info" style="font-size:13px;">
+    <i class="bi bi-info-circle"></i>
+    <strong>Como funciona:</strong> escolha a loja, cole a lista de chegada e
+    cada item <strong>soma</strong> ao estoque atual. Itens sem cadastro entram
+    como <strong>pendentes</strong> — depois vincule a uma receita/produto/MP.
+</div>
+
+<form method="POST" action="{{ url_for('pedidos.estoque_loja_entrada_lote') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card mb-3">
+        <div class="card-header bg-white fw-bold">
+            <i class="bi bi-pencil-square"></i> Lista da entrada
+        </div>
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-9">
+                    <label class="form-label" style="font-size:12px;">
+                        Uma linha por item, formato <code>Nome: quantidade</code>
+                    </label>
+                    <textarea name="texto" class="form-control font-monospace" rows="14"
+                              placeholder="Pão Francês: 100&#10;Croissant: 50&#10;Cookie: 30">{{ texto }}</textarea>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" style="font-size:12px;">Loja</label>
+                    <select name="loja_id" class="form-select form-select-sm input-blue" required>
+                        <option value="">Selecione...</option>
+                        {% for l in lojas %}
+                        <option value="{{ l.id }}" {% if sel_loja == l.id %}selected{% endif %}>{{ l.nome }}</option>
+                        {% endfor %}
+                    </select>
+                    <label class="form-label mt-2" style="font-size:12px;">Referência (opcional)</label>
+                    <input type="text" name="referencia" class="form-control form-control-sm input-blue"
+                           placeholder="Ex: Entrega 13/05" value="{{ referencia }}">
+                    <div class="mt-3 d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bi bi-eye"></i> Pré-visualizar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+{% if itens %}
+{% set n_ok = itens | selectattr('resolvido') | list | length %}
+{% set n_erro = itens | selectattr('erro') | list | length %}
+{% set n_naoresolvido = itens | rejectattr('erro') | rejectattr('resolvido') | list | length %}
+{% set n_aplicaveis = n_ok + n_naoresolvido %}
+
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <span class="fw-bold"><i class="bi bi-list-check"></i> Pré-visualização — {{ loja.nome if loja else '?' }}</span>
+        <span>
+            <span class="badge bg-success">{{ n_ok }} com match</span>
+            {% if n_naoresolvido %}<span class="badge bg-warning text-dark">{{ n_naoresolvido }} pendente(s)</span>{% endif %}
+            {% if n_erro %}<span class="badge bg-danger">{{ n_erro }} com erro</span>{% endif %}
+        </span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0">
+                <thead class="thead-padaria">
+                    <tr>
+                        <th style="width:30px;">#</th>
+                        <th>Você digitou</th>
+                        <th>Match no sistema</th>
+                        <th class="text-center" style="width:80px;">Tipo</th>
+                        <th class="text-end" style="width:90px;">Atual</th>
+                        <th class="text-end" style="width:90px;">Soma</th>
+                        <th class="text-end" style="width:100px;">Novo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in itens %}
+                    <tr class="{% if item.erro %}table-danger{% elif not item.resolvido %}table-warning{% endif %}">
+                        <td class="text-muted">{{ loop.index }}</td>
+                        <td>
+                            <div class="fw-semibold">{{ item.nome or item.linha }}</div>
+                            {% if item.linha and item.linha != item.nome %}
+                                <small class="text-muted">{{ item.linha }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.erro %}
+                                <span class="text-danger">⚠ erro: {{ item.erro }}</span>
+                            {% elif item.resolvido %}
+                                {{ item.resolvido.nome }}
+                                {% if item.resolvido.match == 'fuzzy' %}
+                                    <small class="badge bg-info text-dark">fuzzy</small>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-warning">
+                                    <i class="bi bi-link-45deg"></i> sem match — entra como <strong>pendente</strong>
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if item.resolvido %}
+                                {% if item.resolvido.tipo == 'receita' %}
+                                    <span class="badge bg-primary" style="font-size:10px;">Receita</span>
+                                {% elif item.resolvido.tipo == 'produto' %}
+                                    <span class="badge bg-secondary" style="font-size:10px;">Produto</span>
+                                {% elif item.resolvido.tipo == 'mp' %}
+                                    <span class="badge bg-dark" style="font-size:10px;">MP</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark" style="font-size:10px;">Pendente</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if item.resolvido or item.estoque_atual is defined %}{{ item.estoque_atual }}{% endif %}
+                        </td>
+                        <td class="text-end fw-bold text-success">
+                            {% if item.quantidade is defined %}+{{ item.quantidade }}{% endif %}
+                        </td>
+                        <td class="text-end fw-bold">
+                            {% if item.novo is defined %}{{ item.novo }}{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+        <small class="text-muted">
+            {% if n_erro %}Linhas com erro serão ignoradas.{% endif %}
+            {% if n_naoresolvido %}
+                Itens sem match entram como <strong>pendentes</strong> nesta loja — vincule depois.
+            {% endif %}
+        </small>
+        <form method="POST" action="{{ url_for('pedidos.estoque_loja_entrada_lote_aplicar') }}"
+              onsubmit="return confirm('Aplicar a entrada em lote? Cada item será SOMADO ao estoque atual.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="texto" value="{{ texto|e }}">
+            <input type="hidden" name="loja_id" value="{{ sel_loja or '' }}">
+            <input type="hidden" name="referencia" value="{{ referencia|e }}">
+            <button type="submit" class="btn btn-success" {% if not n_aplicaveis %}disabled{% endif %}>
+                <i class="bi bi-check-circle"></i> Aplicar Entrada ({{ n_aplicaveis }} item(ns))
+            </button>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

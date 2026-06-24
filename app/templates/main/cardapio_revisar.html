@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Revisar fotos do cardápio{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-images"></i> Revisar fotos do cardápio</h1>
+    <a href="{{ url_for('main.cardapio') }}" class="btn btn-sm btn-outline-secondary">Voltar ao cardápio</a>
+</div>
+
+<div class="alert alert-info small">
+    <strong>{{ receitas|length }} receita(s)</strong> e
+    <strong>{{ produtos|length }} produto(s)</strong> com foto.
+    Confere visualmente se a foto bate com o nome. Se tiver errada, clica
+    <strong>Remover</strong> — depois sobe a correta direto na ficha.
+</div>
+
+{% set tipos = [('receita', receitas, 'receitas.ficha'), ('produto', produtos, 'produtos.detalhe')] %}
+{% for tipo, lista, route_ficha in tipos %}
+{% if lista %}
+<h5 class="mt-4 mb-2"><i class="bi bi-{{ 'book' if tipo == 'receita' else 'box' }}"></i>
+    {{ tipo.capitalize() }}s ({{ lista|length }})</h5>
+<div class="row g-3">
+    {% for obj in lista %}
+    <div class="col-md-3 col-sm-4 col-6">
+        <div class="card h-100">
+            <img src="{{ url_for('main.cardapio_img', tipo=tipo, id=obj.id) }}"
+                 alt="{{ obj.nome }}"
+                 style="width:100%; aspect-ratio:1; object-fit:cover;">
+            <div class="card-body p-2">
+                <div class="small fw-bold" style="font-size:12px;">{{ obj.nome }}</div>
+                {% if obj.categoria %}
+                <div class="small text-muted" style="font-size:10px;">{{ obj.categoria }}</div>
+                {% endif %}
+                <div class="d-flex gap-1 mt-2">
+                    <a href="{{ url_for(route_ficha, id=obj.id) }}" target="_blank"
+                       class="btn btn-sm btn-outline-primary flex-fill" style="font-size:11px;">
+                        <i class="bi bi-pencil"></i> Ficha
+                    </a>
+                    <form method="POST" action="{{ url_for('main.cardapio_img_remover', tipo=tipo, id=obj.id) }}"
+                          onsubmit="return confirm('Remover esta foto?')"
+                          class="flex-fill">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="next" value="revisar">
+                        <button type="submit" class="btn btn-sm btn-outline-danger w-100" style="font-size:11px;">
+                            <i class="bi bi-trash"></i> Remover
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endfor %}
+
+{% if not receitas and not produtos %}
+<div class="alert alert-warning">Nenhuma foto cadastrada ainda.</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}Conta a Pagar #{{ conta.id }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-receipt"></i> Conta a Pagar #{{ conta.id }}
+        {% if conta.revisada %}
+        <span class="badge bg-success" style="font-size:12px;vertical-align:middle;"
+              title="Conferida por {{ conta.revisada_por.nome if conta.revisada_por else '?' }}{% if conta.revisada_em %} em {{ conta.revisada_em.strftime('%d/%m/%Y %H:%M') }}{% endif %}">
+            <i class="bi bi-check2-circle"></i> Conferida</span>
+        {% else %}
+        <span class="badge bg-warning text-dark" style="font-size:12px;vertical-align:middle;"
+              title="Ninguém conferiu — os dados podem ser só a leitura da IA">
+            <i class="bi bi-eye"></i> Aguardando conferência</span>
+        {% endif %}
+    </h1>
+    <div class="d-flex gap-2">
+        <form method="POST" action="{{ url_for('contas_pagar.revisar', id=conta.id) }}" class="mb-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if conta.revisada %}
+            <button type="submit" class="btn btn-sm btn-outline-secondary"
+                    title="Voltar pra fila de conferência"><i class="bi bi-arrow-counterclockwise"></i> Desfazer conferência</button>
+            {% else %}
+            <button type="submit" class="btn btn-sm btn-success"
+                    title="Confirmo que valor, vencimento e fornecedor batem com o documento">
+                <i class="bi bi-check2-circle"></i> Marcar como conferida</button>
+            {% endif %}
+        </form>
+        <a href="{{ url_for('contas_pagar.lista', aba=conta.status) }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <!-- Documento (Dropbox) -->
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header py-2"><strong>Documento</strong>
+                <span class="badge bg-light text-dark">{{ conta.tipo_documento }}</span>
+            </div>
+            <div class="card-body text-center">
+                {% if conta.imagem_url %}
+                <a href="{{ conta.imagem_url }}" target="_blank" rel="noopener">
+                    <img src="{{ conta.imagem_url }}" alt="NF/boleto"
+                         style="max-width:100%; max-height:520px; border:1px solid var(--border-color); border-radius:6px;">
+                </a>
+                {% else %}
+                <p class="text-muted mb-0">Sem imagem.</p>
+                {% endif %}
+                <p class="small text-muted mt-2 mb-0">
+                    Loja: {{ loja_nome or '—' }}
+                    {% if conta.enviado_por %}· por {{ conta.enviado_por }}{% endif %}
+                    {% if conta.criado_em %}· {{ conta.criado_em.strftime('%d/%m/%Y %H:%M') }}{% endif %}
+                </p>
+                {% if conta.imagem_url %}
+                <form method="POST" action="{{ url_for('contas_pagar.reextrair', id=conta.id) }}" class="mt-2 mb-0"
+                      onsubmit="return confirm('Reler o documento com a IA? Os campos extraídos (valor, vencimento, etc) serão reescritos com a nova leitura. Status, pagamento e vínculos são mantidos.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-arrow-repeat"></i> Re-ler com IA
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if conta.ligados %}
+        <div class="card mt-3 border-primary">
+            <div class="card-header py-2 bg-primary-subtle">
+                <i class="bi bi-link-45deg"></i> <strong>Documento(s) ligado(s)</strong>
+            </div>
+            <div class="card-body">
+                {% for l in conta.ligados %}
+                <div class="d-flex gap-2 align-items-center {% if not loop.last %}border-bottom pb-2 mb-2{% endif %}">
+                    {% if l.imagem_url %}
+                    <a href="{{ l.imagem_url }}" target="_blank" rel="noopener">
+                        <img src="{{ l.imagem_url }}" alt="doc ligado"
+                             style="width:64px; height:64px; object-fit:cover; border:1px solid var(--border-color); border-radius:4px;">
+                    </a>
+                    {% endif %}
+                    <div class="flex-grow-1 small">
+                        <span class="badge bg-light text-dark">{{ l.tipo_documento }}</span>
+                        {% if l.nf_numero %}NF {{ l.nf_numero }}{% endif %}<br>
+                        {{ l.fornecedor_nome or 'sem fornecedor' }}<br>
+                        {% if l.valor_total %}R$ {{ '%.2f'|format(l.valor_total) }}{% endif %}
+                        {% if l.vencimento %}· vence {{ l.vencimento.strftime('%d/%m/%Y') }}{% endif %}
+                    </div>
+                    <a href="{{ url_for('contas_pagar.detalhe', id=l.id) }}" class="btn btn-sm btn-outline-primary">Abrir</a>
+                </div>
+                {% endfor %}
+                <p class="small text-muted mb-0 mt-2">
+                    <i class="bi bi-info-circle"></i> NF e boleto do mesmo recebimento — pague apenas uma vez (o boleto quita a NF).
+                </p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Dados (editaveis) -->
+    <div class="col-md-7">
+        <div class="card mb-3">
+            <div class="card-header py-2">
+                <strong>Dados</strong>
+                <span class="badge {% if conta.status == 'pago' %}bg-success{% elif conta.status == 'ignorado' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">{{ conta.status }}</span>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('contas_pagar.editar', id=conta.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row g-2">
+                        <div class="col-12">
+                            <label class="form-label small mb-0">Fornecedor (texto da NF)</label>
+                            <input name="fornecedor_nome" value="{{ conta.fornecedor_nome or '' }}" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-0">Vincular a fornecedor cadastrado</label>
+                            <select name="fornecedor_id" class="form-select form-select-sm">
+                                <option value="">— nenhum —</option>
+                                {% for f in fornecedores %}
+                                <option value="{{ f.id }}" {% if conta.fornecedor_id == f.id %}selected{% endif %}>{{ f.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small mb-0">Tipo</label>
+                            <select name="tipo_documento" class="form-select form-select-sm">
+                                {% for t in ['nota_fiscal', 'boleto', 'desconhecido'] %}
+                                <option value="{{ t }}" {% if conta.tipo_documento == t %}selected{% endif %}>{{ t }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small mb-0">Valor total (R$)</label>
+                            <input name="valor_total" type="number" step="0.01" value="{{ '%.2f'|format(conta.valor_total) if conta.valor_total is not none else '' }}" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small mb-0">Vencimento</label>
+                            <input name="vencimento" type="date" value="{{ conta.vencimento.isoformat() if conta.vencimento else '' }}" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small mb-0">NF número</label>
+                            <input name="nf_numero" value="{{ conta.nf_numero or '' }}" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-0">Código de barras (boleto)</label>
+                            <input name="codigo_barras" value="{{ conta.codigo_barras or '' }}" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-0">Linha digitável (boleto)</label>
+                            <input name="linha_digitavel" value="{{ conta.linha_digitavel or '' }}" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-0">Info de pagamento (pix, etc)</label>
+                            <textarea name="info_pagamento" rows="2" class="form-control form-control-sm">{{ conta.info_pagamento or '' }}</textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-0">Vincular outro documento (NF ↔ boleto)</label>
+                            <select name="relacionado_id" class="form-select form-select-sm">
+                                <option value="">— nenhum —</option>
+                                {% for r in relacionaveis %}
+                                <option value="{{ r.id }}" {% if conta.relacionado_id == r.id %}selected{% endif %}>
+                                    #{{ r.id }} · {{ r.tipo_documento }} · {{ r.fornecedor_nome or 's/ fornecedor' }}
+                                    {% if r.valor_total %}· R$ {{ '%.2f'|format(r.valor_total) }}{% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary mt-3"><i class="bi bi-save"></i> Salvar</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Acoes de status -->
+        <div class="card">
+            <div class="card-body d-flex flex-wrap gap-2 align-items-center">
+                {% if conta.status != 'pago' %}
+                <form method="POST" action="{{ url_for('contas_pagar.pagar', id=conta.id) }}" class="d-flex gap-2 align-items-center mb-0">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <select name="forma_pagamento" class="form-select form-select-sm" style="max-width:150px;">
+                        <option value="">forma...</option>
+                        {% for fp in ['pix', 'boleto', 'transferencia', 'dinheiro', 'cartao'] %}
+                        <option value="{{ fp }}">{{ fp }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> Marcar pago</button>
+                </form>
+                {% endif %}
+                {% for novo, label, cls in [('aberto','Reabrir','btn-outline-secondary'), ('ignorado','Ignorar','btn-outline-danger')] %}
+                {% if conta.status != novo %}
+                <form method="POST" action="{{ url_for('contas_pagar.mudar_status', id=conta.id) }}" class="mb-0">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="status" value="{{ novo }}">
+                    <button type="submit" class="btn btn-sm {{ cls }}">{{ label }}</button>
+                </form>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        {% if itens_vinc %}
+        <div class="card mt-3">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                <strong>Itens da NF → matéria-prima</strong>
+                <a href="{{ url_for('contas_pagar.mapeamentos') }}" class="small">ver todos os vínculos</a>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted">Confira cada item conforme a nota e complete a frase
+                <b>“1 unidade de compra = X na unidade da matéria-prima”</b> (ex.: caixa com 2,01 kg e
+                MP em gramas → 1 <b>cx</b> = <b>2010</b> g; a quantidade da NF multiplica sozinha).
+                O vínculo vale pra todas as NFs com esse mesmo item.</p>
+                {% for iv in itens_vinc %}
+                {% set it = iv.item %}
+                {% set m = iv.mapa %}
+                <div class="border rounded p-2 mb-2">
+                    <div class="d-flex flex-wrap justify-content-between gap-2">
+                        <div style="min-width:160px">
+                            <b>{{ it.get('nome', '—') }}</b>
+                            {% if m and m.estado == 'mapeado' %}
+                                <span class="badge bg-success" title="vinculado">{{ m.alvo_nome }}</span>
+                            {% elif m and m.estado == 'ignorado' %}
+                                <span class="badge bg-secondary">ignorado</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">a vincular</span>
+                            {% endif %}
+                        </div>
+                        <div class="small text-muted">
+                            qtd <b>{{ it.get('quantidade', '—') }}</b>{% if it.get('unidade') %} {{ it.get('unidade') }}{% endif %}
+                            · unit R$ {{ it.get('valor_unitario', '—') }}
+                            · total R$ {{ it.get('valor_total', '—') }}
+                        </div>
+                    </div>
+                    <form method="POST" action="{{ url_for('contas_pagar.item_vincular', id=conta.id, indice=iv.indice) }}"
+                          class="d-flex flex-wrap gap-2 align-items-center mt-2 mapa-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <select name="alvo" class="form-select form-select-sm mapa-mp" style="max-width:220px">
+                            <option value="" data-unid="?">— vincular a —</option>
+                            <optgroup label="Matérias-primas (ingrediente)">
+                              {% for mp in mps %}
+                              <option value="mp-{{ mp.id }}" data-unid="{{ mp.unidade }}"
+                                {% if (m and m.materia_prima_id == mp.id) or ((not m or not m.produto_id) and iv.sugestoes and iv.sugestoes[0].id == mp.id) %}selected{% endif %}>
+                                {{ mp.nome }} ({{ mp.unidade }})
+                              </option>
+                              {% endfor %}
+                            </optgroup>
+                            <optgroup label="Produtos (revenda)">
+                              {% for pr in produtos %}
+                              <option value="prod-{{ pr.id }}" data-unid="un"
+                                {% if m and m.produto_id == pr.id %}selected{% endif %}>
+                                {{ pr.nome }} (produto)
+                              </option>
+                              {% endfor %}
+                            </optgroup>
+                        </select>
+                        <div class="d-flex align-items-center gap-1 flex-nowrap">
+                          <span class="small text-muted">1</span>
+                          <input type="text" name="unidade_compra" class="form-control form-control-sm mapa-uncompra"
+                                 style="max-width:90px" placeholder="cx / un / fardo"
+                                 value="{{ (m.unidade_compra if m else '') or iv.prefill.unidade or it.get('unidade') or '' }}"
+                                 title="unidade de compra como vem na NF (cx, un, fardo, kg...)">
+                          <span class="small text-muted">=</span>
+                          <input type="number" step="any" name="fator_conversao" class="form-control form-control-sm mapa-fator"
+                                 style="max-width:100px" placeholder="quanto?"
+                                 value="{{ m.fator_conversao if (m and m.materia_prima_id) else iv.prefill.fator }}"
+                                 title="quanto 1 unidade de compra representa na unidade da matéria-prima">
+                          <span class="small fw-bold mapa-unid-mp">?</span>
+                        </div>
+                        <button class="btn btn-sm btn-primary" name="acao" value="vincular">Vincular</button>
+                        <button class="btn btn-sm btn-outline-secondary" name="acao" value="ignorar">Ignorar</button>
+                        {% if m and (m.confirmado_em or m.ignorar) %}
+                        <button class="btn btn-sm btn-outline-danger" name="acao" value="desfazer">Desfazer</button>
+                        {% endif %}
+                        <div class="small mt-1 mapa-preview w-100" style="color:#0a7d33; min-height:1em;"
+                             data-qtd="{{ it.get('quantidade') if it.get('quantidade') is not none else '' }}"
+                             data-vunit="{{ it.get('valor_unitario') if it.get('valor_unitario') is not none else '' }}"></div>
+                    </form>
+                    {% if iv.sugestoes %}
+                    <div class="small text-muted mt-1">Sugestões: {% for s in iv.sugestoes %}<span class="badge bg-light text-dark border">{{ s.nome }}</span> {% endfor %}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% include 'contas_pagar/_fator_vivo_js.html' %}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

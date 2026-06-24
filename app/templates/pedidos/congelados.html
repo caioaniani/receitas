@@ -5,9 +5,20 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="page-title mb-0"><i class="bi bi-snow2"></i> Estoque de Congelados</h1>
-    <a href="{{ url_for('pedidos.congelados_balanco') }}" class="btn btn-sm btn-outline-primary">
-        <i class="bi bi-clipboard-check"></i> Fazer Balanço (contagem física)
-    </a>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('pedidos.congelados_dashboard') }}" class="btn btn-sm btn-outline-success">
+            <i class="bi bi-grid-3x3-gap"></i> Visão Geral (Indústria × Lojas)
+        </a>
+        <a href="{{ url_for('pedidos.congelados_conferencia') }}" class="btn btn-sm btn-primary">
+            <i class="bi bi-clipboard-check"></i> Conferir contagem (sistema × físico)
+        </a>
+        <a href="{{ url_for('pedidos.congelados_balanco') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-card-text"></i> Balanço por texto
+        </a>
+        <a href="{{ url_for('pedidos.congelados_historico') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-clock-history"></i> Histórico
+        </a>
+    </div>
 </div>
 
 <!-- Entrada de producao -->
@@ -18,18 +29,13 @@
     <div class="card-body">
         <form method="POST" action="{{ url_for('pedidos.congelados_entrada') }}" class="row g-2 align-items-end">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="col-md-2">
-                <label class="form-label" style="font-size:12px;">Tipo</label>
-                <select name="tipo" class="form-select form-select-sm" id="entrada-tipo" onchange="atualizarEntrada()">
-                    <option value="receita">Receita</option>
-                    <option value="produto">Produto</option>
-                </select>
-            </div>
-            <div class="col-md-5">
-                <label class="form-label" style="font-size:12px;">Item</label>
-                <select name="item_id" class="form-select form-select-sm" id="entrada-item" required>
-                    <option value="">Selecione...</option>
-                </select>
+            <input type="hidden" name="tipo" id="entrada-tipo">
+            <input type="hidden" name="item_id" id="entrada-item">
+            <div class="col-md-7">
+                <label class="form-label" style="font-size:12px;">Item (digite pra buscar)</label>
+                <input type="text" id="entrada-busca" class="form-control form-control-sm" autocomplete="off"
+                       placeholder="Digite o nome (ex: pao, croissant)...">
+                <div id="entrada-results" class="ent-results" style="display:none;"></div>
             </div>
             <div class="col-md-2">
                 <label class="form-label" style="font-size:12px;">Quantidade</label>
@@ -44,6 +50,76 @@
     </div>
 </div>
 
+{% set pendentes = itens | selectattr('pendente') | list %}
+{% set vinculados = itens | rejectattr('pendente') | list %}
+
+{% if pendentes %}
+<div class="card mb-3 border-warning">
+    <div class="card-header bg-warning bg-opacity-10 fw-bold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-link-45deg"></i> Pendentes de vinculação ({{ pendentes|length }})</span>
+        <small class="text-muted fw-normal">Itens contados no balanço sem cadastro prévio. Vincule a uma receita/produto.</small>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead class="thead-padaria">
+                <tr>
+                    <th>Nome digitado</th>
+                    <th class="text-center" style="width:100px">Quantidade</th>
+                    <th style="width:420px">Vincular a...</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ep in pendentes %}
+                {% set sug = sugestoes.get(ep.id) %}
+                <tr class="table-warning">
+                    <td class="fw-semibold">
+                        <span class="badge bg-warning text-dark me-1" style="font-size:10px;">Pendente</span>
+                        {{ ep.nome_item }}
+                        {% if sug %}
+                        <div class="small text-muted mt-1">
+                            <i class="bi bi-magic"></i> sugestão:
+                            <span class="fw-semibold">{{ sug.nome }}</span>
+                            <span class="badge bg-light text-dark border" style="font-size:9px;">
+                                {{ sug.tipo }}{% if sug.match == 'apelido' %} · apelido salvo{% elif sug.match == 'fuzzy' %} · aproximação{% endif %}
+                            </span>
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td class="text-center fw-bold">{{ ep.quantidade }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('pedidos.congelados_vincular') }}" class="d-flex gap-1 align-items-center">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="estoque_id" value="{{ ep.id }}">
+                            <select name="alvo_tipo" class="form-select form-select-sm" style="width:90px;"
+                                    onchange="atualizarVincular(this)">
+                                <option value="receita" {% if sug and sug.tipo == 'receita' %}selected{% endif %}>Receita</option>
+                                <option value="produto" {% if sug and sug.tipo == 'produto' %}selected{% endif %}>Produto</option>
+                            </select>
+                            <select name="alvo_id" class="form-select form-select-sm vinc-item" required>
+                                {% if sug and sug.tipo == 'produto' %}
+                                    {% for p in produtos %}
+                                    <option value="{{ p.id }}" {% if p.id == sug.id %}selected{% endif %}>{{ p.nome }}</option>
+                                    {% endfor %}
+                                {% else %}
+                                    {% for r in receitas %}
+                                    <option value="{{ r.id }}" {% if sug and sug.tipo == 'receita' and r.id == sug.id %}selected{% endif %}>{{ r.categoria }} — {{ r.nome }}</option>
+                                    {% endfor %}
+                                {% endif %}
+                            </select>
+                            <button type="submit" class="btn btn-sm {% if sug %}btn-success{% else %}btn-primary{% endif %}"
+                                    onclick="return confirm('Vincular este pendente?')">
+                                <i class="bi {% if sug %}bi-check2-circle{% else %}bi-link{% endif %}"></i> {% if sug %}Confirmar{% else %}Vincular{% endif %}
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 <!-- Tabela de estoque -->
 <div class="table-responsive">
     <table class="table table-sm table-bordered table-hover bg-white">
@@ -56,7 +132,7 @@
             </tr>
         </thead>
         <tbody>
-            {% for ep in itens %}
+            {% for ep in vinculados %}
             <tr>
                 <td class="fw-semibold">{{ ep.nome_item }}</td>
                 <td class="text-center">
@@ -84,8 +160,8 @@
                 </td>
             </tr>
             {% endfor %}
-            {% if not itens %}
-            <tr><td colspan="4" class="text-center text-muted py-3">Nenhum item no estoque de congelados.</td></tr>
+            {% if not vinculados %}
+            <tr><td colspan="4" class="text-center text-muted py-3">Nenhum item vinculado no estoque de congelados.</td></tr>
             {% endif %}
         </tbody>
     </table>
@@ -93,6 +169,13 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+.ent-results { position:absolute; z-index:1050; background:var(--bg-card,#fff); color:var(--text-main,#212529);
+               border:1px solid var(--border-color,#ced4da); border-radius:var(--radius-md,8px);
+               max-height:280px; overflow-y:auto; box-shadow:0 6px 14px rgba(0,0,0,.3); }
+.ent-opt { padding:9px 12px; cursor:pointer; font-size:.9rem; }
+.ent-opt:hover { background:var(--bg-card-hover,#f4f4f5); }
+</style>
 <script>
 var receitas = [
     {% for r in receitas %}
@@ -105,11 +188,60 @@ var produtos = [
     {% endfor %}
 ];
 
-function atualizarEntrada() {
-    var tipo = document.getElementById('entrada-tipo').value;
-    var sel = document.getElementById('entrada-item');
-    sel.innerHTML = '<option value="">Selecione...</option>';
-    var list = tipo === 'receita' ? receitas : produtos;
+// Busca por digitacao (typeahead) do item da entrada — igual ao formulario B2B.
+// Uma busca so sobre receitas+produtos, sem acento; ao escolher seta os hidden
+// tipo+item_id. Dropdown vai pro <body> pra nao ser cortado por overflow.
+function _normC(s){ return (s==null?'':String(s)).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); }
+function _escC(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+var ENTRADA_TODOS = receitas.map(function(r){ return {tipo:'receita', id:r.id, label:(r.cat?r.cat+' — '+r.nome:r.nome), q:_normC((r.cat||'')+' '+r.nome)}; })
+    .concat(produtos.map(function(p){ return {tipo:'produto', id:p.id, label:p.nome, q:_normC(p.nome)}; }));
+(function(){
+    var input = document.getElementById('entrada-busca');
+    var hTipo = document.getElementById('entrada-tipo');
+    var hId = document.getElementById('entrada-item');
+    var box = document.getElementById('entrada-results');
+    if (!input || !box) return;
+    document.body.appendChild(box);
+    input.addEventListener('input', function(){
+        hTipo.value = ''; hId.value = '';
+        var q = _normC(input.value);
+        if (!q) { box.style.display='none'; box.innerHTML=''; return; }
+        var terms = q.split(/\s+/).filter(Boolean);
+        var res = ENTRADA_TODOS.filter(function(o){ return terms.every(function(t){ return o.q.indexOf(t)!==-1; }); }).slice(0,30);
+        box._res = res;
+        box.innerHTML = res.length
+            ? res.map(function(o,i){ return '<div class="ent-opt" data-i="'+i+'">'+_escC(o.label)+'</div>'; }).join('')
+            : '<div class="ent-opt text-muted">nenhum item</div>';
+        var rect = input.getBoundingClientRect();
+        box.style.left=(rect.left+window.pageXOffset)+'px';
+        box.style.top=(rect.bottom+window.pageYOffset)+'px';
+        box.style.width=rect.width+'px';
+        box.style.display='block';
+    });
+    box.addEventListener('mousedown', function(e){
+        var opt = e.target.closest('.ent-opt[data-i]');
+        if (!opt || !box._res) return;
+        e.preventDefault();
+        var o = box._res[parseInt(opt.getAttribute('data-i'),10)];
+        if (!o) return;
+        hTipo.value = o.tipo; hId.value = o.id;
+        input.value = o.label;
+        box.style.display='none'; box.innerHTML='';
+    });
+    input.addEventListener('blur', function(){ setTimeout(function(){ box.style.display='none'; }, 150); });
+    var form = input.closest('form');
+    if (form) form.addEventListener('submit', function(e){
+        if (!hId.value) { e.preventDefault(); input.focus(); }
+    });
+})();
+
+// Troca o segundo select (item) baseado no tipo escolhido no primeiro,
+// dentro do mesmo form de vincular-pendente.
+function atualizarVincular(tipoSel) {
+    var form = tipoSel.closest('form');
+    var sel = form.querySelector('.vinc-item');
+    sel.innerHTML = '';
+    var list = tipoSel.value === 'receita' ? receitas : produtos;
     list.forEach(function(item) {
         var opt = document.createElement('option');
         opt.value = item.id;
@@ -117,6 +249,5 @@ function atualizarEntrada() {
         sel.appendChild(opt);
     });
 }
-atualizarEntrada();
 </script>
 {% endblock %}

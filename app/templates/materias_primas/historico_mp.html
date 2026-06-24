@@ -38,38 +38,68 @@
     </div>
 </div>
 
-<div class="table-responsive">
-    <table class="table table-sm table-hover align-middle">
-        <thead class="table-light">
-            <tr>
-                <th>Data</th>
-                <th>Tipo</th>
-                <th class="text-end">Quantidade</th>
-                <th class="text-end">Preço Unit.</th>
-                <th>Referência</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for m in movimentacoes %}
-            <tr>
-                <td>{{ m.data.strftime('%d/%m/%Y %H:%M') }}</td>
-                <td>
-                    {% if m.tipo == 'entrada' %}
-                    <span class="badge bg-success">Entrada</span>
-                    {% else %}
-                    <span class="badge bg-warning text-dark">Saída</span>
-                    {% endif %}
-                </td>
-                <td class="text-end">{{ "%.1f"|format(m.quantidade) }}</td>
-                <td class="text-end">{{ ("R$ %.2f"|format(m.preco_unitario)) if m.preco_unitario else '—' }}</td>
-                <td class="small text-muted">{{ m.referencia or '—' }}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="5" class="text-center text-muted">Nenhuma movimentação registrada</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="d-flex justify-content-between align-items-center mb-2 mt-3">
+    <h5 class="mb-0"><i class="bi bi-list-ul"></i> Movimentações</h5>
+    <small class="text-muted">{{ movimentacoes|length }} registro{{ '' if movimentacoes|length == 1 else 's' }}</small>
 </div>
+
+{% if movimentacoes %}
+{% set ns = namespace(grupos={}, ordem=[]) %}
+{% for m in movimentacoes %}
+    {% set chave = m.data.strftime('%Y-%m-%d') if m.data else 'sem-data' %}
+    {% if chave not in ns.grupos %}
+        {% set _ = ns.ordem.append(chave) %}
+        {% set _ = ns.grupos.update({chave: []}) %}
+    {% endif %}
+    {% set _ = ns.grupos[chave].append(m) %}
+{% endfor %}
+{% set dias_pt = {0:'segunda', 1:'terça', 2:'quarta', 3:'quinta', 4:'sexta', 5:'sábado', 6:'domingo'} %}
+
+{% for chave in ns.ordem %}
+    {% set lista_dia = ns.grupos[chave] %}
+    {% set data_obj = lista_dia[0].data %}
+    {% set total_qtd = lista_dia | sum(attribute='quantidade') %}
+    <details class="dia-grupo" {% if loop.first %}open{% endif %}>
+        <summary>
+            <span class="dia-data">
+                <strong>{{ data_obj.strftime('%d/%m/%Y') if data_obj else 'Sem data' }}</strong>
+                {% if data_obj %}· <span class="text-muted">{{ dias_pt.get(data_obj.weekday(), '') }}</span>{% endif %}
+            </span>
+            <span class="dia-resumo">{{ lista_dia|length }} mov</span>
+            <span class="dia-total">{{ "%.1f"|format(total_qtd) }} {{ mp.unidade }}</span>
+        </summary>
+        <div class="dia-corpo table-responsive">
+            <table class="table table-sm mb-0">
+                <thead class="thead-padaria">
+                    <tr>
+                        <th style="width:80px;">Hora</th>
+                        <th style="width:100px;">Tipo</th>
+                        <th class="text-end" style="width:130px;">Quantidade</th>
+                        <th class="text-end" style="width:120px;">Preço Unit.</th>
+                        <th>Referência</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in lista_dia %}
+                    <tr>
+                        <td class="small text-muted">{{ m.data.strftime('%H:%M') }}</td>
+                        <td>
+                            {% set cor = 'success' if m.tipo == 'entrada' else 'warning text-dark' %}
+                            <span class="badge bg-{{ cor }}">{{ historico_humano.mov_mp_label(m.tipo) }}</span>
+                        </td>
+                        <td class="text-end">{{ "%.1f"|format(m.quantidade) }}</td>
+                        <td class="text-end">{{ ("R$ %.2f"|format(m.preco_unitario)) if m.preco_unitario else '—' }}</td>
+                        <td class="small text-muted">{{ m.referencia or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+{% endfor %}
+{% else %}
+<div class="card"><div class="card-body text-center text-muted py-4">Nenhuma movimentação registrada</div></div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

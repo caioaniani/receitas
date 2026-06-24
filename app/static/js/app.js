@@ -27,6 +27,67 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    // ═══ SECOES COLAPSAVEIS NA SIDEBAR ═══
+    // Cada <div class="sidebar-section-title"> ganha um chevron clicavel.
+    // Os elementos seguintes (links) somem ate o proximo .sidebar-divider.
+    // Estado fica em localStorage por nome de secao.
+    if (sidebar) {
+        var titulos = sidebar.querySelectorAll('.sidebar-section-title');
+        titulos.forEach(function (titulo) {
+            var key = (titulo.textContent || '').trim().toLowerCase();
+            if (!key) return;
+            titulo.classList.add('sidebar-section-title-toggle');
+            titulo.dataset.section = key;
+
+            // chevron
+            var chev = document.createElement('span');
+            chev.className = 'sidebar-section-chevron';
+            chev.innerHTML = '<i class="bi bi-chevron-down"></i>';
+            titulo.appendChild(chev);
+
+            // colete irmaos ate o proximo divider
+            var siblings = [];
+            var el = titulo.nextElementSibling;
+            while (el && !el.classList.contains('sidebar-divider')
+                       && !el.classList.contains('sidebar-section-title')) {
+                siblings.push(el);
+                el = el.nextElementSibling;
+            }
+
+            function aplicar(collapsed) {
+                titulo.classList.toggle('collapsed', collapsed);
+                siblings.forEach(function (s) {
+                    s.style.display = collapsed ? 'none' : '';
+                });
+            }
+
+            // Estado inicial: COLAPSADO por padrao.
+            // Exceções: (a) secao contem link ativo (pagina atual) → expande
+            //           (b) usuario expandiu manualmente antes → respeita ('0' em localStorage)
+            var hasActive = siblings.some(function (s) {
+                if (!s.classList) return false;
+                if (s.classList.contains('active')) return true;
+                return s.querySelector && s.querySelector('.active');
+            });
+            var saved = localStorage.getItem('sidebar-collapsed-' + key);
+            var collapsedInicial;
+            if (hasActive) {
+                collapsedInicial = false;
+            } else if (saved === '0') {
+                collapsedInicial = false;
+            } else {
+                collapsedInicial = true;
+            }
+            aplicar(collapsedInicial);
+
+            titulo.addEventListener('click', function () {
+                var nowCollapsed = !titulo.classList.contains('collapsed');
+                aplicar(nowCollapsed);
+                localStorage.setItem('sidebar-collapsed-' + key, nowCollapsed ? '1' : '0');
+            });
+        });
+    }
+
     // ═══ BUSCA NA SIDEBAR ═══
     var sidebarBusca = document.getElementById('sidebar-busca');
     if (sidebarBusca) {
@@ -160,6 +221,239 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
                 fichaBody.appendChild(clone);
             });
+        }
+
+        // ── Reordenar por arraste (alça ⠿) — ingredientes e etapas ──
+        // A ordem persiste no salvar: o backend apaga e recria os itens na
+        // ordem em que os campos chegam no formulário. Mouse (HTML5 DnD) e
+        // dedo (touch) suportados.
+        function tornarOrdenavel(container, seletorItem, seletorAlca, aoSoltar) {
+            var arrastando = null;
+
+            function moverPara(clientY, alvo) {
+                if (!arrastando || !alvo || alvo === arrastando) return;
+                var r = alvo.getBoundingClientRect();
+                var antes = clientY < r.top + r.height / 2;
+                container.insertBefore(arrastando, antes ? alvo : alvo.nextSibling);
+            }
+            function soltar() {
+                if (!arrastando) return;
+                arrastando.style.opacity = '';
+                arrastando.draggable = false;
+                arrastando = null;
+                formAlterado = true;
+                if (aoSoltar) aoSoltar();
+            }
+
+            container.addEventListener('mousedown', function (e) {
+                var alca = e.target.closest(seletorAlca);
+                if (alca) alca.closest(seletorItem).draggable = true;
+            });
+            container.addEventListener('dragstart', function (e) {
+                var item = e.target.closest(seletorItem);
+                if (!item || !item.draggable) return;
+                arrastando = item;
+                item.style.opacity = '0.4';
+                e.dataTransfer.effectAllowed = 'move';
+                try { e.dataTransfer.setData('text/plain', ''); } catch (err) { /* IE */ }
+            });
+            container.addEventListener('dragover', function (e) {
+                if (!arrastando) return;
+                e.preventDefault();
+                moverPara(e.clientY, e.target.closest(seletorItem));
+            });
+            container.addEventListener('dragend', soltar);
+
+            container.addEventListener('touchstart', function (e) {
+                var alca = e.target.closest(seletorAlca);
+                if (!alca) return;
+                arrastando = alca.closest(seletorItem);
+                arrastando.style.opacity = '0.4';
+            }, { passive: true });
+            container.addEventListener('touchmove', function (e) {
+                if (!arrastando) return;
+                e.preventDefault();
+                var t = e.touches[0];
+                var el = document.elementFromPoint(t.clientX, t.clientY);
+                moverPara(t.clientY, el && el.closest(seletorItem));
+            }, { passive: false });
+            container.addEventListener('touchend', soltar);
+        }
+
+        tornarOrdenavel(fichaBody, '.ingrediente-row', '.ing-drag', recalcularTudo);
+
+        // ── Modo de preparo em etapas (1 módulo por etapa) ──
+        var etapasBox = document.getElementById('etapas-box');
+        var etapaTemplate = document.getElementById('etapa-template');
+        var btnAddEtapa = document.getElementById('btn-add-etapa');
+
+        function renumerarEtapas() {
+            etapasBox.querySelectorAll('.etapa-num').forEach(function (b, i) {
+                b.textContent = i + 1;
+            });
+        }
+        if (etapasBox) {
+            tornarOrdenavel(etapasBox, '.etapa-modulo', '.etapa-drag', renumerarEtapas);
+            etapasBox.addEventListener('click', function (e) {
+                var btn = e.target.closest('.btn-remove-etapa');
+                if (btn) {
+                    btn.closest('.etapa-modulo').remove();
+                    renumerarEtapas();
+                    formAlterado = true;
+                }
+            });
+            if (btnAddEtapa && etapaTemplate) {
+                btnAddEtapa.addEventListener('click', function () {
+                    etapasBox.appendChild(etapaTemplate.content.cloneNode(true));
+                    renumerarEtapas();
+                    var nova = etapasBox.querySelector('.etapa-modulo:last-child textarea');
+                    if (nova) nova.focus();
+                });
+            }
+        }
+
+        // ── Excluir receita: modal lista os vínculos e resolve ali mesmo ──
+        var formExcluir = document.getElementById('form-excluir-receita');
+        if (formExcluir) {
+            var modalVinc = document.getElementById('modal-vinculos');
+            var vincBody = document.getElementById('vinculos-body');
+            var btnLiberado = document.getElementById('btn-excluir-liberado');
+            var excluirLiberado = false;
+
+            function esc(s) {
+                return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;',
+                             '"': '&quot;', "'": '&#39;' }[c];
+                });
+            }
+
+            var boxTransferir = document.getElementById('vinculos-transferir-box');
+
+            function renderVinculos(data) {
+                if (data.pode_excluir) {
+                    vincBody.innerHTML = '<div class="text-success">' +
+                        '<i class="bi bi-check-circle"></i> Nenhum vínculo restante — pode excluir.</div>';
+                    btnLiberado.style.display = '';
+                    if (boxTransferir) boxTransferir.style.display = 'none';
+                    return;
+                }
+                btnLiberado.style.display = 'none';
+                if (boxTransferir) boxTransferir.style.display = '';
+                var html = '';
+                data.grupos.forEach(function (g) {
+                    html += '<div class="border rounded p-2 mb-2">' +
+                        '<div class="d-flex justify-content-between align-items-start gap-2">' +
+                        '<div><b>' + esc(g.titulo) + '</b> ' +
+                        '<span class="badge bg-secondary">' + esc(g.qtd) + '</span>' +
+                        '<div class="small text-muted">' + esc(g.descricao) + '</div></div>';
+                    if (g.resolvivel) {
+                        html += '<button type="button" class="btn btn-sm btn-outline-danger btn-resolver" ' +
+                            'data-chave="' + esc(g.chave) + '">Resolver</button>';
+                    } else {
+                        html += '<span class="badge bg-dark">histórico</span>';
+                    }
+                    html += '</div>';
+                    if (g.itens && g.itens.length) {
+                        html += '<div class="small mt-1">' + g.itens.map(function (i) {
+                            return i.url
+                                ? '<a href="' + esc(i.url) + '" target="_blank">' + esc(i.label) + '</a>'
+                                : esc(i.label);
+                        }).join(' · ') + '</div>';
+                    }
+                    html += '</div>';
+                });
+                vincBody.innerHTML = html;
+            }
+
+            formExcluir.addEventListener('submit', function (e) {
+                if (excluirLiberado) return;
+                e.preventDefault();
+                fetch(formExcluir.dataset.vinculosUrl)
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data.pode_excluir) {
+                            if (confirm('Excluir "' + formExcluir.dataset.nome + '"?')) {
+                                excluirLiberado = true;
+                                formExcluir.submit();
+                            }
+                            return;
+                        }
+                        renderVinculos(data);
+                        bootstrap.Modal.getOrCreateInstance(modalVinc).show();
+                    })
+                    .catch(function () {
+                        // fetch falhou: deixa o servidor decidir (fallback IntegrityError)
+                        excluirLiberado = true;
+                        formExcluir.submit();
+                    });
+            });
+
+            vincBody.addEventListener('click', function (e) {
+                var btn = e.target.closest('.btn-resolver');
+                if (!btn) return;
+                btn.disabled = true;
+                var fd = new FormData();
+                fd.append('chave', btn.dataset.chave);
+                fd.append('csrf_token', CSRF_TOKEN);
+                fetch(formExcluir.dataset.resolverUrl, { method: 'POST', body: fd })
+                    .then(function (r) { return r.json(); })
+                    .then(renderVinculos)
+                    .catch(function () { btn.disabled = false; });
+            });
+
+            btnLiberado.addEventListener('click', function () {
+                if (!confirm('Excluir "' + formExcluir.dataset.nome + '" de vez?')) return;
+                excluirLiberado = true;
+                formExcluir.submit();
+            });
+
+            // Transferir TODOS os vinculos pra outra receita (fusao de duplicata)
+            var btnTransferir = document.getElementById('btn-transferir-vinculos');
+            if (btnTransferir) {
+                btnTransferir.addEventListener('click', function () {
+                    var destino = (document.getElementById('transferir-destino').value || '').trim();
+                    var fb = document.getElementById('transferir-feedback');
+                    fb.className = 'small mt-1';
+                    if (!destino) {
+                        fb.classList.add('text-danger');
+                        fb.textContent = 'Digite o nome da receita destino.';
+                        return;
+                    }
+                    if (!confirm('Transferir TODOS os vínculos de "' +
+                                 formExcluir.dataset.nome + '" para "' + destino +
+                                 '"?\n\nPedidos, vendas e estoque passam a contar na receita destino.')) {
+                        return;
+                    }
+                    btnTransferir.disabled = true;
+                    fb.textContent = 'Transferindo...';
+                    var fd = new FormData();
+                    fd.append('destino', destino);
+                    fd.append('csrf_token', CSRF_TOKEN);
+                    fetch(btnTransferir.dataset.url, { method: 'POST', body: fd })
+                        .then(function (r) { return r.json(); })
+                        .then(function (data) {
+                            btnTransferir.disabled = false;
+                            if (data.erro) {
+                                fb.classList.add('text-danger');
+                                fb.textContent = data.erro;
+                                return;
+                            }
+                            var total = 0;
+                            Object.keys(data.movidos || {}).forEach(function (k) {
+                                total += data.movidos[k];
+                            });
+                            fb.classList.add('text-success');
+                            fb.textContent = total + ' vínculo(s) transferido(s) para "' +
+                                data.destino + '".';
+                            renderVinculos(data);
+                        })
+                        .catch(function () {
+                            btnTransferir.disabled = false;
+                            fb.classList.add('text-danger');
+                            fb.textContent = 'Falha na transferência — tente de novo.';
+                        });
+                });
+            }
         }
 
         // Cadeado de % Padeiro
@@ -372,6 +666,26 @@ document.addEventListener('DOMContentLoaded', function () {
                 // MP direto não contribui para % padeiro, mas contribui para peso e custo
                 totalQtd += qtd;
                 totalCusto += custoRs;
+            } else if (tipo === 'mp_un') {
+                // MP cobrada por unidade (ex: Baton Calebaut). pct = qtd de unidades.
+                // Custo = qtd × custo_por_unidade (que esta em custo_por_kg pra mp un).
+                var mp = MP_DATA[nome];
+                var custoUn = mp ? mp.custo_por_kg : 0;
+                qtd = pct;  // unidades
+                custoRs = qtd * custoUn;
+
+                var qtdExibir = qtd * multiplicador;
+                var custoExibir = custoRs * multiplicador;
+
+                qtdCell.textContent = qtdExibir > 0 ? formatNum(qtdExibir, 0) + ' un' : '-';
+                custoKgCell.textContent = mp ? formatBRL(custoUn) + '/un' : '-';
+                custoKgCell.className = mp ? 'custo-kg-calc valor-mp text-end' : 'custo-kg-calc text-end text-muted';
+                custoRsCell.textContent = custoExibir > 0 ? formatBRL(custoExibir) : '-';
+
+                // Soma peso se a MP tem peso_unidade definido
+                var pesoUn = (mp && mp.peso_unidade) ? mp.peso_unidade : 0;
+                totalQtd += qtd * pesoUn;
+                totalCusto += custoRs;
             } else {
                 // MP normal: % padeiro
                 qtd = pesoBase * pct / 100;
@@ -557,9 +871,46 @@ document.addEventListener('DOMContentLoaded', function () {
             return null;
         }
 
+        function _norm(s) {
+            return (s || '').trim().toLowerCase();
+        }
+
+        // Indices normalizados (case/espaco-tolerantes), construidos uma vez
+        // por render. Evita custo zero quando grafia divergir (ex: "Croissant
+        // Tradicional" vs "Croissant Tradicional ").
+        var _RECEITA_CUSTOS_N = null;
+        var _PRODUTO_CUSTOS_N = null;
+        var _MP_DATA_N = null;
+        function _receitaCustoN() {
+            if (_RECEITA_CUSTOS_N) return _RECEITA_CUSTOS_N;
+            _RECEITA_CUSTOS_N = {};
+            if (typeof RECEITA_CUSTOS !== 'undefined') {
+                Object.keys(RECEITA_CUSTOS).forEach(function (k) {
+                    _RECEITA_CUSTOS_N[_norm(k)] = RECEITA_CUSTOS[k];
+                });
+            }
+            return _RECEITA_CUSTOS_N;
+        }
+        function _produtoCustoN() {
+            if (_PRODUTO_CUSTOS_N) return _PRODUTO_CUSTOS_N;
+            _PRODUTO_CUSTOS_N = {};
+            if (typeof PRODUTO_CUSTOS !== 'undefined') {
+                Object.keys(PRODUTO_CUSTOS).forEach(function (k) {
+                    _PRODUTO_CUSTOS_N[_norm(k)] = PRODUTO_CUSTOS[k];
+                });
+            }
+            return _PRODUTO_CUSTOS_N;
+        }
+
         function getCustoItem(tipo, nome) {
             if (tipo === 'receita') {
-                return (typeof RECEITA_CUSTOS !== 'undefined' && RECEITA_CUSTOS[nome]) || 0;
+                if (typeof RECEITA_CUSTOS === 'undefined') return 0;
+                if (RECEITA_CUSTOS[nome]) return RECEITA_CUSTOS[nome];
+                return _receitaCustoN()[_norm(nome)] || 0;
+            } else if (tipo === 'produto') {
+                if (typeof PRODUTO_CUSTOS === 'undefined') return 0;
+                if (PRODUTO_CUSTOS[nome]) return PRODUTO_CUSTOS[nome];
+                return _produtoCustoN()[_norm(nome)] || 0;
             } else {
                 var mp = _findMp(nome);
                 if (!mp) return 0;
@@ -662,7 +1013,10 @@ document.addEventListener('DOMContentLoaded', function () {
             if (e.target.classList.contains('item-tipo')) {
                 var row = e.target.closest('tr');
                 var nomeInput = row.querySelector('.item-nome');
-                nomeInput.setAttribute('list', e.target.value === 'receita' ? 'receita-list' : 'mp-list');
+                var listId = 'mp-list';
+                if (e.target.value === 'receita') listId = 'receita-list';
+                else if (e.target.value === 'produto') listId = 'produto-list';
+                nomeInput.setAttribute('list', listId);
                 nomeInput.value = '';
                 recalcularCesta();
             }
@@ -813,6 +1167,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ═══ UX: LOADING STATES ═══
     document.addEventListener('submit', function(e) {
+        // Form interceptado por outro handler (ex: modal de vinculos da
+        // ficha chama preventDefault) NAO esta navegando — sem "Salvando...",
+        // senao o botao fica preso no spinner com o modal aberto.
+        if (e.defaultPrevented) return;
         var btn = e.target.querySelector('[type="submit"]');
         if (btn && !btn.dataset.noLoading) {
             btn.disabled = true;

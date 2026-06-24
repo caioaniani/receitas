@@ -17,8 +17,9 @@
                     <th style="width:50px" class="text-center">cód</th>
                     <th>nome</th>
                     <th>endereço</th>
-                    <th style="width:170px">telefone</th>
-                    <th style="width:80px" class="text-center">funcs.</th>
+                    <th style="width:140px">telefone</th>
+                    <th style="width:100px" title="PIN para QR de entrega">PIN</th>
+                    <th style="width:70px" class="text-center">funcs.</th>
                     <th class="col-acoes"></th>
                 </tr>
             </thead>
@@ -35,6 +36,9 @@
                     </td>
                     <td>
                         <input type="text" name="loja_telefone[]" value="{{ l.telefone or '' }}" class="form-control form-control-sm input-blue">
+                    </td>
+                    <td>
+                        <input type="text" name="loja_pin[]" value="{{ l.pin or '' }}" class="form-control form-control-sm input-blue" maxlength="8" placeholder="ex: 1234" title="PIN da loja pra confirmar entrega via QR">
                     </td>
                     <td class="text-center">
                         <span class="badge-status"><span class="bullet" style="background:var(--cor-azul);"></span>{{ l.funcionarios | length }}</span>
@@ -78,6 +82,7 @@ document.getElementById('btn-add-loja').addEventListener('click', function() {
         '<input type="text" name="loja_nome[]" value="" class="form-control form-control-sm input-blue" required></td>' +
         '<td><input type="text" name="loja_endereco[]" value="" class="form-control form-control-sm input-blue"></td>' +
         '<td><input type="text" name="loja_telefone[]" value="" class="form-control form-control-sm input-blue"></td>' +
+        '<td><input type="text" name="loja_pin[]" value="" class="form-control form-control-sm input-blue" maxlength="8" placeholder="PIN"></td>' +
         '<td class="text-center">—</td>' +
         '<td class="col-acoes"><button type="button" class="btn-circle" onclick="this.closest(\'tr\').remove()" title="Remover"><i class="bi bi-trash"></i></button></td>';
     tbody.appendChild(tr);

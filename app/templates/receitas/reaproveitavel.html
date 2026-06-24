@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% block title %}Reaproveitável (bulk){% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-recycle"></i> Reaproveitável</h1>
+    <a href="{{ url_for('receitas.padeiro_lista') }}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+</div>
+
+<div class="alert alert-info small mb-3">
+    Marque itens cujo desperdício com motivo <strong>“validade”</strong> NÃO deve baixar estoque —
+    o item vencido vira outra coisa (ex: croissant tradicional vencido vira croissant amande).
+    Outros motivos (estragou/caiu/queimou) baixam normalmente.
+</div>
+
+<form method="POST" action="{{ url_for('receitas.reaproveitavel') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="mb-3 d-flex gap-2 flex-wrap align-items-center">
+        <span class="small text-muted">Atalhos:</span>
+        <button type="button" class="btn btn-sm btn-outline-primary"
+                onclick="marcarFamilia('viennoiserie', true)">
+            Marcar viennoiserie
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="marcarTodos(false)">
+            Limpar tudo
+        </button>
+    </div>
+
+    <h5 class="mt-3">Receitas</h5>
+    {% for categoria, lista in receitas_por_cat.items() %}
+    <div class="card card-padaria mb-3">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <strong>{{ categoria }}</strong>
+            <div class="d-flex gap-1">
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        onclick="marcarCategoria('r', '{{ categoria|e }}', true)">
+                    Marcar categoria
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        onclick="marcarCategoria('r', '{{ categoria|e }}', false)">
+                    Limpar categoria
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th style="width:60px">✓</th>
+                        <th>Receita</th>
+                        <th style="width:140px">Família</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for r in lista %}
+                    <tr data-tipo="r" data-categoria="{{ r.categoria or 'Outros' }}"
+                        data-familia="{{ r.familia or '' }}">
+                        <td>
+                            <input type="checkbox" name="reap_r_{{ r.id }}" class="form-check-input reap-chk"
+                                   {% if r.reaproveitavel %}checked{% endif %}>
+                        </td>
+                        <td>{{ r.nome }}</td>
+                        <td><span class="badge bg-secondary">{{ r.familia or '—' }}</span></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+
+    <h5 class="mt-4">Produtos / Cestas</h5>
+    {% for categoria, lista in produtos_por_cat.items() %}
+    <div class="card card-padaria mb-3">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <strong>{{ categoria }}</strong>
+            <div class="d-flex gap-1">
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        onclick="marcarCategoria('p', '{{ categoria|e }}', true)">
+                    Marcar categoria
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        onclick="marcarCategoria('p', '{{ categoria|e }}', false)">
+                    Limpar categoria
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th style="width:60px">✓</th>
+                        <th>Produto</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for p in lista %}
+                    <tr data-tipo="p" data-categoria="{{ p.categoria or 'Outros' }}">
+                        <td>
+                            <input type="checkbox" name="reap_p_{{ p.id }}" class="form-check-input reap-chk"
+                                   {% if p.reaproveitavel %}checked{% endif %}>
+                        </td>
+                        <td>{{ p.nome }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+
+    <div class="d-flex gap-2 sticky-bottom bg-white border-top py-2" style="position:sticky;bottom:0;z-index:10;">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg"></i> Salvar todos
+        </button>
+        <a href="{{ url_for('receitas.padeiro_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+    </div>
+</form>
+
+<script>
+function marcarFamilia(familia, valor) {
+    document.querySelectorAll('tr[data-familia]').forEach(function(tr) {
+        if (tr.dataset.familia !== familia) return;
+        var chk = tr.querySelector('input.reap-chk');
+        if (chk) chk.checked = valor;
+    });
+}
+function marcarCategoria(tipo, categoria, valor) {
+    document.querySelectorAll('tr[data-tipo="' + tipo + '"][data-categoria]').forEach(function(tr) {
+        if (tr.dataset.categoria !== categoria) return;
+        var chk = tr.querySelector('input.reap-chk');
+        if (chk) chk.checked = valor;
+    });
+}
+function marcarTodos(valor) {
+    document.querySelectorAll('input.reap-chk').forEach(function(c) { c.checked = valor; });
+}
+</script>
+{% endblock %}

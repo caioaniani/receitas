@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Cancela runs em andamento do mesmo ref quando chega push novo — o
+# auto-commit empurra varios commits seguidos, entao so o ultimo importa.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # Suite ~12 min apos pular seeds em teste (PYTEST_RUNNING). Com install +
+    # ruff da ~15 min de wall time no runner. 25 mantem margem de seguranca —
+    # falha falsa por timeout travaria deploy (Wait for CI), entao folga > corte.
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff pytest
+
+      - name: Ruff (lint)
+        run: ruff check app/ tests/
+
+      - name: Pytest
+        # `python -m pytest` adiciona cwd ao sys.path (vs `pytest` direto
+        # que nao adiciona). Sem isso, `from app import ...` falha no CI.
+        run: python -m pytest -q --tb=short
+        env:
+          # SECRET_KEY obrigatorio em prod (Postgres). Como CI usa SQLite
+          # in-memory via conftest.py, o fallback dev gera SECRET_KEY
+          # automatica — definir explicitamente so pra silenciar warning.
+          SECRET_KEY: ci-test-secret-not-secret

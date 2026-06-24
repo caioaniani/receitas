@@ -7,11 +7,43 @@
     <h1 class="page-title">entregas
         <small class="text-muted" style="font-size:11px;font-weight:normal;text-transform:none;">build {{ static_v['js/entregas.js'] }}</small>
     </h1>
-    <div class="page-actions">
-        <button class="btn-pill btn-pill-outline d-print-none" onclick="imprimirPedidos()">
-            <i class="bi bi-printer"></i> imprimir
+    <div class="page-actions d-flex gap-2 align-items-center">
+        <span id="sel-imprimir-info" class="small text-muted d-print-none"></span>
+        <button class="btn-pill btn-pill-outline d-print-none" id="btn-imprimir-sel"
+                onclick="abrirModalImprimir()" disabled>
+            <i class="bi bi-printer"></i> imprimir selecionados
         </button>
     </div>
+</div>
+
+<!-- Modal: imprimir tambem via do entregador? -->
+<div class="modal fade d-print-none" id="modalImprimirVias" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title"><i class="bi bi-printer"></i>
+          Imprimir <span id="modal-imprimir-qt">0</span> pedido(s)</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">Quer imprimir <b>também a via do entregador</b>?</p>
+        <p class="small text-muted mb-0">
+          A via do cliente tem cartinha e valores. A via do entregador tem só
+          o que ele precisa pra entregar (destinatário, endereço, telefone,
+          itens, janela) e um campo pra assinatura — sem valores nem cartinha.
+        </p>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-outline-primary" onclick="imprimirSelecionados('cliente')">
+          Só via do cliente
+        </button>
+        <button class="btn btn-primary" onclick="imprimirSelecionados('cliente,motorista')">
+          Cliente + entregador
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Tabs -->
@@ -77,7 +109,8 @@
             <button class="btn-pill btn-pill-outline ms-auto" data-bs-toggle="modal" data-bs-target="#modal-drivers">
                 <i class="bi bi-people"></i> drivers
             </button>
-            <button class="btn-pill btn-pill-outline" onclick="window.print()">
+            <button class="btn-pill btn-pill-outline" onclick="abrirModalImprimir()"
+                    title="Marque os checkboxes dos pedidos antes — abre A4 por pedido em nova aba">
                 <i class="bi bi-printer"></i> imprimir
             </button>
         </div>

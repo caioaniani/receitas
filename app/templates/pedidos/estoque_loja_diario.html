@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Movimento do dia — Estoque da Loja{% endblock %}
+
+{% block content %}
+<h1 class="page-title mb-3"><i class="bi bi-calendar-day"></i> Movimento do dia — Estoque da Loja</h1>
+
+<form method="GET" class="mb-3 d-flex align-items-center gap-2 flex-wrap">
+    {% if current_user.is_admin() %}
+    <select name="loja" class="form-select form-select-sm" style="max-width:250px;" onchange="this.form.submit()">
+        <option value="">Selecione uma loja...</option>
+        {% for l in lojas %}
+        <option value="{{ l.id }}" {% if sel_loja == l.id %}selected{% endif %}>{{ l.nome }}</option>
+        {% endfor %}
+    </select>
+    {% endif %}
+    <label class="small text-muted mb-0">Dia:</label>
+    <input type="date" name="dia" value="{{ dia }}" class="form-control form-control-sm"
+           style="max-width:160px;" onchange="this.form.submit()">
+</form>
+
+{% if loja %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <p class="text-muted mb-0">
+        <strong>{{ loja.nome }}</strong> — clique num produto pra ver as baixas por fonte
+    </p>
+    <a href="{{ url_for('pedidos.estoque_loja', loja=loja.id) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-box-seam"></i> Estoque completo
+    </a>
+</div>
+
+<div class="alert alert-light border small py-2">
+    <i class="bi bi-info-circle"></i>
+    Tudo vem dos movimentos já registrados. <strong>Estoque 23:59</strong> = saldo no
+    fim do dia anterior; <strong>baixas</strong> = vendas/saídas do dia até agora.
+</div>
+
+<div class="table-responsive">
+<table class="table table-sm align-middle">
+    <thead class="table-light">
+        <tr>
+            <th>Produto</th>
+            <th class="text-end">Estoque 23:59 (dia anterior)</th>
+            <th class="text-end">Entradas hoje</th>
+            <th class="text-end">Baixas hoje</th>
+            <th class="text-end">Estoque atual</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for x in linhas %}
+        <tr {% if x.baixas_por_fonte %}style="cursor:pointer" onclick="toggleDet('det{{ x.estoque_loja_id }}')"{% endif %}>
+            <td>
+                {% if x.baixas_por_fonte %}<i class="bi bi-caret-right-fill small text-muted"></i> {% endif %}
+                {{ x.nome }}
+                {% if x.estado %}<span class="badge bg-light text-dark">{{ x.estado }}</span>{% endif %}
+            </td>
+            <td class="text-end">{{ x.estoque_inicio }}</td>
+            <td class="text-end {% if x.entradas %}text-success{% endif %}">{{ x.entradas or '' }}</td>
+            <td class="text-end {% if x.baixas %}text-danger fw-bold{% endif %}">{{ x.baixas or '' }}</td>
+            <td class="text-end fw-bold">{{ x.estoque_atual }}</td>
+        </tr>
+        {% if x.baixas_por_fonte %}
+        <tr id="det{{ x.estoque_loja_id }}" class="d-none">
+            <td colspan="5" class="bg-light">
+                <div class="small ps-3">
+                    <strong>Baixas de hoje por fonte:</strong>
+                    <ul class="mb-0 mt-1">
+                        {% for f in x.baixas_por_fonte %}
+                        <li>{{ f.label }}: <strong>{{ f.quantidade }}</strong></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </td>
+        </tr>
+        {% endif %}
+        {% else %}
+        <tr><td colspan="5" class="text-muted text-center py-3">
+            Nenhum item com estoque ou movimento no dia.
+        </td></tr>
+        {% endfor %}
+    </tbody>
+    {% if linhas %}
+    <tfoot class="table-light fw-bold">
+        <tr>
+            <td>Total</td>
+            <td class="text-end">{{ totais.inicio }}</td>
+            <td class="text-end text-success">{{ totais.entradas }}</td>
+            <td class="text-end text-danger">{{ totais.baixas }}</td>
+            <td class="text-end">{{ totais.atual }}</td>
+        </tr>
+    </tfoot>
+    {% endif %}
+</table>
+</div>
+
+<script>
+function toggleDet(id) {
+    var el = document.getElementById(id);
+    if (el) el.classList.toggle('d-none');
+}
+</script>
+{% else %}
+<p class="text-muted">Selecione uma loja pra ver o movimento do dia.</p>
+{% endif %}
+{% endblock %}

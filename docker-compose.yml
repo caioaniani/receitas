@@ -1,0 +1,108 @@
+# Sistema Padaria O Pão — stack de produção (servidor de casa)
+#
+# Sobe tudo:    docker compose up -d
+# Logs:         docker compose logs -f app
+# Restart:      docker compose restart app
+# Update:       git pull && docker compose up -d --build app
+# Backup DB:    ./deploy/backup.sh
+# Restore DB:   ./deploy/restore.sh <arquivo.sql>
+#
+# Dados persistem em volumes nomeados (não somem ao recriar o container).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: padaria-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-padaria}
+      POSTGRES_USER: ${POSTGRES_USER:-padaria}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deploy/backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-padaria}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Só expõe localmente (não abre porta para a rede)
+    expose:
+      - "5432"
+
+  app:
+    build: .
+    container_name: padaria-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Banco de dados (conecta no service postgres do compose)
+      DATABASE_URL: postgresql://${POSTGRES_USER:-padaria}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-padaria}
+      # Segredos e tokens — vêm do .env
+      SECRET_KEY: ${SECRET_KEY:?defina SECRET_KEY no .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Seru (PDV)
+      SERU_CLIENT_ID: ${SERU_CLIENT_ID:-}
+      SERU_CLIENT_SECRET: ${SERU_CLIENT_SECRET:-}
+      SERU_AUTO_SYNC: ${SERU_AUTO_SYNC:-1}
+      # VNDA
+      VNDA_API_TOKEN: ${VNDA_API_TOKEN:-}
+      VNDA_SHOP_HOST: ${VNDA_SHOP_HOST:-}
+      # Slack bot
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
+      SLACK_CANAIS_PERMITIDOS: ${SLACK_CANAIS_PERMITIDOS:-}
+      SLACK_CANAL_RESUMO_DIARIO: ${SLACK_CANAL_RESUMO_DIARIO:-}
+      SLACK_CANAL_PEDIDOS: ${SLACK_CANAL_PEDIDOS:-}
+      # Z-API (WhatsApp)
+      ZAPI_INSTANCE_ID: ${ZAPI_INSTANCE_ID:-}
+      ZAPI_TOKEN: ${ZAPI_TOKEN:-}
+      ZAPI_CLIENT_TOKEN: ${ZAPI_CLIENT_TOKEN:-}
+      ZAPI_NUMERO_DESTINO: ${ZAPI_NUMERO_DESTINO:-}
+      ZAPI_NUMEROS_PERMITIDOS: ${ZAPI_NUMEROS_PERMITIDOS:-}
+      # Google Maps (geocoding + rotas)
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      ROTA_ORIGEM_LAT: ${ROTA_ORIGEM_LAT:-}
+      ROTA_ORIGEM_LNG: ${ROTA_ORIGEM_LNG:-}
+      ROTA_ORIGEM_ENDERECO: ${ROTA_ORIGEM_ENDERECO:-}
+      # Dropbox (fotos de entrega)
+      DROPBOX_ACCESS_TOKEN: ${DROPBOX_ACCESS_TOKEN:-}
+      DROPBOX_APP_KEY: ${DROPBOX_APP_KEY:-}
+      DROPBOX_APP_SECRET: ${DROPBOX_APP_SECRET:-}
+      DROPBOX_REFRESH_TOKEN: ${DROPBOX_REFRESH_TOKEN:-}
+      DROPBOX_PASTA_BASE: ${DROPBOX_PASTA_BASE:-/Apps/Receitas-Entregas}
+      # Bot API (n8n/WhatsApp custom)
+      BOT_API_TOKEN: ${BOT_API_TOKEN:-}
+      BOT_ALLOWED_PHONES: ${BOT_ALLOWED_PHONES:-}
+      # Observabilidade (opcional)
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      # URL pública (para links em emails / Slack)
+      APP_BASE_URL: ${APP_BASE_URL:-https://gestao.opaopadariaartesanal.com.br}
+    # Aplicação escuta interna na 5000; só o Cloudflare Tunnel acessa
+    expose:
+      - "5000"
+    # Acesso opcional via localhost durante setup/teste
+    ports:
+      - "127.0.0.1:5000:5000"
+
+  # Cloudflare Tunnel — exposição segura para a internet sem abrir portas no router.
+  # Configuração separada (ver deploy/cloudflared/README.md).
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: padaria-tunnel
+    restart: unless-stopped
+    depends_on:
+      - app
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    # Só sobe se houver token configurado
+    profiles:
+      - tunnel
+
+volumes:
+  postgres_data:
+    name: padaria_postgres_data

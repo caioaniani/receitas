@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}Famílias das receitas{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-tags"></i> Famílias das receitas</h1>
+    <a href="{{ url_for('receitas.padeiro_lista') }}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+</div>
+
+<div class="alert alert-info small mb-3">
+    <strong>Família</strong> define quais estados (backup/assado) a receita aceita em pedidos/estoque:
+    <ul class="mb-0 mt-1">
+        <li><strong>Viennoiserie</strong> — croissant, pain au chocolat, danish, croifin, choconana. Aceita backup e assado.</li>
+        <li><strong>Pão / Sourdough</strong> — congelado assado, único estado.</li>
+        <li><strong>Fornada especial</strong> — focaccia, brioche, especialidades assadas fresco.</li>
+        <li><em>Padrão (vazio)</em> — sem distinção de estado. Use pra receitas sem variação (massa-mãe, recheios, etc).</li>
+    </ul>
+</div>
+
+<form method="POST" action="{{ url_for('receitas.familias') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="mb-3 d-flex gap-2 flex-wrap align-items-center">
+        <span class="small text-muted">Aplicar em massa (todos da página):</span>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="aplicarTodos('viennoiserie')">
+            Marcar tudo como Viennoiserie
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="aplicarTodos('pao_sourdough')">
+            Marcar tudo como Pão/Sourdough
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="aplicarTodos('fornada_especial')">
+            Marcar tudo como Fornada especial
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="aplicarTodos('')">
+            Limpar todas
+        </button>
+    </div>
+
+    {% for categoria, lista in categorias.items() %}
+    <div class="card card-padaria mb-3">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <strong>{{ categoria }}</strong>
+            <div class="d-flex gap-1">
+                <span class="small text-muted me-2">Aplicar nesta categoria:</span>
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        onclick="aplicarCategoria('{{ categoria|e }}', 'viennoiserie')">
+                    Viennoiserie
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        onclick="aplicarCategoria('{{ categoria|e }}', 'pao_sourdough')">
+                    Pão/Sourdough
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        onclick="aplicarCategoria('{{ categoria|e }}', 'fornada_especial')">
+                    Fornada
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Receita</th>
+                        <th style="width:280px">Família</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for r in lista %}
+                    <tr data-categoria="{{ r.categoria or 'Outros' }}">
+                        <td>{{ r.nome }}</td>
+                        <td>
+                            <select name="familia_{{ r.id }}" class="form-select form-select-sm familia-sel">
+                                <option value="" {% if not r.familia %}selected{% endif %}>— Padrão —</option>
+                                <option value="viennoiserie" {% if r.familia == 'viennoiserie' %}selected{% endif %}>Viennoiserie</option>
+                                <option value="pao_sourdough" {% if r.familia == 'pao_sourdough' %}selected{% endif %}>Pão / Sourdough</option>
+                                <option value="fornada_especial" {% if r.familia == 'fornada_especial' %}selected{% endif %}>Fornada especial</option>
+                            </select>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+
+    <div class="d-flex gap-2 sticky-bottom bg-white border-top py-2" style="position:sticky;bottom:0;z-index:10;">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg"></i> Salvar todas
+        </button>
+        <a href="{{ url_for('receitas.padeiro_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+    </div>
+</form>
+
+<script>
+function aplicarTodos(valor) {
+    document.querySelectorAll('.familia-sel').forEach(function(sel) {
+        sel.value = valor;
+    });
+}
+function aplicarCategoria(categoria, valor) {
+    document.querySelectorAll('tr[data-categoria]').forEach(function(tr) {
+        if (tr.dataset.categoria === categoria) {
+            var sel = tr.querySelector('.familia-sel');
+            if (sel) sel.value = valor;
+        }
+    });
+}
+</script>
+{% endblock %}

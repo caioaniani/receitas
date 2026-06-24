@@ -1,18 +1,17 @@
 """CRUD de Fornecedores + historico de preco de MP por fornecedor."""
-from datetime import datetime
 
-from flask import render_template, redirect, url_for, flash, request, abort, jsonify, current_app
-from flask_login import login_required, current_user
+from flask import current_app, flash, redirect, render_template, request, url_for
+from flask_login import login_required
 
 from app.blueprints.fornecedores import fornecedores_bp
-from app.decorators import admin_required
+from app.decorators import admin_required, catalogo_required
 from app.extensions import db
-from app.models import Fornecedor, HistoricoPrecoMP, MateriaPrima, MovimentacaoEstoque
+from app.models import Fornecedor, HistoricoPrecoMP, MateriaPrima
 
 
 @fornecedores_bp.route('/')
 @login_required
-@admin_required
+@catalogo_required
 def lista():
     incluir_inativos = request.args.get('inativos') == '1'
     q = Fornecedor.query
@@ -58,7 +57,7 @@ def novo():
 
 @fornecedores_bp.route('/<int:id>')
 @login_required
-@admin_required
+@catalogo_required
 def detalhe(id):
     f = Fornecedor.query.get_or_404(id)
     historico = (HistoricoPrecoMP.query
@@ -122,7 +121,7 @@ def excluir(id):
 
 @fornecedores_bp.route('/comparar/<int:mp_id>')
 @login_required
-@admin_required
+@catalogo_required
 def comparar_precos(mp_id):
     """Compara historico de preco de uma MP entre fornecedores."""
     mp = MateriaPrima.query.get_or_404(mp_id)

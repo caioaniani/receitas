@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% block title %}Relatório do upload{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-images"></i> Relatório do upload</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('receitas.imagens_upload') }}" class="btn btn-sm btn-outline-primary">Novo upload</a>
+        <a href="{{ url_for('receitas.padeiro_lista') }}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+    </div>
+</div>
+
+<div class="alert alert-success">
+    <strong>{{ atualizadas }}</strong> receita(s) atualizada(s).
+    <strong>{{ casados|length }}</strong> casamento(s) ·
+    <strong>{{ nao_casados|length }}</strong> não-casado(s).
+</div>
+
+{% if casados %}
+<div class="card card-padaria mb-3">
+    <div class="card-header py-2"><strong>Casadas</strong></div>
+    <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+            <thead>
+                <tr>
+                    <th>Arquivo no zip</th>
+                    <th>Receita</th>
+                    <th style="width:160px">Ficha</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for nome_arquivo, r in casados %}
+                <tr>
+                    <td><code>{{ nome_arquivo }}</code></td>
+                    <td>{{ r.nome }}</td>
+                    <td><a href="{{ url_for('receitas.ficha', id=r.id) }}" class="btn btn-sm btn-outline-primary">Abrir</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if nao_casados %}
+<div class="card card-padaria mb-3">
+    <div class="card-header py-2"><strong>Não casadas</strong></div>
+    <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+            <thead>
+                <tr>
+                    <th>Arquivo no zip</th>
+                    <th>Motivo</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for nome_arquivo, motivo in nao_casados %}
+                <tr>
+                    <td><code>{{ nome_arquivo }}</code></td>
+                    <td>{{ motivo }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

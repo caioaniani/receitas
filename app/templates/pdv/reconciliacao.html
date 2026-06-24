@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}Reconciliação PDV{% endblock %}
+
+{% macro secao(dd, fonte) %}
+{% if dd.erro %}
+<div class="alert alert-danger">
+    Não consegui buscar vendas: <code>{{ dd.erro }}</code>
+</div>
+{% else %}
+<div class="row g-3 mb-2">
+    <div class="col-md-3 col-6">
+        <div class="card text-center h-100"><div class="card-body py-3">
+            <div class="h4 mb-0">{{ dd.total_pedidos }}</div>
+            <div class="small text-muted">pedidos</div>
+        </div></div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card text-center h-100"><div class="card-body py-3">
+            <div class="h4 mb-0">{{ dd.total_itens | round(0, 'floor') | int }}</div>
+            <div class="small text-muted">itens vendidos</div>
+        </div></div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card text-center h-100"><div class="card-body py-3">
+            <div class="h4 mb-0 text-success">{{ dd.baixado_efetivo }}</div>
+            <div class="small text-muted">unidades baixadas</div>
+        </div></div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card text-center h-100"><div class="card-body py-3">
+            <div class="h4 mb-0 {% if dd.sem_estoque %}text-danger{% endif %}">{{ dd.sem_estoque }}</div>
+            <div class="small text-muted">vendas sem estoque</div>
+        </div></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header py-2">
+        <strong>Produtos vendidos que NÃO baixaram estoque</strong>
+        {% if dd.pendentes_vendidos %}
+        <span class="badge bg-danger">{{ dd.pendentes_vendidos|length }} produto(s), {{ dd.qtd_pendente | round(0,'floor') | int }} un</span>
+        {% else %}
+        <span class="badge bg-success">nenhum</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        {% if dd.pendentes_vendidos %}
+        <div class="alert alert-light border small py-2 mb-2">
+            <i class="bi bi-lightbulb"></i>
+            <strong>Vincular</strong>: liga o item a um produto/receita e o sync
+            passa a baixar o estoque. <strong>Ignorar</strong>: marca como "não
+            mapear por enquanto" (o sync não baixa). Dá pra mudar depois.
+        </div>
+        <table class="table table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr><th>Produto</th><th>SKU</th><th class="text-end">Qtd</th><th>Vincular a</th><th style="width:170px;">Ação</th></tr>
+            </thead>
+            <tbody>
+                {% for p in dd.pendentes_vendidos %}
+                <tr data-nome="{{ p.nome }}" data-fonte="{{ fonte }}">
+                    <td>{{ p.nome }}</td>
+                    <td><code>{{ p.sku or '—' }}</code></td>
+                    <td class="text-end">{{ p.qtd | round(0,'floor') | int }}</td>
+                    <td>
+                        <select class="form-select form-select-sm recon-alvo">
+                            <option value="">— escolher —</option>
+                            <optgroup label="Produtos">
+                                {% for pr in produtos %}
+                                <option value="produto:{{ pr.id }}">{{ pr.nome }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            <optgroup label="Receitas">
+                                {% for r in receitas %}
+                                <option value="receita:{{ r.id }}">{{ r.nome }}</option>
+                                {% endfor %}
+                            </optgroup>
+                        </select>
+                    </td>
+                    <td class="recon-acao-cell">
+                        <button class="btn btn-sm btn-success" onclick="reconMapear(this, 'vincular')">Vincular</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="reconMapear(this, 'ignorar')">Ignorar</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-success mb-0"><i class="bi bi-check-circle"></i>
+            Toda venda mapeada do período baixou estoque.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header py-2">
+        <strong>Itens ignorados</strong>
+        <span class="badge bg-secondary">{{ dd.ignorados_vendidos|length }} produto(s){% if dd.qtd_ignorada %}, {{ dd.qtd_ignorada | round(0,'floor') | int }} un{% endif %}</span>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-light border small py-2 mb-2">
+            <i class="bi bi-info-circle"></i>
+            Itens marcados como <strong>Ignorar</strong> — vocês optaram por
+            <strong>não mapear por enquanto</strong>, então o sync não baixa o
+            estoque deles. Listados aqui só pra conferência. Se algum já deveria
+            ser mapeado, é só <strong>Desfazer</strong> e vincular na outra tabela.
+        </div>
+        {% if dd.ignorados_vendidos %}
+        <table class="table table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr><th>Produto</th><th>SKU</th><th class="text-end">Qtd vendida</th><th style="width:120px;">Ação</th></tr>
+            </thead>
+            <tbody>
+                {% for p in dd.ignorados_vendidos %}
+                <tr data-nome="{{ p.nome }}" data-fonte="{{ fonte }}">
+                    <td>{{ p.nome }}</td>
+                    <td><code>{{ p.sku or '—' }}</code></td>
+                    <td class="text-end">{{ p.qtd | round(0,'floor') | int }}</td>
+                    <td class="recon-acao-cell">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="reconMapear(this, 'desfazer')"
+                                title="Voltar a tratar este item (sai de ignorado)">Desfazer</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted mb-0">Nenhum item ignorado vendeu no período.</p>
+        {% endif %}
+    </div>
+</div>
+
+<p class="small text-muted mt-2">
+    Baixas por tipo no período: {% for tipo, total in dd.movs_por_tipo.items() %}
+    <code>{{ tipo }}={{ total }}</code>{% if not loop.last %} · {% endif %}{% else %}(nenhuma){% endfor %}
+</p>
+{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-clipboard-check"></i> Reconciliação venda vs estoque</h1>
+    <a href="{{ url_for('pdv.saude') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-heart-pulse"></i> Saúde do sync
+    </a>
+</div>
+
+<form method="get" class="row g-2 align-items-end mb-3">
+    <div class="col-auto">
+        <label class="form-label small mb-0">De</label>
+        <input type="date" name="inicio" value="{{ inicio }}" class="form-control form-control-sm">
+    </div>
+    <div class="col-auto">
+        <label class="form-label small mb-0">Até</label>
+        <input type="date" name="fim" value="{{ fim }}" class="form-control form-control-sm">
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Atualizar</button>
+    </div>
+</form>
+
+<div class="alert alert-warning" style="font-size:13px;">
+    <i class="bi bi-exclamation-triangle"></i>
+    <strong>Leia antes:</strong> "vendido" e "baixado" <strong>não batem 1:1 por
+    design</strong> — produtos compostos (fator &lt; 1) e cestas baixam quantidade
+    diferente da vendida. O que importa é a tabela de <strong>produtos que não
+    baixaram estoque</strong>: se estiver vazia, toda venda mapeada baixou.
+</div>
+
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-seru" type="button">PDV (Seru)</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-vnda" type="button">Site (VNDA){% if dv.loja %} · {{ dv.loja }}{% endif %}</button></li>
+</ul>
+<div class="tab-content">
+    <div class="tab-pane fade show active" id="tab-seru">{{ secao(d, 'seru') }}</div>
+    <div class="tab-pane fade" id="tab-vnda">{{ secao(dv, 'vnda') }}</div>
+</div>
+
+<script>
+function reconMapear(btn, acao) {
+    var tr = btn.closest('tr');
+    var nome = tr.getAttribute('data-nome');
+    var fonte = tr.getAttribute('data-fonte') || 'seru';
+    var url = (fonte === 'vnda') ? '/pdv/api/vnda-mapear' : '/pdv/api/mapear';
+    var campoNome = (fonte === 'vnda') ? 'vnda_nome' : 'seru_nome';
+    var fd = new FormData();
+    fd.append('csrf_token', CSRF_TOKEN);
+    fd.append(campoNome, nome);
+    fd.append('acao', acao);
+    if (acao === 'vincular') {
+        var alvo = tr.querySelector('.recon-alvo').value;
+        if (!alvo) { alert('Escolha um produto/receita pra vincular.'); return; }
+        var partes = alvo.split(':');
+        fd.append('alvo_tipo', partes[0]);
+        fd.append('alvo_id', partes[1]);
+        fd.append('fator', '1');
+    }
+    tr.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+    fetch(url, {method: 'POST', body: fd, credentials: 'same-origin'})
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+            if (j.ok) {
+                tr.querySelector('.recon-acao-cell').innerHTML =
+                    '<span class="badge bg-success">' + (j.estado || 'ok') + '</span>';
+            } else {
+                alert('Erro: ' + (j.erro || 'desconhecido'));
+                tr.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+            }
+        })
+        .catch(function(){
+            alert('Falha de rede.');
+            tr.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+        });
+}
+</script>
+{% endblock %}

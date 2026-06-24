@@ -18,10 +18,11 @@ import logging
 import threading
 import time
 import uuid
-from datetime import datetime
 
 import requests
 from flask import current_app
+
+from app.utils import agora as _agora_brt
 
 logger = logging.getLogger(__name__)
 
@@ -97,23 +98,29 @@ def _invalidar_cache():
         _token_cache['expira_em'] = 0
 
 
-def upload_foto(file_bytes, atribuicao_id, ext='jpg'):
-    """Faz upload da foto e retorna {'url': str, 'storage_path': str, 'tamanho': int}.
+def upload_publico(file_bytes, dropbox_path, *, mode='add', autorename=True):
+    """Sobe bytes pro Dropbox e cria shared link publico (URL retornada).
 
-    Levanta RuntimeError se nao configurado ou se a API falhar.
+    Use pra fotos/imagens que o app precisa servir via `<img src=...>`.
+    Diferente de `upload_arquivo` (que nao cria link).
+
+    - `mode='add'` + `autorename=True`: se path ja existe, Dropbox sufixa
+      `(1)`, `(2)`. Default seguro.
+    - `mode='overwrite'`: substitui arquivo existente (pra cardapio onde
+      a foto representa o item atual).
+
+    Retorna {'url', 'storage_path', 'tamanho'}.
+    Levanta RuntimeError se nao configurado ou API falhar.
     """
     if not file_bytes:
         raise RuntimeError('Arquivo vazio')
-
-    # Caminho organizado por data + atribuicao + uuid pra evitar colisao
-    hoje = datetime.utcnow().strftime('%Y-%m-%d')
-    nome = f"{atribuicao_id}_{uuid.uuid4().hex[:8]}.{ext}"
-    path = f"{_pasta_base()}/{hoje}/{nome}"
+    if not dropbox_path or not dropbox_path.startswith('/'):
+        raise RuntimeError('dropbox_path deve comecar com /')
 
     api_args = {
-        'path': path,
-        'mode': 'add',
-        'autorename': True,
+        'path': dropbox_path,
+        'mode': mode,
+        'autorename': autorename,
         'mute': True,
     }
 
@@ -133,7 +140,7 @@ def upload_foto(file_bytes, atribuicao_id, ext='jpg'):
         )
 
     r = _do_upload()
-    if r.status_code == 401:  # token expirado mid-request
+    if r.status_code == 401:
         _invalidar_cache()
         r = _do_upload()
     if r.status_code != 200:
@@ -141,7 +148,7 @@ def upload_foto(file_bytes, atribuicao_id, ext='jpg'):
         raise RuntimeError(f'Upload Dropbox falhou: {r.status_code}')
 
     meta = r.json()
-    storage_path = meta.get('path_lower') or path
+    storage_path = meta.get('path_lower') or dropbox_path
     url = _criar_shared_link(_token(), storage_path)
 
     return {
@@ -149,6 +156,17 @@ def upload_foto(file_bytes, atribuicao_id, ext='jpg'):
         'storage_path': storage_path,
         'tamanho': meta.get('size') or len(file_bytes),
     }
+
+
+def upload_foto(file_bytes, atribuicao_id, ext='jpg'):
+    """Compat: upload de foto de entrega (EntregaFoto). Delega pra upload_publico.
+
+    Mantida por compat com `app/blueprints/driver/routes.py:309`.
+    """
+    hoje = _agora_brt().strftime('%Y-%m-%d')
+    nome = f"{atribuicao_id}_{uuid.uuid4().hex[:8]}.{ext}"
+    path = f"{_pasta_base()}/{hoje}/{nome}"
+    return upload_publico(file_bytes, path, mode='add', autorename=True)
 
 
 def _criar_shared_link(token, path):
@@ -185,16 +203,226 @@ def _criar_shared_link(token, path):
     raise RuntimeError(f'create_shared_link falhou: {r.status_code}')
 
 
+def shared_link_pasta(path):
+    """Cria (ou recupera, se ja existe) o link compartilhado de uma PASTA do
+    Dropbox. Retorna a URL do navegador (NAO `?raw=1` — visualizacao da pasta
+    com as miniaturas, que e o que a equipe quer ver). None se falhar.
+
+    Usa a mesma API de `_criar_shared_link` (vale pra arquivo OU pasta), so
+    forca a URL pra `?dl=0` em vez de `?raw=1` no fim — `raw` num link de
+    pasta retorna ZIP, e queremos a tela de visualizacao."""
+    token = _token()
+    if not token or not path:
+        return None
+    try:
+        r = requests.post(
+            'https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings',
+            headers={'Authorization': f'Bearer {token}',
+                     'Content-Type': 'application/json'},
+            json={'path': path,
+                  'settings': {'requested_visibility': 'public'}},
+            timeout=15,
+        )
+        if r.status_code == 200:
+            url = (r.json().get('url') or '')
+        elif r.status_code == 409:
+            r2 = requests.post(
+                'https://api.dropboxapi.com/2/sharing/list_shared_links',
+                headers={'Authorization': f'Bearer {token}',
+                         'Content-Type': 'application/json'},
+                json={'path': path, 'direct_only': True},
+                timeout=15,
+            )
+            if r2.status_code != 200:
+                logger.warning('Dropbox list_shared_links %s: %s %s',
+                               path, r2.status_code, r2.text[:200])
+                return None
+            links = r2.json().get('links') or []
+            if not links:
+                return None
+            url = links[0].get('url') or ''
+        else:
+            logger.warning('Dropbox shared_link_pasta %s: %s %s',
+                           path, r.status_code, r.text[:200])
+            return None
+    except requests.RequestException:
+        logger.exception('Erro criando shared link de pasta %s', path)
+        return None
+
+    # `?dl=0` = visualizacao no navegador. `?raw=1` no link de pasta entrega
+    # um ZIP, que nao serve pra equipe abrir do celular.
+    if not url:
+        return None
+    if '?dl=' in url:
+        url = url.split('?dl=', 1)[0] + '?dl=0'
+    elif '?' in url:
+        url = url + '&dl=0'
+    else:
+        url = url + '?dl=0'
+    return url
+
+
 def _converter_para_raw(url):
-    """Converte URL ?dl=0 do Dropbox em ?raw=1 que serve o arquivo direto."""
+    """Normaliza URL Dropbox pra servir arquivo raw.
+
+    URLs modernas do Dropbox (formato /scl/fi/...) chegam com `&dl=0` por
+    default — preview HTML, nao serve o arquivo. Trocar por `raw=1` serve
+    bytes diretos via CDN.
+
+    Robusto contra: dl em qualquer posicao, raw=1 ja presente, duplicatas.
+    """
     if not url:
         return url
-    if '?dl=0' in url:
-        return url.replace('?dl=0', '?raw=1')
-    if '?dl=1' in url:
-        return url.replace('?dl=1', '?raw=1')
-    sep = '&' if '?' in url else '?'
-    return f"{url}{sep}raw=1"
+    from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
+    parsed = urlparse(url)
+    params = parse_qsl(parsed.query, keep_blank_values=True)
+    # Remove qualquer dl=X (Dropbox prioriza dl sobre raw — se houver dl=0
+    # com raw=1, Dropbox serve preview HTML).
+    params = [(k, v) for k, v in params if k != 'dl']
+    # Remove raw existente (pra evitar duplicatas) e garante exatamente 1.
+    params = [(k, v) for k, v in params if k != 'raw']
+    params.append(('raw', '1'))
+    new_query = urlencode(params)
+    return urlunparse(parsed._replace(query=new_query))
+
+
+_UPLOAD_LIMITE_SIMPLES = 140 * 1024 * 1024  # acima disso, usa upload_session
+_CHUNK_SIZE = 100 * 1024 * 1024
+
+
+def upload_arquivo(file_bytes, dropbox_path):
+    """Faz upload generico de bytes pra um caminho Dropbox arbitrario.
+
+    Diferente de upload_foto, nao cria shared link nem prefixa pasta base.
+    Usado pra backups, exports, qualquer arquivo que so o admin acessa.
+
+    Acima de 140MB, usa upload_session em chunks de 100MB (limite da API).
+
+    Levanta RuntimeError se nao configurado ou se a API falhar.
+    Retorna {'storage_path': str, 'tamanho': int}.
+    """
+    if not file_bytes:
+        raise RuntimeError('Arquivo vazio')
+    if not dropbox_path or not dropbox_path.startswith('/'):
+        raise RuntimeError('dropbox_path deve comecar com /')
+
+    tamanho = len(file_bytes)
+    if tamanho <= _UPLOAD_LIMITE_SIMPLES:
+        meta = _upload_simples(file_bytes, dropbox_path)
+    else:
+        meta = _upload_session(file_bytes, dropbox_path)
+
+    return {
+        'storage_path': meta.get('path_lower') or dropbox_path,
+        'tamanho': meta.get('size') or tamanho,
+    }
+
+
+def _upload_simples(file_bytes, dropbox_path):
+    api_args = {
+        'path': dropbox_path,
+        'mode': 'overwrite',
+        'autorename': False,
+        'mute': True,
+    }
+
+    def _do_upload():
+        token = _token()
+        if not token:
+            raise RuntimeError('Dropbox nao configurado')
+        return requests.post(
+            'https://content.dropboxapi.com/2/files/upload',
+            headers={
+                'Authorization': f'Bearer {token}',
+                'Dropbox-API-Arg': json.dumps(api_args),
+                'Content-Type': 'application/octet-stream',
+            },
+            data=file_bytes,
+            timeout=120,
+        )
+
+    r = _do_upload()
+    if r.status_code == 401:
+        _invalidar_cache()
+        r = _do_upload()
+    if r.status_code != 200:
+        logger.warning('Dropbox upload falhou: %s %s', r.status_code, r.text[:200])
+        raise RuntimeError(f'Upload Dropbox falhou: {r.status_code}')
+    return r.json()
+
+
+def _upload_session(file_bytes, dropbox_path):
+    """Upload em chunks pra arquivos > 140MB."""
+    token = _token()
+    if not token:
+        raise RuntimeError('Dropbox nao configurado')
+
+    tamanho = len(file_bytes)
+    # 1. start (primeiro chunk)
+    primeiro = file_bytes[:_CHUNK_SIZE]
+    r = requests.post(
+        'https://content.dropboxapi.com/2/files/upload_session/start',
+        headers={
+            'Authorization': f'Bearer {token}',
+            'Dropbox-API-Arg': json.dumps({'close': False}),
+            'Content-Type': 'application/octet-stream',
+        },
+        data=primeiro,
+        timeout=300,
+    )
+    if r.status_code != 200:
+        logger.warning('upload_session/start falhou: %s %s', r.status_code, r.text[:200])
+        raise RuntimeError(f'Upload Dropbox falhou: {r.status_code}')
+    session_id = r.json()['session_id']
+    offset = len(primeiro)
+
+    # 2. append + finish
+    while offset < tamanho:
+        chunk = file_bytes[offset:offset + _CHUNK_SIZE]
+        ultimo = (offset + len(chunk)) >= tamanho
+        if not ultimo:
+            r = requests.post(
+                'https://content.dropboxapi.com/2/files/upload_session/append_v2',
+                headers={
+                    'Authorization': f'Bearer {token}',
+                    'Dropbox-API-Arg': json.dumps({
+                        'cursor': {'session_id': session_id, 'offset': offset},
+                        'close': False,
+                    }),
+                    'Content-Type': 'application/octet-stream',
+                },
+                data=chunk,
+                timeout=300,
+            )
+            if r.status_code != 200:
+                logger.warning('upload_session/append falhou: %s %s', r.status_code, r.text[:200])
+                raise RuntimeError(f'Upload Dropbox falhou: {r.status_code}')
+            offset += len(chunk)
+        else:
+            r = requests.post(
+                'https://content.dropboxapi.com/2/files/upload_session/finish',
+                headers={
+                    'Authorization': f'Bearer {token}',
+                    'Dropbox-API-Arg': json.dumps({
+                        'cursor': {'session_id': session_id, 'offset': offset},
+                        'commit': {
+                            'path': dropbox_path,
+                            'mode': 'overwrite',
+                            'autorename': False,
+                            'mute': True,
+                        },
+                    }),
+                    'Content-Type': 'application/octet-stream',
+                },
+                data=chunk,
+                timeout=300,
+            )
+            if r.status_code != 200:
+                logger.warning('upload_session/finish falhou: %s %s', r.status_code, r.text[:200])
+                raise RuntimeError(f'Upload Dropbox falhou: {r.status_code}')
+            return r.json()
+    raise RuntimeError('upload_session: chunks acabaram sem finish?')
 
 
 def deletar(storage_path):
@@ -216,3 +444,112 @@ def deletar(storage_path):
     except Exception:
         logger.exception('Erro deletando foto do Dropbox')
         return False
+
+
+def listar_pasta(path):
+    """Lista arquivos de uma pasta do Dropbox (nao-recursivo, com paginacao).
+
+    Retorna lista de {'path': str, 'nome': str, 'tamanho': int,
+    'modificado': str ISO-8601} so de ARQUIVOS (ignora subpastas), ou []
+    se pasta inexistente/erro. Usado pela retencao de backups e pelo drill
+    de restore (achar o dump mais recente)."""
+    token = _token()
+    if not token or not path:
+        return []
+    out = []
+    url = 'https://api.dropboxapi.com/2/files/list_folder'
+    body = {'path': path.rstrip('/'), 'recursive': False, 'limit': 500}
+    try:
+        while True:
+            r = requests.post(
+                url,
+                headers={'Authorization': f'Bearer {token}',
+                         'Content-Type': 'application/json'},
+                json=body,
+                timeout=30,
+            )
+            if r.status_code == 401:
+                _invalidar_cache()
+                token = _token()
+                if not token:
+                    return out
+                continue
+            if r.status_code != 200:
+                # path/not_found = pasta nunca criada (sem backups ainda): nao
+                # eh erro de verdade, devolve vazio sem poluir o log.
+                if 'not_found' not in (r.text or ''):
+                    logger.warning('Dropbox list_folder %s: %s %s',
+                                   path, r.status_code, r.text[:200])
+                return out
+            data = r.json()
+            for e in data.get('entries', []):
+                if e.get('.tag') != 'file':
+                    continue
+                out.append({
+                    'path': e.get('path_lower') or e.get('path_display') or '',
+                    'nome': e.get('name') or '',
+                    'tamanho': e.get('size') or 0,
+                    'modificado': e.get('server_modified') or '',
+                })
+            if not data.get('has_more'):
+                return out
+            url = 'https://api.dropboxapi.com/2/files/list_folder/continue'
+            body = {'cursor': data.get('cursor')}
+    except requests.RequestException:
+        logger.exception('Erro listando pasta do Dropbox %s', path)
+        return out
+
+
+# Causa da ultima falha de `baixar()` (thread-local, padrao do tiny.py):
+# o drill consome pra reportar a causa EXATA no relatorio — sem isso, o
+# motivo era so "download falhou" e o debug exigia acesso aos logs do
+# Railway (visto em prod 2026-06-09).
+import threading as _threading
+
+_falha_download = _threading.local()
+
+
+def consumir_falha_download():
+    motivo = getattr(_falha_download, 'motivo', None)
+    _falha_download.motivo = None
+    return motivo
+
+
+def baixar(path):
+    """Baixa um arquivo do Dropbox. Retorna bytes ou None (causa em
+    `consumir_falha_download()`).
+
+    Usado pelo drill de restore (puxar o ultimo dump pra validar)."""
+    token = _token()
+    if not token or not path:
+        _falha_download.motivo = 'Dropbox nao configurado ou path vazio'
+        return None
+
+    def _do():
+        return requests.post(
+            'https://content.dropboxapi.com/2/files/download',
+            headers={'Authorization': f'Bearer {token}',
+                     'Dropbox-API-Arg': json.dumps({'path': path})},
+            timeout=300,   # dumps de ~100MB em link lento
+        )
+
+    try:
+        r = _do()
+        if r.status_code == 401:
+            _invalidar_cache()
+            token = _token()
+            if not token:
+                _falha_download.motivo = 'token expirou e refresh falhou'
+                return None
+            r = _do()
+        if r.status_code != 200:
+            corpo = (r.text or '')[:200]
+            _falha_download.motivo = f'HTTP {r.status_code}: {corpo}'
+            logger.warning('Dropbox download %s: %s %s',
+                           path, r.status_code, corpo)
+            return None
+        return r.content
+    except requests.RequestException as exc:
+        _falha_download.motivo = f'{type(exc).__name__}: {exc}'
+        logger.exception('Erro baixando %s do Dropbox', path)
+        return None

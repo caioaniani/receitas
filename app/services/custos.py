@@ -2,9 +2,14 @@
 
 from sqlalchemy.orm import selectinload
 
-from app.models import Receita, MateriaPrima, Produto
+from app.models import MateriaPrima, Receita
 
 MAX_PASSES = 5  # máximo de passadas para resolver sub-receitas
+
+
+def _norm(nome):
+    """Normaliza nome para lookup case/whitespace-insensitive."""
+    return (nome or '').strip().casefold()
 
 
 def calcular_custos_receitas():
@@ -25,6 +30,8 @@ def calcular_custos_receitas():
     mp_dict = {mp.nome: mp.custo_por_kg for mp in mps}
     mp_info = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade,
                           'peso_unidade': mp.peso_unidade} for mp in mps}
+    # Indice normalizado pra lookup case/whitespace-tolerant em MP.
+    mp_info_norm = {_norm(k): v for k, v in mp_info.items()}
 
     custos = {}
     pesos = {}
@@ -32,9 +39,15 @@ def calcular_custos_receitas():
 
     remaining = list(receitas)
     for _ in range(MAX_PASSES):
+        # Indices normalizados de custos/pesos ja resolvidos — pra casar
+        # nome de sub-receita mesmo se a grafia diverge (espacos/maiusculas).
+        custos_norm = {_norm(k): v for k, v in custos.items()}
+        pesos_norm = {_norm(k): v for k, v in pesos.items()}
         still_remaining = []
         for r in remaining:
-            resultado = _calcular_receita(r, custos, mp_info)
+            resultado = _calcular_receita(r, custos, custos_norm,
+                                           pesos, pesos_norm,
+                                           mp_info, mp_info_norm)
             if resultado is None:
                 still_remaining.append(r)
                 continue
@@ -67,11 +80,14 @@ def calcular_custos_receitas():
     }
 
 
-def calcular_custo_produto(produto, receita_custos, mp_info):
+def calcular_custo_produto(produto, receita_custos, mp_info, produto_custos=None):
     """Calcula custo total de um produto/cesta.
 
     Para MPs com unidade 'g' ou 'ml', quantidade está em gramas/ml.
     Para MPs com unidade 'un', quantidade é unidades e custo é direto.
+    Para componentes do tipo 'produto', usa produto_custos[nome] (dict de
+    custos ja resolvidos) — se nao fornecido ou nao achar, usa
+    `Produto.custo_direto`.
     """
     embalagem = produto.custo_embalagem or 0
     if produto.itens:
@@ -79,6 +95,16 @@ def calcular_custo_produto(produto, receita_custos, mp_info):
         for item in produto.itens:
             if item.tipo == 'receita':
                 custo += receita_custos.get(item.item_nome, 0) * item.quantidade
+            elif item.tipo == 'produto':
+                # Resolve via dict ja calculado (suporta cesta-de-cesta).
+                # Fallback: custo_direto do produto-componente.
+                if produto_custos is not None:
+                    custo_componente = produto_custos.get(item.item_nome, 0)
+                else:
+                    custo_componente = 0
+                    if item.produto_componente_id and item.produto_componente:
+                        custo_componente = item.produto_componente.custo_direto or 0
+                custo += custo_componente * item.quantidade
             else:
                 info = mp_info.get(item.item_nome, {})
                 custo_kg = info.get('custo_por_kg', 0)
@@ -90,6 +116,45 @@ def calcular_custo_produto(produto, receita_custos, mp_info):
     elif produto.custo_direto:
         return produto.custo_direto + embalagem
     return embalagem
+
+
+def calcular_custos_produtos(receita_custos, mp_info):
+    """Calcula {nome_produto: custo} pra todos os produtos ativos.
+
+    Lida com produto-de-produto (cesta dentro de cesta) por resolucao
+    iterativa, mesma logica do `calcular_custos_receitas`. Produtos sem
+    composicao usam `custo_direto`. Produtos com itens somam os componentes.
+    """
+    from app.models import Produto
+    produtos = Produto.query.filter(Produto.ativo.is_(True)).all()
+
+    custos = {}
+    # Primeira passada: produtos sem dependencia de outro produto.
+    # Iterativo pra suportar cesta dentro de cesta (max 5 niveis).
+    remaining = list(produtos)
+    for _ in range(MAX_PASSES):
+        still_remaining = []
+        for p in remaining:
+            # Se algum item tipo='produto' aponta pra produto que ainda
+            # nao calculamos, espera proxima passada.
+            depende_pendente = False
+            for item in (p.itens or []):
+                if item.tipo == 'produto' and item.item_nome not in custos:
+                    # Tenta tambem normalizado
+                    if _norm(item.item_nome) not in {_norm(k) for k in custos}:
+                        depende_pendente = True
+                        break
+            if depende_pendente:
+                still_remaining.append(p)
+                continue
+            custos[p.nome] = calcular_custo_produto(p, receita_custos, mp_info, custos)
+        remaining = still_remaining
+        if not remaining:
+            break
+    # Sobras (referencia circular ou nao-resolviveis): usa custo_direto
+    for p in remaining:
+        custos[p.nome] = float(p.custo_direto or 0) + (p.custo_embalagem or 0)
+    return custos
 
 
 def calcular_rendimento(receita, custos_dict=None):
@@ -132,27 +197,66 @@ def _custo_por_grama(info):
     return 0
 
 
-def _calcular_receita(r, custos, mp_info):
-    """Calcula custo de uma receita. Retorna (custo_un, rendimento) ou None se dependência faltante."""
+def _calcular_receita(r, custos, custos_norm, pesos, pesos_norm,
+                       mp_info, mp_info_norm):
+    """Calcula custo de uma receita. Retorna (custo_un, rendimento) ou None se dependência faltante.
+
+    Lookup de sub-receita e MP eh tolerante a case/espaco — divergencia
+    entre grafia da receita-pai (`ReceitaIngrediente.ingrediente_nome`) e
+    da receita-filha (`Receita.nome`) era causa silenciosa de custo zero
+    em cestas.
+
+    Sub-receita contribui pro custo E pro peso (qtd_direto) — antes nao
+    contribuia pro peso, o que zerava o rendimento de receitas que misturam
+    MP direta com sub-receita (ex: "Croissant Nutella com Morango" tem
+    200g de MPs + 1 unidade de Croissant Tradicional, peso_unitario=290g —
+    sem o peso da sub-receita o rendimento dava 0 e o custo virava 0).
+    """
     custo_total = 0
     sum_pct = 0
     qtd_direto = 0
 
+    def _get_mp_info(nome):
+        return mp_info.get(nome) or mp_info_norm.get(_norm(nome), {})
+
     for ing in r.ingredientes:
         tipo = ing.tipo or 'mp'
         if tipo == 'receita':
-            if ing.ingrediente_nome not in custos:
+            # Lookup tolerante: tenta exato, depois normalizado.
+            sub_custo = custos.get(ing.ingrediente_nome)
+            if sub_custo is None:
+                sub_custo = custos_norm.get(_norm(ing.ingrediente_nome))
+            if sub_custo is None:
                 return None  # dependência não resolvida ainda
-            custo_total += custos[ing.ingrediente_nome] * ing.porcentagem
+            custo_total += sub_custo * ing.porcentagem
+            # Sub-receita contribui pro peso total (mesma logica do JS na
+            # ficha): peso = unidades × peso_unitario_da_sub.
+            sub_peso = pesos.get(ing.ingrediente_nome)
+            if sub_peso is None:
+                sub_peso = pesos_norm.get(_norm(ing.ingrediente_nome), 0)
+            qtd_direto += ing.porcentagem * (sub_peso or 0)
         elif tipo == 'mp_direto':
             qtd_g = ing.porcentagem
-            info = mp_info.get(ing.ingrediente_nome, {})
+            info = _get_mp_info(ing.ingrediente_nome)
             custo_total += qtd_g * _custo_por_grama(info)
             qtd_direto += qtd_g
+        elif tipo == 'mp_un':
+            # MP cobrada por unidade (ex: Baton Calebaut). porcentagem =
+            # quantidade de unidades. Custo = qtd × custo_por_unidade.
+            # custo_por_kg da MP unitaria armazena o custo POR UNIDADE.
+            qtd_un = ing.porcentagem
+            info = _get_mp_info(ing.ingrediente_nome)
+            custo_por_un = info.get('custo_por_kg') or 0
+            custo_total += qtd_un * custo_por_un
+            # Se a MP tem peso_unidade definido, soma ao total de peso pra
+            # contar no rendimento. Senao, ignora no peso (ex: corante).
+            peso_un = info.get('peso_unidade') or 0
+            if peso_un > 0:
+                qtd_direto += qtd_un * peso_un
         else:
             sum_pct += ing.porcentagem
             qtd_g = r.peso_base * ing.porcentagem / 100
-            info = mp_info.get(ing.ingrediente_nome, {})
+            info = _get_mp_info(ing.ingrediente_nome)
             custo_total += qtd_g * _custo_por_grama(info)
 
     total_qtd = r.peso_base * sum_pct / 100 + qtd_direto

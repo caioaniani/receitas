@@ -1,15 +1,15 @@
 from datetime import date, datetime, timedelta
 
-from flask import render_template, request, jsonify, redirect, url_for, flash, abort
-from flask_login import login_required, current_user
-
-from app.blueprints.projetos import projetos_bp
-from app.decorators import admin_required
-from app.extensions import db
+from flask import abort, flash, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload, selectinload
 
-from app.models import (ProjetoArea, Projeto, TarefaProjeto, Usuario, WeeklyReview)
-
+from app.blueprints.projetos import projetos_bp
+from app.decorators import owner_required
+from app.extensions import db
+from app.models import Projeto, ProjetoArea, TarefaProjeto, Usuario, WeeklyReview
+from app.utils import agora
+from app.utils import hoje as hoje_brt
 
 WIP_LIMIT = 3
 TIPOS_AREA = ('empresa', 'igreja', 'vida')
@@ -29,7 +29,7 @@ def _contadores():
     fazendo = base_t.filter(TarefaProjeto.status == 'fazendo').count()
     atrasadas = base_t.filter(
         TarefaProjeto.prazo.isnot(None),
-        TarefaProjeto.prazo < date.today(),
+        TarefaProjeto.prazo < hoje_brt(),
         ~TarefaProjeto.status.in_(['feito', 'cancelado']),
     ).count()
     foco_12s = base_p.filter(Projeto.foco_12s.is_(True)).count()
@@ -98,7 +98,7 @@ def _data_relativa(prazo):
     """Retorna string amigavel: 'Hoje', 'Amanha', 'Em 3 dias', 'Atrasada ha 2 dias'."""
     if not prazo:
         return ''
-    delta = (prazo - date.today()).days
+    delta = (prazo - hoje_brt()).days
     if delta == 0:
         return 'Hoje'
     if delta == 1:
@@ -110,7 +110,7 @@ def _data_relativa(prazo):
     if delta < 7:
         return f'Em {delta} dias'
     if delta < 14:
-        return f'Em 1 semana'
+        return 'Em 1 semana'
     if delta < 30:
         return f'Em {delta // 7} semanas'
     return prazo.strftime('%d/%m/%Y')
@@ -150,12 +150,13 @@ def _projetos_para_select():
 
 @projetos_bp.route('/')
 @login_required
-@admin_required
+@owner_required
 def painel():
     """Dashboard: cards de projetos agrupados por area, ordenados por urgencia."""
     import traceback
-    from flask import current_app
     from collections import defaultdict
+
+    from flask import current_app
     try:
         from app.models import ProjetoTemplate
 
@@ -181,7 +182,7 @@ def painel():
         if busca:
             projetos = [p for p in projetos if busca in p.nome.lower()]
 
-        hoje_d = date.today()
+        hoje_d = hoje_brt()
 
         def _urgencia(p, atras):
             # Menor = mais urgente
@@ -276,7 +277,7 @@ def painel():
 
 @projetos_bp.route('/lista')
 @login_required
-@admin_required
+@owner_required
 def hierarquia():
     """Visão hierárquica densa: Área › Projeto › Tarefas (todos expandidos)."""
     from app.models import ProjetoTemplate
@@ -305,7 +306,7 @@ def hierarquia():
 
 @projetos_bp.route('/p/<int:pid>')
 @login_required
-@admin_required
+@owner_required
 def projeto_detalhe(pid):
     """Página dedicada de um projeto com mini-kanban."""
     p = Projeto.query.options(
@@ -338,7 +339,7 @@ def projeto_detalhe(pid):
 
 @projetos_bp.route('/kanban')
 @login_required
-@admin_required
+@owner_required
 def kanban():
     filtro_area = request.args.get('area', type=int)
     so_foco = request.args.get('foco') == '1'
@@ -359,7 +360,7 @@ def kanban():
     # Por padrao, oculta tarefas concluidas/canceladas ha mais de 7 dias do kanban
     # — evita poluicao da coluna Feito ao longo do tempo.
     if not mostrar_antigas:
-        corte = datetime.utcnow() - timedelta(days=7)
+        corte = agora() - timedelta(days=7)
         q = q.filter(
             db.or_(
                 ~TarefaProjeto.status.in_(['feito', 'cancelado']),
@@ -393,7 +394,7 @@ def kanban():
 
 @projetos_bp.route('/foco')
 @login_required
-@admin_required
+@owner_required
 def foco():
     q = Projeto.query.filter_by(foco_12s=True).join(ProjetoArea)
     if not current_user.is_dono():
@@ -409,14 +410,14 @@ def foco():
 
 @projetos_bp.route('/dia')
 @login_required
-@admin_required
+@owner_required
 def dia():
     """Tarefas de uma data especifica (similar a 'hoje' mas com seletor)."""
     data_str = request.args.get('data', '')
     try:
         alvo = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
-        alvo = date.today()
+        alvo = hoje_brt()
 
     base = TarefaProjeto.query.join(Projeto).join(ProjetoArea).options(
         joinedload(TarefaProjeto.projeto).joinedload(Projeto.area),
@@ -456,7 +457,7 @@ def dia():
                            fazendo=fazendo,
                            atrasadas=atrasadas,
                            semana=semana,
-                           hoje=date.today(),
+                           hoje=hoje_brt(),
                            contadores=_contadores(),
                            data_relativa=_data_relativa,
                            view='dia',
@@ -465,9 +466,9 @@ def dia():
 
 @projetos_bp.route('/hoje')
 @login_required
-@admin_required
+@owner_required
 def hoje():
-    hoje_d = date.today()
+    hoje_d = hoje_brt()
 
     base = TarefaProjeto.query.join(Projeto).join(ProjetoArea).options(
         joinedload(TarefaProjeto.projeto).joinedload(Projeto.area),
@@ -512,7 +513,7 @@ def hoje():
 
 @projetos_bp.route('/area/nova', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def area_nova():
     nome = request.form.get('nome', '').strip()
     tipo = request.form.get('tipo', 'empresa')
@@ -536,7 +537,7 @@ def area_nova():
 
 @projetos_bp.route('/area/<int:area_id>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def area_excluir(area_id):
     area = ProjetoArea.query.get_or_404(area_id)
     if area.projetos:
@@ -552,7 +553,7 @@ def area_excluir(area_id):
 
 @projetos_bp.route('/projeto/novo', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def projeto_novo():
     area_id = request.form.get('area_id', type=int)
     nome = request.form.get('nome', '').strip()
@@ -575,7 +576,7 @@ def projeto_novo():
 
 @projetos_bp.route('/projeto/<int:pid>/editar', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def projeto_editar(pid):
     p = Projeto.query.get_or_404(pid)
     if not _projeto_visivel(p):
@@ -606,7 +607,7 @@ def projeto_editar(pid):
 
 @projetos_bp.route('/projeto/<int:pid>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def projeto_excluir(pid):
     p = Projeto.query.get_or_404(pid)
     if not _projeto_visivel(p):
@@ -622,7 +623,7 @@ def projeto_excluir(pid):
 
 @projetos_bp.route('/tarefa/quick', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def tarefa_quick():
     """Cria tarefa rapida na Inbox (sem vinculo a projeto especifico)."""
     nome = request.form.get('nome', '').strip()
@@ -653,7 +654,7 @@ def tarefa_quick():
 
 @projetos_bp.route('/inbox')
 @login_required
-@admin_required
+@owner_required
 def inbox():
     """Caixa de entrada: tarefas avulsas aguardando classificacao."""
     inbox_proj = _get_inbox_projeto()
@@ -666,7 +667,7 @@ def inbox():
         TarefaProjeto.projeto_id == inbox_proj.id,
         TarefaProjeto.status.in_(['feito', 'cancelado']),
         TarefaProjeto.feito_em.isnot(None),
-        TarefaProjeto.feito_em >= datetime.utcnow() - timedelta(days=14),
+        TarefaProjeto.feito_em >= agora() - timedelta(days=14),
     ).order_by(TarefaProjeto.feito_em.desc()).all()
 
     return render_template('projetos/inbox.html',
@@ -680,7 +681,7 @@ def inbox():
 
 @projetos_bp.route('/tarefa/nova', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def tarefa_nova():
     projeto_id = request.form.get('projeto_id', type=int)
     nome = request.form.get('nome', '').strip()
@@ -717,7 +718,7 @@ def tarefa_nova():
 
 @projetos_bp.route('/tarefa/<int:tid>/editar', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def tarefa_editar(tid):
     t = TarefaProjeto.query.get_or_404(tid)
     if not _tarefa_visivel(t):
@@ -728,7 +729,7 @@ def tarefa_editar(tid):
     if campo == 'status' and valor in STATUS_TAREFA:
         antigo = t.status
         t.status = valor
-        t.feito_em = datetime.utcnow() if valor == 'feito' else None
+        t.feito_em = agora() if valor == 'feito' else None
         # Recorrencia: ao marcar como feita, cria proxima ocorrencia
         if valor == 'feito' and antigo != 'feito' and t.recorrencia:
             _agendar_proxima(t)
@@ -761,7 +762,7 @@ def tarefa_editar(tid):
 
 @projetos_bp.route('/tarefa/<int:tid>/mover', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def tarefa_mover(tid):
     """Drag-and-drop: muda status (coluna kanban) e atualiza ordens das tarefas afetadas."""
     t = TarefaProjeto.query.get_or_404(tid)
@@ -770,7 +771,7 @@ def tarefa_mover(tid):
         return jsonify(ok=False, erro='status invalido'), 400
     if t.status != novo_status:
         t.status = novo_status
-        t.feito_em = datetime.utcnow() if novo_status == 'feito' else None
+        t.feito_em = agora() if novo_status == 'feito' else None
 
     # Reordena: a lista vem como ids[]=[...] na ordem desejada na coluna de destino
     ids_ordem = request.form.getlist('ids[]')
@@ -788,7 +789,7 @@ def tarefa_mover(tid):
 
 @projetos_bp.route('/tarefa/<int:tid>/dados')
 @login_required
-@admin_required
+@owner_required
 def tarefa_dados(tid):
     """Retorna dados completos de uma tarefa (para o modal de edicao)."""
     t = TarefaProjeto.query.get_or_404(tid)
@@ -811,7 +812,7 @@ def tarefa_dados(tid):
 
 @projetos_bp.route('/tarefa/<int:tid>/atualizar', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def tarefa_atualizar(tid):
     """Atualiza todos os campos de uma tarefa de uma vez."""
     t = TarefaProjeto.query.get_or_404(tid)
@@ -848,7 +849,7 @@ def tarefa_atualizar(tid):
     if novo_status in STATUS_TAREFA:
         antigo = t.status
         t.status = novo_status
-        t.feito_em = datetime.utcnow() if novo_status == 'feito' else None
+        t.feito_em = agora() if novo_status == 'feito' else None
         if novo_status == 'feito' and antigo != 'feito' and t.recorrencia:
             _agendar_proxima(t)
 
@@ -858,7 +859,7 @@ def tarefa_atualizar(tid):
 
 @projetos_bp.route('/tarefa/<int:tid>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def tarefa_excluir(tid):
     t = TarefaProjeto.query.get_or_404(tid)
     db.session.delete(t)
@@ -871,10 +872,10 @@ def tarefa_excluir(tid):
 
 @projetos_bp.route('/weekly')
 @login_required
-@admin_required
+@owner_required
 def weekly():
     """Dados pra modal de Weekly Review."""
-    hoje_d = date.today()
+    hoje_d = hoje_brt()
     atrasadas = TarefaProjeto.query.filter(
         TarefaProjeto.prazo.isnot(None),
         TarefaProjeto.prazo < hoje_d,
@@ -911,11 +912,13 @@ def weekly():
 
 @projetos_bp.route('/_migrar', methods=['GET'])
 @login_required
-@admin_required
+@owner_required
 def forcar_migrate():
     """Endpoint de emergencia para forcar migrations das colunas novas."""
     import traceback
+
     from flask import current_app
+
     from app import _migrate
     try:
         _migrate(current_app)
@@ -924,7 +927,7 @@ def forcar_migrate():
             '<p>Sem erros. <a href="/projetos/">Voltar pro dashboard</a></p>',
             200
         )
-    except Exception as e:
+    except Exception:
         return (
             '<h1>Erro ao migrar</h1>'
             f'<pre>{traceback.format_exc()}</pre>'
@@ -935,14 +938,14 @@ def forcar_migrate():
 
 @projetos_bp.route('/weekly/salvar', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def weekly_salvar():
     reflexao = request.form.get('reflexao', '').strip()
     if not reflexao:
         return jsonify(ok=False, erro='reflexao vazia'), 400
     c = _contadores()
     review = WeeklyReview(
-        data=date.today(),
+        data=hoje_brt(),
         reflexao=reflexao,
         fazendo_count=c['fazendo'],
         a_fazer_count=c['a_fazer'],
@@ -971,7 +974,7 @@ def _agendar_proxima(tarefa):
     dias = _RECORRENCIA_DIAS.get(tarefa.recorrencia)
     if not dias:
         return
-    base = tarefa.prazo or date.today()
+    base = tarefa.prazo or hoje_brt()
     nova = TarefaProjeto(
         projeto_id=tarefa.projeto_id,
         nome=tarefa.nome,
@@ -991,7 +994,7 @@ def _agendar_proxima(tarefa):
 
 @projetos_bp.route('/templates')
 @login_required
-@admin_required
+@owner_required
 def templates_lista():
     from app.models import ProjetoTemplate
     templates = ProjetoTemplate.query.order_by(ProjetoTemplate.nome).all()
@@ -1004,7 +1007,7 @@ def templates_lista():
 
 @projetos_bp.route('/templates/novo', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def template_novo():
     from app.models import ProjetoTemplate
     nome = request.form.get('nome', '').strip()
@@ -1024,7 +1027,7 @@ def template_novo():
 
 @projetos_bp.route('/templates/<int:tid>')
 @login_required
-@admin_required
+@owner_required
 def template_editar(tid):
     from app.models import ProjetoTemplate
     template = ProjetoTemplate.query.get_or_404(tid)
@@ -1037,7 +1040,7 @@ def template_editar(tid):
 
 @projetos_bp.route('/templates/<int:tid>/atualizar', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def template_atualizar(tid):
     from app.models import ProjetoTemplate
     template = ProjetoTemplate.query.get_or_404(tid)
@@ -1051,7 +1054,7 @@ def template_atualizar(tid):
 
 @projetos_bp.route('/templates/<int:tid>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def template_excluir(tid):
     from app.models import ProjetoTemplate
     template = ProjetoTemplate.query.get_or_404(tid)
@@ -1063,7 +1066,7 @@ def template_excluir(tid):
 
 @projetos_bp.route('/templates/<int:tid>/tarefa', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def template_tarefa_nova(tid):
     from app.models import ProjetoTemplate, TarefaTemplate
     template = ProjetoTemplate.query.get_or_404(tid)
@@ -1094,7 +1097,7 @@ def template_tarefa_nova(tid):
 
 @projetos_bp.route('/templates/tarefa/<int:tt_id>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def template_tarefa_excluir(tt_id):
     from app.models import TarefaTemplate
     tt = TarefaTemplate.query.get_or_404(tt_id)
@@ -1106,7 +1109,7 @@ def template_tarefa_excluir(tt_id):
 
 @projetos_bp.route('/projeto/novo-de-template', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def projeto_novo_de_template():
     from app.models import ProjetoTemplate
     template_id = request.form.get('template_id', type=int)
@@ -1125,7 +1128,7 @@ def projeto_novo_de_template():
     db.session.add(p)
     db.session.flush()
 
-    base_data = date.today()
+    base_data = hoje_brt()
     for tt in sorted(template.tarefas, key=lambda x: x.ordem):
         prazo = base_data + timedelta(days=tt.dias_prazo) if tt.dias_prazo is not None else None
         db.session.add(TarefaProjeto(
@@ -1146,10 +1149,10 @@ def projeto_novo_de_template():
 
 @projetos_bp.route('/calendario')
 @login_required
-@admin_required
+@owner_required
 def calendario():
-    ano = request.args.get('ano', type=int) or date.today().year
-    mes = request.args.get('mes', type=int) or date.today().month
+    ano = request.args.get('ano', type=int) or hoje_brt().year
+    mes = request.args.get('mes', type=int) or hoje_brt().month
 
     if mes < 1: mes, ano = 12, ano - 1
     if mes > 12: mes, ano = 1, ano + 1
@@ -1181,7 +1184,7 @@ def calendario():
                            primeiro_dia_semana=primeiro_dia_semana,
                            ultimo_dia=ultimo_dia,
                            por_dia=por_dia,
-                           hoje=date.today(),
+                           hoje=hoje_brt(),
                            contadores=_contadores(),
                            view='calendario',
                            **_contexto_acao())
@@ -1191,9 +1194,9 @@ def calendario():
 
 @projetos_bp.route('/relatorio')
 @login_required
-@admin_required
+@owner_required
 def relatorio():
-    hoje_d = date.today()
+    hoje_d = hoje_brt()
     de_str = request.args.get('de', '')
     ate_str = request.args.get('ate', '')
     try:
@@ -1255,7 +1258,7 @@ def relatorio():
 
 @projetos_bp.route('/area/<int:area_id>/editar', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def area_editar(area_id):
     area = ProjetoArea.query.get_or_404(area_id)
     campo = request.form.get('campo')

@@ -2,8 +2,8 @@
 via link /entrega/<hash> compartilhado pela padaria."""
 from flask import abort, render_template
 
-from app.models import AtribuicaoEntrega, EntregaFoto
 from app.blueprints.comprovante import comprovante_bp
+from app.models import AtribuicaoEntrega, EntregaFoto
 
 
 @comprovante_bp.route('/<proof_hash>')

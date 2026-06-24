@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Historico Industria{% endblock %}
+
+{# Cores dos badges. Rótulos vêm do serviço central historico_humano. #}
+{% set TIPO_COR = {
+    'entrada': 'primary',
+    'saida_pedido': 'warning',
+    'ajuste': 'secondary',
+    'balanco': 'info',
+    'desperdicio': 'danger',
+} %}
+
+{% block content %}
+<h1 class="page-title mb-3"><i class="bi bi-clock-history"></i> Historico do Estoque da Industria</h1>
+
+<form method="GET" class="card mb-3">
+    <div class="card-body row g-2 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label small mb-1">Item</label>
+            <select name="item" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">Todos</option>
+                {% for it in itens_disp %}
+                <option value="{{ it.id }}" {% if item_sel and item_sel.id == it.id %}selected{% endif %}>
+                    {{ it.nome_item }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small mb-1">Tipo</label>
+            <select name="tipo" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">Todos</option>
+                {% for t in tipos_disp %}
+                <option value="{{ t }}" {% if tipo_filtro == t %}selected{% endif %}>{{ historico_humano.mov_producao_label(t) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small mb-1">De</label>
+            <input type="date" name="de" value="{{ de }}" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small mb-1">Ate</label>
+            <input type="date" name="ate" value="{{ ate }}" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2 d-flex gap-1">
+            <button type="submit" class="btn btn-primary btn-sm flex-grow-1">Filtrar</button>
+            <a href="{{ url_for('pedidos.congelados_historico') }}" class="btn btn-outline-secondary btn-sm" title="Limpar">
+                <i class="bi bi-x"></i>
+            </a>
+        </div>
+    </div>
+</form>
+
+{% if totais %}
+<div class="row g-2 mb-3">
+    {% for tipo, info in totais.items() %}
+    {% set color = TIPO_COR.get(tipo, 'secondary') %}
+    <div class="col-md-3">
+        <div class="card border-{{ color }}">
+            <div class="card-body py-2 px-3">
+                <small class="text-muted">{{ historico_humano.mov_producao_label(tipo) }}</small>
+                <div class="d-flex justify-content-between">
+                    <strong>{{ info.qtd }} un</strong>
+                    <span class="text-muted small">{{ info.n }} mov</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="d-flex justify-content-between align-items-center mb-2 mt-3">
+    <h5 class="mb-0"><i class="bi bi-list-ul"></i> Movimentações</h5>
+    <small class="text-muted">{{ linhas|length }} registro{{ '' if linhas|length == 1 else 's' }} (max 500)</small>
+</div>
+
+{% if linhas %}
+{% set ns = namespace(grupos={}, ordem=[]) %}
+{% for l in linhas %}
+    {% set chave = l.mov.data.strftime('%Y-%m-%d') if l.mov.data else 'sem-data' %}
+    {% if chave not in ns.grupos %}
+        {% set _ = ns.ordem.append(chave) %}
+        {% set _ = ns.grupos.update({chave: []}) %}
+    {% endif %}
+    {% set _ = ns.grupos[chave].append(l) %}
+{% endfor %}
+{% set dias_pt = {0:'segunda', 1:'terça', 2:'quarta', 3:'quinta', 4:'sexta', 5:'sábado', 6:'domingo'} %}
+
+{% for chave in ns.ordem %}
+    {% set lista_dia = ns.grupos[chave] %}
+    {% set data_obj = lista_dia[0].mov.data %}
+    {% set total_qtd = lista_dia | sum(attribute='mov.quantidade') %}
+    <details class="dia-grupo" {% if loop.first %}open{% endif %}>
+        <summary>
+            <span class="dia-data">
+                <strong>{{ data_obj.strftime('%d/%m/%Y') if data_obj else 'Sem data' }}</strong>
+                {% if data_obj %}· <span class="text-muted">{{ dias_pt.get(data_obj.weekday(), '') }}</span>{% endif %}
+            </span>
+            <span class="dia-resumo">
+                {{ lista_dia|length }} movimentação{{ '' if lista_dia|length == 1 else 'es' }}
+            </span>
+            <span class="dia-total">{{ total_qtd }} un total</span>
+        </summary>
+        <div class="dia-corpo table-responsive">
+            <table class="table table-sm mb-0">
+                <thead class="thead-padaria">
+                    <tr>
+                        <th style="width:80px;">Hora</th>
+                        {% if not item_sel %}<th>Item</th>{% endif %}
+                        <th class="text-center" style="width:80px;">Qtd</th>
+                        <th style="width:160px;">Tipo</th>
+                        <th>Referência</th>
+                        <th style="width:120px;" class="text-muted small">Usuário</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for l in lista_dia %}
+                    {% set color = TIPO_COR.get(l.mov.tipo, 'secondary') %}
+                    <tr>
+                        <td class="small text-muted">{{ l.mov.data.strftime('%H:%M') if l.mov.data else '—' }}</td>
+                        {% if not item_sel %}<td>{{ l.item_nome }}</td>{% endif %}
+                        <td class="text-center fw-bold">{{ l.mov.quantidade }}</td>
+                        <td><span class="badge bg-{{ color }}">{{ historico_humano.mov_producao_label(l.mov.tipo) }}</span></td>
+                        <td class="text-muted small">{{ l.mov.referencia or '' }}</td>
+                        <td class="text-muted small">{{ l.usuario.nome if l.usuario else '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+{% endfor %}
+{% else %}
+<div class="card">
+    <div class="card-body text-center text-muted py-4">
+        Nenhuma movimentação encontrada com esses filtros.
+    </div>
+</div>
+{% endif %}
+{% endblock %}

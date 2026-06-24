@@ -65,7 +65,7 @@
 <!-- Modal Entrada -->
 <div class="modal fade" id="modal-entrada" tabindex="-1">
     <div class="modal-dialog">
-        <form method="POST" action="{{ url_for('materias_primas.estoque_entrada') }}">
+        <form method="POST" action="{{ url_for('materias_primas.estoque_entrada') }}" id="form-entrada-mp">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="modal-content">
                 <div class="modal-header bg-success text-white">
@@ -73,6 +73,14 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
+                    <div class="mb-3 p-2 border rounded bg-light">
+                        <label class="form-label small fw-bold mb-1">
+                            <i class="bi bi-camera"></i> Extrair de foto da nota
+                        </label>
+                        <input type="file" id="ocr-nota-input" accept="image/*" class="form-control form-control-sm">
+                        <small id="ocr-status" class="text-muted"></small>
+                        <div id="ocr-resultado" class="mt-2" style="display:none;"></div>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label">Matéria-Prima</label>
                         <select name="mp_id" class="form-select" required>
@@ -184,4 +192,71 @@
         </form>
     </div>
 </div>
+
+<script>
+(function() {
+    var inp = document.getElementById('ocr-nota-input');
+    if (!inp) return;
+    var statusEl = document.getElementById('ocr-status');
+    var resEl = document.getElementById('ocr-resultado');
+    var form = document.getElementById('form-entrada-mp');
+    inp.addEventListener('change', function() {
+        var f = inp.files[0];
+        if (!f) return;
+        statusEl.textContent = 'lendo nota com IA...';
+        resEl.style.display = 'none';
+        var fd = new FormData();
+        fd.append('imagem', f);
+        fd.append('csrf_token', form.querySelector('[name=csrf_token]').value);
+        fetch('{{ url_for("materias_primas.estoque_ocr_nota") }}', {
+            method: 'POST', body: fd,
+        }).then(r => r.json()).then(function(d) {
+            if (!d.ok) {
+                statusEl.textContent = 'erro: ' + (d.erro || 'falhou');
+                return;
+            }
+            statusEl.textContent = '';
+            var itens = (d.dados && d.dados.itens) || [];
+            if (!itens.length) {
+                resEl.innerHTML = '<small class="text-muted">nenhum item identificado</small>';
+                resEl.style.display = '';
+                return;
+            }
+            var html = '<table class="table table-sm table-bordered mb-0" style="font-size:11px;">';
+            html += '<thead><tr><th>nota</th><th>MP match</th><th>qtd</th><th>preço</th><th></th></tr></thead><tbody>';
+            itens.forEach(function(it, idx) {
+                var match = it.resolvido
+                    ? '<span class="text-success">' + (it.resolvido.nome) + '</span>'
+                    : '<span class="text-danger">não achei</span>';
+                html += '<tr><td>' + (it.nome || '?') + '</td><td>' + match + '</td>'
+                    + '<td>' + (it.quantidade || '') + ' ' + (it.unidade || '') + '</td>'
+                    + '<td>R$ ' + (it.preco_unitario || it.preco_total || '?') + '</td>'
+                    + '<td>';
+                if (it.resolvido) {
+                    html += '<button type="button" class="btn btn-sm btn-success ocr-use" '
+                        + 'data-mp="' + it.resolvido.id + '" '
+                        + 'data-qtd="' + (it.quantidade || '') + '" '
+                        + 'data-preco="' + (it.preco_unitario || '') + '">usar</button>';
+                }
+                html += '</td></tr>';
+            });
+            html += '</tbody></table>';
+            resEl.innerHTML = html;
+            resEl.style.display = '';
+            resEl.querySelectorAll('.ocr-use').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var mp = btn.dataset.mp;
+                    var qtd = btn.dataset.qtd;
+                    var preco = btn.dataset.preco;
+                    form.querySelector('[name=mp_id]').value = mp;
+                    if (qtd) form.querySelector('[name=quantidade]').value = qtd.replace('.', ',');
+                    if (preco) form.querySelector('[name=preco_unitario]').value = preco.replace('.', ',');
+                });
+            });
+        }).catch(function(e) {
+            statusEl.textContent = 'erro: ' + e.message;
+        });
+    });
+})();
+</script>
 {% endblock %}

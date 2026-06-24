@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Permissões por papel{% endblock %}
+{% block content %}
+<h1 class="page-title"><i class="bi bi-sliders"></i> Permissões por papel</h1>
+
+<p class="text-muted small">
+    Marque o que cada papel pode fazer — vale para as 3 pontas: <strong>telas web</strong>,
+    <strong>copilot</strong> e <strong>Slack</strong> (já são o mesmo sistema).
+    <strong>Admin e owner têm acesso total</strong> e não aparecem aqui (ninguém se tranca fora).
+    Muda na hora, sem deploy. O padrão já reflete o comportamento atual — só o que você alterar passa a valer.
+</p>
+
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {% set ns = namespace(grupo=None) %}
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered align-middle bg-white">
+            <thead class="thead-padaria">
+                <tr>
+                    <th style="min-width:240px">Função</th>
+                    {% for p in papeis %}
+                    <th class="text-center">{{ papel_label[p] }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for linha in linhas %}
+                {% if linha.grupo != ns.grupo %}
+                <tr class="table-active">
+                    <td colspan="{{ papeis|length + 1 }}" class="fw-bold">{{ linha.grupo }}</td>
+                </tr>
+                {% set ns.grupo = linha.grupo %}
+                {% endif %}
+                <tr>
+                    <td>{{ linha.rotulo }}</td>
+                    {% for p in papeis %}
+                    <td class="text-center">
+                        <input type="checkbox" class="form-check-input"
+                               name="{{ linha.chave }}__{{ p }}"
+                               {% if linha.estados[p] %}checked{% endif %}>
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex gap-2 mt-2 mb-4">
+        <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-check-lg"></i> Salvar permissões
+        </button>
+        <a href="{{ url_for('main.debug_papeis') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-people"></i> Ver papéis dos usuários
+        </a>
+    </div>
+</form>
+{% endblock %}
