@@ -168,10 +168,11 @@
                         {% if s.breakdown_comprometido %}
                         <strong>Comprometido por loja:</strong>
                         {% for b in s.breakdown_comprometido %}
-                        <span class="me-2">{{ b.loja_nome }}: <strong>{{ b.qtd }}</strong></span>
+                        <span class="me-2 {% if b.qtd == 0 %}text-muted{% endif %}">{{ b.loja_nome }}: <strong>{{ b.qtd }}</strong></span>
                         {% endfor %}
+                        <small class="text-muted d-block mt-1">Lojas em cinza (qtd 0) também foram consultadas — simplesmente não pediram essa receita no horizonte.</small>
                         {% else %}
-                        <span class="text-muted">Nenhum pedido em aberto no horizonte — o Produzir vem da previsão histórica.</span>
+                        <span class="text-muted">Nenhuma loja operacional cadastrada.</span>
                         {% endif %}
                     </div>
                 </div>
