@@ -474,3 +474,61 @@ def test_detalhe_owner_pago_ve_acoes(app):
     assert r.status_code == 200
     assert 'Reembolsar e cancelar'.encode() in r.data
     assert b'Emitir NF' in r.data
+
+
+# ── Reenviar e-mails (24/06/2026): caso do email com typo no domínio ──────
+
+def test_reenviar_emails_pago_dispara_confirmado(app):
+    """Pedido pago: reenvia 'recebido' + 'confirmado' pro email_cliente atual.
+    Cobre o caso da cliente que digitou hotmail.con — corrige email, salva,
+    reenvia."""
+    from unittest.mock import patch
+    from app.extensions import db
+    c = _owner(app)
+    p = _pedido(db, codigo='D63571EF', status='pago')
+    with patch('app.services.email.enviar',
+               return_value={'ok': True, 'id': 'x'}) as mock_env:
+        r = c.post(f'/admin/loja-online/pedidos/{p.codigo}/reenviar-emails',
+                   follow_redirects=False)
+    assert r.status_code in (302, 303)
+    # "recebido" + "confirmado" = 2 envios
+    assert mock_env.call_count == 2
+    # foi pro email do pedido
+    assert all(call.args[0] == 'm@x.com' for call in mock_env.call_args_list)
+
+
+def test_reenviar_emails_entregue_inclui_entregue(app):
+    """Pedido entregue: recebido + confirmado + entregue."""
+    from unittest.mock import patch
+    from app.extensions import db
+    c = _owner(app)
+    p = _pedido(db, codigo='ENT001', status='entregue')
+    with patch('app.services.email.enviar',
+               return_value={'ok': True}) as mock_env:
+        c.post(f'/admin/loja-online/pedidos/{p.codigo}/reenviar-emails')
+    assert mock_env.call_count == 3
+
+
+def test_reenviar_emails_sem_email_recusa(app):
+    """Pedido sem e-mail válido: não tenta enviar, avisa pra corrigir."""
+    from unittest.mock import patch
+    from app.extensions import db
+    c = _owner(app)
+    p = _pedido(db, codigo='SEM01', status='pago')
+    p.email_cliente = 'invalido-sem-arroba'
+    db.session.commit()
+    with patch('app.services.email.enviar') as mock_env:
+        r = c.post(f'/admin/loja-online/pedidos/{p.codigo}/reenviar-emails',
+                   follow_redirects=True)
+    mock_env.assert_not_called()
+    assert b'corrija o e-mail' in r.data.lower() or b'e-mail v' in r.data.lower()
+
+
+def test_botao_reenviar_aparece_no_detalhe(app):
+    """O detalhe do pedido mostra o botão de reenviar."""
+    from app.extensions import db
+    c = _owner(app)
+    p = _pedido(db, codigo='BTN01', status='pago')
+    html = c.get(f'/admin/loja-online/pedidos/{p.codigo}').data
+    assert b'Reenviar e-mails' in html
+    assert b'/reenviar-emails' in html
