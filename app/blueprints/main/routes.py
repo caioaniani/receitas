@@ -3323,6 +3323,74 @@ def loja_online_pedido_editar(codigo):
     return _detalhe_redirect(codigo)
 
 
+@main_bp.route('/admin/loja-online/pedidos/<codigo>/reenviar-emails',
+               methods=['POST'])
+@login_required
+def loja_online_pedido_reenviar_emails(codigo):
+    """Reenvia os e-mails relevantes pro status atual do pedido, pro
+    email_cliente ATUAL (corrija o e-mail antes, se estava errado).
+
+    Caso 24/06/2026: cliente digitou hotmail.con; os 4 e-mails bouncearam.
+    Fluxo: editar e-mail -> Salvar -> Reenviar e-mails.
+
+    Quais manda, por status:
+    - pago/em_preparo/a_caminho/entregue: "confirmado" (todos já pagaram).
+    - a_caminho: + "a caminho".
+    - entregue: + "entregue".
+    - se a NF foi emitida: + "nota fiscal".
+    Sempre manda "recebemos seu pedido" (base). Best-effort por e-mail —
+    reporta quantos saíram OK."""
+    from flask import flash
+
+    from app.models import PedidoOnline
+    from app.services import email as email_svc
+    p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+
+    destinatario = (p.email_cliente or '').strip()
+    if '@' not in destinatario:
+        flash('Pedido sem e-mail válido — corrija o e-mail do cliente antes '
+              'de reenviar.', 'danger')
+        return _detalhe_redirect(codigo)
+
+    # Monta a lista de e-mails a reenviar conforme o status atual.
+    envios = [('Recebemos seu pedido', email_svc.enviar_pedido_recebido)]
+    pago_ou_alem = p.status in ('pago', 'em_preparo', 'a_caminho', 'entregue')
+    if pago_ou_alem:
+        envios.append(('Pedido confirmado', email_svc.enviar_confirmacao_pedido))
+    if p.status == 'a_caminho':
+        envios.append(('A caminho', email_svc.enviar_pedido_a_caminho))
+    if p.status == 'entregue':
+        envios.append(('Entregue', email_svc.enviar_pedido_entregue))
+    if getattr(p, 'nf_emitida_em', None):
+        envios.append(('Nota fiscal', email_svc.enviar_nf_emitida))
+
+    ok, falhas = 0, []
+    for nome_email, fn in envios:
+        try:
+            res = fn(p)
+            if res and res.get('ok'):
+                ok += 1
+            else:
+                falhas.append(f'{nome_email} ({(res or {}).get("erro", "?")})')
+        except Exception as exc:  # noqa: BLE001
+            current_app.logger.exception('reenviar email %s pedido=%s',
+                                         nome_email, codigo)
+            falhas.append(f'{nome_email} (erro)')
+
+    current_app.logger.info('reenvio emails pedido %s -> %s: %d ok, %d falha '
+                            '(uid=%s)', codigo, destinatario, ok, len(falhas),
+                            getattr(current_user, 'id', None))
+    falhas_txt = ', '.join(falhas)
+    if ok and not falhas:
+        flash(f'{ok} e-mail(s) reenviado(s) pra {destinatario}.', 'success')
+    elif ok:
+        flash(f'{ok} reenviado(s); falhou: {falhas_txt}.', 'warning')
+    else:
+        flash(f'Não consegui reenviar: {falhas_txt or "verifique o Postmark"}.',
+              'danger')
+    return _detalhe_redirect(codigo)
+
+
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/imprimir.pdf')
 @login_required
 def loja_online_pedido_imprimir(codigo):
