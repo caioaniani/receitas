@@ -155,6 +155,38 @@ def devolver(kind, item_id, data, qtd):
     db.session.commit()
 
 
+def reparar_linhas_orfas():
+    """Corrige linhas com qtd_planejada=0 e qtd_reservada>0 (criadas pelo
+    bug pre-24/06/2026 do `reservar`). Sobe o planejado pra default + reservado
+    pra restaurar saldo positivo.
+
+    Ex: linha (planejada=0, reservada=1) → vira (planejada=99999+1=100000,
+    reservada=1). Saldo = 99999 — item volta a vender.
+
+    Idempotente: linhas já normais (planejada > reservada) NÃO mexe.
+    Retorna a lista de linhas corrigidas pra log."""
+    quebradas = (db.session.query(EstoqueSitePlano)
+                 .filter(EstoqueSitePlano.qtd_planejada == 0,
+                         EstoqueSitePlano.qtd_reservada > 0)
+                 .all())
+    corrigidas = []
+    for row in quebradas:
+        antes = row.qtd_planejada
+        # Mantém saldo = 99999 (qtd_reservada continua, qtd_planejada sobe).
+        row.qtd_planejada = DEFAULT_QTD_PLANEJADA + (row.qtd_reservada or 0)
+        corrigidas.append({
+            'kind': row.kind, 'item_id': row.item_id,
+            'data': row.data.isoformat() if row.data else None,
+            'antes': antes, 'depois': row.qtd_planejada,
+            'reservada': row.qtd_reservada,
+        })
+    if corrigidas:
+        db.session.commit()
+        logger.warning('plano_dia.reparar_linhas_orfas: corrigidas %d linhas',
+                       len(corrigidas))
+    return corrigidas
+
+
 def _hoje_brt():
     """Hoje em BRT (delegado ao app.utils, evita importar agora() neste topo
     sem precisar)."""
