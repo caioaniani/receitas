@@ -381,6 +381,25 @@
         </div>
       </div>
     </form>
+
+    {# Reenviar e-mails (24/06/2026): pro caso do e-mail ter ido errado
+       (typo no domínio etc). Form SEPARADO do de salvar — corrija o e-mail,
+       Salve, depois Reenvie. #}
+    <hr class="my-3">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <form method="POST"
+            action="{{ url_for('main.loja_online_pedido_reenviar_emails', codigo=p.codigo) }}"
+            onsubmit="return confirm('Reenviar os e-mails do pedido {{ p.codigo }} para {{ p.email_cliente }}?\n\nConfira se o e-mail está CORRETO acima (e salve) antes de reenviar.');">
+        <button type="submit" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-envelope-arrow-up"></i> Reenviar e-mails
+        </button>
+      </form>
+      <span class="text-muted small">
+        Manda de novo os e-mails do status atual (confirmado/entregue/NF)
+        para <strong>{{ p.email_cliente }}</strong>. Se o e-mail estava
+        errado, <strong>corrija acima e salve primeiro</strong>.
+      </span>
+    </div>
   </div>
 </div>
 {% endblock %}
