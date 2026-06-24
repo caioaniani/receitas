@@ -236,6 +236,33 @@ Da auditoria 1, ainda pendentes:
   anexar em cada `<script>`). Esforco: 1-2d, mexe em todos os
   templates com inline JS.
 
+## VNDA aposentado (24/06/2026)
+
+A integracao com VNDA (e-commerce externo) foi **aposentada** porque a
+operacao migrou 100% pro sistema proprio. Decidido pelo dono em
+24/06/2026. NAO ressuscitar sem ordem explicita.
+
+**O que esta dormente** (codigo morto, mantido pra nao quebrar imports):
+- Cron `vnda-sync` e `vnda-card-sync` em `app/services/seru_cron.py` — NAO
+  agendados (linhas marcadas "VNDA APOSENTADO").
+- `_agregar_vendas_vnda_api` em `app/services/vendas_manuais.py` — retorna
+  sempre `({}, 'VNDA aposentado em 06/2026')`. NAO bate na API. O codigo
+  antigo segue como `_agregar_vendas_vnda_api_DESLIGADO` por referencia.
+- `agregar_itens_consolidado` e `vendas_vnda_loja` em
+  `app/services/vendas_itens.py` — Seru apenas. Versoes antigas
+  preservadas com sufixo `_DESLIGADO`.
+- Link "Vincular produtos do site" tirado da sidebar (`base.html`). Rotas
+  `/pdv/vnda/...` continuam existindo mas sem entrada no menu.
+
+**Trava de regressao**: `tests/test_vendas_vnda.py` e
+`tests/test_vnda_cesta.py` testam que VNDA NAO eh consultado (patch da API
+com `AssertionError` — qualquer chamada explode o teste).
+
+**Camada B (futura limpeza, NAO urgente)**: apagar `vnda_sync.py`,
+`vnda.py`, `vnda_card.py`, modelos `VndaProdutoMap` / `VndaPedidoProcessado`
+/ `VndaDebito` e migrations correspondentes. Tabelas ficam no Postgres
+por enquanto pra preservar historico.
+
 ## Stack
 
 Flask 3 + SQLAlchemy + Bootstrap 5 + Postgres em prod / SQLite local.
