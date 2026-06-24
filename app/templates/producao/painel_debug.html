@@ -27,6 +27,64 @@
         </div>
     </div>
 
+    <h2>🔎 Buscar item — "quais lojas pediram X"</h2>
+    <div class="card-box">
+        <form method="GET" class="d-flex gap-2 mb-2 flex-wrap align-items-center">
+            <input type="text" name="q" value="{{ busca }}" placeholder="ex: Pão Francês"
+                   class="form-control form-control-sm" style="max-width:280px;">
+            <input type="hidden" name="horizonte" value="{{ horizonte }}">
+            <input type="hidden" name="janela" value="{{ janela }}">
+            <button type="submit" class="btn btn-sm btn-primary">buscar</button>
+            <small class="text-muted">Janela: 60 dias atrás → fim do horizonte. Busca em receita, produto E matéria-prima.</small>
+        </form>
+
+        {% if busca %}
+            {% if not busca_linhas %}
+            <p class="text-muted mb-0">Nenhum item com "<strong>{{ busca }}</strong>" no período.</p>
+            {% else %}
+            <p class="mb-2"><strong>{{ busca_linhas|length }}</strong> linha(s) para "<strong>{{ busca }}</strong>". Resumo por loja (qtd total no período):</p>
+            <table class="table table-sm" style="max-width:600px;">
+                <thead><tr><th>Loja</th><th class="text-end">Qtd total (60d)</th><th class="text-end">Qtd no horizonte</th><th class="text-end">Linhas</th></tr></thead>
+                <tbody>
+                    {% for r in busca_resumo %}
+                    <tr>
+                        <td>{{ r.loja_nome }}</td>
+                        <td class="text-end fw-bold">{{ r.qtd_total }}</td>
+                        <td class="text-end {% if r.qtd_horizonte > 0 %}text-primary fw-bold{% else %}text-muted{% endif %}">{{ r.qtd_horizonte }}</td>
+                        <td class="text-end text-muted">{{ r.n_linhas }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <p class="small text-muted mb-2">Detalhe — cada pedido (mais recente primeiro). Coluna "entra no balanço" = item-receita + status não-baixado + dentro do horizonte.</p>
+            <table class="table table-sm table-hover">
+                <thead>
+                    <tr>
+                        <th>Pedido</th><th>Loja</th><th>Status</th><th>Entrega</th>
+                        <th>Item</th><th>FK</th><th class="text-end">Qtd</th><th class="text-center">Entra?</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in busca_linhas %}
+                    <tr>
+                        <td><a href="{{ url_for('pedidos.detalhe', id=r.pedido_id) }}">#{{ r.pedido_id }}</a></td>
+                        <td>{{ r.loja_nome }}</td>
+                        <td><span class="badge bg-light text-dark badge-status">{{ r.status }}</span></td>
+                        <td>{{ r.data_entrega.strftime('%d/%m/%Y') if r.data_entrega }}</td>
+                        <td>{{ r.item_nome }}</td>
+                        <td><span class="badge {% if r.fk_tipo == 'REC' %}bg-success{% elif r.fk_tipo == 'NENHUMA' %}bg-danger{% else %}bg-warning text-dark{% endif %} badge-status">{{ r.fk_tipo }}</span></td>
+                        <td class="text-end">{{ r.quantidade }}</td>
+                        <td class="text-center">{% if r.entra_balanco %}<span class="text-success">✓</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        {% else %}
+        <p class="text-muted mb-0">Digite um nome de receita/produto (ex: "Pão Francês") pra ver exatamente quais lojas pediram, quanto, quando, e se entra no balanço.</p>
+        {% endif %}
+    </div>
+
     <h2>Por loja — visão consolidada</h2>
     <div class="card-box">
         <table class="table table-sm">
