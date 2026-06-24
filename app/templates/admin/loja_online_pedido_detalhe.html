@@ -390,6 +390,7 @@
       <form method="POST"
             action="{{ url_for('main.loja_online_pedido_reenviar_emails', codigo=p.codigo) }}"
             onsubmit="return confirm('Reenviar os e-mails do pedido {{ p.codigo }} para {{ p.email_cliente }}?\n\nConfira se o e-mail está CORRETO acima (e salve) antes de reenviar.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
         <button type="submit" class="btn btn-outline-secondary btn-sm">
           <i class="bi bi-envelope-arrow-up"></i> Reenviar e-mails
         </button>
