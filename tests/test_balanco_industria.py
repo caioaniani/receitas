@@ -192,5 +192,44 @@ def test_receita_arquivada_fora(app):
     _pedido(loja, 'pendente', hoje() + timedelta(days=1),
             [(r.id, None, None, 20)])
 
+
+def test_breakdown_lista_todas_lojas_operacionais(app):
+    """O breakdown_comprometido lista TODAS as lojas operacionais (ativas,
+    sem Industria), inclusive as que NAO pediram a receita (qtd=0). Sem isso,
+    o usuario ve so a loja que pediu e pensa que o motor filtrou as demais.
+
+    Tambem trava: Industria NAO aparece no breakdown (loja de servico
+    interna, nao operacional); loja inativa tambem NAO aparece."""
+    loja_a = _loja('Loja A')
+    loja_b = _loja('Loja B')
+    loja_inativa = Loja(nome='Loja Inativa', ativa=False)
+    industria = Loja(nome='Industria', ativa=True)
+    db.session.add_all([loja_inativa, industria])
+    db.session.commit()
+
+    r = _receita()
+    # So Loja A pede a receita.
+    _pedido(loja_a, 'pendente', hoje() + timedelta(days=1),
+            [(r.id, None, None, 50)])
+
+    res = balanco_industria(horizonte_dias=7, usar_cache=False)
+    it = _por_receita(res, r.id)
+    assert it is not None
+
+    breakdown = it['breakdown_comprometido']
+    nomes = [b['loja_nome'] for b in breakdown]
+    qtds_por_nome = {b['loja_nome']: b['qtd'] for b in breakdown}
+
+    assert 'Loja A' in nomes
+    assert 'Loja B' in nomes        # zerada mas listada (a virada da UX)
+    assert 'Industria' not in nomes
+    assert 'Loja Inativa' not in nomes
+
+    assert qtds_por_nome['Loja A'] == 50
+    assert qtds_por_nome['Loja B'] == 0
+
+    # Ordem: qtd desc, depois alfabetica entre zeradas.
+    assert breakdown[0]['loja_nome'] == 'Loja A'    # qtd 50 vem primeiro
+
     res = balanco_industria(horizonte_dias=7, usar_cache=False)
     assert _por_receita(res, r.id) is None
