@@ -350,15 +350,10 @@ def iniciar(app):
         'interval', minutes=15, id='seru-sync',
         max_instances=1, coalesce=True,
     )
-    # VNDA desligado no cutover (22/06/2026) — a loja propria (PedidoOnline)
-    # substituiu a fonte de vendas do site. O sync VNDA so faz sentido se o
-    # VNDA voltar: religar com VNDA_AUTO_SYNC=1.
-    if os.environ.get('VNDA_AUTO_SYNC', '0') == '1':
-        _scheduler.add_job(
-            lambda: _run_vnda_sync(app),
-            'interval', minutes=15, id='vnda-sync',
-            max_instances=1, coalesce=True,
-        )
+    # VNDA APOSENTADO em 24/06/2026 (operacao 100% no sistema proprio). O job
+    # _run_vnda_sync segue existindo (codigo morto) mas NAO eh mais agendado,
+    # nem mesmo via env var. Pra ressuscitar: re-registrar este add_job +
+    # limpar o aviso "VNDA aposentado" em vendas_manuais/vendas_itens.
 
     # Resumo diario de pedidos no Slack as 04:00 BRT
     _scheduler.add_job(
@@ -457,17 +452,8 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
-    # Cache de pedidos do site (VNDA) pro card de cliente do CRM/Chatwoot —
-    # janela curta a cada 1h (going-forward). So agenda se houver token VNDA.
-    # Desligavel via env VNDA_CARD_SYNC=0. Historico antigo: botao manual em
-    # /pdv/vnda/mapeamentos.
-    if (os.environ.get('VNDA_CARD_SYNC', '1') != '0'
-            and (app.config.get('VNDA_API_TOKEN') or '').strip()):
-        _scheduler.add_job(
-            lambda app=app: _run_vnda_card_sync(app),
-            'cron', minute=0, id='vnda-card-sync',
-            max_instances=1, coalesce=True,
-        )
+    # VNDA card-sync APOSENTADO em 24/06/2026 (junto com o VNDA principal —
+    # ver bloco acima). NAO eh mais agendado.
 
     # Automacoes WhatsApp configuraveis (mensagens agendadas) — checa a cada 5 min
     _scheduler.add_job(

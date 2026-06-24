@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Painel Producao{% endblock %}
+{% block title %}Balanço Produção{% endblock %}
 
 {% block content %}
 <style>
-    /* Painel TV — fonte grande, alto contraste, denso mas legivel a 3m */
+    /* Painel TV — fonte grande, alto contraste, legivel a 3m */
     .painel-tv { font-size: 1.05rem; }
     .painel-tv h2 { font-size: 1.6rem; margin: 0; }
     .painel-tv .zona-titulo {
@@ -16,49 +16,52 @@
         border-radius: 0 0 .5rem .5rem; padding: .75rem;
     }
     .painel-tv .zona-vazio { color: #6c757d; font-style: italic; }
-    .painel-tv .badge-grande {
-        font-size: 1rem; padding: .35rem .7rem;
-    }
+    .painel-tv .badge-grande { font-size: 1rem; padding: .35rem .7rem; }
     .painel-tv .alerta-card {
         background: #f8d7da; border-left: 6px solid #b02a37;
         padding: .75rem 1rem; margin-bottom: .5rem; border-radius: .25rem;
     }
-    .painel-tv .produzir-linha {
+    .painel-tv .bal-head, .painel-tv .bal-linha {
         display: grid; grid-template-columns: 1fr auto auto auto auto;
-        gap: 1rem; padding: .5rem .75rem; border-bottom: 1px solid #f0f0f0;
-        align-items: center;
+        gap: 1.2rem; padding: .5rem .75rem; align-items: center;
     }
-    .painel-tv .produzir-linha:hover { background: #f8f9fa; cursor: pointer; }
-    .painel-tv .produzir-linha .num { font-weight: 700; font-size: 1.3rem; }
-    .painel-tv .produzir-linha .num.urgente { color: #b02a37; }
-    .painel-tv .produzir-linha .num.coberto { color: #198754; }
+    .painel-tv .bal-head {
+        background: #f1f3f5; font-size: .8rem; font-weight: 600;
+        text-transform: uppercase; color: #6c757d;
+    }
+    .painel-tv .bal-linha { border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+    .painel-tv .bal-linha:hover { background: #f8f9fa; }
+    .painel-tv .col-num { text-align: right; font-variant-numeric: tabular-nums; }
+    .painel-tv .produzir { font-weight: 700; font-size: 1.3rem; }
+    .painel-tv .produzir.alerta { color: #b02a37; }
+    .painel-tv .produzir.ok { color: #198754; }
     .painel-tv .breakdown { background: #f8f9fa; padding: .5rem 1rem;
                             font-size: .9rem; display: none; }
     .painel-tv .breakdown.aberto { display: block; }
-    .painel-tv .stockout-tag {
-        background: #fd7e14; color: #fff; padding: .15rem .5rem;
-        border-radius: .25rem; font-size: .75rem; font-weight: 600;
+    .painel-tv .tag-sem-hist {
+        background: #e9ecef; color: #6c757d; padding: .1rem .45rem;
+        border-radius: .25rem; font-size: .72rem; font-weight: 600;
     }
     .painel-tv .pedido-card {
         background: #e7f5ff; border: 1px solid #74c0fc;
         padding: .6rem .8rem; margin-bottom: .5rem; border-radius: .35rem;
         display: flex; justify-content: space-between; align-items: center;
     }
-    .painel-tv .pedido-card.separado { background: #d3f9d8; border-color: #69db7c; }
-    .painel-tv .pedido-card.em_transporte { background: #fff3bf; border-color: #fcc419; }
     .painel-tv .relogio { font-variant-numeric: tabular-nums; font-weight: 700; }
-    .painel-tv-controls { font-size: .9rem; }
 </style>
 
 <div class="painel-tv">
-    <div class="d-flex justify-content-between align-items-center mb-3 painel-tv-controls flex-wrap gap-2">
-        <h2><i class="bi bi-display"></i> Painel Producao</h2>
-        <div class="d-flex gap-3 align-items-center">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h2><i class="bi bi-clipboard-data"></i> Balanço da Produção</h2>
+        <div class="d-flex gap-3 align-items-center flex-wrap">
             <form method="GET" class="d-flex gap-1 align-items-center mb-0">
                 <label class="small text-muted mb-0">Horizonte:</label>
                 <input type="number" name="horizonte" min="1" max="14" value="{{ horizonte }}"
-                       class="form-control form-control-sm" style="width:70px;">
-                <button type="submit" class="btn btn-sm btn-outline-secondary">d</button>
+                       class="form-control form-control-sm" style="width:64px;">
+                <label class="small text-muted mb-0 ms-2">Histórico (sem):</label>
+                <input type="number" name="janela" min="1" max="26" value="{{ janela }}"
+                       class="form-control form-control-sm" style="width:64px;">
+                <button type="submit" class="btn btn-sm btn-outline-secondary">ver</button>
             </form>
             <span class="relogio" id="relogio">--:--:--</span>
             <small class="text-muted">refresh <span id="refresh-count">60</span>s</small>
@@ -66,30 +69,28 @@
     </div>
 
     <div class="row g-3">
-        <!-- Zona 1: Alertas urgentes -->
+        <!-- Zona 1: Alertas -->
         <div class="col-12">
             <div class="zona-titulo" style="background:#b02a37;">
-                <h2><i class="bi bi-exclamation-octagon-fill"></i> Alertas urgentes</h2>
+                <h2><i class="bi bi-exclamation-octagon-fill"></i> Alertas</h2>
                 <span class="badge bg-light text-dark badge-grande">
                     {{ (pedidos_atrasados|length) + (1 if cestas_orfaos else 0) }}
                 </span>
             </div>
             <div class="zona-corpo">
-                {% if pedidos_atrasados %}
-                    {% for p in pedidos_atrasados %}
-                    <div class="alerta-card">
-                        <strong>Pedido #{{ p.id }} — {{ p.loja.nome if p.loja else '?' }}</strong>
-                        — entrega era <strong>{{ p.data_entrega.strftime('%d/%m') }}</strong>
-                        ({{ (hoje - p.data_entrega).days }}d atrasado),
-                        status <strong>{{ p.status }}</strong>
-                        <a href="{{ url_for('pedidos.detalhe', id=p.id) }}" class="btn btn-sm btn-dark float-end">Ver</a>
-                    </div>
-                    {% endfor %}
-                {% endif %}
+                {% for p in pedidos_atrasados %}
+                <div class="alerta-card">
+                    <strong>Pedido #{{ p.id }} — {{ p.loja.nome if p.loja else '?' }}</strong>
+                    — entrega era <strong>{{ p.data_entrega.strftime('%d/%m') }}</strong>
+                    ({{ (hoje - p.data_entrega).days }}d atrasado),
+                    status <strong>{{ p.status }}</strong>
+                    <a href="{{ url_for('pedidos.detalhe', id=p.id) }}" class="btn btn-sm btn-dark float-end">Ver</a>
+                </div>
+                {% endfor %}
                 {% if cestas_orfaos %}
                 <div class="alerta-card">
-                    <strong>{{ cestas_orfaos }} componente(s) de cesta sem vinculo</strong>
-                    — vendas/desperdicios dessas cestas NAO baixam estoque.
+                    <strong>{{ cestas_orfaos }} componente(s) de cesta sem vínculo</strong>
+                    — vendas/desperdícios dessas cestas NÃO baixam estoque.
                     <a href="{{ url_for('produtos.cestas_orfaos') }}" class="btn btn-sm btn-dark float-end">Resolver</a>
                 </div>
                 {% endif %}
@@ -99,74 +100,79 @@
             </div>
         </div>
 
-        <!-- Zona 2: Produzir hoje -->
+        <!-- Zona 2: Balanço da indústria -->
         <div class="col-12">
             <div class="zona-titulo" style="background:#0d6efd;">
-                <h2><i class="bi bi-hammer"></i> Produzir nos proximos {{ horizonte }} dia(s)</h2>
-                <span class="badge bg-light text-dark badge-grande">
-                    {{ sugestao['itens']|selectattr('qtd_a_produzir', 'gt', 0)|list|length }} itens
-                </span>
+                <h2><i class="bi bi-hammer"></i> Produzir nos próximos {{ horizonte }} dia(s)</h2>
+                <div class="d-flex gap-2 align-items-center">
+                    {% if balanco.total_produzir_itens > 0 %}
+                    <form method="POST"
+                          action="{{ url_for('producao.criar_plano_do_deficit') }}"
+                          onsubmit="return confirm('Criar plano de produção com as {{ balanco.total_produzir_itens }} receita(s) em déficit? Você poderá revisar e ajustar antes de baixar o estoque.');"
+                          class="mb-0">
+                        <input type="hidden" name="horizonte" value="{{ horizonte }}">
+                        <input type="hidden" name="janela" value="{{ janela }}">
+                        <button type="submit" class="btn btn-warning btn-sm">
+                            <i class="bi bi-plus-square"></i> Criar plano do déficit
+                        </button>
+                    </form>
+                    {% endif %}
+                    <span class="badge bg-light text-dark badge-grande">{{ balanco.total_produzir_itens }} a produzir</span>
+                </div>
             </div>
             <div class="zona-corpo p-0">
-                {# Confirmacao positiva ou erro: stats explicitos de cada
-                   fonte que tentou puxar dados. Cinza = nao tentou
-                   (cache hit no service por loja). Verde = OK. Vermelho = erro. #}
-                <div class="small m-2" style="border-left:3px solid #dee2e6;padding-left:.6rem;color:#6c757d;">
-                    <strong>Lookback:</strong> {{ sugestao.get('data_inicio') }} → {{ sugestao.get('data_fim') }}.
-                    {% set vstats = sugestao.get('vnda_stats') or [] %}
-                    {% if vstats %}
-                    <strong>VNDA:</strong>
-                        {% for st in vstats %}
-                            {% if st.erro %}
-                            <span class="text-danger">{{ st.loja_nome }} — ERRO ({{ st.erro|truncate(80) }})</span>
-                            {% else %}
-                            <span class="text-success">{{ st.loja_nome }} — {{ st.n_orders_recebidos }} pedidos recebidos, {{ st.n_processados }} processados</span>
-                            {% endif %}
-                            {% if not loop.last %}<br>{% endif %}
-                        {% endfor %}
-                    {% else %}
-                    <span class="text-muted">VNDA: nao tentado (resultado de cache de 60s — atualiza no proximo refresh sem cache).</span>
-                    {% endif %}
-                </div>
-                {% if sugestao['avisos_vnda'] %}
+                {# Profundidade do historico = confianca da previsao. Raso -> aviso. #}
+                {% set prof = balanco.profundidade %}
+                {% if prof.n_pedidos < 20 or prof.n_semanas_dados < 3 %}
                 <div class="alert alert-warning small mb-0 m-2">
-                    {% for a in sugestao['avisos_vnda'] %}<div>{{ a }}</div>{% endfor %}
+                    <i class="bi bi-info-circle"></i>
+                    Previsão baseada em <strong>{{ prof.n_pedidos }} pedido(s)</strong> de
+                    <strong>{{ prof.n_semanas_dados }} semana(s)</strong> (desde {{ prof.desde }}).
+                    Histórico ainda raso — confie mais na coluna <strong>Comprometido</strong>;
+                    a previsão melhora conforme acumulam pedidos.
+                </div>
+                {% else %}
+                <div class="small m-2" style="border-left:3px solid #dee2e6;padding-left:.6rem;color:#6c757d;">
+                    Previsão por dia da semana, baseada em <strong>{{ prof.n_pedidos }} pedidos</strong> de
+                    <strong>{{ prof.n_semanas_dados }} semanas</strong> (desde {{ prof.desde }}).
                 </div>
                 {% endif %}
-                {% if not sugestao['itens'] %}
-                <p class="zona-vazio mb-0 p-3">Sem demanda projetada no periodo.</p>
+
+                {% if not balanco['itens'] %}
+                <p class="zona-vazio mb-0 p-3">Sem estoque, pedido em aberto ou histórico de demanda no período.</p>
                 {% else %}
-                <div style="display:grid;grid-template-columns:1fr auto auto auto auto;
-                            gap:1rem;padding:.4rem .75rem;background:#f1f3f5;
-                            font-size:.8rem;font-weight:600;text-transform:uppercase;
-                            color:#6c757d;">
-                    <div>Item</div>
-                    <div class="text-end">Lojas</div>
-                    <div class="text-end">Em pedido</div>
+                <div class="bal-head">
+                    <div>Receita</div>
                     <div class="text-end">Em estoque</div>
+                    <div class="text-end">Comprometido</div>
+                    <div class="text-end">Previsto</div>
                     <div class="text-end">Produzir</div>
                 </div>
-                {% for s in sugestao['itens'] %}
+                {% for s in balanco['itens'] %}
                 <div>
-                    <div class="produzir-linha" onclick="toggleBreakdown('bd-{{ loop.index }}')">
+                    <div class="bal-linha" onclick="toggleBreakdown('bd-{{ loop.index }}')">
                         <div>
                             {{ s.nome }}
-                            {% if s.stockout %}
-                            <span class="stockout-tag" title="Estoque abaixo da media no periodo — demanda real provavelmente maior">stockout</span>
+                            {% if not s.tem_historico %}
+                            <span class="tag-sem-hist" title="Sem histórico de pedidos — sem previsão; o Produzir vem do comprometido">sem histórico</span>
                             {% endif %}
                         </div>
-                        <div class="text-end">{{ s.qtd_total_lojas }}</div>
-                        <div class="text-end text-muted">{{ s.qtd_em_pedidos or '—' }}</div>
-                        <div class="text-end text-muted">{{ s.qtd_em_estoque_industria or '—' }}</div>
-                        <div class="text-end num {% if s.qtd_a_produzir > 0 %}urgente{% else %}coberto{% endif %}">
-                            {{ s.qtd_a_produzir }}
+                        <div class="col-num">{{ s.em_estoque or '—' }}</div>
+                        <div class="col-num">{{ s.comprometido or '—' }}</div>
+                        <div class="col-num text-muted">{{ s.previsto or '—' }}</div>
+                        <div class="col-num produzir {% if s.produzir > 0 %}alerta{% else %}ok{% endif %}">
+                            {{ s.produzir }}
                         </div>
                     </div>
                     <div id="bd-{{ loop.index }}" class="breakdown">
-                        Por loja:
-                        {% for b in s.breakdown_por_loja %}
+                        {% if s.breakdown_comprometido %}
+                        <strong>Comprometido por loja:</strong>
+                        {% for b in s.breakdown_comprometido %}
                         <span class="me-2">{{ b.loja_nome }}: <strong>{{ b.qtd }}</strong></span>
                         {% endfor %}
+                        {% else %}
+                        <span class="text-muted">Nenhum pedido em aberto no horizonte — o Produzir vem da previsão histórica.</span>
+                        {% endif %}
                     </div>
                 </div>
                 {% endfor %}
@@ -184,30 +190,28 @@
                 {% if not saindo_hoje %}
                 <p class="zona-vazio mb-0">Nenhum pedido com entrega hoje.</p>
                 {% else %}
-                    {% for p in saindo_hoje %}
-                    <div class="pedido-card {{ p.status }}">
-                        <div>
-                            <strong>#{{ p.id }} — {{ p.loja.nome if p.loja else '?' }}</strong>
-                            <span class="badge bg-secondary ms-2">{{ p.status }}</span>
-                            <small class="text-muted ms-2">{{ p.itens|length }} item(s)</small>
-                        </div>
-                        <div>
-                            {% if p.status in ('separado', 'em_transporte') %}
-                            <a href="{{ url_for('pedidos.qr_saida', id=p.id) }}"
-                               class="btn btn-sm btn-dark"
-                               target="_blank">
-                                <i class="bi bi-qr-code"></i> Gerar QR Saida
-                            </a>
-                            {% endif %}
-                            <a href="{{ url_for('pedidos.detalhe', id=p.id) }}"
-                               class="btn btn-sm btn-outline-secondary">Ver</a>
-                        </div>
+                {% for p in saindo_hoje %}
+                <div class="pedido-card">
+                    <div>
+                        <strong>#{{ p.id }} — {{ p.loja.nome if p.loja else '?' }}</strong>
+                        <span class="badge bg-secondary ms-2">{{ p.status }}</span>
+                        <small class="text-muted ms-2">{{ p.itens|length }} item(s)</small>
                     </div>
-                    {% endfor %}
+                    <div>
+                        {% if p.status in ('separado', 'em_transporte') %}
+                        <a href="{{ url_for('pedidos.qr_saida', id=p.id) }}"
+                           class="btn btn-sm btn-dark" target="_blank">
+                            <i class="bi bi-qr-code"></i> QR Saída
+                        </a>
+                        {% endif %}
+                        <a href="{{ url_for('pedidos.detalhe', id=p.id) }}"
+                           class="btn btn-sm btn-outline-secondary">Ver</a>
+                    </div>
+                </div>
+                {% endfor %}
                 {% endif %}
             </div>
         </div>
-
     </div>
 </div>
 
@@ -216,26 +220,19 @@ function toggleBreakdown(id) {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('aberto');
 }
-
-// Relogio + auto-refresh
 function tickRelogio() {
     const d = new Date();
     const pad = n => String(n).padStart(2, '0');
     const el = document.getElementById('relogio');
     if (el) el.textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
 }
-setInterval(tickRelogio, 1000);
-tickRelogio();
-
-// Refresh contagem regressiva (60s)
+setInterval(tickRelogio, 1000); tickRelogio();
 let refreshIn = 60;
 setInterval(function() {
     refreshIn--;
     const el = document.getElementById('refresh-count');
     if (el) el.textContent = refreshIn;
-    if (refreshIn <= 0) {
-        window.location.reload();
-    }
+    if (refreshIn <= 0) window.location.reload();
 }, 1000);
 </script>
 {% endblock %}

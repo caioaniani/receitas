@@ -236,6 +236,39 @@ Da auditoria 1, ainda pendentes:
   anexar em cada `<script>`). Esforco: 1-2d, mexe em todos os
   templates com inline JS.
 
+## VNDA aposentado (24/06/2026)
+
+A integracao com VNDA (e-commerce externo) foi **aposentada** porque a
+operacao migrou 100% pro sistema proprio (PedidoOnline / loja propria).
+Decisao do dono em 24/06/2026. NAO ressuscitar sem ordem explicita.
+
+**O que esta dormente** (codigo morto, mantido pra nao quebrar imports):
+- Cron `vnda-sync` e `vnda-card-sync` em `app/services/seru_cron.py` — NAO
+  agendados (linhas marcadas "VNDA APOSENTADO").
+- `_agregar_vendas_vnda_api` em `app/services/vendas_manuais.py` — retorna
+  sempre `({}, 'VNDA aposentado em 06/2026')`. NAO bate na API.
+- `agregar_itens_consolidado` em `app/services/vendas_itens.py` — Seru +
+  site (PedidoOnline) apenas; chaves `qtd_vnda`/`faturamento_vnda` ficam
+  zeradas por compat com chamadores.
+- `vendas_vnda_loja` ja usava `loja_online_vendas` desde o cutover parcial
+  (22/06/2026) — mantida.
+- Link "Vincular produtos do site" tirado da sidebar (`base.html`). Rotas
+  `/pdv/vnda/...` continuam existindo mas sem entrada no menu.
+
+**Trava de regressao**: `tests/test_vendas_vnda.py` e
+`tests/test_vnda_cesta.py` testam que VNDA NAO eh consultado (patch da API
+com `AssertionError` — qualquer chamada explode o teste).
+
+**Painel de producao**: a previsao de producao foi reescrita pra usar o
+historico de `PedidoLoja` (loja->industria) como base — nao mais PDV/VNDA.
+Ver `app/services/previsao_producao.py::balanco_industria`. Coluna
+"Produzir" = `max(0, max(comprometido, previsto) - em_estoque)`.
+
+**Camada B (futura limpeza, NAO urgente)**: apagar `vnda_sync.py`,
+`vnda.py`, `vnda_card.py`, modelos `VndaProdutoMap` / `VndaPedidoProcessado`
+/ `VndaDebito` e migrations correspondentes. Tabelas ficam no Postgres
+por enquanto pra preservar historico.
+
 ## Stack
 
 Flask 3 + SQLAlchemy + Bootstrap 5 + Postgres em prod / SQLite local.

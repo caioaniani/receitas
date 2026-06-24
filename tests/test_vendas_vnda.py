@@ -1,9 +1,8 @@
-"""Copilot/vendas: inclusao da loja propria (PedidoOnline) + VNDA historico.
+"""Copilot/vendas: inclusao da loja propria (PedidoOnline).
 
-Desde o cutover (22/06/2026) a fonte das vendas do site e o `PedidoOnline`
-(VNDA desligado). Cobre:
+VNDA APOSENTADO em 24/06/2026 (operacao 100% no sistema proprio). Cobre:
 - `vendas_vnda_loja`: monta a venda do site (loja propria) no formato do copilot.
-- `agregar_itens_consolidado`: faturamento total = Seru + VNDA(historico) + site.
+- `agregar_itens_consolidado`: faturamento total = Seru + site (sem VNDA).
 - `_read_consultar_vendas_itens`: filtro pela loja do site (Anesio) usa a loja
   propria.
 """
@@ -44,7 +43,8 @@ def test_vendas_site_loja_vazio(app):
     assert r['faturamento_total'] == 0.0
 
 
-def test_consolidado_soma_seru_vnda_e_site(app):
+def test_consolidado_soma_seru_e_site_sem_vnda(app):
+    """Pos-aposentamento: total = Seru + site. VNDA nao soma nada (=0)."""
     from app.services import vendas_itens
     seru_data = {
         'inicio': '2026-05-20', 'fim': '2026-05-20', 'loja': None,
@@ -54,21 +54,18 @@ def test_consolidado_soma_seru_vnda_e_site(app):
     }
     with patch('app.services.vendas_itens.agregar_itens',
                return_value=seru_data), \
-         patch('app.services.vendas_manuais._agregar_vendas_vnda_api',
-               return_value=({}, None)), \
-         patch('app.services.vnda_sync.faturamento_por_dia',
-               return_value={'total': 55.0, 'n_pedidos': 2, 'por_dia': {}}), \
          patch('app.services.loja_online_vendas.vendas_por_produto',
                return_value={}), \
          patch('app.services.loja_online_vendas.faturamento_por_dia',
                return_value={'total': 30.0, 'n_pedidos': 1, 'por_dia': {}}):
         r = vendas_itens.agregar_itens_consolidado(
             date(2026, 5, 20), date(2026, 5, 20))
-    assert r['faturamento_total'] == 285.0   # 200 Seru + 55 VNDA + 30 site
+    assert r['faturamento_total'] == 230.0   # 200 Seru + 30 site (sem VNDA)
     assert r['faturamento_seru'] == 200.0
-    assert r['faturamento_vnda'] == 55.0
+    assert r['faturamento_vnda'] == 0.0
     assert r['faturamento_online'] == 30.0
     assert r['faturamento_fonte'] == 'seru+site'
+    assert 'aposentado' in (r['vnda_aviso'] or '').lower()
 
 
 def test_copilot_loja_anesio_roteia_pra_site(app):

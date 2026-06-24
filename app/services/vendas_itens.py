@@ -193,26 +193,18 @@ def _resolver_nome_item(tipo, item_id):
 
 
 def agregar_itens_consolidado(data_inicial, data_final):
-    """Versao 'consolidada' Seru + VNDA pra uso do copilot/tools.
+    """Versao consolidada Seru + loja propria pra uso do copilot/tools.
 
-    Diferente de `agregar_itens`: nao recebe filtro de loja Seru (consolida
-    por item agregado entre todas as lojas) e soma vendas VNDA (e-commerce)
-    via mapeamento por (tipo, id). Itens VNDA sem correspondente Seru
-    aparecem como linhas novas (fonte='vnda').
+    Soma vendas Seru (PDV) + loja propria (PedidoOnline). VNDA APOSENTADO em
+    24/06/2026 — nao soma mais nada de VNDA. Chaves `qtd_vnda`/
+    `faturamento_vnda` continuam no retorno (=0) por compat com chamadores.
 
-    Faturamento ainda eh so do Seru (a fonte VNDA disponivel via
-    `_agregar_vendas_vnda_api` so retorna qtd). A resposta sinaliza isso
-    em `faturamento_fonte`.
-
-    NAO substitui `agregar_itens` — a tela /pdv/itens-vendidos continua
-    usando a versao crua porque depende dos campos de mapeamento Seru.
+    Itens vendidos so no site sem correspondente Seru aparecem como linhas
+    novas (fonte='site').
     """
     from app.services import loja_online_vendas
-    from app.services.vendas_manuais import _agregar_vendas_vnda_api
 
     seru_data = agregar_itens(data_inicial, data_final)
-    vendas_vnda, vnda_aviso = _agregar_vendas_vnda_api(data_inicial, data_final)
-    # Loja propria (PedidoOnline) — fonte do site desde o cutover (VNDA off).
     vendas_online = loja_online_vendas.vendas_por_produto(data_inicial, data_final)
 
     seru_por_chave = {}
@@ -230,53 +222,39 @@ def agregar_itens_consolidado(data_inicial, data_final):
     linhas = []
     chaves_seru = set()
     for chave, p in seru_por_chave.items():
-        qtd_vnda = vendas_vnda.get(chave, 0)
         qtd_online = vendas_online.get(chave, 0)
         chaves_seru.add(chave)
         p = dict(p)  # copia rasa pra nao mutar seru_data
         p['qtd_seru'] = p['qtd']
-        p['qtd_vnda'] = qtd_vnda
+        p['qtd_vnda'] = 0
         p['qtd_online'] = qtd_online
-        p['qtd'] = p['qtd_seru'] + qtd_vnda + qtd_online
+        p['qtd'] = p['qtd_seru'] + qtd_online
         fontes = ['seru']
-        if qtd_vnda > 0:
-            fontes.append('vnda')
         if qtd_online > 0:
             fontes.append('site')
         p['fonte'] = '+'.join(fontes)
         linhas.append(p)
 
-    # Itens que vendem so no site (VNDA historico e/ou loja propria), sem Seru.
-    for chave in set(vendas_vnda) | set(vendas_online):
-        if chave in chaves_seru:
-            continue
-        qtd_vnda = vendas_vnda.get(chave, 0)
-        qtd_online = vendas_online.get(chave, 0)
-        qtd = qtd_vnda + qtd_online
-        if qtd <= 0:
+    # Itens que vendem so no site, sem Seru.
+    for chave, qtd_online in vendas_online.items():
+        if chave in chaves_seru or qtd_online <= 0:
             continue
         tipo_v, id_v = chave
         nome = _resolver_nome_item(tipo_v, id_v)
         if not nome:
             continue
-        fontes = []
-        if qtd_vnda > 0:
-            fontes.append('vnda')
-        if qtd_online > 0:
-            fontes.append('site')
-        fonte = '+'.join(fontes)
         linhas.append({
             'nome': nome,
             'sku': None,
-            'qtd': qtd,
+            'qtd': qtd_online,
             'qtd_seru': 0,
-            'qtd_vnda': qtd_vnda,
+            'qtd_vnda': 0,
             'qtd_online': qtd_online,
             'faturamento': 0,
             'pct_faturamento': 0,
             'n_pedidos': 0,
-            'fonte': fonte,
-            'estado_map': f'{fonte}_only',
+            'fonte': 'site',
+            'estado_map': 'site_only',
             'mapeado_para': {'tipo': tipo_v, 'id': id_v, 'nome': nome},
             'match': {'tipo': tipo_v, 'id': id_v, 'nome': nome, 'kind': 'exato'},
         })
@@ -291,15 +269,7 @@ def agregar_itens_consolidado(data_inicial, data_final):
 
     linhas.sort(key=lambda x: -x['qtd'])
 
-    # Faturamento do site por data de venda. VNDA = historico (pre-cutover,
-    # best-effort se a API ainda responder); loja propria (PedidoOnline) =
-    # vendas novas. Somam sem dupla contagem (pedidos/periodos distintos).
-    from app.services import vnda_sync
-    fat_vnda = 0.0
-    try:
-        fat_vnda = vnda_sync.faturamento_por_dia(data_inicial, data_final)['total']
-    except Exception:  # noqa: BLE001
-        fat_vnda = 0.0
+    # Faturamento do site = so loja propria (PedidoOnline). VNDA aposentado.
     try:
         fat_online = loja_online_vendas.faturamento_por_dia(
             data_inicial, data_final)['total']
@@ -307,18 +277,17 @@ def agregar_itens_consolidado(data_inicial, data_final):
         fat_online = 0.0
 
     fat_seru = seru_data['faturamento_total'] or 0
-    fat_site = fat_vnda + fat_online
     return {
         'inicio': data_inicial.isoformat(),
         'fim': data_final.isoformat(),
         'total_pedidos_seru': seru_data['total_pedidos'],
-        'faturamento_total': round(fat_seru + fat_site, 2),
+        'faturamento_total': round(fat_seru + fat_online, 2),
         'faturamento_seru': round(fat_seru, 2),
-        'faturamento_vnda': round(fat_vnda, 2),
+        'faturamento_vnda': 0.0,
         'faturamento_online': round(fat_online, 2),
-        'faturamento_fonte': 'seru+site' if fat_site > 0 else 'seru_apenas',
+        'faturamento_fonte': 'seru+site' if fat_online > 0 else 'seru_apenas',
         'produtos': linhas,
-        'vnda_aviso': vnda_aviso,
+        'vnda_aviso': 'VNDA aposentado em 06/2026',
         'lojas_no_intervalo': seru_data['lojas_no_intervalo'],
     }
 

@@ -42,6 +42,21 @@ ULTIMA_CONSULTA_VNDA = {}
 
 
 def _agregar_vendas_vnda_api(data_inicio, data_fim, _loja_id=None):
+    """VNDA APOSENTADO em 24/06/2026 — operacao 100% no sistema proprio.
+
+    Mantida com a assinatura antiga (chamadores: vendas_itens, testes) mas
+    SEMPRE retorna vazio. Nao bate na API VNDA nunca mais. Atualiza
+    ULTIMA_CONSULTA_VNDA pra UI nao quebrar onde le essas chaves.
+    """
+    stats_key = _loja_id or 0
+    ULTIMA_CONSULTA_VNDA[stats_key] = {
+        'n_orders_recebidos': 0, 'n_processados': 0,
+        'erro': 'VNDA aposentado', 'tentou_em': None,
+    }
+    return {}, 'VNDA aposentado em 06/2026'
+
+
+def _agregar_vendas_vnda_api_DESLIGADO(data_inicio, data_fim, _loja_id=None):
     """Puxa direto da API do VNDA pedidos com data_entrega no intervalo
     e agrega por (tipo, id) via VndaProdutoMap. NAO depende de sync
     previo do cron — funciona retroativo.
@@ -294,22 +309,12 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
         fontes_por_item[chave].add('seru')
         por_fonte_item[chave]['seru'] += qtd
 
-    # 1b. VNDA via API direta (pega historico real, retroativo). So usa
-    # essa fonte se essa loja for a "loja_vnda" configurada — nao faz
-    # sentido somar vendas VNDA pra outras lojas.
+    # 1b. VNDA aposentado (canal e-commerce desligado em 06/2026 — operacao
+    # 100% no sistema proprio). NAO batemos mais na API VNDA nesta sugestao:
+    # o painel de producao passou a prever pela demanda real (PedidoLoja) e
+    # esta sugestao por loja usa Seru + manual. `_agregar_vendas_vnda_api`
+    # segue existindo pra leitura de historico em /pdv/itens-vendidos.
     aviso_vnda = None
-    try:
-        from app.services.vnda_sync import loja_vnda as _loja_vnda_cfg
-        loja_vnda_obj = _loja_vnda_cfg()
-        if loja_vnda_obj and loja_vnda_obj.id == loja_id:
-            vnda_dict, aviso_vnda = _agregar_vendas_vnda_api(
-                data_inicio, data_fim, _loja_id=loja_id)
-            for chave, qtd in vnda_dict.items():
-                vendas_por_item[chave] += qtd
-                fontes_por_item[chave].add('vnda')
-                por_fonte_item[chave]['vnda'] += qtd
-    except Exception as e:  # noqa: BLE001
-        aviso_vnda = f'Erro inesperado VNDA: {type(e).__name__}: {str(e)[:200]}'
 
     # 2. Vendas manuais (por data_venda — Date, nao datetime)
     manuais = VendaManualLoja.query.filter(

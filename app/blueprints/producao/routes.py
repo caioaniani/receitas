@@ -139,25 +139,30 @@ def excluir(id):
 @login_required
 @admin_required
 def painel():
-    """Painel de planejamento — visao consolidada de demanda das lojas vs
-    estoque industria. **Admin-only**: admin ve os dados e decide o que
-    enviar pra producao executar (nao eh a producao que ve direto)."""
+    """Balanco de producao da industria — por receita: estoque x comprometido
+    x previsto (historico de PedidoLoja) -> quanto produzir. **Admin-only**:
+    admin ve os dados e decide o que mandar a producao executar."""
     from datetime import timedelta
 
     from app.constants import STATUS_PEDIDO_FINALIZADOS
     from app.models import PedidoLoja
     from app.services.cestas import contar_produto_itens_orfaos
-    from app.services.previsao_producao import sugerir_producao
+    from app.services.previsao_producao import balanco_industria
 
     hoje_d = hoje_brt()
     amanha = hoje_d + timedelta(days=1)
-    agora_hora = datetime.now().hour
 
     try:
         horizonte = int(request.args.get('horizonte', 7))
     except ValueError:
         horizonte = 7
     horizonte = max(1, min(horizonte, 14))
+
+    try:
+        janela = int(request.args.get('janela', 6))
+    except ValueError:
+        janela = 6
+    janela = max(1, min(janela, 26))
 
     # Zona 1 — alertas
     pedidos_atrasados = (PedidoLoja.query
@@ -166,8 +171,8 @@ def painel():
                          .order_by(PedidoLoja.data_entrega).all())
     cestas_orfaos = contar_produto_itens_orfaos()
 
-    # Zona 2 — produzir hoje (sugestao agregada)
-    sugestao = sugerir_producao(horizonte_dias=horizonte)
+    # Zona 2 — balanco da industria (estoque x comprometido x previsto)
+    balanco = balanco_industria(horizonte_dias=horizonte, janela_semanas=janela)
 
     # Zona 3 — saindo hoje
     saindo_hoje = (PedidoLoja.query
@@ -178,9 +183,72 @@ def painel():
     return render_template('producao/painel.html',
                            hoje=hoje_d,
                            amanha=amanha,
-                           agora_hora=agora_hora,
                            horizonte=horizonte,
+                           janela=janela,
                            pedidos_atrasados=pedidos_atrasados,
                            cestas_orfaos=cestas_orfaos,
-                           sugestao=sugestao,
+                           balanco=balanco,
                            saindo_hoje=saindo_hoje)
+
+
+@producao_bp.route('/painel/criar-plano-do-deficit', methods=['POST'])
+@login_required
+@admin_required
+def criar_plano_do_deficit():
+    """Cria um PlanejamentoProducao do dia ja preenchido com as receitas que
+    o balanco aponta como deficit (coluna Produzir > 0). Multiplicador por
+    receita = ceil(produzir / rendimento_qtd). O admin abre o plano criado,
+    revisa, ajusta a olho e clica em 'Baixar estoque' como ja faz hoje."""
+    from math import ceil
+
+    from app.services.previsao_producao import balanco_industria
+
+    try:
+        horizonte = int(request.form.get('horizonte', 7))
+    except ValueError:
+        horizonte = 7
+    horizonte = max(1, min(horizonte, 14))
+
+    try:
+        janela = int(request.form.get('janela', 6))
+    except ValueError:
+        janela = 6
+    janela = max(1, min(janela, 26))
+
+    balanco = balanco_industria(horizonte_dias=horizonte,
+                                janela_semanas=janela, usar_cache=False)
+    deficits = [it for it in balanco['itens'] if it['produzir'] > 0]
+    if not deficits:
+        flash('Sem deficit no horizonte — nada a planejar.', 'info')
+        return redirect(url_for('producao.painel',
+                                horizonte=horizonte, janela=janela))
+
+    hoje_d = hoje_brt()
+    plano = PlanejamentoProducao(
+        data=hoje_d,
+        nome=f'Producao {hoje_d.strftime("%d/%m")} (deficit {horizonte}d)',
+        criado_por=current_user.id,
+    )
+    db.session.add(plano)
+    db.session.flush()
+
+    ignorados = []
+    for it in deficits:
+        rec = Receita.query.get(it['receita_id'])
+        if not rec or not rec.rendimento_qtd or rec.rendimento_qtd <= 0:
+            # Receita sem rendimento definido — nao da pra calcular mult.
+            # Reporta na flash pro admin completar a ficha tecnica.
+            ignorados.append(it['nome'])
+            continue
+        mult = max(1, ceil(it['produzir'] / float(rec.rendimento_qtd)))
+        db.session.add(PlanejamentoItem(
+            planejamento_id=plano.id, receita_id=rec.id, multiplicador=mult))
+
+    db.session.commit()
+    msg = f'Plano criado com {len(deficits) - len(ignorados)} receita(s).'
+    if ignorados:
+        msg += (' Sem rendimento na ficha (ignorados): '
+                + ', '.join(ignorados[:5])
+                + ('...' if len(ignorados) > 5 else ''))
+    flash(msg, 'success' if not ignorados else 'warning')
+    return redirect(url_for('producao.detalhe', id=plano.id))
