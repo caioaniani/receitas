@@ -192,6 +192,9 @@ def test_receita_arquivada_fora(app):
     _pedido(loja, 'pendente', hoje() + timedelta(days=1),
             [(r.id, None, None, 20)])
 
+    res = balanco_industria(horizonte_dias=7, usar_cache=False)
+    assert _por_receita(res, r.id) is None
+
 
 def test_breakdown_lista_todas_lojas_operacionais(app):
     """O breakdown_comprometido lista TODAS as lojas operacionais (ativas,
