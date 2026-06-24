@@ -37,6 +37,23 @@
   <a href="{{ url_for('main.loja_online_dashboard') }}" class="btn btn-sm btn-outline-secondary">← Loja Online</a>
 </form>
 
+<div class="alert alert-secondary border d-flex flex-wrap align-items-center gap-2 mb-3"
+     style="font-size:14px;">
+  <strong>Atalhos:</strong>
+  <button type="button" id="btn-replicar-tudo" class="btn btn-sm btn-dark"
+          data-url="{{ url_for('main.loja_online_plano_dia_replicar_tudo') }}"
+          data-data="{{ data_str }}">
+    🔁 Aplicar 99999 a TODOS os itens (14 dias)
+  </button>
+  <button type="button" id="btn-reparar-orfas" class="btn btn-sm btn-outline-warning"
+          data-url="{{ url_for('main.loja_online_plano_dia_reparar_orfas') }}">
+    🩹 Reparar itens zerados por venda sem plano
+  </button>
+  <small class="text-muted ms-auto">
+    "Reparar" só age em linhas com planejado=0 + vendas&gt;0 (não toca onde você setou limite manualmente).
+  </small>
+</div>
+
 {% if not itens %}
 <div class="alert alert-light">
   Nenhum item publicado no site. Configure preços e fotos em
