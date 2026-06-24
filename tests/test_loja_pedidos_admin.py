@@ -528,10 +528,46 @@ def test_reenviar_emails_sem_email_recusa(app):
 
 
 def test_botao_reenviar_aparece_no_detalhe(app):
-    """O detalhe do pedido mostra o botão de reenviar."""
+    """O detalhe do pedido mostra o botão de reenviar — COM csrf_token no
+    form (sem ele, prod dá 'The CSRF token is missing' — bug 24/06/2026)."""
     from app.extensions import db
     c = _owner(app)
     p = _pedido(db, codigo='BTN01', status='pago')
     html = c.get(f'/admin/loja-online/pedidos/{p.codigo}').data
     assert b'Reenviar e-mails' in html
     assert b'/reenviar-emails' in html
+    # O form de reenviar precisa do hidden csrf_token. Conta: o número de
+    # csrf_token no HTML tem que cobrir TODOS os forms POST (incluindo este).
+    # Localiza o trecho do form de reenviar e garante que tem csrf logo antes
+    # do botão.
+    txt = html.decode()
+    pos_form = txt.find('/reenviar-emails')
+    pos_botao = txt.find('Reenviar e-mails', pos_form)
+    trecho = txt[pos_form:pos_botao]
+    assert 'csrf_token' in trecho, 'form de reenviar sem csrf_token'
+
+
+def test_reenviar_com_csrf_ligado_funciona(app):
+    """Com CSRF ATIVO (como em prod), o POST com o token do form passa.
+    Sem o hidden csrf_token no template, daria 400 'CSRF token is missing'."""
+    from unittest.mock import patch
+
+    from app.extensions import db
+    app.config['WTF_CSRF_ENABLED'] = True
+    try:
+        c = _owner(app)
+        p = _pedido(db, codigo='CSRF1', status='pago')
+        # Pega o token renderizado na página de detalhe
+        html = c.get(f'/admin/loja-online/pedidos/{p.codigo}').data.decode()
+        import re
+        m = re.search(r'name="csrf_token" value="([^"]+)"', html)
+        assert m, 'csrf_token não renderizado'
+        token = m.group(1)
+        with patch('app.services.email.enviar', return_value={'ok': True}):
+            r = c.post(
+                f'/admin/loja-online/pedidos/{p.codigo}/reenviar-emails',
+                data={'csrf_token': token})
+        # 302/303 redirect (sucesso) — NÃO 400 (CSRF missing)
+        assert r.status_code in (302, 303), r.status_code
+    finally:
+        app.config['WTF_CSRF_ENABLED'] = False
