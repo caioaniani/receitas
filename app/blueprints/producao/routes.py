@@ -203,7 +203,7 @@ def painel_debug():
     from datetime import timedelta
 
     from app.constants import STATUS_PEDIDO_NAO_BAIXADOS
-    from app.models import Loja, PedidoItem, PedidoLoja
+    from app.models import Loja, MateriaPrima, PedidoItem, PedidoLoja, Produto
 
     try:
         horizonte = int(request.args.get('horizonte', 7))
@@ -297,6 +297,83 @@ def painel_debug():
         if lid in contagem_por_loja:
             contagem_por_loja[lid]['historico'] = cnt
 
+    # SECAO "CACA O FANTASMA" — todos os PedidoItem do horizonte,
+    # independente da FK. Cobre 3 hipoteses do dono (24/06/2026):
+    # 1) item gravado com produto_id em vez de receita_id (motor filtra fora)
+    # 2) item gravado com materia_prima_id (idem)
+    # 3) item ORFAO (3 FKs NULL) — so item_nome textual
+    # Pra cada linha, mostra: loja, pedido, status, data_entrega, item_nome,
+    # qual FK esta setada (REC/PROD/MP/NENHUMA), nome do alvo da FK.
+    # Tambem agrupa por busca textual "Pão Francês" (case-insensitive) pra
+    # achar variantes.
+    todos_itens_horizonte = (db.session.query(PedidoLoja.id, PedidoLoja.loja_id,
+                                               PedidoLoja.status,
+                                               PedidoLoja.data_entrega,
+                                               PedidoItem.id.label('item_id'),
+                                               PedidoItem.receita_id,
+                                               PedidoItem.produto_id,
+                                               PedidoItem.materia_prima_id,
+                                               PedidoItem.quantidade,
+                                               PedidoItem.observacao)
+                              .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
+                              .filter(PedidoLoja.data_entrega >= hoje_d,
+                                      PedidoLoja.data_entrega <= horizonte_fim)
+                              .order_by(PedidoLoja.loja_id,
+                                        PedidoLoja.data_entrega).all())
+
+    # Resolve nomes das 3 FKs em lote.
+    rec_ids = {r.receita_id for r in todos_itens_horizonte if r.receita_id}
+    prod_ids = {r.produto_id for r in todos_itens_horizonte if r.produto_id}
+    mp_ids = {r.materia_prima_id for r in todos_itens_horizonte
+              if r.materia_prima_id}
+    nomes_rec = {r.id: r.nome for r in
+                 Receita.query.filter(Receita.id.in_(rec_ids)).all()} if rec_ids else {}
+    nomes_prod = {p.id: p.nome for p in
+                  Produto.query.filter(Produto.id.in_(prod_ids)).all()} if prod_ids else {}
+    nomes_mp = {m.id: m.nome for m in
+                MateriaPrima.query.filter(MateriaPrima.id.in_(mp_ids)).all()} if mp_ids else {}
+
+    # Enriquece cada linha + identifica fantasmas (nao-receita).
+    itens_enriquecidos = []
+    fantasmas = []  # itens que nao entram no balanco mas tem nome reconhecivel
+    for r in todos_itens_horizonte:
+        if r.receita_id:
+            fk = 'REC'
+            alvo = nomes_rec.get(r.receita_id, f'?id={r.receita_id}')
+        elif r.produto_id:
+            fk = 'PROD'
+            alvo = nomes_prod.get(r.produto_id, f'?id={r.produto_id}')
+        elif r.materia_prima_id:
+            fk = 'MP'
+            alvo = nomes_mp.get(r.materia_prima_id, f'?id={r.materia_prima_id}')
+        else:
+            fk = 'NENHUMA'
+            alvo = (r.observacao or '<sem FK e sem observacao>')
+        entrada = {
+            'pedido_id': r.id, 'loja_id': r.loja_id, 'status': r.status,
+            'data_entrega': r.data_entrega, 'item_id': r.item_id,
+            'fk_tipo': fk, 'alvo_nome': alvo,
+            'receita_id': r.receita_id, 'produto_id': r.produto_id,
+            'materia_prima_id': r.materia_prima_id,
+            'quantidade': r.quantidade, 'observacao': r.observacao,
+        }
+        itens_enriquecidos.append(entrada)
+        # Fantasma = nao entra no balanco (motor filtra receita_id NOT NULL)
+        if fk != 'REC' and r.status in STATUS_PEDIDO_NAO_BAIXADOS:
+            fantasmas.append(entrada)
+
+    # Variantes de receita por nome — agrupar por "primeira palavra" pra
+    # detectar receitas duplicadas (ex: "Pão Francês" vs "Pão Francês Fermentado").
+    variantes_receita = {}
+    for rec in Receita.query.order_by(Receita.nome).all():
+        chave = (rec.nome.split()[0] if rec.nome else '?').lower()
+        variantes_receita.setdefault(chave, []).append(
+            {'id': rec.id, 'nome': rec.nome,
+             'arquivada': rec.arquivada_em is not None})
+    # So mostra grupos com 2+ variantes.
+    variantes_receita = {k: v for k, v in variantes_receita.items()
+                          if len(v) >= 2}
+
     return render_template(
         'producao/painel_debug.html',
         hoje=hoje_d, horizonte=horizonte, janela=janela,
@@ -307,6 +384,9 @@ def painel_debug():
         contagem_por_loja=contagem_por_loja,
         nomes_loja=nomes_loja,
         status_nao_baixados=STATUS_PEDIDO_NAO_BAIXADOS,
+        itens_enriquecidos=itens_enriquecidos,
+        fantasmas=fantasmas,
+        variantes_receita=variantes_receita,
     )
 
 
