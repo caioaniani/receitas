@@ -37,6 +37,11 @@ from app.models import EstoqueSitePlano
 
 logger = logging.getLogger(__name__)
 
+# Valor que a tela admin mostra no campo "Planejado" quando nao ha linha
+# cadastrada (= "sem limite"). O servidor TAMBEM usa esse valor quando
+# auto-cria linha em `reservar` — alinha com a expectativa do dono.
+DEFAULT_QTD_PLANEJADA = 99999
+
 
 def saldo(kind, item_id, data):
     """qtd_planejada - qtd_reservada pra (item, data). Devolve `None` se NAO
