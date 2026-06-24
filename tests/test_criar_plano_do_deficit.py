@@ -9,7 +9,8 @@ from app.utils import hoje
 
 
 def _login(client, admin_user):
-    client.post('/login', data={'login': admin_user.login, 'senha': '123'},
+    client.post('/auth/login',
+                data={'login': admin_user.login, 'senha': '123'},
                 follow_redirects=True)
 
 
