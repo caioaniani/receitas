@@ -139,25 +139,30 @@ def excluir(id):
 @login_required
 @admin_required
 def painel():
-    """Painel de planejamento — visao consolidada de demanda das lojas vs
-    estoque industria. **Admin-only**: admin ve os dados e decide o que
-    enviar pra producao executar (nao eh a producao que ve direto)."""
+    """Balanco de producao da industria — por receita: estoque x comprometido
+    x previsto (historico de PedidoLoja) -> quanto produzir. **Admin-only**:
+    admin ve os dados e decide o que mandar a producao executar."""
     from datetime import timedelta
 
     from app.constants import STATUS_PEDIDO_FINALIZADOS
     from app.models import PedidoLoja
     from app.services.cestas import contar_produto_itens_orfaos
-    from app.services.previsao_producao import sugerir_producao
+    from app.services.previsao_producao import balanco_industria
 
     hoje_d = hoje_brt()
     amanha = hoje_d + timedelta(days=1)
-    agora_hora = datetime.now().hour
 
     try:
         horizonte = int(request.args.get('horizonte', 7))
     except ValueError:
         horizonte = 7
     horizonte = max(1, min(horizonte, 14))
+
+    try:
+        janela = int(request.args.get('janela', 6))
+    except ValueError:
+        janela = 6
+    janela = max(1, min(janela, 26))
 
     # Zona 1 — alertas
     pedidos_atrasados = (PedidoLoja.query
@@ -166,8 +171,8 @@ def painel():
                          .order_by(PedidoLoja.data_entrega).all())
     cestas_orfaos = contar_produto_itens_orfaos()
 
-    # Zona 2 — produzir hoje (sugestao agregada)
-    sugestao = sugerir_producao(horizonte_dias=horizonte)
+    # Zona 2 — balanco da industria (estoque x comprometido x previsto)
+    balanco = balanco_industria(horizonte_dias=horizonte, janela_semanas=janela)
 
     # Zona 3 — saindo hoje
     saindo_hoje = (PedidoLoja.query
@@ -178,9 +183,9 @@ def painel():
     return render_template('producao/painel.html',
                            hoje=hoje_d,
                            amanha=amanha,
-                           agora_hora=agora_hora,
                            horizonte=horizonte,
+                           janela=janela,
                            pedidos_atrasados=pedidos_atrasados,
                            cestas_orfaos=cestas_orfaos,
-                           sugestao=sugestao,
+                           balanco=balanco,
                            saindo_hoje=saindo_hoje)
