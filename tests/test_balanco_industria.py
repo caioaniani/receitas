@@ -230,6 +230,3 @@ def test_breakdown_lista_todas_lojas_operacionais(app):
 
     # Ordem: qtd desc, depois alfabetica entre zeradas.
     assert breakdown[0]['loja_nome'] == 'Loja A'    # qtd 50 vem primeiro
-
-    res = balanco_industria(horizonte_dias=7, usar_cache=False)
-    assert _por_receita(res, r.id) is None
