@@ -3701,6 +3701,47 @@ def loja_online_plano_dia_definir():
     return jsonify(ok=True, saldo=saldo, qtd_planejada=qtd)
 
 
+@main_bp.route('/admin/loja-online/plano-do-dia/replicar-tudo', methods=['POST'])
+@owner_required
+def loja_online_plano_dia_replicar_tudo():
+    """Replica `qtd_planejada` pros proximos 14 dias pra TODOS os itens
+    publicados no site, a partir de `data_inicio`. Sobrescreve.
+
+    Decisao do dono 24/06/2026: evitar o caso "esqueci de clicar ↔ num
+    item e ele zerou no site"."""
+    from datetime import date as _date
+
+    from app.services import loja_catalogo, loja_plano_dia
+    try:
+        qtd = int(request.form.get('qtd_planejada'))
+        data_inicio = _date.fromisoformat(request.form.get('data_inicio'))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, erro='parametros invalidos'), 400
+    if qtd < 0:
+        return jsonify(ok=False, erro='qtd nao pode ser negativa'), 400
+    n_itens = 0
+    n_dias_total = 0
+    for it in loja_catalogo.produtos_publicados():
+        loja_plano_dia.replicar_para_proximos_dias(
+            it['kind'], it['id'], qtd,
+            data_inicio=data_inicio, dias=14)
+        n_itens += 1
+        n_dias_total += 14
+    return jsonify(ok=True, itens=n_itens, dias_total=n_dias_total)
+
+
+@main_bp.route('/admin/loja-online/plano-do-dia/reparar-orfas', methods=['POST'])
+@owner_required
+def loja_online_plano_dia_reparar_orfas():
+    """Conserta linhas (planejada=0, reservada>0) criadas pelo bug
+    pre-24/06/2026 do `reservar`. Sobe planejada pra DEFAULT + reservada,
+    devolvendo saldo positivo. Idempotente."""
+    from app.services import loja_plano_dia
+    corrigidas = loja_plano_dia.reparar_linhas_orfas()
+    return jsonify(ok=True, corrigidas=len(corrigidas),
+                   detalhes=corrigidas[:50])
+
+
 @main_bp.route('/admin/loja-online/plano-do-dia/replicar', methods=['POST'])
 @owner_required
 def loja_online_plano_dia_replicar():
