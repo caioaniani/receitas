@@ -227,13 +227,14 @@
            "nao responde", relato do dono 24/06/2026). Sem `capture`, o iOS
            mostra o picker padrao (camera / galeria / arquivos), que sempre
            funciona — o usuario escolhe a fonte. #}
-        <input type="file" name="fotos" class="form-control form-control-sm"
+        <input form="receber-form" type="file" name="fotos"
+               class="form-control form-control-sm"
                accept="image/*" multiple
                {% if not fotos_conf['entrega'] %}required{% endif %}>
         <small class="text-muted">Tire foto pela câmera ou escolha da galeria.
             Pelo menos 1 foto é obrigatória pra confirmar a entrega.</small>
     </div>
-    <button type="submit" class="btn btn-success btn-sm">
+    <button form="receber-form" type="submit" class="btn btn-success btn-sm">
         <i class="bi bi-check-all"></i> Confirmar Recebimento
     </button>
     {% endif %}
