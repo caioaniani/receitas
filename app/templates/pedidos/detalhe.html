@@ -87,10 +87,18 @@
 <div class="alert alert-info py-2" style="font-size:13px;">
     <i class="bi bi-info-circle"></i> Informe a <strong>quantidade realmente recebida</strong> por item. Se nao mexer, o sistema assume que chegou tudo conforme pedido. Tire foto(s) do pedido pra registro.
 </div>
-<form method="POST" action="{{ url_for('pedidos.receber', id=pedido.id) }}"
+{# Form auto-fechado; os inputs (quantidade recebida + fotos) e o botao
+   "Confirmar Recebimento" se referem a ele via atributo `form="receber-form"`.
+   Isso permite que os botoes "Voltar status" / "Excluir" / "Cancelar" sejam
+   <form> IRMAOS no DOM em vez de aninhados (HTML proibe forms aninhados;
+   antes "Voltar status" submetia pra /receber por causa do fechamento
+   implicito — fix de 24/06/2026). #}
+<form id="receber-form" method="POST"
+      action="{{ url_for('pedidos.receber', id=pedido.id) }}"
       enctype="multipart/form-data"
       onsubmit="return confirm('Confirmar recebimento deste pedido?')">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
 {% endif %}
 
 <div class="table-responsive">
