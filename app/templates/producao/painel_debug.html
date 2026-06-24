@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}Debug do Balanço{% endblock %}
+
+{% block content %}
+<style>
+    .dbg h2 { font-size: 1.3rem; margin-top: 1.5rem; }
+    .dbg .card-box { background:#fff; border:1px solid #dee2e6;
+                     border-radius:.4rem; padding:.75rem; margin-bottom:1rem; }
+    .dbg table { font-size:.85rem; }
+    .dbg .badge-status { font-size:.75rem; padding:.15rem .4rem; }
+    .dbg .key { color:#6c757d; font-size:.85rem; }
+    .dbg .val { font-weight:600; }
+</style>
+
+<div class="dbg">
+    <h1>Debug do balanço da indústria</h1>
+    <p class="text-muted small">Mostra exatamente quais pedidos o motor
+    enxergou. Útil quando uma loja parece estar faltando no painel.</p>
+
+    <div class="card-box">
+        <div><span class="key">Hoje:</span> <span class="val">{{ hoje }}</span></div>
+        <div><span class="key">Horizonte:</span> <span class="val">{{ horizonte }} dia(s) → até {{ horizonte_fim }}</span></div>
+        <div><span class="key">Histórico:</span> <span class="val">{{ janela }} semanas ({{ hist_ini }} → {{ hist_fim }})</span></div>
+        <div><span class="key">Status que CONTAM como "Comprometido":</span> <code>{{ status_nao_baixados|join(', ') }}</code></div>
+        <div class="mt-2">
+            <a href="{{ url_for('producao.painel') }}" class="btn btn-sm btn-outline-secondary">← voltar ao painel</a>
+        </div>
+    </div>
+
+    <h2>Por loja — visão consolidada</h2>
+    <div class="card-box">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Loja</th>
+                    <th class="text-center">Ativa</th>
+                    <th class="text-end" title="Pedidos no horizonte com status NÃO BAIXADO — entram no Comprometido">Comprometido<br><small class="text-muted">(no horizonte)</small></th>
+                    <th class="text-end" title="Pedidos no horizonte mas com status já baixado (em_transporte/entregue/etc) — SAEM do Comprometido">Excluídos por status<br><small class="text-muted">(no horizonte)</small></th>
+                    <th class="text-end" title="Pedidos no histórico de N semanas — alimentam o Previsto">Histórico<br><small class="text-muted">({{ janela }} semanas)</small></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for lid, info in contagem_por_loja.items() %}
+                <tr>
+                    <td>{{ info.nome }}</td>
+                    <td class="text-center">
+                        {% if info.ativa %}<span class="badge bg-success">sim</span>
+                        {% else %}<span class="badge bg-secondary">não</span>{% endif %}
+                    </td>
+                    <td class="text-end {% if info.comprometido > 0 %}fw-bold text-primary{% else %}text-muted{% endif %}">{{ info.comprometido }}</td>
+                    <td class="text-end {% if info.excluido > 0 %}fw-bold text-warning{% else %}text-muted{% endif %}">{{ info.excluido }}</td>
+                    <td class="text-end {% if info.historico > 0 %}fw-bold{% else %}text-muted{% endif %}">{{ info.historico }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <small class="text-muted">
+            Loja com Comprometido=0 mas Excluídos>0 = tem pedidos no horizonte
+            mas todos já foram enviados/entregues. Loja sem nada nos 3 = não
+            tem pedido formal no sistema (talvez pede por WhatsApp).
+        </small>
+    </div>
+
+    <h2>Pedidos no Comprometido (entram no balanço)</h2>
+    <div class="card-box">
+        {% if not comprometido_pedidos %}
+        <p class="text-muted mb-0">Nenhum pedido no horizonte com status pendente/confirmado/separado.</p>
+        {% else %}
+        <table class="table table-sm table-hover">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Loja</th>
+                    <th>Status</th>
+                    <th>Entrega</th>
+                    <th>Receita</th>
+                    <th class="text-end">Qtd</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in comprometido_pedidos %}
+                <tr>
+                    <td><a href="{{ url_for('pedidos.detalhe', id=r.id) }}">#{{ r.id }}</a></td>
+                    <td>{{ nomes_loja.get(r.loja_id, '?') }}</td>
+                    <td><span class="badge bg-info text-dark badge-status">{{ r.status }}</span></td>
+                    <td>{{ r.data_entrega.strftime('%d/%m/%Y') if r.data_entrega }}</td>
+                    <td>{{ r.nome }}</td>
+                    <td class="text-end fw-bold">{{ r.quantidade }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+
+    <h2>Pedidos NO HORIZONTE mas excluídos por status</h2>
+    <div class="card-box">
+        <p class="small text-muted mb-2">
+            Estes pedidos têm data_entrega dentro do horizonte mas o status já
+            saiu do "comprometido" (foi enviado/entregue/cancelado). Se VOCÊ
+            espera ver uma loja no Comprometido e ela aparece AQUI em vez de
+            lá, é porque os pedidos dela já foram enviados — o estoque da
+            indústria já baixou e somar de novo seria contagem dupla.
+        </p>
+        {% if not excluidos_status %}
+        <p class="text-muted mb-0">Nenhum.</p>
+        {% else %}
+        <table class="table table-sm table-hover">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Loja</th>
+                    <th>Status</th>
+                    <th>Entrega</th>
+                    <th>Receita</th>
+                    <th class="text-end">Qtd</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in excluidos_status %}
+                <tr>
+                    <td><a href="{{ url_for('pedidos.detalhe', id=r.id) }}">#{{ r.id }}</a></td>
+                    <td>{{ nomes_loja.get(r.loja_id, '?') }}</td>
+                    <td><span class="badge bg-warning text-dark badge-status">{{ r.status }}</span></td>
+                    <td>{{ r.data_entrega.strftime('%d/%m/%Y') if r.data_entrega }}</td>
+                    <td>{{ r.nome }}</td>
+                    <td class="text-end">{{ r.quantidade }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+
+    <h2>Pedidos atrasados (data_entrega &lt; hoje, ainda não enviados)</h2>
+    <div class="card-box">
+        <p class="small text-muted mb-2">
+            O painel NÃO conta esses no Comprometido (a query usa
+            <code>data_entrega &gt;= hoje</code>). Mas eles existem no sistema
+            e provavelmente precisam ser enviados ou cancelados.
+        </p>
+        {% if not atrasados %}
+        <p class="text-muted mb-0">Nenhum atrasado.</p>
+        {% else %}
+        <table class="table table-sm table-hover">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Loja</th>
+                    <th>Status</th>
+                    <th>Entrega</th>
+                    <th>Receita</th>
+                    <th class="text-end">Qtd</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in atrasados %}
+                <tr>
+                    <td><a href="{{ url_for('pedidos.detalhe', id=r.id) }}">#{{ r.id }}</a></td>
+                    <td>{{ nomes_loja.get(r.loja_id, '?') }}</td>
+                    <td><span class="badge bg-danger badge-status">{{ r.status }}</span></td>
+                    <td>{{ r.data_entrega.strftime('%d/%m/%Y') if r.data_entrega }}</td>
+                    <td>{{ r.nome }}</td>
+                    <td class="text-end">{{ r.quantidade }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <small class="text-muted">Limite de 50 pra não explodir a tela.</small>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
