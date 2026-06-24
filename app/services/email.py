@@ -46,6 +46,11 @@ def enviar(destinatario, assunto, html, *, texto=None):
 
     remetente_nome = cfg.get('EMAIL_REMETENTE_NOME') or 'O Pão'
     remetente_email = cfg.get('EMAIL_REMETENTE') or 'noreply@opao.online'
+    # Reply-To: pra onde a resposta do cliente vai. Diferente do From
+    # (noreply@). Sem Reply-To, "responda este e-mail" cai no vazio
+    # (incidente 24/06/2026 — dono pegou). Default: contato@opao.online,
+    # que ja aparece no rodape do site como contato publico.
+    reply_to = (cfg.get('EMAIL_REPLY_TO') or 'contato@opao.online').strip()
     payload = {
         'From': f'{remetente_nome} <{remetente_email}>',
         'To': destinatario,
@@ -53,6 +58,8 @@ def enviar(destinatario, assunto, html, *, texto=None):
         'HtmlBody': html,
         'MessageStream': _MESSAGE_STREAM,
     }
+    if reply_to and reply_to.lower() != remetente_email.lower():
+        payload['ReplyTo'] = reply_to
     if texto:
         payload['TextBody'] = texto
     try:
