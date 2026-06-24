@@ -389,17 +389,9 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
-    # Cache de pedidos do site (VNDA) pro card de cliente do CRM/Chatwoot —
-    # janela curta a cada 1h (going-forward). So agenda se houver token VNDA.
-    # Desligavel via env VNDA_CARD_SYNC=0. Historico antigo: botao manual em
-    # /pdv/vnda/mapeamentos.
-    if (os.environ.get('VNDA_CARD_SYNC', '1') != '0'
-            and (app.config.get('VNDA_API_TOKEN') or '').strip()):
-        _scheduler.add_job(
-            lambda app=app: _run_vnda_card_sync(app),
-            'cron', minute=0, id='vnda-card-sync',
-            max_instances=1, coalesce=True,
-        )
+    # VNDA card-sync APOSENTADO em 24/06/2026 (junto com o VNDA principal —
+    # ver bloco acima). NAO eh mais agendado. Pra ressuscitar: descomentar e
+    # restaurar a guarda de VNDA_API_TOKEN.
 
     # Automacoes WhatsApp configuraveis (mensagens agendadas) — checa a cada 5 min
     _scheduler.add_job(
