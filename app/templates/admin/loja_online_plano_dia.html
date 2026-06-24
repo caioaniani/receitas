@@ -207,6 +207,71 @@
     });
   });
 
+  // Replicar 99999 pra TODOS os itens × 14 dias (atalho do dono 24/06/2026).
+  var btnRepTudo = document.getElementById('btn-replicar-tudo');
+  if (btnRepTudo) {
+    btnRepTudo.addEventListener('click', function () {
+      if (!confirm('Aplicar PLANEJADO = 99999 (sem limite) pra TODOS os itens '
+                   + 'publicados, pros próximos 14 dias a partir de '
+                   + btnRepTudo.dataset.data + '?\n\n'
+                   + 'Isso SOBRESCREVE valores que você tenha digitado. '
+                   + 'Use só pra "soltar tudo".')) return;
+      btnRepTudo.disabled = true;
+      var fd = new FormData();
+      fd.append('csrf_token', CSRF);
+      fd.append('qtd_planejada', '99999');
+      fd.append('data_inicio', btnRepTudo.dataset.data);
+      fetch(btnRepTudo.dataset.url, { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          btnRepTudo.disabled = false;
+          if (j.ok) {
+            alert(j.itens + ' item(ns) atualizados pros próximos 14 dias. '
+                  + 'Recarregando…');
+            window.location.reload();
+          } else {
+            alert('Erro: ' + (j.erro || 'falha'));
+          }
+        })
+        .catch(function () {
+          btnRepTudo.disabled = false;
+          alert('Erro de rede');
+        });
+    });
+  }
+
+  // Reparar linhas órfãs (planejada=0 + reservada>0, do bug pre-24/06/2026).
+  var btnReparar = document.getElementById('btn-reparar-orfas');
+  if (btnReparar) {
+    btnReparar.addEventListener('click', function () {
+      if (!confirm('Procurar linhas que zeraram por venda sem plano e '
+                   + 'restaurar saldo (planejada vai pra 99999 + reservada)?\n\n'
+                   + 'Não afeta linhas onde você setou limite manualmente.')) return;
+      btnReparar.disabled = true;
+      var fd = new FormData();
+      fd.append('csrf_token', CSRF);
+      fetch(btnReparar.dataset.url, { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          btnReparar.disabled = false;
+          if (j.ok) {
+            if (j.corrigidas) {
+              alert(j.corrigidas + ' linha(s) reparada(s). Recarregando…');
+              window.location.reload();
+            } else {
+              alert('Nada pra reparar — todas as linhas já estão OK. ✓');
+            }
+          } else {
+            alert('Erro: ' + (j.erro || 'falha'));
+          }
+        })
+        .catch(function () {
+          btnReparar.disabled = false;
+          alert('Erro de rede');
+        });
+    });
+  }
+
   // Copiar semana passada (idempotente — não sobrescreve quem já tem).
   var btnCopiar = document.getElementById('btn-copiar-anterior');
   if (btnCopiar) {
