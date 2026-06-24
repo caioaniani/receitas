@@ -191,6 +191,125 @@ def painel():
                            saindo_hoje=saindo_hoje)
 
 
+@producao_bp.route('/painel/debug')
+@login_required
+@admin_required
+def painel_debug():
+    """Dump dos pedidos que o motor balanco_industria ENXERGA — pra
+    auditoria. Mostra Comprometido (proximos N dias) E Historico (M semanas)
+    detalhados pedido a pedido, mais a lista de TODAS as Lojas com contagem.
+    Crucial: revela se o motor esta perdendo alguma loja ou status.
+    """
+    from datetime import timedelta
+
+    from app.constants import STATUS_PEDIDO_NAO_BAIXADOS
+    from app.models import Loja, PedidoItem, PedidoLoja
+
+    try:
+        horizonte = int(request.args.get('horizonte', 7))
+    except ValueError:
+        horizonte = 7
+    horizonte = max(1, min(horizonte, 14))
+    try:
+        janela = int(request.args.get('janela', 6))
+    except ValueError:
+        janela = 6
+    janela = max(1, min(janela, 26))
+
+    hoje_d = hoje_brt()
+    horizonte_fim = hoje_d + timedelta(days=horizonte - 1)
+    hist_ini = hoje_d - timedelta(days=7 * janela)
+    hist_fim = hoje_d - timedelta(days=1)
+
+    nomes_loja = {l.id: l.nome for l in Loja.query.all()}
+
+    # Pedidos QUE ENTRAM no Comprometido — mesma query do motor + dados extra.
+    comprometido_pedidos = (db.session.query(PedidoLoja.id, PedidoLoja.loja_id,
+                                              PedidoLoja.status,
+                                              PedidoLoja.data_entrega,
+                                              PedidoItem.receita_id,
+                                              PedidoItem.quantidade,
+                                              Receita.nome)
+                            .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
+                            .join(Receita, Receita.id == PedidoItem.receita_id)
+                            .filter(PedidoItem.receita_id.isnot(None),
+                                    PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
+                                    PedidoLoja.data_entrega >= hoje_d,
+                                    PedidoLoja.data_entrega <= horizonte_fim)
+                            .order_by(PedidoLoja.data_entrega, PedidoLoja.loja_id,
+                                      Receita.nome)
+                            .all())
+
+    # Pedidos QUE NAO ENTRAM no Comprometido mas estao no horizonte —
+    # exclusao por status (em_transporte/entregue/recebido/cancelado).
+    # Crucial pra diagnosticar quando uma loja "some" do balanco.
+    excluidos_status = (db.session.query(PedidoLoja.id, PedidoLoja.loja_id,
+                                          PedidoLoja.status,
+                                          PedidoLoja.data_entrega,
+                                          PedidoItem.receita_id,
+                                          PedidoItem.quantidade,
+                                          Receita.nome)
+                        .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
+                        .join(Receita, Receita.id == PedidoItem.receita_id)
+                        .filter(PedidoItem.receita_id.isnot(None),
+                                ~PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
+                                PedidoLoja.data_entrega >= hoje_d,
+                                PedidoLoja.data_entrega <= horizonte_fim)
+                        .order_by(PedidoLoja.data_entrega, PedidoLoja.loja_id)
+                        .all())
+
+    # Pedidos no horizonte mas com data_entrega ANTERIOR a hoje (atrasados).
+    atrasados = (db.session.query(PedidoLoja.id, PedidoLoja.loja_id,
+                                   PedidoLoja.status, PedidoLoja.data_entrega,
+                                   PedidoItem.receita_id, PedidoItem.quantidade,
+                                   Receita.nome)
+                 .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
+                 .join(Receita, Receita.id == PedidoItem.receita_id)
+                 .filter(PedidoItem.receita_id.isnot(None),
+                         PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
+                         PedidoLoja.data_entrega < hoje_d)
+                 .order_by(PedidoLoja.data_entrega.desc())
+                 .limit(50).all())
+
+    # Por loja: contagem de pedidos comprometidos, excluidos por status,
+    # e historico. Lista TODAS as Lojas (incluindo inativas), pra revelar
+    # alguma loja "fantasma" ou diferenca de nome.
+    contagem_por_loja = {l.id: {'nome': l.nome, 'ativa': l.ativa,
+                                 'comprometido': 0, 'excluido': 0,
+                                 'historico': 0}
+                          for l in Loja.query.order_by(Loja.nome).all()}
+    for r in comprometido_pedidos:
+        if r.loja_id in contagem_por_loja:
+            contagem_por_loja[r.loja_id]['comprometido'] += 1
+    for r in excluidos_status:
+        if r.loja_id in contagem_por_loja:
+            contagem_por_loja[r.loja_id]['excluido'] += 1
+
+    historico_count_por_loja = dict(
+        db.session.query(PedidoLoja.loja_id, db.func.count(PedidoLoja.id.distinct()))
+        .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
+        .filter(PedidoItem.receita_id.isnot(None),
+                PedidoLoja.status != 'cancelado',
+                PedidoLoja.data_entrega >= hist_ini,
+                PedidoLoja.data_entrega <= hist_fim)
+        .group_by(PedidoLoja.loja_id).all())
+    for lid, cnt in historico_count_por_loja.items():
+        if lid in contagem_por_loja:
+            contagem_por_loja[lid]['historico'] = cnt
+
+    return render_template(
+        'producao/painel_debug.html',
+        hoje=hoje_d, horizonte=horizonte, janela=janela,
+        horizonte_fim=horizonte_fim, hist_ini=hist_ini, hist_fim=hist_fim,
+        comprometido_pedidos=comprometido_pedidos,
+        excluidos_status=excluidos_status,
+        atrasados=atrasados,
+        contagem_por_loja=contagem_por_loja,
+        nomes_loja=nomes_loja,
+        status_nao_baixados=STATUS_PEDIDO_NAO_BAIXADOS,
+    )
+
+
 @producao_bp.route('/painel/criar-plano-do-deficit', methods=['POST'])
 @login_required
 @admin_required
