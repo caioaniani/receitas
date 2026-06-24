@@ -407,7 +407,7 @@ def _texto_entregue(pedido, base):
     linhas = [f'Pedido {pedido.codigo} entregue!',
               '',
               'Obrigado pela preferência. Qualquer feedback é bem-vindo — '
-              'responda este e-mail.']
+              'responda este e-mail ou escreva pra contato@opao.online.']
     if link_nf:
         linhas += ['', f'Nota fiscal: {link_nf}']
     linhas += ['', f'Comprar de novo: {link_loja}',
