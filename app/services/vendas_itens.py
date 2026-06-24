@@ -193,20 +193,41 @@ def _resolver_nome_item(tipo, item_id):
 
 
 def agregar_itens_consolidado(data_inicial, data_final):
-    """Versao 'consolidada' Seru + VNDA pra uso do copilot/tools.
+    """Versao consolidada pra uso do copilot/tools.
 
-    Diferente de `agregar_itens`: nao recebe filtro de loja Seru (consolida
-    por item agregado entre todas as lojas) e soma vendas VNDA (e-commerce)
-    via mapeamento por (tipo, id). Itens VNDA sem correspondente Seru
-    aparecem como linhas novas (fonte='vnda').
-
-    Faturamento ainda eh so do Seru (a fonte VNDA disponivel via
-    `_agregar_vendas_vnda_api` so retorna qtd). A resposta sinaliza isso
-    em `faturamento_fonte`.
-
-    NAO substitui `agregar_itens` — a tela /pdv/itens-vendidos continua
-    usando a versao crua porque depende dos campos de mapeamento Seru.
+    Historico: agregava Seru + VNDA. VNDA APOSENTADO em 24/06/2026
+    (operacao 100% no sistema proprio); hoje a funcao apenas reformata a
+    saida de `agregar_itens` (Seru) no shape esperado pelo copilot,
+    mantendo `faturamento_vnda=0` e `faturamento_fonte='seru_apenas'` por
+    compat com chamadores e testes que ainda olham essas chaves.
     """
+    seru_data = agregar_itens(data_inicial, data_final)
+
+    linhas = []
+    for p in seru_data['produtos']:
+        p = dict(p)
+        p['qtd_seru'] = p['qtd']
+        p['qtd_vnda'] = 0
+        p['fonte'] = 'seru'
+        linhas.append(p)
+    linhas.sort(key=lambda x: -x['qtd'])
+
+    fat_seru = seru_data['faturamento_total'] or 0
+    return {
+        'inicio': data_inicial.isoformat(),
+        'fim': data_final.isoformat(),
+        'total_pedidos_seru': seru_data['total_pedidos'],
+        'faturamento_total': round(fat_seru, 2),
+        'faturamento_seru': round(fat_seru, 2),
+        'faturamento_vnda': 0.0,
+        'faturamento_fonte': 'seru_apenas',
+        'produtos': linhas,
+        'vnda_aviso': 'VNDA aposentado em 06/2026',
+        'lojas_no_intervalo': seru_data['lojas_no_intervalo'],
+    }
+
+
+def agregar_itens_consolidado_DESLIGADO(data_inicial, data_final):
     from app.services.vendas_manuais import _agregar_vendas_vnda_api
 
     seru_data = agregar_itens(data_inicial, data_final)
