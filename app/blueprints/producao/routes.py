@@ -374,6 +374,67 @@ def painel_debug():
     variantes_receita = {k: v for k, v in variantes_receita.items()
                           if len(v) >= 2}
 
+    # BUSCA POR ITEM — responde "quais lojas pediram X" pra qualquer termo.
+    # Cobre os 3 tipos de FK (receita/produto/mp), pra revelar inclusive se um
+    # item foi cadastrado como produto/MP em alguma loja (e por isso some do
+    # balanco de producao). Janela: 60 dias atras ate o fim do horizonte.
+    busca = (request.args.get('q') or '').strip()
+    busca_linhas = []
+    busca_resumo = []
+    if busca:
+        like = f'%{busca}%'
+        janela_busca_ini = hoje_d - timedelta(days=60)
+        q = (db.session.query(PedidoLoja.id, PedidoLoja.loja_id,
+                              PedidoLoja.status, PedidoLoja.data_entrega,
+                              PedidoItem.receita_id, PedidoItem.produto_id,
+                              PedidoItem.materia_prima_id,
+                              PedidoItem.quantidade,
+                              Receita.nome.label('rec_nome'),
+                              Produto.nome.label('prod_nome'),
+                              MateriaPrima.nome.label('mp_nome'))
+             .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
+             .outerjoin(Receita, Receita.id == PedidoItem.receita_id)
+             .outerjoin(Produto, Produto.id == PedidoItem.produto_id)
+             .outerjoin(MateriaPrima,
+                        MateriaPrima.id == PedidoItem.materia_prima_id)
+             .filter(PedidoLoja.data_entrega >= janela_busca_ini,
+                     PedidoLoja.data_entrega <= horizonte_fim,
+                     db.or_(Receita.nome.ilike(like),
+                            Produto.nome.ilike(like),
+                            MateriaPrima.nome.ilike(like)))
+             .order_by(PedidoLoja.data_entrega.desc(), PedidoLoja.loja_id)
+             .limit(300).all())
+        # Agrega por loja pra um resumo no topo (responde direto a pergunta).
+        resumo_por_loja = {}
+        for r in q:
+            if r.receita_id:
+                fk, nome = 'REC', r.rec_nome
+            elif r.produto_id:
+                fk, nome = 'PROD', r.prod_nome
+            elif r.materia_prima_id:
+                fk, nome = 'MP', r.mp_nome
+            else:
+                fk, nome = 'NENHUMA', '?'
+            no_horizonte = r.data_entrega and r.data_entrega >= hoje_d
+            busca_linhas.append({
+                'pedido_id': r.id, 'loja_nome': nomes_loja.get(r.loja_id, '?'),
+                'status': r.status, 'data_entrega': r.data_entrega,
+                'item_nome': nome, 'fk_tipo': fk, 'quantidade': r.quantidade,
+                'no_horizonte': no_horizonte,
+                'entra_balanco': (fk == 'REC' and no_horizonte
+                                  and r.status in STATUS_PEDIDO_NAO_BAIXADOS),
+            })
+            chave = nomes_loja.get(r.loja_id, '?')
+            ag = resumo_por_loja.setdefault(
+                chave, {'loja_nome': chave, 'qtd_total': 0, 'n_linhas': 0,
+                        'qtd_horizonte': 0})
+            ag['qtd_total'] += int(r.quantidade or 0)
+            ag['n_linhas'] += 1
+            if no_horizonte:
+                ag['qtd_horizonte'] += int(r.quantidade or 0)
+        busca_resumo = sorted(resumo_por_loja.values(),
+                              key=lambda x: -x['qtd_total'])
+
     return render_template(
         'producao/painel_debug.html',
         hoje=hoje_d, horizonte=horizonte, janela=janela,
@@ -387,6 +448,9 @@ def painel_debug():
         itens_enriquecidos=itens_enriquecidos,
         fantasmas=fantasmas,
         variantes_receita=variantes_receita,
+        busca=busca,
+        busca_linhas=busca_linhas,
+        busca_resumo=busca_resumo,
     )
 
 
