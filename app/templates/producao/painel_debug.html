@@ -169,5 +169,135 @@
         <small class="text-muted">Limite de 50 pra não explodir a tela.</small>
         {% endif %}
     </div>
+
+    <h2 class="text-danger">🔍 Caça o fantasma — itens que NÃO entram no balanço</h2>
+    <div class="card-box">
+        <p class="small text-muted mb-2">
+            Esta seção mostra os PedidoItem do horizonte com status comprometido
+            (pendente/confirmado/separado) que <strong>NÃO entram no balanço da
+            indústria</strong> porque o motor filtra apenas <code>receita_id IS
+            NOT NULL</code>. Se uma loja "perdeu" um item de Pão Francês, ele
+            provavelmente está aqui — gravado com produto_id, materia_prima_id
+            ou sem nenhuma FK ("órfão").
+        </p>
+        {% if not fantasmas %}
+        <p class="text-success mb-0"><strong>Nenhum fantasma.</strong> Todos os itens comprometidos têm receita_id válida — o motor não está perdendo nada.</p>
+        {% else %}
+        <p class="text-danger mb-2">
+            <strong>{{ fantasmas|length }} fantasma(s) encontrado(s).</strong>
+            Isto explica o problema reportado pelo dono.
+        </p>
+        <table class="table table-sm table-hover">
+            <thead>
+                <tr>
+                    <th>Pedido</th>
+                    <th>Loja</th>
+                    <th>Status</th>
+                    <th>Entrega</th>
+                    <th>Item (alvo da FK)</th>
+                    <th>FK setada</th>
+                    <th>IDs (rec/prod/mp)</th>
+                    <th class="text-end">Qtd</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for f in fantasmas %}
+                <tr>
+                    <td><a href="{{ url_for('pedidos.detalhe', id=f.pedido_id) }}">#{{ f.pedido_id }}</a></td>
+                    <td>{{ nomes_loja.get(f.loja_id, '?') }}</td>
+                    <td><span class="badge bg-info text-dark badge-status">{{ f.status }}</span></td>
+                    <td>{{ f.data_entrega.strftime('%d/%m/%Y') if f.data_entrega }}</td>
+                    <td><strong>{{ f.alvo_nome }}</strong></td>
+                    <td>
+                        {% if f.fk_tipo == 'NENHUMA' %}
+                        <span class="badge bg-danger">{{ f.fk_tipo }}</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">{{ f.fk_tipo }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="small text-muted">
+                        rec={{ f.receita_id or '—' }} /
+                        prod={{ f.produto_id or '—' }} /
+                        mp={{ f.materia_prima_id or '—' }}
+                    </td>
+                    <td class="text-end">{{ f.quantidade }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="small text-muted">
+            <strong>FK = PROD:</strong> item foi cadastrado como Produto. Possível causa:
+            a rota/copilot que criou o pedido fez match com Produto em vez de Receita
+            (talvez exista um Produto com nome igual a uma Receita).<br>
+            <strong>FK = MP:</strong> item é Matéria-Prima (ex: queijo mussarela
+            comprado pronto). Não vai aparecer no balanço de produção mesmo.<br>
+            <strong>FK = NENHUMA:</strong> item órfão — sem vínculo no catálogo.
+            Provavelmente erro de cadastro.
+        </p>
+        {% endif %}
+    </div>
+
+    {% if variantes_receita %}
+    <h2>Variantes de receita (mesmo prefixo de nome)</h2>
+    <div class="card-box">
+        <p class="small text-muted mb-2">
+            Agrupado pela primeira palavra do nome. Se uma loja pediu
+            "Pão Francês" e outra pediu "Pão Francês Fermentado", elas vão
+            cair em IDs diferentes e aparecem como receitas separadas no
+            painel — pode dar a impressão de que uma loja não pediu nada.
+        </p>
+        {% for chave, lista in variantes_receita.items() %}
+        <div class="mb-2">
+            <strong>"{{ chave }}":</strong>
+            {% for v in lista %}
+            <span class="me-2">
+                #{{ v.id }} — {{ v.nome }}
+                {% if v.arquivada %}<span class="badge bg-secondary">arquivada</span>{% endif %}
+            </span>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <h2>Todos os itens do horizonte (incluindo não-receita)</h2>
+    <div class="card-box">
+        <p class="small text-muted mb-2">
+            Lista crua: TODO PedidoItem do horizonte, com qual FK está setada.
+            Útil pra ver o quadro completo antes de filtros do motor.
+        </p>
+        {% if not itens_enriquecidos %}
+        <p class="text-muted mb-0">Nenhum item no horizonte.</p>
+        {% else %}
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Pedido</th>
+                    <th>Loja</th>
+                    <th>Status</th>
+                    <th>Entrega</th>
+                    <th>Item (FK)</th>
+                    <th>FK tipo</th>
+                    <th class="text-end">Qtd</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for i in itens_enriquecidos %}
+                <tr {% if i.fk_tipo != 'REC' %}class="table-warning"{% endif %}>
+                    <td><a href="{{ url_for('pedidos.detalhe', id=i.pedido_id) }}">#{{ i.pedido_id }}</a></td>
+                    <td>{{ nomes_loja.get(i.loja_id, '?') }}</td>
+                    <td><span class="badge bg-light text-dark badge-status">{{ i.status }}</span></td>
+                    <td>{{ i.data_entrega.strftime('%d/%m/%Y') if i.data_entrega }}</td>
+                    <td>{{ i.alvo_nome }}</td>
+                    <td>
+                        <span class="badge {% if i.fk_tipo == 'REC' %}bg-success{% elif i.fk_tipo == 'NENHUMA' %}bg-danger{% else %}bg-warning text-dark{% endif %} badge-status">{{ i.fk_tipo }}</span>
+                    </td>
+                    <td class="text-end">{{ i.quantidade }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}
