@@ -97,11 +97,13 @@ def reservar(kind, item_id, data, qtd):
     (SELECT FOR UPDATE no Postgres) pra evitar oversell.
 
     Retorna True se conseguiu, False se nao tem saldo. Se nao existe plano
-    pra esse item naquela data, AUTO-CRIA com qtd_planejada=0 e qtd_reservada=qtd
-    (deixa saldo NEGATIVO virtual no banco — mas saldo() trunca em 0). Isso
-    eh proposital pra a baixa fisica e a reserva continuarem batendo mesmo
-    quando o dono esqueceu de planejar (auditoria fica clara: rows com saldo
-    negativo = vendeu sem planejar).
+    pra esse item naquela data, AUTO-CRIA com DEFAULT_QTD_PLANEJADA (99999):
+    alinha com a regra "sem plano cadastrado = sem limite" da tela admin.
+
+    Antes de 24/06/2026, criava com qtd_planejada=0 — o que zerava o item no
+    site DEPOIS da primeira venda (incidente Bonjura/Box Mimo: dono esqueceu
+    de setar limite manual; primeira venda deixou item esgotado). Agora cria
+    com 99999, replicando o comportamento default da tela.
 
     Sem plano de dia: ainda eh chamado, mas eh idempotente em servico de
     cancelamento. Caller decide se chamar baseado em `tem_plano(data)`."""
@@ -119,10 +121,12 @@ def reservar(kind, item_id, data, qtd):
         row = (db.session.query(EstoqueSitePlano)
                .filter_by(kind=kind, item_id=item_id, data=data).first())
     if row is None:
-        # Sem plano: cria linha com 0 planejado e ja reserva — saldo virtual
-        # negativo deixa rastro do oversell pra auditoria.
+        # Sem plano: cria com default 99999 (= sem limite) e ja reserva.
+        # Saldo = 99999 - qtd: continua positivo, item nao fica esgotado
+        # por uma compra sem o dono ter estabelecido limite manual.
         row = EstoqueSitePlano(kind=kind, item_id=item_id, data=data,
-                                qtd_planejada=0, qtd_reservada=qtd)
+                                qtd_planejada=DEFAULT_QTD_PLANEJADA,
+                                qtd_reservada=qtd)
         db.session.add(row)
         db.session.commit()
         return True  # nao havia limite cadastrado; vendeu mesmo assim
