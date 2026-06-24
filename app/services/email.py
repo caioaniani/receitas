@@ -383,7 +383,9 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
   <div style="background:#fff;border-radius:12px;padding:18px 20px;margin-bottom:18px;">
     <p style="margin:0 0 6px;font-weight:600;">Obrigado pela preferência</p>
     <p style="margin:0;font-size:14px;color:#6b5f54;">
-      Qualquer feedback é bem-vindo — responda este e-mail.</p>
+      Qualquer feedback é bem-vindo — responda este e-mail ou escreva pra
+      <a href="mailto:contato@opao.online"
+         style="color:#8b5a2b;">contato@opao.online</a>.</p>
     {nf_html}
   </div>
   <p style="margin-top:20px;">
