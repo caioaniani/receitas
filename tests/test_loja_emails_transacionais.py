@@ -159,6 +159,7 @@ def test_email_envio_inclui_replyto(app):
     """Todo e-mail enviado pelo Postmark inclui ReplyTo apontando pra
     contato@opao.online — sem isso, "responda este e-mail" cai no vazio."""
     from unittest.mock import MagicMock, patch
+
     from app.services import email as email_svc
     with app.app_context():
         app.config['POSTMARK_SERVER_TOKEN'] = 'tok-teste'
@@ -177,6 +178,7 @@ def test_email_envio_inclui_replyto(app):
 def test_replyto_pode_ser_customizado_por_env(app):
     """EMAIL_REPLY_TO no config sobrescreve o default."""
     from unittest.mock import MagicMock, patch
+
     from app.services import email as email_svc
     with app.app_context():
         app.config['POSTMARK_SERVER_TOKEN'] = 'tok'
@@ -191,6 +193,7 @@ def test_replyto_pode_ser_customizado_por_env(app):
 def test_replyto_omitido_quando_igual_ao_from(app):
     """Defesa: se Reply-To == From, não adiciona o header (redundante)."""
     from unittest.mock import MagicMock, patch
+
     from app.services import email as email_svc
     with app.app_context():
         app.config['POSTMARK_SERVER_TOKEN'] = 'tok'

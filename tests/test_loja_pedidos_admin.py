@@ -483,6 +483,7 @@ def test_reenviar_emails_pago_dispara_confirmado(app):
     Cobre o caso da cliente que digitou hotmail.con — corrige email, salva,
     reenvia."""
     from unittest.mock import patch
+
     from app.extensions import db
     c = _owner(app)
     p = _pedido(db, codigo='D63571EF', status='pago')
@@ -500,6 +501,7 @@ def test_reenviar_emails_pago_dispara_confirmado(app):
 def test_reenviar_emails_entregue_inclui_entregue(app):
     """Pedido entregue: recebido + confirmado + entregue."""
     from unittest.mock import patch
+
     from app.extensions import db
     c = _owner(app)
     p = _pedido(db, codigo='ENT001', status='entregue')
@@ -512,6 +514,7 @@ def test_reenviar_emails_entregue_inclui_entregue(app):
 def test_reenviar_emails_sem_email_recusa(app):
     """Pedido sem e-mail válido: não tenta enviar, avisa pra corrigir."""
     from unittest.mock import patch
+
     from app.extensions import db
     c = _owner(app)
     p = _pedido(db, codigo='SEM01', status='pago')
