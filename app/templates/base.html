@@ -232,10 +232,8 @@
            class="sidebar-link ps-4 small {% if '/pdv/mapeamentos' in request.path %}active{% endif %}">
             Vincular produtos do caixa
         </a>
-        <a href="{{ url_for('pdv.vnda_mapeamentos') }}"
-           class="sidebar-link ps-4 small {% if '/pdv/vnda/' in request.path %}active{% endif %}">
-            Vincular produtos do site
-        </a>
+        {# VNDA aposentado em 24/06/2026 — link removido. Rota /pdv/vnda/...
+           continua existindo (codigo morto) mas nao aparece mais no menu. #}
         <a href="{{ url_for('pdv.saude') }}"
            class="sidebar-link ps-4 small {% if '/pdv/saude' in request.path %}active{% endif %}">
             Saúde do sync de vendas
