@@ -104,7 +104,21 @@
         <div class="col-12">
             <div class="zona-titulo" style="background:#0d6efd;">
                 <h2><i class="bi bi-hammer"></i> Produzir nos próximos {{ horizonte }} dia(s)</h2>
-                <span class="badge bg-light text-dark badge-grande">{{ balanco.total_produzir_itens }} a produzir</span>
+                <div class="d-flex gap-2 align-items-center">
+                    {% if balanco.total_produzir_itens > 0 %}
+                    <form method="POST"
+                          action="{{ url_for('producao.criar_plano_do_deficit') }}"
+                          onsubmit="return confirm('Criar plano de produção com as {{ balanco.total_produzir_itens }} receita(s) em déficit? Você poderá revisar e ajustar antes de baixar o estoque.');"
+                          class="mb-0">
+                        <input type="hidden" name="horizonte" value="{{ horizonte }}">
+                        <input type="hidden" name="janela" value="{{ janela }}">
+                        <button type="submit" class="btn btn-warning btn-sm">
+                            <i class="bi bi-plus-square"></i> Criar plano do déficit
+                        </button>
+                    </form>
+                    {% endif %}
+                    <span class="badge bg-light text-dark badge-grande">{{ balanco.total_produzir_itens }} a produzir</span>
+                </div>
             </div>
             <div class="zona-corpo p-0">
                 {# Profundidade do historico = confianca da previsao. Raso -> aviso. #}
