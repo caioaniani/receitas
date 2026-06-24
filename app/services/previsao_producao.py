@@ -187,12 +187,15 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True):
             'previsto': prev,
             'produzir': produzir,
             'tem_historico': bool(datas_total.get(rid)),
-            'breakdown_comprometido': [
-                {'loja_id': lid, 'loja_nome': nomes_loja.get(lid, '?'),
-                 'qtd': q}
-                for lid, q in sorted(comprometido_loja.get(rid, {}).items(),
-                                     key=lambda kv: -kv[1])
-            ],
+            # Lista TODAS as lojas operacionais — mesmo com qtd=0. Visivel
+            # confirma ao usuario que o motor enxergou cada loja. Ordem: qtd
+            # desc, depois alfabetico (lojas_op ja vem ordenado por nome).
+            'breakdown_comprometido': sorted(
+                [{'loja_id': l.id, 'loja_nome': l.nome,
+                  'qtd': comprometido_loja.get(rid, {}).get(l.id, 0)}
+                 for l in lojas_op],
+                key=lambda b: (-b['qtd'], b['loja_nome']),
+            ),
         })
 
     # Ordena: primeiro o que falta produzir (urgencia), depois maior demanda.
