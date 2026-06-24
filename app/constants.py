@@ -28,6 +28,14 @@ VENDA_TIPOS_TODOS = VENDA_TIPOS_LOJA + VENDA_TIPOS_PRODUCAO
 # Os dois precisam coexistir.
 STATUS_PEDIDO_FINALIZADOS = ('entregue', 'recebido', 'cancelado')
 
+# Status cujo estoque da industria AINDA NAO foi baixado. A baixa do
+# EstoqueProducao acontece na transicao separado->em_transporte
+# (pedidos/routes.py::_executar_envio_pedido). Logo, pedido nestes status e
+# demanda "comprometida" que ainda vai consumir o estoque — o balanco de
+# producao (previsao_producao.py) usa isso pra nao contar duas vezes o que
+# ja saiu da industria.
+STATUS_PEDIDO_NAO_BAIXADOS = ('pendente', 'confirmado', 'separado')
+
 # Labels amigaveis pra UI / copilot. Use sempre que precisar mostrar status
 # pro usuario final.
 STATUS_PEDIDO_LABEL = {
