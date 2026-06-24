@@ -42,6 +42,21 @@ ULTIMA_CONSULTA_VNDA = {}
 
 
 def _agregar_vendas_vnda_api(data_inicio, data_fim, _loja_id=None):
+    """VNDA APOSENTADO em 24/06/2026 — operacao 100% no sistema proprio.
+
+    Mantida com a assinatura antiga (chamadores: vendas_itens, testes) mas
+    SEMPRE retorna vazio. Nao bate na API VNDA nunca mais. Atualiza
+    ULTIMA_CONSULTA_VNDA pra UI nao quebrar onde le essas chaves.
+    """
+    stats_key = _loja_id or 0
+    ULTIMA_CONSULTA_VNDA[stats_key] = {
+        'n_orders_recebidos': 0, 'n_processados': 0,
+        'erro': 'VNDA aposentado', 'tentou_em': None,
+    }
+    return {}, 'VNDA aposentado em 06/2026'
+
+
+def _agregar_vendas_vnda_api_DESLIGADO(data_inicio, data_fim, _loja_id=None):
     """Puxa direto da API do VNDA pedidos com data_entrega no intervalo
     e agrega por (tipo, id) via VndaProdutoMap. NAO depende de sync
     previo do cron — funciona retroativo.
