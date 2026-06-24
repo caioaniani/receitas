@@ -314,15 +314,22 @@ def agregar_itens_consolidado_DESLIGADO(data_inicial, data_final):
 
 
 def vendas_vnda_loja(data_inicial, data_final):
-    """Vendas do site (VNDA → loja Anesio) por produto, no formato que o
-    `consultar_vendas_itens` do copilot espera.
-
-    Usado quando o usuario filtra a venda pela loja do site: essa loja nao tem
-    PDV Seru (e manual), entao as vendas vem do VNDA. Qty por produto vem de
-    `vnda_sync.agregar_vendas` (por data de entrega); `faturamento_total` vem de
-    `vnda_sync.faturamento_por_dia` (por data de venda — mesma base do
-    /api/bot/faturamento). O faturamento NAO eh quebrado por produto aqui.
+    """VNDA APOSENTADO em 24/06/2026. Retorna estrutura vazia com aviso —
+    nao bate na API VNDA. Mantida com assinatura antiga pra copilot/testes.
     """
+    return {
+        'inicio': data_inicial.isoformat(),
+        'fim': data_final.isoformat(),
+        'total_pedidos': 0,
+        'faturamento_total': 0.0,
+        'faturamento_fonte': 'vnda',
+        'produtos': [],
+        'vnda_aviso': 'VNDA aposentado em 06/2026',
+        'lojas_no_intervalo': [],
+    }
+
+
+def vendas_vnda_loja_DESLIGADO(data_inicial, data_final):
     from app.services import vnda_sync
 
     base = {
