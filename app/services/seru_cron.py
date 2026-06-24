@@ -304,11 +304,10 @@ def iniciar(app):
         'interval', minutes=15, id='seru-sync',
         max_instances=1, coalesce=True,
     )
-    _scheduler.add_job(
-        lambda: _run_vnda_sync(app),
-        'interval', minutes=15, id='vnda-sync',
-        max_instances=1, coalesce=True,
-    )
+    # VNDA APOSENTADO em 24/06/2026 (operacao 100% no sistema proprio). O job
+    # _run_vnda_sync segue existindo (codigo morto) mas NAO eh mais agendado.
+    # Pra ressuscitar: re-registrar este add_job + limpar o aviso "VNDA
+    # aposentado" em vendas_manuais/vendas_itens.
 
     # Resumo diario de pedidos no Slack as 04:00 BRT
     _scheduler.add_job(
