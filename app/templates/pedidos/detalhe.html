@@ -122,7 +122,9 @@
                 <td class="text-center fw-bold">{{ item.quantidade }}</td>
                 {% if pedido.status == 'em_transporte' %}
                 <td>
-                    <input type="number" name="recebido_{{ item.id }}" class="form-control form-control-sm text-center input-blue"
+                    <input form="receber-form" type="number"
+                           name="recebido_{{ item.id }}"
+                           class="form-control form-control-sm text-center input-blue"
                            min="0" value="{{ item.quantidade }}">
                 </td>
                 {% elif pedido.status == 'entregue' %}
