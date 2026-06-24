@@ -301,6 +301,26 @@ body {
     box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.15);
 }
 
+/* Input de quantidade na composição do produto (cesta) — 24/06/2026:
+   dono não conseguia ver o número no celular (fonte minúscula + setinhas
+   nativas cobrindo o valor). Aumentar fonte, alargar e esconder setinhas
+   nativas (touch já tem teclado numérico). */
+.item-qtd {
+    font-size: 16px !important;   /* ≥16px evita iOS dar zoom no focus */
+    font-weight: 700 !important;
+    min-width: 70px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+}
+/* Remove as setinhas (spinner) do input number — em mobile elas não
+   funcionam direito e ainda cobrem o número. Usuário ajusta digitando. */
+.item-qtd::-webkit-outer-spin-button,
+.item-qtd::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.item-qtd[type=number] { -moz-appearance: textfield; }
+
 /* Preto = valor calculado automaticamente */
 .valor-calc {
     color: var(--text-calc);
