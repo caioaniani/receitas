@@ -2239,6 +2239,16 @@ h6 { font-weight: 600; text-transform: lowercase; }
     -webkit-overflow-scrolling: touch;
 }
 
+/* Opt-out pra cards onde a tabela cabe na viewport E precisamos do dropdown
+   escapar do clipping (ex: /pedidos lista — dropdown de acoes ficava cortado
+   pelo overflow forcado acima, virando uma faixa cinza sem conteudo em
+   mobile). Aplicar com cuidado: cabe na viewport vs scroll horizontal e
+   uma decisao por tela. */
+.card.allow-dropdown-overflow:has(.table-dense),
+.card.allow-dropdown-overflow:has(> table) {
+    overflow: visible !important;
+}
+
 /* Sombra sutil indicando que tem conteudo pra rolar */
 @media (max-width: 768px) {
     .card:has(.table-dense),
