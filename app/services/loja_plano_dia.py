@@ -5,6 +5,12 @@ ha plano cadastrado pra aquela data. Sem plano = comportamento de antes
 (fail-open / fallback no EstoqueLoja). Permite ao dono definir "hoje 0
 foccacia, sexta 20" sem mexer no estoque fisico (que segue em EstoqueLoja).
 
+DEFAULT_QTD_PLANEJADA = 99999 (24/06/2026): quando o servidor auto-cria
+linha (caller `reservar` sem plano cadastrado), usa esse valor — alinha com
+a regra do dono "campo vazio na tela = 99999 = sem limite". Antes era 0, que
+deixava o item ESGOTADO depois da primeira venda (caso real: Bonjura e Box
+Mimo ficaram esgotados sem o dono ter setado limite).
+
 Operacoes principais:
 - `saldo(kind, item_id, data)`: quanto sobra pra vender no site naquela data.
   Devolve `None` se NAO existe plano (= sem controle, vitrine cai no fallback).
