@@ -210,12 +210,18 @@
            `required` so cai quando ja ha foto de conferencia de entrega
            (caminho QR parcial) — nesse caso o backend ja aceita; nos demais
            exige anexar. A validacao REAL esta no executor (_executar_
-           recebimento_pedido), o `required` aqui e so pra evitar o round-trip. #}
+           recebimento_pedido), o `required` aqui e so pra evitar o round-trip.
+
+           NAO usar `capture="environment"`: em iOS Safari, se a permissao da
+           camera foi negada uma vez pro dominio, o picker nao abre mais (botao
+           "nao responde", relato do dono 24/06/2026). Sem `capture`, o iOS
+           mostra o picker padrao (camera / galeria / arquivos), que sempre
+           funciona — o usuario escolhe a fonte. #}
         <input type="file" name="fotos" class="form-control form-control-sm"
-               accept="image/*" capture="environment" multiple
+               accept="image/*" multiple
                {% if not fotos_conf['entrega'] %}required{% endif %}>
-        <small class="text-muted">No celular abre a câmera direto. Pelo menos
-            1 foto é obrigatória pra confirmar a entrega.</small>
+        <small class="text-muted">Tire foto pela câmera ou escolha da galeria.
+            Pelo menos 1 foto é obrigatória pra confirmar a entrega.</small>
     </div>
     <button type="submit" class="btn btn-success btn-sm">
         <i class="bi bi-check-all"></i> Confirmar Recebimento
