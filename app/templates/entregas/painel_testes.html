@@ -21,6 +21,20 @@
   }
   .barra-teste a { color: #fff; text-decoration: underline; }
   .barra-teste .dir { margin-left: auto; opacity: .9; }
+  .bt-arm {
+    background: #198754; color: #fff; border: 0; padding: 3px 12px;
+    border-radius: 3px; font-weight: 700; cursor: pointer; font-size: 12px;
+  }
+  .bt-arm.armado { background: #495057; }
+  .badge-cw {
+    background: #ffd43b; color: #1f2933; padding: 3px 10px; border-radius: 3px;
+    font-weight: 700; font-size: 12px; cursor: pointer;
+    animation: pulsa-cw 1s infinite;
+  }
+  @keyframes pulsa-cw {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,212,59,.7); }
+    50% { box-shadow: 0 0 0 8px rgba(255,212,59,0); }
+  }
 
   .split { flex: 1 1 auto; display: flex; min-height: 0; }
   .pane { height: 100%; min-width: 0; position: relative; }
