@@ -273,7 +273,7 @@ def gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item,
         p = p_info['p']
         # Fotos de conferencia (QR) so sao coletadas quando vao ser renderizadas
         # — evita N+1 query no relatorio comum (sem fotos).
-        conf = _fotos_conferencia(p) if incluir_fotos else []
+        conf = _fotos_conferencia(p, etapa_foto) if incluir_fotos else []
         n_fotos = len(p.fotos) + len(conf)
         pdf.set_fill_color(235, 235, 235)
         pdf.set_font('Helvetica', 'B', 9)
