@@ -686,7 +686,7 @@ def responder(historico, *, telefone_contato=None):
                                  tools_usadas=tools_usadas)
 
         from app.services import uso_ia
-        uso_ia.registrar('bot_atendimento', MODELO, resp.usage)
+        uso_ia.registrar('bot_atendimento', MODELO, getattr(resp, 'usage', None))
 
         tool_uses = [b for b in resp.content if getattr(b, 'type', None) == 'tool_use']
 
