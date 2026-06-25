@@ -344,6 +344,7 @@ def _marcar_estornado(pedido, pagamento):
         return False
     estado_anterior = pedido.status
     pedido.status = 'cancelado'
+    pedido.motivo_cancelamento = 'reembolso'
     pedido.cancelado_em = agora()
     if pagamento:
         pagamento.status = 'estornado'
