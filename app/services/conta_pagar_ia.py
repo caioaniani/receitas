@@ -93,7 +93,7 @@ def _chamar(client, modelo, bloco):
         ]}],
     )
     from app.services import uso_ia
-    uso_ia.registrar('ocr_nf', modelo, response.usage)
+    uso_ia.registrar('ocr_nf', modelo, getattr(response, 'usage', None))
     texto = ''.join(b.text for b in response.content if b.type == 'text').strip()
     texto = re.sub(r'^```(?:json)?\s*|\s*```$', '', texto, flags=re.MULTILINE).strip()
     return json.loads(texto)
