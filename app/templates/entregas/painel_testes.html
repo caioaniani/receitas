@@ -270,11 +270,14 @@
   // ── Painel de atendimento (lista + thread, read-only) ──
   (function () {
     var statusAtual = 'open';
+    var convAtual = null;          // id da conversa aberta na thread
     var lista = document.getElementById('at-lista');
     var thread = document.getElementById('at-thread');
     var threadCorpo = document.getElementById('thread-corpo');
     var threadNome = document.getElementById('thread-nome');
     var att = document.getElementById('at-att');
+    var compose = document.getElementById('compose-texto');
+    var btnEnviar = document.getElementById('compose-enviar');
 
     document.querySelectorAll('.at-topo .filtros button').forEach(function (b) {
       b.addEventListener('click', function () {
