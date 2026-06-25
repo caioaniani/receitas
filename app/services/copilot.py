@@ -1444,7 +1444,7 @@ def interpretar(prompt_text, user, historico=None, images=None,
     _canal_uso = 'whatsapp' if apenas_leitura else 'slack'
     from app.services import uso_ia
     uso_ia.registrar(f'copilot_{_canal_uso}', modelo or MODELO_DEFAULT,
-                     response.usage, canal=_canal_uso)
+                     getattr(response, 'usage', None), canal=_canal_uso)
 
     if tool_call and tool_name:
         # Enriquece params com info do banco (matches de produto/MP)
