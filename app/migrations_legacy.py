@@ -187,6 +187,7 @@ def _migrate_postgres(app):
             migrações_produto = {
                 'custo_direto': 'ALTER TABLE produto ADD COLUMN custo_direto REAL',
                 'custo_embalagem': 'ALTER TABLE produto ADD COLUMN custo_embalagem REAL DEFAULT 0',
+                'preco_interno': 'ALTER TABLE produto ADD COLUMN preco_interno REAL',
                 'modo_preparo': 'ALTER TABLE produto ADD COLUMN modo_preparo TEXT',
                 'observacao': 'ALTER TABLE produto ADD COLUMN observacao TEXT',
                 'reaproveitavel': 'ALTER TABLE produto ADD COLUMN reaproveitavel BOOLEAN NOT NULL DEFAULT FALSE',
