@@ -269,11 +269,15 @@ def gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item, incluir_fot
         if pdf.get_y() > 255:
             pdf.add_page()
         p = p_info['p']
+        # Fotos de conferencia (QR) so sao coletadas quando vao ser renderizadas
+        # — evita N+1 query no relatorio comum (sem fotos).
+        conf = _fotos_conferencia(p) if incluir_fotos else []
+        n_fotos = len(p.fotos) + len(conf)
         pdf.set_fill_color(235, 235, 235)
         pdf.set_font('Helvetica', 'B', 9)
         data_str = p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '-'
         div_str = '  [DIVERGENCIA]' if p.tem_divergencia else ''
-        fotos_str = f'  ({len(p.fotos)} foto{"s" if len(p.fotos) != 1 else ""})' if p.fotos else ''
+        fotos_str = f'  ({n_fotos} foto{"s" if n_fotos != 1 else ""})' if n_fotos else ''
         pdf.cell(0, 5, f'Pedido #{p.id}  -  {data_str}{div_str}{fotos_str}', fill=True, border=1,
                  new_x='LMARGIN', new_y='NEXT')
         pdf.set_font('Helvetica', '', 8)
