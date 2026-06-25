@@ -82,15 +82,21 @@ def parse_lista(texto):
 
 
 def classificar(linhas):
-    """Casa cada linha contra Receita/Produto existente por nome normalizado.
+    """Para cada linha, decide acao (atualizar|criar) e match. Retorna lista
+    ordenada com TODAS as linhas + uma flag `sugestao_marcar` que controla
+    qual checkbox vem marcado por default no preview.
 
-    Retorna dict com 3 listas:
-    - atualizar: [(linha, 'receita'|'produto', objeto)] — vai setar preco_interno
-    - criar: [linha] — vai criar Produto novo (categoria 'Padaria')
-    - ignorar: [(linha, motivo)] — Fornecedor/Funcionarios
+    O dono marca/desmarca caso a caso na tela antes de confirmar — entao a
+    decisao de incluir/excluir Fornecedor e Funcionarios fica com ele, nao
+    com o filtro automatico. Mantemos a flag pra ainda DESMARCAR essas
+    categorias por default (evitar marcar 47 sem querer).
 
-    Receita tem prioridade sobre Produto em caso de colisao de nome
-    (raramente acontece, mas se acontecer atualizamos a Receita).
+    Cada item: {idx, linha, acao, tipo, obj, preco_atual, sugestao_marcar}.
+    - acao = 'atualizar' se casou com Receita/Produto existente; 'criar' se nao.
+    - obj = a entidade casada (None se 'criar').
+    - tipo = 'receita' | 'produto' | None.
+    - preco_atual = preco_interno atual (pra mostrar mudanca no preview).
+    - sugestao_marcar = True se Padaria, False se Fornecedor/Funcionarios.
     """
     receitas = Receita.query.filter(Receita.arquivada_em.is_(None)).all()
     produtos = Produto.query.filter_by(ativo=True).all()
@@ -100,36 +106,52 @@ def classificar(linhas):
     for p in produtos:
         idx.setdefault(_norm(p.nome), ('produto', p))
 
-    plano = {'atualizar': [], 'criar': [], 'ignorar': []}
-    for linha in linhas:
+    out = []
+    for i, linha in enumerate(linhas):
         cat_norm = _norm(linha['categoria'])
-        if cat_norm in CATEGORIAS_IGNORAR:
-            plano['ignorar'].append(
-                (linha, f'categoria "{linha["categoria"]}" — '
-                        f'insumo/folha, não é produto de venda'))
-            continue
         match = idx.get(_norm(linha['nome']))
         if match:
-            plano['atualizar'].append((linha, match[0], match[1]))
+            tipo, obj = match
+            acao = 'atualizar'
+            preco_atual = getattr(obj, 'preco_interno', None)
         else:
-            plano['criar'].append(linha)
-    return plano
+            tipo, obj = None, None
+            acao = 'criar'
+            preco_atual = None
+        out.append({
+            'idx': i,
+            'linha': linha,
+            'acao': acao,
+            'tipo': tipo,
+            'obj': obj,
+            'preco_atual': preco_atual,
+            'sugestao_marcar': cat_norm not in CATEGORIAS_IGNORAR,
+        })
+    return out
 
 
-def aplicar(plano):
-    """Persiste o plano. Retorna {atualizados, criados, ignorados}."""
+def aplicar(plano, indices_marcados):
+    """Persiste apenas os indices marcados pelo dono. Retorna contadores.
+
+    `indices_marcados`: iteravel de ints (idx do item no plano).
+    """
+    marcados = set(indices_marcados)
     n_atual = n_criado = 0
-    for linha, _tipo, obj in plano['atualizar']:
-        obj.preco_interno = linha['preco']
-        n_atual += 1
-    for linha in plano['criar']:
-        db.session.add(Produto(
-            nome=linha['nome'].strip(),
-            categoria=(linha['categoria'].strip() or 'Padaria'),
-            preco_interno=linha['preco'],
-            ativo=True,
-        ))
-        n_criado += 1
+    for item in plano:
+        if item['idx'] not in marcados:
+            continue
+        linha = item['linha']
+        if item['acao'] == 'atualizar':
+            item['obj'].preco_interno = linha['preco']
+            n_atual += 1
+        else:
+            db.session.add(Produto(
+                nome=linha['nome'].strip(),
+                categoria=(linha['categoria'].strip() or 'Padaria'),
+                preco_interno=linha['preco'],
+                ativo=True,
+            ))
+            n_criado += 1
     db.session.commit()
     return {'atualizados': n_atual, 'criados': n_criado,
-            'ignorados': len(plano['ignorar'])}
+            'desmarcados': len(plano) - len(marcados)}
