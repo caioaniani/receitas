@@ -91,3 +91,72 @@ def test_painel_testes_exige_login(app):
     r = c.get('/entregas/painel-testes')
     assert r.status_code in (301, 302)
     assert '/login' in r.headers.get('Location', '')
+
+
+# ── /entregas/api/painel-testes/chatwoot-pending ───────────
+
+
+def test_pending_api_retorna_ids(app, monkeypatch):
+    """Devolve IDs de conversas pending (formato esperado pelo front)."""
+    from app.services import chatwoot
+    monkeypatch.setattr(
+        chatwoot, 'listar_conversas_paradas',
+        lambda **kw: [
+            {'id': 198, 'nome_contato': 'Caio', 'minutos_paradas': 0},
+            {'id': 201, 'nome_contato': 'Ana', 'minutos_paradas': 2},
+        ])
+    c = _staff(app)
+    r = c.get('/entregas/api/painel-testes/chatwoot-pending')
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['ids'] == [198, 201]
+    assert j['count'] == 2
+
+
+def test_pending_api_chama_com_min_minutos_zero(app, monkeypatch):
+    """REGRESSAO: precisa pegar conversas RECEM-CRIADAS (0min), nao paradas
+    ha 15min. Se voltar pro default da funcao do vigia, perde alarme de
+    conversa nova — proposito DESTA tela."""
+    chamadas = []
+    from app.services import chatwoot
+    monkeypatch.setattr(
+        chatwoot, 'listar_conversas_paradas',
+        lambda **kw: (chamadas.append(kw) or []))
+    c = _staff(app)
+    c.get('/entregas/api/painel-testes/chatwoot-pending')
+    assert chamadas
+    assert chamadas[0].get('min_minutos') == 0
+    assert chamadas[0].get('status') == 'pending'
+
+
+def test_pending_api_erro_no_chatwoot_devolve_zero(app, monkeypatch):
+    """Chatwoot fora do ar / token invalido NAO derruba a rota — devolve
+    count=0 (frontend trata como 'nenhuma pending', nao falsifica klaxon)."""
+    from app.services import chatwoot
+
+    def boom(**kw):
+        raise RuntimeError('chatwoot down')
+
+    monkeypatch.setattr(chatwoot, 'listar_conversas_paradas', boom)
+    c = _staff(app)
+    r = c.get('/entregas/api/painel-testes/chatwoot-pending')
+    assert r.status_code == 200
+    assert r.get_json() == {'ids': [], 'count': 0}
+
+
+def test_pending_api_exige_login(app):
+    c = app.test_client()
+    r = c.get('/entregas/api/painel-testes/chatwoot-pending')
+    assert r.status_code in (301, 302)
+
+
+def test_painel_testes_tem_botao_ligar_alertas(app):
+    """UI: botao de armar audio (AudioContext exige user gesture) +
+    chamada da API de pending no JS."""
+    app.config['CHATWOOT_URL'] = 'https://atendimento.exemplo.com'
+    c = _staff(app)
+    r = c.get('/entregas/painel-testes')
+    html = r.data.decode()
+    assert 'LIGAR ALERTAS' in html
+    assert '/entregas/api/painel-testes/chatwoot-pending' in html
+    assert 'klaxon' in html
