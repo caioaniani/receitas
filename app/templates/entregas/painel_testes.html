@@ -144,6 +144,20 @@
       document.body.classList.remove('dragging');
     });
   })();
+
+  // Detector: se o iframe do Chatwoot nao disparar `load` em 5s, mostra aviso.
+  // Em cross-origin nao da pra ler o conteudo, mas DA pra saber se carregou —
+  // bloqueio por X-Frame-Options/CSP impede o evento `load` de disparar.
+  (function () {
+    var iframe = document.getElementById('cw-iframe');
+    var aviso = document.getElementById('cw-aviso');
+    if (!iframe || !aviso) return;
+    var carregou = false;
+    iframe.addEventListener('load', function () { carregou = true; });
+    setTimeout(function () {
+      if (!carregou) aviso.hidden = false;
+    }, 5000);
+  })();
 </script>
 </body>
 </html>
