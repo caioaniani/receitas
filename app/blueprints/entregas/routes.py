@@ -229,6 +229,42 @@ def api_painel_testes_chatwoot_pending():
     return jsonify({'ids': ids, 'count': len(ids)})
 
 
+@entregas_bp.route('/api/atendimento/conversas')
+@login_required
+def api_atendimento_conversas():
+    """Lista conversas do Chatwoot pro painel de atendimento NOSSO (sem iframe).
+
+    `?status=` open (default) | pending | resolved | all. Read-only: so leitura
+    via API (token de usuario). Erro/desconfig -> lista vazia (a UI mostra
+    'sem conversas', nunca quebra o painel)."""
+    from flask import jsonify
+
+    from app.services import chatwoot as cw_svc
+    status = request.args.get('status', 'open')
+    try:
+        conversas = cw_svc.listar_conversas(status=status, limite=40)
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception('atendimento: listar_conversas falhou')
+        conversas = []
+    return jsonify({'conversas': conversas, 'status': status})
+
+
+@entregas_bp.route('/api/atendimento/conversa/<int:cid>')
+@login_required
+def api_atendimento_conversa(cid):
+    """Mensagens de UMA conversa do Chatwoot (thread) pro painel. Reusa
+    `buscar_historico` (mesma fonte do bot). Read-only."""
+    from flask import jsonify
+
+    from app.services import chatwoot as cw_svc
+    try:
+        mensagens = cw_svc.buscar_historico(cid, limite=40)
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception('atendimento: buscar_historico %s falhou', cid)
+        mensagens = []
+    return jsonify({'id': cid, 'mensagens': mensagens})
+
+
 @entregas_bp.route('/api/painel')
 @login_required
 def api_painel():
