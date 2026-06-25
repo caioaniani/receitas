@@ -208,6 +208,37 @@ def precos():
                            cestas=cestas)
 
 
+@receitas_bp.route('/precos/importar', methods=['GET', 'POST'])
+@login_required
+@owner_required
+def precos_importar():
+    """Importacao em lote de precos internos. Owner-only.
+
+    Fluxo:
+    - GET: form com textarea.
+    - POST sem `confirmar`: mostra preview (atualizar/criar/ignorar).
+    - POST com `confirmar` + `texto`: aplica e flasha resultado.
+
+    Idempotente (rodar 2x nao duplica — segunda vez tudo cai em "atualizar").
+    """
+    from app.services.precos_importar import aplicar, classificar, parse_lista
+
+    texto = request.form.get('texto', '') if request.method == 'POST' else ''
+    plano = None
+    if request.method == 'POST' and texto.strip():
+        linhas = parse_lista(texto)
+        plano = classificar(linhas)
+        if request.form.get('confirmar') == '1':
+            res = aplicar(plano)
+            flash(
+                f'Importacao OK: {res["atualizados"]} atualizado(s), '
+                f'{res["criados"]} criado(s), {res["ignorados"]} ignorado(s).',
+                'success')
+            return redirect(url_for('receitas.precos'))
+    return render_template('receitas/precos_importar.html',
+                           texto=texto, plano=plano)
+
+
 _PRECOS_CAMPOS = {
     'receita': {'preco_loja', 'preco_site', 'preco_venda', 'preco_interno'},
     'produto': {'preco_loja', 'preco_site', 'preco_atacado', 'preco_interno'},
