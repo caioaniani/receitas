@@ -54,7 +54,7 @@ def _chamar_claude(prompt):
             messages=[{'role': 'user', 'content': prompt}],
         )
         from app.services import uso_ia
-        uso_ia.registrar('seo', MODELO, resp.usage)
+        uso_ia.registrar('seo', MODELO, getattr(resp, 'usage', None))
         # resp.content e' lista de blocks; pega o texto.
         partes = [b.text for b in resp.content
                   if getattr(b, 'type', '') == 'text']
