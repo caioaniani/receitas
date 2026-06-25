@@ -133,6 +133,15 @@ STATUS_PEDIDO_ONLINE = (
 )
 
 
+# Motivos de cancelamento (codigos persistidos em
+# PedidoOnline.motivo_cancelamento) -> rotulo legivel pra UI.
+MOTIVOS_CANCELAMENTO = {
+    'pix_expirado': 'Pix não pago (reserva expirou)',
+    'reembolso': 'Reembolsado pelo admin',
+    'cancelado_admin': 'Cancelado manualmente (admin)',
+}
+
+
 class PedidoOnline(db.Model):
     """Pedido nascido no nosso site (checkout nativo).
 
