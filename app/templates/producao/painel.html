@@ -162,6 +162,9 @@
                             {% if not s.tem_historico %}
                             <span class="tag-sem-hist" title="Sem histórico de pedidos — sem previsão; o Produzir vem do comprometido">sem histórico</span>
                             {% endif %}
+                            {% if s.dias_producao %}
+                            <span class="tag-lead" title="Leva {{ s.dias_producao }} dia(s) pra ficar pronto (ex: fermentação 48h). O Produzir já reflete a demanda das entregas daqui {{ s.dias_producao }} dia(s) — produza hoje pra não faltar.">produção {{ s.dias_producao }}d</span>
+                            {% endif %}
                         </div>
                         <div class="col-num">{{ s.em_estoque or '—' }}</div>
                         <div class="col-num">{{ s.comprometido or '—' }}</div>
