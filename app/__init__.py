@@ -435,8 +435,9 @@ def create_app(config_class=None):
         # ate o same-origin — troca por SAMEORIGIN + frame-ancestors 'self'
         # (cross-origin/clickjacking segue bloqueado). Escopado ao detalhe do
         # pedido pra nao afrouxar o resto do admin.
-        if (request.values.get('embed')
-                and request.path.startswith('/admin/loja-online/pedidos')):
+        if (request.values.get('embed') and (
+                request.path.startswith('/admin/loja-online/pedidos')
+                or request.path == '/entregas/painel')):
             response.headers['X-Frame-Options'] = 'SAMEORIGIN'
             response.headers['Content-Security-Policy'] = (
                 "default-src 'self'; "
@@ -446,6 +447,24 @@ def create_app(config_class=None):
                 "img-src 'self' data: https://*.dropbox.com "
                 "https://*.dropboxusercontent.com; "
                 "frame-ancestors 'self';"
+            )
+        # Tela de teste /entregas/painel-testes: embute o painel (same-origin,
+        # via ?embed=1 acima) + o dashboard do Chatwoot (outro dominio) lado a
+        # lado. Precisa frame-src liberando 'self' + a URL do Chatwoot. Escopado
+        # so a esta rota — o painel de producao NAO e afrouxado. Se o Chatwoot
+        # recusar o embed (X-Frame-Options/frame-ancestors DELE), o iframe vem
+        # em branco; isso e config do servidor Chatwoot, fora deste repo.
+        if request.path == '/entregas/painel-testes':
+            chatwoot = (app.config.get('CHATWOOT_URL') or '').strip().rstrip('/')
+            frame_cw = f' {chatwoot}' if chatwoot else ''
+            response.headers['Content-Security-Policy'] = (
+                "default-src 'self'; "
+                "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+                "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+                "font-src 'self' https://cdn.jsdelivr.net; "
+                "img-src 'self' data: https://*.dropbox.com "
+                "https://*.dropboxusercontent.com; "
+                f"frame-src 'self'{frame_cw};"
             )
         # Excecao: o card do CRM (/crm/card) e embutido como iframe DENTRO do
         # Chatwoot (outro dominio). X-Frame-Options=DENY bloquearia; e
