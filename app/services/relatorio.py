@@ -1,6 +1,7 @@
 """Geracao de relatorio de pedidos em XLSX e PDF."""
 
 import io
+import logging
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -8,22 +9,63 @@ from openpyxl.utils import get_column_letter
 
 from app.services.pdf import PadariaPDF
 
+logger = logging.getLogger(__name__)
+
+# Magic bytes dos formatos que o fpdf2 aceita — pra validar que o download
+# trouxe uma IMAGEM, nao a pagina HTML de preview do Dropbox.
+_IMG_MAGIC = (b'\xff\xd8\xff', b'\x89PNG\r\n\x1a\n', b'GIF87a', b'GIF89a')
+
 
 def _money(v):
     return f'R$ {v:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
 
 
+def _eh_imagem(conteudo, content_type):
+    """True se o conteudo baixado e realmente uma imagem (nao HTML)."""
+    if content_type.startswith('image/'):
+        return True
+    return any(conteudo.startswith(m) for m in _IMG_MAGIC)
+
+
 def _foto_bytes(foto):
-    """Le bytes da foto: prioriza Dropbox URL, fallback BLOB legado."""
+    """Le bytes da foto pra embutir no PDF. Prioriza Dropbox, fallback BLOB.
+
+    Dois cuidados aprendidos no diagnostico de 24/06/2026 (foto aparecia na
+    tela mas sumia do PDF):
+    1. **User-Agent de navegador**: o Dropbox serve a PAGINA HTML de preview
+       (nao a imagem) pra clientes nao-browser como `python-requests`. Sem
+       isso, `r.content` era HTML, o `pdf.image()` estourava e caia em
+       "[foto invalida]". O `<img>` da tela funcionava porque o navegador
+       manda User-Agent Mozilla.
+    2. **Normalizar pra `raw=1`**: fotos antigas (ou links de preview)
+       carregam `?dl=0` = HTML. `_converter_para_raw` garante bytes via CDN.
+
+    Valida que o download e imagem (magic bytes / Content-Type) antes de
+    aceitar — se vier HTML, loga e cai no fallback em vez de passar lixo
+    pro fpdf2. Erros NAO sao mais engolidos em silencio.
+    """
     import requests
-    if foto.imagem_url:
+
+    from app.services.dropbox_storage import _converter_para_raw
+    url = foto.imagem_url
+    if url:
         try:
-            r = requests.get(foto.imagem_url, timeout=10)
-            if r.status_code == 200:
-                return r.content
+            r = requests.get(
+                _converter_para_raw(url), timeout=15,
+                headers={'User-Agent':
+                         'Mozilla/5.0 (compatible; PadariaPDF/1.0)'})
+            conteudo = r.content or b''
+            ct = (r.headers.get('Content-Type') or '').lower()
+            if r.status_code == 200 and _eh_imagem(conteudo, ct):
+                return conteudo
+            logger.warning(
+                'foto %s: download do Dropbox nao retornou imagem '
+                '(status=%s content_type=%s len=%s) — usando fallback BLOB',
+                getattr(foto, 'id', '?'), r.status_code, ct, len(conteudo))
         except Exception:  # noqa: BLE001
-            pass
-    return foto.imagem  # pode ser None apos M6
+            logger.exception('foto %s: erro baixando do Dropbox pro PDF',
+                             getattr(foto, 'id', '?'))
+    return foto.imagem  # BLOB legado (pode ser None apos M6)
 
 
 def _render_fotos(pdf, fotos, largura=45, altura=35, por_linha=4, margem=2):
