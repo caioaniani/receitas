@@ -53,6 +53,8 @@ def _chamar_claude(prompt):
             max_tokens=400,
             messages=[{'role': 'user', 'content': prompt}],
         )
+        from app.services import uso_ia
+        uso_ia.registrar('seo', MODELO, resp.usage)
         # resp.content e' lista de blocks; pega o texto.
         partes = [b.text for b in resp.content
                   if getattr(b, 'type', '') == 'text']
