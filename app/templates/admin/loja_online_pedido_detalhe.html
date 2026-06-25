@@ -145,6 +145,7 @@
         Criado: {{ p.criado_em.strftime('%d/%m/%Y %H:%M') if p.criado_em }}<br>
         {% if p.pago_em %}Pago: {{ p.pago_em.strftime('%d/%m/%Y %H:%M') }}<br>{% endif %}
         {% if p.cancelado_em %}Cancelado: {{ p.cancelado_em.strftime('%d/%m/%Y %H:%M') }}<br>{% endif %}
+        {% if p.status == 'cancelado' and p.motivo_cancelamento_label %}Motivo: {{ p.motivo_cancelamento_label }}<br>{% endif %}
       </div>
     </div>
 
