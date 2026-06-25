@@ -110,6 +110,47 @@
   .bolha .qd { display: block; font-size: 10px; color: #868e96; margin-top: 3px; }
   .bolha img { max-width: 100%; border-radius: 6px; margin-top: 4px; }
   .hidden { display: none !important; }
+
+  /* ── Caixa de resposta + acoes ── */
+  .thread-acoes { display: flex; gap: 6px; margin-left: auto; }
+  .thread-acoes button {
+    background: #fff; border: 1px solid #ced4da; border-radius: 4px;
+    padding: 2px 8px; cursor: pointer; font-size: 12px;
+  }
+  .thread-acoes button.danger { color: #b02a37; border-color: #f1aeb5; }
+  .thread-acoes button.ok { color: #198754; border-color: #a3cfbb; }
+  .thread-acoes button:hover { background: #f8f9fa; }
+  .thread-acoes button:disabled { opacity: .5; cursor: wait; }
+
+  .compose {
+    flex: 0 0 auto; border-top: 1px solid #dee2e6; background: #fff;
+    padding: 8px; display: flex; gap: 6px; align-items: flex-end;
+  }
+  .compose textarea {
+    flex: 1 1 auto; min-height: 38px; max-height: 120px; resize: none;
+    border: 1px solid #ced4da; border-radius: 6px; padding: 7px 9px;
+    font: inherit; font-size: 13px; outline: none;
+  }
+  .compose textarea:focus { border-color: #0d6efd; }
+  .compose .enviar {
+    background: #0d6efd; color: #fff; border: 0; border-radius: 6px;
+    padding: 8px 14px; font-weight: 700; cursor: pointer; font-size: 13px;
+  }
+  .compose .enviar:hover { background: #0b5ed7; }
+  .compose .enviar:disabled { background: #adb5bd; cursor: wait; }
+  .compose .dica {
+    font-size: 10px; color: #adb5bd; align-self: center; padding: 0 4px;
+  }
+
+  .toast {
+    position: fixed; bottom: 16px; right: 16px; z-index: 100;
+    background: #212529; color: #fff; padding: 9px 14px; border-radius: 6px;
+    font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,.25);
+    opacity: 0; transition: opacity .2s;
+  }
+  .toast.show { opacity: 1; }
+  .toast.erro { background: #b02a37; }
+  .toast.ok { background: #198754; }
 </style>
 </head>
 <body>
