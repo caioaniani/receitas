@@ -177,4 +177,25 @@
 {% else %}
 <div class="alert alert-secondary">Escolha uma loja e o periodo para gerar o relatorio.</div>
 {% endif %}
+
+<script>
+// Mantem o link do botao PDF em sincronia com o checkbox "incluir fotos" e o
+// seletor de etapa — sem exigir um "Ir" extra antes de exportar.
+(function() {
+    var btn = document.getElementById('btn-pdf');
+    if (!btn) return;
+    var sel = document.getElementById('sel-etapa-foto');
+    var chk = document.getElementById('chk-fotos');
+    function atualiza() {
+        var url = new URL(btn.href, window.location.origin);
+        if (chk && chk.checked) url.searchParams.set('fotos', '1');
+        else url.searchParams.delete('fotos');
+        if (sel && sel.value) url.searchParams.set('etapa_foto', sel.value);
+        else url.searchParams.delete('etapa_foto');
+        btn.href = url.pathname + url.search;
+    }
+    if (sel) sel.addEventListener('change', atualiza);
+    if (chk) chk.addEventListener('change', atualiza);
+})();
+</script>
 {% endblock %}
