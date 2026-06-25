@@ -175,3 +175,32 @@ def test_colunas_cobrem_o_horizonte(app):
     assert len(grade['dias']) == 5
     assert grade['dias'][0]['data'] == hoje().isoformat()
     assert grade['dias'][4]['data'] == (hoje() + timedelta(days=4)).isoformat()
+
+
+def _login(client, admin_user):
+    client.post('/auth/login',
+                data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+
+
+def test_rota_renderiza(app, admin_user):
+    """GET /producao/painel/receita/<id> renderiza a grade (template valido)."""
+    loja = _loja('Loja Centro')
+    r = _receita('Pão Francês')
+    _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 40)
+
+    client = app.test_client()
+    _login(client, admin_user)
+    resp = client.get('/producao/painel/receita/%d?horizonte=7&janela=6' % r.id)
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert 'Pão Francês' in body
+    assert 'Loja Centro' in body
+
+
+def test_rota_receita_inexistente_redireciona(app, admin_user):
+    client = app.test_client()
+    _login(client, admin_user)
+    resp = client.get('/producao/painel/receita/999999')
+    assert resp.status_code == 302
+    assert '/producao/' in resp.headers['Location']
