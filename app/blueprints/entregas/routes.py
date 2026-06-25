@@ -229,6 +229,32 @@ def api_painel_testes_chatwoot_pending():
     return jsonify({'ids': ids, 'count': len(ids)})
 
 
+@entregas_bp.route('/api/atendimento/debug')
+@login_required
+def api_atendimento_debug():
+    """Diagnostico OWNER do painel de atendimento. Mostra quantas conversas
+    vem em cada status + amostra das 3 primeiras (raw da API, pra ver formato
+    real). Util quando 'nao aparece nenhuma' — descobre se e filtro de status,
+    erro de token, ou parsing."""
+    from flask import abort, jsonify
+    if not current_user.is_owner:
+        abort(403)
+    from app.services import chatwoot as cw_svc
+    out = {'token_usuario_ok': cw_svc.disponivel(),
+           'token_bot_ok': cw_svc.bot_disponivel(),
+           'por_status': {}, 'amostra_raw': []}
+    for st in ('open', 'pending', 'resolved'):
+        try:
+            cs = cw_svc.listar_conversas(status=st, limite=100)
+        except Exception as e:  # noqa: BLE001
+            out['por_status'][st] = f'erro: {e}'
+            continue
+        out['por_status'][st] = len(cs)
+        if st == 'open' and cs:
+            out['amostra_raw'] = cs[:3]
+    return jsonify(out)
+
+
 @entregas_bp.route('/api/atendimento/conversas')
 @login_required
 def api_atendimento_conversas():
