@@ -66,8 +66,25 @@
          title="Arraste para ajustar a proporção"></div>
     <div class="pane" id="pane-chat">
       {% if chatwoot_url %}
-      <iframe src="{{ chatwoot_url }}" title="Atendimento (Chatwoot)"
-              allow="clipboard-write; clipboard-read; autoplay"></iframe>
+      <div class="cw-topo">
+        <span class="cw-url" title="{{ chatwoot_url }}">{{ chatwoot_url }}</span>
+        <a href="{{ chatwoot_url }}" target="_blank" rel="noopener"
+           class="cw-botao">abrir em nova aba ↗</a>
+      </div>
+      <div class="cw-wrap">
+        <iframe id="cw-iframe" src="{{ chatwoot_url }}"
+                title="Atendimento (Chatwoot)"
+                allow="clipboard-write; clipboard-read; autoplay"></iframe>
+        <div id="cw-aviso" class="cw-aviso" hidden>
+          <div>
+            <strong>O Chatwoot não carregou aqui dentro.</strong><br>
+            Provavelmente o servidor do Chatwoot está recusando ser embutido
+            (X-Frame-Options/CSP frame-ancestors).<br>
+            Use o botão <em>abrir em nova aba</em> acima pra confirmar que o
+            Chatwoot está no ar — se abrir lá, é só config do servidor dele.
+          </div>
+        </div>
+      </div>
       {% else %}
       <div class="sem-chatwoot">
         Chatwoot não configurado (variável <code>CHATWOOT_URL</code> vazia).
