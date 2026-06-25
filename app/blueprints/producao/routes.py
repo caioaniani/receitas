@@ -191,6 +191,38 @@ def painel():
                            saindo_hoje=saindo_hoje)
 
 
+@producao_bp.route('/painel/receita/<int:rid>')
+@login_required
+@admin_required
+def painel_receita_grade(rid):
+    """Grade loja x dia de UMA receita: quanto cada loja recebe em cada dia do
+    horizonte. Detalha o que o balanco resume — firme (pedidos reais com data)
+    + estimado (projecao do previsto rateada por loja/dia). Aberta a partir do
+    balanco da producao. **Admin-only** (mesma sensibilidade do painel)."""
+    from app.services.previsao_producao import grade_loja_dia
+
+    try:
+        horizonte = int(request.args.get('horizonte', 7))
+    except ValueError:
+        horizonte = 7
+    horizonte = max(1, min(horizonte, 14))
+
+    try:
+        janela = int(request.args.get('janela', 6))
+    except ValueError:
+        janela = 6
+    janela = max(1, min(janela, 26))
+
+    grade = grade_loja_dia(rid, horizonte_dias=horizonte, janela_semanas=janela)
+    if grade is None:
+        flash('Receita não encontrada.', 'warning')
+        return redirect(url_for('producao.painel', horizonte=horizonte,
+                                janela=janela))
+
+    return render_template('producao/grade_receita.html',
+                           grade=grade, horizonte=horizonte, janela=janela)
+
+
 @producao_bp.route('/painel/debug')
 @login_required
 @admin_required
