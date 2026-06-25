@@ -1482,6 +1482,9 @@ def _migrate_sqlite(app):
     if cols_po and 'reserva_expira_em' not in cols_po:
         cursor.execute("ALTER TABLE pedido_online ADD COLUMN "
                        "reserva_expira_em TIMESTAMP")
+    if cols_po and 'motivo_cancelamento' not in cols_po:
+        cursor.execute("ALTER TABLE pedido_online ADD COLUMN "
+                       "motivo_cancelamento VARCHAR(40)")
 
     # seru_produto_map.fator_quantidade
     cursor.execute("PRAGMA table_info(seru_produto_map)")
