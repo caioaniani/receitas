@@ -66,9 +66,11 @@ def test_copilot_resolver_ignora_arquivada(app, admin_user):
                        for m in depois)
 
 
-def test_precos_post_nao_zera_arquivada(app, admin_user):
+def test_precos_post_nao_zera_arquivada(app, owner_user):
     """Regressao da filtragem: a tela de precos so lista ativas — o POST nao
-    pode zerar os precos das arquivadas (ausentes do form)."""
+    pode zerar os precos das arquivadas (ausentes do form).
+
+    Owner-only (24/06/2026) — usa owner_user em vez de admin."""
     from app.extensions import db
     from app.models import Receita
     from app.utils import agora
@@ -79,7 +81,7 @@ def test_precos_post_nao_zera_arquivada(app, admin_user):
         db.session.commit()
 
     c = app.test_client()
-    _login(c)
+    c.post('/auth/login', data={'login': 'dono', 'senha': '123'})
     r = c.post('/receitas/precos', data={f'preco_loja_{rid_a}': '6,50',
                                          f'preco_site_{rid_a}': '',
                                          f'preco_venda_{rid_a}': ''},
