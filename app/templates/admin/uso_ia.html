@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block title %}Custo de IA{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-cpu"></i> Custo de IA por função</h1>
+    <div class="btn-group btn-group-sm">
+        {% for d in [7, 15, 30, 90] %}
+        <a href="{{ url_for('main.uso_ia_relatorio', dias=d) }}"
+           class="btn {% if dias == d %}btn-primary{% else %}btn-outline-primary{% endif %}">
+            {{ d }} dias
+        </a>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="alert alert-info small">
+    <i class="bi bi-info-circle"></i>
+    Gasto em <strong>USD</strong> com a API da Anthropic, separado por função.
+    A medição começou em <strong>25/06/2026</strong> — antes disso nada era
+    registrado, então a janela só fica completa depois de acumular {{ dias }}
+    dias inteiros de uso. Cálculo: tokens reais de cada chamada × preço do
+    modelo (cache já considerado a 0,1×).
+</div>
+
+{% if not linhas %}
+<div class="card"><div class="card-body text-center text-muted py-4">
+    Ainda não há chamadas registradas nesta janela. Volte depois que o sistema
+    rodar algumas conversas/avaliações.
+</div></div>
+{% else %}
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Função</th>
+                        <th class="text-end">Chamadas</th>
+                        <th class="text-end">Tokens entrada</th>
+                        <th class="text-end">Tokens saída</th>
+                        <th class="text-end">Custo (USD)</th>
+                        <th class="text-end">% do total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for ln in linhas %}
+                    <tr>
+                        <td>{{ ln.label }}</td>
+                        <td class="text-end">{{ '{:,}'.format(ln.chamadas) }}</td>
+                        <td class="text-end text-muted">{{ '{:,}'.format(ln.input_tokens) }}</td>
+                        <td class="text-end text-muted">{{ '{:,}'.format(ln.output_tokens) }}</td>
+                        <td class="text-end fw-semibold">${{ '%.4f'|format(ln.custo_usd) }}</td>
+                        <td class="text-end text-muted">
+                            {% if total and total > 0 %}{{ '%.0f'|format(ln.custo_usd / total * 100) }}%{% else %}—{% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+                <tfoot class="table-light fw-bold">
+                    <tr>
+                        <td>Total ({{ dias }} dias)</td>
+                        <td colspan="3"></td>
+                        <td class="text-end">${{ '%.4f'|format(total) }}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+<p class="small text-muted mt-2">
+    Projeção mensal grosseira (total ÷ {{ dias }} × 30):
+    <strong>${{ '%.2f'|format(total / dias * 30) }}/mês</strong>, se o ritmo se mantiver.
+</p>
+{% endif %}
+{% endblock %}
