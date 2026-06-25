@@ -358,6 +358,79 @@
         });
     }
 
+    // ── Enviar mensagem ──
+    function enviar() {
+      if (!convAtual) return;
+      var texto = (compose.value || '').trim();
+      if (!texto) { compose.focus(); return; }
+      btnEnviar.disabled = true;
+      btnEnviar.textContent = 'Enviando…';
+      postJSON('/entregas/api/atendimento/conversa/' + convAtual + '/enviar',
+               { content: texto })
+        .then(function (r) {
+          btnEnviar.disabled = false;
+          btnEnviar.textContent = 'Enviar';
+          if (r.status === 200 && r.body && r.body.ok) {
+            compose.value = '';
+            compose.style.height = 'auto';
+            toast('Mensagem enviada', 'ok');
+            // recarrega a thread pra mostrar a propria msg
+            abrirThread(convAtual, threadNome.textContent);
+          } else {
+            toast('Erro ao enviar: ' + ((r.body && r.body.erro) || r.status), 'erro');
+          }
+        })
+        .catch(function () {
+          btnEnviar.disabled = false;
+          btnEnviar.textContent = 'Enviar';
+          toast('Falha de rede', 'erro');
+        });
+    }
+    btnEnviar.addEventListener('click', enviar);
+    // Enter envia, Shift+Enter quebra linha. IME (acentos lentos) respeitado:
+    // se isComposing=true, Enter NAO envia (deixa o teclado virtual confirmar).
+    compose.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+        e.preventDefault();
+        enviar();
+      }
+    });
+    // Auto-resize: cresce conforme o usuario digita ate o max-height do CSS.
+    compose.addEventListener('input', function () {
+      compose.style.height = 'auto';
+      compose.style.height = Math.min(compose.scrollHeight, 120) + 'px';
+    });
+
+    // ── Acoes (status) ──
+    function mudarStatus(novoStatus, msgOk, confirmacao) {
+      if (!convAtual) return;
+      if (confirmacao && !confirm(confirmacao)) return;
+      postJSON('/entregas/api/atendimento/conversa/' + convAtual + '/status',
+               { status: novoStatus })
+        .then(function (r) {
+          if (r.status === 200 && r.body && r.body.ok) {
+            toast(msgOk, 'ok');
+            // volta pra lista — a conversa nao esta mais no status atual
+            thread.classList.add('hidden');
+            lista.classList.remove('hidden');
+            carregarLista();
+          } else {
+            toast('Erro: ' + ((r.body && r.body.erro) || r.status), 'erro');
+          }
+        })
+        .catch(function () { toast('Falha de rede', 'erro'); });
+    }
+    document.getElementById('acao-pending').addEventListener('click', function () {
+      mudarStatus('pending', 'Devolvida pro bot');
+    });
+    document.getElementById('acao-open').addEventListener('click', function () {
+      mudarStatus('open', 'Marcada como humano atendendo');
+    });
+    document.getElementById('acao-resolved').addEventListener('click', function () {
+      mudarStatus('resolved', 'Conversa resolvida',
+                  'Marcar esta conversa como resolvida?');
+    });
+
     carregarLista();
     // Atualiza a lista a cada 20s, mas SO quando a thread nao esta aberta
     // (pra nao puxar o tapete de quem esta lendo uma conversa).
