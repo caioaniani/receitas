@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Painel + Atendimento (teste)</title>
+<title>Painel + Atendimento</title>
 <style>
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
@@ -40,7 +40,7 @@
   .pane { height: 100%; min-width: 0; position: relative; }
   .pane iframe { width: 100%; height: 100%; border: 0; display: block; }
   #pane-painel { flex: 0 0 60%; }
-  #pane-chat { flex: 1 1 auto; }
+  #pane-chat { flex: 1 1 auto; background: #f8f9fa; display: flex; flex-direction: column; }
 
   .divisor {
     flex: 0 0 7px; background: #495057; cursor: col-resize;
@@ -48,48 +48,74 @@
   }
   .divisor::before { content: "⋮"; color: #adb5bd; font-size: 16px; }
   .divisor:hover { background: #0d6efd; }
-
-  /* Durante o arraste, os iframes nao podem capturar o mouse — senao o
-     parent perde os eventos de mousemove/up e o divisor "gruda". */
   body.dragging iframe { pointer-events: none; }
   body.dragging { user-select: none; cursor: col-resize; }
 
-  .sem-chatwoot {
-    display: flex; align-items: center; justify-content: center; height: 100%;
-    color: #adb5bd; padding: 24px; text-align: center; font-size: 14px;
-    line-height: 1.5;
+  /* ── Widget de atendimento ── */
+  .at-topo {
+    flex: 0 0 auto; background: #212529; color: #fff;
+    display: flex; align-items: center; gap: 8px; padding: 6px 10px;
   }
+  .at-topo .titulo { font-weight: 700; font-size: 14px; }
+  .at-topo .filtros { display: flex; gap: 4px; margin-left: auto; }
+  .at-topo .filtros button {
+    background: #343a40; color: #ced4da; border: 0; border-radius: 3px;
+    padding: 2px 9px; font-size: 12px; cursor: pointer;
+  }
+  .at-topo .filtros button.on { background: #0d6efd; color: #fff; }
+  .at-topo .att { font-size: 11px; opacity: .6; }
 
-  /* Barra de diagnostico em cima do iframe do Chatwoot (URL + abrir externo). */
-  .cw-topo {
-    background: #343a40; color: #ced4da; font-size: 12px;
-    display: flex; align-items: center; gap: 10px;
-    padding: 5px 10px; border-bottom: 1px solid #495057;
-  }
-  .cw-url {
-    flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    opacity: .8;
-  }
-  .cw-botao {
-    flex: 0 0 auto; color: #fff; background: #0d6efd;
-    padding: 2px 9px; border-radius: 3px; text-decoration: none;
-    font-weight: 600;
-  }
-  .cw-botao:hover { background: #0b5ed7; }
+  .at-corpo { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
 
-  .cw-wrap { position: relative; height: calc(100% - 30px); }
-  .cw-wrap iframe { width: 100%; height: 100%; border: 0; display: block; }
-  .cw-aviso {
-    position: absolute; inset: 0; background: rgba(31,41,51,.95);
-    color: #ffd43b; display: flex; align-items: center; justify-content: center;
-    padding: 24px; text-align: center; font-size: 14px; line-height: 1.6;
+  .conv {
+    display: flex; align-items: flex-start; gap: 8px; padding: 9px 11px;
+    border-bottom: 1px solid #e9ecef; cursor: pointer; background: #fff;
   }
+  .conv:hover { background: #eef2ff; }
+  .conv .av {
+    flex: 0 0 34px; height: 34px; border-radius: 50%; background: #ced4da;
+    color: #495057; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
+  }
+  .conv .meio { flex: 1 1 auto; min-width: 0; }
+  .conv .nome { font-weight: 600; font-size: 13px; color: #212529;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .conv .prev { font-size: 12px; color: #6c757d;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .conv .lado { flex: 0 0 auto; text-align: right; }
+  .conv .quando { font-size: 11px; color: #adb5bd; }
+  .conv .badge-pend {
+    display: inline-block; margin-top: 3px; background: #d6336c; color: #fff;
+    border-radius: 10px; padding: 0 6px; font-size: 11px; font-weight: 700;
+  }
+  .at-vazio { padding: 24px; text-align: center; color: #adb5bd; font-size: 13px; }
+
+  /* ── Thread ── */
+  .thread-topo {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px; background: #e9ecef; border-bottom: 1px solid #dee2e6;
+  }
+  .thread-topo button {
+    background: #fff; border: 1px solid #ced4da; border-radius: 4px;
+    padding: 2px 9px; cursor: pointer; font-size: 13px;
+  }
+  .thread-topo .nome { font-weight: 700; font-size: 14px; }
+  .thread-corpo { flex: 1 1 auto; overflow-y: auto; padding: 10px; min-height: 0; }
+  .bolha {
+    max-width: 80%; padding: 7px 10px; border-radius: 10px; margin-bottom: 8px;
+    font-size: 13px; line-height: 1.35; white-space: pre-wrap; word-wrap: break-word;
+  }
+  .bolha.cli { background: #fff; border: 1px solid #dee2e6; }
+  .bolha.nos { background: #d0ebff; margin-left: auto; }
+  .bolha .qd { display: block; font-size: 10px; color: #868e96; margin-top: 3px; }
+  .bolha img { max-width: 100%; border-radius: 6px; margin-top: 4px; }
+  .hidden { display: none !important; }
 </style>
 </head>
 <body>
   <div class="barra-teste">
-    <span class="tag">TESTE</span>
-    <span>Painel de entregas + Atendimento (Chatwoot) lado a lado.</span>
+    <span class="tag">PAINEL</span>
+    <span>Pedidos do dia + Atendimento (Chatwoot via API).</span>
     <button id="btn-arm" type="button" class="bt-arm">▶ LIGAR ALERTAS</button>
     <span id="badge-cw" class="badge-cw" hidden>
       <span id="badge-cw-n">0</span> nova(s) — clique para silenciar
@@ -104,49 +130,56 @@
       <iframe src="{{ url_for('entregas.painel') }}?embed=1"
               title="Painel de entregas"></iframe>
     </div>
-    <div class="divisor" id="divisor"
-         title="Arraste para ajustar a proporção"></div>
+    <div class="divisor" id="divisor" title="Arraste para ajustar a proporção"></div>
+
     <div class="pane" id="pane-chat">
-      {% if chatwoot_url %}
-      <div class="cw-topo">
-        <span class="cw-url" title="{{ chatwoot_url }}">{{ chatwoot_url }}</span>
-        <a href="{{ chatwoot_url }}" target="_blank" rel="noopener"
-           class="cw-botao">abrir em nova aba ↗</a>
+      <div class="at-topo">
+        <span class="titulo"><i></i> Atendimento</span>
+        <span class="filtros">
+          <button type="button" data-status="open" class="on">Abertas</button>
+          <button type="button" data-status="pending">Aguardando</button>
+        </span>
+        <span class="att" id="at-att"></span>
       </div>
-      <div class="cw-wrap">
-        <iframe id="cw-iframe" src="{{ chatwoot_url }}"
-                title="Atendimento (Chatwoot)"
-                allow="clipboard-write; clipboard-read; autoplay"></iframe>
-        <div id="cw-aviso" class="cw-aviso" hidden>
-          <div>
-            <strong>O Chatwoot não carregou aqui dentro.</strong><br>
-            Provavelmente o servidor do Chatwoot está recusando ser embutido
-            (X-Frame-Options/CSP frame-ancestors).<br>
-            Use o botão <em>abrir em nova aba</em> acima pra confirmar que o
-            Chatwoot está no ar — se abrir lá, é só config do servidor dele.
-          </div>
+
+      <!-- Lista de conversas -->
+      <div class="at-corpo" id="at-lista">
+        <div class="at-vazio">Carregando…</div>
+      </div>
+
+      <!-- Thread de uma conversa (escondida até clicar) -->
+      <div class="at-corpo hidden" id="at-thread" style="display:flex;flex-direction:column;">
+        <div class="thread-topo">
+          <button type="button" id="thread-voltar">← Voltar</button>
+          <span class="nome" id="thread-nome"></span>
         </div>
+        <div class="thread-corpo" id="thread-corpo"></div>
       </div>
-      {% else %}
-      <div class="sem-chatwoot">
-        Chatwoot não configurado (variável <code>CHATWOOT_URL</code> vazia).
-      </div>
-      {% endif %}
     </div>
   </div>
 
 <script>
-  // Divisor arrastavel: ajusta a largura do painel da esquerda (20%–80%).
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function tempoRel(epoch) {
+    if (!epoch) return '';
+    var seg = Math.floor(Date.now()/1000 - Number(epoch));
+    if (seg < 60) return 'agora';
+    if (seg < 3600) return Math.floor(seg/60) + 'min';
+    if (seg < 86400) return Math.floor(seg/3600) + 'h';
+    return Math.floor(seg/86400) + 'd';
+  }
+
+  // ── Divisor arrastavel ──
   (function () {
     var split = document.getElementById('split');
     var pane = document.getElementById('pane-painel');
     var divisor = document.getElementById('divisor');
     var arrastando = false;
-
     divisor.addEventListener('mousedown', function (e) {
-      arrastando = true;
-      document.body.classList.add('dragging');
-      e.preventDefault();
+      arrastando = true; document.body.classList.add('dragging'); e.preventDefault();
     });
     window.addEventListener('mousemove', function (e) {
       if (!arrastando) return;
@@ -157,39 +190,106 @@
     });
     window.addEventListener('mouseup', function () {
       if (!arrastando) return;
-      arrastando = false;
-      document.body.classList.remove('dragging');
+      arrastando = false; document.body.classList.remove('dragging');
     });
   })();
 
-  // Detector: se o iframe do Chatwoot nao disparar `load` em 5s, mostra aviso.
-  // Em cross-origin nao da pra ler o conteudo, mas DA pra saber se carregou —
-  // bloqueio por X-Frame-Options/CSP impede o evento `load` de disparar.
+  // ── Painel de atendimento (lista + thread, read-only) ──
   (function () {
-    var iframe = document.getElementById('cw-iframe');
-    var aviso = document.getElementById('cw-aviso');
-    if (!iframe || !aviso) return;
-    var carregou = false;
-    iframe.addEventListener('load', function () { carregou = true; });
-    setTimeout(function () {
-      if (!carregou) aviso.hidden = false;
-    }, 5000);
+    var statusAtual = 'open';
+    var lista = document.getElementById('at-lista');
+    var thread = document.getElementById('at-thread');
+    var threadCorpo = document.getElementById('thread-corpo');
+    var threadNome = document.getElementById('thread-nome');
+    var att = document.getElementById('at-att');
+
+    document.querySelectorAll('.at-topo .filtros button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        document.querySelectorAll('.at-topo .filtros button')
+          .forEach(function (x) { x.classList.remove('on'); });
+        b.classList.add('on');
+        statusAtual = b.dataset.status;
+        carregarLista();
+      });
+    });
+    document.getElementById('thread-voltar').addEventListener('click', function () {
+      thread.classList.add('hidden');
+      lista.classList.remove('hidden');
+    });
+
+    function carregarLista() {
+      fetch('/entregas/api/atendimento/conversas?status=' + statusAtual,
+            {credentials: 'same-origin'})
+        .then(function (r) { return r.ok ? r.json() : {conversas: []}; })
+        .then(function (data) {
+          var cs = (data && data.conversas) || [];
+          att.textContent = 'atualizado ' + tempoRel(Math.floor(Date.now()/1000));
+          if (!cs.length) {
+            lista.innerHTML = '<div class="at-vazio">Nenhuma conversa ' +
+              (statusAtual === 'pending' ? 'aguardando' : 'aberta') + ' agora.</div>';
+            return;
+          }
+          lista.innerHTML = cs.map(function (c) {
+            var ini = (c.contato || '?').trim().charAt(0).toUpperCase();
+            var pend = c.status === 'pending'
+              ? '<span class="badge-pend">aguardando</span>' : '';
+            return '<div class="conv" data-id="' + c.id + '" data-nome="' +
+              esc(c.contato) + '">' +
+              '<div class="av">' + esc(ini) + '</div>' +
+              '<div class="meio"><div class="nome">' + esc(c.contato) + '</div>' +
+              '<div class="prev">' + esc(c.preview || '(sem mensagem)') + '</div></div>' +
+              '<div class="lado"><div class="quando">' + tempoRel(c.ultima_em) + '</div>' +
+              pend + '</div></div>';
+          }).join('');
+          lista.querySelectorAll('.conv').forEach(function (el) {
+            el.addEventListener('click', function () {
+              abrirThread(el.dataset.id, el.dataset.nome);
+            });
+          });
+        })
+        .catch(function () { /* rede: mantem o que tinha */ });
+    }
+
+    function abrirThread(id, nome) {
+      threadNome.textContent = nome || ('Conversa ' + id);
+      threadCorpo.innerHTML = '<div class="at-vazio">Carregando…</div>';
+      lista.classList.add('hidden');
+      thread.classList.remove('hidden');
+      fetch('/entregas/api/atendimento/conversa/' + id, {credentials: 'same-origin'})
+        .then(function (r) { return r.ok ? r.json() : {mensagens: []}; })
+        .then(function (data) {
+          var ms = (data && data.mensagens) || [];
+          if (!ms.length) {
+            threadCorpo.innerHTML = '<div class="at-vazio">Sem mensagens.</div>';
+            return;
+          }
+          threadCorpo.innerHTML = ms.map(function (m) {
+            var cls = m.role === 'user' ? 'cli' : 'nos';
+            var quem = m.role === 'user' ? esc(nome || 'Cliente') : 'Nós';
+            var imgs = (m.imagens || []).map(function (u) {
+              return '<img src="' + esc(u) + '" alt="anexo">';
+            }).join('');
+            return '<div class="bolha ' + cls + '">' + esc(m.content) + imgs +
+              '<span class="qd">' + quem + '</span></div>';
+          }).join('');
+          threadCorpo.scrollTop = threadCorpo.scrollHeight;
+        })
+        .catch(function () {
+          threadCorpo.innerHTML = '<div class="at-vazio">Erro ao carregar.</div>';
+        });
+    }
+
+    carregarLista();
+    // Atualiza a lista a cada 20s, mas SO quando a thread nao esta aberta
+    // (pra nao puxar o tapete de quem esta lendo uma conversa).
+    setInterval(function () {
+      if (thread.classList.contains('hidden')) carregarLista();
+    }, 20000);
   })();
 
-  // ── Klaxon de nova conversa no Chatwoot ──────────────────
-  // Polling de /entregas/api/painel-testes/chatwoot-pending a cada 20s.
-  // Mantem um Set de IDs ja vistos; ID NOVO = dispara klaxon (mesmo som do
-  // vigia, copiado do painel.html). Silencia ao clicar no badge OU ao
-  // confirmar que o ID nao esta mais em pending (atendente pegou).
-  //
-  // Baseline: a 1a chamada NAO toca alarme — so registra os IDs ja existentes
-  // como "vistos". Senao toda recarga da pagina dispararia o klaxon pelo que
-  // ja estava la antes.
+  // ── Klaxon de nova conversa (pending) ──
   (function () {
-    var armado = false;
-    var audioCtx = null;
-    var vistos = null;          // Set de IDs ja conhecidos; null = baseline pendente
-    var klaxonTimer = null;
+    var armado = false, audioCtx = null, vistos = null, klaxonTimer = null;
     var btnArm = document.getElementById('btn-arm');
     var badge = document.getElementById('badge-cw');
     var badgeN = document.getElementById('badge-cw-n');
@@ -208,19 +308,8 @@
         osc.start(t); osc.stop(t + 0.24);
       });
     }
-    function ligarKlaxon() {
-      if (klaxonTimer) return;
-      klaxon();
-      klaxonTimer = setInterval(klaxon, 1600);
-    }
-    function desligarKlaxon() {
-      if (klaxonTimer) { clearInterval(klaxonTimer); klaxonTimer = null; }
-    }
-
-    function mostrarBadge(n) {
-      badgeN.textContent = n;
-      badge.hidden = (n <= 0);
-    }
+    function ligarKlaxon() { if (!klaxonTimer) { klaxon(); klaxonTimer = setInterval(klaxon, 1600); } }
+    function desligarKlaxon() { if (klaxonTimer) { clearInterval(klaxonTimer); klaxonTimer = null; } }
 
     btnArm.addEventListener('click', function () {
       try {
@@ -230,14 +319,9 @@
       armado = true;
       btnArm.textContent = '✓ alertas ligados';
       btnArm.classList.add('armado');
-      poll();  // chama imediato pra estabelecer baseline
+      poll();
     });
-
-    // Silenciar manualmente (atendente vai responder, nao precisa mais do som).
-    badge.addEventListener('click', function () {
-      desligarKlaxon();
-      badge.hidden = true;
-    });
+    badge.addEventListener('click', function () { desligarKlaxon(); badge.hidden = true; });
 
     function poll() {
       fetch('{{ url_for("entregas.api_painel_testes_chatwoot_pending") }}',
@@ -245,23 +329,15 @@
         .then(function (r) { return r.ok ? r.json() : {ids: []}; })
         .then(function (data) {
           var ids = (data && data.ids) || [];
-          if (vistos === null) {
-            // Baseline: 1a chamada nao toca alarme.
-            vistos = new Set(ids);
-            return;
-          }
+          if (vistos === null) { vistos = new Set(ids); return; }
           var novos = ids.filter(function (id) { return !vistos.has(id); });
           ids.forEach(function (id) { vistos.add(id); });
           if (novos.length > 0 && armado) {
-            mostrarBadge(novos.length);
-            ligarKlaxon();
+            badgeN.textContent = novos.length; badge.hidden = false; ligarKlaxon();
           }
         })
-        .catch(function () { /* erro de rede: silencioso, tenta de novo */ });
+        .catch(function () {});
     }
-
-    // Polling a cada 20s (mesma cadencia do api_painel). Comeca so depois
-    // de o user clicar em LIGAR ALERTAS (senao roda em background sem som).
     setInterval(function () { if (armado) poll(); }, 20000);
   })();
 </script>
