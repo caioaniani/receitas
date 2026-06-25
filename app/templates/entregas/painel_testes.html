@@ -327,10 +327,13 @@
     }
 
     function abrirThread(id, nome) {
+      convAtual = id;
       threadNome.textContent = nome || ('Conversa ' + id);
       threadCorpo.innerHTML = '<div class="at-vazio">Carregando…</div>';
       lista.classList.add('hidden');
       thread.classList.remove('hidden');
+      compose.value = '';
+      compose.style.height = 'auto';
       fetch('/entregas/api/atendimento/conversa/' + id, {credentials: 'same-origin'})
         .then(function (r) { return r.ok ? r.json() : {mensagens: []}; })
         .then(function (data) {
