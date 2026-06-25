@@ -208,6 +208,52 @@ def precos():
                            cestas=cestas)
 
 
+_PRECOS_CAMPOS = {
+    'receita': {'preco_loja', 'preco_site', 'preco_venda', 'preco_interno'},
+    'produto': {'preco_loja', 'preco_site', 'preco_atacado', 'preco_interno'},
+}
+
+
+@receitas_bp.route('/precos/salvar-campo', methods=['POST'])
+@login_required
+@owner_required
+def precos_salvar_campo():
+    """Auto-save de UM campo de preço (AJAX). JSON: {tipo, id, campo, valor}.
+
+    Usado pela tela de preços em massa pra salvar assim que o usuário sai do
+    campo — sem depender do botão "Salvar todos". `valor` vazio => NULL.
+    Owner-only (dinheiro), mesmo gate da tela.
+    """
+    dados = request.get_json(silent=True) or {}
+    tipo = dados.get('tipo')
+    campo = dados.get('campo')
+    if tipo not in _PRECOS_CAMPOS or campo not in _PRECOS_CAMPOS[tipo]:
+        return jsonify(ok=False, erro='campo inválido'), 400
+    try:
+        obj_id = int(dados.get('id'))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, erro='id inválido'), 400
+
+    obj = (Receita if tipo == 'receita' else Produto).query.get(obj_id)
+    if not obj:
+        return jsonify(ok=False, erro='item não encontrado'), 404
+
+    raw = dados.get('valor')
+    if raw is None or str(raw).strip() == '':
+        setattr(obj, campo, None)
+        valor_fmt = None
+    else:
+        val = parse_float_br(str(raw))
+        if val is None:
+            return jsonify(ok=False, erro='valor inválido'), 400
+        if val < 0 or val > 9999:
+            return jsonify(ok=False, erro='fora da faixa (0 a 9999)'), 400
+        setattr(obj, campo, val)
+        valor_fmt = f'{val:.2f}'
+    db.session.commit()
+    return jsonify(ok=True, valor=valor_fmt)
+
+
 @receitas_bp.route('/reaproveitavel', methods=['GET', 'POST'])
 @login_required
 @admin_required
