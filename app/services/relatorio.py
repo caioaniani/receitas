@@ -241,6 +241,10 @@ def gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item,
     pdf.set_font('Helvetica', '', 9)
     pdf.cell(0, 5, f'Periodo: {de.strftime("%d/%m/%Y")} a {ate.strftime("%d/%m/%Y")}',
              align='C', new_x='LMARGIN', new_y='NEXT')
+    pdf.set_font('Helvetica', 'I', 8)
+    pdf.cell(0, 4, 'Valores em preco INTERNO (transferencia loja-industria) - '
+             'nao e balcao/site/atacado.',
+             align='C', new_x='LMARGIN', new_y='NEXT')
     pdf.ln(3)
 
     pdf.set_font('Helvetica', 'B', 10)
