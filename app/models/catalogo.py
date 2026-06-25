@@ -222,6 +222,7 @@ class Produto(db.Model):
             'preco_atacado': self.preco_atacado,
             'preco_loja': self.preco_loja,
             'preco_site': self.preco_site,
+            'preco_interno': self.preco_interno,
             'custo_direto': self.custo_direto,
             'custo_embalagem': self.custo_embalagem or 0,
             'modo_preparo': self.modo_preparo or '',
