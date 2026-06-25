@@ -223,3 +223,177 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True):
     }
     _CACHE[cache_key] = {'t': time.time(), 'data': resultado}
     return resultado
+
+
+# Dias da semana abreviados em PT-BR (Monday=0 .. Sunday=6, igual weekday()).
+_DOW_PT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+
+
+def grade_loja_dia(receita_id, horizonte_dias=7, janela_semanas=6):
+    """Grade loja x dia de UMA receita: quanto cada loja recebe em cada dia do
+    horizonte. Detalha o que o balanco resume na linha da receita.
+
+    Duas camadas por celula (loja, dia):
+
+    - **firme**: pedidos REAIS (PedidoLoja ainda nao baixados, mesma regra do
+      `comprometido` do balanco) com `data_entrega` naquele dia. Exato — e o
+      que a loja JA pediu, com data certa.
+    - **estimado**: projecao do `previsto` do balanco, decomposta por dia e por
+      loja. O previsto diario (mesma formula de `balanco_industria`: media do
+      dia-da-semana, fallback media diaria) e rateado entre as lojas
+      OPERACIONAIS pela participacao historica de cada uma naquele
+      dia-da-semana (fallback: participacao geral). E ESTIMATIVA — nao ha
+      pedido por tras; serve pra antecipar de onde a demanda ainda-nao-pedida
+      tende a vir.
+
+    Decomposicao top-down: a soma do `estimado` de todas as lojas num dia bate
+    com o `previsto` daquele dia (a menos de arredondamento por celula). A
+    grade NAO inventa demanda alem da que o balanco ja projeta.
+
+    Lista TODAS as lojas operacionais como linhas (mesmo zeradas) — mesma UX do
+    `breakdown_comprometido`: o usuario confirma que o motor olhou cada loja.
+
+    Retorna dict (ou None se a receita nao existir):
+        receita_id, receita_nome, horizonte_dias, janela_semanas, hoje,
+        tem_historico,
+        dias: [{data, label, dow}]                       # colunas
+        lojas: [{loja_id, loja_nome, celulas: [{data, firme, estimado}],
+                 total_firme, total_estimado}]           # linhas
+        totais_dia: [{data, label, firme, estimado}]
+        total_firme, total_estimado.
+    """
+    horizonte_dias = max(1, min(int(horizonte_dias or 7), 14))
+    janela_semanas = max(1, min(int(janela_semanas or 6), 26))
+
+    rec = Receita.query.get(receita_id)
+    if rec is None:
+        return None
+
+    hoje_d = hoje()
+    horizonte_fim = hoje_d + timedelta(days=horizonte_dias - 1)
+    hist_ini = hoje_d - timedelta(days=7 * janela_semanas)
+    hist_fim = hoje_d - timedelta(days=1)
+    dias_futuros = [hoje_d + timedelta(days=i) for i in range(horizonte_dias)]
+    dias_calendario_janela = 7 * janela_semanas
+
+    lojas_op = (Loja.query
+                .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
+                .order_by(Loja.nome).all())
+
+    # 1. Firme: pedidos nao baixados desta receita, por (loja, data_entrega).
+    firme = defaultdict(lambda: defaultdict(int))   # loja_id -> data -> qtd
+    rows = (db.session.query(PedidoLoja.loja_id, PedidoLoja.data_entrega,
+                             PedidoItem.quantidade)
+            .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
+            .filter(PedidoItem.receita_id == receita_id,
+                    PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
+                    PedidoLoja.data_entrega >= hoje_d,
+                    PedidoLoja.data_entrega <= horizonte_fim)
+            .all())
+    for loja_id, data_ent, qtd in rows:
+        if data_ent is None:
+            continue
+        firme[loja_id][data_ent] += int(qtd or 0)
+
+    # 2. Historico desta receita: por (loja, dow), por dow global e por loja
+    #    total. Base da projecao diaria E do rateio por loja. Exclui cancelado.
+    soma_loja_dow = defaultdict(lambda: defaultdict(int))  # loja -> dow -> q
+    datas_dow = defaultdict(set)                           # dow -> {datas}
+    soma_dow = defaultdict(int)                            # dow -> q (global)
+    soma_loja_total = defaultdict(int)                     # loja -> q
+    soma_total = 0
+    datas_total = set()
+    hist_rows = (db.session.query(PedidoLoja.loja_id, PedidoLoja.data_entrega,
+                                  PedidoItem.quantidade)
+                 .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
+                 .filter(PedidoItem.receita_id == receita_id,
+                         PedidoLoja.status != 'cancelado',
+                         PedidoLoja.data_entrega >= hist_ini,
+                         PedidoLoja.data_entrega <= hist_fim)
+                 .all())
+    for loja_id, data_ent, qtd in hist_rows:
+        if data_ent is None:
+            continue
+        dow = data_ent.weekday()
+        q = int(qtd or 0)
+        soma_loja_dow[loja_id][dow] += q
+        datas_dow[dow].add(data_ent)
+        soma_dow[dow] += q
+        soma_loja_total[loja_id] += q
+        soma_total += q
+        datas_total.add(data_ent)
+
+    # 3. Estimado por (loja, dia). Previsto diario igual ao do balanco; rateio
+    #    normalizado entre as lojas OPERACIONAIS pra a grade fechar no previsto
+    #    (demanda de loja desativada/Industria nao fica orfa — redistribui
+    #    proporcional entre as operacionais de hoje).
+    soma_op_total = sum(soma_loja_total.get(l.id, 0) for l in lojas_op)
+    estimado = defaultdict(lambda: defaultdict(float))  # loja_id -> data -> q
+    for d in dias_futuros:
+        dow = d.weekday()
+        datas = datas_dow.get(dow)
+        if datas and len(datas) >= _MIN_OCORRENCIAS_DOW:
+            previsto_dia = soma_dow[dow] / len(datas)
+        elif soma_total:
+            previsto_dia = soma_total / dias_calendario_janela
+        else:
+            previsto_dia = 0.0
+        if previsto_dia <= 0:
+            continue
+        base_dow_op = sum(soma_loja_dow.get(l.id, {}).get(dow, 0)
+                          for l in lojas_op)
+        for loja in lojas_op:
+            if base_dow_op:
+                share = soma_loja_dow.get(loja.id, {}).get(dow, 0) / base_dow_op
+            elif soma_op_total:
+                share = soma_loja_total.get(loja.id, 0) / soma_op_total
+            else:
+                share = 0.0
+            if share:
+                estimado[loja.id][d] = previsto_dia * share
+
+    # 4. Monta linhas (lojas) e colunas (dias). Totais somados das celulas JA
+    #    arredondadas, pra o que o usuario ve fechar na conta.
+    dias_out = [{'data': d.isoformat(),
+                 'label': '%s %s' % (_DOW_PT[d.weekday()], d.strftime('%d/%m')),
+                 'dow': d.weekday()} for d in dias_futuros]
+
+    lojas_out = []
+    for loja in lojas_op:
+        celulas = []
+        tot_f = tot_e = 0
+        for d in dias_futuros:
+            f = int(firme.get(loja.id, {}).get(d, 0))
+            e = int(round(estimado.get(loja.id, {}).get(d, 0.0)))
+            celulas.append({'data': d.isoformat(), 'firme': f, 'estimado': e})
+            tot_f += f
+            tot_e += e
+        lojas_out.append({
+            'loja_id': loja.id, 'loja_nome': loja.nome,
+            'celulas': celulas, 'total_firme': tot_f, 'total_estimado': tot_e,
+        })
+
+    # Ordena: maior demanda (firme + estimado) primeiro, depois alfabetico.
+    lojas_out.sort(key=lambda x: (-(x['total_firme'] + x['total_estimado']),
+                                  x['loja_nome']))
+
+    totais_dia = []
+    for i, d in enumerate(dias_futuros):
+        f = sum(l['celulas'][i]['firme'] for l in lojas_out)
+        e = sum(l['celulas'][i]['estimado'] for l in lojas_out)
+        totais_dia.append({'data': d.isoformat(), 'label': dias_out[i]['label'],
+                           'firme': f, 'estimado': e})
+
+    return {
+        'receita_id': receita_id,
+        'receita_nome': rec.nome,
+        'horizonte_dias': horizonte_dias,
+        'janela_semanas': janela_semanas,
+        'hoje': hoje_d.isoformat(),
+        'tem_historico': bool(datas_total),
+        'dias': dias_out,
+        'lojas': lojas_out,
+        'totais_dia': totais_dia,
+        'total_firme': sum(t['firme'] for t in totais_dia),
+        'total_estimado': sum(t['estimado'] for t in totais_dia),
+    }
