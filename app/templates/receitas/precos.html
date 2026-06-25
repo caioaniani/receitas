@@ -213,6 +213,7 @@
                 {% for p in lista %}
                     <tr data-categoria="p:{{ p.categoria or 'Outros' }}" data-nome="{{ p.nome|lower }}">
                         <td>{{ p.nome }}</td>
+                        {{ custo_cell(p.custo_unit) }}
                         <td>
                             <input type="text" name="preco_loja_p{{ p.id }}"
                                    value="{{ '%.2f'|format(p.preco_loja) if p.preco_loja is not none else '' }}"
