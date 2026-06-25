@@ -1439,6 +1439,13 @@ def interpretar(prompt_text, user, historico=None, images=None,
         },
     }
 
+    # Registro de custo: separa copilot do Slack (Sonnet) do WhatsApp do dono
+    # (Opus) — mesmo motor, canais e modelos distintos.
+    _canal_uso = 'whatsapp' if apenas_leitura else 'slack'
+    from app.services import uso_ia
+    uso_ia.registrar(f'copilot_{_canal_uso}', modelo or MODELO_DEFAULT,
+                     response.usage, canal=_canal_uso)
+
     if tool_call and tool_name:
         # Enriquece params com info do banco (matches de produto/MP)
         params = _enriquecer_params(tool_name, tool_call, user)
