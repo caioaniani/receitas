@@ -56,6 +56,16 @@
                 </select>
             </div>
             <div class="col">
+                <label class="form-label small text-muted" title="Quantos dias a receita leva pra ficar pronta. Ex: pão de fermentação longa = 2 (48h). O plano de produção do dia já produz com essa antecedência.">
+                    Produção (dias até pronto)
+                </label>
+                <input type="number" name="dias_producao"
+                       value="{{ receita.dias_producao if receita.dias_producao else 0 }}"
+                       step="1" min="0" max="14"
+                       class="form-control form-control-sm input-blue"
+                       placeholder="0">
+            </div>
+            <div class="col">
                 <label class="form-label small text-muted">Preco Atacado (R$)</label>
                 <input type="number" name="preco_venda" value="{{ '%.2f' % receita.preco_venda if receita.preco_venda else '' }}"
                        step="0.01" min="0" class="form-control form-control-sm input-blue" id="preco-venda">
