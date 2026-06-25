@@ -203,6 +203,32 @@ def painel_testes():
     return resp
 
 
+@entregas_bp.route('/api/painel-testes/chatwoot-pending')
+@login_required
+def api_painel_testes_chatwoot_pending():
+    """IDs das conversas em `pending` no Chatwoot (atendente ainda nao
+    pegou). O frontend mantem um Set de IDs ja vistos; quando aparece um ID
+    novo, dispara o klaxon (mesmo som do vigia). `min_minutos=0` pega tudo
+    desde 0s — a funcao existente do vigia (`listar_conversas_paradas`) ja
+    aceita esse parametro.
+
+    Usa o token de USUARIO (com fallback pro bot). CLAUDE.md trava: token de
+    Agent Bot NAO pode listar conversas (401 = lista vazia silenciosa).
+
+    Retorna {ids: [int], count: int}. Em erro/desconfig, {ids: [], count: 0}
+    — o frontend trata como "nenhuma pending" (nao falsifica klaxon)."""
+    from app.services import chatwoot as cw_svc
+    try:
+        paradas = cw_svc.listar_conversas_paradas(
+            min_minutos=0, status='pending', limite=100)
+        ids = [p['id'] for p in paradas if p.get('id') is not None]
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception('painel-testes: chatwoot pending falhou')
+        ids = []
+    from flask import jsonify
+    return jsonify({'ids': ids, 'count': len(ids)})
+
+
 @entregas_bp.route('/api/painel')
 @login_required
 def api_painel():
