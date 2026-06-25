@@ -629,3 +629,36 @@ class LalamoveSaldo(db.Model):
     moeda = db.Column(db.String(8), default='BRL')
     payload_json = db.Column(db.Text)
     atualizado_em = db.Column(db.DateTime, default=agora)
+
+
+class UsoIA(db.Model):
+    """Uso/custo de CADA chamada de IA (Anthropic), rotulada por funcao do app.
+
+    Instrumentacao adicionada 25/06/2026 — antes NADA registrava tokens, e o
+    gasto por funcao (vigia/auditor/bot/OCR/copilot...) era irrecuperavel. O
+    registro e best-effort e em SESSAO ISOLADA (ver `app/services/uso_ia.py`)
+    pra nunca contaminar a transacao de negocio do chamador nem quebrar a
+    chamada principal.
+
+    Tabela NOVA — criada por `db.create_all()` (checkfirst) no startup, sem
+    ALTER legado. `custo_usd` e Numeric porque e dinheiro (regra do CLAUDE.md),
+    calculado no registro a partir dos tokens + tabela de precos do servico.
+    """
+    __tablename__ = 'uso_ia'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # Ex: 'vigia', 'auditor', 'bot_atendimento', 'followup', 'copilot',
+    # 'ocr_nf', 'ocr_cupom', 'seo'. Index pra agregar rapido por funcao.
+    funcao = db.Column(db.String(40), nullable=False, index=True)
+    modelo = db.Column(db.String(60))
+    # 'slack' | 'whatsapp' — separa o copilot (mesmo motor, canais distintos).
+    canal = db.Column(db.String(20))
+    input_tokens = db.Column(db.Integer, default=0)
+    output_tokens = db.Column(db.Integer, default=0)
+    cache_read_tokens = db.Column(db.Integer, default=0)
+    cache_create_tokens = db.Column(db.Integer, default=0)
+    custo_usd = db.Column(db.Numeric(10, 6))  # dinheiro = Numeric (CLAUDE.md)
+    criado_em = db.Column(db.DateTime, default=agora, index=True)
+
+    def __repr__(self):
+        return f'<UsoIA {self.funcao} {self.modelo} ${self.custo_usd}>'
