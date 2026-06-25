@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}Lista de Compras — {{ plano.nome }}{% endblock %}
+{% block title %}Ordem de Compra — {{ plano.nome }}{% endblock %}
 
 {% block content %}
 <style>
@@ -8,17 +8,19 @@
     .sidebar, .mobile-header, .legenda-cores, .no-print { display: none !important; }
     .main-content { margin: 0; padding: 10px; }
 }
+.oc-forn-titulo { background: #f1f3f5; font-weight: 700; }
+.oc-comprar { color: #b02a37; font-weight: 700; }
 </style>
 
 <div class="no-print">
 {{ ui.breadcrumbs([
     ('Plano de Produção', url_for('producao.lista')),
     (plano.nome, url_for('producao.detalhe', id=plano.id)),
-    ('Lista de Compras', None),
+    ('Ordem de Compra', None),
 ]) }}
 </div>
 <div class="d-flex justify-content-between align-items-center mb-3 no-print">
-    <h1 class="page-title mb-0"><i class="bi bi-cart"></i> Lista de Compras</h1>
+    <h1 class="page-title mb-0"><i class="bi bi-cart-check"></i> Ordem de Compra</h1>
     <div class="d-flex gap-2">
         <button onclick="window.print()" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-printer"></i> Imprimir
@@ -29,35 +31,59 @@
 
 <div class="mb-2">
     <strong>{{ plano.nome }}</strong> — {{ plano.data.strftime('%d/%m/%Y') }}
+    <span class="text-muted small d-block">
+        "A comprar" considera o estoque atual de cada matéria-prima (déficit).
+        Sem controle fino de estoque de MP, costuma coincidir com o necessário.
+    </span>
 </div>
 
+{% if not ordem.fornecedores %}
+<p class="text-muted">Nenhuma matéria-prima — as receitas do plano não têm ficha técnica com MP cadastrada.</p>
+{% else %}
 <div class="table-responsive">
-<table class="table table-sm table-bordered">
-    <thead>
+<table class="table table-sm table-bordered align-middle">
+    <thead class="table-light">
         <tr>
             <th>Matéria-Prima</th>
-            <th class="text-end">Qtd (g)</th>
-            <th class="text-end">Qtd (kg)</th>
-            <th class="text-center" style="width:60px;">OK</th>
+            <th class="text-end">Necessário (g)</th>
+            <th class="text-end">Estoque</th>
+            <th class="text-end">A comprar (g)</th>
+            <th class="text-end">A comprar (kg)</th>
+            <th class="text-end">Custo compra</th>
+            <th class="text-center no-print" style="width:50px;">OK</th>
         </tr>
     </thead>
     <tbody>
-        {% for nome, dados in lista_compras %}
-        <tr>
-            <td>{{ nome }}</td>
-            <td class="text-end">{{ "%.0f"|format(dados.quantidade) }}</td>
-            <td class="text-end">{{ "%.2f"|format(dados.quantidade / 1000) }}</td>
-            <td class="text-center"><input type="checkbox"></td>
+        {% for forn in ordem.fornecedores %}
+        <tr class="oc-forn-titulo">
+            <td colspan="7"><i class="bi bi-truck"></i> {{ forn.nome }}
+                <span class="text-muted fw-normal small">— compra R$ {{ "%.2f"|format(forn.subtotal_compra) }}</span>
+            </td>
         </tr>
+        {% for it in forn.itens %}
+        <tr>
+            <td>{{ it.nome }}</td>
+            <td class="text-end">{{ "%.0f"|format(it.quantidade) }}</td>
+            <td class="text-end">{{ "%.0f"|format(it.estoque_atual) }}</td>
+            <td class="text-end">
+                {% if it.comprar > 0 %}<span class="oc-comprar">{{ "%.0f"|format(it.comprar) }}</span>
+                {% else %}—{% endif %}
+            </td>
+            <td class="text-end">{{ "%.2f"|format(it.comprar / 1000) }}</td>
+            <td class="text-end">R$ {{ "%.2f"|format(it.custo_compra) }}</td>
+            <td class="text-center no-print"><input type="checkbox"></td>
+        </tr>
+        {% endfor %}
         {% endfor %}
     </tbody>
     <tfoot>
         <tr class="fw-bold">
-            <td>Total Estimado</td>
-            <td colspan="2" class="text-end">R$ {{ "%.2f"|format(custo_total) }}</td>
-            <td></td>
+            <td colspan="5" class="text-end">Total a comprar:</td>
+            <td class="text-end">R$ {{ "%.2f"|format(ordem.total_compra) }}</td>
+            <td class="no-print"></td>
         </tr>
     </tfoot>
 </table>
 </div>
+{% endif %}
 {% endblock %}

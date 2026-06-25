@@ -50,6 +50,15 @@
     <strong>entrega</strong> (o lead time de produção é tratado no balanço).
 </div>
 
+<form method="POST" action="{{ url_for('producao.criar_plano_do_deficit') }}" class="mb-3"
+      onsubmit="return confirm('Gerar a ordem de produção do déficit atual (já considerando os pedidos lançados e o lead time de 48h)? Em seguida você vê a ordem de compra de matéria-prima.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="horizonte" value="{{ horizonte }}">
+    <input type="hidden" name="janela" value="{{ janela }}">
+    <button class="btn btn-warning btn-sm"><i class="bi bi-hammer"></i> Gerar ordem de produção + compra</button>
+    <span class="text-muted small ms-1">a partir do déficit atual (já conta os pedidos lançados); leva à ordem de produção e, dela, à ordem de compra de MP.</span>
+</form>
+
 <form method="POST" action="{{ url_for('producao.pedidos_semana_gerar') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
