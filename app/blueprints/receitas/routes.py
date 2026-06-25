@@ -226,13 +226,20 @@ def precos_importar():
     texto = request.form.get('texto', '') if request.method == 'POST' else ''
     plano = None
     if request.method == 'POST' and texto.strip():
-        linhas = parse_lista(texto)
-        plano = classificar(linhas)
+        plano = classificar(parse_lista(texto))
         if request.form.get('confirmar') == '1':
-            res = aplicar(plano)
+            # Le os indices marcados pelo dono na tela de preview.
+            marcados = set()
+            for v in request.form.getlist('marcar'):
+                try:
+                    marcados.add(int(v))
+                except (TypeError, ValueError):
+                    continue
+            res = aplicar(plano, marcados)
             flash(
-                f'Importacao OK: {res["atualizados"]} atualizado(s), '
-                f'{res["criados"]} criado(s), {res["ignorados"]} ignorado(s).',
+                f'Importação OK: {res["atualizados"]} atualizado(s), '
+                f'{res["criados"]} criado(s), {res["desmarcados"]} '
+                f'desmarcado(s) (não aplicado).',
                 'success')
             return redirect(url_for('receitas.precos'))
     return render_template('receitas/precos_importar.html',
