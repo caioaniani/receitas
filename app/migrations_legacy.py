@@ -149,6 +149,7 @@ def _migrate_postgres(app):
             'perda_percentual': 'ALTER TABLE receita ADD COLUMN perda_percentual REAL DEFAULT 0',
             'preco_loja': 'ALTER TABLE receita ADD COLUMN preco_loja REAL',
             'preco_site': 'ALTER TABLE receita ADD COLUMN preco_site REAL',
+            'preco_interno': 'ALTER TABLE receita ADD COLUMN preco_interno REAL',
             'custo_embalagem': 'ALTER TABLE receita ADD COLUMN custo_embalagem REAL DEFAULT 0',
             'modo_preparo': 'ALTER TABLE receita ADD COLUMN modo_preparo TEXT',
             'observacao': 'ALTER TABLE receita ADD COLUMN observacao TEXT',
