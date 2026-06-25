@@ -909,6 +909,10 @@ def relatorio():
     ate_str = request.args.get('ate', '')
     formato = request.args.get('formato', 'html')
     incluir_fotos = request.args.get('fotos') == '1'
+    # Etapa das fotos do QR no PDF: 'saida' | 'entrega' | None (ambas).
+    etapa_foto = request.args.get('etapa_foto') or None
+    if etapa_foto not in ('saida', 'entrega'):
+        etapa_foto = None
 
     try:
         de = datetime.strptime(de_str, '%Y-%m-%d').date()
