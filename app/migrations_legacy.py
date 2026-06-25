@@ -1257,6 +1257,9 @@ def _migrate_sqlite(app):
     if 'arquivada_por_id' not in colunas:
         cursor.execute(
             "ALTER TABLE receita ADD COLUMN arquivada_por_id INTEGER REFERENCES usuario(id)")
+    if 'dias_producao' not in colunas:
+        cursor.execute(
+            "ALTER TABLE receita ADD COLUMN dias_producao INTEGER NOT NULL DEFAULT 0")
 
     cursor.execute("PRAGMA table_info(conta_pagar_item_map)")
     cols_cpim = [row[1] for row in cursor.fetchall()]
