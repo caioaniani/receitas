@@ -2,6 +2,7 @@
 
 import io
 import logging
+import math
 
 import requests
 from openpyxl import Workbook
@@ -231,10 +232,135 @@ def gerar_xlsx_pedidos(loja_nome, de, ate, pedidos, totais, por_item):
     return buf
 
 
-def gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item,
-                      incluir_fotos=False, etapa_foto=None):
+# ── Layout do relatorio PDF: manter cada pedido inteiro numa pagina ──────
+#
+# Bug (25/06/2026, /pedidos/relatorio?formato=pdf, visto na Loja Nebraska):
+# a tabela de itens de um pedido rachava entre paginas — o ultimo item e o
+# "Subtotal do pedido" caiam orfaos no topo da pagina seguinte. Causa: as
+# quebras eram decididas por-LINHA (pdf.get_y() > 275), entao o bloco fluia
+# ate o fim da pagina e quebrava onde calhasse. Fix: estimar a altura do
+# bloco do pedido (cabecalho + itens + subtotal [+ fotos]) ANTES de desenhar
+# e empurrar o pedido inteiro pra proxima pagina quando nao cabe.
+#
+# Alturas (mm) das celulas desenhadas em _render_pedido — manter em sincronia
+# com o desenho abaixo.
+_H_HEADER_PEDIDO = 5
+_H_LINHA_ITEM = 4
+_H_SUBTOTAL = 5
+_H_FOLGA_PEDIDO = 2
+_H_TITULO_SECAO = 6
+
+
+def _altura_bloco_pedido(n_linhas):
+    """Altura estimada (mm) do bloco de texto de um pedido: cabecalho do
+    pedido + uma linha por item + linha de subtotal + folga final."""
+    return (_H_HEADER_PEDIDO + n_linhas * _H_LINHA_ITEM
+            + _H_SUBTOTAL + _H_FOLGA_PEDIDO)
+
+
+def _altura_grade_fotos(n, com_legenda):
+    """Altura estimada (mm) de uma grade de fotos como _render_fotos a
+    desenha: titulo + ceil(n/por_linha) linhas de miniaturas. Espelha a
+    geometria de _render_fotos (altura=35, por_linha=4, margem=2) pra a
+    decisao de quebra manter as fotos junto do pedido quando cabem."""
+    if not n:
+        return 0.0
+    bloco = 35 + (4 if com_legenda else 0)  # miniatura + legenda opcional
+    linhas = math.ceil(n / 4)
+    return 4 + linhas * (bloco + 2)  # 4 = titulo; 2 = margem entre linhas
+
+
+def _render_pedido(pdf, p_info, incluir_fotos, conf, limite, altura_pagina,
+                   titulo_secao=None):
+    """Desenha o bloco de um pedido (cabecalho + itens + subtotal + fotos),
+    decidindo a quebra de pagina ANTES pra nao rachar o pedido entre paginas.
+
+    `titulo_secao`: se setado, imprime esse titulo de secao logo acima do
+    pedido e dentro da mesma decisao de quebra (evita o titulo orfao no
+    rodape quando o 1o pedido pula de pagina).
+
+    Retorna dict com a pagina de inicio do pedido e a pagina do subtotal —
+    usado em teste pra travar que pedidos que cabem numa pagina nao racham
+    (pagina_inicio == pagina_subtotal)."""
+    p = p_info['p']
+    n_fotos = len(p.fotos) + len(conf)
+
+    alt_texto = _altura_bloco_pedido(len(p_info['linhas']))
+    if titulo_secao:
+        alt_texto += _H_TITULO_SECAO
+    alt_fotos = 0.0
+    if incluir_fotos:
+        if p.fotos:
+            alt_fotos += _altura_grade_fotos(len(p.fotos), com_legenda=False)
+        if conf:
+            alt_fotos += _altura_grade_fotos(len(conf), com_legenda=True)
+    alt_total = alt_texto + alt_fotos
+    restante = limite - pdf.get_y()
+
+    # Mantem o pedido junto. Cabe tudo aqui -> fica. Cabe numa pagina limpa
+    # -> pula a pagina (pedido + fotos juntos). Nem numa pagina inteira cabe
+    # (pedido gigante ou muitas fotos) -> garante ao menos o bloco de TEXTO
+    # inteiro e deixa as fotos fluirem (elas ja paginam sozinhas).
+    if alt_total <= restante:
+        pass
+    elif alt_total <= altura_pagina:
+        pdf.add_page()
+    elif alt_texto > restante:
+        pdf.add_page()
+
+    if titulo_secao:
+        pdf.set_font('Helvetica', 'B', 10)
+        pdf.cell(0, _H_TITULO_SECAO, titulo_secao,
+                 new_x='LMARGIN', new_y='NEXT')
+
+    pagina_inicio = pdf.page
+
+    pdf.set_fill_color(235, 235, 235)
+    pdf.set_font('Helvetica', 'B', 9)
+    data_str = p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '-'
+    div_str = '  [DIVERGENCIA]' if p.tem_divergencia else ''
+    fotos_str = (f'  ({n_fotos} foto{"s" if n_fotos != 1 else ""})'
+                 if n_fotos else '')
+    pdf.cell(0, _H_HEADER_PEDIDO,
+             f'Pedido #{p.id}  -  {data_str}{div_str}{fotos_str}',
+             fill=True, border=1, new_x='LMARGIN', new_y='NEXT')
+    pdf.set_font('Helvetica', '', 8)
+    for l in p_info['linhas']:
+        pdf.cell(85, _H_LINHA_ITEM, l['nome'][:48], border='LR')
+        pdf.cell(20, _H_LINHA_ITEM, f'{l["recebido"]}x', border='LR', align='C')
+        pdf.cell(30, _H_LINHA_ITEM, _money(l['preco']), border='LR', align='R')
+        pdf.cell(35, _H_LINHA_ITEM, _money(l['subtotal']), border='LR',
+                 align='R', new_x='LMARGIN', new_y='NEXT')
+    pdf.set_font('Helvetica', 'B', 9)
+    pagina_subtotal = pdf.page
+    pdf.cell(135, _H_SUBTOTAL, 'Subtotal do pedido', border=1, align='R')
+    pdf.cell(35, _H_SUBTOTAL, _money(p_info['subtotal']), border=1, align='R',
+             new_x='LMARGIN', new_y='NEXT')
+
+    if incluir_fotos:
+        if p.fotos:
+            _render_fotos(pdf, list(p.fotos),
+                          titulo='Fotos do recebimento (upload manual)')
+        if conf:
+            _render_fotos(pdf, [f for f, _ in conf],
+                          titulo='Fotos da conferencia por item (QR)',
+                          legendas=[lg for _, lg in conf])
+
+    pdf.ln(_H_FOLGA_PEDIDO)
+    return {'id': p.id, 'pagina_inicio': pagina_inicio,
+            'pagina_subtotal': pagina_subtotal,
+            'n_linhas': len(p_info['linhas'])}
+
+
+def montar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item,
+                       incluir_fotos=False, etapa_foto=None):
+    """Monta o FPDF do relatorio de pedidos. Separado de gerar_ pra teste
+    poder inspecionar `pdf.layout_pedidos` (pagina de inicio/subtotal de cada
+    pedido) e travar que pedidos que cabem numa pagina nao racham."""
     pdf = PadariaPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
+    limite = pdf.h - pdf.b_margin        # y maximo util da pagina (~277mm)
+    altura_pagina = limite - pdf.get_y()  # area util abaixo do cabecalho fixo
 
     pdf.set_font('Helvetica', 'B', 12)
     pdf.cell(0, 7, f'Relatorio de Pedidos - {loja_nome}', align='C', new_x='LMARGIN', new_y='NEXT')
@@ -253,7 +379,8 @@ def gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item,
     pdf.cell(60, 6, f'Divergencias: {totais["divergencias"]}', new_x='LMARGIN', new_y='NEXT')
     pdf.ln(3)
 
-    # Resumo por item
+    # Resumo por item — tabela continua; quebra normal por linha (nao e um
+    # bloco de pedido, entao dividir entre paginas e esperado).
     pdf.set_font('Helvetica', 'B', 10)
     pdf.cell(0, 6, 'Resumo por item', new_x='LMARGIN', new_y='NEXT')
     pdf.set_fill_color(55, 71, 79)
@@ -266,7 +393,7 @@ def gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item,
     pdf.set_text_color(0, 0, 0)
     pdf.set_font('Helvetica', '', 9)
     for nome, d in por_item.items():
-        if pdf.get_y() > 270:
+        if pdf.get_y() > limite - 7:
             pdf.add_page()
         pdf.cell(80, 5, nome[:42], border=1)
         pdf.cell(30, 5, str(d['quantidade']), border=1, align='C')
@@ -274,56 +401,40 @@ def gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item,
         pdf.cell(40, 5, _money(d['valor']), border=1, align='R', new_x='LMARGIN', new_y='NEXT')
     pdf.ln(3)
 
-    # Detalhamento
-    pdf.set_font('Helvetica', 'B', 10)
-    pdf.cell(0, 6, 'Detalhamento por pedido', new_x='LMARGIN', new_y='NEXT')
-
-    for p_info in pedidos:
-        if pdf.get_y() > 255:
-            pdf.add_page()
+    # Detalhamento por pedido — cada pedido fica inteiro numa pagina (o titulo
+    # da secao viaja junto do 1o pedido pra nao ficar orfao no rodape).
+    layout = []
+    for i, p_info in enumerate(pedidos):
         p = p_info['p']
         # Fotos de conferencia (QR) so sao coletadas quando vao ser renderizadas
         # — evita N+1 query no relatorio comum (sem fotos).
         conf = _fotos_conferencia(p, etapa_foto) if incluir_fotos else []
-        n_fotos = len(p.fotos) + len(conf)
-        pdf.set_fill_color(235, 235, 235)
-        pdf.set_font('Helvetica', 'B', 9)
-        data_str = p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '-'
-        div_str = '  [DIVERGENCIA]' if p.tem_divergencia else ''
-        fotos_str = f'  ({n_fotos} foto{"s" if n_fotos != 1 else ""})' if n_fotos else ''
-        pdf.cell(0, 5, f'Pedido #{p.id}  -  {data_str}{div_str}{fotos_str}', fill=True, border=1,
-                 new_x='LMARGIN', new_y='NEXT')
-        pdf.set_font('Helvetica', '', 8)
-        for l in p_info['linhas']:
-            if pdf.get_y() > 275:
-                pdf.add_page()
-            pdf.cell(85, 4, l['nome'][:48], border='LR')
-            pdf.cell(20, 4, f'{l["recebido"]}x', border='LR', align='C')
-            pdf.cell(30, 4, _money(l['preco']), border='LR', align='R')
-            pdf.cell(35, 4, _money(l['subtotal']), border='LR', align='R', new_x='LMARGIN', new_y='NEXT')
-        pdf.set_font('Helvetica', 'B', 9)
-        pdf.cell(135, 5, 'Subtotal do pedido', border=1, align='R')
-        pdf.cell(35, 5, _money(p_info['subtotal']), border=1, align='R', new_x='LMARGIN', new_y='NEXT')
+        titulo = 'Detalhamento por pedido' if i == 0 else None
+        layout.append(_render_pedido(pdf, p_info, incluir_fotos, conf,
+                                     limite, altura_pagina, titulo_secao=titulo))
 
-        if incluir_fotos:
-            if p.fotos:
-                _render_fotos(pdf, list(p.fotos),
-                              titulo='Fotos do recebimento (upload manual)')
-            if conf:
-                _render_fotos(pdf, [f for f, _ in conf],
-                              titulo='Fotos da conferencia por item (QR)',
-                              legendas=[lg for _, lg in conf])
+    if not pedidos:
+        # Sem pedidos, ainda imprime o titulo da secao (consistencia visual).
+        pdf.set_font('Helvetica', 'B', 10)
+        pdf.cell(0, 6, 'Detalhamento por pedido', new_x='LMARGIN', new_y='NEXT')
 
-        pdf.ln(2)
-
-    if pdf.get_y() > 260:
+    if pdf.get_y() > limite - 17:
         pdf.add_page()
     pdf.ln(2)
     pdf.set_font('Helvetica', 'B', 11)
+    pdf.set_fill_color(235, 235, 235)
     pdf.cell(135, 7, 'TOTAL GERAL', border=1, align='R', fill=True)
     pdf.cell(35, 7, _money(totais['valor_total']), border=1, align='R', fill=True,
              new_x='LMARGIN', new_y='NEXT')
 
+    pdf.layout_pedidos = layout
+    return pdf
+
+
+def gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item,
+                      incluir_fotos=False, etapa_foto=None):
+    pdf = montar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item,
+                             incluir_fotos=incluir_fotos, etapa_foto=etapa_foto)
     buf = io.BytesIO()
     pdf.output(buf)
     buf.seek(0)
