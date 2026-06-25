@@ -523,8 +523,8 @@ Responda APENAS com JSON válido neste formato:
 NUNCA inclua texto fora do JSON."""
 
 
-def _chamar_haiku_abandono(api_key, contexto):
-    """Igual ao _chamar_haiku, mas com PROMPT_ABANDONO."""
+def _chamar_modelo_abandono(api_key, contexto):
+    """Igual ao _chamar_modelo, mas com PROMPT_ABANDONO."""
     import anthropic
     client = anthropic.Anthropic(api_key=api_key)
     resp = client.messages.create(
@@ -533,6 +533,8 @@ def _chamar_haiku_abandono(api_key, contexto):
         system=PROMPT_ABANDONO,
         messages=[{'role': 'user', 'content': contexto}],
     )
+    from app.services import uso_ia
+    uso_ia.registrar('vigia', MODELO, resp.usage)
     texto = ''.join(b.text for b in resp.content
                     if getattr(b, 'type', None) == 'text' and b.text).strip()
     if texto.startswith('```'):
@@ -591,7 +593,7 @@ def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_re
             f'Sem resposta ha {minutos_sem_resposta} minutos.\n\n'
             f'CONVERSA:\n{_formatar_historico(historico)}'
         )
-        veredicto = _chamar_haiku_abandono(api_key, contexto)
+        veredicto = _chamar_modelo_abandono(api_key, contexto)
     except Exception as exc:  # noqa: BLE001
         logger.exception('vigia abandono: avaliacao falhou')
         return {'erro': str(exc)}
