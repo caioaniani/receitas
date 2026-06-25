@@ -223,6 +223,13 @@
                                    data-campo="preco_atacado"
                                    inputmode="decimal" autocomplete="off">
                         </td>
+                        <td>
+                            <input type="text" name="preco_interno_p{{ p.id }}"
+                                   value="{{ '%.2f'|format(p.preco_interno) if p.preco_interno is not none else '' }}"
+                                   class="form-control form-control-sm text-end preco-input"
+                                   data-campo="preco_interno"
+                                   inputmode="decimal" autocomplete="off">
+                        </td>
                     </tr>
                 {% endfor %}
                 </tbody>
