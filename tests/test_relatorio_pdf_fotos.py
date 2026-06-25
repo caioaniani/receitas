@@ -102,8 +102,9 @@ def test_foto_bytes_rejeita_html_de_preview_e_cai_no_fallback():
 def test_foto_bytes_normaliza_url_pra_raw():
     """A URL `?dl=0` deve ser convertida pra raw antes do download."""
     jpeg = _jpeg_bytes()
-    foto = SimpleNamespace(id=3, imagem_url='https://www.dropbox.com/s/abc/f.jpg?dl=0',
-                           imagem=None)
+    foto = SimpleNamespace(id=3,
+                           imagem_url='https://www.dropbox.com/s/abc/f.jpg?dl=0',
+                           imagem_storage_path=None, imagem=None)
     with patch('app.services.relatorio.requests.get',
                return_value=_resp(200, jpeg, 'image/jpeg')) as m:
         relatorio._foto_bytes(foto)
@@ -113,10 +114,10 @@ def test_foto_bytes_normaliza_url_pra_raw():
 
 
 def test_foto_bytes_erro_de_rede_nao_quebra():
-    """Timeout/erro no Dropbox: loga e cai no fallback, sem propagar."""
+    """Timeout/erro no shared link: loga e cai no BLOB, sem propagar."""
     blob_legado = _jpeg_bytes()
     foto = SimpleNamespace(id=4, imagem_url='https://dropbox.com/x?raw=1',
-                           imagem=blob_legado)
+                           imagem_storage_path=None, imagem=blob_legado)
     with patch('app.services.relatorio.requests.get',
                side_effect=Exception('timeout')):
         out = relatorio._foto_bytes(foto)
