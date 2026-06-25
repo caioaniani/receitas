@@ -223,6 +223,81 @@ def painel_receita_grade(rid):
                            grade=grade, horizonte=horizonte, janela=janela)
 
 
+@producao_bp.route('/pedidos-semana')
+@login_required
+@admin_required
+def pedidos_semana():
+    """Sugestao de pedidos da semana por loja/dia a partir do historico — a
+    inversao do fluxo: o sistema propoe, a loja nao precisa pedir. Preview
+    editavel; ao gerar cria PedidoLoja em rascunho ('pendente'). **Admin**."""
+    from app.services.previsao_producao import sugerir_pedidos_semana
+
+    try:
+        horizonte = int(request.args.get('horizonte', 7))
+    except ValueError:
+        horizonte = 7
+    horizonte = max(1, min(horizonte, 14))
+
+    try:
+        janela = int(request.args.get('janela', 6))
+    except ValueError:
+        janela = 6
+    janela = max(1, min(janela, 26))
+
+    sugestao = sugerir_pedidos_semana(horizonte_dias=horizonte,
+                                      janela_semanas=janela)
+    return render_template('producao/pedidos_semana.html',
+                           sugestao=sugestao, horizonte=horizonte, janela=janela)
+
+
+@producao_bp.route('/pedidos-semana/gerar', methods=['POST'])
+@login_required
+@admin_required
+def pedidos_semana_gerar():
+    """Cria os pedidos rascunho a partir das quantidades (ajustadas) da tela.
+    Campos do form: 'qtd|<loja_id>|<data_iso>|<receita_id>' = quantidade."""
+    from datetime import date
+
+    from app.services.pedidos_semana import criar_pedidos_rascunho
+
+    agrupado = {}   # (loja_id, data) -> list[{receita_id, qtd}]
+    for chave, valor in request.form.items():
+        if not chave.startswith('qtd|'):
+            continue
+        partes = chave.split('|')
+        if len(partes) != 4:
+            continue
+        _, loja_s, data_s, rid_s = partes
+        try:
+            loja_id = int(loja_s)
+            rid = int(rid_s)
+            qtd = int(valor or 0)
+            data_ent = date.fromisoformat(data_s)
+        except (TypeError, ValueError):
+            continue
+        if qtd <= 0:
+            continue
+        agrupado.setdefault((loja_id, data_ent), []).append(
+            {'receita_id': rid, 'qtd': qtd})
+
+    pedidos = [{'loja_id': k[0], 'data_entrega': k[1], 'itens': v}
+               for k, v in agrupado.items()]
+    res = criar_pedidos_rascunho(pedidos, current_user.id)
+
+    if res['criados']:
+        msg = (f"{res['criados']} pedido(s) rascunho criado(s) "
+               f"({res['itens']} itens). Revise e confirme em Pedidos.")
+        if res['pulados_existentes']:
+            msg += (f" {res['pulados_existentes']} dia(s) pulado(s) — a loja "
+                    "já tinha pedido.")
+        flash(msg, 'success')
+    else:
+        flash('Nenhum pedido criado (sem itens, ou todas as lojas já tinham '
+              'pedido nas datas).', 'info')
+
+    return redirect(url_for('producao.pedidos_semana'))
+
+
 @producao_bp.route('/painel/debug')
 @login_required
 @admin_required
