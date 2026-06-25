@@ -86,13 +86,16 @@ def detalhe(id):
 @login_required
 @producao_required
 def lista_compras(id):
+    """Ordem de compra de MP do plano, agrupada por fornecedor, com o que ha
+    A COMPRAR (deficit) destacado. Print-friendly."""
+    from app.services.producao import ordem_compra_consolidada
+
     plano = PlanejamentoProducao.query.get_or_404(id)
-    itens = [{'receita_id': i.receita_id, 'multiplicador': i.multiplicador} for i in plano.itens]
-    lista = consolidar_lista_compras(itens)
-    lista_ordenada = sorted(lista.items(), key=lambda x: x[0])
-    custo_total = sum(v['custo_estimado'] for v in lista.values())
-    return render_template('producao/lista_compras.html',
-                           plano=plano, lista_compras=lista_ordenada, custo_total=custo_total)
+    itens = [{'receita_id': i.receita_id, 'multiplicador': i.multiplicador}
+             for i in plano.itens]
+    ordem = ordem_compra_consolidada(itens)
+    return render_template('producao/lista_compras.html', plano=plano,
+                           ordem=ordem)
 
 
 @producao_bp.route('/<int:id>/baixar-estoque', methods=['POST'])
