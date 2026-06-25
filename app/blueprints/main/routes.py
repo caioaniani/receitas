@@ -2300,6 +2300,43 @@ def vigia_diag():
     })
 
 
+# Rotulos amigaveis pras funcoes registradas em UsoIA.
+_USO_IA_LABELS = {
+    'bot_atendimento': 'Bot atendimento (Chatwoot)',
+    'vigia': 'Vigia do bot',
+    'auditor': 'Auditor diario',
+    'followup': 'Follow-up pos-handoff',
+    'copilot_slack': 'Copilot (Slack)',
+    'copilot_whatsapp': 'Copilot (WhatsApp do dono)',
+    'ocr_nf': 'OCR Contas a Pagar (NF/boleto)',
+    'ocr_cupom': 'OCR cupom',
+    'seo': 'Descrições SEO',
+}
+
+
+@main_bp.route('/admin/uso-ia')
+@owner_required
+def uso_ia_relatorio():
+    """Custo das chamadas de IA (Anthropic) por funcao, nos ultimos N dias.
+
+    Owner-only. Fonte: tabela UsoIA (app/services/uso_ia.py registra cada
+    chamada). ATENCAO: nao havia registro antes de 25/06/2026 — os numeros so
+    existem a partir do deploy desta instrumentacao. Os primeiros 7 dias ficam
+    parciais ate acumular a janela inteira."""
+    from decimal import Decimal
+
+    from app.services import uso_ia
+    dias = request.args.get('dias', 7, type=int)
+    if dias < 1:
+        dias = 7
+    linhas = uso_ia.resumo(dias)
+    for ln in linhas:
+        ln['label'] = _USO_IA_LABELS.get(ln['funcao'], ln['funcao'])
+    total = sum((ln['custo_usd'] for ln in linhas), Decimal(0))
+    return render_template('admin/uso_ia.html', linhas=linhas, total=total,
+                           dias=dias)
+
+
 @main_bp.route('/admin/auditor/run', methods=['POST'])
 @owner_required
 def auditor_run():
