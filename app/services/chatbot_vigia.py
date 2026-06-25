@@ -162,7 +162,7 @@ def _chamar_modelo(api_key, contexto):
         messages=[{'role': 'user', 'content': contexto}],
     )
     from app.services import uso_ia
-    uso_ia.registrar('vigia', MODELO, resp.usage)
+    uso_ia.registrar('vigia', MODELO, getattr(resp, 'usage', None))
     texto = ''.join(b.text for b in resp.content
                     if getattr(b, 'type', None) == 'text' and b.text).strip()
     # Tolerante a markdown wrappers do tipo ```json ... ```
@@ -534,7 +534,7 @@ def _chamar_modelo_abandono(api_key, contexto):
         messages=[{'role': 'user', 'content': contexto}],
     )
     from app.services import uso_ia
-    uso_ia.registrar('vigia', MODELO, resp.usage)
+    uso_ia.registrar('vigia', MODELO, getattr(resp, 'usage', None))
     texto = ''.join(b.text for b in resp.content
                     if getattr(b, 'type', None) == 'text' and b.text).strip()
     if texto.startswith('```'):
