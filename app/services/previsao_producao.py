@@ -416,3 +416,147 @@ def grade_loja_dia(receita_id, horizonte_dias=7, janela_semanas=6):
         'total_firme': sum(t['firme'] for t in totais_dia),
         'total_estimado': sum(t['estimado'] for t in totais_dia),
     }
+
+
+def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6):
+    """Sugere os pedidos da semana POR loja POR dia de ENTREGA, a partir do
+    historico — a inversao do fluxo: em vez de cada loja pedir, o sistema
+    propoe o pedido e o admin ajusta.
+
+    Datado pela ENTREGA (NAO desloca por lead — lead e da producao, nao do
+    pedido da loja). Pra cada (loja, dia, receita) calcula o estimado =
+    previsto do dia-da-semana rateado pela participacao historica da loja —
+    mesma matematica de `grade_loja_dia`, generalizada pra todas as receitas
+    de uma vez (uma query de historico em vez de uma por receita).
+
+    Marca `ja_tem_pedido` quando a loja JA tem pedido nao-cancelado naquela
+    data: o gerador pula esses (a loja ja pediu — nao duplica). O total_pedidos
+    conta quantos rascunhos seriam criados (loja/dia com item e sem pedido).
+
+    Retorna dict:
+        dias: [{data, label, dow}]                       # colunas (cabecalho)
+        lojas: [{loja_id, loja_nome, dias: [{data, label, ja_tem_pedido,
+                 itens: [{receita_id, nome, qtd}], total}]}]
+        horizonte_dias, janela_semanas, hoje, total_pedidos.
+    """
+    horizonte_dias = max(1, min(int(horizonte_dias or 7), 14))
+    janela_semanas = max(1, min(int(janela_semanas or 6), 26))
+
+    hoje_d = hoje()
+    horizonte_fim = hoje_d + timedelta(days=horizonte_dias - 1)
+    hist_ini = hoje_d - timedelta(days=7 * janela_semanas)
+    hist_fim = hoje_d - timedelta(days=1)
+    dias_futuros = [hoje_d + timedelta(days=i) for i in range(horizonte_dias)]
+    dias_calendario_janela = 7 * janela_semanas
+
+    receitas = {r.id: r for r in Receita.query
+                .filter(Receita.arquivada_em.is_(None)).all()}
+    lojas_op = (Loja.query
+                .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
+                .order_by(Loja.nome).all())
+
+    # Historico por (receita, loja, dow) + agregados. UMA query pra todas as
+    # receitas (mesma logica da grade, mas sem o filtro por receita_id).
+    soma_rld = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    datas_rd = defaultdict(lambda: defaultdict(set))   # rid -> dow -> {datas}
+    soma_rd = defaultdict(lambda: defaultdict(int))    # rid -> dow -> q
+    soma_rl = defaultdict(lambda: defaultdict(int))    # rid -> loja -> q
+    soma_r = defaultdict(int)                           # rid -> q
+    datas_r = defaultdict(set)                          # rid -> {datas}
+    hist_rows = (db.session.query(PedidoItem.receita_id, PedidoLoja.loja_id,
+                                  PedidoLoja.data_entrega, PedidoItem.quantidade)
+                 .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
+                 .filter(PedidoItem.receita_id.isnot(None),
+                         PedidoLoja.status != 'cancelado',
+                         PedidoLoja.data_entrega >= hist_ini,
+                         PedidoLoja.data_entrega <= hist_fim)
+                 .all())
+    for rid, loja_id, data_ent, qtd in hist_rows:
+        if data_ent is None or rid not in receitas:
+            continue
+        dow = data_ent.weekday()
+        q = int(qtd or 0)
+        soma_rld[rid][loja_id][dow] += q
+        datas_rd[rid][dow].add(data_ent)
+        soma_rd[rid][dow] += q
+        soma_rl[rid][loja_id] += q
+        soma_r[rid] += q
+        datas_r[rid].add(data_ent)
+
+    # Pedidos nao-cancelados por (loja, data) no horizonte — onde a loja JA
+    # pediu, nao geramos rascunho (anti-duplicacao).
+    ja_tem = set()
+    for loja_id, data_ent in (db.session.query(
+            PedidoLoja.loja_id, PedidoLoja.data_entrega)
+            .filter(PedidoLoja.status != 'cancelado',
+                    PedidoLoja.data_entrega >= hoje_d,
+                    PedidoLoja.data_entrega <= horizonte_fim)
+            .distinct().all()):
+        if data_ent is not None:
+            ja_tem.add((loja_id, data_ent))
+
+    # sugestao[loja_id][data] = [ {receita_id, nome, qtd} ]
+    soma_op_r = {rid: sum(soma_rl[rid].get(l.id, 0) for l in lojas_op)
+                 for rid in receitas}
+    sugestao = defaultdict(lambda: defaultdict(list))
+    for rid, rec in receitas.items():
+        if not datas_r.get(rid):
+            continue
+        for d in dias_futuros:
+            dow = d.weekday()
+            datas = datas_rd[rid].get(dow)
+            if datas and len(datas) >= _MIN_OCORRENCIAS_DOW:
+                previsto_dia = soma_rd[rid][dow] / len(datas)
+            elif soma_r[rid]:
+                previsto_dia = soma_r[rid] / dias_calendario_janela
+            else:
+                previsto_dia = 0.0
+            if previsto_dia <= 0:
+                continue
+            base_dow_op = sum(soma_rld[rid].get(l.id, {}).get(dow, 0)
+                              for l in lojas_op)
+            for loja in lojas_op:
+                if base_dow_op:
+                    share = (soma_rld[rid].get(loja.id, {}).get(dow, 0)
+                             / base_dow_op)
+                elif soma_op_r[rid]:
+                    share = soma_rl[rid].get(loja.id, 0) / soma_op_r[rid]
+                else:
+                    share = 0.0
+                qtd = int(round(previsto_dia * share))
+                if qtd > 0:
+                    sugestao[loja.id][d].append(
+                        {'receita_id': rid, 'nome': rec.nome, 'qtd': qtd})
+
+    dias_out = [{'data': d.isoformat(),
+                 'label': '%s %s' % (_DOW_PT[d.weekday()], d.strftime('%d/%m')),
+                 'dow': d.weekday()} for d in dias_futuros]
+
+    lojas_out = []
+    total_pedidos = 0
+    for loja in lojas_op:
+        dias_loja = []
+        for d in dias_futuros:
+            itens = sorted(sugestao.get(loja.id, {}).get(d, []),
+                           key=lambda x: x['nome'])
+            tem = (loja.id, d) in ja_tem
+            if itens and not tem:
+                total_pedidos += 1
+            dias_loja.append({
+                'data': d.isoformat(),
+                'label': '%s %s' % (_DOW_PT[d.weekday()], d.strftime('%d/%m')),
+                'ja_tem_pedido': tem,
+                'itens': itens,
+                'total': sum(i['qtd'] for i in itens),
+            })
+        lojas_out.append({'loja_id': loja.id, 'loja_nome': loja.nome,
+                          'dias': dias_loja})
+
+    return {
+        'horizonte_dias': horizonte_dias,
+        'janela_semanas': janela_semanas,
+        'hoje': hoje_d.isoformat(),
+        'dias': dias_out,
+        'lojas': lojas_out,
+        'total_pedidos': total_pedidos,
+    }
