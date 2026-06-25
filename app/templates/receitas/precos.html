@@ -7,18 +7,33 @@
   {%- if valor is not none and valor > 0 %}<span class="small text-muted">R$</span> {{ '%.2f'|format(valor)|replace('.', ',') }}{% else %}<span class="text-muted">—</span>{% endif -%}
 </td>
 {%- endmacro %}
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-2 sticky-top bg-white py-2"
+     style="z-index:20;border-bottom:1px solid #eee;">
     <h1 class="page-title mb-0"><i class="bi bi-tag"></i> Preços em massa</h1>
-    <a href="{{ url_for('receitas.padeiro_lista') }}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+    <div class="d-flex align-items-center gap-2">
+        <span id="save-status" class="badge bg-success-subtle text-success-emphasis"
+              style="font-size:13px;">
+            <i class="bi bi-check-circle"></i> Salva automaticamente
+        </span>
+        <a href="{{ url_for('receitas.padeiro_lista') }}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+    </div>
 </div>
 
 <div class="alert alert-info small mb-3">
-    Edite <strong>preço loja</strong>, <strong>preço site</strong> e <strong>preço venda/atacado</strong>
-    de <strong>receitas</strong>, <strong>produtos simples</strong> e <strong>cestas</strong> de uma vez.
-    O botão <em>aplicar +%</em> em cada categoria multiplica o preço já preenchido.
-    Linhas com campo vazio ficam sem preço (NULL).
-    A coluna <strong>Custo un.</strong> é só leitura (calculada da ficha técnica /
-    componentes) — serve de referência pra definir a margem.
+    <strong>Salva sozinho:</strong> quando você termina de digitar um preço e sai do
+    campo, ele é gravado na hora (o status no topo confirma). Não precisa de botão.
+    <br>
+    O que é cada preço:
+    <ul class="mb-1 mt-1">
+        <li><strong>Loja</strong> — preço de venda no balcão da loja física.</li>
+        <li><strong>Site</strong> — preço no site/e-commerce próprio (vazio = não vende no site).</li>
+        <li><strong>Atacado</strong> — preço de venda B2B: indústria para cliente externo
+            (hotel, restaurante, buffet). <em>No banco a receita chama esse campo de
+            "preço venda"; é o mesmo que "atacado" do produto.</em></li>
+        <li><strong>Interno</strong> — preço de transferência interna (pedido da loja para a indústria).</li>
+    </ul>
+    O botão <em>+%</em> em cada categoria multiplica o preço já preenchido e salva.
+    A coluna <strong>Custo un.</strong> é só leitura (calculada da ficha técnica).
 </div>
 
 <div class="d-flex gap-2 mb-3" id="precos-filtro-tipos">
