@@ -89,6 +89,12 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True):
     receitas = {r.id: r for r in Receita.query
                 .filter(Receita.arquivada_em.is_(None)).all()}
     nomes_loja = {l.id: l.nome for l in Loja.query.all()}
+    # Lead time de producao por receita (dias). 0 = assa no mesmo dia. Desloca
+    # a janela de demanda: "produzir HOJE = entregas em (hoje + lead)". Pra o
+    # pao de 48h (lead=2) nao faltar, o plano de hoje ja olha 2 dias a frente.
+    # Com tudo em 0 (padrao), o balanco e identico ao comportamento anterior.
+    lead = {rid: int(rec.dias_producao or 0) for rid, rec in receitas.items()}
+    max_lead = max(lead.values(), default=0)
     # Lojas OPERACIONAIS (ativas + sem a "Industria"). Usada no breakdown
     # pra listar TODAS as lojas que VAO ser olhadas (mesmo com qtd=0) — sem
     # essa lista o usuario nao consegue distinguir "loja nao pediu essa
