@@ -184,6 +184,158 @@ def test_debug_exige_owner(app, admin_user):
     assert c.get('/entregas/api/atendimento/debug').status_code == 403
 
 
+def _csrf(client):
+    """Pega um CSRF token valido pegando um GET autenticado primeiro."""
+    client.get('/entregas/painel-testes')
+    with client.session_transaction() as s:
+        # Flask-WTF guarda o secret na sessao; gerar o token via app
+        from flask import current_app
+        with current_app.test_request_context():
+            from flask_wtf.csrf import generate_csrf
+            return generate_csrf()
+
+
+# ── POST /enviar ──
+
+
+def test_enviar_chama_servico_painel(app, monkeypatch):
+    """Envia chama enviar_mensagem_painel (token Painel), NAO o bot."""
+    from app.services import chatwoot
+    chamadas = []
+    monkeypatch.setattr(chatwoot, 'enviar_mensagem_painel',
+                        lambda cid, content: chamadas.append((cid, content))
+                        or {'ok': True})
+    monkeypatch.setattr(chatwoot, 'enviar_mensagem',
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            AssertionError('NAO deve usar bot enviar_mensagem')))
+    c = _staff(app)
+    r = c.post('/entregas/api/atendimento/conversa/42/enviar',
+               json={'content': 'oi tudo bem'})
+    assert r.status_code == 200
+    assert r.get_json()['ok'] is True
+    assert chamadas == [(42, 'oi tudo bem')]
+
+
+def test_enviar_vazio_400(app, monkeypatch):
+    from app.services import chatwoot
+    monkeypatch.setattr(chatwoot, 'enviar_mensagem_painel',
+                        lambda cid, content: {'ok': True})
+    c = _staff(app)
+    r = c.post('/entregas/api/atendimento/conversa/1/enviar', json={'content': '  '})
+    assert r.status_code == 400
+    assert r.get_json()['ok'] is False
+
+
+def test_enviar_muito_longo_400(app, monkeypatch):
+    from app.services import chatwoot
+    monkeypatch.setattr(chatwoot, 'enviar_mensagem_painel',
+                        lambda cid, content: {'ok': True})
+    c = _staff(app)
+    r = c.post('/entregas/api/atendimento/conversa/1/enviar',
+               json={'content': 'x' * 5000})
+    assert r.status_code == 400
+
+
+def test_enviar_erro_propaga_502(app, monkeypatch):
+    """Erro no Chatwoot devolve 502 + ok=false (UI mostra, nao silencia)."""
+    from app.services import chatwoot
+    monkeypatch.setattr(chatwoot, 'enviar_mensagem_painel',
+                        lambda cid, content: {'ok': False, 'erro': 'HTTP 401'})
+    c = _staff(app)
+    r = c.post('/entregas/api/atendimento/conversa/1/enviar', json={'content': 'oi'})
+    assert r.status_code == 502
+    j = r.get_json()
+    assert j['ok'] is False
+    assert 'HTTP 401' in j['erro']
+
+
+def test_enviar_exige_login(app):
+    c = app.test_client()
+    r = c.post('/entregas/api/atendimento/conversa/1/enviar', json={'content': 'oi'})
+    assert r.status_code in (301, 302, 401)
+
+
+# ── POST /status ──
+
+
+def test_status_chama_definir_status(app, monkeypatch):
+    from app.services import chatwoot
+    chamadas = []
+    monkeypatch.setattr(chatwoot, 'definir_status',
+                        lambda cid, status, **k: chamadas.append((cid, status))
+                        or {'ok': True})
+    c = _staff(app)
+    for st in ('open', 'pending', 'resolved'):
+        r = c.post('/entregas/api/atendimento/conversa/7/status', json={'status': st})
+        assert r.status_code == 200
+    assert chamadas == [(7, 'open'), (7, 'pending'), (7, 'resolved')]
+
+
+def test_status_invalido_400(app):
+    c = _staff(app)
+    r = c.post('/entregas/api/atendimento/conversa/1/status',
+               json={'status': 'lixo'})
+    assert r.status_code == 400
+
+
+def test_status_erro_propaga(app, monkeypatch):
+    from app.services import chatwoot
+    monkeypatch.setattr(chatwoot, 'definir_status',
+                        lambda cid, status, **k: {'ok': False, 'erro': 'HTTP 500'})
+    c = _staff(app)
+    r = c.post('/entregas/api/atendimento/conversa/1/status',
+               json={'status': 'open'})
+    assert r.status_code == 502
+
+
+# ── enviar_mensagem_painel (servico) ──
+
+
+def test_enviar_mensagem_painel_sem_token_nao_envia(app, monkeypatch):
+    """REGRESSAO: sem CHATWOOT_PAINEL_TOKEN NAO pode usar o bot como fallback
+    (UI tem que falhar, nao confundir autor da mensagem)."""
+    from app.services import chatwoot
+    app.config.pop('CHATWOOT_PAINEL_TOKEN', None)
+    posted = []
+    monkeypatch.setattr(chatwoot.requests, 'post',
+                        lambda *a, **k: posted.append(a) or None)
+    with app.app_context():
+        r = chatwoot.enviar_mensagem_painel(1, 'oi')
+    assert r['ok'] is False
+    assert posted == []
+
+
+def test_enviar_mensagem_painel_usa_token_painel(app, monkeypatch):
+    """O header api_access_token tem que ser o do Painel, nao o do bot."""
+    from app.services import chatwoot
+    app.config['CHATWOOT_URL'] = 'https://atendimento.x.com'
+    app.config['CHATWOOT_ACCOUNT_ID'] = '1'
+    app.config['CHATWOOT_PAINEL_TOKEN'] = 'tok-do-painel'
+    app.config['CHATWOOT_BOT_TOKEN'] = 'tok-do-bot'
+    capturado = {}
+
+    class _R:
+        status_code = 200
+        text = ''
+
+        def json(self):
+            return {}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        capturado['url'] = url
+        capturado['headers'] = headers
+        capturado['json'] = json
+        return _R()
+
+    monkeypatch.setattr(chatwoot.requests, 'post', fake_post)
+    with app.app_context():
+        r = chatwoot.enviar_mensagem_painel(99, 'mensagem real')
+    assert r['ok'] is True
+    assert capturado['headers']['api_access_token'] == 'tok-do-painel'
+    assert capturado['json']['content'] == 'mensagem real'
+    assert capturado['json']['message_type'] == 'outgoing'
+
+
 def test_api_conversas_erro_nao_quebra(app, monkeypatch):
     from app.services import chatwoot
 
