@@ -224,7 +224,8 @@ def gerar_xlsx_pedidos(loja_nome, de, ate, pedidos, totais, por_item):
     return buf
 
 
-def gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item, incluir_fotos=False):
+def gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item,
+                      incluir_fotos=False, etapa_foto=None):
     pdf = PadariaPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
 
