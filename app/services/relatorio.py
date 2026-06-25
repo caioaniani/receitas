@@ -78,22 +78,49 @@ def _foto_bytes(foto):
     return foto.imagem  # BLOB legado (pode ser None apos M6)
 
 
-def _render_fotos(pdf, fotos, largura=45, altura=35, por_linha=4, margem=2):
+def _fotos_conferencia(p):
+    """Fotos do QR (PedidoItemFoto) do pedido, por SKU.
+
+    Modelo DIFERENTE de `FotoRecebimento` (= `p.fotos`, upload manual pela
+    web): essas sao as tiradas no fluxo de conferencia via QR code —
+    `saida` (industria->motorista) e `entrega` (motorista->loja). Eram
+    invisiveis no PDF ate 25/06/2026 porque o relatorio so olhava `p.fotos`.
+
+    Retorna [(foto, legenda)] ordenado por etapa; legenda = item + etapa.
+    """
+    out = []
+    for item in p.itens:
+        for f in (item.fotos_conferencia or []):
+            etapa = f.etapa or '?'
+            nome = (item.nome_item or '')[:18]
+            out.append((f, f'{nome} ({etapa})'))
+    out.sort(key=lambda t: (t[0].etapa or '', t[1]))
+    return out
+
+
+def _render_fotos(pdf, fotos, titulo='Fotos do recebimento', legendas=None,
+                  largura=45, altura=35, por_linha=4, margem=2):
     """Renderiza miniaturas das fotos em grade dentro do PDF.
 
     Quebra de pagina automatica quando o bloco nao cabe no restante.
     Fotos podem estar no Dropbox (M6+) ou BLOB legado.
+
+    `legendas`: lista paralela a `fotos` (str por foto). Quando presente,
+    escreve a legenda embaixo de cada miniatura — usado nas fotos de
+    conferencia por SKU pra identificar item + etapa.
     """
     pdf.set_font('Helvetica', 'I', 8)
-    pdf.cell(0, 4, f'Fotos do recebimento ({len(fotos)}):', new_x='LMARGIN', new_y='NEXT')
+    pdf.cell(0, 4, f'{titulo} ({len(fotos)}):', new_x='LMARGIN', new_y='NEXT')
 
+    h_leg = 4 if legendas else 0
+    bloco = altura + h_leg
     x0 = pdf.l_margin
     y = pdf.get_y()
     for i, foto in enumerate(fotos):
         col = i % por_linha
         if col == 0 and i > 0:
-            y += altura + margem
-        if y + altura > pdf.h - pdf.b_margin - 5:
+            y += bloco + margem
+        if y + bloco > pdf.h - pdf.b_margin - 5:
             pdf.add_page()
             y = pdf.get_y()
         x = x0 + col * (largura + margem)
@@ -105,7 +132,11 @@ def _render_fotos(pdf, fotos, largura=45, altura=35, por_linha=4, margem=2):
         except Exception:
             pdf.set_xy(x, y)
             pdf.cell(largura, altura, '[foto invalida]', border=1, align='C')
-    pdf.set_y(y + altura + margem)
+        if legendas:
+            pdf.set_xy(x, y + altura)
+            pdf.set_font('Helvetica', '', 6)
+            pdf.cell(largura, h_leg, legendas[i][:32], align='C')
+    pdf.set_y(y + bloco + margem)
 
 
 def gerar_xlsx_pedidos(loja_nome, de, ate, pedidos, totais, por_item):
