@@ -78,7 +78,7 @@ def _foto_bytes(foto):
     return foto.imagem  # BLOB legado (pode ser None apos M6)
 
 
-def _fotos_conferencia(p):
+def _fotos_conferencia(p, etapa=None):
     """Fotos do QR (PedidoItemFoto) do pedido, por SKU.
 
     Modelo DIFERENTE de `FotoRecebimento` (= `p.fotos`, upload manual pela
@@ -86,14 +86,17 @@ def _fotos_conferencia(p):
     `saida` (industria->motorista) e `entrega` (motorista->loja). Eram
     invisiveis no PDF ate 25/06/2026 porque o relatorio so olhava `p.fotos`.
 
+    `etapa`: filtra ('saida' | 'entrega'); None = ambas.
+
     Retorna [(foto, legenda)] ordenado por etapa; legenda = item + etapa.
     """
     out = []
     for item in p.itens:
         for f in (item.fotos_conferencia or []):
-            etapa = f.etapa or '?'
+            if etapa and f.etapa != etapa:
+                continue
             nome = (item.nome_item or '')[:18]
-            out.append((f, f'{nome} ({etapa})'))
+            out.append((f, f'{nome} ({f.etapa or "?"})'))
     out.sort(key=lambda t: (t[0].etapa or '', t[1]))
     return out
 
