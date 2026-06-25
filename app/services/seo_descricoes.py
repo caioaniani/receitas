@@ -17,9 +17,10 @@ import os
 
 logger = logging.getLogger(__name__)
 
-# Modelo barato e rapido (Haiku) — tarefa de geracao simples, nao
-# precisa de Sonnet/Opus. ~$0.001/descricao = ~R$0.05 pras 40 receitas.
-MODELO = 'claude-haiku-4-5-20251001'
+# Sonnet 4.6 por decisao do dono (25/06/2026) — padronizacao dos modelos.
+# Geracao de descricao e tarefa simples (baixo volume: ~1x por receita), o
+# custo extra vs Haiku e marginal aqui.
+MODELO = 'claude-sonnet-4-6'
 
 _INSTRUCOES_BASE = (
     "Escreva uma descricao curta (2 frases, MAXIMO 220 caracteres) "
