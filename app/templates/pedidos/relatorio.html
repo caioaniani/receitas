@@ -39,6 +39,12 @@
                 <i class="bi bi-camera"></i> Incluir fotos no PDF
             </label>
         </div>
+        <select name="etapa_foto" id="sel-etapa-foto" class="form-select form-select-sm mt-1"
+                style="font-size:12px;" title="Quais fotos do QR incluir no PDF">
+            <option value="" {% if not etapa_foto %}selected{% endif %}>Fotos: todas as etapas</option>
+            <option value="entrega" {% if etapa_foto == 'entrega' %}selected{% endif %}>Fotos: só entrega (recebimento)</option>
+            <option value="saida" {% if etapa_foto == 'saida' %}selected{% endif %}>Fotos: só saída (indústria)</option>
+        </select>
     </div>
     <div class="col-md-1">
         <button type="submit" class="btn btn-primary btn-sm w-100">
@@ -48,7 +54,8 @@
     <div class="col-md-2">
         {% if loja_id %}
         <div class="btn-group btn-group-sm w-100">
-            <a href="{{ url_for('pedidos.relatorio', loja=loja_id, de=de, ate=ate, formato='pdf', fotos=('1' if incluir_fotos else None)) }}"
+            <a id="btn-pdf"
+               href="{{ url_for('pedidos.relatorio', loja=loja_id, de=de, ate=ate, formato='pdf', fotos=('1' if incluir_fotos else None), etapa_foto=(etapa_foto or None)) }}"
                class="btn btn-danger">
                 <i class="bi bi-filetype-pdf"></i> PDF
             </a>
