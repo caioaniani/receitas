@@ -3613,6 +3613,7 @@ def loja_online_pedido_cancelar(codigo):
         flash(f'{p.codigo}: {msg}', 'success' if ok else 'danger')
     else:
         p.status = 'cancelado'
+        p.motivo_cancelamento = 'cancelado_admin'
         p.cancelado_em = agora()
         db.session.commit()
         flash(f'Pedido {p.codigo} cancelado.', 'success')
