@@ -165,17 +165,20 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True):
 
     dias_calendario_janela = 7 * janela_semanas
 
-    # 4. Previsao: pra cada dia do horizonte, soma a media do dia-da-semana
-    # correspondente (com fallback pra media diaria simples). Receita sem
-    # historico fica com previsto 0 (produzir vem so do comprometido).
-    dias_futuros = [hoje_d + timedelta(days=i) for i in range(horizonte_dias)]
+    # 4. Previsao: pra cada dia da janela de entrega da receita (deslocada pelo
+    # lead), soma a media do dia-da-semana correspondente (com fallback pra
+    # media diaria simples). Receita sem historico fica com previsto 0
+    # (produzir vem so do comprometido).
     previsto = defaultdict(float)
     for rid in receitas:
         if not datas_total.get(rid):
             continue
         rid_dow = datas_dow.get(rid, {})
         rid_soma_total = soma_total.get(rid, 0)
-        for d in dias_futuros:
+        L = lead.get(rid, 0)
+        dias_rid = [hoje_d + timedelta(days=L + i)
+                    for i in range(horizonte_dias)]
+        for d in dias_rid:
             dow = d.weekday()
             datas = rid_dow.get(dow)
             if datas and len(datas) >= _MIN_OCORRENCIAS_DOW:
