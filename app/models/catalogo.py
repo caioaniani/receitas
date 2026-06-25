@@ -136,6 +136,7 @@ class Receita(db.Model):
             'preco_venda': self.preco_venda,
             'preco_loja': self.preco_loja,
             'preco_site': self.preco_site,
+            'preco_interno': self.preco_interno,
             'rendimento_qtd': self.rendimento_qtd,
             'rendimento_unidade': self.rendimento_unidade,
             'peso_base': self.peso_base,
