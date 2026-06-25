@@ -123,6 +123,10 @@
                         </button>
                     </form>
                     {% endif %}
+                    <a href="{{ url_for('producao.pedidos_semana', horizonte=horizonte, janela=janela) }}"
+                       class="btn btn-sm btn-light">
+                        <i class="bi bi-magic"></i> Gerar pedidos da semana
+                    </a>
                     <span class="badge bg-light text-dark badge-grande">{{ balanco.total_produzir_itens }} a produzir</span>
                 </div>
             </div>
