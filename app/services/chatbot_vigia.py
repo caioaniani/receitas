@@ -30,7 +30,7 @@ from flask import current_app
 
 logger = logging.getLogger(__name__)
 
-MODELO = 'claude-haiku-4-5-20251001'
+MODELO = 'claude-sonnet-4-6'
 MAX_TOKENS = 400
 # Historico em memoria das ultimas avaliacoes (volatil, reinicia no deploy).
 # Bom o suficiente pra confirmar "ta rodando?" — pra historico durador usar
