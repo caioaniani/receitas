@@ -152,7 +152,7 @@ def _formatar_historico(historico):
     return '\n'.join(linhas)
 
 
-def _chamar_haiku(api_key, contexto):
+def _chamar_modelo(api_key, contexto):
     import anthropic
     client = anthropic.Anthropic(api_key=api_key)
     resp = client.messages.create(
@@ -161,6 +161,8 @@ def _chamar_haiku(api_key, contexto):
         system=PROMPT_VIGIA,
         messages=[{'role': 'user', 'content': contexto}],
     )
+    from app.services import uso_ia
+    uso_ia.registrar('vigia', MODELO, resp.usage)
     texto = ''.join(b.text for b in resp.content
                     if getattr(b, 'type', None) == 'text' and b.text).strip()
     # Tolerante a markdown wrappers do tipo ```json ... ```
@@ -233,7 +235,7 @@ def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=
             f'marcado DISPONIVEL aqui):\n'
             f'{_resumo_catalogo_site()}'
         )
-        veredicto = _chamar_haiku(api_key, contexto)
+        veredicto = _chamar_modelo(api_key, contexto)
     except Exception as exc:  # noqa: BLE001
         logger.exception('vigia: avaliacao falhou')
         return {'erro': str(exc)}
