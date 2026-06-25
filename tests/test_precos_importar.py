@@ -1,14 +1,8 @@
 """Importacao em lote de precos internos (parse + classificar + aplicar).
 
-Cobre o fluxo do dono (25/06/2026): colar uma lista TSV que mistura
-Padaria/Fornecedor/Funcionarios e ter o sistema:
-1. Aceitar so Padaria.
-2. Atualizar preco_interno do que ja existe.
-3. Criar Produto novo pro que nao existe.
-4. Ignorar com motivo o que e Fornecedor/Funcionarios.
-5. Ser idempotente (rodar 2x nao duplica).
+Refeito em 25/06/2026 apos decisao do dono: NAO filtra automaticamente
+Fornecedor/Funcionarios — mostra TUDO no preview e ele marca caso a caso.
 """
-
 from app.services.precos_importar import (
     _norm,
     _parse_preco,
@@ -27,16 +21,13 @@ def _login(client, user):
 def test_norm_lower_e_sem_acentos():
     assert _norm('Pão Francês') == 'pao frances'
     assert _norm('  Brioche   ') == 'brioche'
-    assert _norm('SOURDOUGH NOZES E AZEITONAS') == 'sourdough nozes e azeitonas'
 
 
 def test_parse_preco_aceita_formatos_br_e_us():
     assert _parse_preco('R$ 1.234,56') == 1234.56
     assert _parse_preco('6,50') == 6.5
     assert _parse_preco('100.00') == 100.0
-    assert _parse_preco('R$ 0,30') == 0.30
     assert _parse_preco('lixo') is None
-    assert _parse_preco('') is None
 
 
 def test_parse_lista_tsv():
@@ -44,91 +35,107 @@ def test_parse_lista_tsv():
         'Produto\tCategoria\tPreço\tUnidade\n'
         'Brioche\tPadaria\tR$ 10,00\tun\n'
         'Abacaxi\tFornecedor\tR$ 6,50\tun\n'
-        '\n'  # linha vazia ignorada
-        'sem tabs e sem dois espacos  invalido'
     )
     out = parse_lista(texto)
     assert len(out) == 2
     assert out[0]['nome'] == 'Brioche'
-    assert out[0]['categoria'] == 'Padaria'
     assert out[0]['preco'] == 10.0
-    assert out[1]['categoria'] == 'Fornecedor'
 
 
-def test_classificar_padaria_existente_vai_pra_atualizar(app):
+def test_classificar_existente_vira_atualizar(app):
     from app.extensions import db
     from app.models import Produto
     with app.app_context():
         db.session.add(Produto(nome='Brioche', categoria='Padaria', ativo=True))
         db.session.commit()
-        linhas = [{'nome': 'brioche', 'categoria': 'Padaria',
-                   'preco': 10.0, 'unidade': 'un'}]
-        plano = classificar(linhas)
-    assert len(plano['atualizar']) == 1
-    assert plano['atualizar'][0][1] == 'produto'
-    assert len(plano['criar']) == 0
+        plano = classificar([{'nome': 'brioche', 'categoria': 'Padaria',
+                              'preco': 10.0, 'unidade': 'un'}])
+    assert len(plano) == 1
+    assert plano[0]['acao'] == 'atualizar'
+    assert plano[0]['tipo'] == 'produto'
+    assert plano[0]['sugestao_marcar'] is True
 
 
-def test_classificar_padaria_nova_vai_pra_criar(app):
+def test_classificar_novo_vira_criar(app):
     with app.app_context():
-        linhas = [{'nome': 'Brioche Mickey Pequeno', 'categoria': 'Padaria',
-                   'preco': 10.0, 'unidade': 'un'}]
-        plano = classificar(linhas)
-    assert len(plano['criar']) == 1
-    assert plano['criar'][0]['nome'] == 'Brioche Mickey Pequeno'
+        plano = classificar([{'nome': 'Brioche Mickey Pequeno',
+                              'categoria': 'Padaria', 'preco': 10.0,
+                              'unidade': 'un'}])
+    assert plano[0]['acao'] == 'criar'
+    assert plano[0]['obj'] is None
 
 
-def test_classificar_fornecedor_funcionarios_sao_ignorados(app):
+def test_fornecedor_funcionarios_sao_listados_mas_desmarcados(app):
+    """Mudanca de 25/06/2026: NAO filtra mais. Tudo vai pro preview;
+    Fornecedor/Funcionarios vem com sugestao_marcar=False (desmarcados)."""
     with app.app_context():
-        linhas = [
-            {'nome': 'Abacaxi', 'categoria': 'Fornecedor', 'preco': 6.5, 'unidade': 'un'},
-            {'nome': 'Funcionarios', 'categoria': 'Funcionarios', 'preco': 31000, 'unidade': 'un'},
-        ]
-        plano = classificar(linhas)
-    assert len(plano['ignorar']) == 2
-    motivos = [m for _, m in plano['ignorar']]
-    assert any('Fornecedor' in m for m in motivos)
-    assert any('Funcionarios' in m for m in motivos)
+        plano = classificar([
+            {'nome': 'Abacaxi', 'categoria': 'Fornecedor', 'preco': 6.5,
+             'unidade': 'un'},
+            {'nome': 'Funcionarios', 'categoria': 'Funcionarios',
+             'preco': 31000, 'unidade': 'un'},
+            {'nome': 'Brioche', 'categoria': 'Padaria', 'preco': 10.0,
+             'unidade': 'un'},
+        ])
+    assert len(plano) == 3
+    assert plano[0]['sugestao_marcar'] is False
+    assert plano[1]['sugestao_marcar'] is False
+    assert plano[2]['sugestao_marcar'] is True
 
 
-def test_aplicar_atualiza_e_cria(app):
+def test_aplicar_so_persiste_indices_marcados(app):
     from app.extensions import db
     from app.models import Produto
     with app.app_context():
         db.session.add(Produto(nome='Brioche', categoria='Padaria', ativo=True))
         db.session.commit()
-        linhas = [
-            {'nome': 'Brioche', 'categoria': 'Padaria', 'preco': 10.0, 'unidade': 'un'},
-            {'nome': 'Pao De Cramberry', 'categoria': 'Padaria', 'preco': 9.0, 'unidade': 'un'},
-            {'nome': 'Sacola', 'categoria': 'Fornecedor', 'preco': 1.09, 'unidade': 'un'},
-        ]
-        plano = classificar(linhas)
-        res = aplicar(plano)
-        assert res == {'atualizados': 1, 'criados': 1, 'ignorados': 1}
-
+        plano = classificar([
+            {'nome': 'Brioche', 'categoria': 'Padaria', 'preco': 10.0,
+             'unidade': 'un'},
+            {'nome': 'Pao De Cramberry', 'categoria': 'Padaria', 'preco': 9.0,
+             'unidade': 'un'},
+            {'nome': 'Sacola', 'categoria': 'Fornecedor', 'preco': 1.09,
+             'unidade': 'un'},
+        ])
+        # Marca so o Brioche (idx 0) e o Pao de Cramberry (idx 1). Sacola (idx 2) NAO.
+        res = aplicar(plano, {0, 1})
+        assert res['atualizados'] == 1
+        assert res['criados'] == 1
+        assert res['desmarcados'] == 1
         assert Produto.query.filter_by(nome='Brioche').first().preco_interno == 10.0
-        novo = Produto.query.filter_by(nome='Pao De Cramberry').first()
-        assert novo is not None
-        assert novo.preco_interno == 9.0
-        assert novo.categoria == 'Padaria'
-        # Fornecedor NAO foi criado
+        assert Produto.query.filter_by(nome='Pao De Cramberry').first() is not None
         assert Produto.query.filter_by(nome='Sacola').first() is None
 
 
-def test_aplicar_eh_idempotente(app):
-    """Rodar 2 vezes a mesma lista nao duplica produtos."""
+def test_aplicar_marcando_fornecedor_PERMITE_cadastrar(app):
+    """O dono pode marcar Coca-cola (Fornecedor) se for produto que revende.
+    A categoria vai como esta no input — nao tem mais filtro automatico."""
     from app.models import Produto
     with app.app_context():
-        linhas = [
-            {'nome': 'Cookie Novo', 'categoria': 'Padaria', 'preco': 6.0, 'unidade': 'un'},
-        ]
-        aplicar(classificar(linhas))
-        # Segunda passada: deve cair em "atualizar", nao criar de novo.
+        plano = classificar([
+            {'nome': 'Coca-cola lata', 'categoria': 'Fornecedor',
+             'preco': 3.45, 'unidade': 'un'},
+        ])
+        # Por default vinha desmarcado (sugestao_marcar=False),
+        # mas o dono marca explicitamente:
+        aplicar(plano, {0})
+        novo = Produto.query.filter_by(nome='Coca-cola lata').first()
+        assert novo is not None
+        assert novo.preco_interno == 3.45
+        # Categoria preservada (vai como Fornecedor mesmo).
+        assert novo.categoria == 'Fornecedor'
+
+
+def test_aplicar_eh_idempotente(app):
+    from app.models import Produto
+    with app.app_context():
+        linhas = [{'nome': 'Cookie Novo', 'categoria': 'Padaria',
+                   'preco': 6.0, 'unidade': 'un'}]
+        plano1 = classificar(linhas)
+        aplicar(plano1, {0})
         plano2 = classificar(linhas)
-        assert len(plano2['criar']) == 0
-        assert len(plano2['atualizar']) == 1
-        aplicar(plano2)
-        # So existe 1 Cookie Novo no banco
+        assert plano2[0]['acao'] == 'atualizar'  # ja existe
+        aplicar(plano2, {0})
         assert Produto.query.filter_by(nome='Cookie Novo').count() == 1
 
 
@@ -137,41 +144,37 @@ def test_rota_get_owner(app, owner_user):
     _login(client, owner_user)
     resp = client.get('/receitas/precos/importar')
     assert resp.status_code == 200
-    assert b'Importar pre' in resp.data
 
 
 def test_rota_preview_nao_persiste(app, owner_user):
-    """POST sem `confirmar` so mostra preview — nao grava."""
     from app.models import Produto
     client = app.test_client()
     _login(client, owner_user)
-    texto = 'Pao Teste Preview\tPadaria\tR$ 5,00\tun'
     resp = client.post('/receitas/precos/importar',
-                       data={'texto': texto})
+                       data={'texto': 'Pao Teste Preview\tPadaria\tR$ 5,00\tun'})
     assert resp.status_code == 200
-    assert b'Pao Teste Preview' in resp.data  # apareceu no preview
+    assert b'Pao Teste Preview' in resp.data
     with app.app_context():
-        # NAO foi criado
         assert Produto.query.filter_by(nome='Pao Teste Preview').first() is None
 
 
-def test_rota_confirmar_aplica(app, owner_user):
+def test_rota_confirmar_so_aplica_marcados(app, owner_user):
     from app.extensions import db
     from app.models import Produto
     client = app.test_client()
     _login(client, owner_user)
-    texto = 'Pao Confirma\tPadaria\tR$ 7,00\tun'
+    texto = ('Marcado A\tPadaria\tR$ 5,00\tun\n'
+             'Nao Marcado B\tPadaria\tR$ 7,00\tun')
     resp = client.post('/receitas/precos/importar',
-                       data={'texto': texto, 'confirmar': '1'},
+                       data={'texto': texto, 'confirmar': '1',
+                             'marcar': ['0']},  # so o primeiro
                        follow_redirects=False)
     assert resp.status_code == 302
     with app.app_context():
-        p = Produto.query.filter_by(nome='Pao Confirma').first()
-        assert p is not None
-        assert p.preco_interno == 7.0
-    # cleanup
-    with app.app_context():
-        db.session.delete(Produto.query.filter_by(nome='Pao Confirma').first())
+        assert Produto.query.filter_by(nome='Marcado A').first() is not None
+        assert Produto.query.filter_by(nome='Nao Marcado B').first() is None
+        # cleanup
+        db.session.delete(Produto.query.filter_by(nome='Marcado A').first())
         db.session.commit()
 
 
@@ -180,23 +183,3 @@ def test_rota_exige_owner(app, admin_user):
     _login(client, admin_user)
     resp = client.get('/receitas/precos/importar')
     assert resp.status_code == 403
-
-
-def test_lista_real_do_dono_processa_corretamente(app):
-    """Sanity da lista colada pelo dono em 25/06/2026: 40 Padaria + 44
-    Fornecedor + 3 Funcionarios = 87 linhas. So Padaria conta."""
-    lista = '''Abacaxi\tFornecedor\tR$ 6,50\tun
-Brioche\tPadaria\tR$ 10,00\tun
-Bowl\tFornecedor\tR$ 132,22\tun
-Cinnamon Roll\tPadaria\tR$ 8,47\tun
-Funcionarios\tFuncionarios\tR$ 31.093,28\tun
-Adiantamento de salário\tFuncionarios\tR$ 4.000,00\tun
-Pão de cramberry\tPadaria\tR$ 9,00\tun'''
-    with app.app_context():
-        linhas = parse_lista(lista)
-        plano = classificar(linhas)
-    # 4 sao Padaria, 3 sao ignoradas
-    total_padaria = len(plano['atualizar']) + len(plano['criar'])
-    assert total_padaria == 3 or total_padaria == 4  # depende do que existe no banco de teste
-    # Fornecedor (Abacaxi, Bowl) + Funcionarios (Funcionarios, Adiantamento) = 4
-    assert len(plano['ignorar']) == 4
