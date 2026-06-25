@@ -193,8 +193,18 @@
         <div class="thread-topo">
           <button type="button" id="thread-voltar">← Voltar</button>
           <span class="nome" id="thread-nome"></span>
+          <span class="thread-acoes">
+            <button type="button" id="acao-pending" title="Devolver pro bot">↩ Bot</button>
+            <button type="button" id="acao-open" title="Passar pro atendimento humano">👤 Humano</button>
+            <button type="button" id="acao-resolved" class="ok" title="Marcar como resolvida">✓ Resolver</button>
+          </span>
         </div>
         <div class="thread-corpo" id="thread-corpo"></div>
+        <div class="compose">
+          <textarea id="compose-texto" placeholder="Escreva sua resposta… (Enter envia, Shift+Enter quebra linha)"
+                    rows="1" maxlength="4000"></textarea>
+          <button type="button" id="compose-enviar" class="enviar">Enviar</button>
+        </div>
       </div>
     </div>
   </div>
