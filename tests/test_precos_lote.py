@@ -144,3 +144,28 @@ def test_precos_lote_get_separa_cestas_de_produtos_simples(app, owner_user):
     # Simples aparece com sua categoria propria
     assert 'ItemSimplesGet' in html
     assert 'data-categoria="p:Bebidas"' in html
+
+
+def test_precos_get_mostra_custo_unitario(app, owner_user):
+    """Coluna 'Custo un.' read-only: produto simples com custo_direto +
+    embalagem aparece formatado (R$ X,XX). Custo vem de calcular_custos_*."""
+    from app.extensions import db
+    from app.models import Produto
+
+    with app.app_context():
+        p = Produto(nome='Cookie Custo', categoria='Doces',
+                    custo_direto=5.0, custo_embalagem=1.0, ativo=True)
+        db.session.add(p)
+        db.session.commit()
+
+    client = app.test_client()
+    _login(client, owner_user)
+    resp = client.get('/receitas/precos')
+    assert resp.status_code == 200
+    html = resp.data.decode()
+    # Cabecalho da coluna
+    assert 'Custo un.' in html
+    # 5.0 + 1.0 = 6.00 -> formatado 'R$ 6,00' (com span no meio)
+    assert '6,00' in html
+    # data-custo no td (habilita uso futuro/JS de margem)
+    assert 'data-custo=' in html
