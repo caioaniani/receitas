@@ -232,7 +232,7 @@ def _chamar_sonnet(api_key, contexto, prompt_sistema=None):
         messages=[{'role': 'user', 'content': contexto}],
     )
     from app.services import uso_ia
-    uso_ia.registrar('auditor', MODELO, resp.usage)
+    uso_ia.registrar('auditor', MODELO, getattr(resp, 'usage', None))
     texto = ''.join(b.text for b in resp.content
                     if getattr(b, 'type', None) == 'text' and b.text).strip()
     if texto.startswith('```'):
