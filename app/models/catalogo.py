@@ -108,6 +108,13 @@ class Receita(db.Model):
     # Quando setado, vale como default pra qualquer PedidoItem dessa receita
     # cujo `estado` esteja NULL — sem precisar marcar item a item.
     estado_padrao = db.Column(db.String(20), nullable=True)
+    # Lead time de producao em DIAS: quanto a receita leva pra ficar pronta
+    # (sourdough de fermentacao longa = 2 = 48h; o que assa na hora = 0).
+    # Usado pelo balanco/plano de producao: "produzir HOJE = demanda das
+    # entregas em (hoje + dias_producao)" — pra o pao de 48h nao faltar. NAO
+    # afeta a grade loja x dia (essa e datada pela ENTREGA, nao pela producao).
+    dias_producao = db.Column(db.Integer, nullable=False, default=0,
+                              server_default='0')
     # Quando True, desperdicio com motivo='validade' NAO baixa estoque
     # — o item vencido vira outra coisa (ex: Croissant Tradicional vencido
     # vira Croissant Almond, Sourdough Tradicional vira chapa). Outros
