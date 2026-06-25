@@ -571,3 +571,68 @@ def listar_conversas_paradas(min_minutos=15, limite=50, status='pending'):
         })
     paradas.sort(key=lambda p: -p['minutos_paradas'])
     return paradas[:limite]
+
+
+def listar_conversas(status='open', limite=40):
+    """Conversas no `status` (open/pending/resolved/all), com dados pra UI:
+    contato, preview da ultima mensagem, status, canal, quando, nao-lidas.
+    Ordena por atividade mais recente. Lista vazia se Chatwoot indisponivel
+    ou erro (a UI trata como 'sem conversas', nunca quebra).
+
+    Leitura: token de USUARIO (CHATWOOT_API_TOKEN), fallback pro de bot.
+    LICAO DURA (CLAUDE.md): token de Agent Bot NAO lista conversas (401) — dai
+    a preferencia pelo de usuario; so com o de bot a lista volta vazia em
+    silencio."""
+    if disponivel():
+        headers = _headers()
+    elif bot_disponivel():
+        headers = _bot_headers()
+    else:
+        return []
+    params = {'page': 1}
+    if status and status != 'all':
+        params['status'] = status
+    url = f'{_base()}/conversations'
+    try:
+        r = requests.get(url, headers=headers, params=params, timeout=15)
+        if r.status_code not in (200, 201):
+            logger.warning('chatwoot listar_conversas %s: %s',
+                           r.status_code, (r.text or '')[:200])
+            return []
+        data = r.json() if r.text else {}
+    except Exception:  # noqa: BLE001
+        logger.exception('chatwoot listar_conversas falhou')
+        return []
+
+    payload = (data.get('data') or {}).get('payload') if isinstance(data, dict) else None
+    if not isinstance(payload, list):
+        payload = data if isinstance(data, list) else []
+
+    out = []
+    for c in payload:
+        if not isinstance(c, dict):
+            continue
+        meta = c.get('meta') or {}
+        sender = meta.get('sender') or {}
+        # Preview da ultima mensagem: last_non_activity_message, senao a ultima
+        # do array `messages` que tenha texto (a API varia por versao).
+        preview = ''
+        ultima = c.get('last_non_activity_message')
+        if isinstance(ultima, dict):
+            preview = (ultima.get('content') or '').strip()
+        if not preview:
+            for m in reversed(c.get('messages') or []):
+                if isinstance(m, dict) and (m.get('content') or '').strip():
+                    preview = m['content'].strip()
+                    break
+        out.append({
+            'id': c.get('id'),
+            'contato': sender.get('name') or 'Sem nome',
+            'status': c.get('status') or status,
+            'canal': meta.get('channel') or '',
+            'preview': preview[:90],
+            'ultima_em': c.get('last_activity_at') or c.get('timestamp') or 0,
+            'nao_lidas': c.get('unread_count') or 0,
+        })
+    out.sort(key=lambda d: d.get('ultima_em') or 0, reverse=True)
+    return out[:limite]
