@@ -109,18 +109,27 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True):
                .filter(EstoqueProducao.receita_id.isnot(None)).all()):
         em_estoque[ep.receita_id] += int(ep.quantidade or 0)
 
-    # 2. Comprometido: pedidos ainda nao enviados, data_entrega no horizonte.
+    # 2. Comprometido: pedidos ainda nao enviados cuja data_entrega cai na
+    # janela de PRODUCAO de cada receita — [hoje+lead, hoje+lead+horizonte-1].
+    # Pra lead=0 a janela e [hoje, horizonte_fim] (comportamento original).
     comprometido = defaultdict(int)
     comprometido_loja = defaultdict(lambda: defaultdict(int))
+    comp_fim = horizonte_fim + timedelta(days=max_lead)
     rows = (db.session.query(PedidoItem.receita_id, PedidoLoja.loja_id,
-                             PedidoItem.quantidade)
+                             PedidoLoja.data_entrega, PedidoItem.quantidade)
             .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
             .filter(PedidoItem.receita_id.isnot(None),
                     PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
                     PedidoLoja.data_entrega >= hoje_d,
-                    PedidoLoja.data_entrega <= horizonte_fim)
+                    PedidoLoja.data_entrega <= comp_fim)
             .all())
-    for rid, loja_id, qtd in rows:
+    for rid, loja_id, data_ent, qtd in rows:
+        if data_ent is None:
+            continue
+        L = lead.get(rid, 0)
+        if not (hoje_d + timedelta(days=L) <= data_ent
+                <= hoje_d + timedelta(days=L + horizonte_dias - 1)):
+            continue
         comprometido[rid] += int(qtd or 0)
         comprometido_loja[rid][loja_id] += int(qtd or 0)
 
