@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel + Atendimento (teste)</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; flex-direction: column; background: #1f2933;
+    font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+  }
+  .barra-teste {
+    flex: 0 0 auto; background: #b02a37; color: #fff; font-size: 13px;
+    padding: 5px 12px; display: flex; align-items: center; gap: 12px;
+  }
+  .barra-teste .tag {
+    background: #fff; color: #b02a37; font-weight: 700; border-radius: 3px;
+    padding: 1px 7px; font-size: 11px; letter-spacing: .5px;
+  }
+  .barra-teste a { color: #fff; text-decoration: underline; }
+  .barra-teste .dir { margin-left: auto; opacity: .9; }
+
+  .split { flex: 1 1 auto; display: flex; min-height: 0; }
+  .pane { height: 100%; min-width: 0; position: relative; }
+  .pane iframe { width: 100%; height: 100%; border: 0; display: block; }
+  #pane-painel { flex: 0 0 60%; }
+  #pane-chat { flex: 1 1 auto; }
+
+  .divisor {
+    flex: 0 0 7px; background: #495057; cursor: col-resize;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .divisor::before { content: "⋮"; color: #adb5bd; font-size: 16px; }
+  .divisor:hover { background: #0d6efd; }
+
+  /* Durante o arraste, os iframes nao podem capturar o mouse — senao o
+     parent perde os eventos de mousemove/up e o divisor "gruda". */
+  body.dragging iframe { pointer-events: none; }
+  body.dragging { user-select: none; cursor: col-resize; }
+
+  .sem-chatwoot {
+    display: flex; align-items: center; justify-content: center; height: 100%;
+    color: #adb5bd; padding: 24px; text-align: center; font-size: 14px;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+  <div class="barra-teste">
+    <span class="tag">TESTE</span>
+    <span>Painel de entregas + Atendimento (Chatwoot) lado a lado.</span>
+    <span class="dir">
+      Arraste a barra do meio pra ajustar a proporção &nbsp;·&nbsp;
+      <a href="{{ url_for('entregas.painel') }}">abrir painel normal</a>
+    </span>
+  </div>
+
+  <div class="split" id="split">
+    <div class="pane" id="pane-painel">
+      <iframe src="{{ url_for('entregas.painel') }}?embed=1"
+              title="Painel de entregas"></iframe>
+    </div>
+    <div class="divisor" id="divisor"
+         title="Arraste para ajustar a proporção"></div>
+    <div class="pane" id="pane-chat">
+      {% if chatwoot_url %}
+      <iframe src="{{ chatwoot_url }}" title="Atendimento (Chatwoot)"
+              allow="clipboard-write; clipboard-read; autoplay"></iframe>
+      {% else %}
+      <div class="sem-chatwoot">
+        Chatwoot não configurado (variável <code>CHATWOOT_URL</code> vazia).
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+<script>
+  // Divisor arrastavel: ajusta a largura do painel da esquerda (20%–80%).
+  (function () {
+    var split = document.getElementById('split');
+    var pane = document.getElementById('pane-painel');
+    var divisor = document.getElementById('divisor');
+    var arrastando = false;
+
+    divisor.addEventListener('mousedown', function (e) {
+      arrastando = true;
+      document.body.classList.add('dragging');
+      e.preventDefault();
+    });
+    window.addEventListener('mousemove', function (e) {
+      if (!arrastando) return;
+      var rect = split.getBoundingClientRect();
+      var pct = (e.clientX - rect.left) / rect.width * 100;
+      pct = Math.max(20, Math.min(80, pct));
+      pane.style.flex = '0 0 ' + pct + '%';
+    });
+    window.addEventListener('mouseup', function () {
+      if (!arrastando) return;
+      arrastando = false;
+      document.body.classList.remove('dragging');
+    });
+  })();
+</script>
+</body>
+</html>
