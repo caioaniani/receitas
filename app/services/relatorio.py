@@ -29,24 +29,34 @@ def _eh_imagem(conteudo, content_type):
 
 
 def _foto_bytes(foto):
-    """Le bytes da foto pra embutir no PDF. Prioriza Dropbox, fallback BLOB.
+    """Le bytes da foto pra embutir no PDF.
 
-    Dois cuidados aprendidos no diagnostico de 24/06/2026 (foto aparecia na
-    tela mas sumia do PDF):
-    1. **User-Agent de navegador**: o Dropbox serve a PAGINA HTML de preview
-       (nao a imagem) pra clientes nao-browser como `python-requests`. Sem
-       isso, `r.content` era HTML, o `pdf.image()` estourava e caia em
-       "[foto invalida]". O `<img>` da tela funcionava porque o navegador
-       manda User-Agent Mozilla.
-    2. **Normalizar pra `raw=1`**: fotos antigas (ou links de preview)
-       carregam `?dl=0` = HTML. `_converter_para_raw` garante bytes via CDN.
+    Ordem de tentativa (cada uma logada em caso de falha):
+    1. **API autenticada via storage_path** — `dropbox_storage.baixar(path)`.
+       SEMPRE funciona se temos token + path; nao depende de shared link,
+       CDN, raw vs preview, ou User-Agent. Eh o canonico.
+    2. **HTTP no shared link** (legado/compat) — User-Agent de navegador,
+       URL normalizada pra `raw=1`. Valida magic bytes / Content-Type pra
+       rejeitar pagina HTML de preview do Dropbox.
+    3. **BLOB legado** (`foto.imagem`) — fotos pre-M6.
 
-    Valida que o download e imagem (magic bytes / Content-Type) antes de
-    aceitar — se vier HTML, loga e cai no fallback em vez de passar lixo
-    pro fpdf2. Erros NAO sao mais engolidos em silencio.
+    Bug 24/06/2026: fix via User-Agent + raw=1 nao bastou em prod (motivo
+    nao confirmado — pode ser link de preview que ignora raw, ou CDN com
+    rate limit). Solucao canonica = baixar via API autenticada, tirando o
+    CDN publico do caminho critico.
     """
-
+    from app.services import dropbox_storage
     from app.services.dropbox_storage import _converter_para_raw
+
+    storage_path = getattr(foto, 'imagem_storage_path', None)
+    if storage_path:
+        bytes_ = dropbox_storage.baixar(storage_path)
+        if bytes_:
+            return bytes_
+        logger.warning(
+            'foto %s: API Dropbox falhou pra %s — tentando shared link',
+            getattr(foto, 'id', '?'), storage_path)
+
     url = foto.imagem_url
     if url:
         try:
@@ -59,11 +69,11 @@ def _foto_bytes(foto):
             if r.status_code == 200 and _eh_imagem(conteudo, ct):
                 return conteudo
             logger.warning(
-                'foto %s: download do Dropbox nao retornou imagem '
-                '(status=%s content_type=%s len=%s) — usando fallback BLOB',
+                'foto %s: shared link nao retornou imagem '
+                '(status=%s content_type=%s len=%s) — usando BLOB',
                 getattr(foto, 'id', '?'), r.status_code, ct, len(conteudo))
         except Exception:  # noqa: BLE001
-            logger.exception('foto %s: erro baixando do Dropbox pro PDF',
+            logger.exception('foto %s: erro no shared link pro PDF',
                              getattr(foto, 'id', '?'))
     return foto.imagem  # BLOB legado (pode ser None apos M6)
 
