@@ -139,6 +139,19 @@ def admin_user(app):
 
 
 @pytest.fixture
+def owner_user(app):
+    """Usuario com is_owner=True — necessario pra rotas @owner_required
+    (ex: edicao de precos em massa)."""
+    from app.extensions import db
+    from app.models import Usuario
+    u = Usuario(nome='dono teste', login='dono', papel='admin', is_owner=True)
+    u.set_senha('123')
+    db.session.add(u)
+    db.session.commit()
+    return u
+
+
+@pytest.fixture
 def loja(app):
     from app.extensions import db
     from app.models import Loja
