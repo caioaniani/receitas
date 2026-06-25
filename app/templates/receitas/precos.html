@@ -7,14 +7,26 @@
 </div>
 
 <div class="alert alert-info small mb-3">
-    Edite <strong>preço loja</strong>, <strong>preço site</strong> e <strong>preço venda</strong> de várias receitas
-    de uma vez. O botão <em>aplicar +%</em> em cada categoria multiplica o preço já preenchido.
+    Edite <strong>preço loja</strong>, <strong>preço site</strong> e <strong>preço venda/atacado</strong>
+    de <strong>receitas</strong>, <strong>produtos simples</strong> e <strong>cestas</strong> de uma vez.
+    O botão <em>aplicar +%</em> em cada categoria multiplica o preço já preenchido.
     Linhas com campo vazio ficam sem preço (NULL).
+</div>
+
+<div class="d-flex gap-2 mb-3" id="precos-filtro-tipos">
+    <a href="#receitas" class="btn btn-sm btn-outline-primary">Ir pra Receitas</a>
+    {% if cestas %}<a href="#cestas" class="btn btn-sm btn-outline-warning">Ir pra Cestas</a>{% endif %}
+    {% if categorias_produtos %}<a href="#produtos" class="btn btn-sm btn-outline-success">Ir pra Produtos</a>{% endif %}
+    <input type="search" id="precos-busca" placeholder="Filtrar por nome..."
+           class="form-control form-control-sm ms-auto" style="max-width:280px">
 </div>
 
 <form method="POST" action="{{ url_for('receitas.precos') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
+    <h2 id="receitas" class="h5 mt-3 mb-2 text-primary">
+        <i class="bi bi-journal-text"></i> Receitas (fichas técnicas)
+    </h2>
     {% for categoria, lista in categorias.items() %}
     <div class="card card-padaria mb-3">
         <div class="card-header py-2 d-flex justify-content-between align-items-center">
@@ -22,15 +34,15 @@
             <div class="d-flex gap-1 align-items-center">
                 <span class="small text-muted me-2">Categoria:</span>
                 <button type="button" class="btn btn-sm btn-outline-primary"
-                        onclick="aplicarMargem('{{ categoria|e }}', 'preco_loja')">
+                        onclick="aplicarMargem('r:{{ categoria|e }}', 'preco_loja')">
                     +% em loja
                 </button>
                 <button type="button" class="btn btn-sm btn-outline-primary"
-                        onclick="aplicarMargem('{{ categoria|e }}', 'preco_site')">
+                        onclick="aplicarMargem('r:{{ categoria|e }}', 'preco_site')">
                     +% em site
                 </button>
                 <button type="button" class="btn btn-sm btn-outline-secondary"
-                        onclick="sincronizar('{{ categoria|e }}')">
+                        onclick="sincronizar('r:{{ categoria|e }}')">
                     site = loja
                 </button>
             </div>
@@ -47,7 +59,7 @@
                 </thead>
                 <tbody>
                 {% for r in lista %}
-                    <tr data-categoria="{{ r.categoria or 'Outros' }}">
+                    <tr data-categoria="r:{{ r.categoria or 'Outros' }}" data-nome="{{ r.nome|lower }}">
                         <td>{{ r.nome }}</td>
                         <td>
                             <input type="text" name="preco_loja_{{ r.id }}"
@@ -78,6 +90,131 @@
     </div>
     {% endfor %}
 
+    {% if cestas %}
+    <h2 id="cestas" class="h5 mt-4 mb-2 text-warning">
+        <i class="bi bi-box-seam"></i> Cestas
+    </h2>
+    <div class="card card-padaria mb-3">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <strong>Cestas ({{ cestas|length }})</strong>
+            <div class="d-flex gap-1 align-items-center">
+                <span class="small text-muted me-2">Aplicar a todas:</span>
+                <button type="button" class="btn btn-sm btn-outline-warning"
+                        onclick="aplicarMargem('p:__cestas__', 'preco_loja')">+% em loja</button>
+                <button type="button" class="btn btn-sm btn-outline-warning"
+                        onclick="aplicarMargem('p:__cestas__', 'preco_site')">+% em site</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        onclick="sincronizar('p:__cestas__')">site = loja</button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Cesta</th>
+                        <th style="width:140px">Preço loja</th>
+                        <th style="width:140px">Preço site</th>
+                        <th style="width:140px">Preço atacado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for p in cestas %}
+                    <tr data-categoria="p:__cestas__" data-nome="{{ p.nome|lower }}">
+                        <td>
+                            {{ p.nome }}
+                            {% if p.categoria %}<span class="badge bg-light text-muted ms-1">{{ p.categoria }}</span>{% endif %}
+                        </td>
+                        <td>
+                            <input type="text" name="preco_loja_p{{ p.id }}"
+                                   value="{{ '%.2f'|format(p.preco_loja) if p.preco_loja is not none else '' }}"
+                                   class="form-control form-control-sm text-end preco-input"
+                                   data-campo="preco_loja"
+                                   inputmode="decimal" autocomplete="off">
+                        </td>
+                        <td>
+                            <input type="text" name="preco_site_p{{ p.id }}"
+                                   value="{{ '%.2f'|format(p.preco_site) if p.preco_site is not none else '' }}"
+                                   class="form-control form-control-sm text-end preco-input"
+                                   data-campo="preco_site"
+                                   inputmode="decimal" autocomplete="off">
+                        </td>
+                        <td>
+                            <input type="text" name="preco_atacado_p{{ p.id }}"
+                                   value="{{ '%.2f'|format(p.preco_atacado) if p.preco_atacado is not none else '' }}"
+                                   class="form-control form-control-sm text-end preco-input"
+                                   data-campo="preco_atacado"
+                                   inputmode="decimal" autocomplete="off">
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if categorias_produtos %}
+    <h2 id="produtos" class="h5 mt-4 mb-2 text-success">
+        <i class="bi bi-bag"></i> Produtos simples (sem ficha técnica)
+    </h2>
+    {% for categoria, lista in categorias_produtos.items() %}
+    <div class="card card-padaria mb-3">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <strong>{{ categoria }}</strong>
+            <div class="d-flex gap-1 align-items-center">
+                <span class="small text-muted me-2">Categoria:</span>
+                <button type="button" class="btn btn-sm btn-outline-success"
+                        onclick="aplicarMargem('p:{{ categoria|e }}', 'preco_loja')">+% em loja</button>
+                <button type="button" class="btn btn-sm btn-outline-success"
+                        onclick="aplicarMargem('p:{{ categoria|e }}', 'preco_site')">+% em site</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        onclick="sincronizar('p:{{ categoria|e }}')">site = loja</button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Produto</th>
+                        <th style="width:140px">Preço loja</th>
+                        <th style="width:140px">Preço site</th>
+                        <th style="width:140px">Preço atacado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for p in lista %}
+                    <tr data-categoria="p:{{ p.categoria or 'Outros' }}" data-nome="{{ p.nome|lower }}">
+                        <td>{{ p.nome }}</td>
+                        <td>
+                            <input type="text" name="preco_loja_p{{ p.id }}"
+                                   value="{{ '%.2f'|format(p.preco_loja) if p.preco_loja is not none else '' }}"
+                                   class="form-control form-control-sm text-end preco-input"
+                                   data-campo="preco_loja"
+                                   inputmode="decimal" autocomplete="off">
+                        </td>
+                        <td>
+                            <input type="text" name="preco_site_p{{ p.id }}"
+                                   value="{{ '%.2f'|format(p.preco_site) if p.preco_site is not none else '' }}"
+                                   class="form-control form-control-sm text-end preco-input"
+                                   data-campo="preco_site"
+                                   inputmode="decimal" autocomplete="off">
+                        </td>
+                        <td>
+                            <input type="text" name="preco_atacado_p{{ p.id }}"
+                                   value="{{ '%.2f'|format(p.preco_atacado) if p.preco_atacado is not none else '' }}"
+                                   class="form-control form-control-sm text-end preco-input"
+                                   data-campo="preco_atacado"
+                                   inputmode="decimal" autocomplete="off">
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
     <div class="d-flex gap-2 sticky-bottom bg-white border-top py-2" style="position:sticky;bottom:0;z-index:10;">
         <button type="submit" class="btn btn-primary">
             <i class="bi bi-check-lg"></i> Salvar todos
@@ -92,9 +229,8 @@ function parseBr(v) {
     var n = parseFloat(String(v).replace(',', '.'));
     return isNaN(n) ? null : n;
 }
-function fmt(n) {
-    return n.toFixed(2);
-}
+function fmt(n) { return n.toFixed(2); }
+
 function aplicarMargem(categoria, campo) {
     var pct = prompt('Aplicar quantos % de aumento (use negativo pra desconto):', '10');
     if (pct === null || pct === '') return;
@@ -102,8 +238,7 @@ function aplicarMargem(categoria, campo) {
     if (isNaN(f)) { alert('Numero invalido.'); return; }
     var mult = 1 + (f / 100);
     var alteradas = 0;
-    document.querySelectorAll('tr[data-categoria]').forEach(function(tr) {
-        if (tr.dataset.categoria !== categoria) return;
+    document.querySelectorAll('tr[data-categoria="' + categoria + '"]').forEach(function(tr) {
         var inp = tr.querySelector('input.preco-input[data-campo="' + campo + '"]');
         if (!inp) return;
         var v = parseBr(inp.value);
@@ -111,16 +246,26 @@ function aplicarMargem(categoria, campo) {
         inp.value = fmt(v * mult);
         alteradas++;
     });
-    alert(alteradas + ' linha(s) atualizada(s) em ' + categoria + '. Salve pra persistir.');
+    alert(alteradas + ' linha(s) atualizada(s). Salve pra persistir.');
 }
 function sincronizar(categoria) {
-    if (!confirm('Copiar preço loja → preço site nesta categoria?')) return;
-    document.querySelectorAll('tr[data-categoria]').forEach(function(tr) {
-        if (tr.dataset.categoria !== categoria) return;
+    if (!confirm('Copiar preço loja → preço site nesta secao?')) return;
+    document.querySelectorAll('tr[data-categoria="' + categoria + '"]').forEach(function(tr) {
         var src = tr.querySelector('input.preco-input[data-campo="preco_loja"]');
         var dst = tr.querySelector('input.preco-input[data-campo="preco_site"]');
         if (src && dst) dst.value = src.value;
     });
 }
+// Filtro client-side por nome (busca em tr[data-nome])
+(function() {
+    var busca = document.getElementById('precos-busca');
+    if (!busca) return;
+    busca.addEventListener('input', function() {
+        var q = busca.value.trim().toLowerCase();
+        document.querySelectorAll('tr[data-nome]').forEach(function(tr) {
+            tr.style.display = (!q || tr.dataset.nome.indexOf(q) >= 0) ? '' : 'none';
+        });
+    });
+})();
 </script>
 {% endblock %}
