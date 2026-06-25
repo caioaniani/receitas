@@ -840,6 +840,8 @@ def _followup_gerar_texto(api_key, historico, minutos):
         system=FOLLOWUP_PROMPT.format(minutos=minutos),
         messages=[{'role': 'user', 'content': '\n'.join(linhas) or '(vazio)'}],
     )
+    from app.services import uso_ia
+    uso_ia.registrar('followup', FOLLOWUP_MODELO, resp.usage)
     texto = ''.join(b.text for b in resp.content
                     if getattr(b, 'type', None) == 'text' and b.text).strip()
     return texto.strip('"“” ').strip()
