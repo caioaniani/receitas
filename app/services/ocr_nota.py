@@ -54,7 +54,7 @@ def extrair_itens_nota(image_bytes, mimetype='image/jpeg'):
             }],
         )
         from app.services import uso_ia
-        uso_ia.registrar('ocr_cupom', modelo, response.usage)
+        uso_ia.registrar('ocr_cupom', modelo, getattr(response, 'usage', None))
     except Exception as exc:  # noqa: BLE001
         return {'erro': f'Anthropic falhou: {exc}'}
 
