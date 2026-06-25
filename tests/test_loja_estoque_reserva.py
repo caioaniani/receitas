@@ -203,6 +203,7 @@ def test_liberar_expirados_cancela_pedido_e_devolve_saldo(app):
         assert ped.codigo in codigos
         db.session.refresh(ped)
         assert ped.status == 'cancelado'
+        assert ped.motivo_cancelamento == 'pix_expirado'
         assert ped.cancelado_em is not None
         db.session.refresh(el)
         assert el.quantidade_reservada == 0
