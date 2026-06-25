@@ -1165,6 +1165,13 @@ def _migrate_postgres(app):
          "ON pedido_online(reserva_expira_em) "
          "WHERE reserva_expira_em IS NOT NULL")
 
+    # Motivo do cancelamento (25/06/2026) — registra POR QUE um pedido do site
+    # foi cancelado (pix_expirado / reembolso / cancelado_admin) em vez de
+    # deduzir pelos timestamps. Coluna nullable; pedidos cancelados antes desta
+    # coluna ficam NULL e a UI infere o motivo pelos timestamps.
+    _try("ALTER TABLE pedido_online ADD COLUMN IF NOT EXISTS "
+         "motivo_cancelamento VARCHAR(40)")
+
     # Orcamento B2B (22/06/2026) — data prevista de entrega + frete. A tabela
     # `orcamento` eh criada por db.create_all no mesmo deploy; estes ALTER
     # cobrem o caso de ela ter sido criada em deploy anterior sem as colunas.
