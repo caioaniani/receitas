@@ -716,6 +716,7 @@ def test_reembolsar_pedido_estorna(app):
         db.session.refresh(ped)
         db.session.refresh(el)
         assert ped.status == 'cancelado'
+        assert ped.motivo_cancelamento == 'reembolso'
         assert el.quantidade == 10  # devolvido
         assert MovEstoqueLoja.query.filter_by(tipo='venda_site_estorno').count() == 1
 
