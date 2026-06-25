@@ -180,6 +180,29 @@ def painel():
     return resp
 
 
+@entregas_bp.route('/painel-testes')
+@login_required
+def painel_testes():
+    """EXPERIMENTAL: painel de entregas + Chatwoot embutido lado a lado.
+
+    Clone leve de /painel pra testar o layout SEM tocar na tela de producao.
+    Em vez de duplicar o painel (48KB de template/JS), embute /painel?embed=1
+    num iframe same-origin + o dashboard do Chatwoot noutro iframe. Assim o
+    painel da esquerda e SEMPRE o real (nada pra manter em paralelo).
+
+    Depende de CSP especifica (ver app/__init__.py): o bloco
+    '/entregas/painel-testes' libera `frame-src` pro Chatwoot, e a excecao
+    `?embed=1` deixa /entregas/painel ser embutido same-origin. Se o iframe
+    do Chatwoot vier em branco, e o servidor do Chatwoot recusando o embed
+    (X-Frame-Options/frame-ancestors dele) — config fora deste repo.
+    """
+    chatwoot = (current_app.config.get('CHATWOOT_URL') or '').strip().rstrip('/')
+    resp = current_app.make_response(
+        render_template('entregas/painel_testes.html', chatwoot_url=chatwoot))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return resp
+
+
 @entregas_bp.route('/api/painel')
 @login_required
 def api_painel():
