@@ -1,6 +1,12 @@
 {% extends 'base.html' %}
 {% block title %}Preços em massa{% endblock %}
 {% block content %}
+{% macro custo_cell(valor) -%}
+<td class="text-end align-middle bg-light preco-custo" style="white-space:nowrap"
+    data-custo="{{ valor if valor is not none else '' }}">
+  {%- if valor is not none and valor > 0 %}<span class="small text-muted">R$</span> {{ '%.2f'|format(valor)|replace('.', ',') }}{% else %}<span class="text-muted">—</span>{% endif -%}
+</td>
+{%- endmacro %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="page-title mb-0"><i class="bi bi-tag"></i> Preços em massa</h1>
     <a href="{{ url_for('receitas.padeiro_lista') }}" class="btn btn-sm btn-outline-secondary">Voltar</a>
