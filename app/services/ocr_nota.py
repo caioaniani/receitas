@@ -38,9 +38,10 @@ def extrair_itens_nota(image_bytes, mimetype='image/jpeg'):
 
     b64 = base64.b64encode(image_bytes).decode('ascii')
     client = anthropic.Anthropic(api_key=api_key)
+    modelo = 'claude-opus-4-8'
     try:
         response = client.messages.create(
-            model='claude-sonnet-4-6',
+            model=modelo,
             max_tokens=2000,
             system=SYSTEM_PROMPT,
             messages=[{
@@ -52,6 +53,8 @@ def extrair_itens_nota(image_bytes, mimetype='image/jpeg'):
                 ],
             }],
         )
+        from app.services import uso_ia
+        uso_ia.registrar('ocr_cupom', modelo, response.usage)
     except Exception as exc:  # noqa: BLE001
         return {'erro': f'Anthropic falhou: {exc}'}
 
