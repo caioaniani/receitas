@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Gerar pedidos da semana{% endblock %}
+
+{% block content %}
+<style>
+    .psem-loja { border: 1px solid #dee2e6; border-radius: .5rem; margin-bottom: 1rem; }
+    .psem-loja > h5 {
+        background: #f1f3f5; margin: 0; padding: .5rem .75rem;
+        border-radius: .5rem .5rem 0 0; font-size: 1rem;
+    }
+    .psem-dia { padding: .5rem .75rem; border-top: 1px solid #f0f0f0; }
+    .psem-dia .dia-label { font-weight: 600; color: #0d3b66; }
+    .psem-item {
+        display: inline-flex; align-items: center; gap: .35rem;
+        margin: .2rem .7rem .2rem 0;
+    }
+    .psem-item input { width: 64px; text-align: right;
+                       font-variant-numeric: tabular-nums; }
+    .psem-jatem { color: #8a6d3b; font-size: .85rem; }
+    .psem-barra {
+        position: sticky; bottom: 0; background: #fff;
+        border-top: 1px solid #dee2e6; padding: .6rem .25rem;
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+    <h3 class="mb-0"><i class="bi bi-magic"></i> Gerar pedidos da semana</h3>
+    <a href="{{ url_for('producao.painel', horizonte=horizonte, janela=janela) }}"
+       class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Balanço da produção
+    </a>
+</div>
+
+<form method="GET" class="d-flex gap-1 align-items-center mb-3 flex-wrap">
+    <label class="small text-muted mb-0">Horizonte (dias):</label>
+    <input type="number" name="horizonte" min="1" max="14" value="{{ horizonte }}"
+           class="form-control form-control-sm" style="width:64px;">
+    <label class="small text-muted mb-0 ms-2">Histórico (sem):</label>
+    <input type="number" name="janela" min="1" max="26" value="{{ janela }}"
+           class="form-control form-control-sm" style="width:64px;">
+    <button class="btn btn-sm btn-outline-secondary">Recalcular</button>
+</form>
+
+<div class="alert alert-light border small">
+    O sistema propõe o pedido de cada loja para cada dia, com base no histórico
+    (média por dia da semana). <strong>Ajuste as quantidades</strong> e clique em
+    gerar — os pedidos entram como <strong>rascunho (pendente)</strong> pra você
+    revisar e confirmar em Pedidos. Dias em que a loja <strong>já tem
+    pedido</strong> são pulados, pra não duplicar. Datas aqui são de
+    <strong>entrega</strong> (o lead time de produção é tratado no balanço).
+</div>
+
+<form method="POST" action="{{ url_for('producao.pedidos_semana_gerar') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {% set ns = namespace(algum=false) %}
+    {% for loja in sugestao.lojas %}
+        {% set dias_relevantes = loja.dias | selectattr('itens') | list %}
+        {% set dias_jatem = loja.dias | selectattr('ja_tem_pedido') | list %}
+        {% if dias_relevantes or dias_jatem %}
+        {% set ns.algum = true %}
+        <div class="psem-loja">
+            <h5>{{ loja.loja_nome }}</h5>
+            {% for dia in loja.dias %}
+                {% if dia.itens or dia.ja_tem_pedido %}
+                <div class="psem-dia">
+                    <span class="dia-label">{{ dia.label }}</span>
+                    {% if dia.ja_tem_pedido %}
+                        <span class="psem-jatem ms-2"><i class="bi bi-check2-circle"></i> já tem pedido — será pulado</span>
+                    {% elif dia.itens %}
+                        <span class="text-muted small ms-2">(~{{ dia.total }} un sugeridas)</span>
+                        <div class="mt-1">
+                            {% for it in dia.itens %}
+                            <span class="psem-item">
+                                <input type="number" min="0"
+                                       class="form-control form-control-sm"
+                                       name="qtd|{{ loja.loja_id }}|{{ dia.data }}|{{ it.receita_id }}"
+                                       value="{{ it.qtd }}">
+                                <span class="small">{{ it.nome }}</span>
+                            </span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endfor %}
+
+    {% if ns.algum %}
+    <div class="psem-barra d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span class="text-muted small">
+            {{ sugestao.total_pedidos }} pedido(s) rascunho serão criados
+            (dias com pedido existente são pulados).
+        </span>
+        <button type="submit" class="btn btn-success"
+                onclick="return confirm('Gerar os pedidos rascunho com as quantidades atuais? Eles entram como pendente pra você revisar e confirmar.');">
+            <i class="bi bi-plus-square"></i> Gerar pedidos rascunho
+        </button>
+    </div>
+    {% else %}
+    <p class="text-muted">Sem sugestões no período — histórico de pedidos
+        insuficiente para projetar. Acumule alguns pedidos e tente de novo.</p>
+    {% endif %}
+</form>
+{% endblock %}
