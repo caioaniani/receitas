@@ -22,7 +22,7 @@ def _csrf(client):
     return html[i:html.index('"', i)]
 
 
-def test_precos_lote_atualiza_receita_e_produto_e_cesta(app, admin_user):
+def test_precos_lote_atualiza_receita_e_produto_e_cesta(app, owner_user):
     from app.extensions import db
     from app.models import Produto, ProdutoItem, Receita
 
@@ -45,7 +45,7 @@ def test_precos_lote_atualiza_receita_e_produto_e_cesta(app, admin_user):
         rid, pid, cid = receita.id, prod.id, cesta.id
 
     client = app.test_client()
-    _login(client, admin_user)
+    _login(client, owner_user)
     token = _csrf(client)
 
     resp = client.post('/receitas/precos', data={
@@ -82,7 +82,7 @@ def test_precos_lote_atualiza_receita_e_produto_e_cesta(app, admin_user):
         assert c.preco_atacado == 95.00
 
 
-def test_precos_lote_nao_zera_item_ausente_no_form(app, admin_user):
+def test_precos_lote_nao_zera_item_ausente_no_form(app, owner_user):
     """Item nao enviado no POST mantem preco — protecao contra zerar
     arquivados/itens fora do scroll. Replica o invariante da Receita
     pro Produto."""
@@ -100,7 +100,7 @@ def test_precos_lote_nao_zera_item_ausente_no_form(app, admin_user):
         rid, pid = intocada.id, intocado_prod.id
 
     client = app.test_client()
-    _login(client, admin_user)
+    _login(client, owner_user)
     token = _csrf(client)
 
     # POST vazio (so o CSRF)
@@ -113,7 +113,7 @@ def test_precos_lote_nao_zera_item_ausente_no_form(app, admin_user):
         assert Produto.query.get(pid).preco_loja == 77.77
 
 
-def test_precos_lote_get_separa_cestas_de_produtos_simples(app, admin_user):
+def test_precos_lote_get_separa_cestas_de_produtos_simples(app, owner_user):
     """GET renderiza Produto com itens na secao 'Cestas' e sem itens em
     'Produtos simples'."""
     from app.extensions import db
@@ -134,7 +134,7 @@ def test_precos_lote_get_separa_cestas_de_produtos_simples(app, admin_user):
         db.session.commit()
 
     client = app.test_client()
-    _login(client, admin_user)
+    _login(client, owner_user)
     resp = client.get('/receitas/precos')
     assert resp.status_code == 200
     html = resp.data.decode()
