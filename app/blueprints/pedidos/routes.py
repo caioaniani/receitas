@@ -976,10 +976,6 @@ def relatorio():
 
     if formato == 'pdf' and loja_id:
         from app.services.relatorio import gerar_pdf_pedidos
-        # etapa_foto: 'saida' | 'entrega' | None (ambas). So vale com fotos.
-        etapa_foto = request.args.get('etapa_foto') or None
-        if etapa_foto not in ('saida', 'entrega'):
-            etapa_foto = None
         buf = gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item,
                                 incluir_fotos=incluir_fotos,
                                 etapa_foto=etapa_foto)
