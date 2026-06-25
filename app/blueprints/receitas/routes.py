@@ -131,27 +131,39 @@ def padeiro(id):
 @login_required
 @admin_required
 def precos():
-    """Tela bulk pra editar preco_loja/preco_site/preco_venda de todas as receitas.
+    """Tela bulk pra editar precos de Receitas, Produtos simples e Cestas.
 
-    GET: agrupa por categoria. POST: parseia preco_loja_<id>/preco_site_<id>/preco_venda_<id>
-    e salva so o que mudou."""
+    Receitas: preco_loja, preco_site, preco_venda (atacado/B2B).
+    Produtos (simples e cestas): preco_loja, preco_site, preco_atacado.
+
+    Naming de campo distingue tipo: `preco_loja_<id>` = Receita;
+    `preco_loja_p<id>` = Produto/Cesta. Item ausente no form NAO eh zerado
+    (arquivados ficam de fora da tela e nao podem perder preco silenciosamente).
+    """
     if request.method == 'POST':
         atualizados = 0
         for r in Receita.query.all():
-            # So mexe em quem veio no form — arquivadas (fora da tela) nao
-            # podem ter os precos zerados por ausencia.
             if f'preco_loja_{r.id}' not in request.form:
                 continue
             antes = (r.preco_loja, r.preco_site, r.preco_venda)
             r.preco_loja = parse_float_br(request.form.get(f'preco_loja_{r.id}', ''))
             r.preco_site = parse_float_br(request.form.get(f'preco_site_{r.id}', ''))
             r.preco_venda = parse_float_br(request.form.get(f'preco_venda_{r.id}', ''))
-            depois = (r.preco_loja, r.preco_site, r.preco_venda)
-            if antes != depois:
+            if antes != (r.preco_loja, r.preco_site, r.preco_venda):
+                atualizados += 1
+        for p in Produto.query.filter_by(ativo=True).all():
+            if f'preco_loja_p{p.id}' not in request.form:
+                continue
+            antes = (p.preco_loja, p.preco_site, p.preco_atacado)
+            p.preco_loja = parse_float_br(request.form.get(f'preco_loja_p{p.id}', ''))
+            p.preco_site = parse_float_br(request.form.get(f'preco_site_p{p.id}', ''))
+            p.preco_atacado = parse_float_br(
+                request.form.get(f'preco_atacado_p{p.id}', ''))
+            if antes != (p.preco_loja, p.preco_site, p.preco_atacado):
                 atualizados += 1
         if atualizados:
             db.session.commit()
-            flash(f'{atualizados} receita(s) com preço atualizado.', 'success')
+            flash(f'{atualizados} item(ns) com preço atualizado.', 'success')
         else:
             flash('Nenhuma mudança.', 'info')
         return redirect(url_for('receitas.precos'))
@@ -162,7 +174,20 @@ def precos():
     for r in receitas:
         cat = r.categoria or 'Outros'
         categorias.setdefault(cat, []).append(r)
-    return render_template('receitas/precos.html', categorias=categorias)
+
+    produtos = (Produto.query.filter_by(ativo=True)
+                .order_by(Produto.categoria, Produto.nome).all())
+    cestas = [p for p in produtos if p.itens]
+    simples = [p for p in produtos if not p.itens]
+    categorias_produtos = {}
+    for p in simples:
+        cat = p.categoria or 'Outros'
+        categorias_produtos.setdefault(cat, []).append(p)
+
+    return render_template('receitas/precos.html',
+                           categorias=categorias,
+                           categorias_produtos=categorias_produtos,
+                           cestas=cestas)
 
 
 @receitas_bp.route('/reaproveitavel', methods=['GET', 'POST'])
