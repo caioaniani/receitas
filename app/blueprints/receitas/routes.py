@@ -482,6 +482,13 @@ def salvar(id):
     ep = (request.form.get('estado_padrao') or '').strip().lower()
     receita.estado_padrao = ep if ep in ('assado', 'backup') else None
     receita.reaproveitavel = bool(request.form.get('reaproveitavel'))
+    # Lead time de producao (dias). Vazio/invalido -> 0. Limite defensivo de
+    # 0..14 (nada na padaria leva mais que 2 semanas pra ficar pronto).
+    try:
+        dias_prod = int(request.form.get('dias_producao') or 0)
+    except (TypeError, ValueError):
+        dias_prod = 0
+    receita.dias_producao = max(0, min(dias_prod, 14))
     receita.imagem_url = request.form.get('imagem_url', '').strip() or None
 
     # Atualiza ingredientes

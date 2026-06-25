@@ -196,6 +196,55 @@ def test_receita_arquivada_fora(app):
     assert _por_receita(res, r.id) is None
 
 
+def test_lead_time_desloca_comprometido(app):
+    """dias_producao=2 (pao de 48h): o comprometido de hoje olha as entregas
+    de daqui 2 dias, nao as de hoje (tarde demais pra produzir com 48h)."""
+    loja = _loja()
+    r = _receita()
+    r.dias_producao = 2
+    db.session.commit()
+    hoje_d = hoje()
+    _pedido(loja, 'pendente', hoje_d + timedelta(days=2),
+            [(r.id, None, None, 30)])
+    _pedido(loja, 'pendente', hoje_d, [(r.id, None, None, 99)])
+
+    res = balanco_industria(horizonte_dias=1, usar_cache=False)
+    it = _por_receita(res, r.id)
+    assert it is not None
+    assert it['comprometido'] == 30     # entrega hoje+2; ignora a de hoje
+    assert it['dias_producao'] == 2
+    assert it['produzir'] == 30
+
+
+def test_lead_time_zero_inalterado(app):
+    """Sem lead (default 0): janela = horizonte a partir de hoje (como antes)."""
+    loja = _loja()
+    r = _receita()
+    _pedido(loja, 'pendente', hoje(), [(r.id, None, None, 40)])
+
+    res = balanco_industria(horizonte_dias=1, usar_cache=False)
+    it = _por_receita(res, r.id)
+    assert it['comprometido'] == 40
+    assert it['dias_producao'] == 0
+
+
+def test_lead_time_previsto_usa_dow_do_dia_alvo(app):
+    """Com lead=2, a previsao usa o dia-da-semana de (hoje+2), nao de hoje."""
+    loja = _loja()
+    r = _receita()
+    r.dias_producao = 2
+    db.session.commit()
+    alvo = hoje() + timedelta(days=2)
+    for semanas in (1, 2, 3):
+        _pedido(loja, 'recebido', alvo - timedelta(days=7 * semanas),
+                [(r.id, None, None, 10)])
+
+    res = balanco_industria(horizonte_dias=1, janela_semanas=6,
+                            usar_cache=False)
+    it = _por_receita(res, r.id)
+    assert it['previsto'] == 10        # media do dow de hoje+2 (3 ocorrencias)
+
+
 def test_breakdown_lista_todas_lojas_operacionais(app):
     """O breakdown_comprometido lista TODAS as lojas operacionais (ativas,
     sem Industria), inclusive as que NAO pediram a receita (qtd=0). Sem isso,

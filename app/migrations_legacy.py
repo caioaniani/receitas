@@ -156,6 +156,7 @@ def _migrate_postgres(app):
             'reaproveitavel': 'ALTER TABLE receita ADD COLUMN reaproveitavel BOOLEAN NOT NULL DEFAULT FALSE',
             'familia': 'ALTER TABLE receita ADD COLUMN familia VARCHAR(30)',
             'estado_padrao': 'ALTER TABLE receita ADD COLUMN estado_padrao VARCHAR(20)',
+            'dias_producao': 'ALTER TABLE receita ADD COLUMN dias_producao INTEGER NOT NULL DEFAULT 0',
         }
         for col, sql in migrações_receita.items():
             if col not in colunas:
@@ -1263,6 +1264,9 @@ def _migrate_sqlite(app):
     if 'arquivada_por_id' not in colunas:
         cursor.execute(
             "ALTER TABLE receita ADD COLUMN arquivada_por_id INTEGER REFERENCES usuario(id)")
+    if 'dias_producao' not in colunas:
+        cursor.execute(
+            "ALTER TABLE receita ADD COLUMN dias_producao INTEGER NOT NULL DEFAULT 0")
 
     cursor.execute("PRAGMA table_info(conta_pagar_item_map)")
     cols_cpim = [row[1] for row in cursor.fetchall()]

@@ -43,6 +43,10 @@
         background: #e9ecef; color: #6c757d; padding: .1rem .45rem;
         border-radius: .25rem; font-size: .72rem; font-weight: 600;
     }
+    .painel-tv .tag-lead {
+        background: #fff3cd; color: #664d03; padding: .1rem .45rem;
+        border-radius: .25rem; font-size: .72rem; font-weight: 600;
+    }
     .painel-tv .pedido-card {
         background: #e7f5ff; border: 1px solid #74c0fc;
         padding: .6rem .8rem; margin-bottom: .5rem; border-radius: .35rem;
@@ -157,6 +161,9 @@
                             {{ s.nome }}
                             {% if not s.tem_historico %}
                             <span class="tag-sem-hist" title="Sem histórico de pedidos — sem previsão; o Produzir vem do comprometido">sem histórico</span>
+                            {% endif %}
+                            {% if s.dias_producao %}
+                            <span class="tag-lead" title="Leva {{ s.dias_producao }} dia(s) pra ficar pronto (ex: fermentação 48h). O Produzir já reflete a demanda das entregas daqui {{ s.dias_producao }} dia(s) — produza hoje pra não faltar.">produção {{ s.dias_producao }}d</span>
                             {% endif %}
                         </div>
                         <div class="col-num">{{ s.em_estoque or '—' }}</div>

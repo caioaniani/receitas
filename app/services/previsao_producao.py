@@ -89,6 +89,12 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True):
     receitas = {r.id: r for r in Receita.query
                 .filter(Receita.arquivada_em.is_(None)).all()}
     nomes_loja = {l.id: l.nome for l in Loja.query.all()}
+    # Lead time de producao por receita (dias). 0 = assa no mesmo dia. Desloca
+    # a janela de demanda: "produzir HOJE = entregas em (hoje + lead)". Pra o
+    # pao de 48h (lead=2) nao faltar, o plano de hoje ja olha 2 dias a frente.
+    # Com tudo em 0 (padrao), o balanco e identico ao comportamento anterior.
+    lead = {rid: int(rec.dias_producao or 0) for rid, rec in receitas.items()}
+    max_lead = max(lead.values(), default=0)
     # Lojas OPERACIONAIS (ativas + sem a "Industria"). Usada no breakdown
     # pra listar TODAS as lojas que VAO ser olhadas (mesmo com qtd=0) — sem
     # essa lista o usuario nao consegue distinguir "loja nao pediu essa
@@ -103,18 +109,27 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True):
                .filter(EstoqueProducao.receita_id.isnot(None)).all()):
         em_estoque[ep.receita_id] += int(ep.quantidade or 0)
 
-    # 2. Comprometido: pedidos ainda nao enviados, data_entrega no horizonte.
+    # 2. Comprometido: pedidos ainda nao enviados cuja data_entrega cai na
+    # janela de PRODUCAO de cada receita — [hoje+lead, hoje+lead+horizonte-1].
+    # Pra lead=0 a janela e [hoje, horizonte_fim] (comportamento original).
     comprometido = defaultdict(int)
     comprometido_loja = defaultdict(lambda: defaultdict(int))
+    comp_fim = horizonte_fim + timedelta(days=max_lead)
     rows = (db.session.query(PedidoItem.receita_id, PedidoLoja.loja_id,
-                             PedidoItem.quantidade)
+                             PedidoLoja.data_entrega, PedidoItem.quantidade)
             .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
             .filter(PedidoItem.receita_id.isnot(None),
                     PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
                     PedidoLoja.data_entrega >= hoje_d,
-                    PedidoLoja.data_entrega <= horizonte_fim)
+                    PedidoLoja.data_entrega <= comp_fim)
             .all())
-    for rid, loja_id, qtd in rows:
+    for rid, loja_id, data_ent, qtd in rows:
+        if data_ent is None:
+            continue
+        L = lead.get(rid, 0)
+        if not (hoje_d + timedelta(days=L) <= data_ent
+                <= hoje_d + timedelta(days=L + horizonte_dias - 1)):
+            continue
         comprometido[rid] += int(qtd or 0)
         comprometido_loja[rid][loja_id] += int(qtd or 0)
 
@@ -150,17 +165,20 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True):
 
     dias_calendario_janela = 7 * janela_semanas
 
-    # 4. Previsao: pra cada dia do horizonte, soma a media do dia-da-semana
-    # correspondente (com fallback pra media diaria simples). Receita sem
-    # historico fica com previsto 0 (produzir vem so do comprometido).
-    dias_futuros = [hoje_d + timedelta(days=i) for i in range(horizonte_dias)]
+    # 4. Previsao: pra cada dia da janela de entrega da receita (deslocada pelo
+    # lead), soma a media do dia-da-semana correspondente (com fallback pra
+    # media diaria simples). Receita sem historico fica com previsto 0
+    # (produzir vem so do comprometido).
     previsto = defaultdict(float)
     for rid in receitas:
         if not datas_total.get(rid):
             continue
         rid_dow = datas_dow.get(rid, {})
         rid_soma_total = soma_total.get(rid, 0)
-        for d in dias_futuros:
+        L = lead.get(rid, 0)
+        dias_rid = [hoje_d + timedelta(days=L + i)
+                    for i in range(horizonte_dias)]
+        for d in dias_rid:
             dow = d.weekday()
             datas = rid_dow.get(dow)
             if datas and len(datas) >= _MIN_OCORRENCIAS_DOW:
@@ -187,6 +205,7 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True):
             'previsto': prev,
             'produzir': produzir,
             'tem_historico': bool(datas_total.get(rid)),
+            'dias_producao': lead.get(rid, 0),
             # Lista TODAS as lojas operacionais — mesmo com qtd=0. Visivel
             # confirma ao usuario que o motor enxergou cada loja. Ordem: qtd
             # desc, depois alfabetico (lojas_op ja vem ordenado por nome).
