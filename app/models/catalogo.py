@@ -190,6 +190,7 @@ class Produto(db.Model):
     preco_atacado = db.Column(db.Float)
     preco_loja = db.Column(db.Float)
     preco_site = db.Column(db.Float)
+    preco_interno = db.Column(db.Float)
     imagem_url = db.Column(db.String(400))  # URL externa de fallback (legado)
     imagem_blob = db.Column(db.LargeBinary)  # legado: foto admin pre-M6
     imagem_dropbox_url = db.Column(db.String(500))  # shared link Dropbox (M6+)
