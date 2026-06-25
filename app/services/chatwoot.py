@@ -74,6 +74,48 @@ def _bot_headers():
             'Content-Type': 'application/json'}
 
 
+# ── Painel (atendimento humano via /entregas/painel-testes) ──
+# Usa token de USUARIO de um agente dedicado no Chatwoot ("Painel"). Mensagens
+# postadas com esse token aparecem como esse agente — distinguivel do bot
+# (que usa CHATWOOT_BOT_TOKEN) e dos 12 atendentes. Setup: criar agente
+# "Painel" no Chatwoot, gerar token (Profile Settings → Access Token), pôr em
+# CHATWOOT_PAINEL_TOKEN no Railway.
+
+
+def painel_disponivel():
+    cfg = current_app.config
+    return bool((cfg.get('CHATWOOT_URL') or '').strip()
+                and (cfg.get('CHATWOOT_PAINEL_TOKEN') or '').strip()
+                and (cfg.get('CHATWOOT_ACCOUNT_ID') or '').strip())
+
+
+def _painel_headers():
+    return {'api_access_token':
+            (current_app.config.get('CHATWOOT_PAINEL_TOKEN') or '').strip(),
+            'Content-Type': 'application/json'}
+
+
+def enviar_mensagem_painel(conversation_id, content):
+    """Posta uma mensagem na conversa como o agente 'Painel' (NAO o bot).
+
+    Cuidado: a mensagem aparece como esse agente humano no Chatwoot, com
+    nome+foto proprios. Erro = nao envia (cliente nao recebe resposta dupla)."""
+    if not painel_disponivel():
+        return {'ok': False, 'erro': 'CHATWOOT_PAINEL_TOKEN nao configurado'}
+    url = f'{_base()}/conversations/{conversation_id}/messages'
+    try:
+        r = requests.post(url, json={'content': content, 'message_type': 'outgoing'},
+                          headers=_painel_headers(), timeout=10)
+        if r.status_code not in (200, 201):
+            logger.warning('chatwoot enviar_mensagem_painel %s: %s',
+                           r.status_code, (r.text or '')[:200])
+            return {'ok': False, 'erro': f'HTTP {r.status_code}'}
+        return {'ok': True}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('chatwoot enviar_mensagem_painel falhou')
+        return {'ok': False, 'erro': str(exc)}
+
+
 def enviar_mensagem(conversation_id, content):
     """Posta uma resposta do bot numa conversa. Retorna {'ok': bool}."""
     if not bot_disponivel():
