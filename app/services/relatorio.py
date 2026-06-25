@@ -292,8 +292,14 @@ def gerar_pdf_pedidos(loja_nome, de, ate, pedidos, totais, por_item, incluir_fot
         pdf.cell(135, 5, 'Subtotal do pedido', border=1, align='R')
         pdf.cell(35, 5, _money(p_info['subtotal']), border=1, align='R', new_x='LMARGIN', new_y='NEXT')
 
-        if incluir_fotos and p.fotos:
-            _render_fotos(pdf, p.fotos)
+        if incluir_fotos:
+            if p.fotos:
+                _render_fotos(pdf, list(p.fotos),
+                              titulo='Fotos do recebimento (upload manual)')
+            if conf:
+                _render_fotos(pdf, [f for f, _ in conf],
+                              titulo='Fotos da conferencia por item (QR)',
+                              legendas=[lg for _, lg in conf])
 
         pdf.ln(2)
 
