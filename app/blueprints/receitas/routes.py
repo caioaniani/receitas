@@ -16,7 +16,7 @@ from flask import (
 from flask_login import current_user, login_required
 
 from app.blueprints.receitas import receitas_bp
-from app.decorators import admin_required
+from app.decorators import admin_required, owner_required
 from app.extensions import db
 from app.models import Atribuicao, MateriaPrima, Produto, Receita, ReceitaIngrediente
 from app.services.custos import calcular_custos_receitas
@@ -129,12 +129,14 @@ def padeiro(id):
 
 @receitas_bp.route('/precos', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@owner_required
 def precos():
     """Tela bulk pra editar precos de Receitas, Produtos simples e Cestas.
 
-    Receitas: preco_loja, preco_site, preco_venda (atacado/B2B).
-    Produtos (simples e cestas): preco_loja, preco_site, preco_atacado.
+    Owner-only — mexe em dinheiro em massa.
+
+    Receitas: preco_loja, preco_site, preco_venda (atacado/B2B), preco_interno.
+    Produtos (simples e cestas): preco_loja, preco_site, preco_atacado, preco_interno.
 
     Naming de campo distingue tipo: `preco_loja_<id>` = Receita;
     `preco_loja_p<id>` = Produto/Cesta. Item ausente no form NAO eh zerado
@@ -145,21 +147,25 @@ def precos():
         for r in Receita.query.all():
             if f'preco_loja_{r.id}' not in request.form:
                 continue
-            antes = (r.preco_loja, r.preco_site, r.preco_venda)
+            antes = (r.preco_loja, r.preco_site, r.preco_venda, r.preco_interno)
             r.preco_loja = parse_float_br(request.form.get(f'preco_loja_{r.id}', ''))
             r.preco_site = parse_float_br(request.form.get(f'preco_site_{r.id}', ''))
             r.preco_venda = parse_float_br(request.form.get(f'preco_venda_{r.id}', ''))
-            if antes != (r.preco_loja, r.preco_site, r.preco_venda):
+            r.preco_interno = parse_float_br(
+                request.form.get(f'preco_interno_{r.id}', ''))
+            if antes != (r.preco_loja, r.preco_site, r.preco_venda, r.preco_interno):
                 atualizados += 1
         for p in Produto.query.filter_by(ativo=True).all():
             if f'preco_loja_p{p.id}' not in request.form:
                 continue
-            antes = (p.preco_loja, p.preco_site, p.preco_atacado)
+            antes = (p.preco_loja, p.preco_site, p.preco_atacado, p.preco_interno)
             p.preco_loja = parse_float_br(request.form.get(f'preco_loja_p{p.id}', ''))
             p.preco_site = parse_float_br(request.form.get(f'preco_site_p{p.id}', ''))
             p.preco_atacado = parse_float_br(
                 request.form.get(f'preco_atacado_p{p.id}', ''))
-            if antes != (p.preco_loja, p.preco_site, p.preco_atacado):
+            p.preco_interno = parse_float_br(
+                request.form.get(f'preco_interno_p{p.id}', ''))
+            if antes != (p.preco_loja, p.preco_site, p.preco_atacado, p.preco_interno):
                 atualizados += 1
         if atualizados:
             db.session.commit()
