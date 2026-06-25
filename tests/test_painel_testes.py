@@ -1,9 +1,10 @@
-"""Tela experimental /entregas/painel-testes: painel de entregas + Chatwoot
-embutidos lado a lado (pedido do dono 25/06/2026).
+"""Tela /entregas/painel-testes: painel de pedidos (iframe same-origin) +
+atendimento NOSSO (conversas do Chatwoot via API, SEM iframe) + klaxon de
+nova conversa. Read-only.
 
-Cobre: a rota renderiza os 2 iframes; a CSP libera frame-src pro Chatwoot
-SO nesta rota; o painel embute same-origin via ?embed=1; e — trava de
-regressao — o painel de PRODUCAO (sem ?embed) continua X-Frame-Options DENY.
+O embed direto do dashboard do Chatwoot foi abandonado (o servidor dele recusa
+ser embutido); trazemos as conversas via fetch das rotas /entregas/api/
+atendimento/*.
 """
 
 
@@ -21,65 +22,49 @@ def _staff(app):
     return c
 
 
-def test_painel_testes_renderiza_dois_iframes(app):
+# ── Render da tela ──
+
+
+def test_painel_testes_renderiza(app):
     c = _staff(app)
     r = c.get('/entregas/painel-testes')
     assert r.status_code == 200
     html = r.data.decode()
-    assert 'TESTE' in html
-    # iframe do painel real, embutido same-origin com ?embed=1
-    assert '/entregas/painel?embed=1' in html
-    # divisor arrastavel presente
-    assert 'id="divisor"' in html
+    assert '/entregas/painel?embed=1' in html              # iframe do painel real
+    assert 'id="divisor"' in html                          # divisor arrastavel
+    assert 'id="at-lista"' in html                         # widget de atendimento
+    assert '/entregas/api/atendimento/conversas' in html   # fetch da lista
 
 
-def test_painel_testes_csp_libera_frame_self(app):
+def test_painel_testes_csp_frame_self(app):
     c = _staff(app)
     r = c.get('/entregas/painel-testes')
     csp = r.headers.get('Content-Security-Policy', '')
-    assert "frame-src 'self'" in csp
+    # so o painel embutido; o Chatwoot NAO entra no frame-src (sem iframe dele)
+    assert "frame-src 'self';" in csp
 
 
-def test_painel_testes_csp_inclui_chatwoot_quando_configurado(app):
+def test_painel_testes_csp_img_libera_chatwoot(app):
+    """Dominio do Chatwoot vai pro img-src (anexos de imagem dos clientes na
+    thread), NUNCA pro frame-src."""
     app.config['CHATWOOT_URL'] = 'https://atendimento.exemplo.com'
     c = _staff(app)
     r = c.get('/entregas/painel-testes')
     csp = r.headers.get('Content-Security-Policy', '')
     assert 'https://atendimento.exemplo.com' in csp
-    assert "frame-src 'self' https://atendimento.exemplo.com" in csp
-    html = r.data.decode()
-    # iframe + fallback "abrir em nova aba" (caso o Chatwoot recuse embed)
-    assert 'https://atendimento.exemplo.com' in html
-    assert 'target="_blank"' in html
-    assert 'abrir em nova aba' in html
-    # aviso oculto que aparece se o iframe nao carregar em 5s
-    assert 'cw-aviso' in html
-
-
-def test_painel_testes_sem_chatwoot_mostra_aviso(app):
-    app.config.pop('CHATWOOT_URL', None)
-    c = _staff(app)
-    r = c.get('/entregas/painel-testes')
-    html = r.data.decode()
-    assert 'CHATWOOT_URL' in html  # aviso "nao configurado"
-    csp = r.headers.get('Content-Security-Policy', '')
-    # frame-src so com 'self' (nenhum dominio externo de frame)
-    assert "frame-src 'self';" in csp
+    frame_part = csp.split('frame-src', 1)[1] if 'frame-src' in csp else ''
+    assert 'atendimento.exemplo.com' not in frame_part
 
 
 def test_painel_embed_permite_same_origin(app):
-    """/entregas/painel?embed=1 troca o DENY por SAMEORIGIN pra poder ser
-    embutido na tela de testes (same-origin)."""
     c = _staff(app)
     r = c.get('/entregas/painel?embed=1')
     assert r.status_code == 200
     assert r.headers.get('X-Frame-Options') == 'SAMEORIGIN'
-    assert "frame-ancestors 'self'" in r.headers.get('Content-Security-Policy', '')
 
 
 def test_painel_producao_sem_embed_continua_deny(app):
-    """REGRESSAO: o painel de producao (sem ?embed) NAO pode ser afrouxado —
-    segue X-Frame-Options DENY (anti-clickjacking)."""
+    """REGRESSAO: painel de producao (sem ?embed) segue X-Frame-Options DENY."""
     c = _staff(app)
     r = c.get('/entregas/painel')
     assert r.status_code == 200
@@ -93,18 +78,107 @@ def test_painel_testes_exige_login(app):
     assert '/login' in r.headers.get('Location', '')
 
 
-# ── /entregas/api/painel-testes/chatwoot-pending ───────────
+def test_painel_testes_botao_alertas(app):
+    c = _staff(app)
+    html = c.get('/entregas/painel-testes').data.decode()
+    assert 'LIGAR ALERTAS' in html
+    assert '/entregas/api/painel-testes/chatwoot-pending' in html
+    assert 'klaxon' in html
+
+
+# ── Backend: chatwoot.listar_conversas ──
+
+
+def test_listar_conversas_parseia(app, monkeypatch):
+    from app.services import chatwoot
+
+    class _Resp:
+        status_code = 200
+        text = '{}'
+
+        def json(self):
+            return {'data': {'payload': [{
+                'id': 7, 'status': 'open',
+                'meta': {'sender': {'name': 'Caio'}, 'channel': 'Channel::WebWidget'},
+                'last_non_activity_message': {'content': 'Oi, tem cesta?'},
+                'last_activity_at': 1000, 'unread_count': 2,
+            }]}}
+
+    monkeypatch.setattr(chatwoot, 'disponivel', lambda: True)
+    monkeypatch.setattr(chatwoot, '_headers', lambda: {})
+    monkeypatch.setattr(chatwoot.requests, 'get', lambda *a, **k: _Resp())
+    with app.app_context():
+        cs = chatwoot.listar_conversas(status='open')
+    assert len(cs) == 1
+    assert cs[0]['contato'] == 'Caio'
+    assert cs[0]['preview'] == 'Oi, tem cesta?'
+    assert cs[0]['nao_lidas'] == 2
+    assert cs[0]['status'] == 'open'
+
+
+def test_listar_conversas_indisponivel_vazio(app, monkeypatch):
+    from app.services import chatwoot
+    monkeypatch.setattr(chatwoot, 'disponivel', lambda: False)
+    monkeypatch.setattr(chatwoot, 'bot_disponivel', lambda: False)
+    with app.app_context():
+        assert chatwoot.listar_conversas() == []
+
+
+# ── Rotas de atendimento ──
+
+
+def test_api_conversas(app, monkeypatch):
+    from app.services import chatwoot
+    monkeypatch.setattr(
+        chatwoot, 'listar_conversas',
+        lambda **k: [{'id': 1, 'contato': 'Ana', 'preview': 'oi',
+                      'status': 'open', 'ultima_em': 1, 'nao_lidas': 0, 'canal': ''}])
+    c = _staff(app)
+    r = c.get('/entregas/api/atendimento/conversas?status=open')
+    assert r.status_code == 200
+    assert r.get_json()['conversas'][0]['contato'] == 'Ana'
+
+
+def test_api_conversa_thread(app, monkeypatch):
+    from app.services import chatwoot
+    monkeypatch.setattr(
+        chatwoot, 'buscar_historico',
+        lambda cid, **k: [{'role': 'user', 'content': 'tem cesta?'},
+                          {'role': 'assistant', 'content': 'temos sim!'}])
+    c = _staff(app)
+    r = c.get('/entregas/api/atendimento/conversa/7')
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['id'] == 7
+    assert [m['content'] for m in j['mensagens']] == ['tem cesta?', 'temos sim!']
+
+
+def test_api_conversas_erro_nao_quebra(app, monkeypatch):
+    from app.services import chatwoot
+
+    def boom(**k):
+        raise RuntimeError('chatwoot down')
+
+    monkeypatch.setattr(chatwoot, 'listar_conversas', boom)
+    c = _staff(app)
+    r = c.get('/entregas/api/atendimento/conversas')
+    assert r.status_code == 200
+    assert r.get_json()['conversas'] == []
+
+
+def test_api_atendimento_exige_login(app):
+    c = app.test_client()
+    assert c.get('/entregas/api/atendimento/conversas').status_code in (301, 302)
+    assert c.get('/entregas/api/atendimento/conversa/1').status_code in (301, 302)
+
+
+# ── API pending (klaxon) ──
 
 
 def test_pending_api_retorna_ids(app, monkeypatch):
-    """Devolve IDs de conversas pending (formato esperado pelo front)."""
     from app.services import chatwoot
-    monkeypatch.setattr(
-        chatwoot, 'listar_conversas_paradas',
-        lambda **kw: [
-            {'id': 198, 'nome_contato': 'Caio', 'minutos_paradas': 0},
-            {'id': 201, 'nome_contato': 'Ana', 'minutos_paradas': 2},
-        ])
+    monkeypatch.setattr(chatwoot, 'listar_conversas_paradas',
+                        lambda **kw: [{'id': 198}, {'id': 201}])
     c = _staff(app)
     r = c.get('/entregas/api/painel-testes/chatwoot-pending')
     assert r.status_code == 200
@@ -113,50 +187,25 @@ def test_pending_api_retorna_ids(app, monkeypatch):
     assert j['count'] == 2
 
 
-def test_pending_api_chama_com_min_minutos_zero(app, monkeypatch):
-    """REGRESSAO: precisa pegar conversas RECEM-CRIADAS (0min), nao paradas
-    ha 15min. Se voltar pro default da funcao do vigia, perde alarme de
-    conversa nova — proposito DESTA tela."""
+def test_pending_api_min_minutos_zero(app, monkeypatch):
+    """REGRESSAO: precisa pegar conversas RECEM-criadas (0min), nao paradas."""
     chamadas = []
     from app.services import chatwoot
-    monkeypatch.setattr(
-        chatwoot, 'listar_conversas_paradas',
-        lambda **kw: (chamadas.append(kw) or []))
+    monkeypatch.setattr(chatwoot, 'listar_conversas_paradas',
+                        lambda **kw: (chamadas.append(kw) or []))
     c = _staff(app)
     c.get('/entregas/api/painel-testes/chatwoot-pending')
-    assert chamadas
     assert chamadas[0].get('min_minutos') == 0
     assert chamadas[0].get('status') == 'pending'
 
 
-def test_pending_api_erro_no_chatwoot_devolve_zero(app, monkeypatch):
-    """Chatwoot fora do ar / token invalido NAO derruba a rota — devolve
-    count=0 (frontend trata como 'nenhuma pending', nao falsifica klaxon)."""
+def test_pending_api_erro_zero(app, monkeypatch):
     from app.services import chatwoot
 
     def boom(**kw):
-        raise RuntimeError('chatwoot down')
+        raise RuntimeError('down')
 
     monkeypatch.setattr(chatwoot, 'listar_conversas_paradas', boom)
     c = _staff(app)
     r = c.get('/entregas/api/painel-testes/chatwoot-pending')
-    assert r.status_code == 200
     assert r.get_json() == {'ids': [], 'count': 0}
-
-
-def test_pending_api_exige_login(app):
-    c = app.test_client()
-    r = c.get('/entregas/api/painel-testes/chatwoot-pending')
-    assert r.status_code in (301, 302)
-
-
-def test_painel_testes_tem_botao_ligar_alertas(app):
-    """UI: botao de armar audio (AudioContext exige user gesture) +
-    chamada da API de pending no JS."""
-    app.config['CHATWOOT_URL'] = 'https://atendimento.exemplo.com'
-    c = _staff(app)
-    r = c.get('/entregas/painel-testes')
-    html = r.data.decode()
-    assert 'LIGAR ALERTAS' in html
-    assert '/entregas/api/painel-testes/chatwoot-pending' in html
-    assert 'klaxon' in html
