@@ -3,6 +3,7 @@
 import io
 import logging
 
+import requests
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -44,7 +45,6 @@ def _foto_bytes(foto):
     aceitar — se vier HTML, loga e cai no fallback em vez de passar lixo
     pro fpdf2. Erros NAO sao mais engolidos em silencio.
     """
-    import requests
 
     from app.services.dropbox_storage import _converter_para_raw
     url = foto.imagem_url
