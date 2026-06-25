@@ -193,7 +193,8 @@ def gerar_xlsx_pedidos(loja_nome, de, ate, pedidos, totais, por_item):
 
     for p_info in pedidos:
         p = p_info['p']
-        n_fotos = len(p.fotos)
+        # Total de fotos = recebimento manual (p.fotos) + conferencia QR.
+        n_fotos = len(p.fotos) + len(_fotos_conferencia(p))
         for l in p_info['linhas']:
             ws.append([
                 p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '',
