@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% block title %}Importar preços em lote{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-upload"></i> Importar preços em lote</h1>
+    <a href="{{ url_for('receitas.precos') }}" class="btn btn-sm btn-outline-secondary">Voltar</a>
+</div>
+
+<div class="alert alert-info small mb-3">
+    Cole a lista (TSV ou colunas separadas por 2+ espaços). Cabeçalho esperado:
+    <code>Produto<i>tab</i>Categoria<i>tab</i>Preço<i>tab</i>Unidade</code>.
+    Categorias aceitas: <strong>Padaria</strong>.
+    <strong>Fornecedor</strong> e <strong>Funcionarios</strong> são ignorados
+    (não são produto de venda interna).
+    Match por nome (case-insensitive, sem acentos). Roda 2x sem duplicar.
+</div>
+
+<form method="POST" action="{{ url_for('receitas.precos_importar') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-3">
+        <label class="form-label fw-semibold">Cole aqui:</label>
+        <textarea name="texto" rows="14" class="form-control font-monospace"
+                  style="font-size:12px;"
+                  placeholder="Produto&#9;Categoria&#9;Preço&#9;Unidade&#10;Brioche&#9;Padaria&#9;R$ 10,00&#9;un">{{ texto }}</textarea>
+    </div>
+    {% if not plano %}
+    <button type="submit" class="btn btn-primary">
+        <i class="bi bi-search"></i> Analisar (preview)
+    </button>
+    {% endif %}
+
+    {% if plano %}
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="card border-success h-100">
+                <div class="card-header bg-success text-white py-2">
+                    <strong>Vou atualizar ({{ plano.atualizar|length }})</strong>
+                </div>
+                <div class="card-body p-2" style="max-height:380px;overflow:auto;">
+                    {% if plano.atualizar %}
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Item</th><th>Tipo</th><th class="text-end">Preço</th></tr></thead>
+                        <tbody>
+                        {% for linha, tipo, obj in plano.atualizar %}
+                            <tr>
+                                <td>{{ obj.nome }}</td>
+                                <td><span class="badge bg-light text-dark">{{ tipo }}</span></td>
+                                <td class="text-end">{{ '%.2f'|format(linha.preco)|replace('.', ',') }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}<span class="text-muted small">Nenhum.</span>{% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-warning h-100">
+                <div class="card-header bg-warning py-2">
+                    <strong>Vou criar como Produto ({{ plano.criar|length }})</strong>
+                </div>
+                <div class="card-body p-2" style="max-height:380px;overflow:auto;">
+                    {% if plano.criar %}
+                    <p class="small text-muted mb-1">
+                        Itens que não casam com nenhuma receita/produto existente.
+                        Confira antes — pode ser variante de nome (ex: "Pão Frances" vs "Pão Francês").
+                    </p>
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Nome</th><th class="text-end">Preço</th></tr></thead>
+                        <tbody>
+                        {% for linha in plano.criar %}
+                            <tr>
+                                <td>{{ linha.nome }}</td>
+                                <td class="text-end">{{ '%.2f'|format(linha.preco)|replace('.', ',') }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}<span class="text-muted small">Nenhum.</span>{% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-secondary h-100">
+                <div class="card-header bg-secondary text-white py-2">
+                    <strong>Vou ignorar ({{ plano.ignorar|length }})</strong>
+                </div>
+                <div class="card-body p-2" style="max-height:380px;overflow:auto;">
+                    {% if plano.ignorar %}
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Item</th><th>Motivo</th></tr></thead>
+                        <tbody>
+                        {% for linha, motivo in plano.ignorar %}
+                            <tr>
+                                <td>{{ linha.nome }}</td>
+                                <td class="small text-muted">{{ motivo }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}<span class="text-muted small">Nenhum.</span>{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" name="confirmar" value="1" class="btn btn-success btn-lg">
+            <i class="bi bi-check-lg"></i> Confirmar e aplicar
+            ({{ plano.atualizar|length + plano.criar|length }} mudança{{ '' if (plano.atualizar|length + plano.criar|length) == 1 else 's' }})
+        </button>
+        <button type="submit" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-clockwise"></i> Re-analisar
+        </button>
+    </div>
+    {% endif %}
+</form>
+{% endblock %}
