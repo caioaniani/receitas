@@ -101,6 +101,17 @@ def test_detalhe_pedido_mostra_itens(app):
     assert b'CCCC0003' in r.data
 
 
+def test_detalhe_mostra_motivo_cancelamento(app):
+    from app.extensions import db
+    c = _owner(app)
+    p = _pedido(db, codigo='EEEE0005')  # aguardando_pagamento -> cancelado_admin
+    c.post(f'/admin/loja-online/pedidos/{p.codigo}/cancelar',
+           follow_redirects=False)
+    r = c.get(f'/admin/loja-online/pedidos/{p.codigo}')
+    assert r.status_code == 200
+    assert b'Cancelado manualmente (admin)' in r.data
+
+
 def test_cancelar_pedido(app):
     from app.extensions import db
     from app.models import PedidoOnline
