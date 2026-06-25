@@ -158,6 +158,10 @@ def gerar_xlsx_pedidos(loja_nome, de, ate, pedidos, totais, por_item):
     ws.merge_cells('A1:H1')
     ws['A2'] = f'Periodo: {de.strftime("%d/%m/%Y")} a {ate.strftime("%d/%m/%Y")}'
     ws.merge_cells('A2:H2')
+    ws['A3'] = ('Valores em PRECO INTERNO (transferencia loja->industria) '
+                '- nao e balcao/site/atacado. Item sem interno = R$ 0,00.')
+    ws['A3'].font = Font(italic=True, size=9, color='666666')
+    ws.merge_cells('A3:H3')
 
     ws['A4'] = 'Pedidos entregues'
     ws['B4'] = totais['qtd_pedidos']
