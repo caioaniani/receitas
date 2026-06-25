@@ -685,6 +685,9 @@ def responder(historico, *, telefone_contato=None):
             return _resp_handoff(_FALLBACK, f'erro anthropic: {exc}',
                                  tools_usadas=tools_usadas)
 
+        from app.services import uso_ia
+        uso_ia.registrar('bot_atendimento', MODELO, resp.usage)
+
         tool_uses = [b for b in resp.content if getattr(b, 'type', None) == 'tool_use']
 
         if not tool_uses:
