@@ -34,7 +34,7 @@ def test_vigia_recebe_tools_usadas_no_contexto(app):
     with app.app_context(), \
          patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'x'}), \
          patch.object(app.config, 'get', wraps=app.config.get), \
-         patch('app.services.chatbot_vigia._chamar_haiku',
+         patch('app.services.chatbot_vigia._chamar_modelo',
                side_effect=fake_haiku), \
          patch('app.services.chatbot_vigia._resumo_catalogo_site',
                return_value='- Family Box: DISPONIVEL'), \
@@ -60,7 +60,7 @@ def test_vigia_mostra_tools_quando_bot_consultou(app):
 
     with app.app_context(), \
          patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'x'}), \
-         patch('app.services.chatbot_vigia._chamar_haiku',
+         patch('app.services.chatbot_vigia._chamar_modelo',
                side_effect=fake_haiku), \
          patch('app.services.chatbot_vigia._resumo_catalogo_site',
                return_value=''):

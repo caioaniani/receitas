@@ -106,7 +106,7 @@ def test_avaliar_pula_haiku_quando_detector_bate(app):
     app.config['ANTHROPIC_API_KEY'] = 'sk-x'
     app.config['ZAPI_NUMERO_DESTINO'] = '5511999999999'
     with app.app_context():
-        with patch.object(v, '_chamar_haiku') as haiku, \
+        with patch.object(v, '_chamar_modelo') as haiku, \
              patch('app.services.zapi.enviar_texto',
                     return_value={'ok': True}) as send:
             r = v._avaliar_interno(
@@ -128,7 +128,7 @@ def test_avaliar_chama_haiku_quando_detector_NAO_bate(app):
     app.config['CHATBOT_VIGIA'] = '1'
     app.config['ANTHROPIC_API_KEY'] = 'sk-x'
     with app.app_context():
-        with patch.object(v, '_chamar_haiku',
+        with patch.object(v, '_chamar_modelo',
                            return_value={'alerta': False, 'gravidade': None,
                                          'motivo': '', 'acao_sugerida': ''}) as haiku:
             v._avaliar_interno(

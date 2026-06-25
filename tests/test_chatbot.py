@@ -182,7 +182,7 @@ def test_vigia_registra_no_historico(app):
         app.config['CHATBOT_VIGIA'] = True
         app.config['ANTHROPIC_API_KEY'] = 'test'
         app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
-        with patch('app.services.chatbot_vigia._chamar_haiku',
+        with patch('app.services.chatbot_vigia._chamar_modelo',
                    return_value=veredicto), \
              patch('app.services.chatbot_vigia._resumo_catalogo_site',
                    return_value=''), \
@@ -209,7 +209,7 @@ def test_vigia_disparar_teste_cenario_estoque(app):
         app.config['CHATBOT_VIGIA'] = True
         app.config['ANTHROPIC_API_KEY'] = 'test'
         app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
-        with patch('app.services.chatbot_vigia._chamar_haiku',
+        with patch('app.services.chatbot_vigia._chamar_modelo',
                    return_value=veredicto), \
              patch('app.services.chatbot_vigia._resumo_catalogo_site',
                    return_value=''), \
@@ -543,7 +543,7 @@ def test_vigia_media_nao_pinga_so_registra(app):
         app.config['CHATBOT_VIGIA'] = True
         app.config['ANTHROPIC_API_KEY'] = 'test'
         app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
-        with patch('app.services.chatbot_vigia._chamar_haiku', return_value=veredicto), \
+        with patch('app.services.chatbot_vigia._chamar_modelo', return_value=veredicto), \
              patch('app.services.chatbot_vigia._resumo_catalogo_site', return_value=''), \
              patch('app.services.zapi.enviar_texto') as send:
             r = chatbot_vigia.avaliar([{'role': 'user', 'content': 'o que tem na cesta?'}],
@@ -824,7 +824,7 @@ def test_vigia_dispara_alerta_quando_gravidade_alta(app):
         app.config['CHATBOT_VIGIA'] = True
         app.config['ANTHROPIC_API_KEY'] = 'test'
         app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
-        with patch('app.services.chatbot_vigia._chamar_haiku',
+        with patch('app.services.chatbot_vigia._chamar_modelo',
                    return_value=veredicto), \
              patch('app.services.chatbot_vigia._resumo_catalogo_site',
                    return_value='- Croissant: 12 un'), \
@@ -851,7 +851,7 @@ def test_vigia_silencia_quando_sem_alerta(app):
         app.config['CHATBOT_VIGIA'] = True
         app.config['ANTHROPIC_API_KEY'] = 'test'
         app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
-        with patch('app.services.chatbot_vigia._chamar_haiku',
+        with patch('app.services.chatbot_vigia._chamar_modelo',
                    return_value=veredicto), \
              patch('app.services.chatbot_vigia._resumo_catalogo_site',
                    return_value=''), \
@@ -870,7 +870,7 @@ def test_vigia_silencia_quando_gravidade_baixa(app):
         app.config['CHATBOT_VIGIA'] = True
         app.config['ANTHROPIC_API_KEY'] = 'test'
         app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
-        with patch('app.services.chatbot_vigia._chamar_haiku',
+        with patch('app.services.chatbot_vigia._chamar_modelo',
                    return_value=veredicto), \
              patch('app.services.chatbot_vigia._resumo_catalogo_site',
                    return_value=''), \
@@ -885,7 +885,7 @@ def test_vigia_desligado_pula(app):
     with app.app_context():
         app.config['CHATBOT_VIGIA'] = False
         app.config['ANTHROPIC_API_KEY'] = 'test'
-        with patch('app.services.chatbot_vigia._chamar_haiku') as call:
+        with patch('app.services.chatbot_vigia._chamar_modelo') as call:
             r = chatbot_vigia.avaliar([{'role': 'user', 'content': 'oi'}])
     assert 'pulou' in r
     call.assert_not_called()
@@ -953,7 +953,7 @@ def test_vigia_extrai_json_com_markdown_wrapper(app):
         app.config['ANTHROPIC_API_KEY'] = 'test'
         with patch('anthropic.Anthropic') as M:
             M.return_value.messages.create.return_value = fake_resp
-            r = chatbot_vigia._chamar_haiku('test', 'contexto')
+            r = chatbot_vigia._chamar_modelo('test', 'contexto')
     assert r['alerta'] is False
 
 
@@ -972,7 +972,7 @@ def test_vigia_abandono_alerta_quando_perda_de_venda(app):
         app.config['CHATBOT_VIGIA'] = True
         app.config['ANTHROPIC_API_KEY'] = 'test'
         app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
-        with patch('app.services.chatbot_vigia._chamar_haiku_abandono',
+        with patch('app.services.chatbot_vigia._chamar_modelo_abandono',
                    return_value=veredicto), \
              patch('app.services.zapi.enviar_texto',
                    return_value={'ok': True}) as send:
@@ -999,7 +999,7 @@ def test_ja_avisado_abandono_persiste_no_banco(app):
         assert chatbot_vigia.ja_avisado_abandono(555) is False
         # Avalia (veredicto silencioso) → grava VigiaVeredito [ABANDONO...]
         app.config['CHATBOT_VIGIA'] = '1'
-        with patch('app.services.chatbot_vigia._chamar_haiku_abandono',
+        with patch('app.services.chatbot_vigia._chamar_modelo_abandono',
                    return_value={'alerta': False, 'gravidade': None,
                                  'motivo': 'so cumprimento'}), \
              patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'x'}):
@@ -1030,7 +1030,7 @@ def test_vigia_abandono_silencia_quando_conversa_so_cumprimento(app):
         app.config['CHATBOT_VIGIA'] = True
         app.config['ANTHROPIC_API_KEY'] = 'test'
         app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
-        with patch('app.services.chatbot_vigia._chamar_haiku_abandono',
+        with patch('app.services.chatbot_vigia._chamar_modelo_abandono',
                    return_value=veredicto), \
              patch('app.services.zapi.enviar_texto') as send:
             r = chatbot_vigia.avaliar_abandono(
