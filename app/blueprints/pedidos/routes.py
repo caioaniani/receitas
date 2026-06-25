@@ -63,16 +63,27 @@ def _parse_item_id(value):
         return None, None
 
 
-def _preco_para_loja(receita_id, loja_id):
-    """Preco customizado da loja para a receita, ou preco_loja padrao."""
-    if receita_id and loja_id:
-        custom = PrecoLojaReceita.query.filter_by(
-            loja_id=loja_id, receita_id=receita_id
-        ).first()
-        if custom:
-            return custom.preco
-    rec = Receita.query.get(receita_id) if receita_id else None
-    return (rec.preco_loja if rec and rec.preco_loja else 0) or 0
+def _preco_interno_item(it):
+    """Preco INTERNO (transferencia loja->industria) do item do pedido.
+
+    Usado no /pedidos/relatorio: PedidoLoja e a loja pedindo a industria,
+    entao o valor praticado e o `preco_interno` da receita/produto — NAO o
+    preco de balcao (preco_loja), do site (preco_site) nem de atacado
+    (preco_venda na receita / preco_atacado no produto).
+
+    `preco_interno` e unico por receita/produto (nao ha override por loja como
+    no PrecoLojaReceita, que e do preco de balcao). Item sem preco_interno
+    setado retorna 0 — de proposito NAO caimos pra preco_loja: misturar fontes
+    de preco num relatorio financeiro esconderia o dado faltante. O dono
+    preenche o interno em /receitas/precos.
+    """
+    if it.receita_id:
+        rec = Receita.query.get(it.receita_id)
+        return (rec.preco_interno or 0) if rec else 0
+    if it.produto_id:
+        prod = Produto.query.get(it.produto_id)
+        return (prod.preco_interno or 0) if prod else 0
+    return 0
 
 
 # Lojas com a 'Industria' (fabrica de producao) excluida.
@@ -941,7 +952,7 @@ def relatorio():
             subtotal = 0.0
             linhas = []
             for it in p.itens:
-                preco = _preco_para_loja(it.receita_id, loja_id)
+                preco = _preco_interno_item(it)
                 qtd_efetiva = it.quantidade_recebida if it.quantidade_recebida is not None else it.quantidade
                 valor_linha = preco * qtd_efetiva
                 subtotal += valor_linha
