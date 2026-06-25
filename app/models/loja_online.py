@@ -214,6 +214,10 @@ class PedidoOnline(db.Model):
     atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
     pago_em = db.Column(db.DateTime, nullable=True)
     cancelado_em = db.Column(db.DateTime, nullable=True)
+    # Por que foi cancelado (25/06/2026): 'pix_expirado' | 'reembolso' |
+    # 'cancelado_admin'. NULL = nunca cancelado OU cancelado antes desta coluna
+    # existir — nesse caso `motivo_cancelamento_label` infere pelos timestamps.
+    motivo_cancelamento = db.Column(db.String(40), nullable=True)
     # Reserva de estoque (21/06/2026): a partir do checkout,
     # `EstoqueLoja.quantidade_reservada` segura o saldo. `reserva_expira_em`
     # marca quando o cron deve liberar caso o cliente nunca pague (Pix vence
