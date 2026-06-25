@@ -19,7 +19,7 @@ from app.blueprints.receitas import receitas_bp
 from app.decorators import admin_required, owner_required
 from app.extensions import db
 from app.models import Atribuicao, MateriaPrima, Produto, Receita, ReceitaIngrediente
-from app.services.custos import calcular_custos_receitas
+from app.services.custos import calcular_custos_produtos, calcular_custos_receitas
 from app.utils import agora, dividir_etapas_preparo, parse_float_br
 
 
@@ -174,17 +174,29 @@ def precos():
             flash('Nenhuma mudança.', 'info')
         return redirect(url_for('receitas.precos'))
 
+    # Custo unitario (referencia read-only pra precificar). Indexado por nome
+    # — Receita.nome e Produto.nome sao unique. Anexa `custo_unit` transiente
+    # em cada objeto pra simplificar o template.
+    res_custos = calcular_custos_receitas()
+    custos_receita = res_custos['custos']  # {nome: custo_unitario}
+    custos_produto = calcular_custos_produtos(
+        custos_receita, res_custos['mp_info'])  # {nome: custo}
+
     receitas = (Receita.query.filter(Receita.arquivada_em.is_(None))
                 .order_by(Receita.categoria, Receita.nome).all())
     categorias = {}
     for r in receitas:
+        r.custo_unit = custos_receita.get(r.nome)
         cat = r.categoria or 'Outros'
         categorias.setdefault(cat, []).append(r)
 
     produtos = (Produto.query.filter_by(ativo=True)
                 .order_by(Produto.categoria, Produto.nome).all())
-    cestas = [p for p in produtos if p.itens]
-    simples = [p for p in produtos if not p.itens]
+    cestas = []
+    simples = []
+    for p in produtos:
+        p.custo_unit = custos_produto.get(p.nome)
+        (cestas if p.itens else simples).append(p)
     categorias_produtos = {}
     for p in simples:
         cat = p.categoria or 'Outros'
