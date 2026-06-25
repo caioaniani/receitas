@@ -1241,6 +1241,8 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE receita ADD COLUMN preco_loja REAL")
     if 'preco_site' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN preco_site REAL")
+    if 'preco_interno' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN preco_interno REAL")
     if 'custo_embalagem' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN custo_embalagem REAL DEFAULT 0")
     if 'imagem_url' not in colunas:
