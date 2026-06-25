@@ -153,6 +153,37 @@ def test_api_conversa_thread(app, monkeypatch):
     assert [m['content'] for m in j['mensagens']] == ['tem cesta?', 'temos sim!']
 
 
+def test_debug_owner_mostra_contagem_por_status(app, monkeypatch):
+    """Debug owner-only: lista quantas conversas vem em cada status."""
+    from app.services import chatwoot
+    chamadas = []
+
+    def fake_listar(**k):
+        chamadas.append(k.get('status'))
+        return [{'id': 1, 'contato': 'x', 'preview': '', 'status': k.get('status'),
+                 'ultima_em': 0, 'nao_lidas': 0, 'canal': ''}] * 3
+
+    monkeypatch.setattr(chatwoot, 'listar_conversas', fake_listar)
+    monkeypatch.setattr(chatwoot, 'disponivel', lambda: True)
+    monkeypatch.setattr(chatwoot, 'bot_disponivel', lambda: True)
+    c = _staff(app)
+    r = c.get('/entregas/api/atendimento/debug')
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['token_usuario_ok'] is True
+    assert set(chamadas) == {'open', 'pending', 'resolved'}
+    assert j['por_status']['open'] == 3
+
+
+def test_debug_exige_owner(app, admin_user):
+    """Admin nao-owner nao acessa o debug (dado de cliente)."""
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(admin_user.id)
+        s['_fresh'] = True
+    assert c.get('/entregas/api/atendimento/debug').status_code == 403
+
+
 def test_api_conversas_erro_nao_quebra(app, monkeypatch):
     from app.services import chatwoot
 
