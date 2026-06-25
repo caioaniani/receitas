@@ -175,6 +175,95 @@
       if (!carregou) aviso.hidden = false;
     }, 5000);
   })();
+
+  // ── Klaxon de nova conversa no Chatwoot ──────────────────
+  // Polling de /entregas/api/painel-testes/chatwoot-pending a cada 20s.
+  // Mantem um Set de IDs ja vistos; ID NOVO = dispara klaxon (mesmo som do
+  // vigia, copiado do painel.html). Silencia ao clicar no badge OU ao
+  // confirmar que o ID nao esta mais em pending (atendente pegou).
+  //
+  // Baseline: a 1a chamada NAO toca alarme — so registra os IDs ja existentes
+  // como "vistos". Senao toda recarga da pagina dispararia o klaxon pelo que
+  // ja estava la antes.
+  (function () {
+    var armado = false;
+    var audioCtx = null;
+    var vistos = null;          // Set de IDs ja conhecidos; null = baseline pendente
+    var klaxonTimer = null;
+    var btnArm = document.getElementById('btn-arm');
+    var badge = document.getElementById('badge-cw');
+    var badgeN = document.getElementById('badge-cw-n');
+
+    function klaxon() {
+      if (!audioCtx) return;
+      var now = audioCtx.currentTime;
+      [440, 660, 440].forEach(function (freq, i) {
+        var osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+        osc.type = 'square'; osc.frequency.value = freq;
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        var t = now + i * 0.22;
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(0.35, t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+        osc.start(t); osc.stop(t + 0.24);
+      });
+    }
+    function ligarKlaxon() {
+      if (klaxonTimer) return;
+      klaxon();
+      klaxonTimer = setInterval(klaxon, 1600);
+    }
+    function desligarKlaxon() {
+      if (klaxonTimer) { clearInterval(klaxonTimer); klaxonTimer = null; }
+    }
+
+    function mostrarBadge(n) {
+      badgeN.textContent = n;
+      badge.hidden = (n <= 0);
+    }
+
+    btnArm.addEventListener('click', function () {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      } catch (e) {}
+      armado = true;
+      btnArm.textContent = '✓ alertas ligados';
+      btnArm.classList.add('armado');
+      poll();  // chama imediato pra estabelecer baseline
+    });
+
+    // Silenciar manualmente (atendente vai responder, nao precisa mais do som).
+    badge.addEventListener('click', function () {
+      desligarKlaxon();
+      badge.hidden = true;
+    });
+
+    function poll() {
+      fetch('{{ url_for("entregas.api_painel_testes_chatwoot_pending") }}',
+            {credentials: 'same-origin'})
+        .then(function (r) { return r.ok ? r.json() : {ids: []}; })
+        .then(function (data) {
+          var ids = (data && data.ids) || [];
+          if (vistos === null) {
+            // Baseline: 1a chamada nao toca alarme.
+            vistos = new Set(ids);
+            return;
+          }
+          var novos = ids.filter(function (id) { return !vistos.has(id); });
+          ids.forEach(function (id) { vistos.add(id); });
+          if (novos.length > 0 && armado) {
+            mostrarBadge(novos.length);
+            ligarKlaxon();
+          }
+        })
+        .catch(function () { /* erro de rede: silencioso, tenta de novo */ });
+    }
+
+    // Polling a cada 20s (mesma cadencia do api_painel). Comeca so depois
+    // de o user clicar em LIGAR ALERTAS (senao roda em background sem som).
+    setInterval(function () { if (armado) poll(); }, 20000);
+  })();
 </script>
 </body>
 </html>
