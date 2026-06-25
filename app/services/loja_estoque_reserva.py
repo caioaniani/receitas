@@ -244,6 +244,7 @@ def liberar_expirados(*, agora_=None, max_lote=200):
             continue
         liberar(p, loja_id=loja.id)
         p.status = 'cancelado'
+        p.motivo_cancelamento = 'pix_expirado'
         p.cancelado_em = base
         codigos.append(p.codigo)
     if codigos:
