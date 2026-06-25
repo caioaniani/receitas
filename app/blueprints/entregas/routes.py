@@ -291,6 +291,42 @@ def api_atendimento_conversa(cid):
     return jsonify({'id': cid, 'mensagens': mensagens})
 
 
+@entregas_bp.route('/api/atendimento/conversa/<int:cid>/enviar', methods=['POST'])
+@login_required
+def api_atendimento_enviar(cid):
+    """Envia mensagem na conversa como o agente 'Painel' do Chatwoot (NAO bot).
+
+    Erro NAO e silenciado — devolve `ok=false` e a UI mostra (sem isso o
+    atendente acharia que enviou quando nao enviou)."""
+    from flask import jsonify
+
+    from app.services import chatwoot as cw_svc
+    data = request.get_json(silent=True) or {}
+    content = (data.get('content') or '').strip()
+    if not content:
+        return jsonify({'ok': False, 'erro': 'mensagem vazia'}), 400
+    if len(content) > 4000:
+        return jsonify({'ok': False, 'erro': 'mensagem muito longa (max 4000)'}), 400
+    res = cw_svc.enviar_mensagem_painel(cid, content)
+    return jsonify(res), (200 if res.get('ok') else 502)
+
+
+@entregas_bp.route('/api/atendimento/conversa/<int:cid>/status', methods=['POST'])
+@login_required
+def api_atendimento_status(cid):
+    """Muda status da conversa: open (humano) / pending (bot) / resolved.
+    Reusa `definir_status` (3 tentativas com backoff — handoff e critico)."""
+    from flask import jsonify
+
+    from app.services import chatwoot as cw_svc
+    data = request.get_json(silent=True) or {}
+    status = (data.get('status') or '').strip()
+    if status not in ('open', 'pending', 'resolved'):
+        return jsonify({'ok': False, 'erro': 'status invalido'}), 400
+    res = cw_svc.definir_status(cid, status)
+    return jsonify(res), (200 if res.get('ok') else 502)
+
+
 @entregas_bp.route('/api/painel')
 @login_required
 def api_painel():
