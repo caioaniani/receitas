@@ -111,6 +111,7 @@ def test_cancelar_pedido(app):
     assert r.status_code == 302
     atual = PedidoOnline.query.filter_by(codigo='DDDD0004').first()
     assert atual.status == 'cancelado'
+    assert atual.motivo_cancelamento == 'cancelado_admin'
     assert atual.cancelado_em is not None
 
 
