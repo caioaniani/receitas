@@ -1001,6 +1001,92 @@ def debug_tiny():
     return jsonify(resultado), 200
 
 
+@main_bp.route('/admin/debug-foto-pdf')
+@owner_required
+def debug_foto_pdf():
+    """Owner-only: por que a foto N nao vai pro PDF?
+
+    Uso: /admin/debug-foto-pdf?foto_id=123  (ou ?pedido_id=999 = primeira foto)
+
+    Testa cada caminho de download separado e mostra o que veio:
+    1. API autenticada (storage_path)
+    2. Shared link com User-Agent + raw=1
+    3. Shared link cru (como estava antes do fix)
+    4. BLOB legado
+    """
+    import requests as _req
+
+    from app.models import FotoRecebimento
+    from app.services import dropbox_storage as ds
+    foto_id = request.args.get('foto_id', type=int)
+    pedido_id = request.args.get('pedido_id', type=int)
+    if foto_id:
+        f = FotoRecebimento.query.get(foto_id)
+    elif pedido_id:
+        f = FotoRecebimento.query.filter_by(pedido_id=pedido_id).first()
+    else:
+        return jsonify(erro='passe ?foto_id=N ou ?pedido_id=N'), 400
+    if not f:
+        return jsonify(erro='foto nao encontrada'), 404
+
+    out = {
+        'foto_id': f.id, 'pedido_id': f.pedido_id,
+        'tem_imagem_url': bool(f.imagem_url),
+        'imagem_url': f.imagem_url,
+        'tem_storage_path': bool(f.imagem_storage_path),
+        'storage_path': f.imagem_storage_path,
+        'tem_blob': bool(f.imagem),
+        'blob_len': len(f.imagem) if f.imagem else 0,
+        'mimetype': f.mimetype,
+        'dropbox_configurado': ds.disponivel(),
+    }
+
+    # 1. API autenticada
+    if f.imagem_storage_path and ds.disponivel():
+        b = ds.baixar(f.imagem_storage_path)
+        out['api_autenticada'] = {
+            'ok': bool(b),
+            'tamanho': len(b) if b else 0,
+            'magic': (b[:4].hex() if b else None),
+            'motivo_falha': ds.consumir_falha_download() if not b else None,
+        }
+    # 2. Shared link com User-Agent + raw
+    if f.imagem_url:
+        try:
+            url_raw = ds._converter_para_raw(f.imagem_url)
+            r = _req.get(url_raw, timeout=15,
+                          headers={'User-Agent':
+                                   'Mozilla/5.0 (compatible; DebugPDF/1.0)'})
+            ct = r.headers.get('Content-Type', '')
+            corpo = r.content or b''
+            out['shared_link_raw_com_ua'] = {
+                'url': url_raw,
+                'status': r.status_code,
+                'content_type': ct,
+                'tamanho': len(corpo),
+                'magic': corpo[:4].hex() if corpo else None,
+                'eh_html': corpo[:200].lstrip().lower().startswith(b'<!doctype')
+                            or corpo[:200].lstrip().lower().startswith(b'<html'),
+                'inicio': corpo[:80].decode('latin-1', errors='replace'),
+            }
+        except Exception as e:  # noqa: BLE001
+            out['shared_link_raw_com_ua'] = {'erro': str(e)}
+        # 3. Shared link sem User-Agent + sem raw (jeito antigo)
+        try:
+            r2 = _req.get(f.imagem_url, timeout=15)
+            corpo2 = r2.content or b''
+            out['shared_link_cru'] = {
+                'status': r2.status_code,
+                'content_type': r2.headers.get('Content-Type', ''),
+                'tamanho': len(corpo2),
+                'magic': corpo2[:4].hex() if corpo2 else None,
+            }
+        except Exception as e:  # noqa: BLE001
+            out['shared_link_cru'] = {'erro': str(e)}
+
+    return jsonify(out), 200
+
+
 @main_bp.route('/admin/debug-nflog')
 @owner_required
 def debug_nflog():
