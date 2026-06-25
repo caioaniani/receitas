@@ -1,9 +1,13 @@
 """Regressao: fotos do Dropbox no PDF de relatorio de pedidos.
 
-Bug (24/06/2026): foto aparecia na tela mas sumia do PDF (virava
-"[foto invalida]"). Causa: `_foto_bytes` baixava a URL do Dropbox sem
-User-Agent de navegador, e o Dropbox respondia com a PAGINA HTML de preview
-em vez da imagem. O HTML ia pro `pdf.image()` e estourava.
+Bug (24/06/2026): foto aparecia na tela mas sumia do PDF.
+Fix em 2 etapas:
+1. User-Agent + raw=1 (NAO BASTOU em prod).
+2. Baixar via API autenticada (`dropbox_storage.baixar(storage_path)`),
+   tirando o CDN publico do caminho critico.
+
+Os testes garantem a ordem: API autenticada PRIMEIRO; shared link como
+fallback; BLOB legado por ultimo.
 """
 import io
 from types import SimpleNamespace
