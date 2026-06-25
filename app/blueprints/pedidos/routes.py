@@ -991,6 +991,7 @@ def relatorio():
                            de=de.isoformat(), ate=ate.isoformat(),
                            pedidos=pedidos, totais=totais,
                            incluir_fotos=incluir_fotos,
+                           etapa_foto=etapa_foto or '',
                            por_item=sorted(por_item.items(), key=lambda x: x[0]))
 
 
