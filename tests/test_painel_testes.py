@@ -47,8 +47,13 @@ def test_painel_testes_csp_inclui_chatwoot_quando_configurado(app):
     csp = r.headers.get('Content-Security-Policy', '')
     assert 'https://atendimento.exemplo.com' in csp
     assert "frame-src 'self' https://atendimento.exemplo.com" in csp
-    # e o iframe do Chatwoot aparece no HTML
-    assert 'https://atendimento.exemplo.com' in r.data.decode()
+    html = r.data.decode()
+    # iframe + fallback "abrir em nova aba" (caso o Chatwoot recuse embed)
+    assert 'https://atendimento.exemplo.com' in html
+    assert 'target="_blank"' in html
+    assert 'abrir em nova aba' in html
+    # aviso oculto que aparece se o iframe nao carregar em 5s
+    assert 'cw-aviso' in html
 
 
 def test_painel_testes_sem_chatwoot_mostra_aviso(app):
