@@ -9,17 +9,16 @@
 <div class="alert alert-info small mb-3">
     Cole a lista (TSV ou colunas separadas por 2+ espaços). Cabeçalho esperado:
     <code>Produto<i>tab</i>Categoria<i>tab</i>Preço<i>tab</i>Unidade</code>.
-    Categorias aceitas: <strong>Padaria</strong>.
-    <strong>Fornecedor</strong> e <strong>Funcionarios</strong> são ignorados
-    (não são produto de venda interna).
-    Match por nome (case-insensitive, sem acentos). Roda 2x sem duplicar.
+    No preview, <strong>marque/desmarque</strong> linha por linha o que entra:
+    Padaria já vem marcada; Fornecedor e Funcionarios vêm desmarcadas (mas
+    listadas). Roda 2x sem duplicar.
 </div>
 
 <form method="POST" action="{{ url_for('receitas.precos_importar') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="mb-3">
         <label class="form-label fw-semibold">Cole aqui:</label>
-        <textarea name="texto" rows="14" class="form-control font-monospace"
+        <textarea name="texto" rows="10" class="form-control font-monospace"
                   style="font-size:12px;"
                   placeholder="Produto&#9;Categoria&#9;Preço&#9;Unidade&#10;Brioche&#9;Padaria&#9;R$ 10,00&#9;un">{{ texto }}</textarea>
     </div>
@@ -30,89 +29,111 @@
     {% endif %}
 
     {% if plano %}
-    <div class="row g-3 mb-3">
-        <div class="col-md-4">
-            <div class="card border-success h-100">
-                <div class="card-header bg-success text-white py-2">
-                    <strong>Vou atualizar ({{ plano.atualizar|length }})</strong>
-                </div>
-                <div class="card-body p-2" style="max-height:380px;overflow:auto;">
-                    {% if plano.atualizar %}
-                    <table class="table table-sm mb-0">
-                        <thead><tr><th>Item</th><th>Tipo</th><th class="text-end">Preço</th></tr></thead>
-                        <tbody>
-                        {% for linha, tipo, obj in plano.atualizar %}
-                            <tr>
-                                <td>{{ obj.nome }}</td>
-                                <td><span class="badge bg-light text-dark">{{ tipo }}</span></td>
-                                <td class="text-end">{{ '%.2f'|format(linha.preco)|replace('.', ',') }}</td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}<span class="text-muted small">Nenhum.</span>{% endif %}
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card border-warning h-100">
-                <div class="card-header bg-warning py-2">
-                    <strong>Vou criar como Produto ({{ plano.criar|length }})</strong>
-                </div>
-                <div class="card-body p-2" style="max-height:380px;overflow:auto;">
-                    {% if plano.criar %}
-                    <p class="small text-muted mb-1">
-                        Itens que não casam com nenhuma receita/produto existente.
-                        Confira antes — pode ser variante de nome (ex: "Pão Frances" vs "Pão Francês").
-                    </p>
-                    <table class="table table-sm mb-0">
-                        <thead><tr><th>Nome</th><th class="text-end">Preço</th></tr></thead>
-                        <tbody>
-                        {% for linha in plano.criar %}
-                            <tr>
-                                <td>{{ linha.nome }}</td>
-                                <td class="text-end">{{ '%.2f'|format(linha.preco)|replace('.', ',') }}</td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}<span class="text-muted small">Nenhum.</span>{% endif %}
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card border-secondary h-100">
-                <div class="card-header bg-secondary text-white py-2">
-                    <strong>Vou ignorar ({{ plano.ignorar|length }})</strong>
-                </div>
-                <div class="card-body p-2" style="max-height:380px;overflow:auto;">
-                    {% if plano.ignorar %}
-                    <table class="table table-sm mb-0">
-                        <thead><tr><th>Item</th><th>Motivo</th></tr></thead>
-                        <tbody>
-                        {% for linha, motivo in plano.ignorar %}
-                            <tr>
-                                <td>{{ linha.nome }}</td>
-                                <td class="small text-muted">{{ motivo }}</td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}<span class="text-muted small">Nenhum.</span>{% endif %}
-                </div>
-            </div>
+    {% set n_atualizar = plano|selectattr('acao', 'equalto', 'atualizar')|list|length %}
+    {% set n_criar = plano|selectattr('acao', 'equalto', 'criar')|list|length %}
+    {% set n_padaria = plano|selectattr('sugestao_marcar')|list|length %}
+    <div class="mb-2 d-flex gap-2 align-items-center flex-wrap">
+        <span class="badge bg-success">{{ n_atualizar }} casaram (atualizar)</span>
+        <span class="badge bg-warning text-dark">{{ n_criar }} sem match (criar)</span>
+        <span class="badge bg-secondary">{{ plano|length }} no total</span>
+        <div class="btn-group btn-group-sm ms-auto">
+            <button type="button" class="btn btn-outline-success"
+                    onclick="marcar('todos')">Marcar todos</button>
+            <button type="button" class="btn btn-outline-warning"
+                    onclick="marcar('padaria')">Só Padaria ({{ n_padaria }})</button>
+            <button type="button" class="btn btn-outline-secondary"
+                    onclick="marcar('nenhum')">Desmarcar todos</button>
         </div>
     </div>
 
-    <div class="d-flex gap-2">
+    <div class="card mb-3">
+        <div class="table-responsive" style="max-height:60vh;">
+            <table class="table table-sm table-hover mb-0 align-middle">
+                <thead class="table-light sticky-top" style="top:0;">
+                    <tr>
+                        <th style="width:40px"><i class="bi bi-check2-square"></i></th>
+                        <th>Nome</th>
+                        <th>Categoria</th>
+                        <th>Ação</th>
+                        <th>Match (já existe)</th>
+                        <th class="text-end">Preço atual</th>
+                        <th class="text-end">Preço novo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for item in plano %}
+                    {% set acao = item.acao %}
+                    {% set cat = item.linha.categoria %}
+                    {% set sug = item.sugestao_marcar %}
+                    <tr class="preco-row {{ 'table-warning' if not sug }}"
+                        data-categoria="{{ cat|lower }}" data-sug="{{ '1' if sug else '0' }}">
+                        <td>
+                            <input type="checkbox" name="marcar" value="{{ item.idx }}"
+                                   class="form-check-input chk-linha" {% if sug %}checked{% endif %}>
+                        </td>
+                        <td>{{ item.linha.nome }}</td>
+                        <td><span class="badge bg-light text-dark">{{ cat }}</span></td>
+                        <td>
+                            {% if acao == 'atualizar' %}
+                                <span class="badge bg-success">atualizar</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">criar Produto</span>
+                            {% endif %}
+                        </td>
+                        <td class="small text-muted">
+                            {% if item.obj %}
+                                [{{ item.tipo }}] {{ item.obj.nome }}
+                            {% else %}
+                                <em>—</em>
+                            {% endif %}
+                        </td>
+                        <td class="text-end text-muted">
+                            {% if item.preco_atual is not none %}
+                                R$ {{ '%.2f'|format(item.preco_atual)|replace('.', ',') }}
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="text-end fw-semibold">
+                            R$ {{ '%.2f'|format(item.linha.preco)|replace('.', ',') }}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 align-items-center sticky-bottom bg-white border-top py-2">
         <button type="submit" name="confirmar" value="1" class="btn btn-success btn-lg">
-            <i class="bi bi-check-lg"></i> Confirmar e aplicar
-            ({{ plano.atualizar|length + plano.criar|length }} mudança{{ '' if (plano.atualizar|length + plano.criar|length) == 1 else 's' }})
+            <i class="bi bi-check-lg"></i> Aplicar marcados
+            (<span id="contagem-marcados">{{ n_padaria }}</span>)
         </button>
         <button type="submit" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-clockwise"></i> Re-analisar
+            <i class="bi bi-arrow-clockwise"></i> Re-analisar texto
         </button>
+        <span class="text-muted small ms-2">
+            Linhas em amarelo = Fornecedor/Funcionarios (desmarcadas por padrão).
+        </span>
     </div>
     {% endif %}
 </form>
+
+<script>
+function marcar(modo) {
+    document.querySelectorAll('.chk-linha').forEach(function(chk) {
+        var tr = chk.closest('tr');
+        if (modo === 'todos') chk.checked = true;
+        else if (modo === 'nenhum') chk.checked = false;
+        else if (modo === 'padaria') chk.checked = tr.dataset.sug === '1';
+    });
+    atualizaContagem();
+}
+function atualizaContagem() {
+    var n = document.querySelectorAll('.chk-linha:checked').length;
+    var el = document.getElementById('contagem-marcados');
+    if (el) el.textContent = n;
+}
+document.querySelectorAll('.chk-linha').forEach(function(chk) {
+    chk.addEventListener('change', atualizaContagem);
+});
+</script>
 {% endblock %}
