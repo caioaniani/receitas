@@ -267,15 +267,20 @@
     {% endfor %}
     {% endif %}
 
-    <div class="d-flex gap-2 sticky-bottom bg-white border-top py-2" style="position:sticky;bottom:0;z-index:10;">
-        <button type="submit" class="btn btn-primary">
-            <i class="bi bi-check-lg"></i> Salvar todos
+    <div class="d-flex gap-2 border-top py-2 mt-2 align-items-center">
+        <button type="submit" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-check-lg"></i> Salvar tudo agora
         </button>
-        <a href="{{ url_for('receitas.padeiro_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+        <span class="text-muted small">
+            Os preços já salvam sozinhos ao sair do campo — este botão é só garantia.
+        </span>
     </div>
 </form>
 
 <script>
+var CSRF = "{{ csrf_token() }}";
+var URL_SALVAR = "{{ url_for('receitas.precos_salvar_campo') }}";
+
 function parseBr(v) {
     if (!v) return null;
     var n = parseFloat(String(v).replace(',', '.'));
@@ -283,29 +288,88 @@ function parseBr(v) {
 }
 function fmt(n) { return n.toFixed(2); }
 
+var statusEl = document.getElementById('save-status');
+var pendentes = 0;
+function setStatus(estado, msg) {
+    if (!statusEl) return;
+    var map = {
+        ok:     ['bg-success', 'bi-check-circle', msg || 'Tudo salvo'],
+        saving: ['bg-warning text-dark', 'bi-arrow-repeat', msg || 'Salvando...'],
+        err:    ['bg-danger', 'bi-exclamation-triangle', msg || 'Erro ao salvar']
+    };
+    var c = map[estado] || map.ok;
+    statusEl.className = 'badge ' + c[0];
+    statusEl.innerHTML = '<i class="bi ' + c[1] + '"></i> ' + c[2];
+}
+
+function tipoEId(inp) {
+    // name = "<campo>_<id>" (receita) ou "<campo>_p<id>" (produto/cesta)
+    var sufixo = inp.name.slice(inp.dataset.campo.length + 1);
+    if (sufixo.charAt(0) === 'p') return {tipo: 'produto', id: sufixo.slice(1)};
+    return {tipo: 'receita', id: sufixo};
+}
+
+function salvarCampo(inp) {
+    if (inp.value === (inp.dataset.original || '')) return;  // nada mudou
+    var ti = tipoEId(inp);
+    pendentes++;
+    setStatus('saving');
+    inp.classList.remove('is-valid', 'is-invalid');
+    fetch(URL_SALVAR, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+        body: JSON.stringify({tipo: ti.tipo, id: ti.id,
+                              campo: inp.dataset.campo, valor: inp.value})
+    }).then(function(r) {
+        return r.json().then(function(d) { return {ok: r.ok, d: d}; });
+    }).then(function(res) {
+        pendentes = Math.max(0, pendentes - 1);
+        if (res.ok && res.d.ok) {
+            inp.dataset.original = inp.value;
+            inp.classList.add('is-valid');
+            setTimeout(function() { inp.classList.remove('is-valid'); }, 1200);
+            if (pendentes === 0) setStatus('ok');
+        } else {
+            inp.classList.add('is-invalid');
+            setStatus('err', 'Erro: ' + ((res.d && res.d.erro) || 'falhou'));
+        }
+    }).catch(function() {
+        pendentes = Math.max(0, pendentes - 1);
+        inp.classList.add('is-invalid');
+        setStatus('err', 'Erro de rede');
+    });
+}
+
+// Auto-save: ao sair do campo com valor mudado. Enter salva e sai.
+document.querySelectorAll('input.preco-input').forEach(function(inp) {
+    inp.dataset.original = inp.value;
+    inp.addEventListener('change', function() { salvarCampo(inp); });
+    inp.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+    });
+});
+
 function aplicarMargem(categoria, campo) {
     var pct = prompt('Aplicar quantos % de aumento (use negativo pra desconto):', '10');
     if (pct === null || pct === '') return;
     var f = parseFloat(String(pct).replace(',', '.'));
     if (isNaN(f)) { alert('Numero invalido.'); return; }
     var mult = 1 + (f / 100);
-    var alteradas = 0;
     document.querySelectorAll('tr[data-categoria="' + categoria + '"]').forEach(function(tr) {
         var inp = tr.querySelector('input.preco-input[data-campo="' + campo + '"]');
         if (!inp) return;
         var v = parseBr(inp.value);
         if (v === null) return;
         inp.value = fmt(v * mult);
-        alteradas++;
+        salvarCampo(inp);  // auto-save de cada linha alterada
     });
-    alert(alteradas + ' linha(s) atualizada(s). Salve pra persistir.');
 }
 function sincronizar(categoria) {
     if (!confirm('Copiar preço loja → preço site nesta secao?')) return;
     document.querySelectorAll('tr[data-categoria="' + categoria + '"]').forEach(function(tr) {
         var src = tr.querySelector('input.preco-input[data-campo="preco_loja"]');
         var dst = tr.querySelector('input.preco-input[data-campo="preco_site"]');
-        if (src && dst) dst.value = src.value;
+        if (src && dst) { dst.value = src.value; salvarCampo(dst); }
     });
 }
 // Filtro client-side por nome (busca em tr[data-nome])
