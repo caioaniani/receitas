@@ -293,10 +293,28 @@ Padaria Opão: receitas, pedidos, entregas, PDV, estoque, RH, copilot
 - **OCR de NF/boleto (Contas a Pagar)**: `claude-opus-4-8` direto
   (`conta_pagar_ia.py:MODELO`). Sem cascata Sonnet->Opus.
 - **Auditor** (`chatbot_auditor.py`): Sonnet 4.6.
-- **Vigia chatbot** (`chatbot_vigia.py`): Haiku 4.5.
-- **OCR de cupom** (`ocr_nota.py`): Sonnet 4.6 — escopo diferente do
-  Contas a Pagar, fica como esta.
-- **Follow-up pos-handoff** (`chatbot.py:FOLLOWUP_MODELO`): Haiku 4.5.
+- **Vigia chatbot** (`chatbot_vigia.py`): **Sonnet 4.6** (era Haiku 4.5;
+  subido pelo dono em 25/06/2026 na padronizacao geral. ATENCAO: o vigia roda
+  a CADA resposta do bot — `crm/routes.py` — entao e o de MAIOR volume; pesa
+  no custo. A funcao `_chamar_modelo` foi renomeada de `_chamar_haiku` porque
+  nao usa mais Haiku).
+- **OCR de cupom** (`ocr_nota.py`): **Opus 4.8** (era Sonnet 4.6; subido pelo
+  dono em 25/06/2026). Modelo inline, sem constante.
+- **Follow-up pos-handoff** (`chatbot.py:FOLLOWUP_MODELO`): **Sonnet 4.6**
+  (era Haiku 4.5; 25/06/2026).
+- **Descricoes SEO** (`seo_descricoes.py:MODELO`): Sonnet 4.6 (era Haiku;
+  25/06/2026).
+
+**Padronizacao de modelos (dono, 25/06/2026)**: "tudo Sonnet 4.6, exceto bot
+Chatwoot + WhatsApp do dono + OCR Contas a Pagar + OCR cupom = Opus 4.8".
+
+**Instrumentacao de custo (25/06/2026)**: TODA chamada de IA agora registra
+tokens + custo em USD na tabela `UsoIA`, rotulada por funcao, via
+`app/services/uso_ia.py::registrar` (sessao isolada + best-effort, nunca
+contamina transacao de negocio nem quebra o fluxo). Relatorio owner-only em
+`GET /admin/uso-ia?dias=N` (por funcao, % do total, projecao mensal). Antes
+disso o gasto por funcao era irrecuperavel (nada registrava). Precos em
+`uso_ia._PRECOS` — atualizar quando a Anthropic mudar tabela.
 
 **Regra "preferir RESPONDER a PERGUNTAR"** no system prompt (vale pra
 Sonnet e Opus, mas rende mais no Opus): inferir/escolher com o contexto
