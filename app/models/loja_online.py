@@ -250,6 +250,20 @@ class PedidoOnline(db.Model):
         self.valor_total = sub + Decimal(str(self.frete_valor or 0))
         return self.valor_total
 
+    @property
+    def motivo_cancelamento_label(self):
+        """Rotulo legivel do motivo do cancelamento. Para pedidos cancelados
+        ANTES desta coluna existir (motivo NULL), infere pelos timestamps — era
+        o que se fazia na mao (Pix nao pago vs cancelado pos-pagamento)."""
+        if self.status != 'cancelado':
+            return None
+        if self.motivo_cancelamento:
+            return MOTIVOS_CANCELAMENTO.get(
+                self.motivo_cancelamento, self.motivo_cancelamento)
+        if self.pago_em is None:
+            return 'Pix não pago (inferido)'
+        return 'Cancelado após pagamento (inferido)'
+
     def __repr__(self):
         return f'<PedidoOnline {self.codigo} {self.status}>'
 
