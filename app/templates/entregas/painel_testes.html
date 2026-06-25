@@ -212,9 +212,29 @@
   </div>
 
 <script>
+  var CSRF = "{{ csrf_token() }}";
   function esc(s) {
     return String(s == null ? '' : s)
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function postJSON(url, body) {
+    return fetch(url, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify(body || {}),
+    }).then(function (r) {
+      return r.json().then(function (j) { return { status: r.status, body: j }; })
+        .catch(function () { return { status: r.status, body: {} }; });
+    });
+  }
+  var _toastT;
+  function toast(msg, tipo) {
+    var t = document.getElementById('toast');
+    if (!t) return;
+    t.className = 'toast show ' + (tipo || '');
+    t.textContent = msg;
+    clearTimeout(_toastT);
+    _toastT = setTimeout(function () { t.className = 'toast'; }, 3500);
   }
   function tempoRel(epoch) {
     if (!epoch) return '';
