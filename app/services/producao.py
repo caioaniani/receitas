@@ -1,7 +1,55 @@
 from math import ceil
 
+from app.extensions import db
 from app.models import MateriaPrima, Receita
 from app.services.custos import calcular_custos_receitas
+
+
+def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6):
+    """Aprova a coluna de UM dia do cronograma -> cria um PlanejamentoProducao
+    (origem='cronograma', status='aprovado') desse dia, pronto pra descer pro
+    padeiro. Itens = receitas com qtd>0 naquele dia; qtd_alvo = unidades,
+    multiplicador = ceil(unidades / rendimento). Re-aprovar o mesmo dia
+    substitui o plano-cronograma anterior. Retorna o plano (ou None se nada
+    a produzir naquele dia).
+    """
+    from app.models import PlanejamentoItem, PlanejamentoProducao
+    from app.services.previsao_producao import cronograma_producao
+
+    crono = cronograma_producao(horizonte_dias=horizonte_dias,
+                                janela_semanas=janela_semanas)
+    iso = data_alvo.isoformat()
+    itens_dia = []
+    for rec in crono['receitas']:
+        for c in rec['por_dia']:
+            if c['data'] == iso and c['qtd'] > 0:
+                itens_dia.append((rec['receita_id'], c['qtd']))
+    if not itens_dia:
+        return None
+
+    # Re-aprovar o mesmo dia substitui o plano-cronograma anterior.
+    antigo = (PlanejamentoProducao.query
+              .filter_by(data=data_alvo, origem='cronograma').first())
+    if antigo is not None:
+        db.session.delete(antigo)
+        db.session.flush()
+
+    plano = PlanejamentoProducao(
+        data=data_alvo, origem='cronograma', status='aprovado',
+        nome='Cronograma %s' % data_alvo.strftime('%d/%m'),
+        criado_por=user_id)
+    db.session.add(plano)
+    db.session.flush()
+
+    receitas = {r.id: r for r in Receita.query.all()}
+    for rid, qtd in itens_dia:
+        rec = receitas.get(rid)
+        rend = int(rec.rendimento_qtd) if rec and rec.rendimento_qtd else 1
+        db.session.add(PlanejamentoItem(
+            planejamento_id=plano.id, receita_id=rid,
+            multiplicador=max(1, ceil(qtd / rend)), qtd_alvo=qtd))
+    db.session.commit()
+    return plano
 
 
 def massa_receita_base(receita):
