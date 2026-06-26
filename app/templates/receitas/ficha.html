@@ -66,8 +66,8 @@
                        placeholder="0">
             </div>
             <div class="col">
-                <label class="form-label small text-muted" title="Capacidade da amassadeira em gramas de farinha por batida (padrão 50000 = 50kg). O plano conta as fornadas com base nisso. Use 0 se a receita NÃO passa pela amassadeira (ex: Moedas, creme almond) — aí o plano mostra unidades, não fornadas.">
-                    Amassadeira (g farinha)
+                <label class="form-label small text-muted" title="Capacidade da amassadeira em gramas de MASSA final por batida (massa = farinha + água + tudo). Padrão 50000 = 50kg/50L. O plano conta as fornadas com base na massa total da receita. Use 0 se a receita NÃO passa pela amassadeira (ex: Moedas, creme almond) — aí o plano mostra unidades, não fornadas.">
+                    Amassadeira (g massa)
                 </label>
                 <input type="number" name="capacidade_amassadeira_g"
                        value="{{ receita.capacidade_amassadeira_g if receita.capacidade_amassadeira_g is not none else 50000 }}"
