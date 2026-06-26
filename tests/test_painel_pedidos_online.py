@@ -334,7 +334,9 @@ def test_painel_renderiza_drawer_pedidos_do_site(app):
     site', o popup (iframe) e a referência ao endpoint de listagem. Trava
     regressão de endpoint inexistente em url_for."""
     c = _staff(app)
-    r = c.get('/entregas/painel')
+    # Swap 26/06/2026: o conteudo de pedidos (v1, com a aba 'Pedidos do site')
+    # virou /painel-testes; /painel agora e o v2 (atendimento).
+    r = c.get('/entregas/painel-testes')
     assert r.status_code == 200
     for marker in (b'id="ped-toggle"', b'id="ped-drawer"', b'id="ped-iframe"',
                    b'/entregas/api/painel/pedidos-online',
