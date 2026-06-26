@@ -184,12 +184,15 @@ def amassadeira():
     for cat in sorted(grupos, key=lambda c: (c == '', c.lower())):
         recs = grupos[cat]
         caps = sorted({int(r.capacidade_amassadeira_g or 0) for r in recs})
+        leads = sorted({int(r.dias_producao or 0) for r in recs})
         categorias.append({
             'nome': cat,
             'label': cat or '(sem categoria)',
             'qtd': len(recs),
             'atual': caps[0] if len(caps) == 1 else None,
             'misto': len(caps) > 1,
+            'lead_atual': leads[0] if len(leads) == 1 else None,
+            'lead_misto': len(leads) > 1,
             'nomes': [r.nome for r in recs],
         })
     return render_template('receitas/amassadeira.html', categorias=categorias)
