@@ -316,6 +316,10 @@
   var VIGIA_HISTORICO = "{{ url_for('entregas.api_painel_vigia_historico') }}";
   var lalaSaldo = null;   // ultimo saldo da carteira (vem no api_painel)
   var CSRF = "{{ csrf_token() }}";
+  // EMBED = este painel esta DENTRO do /entregas/painel-testes (iframe ?embed=1).
+  // So nesse caso o alerta do vigia abre a conversa no painel da direita (em
+  // vez do Chatwoot externo). No painel normal (sem embed) NADA muda.
+  var EMBED = new URLSearchParams(location.search).has('embed');
   var pedidos = [];
   var audioCtx = null, beepTimer = null;
   var vigia = { pendentes: 0, ultimo: null };  // resumo do api_painel
