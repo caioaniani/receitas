@@ -317,9 +317,16 @@ _FALLBACK_CATALOGO = ('Tive uma instabilidade pra consultar nosso catálogo '
 TOOL_HANDOFF = {
     'name': 'transferir_para_humano',
     'description': (
-        'Passa a conversa para um atendente humano. Use quando o cliente pedir '
-        'para falar com uma pessoa, em reclamações, em dúvidas de entrega/CEP/'
-        'agendamento, cartinha em pedido já feito, ou quando não tiver certeza.'
+        'Passa a conversa para um atendente humano. Handoff é o ÚLTIMO recurso, '
+        'NÃO o primeiro. Transfira direto (sem chamar tool antes) SÓ se: o '
+        'cliente pediu humano explicitamente, alergia/intolerância confirmada, '
+        'reclamação grave (risco legal: intoxicação, corpo estranho, Procon), '
+        'ou cartinha de pedido já confirmado. Em QUALQUER outra dúvida (produto, '
+        'frete/entrega/CEP, pedido, pagamento) você é OBRIGADO a chamar pelo '
+        'menos uma tool de leitura ANTES (consultar_produtos/_pedido/_frete/'
+        '_ingredientes/_notas/buscar_nota_fiscal). Para entrega/CEP use '
+        'consultar_frete, não escale direto. NUNCA transfira "por não ter '
+        'certeza" — tente resolver com as tools primeiro.'
     ),
     'input_schema': {
         'type': 'object',
