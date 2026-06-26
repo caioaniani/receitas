@@ -194,7 +194,7 @@ def _output_vazou_prompt(texto):
         return False
     return any(marcador in texto for marcador in _OUTPUT_VAZOU_MARCADORES)
 MAX_ITERACOES = 6  # teto de idas-e-voltas de ferramenta por mensagem
-_FALLBACK = 'Já te passo para um atendente pra te ajudar melhor. 🙂'
+_FALLBACK = 'Já te passo para um atendente pra te ajudar melhor.'
 
 # Janela de atendimento humano (BRT). O bot CONTINUA respondendo fora dela
 # (consulta produtos, manda link, etc) — mas quando vai FAZER HANDOFF fora
@@ -312,7 +312,7 @@ def salvar_historico(conv_id, historico, resposta):
 # de memoria (risco de inventar valor — dinheiro). Passa pro humano.
 _FALLBACK_CATALOGO = ('Tive uma instabilidade pra consultar nosso catálogo '
                       'agora. Já te passo para um atendente continuar com você, '
-                      'tá? 🙂')
+                      'tá?')
 
 TOOL_HANDOFF = {
     'name': 'transferir_para_humano',
@@ -629,7 +629,7 @@ def responder(historico, *, telefone_contato=None):
     if _detectar_injection(texto_user):
         logger.warning('chatbot: injection detectado msg=%r', texto_user[:120])
         return _resp_handoff(
-            'Vou te conectar com nossa equipe agora. 🙂',
+            'Vou te conectar com nossa equipe agora.',
             'tentativa de bypass', tools_usadas=[])
 
     # Pedido explicito de humano: handoff deterministico ANTES do Claude. Sem
@@ -641,7 +641,7 @@ def responder(historico, *, telefone_contato=None):
         logger.info('chatbot: pedido explicito de humano -> handoff forcado '
                     'msg=%r', texto_user[:120])
         return _resp_handoff(
-            'Claro! Já estou te passando pra um atendente. Só um instante. 🙂',
+            'Claro! Já estou te passando pra um atendente. Só um instante.',
             'cliente pediu atendente', tools_usadas=[])
 
     api_key = (os.environ.get('ANTHROPIC_API_KEY')
@@ -709,7 +709,7 @@ def responder(historico, *, telefone_contato=None):
             texto = '\n'.join(b.text for b in resp.content
                               if getattr(b, 'type', None) == 'text' and b.text).strip()
             if not texto:
-                return _resp_handoff('Já te passo para um atendente. 🙂',
+                return _resp_handoff('Já te passo para um atendente.',
                                      'resposta vazia',
                                      tools_usadas=tools_usadas)
             # Camada 3 anti-injection: filtro de saida. Se o bot regurgita
@@ -720,7 +720,7 @@ def responder(historico, *, telefone_contato=None):
                 logger.warning('chatbot: output vazou prompt — handoff '
                                 'forcado. trecho=%r', texto[:200])
                 return _resp_handoff(
-                    'Vou te conectar com nossa equipe agora. 🙂',
+                    'Vou te conectar com nossa equipe agora.',
                     'output vazou prompt',
                     tools_usadas=tools_usadas)
             return {'acao': 'responder', 'texto': texto,
@@ -731,7 +731,7 @@ def responder(historico, *, telefone_contato=None):
             if b.name == 'transferir_para_humano':
                 inp = b.input or {}
                 texto_base = ((inp.get('mensagem_cliente') or '').strip()
-                              or 'Já te passo para um atendente. 🙂')
+                              or 'Já te passo para um atendente.')
                 return _resp_handoff(texto_base,
                                      inp.get('motivo') or 'handoff',
                                      tools_usadas=tools_usadas)
