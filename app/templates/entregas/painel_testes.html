@@ -236,6 +236,20 @@
     clearTimeout(_toastT);
     _toastT = setTimeout(function () { t.className = 'toast'; }, 3500);
   }
+  function horaMsg(epoch) {
+    if (!epoch) return '';
+    var d = new Date(Number(epoch) * 1000);
+    var hoje = new Date();
+    var hh = String(d.getHours()).padStart(2, '0');
+    var mm = String(d.getMinutes()).padStart(2, '0');
+    var mesmoDia = d.getFullYear() === hoje.getFullYear()
+                 && d.getMonth() === hoje.getMonth()
+                 && d.getDate() === hoje.getDate();
+    if (mesmoDia) return hh + ':' + mm;
+    var dd = String(d.getDate()).padStart(2, '0');
+    var mo = String(d.getMonth() + 1).padStart(2, '0');
+    return dd + '/' + mo + ' ' + hh + ':' + mm;
+  }
   function tempoRel(epoch) {
     if (!epoch) return '';
     var seg = Math.floor(Date.now()/1000 - Number(epoch));
