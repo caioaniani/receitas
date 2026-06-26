@@ -18,6 +18,9 @@ class PlanejamentoProducao(db.Model):
     criado_em = db.Column(db.DateTime, default=agora)
     criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
     status = db.Column(db.String(20), default='rascunho')
+    # 'cronograma' = plano aprovado do cronograma diario (desce pro padeiro);
+    # NULL/'manual' = plano avulso/deficit. So pra distinguir na UI.
+    origem = db.Column(db.String(20))
 
     itens = db.relationship('PlanejamentoItem', backref='planejamento',
                             cascade='all, delete-orphan', lazy=True)
