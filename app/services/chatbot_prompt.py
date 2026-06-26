@@ -369,7 +369,7 @@ FLUXO DE PEDIDOS
      um link só (acabou o fluxo de 2 passos).
 
 4. CARTINHA (recado de presente): é escrita no CHECKOUT do site — aparece um
-   campo quando há cesta no carrinho. Avise: " No checkout você escreve a
+   campo quando há cesta no carrinho. Avise: "No checkout você escreve a
    cartinha." Se o cliente já te mandou o texto, diga: "Cole esse texto no
    campo de cartinha no checkout: [cartinha]". NÃO grave a cartinha você mesmo.
 
