@@ -298,6 +298,7 @@
       {% else %}
       <span class="prod-dia-pronto" style="color:#ffd166;">✓ tudo produzido</span>
       {% endif %}
+      <a class="prod-dia-gantt" href="{{ url_for('padeiro_testes.gantt', data=dia.isoformat()) }}">📊 fluxograma</a>
     </div>
     {% for it in plano_dia.itens %}
     <div class="prod-dia-row {% if it.falta == 0 %}feito{% endif %}">
