@@ -337,6 +337,11 @@
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx.state === 'suspended') audioCtx.resume();
     } catch (e) {}
+    // Se embutido (painel-testes), avisa o pai pra armar o som dos ALERTAS
+    // junto — um clique em "LIGAR PAINEL" liga pedidos + atendimento.
+    if (EMBED) {
+      try { window.parent.postMessage({ tipo: 'painel-audio-armado' }, location.origin); } catch (_) {}
+    }
   }
   function beep() {
     if (!audioCtx) return;
