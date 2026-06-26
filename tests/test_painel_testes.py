@@ -22,95 +22,118 @@ def _staff(app):
     return c
 
 
-# ── Render da tela ──
+# ── Swap 26/06/2026: /painel = v2 (atendimento), /painel-testes = v1 (backup) ──
 
 
-def test_painel_testes_renderiza(app):
+def test_painel_oficial_e_o_v2(app):
+    """/entregas/painel agora serve o v2: pedidos (iframe do v1) + atendimento."""
     c = _staff(app)
-    r = c.get('/entregas/painel-testes')
+    r = c.get('/entregas/painel')
     assert r.status_code == 200
     html = r.data.decode()
-    assert '/entregas/painel?embed=1' in html              # iframe do painel real
-    assert 'id="divisor"' in html                          # divisor arrastavel
-    assert 'id="at-lista"' in html                         # widget de atendimento
-    assert '/entregas/api/atendimento/conversas' in html   # fetch da lista
+    assert 'id="at-lista"' in html                          # widget de atendimento
+    assert 'id="divisor"' in html
+    assert '/entregas/api/atendimento/conversas' in html
+    # embute o v1 (pedidos) via /painel-testes?embed=1 — NAO a si mesmo (anti-loop)
+    assert '/entregas/painel-testes' in html
+    assert 'at-lista' not in html.split('<iframe')[1].split('</iframe>')[0] \
+        if '<iframe' in html else True
 
 
-def test_painel_testes_csp_frame_self(app):
+def test_painel_testes_e_o_v1_backup(app):
+    """/entregas/painel-testes agora serve o v1 (pedidos puro), backup."""
     c = _staff(app)
-    r = c.get('/entregas/painel-testes')
-    csp = r.headers.get('Content-Security-Policy', '')
-    # so o painel embutido; o Chatwoot NAO entra no frame-src (sem iframe dele)
+    html = c.get('/entregas/painel-testes').data.decode()
+    assert 'PEDIDOS DE HOJE' in html or 'LIGAR PAINEL' in html  # cara do v1
+    assert 'id="at-lista"' not in html                          # nao e o v2
+
+
+def test_anti_loop_v2_nao_embute_a_si_mesmo(app):
+    """O iframe do v2 aponta pro v1 (/painel-testes), nunca pro proprio /painel
+    — senao seria recursao infinita de iframes."""
+    c = _staff(app)
+    html = c.get('/entregas/painel').data.decode()
+    iframe = html.split('<iframe', 1)[1].split('>', 1)[0]
+    assert '/entregas/painel-testes' in iframe
+    assert 'src="/entregas/painel?' not in html  # nao embute a si mesmo
+
+
+def test_v2_csp_frame_self(app):
+    c = _staff(app)
+    csp = c.get('/entregas/painel').headers.get('Content-Security-Policy', '')
     assert "frame-src 'self';" in csp
 
 
-def test_painel_testes_csp_img_libera_chatwoot(app):
-    """Dominio do Chatwoot vai pro img-src (anexos de imagem dos clientes na
-    thread), NUNCA pro frame-src."""
+def test_v2_csp_img_libera_chatwoot(app):
+    """Dominio do Chatwoot no img-src (anexos), NUNCA no frame-src."""
     app.config['CHATWOOT_URL'] = 'https://atendimento.exemplo.com'
     c = _staff(app)
-    r = c.get('/entregas/painel-testes')
-    csp = r.headers.get('Content-Security-Policy', '')
+    csp = c.get('/entregas/painel').headers.get('Content-Security-Policy', '')
     assert 'https://atendimento.exemplo.com' in csp
     frame_part = csp.split('frame-src', 1)[1] if 'frame-src' in csp else ''
     assert 'atendimento.exemplo.com' not in frame_part
 
 
-def test_painel_embed_permite_same_origin(app):
+def test_v1_embed_permite_same_origin(app):
+    """O v1 (pedidos) embutido via ?embed=1 troca DENY por SAMEORIGIN."""
     c = _staff(app)
-    r = c.get('/entregas/painel?embed=1')
+    r = c.get('/entregas/painel-testes?embed=1')
     assert r.status_code == 200
     assert r.headers.get('X-Frame-Options') == 'SAMEORIGIN'
 
 
-def test_painel_producao_sem_embed_continua_deny(app):
-    """REGRESSAO: painel de producao (sem ?embed) segue X-Frame-Options DENY."""
+def test_paineis_sem_embed_continuam_deny(app):
+    """REGRESSAO anti-clickjacking: nem o v2 (/painel) nem o v1 (/painel-testes)
+    standalone podem ser embutidos — X-Frame-Options DENY."""
     c = _staff(app)
-    r = c.get('/entregas/painel')
-    assert r.status_code == 200
-    assert r.headers.get('X-Frame-Options') == 'DENY'
+    assert c.get('/entregas/painel').headers.get('X-Frame-Options') == 'DENY'
+    assert c.get('/entregas/painel-testes').headers.get('X-Frame-Options') == 'DENY'
 
 
-def test_painel_testes_exige_login(app):
+def test_painel_exige_login(app):
     c = app.test_client()
-    r = c.get('/entregas/painel-testes')
-    assert r.status_code in (301, 302)
-    assert '/login' in r.headers.get('Location', '')
+    for url in ('/entregas/painel', '/entregas/painel-testes'):
+        r = c.get(url)
+        assert r.status_code in (301, 302)
+        assert '/login' in r.headers.get('Location', '')
 
 
-def test_painel_alerta_vigia_abre_no_painel_so_com_embed(app):
-    """O alerta do vigia abre a conversa no painel da direita SO quando
-    embutido (?embed=1). No painel de producao normal o comportamento e
-    intocado: continua o link do Chatwoot. A logica e condicional a EMBED."""
-    c = _staff(app)
-    html = c.get('/entregas/painel').data.decode()
-    # A flag e a logica condicional existem no painel...
-    assert 'var EMBED' in html
-    assert 'al-abrir-aqui' in html
-    assert 'vigia-abrir-conversa' in html
-    # ...mas o botao novo so e gerado dentro do `if (EMBED && a.conv_id)`,
-    # e o link do Chatwoot original CONTINUA no else (nao foi removido).
-    assert 'if (EMBED && a.conv_id)' in html
-    assert 'Abrir no Chatwoot' in html  # caminho de producao preservado
-
-
-def test_painel_testes_recebe_postmessage_do_vigia(app):
-    """O painel-testes escuta o postMessage do alerta e abre a conversa na
-    direita — validando a origem (same-origin) por seguranca."""
+def test_alerta_vigia_abre_na_direita_so_com_embed(app):
+    """A logica do alerta abrir na direita esta no v1 (pedidos, /painel-testes),
+    condicional a EMBED. O link do Chatwoot original CONTINUA no else (o painel
+    de pedidos standalone nao muda)."""
     c = _staff(app)
     html = c.get('/entregas/painel-testes').data.decode()
+    assert 'var EMBED' in html
+    assert 'al-abrir-aqui' in html
+    assert 'if (EMBED && a.conv_id)' in html
+    assert 'Abrir no Chatwoot' in html  # caminho standalone preservado
+
+
+def test_v2_recebe_postmessage_do_vigia(app):
+    """O v2 (/painel) escuta o postMessage do alerta e abre a conversa na
+    direita — validando a origem (same-origin)."""
+    c = _staff(app)
+    html = c.get('/entregas/painel').data.decode()
     assert "addEventListener('message'" in html
     assert 'vigia-abrir-conversa' in html
-    assert 'e.origin !== location.origin' in html  # trava de origem
+    assert 'e.origin !== location.origin' in html
     assert 'abrirThread(d.conv_id' in html
 
 
-def test_painel_testes_botao_alertas(app):
+def test_v2_liga_alertas_automatico(app):
+    """O v2 NAO tem mais botao 'LIGAR ALERTAS': arma o som no 1o gesto + via
+    postMessage 'painel-audio-armado' do iframe. So filtro 'Abertas' (sem
+    'Aguardando'). Sem link 'abrir painel normal'."""
     c = _staff(app)
-    html = c.get('/entregas/painel-testes').data.decode()
-    assert 'LIGAR ALERTAS' in html
+    html = c.get('/entregas/painel').data.decode()
+    assert 'LIGAR ALERTAS' not in html            # botao removido
+    assert 'painel-audio-armado' in html          # arma via aviso do iframe
+    assert "{ once: true }" in html               # arma no 1o gesto
     assert '/entregas/api/painel-testes/chatwoot-pending' in html
     assert 'klaxon' in html
+    assert 'data-status="pending"' not in html    # filtro Aguardando removido
+    assert 'abrir painel normal' not in html      # link removido
 
 
 # ── Backend: chatwoot.listar_conversas ──
