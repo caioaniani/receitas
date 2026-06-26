@@ -654,18 +654,28 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6):
     receitas_out = []
     for rid, rec in receitas.items():
         L = lead[rid]
-        bruto = []
-        for p in dias_prod:
-            x = p + timedelta(days=L)
-            bruto.append(max(int(firme[rid].get(x, 0)),
-                             int(round(_previsto_dia(rid, x)))))
-        # desconta estoque pronto dos primeiros dias
+        # Percorre as entregas em ORDEM CRONOLOGICA (hoje, hoje+1, ...). O
+        # estoque pronto cobre as entregas mais PROXIMAS primeiro; o que faltar
+        # numa entrega X precisa ser produzido em X-lead (lead dias antes), pra
+        # estar pronto no dia da entrega. Entrega cuja producao cairia no
+        # passado (proximas `lead` entregas) ja esta atrasada -> produz hoje.
         running = em_estoque.get(rid, 0)
-        liquido = []
-        for d in bruto:
-            cover = min(running, d)
-            liquido.append(d - cover)
+        liquido = [0] * horizonte_dias
+        for j in range(horizonte_dias + L):
+            x = hoje_d + timedelta(days=j)
+            demanda = max(int(firme[rid].get(x, 0)),
+                          int(round(_previsto_dia(rid, x))))
+            cover = min(running, demanda)
             running -= cover
+            net = demanda - cover
+            if net <= 0:
+                continue
+            pidx = j - L                 # dia de producao = entrega - lead
+            if pidx < 0:
+                pidx = 0                 # atrasado -> produz hoje (melhor esforco)
+            if pidx < horizonte_dias:
+                liquido[pidx] += net
+            # entrega alem do alcance do horizonte de producao -> ignora
         total = sum(liquido)
         if total <= 0:
             continue

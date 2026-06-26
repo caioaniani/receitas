@@ -57,6 +57,28 @@ def test_aplica_por_categoria(app, admin_user):
     assert m.capacidade_amassadeira_g == 0        # Moedas nao usa amassadeira
 
 
+def test_aplica_lead_por_categoria(app, admin_user):
+    r1 = _rec('Sourdough A', 'Sourdough')
+    r2 = _rec('Sourdough B', 'Sourdough')
+    cro = _rec('Croissant', 'Croissants')
+
+    client = app.test_client()
+    _login(client, admin_user)
+    resp = client.post('/receitas/amassadeira', data={
+        'categoria_0': 'Sourdough', 'lead_0': '2',          # so lead
+        'categoria_1': 'Croissants', 'cap_1': '50000', 'lead_1': '0',
+    })
+    assert resp.status_code == 302
+
+    for r in (r1, r2, cro):
+        db.session.refresh(r)
+    assert r1.dias_producao == 2          # pao de fermentacao longa
+    assert r2.dias_producao == 2          # toda a categoria
+    assert cro.dias_producao == 0
+    # cap em branco no Sourdough nao mexeu na capacidade
+    assert r1.capacidade_amassadeira_g == 50000
+
+
 def test_branco_nao_altera(app, admin_user):
     r = _rec('Pão', 'Paes', cap=50000)
     client = app.test_client()

@@ -136,13 +136,21 @@ def amassadeira():
         while f'categoria_{i}' in request.form:
             cat = request.form.get(f'categoria_{i}')
             cap_raw = (request.form.get(f'cap_{i}') or '').strip()
+            lead_raw = (request.form.get(f'lead_{i}') or '').strip()
             i += 1
-            if cap_raw == '':
-                continue   # em branco = nao altera essa categoria
-            try:
-                cap = max(0, min(int(cap_raw), 1000000))
-            except (TypeError, ValueError):
-                continue
+            cap = lead = None
+            if cap_raw != '':
+                try:
+                    cap = max(0, min(int(cap_raw), 1000000))
+                except (TypeError, ValueError):
+                    cap = None
+            if lead_raw != '':
+                try:
+                    lead = max(0, min(int(lead_raw), 14))
+                except (TypeError, ValueError):
+                    lead = None
+            if cap is None and lead is None:
+                continue   # ambos em branco = nao altera essa categoria
             q = Receita.query.filter(Receita.arquivada_em.is_(None))
             if cat:
                 q = q.filter(Receita.categoria == cat)
@@ -150,8 +158,14 @@ def amassadeira():
                 q = q.filter((Receita.categoria.is_(None))
                              | (Receita.categoria == ''))
             for r in q.all():
-                if r.capacidade_amassadeira_g != cap:
+                mudou = False
+                if cap is not None and r.capacidade_amassadeira_g != cap:
                     r.capacidade_amassadeira_g = cap
+                    mudou = True
+                if lead is not None and r.dias_producao != lead:
+                    r.dias_producao = lead
+                    mudou = True
+                if mudou:
                     atualizados += 1
         if atualizados:
             db.session.commit()
@@ -170,12 +184,15 @@ def amassadeira():
     for cat in sorted(grupos, key=lambda c: (c == '', c.lower())):
         recs = grupos[cat]
         caps = sorted({int(r.capacidade_amassadeira_g or 0) for r in recs})
+        leads = sorted({int(r.dias_producao or 0) for r in recs})
         categorias.append({
             'nome': cat,
             'label': cat or '(sem categoria)',
             'qtd': len(recs),
             'atual': caps[0] if len(caps) == 1 else None,
             'misto': len(caps) > 1,
+            'lead_atual': leads[0] if len(leads) == 1 else None,
+            'lead_misto': len(leads) > 1,
             'nomes': [r.nome for r in recs],
         })
     return render_template('receitas/amassadeira.html', categorias=categorias)

@@ -85,6 +85,29 @@ def test_estoque_cobre_primeiros_dias(app):
     assert rr['total'] == 40
 
 
+def test_lead_com_estoque_cobre_entregas_proximas(app):
+    """Com lead 2 e estoque: o estoque cobre as entregas CRONOLOGICAMENTE mais
+    proximas; o que falta numa entrega X e produzido em X-lead."""
+    loja = _loja()
+    r = _receita()
+    r.dias_producao = 2
+    db.session.commit()
+    db.session.add(EstoqueProducao(receita_id=r.id, quantidade=40))
+    db.session.commit()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 30)
+    _pedido(loja, 'pendente', hoje() + timedelta(days=2), r, 30)
+    _pedido(loja, 'pendente', hoje() + timedelta(days=4), r, 30)
+
+    crono = cronograma_producao(horizonte_dias=7)
+    rr = _rec_out(crono, r.id)
+    # estoque 40 cobre hoje+1 (30) e parte de hoje+2 (10).
+    # hoje+2: falta 20 -> producao em (hoje+2)-2 = hoje.
+    # hoje+4: falta 30 -> producao em (hoje+4)-2 = hoje+2.
+    assert rr['por_dia'][0]['qtd'] == 20
+    assert rr['por_dia'][2]['qtd'] == 30
+    assert rr['total'] == 50
+
+
 def test_rota_telaindustriateste(app, admin_user):
     loja = _loja()
     r = _receita()
