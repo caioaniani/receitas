@@ -288,6 +288,39 @@ def test_status_erro_propaga(app, monkeypatch):
     assert r.status_code == 502
 
 
+# ── buscar_historico devolve created_at ──
+
+
+def test_buscar_historico_inclui_created_at(app, monkeypatch):
+    """created_at (epoch UTC) vai no dict pra UI mostrar HH:MM em cada bolha.
+    Callers antigos (bot/copilot/vigia) ignoram a chave extra."""
+    from app.services import chatwoot
+
+    class _R:
+        status_code = 200
+        text = '{}'
+
+        def json(self):
+            return {'payload': [
+                {'message_type': 'incoming', 'content': 'oi',
+                 'created_at': 1719417600},
+                {'message_type': 'outgoing', 'content': 'olá',
+                 'created_at': 1719417660},
+                # ts invalido = None (nao quebra)
+                {'message_type': 'incoming', 'content': 'q?',
+                 'created_at': 'lixo'},
+            ]}
+
+    monkeypatch.setattr(chatwoot, 'disponivel', lambda: True)
+    monkeypatch.setattr(chatwoot, '_headers', lambda: {})
+    monkeypatch.setattr(chatwoot.requests, 'get', lambda *a, **k: _R())
+    with app.app_context():
+        h = chatwoot.buscar_historico(7)
+    assert h[0]['created_at'] == 1719417600
+    assert h[1]['created_at'] == 1719417660
+    assert h[2]['created_at'] is None
+
+
 # ── enviar_mensagem_painel (servico) ──
 
 
