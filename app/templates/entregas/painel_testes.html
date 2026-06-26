@@ -403,13 +403,23 @@
         });
     }
     btnEnviar.addEventListener('click', enviar);
-    // Enter envia, Shift+Enter quebra linha. IME (acentos lentos) respeitado:
-    // se isComposing=true, Enter NAO envia (deixa o teclado virtual confirmar).
+    // Enter envia. Shift+Enter, Cmd+Enter e Ctrl+Enter quebram linha.
+    // IME (acentos lentos) respeitado: se isComposing=true, Enter NAO envia.
     compose.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      if (e.key !== 'Enter' || e.isComposing) return;
+      if (e.shiftKey) return;             // Shift+Enter = quebra nativa do browser
+      if (e.metaKey || e.ctrlKey) {
+        // Cmd/Ctrl+Enter: o browser NAO insere \n sozinho — insere na mao na
+        // posicao do cursor e re-dispara o auto-resize.
         e.preventDefault();
-        enviar();
+        var i = compose.selectionStart, j = compose.selectionEnd;
+        compose.value = compose.value.slice(0, i) + '\n' + compose.value.slice(j);
+        compose.selectionStart = compose.selectionEnd = i + 1;
+        compose.dispatchEvent(new Event('input'));
+        return;
       }
+      e.preventDefault();                 // Enter sozinho = envia
+      enviar();
     });
     // Auto-resize: cresce conforme o usuario digita ate o max-height do CSS.
     compose.addEventListener('input', function () {
