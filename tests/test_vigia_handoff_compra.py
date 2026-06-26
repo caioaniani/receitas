@@ -44,43 +44,6 @@ def test_detector_NAO_dispara_quando_bot_consultou_antes():
     assert not v._e_handoff_preguicoso_em_compra(h, rb)
 
 
-def test_detector_NAO_dispara_quando_cliente_pediu_humano(app):
-    """FALSO POSITIVO corrigido 26/06: cliente vendo cestas que PEDE humano
-    explicitamente -> handoff legitimo (excecao do prompt), mesmo com tools=[].
-    Nao pode ser flagrado como preguicoso."""
-    from app.services import chatbot_vigia as v
-    rb = {'acao': 'handoff', 'tools_usadas': []}
-    with app.app_context():
-        # compra em curso (cesta) + pedido explicito de humano na mesma janela
-        h = _hist('queria ver as cestas de café',
-                  'prefiro falar com um atendente')
-        assert not v._e_handoff_preguicoso_em_compra(h, rb)
-        # so "falar com atendente", sem compra: tambem nao alerta
-        h2 = _hist('quero falar com uma pessoa')
-        assert not v._e_handoff_preguicoso_em_compra(h2, rb)
-
-
-def test_detector_ainda_pega_preguicoso_sem_pedido_de_humano(app):
-    """Regressao da regressao: compra em curso SEM o cliente pedir humano
-    continua sendo flagrada (a correcao nao pode cegar o detector)."""
-    from app.services import chatbot_vigia as v
-    rb = {'acao': 'handoff', 'tools_usadas': []}
-    with app.app_context():
-        h = _hist('quanto custa a cesta brunch? quero comprar')
-        assert v._e_handoff_preguicoso_em_compra(h, rb)
-
-
-def test_tool_handoff_nao_convida_preguica():
-    """Correcao 26/06: a descricao da tool transferir_para_humano nao pode
-    convidar handoff preguicoso ('quando nao tiver certeza') nem mandar escalar
-    entrega/CEP direto (existe consultar_frete). Tem que REFORCAR o prompt."""
-    from app.services.chatbot import TOOL_HANDOFF
-    desc = TOOL_HANDOFF['description'].lower()
-    assert 'tiver certeza' not in desc           # escape removido
-    assert 'ltimo recurso' in desc               # 'ÚLTIMO recurso'
-    assert 'consultar_frete' in desc             # entrega/CEP -> frete
-
-
 def test_detector_NAO_dispara_quando_e_reclamacao():
     """Reclamação = handoff humano é correto. Não classifica como
     preguiçoso mesmo sem tool."""

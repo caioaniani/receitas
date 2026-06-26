@@ -253,14 +253,16 @@
   .mep-x { background:#495057; color:#fff; border:0; border-radius:10px;
     width:42px; height:42px; font-size:22px; cursor:pointer; }
   #mep-body { padding:18px 20px; }
-  .mep-farinha { font-size:20px; font-weight:800; color:#0d3b66; background:#e7f1ff;
-    padding:12px 16px; border-radius:12px; margin-bottom:14px; }
   .mep-sub { font-weight:800; color:#343a40; margin:16px 0 6px;
     text-transform:uppercase; font-size:13px; letter-spacing:.6px; }
-  .mep-ing { display:flex; justify-content:space-between; gap:12px;
-    padding:11px 4px; border-bottom:1px solid #f0f0f0; font-size:19px; }
+  .mep-ing { display:flex; align-items:center; gap:14px; padding:12px 4px;
+    border-bottom:1px solid #f0f0f0; font-size:19px; cursor:pointer; }
+  .mep-ing input { width:28px; height:28px; flex:none; cursor:pointer; }
+  .mep-ing .nm { flex:1; }
   .mep-ing .q { font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
   .mep-ing small { color:#adb5bd; font-weight:600; }
+  .mep-ing.done { opacity:.5; }
+  .mep-ing.done .nm, .mep-ing.done .q { text-decoration:line-through; }
   .mep-etapa { margin:9px 0; font-size:17px; line-height:1.5; }
 </style>
 <div class="wrap">
@@ -408,13 +410,17 @@
       .then(function (d) {
         document.getElementById('mep-titulo').textContent =
           d.nome + ' — ' + d.unidades + ' un';
-        var h = '<div class="mep-farinha">🌾 Farinha total: ' + _mepG(d.farinha_g) + '</div>';
-        h += '<div class="mep-sub">Mise en place — ingredientes (' + d.unidades + ' un)</div>';
+        var h = '<div class="mep-sub">Mise en place — marque o que já separou</div>';
         (d.ingredientes || []).forEach(function (i) {
+          var key = 'mep:' + d.receita_id + ':' + i.nome;
+          var checked = localStorage.getItem(key) === '1';
           var q = i.unidade === 'g' ? _mepG(i.qtd) : (i.qtd + ' ' + i.unidade);
-          h += '<div class="mep-ing"><span>' + _mepEsc(i.nome) +
-               (i.pct ? ' <small>' + i.pct + '%</small>' : '') +
-               '</span><span class="q">' + q + '</span></div>';
+          h += '<label class="mep-ing' + (checked ? ' done' : '') + '">' +
+               '<input type="checkbox" class="mep-chk" data-key="' + _mepEsc(key) + '"' +
+               (checked ? ' checked' : '') + '>' +
+               '<span class="nm">' + _mepEsc(i.nome) +
+               (i.pct ? ' <small>' + i.pct + '%</small>' : '') + '</span>' +
+               '<span class="q">' + q + '</span></label>';
         });
         if (d.etapas && d.etapas.length) {
           h += '<div class="mep-sub">Modo de preparo</div>';
@@ -423,6 +429,13 @@
           });
         }
         document.getElementById('mep-body').innerHTML = h;
+        document.querySelectorAll('#mep-body .mep-chk').forEach(function (cb) {
+          cb.addEventListener('change', function () {
+            var lbl = cb.closest('.mep-ing');
+            if (cb.checked) { localStorage.setItem(cb.dataset.key, '1'); lbl.classList.add('done'); }
+            else { localStorage.removeItem(cb.dataset.key); lbl.classList.remove('done'); }
+          });
+        });
       })
       .catch(function () {
         document.getElementById('mep-body').innerHTML =

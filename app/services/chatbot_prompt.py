@@ -1,13 +1,10 @@
 """Prompt do bot de atendimento (Fase 2). Derivado do bot do cliente (n8n),
 adaptado pro Claude e pras ferramentas que existem hoje:
 
-  consultar_produtos, consultar_ingredientes, consultar_pedido,
-  gerar_link_carrinho, consultar_frete, buscar_nota_fiscal, consultar_notas,
-  transferir_para_humano.
+  consultar_produtos, consultar_pedido, gerar_link_carrinho, transferir_para_humano
 
-Entrega/CEP → consultar_frete (resolve por endereço/Nominatim; NÃO escalar
-direto pro humano por causa de frete). Handoff é o ÚLTIMO recurso — ver a
-seção "ANTES DE TRANSFERIR — ESGOTE AS FERRAMENTAS" no corpo do prompt.
+Entrega/CEP/agendamento → transferir_para_humano (a consulta automatica de
+frete pode entrar depois).
 """
 
 PROMPT = r"""Você é o Padeiro, assistente de atendimento da O Pão Padaria Artesanal.

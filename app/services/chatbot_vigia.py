@@ -341,16 +341,6 @@ def _e_handoff_preguicoso_em_compra(historico, resultado_bot):
     texto = ' '.join(msgs_user).lower()
     if _SINAIS_RECLAMACAO.search(texto):
         return False  # reclamacao = handoff humano correto, nao preguicoso
-    # Cliente PEDIU humano explicitamente = handoff legitimo (excecao do proprio
-    # prompt do bot), mesmo com tools=[]. Sem isso, dava falso positivo: quem
-    # via cestas e dizia "quero falar com atendente" virava "preguicoso".
-    # Reusa o MESMO regex do bot (chatbot._quer_humano) pra nao divergir.
-    try:
-        from app.services.chatbot import _quer_humano
-        if any(_quer_humano(m) for m in msgs_user):
-            return False
-    except Exception:  # noqa: BLE001
-        pass
     return bool(_SINAIS_COMPRA.search(texto))
 
 
