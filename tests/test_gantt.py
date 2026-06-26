@@ -8,6 +8,7 @@ from app.models import (
     PlanejamentoProducao,
     Receita,
     ReceitaEtapa,
+    ReceitaIngrediente,
 )
 from app.services.gantt import PASSIVA_LONGA_MIN, montar_gantt
 
@@ -19,6 +20,9 @@ def _receita(nome, etapas, cap=50000, peso=1000.0):
                 capacidade_amassadeira_g=cap)
     db.session.add(r)
     db.session.flush()
+    # farinha 100% -> massa_receita_base = peso_base (necessário pra fornadas)
+    db.session.add(ReceitaIngrediente(receita_id=r.id, tipo='mp',
+                                      ingrediente_nome='Farinha', porcentagem=100))
     for i, (n, d, eq, at) in enumerate(etapas):
         db.session.add(ReceitaEtapa(receita_id=r.id, ordem=i, nome=n,
                                     duracao_min=d, equipamento=eq, ativa=at))
