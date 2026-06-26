@@ -132,8 +132,17 @@ def test_v2_liga_alertas_automatico(app):
     assert "{ once: true }" in html               # arma no 1o gesto
     assert '/entregas/api/painel-testes/chatwoot-pending' in html
     assert 'klaxon' in html
-    assert 'data-status="pending"' not in html    # filtro Aguardando removido
     assert 'abrir painel normal' not in html      # link removido
+
+
+def test_v2_tem_aba_conversas_do_bot(app):
+    """Aba 'Conversas do bot' (status pending) ao lado de 'Abertas' (open) —
+    pra monitorar o que o bot esta conduzindo."""
+    c = _staff(app)
+    html = c.get('/entregas/painel').data.decode()
+    assert 'Conversas do bot' in html
+    assert 'data-status="pending"' in html
+    assert 'data-status="open"' in html
 
 
 # ── Backend: chatwoot.listar_conversas ──
