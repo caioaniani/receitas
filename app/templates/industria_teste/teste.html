@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Indústria (teste) — cronograma{% endblock %}
+
+{% block content %}
+<style>
+    .crono-wrap { overflow-x: auto; }
+    .crono table { border-collapse: separate; border-spacing: 0; min-width: 100%; }
+    .crono th, .crono td {
+        padding: .5rem .6rem; border-bottom: 1px solid #eee; text-align: center;
+        white-space: nowrap; font-variant-numeric: tabular-nums;
+    }
+    .crono thead th {
+        background: #212529; color: #fff; font-size: .85rem; font-weight: 600;
+        position: sticky; top: 0; z-index: 2;
+    }
+    .crono th.rec-col, .crono td.rec-col {
+        text-align: left; position: sticky; left: 0; background: #fff; z-index: 1;
+        min-width: 14rem; box-shadow: 1px 0 0 #e9ecef;
+    }
+    .crono thead th.rec-col { background: #212529; z-index: 3; }
+    .crono td.hoje-col { background: #fff8e1; }
+    .crono thead th.hoje-col { background: #b8860b; }
+    .crono .cel-qtd { font-weight: 700; font-size: 1.15rem; color: #0d3b66; }
+    .crono .cel-forn { display: block; font-size: .72rem; color: #6c757d; }
+    .crono .cel-zero { color: #ced4da; }
+    .crono tr:hover td:not(.rec-col) { background: #f3f6f9; }
+    .crono td.hoje-col, .crono tr:hover td.hoje-col { background: #fff3cd; }
+    .tag-lead { background: #fff3cd; color: #664d03; padding: .05rem .4rem;
+                border-radius: .25rem; font-size: .68rem; font-weight: 600; }
+    .rec-est { font-size: .75rem; color: #6c757d; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+    <h3 class="mb-0">
+        <i class="bi bi-hammer"></i> Indústria — cronograma de produção
+        <span class="badge bg-warning text-dark align-middle">TESTE</span>
+    </h3>
+    <form method="GET" class="d-flex gap-1 align-items-center mb-0">
+        <label class="small text-muted mb-0">Horizonte:</label>
+        <input type="number" name="horizonte" min="1" max="14" value="{{ horizonte }}"
+               class="form-control form-control-sm" style="width:64px;">
+        <label class="small text-muted mb-0 ms-2">Hist (sem):</label>
+        <input type="number" name="janela" min="1" max="26" value="{{ janela }}"
+               class="form-control form-control-sm" style="width:64px;">
+        <button class="btn btn-sm btn-outline-secondary">ver</button>
+    </form>
+</div>
+
+<div class="alert alert-light border small">
+    <strong>Estudo — não escreve estoque.</strong> Em vez de produzir todo o
+    déficit da semana num dia só, este cronograma distribui a produção
+    <strong>por dia</strong>: cada dia mostra o que precisa ser produzido para
+    cobrir as entregas de <strong>(dia + lead)</strong> — um pouco de cada,
+    sem faltar nem sobrar. O estoque pronto cobre os dias mais próximos
+    primeiro. Cada célula: <strong>unidades</strong> a produzir e, abaixo, as
+    <strong>fornadas</strong> (batidas da amassadeira). O botão "Produzir"
+    (que credita estoque de verdade) entra depois, quando vocês validarem.
+</div>
+
+{% if not crono.receitas %}
+<p class="text-muted">Sem produção prevista no horizonte (sem pedidos/histórico, ou estoque cobre tudo).</p>
+{% else %}
+<div class="crono-wrap">
+  <div class="crono">
+    <table>
+        <thead>
+            <tr>
+                <th class="rec-col">Receita</th>
+                {% for dia in crono.dias %}
+                <th class="{% if loop.first %}hoje-col{% endif %}">{{ dia.label }}</th>
+                {% endfor %}
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in crono.receitas %}
+            <tr>
+                <td class="rec-col">
+                    <div>{{ r.nome }}
+                        {% if r.dias_producao %}<span class="tag-lead">{{ r.dias_producao }}d</span>{% endif %}
+                    </div>
+                    <div class="rec-est">em estoque: {{ r.em_estoque }}</div>
+                </td>
+                {% for c in r.por_dia %}
+                <td class="{% if loop.first %}hoje-col{% endif %}">
+                    {% if c.qtd %}
+                    <span class="cel-qtd">{{ c.qtd }}</span>
+                    {% if c.fornadas is not none %}
+                    <span class="cel-forn">{{ c.fornadas }} fornada(s)</span>
+                    {% else %}
+                    <span class="cel-forn">un</span>
+                    {% endif %}
+                    {% else %}
+                    <span class="cel-zero">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+                <td><strong>{{ r.total }}</strong></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+  </div>
+</div>
+<p class="text-muted small mt-2">
+    Coluna amarela = <strong>hoje</strong> (o que a indústria produz agora).
+    Receitas com <span class="tag-lead">Nd</span> levam N dias pra ficar prontas,
+    então o dia de produção é antecipado em relação à entrega.
+</p>
+{% endif %}
+{% endblock %}

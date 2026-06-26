@@ -560,3 +560,137 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6):
         'lojas': lojas_out,
         'total_pedidos': total_pedidos,
     }
+
+
+def cronograma_producao(horizonte_dias=7, janela_semanas=6):
+    """Cronograma de producao POR DIA (em vez de tudo num dia so).
+
+    Ideia: produzir a cada dia o que vai ser ENTREGUE nesse dia + o lead da
+    receita — "produzir hoje = entregas de (hoje + dias_producao)". Assim a
+    producao acompanha a curva de entrega (um pouco de cada dia), sem faltar
+    nem sobrar. O estoque pronto cobre os dias mais proximos primeiro.
+
+    Por receita, por dia de PRODUCAO P em [hoje, hoje+horizonte-1]:
+        demanda = max(firme, previsto) das entregas em (P + lead)
+        firme   = pedidos nao baixados com data_entrega == P+lead
+        previsto = media do dia-da-semana de (P+lead)
+    Depois desconta o estoque pronto dos primeiros dias.
+
+    Retorna dict:
+        dias: [{data, label, dow}]                          # dias de producao
+        receitas: [{receita_id, nome, dias_producao, em_estoque,
+                    por_dia: [{data, qtd, fornadas}], total}]
+        hoje, horizonte_dias, janela_semanas.
+    """
+    from app.services.producao import fornadas_amassadeira
+
+    horizonte_dias = max(1, min(int(horizonte_dias or 7), 14))
+    janela_semanas = max(1, min(int(janela_semanas or 6), 26))
+
+    hoje_d = hoje()
+    hist_ini = hoje_d - timedelta(days=7 * janela_semanas)
+    hist_fim = hoje_d - timedelta(days=1)
+    dias_calendario_janela = 7 * janela_semanas
+
+    receitas = {r.id: r for r in Receita.query
+                .filter(Receita.arquivada_em.is_(None)).all()}
+    lead = {rid: int(rec.dias_producao or 0) for rid, rec in receitas.items()}
+    max_lead = max(lead.values(), default=0)
+
+    em_estoque = defaultdict(int)
+    for ep in (EstoqueProducao.query
+               .filter(EstoqueProducao.receita_id.isnot(None)).all()):
+        em_estoque[ep.receita_id] += int(ep.quantidade or 0)
+
+    # firme por (receita, dia de entrega) — pedidos nao baixados. Janela de
+    # entrega cobre ate horizonte+lead (producao do fim do horizonte mira
+    # entregas alem dele).
+    deliv_fim = hoje_d + timedelta(days=horizonte_dias - 1 + max_lead)
+    firme = defaultdict(lambda: defaultdict(int))
+    for rid, data_ent, qtd in (db.session.query(
+            PedidoItem.receita_id, PedidoLoja.data_entrega,
+            PedidoItem.quantidade)
+            .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
+            .filter(PedidoItem.receita_id.isnot(None),
+                    PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
+                    PedidoLoja.data_entrega >= hoje_d,
+                    PedidoLoja.data_entrega <= deliv_fim).all()):
+        if data_ent is not None:
+            firme[rid][data_ent] += int(qtd or 0)
+
+    # historico por (receita, dow) pra o previsto
+    soma_dow = defaultdict(lambda: defaultdict(int))
+    datas_dow = defaultdict(lambda: defaultdict(set))
+    soma_total = defaultdict(int)
+    for rid, data_ent, qtd in (db.session.query(
+            PedidoItem.receita_id, PedidoLoja.data_entrega,
+            PedidoItem.quantidade)
+            .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
+            .filter(PedidoItem.receita_id.isnot(None),
+                    PedidoLoja.status != 'cancelado',
+                    PedidoLoja.data_entrega >= hist_ini,
+                    PedidoLoja.data_entrega <= hist_fim).all()):
+        if data_ent is None or rid not in receitas:
+            continue
+        dow = data_ent.weekday()
+        soma_dow[rid][dow] += int(qtd or 0)
+        datas_dow[rid][dow].add(data_ent)
+        soma_total[rid] += int(qtd or 0)
+
+    def _previsto_dia(rid, dia):
+        dow = dia.weekday()
+        datas = datas_dow[rid].get(dow)
+        if datas and len(datas) >= _MIN_OCORRENCIAS_DOW:
+            return soma_dow[rid][dow] / len(datas)
+        if soma_total[rid]:
+            return soma_total[rid] / dias_calendario_janela
+        return 0.0
+
+    dias_prod = [hoje_d + timedelta(days=i) for i in range(horizonte_dias)]
+    dias_out = [{'data': d.isoformat(),
+                 'label': '%s %s' % (_DOW_PT[d.weekday()], d.strftime('%d/%m')),
+                 'dow': d.weekday()} for d in dias_prod]
+
+    receitas_out = []
+    for rid, rec in receitas.items():
+        L = lead[rid]
+        bruto = []
+        for p in dias_prod:
+            x = p + timedelta(days=L)
+            bruto.append(max(int(firme[rid].get(x, 0)),
+                             int(round(_previsto_dia(rid, x)))))
+        # desconta estoque pronto dos primeiros dias
+        running = em_estoque.get(rid, 0)
+        liquido = []
+        for d in bruto:
+            cover = min(running, d)
+            liquido.append(d - cover)
+            running -= cover
+        total = sum(liquido)
+        if total <= 0:
+            continue
+        rend = int(rec.rendimento_qtd) if rec.rendimento_qtd else 0
+        por_dia = []
+        for i, p in enumerate(dias_prod):
+            qtd = liquido[i]
+            if qtd > 0 and rend > 0:
+                fornadas = fornadas_amassadeira(rec, max(1, ceil(qtd / rend)))
+            else:
+                fornadas = None
+            por_dia.append({'data': p.isoformat(), 'qtd': qtd,
+                            'fornadas': fornadas})
+        receitas_out.append({
+            'receita_id': rid, 'nome': rec.nome, 'dias_producao': L,
+            'em_estoque': em_estoque.get(rid, 0),
+            'por_dia': por_dia, 'total': total,
+        })
+
+    receitas_out.sort(key=lambda x: -x['total'])
+
+    return {
+        'dias': dias_out,
+        'receitas': receitas_out,
+        'hoje': hoje_d.isoformat(),
+        'horizonte_dias': horizonte_dias,
+        'janela_semanas': janela_semanas,
+    }
