@@ -435,9 +435,13 @@ def create_app(config_class=None):
         # ate o same-origin — troca por SAMEORIGIN + frame-ancestors 'self'
         # (cross-origin/clickjacking segue bloqueado). Escopado ao detalhe do
         # pedido pra nao afrouxar o resto do admin.
+        # Embutidos same-origin com ?embed=1: detalhe do pedido + o painel de
+        # pedidos (v1, em /entregas/painel-testes apos o swap de 26/06; tambem
+        # /entregas/painel pra cobrir transicao — inocuo, so libera same-origin).
         if (request.values.get('embed') and (
                 request.path.startswith('/admin/loja-online/pedidos')
-                or request.path == '/entregas/painel')):
+                or request.path == '/entregas/painel'
+                or request.path == '/entregas/painel-testes')):
             response.headers['X-Frame-Options'] = 'SAMEORIGIN'
             response.headers['Content-Security-Policy'] = (
                 "default-src 'self'; "
@@ -448,13 +452,13 @@ def create_app(config_class=None):
                 "https://*.dropboxusercontent.com; "
                 "frame-ancestors 'self';"
             )
-        # Tela /entregas/painel-testes: painel de pedidos (iframe same-origin,
-        # via ?embed=1 acima) + atendimento NOSSO (lista/thread do Chatwoot via
-        # API, sem iframe). frame-src 'self' (so o painel). O Chatwoot recusava
-        # ser embutido, entao trazemos as conversas via fetch das nossas rotas
-        # /entregas/api/atendimento/* (connect-src 'self'). img-src libera o
-        # dominio do Chatwoot pros ANEXOS de imagem dos clientes na thread.
-        if request.path == '/entregas/painel-testes':
+        # Painel OFICIAL (v2, /entregas/painel): pedidos (iframe same-origin do
+        # v1 via /painel-testes?embed=1) + atendimento NOSSO (lista/thread do
+        # Chatwoot via API, sem iframe). frame-src 'self' (so o iframe do v1).
+        # img-src libera o dominio do Chatwoot pros ANEXOS de imagem dos
+        # clientes na thread. (O v1 standalone em /painel-testes usa o CSP
+        # default — o mesmo que tinha quando era o /painel.)
+        if request.path == '/entregas/painel':
             chatwoot = (app.config.get('CHATWOOT_URL') or '').strip().rstrip('/')
             img_cw = f' {chatwoot}' if chatwoot else ''
             response.headers['Content-Security-Policy'] = (
