@@ -315,9 +315,10 @@ def test_buscar_historico_inclui_created_at(app, monkeypatch):
     monkeypatch.setattr(chatwoot.requests, 'get', lambda *a, **k: _R())
     with app.app_context():
         h = chatwoot.buscar_historico(7)
-    assert h[0]['created_at'] == 1719417600
-    assert h[1]['created_at'] == 1719417660
-    assert h[2]['created_at'] is None
+    # `sorted` no parse usa `created_at or 0`, entao msg sem ts (q?) vem 1o.
+    assert h[0]['created_at'] is None
+    assert h[1]['created_at'] == 1719417600
+    assert h[2]['created_at'] == 1719417660
 
 
 # ── enviar_mensagem_painel (servico) ──
