@@ -414,6 +414,13 @@
     var d = document.createElement('div'); d.textContent = (s == null ? '' : s);
     return d.innerHTML;
   }
+  function _mepEquipIcon(eq, ativa) {
+    if (eq === 'amassadeira') return '🥣';
+    if (eq === 'forno') return '🔥';
+    if (eq === 'camara_fria') return '❄️';
+    if (eq === 'bancada') return '✋';
+    return ativa ? '•' : '⏳';   // sem equipamento: ativo = ponto, passivo = espera
+  }
   function verReceita(rid, itemId, fallback) {
     var inp = document.getElementById('qtd-' + itemId);
     var un = inp && parseInt(inp.value) > 0 ? parseInt(inp.value) : (fallback || 1);
