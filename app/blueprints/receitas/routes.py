@@ -116,6 +116,70 @@ def familias():
     return render_template('receitas/familias.html', categorias=categorias)
 
 
+@receitas_bp.route('/amassadeira', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def amassadeira():
+    """Configura a capacidade da amassadeira POR CATEGORIA (mais rapido que
+    receita a receita).
+
+    GET: lista as categorias com a capacidade atual (ou 'misto' se as receitas
+    da categoria divergem). POST: aplica a capacidade informada a TODAS as
+    receitas da categoria. Campo vazio = nao mexe. 0 = a categoria NAO passa
+    pela amassadeira (o plano mostra unidades, nao fornadas).
+
+    O campo por receita na ficha continua valendo como override pontual.
+    """
+    if request.method == 'POST':
+        atualizados = 0
+        i = 0
+        while f'categoria_{i}' in request.form:
+            cat = request.form.get(f'categoria_{i}')
+            cap_raw = (request.form.get(f'cap_{i}') or '').strip()
+            i += 1
+            if cap_raw == '':
+                continue   # em branco = nao altera essa categoria
+            try:
+                cap = max(0, min(int(cap_raw), 1000000))
+            except (TypeError, ValueError):
+                continue
+            q = Receita.query.filter(Receita.arquivada_em.is_(None))
+            if cat:
+                q = q.filter(Receita.categoria == cat)
+            else:
+                q = q.filter((Receita.categoria.is_(None))
+                             | (Receita.categoria == ''))
+            for r in q.all():
+                if r.capacidade_amassadeira_g != cap:
+                    r.capacidade_amassadeira_g = cap
+                    atualizados += 1
+        if atualizados:
+            db.session.commit()
+            flash(f'{atualizados} receita(s) atualizada(s).', 'success')
+        else:
+            flash('Nenhuma mudança.', 'info')
+        return redirect(url_for('receitas.amassadeira'))
+
+    receitas = (Receita.query.filter(Receita.arquivada_em.is_(None))
+                .order_by(Receita.categoria, Receita.nome).all())
+    grupos = {}
+    for r in receitas:
+        grupos.setdefault(r.categoria or '', []).append(r)
+
+    categorias = []
+    for cat in sorted(grupos, key=lambda c: (c == '', c.lower())):
+        recs = grupos[cat]
+        caps = sorted({int(r.capacidade_amassadeira_g or 0) for r in recs})
+        categorias.append({
+            'nome': cat,
+            'label': cat or '(sem categoria)',
+            'qtd': len(recs),
+            'atual': caps[0] if len(caps) == 1 else None,
+            'misto': len(caps) > 1,
+        })
+    return render_template('receitas/amassadeira.html', categorias=categorias)
+
+
 @receitas_bp.route('/<int:id>/padeiro')
 @login_required
 def padeiro(id):
