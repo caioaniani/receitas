@@ -213,15 +213,23 @@ def buscar_historico(conversation_id, limite=20):
                    if a.get('file_type') == 'image' and a.get('data_url')]
         if not content and not imagens:
             continue
+        # `created_at` (epoch UTC) entra como campo EXTRA — callers antigos
+        # ignoram, a UI usa pra mostrar HH:MM em cada bolha. Safe pra todos.
+        ts = m.get('created_at')
+        try:
+            ts = int(ts) if ts is not None else None
+        except (TypeError, ValueError):
+            ts = None
         if mt in ('incoming', 0):
-            item = {'role': 'user', 'content': content}
+            item = {'role': 'user', 'content': content, 'created_at': ts}
             if imagens:
                 item['imagens'] = imagens
             hist.append(item)
         elif mt in ('outgoing', 1):
             if not content:
                 continue  # imagem do bot/atendente nao precisa ir pro Claude
-            hist.append({'role': 'assistant', 'content': content})
+            hist.append({'role': 'assistant', 'content': content,
+                         'created_at': ts})
     return hist[-limite:]
 
 
