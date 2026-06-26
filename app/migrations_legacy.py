@@ -765,6 +765,13 @@ def _migrate_postgres(app):
     _try("ALTER TABLE atribuicao_entrega ADD COLUMN geo_lng DOUBLE PRECISION")
     _try("ALTER TABLE atribuicao_entrega ADD COLUMN proof_hash VARCHAR(32)")
     _try("CREATE UNIQUE INDEX IF NOT EXISTS idx_atribuicao_proof_hash ON atribuicao_entrega(proof_hash)")
+
+    # Cronograma -> padeiro: alvo de unidades e quanto ja foi produzido por
+    # item do plano (opcao B: a MP sai e o produto entra na producao).
+    _try("ALTER TABLE planejamento_item ADD COLUMN qtd_alvo INTEGER")
+    _try("ALTER TABLE planejamento_item ADD COLUMN produzido_qtd INTEGER NOT NULL DEFAULT 0")
+    _try("ALTER TABLE planejamento_producao ADD COLUMN origem VARCHAR(20)")
+
     _try("""
     CREATE TABLE IF NOT EXISTS entrega_foto (
         id SERIAL PRIMARY KEY,
