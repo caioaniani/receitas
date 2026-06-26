@@ -467,6 +467,23 @@
     document.getElementById('drawer').classList.remove('on');
   }
 
+  // Delegacao: clique em "Abrir aqui ao lado" (so existe quando EMBED) pede
+  // ao pai (painel-testes) pra abrir a conversa no painel da direita. No painel
+  // normal esses botoes nunca sao criados, entao isto fica dormente.
+  document.getElementById('drawer-lista').addEventListener('click', function (e) {
+    var b = e.target.closest('.al-abrir-aqui');
+    if (!b) return;
+    e.preventDefault();
+    try {
+      window.parent.postMessage({
+        tipo: 'vigia-abrir-conversa',
+        conv_id: b.getAttribute('data-conv'),
+        nome: b.getAttribute('data-nome'),
+      }, location.origin);
+    } catch (_) {}
+    fecharDrawer();
+  });
+
   // ── Agrupamento por janela ────────────────────────────
   function horaInicio(periodo) {
     var m = String(periodo || '').match(/(\d{1,2})/);
