@@ -176,6 +176,7 @@ def amassadeira():
             'qtd': len(recs),
             'atual': caps[0] if len(caps) == 1 else None,
             'misto': len(caps) > 1,
+            'nomes': [r.nome for r in recs],
         })
     return render_template('receitas/amassadeira.html', categorias=categorias)
 

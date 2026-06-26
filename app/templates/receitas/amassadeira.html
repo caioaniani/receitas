@@ -30,7 +30,13 @@
         <tbody>
             {% for c in categorias %}
             <tr>
-                <td><strong>{{ c.label }}</strong></td>
+                <td>
+                    <strong>{{ c.label }}</strong>
+                    <details class="small text-muted">
+                        <summary style="cursor:pointer;">ver receitas</summary>
+                        {{ c.nomes | join(', ') }}
+                    </details>
+                </td>
                 <td class="text-center">{{ c.qtd }}</td>
                 <td>
                     <input type="hidden" name="categoria_{{ loop.index0 }}" value="{{ c.nome }}">
