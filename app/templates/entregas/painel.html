@@ -313,7 +313,7 @@
           att.textContent = 'atualizado ' + tempoRel(Math.floor(Date.now()/1000));
           if (!cs.length) {
             lista.innerHTML = '<div class="at-vazio">Nenhuma conversa ' +
-              (statusAtual === 'pending' ? 'aguardando' : 'aberta') + ' agora.</div>';
+              (statusAtual === 'pending' ? 'com o bot' : 'aberta') + ' agora.</div>';
             return;
           }
           lista.innerHTML = cs.map(function (c) {
