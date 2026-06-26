@@ -4,15 +4,38 @@ from app.models import MateriaPrima, Receita
 from app.services.custos import calcular_custos_receitas
 
 
+def massa_receita_base(receita):
+    """Massa (g) de UMA fornada-base da receita = soma de TODOS os ingredientes
+    (a 'receita final', nao so a farinha). Mesma conta de custos.py:
+    peso_base x sum_pct/100 (ingredientes em % do padeiro: farinha, agua, sal...)
+    + qtd_direto (mp_direto em gramas).
+
+    Add-ins de montagem (sub-receita 'receita' e 'mp_un' tipo baton) NAO entram
+    — nao vao na amassadeira; sao agregados depois. Receitas de pao (as que
+    usam a amassadeira) sao 100% percentuais, entao a conta cobre o caso real.
+    """
+    if not receita:
+        return 0.0
+    sum_pct = 0.0
+    qtd_direto = 0.0
+    for ing in receita.ingredientes:
+        tipo = ing.tipo or 'mp'
+        if tipo == 'mp_direto':
+            qtd_direto += ing.porcentagem or 0
+        elif tipo not in ('receita', 'mp_un'):
+            sum_pct += ing.porcentagem or 0
+    return (receita.peso_base or 0) * sum_pct / 100 + qtd_direto
+
+
 def fornadas_amassadeira(receita, multiplicador):
     """Quantas BATIDAS da amassadeira o plano representa pra essa receita.
 
-    farinha_total = peso_base x multiplicador (peso_base = farinha por
-    batida-base da receita). fornadas = ceil(farinha_total / capacidade) =
-    numero de vezes que se carrega a amassadeira (a ultima batida pode ser
-    parcial; por isso o consumo de MP segue a farinha REAL, nao as batidas
-    cheias). Capacidade 0 = a receita NAO passa pela amassadeira -> retorna
-    None (o plano mostra unidades, nao fornadas).
+    A amassadeira e limitada pela MASSA final (ex: 50kg/50L), nao pela farinha.
+    massa_total = massa_receita_base(receita) x multiplicador. fornadas =
+    ceil(massa_total / capacidade) = numero de vezes que se carrega a
+    amassadeira (a ultima batida pode ser parcial; por isso o consumo de MP
+    segue a massa REAL, nao as batidas cheias). Capacidade 0 = a receita NAO
+    passa pela amassadeira -> retorna None (o plano mostra unidades).
     """
     mult = int(multiplicador or 0)
     if not receita or mult <= 0:
@@ -20,10 +43,10 @@ def fornadas_amassadeira(receita, multiplicador):
     cap = int(getattr(receita, 'capacidade_amassadeira_g', 0) or 0)
     if cap <= 0:
         return None
-    farinha_total = (receita.peso_base or 0) * mult
-    if farinha_total <= 0:
+    massa_total = massa_receita_base(receita) * mult
+    if massa_total <= 0:
         return None
-    return max(1, ceil(farinha_total / cap))
+    return max(1, ceil(massa_total / cap))
 
 
 def consolidar_lista_compras(itens):
