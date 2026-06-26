@@ -419,9 +419,17 @@
     var lido = a.reconhecido ? ' lido' : '';
     var quando = a.criado_em ? new Date(a.criado_em).toLocaleString('pt-BR',
       { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
-    var link = a.chatwoot_url
-      ? '<a class="al-link" href="' + esc(a.chatwoot_url) + '" target="_blank" rel="noopener">💬 Abrir no Chatwoot</a>'
-      : '<span class="al-semlink">sem link da conversa</span>';
+    var link;
+    if (EMBED && a.conv_id) {
+      // Dentro do painel-testes: abre a conversa no painel da direita (manda o
+      // pai via postMessage). Fora do embed cai no else (link do Chatwoot).
+      link = '<button type="button" class="al-link al-abrir-aqui" data-conv="' +
+        esc(a.conv_id) + '" data-nome="' + esc(a.cliente) + '">💬 Abrir aqui ao lado</button>';
+    } else if (a.chatwoot_url) {
+      link = '<a class="al-link" href="' + esc(a.chatwoot_url) + '" target="_blank" rel="noopener">💬 Abrir no Chatwoot</a>';
+    } else {
+      link = '<span class="al-semlink">sem link da conversa</span>';
+    }
     var msg = a.mensagem_cliente
       ? '<div class="al-msg">' + esc(a.mensagem_cliente) + '</div>' : '';
     return '<div class="al-card' + lido + '">' +
