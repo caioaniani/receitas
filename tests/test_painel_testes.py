@@ -306,9 +306,8 @@ def test_buscar_historico_inclui_created_at(app, monkeypatch):
                  'created_at': 1719417600},
                 {'message_type': 'outgoing', 'content': 'olá',
                  'created_at': 1719417660},
-                # ts invalido = None (nao quebra)
-                {'message_type': 'incoming', 'content': 'q?',
-                 'created_at': 'lixo'},
+                # created_at ausente = None (a UI mostra so o nome, sem hora)
+                {'message_type': 'incoming', 'content': 'q?'},
             ]}
 
     monkeypatch.setattr(chatwoot, 'disponivel', lambda: True)
