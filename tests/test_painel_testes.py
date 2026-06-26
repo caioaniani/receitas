@@ -324,6 +324,23 @@ def test_buscar_historico_inclui_created_at(app, monkeypatch):
 # ── enviar_mensagem_painel (servico) ──
 
 
+def test_config_carrega_painel_token():
+    """REGRESSAO: a env CHATWOOT_PAINEL_TOKEN TEM que virar config — senao o
+    token setado no Railway nunca chega no app e o painel diz 'nao configurado'
+    mesmo com tudo certo (bug 26/06/2026)."""
+    import os
+    from importlib import reload
+
+    os.environ['CHATWOOT_PAINEL_TOKEN'] = 'tok-do-painel-xyz'
+    try:
+        import config as cfg_mod
+        reload(cfg_mod)
+        assert cfg_mod.Config.CHATWOOT_PAINEL_TOKEN == 'tok-do-painel-xyz'
+    finally:
+        os.environ.pop('CHATWOOT_PAINEL_TOKEN', None)
+        reload(cfg_mod)
+
+
 def test_enviar_mensagem_painel_sem_token_nao_envia(app, monkeypatch):
     """REGRESSAO: sem CHATWOOT_PAINEL_TOKEN NAO pode usar o bot como fallback
     (UI tem que falhar, nao confundir autor da mensagem)."""
