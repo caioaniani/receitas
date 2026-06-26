@@ -455,6 +455,17 @@
                   'Marcar esta conversa como resolvida?');
     });
 
+    // Alerta do vigia (no iframe do painel à esquerda) pede pra abrir a
+    // conversa aqui na direita. Valida a origem (same-origin) por seguranca —
+    // ignora postMessage de qualquer outra janela/origem.
+    window.addEventListener('message', function (e) {
+      if (e.origin !== location.origin) return;
+      var d = e.data || {};
+      if (d.tipo === 'vigia-abrir-conversa' && d.conv_id) {
+        abrirThread(d.conv_id, d.nome || ('Conversa ' + d.conv_id));
+      }
+    });
+
     carregarLista();
     // Atualiza a lista a cada 20s, mas SO quando a thread nao esta aberta
     // (pra nao puxar o tapete de quem esta lendo uma conversa).
