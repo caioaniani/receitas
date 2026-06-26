@@ -97,6 +97,58 @@ def fornadas_amassadeira(receita, multiplicador):
     return max(1, ceil(massa_total / cap))
 
 
+def produzir_item_plano(item_id, unidades, user_id):
+    """OPCAO B: o padeiro produz `unidades` de um item do plano aprovado.
+    Numa unica transacao: (1) credita o produto pronto na industria
+    (entrada_producao), (2) DESCONTA a MP da ficha tecnica proporcional as
+    unidades (consumo real, sem arredondar pra batida cheia) e (3) avanca o
+    produzido_qtd do item. Retorna {'ok': True, 'produzido': N} ou
+    {'ok': False, 'erro': ...}.
+    """
+    from app.models import MovimentacaoEstoque, PlanejamentoItem
+    from app.services.estoque_congelados import entrada_producao
+
+    try:
+        unidades = int(unidades or 0)
+    except (TypeError, ValueError):
+        unidades = 0
+    if unidades <= 0:
+        return {'ok': False, 'erro': 'Quantidade inválida.'}
+    item = PlanejamentoItem.query.get(item_id)
+    if item is None:
+        return {'ok': False, 'erro': 'Item do plano não encontrado.'}
+    rec = item.receita
+    if rec is None:
+        return {'ok': False, 'erro': 'Receita do item não encontrada.'}
+
+    # 1) credita o produto pronto (nao commita — controlamos a transacao).
+    entrada_producao(receita_id=rec.id, quantidade=unidades, usuario_id=user_id,
+                     referencia='Produção (cronograma) %s' % rec.nome)
+
+    # 2) baixa a MP proporcional as unidades (multiplicador fracionario =
+    #    unidades/rendimento; segue o consumo REAL, nao a batida cheia).
+    rend = float(rec.rendimento_qtd) if rec.rendimento_qtd else 1.0
+    mult = unidades / rend if rend > 0 else 0
+    lista = consolidar_lista_compras([{'receita_id': rec.id,
+                                       'multiplicador': mult}])
+    mps = {mp.nome: mp for mp in MateriaPrima.query.all()}
+    for nome, dados in lista.items():
+        mp = mps.get(nome)
+        if not mp:
+            continue
+        qtd = dados['quantidade']
+        db.session.add(MovimentacaoEstoque(
+            materia_prima_id=mp.id, tipo='saida', quantidade=qtd,
+            referencia='Produção %s (%d un)' % (rec.nome, unidades),
+            usuario_id=user_id))
+        mp.estoque_atual = max(0, (mp.estoque_atual or 0) - qtd)
+
+    # 3) avanca o produzido do item.
+    item.produzido_qtd = int(item.produzido_qtd or 0) + unidades
+    db.session.commit()
+    return {'ok': True, 'produzido': item.produzido_qtd}
+
+
 def consolidar_lista_compras(itens):
     """
     Recebe lista de dicts [{receita_id, multiplicador}].

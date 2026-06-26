@@ -91,6 +91,35 @@ def _dados_listas(dia, eh_hoje):
             'drivers': drivers, 'n_repetidos': n_repetidos}
 
 
+def _plano_do_dia(dia):
+    """Plano de producao aprovado do cronograma pra `dia` (origem=
+    'cronograma'), com itens enriquecidos (fornadas + quanto falta). None se
+    nao houver plano aprovado pra esse dia."""
+    from app.models import PlanejamentoProducao
+    from app.services.producao import fornadas_amassadeira
+
+    plano = (PlanejamentoProducao.query
+             .filter_by(data=dia, origem='cronograma').first())
+    if plano is None:
+        return None
+    itens = []
+    for it in plano.itens:
+        rec = it.receita
+        alvo = int(it.qtd_alvo or 0)
+        feito = int(it.produzido_qtd or 0)
+        itens.append({
+            'item_id': it.id,
+            'receita_id': it.receita_id,
+            'nome': rec.nome if rec else '(receita)',
+            'fornadas': fornadas_amassadeira(rec, it.multiplicador),
+            'alvo': alvo,
+            'produzido': feito,
+            'falta': max(0, alvo - feito),
+        })
+    return {'plano_id': plano.id, 'itens': itens,
+            'total_falta': sum(i['falta'] for i in itens)}
+
+
 @padeiro_testes_bp.route('/')
 @login_required
 @padeiro_required
@@ -99,9 +128,10 @@ def index():
     dia = _parse_dia(request.args.get('data')) or hj
     eh_hoje = (dia == hj)
     return render_template(
-        'padeiro/index.html', dia=dia, eh_hoje=eh_hoje,
+        'padeiro_testes/index.html', dia=dia, eh_hoje=eh_hoje,
         dia_anterior=(dia - timedelta(days=1)).isoformat(),
         dia_seguinte=(dia + timedelta(days=1)).isoformat(),
+        plano_dia=_plano_do_dia(dia),
         **_dados_listas(dia, eh_hoje))
 
 
@@ -116,6 +146,27 @@ def listas_html():
     eh_hoje = (dia == hj)
     return render_template('padeiro_testes/_listas.html', dia=dia, eh_hoje=eh_hoje,
                            **_dados_listas(dia, eh_hoje))
+
+
+@padeiro_testes_bp.route('/produzir-plano/<int:item_id>', methods=['POST'])
+@login_required
+@padeiro_required
+def produzir_plano(item_id):
+    """OPCAO B: produz `unidades` de um item do plano do dia -> credita estoque
+    pronto + desconta MP da ficha + avanca produzido_qtd."""
+    from app.services.producao import produzir_item_plano
+
+    try:
+        unidades = int(request.form.get('unidades') or 0)
+    except (TypeError, ValueError):
+        unidades = 0
+    res = produzir_item_plano(item_id, unidades, current_user.id)
+    if res.get('ok'):
+        flash('Produzido %d un — estoque creditado e MP descontada.'
+              % unidades, 'success')
+    else:
+        flash(res.get('erro', 'Erro ao produzir.'), 'warning')
+    return redirect(request.referrer or url_for('padeiro_testes.index'))
 
 
 @padeiro_testes_bp.route('/<int:id>/separar', methods=['POST'])
