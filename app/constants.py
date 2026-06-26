@@ -210,7 +210,9 @@ ETAPAS_PADRAO = {
         ('Conferência', 5, None, True),
         ('Autólise', 30, None, False),
         ('Amassamento', 15, 'amassadeira', True),
-        ('Bulk + dobras', 120, 'bancada', True),
+        # Fermentação em bloco com dobras: mais descanso que mão de obra — passiva
+        # (o padeiro só dobra rápido a cada 30 min, fica livre pra outra receita).
+        ('Bulk + dobras', 120, None, False),
         ('Pré-modelagem', 10, 'bancada', True),
         ('Modelagem', 15, 'bancada', True),
         ('Fermentação final (frio)', 2880, 'camara_fria', False),
