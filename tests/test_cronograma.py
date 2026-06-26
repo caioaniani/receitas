@@ -119,3 +119,61 @@ def test_rota_telaindustriateste(app, admin_user):
     resp = client.get('/telaindustriateste/')
     assert resp.status_code == 200
     assert 'cronograma' in resp.get_data(as_text=True).lower()
+
+
+def test_aprovar_cria_plano_do_dia(app, admin_user):
+    from app.models import PlanejamentoProducao
+    from app.services.producao import aprovar_plano_do_dia
+
+    loja = _loja()
+    r = _receita()
+    d2 = hoje() + timedelta(days=2)
+    _pedido(loja, 'pendente', d2, r, 50)
+
+    plano = aprovar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+    assert plano is not None
+    assert plano.data == d2
+    assert plano.origem == 'cronograma'
+    assert plano.status == 'aprovado'
+    assert len(plano.itens) == 1
+    it = plano.itens[0]
+    assert it.receita_id == r.id
+    assert it.qtd_alvo == 50
+    assert it.produzido_qtd == 0
+    assert PlanejamentoProducao.query.filter_by(
+        data=d2, origem='cronograma').count() == 1
+
+
+def test_reaprovar_substitui(app, admin_user):
+    from app.models import PlanejamentoProducao
+    from app.services.producao import aprovar_plano_do_dia
+
+    loja = _loja()
+    r = _receita()
+    d2 = hoje() + timedelta(days=2)
+    _pedido(loja, 'pendente', d2, r, 50)
+
+    aprovar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+    aprovar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+    # re-aprovar nao duplica
+    assert PlanejamentoProducao.query.filter_by(
+        data=d2, origem='cronograma').count() == 1
+
+
+def test_rota_aprovar(app, admin_user):
+    from app.models import PlanejamentoProducao
+
+    loja = _loja()
+    r = _receita()
+    d2 = hoje() + timedelta(days=2)
+    _pedido(loja, 'pendente', d2, r, 30)
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    resp = client.post('/telaindustriateste/aprovar',
+                       data={'data': d2.isoformat(), 'horizonte': 7,
+                             'janela': 6})
+    assert resp.status_code == 302
+    assert PlanejamentoProducao.query.filter_by(
+        data=d2, origem='cronograma').first() is not None
