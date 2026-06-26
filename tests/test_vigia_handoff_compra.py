@@ -70,6 +70,17 @@ def test_detector_ainda_pega_preguicoso_sem_pedido_de_humano(app):
         assert v._e_handoff_preguicoso_em_compra(h, rb)
 
 
+def test_tool_handoff_nao_convida_preguica():
+    """Correcao 26/06: a descricao da tool transferir_para_humano nao pode
+    convidar handoff preguicoso ('quando nao tiver certeza') nem mandar escalar
+    entrega/CEP direto (existe consultar_frete). Tem que REFORCAR o prompt."""
+    from app.services.chatbot import TOOL_HANDOFF
+    desc = TOOL_HANDOFF['description'].lower()
+    assert 'tiver certeza' not in desc           # escape removido
+    assert 'ltimo recurso' in desc               # 'ÚLTIMO recurso'
+    assert 'consultar_frete' in desc             # entrega/CEP -> frete
+
+
 def test_detector_NAO_dispara_quando_e_reclamacao():
     """Reclamação = handoff humano é correto. Não classifica como
     preguiçoso mesmo sem tool."""
