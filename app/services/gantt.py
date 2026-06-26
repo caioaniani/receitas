@@ -133,7 +133,6 @@ def montar_gantt(dia):
                                          _dur_label(p['dur']))
             prod['destino_etapa'] = p['nome']
             j['ptr'] = len(j['passos'])      # encerra a receita no dia
-            restantes -= len(j['passos']) - 0  # nada mais conta
             restantes = sum(len(x['passos']) - x['ptr'] for x in jobs)
             continue
 
