@@ -66,7 +66,18 @@
             <tr>
                 <th class="rec-col">Receita</th>
                 {% for dia in crono.dias %}
-                <th class="{% if loop.first %}hoje-col{% endif %}">{{ dia.label }}</th>
+                <th class="{% if loop.first %}hoje-col{% endif %}">
+                    <div>{{ dia.label }}</div>
+                    <form method="POST" action="{{ url_for('industria_teste.aprovar') }}"
+                          class="d-inline" onsubmit="return confirm('Aprovar o plano de {{ dia.label }} e enviar pro padeiro?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="data" value="{{ dia.data }}">
+                        <input type="hidden" name="horizonte" value="{{ horizonte }}">
+                        <input type="hidden" name="janela" value="{{ janela }}">
+                        <button class="btn btn-success btn-sm mt-1"
+                                style="font-size:.68rem;padding:.05rem .4rem;">aprovar dia</button>
+                    </form>
+                </th>
                 {% endfor %}
                 <th>Total</th>
             </tr>
