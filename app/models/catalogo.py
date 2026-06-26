@@ -143,6 +143,13 @@ class Receita(db.Model):
         cascade='all, delete-orphan',
         order_by='ReceitaIngrediente.id'
     )
+    etapas = db.relationship(
+        'ReceitaEtapa',
+        backref='receita',
+        lazy=True,
+        cascade='all, delete-orphan',
+        order_by='ReceitaEtapa.ordem'
+    )
 
     def to_dict(self):
         return {
