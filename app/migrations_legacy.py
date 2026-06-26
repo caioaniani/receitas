@@ -1521,5 +1521,18 @@ def _migrate_sqlite(app):
     except sqlite3.OperationalError:
         pass
 
+    # Cronograma -> padeiro: alvo/produzido por item + origem do plano.
+    cursor.execute("PRAGMA table_info(planejamento_item)")
+    cols_pi = [row[1] for row in cursor.fetchall()]
+    if cols_pi and 'qtd_alvo' not in cols_pi:
+        cursor.execute("ALTER TABLE planejamento_item ADD COLUMN qtd_alvo INTEGER")
+    if cols_pi and 'produzido_qtd' not in cols_pi:
+        cursor.execute("ALTER TABLE planejamento_item ADD COLUMN "
+                       "produzido_qtd INTEGER NOT NULL DEFAULT 0")
+    cursor.execute("PRAGMA table_info(planejamento_producao)")
+    cols_pp = [row[1] for row in cursor.fetchall()]
+    if cols_pp and 'origem' not in cols_pp:
+        cursor.execute("ALTER TABLE planejamento_producao ADD COLUMN origem VARCHAR(20)")
+
     conn.commit()
     conn.close()
