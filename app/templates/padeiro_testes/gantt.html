@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fluxograma da produção — {{ dia.strftime('%d/%m') }}</title>
+<style>
+  :root { --verde:#198754; --azul:#0d6efd; --cinza:#6c757d; --amarelo:#ffc107; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:#f1f3f5; color:#212529; padding-bottom:50px; }
+  header { background:#212529; color:#fff; padding:12px 20px; display:flex;
+           align-items:center; gap:14px; position:sticky; top:0; z-index:10;
+           flex-wrap:wrap; }
+  header h1 { font-size:21px; margin:0; }
+  header a { color:#fff; text-decoration:none; font-size:15px; background:#495057;
+             padding:9px 14px; border-radius:9px; white-space:nowrap; }
+  header a.hoje { background:var(--azul); }
+  header .sp { flex:1; }
+  .wrap { padding:16px; max-width:1280px; margin:0 auto; }
+  .resumo { color:#495057; margin:0 0 14px; font-size:15px; }
+  .resumo b { color:#212529; }
+
+  /* ── Gantt ─────────────────────────────────────────────── */
+  .gantt { background:#fff; border-radius:14px; padding:14px 14px 6px;
+           box-shadow:0 1px 4px rgba(0,0,0,.1); overflow-x:auto; }
+  .gantt-inner { min-width:760px; }
+  /* eixo de horas */
+  .eixo { position:relative; height:26px; margin-left:170px;
+          border-bottom:2px solid #dee2e6; }
+  .eixo .hora { position:absolute; top:0; transform:translateX(-50%);
+                font-size:12px; color:#868e96; font-variant-numeric:tabular-nums; }
+  .eixo .hora::after { content:''; position:absolute; left:50%; top:18px;
+                       width:1px; height:8px; background:#dee2e6; }
+  /* bandas de turno */
+  .turnos { position:relative; height:20px; margin-left:170px; margin-bottom:2px; }
+  .turno { position:absolute; top:0; height:16px; border-radius:5px; font-size:11px;
+           color:#fff; font-weight:700; padding:1px 8px; white-space:nowrap;
+           overflow:hidden; opacity:.85; }
+  .turno.manha { background:#f59f00; }
+  .turno.tarde { background:#7048e8; }
+
+  /* linhas de grade verticais por hora */
+  .linha { position:relative; display:flex; align-items:stretch;
+           border-bottom:1px solid #f1f3f5; min-height:46px; }
+  .linha .rotulo { width:170px; flex:none; padding:6px 10px 6px 0;
+                   border-right:2px solid #dee2e6; display:flex; flex-direction:column;
+                   justify-content:center; }
+  .linha .rotulo .nm { font-weight:800; font-size:15px; line-height:1.15; }
+  .linha .rotulo .sub { font-size:11px; color:#868e96; margin-top:2px; }
+  .linha .faixa { position:relative; flex:1; margin:6px 0; }
+  .grade { position:absolute; top:0; bottom:0; width:1px; background:#f1f3f5; }
+
+  .barra { position:absolute; top:0; height:34px; border-radius:7px; color:#fff;
+           font-size:12px; font-weight:700; padding:0 7px; display:flex;
+           align-items:center; gap:4px; overflow:hidden; white-space:nowrap;
+           box-shadow:0 1px 2px rgba(0,0,0,.18); cursor:default; }
+  .barra.passiva { opacity:.55; font-style:italic;
+    background-image:repeating-linear-gradient(45deg,
+      rgba(255,255,255,.25) 0, rgba(255,255,255,.25) 5px,
+      transparent 5px, transparent 10px); }
+  .barra .et { overflow:hidden; text-overflow:ellipsis; }
+  .destino { position:absolute; top:4px; font-size:12px; color:#495057;
+             background:#e9ecef; border-radius:6px; padding:3px 9px; font-weight:700;
+             white-space:nowrap; }
+
+  .legenda { display:flex; flex-wrap:wrap; gap:6px 16px; margin:14px 0 4px;
+             font-size:13px; color:#495057; }
+  .legenda .it { display:flex; align-items:center; gap:6px; }
+  .legenda .pin { width:14px; height:14px; border-radius:4px; flex:none; }
+  .nota { font-size:13px; color:#868e96; margin-top:12px; line-height:1.5; }
+  .vazio { background:#fff; border-radius:14px; padding:40px 20px; text-align:center;
+           color:#868e96; box-shadow:0 1px 4px rgba(0,0,0,.1); }
+  .alerta { background:#fff3cd; border:1px solid #ffe69c; color:#7a5b00;
+            border-radius:10px; padding:10px 14px; margin:0 0 14px; font-size:14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 Fluxograma — {{ dia.strftime('%d/%m/%Y') }}</h1>
+  <a href="{{ url_for('padeiro_testes.gantt', data=dia_anterior) }}">‹ dia</a>
+  <a href="{{ url_for('padeiro_testes.gantt', data=dia_seguinte) }}">dia ›</a>
+  {% if not eh_hoje %}<a class="hoje" href="{{ url_for('padeiro_testes.gantt') }}">hoje</a>{% endif %}
+  <span class="sp"></span>
+  <a href="{{ url_for('padeiro_testes.index', data=dia.isoformat()) }}">← painel</a>
+</header>
+
+<div class="wrap">
+{% if not g %}
+  <div class="vazio">
+    <p style="font-size:18px;">Nenhum plano de produção aprovado para {{ dia.strftime('%d/%m') }}.</p>
+    <p>Aprove o plano do dia no cronograma da administração.</p>
+  </div>
+{% elif not g.produtos %}
+  <div class="vazio">
+    <p style="font-size:18px;">Plano aprovado, mas nada a produzir.</p>
+    {% if g.sem_etapas %}
+    <p>Receitas sem etapas cadastradas: <b>{{ g.sem_etapas | join(', ') }}</b>.<br>
+       Aplique as etapas em <i>Receitas → Produção por categoria</i>.</p>
+    {% endif %}
+  </div>
+{% else %}
+  <p class="resumo">
+    <b>{{ g.produtos | length }}</b> produto(s) na fila ·
+    encerra por volta de <b>{{ g.fim_estimado }}</b>
+    {% if g.sem_etapas %} · <span style="color:#b45309;">sem etapas: {{ g.sem_etapas | join(', ') }}</span>{% endif %}
+  </p>
+
+  <div class="gantt">
+    <div class="gantt-inner">
+      <!-- bandas de turno -->
+      <div class="turnos">
+        {% for t in g.turnos %}
+        <div class="turno {{ 'manha' if t.nome == 'Manhã' else 'tarde' }}"
+             style="left:{{ t.left_pct }}%; width:{{ t.width_pct }}%;">{{ t.nome }}</div>
+        {% endfor %}
+      </div>
+      <!-- eixo de horas -->
+      <div class="eixo">
+        {% for h in g.horas %}
+        <div class="hora" style="left:{{ h.pct }}%;">{{ h.label }}</div>
+        {% endfor %}
+      </div>
+      <!-- uma linha por produto -->
+      {% for p in g.produtos %}
+      <div class="linha">
+        <div class="rotulo">
+          <span class="nm" style="border-left:5px solid {{ p.cor }}; padding-left:7px;">{{ p.nome }}</span>
+          <span class="sub">falta {{ p.falta }} un{% if p.fornadas %} · {{ p.fornadas }} fornada(s){% endif %}</span>
+        </div>
+        <div class="faixa">
+          {% for h in g.horas %}<div class="grade" style="left:{{ h.pct }}%;"></div>{% endfor %}
+          {% for t in p.tarefas %}
+          <div class="barra {{ 'passiva' if not t.ativa else '' }}"
+               style="left:{{ t.left_pct }}%; width:{{ t.width_pct }}%; background:{{ p.cor }};"
+               title="{{ t.etapa }} — {{ t.ini_hhmm }} a {{ t.fim_hhmm }} ({{ t.dur_label }})">
+            <span>{{ t.icone }}</span><span class="et">{{ t.etapa }}</span>
+          </div>
+          {% endfor %}
+          {% if p.destino %}
+          <div class="destino" style="left:calc({{ (p.fim_min / g.span_min * 100) if g.span_min else 0 }}% + 6px);">
+            → {{ p.destino }}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="legenda">
+    <div class="it"><span>🥣</span> amassadeira</div>
+    <div class="it"><span>🔥</span> forno</div>
+    <div class="it"><span>✋</span> bancada (manual)</div>
+    <div class="it"><span>❄️</span> câmara fria</div>
+    <div class="it"><span>⏳</span> descanso / fermentação</div>
+  </div>
+
+  <p class="nota">
+    A linha do tempo respeita <b>1 amassadeira</b> e <b>1 forno</b> (etapas que
+    usam equipamento não se sobrepõem) e encaixa o trabalho manual em paralelo
+    enquanto a máquina trabalha. Descansos curtos ficam na linha; fermentações
+    longas (≥ 4h) viram o marcador <b>→ câmara fria</b> — o cronograma já antecipa
+    a produção por causa delas. Tempos vêm das etapas cadastradas em cada receita
+    (ajuste em <i>Receitas → Produção por categoria</i> ou na ficha).
+  </p>
+{% endif %}
+</div>
+</body>
+</html>
