@@ -13,7 +13,10 @@ from app.models import (
     PlanejamentoProducao,
     Receita,
 )
-from app.services.producao import consolidar_lista_compras
+from app.services.producao import (
+    consolidar_lista_compras,
+    fornadas_amassadeira,
+)
 from app.utils import hoje as hoje_brt
 
 
@@ -74,12 +77,27 @@ def novo():
 @producao_required
 def detalhe(id):
     plano = PlanejamentoProducao.query.get_or_404(id)
-    itens = [{'receita_id': i.receita_id, 'multiplicador': i.multiplicador} for i in plano.itens]
+    itens = [{'receita_id': i.receita_id, 'multiplicador': i.multiplicador}
+             for i in plano.itens]
     lista_compras = consolidar_lista_compras(itens)
     lista_ordenada = sorted(lista_compras.items(), key=lambda x: x[0])
     custo_total = sum(v['custo_estimado'] for v in lista_compras.values())
-    return render_template('producao/detalhe.html',
-                           plano=plano, lista_compras=lista_ordenada, custo_total=custo_total)
+
+    # Enriquece cada item com FORNADAS (batidas da amassadeira) e unidades.
+    # Receita que nao usa amassadeira (capacidade 0) mostra unidades, sem fornada.
+    itens_view = []
+    for i in plano.itens:
+        rec = i.receita
+        unidades = int(i.multiplicador * (rec.rendimento_qtd or 0)) if rec else 0
+        itens_view.append({
+            'item': i,
+            'fornadas': fornadas_amassadeira(rec, i.multiplicador),
+            'unidades': unidades,
+        })
+
+    return render_template('producao/detalhe.html', plano=plano,
+                           itens_view=itens_view, lista_compras=lista_ordenada,
+                           custo_total=custo_total)
 
 
 @producao_bp.route('/<int:id>/lista-compras')

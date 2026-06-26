@@ -32,21 +32,40 @@
 </div>
 
 <h6 class="fw-bold mb-2">Receitas no plano</h6>
-<div class="table-responsive mb-4">
+<div class="table-responsive mb-1">
     <table class="table table-sm align-middle">
         <thead class="table-light">
-            <tr><th>Receita</th><th class="text-center">Fornadas</th></tr>
+            <tr>
+                <th>Receita</th>
+                <th class="text-center">Fornadas
+                    <small class="text-muted fw-normal">(batidas da amassadeira)</small>
+                </th>
+                <th class="text-center">Unidades</th>
+            </tr>
         </thead>
         <tbody>
-            {% for item in plano.itens %}
+            {% for v in itens_view %}
             <tr>
-                <td>{{ item.receita.nome if item.receita else '(excluída)' }}</td>
-                <td class="text-center">{{ item.multiplicador }}</td>
+                <td>{{ v.item.receita.nome if v.item.receita else '(excluída)' }}</td>
+                <td class="text-center">
+                    {% if v.fornadas is not none %}
+                    <strong>{{ v.fornadas }}</strong>
+                    {% else %}
+                    <span class="text-muted" title="Esta receita não passa pela amassadeira (capacidade 0 na ficha)">— não usa</span>
+                    {% endif %}
+                </td>
+                <td class="text-center">{{ v.unidades }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+<p class="text-muted small mb-4">
+    <strong>Fornadas</strong> = nº de batidas da amassadeira (farinha total ÷
+    capacidade da ficha; a última batida pode ser parcial). Receitas que não
+    passam pela amassadeira mostram só as unidades. O consumo de matéria-prima
+    (ordem de compra) segue a farinha real, não as batidas cheias.
+</p>
 
 <h6 class="fw-bold mb-2"><i class="bi bi-cart"></i> Lista de Compras Consolidada</h6>
 <div class="table-responsive">

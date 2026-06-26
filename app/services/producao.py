@@ -1,5 +1,29 @@
+from math import ceil
+
 from app.models import MateriaPrima, Receita
 from app.services.custos import calcular_custos_receitas
+
+
+def fornadas_amassadeira(receita, multiplicador):
+    """Quantas BATIDAS da amassadeira o plano representa pra essa receita.
+
+    farinha_total = peso_base x multiplicador (peso_base = farinha por
+    batida-base da receita). fornadas = ceil(farinha_total / capacidade) =
+    numero de vezes que se carrega a amassadeira (a ultima batida pode ser
+    parcial; por isso o consumo de MP segue a farinha REAL, nao as batidas
+    cheias). Capacidade 0 = a receita NAO passa pela amassadeira -> retorna
+    None (o plano mostra unidades, nao fornadas).
+    """
+    mult = int(multiplicador or 0)
+    if not receita or mult <= 0:
+        return None
+    cap = int(getattr(receita, 'capacidade_amassadeira_g', 0) or 0)
+    if cap <= 0:
+        return None
+    farinha_total = (receita.peso_base or 0) * mult
+    if farinha_total <= 0:
+        return None
+    return max(1, ceil(farinha_total / cap))
 
 
 def consolidar_lista_compras(itens):

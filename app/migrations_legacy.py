@@ -157,6 +157,7 @@ def _migrate_postgres(app):
             'familia': 'ALTER TABLE receita ADD COLUMN familia VARCHAR(30)',
             'estado_padrao': 'ALTER TABLE receita ADD COLUMN estado_padrao VARCHAR(20)',
             'dias_producao': 'ALTER TABLE receita ADD COLUMN dias_producao INTEGER NOT NULL DEFAULT 0',
+            'capacidade_amassadeira_g': 'ALTER TABLE receita ADD COLUMN capacidade_amassadeira_g INTEGER NOT NULL DEFAULT 50000',
         }
         for col, sql in migrações_receita.items():
             if col not in colunas:
@@ -1267,6 +1268,9 @@ def _migrate_sqlite(app):
     if 'dias_producao' not in colunas:
         cursor.execute(
             "ALTER TABLE receita ADD COLUMN dias_producao INTEGER NOT NULL DEFAULT 0")
+    if 'capacidade_amassadeira_g' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN "
+                       "capacidade_amassadeira_g INTEGER NOT NULL DEFAULT 50000")
 
     cursor.execute("PRAGMA table_info(conta_pagar_item_map)")
     cols_cpim = [row[1] for row in cursor.fetchall()]
