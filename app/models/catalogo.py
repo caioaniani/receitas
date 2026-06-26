@@ -173,6 +173,36 @@ class Receita(db.Model):
     def __repr__(self):
         return f'<Receita {self.nome}>'
 
+class ReceitaEtapa(db.Model):
+    """Etapa do processo de producao de uma receita (Mise en place, Amassamento,
+    Descanso, Forno...), na ordem. Base do Gantt da producao: cada etapa tem
+    duracao e, quando usa equipamento (amassadeira/forno), serializa com as
+    outras (1 de cada). `ativa=False` = etapa PASSIVA (fermentacao/descanso
+    longo) que acontece entre turnos e nao ocupa mao-de-obra."""
+    __tablename__ = 'receita_etapa'
+
+    id = db.Column(db.Integer, primary_key=True)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'),
+                           nullable=False, index=True)
+    ordem = db.Column(db.Integer, nullable=False, default=0)
+    nome = db.Column(db.String(80), nullable=False)
+    duracao_min = db.Column(db.Integer, nullable=False, default=0)
+    # 'amassadeira' / 'forno' / 'bancada' / 'camara_fria' / NULL (sem equip.)
+    equipamento = db.Column(db.String(30))
+    ativa = db.Column(db.Boolean, nullable=False, default=True,
+                      server_default='1')
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'ordem': self.ordem, 'nome': self.nome,
+            'duracao_min': self.duracao_min, 'equipamento': self.equipamento,
+            'ativa': self.ativa,
+        }
+
+    def __repr__(self):
+        return f'<ReceitaEtapa {self.nome} {self.duracao_min}min>'
+
+
 class ReceitaIngrediente(db.Model):
     __tablename__ = 'receita_ingrediente'
 
