@@ -135,6 +135,24 @@ def index():
         **_dados_listas(dia, eh_hoje))
 
 
+@padeiro_testes_bp.route('/gantt')
+@login_required
+@padeiro_required
+def gantt():
+    """Fluxograma/Gantt da produção do dia: agenda as etapas das receitas do
+    plano aprovado na linha do tempo (turnos 06–14 / 13–21), serializando
+    amassadeira e forno e encaixando mise en place em paralelo."""
+    from app.services.gantt import montar_gantt
+
+    hj = hoje()
+    dia = _parse_dia(request.args.get('data')) or hj
+    return render_template(
+        'padeiro_testes/gantt.html', dia=dia, eh_hoje=(dia == hj),
+        dia_anterior=(dia - timedelta(days=1)).isoformat(),
+        dia_seguinte=(dia + timedelta(days=1)).isoformat(),
+        g=montar_gantt(dia))
+
+
 @padeiro_testes_bp.route('/listas.html')
 @login_required
 @padeiro_required
