@@ -29,7 +29,9 @@ def _pedido(code, cartinha='', nome='Cliente'):
 
 
 def test_painel_html_carrega(admin_logado):
-    r = admin_logado.get('/entregas/painel')
+    # Swap 26/06/2026: o conteudo de pedidos (v1) virou /painel-testes; o
+    # /painel agora e o v2 (atendimento + pedidos embutidos).
+    r = admin_logado.get('/entregas/painel-testes')
     assert r.status_code == 200
     assert b'PEDIDOS DE HOJE' in r.data
     assert b'LIGAR PAINEL' in r.data
