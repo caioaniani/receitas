@@ -479,6 +479,10 @@
            class="sidebar-link {% if request.path == '/receitas/familias' %}active{% endif %}">
             Famílias de receitas
         </a>
+        <a href="{{ url_for('receitas.amassadeira') }}"
+           class="sidebar-link {% if request.path == '/receitas/amassadeira' %}active{% endif %}">
+            Amassadeira (categoria)
+        </a>
         {% endif %}
 
         <!-- Busca de receitas -->
