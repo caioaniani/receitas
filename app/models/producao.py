@@ -18,6 +18,9 @@ class PlanejamentoProducao(db.Model):
     criado_em = db.Column(db.DateTime, default=agora)
     criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
     status = db.Column(db.String(20), default='rascunho')
+    # 'cronograma' = plano aprovado do cronograma diario (desce pro padeiro);
+    # NULL/'manual' = plano avulso/deficit. So pra distinguir na UI.
+    origem = db.Column(db.String(20))
 
     itens = db.relationship('PlanejamentoItem', backref='planejamento',
                             cascade='all, delete-orphan', lazy=True)
@@ -33,6 +36,11 @@ class PlanejamentoItem(db.Model):
     planejamento_id = db.Column(db.Integer, db.ForeignKey('planejamento_producao.id'), nullable=False)
     receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=False)
     multiplicador = db.Column(db.Integer, default=1)
+    # Unidades-alvo (do cronograma) e quanto ja foi produzido. produzido_qtd
+    # avanca quando o padeiro marca producao (credita estoque + baixa MP).
+    qtd_alvo = db.Column(db.Integer)
+    produzido_qtd = db.Column(db.Integer, nullable=False, default=0,
+                              server_default='0')
 
     receita = db.relationship('Receita')
 

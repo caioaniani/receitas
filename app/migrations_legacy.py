@@ -765,6 +765,13 @@ def _migrate_postgres(app):
     _try("ALTER TABLE atribuicao_entrega ADD COLUMN geo_lng DOUBLE PRECISION")
     _try("ALTER TABLE atribuicao_entrega ADD COLUMN proof_hash VARCHAR(32)")
     _try("CREATE UNIQUE INDEX IF NOT EXISTS idx_atribuicao_proof_hash ON atribuicao_entrega(proof_hash)")
+
+    # Cronograma -> padeiro: alvo de unidades e quanto ja foi produzido por
+    # item do plano (opcao B: a MP sai e o produto entra na producao).
+    _try("ALTER TABLE planejamento_item ADD COLUMN qtd_alvo INTEGER")
+    _try("ALTER TABLE planejamento_item ADD COLUMN produzido_qtd INTEGER NOT NULL DEFAULT 0")
+    _try("ALTER TABLE planejamento_producao ADD COLUMN origem VARCHAR(20)")
+
     _try("""
     CREATE TABLE IF NOT EXISTS entrega_foto (
         id SERIAL PRIMARY KEY,
@@ -1513,6 +1520,19 @@ def _migrate_sqlite(app):
         cursor.execute("UPDATE pedido_loja SET status='confirmado' WHERE status='pendente'")
     except sqlite3.OperationalError:
         pass
+
+    # Cronograma -> padeiro: alvo/produzido por item + origem do plano.
+    cursor.execute("PRAGMA table_info(planejamento_item)")
+    cols_pi = [row[1] for row in cursor.fetchall()]
+    if cols_pi and 'qtd_alvo' not in cols_pi:
+        cursor.execute("ALTER TABLE planejamento_item ADD COLUMN qtd_alvo INTEGER")
+    if cols_pi and 'produzido_qtd' not in cols_pi:
+        cursor.execute("ALTER TABLE planejamento_item ADD COLUMN "
+                       "produzido_qtd INTEGER NOT NULL DEFAULT 0")
+    cursor.execute("PRAGMA table_info(planejamento_producao)")
+    cols_pp = [row[1] for row in cursor.fetchall()]
+    if cols_pp and 'origem' not in cols_pp:
+        cursor.execute("ALTER TABLE planejamento_producao ADD COLUMN origem VARCHAR(20)")
 
     conn.commit()
     conn.close()

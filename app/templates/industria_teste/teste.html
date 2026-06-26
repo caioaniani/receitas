@@ -32,8 +32,7 @@
 
 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
     <h3 class="mb-0">
-        <i class="bi bi-hammer"></i> Indústria — cronograma de produção
-        <span class="badge bg-warning text-dark align-middle">TESTE</span>
+        <i class="bi bi-hammer"></i> Cronograma de Produção
     </h3>
     <form method="GET" class="d-flex gap-1 align-items-center mb-0">
         <label class="small text-muted mb-0">Horizonte:</label>
@@ -47,14 +46,14 @@
 </div>
 
 <div class="alert alert-light border small">
-    <strong>Estudo — não escreve estoque.</strong> Em vez de produzir todo o
-    déficit da semana num dia só, este cronograma distribui a produção
-    <strong>por dia</strong>: cada dia mostra o que precisa ser produzido para
-    cobrir as entregas de <strong>(dia + lead)</strong> — um pouco de cada,
-    sem faltar nem sobrar. O estoque pronto cobre os dias mais próximos
-    primeiro. Cada célula: <strong>unidades</strong> a produzir e, abaixo, as
-    <strong>fornadas</strong> (batidas da amassadeira). O botão "Produzir"
-    (que credita estoque de verdade) entra depois, quando vocês validarem.
+    Painel da <strong>administração</strong>. A produção é distribuída
+    <strong>por dia</strong> acompanhando as entregas (deslocada pelo lead da
+    receita) — um pouco de cada, sem faltar nem sobrar; o estoque pronto cobre
+    os dias mais próximos primeiro. Cada célula: <strong>unidades</strong> a
+    produzir e, abaixo, as <strong>fornadas</strong>. Clique em
+    <strong>"aprovar"</strong> no topo de um dia para criar a ordem de produção
+    e <strong>enviá-la ao padeiro</strong>. O estoque e a matéria-prima só
+    mexem quando o padeiro produz.
 </div>
 
 {% if not crono.receitas %}
@@ -67,7 +66,18 @@
             <tr>
                 <th class="rec-col">Receita</th>
                 {% for dia in crono.dias %}
-                <th class="{% if loop.first %}hoje-col{% endif %}">{{ dia.label }}</th>
+                <th class="{% if loop.first %}hoje-col{% endif %}">
+                    <div>{{ dia.label }}</div>
+                    <form method="POST" action="{{ url_for('industria_teste.aprovar') }}"
+                          class="d-inline" onsubmit="return confirm('Aprovar o plano de {{ dia.label }} e enviar pro padeiro?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="data" value="{{ dia.data }}">
+                        <input type="hidden" name="horizonte" value="{{ horizonte }}">
+                        <input type="hidden" name="janela" value="{{ janela }}">
+                        <button class="btn btn-success btn-sm mt-1"
+                                style="font-size:.68rem;padding:.05rem .4rem;">aprovar dia</button>
+                    </form>
+                </th>
                 {% endfor %}
                 <th>Total</th>
             </tr>
