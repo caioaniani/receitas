@@ -156,13 +156,9 @@
 <body>
   <div class="barra-teste">
     <span class="tag">PAINEL</span>
-    <span>Pedidos do dia + Atendimento (Chatwoot via API).</span>
-    <button id="btn-arm" type="button" class="bt-arm">▶ LIGAR ALERTAS</button>
+    <span>Pedidos do dia + Atendimento</span>
     <span id="badge-cw" class="badge-cw" hidden>
       <span id="badge-cw-n">0</span> nova(s) — clique para silenciar
-    </span>
-    <span class="dir">
-      <a href="{{ url_for('entregas.painel') }}">abrir painel normal</a>
     </span>
   </div>
 
@@ -170,8 +166,8 @@
 
   <div class="split" id="split">
     <div class="pane" id="pane-painel">
-      <iframe src="{{ url_for('entregas.painel') }}?embed=1"
-              title="Painel de entregas"></iframe>
+      <iframe src="{{ url_for('entregas.painel_testes') }}?embed=1"
+              title="Painel de pedidos"></iframe>
     </div>
     <div class="divisor" id="divisor" title="Arraste para ajustar a proporção"></div>
 
