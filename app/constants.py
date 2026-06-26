@@ -195,3 +195,45 @@ PADARIA_ENDERECO = 'Rua Ribeiro do Vale, 455 — Brooklin Paulista, São Paulo/S
 # os pontos/barra ao processar.
 PADARIA_CHAVE_PIX = '40.646.899/0001-39'
 PADARIA_PIX_TIPO = 'CNPJ'  # rotulo legivel ("Chave PIX (CNPJ): ...")
+
+
+# ── Etapas de produção padrão por categoria (seed do Gantt) ──────────────────
+# Cada etapa: (nome, duracao_min, equipamento, ativa).
+#  - equipamento: 'amassadeira'/'forno'/'bancada'/'camara_fria'/None. Os que
+#    usam equipamento serializam (a padaria tem 1 de cada).
+#  - ativa=False = etapa PASSIVA (fermentação/descanso longo) — acontece entre
+#    turnos, não ocupa mão-de-obra no Gantt.
+# Tempos típicos artesanais (pesquisados); o dono ajusta por receita depois.
+ETAPAS_PADRAO = {
+    'Pães': [
+        ('Mise en place', 10, None, True),
+        ('Conferência', 5, None, True),
+        ('Autólise', 30, None, False),
+        ('Amassamento', 15, 'amassadeira', True),
+        ('Bulk + dobras', 120, 'bancada', True),
+        ('Pré-modelagem', 10, 'bancada', True),
+        ('Modelagem', 15, 'bancada', True),
+        ('Fermentação final (frio)', 2880, 'camara_fria', False),
+        ('Forno (com vapor)', 25, 'forno', True),
+    ],
+    'Viennoiserie': [
+        ('Mise en place', 10, None, True),
+        ('Amassamento', 12, 'amassadeira', True),
+        ('Descanso a frio', 720, 'camara_fria', False),
+        ('Laminagem (3 dobras)', 150, 'bancada', True),
+        ('Modelagem', 20, 'bancada', True),
+        ('Fermentação final', 90, None, False),
+        ('Forno', 18, 'forno', True),
+    ],
+}
+
+ETAPAS_PADRAO_DEFAULT = [
+    ('Mise en place', 10, None, True),
+    ('Preparo', 30, 'bancada', True),
+    ('Forno', 20, 'forno', True),
+]
+
+
+def etapas_padrao_categoria(categoria):
+    """Etapas padrão da categoria (fallback no default genérico)."""
+    return ETAPAS_PADRAO.get((categoria or '').strip(), ETAPAS_PADRAO_DEFAULT)

@@ -97,6 +97,45 @@ def fornadas_amassadeira(receita, multiplicador):
     return max(1, ceil(massa_total / cap))
 
 
+def _fmt_dur(minutos):
+    """Minutos -> '30 min' / '2h' / '2,5h' / '48h'."""
+    m = int(minutos or 0)
+    if m >= 60:
+        h = m / 60.0
+        return ('%dh' % int(h)) if h == int(h) else ('%.1fh' % h).replace('.', ',')
+    return '%d min' % m
+
+
+def seed_etapas_categoria(categoria):
+    """Cria/substitui as etapas de producao de TODAS as receitas (nao
+    arquivadas) da categoria com o padrao pesquisado. Tambem preenche o
+    modo_preparo (texto) SE estiver vazio, gerado das etapas. Retorna o nº de
+    receitas afetadas. Idempotente (re-aplicar substitui as etapas)."""
+    from app.constants import etapas_padrao_categoria
+    from app.models import ReceitaEtapa
+
+    q = Receita.query.filter(Receita.arquivada_em.is_(None))
+    if categoria:
+        q = q.filter(Receita.categoria == categoria)
+    else:
+        q = q.filter((Receita.categoria.is_(None)) | (Receita.categoria == ''))
+    padrao = etapas_padrao_categoria(categoria)
+    n = 0
+    for r in q.all():
+        ReceitaEtapa.query.filter_by(receita_id=r.id).delete()
+        for i, (nome, dur, equip, ativa) in enumerate(padrao):
+            db.session.add(ReceitaEtapa(receita_id=r.id, ordem=i, nome=nome,
+                                        duracao_min=dur, equipamento=equip,
+                                        ativa=ativa))
+        if not (r.modo_preparo or '').strip():
+            r.modo_preparo = '\n\n'.join(
+                '%s — %s' % (nome, _fmt_dur(dur))
+                for nome, dur, equip, ativa in padrao)
+        n += 1
+    db.session.commit()
+    return n
+
+
 def mise_en_place(receita, unidades):
     """Receita ESCALADA pra produzir `unidades`: cada ingrediente com a
     quantidade ja ajustada (farinha, agua, sal...) pro padeiro pesar, mais o
@@ -127,6 +166,18 @@ def mise_en_place(receita, unidades):
             'pct': mostra_pct,
         })
 
+    # Processo estruturado (etapas cadastradas) pro fluxograma do padeiro:
+    # nome, duracao formatada, equipamento e se e ativa (mao-de-obra) ou
+    # passiva (fermentacao/descanso). Vazio quando a receita ainda nao tem
+    # etapas cadastradas — o card cai no modo_preparo em texto.
+    processo = [{
+        'nome': e.nome,
+        'duracao': _fmt_dur(e.duracao_min),
+        'duracao_min': e.duracao_min,
+        'equipamento': e.equipamento,
+        'ativa': e.ativa,
+    } for e in receita.etapas]
+
     return {
         'receita_id': receita.id,
         'nome': receita.nome,
@@ -134,6 +185,7 @@ def mise_en_place(receita, unidades):
         'farinha_g': round(peso_base * mult, 1),
         'ingredientes': ingredientes,
         'etapas': dividir_etapas_preparo(receita.modo_preparo),
+        'processo': processo,
     }
 
 

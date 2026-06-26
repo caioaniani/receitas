@@ -19,6 +19,10 @@
             ficar pronta. Ex: pão de fermentação longa = <strong>2</strong> (48h).
             O cronograma de produção <strong>antecipa</strong> em N dias — começa
             a produzir antes pra estar pronto no dia da entrega.</li>
+        <li><strong>Etapas (processo)</strong>: aplica o passo a passo artesanal
+            padrão (mise en place, amassamento, fermentação, forno…) com tempos
+            a todas as receitas da categoria — base do fluxograma do padeiro.
+            <strong>Substitui</strong> as etapas existentes; ajuste fino na ficha.</li>
     </ul>
 </div>
 
@@ -32,6 +36,7 @@
                 <th class="text-center">Receitas</th>
                 <th>Amassadeira (g massa)</th>
                 <th>Dias até pronto (lead)</th>
+                <th>Etapas (processo)</th>
             </tr>
         </thead>
         <tbody>
@@ -59,6 +64,22 @@
                            placeholder="{{ 'misto' if c.lead_misto else '0' }}"
                            title="Dias que a receita leva pra ficar pronta (ex: pão de fermentação longa = 2 = 48h). O cronograma antecipa a produção em N dias.">
                 </td>
+                <td style="min-width:190px;">
+                    {% if c.com_etapas %}
+                    <span class="badge bg-success-subtle text-success-emphasis me-1"
+                          title="{{ c.com_etapas }} de {{ c.qtd }} receitas com etapas cadastradas">
+                        {{ c.com_etapas }}/{{ c.qtd }} ✓
+                    </span>
+                    {% else %}
+                    <span class="badge bg-light text-muted me-1">nenhuma</span>
+                    {% endif %}
+                    <button type="submit" form="seed-{{ loop.index0 }}"
+                            class="btn btn-sm btn-outline-primary"
+                            title="Substitui as etapas das receitas desta categoria pelo padrão artesanal"
+                            onclick="return confirm('Aplicar etapas padrão a {{ c.qtd }} receita(s) de {{ c.label }}? Substitui as etapas existentes.');">
+                        Aplicar padrão
+                    </button>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
@@ -72,4 +93,14 @@
     <p class="text-muted">Nenhuma receita cadastrada.</p>
     {% endif %}
 </form>
+
+{# Forms isolados (fora da tabela) pro seed de etapas por categoria —
+   HTML nao permite form aninhado; o botao referencia via atributo form. #}
+{% for c in categorias %}
+<form method="POST" action="{{ url_for('receitas.amassadeira_etapas_padrao') }}"
+      id="seed-{{ loop.index0 }}" class="d-none">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="categoria" value="{{ c.nome }}">
+</form>
+{% endfor %}
 {% endblock %}
