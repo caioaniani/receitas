@@ -469,10 +469,15 @@
     }, 20000);
   })();
 
-  // ── Klaxon de nova conversa (pending) ──
+  // ── Klaxon de nova conversa (pending) — LIGA AUTOMATICO ──
+  // O navegador exige 1 gesto do usuario pra tocar som (autoplay policy). Em
+  // vez de um botao dedicado, armamos o som no PRIMEIRO gesto em qualquer lugar
+  // (clique/tecla/toque) E quando o iframe do painel avisa que clicaram "LIGAR
+  // PAINEL" (postMessage). O polling roda desde ja; o badge visual sempre
+  // aparece, o som dispara assim que armado. Como a tela fica aberta o dia todo
+  // e a cozinha interage, o som arma sozinho no primeiro toque.
   (function () {
     var armado = false, audioCtx = null, vistos = null, klaxonTimer = null;
-    var btnArm = document.getElementById('btn-arm');
     var badge = document.getElementById('badge-cw');
     var badgeN = document.getElementById('badge-cw-n');
 
@@ -493,16 +498,24 @@
     function ligarKlaxon() { if (!klaxonTimer) { klaxon(); klaxonTimer = setInterval(klaxon, 1600); } }
     function desligarKlaxon() { if (klaxonTimer) { clearInterval(klaxonTimer); klaxonTimer = null; } }
 
-    btnArm.addEventListener('click', function () {
+    function armar() {
+      if (armado) return;
       try {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx.state === 'suspended') audioCtx.resume();
       } catch (e) {}
       armado = true;
-      btnArm.textContent = '✓ alertas ligados';
-      btnArm.classList.add('armado');
-      poll();
+    }
+    // Primeiro gesto direto nesta pagina (pai) arma o som.
+    ['click', 'keydown', 'touchstart'].forEach(function (ev) {
+      window.addEventListener(ev, armar, { once: true });
     });
+    // O iframe do painel (clique em "LIGAR PAINEL") avisa que o user interagiu.
+    window.addEventListener('message', function (e) {
+      if (e.origin !== location.origin) return;
+      if (e.data && e.data.tipo === 'painel-audio-armado') armar();
+    });
+
     badge.addEventListener('click', function () { desligarKlaxon(); badge.hidden = true; });
 
     function poll() {
@@ -514,13 +527,15 @@
           if (vistos === null) { vistos = new Set(ids); return; }
           var novos = ids.filter(function (id) { return !vistos.has(id); });
           ids.forEach(function (id) { vistos.add(id); });
-          if (novos.length > 0 && armado) {
-            badgeN.textContent = novos.length; badge.hidden = false; ligarKlaxon();
+          if (novos.length > 0) {
+            badgeN.textContent = novos.length; badge.hidden = false;
+            if (armado) ligarKlaxon();
           }
         })
         .catch(function () {});
     }
-    setInterval(function () { if (armado) poll(); }, 20000);
+    poll();                              // imediato (estabelece baseline)
+    setInterval(poll, 20000);
   })();
 </script>
 </body>
