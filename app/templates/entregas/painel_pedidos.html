@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pedidos de Hoje</title>
+<style>
+  :root {
+    --novo: #d6336c; --novo-bg: #fff0f4;
+    --visto: #f59f00; --visto-bg: #fff9db;
+    --pronto: #2b8a3e; --pronto-bg: #ebfbee;
+    --expr: #e8590c;
+  }
+  * { box-sizing: border-box; }
+  body { background: #e9ecef; margin: 0; font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif; }
+
+  .topo {
+    position: sticky; top: 0; z-index: 10; background: #1f2933; color: #fff;
+    display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; gap: 12px;
+  }
+  .topo h1 { font-size: 22px; margin: 0; font-weight: 800; letter-spacing: .5px; }
+  .topo .data { font-size: 13px; opacity: .85; }
+  .badge-novos { background: var(--novo); color: #fff; font-weight: 800; padding: 5px 13px;
+    border-radius: 999px; font-size: 17px; display: none; }
+  .badge-novos.on { display: inline-block; animation: pisca 1s infinite; }
+  .relogio { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .conexao { width: 11px; height: 11px; border-radius: 50%; background: #2b8a3e; }
+  .conexao.off { background: #e03131; }
+
+  /* Quadro: colunas por janela de horario, com scroll horizontal */
+  .quadro { display: flex; gap: 14px; padding: 16px; overflow-x: auto; align-items: flex-start;
+    min-height: calc(100vh - 120px); }
+  .coluna { flex: 0 0 300px; background: #f1f3f5; border-radius: 14px; padding: 10px;
+    display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 130px); }
+  .coluna > h2 { font-size: 17px; font-weight: 800; margin: 4px 6px 2px; color: #343a40;
+    display: flex; align-items: center; justify-content: space-between; }
+  .coluna .conta { font-size: 14px; color: #868e96; font-weight: 700; }
+  .coluna .lista { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding: 2px; }
+  .coluna.expr { background: #fff4e6; }
+  .coluna.expr > h2 { color: var(--expr); }
+  .coluna.retir { background: #e7f5ff; }
+  .coluna.retir > h2 { color: #1971c2; }
+  .coluna.entregues { background: #e3e8ef; }
+  .coluna.entregues > h2 { color: #495057; }
+  .cartao.retir { border-left-color: #1971c2; background: #e7f5ff; }
+  .cartao.retir .selo { background: #1971c2; color: #fff; }
+  .badge-retir { display: inline-block; font-size: 11px; font-weight: 800; padding: 2px 8px;
+    border-radius: 999px; background: #1971c2; color: #fff; margin-left: 6px; }
+
+  .cartao { background: #fff; border-radius: 12px; padding: 14px; cursor: pointer;
+    border-left: 8px solid #ced4da; box-shadow: 0 1px 4px rgba(0,0,0,.08); transition: transform .08s; }
+  .cartao:active { transform: scale(.98); }
+  .cartao .nome { font-size: 19px; font-weight: 800; color: #1f2933; line-height: 1.15; }
+  .cartao .end { font-size: 13px; color: #868e96; margin-top: 2px; }
+  .cartao .meta { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+  .cartao .qtd { font-size: 13px; color: #868e96; }
+  .cartao .selo { font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
+
+  .cartao.novo { border-left-color: var(--novo); background: var(--novo-bg); animation: pisca-borda 1.1s infinite; }
+  .cartao.novo .selo { background: var(--novo); color: #fff; }
+  .cartao.visto { border-left-color: var(--visto); background: var(--visto-bg); }
+  .cartao.visto .selo { background: var(--visto); color: #fff; }
+  .cartao.pronto { border-left-color: var(--pronto); background: var(--pronto-bg); }
+  .cartao.pronto .selo { background: var(--pronto); color: #fff; }
+  .cartao.entregue { opacity: .6; border-left-color: #adb5bd; }
+  .cartao.entregue .selo { background: #adb5bd; color: #fff; }
+
+  @keyframes pisca { 50% { opacity: .35; } }
+  @keyframes pisca-borda { 0%,100% { box-shadow: -4px 0 0 0 rgba(214,51,108,.5); } 50% { box-shadow: -4px 0 0 4px rgba(214,51,108,0); } }
+
+  .arm { position: fixed; inset: 0; z-index: 50; background: #1f2933; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; color: #fff; text-align: center; padding: 20px; }
+  .arm h2 { font-size: 28px; font-weight: 800; margin: 0 0 10px; }
+  .arm p { font-size: 17px; opacity: .8; max-width: 440px; }
+  .arm button { margin-top: 24px; font-size: 24px; font-weight: 800; background: #2b8a3e; color: #fff;
+    border: 0; border-radius: 16px; padding: 20px 44px; cursor: pointer; }
+
+  .detalhe { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.5); display: none;
+    align-items: center; justify-content: center; padding: 14px; }
+  .detalhe.on { display: flex; }
+  .detalhe-box { background: #fff; border-radius: 18px; width: 100%; max-width: 600px; max-height: 92vh;
+    overflow-y: auto; padding: 22px; }
+  .d-nome { font-size: 26px; font-weight: 800; color: #1f2933; }
+  .d-end { font-size: 17px; color: #52606d; margin: 6px 0 2px; }
+  .d-tel { font-size: 17px; color: #52606d; }
+  .d-janela { display: inline-block; margin-top: 8px; font-size: 15px; font-weight: 800;
+    padding: 4px 12px; border-radius: 999px; background: #e7f5ff; color: #1971c2; }
+  .d-janela.expr { background: #fff4e6; color: var(--expr); }
+  .cartinha-bloco { margin: 16px 0; padding: 18px; border-radius: 14px; background: #fff9db; border: 2px dashed #f0c000; }
+  .cartinha-bloco .lbl { font-size: 14px; font-weight: 800; color: #b8860b; text-transform: uppercase; letter-spacing: 1px; }
+  .cartinha-bloco .txt { font-size: 25px; line-height: 1.4; color: #1f2933; margin-top: 6px; white-space: pre-wrap; word-break: break-word; }
+  .cartinha-bloco.vazia { background: #f1f3f5; border-color: #ced4da; }
+  .lala-box { margin: 14px 0; padding: 14px; border-radius: 14px; background: #fff4e6; border: 2px solid #ff9f1a; }
+  .lala-st { font-size: 19px; }
+  .lala-saldo { font-size: 15px; color: #7a5800; margin-left: 8px; }
+  .lala-mot { font-size: 17px; margin-top: 4px; }
+  .lala-link { font-size: 18px; font-weight: 700; color: #1565c0; }
+  .lala-end { width: 100%; font-size: 17px; padding: 8px 10px; margin: 8px 0 2px;
+              border: 1px solid #e0a23f; border-radius: 8px; background: #fff; }
+  .lala-veic { margin: 10px 0; }
+  .lala-veic select { font-size: 19px; padding: 10px 12px; border-radius: 10px;
+                      border: 1px solid #e0a23f; background: #fff; width: 100%; }
+  .lala-res { font-size: 22px; min-height: 28px; margin: 6px 0; }
+  .lala-erro { color: #c92a2a; font-size: 16px; }
+  .lala-btn { font-size: 18px; font-weight: 800; padding: 12px 18px; border-radius: 12px;
+              border: 0; background: #ff9f1a; color: #fff; cursor: pointer; margin-right: 8px; margin-top: 4px; }
+  .lala-btn.chamar { background: #2b8a3e; }
+  .lala-btn.cancelar { background: #c92a2a; }
+  .lala-btn.acelerar { background: #f08c00; }
+  .lala-fee { font-size: 16px; font-weight: 700; color: #b35900; margin-top: 4px; }
+  .lala-acel { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #ffc078; }
+  .lala-acel-tit { font-size: 16px; font-weight: 700; color: #7a5800; margin-bottom: 6px; }
+  .lala-fee-inp { width: 120px; font-size: 19px; padding: 8px 10px; border-radius: 10px;
+                  border: 2px solid #ffc078; margin-right: 8px; }
+  .cartinha-bloco.vazia .txt { font-size: 17px; color: #868e96; font-style: italic; }
+  .itens-lista .item { font-size: 18px; padding: 5px 0; border-bottom: 1px solid #eee; }
+  .itens-lista .item b { font-size: 20px; }
+  .acoes { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .acoes button { flex: 1 1 0; min-width: 130px; font-size: 19px; font-weight: 800; border: 0;
+    border-radius: 14px; padding: 16px; cursor: pointer; color: #fff; }
+  .btn-pronto { background: var(--pronto); }
+  .btn-entregue { background: #1971c2; }
+  .btn-voltar { background: #adb5bd; }
+  .btn-fechar { width: 100%; margin-top: 10px; font-size: 18px; font-weight: 700; background: #f1f3f5;
+    color: #495057; border: 0; border-radius: 12px; padding: 14px; cursor: pointer; }
+
+  .vazio { text-align: center; padding: 60px 20px; color: #868e96; font-size: 20px; width: 100%; }
+  .erro-banner { background: #fff3bf; color: #5c3c00; text-align: center; padding: 9px; font-size: 14px; display: none; }
+  .erro-banner.on { display: block; }
+
+  /* Botao de alertas no topo (abre a aba lateral do historico) */
+  .btn-alertas { position: relative; background: #c92a2a; color: #fff; border: 0; border-radius: 999px;
+    font-size: 14px; font-weight: 800; padding: 7px 14px; cursor: pointer; }
+  .btn-alertas .cnt { background: #fff; color: #c92a2a; border-radius: 999px; font-size: 12px;
+    padding: 1px 7px; margin-left: 6px; display: none; }
+  .btn-alertas .cnt.on { display: inline-block; }
+
+  /* Banner de alerta do vigia (clique pra silenciar e abrir a aba) */
+  .vigia-banner { display: none; background: #c92a2a; color: #fff; cursor: pointer;
+    padding: 14px 18px; align-items: center; gap: 14px; border-bottom: 3px solid #7a1010; }
+  .vigia-banner.on { display: flex; animation: vigia-pisca 1s infinite; }
+  @keyframes vigia-pisca { 0%,100% { background: #c92a2a; } 50% { background: #e8410f; } }
+  .vigia-banner .ico { font-size: 30px; line-height: 1; }
+  .vigia-banner .corpo { flex: 1; min-width: 0; }
+  .vigia-banner .tit { font-size: 17px; font-weight: 800; }
+  .vigia-banner .msg { font-size: 14px; opacity: .95; margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vigia-banner .cta { font-size: 13px; font-weight: 800; background: rgba(255,255,255,.2);
+    padding: 8px 14px; border-radius: 10px; white-space: nowrap; }
+
+  /* Aba lateral (drawer) com o historico de alertas */
+  .drawer-bg { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.45); display: none; }
+  .drawer-bg.on { display: block; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 61; width: 420px; max-width: 92vw;
+    background: #fff; box-shadow: -4px 0 18px rgba(0,0,0,.2); display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform .22s ease; }
+  .drawer.on { transform: translateX(0); }
+  .drawer-topo { background: #1f2933; color: #fff; padding: 16px 18px; display: flex;
+    align-items: center; justify-content: space-between; }
+  .drawer-topo h2 { font-size: 18px; margin: 0; font-weight: 800; }
+  .drawer-topo .x { background: none; border: 0; color: #fff; font-size: 26px; cursor: pointer; line-height: 1; }
+  .drawer-lista { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  .al-card { border: 1px solid #e9ecef; border-left: 6px solid #c92a2a; border-radius: 12px;
+    padding: 13px 14px; background: #fff; }
+  .al-card.lido { border-left-color: #adb5bd; opacity: .72; }
+  .al-card .al-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .al-card .al-cliente { font-size: 16px; font-weight: 800; color: #1f2933; }
+  .al-card .al-quando { font-size: 12px; color: #868e96; white-space: nowrap; }
+  .al-card .al-motivo { font-size: 14px; color: #343a40; margin-top: 5px; line-height: 1.35; }
+  .al-card .al-msg { font-size: 13px; color: #868e96; margin-top: 5px; font-style: italic;
+    border-left: 3px solid #e9ecef; padding-left: 8px; }
+  .al-card .al-link { display: inline-block; margin-top: 10px; font-size: 14px; font-weight: 800;
+    color: #fff; background: #1971c2; padding: 9px 14px; border-radius: 10px; text-decoration: none; }
+  .al-card .al-semlink { display: inline-block; margin-top: 10px; font-size: 12px; color: #adb5bd; }
+  .al-vazio { text-align: center; color: #868e96; font-size: 15px; padding: 40px 12px; }
+  .al-badge { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px;
+    background: #ffe3e3; color: #c92a2a; }
+  .al-badge.lido { background: #e9ecef; color: #868e96; }
+
+  /* ── Aba lateral "Pedidos do site" (estilo /padeiro): tab vertical + drawer ── */
+  #ped-toggle { position: fixed; right: 0; top: 50%; transform: translateY(-50%); z-index: 45;
+    background: #1971c2; color: #fff; border: 0; padding: 18px 12px; font-weight: 800;
+    font-size: 16px; border-radius: 12px 0 0 12px; cursor: pointer; writing-mode: vertical-rl;
+    box-shadow: -2px 0 10px rgba(0,0,0,.25); }
+  #ped-bg { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.45); display: none; }
+  #ped-bg.on { display: block; }
+  /* "um pouco mais que a metade" da tela; em celular ocupa quase tudo */
+  #ped-drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 61; width: 58vw; max-width: 96vw;
+    background: #fff; box-shadow: -4px 0 18px rgba(0,0,0,.2); display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform .22s ease; }
+  #ped-drawer.on { transform: translateX(0); }
+  @media (max-width: 700px) { #ped-drawer { width: 94vw; } }
+  #ped-drawer .drawer-topo { background: #1f2933; color: #fff; padding: 14px 18px; display: flex;
+    align-items: center; justify-content: space-between; }
+  #ped-drawer .drawer-topo h2 { font-size: 18px; margin: 0; font-weight: 800; }
+  #ped-drawer .drawer-topo .x { background: none; border: 0; color: #fff; font-size: 28px; cursor: pointer; line-height: 1; }
+  #ped-busca-wrap { padding: 12px 14px; border-bottom: 1px solid #e9ecef; }
+  #ped-busca { width: 100%; font-size: 17px; padding: 12px 14px; border: 2px solid #ced4da; border-radius: 10px; }
+  #ped-busca:focus { outline: none; border-color: #1971c2; }
+  #ped-tabela-wrap { flex: 1; overflow-y: auto; }
+  table.ped-tabela { width: 100%; border-collapse: collapse; font-size: 15px; }
+  table.ped-tabela th { position: sticky; top: 0; background: #f1f3f5; text-align: left; padding: 11px 12px;
+    font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: #495057; z-index: 1; }
+  table.ped-tabela td { padding: 13px 12px; border-bottom: 1px solid #f1f3f5; }
+  table.ped-tabela tr.ped-row { cursor: pointer; }
+  table.ped-tabela tr.ped-row:hover { background: #e7f5ff; }
+  table.ped-tabela tr.ped-row:active { background: #d0ebff; }
+  .ped-codigo { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: #1971c2; }
+  .ped-vazio { text-align: center; color: #868e96; padding: 40px 12px; font-size: 15px; }
+  /* Popup: detalhe/edição do pedido (iframe da página admin em modo embed) */
+  #ped-popup { position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,.55); display: none;
+    align-items: center; justify-content: center; padding: 16px; }
+  #ped-popup.on { display: flex; }
+  #ped-popup .ped-popup-box { background: #fff; border-radius: 14px; width: 96vw; max-width: 1100px;
+    height: 92vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,.4); }
+  #ped-popup .ped-popup-topo { background: #1f2933; color: #fff; padding: 12px 16px; display: flex;
+    align-items: center; justify-content: space-between; }
+  #ped-popup .ped-popup-topo h2 { font-size: 17px; margin: 0; font-weight: 800; }
+  #ped-popup .ped-popup-topo .x { background: none; border: 0; color: #fff; font-size: 28px; cursor: pointer; line-height: 1; }
+  #ped-popup iframe { flex: 1; width: 100%; border: 0; background: #fff; }
+</style>
+</head>
+<body>
+<div class="arm" id="arm">
+  <h2>🔔 Painel de Pedidos</h2>
+  <p>Toque para ligar o painel e o som de aviso. Deixe esta tela aberta o dia todo.</p>
+  <button id="btn-arm" type="button">▶ LIGAR PAINEL</button>
+</div>
+
+<div class="topo">
+  <div><h1>PEDIDOS DE HOJE</h1><div class="data" id="data-hoje"></div></div>
+  <span class="badge-novos" id="badge-novos">0 novos</span>
+  <div style="display:flex; align-items:center; gap:10px;">
+    <button class="btn-alertas" id="btn-alertas" type="button" title="Alertas do Vigia">
+      🚨 Alertas<span class="cnt" id="alertas-cnt">0</span>
+    </button>
+    <span class="relogio" id="relogio">--:--</span>
+    <span class="conexao" id="conexao" title="conexão"></span>
+  </div>
+</div>
+
+<!-- Banner do Vigia: aparece quando ha alerta ALTA pendente. Clicar
+     silencia o som (reconhece) e abre a aba lateral pra resolver. -->
+<div class="vigia-banner" id="vigia-banner">
+  <div class="ico">🚨</div>
+  <div class="corpo">
+    <div class="tit" id="vigia-banner-tit">Alerta do atendimento</div>
+    <div class="msg" id="vigia-banner-msg"></div>
+  </div>
+  <div class="cta">Clique para ver →</div>
+</div>
+
+<div class="erro-banner" id="erro-banner"></div>
+<div class="quadro" id="quadro"></div>
+
+<div class="detalhe" id="detalhe"><div class="detalhe-box" id="detalhe-box"></div></div>
+
+<!-- Aba lateral: historico de alertas do Vigia com link do Chatwoot -->
+<div class="drawer-bg" id="drawer-bg"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-topo">
+    <h2>🚨 Alertas do atendimento</h2>
+    <button class="x" id="drawer-x" type="button" aria-label="Fechar">×</button>
+  </div>
+  <div class="drawer-lista" id="drawer-lista">
+    <div class="al-vazio">Carregando…</div>
+  </div>
+</aside>
+
+<!-- Aba lateral: Pedidos do site (liberada a todos os usuarios) -->
+<button id="ped-toggle" type="button" title="Pedidos do site">📦 Pedidos do site</button>
+<div id="ped-bg"></div>
+<aside id="ped-drawer">
+  <div class="drawer-topo">
+    <h2>📦 Pedidos do site</h2>
+    <button class="x" id="ped-x" type="button" aria-label="Fechar">×</button>
+  </div>
+  <div id="ped-busca-wrap">
+    <input id="ped-busca" type="search" autocomplete="off"
+           placeholder="🔎 Buscar por nome, telefone ou código…">
+  </div>
+  <div id="ped-tabela-wrap">
+    <table class="ped-tabela">
+      <thead><tr>
+        <th>Data de entrega</th><th>Hora de entrega</th>
+        <th>Destinatário</th><th>Cliente</th><th>Número do Pedido</th>
+      </tr></thead>
+      <tbody id="ped-tbody">
+        <tr><td colspan="5" class="ped-vazio">Carregando…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</aside>
+
+<!-- Popup: detalhe + edição do pedido (iframe da página admin em modo embed) -->
+<div id="ped-popup">
+  <div class="ped-popup-box">
+    <div class="ped-popup-topo">
+      <h2 id="ped-popup-tit">Pedido</h2>
+      <button class="x" id="ped-popup-x" type="button" aria-label="Fechar">×</button>
+    </div>
+    <iframe id="ped-iframe" title="Detalhe do pedido" src="about:blank"></iframe>
+  </div>
+</div>
+
+<script>
+(function () {
+  var ENDPOINT = "{{ url_for('entregas.api_painel') }}";
+  var STATUS_TMPL = "{{ url_for('entregas.api_painel_status', code='__CODE__') }}";
+  var LALA_COTAR = "{{ url_for('entregas.api_lalamove_cotar') }}";
+  var LALA_CHAMAR = "{{ url_for('entregas.api_lalamove_chamar') }}";
+  var LALA_CANCELAR = "{{ url_for('entregas.api_lalamove_cancelar') }}";
+  var LALA_ACELERAR = "{{ url_for('entregas.api_lalamove_acelerar') }}";
+  var LALA_VEICULOS = {{ (lala_veiculos or []) | tojson }};
+  var VIGIA_RECONHECER = "{{ url_for('entregas.api_painel_vigia_reconhecer') }}";
+  var VIGIA_HISTORICO = "{{ url_for('entregas.api_painel_vigia_historico') }}";
+  var lalaSaldo = null;   // ultimo saldo da carteira (vem no api_painel)
+  var CSRF = "{{ csrf_token() }}";
+  // EMBED = este painel esta DENTRO do /entregas/painel-testes (iframe ?embed=1).
+  // So nesse caso o alerta do vigia abre a conversa no painel da direita (em
+  // vez do Chatwoot externo). No painel normal (sem embed) NADA muda.
+  var EMBED = new URLSearchParams(location.search).has('embed');
+  var pedidos = [];
+  var audioCtx = null, beepTimer = null;
+  var vigia = { pendentes: 0, ultimo: null };  // resumo do api_painel
+  var vigiaKlaxonTimer = null;
+  var abertoCode = null;
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Som ───────────────────────────────────────────────
+  function armAudio() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch (e) {}
+    // Se embutido (painel-testes), avisa o pai pra armar o som dos ALERTAS
+    // junto — um clique em "LIGAR PAINEL" liga pedidos + atendimento.
+    if (EMBED) {
+      try { window.parent.postMessage({ tipo: 'painel-audio-armado' }, location.origin); } catch (_) {}
+    }
+  }
+  function beep() {
+    if (!audioCtx) return;
+    var now = audioCtx.currentTime;
+    [880, 1320].forEach(function (freq, i) {
+      var osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.type = 'sine'; osc.frequency.value = freq;
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      var t = now + i * 0.18;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.5, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+      osc.start(t); osc.stop(t + 0.2);
+    });
+  }
+  function ligarAlarme() { if (!beepTimer) { beep(); beepTimer = setInterval(beep, 2000); } }
+  function desligarAlarme() { if (beepTimer) { clearInterval(beepTimer); beepTimer = null; } }
+  function atualizarAlarme() {
+    var novos = pedidos.filter(function (p) { return p.status === 'novo'; }).length;
+    var badge = document.getElementById('badge-novos');
+    badge.textContent = novos + (novos === 1 ? ' NOVO' : ' NOVOS');
+    badge.classList.toggle('on', novos > 0);
+    if (novos > 0) ligarAlarme(); else desligarAlarme();
+  }
+
+  // ── Vigia: banner + som "chato" + aba lateral ─────────
+  // Klaxon insistente (mais agressivo que o beep de pedido novo). So toca
+  // quando ha alerta ALTA pendente; para quando alguem clica (= reconhece).
+  function klaxon() {
+    if (!audioCtx) return;
+    var now = audioCtx.currentTime;
+    [440, 660, 440].forEach(function (freq, i) {
+      var osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.type = 'square'; osc.frequency.value = freq;
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      var t = now + i * 0.22;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.35, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      osc.start(t); osc.stop(t + 0.24);
+    });
+  }
+  function ligarKlaxon() { if (!vigiaKlaxonTimer) { klaxon(); vigiaKlaxonTimer = setInterval(klaxon, 1600); } }
+  function desligarKlaxon() { if (vigiaKlaxonTimer) { clearInterval(vigiaKlaxonTimer); vigiaKlaxonTimer = null; } }
+
+  function atualizarVigia(v) {
+    vigia = v || { pendentes: 0, ultimo: null };
+    var n = vigia.pendentes || 0;
+    var cnt = document.getElementById('alertas-cnt');
+    cnt.textContent = n;
+    cnt.classList.toggle('on', n > 0);
+    var banner = document.getElementById('vigia-banner');
+    if (n > 0 && vigia.ultimo) {
+      var u = vigia.ultimo;
+      var quando = (u.ha_minutos != null) ? (' · há ' + u.ha_minutos + 'min') : '';
+      document.getElementById('vigia-banner-tit').textContent =
+        (n === 1 ? '1 alerta' : n + ' alertas') + ' do atendimento — ' + (u.cliente || '') + quando;
+      document.getElementById('vigia-banner-msg').textContent = u.motivo || '';
+      banner.classList.add('on');
+      ligarKlaxon();
+    } else {
+      banner.classList.remove('on');
+      desligarKlaxon();
+    }
+  }
+
+  function reconhecerAlertas() {
+    // Para o som JA (otimista) e zera local pra nao re-tocar antes do proximo poll.
+    desligarKlaxon();
+    vigia.pendentes = 0;
+    document.getElementById('vigia-banner').classList.remove('on');
+    document.getElementById('alertas-cnt').classList.remove('on');
+    fetch(VIGIA_RECONHECER, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({})
+    }).catch(function () {});
+  }
+
+  function alertaCardHTML(a) {
+    var lido = a.reconhecido ? ' lido' : '';
+    var quando = a.criado_em ? new Date(a.criado_em).toLocaleString('pt-BR',
+      { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    var link;
+    if (EMBED && a.conv_id) {
+      // Dentro do painel-testes: abre a conversa no painel da direita (manda o
+      // pai via postMessage). Fora do embed cai no else (link do Chatwoot).
+      link = '<button type="button" class="al-link al-abrir-aqui" data-conv="' +
+        esc(a.conv_id) + '" data-nome="' + esc(a.cliente) + '">💬 Abrir aqui ao lado</button>';
+    } else if (a.chatwoot_url) {
+      link = '<a class="al-link" href="' + esc(a.chatwoot_url) + '" target="_blank" rel="noopener">💬 Abrir no Chatwoot</a>';
+    } else {
+      link = '<span class="al-semlink">sem link da conversa</span>';
+    }
+    var msg = a.mensagem_cliente
+      ? '<div class="al-msg">' + esc(a.mensagem_cliente) + '</div>' : '';
+    return '<div class="al-card' + lido + '">' +
+      '<div class="al-top"><span class="al-cliente">' + esc(a.cliente) + '</span>' +
+        '<span class="al-quando">' + esc(quando) + '</span></div>' +
+      '<span class="al-badge' + lido + '">' + (a.reconhecido ? 'visto' : 'NOVO') + '</span>' +
+      '<div class="al-motivo">' + esc(a.motivo) + '</div>' + msg + link + '</div>';
+  }
+
+  function carregarHistorico() {
+    var lista = document.getElementById('drawer-lista');
+    lista.innerHTML = '<div class="al-vazio">Carregando…</div>';
+    fetch(VIGIA_HISTORICO, { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var al = d.alertas || [];
+        lista.innerHTML = al.length
+          ? al.map(alertaCardHTML).join('')
+          : '<div class="al-vazio">Nenhum alerta nas últimas 48h. 🎉</div>';
+      })
+      .catch(function () {
+        lista.innerHTML = '<div class="al-vazio">Não consegui carregar o histórico.</div>';
+      });
+  }
+
+  function abrirDrawer() {
+    // Abrir a aba = "estou olhando" → reconhece (silencia em todos) + carrega.
+    reconhecerAlertas();
+    document.getElementById('drawer-bg').classList.add('on');
+    document.getElementById('drawer').classList.add('on');
+    carregarHistorico();
+  }
+  function fecharDrawer() {
+    document.getElementById('drawer-bg').classList.remove('on');
+    document.getElementById('drawer').classList.remove('on');
+  }
+
+  // Delegacao: clique em "Abrir aqui ao lado" (so existe quando EMBED) pede
+  // ao pai (painel-testes) pra abrir a conversa no painel da direita. No painel
+  // normal esses botoes nunca sao criados, entao isto fica dormente.
+  document.getElementById('drawer-lista').addEventListener('click', function (e) {
+    var b = e.target.closest('.al-abrir-aqui');
+    if (!b) return;
+    e.preventDefault();
+    try {
+      window.parent.postMessage({
+        tipo: 'vigia-abrir-conversa',
+        conv_id: b.getAttribute('data-conv'),
+        nome: b.getAttribute('data-nome'),
+      }, location.origin);
+    } catch (_) {}
+    fecharDrawer();
+  });
+
+  // ── Agrupamento por janela ────────────────────────────
+  function horaInicio(periodo) {
+    var m = String(periodo || '').match(/(\d{1,2})/);
+    return m ? parseInt(m[1], 10) : 99;
+  }
+  function selo(status) {
+    return status === 'pronto' ? 'PRONTO' : status === 'visto' ? 'EM PREPARO'
+         : status === 'entregue' ? 'ENTREGUE' : 'NOVO';
+  }
+
+  function colunas() {
+    var ativos = pedidos.filter(function (p) { return p.status !== 'entregue'; });
+    var entregues = pedidos.filter(function (p) { return p.status === 'entregue'; });
+    var cols = [];
+
+    // 1) Expresso (NÃO inclui retirada — retirada tem coluna própria)
+    var expr = ativos.filter(function (p) { return p.expresso && !p.retirada; });
+    if (expr.length) cols.push({ titulo: '⚡ EXPRESSO (1h)', cls: 'expr', itens: expr });
+
+    // 2) Retirada na loja (decisão dono 16/06/2026): cliente busca em
+    // Anésio Pinto Rosa, 78. NÃO vai pra entrega, NÃO chama Lalamove.
+    var retir = ativos.filter(function (p) { return p.retirada; });
+    if (retir.length) cols.push({ titulo: '🏪 RETIRADA HOJE', cls: 'retir', itens: retir });
+
+    // 3) Janelas de horario (nao-expresso, nao-retirada)
+    var porJanela = {};
+    ativos.filter(function (p) { return !p.expresso && !p.retirada; }).forEach(function (p) {
+      var j = (p.periodo || '').trim() || 'Sem horário';
+      (porJanela[j] = porJanela[j] || []).push(p);
+    });
+    Object.keys(porJanela).sort(function (a, b) {
+      return horaInicio(a) - horaInicio(b) || a.localeCompare(b);
+    }).forEach(function (j) {
+      cols.push({ titulo: '🕐 ' + j, cls: '', itens: porJanela[j] });
+    });
+
+    // 4) Entregues do dia (inclui retiradas finalizadas)
+    if (entregues.length) cols.push({ titulo: '✓ ENTREGUES', cls: 'entregues', itens: entregues });
+    return cols;
+  }
+
+  function cartaoHTML(p) {
+    var nItens = (p.itens || []).reduce(function (s, it) { return s + (Number(it.qtd) || 1); }, 0);
+    var cls = 'cartao ' + p.status + (p.retirada ? ' retir' : '');
+    var nomeBadge = esc(p.destinatario) + (p.retirada ? ' <span class="badge-retir">RETIRADA</span>' : '');
+    return '<div class="' + cls + '" data-code="' + esc(p.code) + '">' +
+      '<div class="nome">' + nomeBadge + '</div>' +
+      '<div class="end">' + esc(p.endereco || '—') + '</div>' +
+      '<div class="meta"><span class="qtd">' + nItens + (nItens === 1 ? ' item' : ' itens') + '</span>' +
+        '<span class="selo">' + selo(p.status) + '</span></div></div>';
+  }
+
+  function render() {
+    var quadro = document.getElementById('quadro');
+    if (!pedidos.length) { quadro.innerHTML = '<div class="vazio">Nenhum pedido para hoje ainda.</div>'; return; }
+    quadro.innerHTML = colunas().map(function (c) {
+      return '<div class="coluna ' + c.cls + '">' +
+        '<h2><span>' + c.titulo + '</span><span class="conta">' + c.itens.length + '</span></h2>' +
+        '<div class="lista">' + c.itens.map(cartaoHTML).join('') + '</div></div>';
+    }).join('');
+    Array.prototype.forEach.call(quadro.querySelectorAll('.cartao'), function (el) {
+      el.addEventListener('click', function () { abrir(el.getAttribute('data-code')); });
+    });
+  }
+
+  // ── Status ────────────────────────────────────────────
+  // Mudanças otimistas aguardando o servidor confirmar. Sem isso, o poll de
+  // 20s sobrescreve o card com o estado (ainda antigo) do servidor e o status
+  // "volta" antes do POST dar round-trip. Cada mudança fica pendente até o
+  // servidor devolver o MESMO status (confirmou) ou expirar (POST falhou).
+  var pendentes = {};            // { code: { status, ts } }
+  var PENDENTE_TTL = 30000;      // 30s — mais que um ciclo de poll (20s)
+
+  function marcarPendente(code, status) {
+    pendentes[code] = { status: status, ts: Date.now() };
+  }
+  function aplicarPendentes(lista) {
+    var agora = Date.now();
+    lista.forEach(function (p) {
+      var pend = pendentes[p.code];
+      if (!pend) return;
+      if (pend.status === p.status) delete pendentes[p.code];        // confirmou
+      else if (agora - pend.ts < PENDENTE_TTL) p.status = pend.status; // mantém
+      else delete pendentes[p.code];                                  // expirou
+    });
+    return lista;
+  }
+
+  function mandarStatus(code, status) {
+    marcarPendente(code, status);
+    fetch(STATUS_TMPL.replace('__CODE__', encodeURIComponent(code)) + '?status=' + status, {
+      method: 'POST', headers: { 'X-CSRFToken': CSRF }
+    }).then(function (r) {
+      // Não engole erro: 400 de CSRF expirado ou 4xx/5xx vira aviso no
+      // console (a pendência otimista reverte sozinha em 30s se não salvar).
+      if (!r.ok) console.warn('painel: status não salvou', code, status, r.status);
+    }).catch(function () { console.warn('painel: status sem rede', code, status); });
+  }
+  function setStatus(code, status) {
+    var p = pedidos.find(function (x) { return x.code === code; });
+    if (!p) return;
+    p.status = status;
+    mandarStatus(code, status);
+    render(); atualizarAlarme();
+    if (abertoCode === code) { if (status === 'entregue') fecharDetalhe(); else abrirDetalhe(p); }
+  }
+
+  function abrir(code) {
+    var p = pedidos.find(function (x) { return x.code === code; });
+    if (!p) return;
+    if (p.status === 'novo') { p.status = 'visto'; mandarStatus(code, 'visto'); render(); atualizarAlarme(); }
+    abrirDetalhe(p);
+  }
+
+  function abrirDetalhe(p) {
+    abertoCode = p.code;
+    var temCart = (p.cartinha || '').trim().length > 0;
+    var itens = (p.itens || []).map(function (it) {
+      return '<div class="item"><b>' + (Number(it.qtd) || 1) + 'x</b> ' + esc(it.nome) + '</div>';
+    }).join('') || '<div class="item">—</div>';
+    var janela = p.expresso ? '⚡ Expresso (1h)' : ('🕐 ' + (p.periodo || 'Sem horário'));
+
+    var acoes = '';
+    if (p.status === 'entregue') {
+      acoes = '<button class="btn-voltar" data-act="visto">↩ Reabrir</button>';
+    } else if (p.status === 'pronto') {
+      acoes = '<button class="btn-entregue" data-act="entregue">📦 ENTREGUE</button>' +
+              '<button class="btn-voltar" data-act="visto">↩ Voltar</button>';
+    } else {
+      acoes = '<button class="btn-pronto" data-act="pronto">✓ PRONTO</button>' +
+              '<button class="btn-entregue" data-act="entregue">📦 ENTREGUE</button>';
+    }
+
+    document.getElementById('detalhe-box').innerHTML =
+      '<div class="d-nome">' + esc(p.destinatario) + '</div>' +
+      '<div class="d-end">📍 ' + esc(p.endereco || '—') + '</div>' +
+      (p.telefone ? '<div class="d-tel">📞 ' + esc(p.telefone) + '</div>' : '') +
+      '<div><span class="d-janela ' + (p.expresso ? 'expr' : '') + '">' + esc(janela) + '</span></div>' +
+      '<div class="cartinha-bloco ' + (temCart ? '' : 'vazia') + '">' +
+        '<div class="lbl">💌 Cartinha (escrever à mão)</div>' +
+        '<div class="txt">' + (temCart ? esc(p.cartinha) : 'Este pedido não tem cartinha.') + '</div></div>' +
+      '<div class="itens-lista">' + itens + '</div>' +
+      lalamoveHTML(p) +
+      '<div class="acoes">' + acoes + '</div>' +
+      '<button class="btn-fechar" data-act="fechar">FECHAR</button>';
+
+    Array.prototype.forEach.call(document.querySelectorAll('#detalhe-box [data-act]'), function (b) {
+      b.addEventListener('click', function () {
+        var act = b.getAttribute('data-act');
+        if (act === 'fechar') fecharDetalhe(); else setStatus(p.code, act);
+      });
+    });
+    ligarLalamove(p);
+    document.getElementById('detalhe').classList.add('on');
+  }
+
+  // ── Lalamove (chamar entregador quando PRONTO) ─────────
+  var lalaCotacao = null;   // {entrega_id, valor, ...} da cotação corrente
+
+  function lalamoveHTML(p) {
+    // Retirada não chama Lalamove (cliente busca na loja). Mostra um aviso
+    // pra equipe e esconde TODA a UI de Lalamove pra esse pedido.
+    if (p.retirada) {
+      return '<div class="lala-box" style="background:#e7f5ff;border-color:#1971c2;">' +
+        '<div class="lala-st">🏪 <b>Retirada na loja</b> — cliente busca em Anésio Pinto Rosa, 78. ' +
+        'Sem Lalamove pra esse pedido.</div></div>';
+    }
+    var L = p.lalamove;
+    if (L) {
+      var linhas = '<div class="lala-st">🛵 Lalamove: <b>' + esc(L.rotulo) + '</b>' +
+        (L.valor ? ' · R$ ' + esc(L.valor) : '') +
+        (L.veiculo ? ' · ' + esc(L.veiculo) : '') + '</div>' +
+        (L.priority_fee ? '<div class="lala-fee">⚡ Gorjeta ativa: R$ ' +
+          esc(L.priority_fee) + '</div>' : '') +
+        (L.motorista ? '<div class="lala-mot">👤 ' + esc(L.motorista) +
+          (L.motorista_fone ? ' · ' + esc(L.motorista_fone) : '') + '</div>' : '') +
+        (L.share_link ? '<div><a class="lala-link" target="_blank" href="' +
+          esc(L.share_link) + '">📡 Acompanhar entrega</a></div>' : '');
+      // Acelerar (priority fee): só enquanto procura entregador. Dá pra
+      // repetir aumentando o valor — a Lalamove substitui pelo maior.
+      var acelerar = '';
+      if (L.pode_acelerar) {
+        acelerar = '<div class="lala-acel">' +
+          '<div class="lala-acel-tit">⚡ Acelerar (gorjeta pro entregador)</div>' +
+          '<input class="lala-fee-inp" id="lala-fee" type="number" min="1" step="1" ' +
+            'inputmode="numeric" placeholder="R$ (ex: 5)">' +
+          '<button class="lala-btn acelerar" data-lala="acelerar" data-id="' + L.id +
+            '">⚡ Dar gorjeta</button>' +
+          '<div class="lala-res" id="lala-res"></div>' +
+          '</div>';
+      }
+      var botoes = '';
+      if (L.pode_cancelar) {
+        botoes += '<button class="lala-btn cancelar" data-lala="cancelar" data-id="' +
+                  L.id + '">✕ Cancelar corrida</button>';
+      }
+      if (L.encerrada && p.status === 'pronto') {
+        botoes += '<button class="lala-btn" data-lala="nova">🛵 Chamar de novo</button>';
+      }
+      return '<div class="lala-box">' + linhas + acelerar + botoes + '</div>';
+    }
+    if (p.status !== 'pronto') return '';
+    var opcoes = LALA_VEICULOS.map(function (v) {
+      return '<option value="' + esc(v[0]) + '">' + esc(v[1]) + '</option>';
+    }).join('');
+    return '<div class="lala-box">' +
+      '<div class="lala-st">🛵 <b>Chamar entregador (Lalamove)</b>' +
+      (lalaSaldo ? ' <span class="lala-saldo">💰 saldo R$ ' + esc(lalaSaldo) + '</span>' : '') +
+      '</div>' +
+      '<input class="lala-end" id="lala-end" value="' + esc(p.endereco || '') + '"' +
+        ' placeholder="endereço de entrega" title="Pode editar: tire apto/bloco se o mapa não achar, ou cole coordenadas lat,lng">' +
+      '<div class="lala-veic"><select id="lala-veic">' + opcoes + '</select></div>' +
+      '<div class="lala-res" id="lala-res"></div>' +
+      '<button class="lala-btn" data-lala="cotar">💰 Ver preço</button>' +
+      '<button class="lala-btn chamar" data-lala="chamar" style="display:none">✓ CHAMAR ENTREGADOR</button>' +
+      '</div>';
+  }
+
+  function lalaErro(msg) {
+    var r = document.getElementById('lala-res');
+    if (r) { r.innerHTML = '<span class="lala-erro">⚠ ' + esc(msg) + '</span>'; }
+  }
+
+  function ligarLalamove(p) {
+    Array.prototype.forEach.call(
+        document.querySelectorAll('#detalhe-box [data-lala]'), function (b) {
+      b.addEventListener('click', function () {
+        var act = b.getAttribute('data-lala');
+        if (act === 'nova') { p.lalamove = null; abrirDetalhe(p); return; }
+        if (act === 'cotar') {
+          var veic = (document.getElementById('lala-veic') || {}).value || 'moto';
+          var endInput = document.getElementById('lala-end');
+          var endereco = (endInput && endInput.value.trim()) || p.endereco || '';
+          b.disabled = true;
+          document.getElementById('lala-res').textContent = 'Cotando...';
+          fetch(LALA_COTAR, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ code: p.code, endereco: endereco,
+                                   destinatario: p.destinatario,
+                                   telefone: p.telefone, veiculo: veic })
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            b.disabled = false;
+            if (!d.ok) { lalaErro(d.erro || 'falhou'); return; }
+            lalaCotacao = d;
+            document.getElementById('lala-res').innerHTML =
+              '<b>R$ ' + esc(d.valor) + '</b>' +
+              (d.distancia ? ' · ' + esc(d.distancia) : '') + ' · ' + esc(d.veiculo);
+            var bc = document.querySelector('#detalhe-box [data-lala="chamar"]');
+            if (bc) bc.style.display = '';
+          }).catch(function () { b.disabled = false; lalaErro('sem conexão'); });
+          return;
+        }
+        if (act === 'chamar') {
+          if (!lalaCotacao) { lalaErro('cote o preço primeiro'); return; }
+          if (!confirm('Chamar entregador (' + lalaCotacao.veiculo + ', R$ ' +
+                       lalaCotacao.valor + ') para:\n' + (p.endereco || ''))) return;
+          b.disabled = true;
+          fetch(LALA_CHAMAR, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ entrega_id: lalaCotacao.entrega_id })
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            b.disabled = false;
+            if (!d.ok) { lalaErro(d.erro || 'falhou'); return; }
+            lalaCotacao = null;
+            p.lalamove = d.lalamove;
+            abrirDetalhe(p); carregar();
+          }).catch(function () { b.disabled = false; lalaErro('sem conexão'); });
+          return;
+        }
+        if (act === 'cancelar') {
+          if (!confirm('Cancelar a corrida Lalamove deste pedido?')) return;
+          b.disabled = true;
+          fetch(LALA_CANCELAR, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ entrega_id: b.getAttribute('data-id') })
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            b.disabled = false;
+            if (!d.ok) { lalaErro(d.erro || 'falhou'); return; }
+            p.lalamove = d.lalamove;
+            abrirDetalhe(p); carregar();
+          }).catch(function () { b.disabled = false; lalaErro('sem conexão'); });
+          return;
+        }
+        if (act === 'acelerar') {
+          var feeInp = document.getElementById('lala-fee');
+          var fee = feeInp ? parseFloat(feeInp.value) : 0;
+          if (!fee || fee <= 0) { lalaErro('digite o valor da gorjeta'); return; }
+          if (!confirm('Dar gorjeta de R$ ' + fee + ' pra acelerar este pedido?')) return;
+          b.disabled = true;
+          fetch(LALA_ACELERAR, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ entrega_id: b.getAttribute('data-id'), valor: fee })
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            b.disabled = false;
+            if (!d.ok) { lalaErro(d.erro || 'falhou'); return; }
+            p.lalamove = d.lalamove;
+            abrirDetalhe(p); carregar();
+          }).catch(function () { b.disabled = false; lalaErro('sem conexão'); });
+        }
+      });
+    });
+  }
+  function fecharDetalhe() { abertoCode = null; document.getElementById('detalhe').classList.remove('on'); }
+  document.getElementById('detalhe').addEventListener('click', function (e) {
+    if (e.target.id === 'detalhe') fecharDetalhe();
+  });
+
+  // ── Dados ─────────────────────────────────────────────
+  function setConexao(ok) { document.getElementById('conexao').classList.toggle('off', !ok); }
+  function setErro(msg) {
+    var b = document.getElementById('erro-banner');
+    if (msg) { b.textContent = '⚠ ' + msg; b.classList.add('on'); } else b.classList.remove('on');
+  }
+  function carregar() {
+    fetch(ENDPOINT, { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        setConexao(true);
+        // Renova o token CSRF a cada poll — sem isso ele expira em 1h e os
+        // POSTs de status falham silenciosamente (status não salva).
+        if (data.csrf) CSRF = data.csrf;
+        if (data.erro) {
+          // VNDA indisponível: NÃO esconde tudo. Mantém o último VNDA
+          // carregado e atualiza só os pedidos da loja própria (que vêm
+          // sempre, independem do VNDA).
+          setErro('VNDA indisponível agora — mantendo o último carregado; pedidos da loja própria atualizados.');
+          var online = aplicarPendentes((data.pedidos || []).filter(function (p) { return p.pedido_online; }));
+          var restoVnda = pedidos.filter(function (p) { return !p.pedido_online; });
+          pedidos = restoVnda.concat(online);
+          render(); atualizarAlarme();
+          atualizarVigia(data.vigia);
+          if (abertoCode) {
+            var pa = pedidos.find(function (x) { return x.code === abertoCode; });
+            if (pa) abrirDetalhe(pa); else fecharDetalhe();
+          }
+          return;
+        }
+        setErro('');
+        // Preserva o status de quem acabou de mudar até o servidor confirmar
+        // (aplicarPendentes): o servidor é a fonte da verdade, mas uma mudança
+        // recente que ainda não deu round-trip não pode "voltar" no poll.
+        pedidos = aplicarPendentes(data.pedidos || []);
+        lalaSaldo = data.lalamove_saldo || null;
+        render(); atualizarAlarme();
+        atualizarVigia(data.vigia);
+        if (abertoCode) {
+          var p = pedidos.find(function (x) { return x.code === abertoCode; });
+          if (p) abrirDetalhe(p); else fecharDetalhe();
+        }
+      })
+      .catch(function () { setConexao(false); });
+  }
+
+  function tick() {
+    var d = new Date();
+    document.getElementById('relogio').textContent =
+      ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  }
+  function dataHoje() {
+    var dias = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+    var d = new Date();
+    document.getElementById('data-hoje').textContent =
+      dias[d.getDay()] + ', ' + ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2);
+  }
+
+  document.getElementById('btn-arm').addEventListener('click', function () {
+    armAudio();
+    document.getElementById('arm').style.display = 'none';
+    carregar();
+    setInterval(carregar, 20000);
+  });
+
+  // Banner do vigia + botao de alertas abrem a aba lateral (e silenciam).
+  document.getElementById('vigia-banner').addEventListener('click', abrirDrawer);
+  document.getElementById('btn-alertas').addEventListener('click', abrirDrawer);
+  document.getElementById('drawer-x').addEventListener('click', fecharDrawer);
+  document.getElementById('drawer-bg').addEventListener('click', fecharDrawer);
+
+  dataHoje(); tick(); setInterval(tick, 10000);
+})();
+</script>
+
+<script>
+// ── Aba lateral "Pedidos do site": lista/busca + popup de edição ──────────
+// Independente do IIFE do painel (escopo próprio). Lista via JSON; o popup é
+// um iframe da página admin do pedido em modo embed (mesma edição, fonte
+// única — sem reimplementar formulário de dinheiro/fiscal).
+(function () {
+  var PED_LISTA = "{{ url_for('entregas.api_painel_pedidos_online') }}";
+  var PED_DETALHE_TMPL = "{{ url_for('main.loja_online_pedido_detalhe', codigo='__CODE__') }}";
+  var tbody = document.getElementById('ped-tbody');
+  var busca = document.getElementById('ped-busca');
+  var drawer = document.getElementById('ped-drawer');
+  var bg = document.getElementById('ped-bg');
+  var popup = document.getElementById('ped-popup');
+  var iframe = document.getElementById('ped-iframe');
+  var popupTit = document.getElementById('ped-popup-tit');
+  var timer = null, reqId = 0;
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function render(pedidos) {
+    if (!pedidos || !pedidos.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="ped-vazio">Nenhum pedido encontrado.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = pedidos.map(function (p) {
+      return '<tr class="ped-row" data-code="' + esc(p.codigo) + '">' +
+        '<td>' + esc(p.data_entrega) + '</td>' +
+        '<td>' + esc(p.hora) + '</td>' +
+        '<td>' + esc(p.destinatario) + '</td>' +
+        '<td>' + esc(p.cliente) + '</td>' +
+        '<td class="ped-codigo">' + esc(p.codigo) + '</td></tr>';
+    }).join('');
+    Array.prototype.forEach.call(tbody.querySelectorAll('.ped-row'), function (tr) {
+      tr.addEventListener('click', function () { abrirPedido(tr.getAttribute('data-code')); });
+    });
+  }
+
+  function carregar(q) {
+    var meu = ++reqId;
+    tbody.innerHTML = '<tr><td colspan="5" class="ped-vazio">Carregando…</td></tr>';
+    var url = PED_LISTA + (q ? ('?q=' + encodeURIComponent(q)) : '');
+    fetch(url, { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : { pedidos: [] }; })
+      .then(function (d) { if (meu === reqId) render(d.pedidos); })
+      .catch(function () {
+        if (meu === reqId) tbody.innerHTML =
+          '<tr><td colspan="5" class="ped-vazio">Erro ao carregar. Tente de novo.</td></tr>';
+      });
+  }
+
+  function abrirDrawer() {
+    bg.classList.add('on'); drawer.classList.add('on');
+    carregar(busca.value.trim());
+  }
+  function fecharDrawer() { bg.classList.remove('on'); drawer.classList.remove('on'); }
+
+  function abrirPedido(code) {
+    if (!code) return;
+    popupTit.textContent = 'Pedido ' + code;
+    iframe.src = PED_DETALHE_TMPL.replace('__CODE__', encodeURIComponent(code)) + '?embed=1';
+    popup.classList.add('on');
+  }
+  function fecharPopup() {
+    popup.classList.remove('on');
+    iframe.src = 'about:blank';
+    carregar(busca.value.trim());  // reflete na lista o que foi editado no popup
+  }
+
+  document.getElementById('ped-toggle').addEventListener('click', abrirDrawer);
+  document.getElementById('ped-x').addEventListener('click', fecharDrawer);
+  bg.addEventListener('click', fecharDrawer);
+  document.getElementById('ped-popup-x').addEventListener('click', fecharPopup);
+  popup.addEventListener('click', function (e) { if (e.target === popup) fecharPopup(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (popup.classList.contains('on')) fecharPopup();
+    else if (drawer.classList.contains('on')) fecharDrawer();
+  });
+
+  busca.addEventListener('input', function () {
+    clearTimeout(timer);
+    var q = busca.value.trim();
+    timer = setTimeout(function () { carregar(q); }, 250);
+  });
+})();
+</script>
+</body>
+</html>
