@@ -7,11 +7,24 @@ num dia só, distribui "um pouco de cada dia" acompanhando as entregas
 escreve estoque; o "Produzir" (entrada_producao) entra depois, quando a
 lógica de distribuição estiver validada.
 """
+
 from flask import render_template, request
 from flask_login import login_required
 
 from app.blueprints.industria_teste import industria_teste_bp
 from app.decorators import admin_required
+
+
+def _horizonte_janela():
+    try:
+        horizonte = max(1, min(int(request.values.get('horizonte', 7)), 14))
+    except (TypeError, ValueError):
+        horizonte = 7
+    try:
+        janela = max(1, min(int(request.values.get('janela', 6)), 26))
+    except (TypeError, ValueError):
+        janela = 6
+    return horizonte, janela
 
 
 @industria_teste_bp.route('/')
