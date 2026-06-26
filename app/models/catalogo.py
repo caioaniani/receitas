@@ -115,12 +115,12 @@ class Receita(db.Model):
     # afeta a grade loja x dia (essa e datada pela ENTREGA, nao pela producao).
     dias_producao = db.Column(db.Integer, nullable=False, default=0,
                               server_default='0')
-    # Capacidade da amassadeira em GRAMAS de farinha por batida. Usada pelo
-    # plano pra contar FORNADAS reais: fornadas = ceil(farinha_total /
-    # capacidade), onde farinha_total = peso_base x multiplicador. Padrao
-    # 50000 (amassadeira de 50kg). VALOR 0 = a receita NAO passa pela
-    # amassadeira (ex: Moedas, creme almond) — o plano mostra unidades, nao
-    # fornadas. NAO altera consumo de MP (esse segue a farinha real).
+    # Capacidade da amassadeira em GRAMAS de MASSA final por batida (a massa
+    # pesa farinha + agua + tudo — nao so a farinha). Usada pelo plano pra
+    # contar FORNADAS reais: fornadas = ceil(massa_total / capacidade), onde
+    # massa_total = massa_receita_base x multiplicador. Padrao 50000 (50kg/50L).
+    # VALOR 0 = a receita NAO passa pela amassadeira (ex: Moedas, creme almond)
+    # — o plano mostra unidades, nao fornadas. NAO altera consumo de MP.
     capacidade_amassadeira_g = db.Column(db.Integer, nullable=False,
                                          default=50000, server_default='50000')
     # Quando True, desperdicio com motivo='validade' NAO baixa estoque
