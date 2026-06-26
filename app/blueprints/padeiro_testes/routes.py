@@ -148,6 +148,24 @@ def listas_html():
                            **_dados_listas(dia, eh_hoje))
 
 
+@padeiro_testes_bp.route('/receita/<int:receita_id>.json')
+@login_required
+@padeiro_required
+def receita_mise(receita_id):
+    """Receita escalada pra `unidades` (mise en place do modal)."""
+    from flask import jsonify
+
+    from app.models import Receita
+    from app.services.producao import mise_en_place
+
+    rec = Receita.query.get_or_404(receita_id)
+    try:
+        unidades = max(1, int(request.args.get('unidades', 1)))
+    except (TypeError, ValueError):
+        unidades = 1
+    return jsonify(mise_en_place(rec, unidades))
+
+
 @padeiro_testes_bp.route('/produzir-plano/<int:item_id>', methods=['POST'])
 @login_required
 @padeiro_required

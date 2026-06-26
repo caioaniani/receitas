@@ -225,7 +225,8 @@
   .prod-dia-row:last-child { border-bottom:0; }
   .prod-dia-row.feito { opacity:.5; }
   .prod-dia-nome { font-size:19px; font-weight:800; color:var(--azul,#0d6efd);
-    text-decoration:none; min-width:15rem; }
+    text-decoration:none; min-width:15rem; background:none; border:0; padding:0;
+    text-align:left; cursor:pointer; font-family:inherit; }
   .prod-dia-nome:hover { text-decoration:underline; }
   .prod-dia-ver { font-size:13px; font-weight:600; color:var(--cinza,#6c757d); }
   .prod-dia-meta { color:#6c757d; font-size:15px; flex:1; }
@@ -236,6 +237,31 @@
   .prod-dia-btn { background:var(--verde,#198754); color:#fff; border:0;
     border-radius:12px; padding:11px 22px; font-size:17px; font-weight:800; cursor:pointer; }
   .prod-dia-pronto { color:var(--verde,#198754); font-weight:800; font-size:17px; }
+
+  /* Modal mise en place (receita escalada) */
+  #mep-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.55);
+    display:none; z-index:50; }
+  #mep-backdrop.aberto { display:block; }
+  #mep-modal { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:min(700px,95vw); max-height:90vh; overflow:auto; background:#fff;
+    border-radius:16px; box-shadow:0 10px 50px rgba(0,0,0,.35); z-index:51; display:none; }
+  #mep-modal.aberto { display:block; }
+  .mep-head { display:flex; justify-content:space-between; align-items:center;
+    background:#212529; color:#fff; padding:16px 20px; position:sticky; top:0;
+    border-radius:16px 16px 0 0; }
+  .mep-head b { font-size:21px; }
+  .mep-x { background:#495057; color:#fff; border:0; border-radius:10px;
+    width:42px; height:42px; font-size:22px; cursor:pointer; }
+  #mep-body { padding:18px 20px; }
+  .mep-farinha { font-size:20px; font-weight:800; color:#0d3b66; background:#e7f1ff;
+    padding:12px 16px; border-radius:12px; margin-bottom:14px; }
+  .mep-sub { font-weight:800; color:#343a40; margin:16px 0 6px;
+    text-transform:uppercase; font-size:13px; letter-spacing:.6px; }
+  .mep-ing { display:flex; justify-content:space-between; gap:12px;
+    padding:11px 4px; border-bottom:1px solid #f0f0f0; font-size:19px; }
+  .mep-ing .q { font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .mep-ing small { color:#adb5bd; font-weight:600; }
+  .mep-etapa { margin:9px 0; font-size:17px; line-height:1.5; }
 </style>
 <div class="wrap">
   {% with msgs = get_flashed_messages(with_categories=true) %}
@@ -256,8 +282,10 @@
     </div>
     {% for it in plano_dia.itens %}
     <div class="prod-dia-row {% if it.falta == 0 %}feito{% endif %}">
-      <a class="prod-dia-nome" href="{{ url_for('receitas.padeiro', id=it.receita_id) }}"
-         title="Ver a receita">{{ it.nome }} <span class="prod-dia-ver">📋 ver receita</span></a>
+      <button type="button" class="prod-dia-nome" title="Ver a receita escalada"
+              onclick="verReceita({{ it.receita_id }}, {{ it.item_id }}, {{ it.falta or it.alvo }})">
+        {{ it.nome }} <span class="prod-dia-ver">📋 ver receita</span>
+      </button>
       <span class="prod-dia-meta">
         {% if it.fornadas is not none %}{{ it.fornadas }} fornada(s) · {% endif %}
         alvo <b>{{ it.alvo }}</b>{% if it.produzido %} · feito {{ it.produzido }}{% endif %}
@@ -266,7 +294,8 @@
       <form method="POST" action="{{ url_for('padeiro_testes.produzir_plano', item_id=it.item_id) }}"
             class="prod-dia-form" onsubmit="return confirm('Produzir {{ it.nome }} e dar baixa na matéria-prima?');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="number" name="unidades" min="1" value="{{ it.falta }}" class="prod-dia-qtd">
+        <input type="number" name="unidades" min="1" value="{{ it.falta }}"
+               class="prod-dia-qtd" id="qtd-{{ it.item_id }}">
         <button type="submit" class="prod-dia-btn">Produzir</button>
       </form>
       {% else %}
@@ -345,6 +374,69 @@
   </div>
 </div>
 <div id="upd-badge">atualizado —</div>
+
+<!-- Modal mise en place: receita escalada pra quantidade -->
+<div id="mep-backdrop" onclick="fecharMep()"></div>
+<div id="mep-modal">
+  <div class="mep-head">
+    <b id="mep-titulo">Receita</b>
+    <button type="button" class="mep-x" onclick="fecharMep()" aria-label="Fechar">×</button>
+  </div>
+  <div id="mep-body"></div>
+</div>
+
+<script>
+  function _mepG(g) {
+    g = Number(g) || 0;
+    if (g >= 1000) return (g / 1000).toFixed(2).replace('.', ',') + ' kg';
+    return Math.round(g) + ' g';
+  }
+  function _mepEsc(s) {
+    var d = document.createElement('div'); d.textContent = (s == null ? '' : s);
+    return d.innerHTML;
+  }
+  function verReceita(rid, itemId, fallback) {
+    var inp = document.getElementById('qtd-' + itemId);
+    var un = inp && parseInt(inp.value) > 0 ? parseInt(inp.value) : (fallback || 1);
+    document.getElementById('mep-titulo').textContent = 'Carregando…';
+    document.getElementById('mep-body').innerHTML =
+      '<p style="padding:10px;color:#888;">Carregando receita…</p>';
+    document.getElementById('mep-backdrop').classList.add('aberto');
+    document.getElementById('mep-modal').classList.add('aberto');
+    fetch('/padeiro-testes/receita/' + rid + '.json?unidades=' + un)
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        document.getElementById('mep-titulo').textContent =
+          d.nome + ' — ' + d.unidades + ' un';
+        var h = '<div class="mep-farinha">🌾 Farinha total: ' + _mepG(d.farinha_g) + '</div>';
+        h += '<div class="mep-sub">Mise en place — ingredientes (' + d.unidades + ' un)</div>';
+        (d.ingredientes || []).forEach(function (i) {
+          var q = i.unidade === 'g' ? _mepG(i.qtd) : (i.qtd + ' ' + i.unidade);
+          h += '<div class="mep-ing"><span>' + _mepEsc(i.nome) +
+               (i.pct ? ' <small>' + i.pct + '%</small>' : '') +
+               '</span><span class="q">' + q + '</span></div>';
+        });
+        if (d.etapas && d.etapas.length) {
+          h += '<div class="mep-sub">Modo de preparo</div>';
+          d.etapas.forEach(function (e, idx) {
+            h += '<div class="mep-etapa"><strong>' + (idx + 1) + '.</strong> ' + _mepEsc(e) + '</div>';
+          });
+        }
+        document.getElementById('mep-body').innerHTML = h;
+      })
+      .catch(function () {
+        document.getElementById('mep-body').innerHTML =
+          '<p style="color:#b02a37;padding:10px;">Erro ao carregar a receita.</p>';
+      });
+  }
+  function fecharMep() {
+    document.getElementById('mep-backdrop').classList.remove('aberto');
+    document.getElementById('mep-modal').classList.remove('aberto');
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') fecharMep();
+  });
+</script>
 <script>
   var CSRF = "{{ csrf_token() }}";
   var audioCtx = null, somAtivo = false, loopId = null, avisosAtivos = [];

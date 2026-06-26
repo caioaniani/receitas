@@ -97,6 +97,46 @@ def fornadas_amassadeira(receita, multiplicador):
     return max(1, ceil(massa_total / cap))
 
 
+def mise_en_place(receita, unidades):
+    """Receita ESCALADA pra produzir `unidades`: cada ingrediente com a
+    quantidade ja ajustada (farinha, agua, sal...) pro padeiro pesar, mais o
+    modo de preparo em etapas. mult = unidades/rendimento (fracionario)."""
+    from app.utils import dividir_etapas_preparo
+
+    rend = float(receita.rendimento_qtd) if receita.rendimento_qtd else 1.0
+    mult = (unidades / rend) if rend > 0 else 0.0
+    peso_base = receita.peso_base or 0
+
+    ingredientes = []
+    for ing in receita.ingredientes:
+        tipo = ing.tipo or 'mp'
+        pct = ing.porcentagem or 0
+        if tipo == 'mp_direto':
+            qtd, unidade, mostra_pct = pct * mult, 'g', None
+        elif tipo == 'mp_un':
+            qtd, unidade, mostra_pct = pct * mult, 'un', None
+        elif tipo == 'receita':
+            qtd, unidade, mostra_pct = pct * mult, 'un', None
+        else:  # 'mp' percentual: farinha (100%), agua, sal, fermento...
+            qtd = pct / 100.0 * peso_base * mult
+            unidade, mostra_pct = 'g', pct
+        ingredientes.append({
+            'nome': ing.ingrediente_nome,
+            'qtd': round(qtd, 1),
+            'unidade': unidade,
+            'pct': mostra_pct,
+        })
+
+    return {
+        'receita_id': receita.id,
+        'nome': receita.nome,
+        'unidades': int(unidades),
+        'farinha_g': round(peso_base * mult, 1),
+        'ingredientes': ingredientes,
+        'etapas': dividir_etapas_preparo(receita.modo_preparo),
+    }
+
+
 def produzir_item_plano(item_id, unidades, user_id):
     """OPCAO B: o padeiro produz `unidades` de um item do plano aprovado.
     Numa unica transacao: (1) credita o produto pronto na industria
