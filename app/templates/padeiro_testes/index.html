@@ -439,7 +439,19 @@
                (i.pct ? ' <small>' + i.pct + '%</small>' : '') + '</span>' +
                '<span class="q">' + q + '</span></label>';
         });
-        if (d.etapas && d.etapas.length) {
+        if (d.processo && d.processo.length) {
+          h += '<div class="mep-sub">Processo — passo a passo</div>';
+          h += '<ul class="mep-proc">';
+          d.processo.forEach(function (e) {
+            var ic = _mepEquipIcon(e.equipamento, e.ativa);
+            var eq = e.equipamento ? '<span class="st-eq">' + _mepEsc(e.equipamento) + '</span>' : '';
+            h += '<li class="mep-step' + (e.ativa ? '' : ' passiva') + '">' +
+                 '<span class="ic">' + ic + '</span>' +
+                 '<span class="st-nm">' + _mepEsc(e.nome) + '</span>' + eq +
+                 '<span class="st-dur">' + _mepEsc(e.duracao) + '</span></li>';
+          });
+          h += '</ul>';
+        } else if (d.etapas && d.etapas.length) {
           h += '<div class="mep-sub">Modo de preparo</div>';
           d.etapas.forEach(function (e, idx) {
             h += '<div class="mep-etapa"><strong>' + (idx + 1) + '.</strong> ' + _mepEsc(e) + '</div>';
