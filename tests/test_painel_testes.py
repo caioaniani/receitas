@@ -78,6 +78,33 @@ def test_painel_testes_exige_login(app):
     assert '/login' in r.headers.get('Location', '')
 
 
+def test_painel_alerta_vigia_abre_no_painel_so_com_embed(app):
+    """O alerta do vigia abre a conversa no painel da direita SO quando
+    embutido (?embed=1). No painel de producao normal o comportamento e
+    intocado: continua o link do Chatwoot. A logica e condicional a EMBED."""
+    c = _staff(app)
+    html = c.get('/entregas/painel').data.decode()
+    # A flag e a logica condicional existem no painel...
+    assert 'var EMBED' in html
+    assert 'al-abrir-aqui' in html
+    assert 'vigia-abrir-conversa' in html
+    # ...mas o botao novo so e gerado dentro do `if (EMBED && a.conv_id)`,
+    # e o link do Chatwoot original CONTINUA no else (nao foi removido).
+    assert 'if (EMBED && a.conv_id)' in html
+    assert 'Abrir no Chatwoot' in html  # caminho de producao preservado
+
+
+def test_painel_testes_recebe_postmessage_do_vigia(app):
+    """O painel-testes escuta o postMessage do alerta e abre a conversa na
+    direita — validando a origem (same-origin) por seguranca."""
+    c = _staff(app)
+    html = c.get('/entregas/painel-testes').data.decode()
+    assert "addEventListener('message'" in html
+    assert 'vigia-abrir-conversa' in html
+    assert 'e.origin !== location.origin' in html  # trava de origem
+    assert 'abrirThread(d.conv_id' in html
+
+
 def test_painel_testes_botao_alertas(app):
     c = _staff(app)
     html = c.get('/entregas/painel-testes').data.decode()
