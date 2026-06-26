@@ -785,7 +785,7 @@ FOLLOWUP_PROMPT = (
     'Você é o atendente virtual da padaria O Pão. A conversa abaixo parou: '
     'o cliente não responde há {minutos} minutos e a última mensagem é '
     'nossa. Escreva UMA mensagem curta (1 a 2 frases, PT-BR, tom leve e '
-    'gentil, no máximo 1 emoji) pra retomar — ex: perguntar se conseguiu '
+    'gentil, SEM emoji nenhum) pra retomar — ex: perguntar se conseguiu '
     'finalizar o pedido ou se ficou alguma dúvida. NÃO invente preço, '
     'prazo, promoção nem informação nova. NÃO repita links. Responda '
     'APENAS com o texto da mensagem, sem aspas.'
