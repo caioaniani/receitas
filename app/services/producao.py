@@ -166,6 +166,18 @@ def mise_en_place(receita, unidades):
             'pct': mostra_pct,
         })
 
+    # Processo estruturado (etapas cadastradas) pro fluxograma do padeiro:
+    # nome, duracao formatada, equipamento e se e ativa (mao-de-obra) ou
+    # passiva (fermentacao/descanso). Vazio quando a receita ainda nao tem
+    # etapas cadastradas — o card cai no modo_preparo em texto.
+    processo = [{
+        'nome': e.nome,
+        'duracao': _fmt_dur(e.duracao_min),
+        'duracao_min': e.duracao_min,
+        'equipamento': e.equipamento,
+        'ativa': e.ativa,
+    } for e in receita.etapas]
+
     return {
         'receita_id': receita.id,
         'nome': receita.nome,
@@ -173,6 +185,7 @@ def mise_en_place(receita, unidades):
         'farinha_g': round(peso_base * mult, 1),
         'ingredientes': ingredientes,
         'etapas': dividir_etapas_preparo(receita.modo_preparo),
+        'processo': processo,
     }
 
 
