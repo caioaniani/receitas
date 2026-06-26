@@ -164,7 +164,9 @@ def test_endpoints_exigem_login(app):
 
 
 def test_painel_html_tem_banner_e_drawer(admin_logado):
-    r = admin_logado.get('/entregas/painel')
+    # Swap 26/06/2026: o banner/drawer do vigia (v1) virou /painel-testes;
+    # /painel agora e o v2 (atendimento + pedidos embutidos).
+    r = admin_logado.get('/entregas/painel-testes')
     assert r.status_code == 200
     assert b'vigia-banner' in r.data
     assert b'drawer' in r.data
