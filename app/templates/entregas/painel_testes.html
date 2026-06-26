@@ -362,8 +362,10 @@
             var imgs = (m.imagens || []).map(function (u) {
               return '<img src="' + esc(u) + '" alt="anexo">';
             }).join('');
+            var hora = horaMsg(m.created_at);
+            var rodape = quem + (hora ? ' · ' + hora : '');
             return '<div class="bolha ' + cls + '">' + esc(m.content) + imgs +
-              '<span class="qd">' + quem + '</span></div>';
+              '<span class="qd">' + rodape + '</span></div>';
           }).join('');
           threadCorpo.scrollTop = threadCorpo.scrollHeight;
         })
