@@ -215,21 +215,27 @@
   <div class="prep-ticker-track"><span>Pedido para preparar para amanhã já disponível</span></div>
 </div>
 <style>
-  .prod-dia-painel { background:#fff8e1; border:2px solid #f0c000;
-    border-radius:.5rem; margin:.6rem; padding:.5rem .75rem; }
-  .prod-dia-head { display:flex; justify-content:space-between;
-    align-items:center; font-size:1.1rem; margin-bottom:.4rem; }
-  .prod-dia-falta { color:#b02a37; font-weight:700; }
-  .prod-dia-item { display:flex; align-items:center; gap:.6rem;
-    flex-wrap:wrap; padding:.35rem 0; border-top:1px solid #f0e0a0; }
-  .prod-dia-ok { opacity:.6; }
-  .prod-dia-nome { font-weight:700; color:#0d3b66; text-decoration:underline;
-    min-width:11rem; }
-  .prod-dia-info { color:#555; font-size:.9rem; flex:1; }
-  .prod-dia-form { display:flex; gap:.3rem; align-items:center; }
-  .prod-dia-form button { background:#198754; color:#fff; border:0;
-    border-radius:.3rem; padding:.25rem .7rem; font-weight:700; cursor:pointer; }
-  .prod-dia-pronto { color:#198754; font-weight:700; }
+  .prod-dia { padding:0; overflow:hidden; }
+  .prod-dia-top { display:flex; justify-content:space-between; align-items:center;
+    background:#212529; color:#fff; padding:14px 18px; }
+  .prod-dia-top b { font-size:20px; letter-spacing:.3px; }
+  .prod-dia-falta { color:#ffd166; font-weight:800; font-size:16px; }
+  .prod-dia-row { display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:14px 18px; border-bottom:1px solid #eef0f2; }
+  .prod-dia-row:last-child { border-bottom:0; }
+  .prod-dia-row.feito { opacity:.5; }
+  .prod-dia-nome { font-size:19px; font-weight:800; color:var(--azul,#0d6efd);
+    text-decoration:none; min-width:15rem; }
+  .prod-dia-nome:hover { text-decoration:underline; }
+  .prod-dia-ver { font-size:13px; font-weight:600; color:var(--cinza,#6c757d); }
+  .prod-dia-meta { color:#6c757d; font-size:15px; flex:1; }
+  .prod-dia-meta b { color:#343a40; }
+  .prod-dia-form { display:flex; gap:8px; align-items:center; }
+  .prod-dia-qtd { width:84px; font-size:19px; padding:9px; border:1px solid #ced4da;
+    border-radius:10px; text-align:right; }
+  .prod-dia-btn { background:var(--verde,#198754); color:#fff; border:0;
+    border-radius:12px; padding:11px 22px; font-size:17px; font-weight:800; cursor:pointer; }
+  .prod-dia-pronto { color:var(--verde,#198754); font-weight:800; font-size:17px; }
 </style>
 <div class="wrap">
   {% with msgs = get_flashed_messages(with_categories=true) %}
@@ -239,27 +245,29 @@
   {% endwith %}
 
   {% if plano_dia and plano_dia.itens %}
-  <div class="prod-dia-painel">
-    <div class="prod-dia-head">
-      <strong>🔨 Produção do dia — plano aprovado</strong>
+  <div class="card prod-dia">
+    <div class="prod-dia-top">
+      <b>🔨 Produção do dia</b>
+      {% if plano_dia.total_falta %}
       <span class="prod-dia-falta">faltam {{ plano_dia.total_falta }} un</span>
+      {% else %}
+      <span class="prod-dia-pronto" style="color:#ffd166;">✓ tudo produzido</span>
+      {% endif %}
     </div>
     {% for it in plano_dia.itens %}
-    <div class="prod-dia-item {% if it.falta == 0 %}prod-dia-ok{% endif %}">
-      <a class="prod-dia-nome" href="{{ url_for('receitas.ficha', id=it.receita_id) }}"
-         target="_blank" title="Abrir a receita">{{ it.nome }}</a>
-      <span class="prod-dia-info">
+    <div class="prod-dia-row {% if it.falta == 0 %}feito{% endif %}">
+      <a class="prod-dia-nome" href="{{ url_for('receitas.padeiro', id=it.receita_id) }}"
+         title="Ver a receita">{{ it.nome }} <span class="prod-dia-ver">📋 ver receita</span></a>
+      <span class="prod-dia-meta">
         {% if it.fornadas is not none %}{{ it.fornadas }} fornada(s) · {% endif %}
-        alvo {{ it.alvo }} · feito {{ it.produzido }}
-        {% if it.falta > 0 %}· <strong>faltam {{ it.falta }}</strong>{% endif %}
+        alvo <b>{{ it.alvo }}</b>{% if it.produzido %} · feito {{ it.produzido }}{% endif %}
       </span>
       {% if it.falta > 0 %}
       <form method="POST" action="{{ url_for('padeiro_testes.produzir_plano', item_id=it.item_id) }}"
-            class="prod-dia-form" onsubmit="return confirm('Produzir e dar baixa na matéria-prima?');">
+            class="prod-dia-form" onsubmit="return confirm('Produzir {{ it.nome }} e dar baixa na matéria-prima?');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="number" name="unidades" min="1" value="{{ it.falta }}"
-               style="width:72px;">
-        <button type="submit">Produzir</button>
+        <input type="number" name="unidades" min="1" value="{{ it.falta }}" class="prod-dia-qtd">
+        <button type="submit" class="prod-dia-btn">Produzir</button>
       </form>
       {% else %}
       <span class="prod-dia-pronto">✓ pronto</span>
