@@ -264,6 +264,23 @@
   .mep-ing.done { opacity:.5; }
   .mep-ing.done .nm, .mep-ing.done .q { text-decoration:line-through; }
   .mep-etapa { margin:9px 0; font-size:17px; line-height:1.5; }
+  /* Fluxograma do processo (etapas cadastradas) */
+  .mep-proc { display:flex; align-items:stretch; gap:0; padding:6px 2px 2px;
+    list-style:none; margin:0; }
+  .mep-proc { flex-direction:column; }
+  .mep-step { display:flex; align-items:center; gap:12px; padding:11px 12px;
+    border:1px solid #e6e6e6; border-left:5px solid var(--verde,#198754);
+    border-radius:10px; margin-bottom:8px; background:#fff; font-size:18px; }
+  .mep-step.passiva { border-left-color:#adb5bd; background:#f8f9fa;
+    color:#6c757d; font-style:italic; }
+  .mep-step .ic { font-size:22px; flex:none; width:30px; text-align:center; }
+  .mep-step .st-nm { flex:1; font-weight:700; }
+  .mep-step.passiva .st-nm { font-weight:600; }
+  .mep-step .st-dur { font-weight:800; font-variant-numeric:tabular-nums;
+    white-space:nowrap; background:#eef6f0; color:#198754; padding:3px 9px;
+    border-radius:8px; font-size:15px; }
+  .mep-step.passiva .st-dur { background:#e9ecef; color:#6c757d; }
+  .mep-step .st-eq { font-size:13px; color:#adb5bd; white-space:nowrap; }
 </style>
 <div class="wrap">
   {% with msgs = get_flashed_messages(with_categories=true) %}
