@@ -36,6 +36,11 @@ class PlanejamentoItem(db.Model):
     planejamento_id = db.Column(db.Integer, db.ForeignKey('planejamento_producao.id'), nullable=False)
     receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=False)
     multiplicador = db.Column(db.Integer, default=1)
+    # Unidades-alvo (do cronograma) e quanto ja foi produzido. produzido_qtd
+    # avanca quando o padeiro marca producao (credita estoque + baixa MP).
+    qtd_alvo = db.Column(db.Integer)
+    produzido_qtd = db.Column(db.Integer, nullable=False, default=0,
+                              server_default='0')
 
     receita = db.relationship('Receita')
 
