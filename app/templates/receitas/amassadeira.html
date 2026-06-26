@@ -46,6 +46,13 @@
                            value="{{ c.atual if c.atual is not none else '' }}"
                            placeholder="{{ 'misto (vários valores)' if c.misto else '50000' }}">
                 </td>
+                <td>
+                    <input type="number" name="lead_{{ loop.index0 }}" min="0" max="14" step="1"
+                           class="form-control form-control-sm" style="width:120px;"
+                           value="{{ c.lead_atual if c.lead_atual is not none else '' }}"
+                           placeholder="{{ 'misto' if c.lead_misto else '0' }}"
+                           title="Dias que a receita leva pra ficar pronta (ex: pão de fermentação longa = 2 = 48h). O cronograma antecipa a produção em N dias.">
+                </td>
             </tr>
             {% endfor %}
         </tbody>
