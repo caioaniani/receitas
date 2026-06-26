@@ -489,6 +489,13 @@ def salvar(id):
     except (TypeError, ValueError):
         dias_prod = 0
     receita.dias_producao = max(0, min(dias_prod, 14))
+    # Capacidade da amassadeira (g de farinha/batida). 0 = nao usa amassadeira.
+    # Vazio/invalido -> 50000 (padrao 50kg). Teto defensivo generoso.
+    try:
+        cap_amass = int(request.form.get('capacidade_amassadeira_g') or 50000)
+    except (TypeError, ValueError):
+        cap_amass = 50000
+    receita.capacidade_amassadeira_g = max(0, min(cap_amass, 1000000))
     receita.imagem_url = request.form.get('imagem_url', '').strip() or None
 
     # Atualiza ingredientes
