@@ -211,6 +211,11 @@ class Config:
     # Segredo na URL do webhook do bot (/crm/bot?k=...). Valida que o evento
     # veio do nosso Agent Bot. Gerar random longo. Vazio = webhook recusa tudo.
     CHATWOOT_BOT_SECRET = os.environ.get('CHATWOOT_BOT_SECRET', '')
+    # Token de USUARIO do agente "Painel" (Profile Settings -> Access Token).
+    # Usado pra RESPONDER conversas pelo /entregas/painel-testes — mensagens
+    # aparecem como esse agente, distinto do bot. Vazio = botao Enviar do
+    # painel recusa (chatwoot.painel_disponivel() = False).
+    CHATWOOT_PAINEL_TOKEN = os.environ.get('CHATWOOT_PAINEL_TOKEN', '')
 
     # ── Email transacional (Postmark) — 17/06/2026 ────────────────────
     # Envio de senha/convite pra novos usuarios do gestao.*. Vazio =
