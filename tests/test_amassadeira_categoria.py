@@ -32,6 +32,9 @@ def test_get_lista_categorias(app, admin_user):
     body = resp.get_data(as_text=True)
     assert 'Croissants' in body
     assert 'Moedas' in body
+    # nomes das receitas aparecem (pra saber o que tem em cada categoria)
+    assert 'Croissant A' in body
+    assert 'Moeda Vermelha' in body
 
 
 def test_aplica_por_categoria(app, admin_user):
