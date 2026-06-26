@@ -14,11 +14,19 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required
+from sqlalchemy import func
 
 from app.blueprints.receitas import receitas_bp
 from app.decorators import admin_required, owner_required
 from app.extensions import db
-from app.models import Atribuicao, MateriaPrima, Produto, Receita, ReceitaIngrediente
+from app.models import (
+    Atribuicao,
+    MateriaPrima,
+    Produto,
+    Receita,
+    ReceitaEtapa,
+    ReceitaIngrediente,
+)
 from app.services.custos import calcular_custos_produtos, calcular_custos_receitas
 from app.utils import agora, dividir_etapas_preparo, parse_float_br
 
@@ -195,7 +203,35 @@ def amassadeira():
             'lead_misto': len(leads) > 1,
             'nomes': [r.nome for r in recs],
         })
+    # quantas receitas de cada categoria ja tem etapas de producao cadastradas
+    # (pro botao "Aplicar etapas padrao" mostrar o estado atual).
+    com_etapas = dict(
+        db.session.query(Receita.categoria, func.count(func.distinct(Receita.id)))
+        .join(ReceitaEtapa, ReceitaEtapa.receita_id == Receita.id)
+        .filter(Receita.arquivada_em.is_(None))
+        .group_by(Receita.categoria).all())
+    for c in categorias:
+        c['com_etapas'] = com_etapas.get(c['nome'] or None, 0) or com_etapas.get(c['nome'], 0)
+
     return render_template('receitas/amassadeira.html', categorias=categorias)
+
+
+@receitas_bp.route('/amassadeira/etapas-padrao', methods=['POST'])
+@login_required
+@admin_required
+def amassadeira_etapas_padrao():
+    """Aplica as etapas de producao padrao (pesquisadas) a uma categoria.
+    Substitui as etapas existentes das receitas da categoria e preenche o
+    modo_preparo quando vazio. O dono ajusta receita a receita depois."""
+    from app.services.producao import seed_etapas_categoria
+
+    cat = request.form.get('categoria')
+    if cat is None:
+        abort(400)
+    n = seed_etapas_categoria(cat or '')
+    flash('Etapas padrão aplicadas a %d receita(s) de "%s".'
+          % (n, cat or '(sem categoria)'), 'success')
+    return redirect(url_for('receitas.amassadeira'))
 
 
 @receitas_bp.route('/<int:id>/padeiro')
