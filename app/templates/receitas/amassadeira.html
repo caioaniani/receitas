@@ -3,17 +3,23 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h1 class="page-title mb-0"><i class="bi bi-gear-wide-connected"></i> Amassadeira por categoria</h1>
+    <h1 class="page-title mb-0"><i class="bi bi-gear-wide-connected"></i> Produção por categoria</h1>
     <a href="{{ url_for('receitas.familias') }}" class="btn btn-sm btn-outline-secondary">Famílias</a>
 </div>
 
 <div class="alert alert-light border small">
-    Capacidade da amassadeira em <strong>gramas de massa</strong> por batida
-    (50000 = 50kg/50L). O valor vale pra <strong>todas as receitas da
-    categoria</strong>. Use <strong>0</strong> nas categorias que <strong>não
-    passam pela amassadeira</strong> (ex: Moedas, Cremes) — elas aparecem como
-    unidades no plano, não fornadas. Campo <strong>em branco = não altera</strong>.
-    Dá pra ajustar uma receita específica depois, na ficha dela.
+    Configure por <strong>categoria</strong> (vale pra todas as receitas dela;
+    campo <strong>em branco = não altera</strong>; ajuste fino na ficha de cada
+    receita):
+    <ul class="mb-0 mt-1">
+        <li><strong>Amassadeira (g massa)</strong>: capacidade por batida
+            (50000 = 50kg/50L). <strong>0</strong> = não passa pela amassadeira
+            (ex: Moedas, Cremes) — mostra unidades, não fornadas.</li>
+        <li><strong>Dias até pronto (lead)</strong>: quanto a receita leva pra
+            ficar pronta. Ex: pão de fermentação longa = <strong>2</strong> (48h).
+            O cronograma de produção <strong>antecipa</strong> em N dias — começa
+            a produzir antes pra estar pronto no dia da entrega.</li>
+    </ul>
 </div>
 
 <form method="POST" action="{{ url_for('receitas.amassadeira') }}">
