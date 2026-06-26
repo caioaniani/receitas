@@ -169,6 +169,37 @@ def test_item_ja_produzido_sai_do_gantt(app):
     assert g['produtos'] == []
 
 
+def _login(app, user):
+    c = app.test_client()
+    c.post('/auth/login', data={'login': user.login, 'senha': '123'},
+           follow_redirects=True)
+    return c
+
+
+def test_rota_gantt_renderiza(app, admin_user):
+    dia = date(2026, 7, 20)
+    r = _receita('Pão Francês', [
+        ('Mise en place', 10, None, True),
+        ('Amassamento', 15, 'amassadeira', True),
+        ('Forno', 25, 'forno', True),
+    ])
+    _plano(dia, [(r, 1, 10, 0)])
+    c = _login(app, admin_user)
+    resp = c.get('/padeiro-testes/gantt?data=2026-07-20')
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert 'Pão Francês' in html
+    assert 'Fluxograma' in html
+    assert 'Amassamento' in html
+
+
+def test_rota_gantt_sem_plano(app, admin_user):
+    c = _login(app, admin_user)
+    resp = c.get('/padeiro-testes/gantt?data=2026-07-21')
+    assert resp.status_code == 200
+    assert 'Nenhum plano' in resp.get_data(as_text=True)
+
+
 def test_fornadas_escalam_etapas_ativas(app):
     """3 fornadas: amassamento ocupa 3× o tempo base (1 batida por vez)."""
     dia = date(2026, 7, 8)
