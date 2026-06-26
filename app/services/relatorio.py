@@ -132,7 +132,11 @@ def _render_fotos(pdf, fotos, titulo='Fotos do recebimento', legendas=None,
             bytes_ = _foto_bytes(foto)
             if not bytes_:
                 raise ValueError('foto sem bytes')
-            pdf.image(io.BytesIO(bytes_), x=x, y=y, w=largura, h=altura)
+            # keep_aspect_ratio: encaixa a foto DENTRO da celula sem esticar.
+            # Sem isso, w+h fixos deformavam fotos com proporcao != 45:35
+            # (retrato de celular ficava espremido — "proporcao torta").
+            pdf.image(io.BytesIO(bytes_), x=x, y=y, w=largura, h=altura,
+                      keep_aspect_ratio=True)
         except Exception:
             pdf.set_xy(x, y)
             pdf.cell(largura, altura, '[foto invalida]', border=1, align='C')
