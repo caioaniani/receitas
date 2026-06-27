@@ -298,7 +298,9 @@ def montar_gantt(dia):
         prod = j['prod']
 
         # Fermentação longa: corta o dia aqui — vira marcador "→ câmara fria".
-        if rec is None and not p['ativa'] and p['dur'] >= PASSIVA_LONGA_MIN:
+        # Congelar NÃO corta (é o passo final, fica inline com ícone de freezer).
+        if (rec is None and not p['ativa'] and p['equip'] != 'congelar'
+                and p['dur'] >= PASSIVA_LONGA_MIN):
             prod['destino'] = '%s %s' % (_icone(p['equip'], False),
                                          _dur_label(p['dur']))
             prod['destino_etapa'] = p['nome']
