@@ -66,8 +66,8 @@ def calcular_cascata(massa_base, multiplicadores=None):
     if not receitas:
         return None
     mult = multiplicadores or {}
-    porcoes = {r.id: max(0, int(mult.get(r.id, 1))) for r in receitas}
-    receitas = [r for r in receitas if porcoes[r.id] > 0]
+    porcoes = {r.id: max(0.0, float(mult.get(r.id, 1))) for r in receitas}
+    receitas = [r for r in receitas if porcoes[r.id] > _TOL / 1000.0]
     if not receitas:
         return None
     ings = {r.id: ingredientes_por_porcao(r) for r in receitas}
