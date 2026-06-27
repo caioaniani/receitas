@@ -197,11 +197,11 @@
         {% if current_user.is_admin() %}
         <a href="{{ url_for('producao.painel') }}"
            class="sidebar-link {% if '/producao/painel' in request.path %}active{% endif %}">
-            <i class="bi bi-clipboard-data"></i> Planejamento da produção
+            <i class="bi bi-clipboard-data"></i> Painel de produção
         </a>
         <a href="{{ url_for('industria_teste.index') }}"
            class="sidebar-link {% if '/telaindustriateste' in request.path %}active{% endif %}">
-            <i class="bi bi-calendar-week"></i> Cronograma de Produção
+            <i class="bi bi-calendar-week"></i> Cronograma
         </a>
         <a href="{{ url_for('padeiro_testes.index') }}"
            class="sidebar-link {% if '/padeiro-testes' in request.path %}active{% endif %}">
@@ -220,6 +220,17 @@
            class="sidebar-link {% if '/pedidos/separacao' in request.path %}active{% endif %}">
             Pedidos a Separar
         </a>
+        {% if current_user.is_admin() %}
+        <div class="px-3 pt-2 pb-1 text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:.5px;">Configuração</div>
+        <a href="{{ url_for('receitas.amassadeira') }}"
+           class="sidebar-link {% if request.path == '/receitas/amassadeira' %}active{% endif %}">
+            <i class="bi bi-gear-wide-connected"></i> Produção por categoria
+        </a>
+        <a href="{{ url_for('receitas.massa_base_lista') }}"
+           class="sidebar-link {% if request.path.startswith('/receitas/massa-base') %}active{% endif %}">
+            <i class="bi bi-diagram-2"></i> Massas base
+        </a>
+        {% endif %}
         {% endif %}
 
         {# ── 3. CATÁLOGO ── #}
@@ -486,10 +497,6 @@
         <a href="{{ url_for('receitas.familias') }}"
            class="sidebar-link {% if request.path == '/receitas/familias' %}active{% endif %}">
             Famílias de receitas
-        </a>
-        <a href="{{ url_for('receitas.amassadeira') }}"
-           class="sidebar-link {% if request.path == '/receitas/amassadeira' %}active{% endif %}">
-            Produção (categoria)
         </a>
         {% endif %}
 
