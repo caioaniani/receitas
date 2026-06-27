@@ -145,10 +145,13 @@
       </div>
       <!-- uma linha por produto -->
       {% for p in g.produtos %}
-      <div class="linha">
+      <div class="linha{% if p.tipo == 'base' %} linha-base{% elif p.tipo == 'ramo' %} linha-ramo{% endif %}">
         <div class="rotulo">
-          <span class="nm" style="border-left:5px solid {{ p.cor }}; padding-left:7px;">{{ p.nome }}</span>
-          <span class="sub">falta {{ p.falta }} un{% if p.fornadas %} · {{ p.fornadas }} fornada(s){% endif %}</span>
+          <span class="nm" style="border-left:5px solid {{ p.cor }}; padding-left:7px;">{% if p.tipo == 'base' %}🥣 {% elif p.tipo == 'ramo' %}↳ {% endif %}{{ p.nome }}</span>
+          <span class="sub">
+            {%- if p.tipo == 'base' -%}amassada comum{% if p.fornadas %} · {{ p.fornadas }} fornada(s){% endif %}
+            {%- else -%}falta {{ p.falta }} un{% if p.fornadas %} · {{ p.fornadas }} fornada(s){% endif %}{%- endif -%}
+          </span>
         </div>
         <div class="faixa" style="width:{{ g.canvas_px }}px;">
           {% for h in g.horas %}<div class="grade" style="left:{{ h.px }}px;"></div>{% endfor %}
