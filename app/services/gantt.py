@@ -274,7 +274,7 @@ def montar_gantt(dia):
                 continue            # sem etapa pós-fermentação: nada a finalizar
             nf = fornadas_amassadeira(rec, it.multiplicador) or 1
             prod = _novo_produto(rec.nome, falta=falta, fornadas=nf,
-                                 tipo='continuacao')
+                                 tipo='continuacao', receita_id=rec.id)
             prod['origem_label'] = (dia - timedelta(days=L)).strftime('%d/%m')
             jobs.append({'prod': prod, 'passos': _passos(post, nf),
                          'ptr': 0, 'ready': 0})
