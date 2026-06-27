@@ -168,11 +168,12 @@ def test_multiplicadores_escalam(app):
     assert c['total_porcoes'] == 4
     assert c['base_mix']['Farinha'] == 4000.0      # 1000 × 4
     assert c['base_mix']['Água'] == 2800.0         # 700 × 4
-    lin = {p['nome']: p for p in c['lineares']}
+    ret = {p['nome']: p for p in _retiradas(c)}
     # PF: 2 porções -> tira 1920 × 2 = 3840
-    assert lin['Pão Francês']['tirar_massa'] == 3840.0
-    # depois de tirar PF (2), sobram 2 (ST+S7): +água 100 × 2 = 200
-    assert lin['Sourdough Tradicional']['acrescentar'] == {'Água': 200.0}
+    assert ret['Pão Francês']['tirar_massa'] == 3840.0
+    # depois de tirar PF (2), sobram 2 (ST+S7): incremento de água 100 × 2 = 200
+    incs = _incrementos(c)
+    assert incs[0]['acrescentar'] == {'Água': 200.0}
 
 
 def test_fornadas_varias_batidas(app):
