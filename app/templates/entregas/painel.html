@@ -539,5 +539,36 @@
     setInterval(poll, 20000);
   })();
 </script>
+<!-- Anti-"salvar pagina" (Ctrl+S) + aviso de copia salva (file://). Mesma
+     defesa do painel de pedidos: o foco do teclado pode estar nesta janela ou
+     no iframe da esquerda, entao os DOIS interceptam Ctrl+S. -->
+<div id="aviso-copia" style="display:none;position:fixed;left:0;right:0;top:0;z-index:99999;
+     background:#b02a37;color:#fff;padding:14px 18px;font:700 16px/1.35 system-ui,sans-serif;
+     text-align:center;box-shadow:0 2px 14px rgba(0,0,0,.45)">
+  ⚠️ Esta é uma CÓPIA SALVA e DESATUALIZADA desta tela —
+  <a href="{{ url_for('entregas.painel', _external=True) }}"
+     style="color:#fff;text-decoration:underline">clique aqui para abrir a página de verdade »</a>
+</div>
+<div id="aviso-salvar" style="display:none;position:fixed;top:14px;left:50%;transform:translateX(-50%);
+     z-index:99999;background:#1f2933;color:#fff;padding:10px 16px;border-radius:8px;
+     font:600 14px system-ui,sans-serif;box-shadow:0 2px 12px rgba(0,0,0,.3)">
+  Não precisa salvar — esta tela atualiza sozinha.
+</div>
+<script>
+(function () {
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S' || e.code === 'KeyS')) {
+      e.preventDefault();
+      var a = document.getElementById('aviso-salvar');
+      if (a) { a.style.display = 'block'; clearTimeout(a._t);
+               a._t = setTimeout(function () { a.style.display = 'none'; }, 3000); }
+    }
+  }, true);
+  if (location.protocol === 'file:') {
+    var b = document.getElementById('aviso-copia');
+    if (b) b.style.display = 'block';
+  }
+})();
+</script>
 </body>
 </html>
