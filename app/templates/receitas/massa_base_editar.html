@@ -24,16 +24,16 @@
           {% for p in (calc.lineares | selectattr('nome') | list) + calc.ramos %}
           {% set ns.i = ns.i + 1 %}
           {% set eh_ramo = loop.index0 >= (calc.lineares | selectattr('nome') | list | length) %}
-          <div class="list-group-item d-flex align-items-center gap-2">
+          <div class="list-group-item" style="display:flex; align-items:center; gap:.5rem;">
             <span class="badge bg-secondary rounded-pill">{{ ns.i }}</span>
-            <span class="flex-grow-1">{{ p.nome }}
+            <span style="flex:1 1 auto;">{{ p.nome }}
               {% if eh_ramo %}
               <span class="badge bg-primary-subtle text-primary-emphasis ms-1">ramo (recheio próprio)</span>
               {% else %}
               <span class="badge bg-light text-muted border ms-1">linha principal</span>
               {% endif %}
             </span>
-            <form method="POST" action="{{ url_for('receitas.massa_base_editar', id=mb.id) }}" class="m-0 flex-shrink-0"
+            <form method="POST" action="{{ url_for('receitas.massa_base_editar', id=mb.id) }}" style="margin:0; flex:0 0 auto;"
                   onsubmit="return confirm('Tirar «{{ p.nome }}» do grupo?');">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="acao" value="remover">
