@@ -153,7 +153,8 @@ def montar_gantt(dia):
         cor = kw.get('cor') or _CORES[len(produtos) % len(_CORES)]
         p = {'nome': nome, 'cor': cor, 'tarefas': [], 'destino': None,
              'fim_min': 0, 'falta': kw.get('falta'), 'fornadas': kw.get('fornadas'),
-             'tipo': kw.get('tipo', 'solo'), 'grupo': kw.get('grupo')}
+             'tipo': kw.get('tipo', 'solo'), 'grupo': kw.get('grupo'),
+             'receita_id': kw.get('receita_id')}
         produtos.append(p)
         return p
 
