@@ -385,5 +385,5 @@ def montar_gantt(dia):
         'horas': horas, 'turnos': turnos,
         'produtos': produtos, 'sem_etapas': sem_etapas,
         'fim_estimado': _hhmm(DIA_INI + fim_geral) if fim_geral else None,
-        'plano_id': plano.id,
+        'plano_id': plano.id if plano else None,
     }
