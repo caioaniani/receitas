@@ -154,8 +154,8 @@ def montar_gantt(dia):
         jobs.append({'prod': prod, 'passos': _passos(pi['etapas'], pi['nf']),
                      'ptr': 0, 'ready': 0})
 
-    # 1b) Massa-base: UMA amassada da base (tronco) + retiradas (linha principal e
-    #     ramos); cada receita começa as etapas pós-amassamento na sua retirada.
+    # 1b) Massa-base: UMA amassada da base (tronco) + retiradas em hidratação
+    #     crescente; cada receita começa as etapas pós-amassamento na sua retirada.
     from app.services.massa_base import calcular_cascata
     grupos = {}
     for pi in [x for x in itens_plano if x['mbi'] is not None]:
