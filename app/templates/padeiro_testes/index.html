@@ -242,9 +242,37 @@
     border-radius:12px; padding:11px 22px; font-size:17px; font-weight:800; cursor:pointer; }
   .prod-dia-pronto { color:var(--verde,#198754); font-weight:800; font-size:17px; }
   .prod-dia-grupo { background:#eef4f0; color:#1a4731; font-weight:800; font-size:16px;
-    padding:10px 18px; border-top:1px solid #d8e6dd; border-bottom:1px solid #e6eeea; }
+    padding:10px 18px; border-top:1px solid #d8e6dd; border-bottom:1px solid #e6eeea;
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
   .prod-dia-grupo b { color:#198754; }
   .prod-dia-grupo-sub { font-weight:600; color:#6c757d; font-size:14px; }
+  .prod-dia-base-btn { margin-left:auto; background:#198754; color:#fff; border:0;
+    border-radius:9px; padding:8px 14px; font-size:14px; font-weight:700;
+    cursor:pointer; white-space:nowrap; }
+  .prod-dia-base-btn:active { background:#146c43; }
+
+  /* Sequência de retiradas da massa-base (no modal) */
+  .mep-base-massa { background:#212529; color:#fff; border-radius:12px;
+    padding:14px 16px; font-size:20px; font-weight:800; margin:4px 0 6px; }
+  .mep-base-massa small { display:block; font-size:13px; font-weight:600;
+    color:#adb5bd; margin-top:2px; }
+  .mep-casc { list-style:none; margin:6px 0 0; padding:0; }
+  .mep-casc-step { border:1px solid #e6e6e6; border-left:5px solid var(--verde,#198754);
+    border-radius:12px; padding:12px 14px; margin-bottom:10px; background:#fff; }
+  .mep-casc-step.ramo { border-left-color:#fd7e14; background:#fff8f1; }
+  .mep-casc-step.so-acresc { border-left-color:#0d6efd; background:#f1f6ff; }
+  .mep-casc-num { display:inline-flex; align-items:center; justify-content:center;
+    width:26px; height:26px; border-radius:50%; background:#198754; color:#fff;
+    font-size:15px; font-weight:800; margin-right:8px; }
+  .mep-casc-step.ramo .mep-casc-num { background:#fd7e14; }
+  .mep-casc-step.so-acresc .mep-casc-num { background:#0d6efd; }
+  .mep-casc-tira { font-size:19px; font-weight:800; color:#212529; }
+  .mep-casc-tira .un { color:#198754; }
+  .mep-casc-tag { font-size:12px; font-weight:700; color:#fd7e14;
+    text-transform:uppercase; letter-spacing:.4px; margin-left:6px; }
+  .mep-casc-acr { margin:8px 0 0 34px; font-size:16px; color:#495057; }
+  .mep-casc-acr .lbl { font-weight:700; color:#b45309; }
+  .mep-casc-acr b { font-variant-numeric:tabular-nums; }
 
   /* Modal mise en place (receita escalada) */
   #mep-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.55);
