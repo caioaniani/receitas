@@ -118,15 +118,15 @@ def montar_gantt(dia):
 
     plano = (PlanejamentoProducao.query
              .filter_by(data=dia, origem='cronograma').first())
-    if plano is None:
-        return None
 
     # 1) Itens do plano com falta > 0 e etapas; marca quem é de massa-base.
+    #    O plano de HOJE pode não existir (dia só de finalização de pães
+    #    amassados antes) — nesse caso só rodam as continuações (1c).
     from app.models import MassaBaseItem
     membership = {row.receita_id: row for row in MassaBaseItem.query.all()}
     itens_plano = []
     sem_etapas = []
-    for it in plano.itens:
+    for it in (plano.itens if plano else []):
         rec = it.receita
         if rec is None:
             continue
