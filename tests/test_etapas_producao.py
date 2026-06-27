@@ -213,8 +213,7 @@ def test_editor_post_salva_etapas(app, admin_user):
     resp = c.post('/receitas/%d/etapas' % r.id, data={
         'nome[]': ['Mise en place', 'Amassamento', 'Forno'],
         'duracao[]': ['10', '20', '25'],
-        'equip[]': ['', 'amassadeira', 'forno'],
-        'tipo[]': ['ativa', 'ativa', 'ativa'],
+        'recurso[]': ['padeiro', 'amassadeira', 'forno'],
     }, follow_redirects=True)
     assert resp.status_code == 200
     etapas = (ReceitaEtapa.query.filter_by(receita_id=r.id)
@@ -224,6 +223,23 @@ def test_editor_post_salva_etapas(app, admin_user):
     assert etapas[1].duracao_min == 20
 
 
+def test_editor_amassadeira_e_maquina_nao_mao_de_obra(app, admin_user):
+    """Correção do dono: amassar é MÁQUINA (padeiro livre), não mão de obra.
+    No modelo: equipamento=amassadeira + ativa=True; o Gantt libera o padeiro."""
+    r = _receita(categoria='Pães')
+    c = _login(app, admin_user)
+    c.post('/receitas/%d/etapas' % r.id, data={
+        'nome[]': ['Amassamento'], 'duracao[]': ['15'],
+        'recurso[]': ['amassadeira'],
+    }, follow_redirects=True)
+    e = ReceitaEtapa.query.filter_by(receita_id=r.id).first()
+    assert e.equipamento == 'amassadeira'
+    assert e.ativa is True
+    # o agendador ocupa a amassadeira, NÃO o padeiro
+    from app.services.gantt import _recurso
+    assert _recurso(e.equipamento, e.ativa) == 'amassadeira'
+
+
 def test_editor_post_substitui_e_ignora_vazias(app, admin_user):
     r = _receita(categoria='Pães')
     seed_etapas_categoria('Pães')      # estado inicial
@@ -231,20 +247,19 @@ def test_editor_post_substitui_e_ignora_vazias(app, admin_user):
     c.post('/receitas/%d/etapas' % r.id, data={
         'nome[]': ['Só essa', '', '   '],
         'duracao[]': ['15', '5', '5'],
-        'equip[]': ['bancada', '', ''],
-        'tipo[]': ['ativa', 'ativa', 'passiva'],
+        'recurso[]': ['padeiro', 'padeiro', 'descanso'],
     }, follow_redirects=True)
     etapas = ReceitaEtapa.query.filter_by(receita_id=r.id).all()
     assert len(etapas) == 1            # vazias ignoradas, padrão substituído
     assert etapas[0].nome == 'Só essa'
 
 
-def test_editor_tipo_passiva_vira_ativa_false(app, admin_user):
+def test_editor_recurso_descanso_vira_ativa_false(app, admin_user):
     r = _receita(categoria='Pães')
     c = _login(app, admin_user)
     c.post('/receitas/%d/etapas' % r.id, data={
         'nome[]': ['Fermentação'], 'duracao[]': ['120'],
-        'equip[]': ['camara_fria'], 'tipo[]': ['passiva'],
+        'recurso[]': ['camara_fria'],
     }, follow_redirects=True)
     e = ReceitaEtapa.query.filter_by(receita_id=r.id).first()
     assert e.ativa is False

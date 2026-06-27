@@ -234,7 +234,26 @@ def amassadeira_etapas_padrao():
     return redirect(url_for('receitas.amassadeira'))
 
 
-_ETAPA_EQUIPS = ['amassadeira', 'forno', 'bancada', 'camara_fria']
+# Tipo de trabalho da etapa -> (equipamento, ativa). UM só campo no editor:
+#  - padeiro:     mão de obra (a pessoa trabalhando) — ocupa o padeiro.
+#  - amassadeira/forno: MÁQUINA trabalha sozinha — ocupa o equipamento, padeiro
+#    livre pra adiantar outra receita (correção do dono: amassar não prende a
+#    pessoa no pé da amassadeira).
+#  - camara_fria/descanso: fermentação/descanso passivo — não ocupa ninguém.
+_RECURSO_MAP = {
+    'padeiro': (None, True),
+    'amassadeira': ('amassadeira', True),
+    'forno': ('forno', True),
+    'camara_fria': ('camara_fria', False),
+    'descanso': (None, False),
+}
+
+
+def _recurso_de_etapa(e):
+    """Valor do select 'tipo de trabalho' a partir da etapa salva."""
+    if e.equipamento in ('amassadeira', 'forno', 'camara_fria'):
+        return e.equipamento
+    return 'padeiro' if e.ativa else 'descanso'
 
 
 @receitas_bp.route('/<int:id>/etapas', methods=['GET', 'POST'])
@@ -242,9 +261,10 @@ _ETAPA_EQUIPS = ['amassadeira', 'forno', 'bancada', 'camara_fria']
 @admin_required
 def etapas(id):
     """Editor manual das etapas de produção (fluxograma/Gantt) de uma receita:
-    cada etapa tem nome, duração, equipamento e tipo (mão de obra / descanso).
-    POST salva a lista inteira (substitui). Botão "padrão da categoria" preenche
-    com o modelo pesquisado pra ajustar em cima."""
+    cada etapa tem nome, duração e o tipo de trabalho (padeiro / máquina /
+    descanso). POST salva a lista inteira (substitui, na ordem das linhas — o
+    arrastar reordena). Botão "padrão da categoria" preenche com o modelo
+    pesquisado pra ajustar em cima."""
     from app.constants import etapas_padrao_categoria
     from app.services.producao import _fmt_dur
 
@@ -266,11 +286,10 @@ def etapas(id):
 
         nomes = request.form.getlist('nome[]')
         duracoes = request.form.getlist('duracao[]')
-        equips = request.form.getlist('equip[]')
-        tipos = request.form.getlist('tipo[]')
+        recursos = request.form.getlist('recurso[]')
         ReceitaEtapa.query.filter_by(receita_id=receita.id).delete()
         ordem = 0
-        for nome, dur, equip, tipo in zip(nomes, duracoes, equips, tipos):
+        for nome, dur, recurso in zip(nomes, duracoes, recursos):
             nome = (nome or '').strip()
             if not nome:
                 continue            # linha vazia = ignora
@@ -278,10 +297,10 @@ def etapas(id):
                 dur_min = max(0, min(int(dur or 0), 100000))
             except (TypeError, ValueError):
                 dur_min = 0
-            equip = equip if equip in _ETAPA_EQUIPS else None
+            equip, ativa = _RECURSO_MAP.get(recurso, (None, True))
             db.session.add(ReceitaEtapa(
                 receita_id=receita.id, ordem=ordem, nome=nome,
-                duracao_min=dur_min, equipamento=equip, ativa=(tipo != 'passiva')))
+                duracao_min=dur_min, equipamento=equip, ativa=ativa))
             ordem += 1
         db.session.commit()
         flash(f'{ordem} etapa(s) salva(s) para "{receita.nome}".', 'success')
@@ -290,8 +309,8 @@ def etapas(id):
     etapas_atuais = (ReceitaEtapa.query.filter_by(receita_id=receita.id)
                      .order_by(ReceitaEtapa.ordem).all())
     return render_template('receitas/etapas.html', receita=receita,
-                           etapas=etapas_atuais, equips=_ETAPA_EQUIPS,
-                           fmt_dur=_fmt_dur)
+                           etapas=etapas_atuais, fmt_dur=_fmt_dur,
+                           recurso_de=_recurso_de_etapa)
 
 
 @receitas_bp.route('/<int:id>/padeiro')

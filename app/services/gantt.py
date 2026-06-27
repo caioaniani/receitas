@@ -38,23 +38,30 @@ PX_POR_MIN = 4
 _CORES = ['#0d6efd', '#198754', '#fd7e14', '#6f42c1', '#d63384', '#20c997',
           '#dc3545', '#0dcaf0', '#caa300', '#6610f2', '#0a8f6c', '#495057']
 
-_ICONE = {'amassadeira': '🥣', 'forno': '🔥', 'camara_fria': '❄️',
-          'bancada': '✋'}
-
 
 def _recurso(equip, ativa):
-    """Recurso (capacidade 1) que a etapa ocupa, ou None se passiva."""
+    """Recurso (capacidade 1) que a etapa ocupa, ou None se passiva.
+
+    Etapas de MÁQUINA (amassadeira/forno) ocupam o EQUIPAMENTO, não o padeiro —
+    a máquina trabalha sozinha e a pessoa fica livre pra adiantar outra receita.
+    Só o trabalho manual (mise en place, modelagem) ocupa o `padeiro`."""
     if not ativa:
         return None
     if equip in ('amassadeira', 'forno'):
-        return equip
-    return 'padeiro'          # manual (bancada / sem equipamento)
+        return equip          # máquina trabalha sozinha (padeiro livre)
+    return 'padeiro'          # mão de obra do padeiro
 
 
 def _icone(equip, ativa):
+    if equip == 'amassadeira':
+        return '🥣'
+    if equip == 'forno':
+        return '🔥'
+    if equip == 'camara_fria':
+        return '❄️'
     if not ativa:
-        return '⏳'
-    return _ICONE.get(equip, '•')
+        return '⏳'           # descanso / fermentação
+    return '✋'               # mão de obra do padeiro
 
 
 def _hhmm(minuto):
