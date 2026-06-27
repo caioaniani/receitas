@@ -34,6 +34,17 @@ PASSIVA_LONGA_MIN = 240   # 4h
 # horizontal) pra cada etapa ter espaço real e o rótulo ser legível.
 PX_POR_MIN = 4
 
+# Massa-base: passos manuais curtos da cascata (tirar a receita / acrescentar).
+TIRAR_MIN = 4
+ACRESCENTAR_MIN = 3
+
+
+def _g_label(gramas):
+    g = round(gramas or 0)
+    if g >= 1000:
+        return ('%.1f kg' % (g / 1000.0)).replace('.0 kg', ' kg').replace('.', ',')
+    return '%d g' % g
+
 # Paleta estável por índice de produto.
 _CORES = ['#0d6efd', '#198754', '#fd7e14', '#6f42c1', '#d63384', '#20c997',
           '#dc3545', '#0dcaf0', '#caa300', '#6610f2', '#0a8f6c', '#495057']
