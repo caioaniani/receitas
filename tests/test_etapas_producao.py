@@ -266,6 +266,50 @@ def test_editor_recurso_descanso_vira_ativa_false(app, admin_user):
     assert e.equipamento == 'camara_fria'
 
 
+def test_editor_recurso_congelar(app, admin_user):
+    """Tipo 'congelar' (freezer, passo final): salva equipamento='congelar',
+    passivo, e faz o round-trip no select (recurso_de_etapa)."""
+    from app.blueprints.receitas.routes import _recurso_de_etapa
+    r = _receita(categoria='Viennoiserie')
+    c = _login(app, admin_user)
+    c.post('/receitas/%d/etapas' % r.id, data={
+        'nome[]': ['Modelagem', 'Congelar'], 'duracao[]': ['60', '60'],
+        'recurso[]': ['padeiro', 'congelar'],
+    }, follow_redirects=True)
+    cong = ReceitaEtapa.query.filter_by(receita_id=r.id, nome='Congelar').first()
+    assert cong is not None
+    assert cong.equipamento == 'congelar'
+    assert cong.ativa is False
+    assert _recurso_de_etapa(cong) == 'congelar'
+
+
+def test_gantt_congelar_nao_vira_camara_fria(app):
+    """No Gantt, 'congelar' fica inline com ícone de freezer e NÃO vira marcador
+    de câmara fria (mesmo longo) — é o passo final, não fermentação."""
+    from datetime import date
+
+    from app.models import PlanejamentoItem, PlanejamentoProducao
+    from app.services.gantt import montar_gantt
+    r = _receita(categoria='Viennoiserie')
+    ReceitaEtapa.query.filter_by(receita_id=r.id).delete()
+    for i, (n, d, eq, at) in enumerate([
+            ('Modelagem', 30, None, True),
+            ('Congelar', 300, 'congelar', False)]):   # 5h, mas é congelar
+        db.session.add(ReceitaEtapa(receita_id=r.id, ordem=i, nome=n,
+                                    duracao_min=d, equipamento=eq, ativa=at))
+    pl = PlanejamentoProducao(data=date(2026, 10, 1), origem='cronograma')
+    db.session.add(pl)
+    db.session.flush()
+    db.session.add(PlanejamentoItem(planejamento_id=pl.id, receita_id=r.id,
+                                    multiplicador=1, qtd_alvo=10))
+    db.session.commit()
+    g = montar_gantt(date(2026, 10, 1))
+    prod = g['produtos'][0]
+    assert prod.get('destino') is None                 # NÃO cortou pra câmara fria
+    icones = [t['icone'] for t in prod['tarefas']]
+    assert '🧊' in icones                              # congelar inline, freezer
+
+
 def test_editor_acao_padrao_preenche_da_categoria(app, admin_user):
     r = _receita(categoria='Pães')
     c = _login(app, admin_user)
