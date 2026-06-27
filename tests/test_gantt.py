@@ -176,6 +176,24 @@ def _login(app, user):
     return c
 
 
+def test_layout_em_px_e_label_dentro(app):
+    """As posições saem em px (escala fixa) e cada tarefa diz se o rótulo cabe
+    dentro da barra (senão a barra fica só com o ícone)."""
+    dia = date(2026, 7, 30)
+    r = _receita('Pão X', [
+        ('Mise en place', 5, None, True),                 # curta -> label fora
+        ('Bulk + dobras (fermentação longa)', 120, None, True),  # longa -> cabe
+    ])
+    _plano(dia, [(r, 1, 10, 0)])
+    g = montar_gantt(dia)
+    assert g['canvas_px'] > 0
+    tar = {t['etapa']: t for t in g['produtos'][0]['tarefas']}
+    assert 'left_px' in tar['Mise en place'] and 'width_px' in tar['Mise en place']
+    assert tar['Mise en place']['label_dentro'] is False           # 5min não cabe
+    assert tar['Bulk + dobras (fermentação longa)']['label_dentro'] is True
+    assert g['horas'][0]['px'] == 0
+
+
 def test_rota_gantt_renderiza(app, admin_user):
     dia = date(2026, 7, 20)
     r = _receita('Pão Francês', [
