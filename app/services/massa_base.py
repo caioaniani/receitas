@@ -38,69 +38,127 @@ def ingredientes_por_porcao(receita):
 
 
 def calcular_cascata(massa_base, multiplicadores=None):
-    """Calcula a cascata da `massa_base`.
+    """Calcula a cascata da `massa_base` como uma ÁRVORE (não uma fila).
 
-    multiplicadores: {receita_id: nº de porções (batidas-base) no plano}. Default
-    1 de cada (visualização). Retorna None se o grupo não tem receitas; senão um
-    dict com:
-      - base: {ingrediente: g por porção} (o mínimo comum)
-      - base_mix: {ingrediente: g total na amassadeira}
-      - base_massa: g total da base
-      - fornadas: nº de batidas (ceil(base_massa/capacidade)) ou None
-      - capacidade: g (capacidade da amassadeira do grupo)
-      - passos: lista na ordem da cascata, cada um:
-          {receita_id, nome, porcoes, massa_porcao, tirar_massa,
-           acrescentar: {ingrediente: g a adicionar ANTES de tirar}}
-      - avisos: textos (ex: ordem não forma cadeia)
-      - total_porcoes
+    O sistema descobre a estrutura sozinho a partir da ficha técnica:
+      - amassa a base (o mínimo comum de cada ingrediente);
+      - puxa em LINHA as receitas que vão se aninhando (ex: tira o pão francês,
+        acrescenta a água comum e tira o sourdough tradicional);
+      - quando sobram receitas com recheios EXCLUSIVOS (ex: 7 grãos × nozes e
+        azeitonas — uma não é continuação da outra), elas RAMIFICAM: cada uma
+        tira sua porção da massa branca e recebe o seu recheio à parte.
+
+    multiplicadores: {receita_id: nº de porções no plano}. Default 1 de cada.
+    Retorna None se o grupo não tem receitas; senão um dict com:
+      - base / base_mix / base_massa / fornadas / capacidade / total_porcoes
+      - lineares: passos da linha principal, em ordem. Cada um:
+          {receita_id?, nome?, porcoes?, tirar_massa?,
+           acrescentar: {ingrediente: g}}  (nome None = só um acréscimo comum)
+      - ramos: receitas com recheio próprio (paralelas), cada uma:
+          {receita_id, nome, porcoes, tirar_branca (g da massa branca),
+           acrescentar: {recheio: g}, tirar_massa (g final)}
+      - avisos: [] (a árvore não precisa de ordem manual)
     """
     receitas = [it.receita for it in massa_base.itens if it.receita]
     if not receitas:
         return None
     mult = multiplicadores or {}
     porcoes = {r.id: max(0, int(mult.get(r.id, 1))) for r in receitas}
+    receitas = [r for r in receitas if porcoes[r.id] > 0]
+    if not receitas:
+        return None
     ings = {r.id: ingredientes_por_porcao(r) for r in receitas}
 
-    # base = mínimo comum de cada ingrediente (presente em TODAS as receitas;
-    # se faltar em alguma, o mínimo é 0 e não entra na base).
+    # base = mínimo comum de cada ingrediente (entre as receitas presentes).
     nomes = set().union(*[set(d) for d in ings.values()])
-    base = {}
-    for nome in nomes:
-        m = min(ings[r.id].get(nome, 0.0) for r in receitas)
-        if m > _TOL:
-            base[nome] = m
+    base = {n: min(ings[r.id].get(n, 0.0) for r in receitas) for n in nomes}
+    base = {n: g for n, g in base.items() if g > _TOL}
 
-    total_porcoes = sum(porcoes.values())
-    base_mix = {nome: g * total_porcoes for nome, g in base.items()}
+    total_porcoes = sum(porcoes[r.id] for r in receitas)
+    base_mix = {n: g * total_porcoes for n, g in base.items()}
     base_massa = sum(base_mix.values())
 
-    # cascata: parte do running = base; a cada receita acrescenta o que falta
-    # (pras porções ainda na bacia) e tira a receita.
+    def _massa(comp):
+        return sum(comp.values())
+
+    def _falta(r, running):
+        """Ingredientes que faltam pra completar r a partir de `running`."""
+        d = {}
+        for n in set(ings[r.id]) | set(running):
+            v = ings[r.id].get(n, 0.0) - running.get(n, 0.0)
+            if v > _TOL:
+                d[n] = v
+        return d
+
     running = dict(base)
-    restantes = total_porcoes
-    passos = []
-    avisos = []
-    for r in receitas:
-        inc = {}
-        for nome in set(ings[r.id]) | set(running):
-            d = ings[r.id].get(nome, 0.0) - running.get(nome, 0.0)
-            if d > _TOL:
-                inc[nome] = d
-            elif d < -_TOL:
-                avisos.append(
-                    '%s: "%s" precisaria DIMINUIR %.0f g — a ordem não forma '
-                    'cadeia (mova essa receita pra mais cedo).'
-                    % (r.nome, nome, -d))
-        acrescentar = {nome: g * restantes for nome, g in inc.items()}
-        running = dict(ings[r.id])
-        massa_porcao = sum(ings[r.id].values())
-        passos.append({
-            'receita_id': r.id, 'nome': r.nome, 'porcoes': porcoes[r.id],
-            'massa_porcao': round(massa_porcao, 1),
-            'tirar_massa': round(massa_porcao * porcoes[r.id], 1),
-            'acrescentar': {n: round(g, 1) for n, g in acrescentar.items()},
-        })
-        restantes -= porcoes[r.id]
+    remaining = list(receitas)
+    porcoes_rest = total_porcoes
+    pendente = {}          # acréscimo comum acumulado, anexado ao próximo "tirar"
+    lineares = []
+    ramos = []
+    guarda = 0
+    while remaining and guarda < 1000:
+        guarda += 1
+
+        # incremento COMUM acima de running (mínimo das faltas sobre TODAS as
+        # receitas restantes) — vai pro tronco.
+        faltas = {r.id: _falta(r, running) for r in remaining}
+        nomes_f = set().union(*[set(f) for f in faltas.values()]) if faltas else set()
+        comum = {}
+        for n in nomes_f:
+            m = min(faltas[r.id].get(n, 0.0) for r in remaining)
+            if m > _TOL:
+                comum[n] = m
+        if comum:
+            for n, g in comum.items():
+                running[n] = running.get(n, 0.0) + g
+                pendente[n] = pendente.get(n, 0.0) + g * porcoes_rest
+            continue       # re-avalia: agora alguém pode estar completo
+
+        completas = [r for r in remaining if not _falta(r, running)]
+        if completas:
+            for r in completas:
+                lineares.append({
+                    'receita_id': r.id, 'nome': r.nome, 'porcoes': porcoes[r.id],
+                    'tirar_massa': round(_massa(ings[r.id]) * porcoes[r.id], 1),
+                    'acrescentar': {n: round(g, 1) for n, g in pendente.items()}})
+                pendente = {}
+                remaining.remove(r)
+                porcoes_rest -= porcoes[r.id]
+            continue
+
+        # Sem incremento comum e ninguém completo:
+        if len(remaining) == 1:
+            # cauda linear: a última receita recebe o que falta e é tirada.
+            r = remaining[0]
+            falta = _falta(r, running)
+            for n, g in falta.items():
+                pendente[n] = pendente.get(n, 0.0) + g * porcoes[r.id]
+            lineares.append({
+                'receita_id': r.id, 'nome': r.nome, 'porcoes': porcoes[r.id],
+                'tirar_massa': round(_massa(ings[r.id]) * porcoes[r.id], 1),
+                'acrescentar': {n: round(g, 1) for n, g in pendente.items()}})
+            pendente = {}
+            remaining = []
+        else:
+            # RAMIFICA: recheios exclusivos. Se sobrou acréscimo comum pendente,
+            # ele já está na massa branca (running) — registra como passo solto.
+            if pendente:
+                lineares.append({'receita_id': None, 'nome': None, 'porcoes': None,
+                                 'tirar_massa': None,
+                                 'acrescentar': {n: round(g, 1)
+                                                 for n, g in pendente.items()}})
+                pendente = {}
+            branca = _massa(running)
+            for r in remaining:
+                falta = _falta(r, running)
+                ramos.append({
+                    'receita_id': r.id, 'nome': r.nome, 'porcoes': porcoes[r.id],
+                    'tirar_branca': round(branca * porcoes[r.id], 1),
+                    'acrescentar': {n: round(g * porcoes[r.id], 1)
+                                    for n, g in falta.items()},
+                    'tirar_massa': round(_massa(ings[r.id]) * porcoes[r.id], 1)})
+            remaining = []
 
     caps = [int(getattr(r, 'capacidade_amassadeira_g', 0) or 0) for r in receitas]
     caps = [c for c in caps if c > 0]
@@ -113,5 +171,6 @@ def calcular_cascata(massa_base, multiplicadores=None):
         'base_mix': {n: round(g, 1) for n, g in base_mix.items()},
         'base_massa': round(base_massa, 1),
         'fornadas': fornadas, 'capacidade': cap,
-        'passos': passos, 'avisos': avisos, 'total_porcoes': total_porcoes,
+        'lineares': lineares, 'ramos': ramos, 'avisos': [],
+        'total_porcoes': total_porcoes,
     }
