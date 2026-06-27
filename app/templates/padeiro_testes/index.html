@@ -297,12 +297,18 @@
     {% endfor %}
   {% endwith %}
 
-  {% macro prod_row(it) %}
+  {% macro prod_row(it, em_grupo=false) %}
     <div class="prod-dia-row {% if it.falta == 0 %}feito{% endif %}">
+      {% if em_grupo %}
+      {# pão que sai da massa-base: não tem receita separada — a "receita" é a
+         base + a retirada (botão "ver a base" no cabeçalho do grupo). #}
+      <span class="prod-dia-nome" style="cursor:default;">{{ it.nome }}</span>
+      {% else %}
       <button type="button" class="prod-dia-nome" title="Ver a receita escalada"
               onclick="verReceita({{ it.receita_id }}, {{ it.item_id }}, {{ it.falta or it.alvo }})">
         {{ it.nome }} <span class="prod-dia-ver">📋 ver receita</span>
       </button>
+      {% endif %}
       <span class="prod-dia-meta">
         {% if it.falta > 0 %}produzir <b style="color:#198754;">{{ it.falta }}</b> un{% if it.produzido %} <small>(já {{ it.produzido }}/{{ it.alvo }})</small>{% endif %}
         {%- else -%}✓ feito {{ it.produzido }} un{% endif %}
