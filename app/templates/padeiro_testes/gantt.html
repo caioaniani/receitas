@@ -158,7 +158,8 @@
       {% for p in g.produtos %}
       <div class="linha{% if p.tipo == 'base' %} linha-base{% elif p.tipo == 'ramo' %} linha-ramo{% elif p.tipo == 'continuacao' %} linha-cont{% endif %}">
         <div class="rotulo">
-          <span class="nm" style="border-left:5px solid {{ p.cor }}; padding-left:7px;">{% if p.tipo == 'base' %}🥣 {% elif p.tipo == 'ramo' %}↳ {% elif p.tipo == 'continuacao' %}⏭️ {% endif %}{{ p.nome }}</span>
+          {% set edit_url = url_for('receitas.etapas', id=p.receita_id) if p.receita_id else (url_for('receitas.massa_base_editar', id=p.grupo) if p.tipo == 'base' and p.grupo else None) %}
+          <span class="nm" style="border-left:5px solid {{ p.cor }}; padding-left:7px;">{% if p.tipo == 'base' %}🥣 {% elif p.tipo == 'ramo' %}↳ {% elif p.tipo == 'continuacao' %}⏭️ {% endif %}{% if edit_url and current_user.is_admin() %}<a class="nm-link" href="{{ edit_url }}" title="Editar etapas de {{ p.nome }}">{{ p.nome }} <span class="nm-edit">✏️</span></a>{% else %}{{ p.nome }}{% endif %}</span>
           <span class="sub">
             {%- if p.tipo == 'base' -%}amassar <b>{{ p.base_massa_label }}</b>{% if p.fornadas %} · {{ p.fornadas }} fornada(s){% endif %}
             {%- elif p.tipo == 'continuacao' -%}finalizar <b>{{ p.falta }} un</b> · da câmara fria ({{ p.origem_label }})
