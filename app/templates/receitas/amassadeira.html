@@ -4,7 +4,12 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h1 class="page-title mb-0"><i class="bi bi-gear-wide-connected"></i> Produção por categoria</h1>
-    <a href="{{ url_for('receitas.familias') }}" class="btn btn-sm btn-outline-secondary">Famílias</a>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('receitas.massa_base_lista') }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-diagram-2"></i> Massas base
+        </a>
+        <a href="{{ url_for('receitas.familias') }}" class="btn btn-sm btn-outline-secondary">Famílias</a>
+    </div>
 </div>
 
 <div class="alert alert-light border small">
