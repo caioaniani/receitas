@@ -217,7 +217,8 @@ def montar_gantt(dia):
             i = _idx_amassadeira(pi['etapas'])
             post = pi['etapas'][i + 1:] if i >= 0 else pi['etapas']
             prod_r = _novo_produto(pi['rec'].nome, falta=pi['falta'],
-                                   fornadas=pi['nf'], tipo='ramo', grupo=mb_id)
+                                   fornadas=pi['nf'], tipo='ramo', grupo=mb_id,
+                                   receita_id=pi['rec'].id)
             bj = {'prod': prod_r, 'passos': _passos(post, pi['nf']),
                   'ptr': 0, 'ready': None}        # None = bloqueado
             branch_jobs[p['receita_id']] = bj
