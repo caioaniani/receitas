@@ -70,21 +70,39 @@ def test_base_mix_e_massa_total(app):
     assert c['fornadas'] == 1          # cabe em 50kg
 
 
+def _retiradas(c):
+    return [p for p in c['passos'] if p['tipo'] == 'retirada']
+
+
+def _incrementos(c):
+    return [p for p in c['passos'] if p['tipo'] == 'incremento']
+
+
 def test_cascata_linear_bate_com_o_exemplo(app):
-    """3 pães onde só 1 tem recheio (grãos): tudo na linha principal, sem ramo."""
+    """3 pães em ordem de hidratação crescente; só o 7 grãos tem recheio (laranja).
+    A água é um passo do TRONCO entre as retiradas."""
     pf, st, s7, mb = _exemplo_dono(app)
     c = calcular_cascata(mb)
-    assert c['ramos'] == []            # só 1 recheio -> cauda linear, não ramifica
-    lin = {p['nome']: p for p in c['lineares']}
-    # 1) Pão Francês: nada a acrescentar, tira 1920 g
-    assert lin['Pão Francês']['acrescentar'] == {}
-    assert lin['Pão Francês']['tirar_massa'] == 1920.0
-    # 2) Sourdough Tradicional: +água 200 g (100 g × 2 restantes), tira 2020 g
-    assert lin['Sourdough Tradicional']['acrescentar'] == {'Água': 200.0}
-    assert lin['Sourdough Tradicional']['tirar_massa'] == 2020.0
-    # 3) Sourdough 7 grãos (cauda): +grãos 150 g, tira 2170 g
-    assert lin['Sourdough 7 grãos']['acrescentar'] == {'7 grãos': 150.0}
-    assert lin['Sourdough 7 grãos']['tirar_massa'] == 2170.0
+    passos = c['passos']
+    # ordem: tira PF (75%) -> +água -> tira Tradicional (80%) -> tira 7 grãos
+    assert [p['tipo'] for p in passos] == [
+        'retirada', 'incremento', 'retirada', 'retirada']
+    # 1) Pão Francês: linha principal (verde), nada a bater, tira 1920 g
+    assert passos[0]['nome'] == 'Pão Francês'
+    assert passos[0]['eh_ramo'] is False
+    assert passos[0]['acrescentar'] == {}
+    assert passos[0]['tirar_massa'] == 1920.0
+    # 2) incremento de água no tronco: 100 g × 2 porções restantes = 200 g
+    assert passos[1]['acrescentar'] == {'Água': 200.0}
+    # 3) Tradicional: linha principal (verde), tira 2020 g
+    assert passos[2]['nome'] == 'Sourdough Tradicional'
+    assert passos[2]['eh_ramo'] is False
+    assert passos[2]['tirar_massa'] == 2020.0
+    # 4) 7 grãos: recheio próprio (laranja), só os grãos batidos na porção
+    assert passos[3]['nome'] == 'Sourdough 7 grãos'
+    assert passos[3]['eh_ramo'] is True
+    assert passos[3]['acrescentar'] == {'7 grãos': 150.0}
+    assert passos[3]['tirar_massa'] == 2170.0
     assert c['avisos'] == []
 
 
