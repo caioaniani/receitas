@@ -93,6 +93,8 @@ def _icone(equip, ativa):
         return '🔥'
     if equip == 'camara_fria':
         return '❄️'
+    if equip == 'congelar':
+        return '🧊'           # freezer (passo final)
     if not ativa:
         return '⏳'           # descanso / fermentação
     return '✋'               # mão de obra do padeiro
