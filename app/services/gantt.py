@@ -318,6 +318,10 @@ def montar_gantt(dia):
             'icone': _icone(p['equip'], p['ativa']),
         })
 
+    # Nada a fazer hoje (sem plano e sem continuação) → sem Gantt.
+    if not produtos and plano is None:
+        return None
+
     # 3) Eixo em PIXELS (escala fixa: cada minuto vale PX_POR_MIN px). Layout em
     #    px — e não em % — pra cada etapa ter largura real e legível (a página
     #    rola na horizontal); assim dá pra decidir se o rótulo cabe DENTRO da
