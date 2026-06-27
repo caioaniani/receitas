@@ -91,3 +91,51 @@ def test_padeiro_testes_mostra_producao_do_dia(app, admin_user):
     body = resp.get_data(as_text=True)
     assert 'Produção do dia' in body
     assert 'Pão Teste' in body
+
+
+def test_plano_do_dia_agrupa_por_massa_base(app, admin_user):
+    """Pães de uma massa-base comum aparecem agrupados (amasse a base + tire
+    cada um); os demais vão pra 'solos'."""
+    from app.blueprints.padeiro_testes.routes import _plano_do_dia
+    from app.models import MassaBase, MassaBaseItem
+
+    def _rec(nome, agua, recheio=None):
+        r = Receita(nome=nome, categoria='Pães', rendimento_qtd=10,
+                    rendimento_unidade='un', peso_base=1000.0,
+                    capacidade_amassadeira_g=50000)
+        db.session.add(r)
+        db.session.flush()
+        db.session.add(ReceitaIngrediente(receita_id=r.id, tipo='mp',
+                                          ingrediente_nome='Farinha', porcentagem=100))
+        db.session.add(ReceitaIngrediente(receita_id=r.id, tipo='mp',
+                                          ingrediente_nome='Água', porcentagem=agua))
+        if recheio:
+            db.session.add(ReceitaIngrediente(receita_id=r.id, tipo='mp',
+                                              ingrediente_nome=recheio[0],
+                                              porcentagem=recheio[1]))
+        db.session.commit()
+        return r
+
+    pf = _rec('Pão Francês', 70)
+    s7 = _rec('Sourdough 7g', 80, ('Grãos', 40))
+    foc = _rec('Focaccia', 65)               # solo (sem massa-base)
+    mb = MassaBase(nome='Sourdough')
+    db.session.add(mb)
+    db.session.flush()
+    for r in (pf, s7):
+        db.session.add(MassaBaseItem(massa_base_id=mb.id, receita_id=r.id))
+    plano = PlanejamentoProducao(data=hoje(), origem='cronograma')
+    db.session.add(plano)
+    db.session.flush()
+    for r in (pf, s7, foc):
+        db.session.add(PlanejamentoItem(planejamento_id=plano.id, receita_id=r.id,
+                                        multiplicador=1, qtd_alvo=10))
+    db.session.commit()
+
+    p = _plano_do_dia(hoje())
+    assert len(p['grupos']) == 1
+    g = p['grupos'][0]
+    assert g['nome'] == 'Sourdough'
+    assert g['base_massa_label']                        # ex "3,4 kg"
+    assert {i['nome'] for i in g['itens']} == {'Pão Francês', 'Sourdough 7g'}
+    assert {i['nome'] for i in p['solos']} == {'Focaccia'}
