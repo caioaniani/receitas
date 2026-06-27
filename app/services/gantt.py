@@ -30,6 +30,10 @@ TURNOS = [
 # Etapa passiva acima disso = lead time (carrega pra fora do dia).
 PASSIVA_LONGA_MIN = 240   # 4h
 
+# Escala do eixo: pixels por minuto. Largura fixa por minuto (a página rola na
+# horizontal) pra cada etapa ter espaço real e o rótulo ser legível.
+PX_POR_MIN = 4
+
 # Paleta estável por índice de produto.
 _CORES = ['#0d6efd', '#198754', '#fd7e14', '#6f42c1', '#d63384', '#20c997',
           '#dc3545', '#0dcaf0', '#caa300', '#6610f2', '#0a8f6c', '#495057']
@@ -152,36 +156,43 @@ def montar_gantt(dia):
             'icone': _icone(p['equip'], p['ativa']),
         })
 
-    # 3) Eixo: 06:00 até o fim do último trabalho (mín. fim do 1º turno, 14:00).
+    # 3) Eixo em PIXELS (escala fixa: cada minuto vale PX_POR_MIN px). Layout em
+    #    px — e não em % — pra cada etapa ter largura real e legível (a página
+    #    rola na horizontal); assim dá pra decidir se o rótulo cabe DENTRO da
+    #    barra ou se vai pro lado direito (fora), sem cortar o texto.
     fim_geral = max([p['fim_min'] for p in produtos] or [0])
     eixo_fim = max(fim_geral, 14 * 60 - DIA_INI)        # em min desde 06:00
-    # marcas de hora (06:00, 07:00, …) que cabem no eixo
+    span = eixo_fim or 1
+    canvas_px = span * PX_POR_MIN
+
     horas = []
     h = 0
     while h <= eixo_fim:
         horas.append({'min': h, 'label': _hhmm(DIA_INI + h),
-                      'pct': (h / eixo_fim * 100) if eixo_fim else 0})
+                      'px': h * PX_POR_MIN})
         h += 60
 
     # ordena produtos pelo início do 1º trabalho (linha do tempo legível)
     produtos.sort(key=lambda p: (p['tarefas'][0]['ini'] if p['tarefas'] else 1e9,
                                  p['nome']))
 
-    # posições percentuais das tarefas e bandas de turno
-    span = eixo_fim or 1
     for p in produtos:
         for t in p['tarefas']:
-            t['left_pct'] = t['ini'] / span * 100
-            t['width_pct'] = max(0.6, (t['fim'] - t['ini']) / span * 100)
+            t['left_px'] = t['ini'] * PX_POR_MIN
+            t['width_px'] = max(14, (t['fim'] - t['ini']) * PX_POR_MIN)
+            # o rótulo cabe dentro? (estimativa: ~7px/char + ícone + folga)
+            texto_px = len(t['etapa']) * 7.3 + 30
+            t['label_dentro'] = t['width_px'] >= texto_px
+        p['fim_px'] = p['fim_min'] * PX_POR_MIN
     turnos = [{'nome': tt['nome'],
-               'left_pct': max(0, (tt['ini'] - DIA_INI)) / span * 100,
-               'width_pct': (min(tt['fim'] - DIA_INI, span)
-                             - max(0, tt['ini'] - DIA_INI)) / span * 100}
+               'left_px': max(0, tt['ini'] - DIA_INI) * PX_POR_MIN,
+               'width_px': (min(tt['fim'] - DIA_INI, span)
+                            - max(0, tt['ini'] - DIA_INI)) * PX_POR_MIN}
               for tt in TURNOS]
 
     return {
         'dia': dia, 'dia_iso': dia.isoformat(),
-        'eixo_fim': eixo_fim, 'span_min': span,
+        'eixo_fim': eixo_fim, 'span_min': span, 'canvas_px': canvas_px,
         'horas': horas, 'turnos': turnos,
         'produtos': produtos, 'sem_etapas': sem_etapas,
         'fim_estimado': _hhmm(DIA_INI + fim_geral) if fim_geral else None,

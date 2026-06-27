@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fluxograma da produção — {{ dia.strftime('%d/%m') }}</title>
 <style>
-  :root { --verde:#198754; --azul:#0d6efd; --cinza:#6c757d; --amarelo:#ffc107; }
+  :root { --verde:#198754; --azul:#0d6efd; --cinza:#6c757d; --amarelo:#ffc107;
+          --rotulo-w:196px; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
          background:#f1f3f5; color:#212529; padding-bottom:50px; }
@@ -21,48 +22,69 @@
   .resumo { color:#495057; margin:0 0 14px; font-size:15px; }
   .resumo b { color:#212529; }
 
-  /* ── Gantt ─────────────────────────────────────────────── */
-  .gantt { background:#fff; border-radius:14px; padding:14px 14px 6px;
+  /* ── Gantt (layout em px, rola na horizontal) ─────────────── */
+  .gantt { background:#fff; border-radius:14px; padding:14px 4px 8px;
            box-shadow:0 1px 4px rgba(0,0,0,.1); overflow-x:auto; }
-  .gantt-inner { min-width:760px; }
+  .gantt-inner { display:inline-block; min-width:100%; }
   /* eixo de horas */
-  .eixo { position:relative; height:26px; margin-left:170px;
+  .eixo { position:relative; height:24px; margin-left:var(--rotulo-w);
           border-bottom:2px solid #dee2e6; }
   .eixo .hora { position:absolute; top:0; transform:translateX(-50%);
-                font-size:12px; color:#868e96; font-variant-numeric:tabular-nums; }
-  .eixo .hora::after { content:''; position:absolute; left:50%; top:18px;
+                font-size:13px; color:#868e96; font-variant-numeric:tabular-nums; }
+  .eixo .hora::after { content:''; position:absolute; left:50%; top:16px;
                        width:1px; height:8px; background:#dee2e6; }
   /* bandas de turno */
-  .turnos { position:relative; height:20px; margin-left:170px; margin-bottom:2px; }
-  .turno { position:absolute; top:0; height:16px; border-radius:5px; font-size:11px;
-           color:#fff; font-weight:700; padding:1px 8px; white-space:nowrap;
-           overflow:hidden; opacity:.85; }
+  .turnos { position:relative; height:20px; margin-left:var(--rotulo-w); margin-bottom:2px; }
+  .turno { position:absolute; top:0; height:17px; border-radius:5px; font-size:12px;
+           color:#fff; font-weight:700; padding:1px 10px; white-space:nowrap;
+           overflow:hidden; opacity:.9; }
   .turno.manha { background:#f59f00; }
   .turno.tarde { background:#7048e8; }
 
-  /* linhas de grade verticais por hora */
   .linha { position:relative; display:flex; align-items:stretch;
-           border-bottom:1px solid #f1f3f5; min-height:46px; }
-  .linha .rotulo { width:170px; flex:none; padding:6px 10px 6px 0;
+           border-bottom:1px solid #f1f3f5; min-height:60px; }
+  .linha .rotulo { width:var(--rotulo-w); flex:none; padding:8px 12px 8px 0;
                    border-right:2px solid #dee2e6; display:flex; flex-direction:column;
-                   justify-content:center; }
-  .linha .rotulo .nm { font-weight:800; font-size:15px; line-height:1.15; }
-  .linha .rotulo .sub { font-size:11px; color:#868e96; margin-top:2px; }
-  .linha .faixa { position:relative; flex:1; margin:6px 0; }
+                   justify-content:center; position:sticky; left:0; background:#fff; z-index:3; }
+  .linha .rotulo .nm { font-weight:800; font-size:16px; line-height:1.15; }
+  .linha .rotulo .sub { font-size:12px; color:#868e96; margin-top:3px; }
+  .linha .faixa { position:relative; flex:none; margin:9px 0; }
   .grade { position:absolute; top:0; bottom:0; width:1px; background:#f1f3f5; }
 
-  .barra { position:absolute; top:0; height:34px; border-radius:7px; color:#fff;
-           font-size:12px; font-weight:700; padding:0 7px; display:flex;
-           align-items:center; gap:4px; overflow:hidden; white-space:nowrap;
-           box-shadow:0 1px 2px rgba(0,0,0,.18); cursor:default; }
-  .barra.passiva { opacity:.55; font-style:italic;
+  .barra { position:absolute; top:0; height:40px; border-radius:8px; color:#fff;
+           font-size:14px; font-weight:700; padding:0 9px; display:flex;
+           align-items:center; gap:5px; white-space:nowrap;
+           box-shadow:0 1px 3px rgba(0,0,0,.22); cursor:default; }
+  .barra.passiva { opacity:.6; font-style:italic;
     background-image:repeating-linear-gradient(45deg,
-      rgba(255,255,255,.25) 0, rgba(255,255,255,.25) 5px,
+      rgba(255,255,255,.28) 0, rgba(255,255,255,.28) 5px,
       transparent 5px, transparent 10px); }
+  .barra .ic { flex:none; }
   .barra .et { overflow:hidden; text-overflow:ellipsis; }
-  .destino { position:absolute; top:4px; font-size:12px; color:#495057;
-             background:#e9ecef; border-radius:6px; padding:3px 9px; font-weight:700;
+  /* rótulo FORA (à direita) quando a barra é curta demais pro texto caber */
+  .barra .et-fora { position:absolute; left:100%; margin-left:6px; color:#343a40;
+                    font-weight:700; font-style:normal; font-size:13.5px;
+                    pointer-events:none; }
+  .destino { position:absolute; top:7px; font-size:13px; color:#495057;
+             background:#e9ecef; border-radius:6px; padding:4px 10px; font-weight:700;
              white-space:nowrap; }
+
+  /* detalhamento legível por produto (texto, quebra de linha) */
+  .detalhes { background:#fff; border-radius:14px; padding:14px 16px;
+              box-shadow:0 1px 4px rgba(0,0,0,.1); margin-top:14px; }
+  .det-titulo { font-weight:800; font-size:13px; text-transform:uppercase;
+                letter-spacing:.5px; color:#868e96; margin-bottom:10px; }
+  .det-row { display:flex; flex-wrap:wrap; align-items:center; gap:3px 4px;
+             padding:9px 0; border-top:1px solid #f1f3f5; }
+  .det-row:first-of-type { border-top:0; }
+  .det-nome { font-weight:800; font-size:15px; padding-left:8px; margin-right:8px;
+              min-width:170px; }
+  .det-passo { font-size:14px; color:#212529; background:#f1f3f5;
+               border-radius:6px; padding:3px 9px; white-space:nowrap; }
+  .det-passo i { color:#868e96; font-style:normal; font-weight:600; }
+  .det-passo.passivo { background:#fff; color:#868e96; font-style:italic; }
+  .det-passo.passivo i { color:#adb5bd; }
+  .seta { color:#ced4da; font-weight:800; }
 
   .legenda { display:flex; flex-wrap:wrap; gap:6px 16px; margin:14px 0 4px;
              font-size:13px; color:#495057; }
@@ -109,16 +131,16 @@
   <div class="gantt">
     <div class="gantt-inner">
       <!-- bandas de turno -->
-      <div class="turnos">
+      <div class="turnos" style="width:{{ g.canvas_px }}px;">
         {% for t in g.turnos %}
         <div class="turno {{ 'manha' if t.nome == 'Manhã' else 'tarde' }}"
-             style="left:{{ t.left_pct }}%; width:{{ t.width_pct }}%;">{{ t.nome }}</div>
+             style="left:{{ t.left_px }}px; width:{{ t.width_px }}px;">{{ t.nome }}</div>
         {% endfor %}
       </div>
       <!-- eixo de horas -->
-      <div class="eixo">
+      <div class="eixo" style="width:{{ g.canvas_px }}px;">
         {% for h in g.horas %}
-        <div class="hora" style="left:{{ h.pct }}%;">{{ h.label }}</div>
+        <div class="hora" style="left:{{ h.px }}px;">{{ h.label }}</div>
         {% endfor %}
       </div>
       <!-- uma linha por produto -->
@@ -128,24 +150,37 @@
           <span class="nm" style="border-left:5px solid {{ p.cor }}; padding-left:7px;">{{ p.nome }}</span>
           <span class="sub">falta {{ p.falta }} un{% if p.fornadas %} · {{ p.fornadas }} fornada(s){% endif %}</span>
         </div>
-        <div class="faixa">
-          {% for h in g.horas %}<div class="grade" style="left:{{ h.pct }}%;"></div>{% endfor %}
+        <div class="faixa" style="width:{{ g.canvas_px }}px;">
+          {% for h in g.horas %}<div class="grade" style="left:{{ h.px }}px;"></div>{% endfor %}
           {% for t in p.tarefas %}
           <div class="barra {{ 'passiva' if not t.ativa else '' }}"
-               style="left:{{ t.left_pct }}%; width:{{ t.width_pct }}%; background:{{ p.cor }};"
+               style="left:{{ t.left_px }}px; width:{{ t.width_px }}px; background:{{ p.cor }};"
                title="{{ t.etapa }} — {{ t.ini_hhmm }} a {{ t.fim_hhmm }} ({{ t.dur_label }})">
-            <span>{{ t.icone }}</span><span class="et">{{ t.etapa }}</span>
+            <span class="ic">{{ t.icone }}</span>{% if t.label_dentro %}<span class="et">{{ t.etapa }}</span>{% endif %}
           </div>
           {% endfor %}
           {% if p.destino %}
-          <div class="destino" style="left:calc({{ (p.fim_min / g.span_min * 100) if g.span_min else 0 }}% + 6px);">
-            → {{ p.destino }}
-          </div>
+          <div class="destino" style="left:{{ p.fim_px + 6 }}px;">→ {{ p.destino }}</div>
           {% endif %}
         </div>
       </div>
       {% endfor %}
     </div>
+  </div>
+
+  <!-- Detalhamento legível: cada etapa por extenso (as barras curtas mostram só
+       o ícone; aqui dá pra ler tudo, sem precisar passar o mouse). -->
+  <div class="detalhes">
+    <div class="det-titulo">Passo a passo de cada produto</div>
+    {% for p in g.produtos %}
+    <div class="det-row">
+      <span class="det-nome" style="border-left:5px solid {{ p.cor }};">{{ p.nome }}</span>
+      {% for t in p.tarefas %}
+        <span class="det-passo {{ 'passivo' if not t.ativa }}">{{ t.icone }} {{ t.etapa }} <i>{{ t.dur_label }}</i></span>{% if not loop.last or p.destino %}<span class="seta">›</span>{% endif %}
+      {% endfor %}
+      {% if p.destino %}<span class="det-passo passivo">câmara fria {{ p.destino }}</span>{% endif %}
+    </div>
+    {% endfor %}
   </div>
 
   <div class="legenda">
