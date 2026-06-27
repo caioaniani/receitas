@@ -211,6 +211,18 @@ def test_rota_gantt_renderiza(app, admin_user):
     assert 'Pão Francês' in html
     assert 'Fluxograma' in html
     assert 'Amassamento' in html
+    # admin: nome do produto linka pro editor de etapas (acesso rápido)
+    assert ('/receitas/%d/etapas' % r.id) in html
+
+
+def test_gantt_produto_carrega_receita_id(app):
+    dia = date(2026, 7, 22)
+    r = _receita('Pão Z', [('Mise en place', 10, None, True),
+                           ('Forno', 20, 'forno', True)])
+    _plano(dia, [(r, 1, 10, 0)])
+    g = montar_gantt(dia)
+    prod = [p for p in g['produtos'] if p['nome'] == 'Pão Z'][0]
+    assert prod['receita_id'] == r.id        # pro link "editar etapas" no fluxograma
 
 
 def test_rota_gantt_sem_plano(app, admin_user):
