@@ -368,8 +368,10 @@ def montar_gantt(dia):
             # se não cabe dentro, mostra à DIREITA quando há espaço livre até a
             # próxima barra — assim o texto nunca fica truncado nem some.
             if not t['label_dentro']:
-                prox = (tarefas[idx + 1]['left_px'] if idx + 1 < len(tarefas)
-                        else canvas_px)
+                # left_px da próxima barra (derivado do ini pra não depender da
+                # ordem de cálculo dentro do loop).
+                prox = (tarefas[idx + 1]['ini'] * PX_POR_MIN
+                        if idx + 1 < len(tarefas) else canvas_px)
                 gap = prox - (t['left_px'] + t['width_px'])
                 t['label_fora'] = gap >= len(t['etapa']) * 8 + 14
         p['fim_px'] = p['fim_min'] * PX_POR_MIN
