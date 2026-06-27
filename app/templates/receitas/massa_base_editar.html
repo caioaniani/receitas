@@ -14,27 +14,46 @@
   <div class="col-lg-6">
     <div class="card">
       <div class="card-header bg-light"><b>Receitas do grupo</b>
-        <div class="small text-muted">A ordem da cascata é calculada sozinha pela ficha (menos água sai primeiro; recheios exclusivos viram ramos). O ≡ só organiza a lista.</div>
+        <div class="small text-muted">Mostradas na ordem em que saem da amassadeira — o sistema calcula isso sozinho pela ficha (menos água primeiro; recheios exclusivos viram ramos).</div>
       </div>
       <div class="card-body">
-        {% if mb.itens %}
-        <form method="POST" action="{{ url_for('receitas.massa_base_editar', id=mb.id) }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <ol id="itens" class="list-group list-group-numbered mb-3">
-            {% for it in mb.itens %}
-            <li class="list-group-item d-flex align-items-center gap-2 item-row">
-              <span class="handle text-muted" title="Arraste pra reordenar"
-                    style="cursor:grab; touch-action:none; font-size:18px;">≡</span>
-              <span class="flex-grow-1">{{ it.receita.nome if it.receita else '(receita)' }}</span>
-              <input type="hidden" name="receita_ids[]" value="{{ it.receita_id }}">
-              <button type="button" class="btn btn-sm btn-outline-danger btn-rm" title="Tirar do grupo">×</button>
-            </li>
-            {% endfor %}
-          </ol>
-          <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-save"></i> Salvar ordem</button>
-        </form>
+        {% if calc %}
+        {# linha principal: receitas que se aninham, na ordem da retirada #}
+        {% set ns = namespace(i=0) %}
+        <ol class="list-group mb-0">
+          {% for p in calc.lineares if p.nome %}
+          {% set ns.i = ns.i + 1 %}
+          <li class="list-group-item d-flex align-items-center gap-2">
+            <span class="badge bg-secondary">{{ ns.i }}</span>
+            <span class="flex-grow-1">{{ p.nome }}
+              <span class="badge bg-light text-muted border ms-1">linha principal</span></span>
+            <form method="POST" action="{{ url_for('receitas.massa_base_editar', id=mb.id) }}" class="m-0"
+                  onsubmit="return confirm('Tirar «{{ p.nome }}» do grupo?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="acao" value="remover">
+              <input type="hidden" name="receita_id" value="{{ p.receita_id }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger" title="Tirar do grupo">×</button>
+            </form>
+          </li>
+          {% endfor %}
+          {% for p in calc.ramos %}
+          {% set ns.i = ns.i + 1 %}
+          <li class="list-group-item d-flex align-items-center gap-2">
+            <span class="badge bg-secondary">{{ ns.i }}</span>
+            <span class="flex-grow-1">{{ p.nome }}
+              <span class="badge bg-primary-subtle text-primary-emphasis ms-1">ramo (recheio próprio)</span></span>
+            <form method="POST" action="{{ url_for('receitas.massa_base_editar', id=mb.id) }}" class="m-0"
+                  onsubmit="return confirm('Tirar «{{ p.nome }}» do grupo?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="acao" value="remover">
+              <input type="hidden" name="receita_id" value="{{ p.receita_id }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger" title="Tirar do grupo">×</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ol>
         {% else %}
-        <p class="text-muted">Nenhuma receita no grupo ainda.</p>
+        <p class="text-muted mb-0">Nenhuma receita no grupo ainda.</p>
         {% endif %}
       </div>
     </div>
