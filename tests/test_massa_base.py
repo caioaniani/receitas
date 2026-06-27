@@ -106,9 +106,10 @@ def test_cascata_linear_bate_com_o_exemplo(app):
     assert c['avisos'] == []
 
 
-def test_recheios_exclusivos_ramificam(app):
-    """7 grãos × nozes e azeitonas: recheios exclusivos -> cada um vira RAMO
-    (tira massa branca e recebe o seu recheio à parte). Sem aviso de DIMINUIR."""
+def test_recheios_exclusivos_sao_laranja(app):
+    """7 grãos × nozes: mesma hidratação (80%), recheios exclusivos -> os dois
+    são laranja (recheio batido na porção); pão francês e tradicional (sem
+    recheio) ficam verdes na linha principal."""
     pf = _receita('Pão Francês', [('Farinha', 100), ('Água', 70),
                                   ('Sal', 2), ('Levain', 20)])
     st = _receita('Sourdough Tradicional', [('Farinha', 100), ('Água', 80),
@@ -119,19 +120,45 @@ def test_recheios_exclusivos_ramificam(app):
                                       ('Sal', 2), ('Levain', 20), ('Nozes', 25)])
     mb = _grupo('Base', [pf, st, s7, na])
     c = calcular_cascata(mb)
-    assert c['avisos'] == []                       # árvore não precisa de ordem
-    # linha principal: pão francês e tradicional (sem recheio próprio)
-    lin = {p['nome'] for p in c['lineares'] if p['nome']}
-    assert 'Pão Francês' in lin and 'Sourdough Tradicional' in lin
-    # ramos: 7 grãos e nozes, cada um com o seu recheio
-    ramos = {p['nome']: p for p in c['ramos']}
-    assert set(ramos) == {'Sourdough 7 grãos', 'Sourdough Nozes'}
-    assert ramos['Sourdough 7 grãos']['acrescentar'] == {'7 grãos': 150.0}
-    assert ramos['Sourdough Nozes']['acrescentar'] == {'Nozes': 250.0}
-    # cada ramo puxa a massa branca (base + água = 2020 g/porção) e finaliza
-    assert ramos['Sourdough 7 grãos']['tirar_branca'] == 2020.0
-    assert ramos['Sourdough 7 grãos']['tirar_massa'] == 2170.0
-    assert ramos['Sourdough Nozes']['tirar_massa'] == 2270.0
+    assert c['avisos'] == []
+    ret = {p['nome']: p for p in _retiradas(c)}
+    # verdes (sem recheio): pão francês e tradicional
+    assert ret['Pão Francês']['eh_ramo'] is False
+    assert ret['Sourdough Tradicional']['eh_ramo'] is False
+    # laranja (recheio próprio): 7 grãos e nozes, cada um com o seu recheio
+    assert ret['Sourdough 7 grãos']['eh_ramo'] is True
+    assert ret['Sourdough Nozes']['eh_ramo'] is True
+    assert ret['Sourdough 7 grãos']['acrescentar'] == {'7 grãos': 150.0}
+    assert ret['Sourdough Nozes']['acrescentar'] == {'Nozes': 250.0}
+    assert ret['Sourdough 7 grãos']['tirar_massa'] == 2170.0
+    assert ret['Sourdough Nozes']['tirar_massa'] == 2270.0
+    # a água comum (70->80%) é um único incremento de tronco aplicado às 3
+    # receitas de 80% restantes: 100 g × 3 porções = 300 g
+    incs = _incrementos(c)
+    assert len(incs) == 1
+    assert incs[0]['acrescentar'] == {'Água': 300.0}
+
+
+def test_tradicional_sem_recheio_e_verde(app):
+    """Regressão do bug que o dono pegou: o Tradicional (só +água, SEM recheio)
+    não pode virar 'recheio próprio'. Mesmo no meio de pães recheados ele é
+    verde, e sai antes de quem tem mais hidratação."""
+    pf = _receita('Pão Francês', [('Farinha', 100), ('Água', 75)])
+    na = _receita('Nozes', [('Farinha', 100), ('Água', 75), ('Nozes', 20)])
+    tr = _receita('Tradicional', [('Farinha', 100), ('Água', 80)])
+    s7 = _receita('7 Grãos', [('Farinha', 100), ('Água', 85), ('Grãos', 15)])
+    mb = _grupo('Base', [pf, na, tr, s7])
+    c = calcular_cascata(mb)
+    ret = {p['nome']: p for p in _retiradas(c)}
+    assert ret['Tradicional']['eh_ramo'] is False     # NÃO é recheio próprio
+    assert ret['Pão Francês']['eh_ramo'] is False
+    assert ret['Nozes']['eh_ramo'] is True
+    assert ret['7 Grãos']['eh_ramo'] is True
+    # hidratação só sobe: a posição do Tradicional (80%) vem antes do 7 Grãos (85%)
+    ordem = [p['nome'] for p in _retiradas(c)]
+    assert ordem.index('Tradicional') < ordem.index('7 Grãos')
+    # o Tradicional não recebe recheio nenhum
+    assert ret['Tradicional']['acrescentar'] == {}
 
 
 def test_multiplicadores_escalam(app):
