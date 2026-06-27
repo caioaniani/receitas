@@ -153,6 +153,19 @@ def test_ordem_nao_importa_mais(app):
     assert nomes[0] == 'PF'
 
 
+def test_porcoes_fracionarias_escalam(app):
+    """multiplicadores aceita fracionário (unidades/rendimento) — a base segue o
+    consumo real, sem arredondar a fornada pra cima."""
+    pf, st, s7, mb = _exemplo_dono(app)
+    # 0,5 porção de cada -> base é metade da de 1 porção
+    c = calcular_cascata(mb, {pf.id: 0.5, st.id: 0.5, s7.id: 0.5})
+    assert abs(c['total_porcoes'] - 1.5) < 1e-9
+    assert c['base_mix']['Farinha'] == 1500.0      # 1000 × 1,5
+    assert c['base_mix']['Água'] == 1050.0         # 700 × 1,5
+    lin = {p['nome']: p for p in c['lineares']}
+    assert lin['Pão Francês']['tirar_massa'] == 960.0   # 1920 × 0,5
+
+
 def test_grupo_vazio_retorna_none(app):
     mb = MassaBase(nome='Vazia')
     db.session.add(mb)
