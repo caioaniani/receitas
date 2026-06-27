@@ -203,6 +203,49 @@ class ReceitaEtapa(db.Model):
         return f'<ReceitaEtapa {self.nome} {self.duracao_min}min>'
 
 
+class MassaBase(db.Model):
+    """Grupo de receitas que saem de UMA massa-mãe comum amassada de uma vez.
+
+    A padaria amassa a base comum (o mínimo de cada ingrediente entre as
+    receitas do grupo) e vai TIRANDO cada receita em cascata, acrescentando só o
+    incremento que falta pra próxima (ex: massa sourdough → tira pão francês,
+    +água tira sourdough tradicional, +grãos tira sourdough 7 grãos). 1 amassada
+    no lugar de N. A ordem dos itens é a ordem da cascata (da que tem menos
+    acréscimos pra que tem mais)."""
+    __tablename__ = 'massa_base'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(80), nullable=False)
+
+    itens = db.relationship('MassaBaseItem', backref='massa_base', lazy=True,
+                            cascade='all, delete-orphan',
+                            order_by='MassaBaseItem.ordem')
+
+    def __repr__(self):
+        return f'<MassaBase {self.nome}>'
+
+
+class MassaBaseItem(db.Model):
+    """Receita dentro de uma massa-base, na ordem da cascata. Uma receita está
+    em no máximo uma massa-base."""
+    __tablename__ = 'massa_base_item'
+    __table_args__ = (
+        db.UniqueConstraint('receita_id', name='uq_massa_base_item_receita'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    massa_base_id = db.Column(db.Integer, db.ForeignKey('massa_base.id'),
+                              nullable=False, index=True)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'),
+                           nullable=False, index=True)
+    ordem = db.Column(db.Integer, nullable=False, default=0)
+
+    receita = db.relationship('Receita')
+
+    def __repr__(self):
+        return f'<MassaBaseItem massa={self.massa_base_id} receita={self.receita_id}>'
+
+
 class ReceitaIngrediente(db.Model):
     __tablename__ = 'receita_ingrediente'
 

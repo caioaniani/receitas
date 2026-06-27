@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Massas base{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+  <h1 class="page-title mb-0"><i class="bi bi-diagram-2"></i> Massas base</h1>
+  <a href="{{ url_for('receitas.amassadeira') }}" class="btn btn-sm btn-outline-secondary">
+    Produção por categoria
+  </a>
+</div>
+
+<div class="alert alert-light border small">
+  Um grupo de <strong>massa base</strong> junta receitas que saem de uma
+  <strong>amassada comum</strong>: a padaria amassa a base (o mínimo de cada
+  ingrediente entre as receitas) e vai <strong>tirando cada receita em cascata</strong>,
+  acrescentando só o que falta pra próxima. Resultado: <strong>1 batida na
+  amassadeira em vez de várias</strong>. A ordem das receitas é a ordem da retirada.
+</div>
+
+<form method="POST" action="{{ url_for('receitas.massa_base_lista') }}" class="row g-2 mb-3" style="max-width:520px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="col">
+    <input type="text" name="nome" class="form-control" placeholder="Nome do grupo (ex: Base Sourdough)" required>
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-success"><i class="bi bi-plus-lg"></i> Novo grupo</button>
+  </div>
+</form>
+
+{% if grupos %}
+<div class="row g-3">
+  {% for g in grupos %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <h5 class="card-title d-flex justify-content-between align-items-start">
+          <a href="{{ url_for('receitas.massa_base_editar', id=g.mb.id) }}" class="text-decoration-none">
+            {{ g.mb.nome }}
+          </a>
+          {% if g.fornadas %}<span class="badge bg-primary-subtle text-primary-emphasis">{{ g.fornadas }} fornada(s)</span>{% endif %}
+        </h5>
+        {% if g.qtd %}
+        <p class="small text-muted mb-2">
+          {{ g.qtd }} receita(s): {{ g.nomes | join(' → ') }}
+        </p>
+        <p class="small mb-0">Base: <b>{{ ((g.base_massa / 1000) | round(2)) | string | replace('.', ',') }} kg</b></p>
+        {% if g.avisos %}<p class="small text-danger mb-0 mt-1"><i class="bi bi-exclamation-triangle"></i> ordem precisa de ajuste</p>{% endif %}
+        {% else %}
+        <p class="small text-muted mb-0">Grupo vazio — adicione receitas.</p>
+        {% endif %}
+      </div>
+      <div class="card-footer bg-transparent">
+        <a href="{{ url_for('receitas.massa_base_editar', id=g.mb.id) }}" class="btn btn-sm btn-outline-primary">
+          Editar cascata
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="text-muted">Nenhum grupo de massa base ainda. Crie o primeiro acima.</p>
+{% endif %}
+{% endblock %}
