@@ -196,6 +196,82 @@ def test_rota_seed_aplica_categoria(app, admin_user):
         len(ETAPAS_PADRAO['Pães'])
 
 
+def test_editor_get_renderiza(app, admin_user):
+    r = _receita(categoria='Pães')
+    seed_etapas_categoria('Pães')
+    c = _login(app, admin_user)
+    resp = c.get('/receitas/%d/etapas' % r.id)
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert 'Mise en place' in html
+    assert 'Amassamento' in html
+
+
+def test_editor_post_salva_etapas(app, admin_user):
+    r = _receita(categoria='Pães')
+    c = _login(app, admin_user)
+    resp = c.post('/receitas/%d/etapas' % r.id, data={
+        'nome[]': ['Mise en place', 'Amassamento', 'Forno'],
+        'duracao[]': ['10', '20', '25'],
+        'equip[]': ['', 'amassadeira', 'forno'],
+        'tipo[]': ['ativa', 'ativa', 'ativa'],
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    etapas = (ReceitaEtapa.query.filter_by(receita_id=r.id)
+              .order_by(ReceitaEtapa.ordem).all())
+    assert [e.nome for e in etapas] == ['Mise en place', 'Amassamento', 'Forno']
+    assert etapas[1].equipamento == 'amassadeira'
+    assert etapas[1].duracao_min == 20
+
+
+def test_editor_post_substitui_e_ignora_vazias(app, admin_user):
+    r = _receita(categoria='Pães')
+    seed_etapas_categoria('Pães')      # estado inicial
+    c = _login(app, admin_user)
+    c.post('/receitas/%d/etapas' % r.id, data={
+        'nome[]': ['Só essa', '', '   '],
+        'duracao[]': ['15', '5', '5'],
+        'equip[]': ['bancada', '', ''],
+        'tipo[]': ['ativa', 'ativa', 'passiva'],
+    }, follow_redirects=True)
+    etapas = ReceitaEtapa.query.filter_by(receita_id=r.id).all()
+    assert len(etapas) == 1            # vazias ignoradas, padrão substituído
+    assert etapas[0].nome == 'Só essa'
+
+
+def test_editor_tipo_passiva_vira_ativa_false(app, admin_user):
+    r = _receita(categoria='Pães')
+    c = _login(app, admin_user)
+    c.post('/receitas/%d/etapas' % r.id, data={
+        'nome[]': ['Fermentação'], 'duracao[]': ['120'],
+        'equip[]': ['camara_fria'], 'tipo[]': ['passiva'],
+    }, follow_redirects=True)
+    e = ReceitaEtapa.query.filter_by(receita_id=r.id).first()
+    assert e.ativa is False
+    assert e.equipamento == 'camara_fria'
+
+
+def test_editor_acao_padrao_preenche_da_categoria(app, admin_user):
+    r = _receita(categoria='Pães')
+    c = _login(app, admin_user)
+    c.post('/receitas/%d/etapas' % r.id, data={'acao': 'padrao'},
+           follow_redirects=True)
+    etapas = ReceitaEtapa.query.filter_by(receita_id=r.id).all()
+    assert len(etapas) == len(ETAPAS_PADRAO['Pães'])
+
+
+def test_editor_exige_admin(app):
+    from app.models import Usuario
+    u = Usuario(nome='func2', login='func2', papel='funcionario')
+    u.set_senha('123')
+    db.session.add(u)
+    db.session.commit()
+    r = _receita(categoria='Pães')
+    c = _login(app, u)
+    resp = c.get('/receitas/%d/etapas' % r.id)
+    assert resp.status_code == 403
+
+
 def test_rota_seed_exige_admin(app):
     from app.models import Usuario
     u = Usuario(nome='func', login='func', papel='funcionario')
