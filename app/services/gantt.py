@@ -362,7 +362,7 @@ def montar_gantt(dia):
             t['left_px'] = t['ini'] * PX_POR_MIN
             t['width_px'] = max(14, (t['fim'] - t['ini']) * PX_POR_MIN)
             # cabe DENTRO? (ícone + padding + folga; conservador pra não cortar)
-            texto_px = len(t['etapa']) * 8 + 44
+            texto_px = len(t['etapa']) * 8.5 + 50
             t['label_dentro'] = t['width_px'] >= texto_px
             t['label_fora'] = False
             # se não cabe dentro, mostra à DIREITA quando há espaço livre até a
