@@ -188,14 +188,15 @@ def test_fornadas_varias_batidas(app):
 
 
 def test_ordem_nao_importa_mais(app):
-    """A ordem dos itens não muda o resultado — a árvore se organiza sozinha."""
+    """A ordem de cadastro não muda o resultado — a cascata se organiza pela
+    hidratação."""
     pf = _receita('PF', [('Farinha', 100), ('Água', 70)])
     s7 = _receita('S7', [('Farinha', 100), ('Água', 80), ('Grãos', 15)])
     mb = _grupo('Base', [s7, pf])      # ordem "ruim": s7 primeiro
     c = calcular_cascata(mb)
-    assert c['avisos'] == []           # sem DIMINUIR
-    # PF (menos água) sai primeiro na linha, mesmo cadastrado depois
-    nomes = [p['nome'] for p in c['lineares'] if p['nome']]
+    assert c['avisos'] == []
+    # PF (menos água) sai primeiro, mesmo cadastrado depois
+    nomes = [p['nome'] for p in _retiradas(c)]
     assert nomes[0] == 'PF'
 
 
