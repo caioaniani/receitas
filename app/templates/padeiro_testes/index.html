@@ -584,8 +584,10 @@
           h += '<span class="mep-casc-num">' + n + '</span>';
           if (temNome) {
             h += '<span class="mep-casc-tira">Tire ' +
-                 (temUn ? '<span class="un">' + p.unidades + ' un</span> de ' : '') +
-                 _mepEsc(p.nome) + '</span>';
+                 (p.tirar_massa ? '<span class="massa">' + _mepEsc(p.tirar_massa) +
+                    '</span> de massa' : '') +
+                 (temUn ? ' <span class="un">(' + p.unidades + ' un)</span>' : '') +
+                 ' de ' + _mepEsc(p.nome) + '</span>';
             if (p.eh_ramo) h += '<span class="mep-casc-tag">recheio próprio</span>';
           } else {
             h += '<span class="mep-casc-tira">Acrescente a tudo na amassadeira</span>';
