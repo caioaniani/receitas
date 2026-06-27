@@ -93,30 +93,59 @@ def _dados_listas(dia, eh_hoje):
 
 def _plano_do_dia(dia):
     """Plano de producao aprovado do cronograma pra `dia` (origem=
-    'cronograma'), com itens enriquecidos (fornadas + quanto falta). None se
-    nao houver plano aprovado pra esse dia."""
-    from app.models import PlanejamentoProducao
+    'cronograma'), AGRUPADO por massa-base pro padeiro entender o que amassar e
+    quanto tirar de cada. None se nao houver plano aprovado.
+
+    Retorna {plano_id, total_falta, grupos:[{nome, base_massa_label, fornadas,
+    itens:[...]}], solos:[...]} — cada item tem item_id/receita_id/nome/alvo/
+    produzido/falta."""
+    from app.models import MassaBaseItem, PlanejamentoProducao
+    from app.services.gantt import _g_label
+    from app.services.massa_base import calcular_cascata
     from app.services.producao import fornadas_amassadeira
 
     plano = (PlanejamentoProducao.query
              .filter_by(data=dia, origem='cronograma').first())
     if plano is None:
         return None
-    itens = []
-    for it in plano.itens:
+
+    membership = {row.receita_id: row for row in MassaBaseItem.query.all()}
+
+    def _item(it):
         rec = it.receita
         alvo = int(it.qtd_alvo or 0)
         feito = int(it.produzido_qtd or 0)
-        itens.append({
-            'item_id': it.id,
-            'receita_id': it.receita_id,
-            'nome': rec.nome if rec else '(receita)',
-            'fornadas': fornadas_amassadeira(rec, it.multiplicador),
-            'alvo': alvo,
-            'produzido': feito,
-            'falta': max(0, alvo - feito),
+        return {'item_id': it.id, 'receita_id': it.receita_id,
+                'nome': rec.nome if rec else '(receita)', 'alvo': alvo,
+                'produzido': feito, 'falta': max(0, alvo - feito),
+                'fornadas': fornadas_amassadeira(rec, it.multiplicador),
+                '_mult': it.multiplicador, '_mbi': membership.get(it.receita_id)}
+
+    itens = [_item(it) for it in plano.itens]
+
+    # agrupa por massa-base; o resto vai pra "solos".
+    por_grupo = {}
+    solos = []
+    for d in itens:
+        mbi = d['_mbi']
+        if mbi is not None:
+            por_grupo.setdefault(mbi.massa_base_id, (mbi.massa_base, []))[1].append(d)
+        else:
+            solos.append(d)
+
+    grupos = []
+    for mb_id, (mb, ds) in por_grupo.items():
+        mults = {d['receita_id']: max(1, int(d['_mult'] or 1)) for d in ds}
+        calc = calcular_cascata(mb, mults)
+        grupos.append({
+            'nome': mb.nome,
+            'base_massa_label': _g_label(calc['base_massa']) if calc else None,
+            'fornadas': (calc['fornadas'] if calc else None),
+            'itens': ds,
         })
-    return {'plano_id': plano.id, 'itens': itens,
+    grupos.sort(key=lambda g: g['nome'])
+
+    return {'plano_id': plano.id, 'grupos': grupos, 'solos': solos,
             'total_falta': sum(i['falta'] for i in itens)}
 
 
