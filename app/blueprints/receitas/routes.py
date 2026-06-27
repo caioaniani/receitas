@@ -234,6 +234,66 @@ def amassadeira_etapas_padrao():
     return redirect(url_for('receitas.amassadeira'))
 
 
+_ETAPA_EQUIPS = ['amassadeira', 'forno', 'bancada', 'camara_fria']
+
+
+@receitas_bp.route('/<int:id>/etapas', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def etapas(id):
+    """Editor manual das etapas de produção (fluxograma/Gantt) de uma receita:
+    cada etapa tem nome, duração, equipamento e tipo (mão de obra / descanso).
+    POST salva a lista inteira (substitui). Botão "padrão da categoria" preenche
+    com o modelo pesquisado pra ajustar em cima."""
+    from app.constants import etapas_padrao_categoria
+    from app.services.producao import _fmt_dur
+
+    receita = Receita.query.get_or_404(id)
+
+    if request.method == 'POST':
+        if request.form.get('acao') == 'padrao':
+            # preenche SÓ esta receita com o padrão da categoria (substitui).
+            ReceitaEtapa.query.filter_by(receita_id=receita.id).delete()
+            for i, (nome, dur, equip, ativa) in enumerate(
+                    etapas_padrao_categoria(receita.categoria)):
+                db.session.add(ReceitaEtapa(
+                    receita_id=receita.id, ordem=i, nome=nome, duracao_min=dur,
+                    equipamento=equip, ativa=ativa))
+            db.session.commit()
+            flash('Etapas preenchidas com o padrão da categoria. Ajuste e salve.',
+                  'info')
+            return redirect(url_for('receitas.etapas', id=receita.id))
+
+        nomes = request.form.getlist('nome[]')
+        duracoes = request.form.getlist('duracao[]')
+        equips = request.form.getlist('equip[]')
+        tipos = request.form.getlist('tipo[]')
+        ReceitaEtapa.query.filter_by(receita_id=receita.id).delete()
+        ordem = 0
+        for nome, dur, equip, tipo in zip(nomes, duracoes, equips, tipos):
+            nome = (nome or '').strip()
+            if not nome:
+                continue            # linha vazia = ignora
+            try:
+                dur_min = max(0, min(int(dur or 0), 100000))
+            except (TypeError, ValueError):
+                dur_min = 0
+            equip = equip if equip in _ETAPA_EQUIPS else None
+            db.session.add(ReceitaEtapa(
+                receita_id=receita.id, ordem=ordem, nome=nome,
+                duracao_min=dur_min, equipamento=equip, ativa=(tipo != 'passiva')))
+            ordem += 1
+        db.session.commit()
+        flash(f'{ordem} etapa(s) salva(s) para "{receita.nome}".', 'success')
+        return redirect(url_for('receitas.etapas', id=receita.id))
+
+    etapas_atuais = (ReceitaEtapa.query.filter_by(receita_id=receita.id)
+                     .order_by(ReceitaEtapa.ordem).all())
+    return render_template('receitas/etapas.html', receita=receita,
+                           etapas=etapas_atuais, equips=_ETAPA_EQUIPS,
+                           fmt_dur=_fmt_dur)
+
+
 @receitas_bp.route('/<int:id>/padeiro')
 @login_required
 def padeiro(id):
