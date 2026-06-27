@@ -242,18 +242,21 @@ def amassadeira_etapas_padrao():
 #    livre pra adiantar outra receita (correção do dono: amassar não prende a
 #    pessoa no pé da amassadeira).
 #  - camara_fria/descanso: fermentação/descanso passivo — não ocupa ninguém.
+#  - congelar: passo FINAL (freezer) — o produto fica pronto e congelado; não é
+#    fermentação (não vira marcador de câmara fria nem antecipa a produção).
 _RECURSO_MAP = {
     'padeiro': (None, True),
     'amassadeira': ('amassadeira', True),
     'forno': ('forno', True),
     'camara_fria': ('camara_fria', False),
+    'congelar': ('congelar', False),
     'descanso': (None, False),
 }
 
 
 def _recurso_de_etapa(e):
     """Valor do select 'tipo de trabalho' a partir da etapa salva."""
-    if e.equipamento in ('amassadeira', 'forno', 'camara_fria'):
+    if e.equipamento in ('amassadeira', 'forno', 'camara_fria', 'congelar'):
         return e.equipamento
     return 'padeiro' if e.ativa else 'descanso'
 
