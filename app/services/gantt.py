@@ -166,8 +166,8 @@ def montar_gantt(dia):
         mults = {pi['rec'].id: max(1, int(pi['mult'] or 1)) for pi in items}
         calc = calcular_cascata(mb, mults)
         by_id = {pi['rec'].id: pi for pi in items}
-        retiradas = ([p for p in (calc or {}).get('lineares', []) if p.get('nome')]
-                     + (calc or {}).get('ramos', [])) if calc else []
+        retiradas = ([p for p in (calc or {}).get('passos', [])
+                      if p.get('tipo') == 'retirada']) if calc else []
         if not retiradas:
             for pi in items:                       # fallback: trata como solo
                 prod = _novo_produto(pi['rec'].nome, falta=pi['falta'],
