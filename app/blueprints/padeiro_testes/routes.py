@@ -260,18 +260,16 @@ def massa_base_mise(mb_id):
     base_recipe = [{'nome': n, 'qtd': _g_label(g)} for n, g in
                    sorted(calc['base_mix'].items(), key=lambda kv: -kv[1])]
 
-    def _passo(p, eh_ramo):
-        return {'nome': p['nome'], 'unidades': unidades.get(p['receita_id']),
+    def _passo(p):
+        return {'tipo': p['tipo'], 'nome': p['nome'],
+                'unidades': unidades.get(p['receita_id']),
                 'tirar_massa': (_g_label(p['tirar_massa'])
                                 if p.get('tirar_massa') else None),
                 'acrescentar': [{'nome': n, 'qtd': _g_label(g)}
                                 for n, g in p['acrescentar'].items()],
-                'eh_ramo': eh_ramo}
+                'eh_ramo': p.get('eh_ramo', False)}
 
-    # inclui passos sem 'nome' (acréscimo comum aplicado ao tronco inteiro antes
-    # de ramificar) — é uma adição de massa que o padeiro não pode pular.
-    cascata = ([_passo(p, False) for p in calc['lineares']]
-               + [_passo(p, True) for p in calc['ramos']])
+    cascata = [_passo(p) for p in calc['passos']]
     return jsonify({
         'nome': mb.nome, 'base_massa': _g_label(calc['base_massa']),
         'fornadas': calc['fornadas'], 'base_recipe': base_recipe,
