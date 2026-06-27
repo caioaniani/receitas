@@ -70,20 +70,50 @@ def test_base_mix_e_massa_total(app):
     assert c['fornadas'] == 1          # cabe em 50kg
 
 
-def test_cascata_passos_batem_com_o_exemplo(app):
+def test_cascata_linear_bate_com_o_exemplo(app):
+    """3 pães onde só 1 tem recheio (grãos): tudo na linha principal, sem ramo."""
     pf, st, s7, mb = _exemplo_dono(app)
     c = calcular_cascata(mb)
-    passos = {p['nome']: p for p in c['passos']}
+    assert c['ramos'] == []            # só 1 recheio -> cauda linear, não ramifica
+    lin = {p['nome']: p for p in c['lineares']}
     # 1) Pão Francês: nada a acrescentar, tira 1920 g
-    assert passos['Pão Francês']['acrescentar'] == {}
-    assert passos['Pão Francês']['tirar_massa'] == 1920.0
+    assert lin['Pão Francês']['acrescentar'] == {}
+    assert lin['Pão Francês']['tirar_massa'] == 1920.0
     # 2) Sourdough Tradicional: +água 200 g (100 g × 2 restantes), tira 2020 g
-    assert passos['Sourdough Tradicional']['acrescentar'] == {'Água': 200.0}
-    assert passos['Sourdough Tradicional']['tirar_massa'] == 2020.0
-    # 3) Sourdough 7 grãos: +grãos 150 g (1 restante), tira 2170 g
-    assert passos['Sourdough 7 grãos']['acrescentar'] == {'7 grãos': 150.0}
-    assert passos['Sourdough 7 grãos']['tirar_massa'] == 2170.0
-    assert c['avisos'] == []           # ordem é uma cadeia válida
+    assert lin['Sourdough Tradicional']['acrescentar'] == {'Água': 200.0}
+    assert lin['Sourdough Tradicional']['tirar_massa'] == 2020.0
+    # 3) Sourdough 7 grãos (cauda): +grãos 150 g, tira 2170 g
+    assert lin['Sourdough 7 grãos']['acrescentar'] == {'7 grãos': 150.0}
+    assert lin['Sourdough 7 grãos']['tirar_massa'] == 2170.0
+    assert c['avisos'] == []
+
+
+def test_recheios_exclusivos_ramificam(app):
+    """7 grãos × nozes e azeitonas: recheios exclusivos -> cada um vira RAMO
+    (tira massa branca e recebe o seu recheio à parte). Sem aviso de DIMINUIR."""
+    pf = _receita('Pão Francês', [('Farinha', 100), ('Água', 70),
+                                  ('Sal', 2), ('Levain', 20)])
+    st = _receita('Sourdough Tradicional', [('Farinha', 100), ('Água', 80),
+                                            ('Sal', 2), ('Levain', 20)])
+    s7 = _receita('Sourdough 7 grãos', [('Farinha', 100), ('Água', 80),
+                                        ('Sal', 2), ('Levain', 20), ('7 grãos', 15)])
+    na = _receita('Sourdough Nozes', [('Farinha', 100), ('Água', 80),
+                                      ('Sal', 2), ('Levain', 20), ('Nozes', 25)])
+    mb = _grupo('Base', [pf, st, s7, na])
+    c = calcular_cascata(mb)
+    assert c['avisos'] == []                       # árvore não precisa de ordem
+    # linha principal: pão francês e tradicional (sem recheio próprio)
+    lin = {p['nome'] for p in c['lineares'] if p['nome']}
+    assert 'Pão Francês' in lin and 'Sourdough Tradicional' in lin
+    # ramos: 7 grãos e nozes, cada um com o seu recheio
+    ramos = {p['nome']: p for p in c['ramos']}
+    assert set(ramos) == {'Sourdough 7 grãos', 'Sourdough Nozes'}
+    assert ramos['Sourdough 7 grãos']['acrescentar'] == {'7 grãos': 150.0}
+    assert ramos['Sourdough Nozes']['acrescentar'] == {'Nozes': 250.0}
+    # cada ramo puxa a massa branca (base + água = 2020 g/porção) e finaliza
+    assert ramos['Sourdough 7 grãos']['tirar_branca'] == 2020.0
+    assert ramos['Sourdough 7 grãos']['tirar_massa'] == 2170.0
+    assert ramos['Sourdough Nozes']['tirar_massa'] == 2270.0
 
 
 def test_multiplicadores_escalam(app):
@@ -93,17 +123,16 @@ def test_multiplicadores_escalam(app):
     assert c['total_porcoes'] == 4
     assert c['base_mix']['Farinha'] == 4000.0      # 1000 × 4
     assert c['base_mix']['Água'] == 2800.0         # 700 × 4
-    passos = {p['nome']: p for p in c['passos']}
+    lin = {p['nome']: p for p in c['lineares']}
     # PF: 2 porções -> tira 1920 × 2 = 3840
-    assert passos['Pão Francês']['tirar_massa'] == 3840.0
+    assert lin['Pão Francês']['tirar_massa'] == 3840.0
     # depois de tirar PF (2), sobram 2 (ST+S7): +água 100 × 2 = 200
-    assert passos['Sourdough Tradicional']['acrescentar'] == {'Água': 200.0}
+    assert lin['Sourdough Tradicional']['acrescentar'] == {'Água': 200.0}
 
 
 def test_fornadas_varias_batidas(app):
     pf, st, s7, mb = _exemplo_dono(app)
-    # base 5760/porção-conjunto... força capacidade pequena: cap 3000 -> base
-    # 5760 (3 porções) precisa de 2 batidas
+    # base 5760 (3 porções) com capacidade 3000 -> precisa de 2 batidas
     for r in (pf, st, s7):
         r.capacidade_amassadeira_g = 3000
     db.session.commit()
@@ -112,13 +141,16 @@ def test_fornadas_varias_batidas(app):
     assert c['fornadas'] == 2          # ceil(5760/3000)
 
 
-def test_ordem_invalida_gera_aviso(app):
-    # ordem errada: 7 grãos ANTES do pão francês -> água precisaria diminuir
+def test_ordem_nao_importa_mais(app):
+    """A ordem dos itens não muda o resultado — a árvore se organiza sozinha."""
     pf = _receita('PF', [('Farinha', 100), ('Água', 70)])
     s7 = _receita('S7', [('Farinha', 100), ('Água', 80), ('Grãos', 15)])
-    mb = _grupo('Base', [s7, pf])      # ordem ruim: s7 primeiro
+    mb = _grupo('Base', [s7, pf])      # ordem "ruim": s7 primeiro
     c = calcular_cascata(mb)
-    assert any('DIMINUIR' in a for a in c['avisos'])
+    assert c['avisos'] == []           # sem DIMINUIR
+    # PF (menos água) sai primeiro na linha, mesmo cadastrado depois
+    nomes = [p['nome'] for p in c['lineares'] if p['nome']]
+    assert nomes[0] == 'PF'
 
 
 def test_grupo_vazio_retorna_none(app):
