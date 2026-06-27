@@ -309,12 +309,21 @@ def montar_gantt(dia):
     produtos.sort(key=_chave)
 
     for p in produtos:
-        for t in p['tarefas']:
+        tarefas = p['tarefas']
+        for idx, t in enumerate(tarefas):
             t['left_px'] = t['ini'] * PX_POR_MIN
             t['width_px'] = max(14, (t['fim'] - t['ini']) * PX_POR_MIN)
-            # o rótulo cabe dentro? (estimativa: ~7px/char + ícone + folga)
-            texto_px = len(t['etapa']) * 7.3 + 30
+            # cabe DENTRO? (ícone + padding + folga; conservador pra não cortar)
+            texto_px = len(t['etapa']) * 8 + 44
             t['label_dentro'] = t['width_px'] >= texto_px
+            t['label_fora'] = False
+            # se não cabe dentro, mostra à DIREITA quando há espaço livre até a
+            # próxima barra — assim o texto nunca fica truncado nem some.
+            if not t['label_dentro']:
+                prox = (tarefas[idx + 1]['left_px'] if idx + 1 < len(tarefas)
+                        else canvas_px)
+                gap = prox - (t['left_px'] + t['width_px'])
+                t['label_fora'] = gap >= len(t['etapa']) * 8 + 14
         p['fim_px'] = p['fim_min'] * PX_POR_MIN
     turnos = [{'nome': tt['nome'],
                'left_px': max(0, tt['ini'] - DIA_INI) * PX_POR_MIN,
