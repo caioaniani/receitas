@@ -193,8 +193,9 @@
   <div class="detalhes">
     <div class="det-titulo">Passo a passo de cada produto</div>
     {% for p in g.produtos %}
+    {% set edit_url = url_for('receitas.etapas', id=p.receita_id) if p.receita_id else (url_for('receitas.massa_base_editar', id=p.grupo) if p.tipo == 'base' and p.grupo else None) %}
     <div class="det-row">
-      <span class="det-nome" style="border-left:5px solid {{ p.cor }};">{{ p.nome }}</span>
+      <span class="det-nome" style="border-left:5px solid {{ p.cor }};">{% if edit_url and current_user.is_admin() %}<a class="nm-link" href="{{ edit_url }}" title="Editar etapas">{{ p.nome }} <span class="nm-edit">✏️</span></a>{% else %}{{ p.nome }}{% endif %}</span>
       {% for t in p.tarefas %}
         <span class="det-passo {{ 'passivo' if not t.ativa }}">{{ t.icone }} {{ t.etapa }} <i>{{ t.dur_label }}</i></span>{% if not loop.last or p.destino %}<span class="seta">›</span>{% endif %}
       {% endfor %}
