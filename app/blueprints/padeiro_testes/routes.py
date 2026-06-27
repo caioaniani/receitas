@@ -232,16 +232,24 @@ def massa_base_mise(mb_id):
     plano = (PlanejamentoProducao.query
              .filter_by(data=dia, origem='cronograma').first())
 
-    membros = {it.receita_id for it in mb.itens}
-    mults, faltas = {}, {}
+    # Escala a base pelas UNIDADES do dia em porções REAIS (qtd_alvo /
+    # rendimento), não pelo multiplicador inteiro do item — esse arredonda a
+    # fornada pra cima (ceil) e infla a massa/água (ex: 6 un de rendimento 10
+    # viraria 1 fornada = 10 un). É o mesmo consumo fracionário de
+    # `produzir_item_plano`.
+    membros = {it.receita_id: it.receita for it in mb.itens}
+    porcoes, unidades = {}, {}
     if plano:
         for it in plano.itens:
-            if it.receita_id in membros:
-                mults[it.receita_id] = max(1, int(it.multiplicador or 1))
-                faltas[it.receita_id] = max(
-                    0, int(it.qtd_alvo or 0) - int(it.produzido_qtd or 0))
+            rec = membros.get(it.receita_id)
+            if rec is None:
+                continue
+            alvo = int(it.qtd_alvo or 0)
+            rend = float(rec.rendimento_qtd or 0) or 1.0
+            unidades[it.receita_id] = alvo
+            porcoes[it.receita_id] = alvo / rend
 
-    calc = calcular_cascata(mb, mults or None)
+    calc = calcular_cascata(mb, porcoes or None)
     if calc is None:
         return jsonify({'nome': mb.nome, 'vazio': True})
 
@@ -249,7 +257,9 @@ def massa_base_mise(mb_id):
                    sorted(calc['base_mix'].items(), key=lambda kv: -kv[1])]
 
     def _passo(p, eh_ramo):
-        return {'nome': p['nome'], 'unidades': faltas.get(p['receita_id']),
+        return {'nome': p['nome'], 'unidades': unidades.get(p['receita_id']),
+                'tirar_massa': (_g_label(p['tirar_massa'])
+                                if p.get('tirar_massa') else None),
                 'acrescentar': [{'nome': n, 'qtd': _g_label(g)}
                                 for n, g in p['acrescentar'].items()],
                 'eh_ramo': eh_ramo}
