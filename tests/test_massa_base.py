@@ -209,8 +209,8 @@ def test_porcoes_fracionarias_escalam(app):
     assert abs(c['total_porcoes'] - 1.5) < 1e-9
     assert c['base_mix']['Farinha'] == 1500.0      # 1000 × 1,5
     assert c['base_mix']['Água'] == 1050.0         # 700 × 1,5
-    lin = {p['nome']: p for p in c['lineares']}
-    assert lin['Pão Francês']['tirar_massa'] == 960.0   # 1920 × 0,5
+    ret = {p['nome']: p for p in _retiradas(c)}
+    assert ret['Pão Francês']['tirar_massa'] == 960.0   # 1920 × 0,5
 
 
 def test_grupo_vazio_retorna_none(app):
