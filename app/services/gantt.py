@@ -243,6 +243,35 @@ def montar_gantt(dia):
                                      'desbloqueia': branch_jobs.get(p['receita_id'])})
         jobs.append({'prod': trunk_prod, 'passos': trunk_passos, 'ptr': 0, 'ready': 0})
 
+    # 1c) CONTINUAÇÃO: pães amassados em dias ANTERIORES cuja fermentação termina
+    #     hoje — a FINALIZAÇÃO (laminar/modelar/assar/congelar). rec.dias_producao
+    #     = lead em dias (sourdough/croissant de 24h = 1, de 48h = 2); o que foi
+    #     amassado em (dia - L) é finalizado hoje. Torna o fluxograma contínuo: a
+    #     parte de assar/finalizar aparece no dia certo, não só no dia da amassada.
+    from datetime import timedelta
+    for L in range(1, MAX_LEAD_DIAS + 1):
+        plano_ant = (PlanejamentoProducao.query
+                     .filter_by(data=dia - timedelta(days=L), origem='cronograma')
+                     .first())
+        if plano_ant is None:
+            continue
+        for it in plano_ant.itens:
+            rec = it.receita
+            if rec is None or int(rec.dias_producao or 0) != L:
+                continue
+            falta = max(0, int(it.qtd_alvo or 0) - int(it.produzido_qtd or 0))
+            if falta <= 0:
+                continue
+            _, _, post = _split_long_passiva(list(rec.etapas))
+            if not post:
+                continue            # sem etapa pós-fermentação: nada a finalizar
+            nf = fornadas_amassadeira(rec, it.multiplicador) or 1
+            prod = _novo_produto(rec.nome, falta=falta, fornadas=nf,
+                                 tipo='continuacao')
+            prod['origem_label'] = (dia - timedelta(days=L)).strftime('%d/%m')
+            jobs.append({'prod': prod, 'passos': _passos(post, nf),
+                         'ptr': 0, 'ready': 0})
+
     # 2) Greedy list-scheduling com recursos de capacidade 1. Jobs bloqueados
     #    (ready None) ficam de fora até a retirada que os libera.
     livre = {'padeiro': 0, 'amassadeira': 0, 'forno': 0}
