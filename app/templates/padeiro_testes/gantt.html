@@ -139,7 +139,7 @@
           <div class="barra {{ 'passiva' if not t.ativa else '' }}"
                style="left:{{ t.left_px }}px; width:{{ t.width_px }}px; background:{{ p.cor }};"
                title="{{ t.etapa }} — {{ t.ini_hhmm }} a {{ t.fim_hhmm }} ({{ t.dur_label }})">
-            <span class="ic">{{ t.icone }}</span>{% if t.label_dentro %}<span class="et">{{ t.etapa }}</span>{% else %}<span class="et-fora">{{ t.etapa }}</span>{% endif %}
+            <span class="ic">{{ t.icone }}</span>{% if t.label_dentro %}<span class="et">{{ t.etapa }}</span>{% endif %}
           </div>
           {% endfor %}
           {% if p.destino %}
