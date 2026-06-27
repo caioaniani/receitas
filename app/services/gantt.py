@@ -288,9 +288,23 @@ def montar_gantt(dia):
                       'px': h * PX_POR_MIN})
         h += 60
 
-    # ordena produtos pelo início do 1º trabalho (linha do tempo legível)
-    produtos.sort(key=lambda p: (p['tarefas'][0]['ini'] if p['tarefas'] else 1e9,
-                                 p['nome']))
+    # Ordena por "cluster" (uma receita solo, ou um tronco de massa-base + seus
+    # ramos) pelo início mais cedo do cluster; dentro do cluster o tronco vem
+    # antes dos ramos. Mantém o grupo junto e em ordem de leitura.
+    def _ini(p):
+        return p['tarefas'][0]['ini'] if p['tarefas'] else 1e9
+
+    def _cluster(p):
+        return 'g:%s' % p['grupo'] if p['grupo'] is not None else 's:%d' % id(p)
+    cluster_ini = {}
+    for p in produtos:
+        ch = _cluster(p)
+        cluster_ini[ch] = min(cluster_ini.get(ch, 1e9), _ini(p))
+
+    def _chave(p):
+        rank = 0 if p['tipo'] in ('solo', 'base') else 1   # tronco antes do ramo
+        return (cluster_ini[_cluster(p)], _cluster(p), rank, _ini(p), p['nome'])
+    produtos.sort(key=_chave)
 
     for p in produtos:
         for t in p['tarefas']:
