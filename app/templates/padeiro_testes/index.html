@@ -537,6 +537,79 @@
           '<p style="color:#b02a37;padding:10px;">Erro ao carregar a receita.</p>';
       });
   }
+  // Massa-base: o que PÔR na amassadeira + a sequência de RETIRADAS (em pães).
+  // É isto que o padeiro precisa — não a receita separada de cada pão (que não
+  // existe: todos saem da mesma base).
+  function verBase(mbId) {
+    document.getElementById('mep-titulo').textContent = 'Carregando…';
+    document.getElementById('mep-body').innerHTML =
+      '<p style="padding:10px;color:#888;">Carregando massa base…</p>';
+    document.getElementById('mep-backdrop').classList.add('aberto');
+    document.getElementById('mep-modal').classList.add('aberto');
+    fetch('/padeiro-testes/massa-base/' + mbId + '.json?data={{ dia.isoformat() }}')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        document.getElementById('mep-titulo').textContent = 'Massa base: ' + d.nome;
+        if (d.vazio) {
+          document.getElementById('mep-body').innerHTML =
+            '<p style="padding:10px;color:#6c757d;">Sem produção pra esta base hoje.</p>';
+          return;
+        }
+        var h = '<div class="mep-base-massa">🥣 Amasse ' + _mepEsc(d.base_massa) +
+          (d.fornadas ? ' <small>' + d.fornadas + ' fornada' +
+            (d.fornadas != 1 ? 's' : '') + ' na amassadeira</small>' : '') + '</div>';
+
+        h += '<div class="mep-sub">Pôr na amassadeira — marque o que já pesou</div>';
+        (d.base_recipe || []).forEach(function (i) {
+          var key = 'mepbase:' + mbId + ':' + i.nome;
+          var checked = localStorage.getItem(key) === '1';
+          h += '<label class="mep-ing' + (checked ? ' done' : '') + '">' +
+               '<input type="checkbox" class="mep-chk" data-key="' + _mepEsc(key) + '"' +
+               (checked ? ' checked' : '') + '>' +
+               '<span class="nm">' + _mepEsc(i.nome) + '</span>' +
+               '<span class="q">' + _mepEsc(i.qtd) + '</span></label>';
+        });
+
+        h += '<div class="mep-sub">Depois de amassar, vá tirando (nesta ordem)</div>';
+        h += '<ol class="mep-casc">';
+        var n = 0;
+        (d.cascata || []).forEach(function (p) {
+          n += 1;
+          var temNome = !!p.nome;
+          var temUn = (p.unidades != null);
+          var cls = p.eh_ramo ? ' ramo' : (temNome ? '' : ' so-acresc');
+          h += '<li class="mep-casc-step' + cls + '">';
+          h += '<span class="mep-casc-num">' + n + '</span>';
+          if (temNome) {
+            h += '<span class="mep-casc-tira">Tire ' +
+                 (temUn ? '<span class="un">' + p.unidades + ' un</span> de ' : '') +
+                 _mepEsc(p.nome) + '</span>';
+            if (p.eh_ramo) h += '<span class="mep-casc-tag">recheio próprio</span>';
+          } else {
+            h += '<span class="mep-casc-tira">Acrescente a tudo na amassadeira</span>';
+          }
+          (p.acrescentar || []).forEach(function (a) {
+            h += '<div class="mep-casc-acr">' +
+                 '<span class="lbl">+ ' + _mepEsc(a.nome) + '</span> <b>' +
+                 _mepEsc(a.qtd) + '</b></div>';
+          });
+          h += '</li>';
+        });
+        h += '</ol>';
+        document.getElementById('mep-body').innerHTML = h;
+        document.querySelectorAll('#mep-body .mep-chk').forEach(function (cb) {
+          cb.addEventListener('change', function () {
+            var lbl = cb.closest('.mep-ing');
+            if (cb.checked) { localStorage.setItem(cb.dataset.key, '1'); lbl.classList.add('done'); }
+            else { localStorage.removeItem(cb.dataset.key); lbl.classList.remove('done'); }
+          });
+        });
+      })
+      .catch(function () {
+        document.getElementById('mep-body').innerHTML =
+          '<p style="color:#b02a37;padding:10px;">Erro ao carregar a massa base.</p>';
+      });
+  }
   function fecharMep() {
     document.getElementById('mep-backdrop').classList.remove('aberto');
     document.getElementById('mep-modal').classList.remove('aberto');
