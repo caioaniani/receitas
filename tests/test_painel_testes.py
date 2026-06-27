@@ -135,6 +135,23 @@ def test_v2_liga_alertas_automatico(app):
     assert 'abrir painel normal' not in html      # link removido
 
 
+def test_paineis_bloqueiam_ctrl_s_e_avisam_copia_salva(app):
+    """A operacao apertava Ctrl+S, salvava .htm DESATUALIZADO no Desktop e abria
+    a copia no lugar da pagina ao vivo (parecia 'travar'). Os DOIS paineis (v2 em
+    /painel, v1 em /painel-testes) bloqueiam Ctrl+S e, quando rodando de arquivo
+    salvo (file://), avisam que e copia velha com link ABSOLUTO pra pagina real."""
+    c = _staff(app)
+    for url in ('/entregas/painel', '/entregas/painel-testes'):
+        html = c.get(url).data.decode()
+        assert "e.ctrlKey || e.metaKey" in html          # intercepta Ctrl/Cmd+S
+        assert "location.protocol === 'file:'" in html    # detecta copia salva
+        assert 'CÓPIA SALVA' in html
+        assert 'Não precisa salvar' in html
+        # link do banner e ABSOLUTO (sobrevive ao salvar como arquivo)
+        bloco = html.split('aviso-copia', 1)[1].split('</a>', 1)[0]
+        assert 'http' in bloco and '/entregas/painel' in bloco
+
+
 def test_v2_tem_aba_conversas_do_bot(app):
     """Aba 'Conversas do bot' (status pending) ao lado de 'Abertas' (open) —
     pra monitorar o que o bot esta conduzindo."""
