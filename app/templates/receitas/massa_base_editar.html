@@ -14,23 +14,23 @@
   <div class="col-lg-6">
     <div class="card">
       <div class="card-header bg-light"><b>Receitas do grupo</b>
-        <div class="small text-muted">Mostradas na ordem em que saem da amassadeira — o sistema calcula isso sozinho pela ficha (menos água primeiro; recheios exclusivos viram ramos).</div>
+        <div class="small text-muted">Mostradas na ordem em que saem da amassadeira — o sistema calcula isso sozinho pela ficha (hidratação crescente; quem tem recheio próprio recebe o recheio batido na porção tirada).</div>
       </div>
       <div class="card-body">
         {% if calc %}
-        {# receitas na ordem da cascata: linha principal e depois os ramos #}
+        {# receitas na ordem da cascata (só as retiradas; os incrementos de água
+           são passos do tronco, mostrados no cálculo ao lado) #}
         {% set ns = namespace(i=0) %}
         <div class="list-group">
-          {% for p in (calc.lineares | selectattr('nome') | list) + calc.ramos %}
+          {% for p in calc.passos if p.tipo == 'retirada' %}
           {% set ns.i = ns.i + 1 %}
-          {% set eh_ramo = loop.index0 >= (calc.lineares | selectattr('nome') | list | length) %}
           <div class="list-group-item" style="display:flex; align-items:center; gap:.5rem;">
             <span class="badge bg-secondary rounded-pill">{{ ns.i }}</span>
             <span style="flex:1 1 auto;">{{ p.nome }}
-              {% if eh_ramo %}
-              <span class="badge bg-primary-subtle text-primary-emphasis ms-1">ramo (recheio próprio)</span>
+              {% if p.eh_ramo %}
+              <span class="badge bg-warning-subtle text-warning-emphasis ms-1">recheio próprio</span>
               {% else %}
-              <span class="badge bg-light text-muted border ms-1">linha principal</span>
+              <span class="badge bg-light text-success border ms-1">linha principal</span>
               {% endif %}
             </span>
             <form method="POST" action="{{ url_for('receitas.massa_base_editar', id=mb.id) }}" style="margin:0; flex:0 0 auto;"
