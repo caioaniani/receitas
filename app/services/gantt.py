@@ -36,7 +36,7 @@ PASSIVA_LONGA_MIN = 240   # 4h
 
 # Escala do eixo: pixels por minuto. Largura fixa por minuto (a página rola na
 # horizontal) pra cada etapa ter espaço real e o rótulo ser legível.
-PX_POR_MIN = 5
+PX_POR_MIN = 6
 
 # Massa-base: passos manuais curtos da cascata (tirar a receita / acrescentar).
 TIRAR_MIN = 4
