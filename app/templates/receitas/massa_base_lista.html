@@ -43,7 +43,7 @@
         <p class="small text-muted mb-2">
           {{ g.qtd }} receita(s): {{ g.nomes | join(' → ') }}
         </p>
-        <p class="small mb-0">Base: <b>{{ (g.base_massa / 1000) | round(2) }} kg</b></p>
+        <p class="small mb-0">Base: <b>{{ ((g.base_massa / 1000) | round(2)) | string | replace('.', ',') }} kg</b></p>
         {% if g.avisos %}<p class="small text-danger mb-0 mt-1"><i class="bi bi-exclamation-triangle"></i> ordem precisa de ajuste</p>{% endif %}
         {% else %}
         <p class="small text-muted mb-0">Grupo vazio — adicione receitas.</p>
