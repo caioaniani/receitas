@@ -1,6 +1,6 @@
 """Gantt da produção do dia: agenda etapas respeitando 1 amassadeira / 1 forno /
 1 padeiro, com mise en place em paralelo e fermentação longa virando marcador."""
-from datetime import date
+from datetime import date, timedelta
 
 from app.extensions import db
 from app.models import (
@@ -322,3 +322,53 @@ def test_gantt_tronco_mostra_qtd_e_receita_da_base(app):
     assert 'Farinha' in nomes and 'Água' in nomes     # ingredientes da base
     # recheios NÃO entram na base (são dos ramos)
     assert 'Grãos' not in nomes and 'Nozes' not in nomes
+
+
+def _sourdough_lead(nome, lead):
+    """Pão de fermentação longa (24h) com etapa de assar depois — lead em dias."""
+    r = _receita(nome, [
+        ('Mise en place', 10, None, True),
+        ('Amassamento', 20, 'amassadeira', True),
+        ('Fermentação', 1440, 'camara_fria', False),   # ≥240 -> longa
+        ('Assar', 40, 'forno', True),
+    ])
+    r.dias_producao = lead
+    db.session.commit()
+    return r
+
+
+def test_continuacao_assar_aparece_no_dia_seguinte(app):
+    """Pão amassado ONTEM (lead=1) aparece HOJE na FINALIZAÇÃO (assar) — o
+    fluxograma é contínuo entre os dias, não some a parte de assar."""
+    ontem, hoje_ = date(2026, 9, 10), date(2026, 9, 11)
+    r = _sourdough_lead('Sourdough X', 1)
+    _plano(ontem, [(r, 1, 10, 0)])              # amassado ontem
+    _plano(hoje_, [])                           # hoje sem mistura nova
+
+    g = montar_gantt(hoje_)
+    assert g is not None
+    cont = [p for p in g['produtos'] if p['tipo'] == 'continuacao']
+    assert len(cont) == 1
+    assert cont[0]['nome'] == 'Sourdough X'
+    assert cont[0]['origem_label'] == ontem.strftime('%d/%m')
+    etapas = [t['etapa'] for t in cont[0]['tarefas']]
+    assert 'Assar' in etapas                    # a finalização (forno) é agendada
+    assert 'Amassamento' not in etapas          # o amassamento NÃO se repete hoje
+
+
+def test_continuacao_respeita_lead_de_2_dias(app):
+    """lead=2 (48h): a finalização cai 2 dias após a amassada, não 1."""
+    d0 = date(2026, 9, 15)
+    r = _sourdough_lead('Sourdough 48h', 2)
+    _plano(d0, [(r, 1, 10, 0)])
+    # 1 dia depois: ainda fermentando, nada a finalizar
+    assert montar_gantt(d0 + timedelta(days=1)) is None
+    # 2 dias depois: finaliza
+    g = montar_gantt(d0 + timedelta(days=2))
+    assert g is not None
+    assert any(p['tipo'] == 'continuacao' and p['nome'] == 'Sourdough 48h'
+               for p in g['produtos'])
+
+
+def test_dia_sem_plano_nem_continuacao_e_none(app):
+    assert montar_gantt(date(2026, 9, 20)) is None
