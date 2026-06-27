@@ -383,14 +383,13 @@ def massa_base_editar(id):
                                              ordem=prox))
                 db.session.commit()
             return redirect(url_for('receitas.massa_base_editar', id=mb.id))
-        # salvar ordem (e remoções): receita_ids[] na ordem das linhas
-        ids = [int(x) for x in request.form.getlist('receita_ids[]') if x.isdigit()]
-        MassaBaseItem.query.filter_by(massa_base_id=mb.id).delete()
-        for i, rid in enumerate(ids):
-            db.session.add(MassaBaseItem(massa_base_id=mb.id, receita_id=rid,
-                                         ordem=i))
-        db.session.commit()
-        flash('Ordem da cascata salva.', 'success')
+        if acao == 'remover':
+            # a ordem da cascata é calculada sozinha; remoção é por item.
+            rid = request.form.get('receita_id', type=int)
+            MassaBaseItem.query.filter_by(massa_base_id=mb.id,
+                                          receita_id=rid).delete()
+            db.session.commit()
+            return redirect(url_for('receitas.massa_base_editar', id=mb.id))
         return redirect(url_for('receitas.massa_base_editar', id=mb.id))
 
     calc = calcular_cascata(mb)
