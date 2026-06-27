@@ -199,6 +199,47 @@ def test_massa_base_mise_endpoint(app, admin_user):
     assert passos['Sourdough 7g']['unidades'] == 10
     acr = {a['nome'] for a in passos['Sourdough 7g']['acrescentar']}
     assert 'Grãos' in acr        # o recheio só entra na retirada do 7 grãos
+    # mostra os GRAMAS de massa a tirar (não só as unidades): PF = 1700 g/porção
+    # × 2 porções = 3,40 kg; 7g = 2200 g × 1 = 2,20 kg
+    assert passos['Pão Francês']['tirar_massa'] == '3,40 kg'
+    assert passos['Sourdough 7g']['tirar_massa'] == '2,20 kg'
+
+
+def test_massa_base_mise_escala_unidades_reais(app, admin_user):
+    """A base escala pelas UNIDADES reais (qtd_alvo / rendimento), não pelo
+    multiplicador inteiro arredondado — senão 5 un de rendimento 10 inflaria a
+    massa pro dobro (1 fornada cheia)."""
+    from app.models import MassaBase, MassaBaseItem
+
+    r = Receita(nome='Pão X', categoria='Pães', rendimento_qtd=10,
+                rendimento_unidade='un', peso_base=1000.0,
+                capacidade_amassadeira_g=50000)
+    db.session.add(r); db.session.flush()
+    db.session.add(ReceitaIngrediente(receita_id=r.id, tipo='mp',
+                                      ingrediente_nome='Farinha', porcentagem=100))
+    db.session.add(ReceitaIngrediente(receita_id=r.id, tipo='mp',
+                                      ingrediente_nome='Água', porcentagem=70))
+    mb = MassaBase(nome='Base X'); db.session.add(mb); db.session.flush()
+    db.session.add(MassaBaseItem(massa_base_id=mb.id, receita_id=r.id))
+    plano = PlanejamentoProducao(data=hoje(), origem='cronograma')
+    db.session.add(plano); db.session.flush()
+    # qtd_alvo 5 de rendimento 10 -> 0,5 porção; multiplicador legado = ceil = 1
+    db.session.add(PlanejamentoItem(planejamento_id=plano.id, receita_id=r.id,
+                                    multiplicador=1, qtd_alvo=5))
+    db.session.commit()
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    d = client.get('/padeiro-testes/massa-base/%d.json?data=%s'
+                   % (mb.id, hoje().isoformat())).get_json()
+    # massa/porção = 1000 + 700 = 1700 g; 0,5 porção -> 850 g (NÃO 1700)
+    base = {b['nome']: b['qtd'] for b in d['base_recipe']}
+    assert base['Farinha'] == '500 g'        # 1000 × 0,5
+    assert base['Água'] == '350 g'           # 700 × 0,5
+    passo = d['cascata'][0]
+    assert passo['unidades'] == 5
+    assert passo['tirar_massa'] == '850 g'    # 1700 × 0,5, não 1700
 
 
 def test_massa_base_mise_exige_padeiro(app):
