@@ -113,46 +113,32 @@
     </div>
 
     <div class="card mb-3">
-      <div class="card-header bg-light"><b>Linha principal (massa branca)</b></div>
-      <ul class="list-group list-group-flush">
-        {% for p in calc.lineares %}
-        {% if p.acrescentar %}
-        <li class="list-group-item py-2 bg-light-subtle">
-          <span class="text-primary">➕ Acrescentar:</span>
-          {% for nome, g in p.acrescentar.items() %}<span class="badge bg-primary-subtle text-primary-emphasis me-1">{{ nome }} {{ g_fmt(g) }}</span>{% endfor %}
-        </li>
-        {% endif %}
-        {% if p.nome %}
-        <li class="list-group-item py-2 d-flex justify-content-between align-items-center">
-          <span>✂️ <b>Tirar {{ p.nome }}</b>{% if p.porcoes != 1 %} <span class="text-muted">({{ p.porcoes }}×)</span>{% endif %}</span>
-          <span class="fw-bold text-nowrap">{{ g_fmt(p.tirar_massa) }}</span>
-        </li>
-        {% endif %}
-        {% endfor %}
-      </ul>
-    </div>
-
-    {% if calc.ramos %}
-    <div class="card">
-      <div class="card-header bg-light"><b>Pães com recheio próprio</b>
-        <div class="small text-muted">Cada um tira a sua porção de massa branca e recebe o recheio à parte.</div>
+      <div class="card-header bg-light"><b>Depois de amassar, vá tirando (nesta ordem)</b>
+        <div class="small text-muted">A água sobe a hidratação da amassadeira inteira; o recheio próprio é batido na porção já tirada.</div>
       </div>
       <ul class="list-group list-group-flush">
-        {% for p in calc.ramos %}
-        <li class="list-group-item py-2">
+        {% for p in calc.passos %}
+        {% if p.tipo == 'incremento' %}
+        <li class="list-group-item py-2 bg-light-subtle">
+          <span class="text-primary">💧 Acrescente na amassadeira:</span>
+          {% for nome, g in p.acrescentar.items() %}<span class="badge bg-primary-subtle text-primary-emphasis me-1">{{ nome }} {{ g_fmt(g) }}</span>{% endfor %}
+        </li>
+        {% else %}
+        <li class="list-group-item py-2{% if p.eh_ramo %} border-start border-warning border-3{% endif %}">
           <div class="d-flex justify-content-between align-items-center">
-            <span>🍞 <b>{{ p.nome }}</b>{% if p.porcoes != 1 %} <span class="text-muted">({{ p.porcoes }}×)</span>{% endif %}</span>
+            <span>{% if p.eh_ramo %}🍞{% else %}✂️{% endif %} <b>Tirar {{ p.nome }}</b>{% if p.porcoes != 1 %} <span class="text-muted">({{ p.porcoes }}×)</span>{% endif %}{% if p.eh_ramo %} <span class="badge bg-warning-subtle text-warning-emphasis">recheio próprio</span>{% endif %}</span>
             <span class="fw-bold text-nowrap">{{ g_fmt(p.tirar_massa) }}</span>
           </div>
+          {% if p.acrescentar %}
           <div class="small text-muted mt-1">
-            ✂️ tira {{ g_fmt(p.tirar_branca) }} de massa branca
-            {% for nome, g in p.acrescentar.items() %}<span class="badge bg-primary-subtle text-primary-emphasis ms-1">➕ {{ nome }} {{ g_fmt(g) }}</span>{% endfor %}
+            bata na porção: {% for nome, g in p.acrescentar.items() %}<span class="badge bg-warning-subtle text-warning-emphasis ms-1">➕ {{ nome }} {{ g_fmt(g) }}</span>{% endfor %}
           </div>
+          {% endif %}
         </li>
+        {% endif %}
         {% endfor %}
       </ul>
     </div>
-    {% endif %}
     {% else %}
     <div class="card"><div class="card-body text-muted">
       Adicione receitas ao grupo pra ver o cálculo da base e das retiradas.
