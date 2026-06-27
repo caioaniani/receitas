@@ -4,201 +4,110 @@
 
 {% block content %}
 <style>
-.home-hero { max-width: 760px; margin: 4rem auto 1.5rem; text-align: center; padding: 0 1rem; }
+.home-hero { max-width: 980px; margin: 2.5rem auto 1.5rem; text-align: center; padding: 0 1rem; }
 .home-hero h1 {
-    font-weight: 300;
-    font-size: clamp(1.6rem, 4vw, 2.4rem);
-    margin-bottom: 2rem;
-    letter-spacing: -0.01em;
+    font-weight: 300; font-size: clamp(1.5rem, 4vw, 2.2rem);
+    margin-bottom: 0.3rem; letter-spacing: -0.01em;
 }
-.home-input-wrap {
-    background: var(--bg-card, #fff);
-    border: 1px solid var(--border-color, #d0d0d0);
-    border-radius: 18px;
-    padding: 0.4rem 0.4rem 0.4rem 0.5rem;
-    display: flex; align-items: flex-end; gap: 0.4rem;
-    box-shadow: 0 2px 14px rgba(0,0,0,0.05);
-    transition: border-color .15s ease, box-shadow .15s ease;
-}
-.home-input-wrap:focus-within {
-    border-color: var(--cor-azul, #0d6efd);
-    box-shadow: 0 0 0 3px rgba(13,110,253,0.12);
-}
-.home-input-wrap textarea {
-    flex: 1; border: 0; outline: 0; background: transparent; color: inherit;
-    resize: none; padding: 0.75rem 0.5rem; min-height: 28px; max-height: 220px;
-    font-size: 16px; line-height: 1.45; font-family: inherit;
-}
-.home-input-wrap textarea::placeholder { color: var(--text-muted, #888); }
-.home-input-wrap .send-btn {
-    border: 0; background: var(--cor-azul, #0d6efd); color: #fff; border-radius: 12px;
-    width: 40px; height: 40px; cursor: pointer; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 18px; transition: background .15s ease;
-}
-.home-input-wrap .send-btn:hover { background: #0b5ed7; }
-.home-input-wrap .send-btn:disabled { background: #aaa; cursor: not-allowed; }
-.home-keytip {
-    text-align: center; margin-top: 0.9rem; font-size: 12.5px;
-    color: var(--text-muted, #555);
-}
-.home-keytip kbd {
-    background: var(--bg-card, #fff);
-    border: 1px solid var(--border-color, #bbb);
-    color: var(--text-main, #222);
-    padding: 1px 6px; border-radius: 4px; font-family: inherit; font-size: 11.5px;
-    box-shadow: 0 1px 0 rgba(0,0,0,0.08);
-}
+.home-hero p { color: var(--text-muted, #888); margin: 0; font-size: 15px; }
 
-.suggestions { max-width: 880px; margin: 2.5rem auto 4rem; padding: 0 1rem; }
-.suggestions-title {
-    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
-    color: var(--text-muted, #888); margin-bottom: 0.9rem; text-align: center;
+.menu-grid {
+    max-width: 980px; margin: 1.5rem auto 4rem; padding: 0 1rem;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 0.9rem;
 }
-.suggestions-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 0.6rem;
-}
-.suggestion {
+.menu-card {
     background: var(--bg-card, #fff);
     border: 1px solid var(--border-color, #e5e5e5);
-    border-radius: 14px; padding: 0.8rem 1rem;
-    display: flex; align-items: center; gap: 0.7rem;
-    cursor: pointer; font-size: 13.5px; text-align: left;
-    color: var(--text-main, inherit);
-    transition: all .15s ease;
+    border-left: 5px solid var(--cor, #0d6efd);
+    border-radius: 14px; padding: 1.1rem 1.2rem;
+    display: flex; align-items: flex-start; gap: 0.9rem;
+    text-decoration: none; color: var(--text-main, inherit);
+    transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
 }
-.suggestion:hover {
-    border-color: var(--cor-azul, #0d6efd);
-    background: var(--bg-card-hover, rgba(13,110,253,0.04));
-    transform: translateY(-1px);
+.menu-card:hover {
+    box-shadow: 0 4px 18px rgba(0,0,0,0.10);
+    transform: translateY(-2px);
+    color: inherit;
 }
-.suggestion .icon { font-size: 20px; flex-shrink: 0; }
-.suggestion .label { line-height: 1.3; }
+.menu-card .ic { font-size: 30px; line-height: 1; flex-shrink: 0; }
+.menu-card .nm { font-weight: 800; font-size: 18px; margin-bottom: 2px; }
+.menu-card .desc { font-size: 13px; color: var(--text-muted, #888); line-height: 1.35; }
 </style>
 
 <div class="home-hero">
-    <h1>
-        {% set primeiro_nome = (current_user.nome or '').split(' ')[0] if current_user.nome else '' %}
-        Como posso ajudar{% if primeiro_nome %}, {{ primeiro_nome }}{% endif %}?
-    </h1>
-
-    <form id="home-copilot-form" autocomplete="off">
-        <div class="home-input-wrap">
-            <textarea id="home-copilot-input" rows="1" maxlength="2000"
-                placeholder="ex: preciso pedir 100 croissants pra loja sé amanhã" autofocus></textarea>
-            <button type="submit" class="send-btn" id="home-copilot-send" title="Enviar (Enter)">
-                <i class="bi bi-arrow-up"></i>
-            </button>
-        </div>
-    </form>
-
-    <div class="home-keytip">
-        <kbd>Enter</kbd> envia · <kbd>Shift</kbd>+<kbd>Enter</kbd> nova linha · <kbd>Cmd/Ctrl</kbd>+<kbd>K</kbd> abre o copilot em qualquer página
-    </div>
+    {% set primeiro_nome = (current_user.nome or '').split(' ')[0] if current_user.nome else '' %}
+    <h1>Olá{% if primeiro_nome %}, {{ primeiro_nome }}{% endif %}!</h1>
+    <p>O que você quer fazer?</p>
 </div>
 
-<div class="suggestions">
-    <div class="suggestions-title">Algumas coisas que posso fazer</div>
-    <div class="suggestions-grid">
-        <button type="button" class="suggestion" data-prompt="Quero criar um pedido pra loja  com  pra entregar ">
-            <span class="icon">📦</span><span class="label">Fazer um pedido pra uma loja</span>
-        </button>
-        <button type="button" class="suggestion" data-prompt="Recebi  kg de  do fornecedor , valor total R$ ">
-            <span class="icon">🚛</span><span class="label">Receber produto da indústria</span>
-        </button>
-        <button type="button" class="suggestion" data-prompt="Lançar balanço de congelados">
-            <span class="icon">❄️</span><span class="label">Lançar balanço de congelados</span>
-        </button>
-        <button type="button" class="suggestion" data-prompt="Resumo do caixa de hoje">
-            <span class="icon">📊</span><span class="label">Caixa do dia</span>
-        </button>
-        <button type="button" class="suggestion" data-prompt="Quais matérias-primas estão em alerta?">
-            <span class="icon">⚠️</span><span class="label">Estoque em alerta</span>
-        </button>
-        <button type="button" class="suggestion" data-prompt="Quais pedidos pra hoje?">
-            <span class="icon">📋</span><span class="label">Pedidos do dia</span>
-        </button>
-        <button type="button" class="suggestion" data-prompt="Quais minhas tarefas pendentes?">
-            <span class="icon">✅</span><span class="label">Tarefas pendentes</span>
-        </button>
-        <button type="button" class="suggestion" data-prompt="No que estou focado nas 12 semanas?">
-            <span class="icon">🎯</span><span class="label">Foco das 12 semanas</span>
-        </button>
-        <button type="button" class="suggestion" data-prompt="Marcar ponto de ">
-            <span class="icon">👤</span><span class="label">Marcar ponto de funcionário</span>
-        </button>
-        <button type="button" class="suggestion" data-prompt="Ajuste de estoque por quebra:  kg de ">
-            <span class="icon">📝</span><span class="label">Lançar quebra / perda de MP</span>
-        </button>
-        <button type="button" class="suggestion" data-prompt="Qual a margem do croissant?">
-            <span class="icon">💵</span><span class="label">Margem de uma receita</span>
-        </button>
-        <button type="button" class="suggestion" data-prompt="Cadastrar fornecedor: nome , contato ">
-            <span class="icon">🏭</span><span class="label">Cadastrar fornecedor</span>
-        </button>
-    </div>
+<div class="menu-grid">
+    {% if current_user.pode_lojas() %}
+    <a href="{{ url_for('pedidos.lista') }}" class="menu-card" style="--cor:#ffc107;">
+        <span class="ic">🏪</span>
+        <span><span class="nm">Lojas</span><br>
+        <span class="desc">Pedidos, estoque e lista de compras das lojas</span></span>
+    </a>
+    {% endif %}
+
+    {% if current_user.pode_producao() %}
+    <a href="{{ url_for('producao.painel') }}" class="menu-card" style="--cor:#198754;">
+        <span class="ic">🥖</span>
+        <span><span class="nm">Produção</span><br>
+        <span class="desc">Painel, cronograma, fluxograma e massas base</span></span>
+    </a>
+    {% endif %}
+
+    {% if current_user.pode_catalogo() %}
+    <a href="{{ url_for('materias_primas.banco') }}" class="menu-card" style="--cor:#0d6efd;">
+        <span class="ic">📚</span>
+        <span><span class="nm">Catálogo</span><br>
+        <span class="desc">Matérias-primas, fornecedores, produtos e preços</span></span>
+    </a>
+    {% endif %}
+
+    {% if current_user.pode_pdv() or current_user.is_admin() or current_user.pode_lojas() %}
+    <a href="{{ url_for('pdv.index') if current_user.pode_pdv() else url_for('entregas.index') }}" class="menu-card" style="--cor:#6f42c1;">
+        <span class="ic">🛒</span>
+        <span><span class="nm">Vendas & Entregas</span><br>
+        <span class="desc">Caixa (PDV), B2B e entregas do site</span></span>
+    </a>
+    {% endif %}
+
+    {% if current_user.is_admin() %}
+    <a href="{{ url_for('contas_pagar.lista') }}" class="menu-card" style="--cor:#20c997;">
+        <span class="ic">💰</span>
+        <span><span class="nm">Financeiro</span><br>
+        <span class="desc">Contas a pagar, caixa diário e rentabilidade</span></span>
+    </a>
+    {% endif %}
+
+    {% if current_user.is_owner %}
+    <a href="{{ url_for('rh.dashboard') }}" class="menu-card" style="--cor:#d63384;">
+        <span class="ic">👥</span>
+        <span><span class="nm">RH</span><br>
+        <span class="desc">Funcionários, folha, escala, ponto e férias</span></span>
+    </a>
+    {% endif %}
+
+    {% if current_user.is_admin() %}
+    <a href="{{ url_for('relatorios.dashboards') }}" class="menu-card" style="--cor:#fd7e14;">
+        <span class="ic">📈</span>
+        <span><span class="nm">Relatórios</span><br>
+        <span class="desc">Dashboards, custos e previsão de demanda</span></span>
+    </a>
+
+    <a href="{{ url_for('auth.usuarios') }}" class="menu-card" style="--cor:#6c757d;">
+        <span class="ic">⚙️</span>
+        <span><span class="nm">Administração</span><br>
+        <span class="desc">Usuários, permissões e integrações</span></span>
+    </a>
+    {% endif %}
+
+    <a href="{{ url_for('receitas.padeiro_lista') }}" class="menu-card" style="--cor:#0dcaf0;">
+        <span class="ic">📖</span>
+        <span><span class="nm">Fichas Técnicas</span><br>
+        <span class="desc">Receitas e modo de preparo</span></span>
+    </a>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-(function() {
-    var input = document.getElementById('home-copilot-input');
-    var form = document.getElementById('home-copilot-form');
-    var sendBtn = document.getElementById('home-copilot-send');
-    if (!input || !form) return;
-
-    function autosize() {
-        input.style.height = 'auto';
-        input.style.height = Math.min(input.scrollHeight, 220) + 'px';
-    }
-    input.addEventListener('input', autosize);
-    autosize();
-
-    input.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            if (form.requestSubmit) form.requestSubmit();
-            else form.dispatchEvent(new Event('submit', {cancelable: true}));
-        }
-    });
-
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        var prompt = (input.value || '').trim();
-        if (!prompt) return;
-        launchCopilot(prompt);
-    });
-
-    document.querySelectorAll('.suggestion').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            input.value = btn.dataset.prompt || '';
-            input.focus();
-            try { input.setSelectionRange(input.value.length, input.value.length); } catch (_) {}
-            autosize();
-        });
-    });
-
-    function launchCopilot(prompt) {
-        var cInput = document.getElementById('copilot-input');
-        var cFab = document.getElementById('copilot-fab');
-        var cForm = document.getElementById('copilot-form');
-        if (!cInput || !cFab) {
-            alert('Copilot não disponível neste login.');
-            return;
-        }
-        cFab.click();
-        cInput.value = prompt;
-        setTimeout(function() {
-            if (cForm) {
-                if (cForm.requestSubmit) cForm.requestSubmit();
-                else cForm.dispatchEvent(new Event('submit', {cancelable: true}));
-            }
-            input.value = '';
-            autosize();
-        }, 180);
-    }
-})();
-</script>
 {% endblock %}

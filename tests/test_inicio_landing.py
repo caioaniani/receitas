@@ -34,13 +34,15 @@ def _criar_usuario(app, login, papel, com_loja=False):
 
 
 def test_index_admin_home(app, admin_user):
-    """Admin vê home.html (hero do copilot), não a landing de cards."""
+    """Admin vê home.html: o menu de cards dos menus principais (não mais o
+    hero do copilot, que foi removido)."""
     client = app.test_client()
     _login(client, admin_user.id)
     resp = client.get('/')
     assert resp.status_code == 200
-    assert b'home-copilot-form' in resp.data       # marcador estável do home.html
-    assert b'Fazer novo pedido' not in resp.data    # não é a landing inicio.html
+    assert b'menu-card' in resp.data               # marcador estável do home.html
+    assert b'home-copilot-form' not in resp.data    # copilot web removido
+    assert 'O que você quer fazer'.encode() in resp.data
 
 
 def test_index_padeiro_redirect(app):
