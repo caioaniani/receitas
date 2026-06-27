@@ -115,10 +115,12 @@ def _plano_do_dia(dia):
         rec = it.receita
         alvo = int(it.qtd_alvo or 0)
         feito = int(it.produzido_qtd or 0)
+        rend = (float(rec.rendimento_qtd or 0) or 1.0) if rec else 1.0
         return {'item_id': it.id, 'receita_id': it.receita_id,
                 'nome': rec.nome if rec else '(receita)', 'alvo': alvo,
                 'produzido': feito, 'falta': max(0, alvo - feito),
                 'fornadas': fornadas_amassadeira(rec, it.multiplicador),
+                '_porcoes': alvo / rend,
                 '_mult': it.multiplicador, '_mbi': membership.get(it.receita_id)}
 
     itens = [_item(it) for it in plano.itens]
