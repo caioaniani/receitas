@@ -214,6 +214,54 @@ def receita_mise(receita_id):
     return jsonify(mise_en_place(rec, unidades))
 
 
+@padeiro_testes_bp.route('/massa-base/<int:mb_id>.json')
+@login_required
+@padeiro_required
+def massa_base_mise(mb_id):
+    """A BASE de uma massa-base escalada pro plano do dia: o que pôr na
+    amassadeira + a sequência de retiradas (em unidades de pão). É isto que o
+    padeiro precisa — não a receita separada de cada pão."""
+    from flask import jsonify
+
+    from app.models import MassaBase, PlanejamentoProducao
+    from app.services.gantt import _g_label
+    from app.services.massa_base import calcular_cascata
+
+    mb = MassaBase.query.get_or_404(mb_id)
+    dia = _parse_dia(request.args.get('data')) or hoje()
+    plano = (PlanejamentoProducao.query
+             .filter_by(data=dia, origem='cronograma').first())
+
+    membros = {it.receita_id for it in mb.itens}
+    mults, faltas = {}, {}
+    if plano:
+        for it in plano.itens:
+            if it.receita_id in membros:
+                mults[it.receita_id] = max(1, int(it.multiplicador or 1))
+                faltas[it.receita_id] = max(
+                    0, int(it.qtd_alvo or 0) - int(it.produzido_qtd or 0))
+
+    calc = calcular_cascata(mb, mults or None)
+    if calc is None:
+        return jsonify({'nome': mb.nome, 'vazio': True})
+
+    base_recipe = [{'nome': n, 'qtd': _g_label(g)} for n, g in
+                   sorted(calc['base_mix'].items(), key=lambda kv: -kv[1])]
+
+    def _passo(p, eh_ramo):
+        return {'nome': p['nome'], 'unidades': faltas.get(p['receita_id']),
+                'acrescentar': [{'nome': n, 'qtd': _g_label(g)}
+                                for n, g in p['acrescentar'].items()],
+                'eh_ramo': eh_ramo}
+
+    cascata = ([_passo(p, False) for p in calc['lineares'] if p.get('nome')]
+               + [_passo(p, True) for p in calc['ramos']])
+    return jsonify({
+        'nome': mb.nome, 'base_massa': _g_label(calc['base_massa']),
+        'fornadas': calc['fornadas'], 'base_recipe': base_recipe,
+        'cascata': cascata})
+
+
 @padeiro_testes_bp.route('/produzir-plano/<int:item_id>', methods=['POST'])
 @login_required
 @padeiro_required
