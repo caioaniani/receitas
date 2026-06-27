@@ -293,26 +293,15 @@
     {% endfor %}
   {% endwith %}
 
-  {% if plano_dia and plano_dia.itens %}
-  <div class="card prod-dia">
-    <div class="prod-dia-top">
-      <b>🔨 Produção do dia</b>
-      {% if plano_dia.total_falta %}
-      <span class="prod-dia-falta">faltam {{ plano_dia.total_falta }} un</span>
-      {% else %}
-      <span class="prod-dia-pronto" style="color:#ffd166;">✓ tudo produzido</span>
-      {% endif %}
-      <a class="prod-dia-gantt" href="{{ url_for('padeiro_testes.gantt', data=dia.isoformat()) }}">📊 fluxograma</a>
-    </div>
-    {% for it in plano_dia.itens %}
+  {% macro prod_row(it) %}
     <div class="prod-dia-row {% if it.falta == 0 %}feito{% endif %}">
       <button type="button" class="prod-dia-nome" title="Ver a receita escalada"
               onclick="verReceita({{ it.receita_id }}, {{ it.item_id }}, {{ it.falta or it.alvo }})">
         {{ it.nome }} <span class="prod-dia-ver">📋 ver receita</span>
       </button>
       <span class="prod-dia-meta">
-        {% if it.fornadas is not none %}{{ it.fornadas }} fornada(s) · {% endif %}
-        alvo <b>{{ it.alvo }}</b>{% if it.produzido %} · feito {{ it.produzido }}{% endif %}
+        {% if it.falta > 0 %}produzir <b style="color:#198754;">{{ it.falta }}</b> un{% if it.produzido %} <small>(já {{ it.produzido }}/{{ it.alvo }})</small>{% endif %}
+        {%- else -%}✓ feito {{ it.produzido }} un{% endif %}
       </span>
       {% if it.falta > 0 %}
       <form method="POST" action="{{ url_for('padeiro_testes.produzir_plano', item_id=it.item_id) }}"
@@ -326,7 +315,33 @@
       <span class="prod-dia-pronto">✓ pronto</span>
       {% endif %}
     </div>
+  {% endmacro %}
+
+  {% if plano_dia and (plano_dia.grupos or plano_dia.solos) %}
+  <div class="card prod-dia">
+    <div class="prod-dia-top">
+      <b>🔨 Produção do dia</b>
+      {% if plano_dia.total_falta %}
+      <span class="prod-dia-falta">faltam {{ plano_dia.total_falta }} un</span>
+      {% else %}
+      <span class="prod-dia-pronto" style="color:#ffd166;">✓ tudo produzido</span>
+      {% endif %}
+      <a class="prod-dia-gantt" href="{{ url_for('padeiro_testes.gantt', data=dia.isoformat()) }}">📊 fluxograma</a>
+    </div>
+
+    {# pães que saem de uma massa-base comum: amasse a base e tire cada um #}
+    {% for g in plano_dia.grupos %}
+    <div class="prod-dia-grupo">
+      🥣 Massa base: {{ g.nome }}{% if g.base_massa_label %} — amasse <b>{{ g.base_massa_label }}</b>{% if g.fornadas %} <span class="prod-dia-grupo-sub">({{ g.fornadas }} fornada{{ 's' if g.fornadas != 1 }})</span>{% endif %}{% endif %}
+    </div>
+    {% for it in g.itens %}{{ prod_row(it) }}{% endfor %}
     {% endfor %}
+
+    {# pães soltos (não saem de massa-base) #}
+    {% if plano_dia.solos %}
+    {% if plano_dia.grupos %}<div class="prod-dia-grupo">Outros pães</div>{% endif %}
+    {% for it in plano_dia.solos %}{{ prod_row(it) }}{% endfor %}
+    {% endif %}
   </div>
   {% endif %}
 
