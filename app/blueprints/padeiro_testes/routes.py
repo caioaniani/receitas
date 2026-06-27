@@ -254,7 +254,9 @@ def massa_base_mise(mb_id):
                                 for n, g in p['acrescentar'].items()],
                 'eh_ramo': eh_ramo}
 
-    cascata = ([_passo(p, False) for p in calc['lineares'] if p.get('nome')]
+    # inclui passos sem 'nome' (acréscimo comum aplicado ao tronco inteiro antes
+    # de ramificar) — é uma adição de massa que o padeiro não pode pular.
+    cascata = ([_passo(p, False) for p in calc['lineares']]
                + [_passo(p, True) for p in calc['ramos']])
     return jsonify({
         'nome': mb.nome, 'base_massa': _g_label(calc['base_massa']),
