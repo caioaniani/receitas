@@ -215,21 +215,17 @@ def montar_gantt(dia):
             trunk_passos.append({'nome': nome, 'equip': e.equipamento, 'ativa': ativa,
                                  'dur': int(e.duracao_min or 0) * (base_nf if ativa else 1)})
 
-        for p in calc['lineares']:               # linha principal, em ordem
+        # cascata em ordem: incrementos de água (tronco) e retiradas; cada
+        # "Tirar X" desbloqueia a receita. O recheio (acrescentar da retirada) é
+        # batido na porção — entra como passo curto antes do "Tirar".
+        for p in calc['passos']:
             s = _step_acrescentar(p.get('acrescentar'))
             if s:
                 trunk_passos.append(s)
-            if p.get('nome'):
+            if p['tipo'] == 'retirada':
                 trunk_passos.append({'nome': 'Tirar ' + p['nome'], 'equip': None,
                                      'ativa': True, 'dur': TIRAR_MIN,
                                      'desbloqueia': branch_jobs.get(p['receita_id'])})
-        for p in calc['ramos']:                  # pães com recheio próprio
-            s = _step_acrescentar(p.get('acrescentar'))
-            if s:
-                trunk_passos.append(s)
-            trunk_passos.append({'nome': 'Tirar ' + p['nome'], 'equip': None,
-                                 'ativa': True, 'dur': TIRAR_MIN,
-                                 'desbloqueia': branch_jobs.get(p['receita_id'])})
         jobs.append({'prod': trunk_prod, 'passos': trunk_passos, 'ptr': 0, 'ready': 0})
 
     # 2) Greedy list-scheduling com recursos de capacidade 1. Jobs bloqueados
