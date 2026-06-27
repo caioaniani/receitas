@@ -137,8 +137,10 @@ def _plano_do_dia(dia):
 
     grupos = []
     for mb_id, (mb, ds) in por_grupo.items():
-        mults = {d['receita_id']: max(1, int(d['_mult'] or 1)) for d in ds}
-        calc = calcular_cascata(mb, mults)
+        # porções reais (qtd_alvo / rendimento) — mesma escala do modal "ver a
+        # base", não o multiplicador inteiro (que infla a massa).
+        porcoes = {d['receita_id']: d['_porcoes'] for d in ds}
+        calc = calcular_cascata(mb, porcoes)
         grupos.append({
             'mb_id': mb_id,
             'nome': mb.nome,
