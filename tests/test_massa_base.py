@@ -196,15 +196,14 @@ def test_rota_add_e_ordem_e_calculo(app, admin_user):
     assert '5.76 kg' in html or '5,76 kg' in html
 
 
-def test_rota_salvar_ordem(app, admin_user):
+def test_rota_remover_item(app, admin_user):
     pf, st, s7, mb = _exemplo_dono(app)
     c = _login(app, admin_user)
-    # inverte a ordem: s7, st, pf
     c.post('/receitas/massa-base/%d' % mb.id,
-           data={'receita_ids[]': [s7.id, st.id, pf.id]}, follow_redirects=True)
-    itens = (MassaBaseItem.query.filter_by(massa_base_id=mb.id)
-             .order_by(MassaBaseItem.ordem).all())
-    assert [it.receita_id for it in itens] == [s7.id, st.id, pf.id]
+           data={'acao': 'remover', 'receita_id': st.id}, follow_redirects=True)
+    restantes = {it.receita_id for it in
+                 MassaBaseItem.query.filter_by(massa_base_id=mb.id).all()}
+    assert restantes == {pf.id, s7.id}        # só o tradicional saiu
 
 
 def test_rota_add_receita_ja_em_grupo_recusa(app, admin_user):

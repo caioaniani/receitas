@@ -14,27 +14,37 @@
   <div class="col-lg-6">
     <div class="card">
       <div class="card-header bg-light"><b>Receitas do grupo</b>
-        <div class="small text-muted">A ordem da cascata é calculada sozinha pela ficha (menos água sai primeiro; recheios exclusivos viram ramos). O ≡ só organiza a lista.</div>
+        <div class="small text-muted">Mostradas na ordem em que saem da amassadeira — o sistema calcula isso sozinho pela ficha (menos água primeiro; recheios exclusivos viram ramos).</div>
       </div>
       <div class="card-body">
-        {% if mb.itens %}
-        <form method="POST" action="{{ url_for('receitas.massa_base_editar', id=mb.id) }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <ol id="itens" class="list-group list-group-numbered mb-3">
-            {% for it in mb.itens %}
-            <li class="list-group-item d-flex align-items-center gap-2 item-row">
-              <span class="handle text-muted" title="Arraste pra reordenar"
-                    style="cursor:grab; touch-action:none; font-size:18px;">≡</span>
-              <span class="flex-grow-1">{{ it.receita.nome if it.receita else '(receita)' }}</span>
-              <input type="hidden" name="receita_ids[]" value="{{ it.receita_id }}">
-              <button type="button" class="btn btn-sm btn-outline-danger btn-rm" title="Tirar do grupo">×</button>
-            </li>
-            {% endfor %}
-          </ol>
-          <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-save"></i> Salvar ordem</button>
-        </form>
+        {% if calc %}
+        {# receitas na ordem da cascata: linha principal e depois os ramos #}
+        {% set ns = namespace(i=0) %}
+        <div class="list-group">
+          {% for p in (calc.lineares | selectattr('nome') | list) + calc.ramos %}
+          {% set ns.i = ns.i + 1 %}
+          {% set eh_ramo = loop.index0 >= (calc.lineares | selectattr('nome') | list | length) %}
+          <div class="list-group-item" style="display:flex; align-items:center; gap:.5rem;">
+            <span class="badge bg-secondary rounded-pill">{{ ns.i }}</span>
+            <span style="flex:1 1 auto;">{{ p.nome }}
+              {% if eh_ramo %}
+              <span class="badge bg-primary-subtle text-primary-emphasis ms-1">ramo (recheio próprio)</span>
+              {% else %}
+              <span class="badge bg-light text-muted border ms-1">linha principal</span>
+              {% endif %}
+            </span>
+            <form method="POST" action="{{ url_for('receitas.massa_base_editar', id=mb.id) }}" style="margin:0; flex:0 0 auto;"
+                  onsubmit="return confirm('Tirar «{{ p.nome }}» do grupo?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="acao" value="remover">
+              <input type="hidden" name="receita_id" value="{{ p.receita_id }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger" title="Tirar do grupo">×</button>
+            </form>
+          </div>
+          {% endfor %}
+        </div>
         {% else %}
-        <p class="text-muted">Nenhuma receita no grupo ainda.</p>
+        <p class="text-muted mb-0">Nenhuma receita no grupo ainda.</p>
         {% endif %}
       </div>
     </div>
@@ -150,59 +160,4 @@
     {% endif %}
   </div>
 </div>
-
-{% if mb.itens %}
-<script>
-(function () {
-  var lista = document.getElementById('itens');
-  if (!lista) return;
-  lista.addEventListener('click', function (e) {
-    var btn = e.target.closest('.btn-rm');
-    if (btn) { btn.closest('.item-row').remove(); }
-  });
-  // arrastar pra reordenar (mouse + toque) — mesmo padrão do editor de etapas.
-  var arrastando = null;
-  function moverPara(clientY, alvo) {
-    if (!arrastando || !alvo || alvo === arrastando) return;
-    var r = alvo.getBoundingClientRect();
-    var antes = clientY < r.top + r.height / 2;
-    lista.insertBefore(arrastando, antes ? alvo : alvo.nextSibling);
-  }
-  function soltar() {
-    if (!arrastando) return;
-    arrastando.style.opacity = ''; arrastando.draggable = false; arrastando = null;
-  }
-  lista.addEventListener('mousedown', function (e) {
-    var a = e.target.closest('.handle');
-    if (a) a.closest('.item-row').draggable = true;
-  });
-  lista.addEventListener('dragstart', function (e) {
-    var it = e.target.closest('.item-row');
-    if (!it || !it.draggable) return;
-    arrastando = it; it.style.opacity = '0.4';
-    e.dataTransfer.effectAllowed = 'move';
-    try { e.dataTransfer.setData('text/plain', ''); } catch (err) { /* IE */ }
-  });
-  lista.addEventListener('dragover', function (e) {
-    if (!arrastando) return;
-    e.preventDefault();
-    moverPara(e.clientY, e.target.closest('.item-row'));
-  });
-  lista.addEventListener('dragend', soltar);
-  lista.addEventListener('touchstart', function (e) {
-    var a = e.target.closest('.handle');
-    if (!a) return;
-    arrastando = a.closest('.item-row'); arrastando.style.opacity = '0.4';
-  }, { passive: true });
-  lista.addEventListener('touchmove', function (e) {
-    if (!arrastando) return;
-    e.preventDefault();
-    var t = e.touches[0];
-    moverPara(t.clientY, (document.elementFromPoint(t.clientX, t.clientY) || {}).closest
-              ? document.elementFromPoint(t.clientX, t.clientY).closest('.item-row') : null);
-  }, { passive: false });
-  lista.addEventListener('touchend', soltar);
-})();
-</script>
-{% endif %}
 {% endblock %}
