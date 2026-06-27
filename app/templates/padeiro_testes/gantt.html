@@ -114,16 +114,16 @@
   <div class="gantt">
     <div class="gantt-inner">
       <!-- bandas de turno -->
-      <div class="turnos">
+      <div class="turnos" style="width:{{ g.canvas_px }}px;">
         {% for t in g.turnos %}
         <div class="turno {{ 'manha' if t.nome == 'Manhã' else 'tarde' }}"
-             style="left:{{ t.left_pct }}%; width:{{ t.width_pct }}%;">{{ t.nome }}</div>
+             style="left:{{ t.left_px }}px; width:{{ t.width_px }}px;">{{ t.nome }}</div>
         {% endfor %}
       </div>
       <!-- eixo de horas -->
-      <div class="eixo">
+      <div class="eixo" style="width:{{ g.canvas_px }}px;">
         {% for h in g.horas %}
-        <div class="hora" style="left:{{ h.pct }}%;">{{ h.label }}</div>
+        <div class="hora" style="left:{{ h.px }}px;">{{ h.label }}</div>
         {% endfor %}
       </div>
       <!-- uma linha por produto -->
@@ -133,19 +133,17 @@
           <span class="nm" style="border-left:5px solid {{ p.cor }}; padding-left:7px;">{{ p.nome }}</span>
           <span class="sub">falta {{ p.falta }} un{% if p.fornadas %} · {{ p.fornadas }} fornada(s){% endif %}</span>
         </div>
-        <div class="faixa">
-          {% for h in g.horas %}<div class="grade" style="left:{{ h.pct }}%;"></div>{% endfor %}
+        <div class="faixa" style="width:{{ g.canvas_px }}px;">
+          {% for h in g.horas %}<div class="grade" style="left:{{ h.px }}px;"></div>{% endfor %}
           {% for t in p.tarefas %}
           <div class="barra {{ 'passiva' if not t.ativa else '' }}"
-               style="left:{{ t.left_pct }}%; width:{{ t.width_pct }}%; background:{{ p.cor }};"
+               style="left:{{ t.left_px }}px; width:{{ t.width_px }}px; background:{{ p.cor }};"
                title="{{ t.etapa }} — {{ t.ini_hhmm }} a {{ t.fim_hhmm }} ({{ t.dur_label }})">
-            <span>{{ t.icone }}</span><span class="et">{{ t.etapa }}</span>
+            <span class="ic">{{ t.icone }}</span>{% if t.label_dentro %}<span class="et">{{ t.etapa }}</span>{% else %}<span class="et-fora">{{ t.etapa }}</span>{% endif %}
           </div>
           {% endfor %}
           {% if p.destino %}
-          <div class="destino" style="left:calc({{ (p.fim_min / g.span_min * 100) if g.span_min else 0 }}% + 6px);">
-            → {{ p.destino }}
-          </div>
+          <div class="destino" style="left:{{ p.fim_px + 6 }}px;">→ {{ p.destino }}</div>
           {% endif %}
         </div>
       </div>
