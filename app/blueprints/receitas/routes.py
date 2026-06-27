@@ -21,6 +21,8 @@ from app.decorators import admin_required, owner_required
 from app.extensions import db
 from app.models import (
     Atribuicao,
+    MassaBase,
+    MassaBaseItem,
     MateriaPrima,
     Produto,
     Receita,
@@ -311,6 +313,93 @@ def etapas(id):
     return render_template('receitas/etapas.html', receita=receita,
                            etapas=etapas_atuais, fmt_dur=_fmt_dur,
                            recurso_de=_recurso_de_etapa)
+
+
+@receitas_bp.route('/massa-base', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def massa_base_lista():
+    """Lista os grupos de massa-base e cria novos. Cada grupo = receitas que
+    saem de uma amassada comum (cascata)."""
+    from app.services.massa_base import calcular_cascata
+
+    if request.method == 'POST':
+        nome = (request.form.get('nome') or '').strip()
+        if not nome:
+            flash('Dê um nome ao grupo.', 'warning')
+            return redirect(url_for('receitas.massa_base_lista'))
+        mb = MassaBase(nome=nome)
+        db.session.add(mb)
+        db.session.commit()
+        return redirect(url_for('receitas.massa_base_editar', id=mb.id))
+
+    grupos = []
+    for mb in MassaBase.query.order_by(MassaBase.nome).all():
+        calc = calcular_cascata(mb)
+        grupos.append({
+            'mb': mb, 'qtd': len(mb.itens),
+            'nomes': [it.receita.nome for it in mb.itens if it.receita],
+            'fornadas': calc['fornadas'] if calc else None,
+            'base_massa': calc['base_massa'] if calc else 0,
+            'avisos': calc['avisos'] if calc else [],
+        })
+    return render_template('receitas/massa_base_lista.html', grupos=grupos)
+
+
+@receitas_bp.route('/massa-base/<int:id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def massa_base_editar(id):
+    """Editor de um grupo: adiciona/remove receitas, arrasta pra ordenar a
+    cascata e mostra o cálculo (base, acréscimos, massa, fornadas)."""
+    from app.services.massa_base import calcular_cascata
+
+    mb = MassaBase.query.get_or_404(id)
+
+    if request.method == 'POST':
+        acao = request.form.get('acao')
+        if acao == 'excluir':
+            db.session.delete(mb)
+            db.session.commit()
+            flash('Grupo excluído.', 'info')
+            return redirect(url_for('receitas.massa_base_lista'))
+        if acao == 'renomear':
+            nome = (request.form.get('nome') or '').strip()
+            if nome:
+                mb.nome = nome
+                db.session.commit()
+            return redirect(url_for('receitas.massa_base_editar', id=mb.id))
+        if acao == 'add':
+            rid = request.form.get('receita_id', type=int)
+            r = Receita.query.get(rid) if rid else None
+            ja = MassaBaseItem.query.filter_by(receita_id=rid).first()
+            if r is None:
+                flash('Receita não encontrada.', 'warning')
+            elif ja is not None:
+                flash('Essa receita já está em um grupo de massa-base.', 'warning')
+            else:
+                prox = max([it.ordem for it in mb.itens], default=-1) + 1
+                db.session.add(MassaBaseItem(massa_base_id=mb.id, receita_id=r.id,
+                                             ordem=prox))
+                db.session.commit()
+            return redirect(url_for('receitas.massa_base_editar', id=mb.id))
+        # salvar ordem (e remoções): receita_ids[] na ordem das linhas
+        ids = [int(x) for x in request.form.getlist('receita_ids[]') if x.isdigit()]
+        MassaBaseItem.query.filter_by(massa_base_id=mb.id).delete()
+        for i, rid in enumerate(ids):
+            db.session.add(MassaBaseItem(massa_base_id=mb.id, receita_id=rid,
+                                         ordem=i))
+        db.session.commit()
+        flash('Ordem da cascata salva.', 'success')
+        return redirect(url_for('receitas.massa_base_editar', id=mb.id))
+
+    calc = calcular_cascata(mb)
+    em_grupo = {row.receita_id for row in MassaBaseItem.query.all()}
+    disponiveis = (Receita.query.filter(Receita.arquivada_em.is_(None),
+                                        ~Receita.id.in_(em_grupo or {0}))
+                   .order_by(Receita.nome).all())
+    return render_template('receitas/massa_base_editar.html', mb=mb, calc=calc,
+                           disponiveis=disponiveis)
 
 
 @receitas_bp.route('/<int:id>/padeiro')
