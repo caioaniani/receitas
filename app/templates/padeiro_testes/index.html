@@ -579,20 +579,20 @@
         var n = 0;
         (d.cascata || []).forEach(function (p) {
           n += 1;
-          var temNome = !!p.nome;
-          var temUn = (p.unidades != null);
-          var cls = p.eh_ramo ? ' ramo' : (temNome ? '' : ' so-acresc');
+          var ehInc = (p.tipo === 'incremento');
+          var cls = ehInc ? ' so-acresc' : (p.eh_ramo ? ' ramo' : '');
           h += '<li class="mep-casc-step' + cls + '">';
           h += '<span class="mep-casc-num">' + n + '</span>';
-          if (temNome) {
+          if (ehInc) {
+            // água/líquido: vai na amassadeira inteira (sobe a hidratação)
+            h += '<span class="mep-casc-tira">Acrescente na amassadeira</span>';
+          } else {
             h += '<span class="mep-casc-tira">Tire ' +
                  (p.tirar_massa ? '<span class="massa">' + _mepEsc(p.tirar_massa) +
                     '</span> de massa' : '') +
-                 (temUn ? ' <span class="un">(' + p.unidades + ' un)</span>' : '') +
+                 (p.unidades != null ? ' <span class="un">(' + p.unidades + ' un)</span>' : '') +
                  ' de ' + _mepEsc(p.nome) + '</span>';
-            if (p.eh_ramo) h += '<span class="mep-casc-tag">recheio próprio</span>';
-          } else {
-            h += '<span class="mep-casc-tira">Acrescente a tudo na amassadeira</span>';
+            if (p.eh_ramo) h += '<span class="mep-casc-tag">bater o recheio</span>';
           }
           (p.acrescentar || []).forEach(function (a) {
             h += '<div class="mep-casc-acr">' +
