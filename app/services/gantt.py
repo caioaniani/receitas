@@ -64,7 +64,9 @@ def _split_long_passiva(etapas):
     assar, congelar) é a FINALIZAÇÃO, que cai `dias_producao` dias adiante. Sem
     descanso longo: tudo é do mesmo dia (post vazio)."""
     for i, e in enumerate(etapas):
-        if not bool(e.ativa) and int(e.duracao_min or 0) >= PASSIVA_LONGA_MIN:
+        # congelar é passo final (freezer), não fermentação — não divide a cascata.
+        if (not bool(e.ativa) and e.equipamento != 'congelar'
+                and int(e.duracao_min or 0) >= PASSIVA_LONGA_MIN):
             return etapas[:i], e, etapas[i + 1:]
     return etapas, None, []
 
