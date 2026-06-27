@@ -151,6 +151,21 @@
     </div>
   </div>
 
+  <!-- Detalhamento legível: cada etapa por extenso (as barras curtas mostram só
+       o ícone; aqui dá pra ler tudo, sem precisar passar o mouse). -->
+  <div class="detalhes">
+    <div class="det-titulo">Passo a passo de cada produto</div>
+    {% for p in g.produtos %}
+    <div class="det-row">
+      <span class="det-nome" style="border-left:5px solid {{ p.cor }};">{{ p.nome }}</span>
+      {% for t in p.tarefas %}
+        <span class="det-passo {{ 'passivo' if not t.ativa }}">{{ t.icone }} {{ t.etapa }} <i>{{ t.dur_label }}</i></span>{% if not loop.last or p.destino %}<span class="seta">›</span>{% endif %}
+      {% endfor %}
+      {% if p.destino %}<span class="det-passo passivo">câmara fria {{ p.destino }}</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
   <div class="legenda">
     <div class="it"><span>🥣</span> amassadeira</div>
     <div class="it"><span>🔥</span> forno</div>
