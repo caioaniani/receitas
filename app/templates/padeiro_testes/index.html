@@ -343,8 +343,9 @@
     {% for g in plano_dia.grupos %}
     <div class="prod-dia-grupo">
       🥣 Massa base: {{ g.nome }}{% if g.base_massa_label %} — amasse <b>{{ g.base_massa_label }}</b>{% if g.fornadas %} <span class="prod-dia-grupo-sub">({{ g.fornadas }} fornada{{ 's' if g.fornadas != 1 }})</span>{% endif %}{% endif %}
+      <button type="button" class="prod-dia-base-btn" onclick="verBase({{ g.mb_id }})">📋 ver a base e as retiradas</button>
     </div>
-    {% for it in g.itens %}{{ prod_row(it) }}{% endfor %}
+    {% for it in g.itens %}{{ prod_row(it, em_grupo=true) }}{% endfor %}
     {% endfor %}
 
     {# pães soltos (não saem de massa-base) #}
