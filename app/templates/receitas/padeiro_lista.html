@@ -28,7 +28,7 @@
 <div class="row g-2 mb-3">
     {% for r in receitas %}
     <div class="col-md-3 col-sm-6">
-        <a href="{{ url_for('receitas.padeiro', id=r.id) }}"
+        <a href="{{ url_for(destino, id=r.id) }}"
            class="card border-0 shadow-sm text-decoration-none h-100 card-padeiro">
             <div class="card-body py-2 px-3">
                 <div class="fw-bold" style="color:#0f3460; font-size:14px;">{{ r.nome }}</div>
