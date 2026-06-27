@@ -170,7 +170,8 @@ def montar_gantt(dia):
 
     # 1a) Receitas SOLO (sem massa-base): 1 job por receita, como sempre.
     for pi in [x for x in itens_plano if x['mbi'] is None]:
-        prod = _novo_produto(pi['rec'].nome, falta=pi['falta'], fornadas=pi['nf'])
+        prod = _novo_produto(pi['rec'].nome, falta=pi['falta'], fornadas=pi['nf'],
+                             receita_id=pi['rec'].id)
         jobs.append({'prod': prod, 'passos': _passos(pi['etapas'], pi['nf']),
                      'ptr': 0, 'ready': 0})
 
