@@ -15,8 +15,9 @@
   ingrediente entre as receitas) e vai <strong>tirando cada receita em cascata</strong>,
   acrescentando só o que falta pra próxima. Resultado: <strong>1 batida na
   amassadeira em vez de várias</strong>. O sistema calcula a ordem das retiradas
-  sozinho — pães só de massa branca saem na linha principal; recheios exclusivos
-  (grãos, nozes) viram ramos próprios.
+  sozinho, em <strong>hidratação crescente</strong> (a água só sobe na amassadeira);
+  quem tem recheio exclusivo (grãos, nozes) recebe o recheio batido na própria
+  porção tirada.
 </div>
 
 <form method="POST" action="{{ url_for('receitas.massa_base_lista') }}" class="row g-2 mb-3" style="max-width:520px;">
