@@ -57,6 +57,17 @@ def _step_acrescentar(acr):
     txt = ', '.join('%s %s' % (n, _g_label(g)) for n, g in acr.items())
     return {'nome': '+ ' + txt, 'equip': None, 'ativa': True, 'dur': ACRESCENTAR_MIN}
 
+
+def _split_long_passiva(etapas):
+    """Divide as etapas no primeiro descanso LONGO (≥ PASSIVA_LONGA_MIN). O que
+    vem ANTES é o trabalho do dia da amassada; o que vem DEPOIS (laminar, modelar,
+    assar, congelar) é a FINALIZAÇÃO, que cai `dias_producao` dias adiante. Sem
+    descanso longo: tudo é do mesmo dia (post vazio)."""
+    for i, e in enumerate(etapas):
+        if not bool(e.ativa) and int(e.duracao_min or 0) >= PASSIVA_LONGA_MIN:
+            return etapas[:i], e, etapas[i + 1:]
+    return etapas, None, []
+
 # Paleta estável por índice de produto.
 _CORES = ['#0d6efd', '#198754', '#fd7e14', '#6f42c1', '#d63384', '#20c997',
           '#dc3545', '#0dcaf0', '#caa300', '#6610f2', '#0a8f6c', '#495057']
