@@ -138,6 +138,7 @@ def _plano_do_dia(dia):
         mults = {d['receita_id']: max(1, int(d['_mult'] or 1)) for d in ds}
         calc = calcular_cascata(mb, mults)
         grupos.append({
+            'mb_id': mb_id,
             'nome': mb.nome,
             'base_massa_label': _g_label(calc['base_massa']) if calc else None,
             'fornadas': (calc['fornadas'] if calc else None),
