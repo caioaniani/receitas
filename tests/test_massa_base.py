@@ -126,3 +126,82 @@ def test_grupo_vazio_retorna_none(app):
     db.session.add(mb)
     db.session.commit()
     assert calcular_cascata(mb) is None
+
+
+# ── rotas ────────────────────────────────────────────────────────────────────
+
+def _login(app, user):
+    c = app.test_client()
+    c.post('/auth/login', data={'login': user.login, 'senha': '123'},
+           follow_redirects=True)
+    return c
+
+
+def test_rota_lista_e_criar(app, admin_user):
+    c = _login(app, admin_user)
+    resp = c.post('/receitas/massa-base', data={'nome': 'Base Sourdough'},
+                  follow_redirects=True)
+    assert resp.status_code == 200
+    mb = MassaBase.query.filter_by(nome='Base Sourdough').first()
+    assert mb is not None
+    # a criação redireciona pro editor
+    assert ('massa-base/%d' % mb.id) in resp.request.path
+
+
+def test_rota_add_e_ordem_e_calculo(app, admin_user):
+    pf, st, s7, mb = _exemplo_dono(app)
+    MassaBaseItem.query.delete()      # começa vazio pra testar o add via rota
+    db.session.commit()
+    c = _login(app, admin_user)
+    for r in (pf, st, s7):
+        c.post('/receitas/massa-base/%d' % mb.id,
+               data={'acao': 'add', 'receita_id': r.id}, follow_redirects=True)
+    assert MassaBaseItem.query.filter_by(massa_base_id=mb.id).count() == 3
+    # o editor mostra o cálculo (base 5,76 kg, retira pão francês)
+    resp = c.get('/receitas/massa-base/%d' % mb.id)
+    html = resp.get_data(as_text=True)
+    assert 'Tirar Pão Francês' in html
+    assert '5.76 kg' in html or '5,76 kg' in html
+
+
+def test_rota_salvar_ordem(app, admin_user):
+    pf, st, s7, mb = _exemplo_dono(app)
+    c = _login(app, admin_user)
+    # inverte a ordem: s7, st, pf
+    c.post('/receitas/massa-base/%d' % mb.id,
+           data={'receita_ids[]': [s7.id, st.id, pf.id]}, follow_redirects=True)
+    itens = (MassaBaseItem.query.filter_by(massa_base_id=mb.id)
+             .order_by(MassaBaseItem.ordem).all())
+    assert [it.receita_id for it in itens] == [s7.id, st.id, pf.id]
+
+
+def test_rota_add_receita_ja_em_grupo_recusa(app, admin_user):
+    pf, st, s7, mb = _exemplo_dono(app)   # pf já está no grupo
+    outro = MassaBase(nome='Outro')
+    db.session.add(outro)
+    db.session.commit()
+    c = _login(app, admin_user)
+    c.post('/receitas/massa-base/%d' % outro.id,
+           data={'acao': 'add', 'receita_id': pf.id}, follow_redirects=True)
+    # pf não pode estar em dois grupos
+    assert MassaBaseItem.query.filter_by(receita_id=pf.id).count() == 1
+
+
+def test_rota_excluir_grupo(app, admin_user):
+    _, _, _, mb = _exemplo_dono(app)
+    mbid = mb.id
+    c = _login(app, admin_user)
+    c.post('/receitas/massa-base/%d' % mbid,
+           data={'acao': 'excluir'}, follow_redirects=True)
+    assert MassaBase.query.get(mbid) is None
+    assert MassaBaseItem.query.filter_by(massa_base_id=mbid).count() == 0
+
+
+def test_rota_exige_admin(app):
+    from app.models import Usuario
+    u = Usuario(nome='func', login='func', papel='funcionario')
+    u.set_senha('123')
+    db.session.add(u)
+    db.session.commit()
+    c = _login(app, u)
+    assert c.get('/receitas/massa-base').status_code == 403
