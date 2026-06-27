@@ -48,7 +48,10 @@ def calcular_cascata(massa_base, multiplicadores=None):
         azeitonas — uma não é continuação da outra), elas RAMIFICAM: cada uma
         tira sua porção da massa branca e recebe o seu recheio à parte.
 
-    multiplicadores: {receita_id: nº de porções no plano}. Default 1 de cada.
+    multiplicadores: {receita_id: nº de porções no plano}. Aceita FRACIONÁRIO
+    (ex: 212 un / rendimento 10 = 21,2 porções) — a massa e os acréscimos seguem
+    o consumo REAL, não o multiplicador inteiro de fornada (que arredonda pra
+    cima e infla a base). Default 1 de cada.
     Retorna None se o grupo não tem receitas; senão um dict com:
       - base / base_mix / base_massa / fornadas / capacidade / total_porcoes
       - lineares: passos da linha principal, em ordem. Cada um:
