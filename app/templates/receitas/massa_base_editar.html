@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ mb.nome }} — Massa base{% endblock %}
 
-{% macro g_fmt(g) %}{% if g >= 1000 %}{{ (g / 1000) | round(2) }} kg{% else %}{{ g | round | int }} g{% endif %}{% endmacro %}
+{% macro g_fmt(g) %}{% if g >= 1000 %}{{ ((g / 1000) | round(2)) | string | replace('.', ',') }} kg{% else %}{{ g | round | int }} g{% endif %}{% endmacro %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
