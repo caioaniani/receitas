@@ -45,6 +45,14 @@ def _g_label(gramas):
         return ('%.1f kg' % (g / 1000.0)).replace('.0 kg', ' kg').replace('.', ',')
     return '%d g' % g
 
+
+def _step_acrescentar(acr):
+    """Passo manual "+ ingredientes" da cascata, ou None se nada a acrescentar."""
+    if not acr:
+        return None
+    txt = ', '.join('%s %s' % (n, _g_label(g)) for n, g in acr.items())
+    return {'nome': '+ ' + txt, 'equip': None, 'ativa': True, 'dur': ACRESCENTAR_MIN}
+
 # Paleta estável por índice de produto.
 _CORES = ['#0d6efd', '#198754', '#fd7e14', '#6f42c1', '#d63384', '#20c997',
           '#dc3545', '#0dcaf0', '#caa300', '#6610f2', '#0a8f6c', '#495057']
@@ -98,9 +106,10 @@ def montar_gantt(dia):
     if plano is None:
         return None
 
-    # 1) Monta os jobs (1 por receita com falta > 0 e etapas cadastradas).
-    jobs = []
-    produtos = []
+    # 1) Itens do plano com falta > 0 e etapas; marca quem é de massa-base.
+    from app.models import MassaBaseItem
+    membership = {row.receita_id: row for row in MassaBaseItem.query.all()}
+    itens_plano = []
     sem_etapas = []
     for it in plano.itens:
         rec = it.receita
@@ -113,32 +122,119 @@ def montar_gantt(dia):
         if not etapas:
             sem_etapas.append(rec.nome)
             continue
-        nf = fornadas_amassadeira(rec, it.multiplicador) or 1
-        cor = _CORES[len(produtos) % len(_CORES)]
-        produtos.append({'nome': rec.nome, 'cor': cor, 'fornadas': nf,
-                         'falta': falta, 'tarefas': [], 'destino': None,
-                         'fim_min': 0})
-        prod_ref = produtos[-1]
-        # Etapas ATIVAS escalam com o nº de fornadas (a máquina carrega 1 batida
-        # por vez; o trabalho manual também cresce com o volume). Passiva fica na
-        # duração base (um descanso é um descanso).
-        passos = []
-        for e in etapas:
-            ativa = bool(e.ativa)
-            base = int(e.duracao_min or 0)
-            passos.append({'nome': e.nome, 'equip': e.equipamento,
-                           'ativa': ativa, 'dur': base * nf if ativa else base})
-        jobs.append({'prod': prod_ref, 'passos': passos, 'ptr': 0, 'ready': 0})
+        itens_plano.append({
+            'rec': rec, 'falta': falta, 'mult': it.multiplicador, 'etapas': etapas,
+            'nf': fornadas_amassadeira(rec, it.multiplicador) or 1,
+            'mbi': membership.get(rec.id)})
 
-    # 2) Greedy list-scheduling com recursos de capacidade 1.
+    produtos = []
+    jobs = []
+
+    def _novo_produto(nome, **kw):
+        cor = kw.get('cor') or _CORES[len(produtos) % len(_CORES)]
+        p = {'nome': nome, 'cor': cor, 'tarefas': [], 'destino': None,
+             'fim_min': 0, 'falta': kw.get('falta'), 'fornadas': kw.get('fornadas'),
+             'tipo': kw.get('tipo', 'solo'), 'grupo': kw.get('grupo')}
+        produtos.append(p)
+        return p
+
+    def _passos(etapas, nf):
+        # Etapas ATIVAS escalam com o nº de fornadas; passiva fica na duração base.
+        return [{'nome': e.nome, 'equip': e.equipamento, 'ativa': bool(e.ativa),
+                 'dur': int(e.duracao_min or 0) * (nf if e.ativa else 1)}
+                for e in etapas]
+
+    def _idx_amassadeira(etapas):
+        idx = [i for i, e in enumerate(etapas) if e.equipamento == 'amassadeira']
+        return idx[-1] if idx else -1
+
+    # 1a) Receitas SOLO (sem massa-base): 1 job por receita, como sempre.
+    for pi in [x for x in itens_plano if x['mbi'] is None]:
+        prod = _novo_produto(pi['rec'].nome, falta=pi['falta'], fornadas=pi['nf'])
+        jobs.append({'prod': prod, 'passos': _passos(pi['etapas'], pi['nf']),
+                     'ptr': 0, 'ready': 0})
+
+    # 1b) Massa-base: UMA amassada da base (tronco) + retiradas (linha principal e
+    #     ramos); cada receita começa as etapas pós-amassamento na sua retirada.
+    from app.services.massa_base import calcular_cascata
+    grupos = {}
+    for pi in [x for x in itens_plano if x['mbi'] is not None]:
+        grupos.setdefault(pi['mbi'].massa_base_id, []).append(pi)
+
+    for mb_id, items in grupos.items():
+        mb = items[0]['mbi'].massa_base
+        mults = {pi['rec'].id: max(1, int(pi['mult'] or 1)) for pi in items}
+        calc = calcular_cascata(mb, mults)
+        by_id = {pi['rec'].id: pi for pi in items}
+        retiradas = ([p for p in (calc or {}).get('lineares', []) if p.get('nome')]
+                     + (calc or {}).get('ramos', [])) if calc else []
+        if not retiradas:
+            for pi in items:                       # fallback: trata como solo
+                prod = _novo_produto(pi['rec'].nome, falta=pi['falta'],
+                                     fornadas=pi['nf'])
+                jobs.append({'prod': prod, 'passos': _passos(pi['etapas'], pi['nf']),
+                             'ptr': 0, 'ready': 0})
+            continue
+
+        base_nf = calc['fornadas'] or 1
+        cor_grupo = _CORES[len(produtos) % len(_CORES)]
+        trunk_prod = _novo_produto('Massa base: ' + mb.nome, cor=cor_grupo,
+                                   tipo='base', grupo=mb_id, fornadas=base_nf)
+
+        # ramos/derivados (cada receita): bloqueados até a sua retirada
+        branch_jobs = {}
+        for p in retiradas:
+            pi = by_id.get(p['receita_id'])
+            if pi is None:
+                continue
+            i = _idx_amassadeira(pi['etapas'])
+            post = pi['etapas'][i + 1:] if i >= 0 else pi['etapas']
+            prod_r = _novo_produto(pi['rec'].nome, falta=pi['falta'],
+                                   fornadas=pi['nf'], tipo='ramo', grupo=mb_id)
+            bj = {'prod': prod_r, 'passos': _passos(post, pi['nf']),
+                  'ptr': 0, 'ready': None}        # None = bloqueado
+            branch_jobs[p['receita_id']] = bj
+            jobs.append(bj)
+
+        # tronco: processo da base (mise..amassar, escalado por base_nf) + a
+        # cascata. Cada "tirar" desbloqueia a receita correspondente.
+        rid0 = retiradas[0]['receita_id']
+        tmpl = by_id[rid0]['etapas']
+        i = _idx_amassadeira(tmpl)
+        pre = tmpl[:i + 1] if i >= 0 else tmpl
+        trunk_passos = []
+        for e in pre:
+            ativa = bool(e.ativa)
+            nome = 'Amassar base' if e.equipamento == 'amassadeira' else e.nome
+            trunk_passos.append({'nome': nome, 'equip': e.equipamento, 'ativa': ativa,
+                                 'dur': int(e.duracao_min or 0) * (base_nf if ativa else 1)})
+
+        for p in calc['lineares']:               # linha principal, em ordem
+            s = _step_acrescentar(p.get('acrescentar'))
+            if s:
+                trunk_passos.append(s)
+            if p.get('nome'):
+                trunk_passos.append({'nome': 'Tirar ' + p['nome'], 'equip': None,
+                                     'ativa': True, 'dur': TIRAR_MIN,
+                                     'desbloqueia': branch_jobs.get(p['receita_id'])})
+        for p in calc['ramos']:                  # pães com recheio próprio
+            s = _step_acrescentar(p.get('acrescentar'))
+            if s:
+                trunk_passos.append(s)
+            trunk_passos.append({'nome': 'Tirar ' + p['nome'], 'equip': None,
+                                 'ativa': True, 'dur': TIRAR_MIN,
+                                 'desbloqueia': branch_jobs.get(p['receita_id'])})
+        jobs.append({'prod': trunk_prod, 'passos': trunk_passos, 'ptr': 0, 'ready': 0})
+
+    # 2) Greedy list-scheduling com recursos de capacidade 1. Jobs bloqueados
+    #    (ready None) ficam de fora até a retirada que os libera.
     livre = {'padeiro': 0, 'amassadeira': 0, 'forno': 0}
-    restantes = sum(len(j['passos']) for j in jobs)
     guarda = 0
-    while restantes > 0 and guarda < 20000:
+    while guarda < 20000:
         guarda += 1
         melhor = None
         for j in jobs:
-            if j['ptr'] >= len(j['passos']):
+            if j['ready'] is None or j['ptr'] >= len(j['passos']):
                 continue
             p = j['passos'][j['ptr']]
             rec = _recurso(p['equip'], p['ativa'])
@@ -146,6 +242,8 @@ def montar_gantt(dia):
             chave = (ini, p['dur'])     # menor início; desempate menor duração
             if melhor is None or chave < melhor[0]:
                 melhor = (chave, j, p, rec, ini)
+        if melhor is None:
+            break
         _, j, p, rec, ini = melhor
         prod = j['prod']
 
@@ -155,7 +253,6 @@ def montar_gantt(dia):
                                          _dur_label(p['dur']))
             prod['destino_etapa'] = p['nome']
             j['ptr'] = len(j['passos'])      # encerra a receita no dia
-            restantes = sum(len(x['passos']) - x['ptr'] for x in jobs)
             continue
 
         fim = ini + p['dur']
@@ -163,11 +260,12 @@ def montar_gantt(dia):
             livre[rec] = fim
         j['ready'] = fim
         j['ptr'] += 1
-        restantes -= 1
+        if p.get('desbloqueia') is not None:     # retirada libera a receita
+            p['desbloqueia']['ready'] = fim
         prod['fim_min'] = max(prod['fim_min'], fim)
         prod['tarefas'].append({
             'etapa': p['nome'], 'equip': p['equip'], 'ativa': p['ativa'],
-            'recurso': rec or 'descanso',
+            'recurso': rec or 'descanso', 'retirada': bool(p.get('desbloqueia')),
             'ini': ini, 'fim': fim, 'dur': p['dur'],
             'ini_hhmm': _hhmm(DIA_INI + ini), 'fim_hhmm': _hhmm(DIA_INI + fim),
             'dur_label': _dur_label(p['dur']),
