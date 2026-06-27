@@ -4,6 +4,8 @@ from datetime import date
 
 from app.extensions import db
 from app.models import (
+    MassaBase,
+    MassaBaseItem,
     PlanejamentoItem,
     PlanejamentoProducao,
     Receita,
@@ -229,3 +231,81 @@ def test_fornadas_escalam_etapas_ativas(app):
     am = g['produtos'][0]['tarefas'][0]
     assert g['produtos'][0]['fornadas'] == 3
     assert am['dur'] == 30          # 10 base × 3 fornadas
+
+
+# ── Massa-base no Gantt (modelo árvore): tronco + ramos ──────────────────────
+
+def _rec_grupo(nome, agua, recheio=None):
+    from app.models import ReceitaIngrediente
+    r = Receita(nome=nome, categoria='Pães', rendimento_qtd=10,
+                rendimento_unidade='un', peso_base=1000.0,
+                capacidade_amassadeira_g=50000)
+    db.session.add(r)
+    db.session.flush()
+    db.session.add(ReceitaIngrediente(receita_id=r.id, tipo='mp',
+                                      ingrediente_nome='Farinha', porcentagem=100))
+    db.session.add(ReceitaIngrediente(receita_id=r.id, tipo='mp',
+                                      ingrediente_nome='Água', porcentagem=agua))
+    if recheio:
+        db.session.add(ReceitaIngrediente(receita_id=r.id, tipo='mp',
+                                          ingrediente_nome=recheio[0],
+                                          porcentagem=recheio[1]))
+    for i, (n, d, eq, at) in enumerate([
+            ('Mise en place', 10, None, True),
+            ('Amassamento', 15, 'amassadeira', True),
+            ('Modelagem', 15, 'bancada', True),
+            ('Forno', 20, 'forno', True)]):
+        db.session.add(ReceitaEtapa(receita_id=r.id, ordem=i, nome=n,
+                                    duracao_min=d, equipamento=eq, ativa=at))
+    db.session.commit()
+    return r
+
+
+def _grupo_quatro(dia):
+    pf = _rec_grupo('Pão Francês', 70)
+    st = _rec_grupo('Sourdough', 80)
+    s7 = _rec_grupo('7 Grãos', 80, recheio=('Grãos', 40))
+    na = _rec_grupo('Nozes', 80, recheio=('Nozes', 75))
+    mb = MassaBase(nome='Base')
+    db.session.add(mb)
+    db.session.flush()
+    for i, r in enumerate([pf, st, s7, na]):
+        db.session.add(MassaBaseItem(massa_base_id=mb.id, receita_id=r.id, ordem=i))
+    db.session.commit()
+    _plano(dia, [(pf, 1, 10, 0), (st, 1, 10, 0), (s7, 1, 10, 0), (na, 1, 10, 0)])
+    return pf, st, s7, na, mb
+
+
+def test_gantt_tronco_uma_amassada_e_retiradas(app):
+    dia = date(2026, 9, 1)
+    _grupo_quatro(dia)
+    g = montar_gantt(dia)
+    tronco = [p for p in g['produtos'] if p['tipo'] == 'base'][0]
+    etapas = [t['etapa'] for t in tronco['tarefas']]
+    # UMA amassada da base
+    assert sum(1 for e in etapas if e.startswith('Amassar')) == 1
+    # retira os 4 pães (lineares + ramos)
+    for nome in ['Pão Francês', 'Sourdough', '7 Grãos', 'Nozes']:
+        assert 'Tirar ' + nome in etapas
+    # acréscimos: água (linha principal) e os recheios (ramos)
+    assert any(e.startswith('+') and 'Água' in e for e in etapas)
+    assert any(e.startswith('+') and 'Grãos' in e for e in etapas)
+    assert any(e.startswith('+') and 'Nozes' in e for e in etapas)
+    # a amassada usa a amassadeira; só ela
+    amass = [t for t in tronco['tarefas'] if t['etapa'] == 'Amassar base']
+    assert len(amass) == 1 and amass[0]['recurso'] == 'amassadeira'
+
+
+def test_gantt_ramo_comeca_na_retirada(app):
+    dia = date(2026, 9, 2)
+    _grupo_quatro(dia)
+    g = montar_gantt(dia)
+    tronco = [p for p in g['produtos'] if p['tipo'] == 'base'][0]
+    tirar = {t['etapa']: t for t in tronco['tarefas']}
+    for nome in ['Pão Francês', '7 Grãos', 'Nozes']:
+        ramo = [p for p in g['produtos']
+                if p['tipo'] == 'ramo' and p['nome'] == nome][0]
+        # o ramo não repete o amassamento e começa na retirada
+        assert 'Amassamento' not in [t['etapa'] for t in ramo['tarefas']]
+        assert ramo['tarefas'][0]['etapa'] == 'Modelagem'
+        assert ramo['tarefas'][0]['ini'] >= tirar['Tirar ' + nome]['fim']
