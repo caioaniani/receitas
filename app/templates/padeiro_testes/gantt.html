@@ -69,6 +69,23 @@
              background:#e9ecef; border-radius:6px; padding:4px 10px; font-weight:700;
              white-space:nowrap; }
 
+  /* detalhamento legível por produto (texto, quebra de linha) */
+  .detalhes { background:#fff; border-radius:14px; padding:14px 16px;
+              box-shadow:0 1px 4px rgba(0,0,0,.1); margin-top:14px; }
+  .det-titulo { font-weight:800; font-size:13px; text-transform:uppercase;
+                letter-spacing:.5px; color:#868e96; margin-bottom:10px; }
+  .det-row { display:flex; flex-wrap:wrap; align-items:center; gap:3px 4px;
+             padding:9px 0; border-top:1px solid #f1f3f5; }
+  .det-row:first-of-type { border-top:0; }
+  .det-nome { font-weight:800; font-size:15px; padding-left:8px; margin-right:8px;
+              min-width:170px; }
+  .det-passo { font-size:14px; color:#212529; background:#f1f3f5;
+               border-radius:6px; padding:3px 9px; white-space:nowrap; }
+  .det-passo i { color:#868e96; font-style:normal; font-weight:600; }
+  .det-passo.passivo { background:#fff; color:#868e96; font-style:italic; }
+  .det-passo.passivo i { color:#adb5bd; }
+  .seta { color:#ced4da; font-weight:800; }
+
   .legenda { display:flex; flex-wrap:wrap; gap:6px 16px; margin:14px 0 4px;
              font-size:13px; color:#495057; }
   .legenda .it { display:flex; align-items:center; gap:6px; }
