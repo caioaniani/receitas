@@ -19,9 +19,13 @@ e agenda as etapas de cada receita numa linha do tempo, respeitando:
 A escala do eixo é REAL (minutos), origem 06:00. Greedy list-scheduling: a cada
 passo escolhe a etapa pronta que começa mais cedo (desempate: menor duração).
 """
+
 from app.services.producao import fornadas_amassadeira
 
 DIA_INI = 6 * 60          # 06:00 — origem do eixo (minutos desde a meia-noite)
+
+# Quantos dias pra trás procurar pães em fermentação que são ASSADOS hoje.
+MAX_LEAD_DIAS = 3
 TURNOS = [
     {'nome': 'Manhã', 'ini': 6 * 60, 'fim': 14 * 60},
     {'nome': 'Tarde', 'ini': 13 * 60, 'fim': 21 * 60},
