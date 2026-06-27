@@ -88,6 +88,8 @@
                border-radius:6px; padding:3px 9px; white-space:nowrap; }
   .det-passo i { color:#868e96; font-style:normal; font-weight:600; }
   .det-passo.passivo { background:#fff; color:#868e96; font-style:italic; }
+  .det-base { background:#f1f7ff; border-radius:8px; }
+  .det-base .det-passo { background:#fff; }
   .det-passo.passivo i { color:#adb5bd; }
   .seta { color:#ced4da; font-weight:800; }
 
@@ -154,7 +156,7 @@
         <div class="rotulo">
           <span class="nm" style="border-left:5px solid {{ p.cor }}; padding-left:7px;">{% if p.tipo == 'base' %}🥣 {% elif p.tipo == 'ramo' %}↳ {% endif %}{{ p.nome }}</span>
           <span class="sub">
-            {%- if p.tipo == 'base' -%}amassada comum{% if p.fornadas %} · {{ p.fornadas }} fornada(s){% endif %}
+            {%- if p.tipo == 'base' -%}amassar <b>{{ p.base_massa_label }}</b>{% if p.fornadas %} · {{ p.fornadas }} fornada(s){% endif %}
             {%- else -%}falta {{ p.falta }} un{% if p.fornadas %} · {{ p.fornadas }} fornada(s){% endif %}{%- endif -%}
           </span>
         </div>
@@ -188,6 +190,15 @@
       {% endfor %}
       {% if p.destino %}<span class="det-passo passivo">câmara fria {{ p.destino }}</span>{% endif %}
     </div>
+    {% if p.tipo == 'base' and p.base_recipe %}
+    <div class="det-row det-base">
+      <span class="det-nome" style="border-left:5px solid {{ p.cor }};">↳ Receita da base</span>
+      <span class="det-passo">🥣 Amassar <b>{{ p.base_massa_label }}</b></span><span class="seta">=</span>
+      {% for ing in p.base_recipe %}
+      <span class="det-passo">{{ ing.nome }} <i>{{ ing.qtd }}</i></span>
+      {% endfor %}
+    </div>
+    {% endif %}
     {% endfor %}
   </div>
 

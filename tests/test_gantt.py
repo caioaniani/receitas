@@ -309,3 +309,16 @@ def test_gantt_ramo_comeca_na_retirada(app):
         assert 'Amassamento' not in [t['etapa'] for t in ramo['tarefas']]
         assert ramo['tarefas'][0]['etapa'] == 'Modelagem'
         assert ramo['tarefas'][0]['ini'] >= tirar['Tirar ' + nome]['fim']
+
+
+def test_gantt_tronco_mostra_qtd_e_receita_da_base(app):
+    """O tronco carrega a quantidade da base e a receita ESCALADA pro plano."""
+    dia = date(2026, 9, 3)
+    pf, st, s7, na, mb = _grupo_quatro(dia)   # 1 porção de cada
+    g = montar_gantt(dia)
+    tronco = [p for p in g['produtos'] if p['tipo'] == 'base'][0]
+    assert tronco['base_massa_label']                 # ex "5,76 kg"
+    nomes = {ing['nome'] for ing in tronco['base_recipe']}
+    assert 'Farinha' in nomes and 'Água' in nomes     # ingredientes da base
+    # recheios NÃO entram na base (são dos ramos)
+    assert 'Grãos' not in nomes and 'Nozes' not in nomes

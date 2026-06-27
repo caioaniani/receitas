@@ -180,6 +180,12 @@ def montar_gantt(dia):
         cor_grupo = _CORES[len(produtos) % len(_CORES)]
         trunk_prod = _novo_produto('Massa base: ' + mb.nome, cor=cor_grupo,
                                    tipo='base', grupo=mb_id, fornadas=base_nf)
+        # quantidade e receita da base JÁ ESCALADAS pro plano do dia (a tela
+        # Massa base mostra só pra 1 porção; aqui é o total a amassar no dia).
+        trunk_prod['base_massa_label'] = _g_label(calc['base_massa'])
+        trunk_prod['base_recipe'] = [
+            {'nome': n, 'qtd': _g_label(g)} for n, g in
+            sorted(calc['base_mix'].items(), key=lambda kv: -kv[1])]
 
         # ramos/derivados (cada receita): bloqueados até a sua retirada
         branch_jobs = {}
