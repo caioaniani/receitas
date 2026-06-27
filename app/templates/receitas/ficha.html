@@ -372,6 +372,11 @@
         <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-add-etapa">
             <i class="bi bi-plus-lg"></i> Adicionar etapa
         </button>
+        <a href="{{ url_for('receitas.etapas', id=receita.id) }}"
+           class="btn btn-outline-primary btn-sm ms-2"
+           title="Tempos e equipamentos de cada etapa pro fluxograma/Gantt do padeiro">
+            <i class="bi bi-diagram-3"></i> Etapas de produção (tempos do fluxograma)
+        </a>
     </div>
 
     <template id="etapa-template">
