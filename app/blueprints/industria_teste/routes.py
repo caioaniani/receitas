@@ -67,15 +67,17 @@ def aprovar():
     from app.services.producao import aprovar_plano_do_dia
 
     horizonte, janela = _horizonte_janela()
+    inicio = _inicio_offset()
     try:
         data_alvo = date.fromisoformat(request.form.get('data', ''))
     except (TypeError, ValueError):
         flash('Data inválida.', 'warning')
         return redirect(url_for('industria_teste.index',
-                                horizonte=horizonte, janela=janela))
+                                horizonte=horizonte, janela=janela, inicio=inicio))
 
     plano = aprovar_plano_do_dia(data_alvo, current_user.id,
-                                 horizonte_dias=horizonte, janela_semanas=janela)
+                                 horizonte_dias=horizonte, janela_semanas=janela,
+                                 inicio_offset_dias=inicio)
     if plano:
         flash('Plano de %s aprovado (%d receita(s)). Revise/edite e clique em '
               '"enviar ao padeiro" quando estiver pronto.'
@@ -83,7 +85,7 @@ def aprovar():
     else:
         flash('Nada a produzir em %s.' % data_alvo.strftime('%d/%m'), 'info')
     return redirect(url_for('industria_teste.index',
-                            horizonte=horizonte, janela=janela))
+                            horizonte=horizonte, janela=janela, inicio=inicio))
 
 
 @industria_teste_bp.route('/enviar', methods=['POST'])
