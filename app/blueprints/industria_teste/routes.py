@@ -97,12 +97,13 @@ def enviar():
     from app.services.producao import enviar_plano_do_dia
 
     horizonte, janela = _horizonte_janela()
+    inicio = _inicio_offset()
     try:
         data_alvo = date.fromisoformat(request.form.get('data', ''))
     except (TypeError, ValueError):
         flash('Data inválida.', 'warning')
         return redirect(url_for('industria_teste.index',
-                                horizonte=horizonte, janela=janela))
+                                horizonte=horizonte, janela=janela, inicio=inicio))
     plano = enviar_plano_do_dia(data_alvo)
     if plano:
         flash('Plano de %s enviado ao padeiro.' % data_alvo.strftime('%d/%m'),
@@ -111,4 +112,4 @@ def enviar():
         flash('Não há ordem aprovada em %s pra enviar.'
               % data_alvo.strftime('%d/%m'), 'warning')
     return redirect(url_for('industria_teste.index',
-                            horizonte=horizonte, janela=janela))
+                            horizonte=horizonte, janela=janela, inicio=inicio))
