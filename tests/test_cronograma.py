@@ -177,3 +177,63 @@ def test_rota_aprovar(app, admin_user):
     assert resp.status_code == 302
     assert PlanejamentoProducao.query.filter_by(
         data=d2, origem='cronograma').first() is not None
+
+
+# ── fluxo 2 passos: aprovar (rascunho) -> enviar (padeiro vê) ──────────────────
+
+def test_aprovar_cria_rascunho_padeiro_nao_ve(app, admin_user):
+    """Aprovar cria a ordem como RASCUNHO (enviado_ao_padeiro=False); o padeiro
+    NÃO vê (Produção do dia e Fluxograma vazios) até o passo 'enviar'."""
+    from app.blueprints.padeiro_testes.routes import _plano_do_dia
+    from app.models import PlanejamentoProducao
+    from app.services.gantt import montar_gantt
+    from app.services.producao import aprovar_plano_do_dia
+
+    loja = _loja()
+    r = _receita()
+    d2 = hoje() + timedelta(days=2)
+    _pedido(loja, 'pendente', d2, r, 50)
+    plano = aprovar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+    assert plano.enviado_ao_padeiro is False        # rascunho
+    assert _plano_do_dia(d2) is None                 # padeiro não vê
+    assert montar_gantt(d2) is None
+    # passo 2: enviar
+    from app.services.producao import enviar_plano_do_dia
+    enviar_plano_do_dia(d2)
+    db.session.expire_all()
+    assert PlanejamentoProducao.query.filter_by(
+        data=d2, origem='cronograma').first().enviado_ao_padeiro is True
+    assert _plano_do_dia(d2) is not None             # agora o padeiro vê
+
+
+def test_rota_enviar(app, admin_user):
+    from app.models import PlanejamentoItem, PlanejamentoProducao
+    r = _receita('Pão Enviar')
+    plano = PlanejamentoProducao(data=hoje(), origem='cronograma',
+                                 enviado_ao_padeiro=False)
+    db.session.add(plano); db.session.flush()
+    db.session.add(PlanejamentoItem(planejamento_id=plano.id, receita_id=r.id,
+                                    multiplicador=1, qtd_alvo=10))
+    db.session.commit()
+    pid = plano.id
+    c = app.test_client()
+    c.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+           follow_redirects=True)
+    resp = c.post('/telaindustriateste/enviar', data={'data': hoje().isoformat()})
+    assert resp.status_code in (302, 303)
+    db.session.expire_all()
+    assert db.session.get(PlanejamentoProducao, pid).enviado_ao_padeiro is True
+
+
+def test_plano_antigo_sem_flag_continua_visivel(app, admin_user):
+    """Ordem antiga (criada sem o flag) tem DEFAULT True -> padeiro continua
+    vendo (não quebra produção em andamento)."""
+    from app.blueprints.padeiro_testes.routes import _plano_do_dia
+    from app.models import PlanejamentoItem, PlanejamentoProducao
+    r = _receita('Pão Antigo')
+    plano = PlanejamentoProducao(data=hoje(), origem='cronograma')  # sem flag
+    db.session.add(plano); db.session.flush()
+    db.session.add(PlanejamentoItem(planejamento_id=plano.id, receita_id=r.id,
+                                    multiplicador=1, qtd_alvo=10))
+    db.session.commit()
+    assert _plano_do_dia(hoje()) is not None         # default True -> visível
