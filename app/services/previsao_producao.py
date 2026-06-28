@@ -188,8 +188,8 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     # 3. Historico pra previsao por dia-da-semana. Conta DATAS distintas (nao
     # linhas) pra a media: varias lojas no mesmo dia somam, mas a media e por
     # dia-calendario observado. Exclui cancelados (nao foram demanda real).
-    soma_dow = defaultdict(lambda: defaultdict(int))   # rid -> dow -> total
-    datas_dow = defaultdict(lambda: defaultdict(set))  # rid -> dow -> {datas}
+    # rid -> dow -> data -> q (per-data pra media recencia-ponderada)
+    qtd_dow = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     soma_total = defaultdict(int)
     datas_total = defaultdict(set)
     pedidos_hist = set()
@@ -208,8 +208,7 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             continue
         dow = data_ent.weekday()
         q = int(qtd or 0)
-        soma_dow[rid][dow] += q
-        datas_dow[rid][dow].add(data_ent)
+        qtd_dow[rid][dow][data_ent] += q
         soma_total[rid] += q
         datas_total[rid].add(data_ent)
         pedidos_hist.add(pid)
@@ -225,24 +224,24 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     for rid in receitas:
         if not datas_total.get(rid):
             continue
-        rid_dow = datas_dow.get(rid, {})
+        rid_dow = qtd_dow.get(rid, {})
         rid_soma_total = soma_total.get(rid, 0)
         L = lead.get(rid, 0)
         dias_rid = [inicio_d + timedelta(days=L + i)
                     for i in range(horizonte_dias)]
         for d in dias_rid:
             dow = d.weekday()
-            datas = rid_dow.get(dow)
-            if datas and len(datas) >= _MIN_OCORRENCIAS_DOW:
-                previsto[rid] += soma_dow[rid][dow] / len(datas)
+            por_data = rid_dow.get(dow)
+            if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
+                previsto[rid] += _media_recencia(por_data, hoje_d)
             else:
                 previsto[rid] += rid_soma_total / dias_calendario_janela
 
     def _previsto_dia(rid, dia):
         dow = dia.weekday()
-        datas = datas_dow.get(rid, {}).get(dow)
-        if datas and len(datas) >= _MIN_OCORRENCIAS_DOW:
-            return soma_dow[rid][dow] / len(datas)
+        por_data = qtd_dow.get(rid, {}).get(dow)
+        if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
+            return _media_recencia(por_data, hoje_d)
         if soma_total.get(rid):
             return soma_total[rid] / dias_calendario_janela
         return 0.0
