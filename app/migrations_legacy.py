@@ -784,6 +784,10 @@ def _migrate_postgres(app):
     _try("ALTER TABLE planejamento_item ADD COLUMN qtd_alvo INTEGER")
     _try("ALTER TABLE planejamento_item ADD COLUMN produzido_qtd INTEGER NOT NULL DEFAULT 0")
     _try("ALTER TABLE planejamento_producao ADD COLUMN origem VARCHAR(20)")
+    # Fluxo 2 passos (aprovar -> enviar): o padeiro só vê o que foi ENVIADO.
+    # DEFAULT TRUE pra ordens já existentes continuarem visíveis; novas ordens
+    # do "aprovar dia" nascem FALSE (rascunho) e viram TRUE no "enviar".
+    _try("ALTER TABLE planejamento_producao ADD COLUMN enviado_ao_padeiro BOOLEAN DEFAULT TRUE")
 
     _try("""
     CREATE TABLE IF NOT EXISTS entrega_foto (
