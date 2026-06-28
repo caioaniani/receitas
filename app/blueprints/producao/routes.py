@@ -221,6 +221,8 @@ def painel():
                            amanha=amanha,
                            horizonte=horizonte,
                            janela=janela,
+                           inicio=inicio,
+                           inicio_data=inicio_data,
                            pedidos_atrasados=pedidos_atrasados,
                            cestas_orfaos=cestas_orfaos,
                            balanco=balanco,
