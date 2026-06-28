@@ -51,11 +51,14 @@ def _g_label(gramas):
 
 
 def _step_acrescentar(acr):
-    """Passo manual "+ ingredientes" da cascata, ou None se nada a acrescentar."""
+    """Passo "+ ingredientes" da cascata (na amassadeira), ou None se nada a
+    acrescentar. Ocupa a amassadeira — a base está nela sendo trabalhada, então
+    isso encadeia logo após o amassamento e segura a máquina pra outra massa."""
     if not acr:
         return None
     txt = ', '.join('%s %s' % (n, _g_label(g)) for n, g in acr.items())
-    return {'nome': '+ ' + txt, 'equip': None, 'ativa': True, 'dur': ACRESCENTAR_MIN}
+    return {'nome': '+ ' + txt, 'equip': 'amassadeira', 'ativa': True,
+            'dur': ACRESCENTAR_MIN}
 
 
 def _split_long_passiva(etapas):
