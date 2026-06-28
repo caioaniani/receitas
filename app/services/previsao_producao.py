@@ -433,7 +433,8 @@ def grade_loja_dia(receita_id, horizonte_dias=7, janela_semanas=6,
     }
 
 
-def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6):
+def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
+                           inicio_offset_dias=0):
     """Sugere os pedidos da semana POR loja POR dia de ENTREGA, a partir do
     historico — a inversao do fluxo: em vez de cada loja pedir, o sistema
     propoe o pedido e o admin ajusta.
