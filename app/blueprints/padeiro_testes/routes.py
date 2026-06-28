@@ -618,6 +618,7 @@ def produzir():
         validados.append((tipo, obj, qtd))
 
     try:
+        from app.services.producao import consumir_subreceitas_prontas
         resumo = []
         for tipo, obj, qtd in validados:
             entrada_producao(
@@ -625,6 +626,9 @@ def produzir():
                 produto_id=obj.id if tipo == 'produto' else None,
                 estado=None, quantidade=qtd, usuario_id=current_user.id,
                 referencia='Produção (TV padeiro)')
+            # receita derivada (ex: almond) consome a sub-receita pronta do congelado
+            if tipo == 'receita':
+                consumir_subreceitas_prontas(obj, qtd, current_user.id)
             resumo.append({'nome': obj.nome, 'qtd': qtd})
         db.session.commit()
     except Exception:
