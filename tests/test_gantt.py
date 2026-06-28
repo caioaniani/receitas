@@ -384,3 +384,23 @@ def test_continuacao_respeita_lead_de_2_dias(app):
 
 def test_dia_sem_plano_nem_continuacao_e_none(app):
     assert montar_gantt(date(2026, 9, 20)) is None
+
+
+def test_tronco_retiradas_seguem_amassada_na_amassadeira(app):
+    """As retiradas da massa-base encadeiam LOGO após o amassamento, ocupando a
+    amassadeira (a base está nela) — não esperam o padeiro, que pode estar em
+    outra receita. Sem gap entre 'Amassar base' e a 1ª retirada."""
+    dia = date(2026, 9, 25)
+    _grupo_quatro(dia)
+    g = montar_gantt(dia)
+    tronco = [p for p in g['produtos'] if p['tipo'] == 'base'][0]
+    tarefas = tronco['tarefas']
+    amassar = next(t for t in tarefas if t['etapa'] == 'Amassar base')
+    pos = [t for t in tarefas
+           if t['etapa'].startswith('Tirar') or t['etapa'].startswith('+')]
+    assert pos, 'esperava retiradas/acréscimos no tronco'
+    # a 1ª etapa pós-amassamento começa exatamente quando o amassamento termina
+    assert min(t['ini'] for t in pos) == amassar['fim']
+    # e as retiradas usam a amassadeira (não o padeiro)
+    tirar = [t for t in tarefas if t['etapa'].startswith('Tirar')]
+    assert tirar and all(t['recurso'] == 'amassadeira' for t in tirar)
