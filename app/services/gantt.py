@@ -123,8 +123,11 @@ def montar_gantt(dia):
     plano aprovado pra esse dia."""
     from app.models import PlanejamentoProducao
 
+    # só ordens ENVIADAS ao padeiro (fluxo de 2 passos: aprovar -> enviar).
     plano = (PlanejamentoProducao.query
-             .filter_by(data=dia, origem='cronograma').first())
+             .filter_by(data=dia, origem='cronograma')
+             .filter(PlanejamentoProducao.enviado_ao_padeiro.isnot(False))
+             .first())
 
     # 1) Itens do plano com falta > 0 e etapas; marca quem é de massa-base.
     #    O plano de HOJE pode não existir (dia só de finalização de pães
