@@ -68,8 +68,11 @@
                 {% for dia in crono.dias %}
                 <th class="{% if loop.first %}hoje-col{% endif %}">
                     <div>{{ dia.label }}</div>
+                    {% set est = estados.get(dia.data) %}
+                    {% if not est %}
+                    {# passo 1: ainda não tem ordem -> aprovar (cria rascunho) #}
                     <form method="POST" action="{{ url_for('industria_teste.aprovar') }}"
-                          class="d-inline" onsubmit="return confirm('Aprovar o plano de {{ dia.label }} e enviar pro padeiro?');">
+                          class="d-inline" onsubmit="return confirm('Aprovar o plano de {{ dia.label }}? (você revisa/edita e depois envia ao padeiro)');">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="data" value="{{ dia.data }}">
                         <input type="hidden" name="horizonte" value="{{ horizonte }}">
@@ -77,6 +80,29 @@
                         <button class="btn btn-success btn-sm mt-1"
                                 style="font-size:.68rem;padding:.05rem .4rem;">aprovar dia</button>
                     </form>
+                    {% elif not est.enviado %}
+                    {# passo 2: aprovado (rascunho) -> editar + enviar #}
+                    <div class="badge bg-warning text-dark mt-1" style="font-size:.62rem;">✓ aprovado</div>
+                    <div class="mt-1 d-flex gap-1 justify-content-center">
+                      <a class="btn btn-outline-secondary btn-sm" style="font-size:.62rem;padding:.05rem .35rem;"
+                         href="{{ url_for('padeiro_testes.editar_plano', data=dia.data) }}">✏️ editar</a>
+                      <form method="POST" action="{{ url_for('industria_teste.enviar') }}" class="d-inline"
+                            onsubmit="return confirm('Enviar o plano de {{ dia.label }} pro padeiro?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="data" value="{{ dia.data }}">
+                        <input type="hidden" name="horizonte" value="{{ horizonte }}">
+                        <input type="hidden" name="janela" value="{{ janela }}">
+                        <button class="btn btn-primary btn-sm" style="font-size:.62rem;padding:.05rem .35rem;">📤 enviar</button>
+                      </form>
+                    </div>
+                    {% else %}
+                    {# enviado: padeiro já vê -> ainda dá pra editar #}
+                    <div class="badge bg-success mt-1" style="font-size:.62rem;">📤 enviado</div>
+                    <div class="mt-1">
+                      <a class="btn btn-outline-secondary btn-sm" style="font-size:.62rem;padding:.05rem .35rem;"
+                         href="{{ url_for('padeiro_testes.editar_plano', data=dia.data) }}">✏️ editar</a>
+                    </div>
+                    {% endif %}
                 </th>
                 {% endfor %}
                 <th>Total</th>
