@@ -183,6 +183,15 @@ def _canal_permitido(channel_id, channel_type):
     return channel_id in {c.strip() for c in permitidos.split(',') if c.strip()}
 
 
+def _bot_pedidos_ativo():
+    """Bot de PEDIDOS do Slack (copilot via DM/@mention) — DESATIVADO por
+    decisao do dono (28/06/2026: pedidos nao sao mais feitos pelo Slack). A
+    captura de NF/boleto (Contas a Pagar) e os posts automaticos de saida
+    seguem normais. Reativar: env SLACK_BOT_PEDIDOS_ATIVO=1."""
+    import os
+    return os.environ.get('SLACK_BOT_PEDIDOS_ATIVO', '0') == '1'
+
+
 def processar_evento_mensagem(evento):
     """Processa um event de mensagem (DM ou @mention).
 
