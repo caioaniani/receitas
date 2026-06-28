@@ -1,4 +1,4 @@
-"""Smoke test do clone /padeiro-testes (Etapa 2).
+"""Smoke test do clone /padeiro (Etapa 2).
 
 Confirma que o clone renderiza e que a /padeiro OFICIAL segue intacta.
 """
@@ -17,13 +17,13 @@ def _login(cliente):
 
 def test_padeiro_testes_index_renderiza(app, admin_user, loja, catalogo, cliente):
     _login(cliente)
-    r = cliente.get('/padeiro-testes/')
+    r = cliente.get('/padeiro/')
     assert r.status_code == 200
 
 
 def test_padeiro_testes_listas_fragmento(app, admin_user, loja, catalogo, cliente):
     _login(cliente)
-    r = cliente.get('/padeiro-testes/listas.html')
+    r = cliente.get('/padeiro/listas.html')
     assert r.status_code == 200
 
 

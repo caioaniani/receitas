@@ -15,7 +15,7 @@ from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.blueprints.padeiro import padeiro_bp
-from app.decorators import padeiro_required
+from app.decorators import admin_required, padeiro_required
 from app.extensions import db
 from app.models import Driver, PedidoLoja, VendaB2B
 from app.utils import hoje
@@ -91,6 +91,71 @@ def _dados_listas(dia, eh_hoje):
             'drivers': drivers, 'n_repetidos': n_repetidos}
 
 
+def _plano_do_dia(dia):
+    """Plano de producao aprovado do cronograma pra `dia` (origem=
+    'cronograma'), AGRUPADO por massa-base pro padeiro entender o que amassar e
+    quanto tirar de cada. None se nao houver plano aprovado.
+
+    Retorna {plano_id, total_falta, grupos:[{nome, base_massa_label, fornadas,
+    itens:[...]}], solos:[...]} — cada item tem item_id/receita_id/nome/alvo/
+    produzido/falta."""
+    from app.models import MassaBaseItem, PlanejamentoProducao
+    from app.services.gantt import _g_label
+    from app.services.massa_base import calcular_cascata
+    from app.services.producao import fornadas_amassadeira
+
+    plano = (PlanejamentoProducao.query
+             .filter_by(data=dia, origem='cronograma')
+             .filter(PlanejamentoProducao.enviado_ao_padeiro.isnot(False))
+             .first())
+    if plano is None:
+        return None
+
+    membership = {row.receita_id: row for row in MassaBaseItem.query.all()}
+
+    def _item(it):
+        rec = it.receita
+        alvo = int(it.qtd_alvo or 0)
+        feito = int(it.produzido_qtd or 0)
+        rend = (float(rec.rendimento_qtd or 0) or 1.0) if rec else 1.0
+        return {'item_id': it.id, 'receita_id': it.receita_id,
+                'nome': rec.nome if rec else '(receita)', 'alvo': alvo,
+                'produzido': feito, 'falta': max(0, alvo - feito),
+                'fornadas': fornadas_amassadeira(rec, it.multiplicador),
+                '_porcoes': alvo / rend,
+                '_mult': it.multiplicador, '_mbi': membership.get(it.receita_id)}
+
+    itens = [_item(it) for it in plano.itens]
+
+    # agrupa por massa-base; o resto vai pra "solos".
+    por_grupo = {}
+    solos = []
+    for d in itens:
+        mbi = d['_mbi']
+        if mbi is not None:
+            por_grupo.setdefault(mbi.massa_base_id, (mbi.massa_base, []))[1].append(d)
+        else:
+            solos.append(d)
+
+    grupos = []
+    for mb_id, (mb, ds) in por_grupo.items():
+        # porções reais (qtd_alvo / rendimento) — mesma escala do modal "ver a
+        # base", não o multiplicador inteiro (que infla a massa).
+        porcoes = {d['receita_id']: d['_porcoes'] for d in ds}
+        calc = calcular_cascata(mb, porcoes)
+        grupos.append({
+            'mb_id': mb_id,
+            'nome': mb.nome,
+            'base_massa_label': _g_label(calc['base_massa']) if calc else None,
+            'fornadas': (calc['fornadas'] if calc else None),
+            'itens': ds,
+        })
+    grupos.sort(key=lambda g: g['nome'])
+
+    return {'plano_id': plano.id, 'grupos': grupos, 'solos': solos,
+            'total_falta': sum(i['falta'] for i in itens)}
+
+
 @padeiro_bp.route('/')
 @login_required
 @padeiro_required
@@ -102,7 +167,26 @@ def index():
         'padeiro/index.html', dia=dia, eh_hoje=eh_hoje,
         dia_anterior=(dia - timedelta(days=1)).isoformat(),
         dia_seguinte=(dia + timedelta(days=1)).isoformat(),
+        plano_dia=_plano_do_dia(dia),
         **_dados_listas(dia, eh_hoje))
+
+
+@padeiro_bp.route('/gantt')
+@login_required
+@padeiro_required
+def gantt():
+    """Fluxograma/Gantt da produção do dia: agenda as etapas das receitas do
+    plano aprovado na linha do tempo (turnos 06–14 / 13–21), serializando
+    amassadeira e forno e encaixando mise en place em paralelo."""
+    from app.services.gantt import montar_gantt
+
+    hj = hoje()
+    dia = _parse_dia(request.args.get('data')) or hj
+    return render_template(
+        'padeiro/gantt.html', dia=dia, eh_hoje=(dia == hj),
+        dia_anterior=(dia - timedelta(days=1)).isoformat(),
+        dia_seguinte=(dia + timedelta(days=1)).isoformat(),
+        g=montar_gantt(dia))
 
 
 @padeiro_bp.route('/listas.html')
@@ -116,6 +200,191 @@ def listas_html():
     eh_hoje = (dia == hj)
     return render_template('padeiro/_listas.html', dia=dia, eh_hoje=eh_hoje,
                            **_dados_listas(dia, eh_hoje))
+
+
+@padeiro_bp.route('/receita/<int:receita_id>.json')
+@login_required
+@padeiro_required
+def receita_mise(receita_id):
+    """Receita escalada pra `unidades` (mise en place do modal)."""
+    from flask import jsonify
+
+    from app.models import Receita
+    from app.services.producao import mise_en_place
+
+    rec = Receita.query.get_or_404(receita_id)
+    try:
+        unidades = max(1, int(request.args.get('unidades', 1)))
+    except (TypeError, ValueError):
+        unidades = 1
+    return jsonify(mise_en_place(rec, unidades))
+
+
+@padeiro_bp.route('/massa-base/<int:mb_id>.json')
+@login_required
+@padeiro_required
+def massa_base_mise(mb_id):
+    """A BASE de uma massa-base escalada pro plano do dia: o que pôr na
+    amassadeira + a sequência de retiradas (em unidades de pão). É isto que o
+    padeiro precisa — não a receita separada de cada pão."""
+    from flask import jsonify
+
+    from app.models import MassaBase, PlanejamentoProducao
+    from app.services.gantt import _g_label
+    from app.services.massa_base import calcular_cascata
+
+    mb = MassaBase.query.get_or_404(mb_id)
+    dia = _parse_dia(request.args.get('data')) or hoje()
+    plano = (PlanejamentoProducao.query
+             .filter_by(data=dia, origem='cronograma')
+             .filter(PlanejamentoProducao.enviado_ao_padeiro.isnot(False))
+             .first())
+
+    # Escala a base pelas UNIDADES do dia em porções REAIS (qtd_alvo /
+    # rendimento), não pelo multiplicador inteiro do item — esse arredonda a
+    # fornada pra cima (ceil) e infla a massa/água (ex: 6 un de rendimento 10
+    # viraria 1 fornada = 10 un). É o mesmo consumo fracionário de
+    # `produzir_item_plano`.
+    membros = {it.receita_id: it.receita for it in mb.itens}
+    porcoes, unidades = {}, {}
+    if plano:
+        for it in plano.itens:
+            rec = membros.get(it.receita_id)
+            if rec is None:
+                continue
+            alvo = int(it.qtd_alvo or 0)
+            rend = float(rec.rendimento_qtd or 0) or 1.0
+            unidades[it.receita_id] = alvo
+            porcoes[it.receita_id] = alvo / rend
+
+    calc = calcular_cascata(mb, porcoes or None)
+    if calc is None:
+        return jsonify({'nome': mb.nome, 'vazio': True})
+
+    base_recipe = [{'nome': n, 'qtd': _g_label(g)} for n, g in
+                   sorted(calc['base_mix'].items(), key=lambda kv: -kv[1])]
+
+    def _passo(p):
+        return {'tipo': p['tipo'], 'nome': p['nome'],
+                'unidades': unidades.get(p['receita_id']),
+                'tirar_massa': (_g_label(p['tirar_massa'])
+                                if p.get('tirar_massa') else None),
+                'acrescentar': [{'nome': n, 'qtd': _g_label(g)}
+                                for n, g in p['acrescentar'].items()],
+                'eh_ramo': p.get('eh_ramo', False)}
+
+    cascata = [_passo(p) for p in calc['passos']]
+    return jsonify({
+        'nome': mb.nome, 'base_massa': _g_label(calc['base_massa']),
+        'fornadas': calc['fornadas'], 'base_recipe': base_recipe,
+        'cascata': cascata})
+
+
+@padeiro_bp.route('/produzir-plano/<int:item_id>', methods=['POST'])
+@login_required
+@padeiro_required
+def produzir_plano(item_id):
+    """OPCAO B: produz `unidades` de um item do plano do dia -> credita estoque
+    pronto + desconta MP da ficha + avanca produzido_qtd."""
+    from app.services.producao import produzir_item_plano
+
+    try:
+        unidades = int(request.form.get('unidades') or 0)
+    except (TypeError, ValueError):
+        unidades = 0
+    res = produzir_item_plano(item_id, unidades, current_user.id)
+    if res.get('ok'):
+        flash('Produzido %d un — estoque creditado e MP descontada.'
+              % unidades, 'success')
+    else:
+        flash(res.get('erro', 'Erro ao produzir.'), 'warning')
+    return redirect(request.referrer or url_for('padeiro.index'))
+
+
+@padeiro_bp.route('/plano/editar', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def editar_plano():
+    """Edita a ORDEM DE PRODUÇÃO do dia (a do cronograma, que desce pro padeiro):
+    muda a quantidade-alvo de cada receita, adiciona ou remove receitas. Reflete
+    direto no Fluxograma e na Produção do dia. Não mexe no que já foi produzido."""
+    from math import ceil
+
+    from app.models import PlanejamentoItem, PlanejamentoProducao, Receita
+
+    hj = hoje()
+    dia = _parse_dia(request.args.get('data') or request.form.get('data')) or hj
+    plano = (PlanejamentoProducao.query
+             .filter_by(data=dia, origem='cronograma').first())
+
+    def _rend(rec):
+        return float(rec.rendimento_qtd) if rec and rec.rendimento_qtd else 1.0
+
+    if request.method == 'POST':
+        if plano is None:                      # cria a ordem do dia se não existe
+            plano = PlanejamentoProducao(
+                data=dia, origem='cronograma', status='aprovado',
+                nome='Produção %s' % dia.strftime('%d/%m'),
+                criado_por=current_user.id, enviado_ao_padeiro=False)  # rascunho
+            db.session.add(plano)
+            db.session.flush()
+
+        # 1) atualiza quantidade / remove itens existentes
+        for it in list(plano.itens):
+            if request.form.get('remover_%d' % it.id):
+                db.session.delete(it)
+                continue
+            try:
+                alvo = max(0, int(request.form.get('alvo_%d' % it.id) or 0))
+            except (TypeError, ValueError):
+                alvo = int(it.qtd_alvo or 0)
+            it.qtd_alvo = alvo
+            it.multiplicador = max(1, ceil(alvo / _rend(it.receita))) if alvo else 1
+
+        # 2) adiciona novas receitas
+        existentes = {it.receita_id for it in plano.itens}
+        novas_rid = request.form.getlist('novo_receita_id[]')
+        novas_qtd = request.form.getlist('novo_alvo[]')
+        for i, rid in enumerate(novas_rid):
+            if not rid:
+                continue
+            try:
+                rid = int(rid)
+                alvo = max(0, int(novas_qtd[i]) if i < len(novas_qtd)
+                           and novas_qtd[i] else 0)
+            except (TypeError, ValueError):
+                continue
+            if alvo <= 0 or rid in existentes:
+                continue
+            rec = db.session.get(Receita, rid)
+            if rec is None:
+                continue
+            db.session.add(PlanejamentoItem(
+                planejamento_id=plano.id, receita_id=rid, qtd_alvo=alvo,
+                multiplicador=max(1, ceil(alvo / _rend(rec)))))
+            existentes.add(rid)
+
+        db.session.commit()
+        flash('Plano de produção de %s atualizado.' % dia.strftime('%d/%m'),
+              'success')
+        return redirect(url_for('padeiro.editar_plano', data=dia.isoformat()))
+
+    # GET: monta a tela
+    itens = []
+    if plano:
+        for it in plano.itens:
+            rec = it.receita
+            itens.append({'id': it.id, 'nome': rec.nome if rec else '(receita)',
+                          'alvo': int(it.qtd_alvo or 0),
+                          'produzido': int(it.produzido_qtd or 0)})
+        itens.sort(key=lambda x: x['nome'])
+    receitas = (Receita.query.filter(Receita.arquivada_em.is_(None))
+                .order_by(Receita.categoria, Receita.nome).all())
+    return render_template('padeiro/editar_plano.html', dia=dia,
+                           dia_iso=dia.isoformat(), eh_hoje=(dia == hj),
+                           dia_anterior=(dia - timedelta(days=1)).isoformat(),
+                           dia_seguinte=(dia + timedelta(days=1)).isoformat(),
+                           plano=plano, itens=itens, receitas=receitas)
 
 
 @padeiro_bp.route('/<int:id>/separar', methods=['POST'])
@@ -439,6 +708,7 @@ def produzir():
         validados.append((tipo, obj, qtd))
 
     try:
+        from app.services.producao import consumir_subreceitas_prontas
         resumo = []
         for tipo, obj, qtd in validados:
             entrada_producao(
@@ -446,6 +716,9 @@ def produzir():
                 produto_id=obj.id if tipo == 'produto' else None,
                 estado=None, quantidade=qtd, usuario_id=current_user.id,
                 referencia='Produção (TV padeiro)')
+            # receita derivada (ex: almond) consome a sub-receita pronta do congelado
+            if tipo == 'receita':
+                consumir_subreceitas_prontas(obj, qtd, current_user.id)
             resumo.append({'nome': obj.nome, 'qtd': qtd})
         db.session.commit()
     except Exception:

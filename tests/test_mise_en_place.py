@@ -1,7 +1,7 @@
 """Modal mise en place: receita escalada pra quantidade de produção.
 
 mise_en_place(receita, unidades) ajusta cada ingrediente (farinha, água...)
-pro total a produzir; endpoint /padeiro-testes/receita/<id>.json serve isso.
+pro total a produzir; endpoint /padeiro/receita/<id>.json serve isso.
 """
 from app.extensions import db
 from app.models import Receita, ReceitaIngrediente
@@ -48,7 +48,7 @@ def test_rota_receita_mise(app, admin_user):
     client = app.test_client()
     client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
                 follow_redirects=True)
-    resp = client.get('/padeiro-testes/receita/%d.json?unidades=20' % r.id)
+    resp = client.get('/padeiro/receita/%d.json?unidades=20' % r.id)
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['nome'] == 'Pão Francês'

@@ -221,7 +221,7 @@ def test_rota_aprovar(app, admin_user):
 def test_aprovar_cria_rascunho_padeiro_nao_ve(app, admin_user):
     """Aprovar cria a ordem como RASCUNHO (enviado_ao_padeiro=False); o padeiro
     NÃO vê (Produção do dia e Fluxograma vazios) até o passo 'enviar'."""
-    from app.blueprints.padeiro_testes.routes import _plano_do_dia
+    from app.blueprints.padeiro.routes import _plano_do_dia
     from app.models import PlanejamentoProducao
     from app.services.gantt import montar_gantt
     from app.services.producao import aprovar_plano_do_dia
@@ -265,7 +265,7 @@ def test_rota_enviar(app, admin_user):
 def test_plano_antigo_sem_flag_continua_visivel(app, admin_user):
     """Ordem antiga (criada sem o flag) tem DEFAULT True -> padeiro continua
     vendo (não quebra produção em andamento)."""
-    from app.blueprints.padeiro_testes.routes import _plano_do_dia
+    from app.blueprints.padeiro.routes import _plano_do_dia
     from app.models import PlanejamentoItem, PlanejamentoProducao
     r = _receita('Pão Antigo')
     plano = PlanejamentoProducao(data=hoje(), origem='cronograma')  # sem flag

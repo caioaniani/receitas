@@ -74,7 +74,7 @@ def test_rota_produzir_plano(app, admin_user):
     client = app.test_client()
     client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
                 follow_redirects=True)
-    resp = client.post('/padeiro-testes/produzir-plano/%d' % it.id,
+    resp = client.post('/padeiro/produzir-plano/%d' % it.id,
                        data={'unidades': 10})
     assert resp.status_code == 302
     db.session.refresh(it)
@@ -86,7 +86,7 @@ def test_padeiro_testes_mostra_producao_do_dia(app, admin_user):
     client = app.test_client()
     client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
                 follow_redirects=True)
-    resp = client.get('/padeiro-testes/')
+    resp = client.get('/padeiro/')
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     assert 'Produção do dia' in body
@@ -96,7 +96,7 @@ def test_padeiro_testes_mostra_producao_do_dia(app, admin_user):
 def test_plano_do_dia_agrupa_por_massa_base(app, admin_user):
     """Pães de uma massa-base comum aparecem agrupados (amasse a base + tire
     cada um); os demais vão pra 'solos'."""
-    from app.blueprints.padeiro_testes.routes import _plano_do_dia
+    from app.blueprints.padeiro.routes import _plano_do_dia
     from app.models import MassaBase, MassaBaseItem
 
     def _rec(nome, agua, recheio=None):
@@ -183,7 +183,7 @@ def test_massa_base_mise_endpoint(app, admin_user):
     client = app.test_client()
     client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
                 follow_redirects=True)
-    resp = client.get('/padeiro-testes/massa-base/%d.json?data=%s'
+    resp = client.get('/padeiro/massa-base/%d.json?data=%s'
                       % (mb.id, hoje().isoformat()))
     assert resp.status_code == 200
     d = resp.get_json()
@@ -231,7 +231,7 @@ def test_massa_base_mise_escala_unidades_reais(app, admin_user):
     client = app.test_client()
     client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
                 follow_redirects=True)
-    d = client.get('/padeiro-testes/massa-base/%d.json?data=%s'
+    d = client.get('/padeiro/massa-base/%d.json?data=%s'
                    % (mb.id, hoje().isoformat())).get_json()
     # massa/porção = 1000 + 700 = 1700 g; 0,5 porção -> 850 g (NÃO 1700)
     base = {b['nome']: b['qtd'] for b in d['base_recipe']}
@@ -255,7 +255,7 @@ def test_massa_base_mise_exige_padeiro(app):
     client = app.test_client()
     client.post('/auth/login', data={'login': 'func2', 'senha': '123'},
                 follow_redirects=True)
-    resp = client.get('/padeiro-testes/massa-base/%d.json' % mb.id)
+    resp = client.get('/padeiro/massa-base/%d.json' % mb.id)
     assert resp.status_code == 403
 
 
@@ -321,7 +321,7 @@ def test_produzir_freeform_consome_subreceita(app, admin_user):
     c = app.test_client()
     c.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
            follow_redirects=True)
-    resp = c.post('/padeiro-testes/produzir',
+    resp = c.post('/padeiro/produzir',
                   json={'itens': [{'ref': 'receita:%d' % almond.id, 'quantidade': 3}]})
     assert resp.status_code == 200 and resp.get_json()['ok'] is True
     assert EstoqueProducao.query.filter_by(receita_id=trad.id).first().quantidade == 4
@@ -349,7 +349,7 @@ def test_editar_plano_muda_qtd_adiciona_remove(app, admin_user):
     c = app.test_client()
     c.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
            follow_redirects=True)
-    resp = c.post('/padeiro-testes/plano/editar', data={
+    resp = c.post('/padeiro/plano/editar', data={
         'data': hoje().isoformat(),
         'alvo_%d' % it1_id: '50',            # A: 20 -> 50
         'remover_%d' % it2_id: 'on',         # remove B
@@ -374,4 +374,4 @@ def test_editar_plano_exige_admin(app):
     c = app.test_client()
     c.post('/auth/login', data={'login': 'pad9', 'senha': '123'},
            follow_redirects=True)
-    assert c.get('/padeiro-testes/plano/editar').status_code == 403
+    assert c.get('/padeiro/plano/editar').status_code == 403

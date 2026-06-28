@@ -214,12 +214,184 @@
 <div id="prep-ticker" style="display:none;" onclick="togglePrep()" role="button">
   <div class="prep-ticker-track"><span>Pedido para preparar para amanhã já disponível</span></div>
 </div>
+<style>
+  .prod-dia { padding:0; overflow:hidden; }
+  .prod-dia-top { display:flex; justify-content:space-between; align-items:center;
+    background:#212529; color:#fff; padding:14px 18px; }
+  .prod-dia-top b { font-size:20px; letter-spacing:.3px; }
+  .prod-dia-falta { color:#ffd166; font-weight:800; font-size:16px; }
+  .prod-dia-gantt { margin-left:auto; background:#0d6efd; color:#fff;
+    text-decoration:none; font-weight:700; font-size:15px; padding:8px 14px;
+    border-radius:9px; white-space:nowrap; }
+  .prod-dia-gantt:active { background:#0b5ed7; }
+  .prod-dia-row { display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:14px 18px; border-bottom:1px solid #eef0f2; }
+  .prod-dia-row:last-child { border-bottom:0; }
+  .prod-dia-row.feito { opacity:.5; }
+  .prod-dia-nome { font-size:19px; font-weight:800; color:var(--azul,#0d6efd);
+    text-decoration:none; min-width:15rem; background:none; border:0; padding:0;
+    text-align:left; cursor:pointer; font-family:inherit; }
+  .prod-dia-nome:hover { text-decoration:underline; }
+  .prod-dia-nome-static { color:#212529; cursor:default; }
+  .prod-dia-nome-static:hover { text-decoration:none; }
+  .prod-dia-ver { font-size:13px; font-weight:600; color:var(--cinza,#6c757d); }
+  .prod-dia-meta { color:#6c757d; font-size:15px; flex:1; }
+  .prod-dia-meta b { color:#343a40; }
+  .prod-dia-form { display:flex; gap:8px; align-items:center; }
+  .prod-dia-qtd { width:84px; font-size:19px; padding:9px; border:1px solid #ced4da;
+    border-radius:10px; text-align:right; }
+  .prod-dia-btn { background:var(--verde,#198754); color:#fff; border:0;
+    border-radius:12px; padding:11px 22px; font-size:17px; font-weight:800; cursor:pointer; }
+  .prod-dia-pronto { color:var(--verde,#198754); font-weight:800; font-size:17px; }
+  .prod-dia-grupo { background:#eef4f0; color:#1a4731; font-weight:800; font-size:16px;
+    padding:10px 18px; border-top:1px solid #d8e6dd; border-bottom:1px solid #e6eeea;
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .prod-dia-grupo b { color:#198754; }
+  .prod-dia-grupo-sub { font-weight:600; color:#6c757d; font-size:14px; }
+  .prod-dia-base-btn { margin-left:auto; background:#198754; color:#fff; border:0;
+    border-radius:9px; padding:8px 14px; font-size:14px; font-weight:700;
+    cursor:pointer; white-space:nowrap; }
+  .prod-dia-base-btn:active { background:#146c43; }
+
+  /* Sequência de retiradas da massa-base (no modal) */
+  .mep-base-massa { background:#212529; color:#fff; border-radius:12px;
+    padding:14px 16px; font-size:20px; font-weight:800; margin:4px 0 6px; }
+  .mep-base-massa small { display:block; font-size:13px; font-weight:600;
+    color:#adb5bd; margin-top:2px; }
+  .mep-casc { list-style:none; margin:6px 0 0; padding:0; }
+  .mep-casc-step { border:1px solid #e6e6e6; border-left:5px solid var(--verde,#198754);
+    border-radius:12px; padding:12px 14px; margin-bottom:10px; background:#fff; }
+  .mep-casc-step.ramo { border-left-color:#fd7e14; background:#fff8f1; }
+  .mep-casc-step.so-acresc { border-left-color:#0d6efd; background:#f1f6ff; }
+  .mep-casc-num { display:inline-flex; align-items:center; justify-content:center;
+    width:26px; height:26px; border-radius:50%; background:#198754; color:#fff;
+    font-size:15px; font-weight:800; margin-right:8px; }
+  .mep-casc-step.ramo .mep-casc-num { background:#fd7e14; }
+  .mep-casc-step.so-acresc .mep-casc-num { background:#0d6efd; }
+  .mep-casc-tira { font-size:19px; font-weight:800; color:#212529; }
+  .mep-casc-tira .massa { color:#198754; }
+  .mep-casc-tira .un { color:#6c757d; font-weight:700; font-size:16px; }
+  .mep-casc-step.ramo .mep-casc-tira .massa { color:#fd7e14; }
+  .mep-casc-tag { font-size:12px; font-weight:700; color:#fd7e14;
+    text-transform:uppercase; letter-spacing:.4px; margin-left:6px; }
+  .mep-casc-acr { margin:8px 0 0 34px; font-size:16px; color:#495057; }
+  .mep-casc-acr .lbl { font-weight:700; color:#b45309; }
+  .mep-casc-acr b { font-variant-numeric:tabular-nums; }
+
+  /* Modal mise en place (receita escalada) */
+  #mep-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.55);
+    display:none; z-index:50; }
+  #mep-backdrop.aberto { display:block; }
+  #mep-modal { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:min(700px,95vw); max-height:90vh; overflow:auto; background:#fff;
+    border-radius:16px; box-shadow:0 10px 50px rgba(0,0,0,.35); z-index:51; display:none; }
+  #mep-modal.aberto { display:block; }
+  .mep-head { display:flex; justify-content:space-between; align-items:center;
+    background:#212529; color:#fff; padding:16px 20px; position:sticky; top:0;
+    border-radius:16px 16px 0 0; }
+  .mep-head b { font-size:21px; }
+  .mep-x { background:#495057; color:#fff; border:0; border-radius:10px;
+    width:42px; height:42px; font-size:22px; cursor:pointer; }
+  #mep-body { padding:18px 20px; }
+  .mep-sub { font-weight:800; color:#343a40; margin:16px 0 6px;
+    text-transform:uppercase; font-size:13px; letter-spacing:.6px; }
+  .mep-ing { display:flex; align-items:center; gap:14px; padding:12px 4px;
+    border-bottom:1px solid #f0f0f0; font-size:19px; cursor:pointer; }
+  .mep-ing input { width:28px; height:28px; flex:none; cursor:pointer; }
+  .mep-ing .nm { flex:1; }
+  .mep-ing .q { font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .mep-ing small { color:#adb5bd; font-weight:600; }
+  .mep-ing.done { opacity:.5; }
+  .mep-ing.done .nm, .mep-ing.done .q { text-decoration:line-through; }
+  .mep-etapa { margin:9px 0; font-size:17px; line-height:1.5; }
+  /* Fluxograma do processo (etapas cadastradas) */
+  .mep-proc { display:flex; align-items:stretch; gap:0; padding:6px 2px 2px;
+    list-style:none; margin:0; }
+  .mep-proc { flex-direction:column; }
+  .mep-step { display:flex; align-items:center; gap:12px; padding:11px 12px;
+    border:1px solid #e6e6e6; border-left:5px solid var(--verde,#198754);
+    border-radius:10px; margin-bottom:8px; background:#fff; font-size:18px; }
+  .mep-step.passiva { border-left-color:#adb5bd; background:#f8f9fa;
+    color:#6c757d; font-style:italic; }
+  .mep-step .ic { font-size:22px; flex:none; width:30px; text-align:center; }
+  .mep-step .st-nm { flex:1; font-weight:700; }
+  .mep-step.passiva .st-nm { font-weight:600; }
+  .mep-step .st-dur { font-weight:800; font-variant-numeric:tabular-nums;
+    white-space:nowrap; background:#eef6f0; color:#198754; padding:3px 9px;
+    border-radius:8px; font-size:15px; }
+  .mep-step.passiva .st-dur { background:#e9ecef; color:#6c757d; }
+  .mep-step .st-eq { font-size:13px; color:#adb5bd; white-space:nowrap; }
+</style>
 <div class="wrap">
   {% with msgs = get_flashed_messages(with_categories=true) %}
     {% for cat, msg in msgs %}
       <div class="flash {{ cat }}">{{ msg }}</div>
     {% endfor %}
   {% endwith %}
+
+  {% macro prod_row(it, em_grupo=false) %}
+    <div class="prod-dia-row {% if it.falta == 0 %}feito{% endif %}">
+      {% if em_grupo %}
+      {# pão que sai da massa-base: não tem receita separada — a "receita" é a
+         base + a retirada (botão "ver a base" no cabeçalho do grupo). #}
+      <span class="prod-dia-nome prod-dia-nome-static">{{ it.nome }}</span>
+      {% else %}
+      <button type="button" class="prod-dia-nome" title="Ver a receita escalada"
+              onclick="verReceita({{ it.receita_id }}, {{ it.item_id }}, {{ it.falta or it.alvo }})">
+        {{ it.nome }} <span class="prod-dia-ver">📋 ver receita</span>
+      </button>
+      {% endif %}
+      <span class="prod-dia-meta">
+        {% if it.falta > 0 %}produzir <b style="color:#198754;">{{ it.falta }}</b> un{% if it.produzido %} <small>(já {{ it.produzido }}/{{ it.alvo }})</small>{% endif %}
+        {%- else -%}✓ feito {{ it.produzido }} un{% endif %}
+      </span>
+      {% if it.falta > 0 %}
+      <form method="POST" action="{{ url_for('padeiro.produzir_plano', item_id=it.item_id) }}"
+            class="prod-dia-form" onsubmit="return confirm('Produzir {{ it.nome }} e dar baixa na matéria-prima?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="number" name="unidades" min="1" value="{{ it.falta }}"
+               class="prod-dia-qtd" id="qtd-{{ it.item_id }}">
+        <button type="submit" class="prod-dia-btn">Produzir</button>
+      </form>
+      {% else %}
+      <span class="prod-dia-pronto">✓ pronto</span>
+      {% endif %}
+    </div>
+  {% endmacro %}
+
+  {% if plano_dia and (plano_dia.grupos or plano_dia.solos) %}
+  <div class="card prod-dia">
+    <div class="prod-dia-top">
+      <b>🔨 Produção do dia</b>
+      {% if plano_dia.total_falta %}
+      <span class="prod-dia-falta">faltam {{ plano_dia.total_falta }} un</span>
+      {% else %}
+      <span class="prod-dia-pronto" style="color:#ffd166;">✓ tudo produzido</span>
+      {% endif %}
+      <span style="margin-left:auto; display:flex; gap:8px;">
+        {% if current_user.is_admin() %}
+        <a class="prod-dia-gantt" style="background:#6c757d; margin-left:0;" href="{{ url_for('padeiro.editar_plano', data=dia.isoformat()) }}">✏️ editar plano</a>
+        {% endif %}
+        <a class="prod-dia-gantt" style="margin-left:0;" href="{{ url_for('padeiro.gantt', data=dia.isoformat()) }}">📊 fluxograma</a>
+      </span>
+    </div>
+
+    {# pães que saem de uma massa-base comum: amasse a base e tire cada um #}
+    {% for g in plano_dia.grupos %}
+    <div class="prod-dia-grupo">
+      🥣 Massa base: {{ g.nome }}{% if g.base_massa_label %} — amasse <b>{{ g.base_massa_label }}</b>{% if g.fornadas %} <span class="prod-dia-grupo-sub">({{ g.fornadas }} fornada{{ 's' if g.fornadas != 1 }})</span>{% endif %}{% endif %}
+      <button type="button" class="prod-dia-base-btn" onclick="verBase({{ g.mb_id }})">📋 ver a base e as retiradas</button>
+    </div>
+    {% for it in g.itens %}{{ prod_row(it, em_grupo=true) }}{% endfor %}
+    {% endfor %}
+
+    {# pães soltos (não saem de massa-base) #}
+    {% if plano_dia.solos %}
+    {% if plano_dia.grupos %}<div class="prod-dia-grupo">Outros pães</div>{% endif %}
+    {% for it in plano_dia.solos %}{{ prod_row(it) }}{% endfor %}
+    {% endif %}
+  </div>
+  {% endif %}
 
   <div id="listas">
     {% include 'padeiro/_listas.html' %}
@@ -289,6 +461,174 @@
   </div>
 </div>
 <div id="upd-badge">atualizado —</div>
+
+<!-- Modal mise en place: receita escalada pra quantidade -->
+<div id="mep-backdrop" onclick="fecharMep()"></div>
+<div id="mep-modal">
+  <div class="mep-head">
+    <b id="mep-titulo">Receita</b>
+    <button type="button" class="mep-x" onclick="fecharMep()" aria-label="Fechar">×</button>
+  </div>
+  <div id="mep-body"></div>
+</div>
+
+<script>
+  function _mepG(g) {
+    g = Number(g) || 0;
+    if (g >= 1000) return (g / 1000).toFixed(2).replace('.', ',') + ' kg';
+    return Math.round(g) + ' g';
+  }
+  function _mepEsc(s) {
+    var d = document.createElement('div'); d.textContent = (s == null ? '' : s);
+    return d.innerHTML;
+  }
+  function _mepEquipIcon(eq, ativa) {
+    if (eq === 'amassadeira') return '🥣';
+    if (eq === 'forno') return '🔥';
+    if (eq === 'camara_fria') return '❄️';
+    if (eq === 'bancada') return '✋';
+    return ativa ? '•' : '⏳';   // sem equipamento: ativo = ponto, passivo = espera
+  }
+  function verReceita(rid, itemId, fallback) {
+    var inp = document.getElementById('qtd-' + itemId);
+    var un = inp && parseInt(inp.value) > 0 ? parseInt(inp.value) : (fallback || 1);
+    document.getElementById('mep-titulo').textContent = 'Carregando…';
+    document.getElementById('mep-body').innerHTML =
+      '<p style="padding:10px;color:#888;">Carregando receita…</p>';
+    document.getElementById('mep-backdrop').classList.add('aberto');
+    document.getElementById('mep-modal').classList.add('aberto');
+    fetch('/padeiro/receita/' + rid + '.json?unidades=' + un)
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        document.getElementById('mep-titulo').textContent =
+          d.nome + ' — ' + d.unidades + ' un';
+        var h = '<div class="mep-sub">Mise en place — marque o que já separou</div>';
+        (d.ingredientes || []).forEach(function (i) {
+          var key = 'mep:' + d.receita_id + ':' + i.nome;
+          var checked = localStorage.getItem(key) === '1';
+          var q = i.unidade === 'g' ? _mepG(i.qtd) : (i.qtd + ' ' + i.unidade);
+          h += '<label class="mep-ing' + (checked ? ' done' : '') + '">' +
+               '<input type="checkbox" class="mep-chk" data-key="' + _mepEsc(key) + '"' +
+               (checked ? ' checked' : '') + '>' +
+               '<span class="nm">' + _mepEsc(i.nome) +
+               (i.pct ? ' <small>' + i.pct + '%</small>' : '') + '</span>' +
+               '<span class="q">' + q + '</span></label>';
+        });
+        if (d.processo && d.processo.length) {
+          h += '<div class="mep-sub">Processo — passo a passo</div>';
+          h += '<ul class="mep-proc">';
+          d.processo.forEach(function (e) {
+            var ic = _mepEquipIcon(e.equipamento, e.ativa);
+            var eq = e.equipamento ? '<span class="st-eq">' + _mepEsc(e.equipamento) + '</span>' : '';
+            h += '<li class="mep-step' + (e.ativa ? '' : ' passiva') + '">' +
+                 '<span class="ic">' + ic + '</span>' +
+                 '<span class="st-nm">' + _mepEsc(e.nome) + '</span>' + eq +
+                 '<span class="st-dur">' + _mepEsc(e.duracao) + '</span></li>';
+          });
+          h += '</ul>';
+        } else if (d.etapas && d.etapas.length) {
+          h += '<div class="mep-sub">Modo de preparo</div>';
+          d.etapas.forEach(function (e, idx) {
+            h += '<div class="mep-etapa"><strong>' + (idx + 1) + '.</strong> ' + _mepEsc(e) + '</div>';
+          });
+        }
+        document.getElementById('mep-body').innerHTML = h;
+        document.querySelectorAll('#mep-body .mep-chk').forEach(function (cb) {
+          cb.addEventListener('change', function () {
+            var lbl = cb.closest('.mep-ing');
+            if (cb.checked) { localStorage.setItem(cb.dataset.key, '1'); lbl.classList.add('done'); }
+            else { localStorage.removeItem(cb.dataset.key); lbl.classList.remove('done'); }
+          });
+        });
+      })
+      .catch(function () {
+        document.getElementById('mep-body').innerHTML =
+          '<p style="color:#b02a37;padding:10px;">Erro ao carregar a receita.</p>';
+      });
+  }
+  // Massa-base: o que PÔR na amassadeira + a sequência de RETIRADAS (em pães).
+  // É isto que o padeiro precisa — não a receita separada de cada pão (que não
+  // existe: todos saem da mesma base).
+  function verBase(mbId) {
+    document.getElementById('mep-titulo').textContent = 'Carregando…';
+    document.getElementById('mep-body').innerHTML =
+      '<p style="padding:10px;color:#888;">Carregando massa base…</p>';
+    document.getElementById('mep-backdrop').classList.add('aberto');
+    document.getElementById('mep-modal').classList.add('aberto');
+    fetch('/padeiro/massa-base/' + mbId + '.json?data={{ dia.isoformat() }}')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        document.getElementById('mep-titulo').textContent = 'Massa base: ' + d.nome;
+        if (d.vazio) {
+          document.getElementById('mep-body').innerHTML =
+            '<p style="padding:10px;color:#6c757d;">Sem produção pra esta base hoje.</p>';
+          return;
+        }
+        var h = '<div class="mep-base-massa">🥣 Amasse ' + _mepEsc(d.base_massa) +
+          (d.fornadas ? ' <small>' + d.fornadas + ' fornada' +
+            (d.fornadas != 1 ? 's' : '') + ' na amassadeira</small>' : '') + '</div>';
+
+        h += '<div class="mep-sub">Pôr na amassadeira — marque o que já pesou</div>';
+        (d.base_recipe || []).forEach(function (i) {
+          var key = 'mepbase:' + mbId + ':' + i.nome;
+          var checked = localStorage.getItem(key) === '1';
+          h += '<label class="mep-ing' + (checked ? ' done' : '') + '">' +
+               '<input type="checkbox" class="mep-chk" data-key="' + _mepEsc(key) + '"' +
+               (checked ? ' checked' : '') + '>' +
+               '<span class="nm">' + _mepEsc(i.nome) + '</span>' +
+               '<span class="q">' + _mepEsc(i.qtd) + '</span></label>';
+        });
+
+        h += '<div class="mep-sub">Depois de amassar, vá tirando (nesta ordem)</div>';
+        h += '<ol class="mep-casc">';
+        var n = 0;
+        (d.cascata || []).forEach(function (p) {
+          n += 1;
+          var ehInc = (p.tipo === 'incremento');
+          var cls = ehInc ? ' so-acresc' : (p.eh_ramo ? ' ramo' : '');
+          h += '<li class="mep-casc-step' + cls + '">';
+          h += '<span class="mep-casc-num">' + n + '</span>';
+          if (ehInc) {
+            // água/líquido: vai na amassadeira inteira (sobe a hidratação)
+            h += '<span class="mep-casc-tira">Acrescente na amassadeira</span>';
+          } else {
+            h += '<span class="mep-casc-tira">Tire ' +
+                 (p.tirar_massa ? '<span class="massa">' + _mepEsc(p.tirar_massa) +
+                    '</span> de massa' : '') +
+                 (p.unidades != null ? ' <span class="un">(' + p.unidades + ' un)</span>' : '') +
+                 ' de ' + _mepEsc(p.nome) + '</span>';
+            if (p.eh_ramo) h += '<span class="mep-casc-tag">bater o recheio</span>';
+          }
+          (p.acrescentar || []).forEach(function (a) {
+            h += '<div class="mep-casc-acr">' +
+                 '<span class="lbl">+ ' + _mepEsc(a.nome) + '</span> <b>' +
+                 _mepEsc(a.qtd) + '</b></div>';
+          });
+          h += '</li>';
+        });
+        h += '</ol>';
+        document.getElementById('mep-body').innerHTML = h;
+        document.querySelectorAll('#mep-body .mep-chk').forEach(function (cb) {
+          cb.addEventListener('change', function () {
+            var lbl = cb.closest('.mep-ing');
+            if (cb.checked) { localStorage.setItem(cb.dataset.key, '1'); lbl.classList.add('done'); }
+            else { localStorage.removeItem(cb.dataset.key); lbl.classList.remove('done'); }
+          });
+        });
+      })
+      .catch(function () {
+        document.getElementById('mep-body').innerHTML =
+          '<p style="color:#b02a37;padding:10px;">Erro ao carregar a massa base.</p>';
+      });
+  }
+  function fecharMep() {
+    document.getElementById('mep-backdrop').classList.remove('aberto');
+    document.getElementById('mep-modal').classList.remove('aberto');
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') fecharMep();
+  });
+</script>
 <script>
   var CSRF = "{{ csrf_token() }}";
   var audioCtx = null, somAtivo = false, loopId = null, avisosAtivos = [];

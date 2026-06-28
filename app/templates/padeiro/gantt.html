@@ -115,19 +115,19 @@
 <body>
 <header>
   <h1>📊 Fluxograma — {{ dia.strftime('%d/%m/%Y') }}</h1>
-  <a href="{{ url_for('padeiro_testes.gantt', data=dia_anterior) }}">‹ dia</a>
-  <a href="{{ url_for('padeiro_testes.gantt', data=dia_seguinte) }}">dia ›</a>
-  {% if not eh_hoje %}<a class="hoje" href="{{ url_for('padeiro_testes.gantt') }}">hoje</a>{% endif %}
+  <a href="{{ url_for('padeiro.gantt', data=dia_anterior) }}">‹ dia</a>
+  <a href="{{ url_for('padeiro.gantt', data=dia_seguinte) }}">dia ›</a>
+  {% if not eh_hoje %}<a class="hoje" href="{{ url_for('padeiro.gantt') }}">hoje</a>{% endif %}
   <span class="sp"></span>
-  {% if current_user.is_admin() %}<a href="{{ url_for('padeiro_testes.editar_plano', data=dia.isoformat()) }}">✏️ Editar plano</a>{% endif %}
-  <a href="{{ url_for('padeiro_testes.index', data=dia.isoformat()) }}">← painel</a>
+  {% if current_user.is_admin() %}<a href="{{ url_for('padeiro.editar_plano', data=dia.isoformat()) }}">✏️ Editar plano</a>{% endif %}
+  <a href="{{ url_for('padeiro.index', data=dia.isoformat()) }}">← painel</a>
 </header>
 
 <div class="wrap">
 {% if not g %}
   <div class="vazio">
     <p style="font-size:18px;">Nenhum plano de produção aprovado para {{ dia.strftime('%d/%m') }}.</p>
-    <p>Aprove o plano do dia no <b>Cronograma</b>{% if current_user.is_admin() %}, ou <a href="{{ url_for('padeiro_testes.editar_plano', data=dia.isoformat()) }}">monte/edite o plano deste dia à mão</a>{% endif %}.</p>
+    <p>Aprove o plano do dia no <b>Cronograma</b>{% if current_user.is_admin() %}, ou <a href="{{ url_for('padeiro.editar_plano', data=dia.isoformat()) }}">monte/edite o plano deste dia à mão</a>{% endif %}.</p>
   </div>
 {% elif not g.produtos %}
   <div class="vazio">

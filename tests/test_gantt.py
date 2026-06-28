@@ -205,7 +205,7 @@ def test_rota_gantt_renderiza(app, admin_user):
     ])
     _plano(dia, [(r, 1, 10, 0)])
     c = _login(app, admin_user)
-    resp = c.get('/padeiro-testes/gantt?data=2026-07-20')
+    resp = c.get('/padeiro/gantt?data=2026-07-20')
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     assert 'Pão Francês' in html
@@ -227,7 +227,7 @@ def test_gantt_produto_carrega_receita_id(app):
 
 def test_rota_gantt_sem_plano(app, admin_user):
     c = _login(app, admin_user)
-    resp = c.get('/padeiro-testes/gantt?data=2026-07-21')
+    resp = c.get('/padeiro/gantt?data=2026-07-21')
     assert resp.status_code == 200
     assert 'Nenhum plano' in resp.get_data(as_text=True)
 
