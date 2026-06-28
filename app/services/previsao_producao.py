@@ -249,16 +249,20 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     itens = []
     for rid, rec in receitas.items():
         est = em_estoque.get(rid, 0)
+        # Estoque efetivo = o que sobra DEPOIS das entregas iminentes (que
+        # ja vao consumir estoque antes da janela). E esse que cobre a janela.
+        est_efetivo = max(0, est - pre_demanda.get(rid, 0))
         comp = comprometido.get(rid, 0)
         prev = int(ceil(previsto.get(rid, 0)))
         if est == 0 and comp == 0 and prev == 0:
             continue
         demanda = max(comp, prev)
-        produzir = max(0, demanda - est)
+        produzir = max(0, demanda - est_efetivo)
         itens.append({
             'receita_id': rid,
             'nome': rec.nome,
             'em_estoque': est,
+            'em_estoque_efetivo': est_efetivo,
             'comprometido': comp,
             'previsto': prev,
             'produzir': produzir,
