@@ -1560,6 +1560,9 @@ def _migrate_sqlite(app):
     cols_pp = [row[1] for row in cursor.fetchall()]
     if cols_pp and 'origem' not in cols_pp:
         cursor.execute("ALTER TABLE planejamento_producao ADD COLUMN origem VARCHAR(20)")
+    if cols_pp and 'enviado_ao_padeiro' not in cols_pp:
+        cursor.execute("ALTER TABLE planejamento_producao "
+                       "ADD COLUMN enviado_ao_padeiro BOOLEAN DEFAULT 1")
 
     conn.commit()
     conn.close()
