@@ -189,6 +189,37 @@ def mise_en_place(receita, unidades):
     }
 
 
+def consumir_subreceitas_prontas(rec, unidades, user_id):
+    """Baixa do congelado as SUB-RECEITAS prontas consumidas ao produzir `rec`
+    (ex: croissant almond consome croissant tradicional congelado). Liga por FK
+    (`sub_receita_id`); cai pro nome só se a FK não foi resolvida. porcentagem =
+    unidades da sub por batida; consumo = unidades x porcentagem / rendimento.
+    NÃO commita. Retorna [{sub_id, baixado, falta}]."""
+    from app.models import Receita
+    from app.services.estoque_congelados import saida_producao
+
+    rend = float(rec.rendimento_qtd) if rec and rec.rendimento_qtd else 1.0
+    out = []
+    for ing in (rec.ingredientes if rec else []):
+        if (ing.tipo or 'mp') != 'receita':
+            continue
+        sub_id = ing.sub_receita_id
+        if sub_id is None:
+            sub = (Receita.query
+                   .filter(Receita.nome.ilike((ing.ingrediente_nome or '').strip()))
+                   .first())
+            sub_id = sub.id if sub else None
+        if sub_id is None:
+            continue            # órfão (sem cadastro): não dá pra baixar
+        qtd_sub = int(round(unidades * (ing.porcentagem or 0) / rend)) if rend else 0
+        if qtd_sub > 0:
+            res = saida_producao(
+                receita_id=sub_id, quantidade=qtd_sub, usuario_id=user_id,
+                referencia='Consumo p/ %s (%d un)' % (rec.nome, unidades))
+            out.append({'sub_id': sub_id, **res})
+    return out
+
+
 def produzir_item_plano(item_id, unidades, user_id):
     """OPCAO B: o padeiro produz `unidades` de um item do plano aprovado.
     Numa unica transacao: (1) credita o produto pronto na industria
@@ -236,26 +267,8 @@ def produzir_item_plano(item_id, unidades, user_id):
         mp.estoque_atual = max(0, (mp.estoque_atual or 0) - qtd)
 
     # 2b) consome SUB-RECEITAS prontas do congelado (ex: croissant almond usa
-    #     croissant tradicional congelado). Liga por FK (sub_receita_id); cai pro
-    #     nome só se a FK não foi resolvida. porcentagem = unidades da sub por
-    #     batida; consumo = unidades x porcentagem / rendimento.
-    from app.models import Receita
-    from app.services.estoque_congelados import saida_producao
-    for ing in rec.ingredientes:
-        if (ing.tipo or 'mp') != 'receita':
-            continue
-        sub_id = ing.sub_receita_id
-        if sub_id is None:
-            sub = (Receita.query
-                   .filter(Receita.nome.ilike((ing.ingrediente_nome or '').strip()))
-                   .first())
-            sub_id = sub.id if sub else None
-        if sub_id is None:
-            continue            # órfão (sem cadastro): não dá pra baixar
-        qtd_sub = int(round(unidades * (ing.porcentagem or 0) / rend)) if rend else 0
-        if qtd_sub > 0:
-            saida_producao(receita_id=sub_id, quantidade=qtd_sub, usuario_id=user_id,
-                           referencia='Consumo p/ %s (%d un)' % (rec.nome, unidades))
+    #     croissant tradicional congelado).
+    consumir_subreceitas_prontas(rec, unidades, user_id)
 
     # 3) avanca o produzido do item.
     item.produzido_qtd = int(item.produzido_qtd or 0) + unidades
