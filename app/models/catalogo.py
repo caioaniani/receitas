@@ -139,6 +139,9 @@ class Receita(db.Model):
     ingredientes = db.relationship(
         'ReceitaIngrediente',
         backref='receita',
+        # ReceitaIngrediente tem 2 FKs pra receita (receita_id e sub_receita_id);
+        # esta relação é a da receita-DONA dos ingredientes.
+        foreign_keys='ReceitaIngrediente.receita_id',
         lazy=True,
         cascade='all, delete-orphan',
         order_by='ReceitaIngrediente.id'
