@@ -284,6 +284,9 @@
         enviar: ['separado'],
         cancelar: ['pendente', 'confirmado', 'separado', 'em_transporte'],
         excluir: ['cancelado', 'pendente'],  // destrutivo — só status seguros
+        // voltar um passo: tudo menos pendente (já é o início) e cancelado.
+        'voltar-status': ['confirmado', 'separado', 'em_transporte',
+                          'entregue', 'recebido'],
     };
 
     if (bulkBar) {
