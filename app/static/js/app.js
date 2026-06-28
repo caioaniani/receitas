@@ -723,9 +723,9 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
-        // Aplicar multiplicador aos totais
-        var totalQtdMult = totalQtd * multiplicador;
-        var totalCustoMult = totalCusto * multiplicador;
+        // Aplicar fator (Fornadas x Quantidade) aos totais
+        var totalQtdMult = totalQtd * fator;
+        var totalCustoMult = totalCusto * fator;
 
         // Aplicar perda de rendimento ao peso
         var pesoAposPerda = totalQtdMult * (1 - perda / 100);
