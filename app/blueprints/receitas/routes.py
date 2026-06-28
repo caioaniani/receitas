@@ -750,7 +750,21 @@ def salvar(id):
     receita.preco_venda = parse_float_br(request.form.get('preco_venda', ''))
     receita.preco_loja = parse_float_br(request.form.get('preco_loja', ''))
     receita.preco_site = parse_float_br(request.form.get('preco_site', ''))
-    receita.rendimento_qtd = parse_float_br(request.form.get('rendimento_qtd', ''), default=1)
+    # Rendimento = unidades que UMA fornada rende (divisor de custo unitario e
+    # base da producao via qtd_alvo/rendimento). Caso especial: receita MONTADA
+    # (so MP g/un, sem % de padeiro) lancada por "Quantidade de Produtos" — ali
+    # cada linha ja e "por unidade" e a Quantidade e so preview de quantas
+    # produzir, entao a fornada rende 1. Salvar a Quantidade como rendimento
+    # dividiria o custo da unidade pela propria quantidade (custo -> ~0) e
+    # furaria a producao. Por isso forcamos 1 nesse caso.
+    _modo_lanc = (request.form.get('modo_lancamento') or 'farinha').strip()
+    _tem_pct = any((t or 'mp') == 'mp'
+                   for t in request.form.getlist('ingrediente_tipo[]'))
+    if _modo_lanc == 'quantidade' and not _tem_pct:
+        receita.rendimento_qtd = 1
+    else:
+        receita.rendimento_qtd = parse_float_br(
+            request.form.get('rendimento_qtd', ''), default=1)
     receita.rendimento_unidade = request.form.get('rendimento_unidade', 'unidades').strip()
     receita.peso_base = parse_float_br(request.form.get('peso_base', ''), default=1000)
     receita.peso_unitario = parse_float_br(request.form.get('peso_unitario', ''))
