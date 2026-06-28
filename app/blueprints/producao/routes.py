@@ -638,13 +638,16 @@ def criar_plano_do_deficit():
         janela = 6
     janela = max(1, min(janela, 26))
 
+    inicio = _inicio_offset()
     balanco = balanco_industria(horizonte_dias=horizonte,
-                                janela_semanas=janela, usar_cache=False)
+                                janela_semanas=janela, usar_cache=False,
+                                inicio_offset_dias=inicio)
     deficits = [it for it in balanco['itens'] if it['produzir'] > 0]
     if not deficits:
         flash('Sem deficit no horizonte — nada a planejar.', 'info')
         return redirect(url_for('producao.painel',
-                                horizonte=horizonte, janela=janela))
+                                horizonte=horizonte, janela=janela,
+                                inicio=inicio))
 
     hoje_d = hoje_brt()
     plano = PlanejamentoProducao(
