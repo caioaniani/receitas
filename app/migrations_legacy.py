@@ -1328,6 +1328,16 @@ def _migrate_sqlite(app):
     cols_ing = [row[1] for row in cursor.fetchall()]
     if cols_ing and 'tipo' not in cols_ing:
         cursor.execute("ALTER TABLE receita_ingrediente ADD COLUMN tipo TEXT DEFAULT 'mp'")
+    # FK pra sub-receita (espelha o Postgres) + backfill por nome (idempotente).
+    if cols_ing and 'sub_receita_id' not in cols_ing:
+        cursor.execute("ALTER TABLE receita_ingrediente ADD COLUMN sub_receita_id INTEGER")
+    cursor.execute("""
+        UPDATE receita_ingrediente SET sub_receita_id = (
+            SELECT r.id FROM receita r
+            WHERE lower(trim(r.nome)) = lower(trim(receita_ingrediente.ingrediente_nome))
+            LIMIT 1)
+        WHERE tipo = 'receita' AND sub_receita_id IS NULL
+    """)
 
     # Migração tabela produto
     cursor.execute("PRAGMA table_info(produto)")
