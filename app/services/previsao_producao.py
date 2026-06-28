@@ -49,6 +49,27 @@ _CACHE = {}
 _CACHE_TTL = 60  # segundos
 
 
+def _distribuir_inteiro(total, pesos):
+    """Distribui um inteiro `total` entre len(pesos) baldes, proporcional aos
+    pesos, somando EXATAMENTE `total` (metodo do maior resto). Usado pra
+    espalhar o "Produzir" do balanco pelos dias sem inventar nem perder
+    unidades no arredondamento. Pesos todos zero -> tudo no primeiro balde."""
+    n = len(pesos)
+    if n == 0 or total <= 0:
+        return [0] * n
+    soma = sum(pesos)
+    if soma <= 0:
+        return [total] + [0] * (n - 1)
+    raw = [total * p / soma for p in pesos]
+    base = [int(x) for x in raw]
+    resto = total - sum(base)
+    # o resto vai pros baldes de maior parte fracionaria
+    ordem = sorted(range(n), key=lambda i: raw[i] - base[i], reverse=True)
+    for k in range(resto):
+        base[ordem[k]] += 1
+    return base
+
+
 def invalidar_sugestao_cache():
     """Forca recalculo no proximo request (chamar quando pedido/estoque da
     industria mudar). Mantido com o nome antigo por compat com chamadores."""
