@@ -31,12 +31,18 @@ def _horizonte_janela():
 @login_required
 @admin_required
 def index():
+    from app.models import PlanejamentoProducao
     from app.services.previsao_producao import cronograma_producao
 
     horizonte, janela = _horizonte_janela()
     crono = cronograma_producao(horizonte_dias=horizonte, janela_semanas=janela)
+    # Estado da ordem por dia (fluxo 2 passos): rascunho/aprovado x enviado.
+    estados = {}
+    for p in PlanejamentoProducao.query.filter_by(origem='cronograma').all():
+        estados[p.data.isoformat()] = {
+            'enviado': p.enviado_ao_padeiro is not False, 'plano_id': p.id}
     return render_template('industria_teste/teste.html', crono=crono,
-                           horizonte=horizonte, janela=janela)
+                           horizonte=horizonte, janela=janela, estados=estados)
 
 
 @industria_teste_bp.route('/aprovar', methods=['POST'])
