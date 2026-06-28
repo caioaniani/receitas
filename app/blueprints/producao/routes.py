@@ -251,22 +251,26 @@ def painel_receita_grade(rid):
         janela = 6
     janela = max(1, min(janela, 26))
 
+    inicio = _inicio_offset()
+
     # Fragmento (drop-down inline do balanco) vs pagina inteira (acesso direto).
     partial = (bool(request.args.get('partial'))
                or request.headers.get('X-Requested-With') == 'XMLHttpRequest')
 
-    grade = grade_loja_dia(rid, horizonte_dias=horizonte, janela_semanas=janela)
+    grade = grade_loja_dia(rid, horizonte_dias=horizonte, janela_semanas=janela,
+                           inicio_offset_dias=inicio)
     if grade is None:
         if partial:
             return ('<div class="text-danger small py-2">'
                     'Receita não encontrada.</div>', 404)
         flash('Receita não encontrada.', 'warning')
         return redirect(url_for('producao.painel', horizonte=horizonte,
-                                janela=janela))
+                                janela=janela, inicio=inicio))
 
     tpl = ('producao/_grade_receita_tabela.html' if partial
            else 'producao/grade_receita.html')
-    return render_template(tpl, grade=grade, horizonte=horizonte, janela=janela)
+    return render_template(tpl, grade=grade, horizonte=horizonte, janela=janela,
+                           inicio=inicio)
 
 
 @producao_bp.route('/pedidos-semana')
