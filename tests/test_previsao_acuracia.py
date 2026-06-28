@@ -131,3 +131,26 @@ def test_resumo_ignora_nao_casado_e_fora_do_periodo(app):
     res = svc.resumo_acuracia(dias=30)
     assert res['total']['previsto'] == 10      # so o casado e dentro do periodo
     assert res['total']['n'] == 1
+
+
+# ── painel (rota) ─────────────────────────────────────────────────────────
+def _login(client, admin_user):
+    client.post('/auth/login',
+                data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+
+
+def test_painel_renderiza_e_rodar_cria_snapshot(app, admin_user):
+    loja = _loja()
+    r = _receita()
+    hoje_d = hoje()
+    for semanas in (1, 2, 3):
+        _entrega(loja, r, hoje_d - timedelta(days=7 * semanas), 'recebido', 10)
+
+    client = app.test_client()
+    _login(client, admin_user)
+    resp = client.get('/producao/previsao-acuracia?dias=30')
+    assert resp.status_code == 200
+    resp2 = client.post('/producao/previsao-acuracia/rodar')
+    assert resp2.status_code == 302
+    assert PrevisaoSnapshot.query.count() >= 1
