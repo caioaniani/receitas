@@ -48,6 +48,25 @@ _MIN_OCORRENCIAS_DOW = 2
 _CACHE = {}
 _CACHE_TTL = 60  # segundos
 
+# Recencia (28/06/2026): a previsao do pedido semanal pesa MAIS as entregas
+# recentes (decaimento exponencial) em vez de media uniforme — pega tendencia
+# de loja subindo/caindo sem sair de "media dos ultimos pedidos". Meia-vida em
+# dias: uma entrega de N dias atras pesa 0.5**(N/_MEIA_VIDA_DIAS). Aumentar
+# deixa mais "liso" (no limite vira media uniforme); diminuir reage mais rapido.
+_MEIA_VIDA_DIAS = 21
+
+
+def _media_recencia(qtd_por_data, hoje_d, meia_vida=_MEIA_VIDA_DIAS):
+    """Media recencia-ponderada de {data: quantidade}: entrega recente pesa
+    mais. Com meia_vida -> infinito recai EXATAMENTE na media uniforme
+    (sum/len), entao e uma generalizacao segura da media atual."""
+    num = den = 0.0
+    for data, q in qtd_por_data.items():
+        peso = 0.5 ** (max(0, (hoje_d - data).days) / meia_vida)
+        num += peso * q
+        den += peso
+    return num / den if den else 0.0
+
 
 def _distribuir_inteiro(total, pesos):
     """Distribui um inteiro `total` entre len(pesos) baldes, proporcional aos
