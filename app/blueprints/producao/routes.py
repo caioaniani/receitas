@@ -294,10 +294,13 @@ def pedidos_semana():
         janela = 6
     janela = max(1, min(janela, 26))
 
+    inicio = _inicio_offset()
     sugestao = sugerir_pedidos_semana(horizonte_dias=horizonte,
-                                      janela_semanas=janela)
+                                      janela_semanas=janela,
+                                      inicio_offset_dias=inicio)
     return render_template('producao/pedidos_semana.html',
-                           sugestao=sugestao, horizonte=horizonte, janela=janela)
+                           sugestao=sugestao, horizonte=horizonte,
+                           janela=janela, inicio=inicio)
 
 
 @producao_bp.route('/pedidos-semana/gerar', methods=['POST'])
