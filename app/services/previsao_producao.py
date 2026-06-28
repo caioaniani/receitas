@@ -598,19 +598,23 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
                 previsto_dia = soma_r[rid] / dias_calendario_janela
             else:
                 previsto_dia = 0.0
-            if previsto_dia <= 0:
+            total_dia = int(round(previsto_dia))
+            if total_dia <= 0:
                 continue
+            # Rateio canonico (maior resto): a soma das lojas bate EXATAMENTE
+            # com o total previsto, e itens pequenos espalhados em varias lojas
+            # nao zeram todos no arredondamento (antes era round() por loja).
             base_dow_op = sum(soma_rld[rid].get(l.id, {}).get(dow, 0)
                               for l in lojas_op)
-            for loja in lojas_op:
-                if base_dow_op:
-                    share = (soma_rld[rid].get(loja.id, {}).get(dow, 0)
-                             / base_dow_op)
-                elif soma_op_r[rid]:
-                    share = soma_rl[rid].get(loja.id, 0) / soma_op_r[rid]
-                else:
-                    share = 0.0
-                qtd = int(round(previsto_dia * share))
+            if base_dow_op:
+                pesos = [soma_rld[rid].get(l.id, {}).get(dow, 0)
+                         for l in lojas_op]
+            elif soma_op_r[rid]:
+                pesos = [soma_rl[rid].get(l.id, 0) for l in lojas_op]
+            else:
+                continue
+            for loja, qtd in zip(lojas_op,
+                                 _distribuir_inteiro(total_dia, pesos)):
                 if qtd > 0:
                     sugestao[loja.id][d].append(
                         {'receita_id': rid, 'nome': rec.nome, 'qtd': qtd})
