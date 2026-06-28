@@ -50,3 +50,41 @@ class PlanejamentoItem(db.Model):
 
     def __repr__(self):
         return f'<PlanejamentoItem receita={self.receita_id} x{self.multiplicador}>'
+
+
+class PrevisaoSnapshot(db.Model):
+    """Instrumentacao de acuracia do forecast (28/06/2026): congela o
+    `previsto` do pedido semanal por (data de entrega, loja, receita) no
+    momento em que foi gerado, e depois casa com o `realizado` (entregue)
+    pra medir vies e erro. Sem isso nao havia como saber se a previsao
+    acerta — qualquer 'melhoria' era no escuro.
+
+    Uma linha por (data_alvo, loja, receita): grava-se a PRIMEIRA previsao
+    vista pra aquela data-alvo (tipicamente ~7 dias antes), pra medir sempre
+    no mesmo lead. `realizado` fica NULL ate a data passar e o cron casar.
+    """
+    __tablename__ = 'previsao_snapshot'
+
+    id = db.Column(db.Integer, primary_key=True)
+    data_alvo = db.Column(db.Date, nullable=False, index=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'),
+                           nullable=False)
+    previsto = db.Column(db.Integer, nullable=False, default=0)
+    # NULL ate a data_alvo passar; preenchido pelo cron com o entregue real.
+    realizado = db.Column(db.Integer, nullable=True)
+    casado_em = db.Column(db.DateTime, nullable=True)
+    criado_em = db.Column(db.DateTime, default=agora, index=True)
+
+    loja = db.relationship('Loja')
+    receita = db.relationship('Receita')
+
+    __table_args__ = (
+        db.UniqueConstraint('data_alvo', 'loja_id', 'receita_id',
+                            name='uq_previsao_snapshot_alvo'),
+    )
+
+    def __repr__(self):
+        return (f'<PrevisaoSnapshot {self.data_alvo} loja={self.loja_id} '
+                f'rec={self.receita_id} prev={self.previsto} '
+                f'real={self.realizado}>')
