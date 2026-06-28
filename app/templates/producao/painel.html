@@ -146,6 +146,10 @@
                        class="btn btn-sm btn-light">
                         <i class="bi bi-magic"></i> Gerar pedidos da semana
                     </a>
+                    <a href="{{ url_for('producao.previsao_acuracia') }}"
+                       class="btn btn-sm btn-light" title="Vies e WAPE: o quanto a previsao acerta">
+                        <i class="bi bi-bullseye"></i> Acurácia do forecast
+                    </a>
                     <span class="badge bg-light text-dark badge-grande">{{ balanco.total_produzir_itens }} a produzir</span>
                 </div>
             </div>
