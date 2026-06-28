@@ -368,6 +368,9 @@
       {% else %}
       <span class="prod-dia-pronto" style="color:#ffd166;">✓ tudo produzido</span>
       {% endif %}
+      {% if current_user.is_admin() %}
+      <a class="prod-dia-gantt" style="background:#6c757d;" href="{{ url_for('padeiro_testes.editar_plano', data=dia.isoformat()) }}">✏️ editar plano</a>
+      {% endif %}
       <a class="prod-dia-gantt" href="{{ url_for('padeiro_testes.gantt', data=dia.isoformat()) }}">📊 fluxograma</a>
     </div>
 
