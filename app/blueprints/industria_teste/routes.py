@@ -64,9 +64,36 @@ def aprovar():
     plano = aprovar_plano_do_dia(data_alvo, current_user.id,
                                  horizonte_dias=horizonte, janela_semanas=janela)
     if plano:
-        flash('Plano de %s aprovado e enviado ao padeiro (%d receita(s)).'
+        flash('Plano de %s aprovado (%d receita(s)). Revise/edite e clique em '
+              '"enviar ao padeiro" quando estiver pronto.'
               % (data_alvo.strftime('%d/%m'), len(plano.itens)), 'success')
     else:
         flash('Nada a produzir em %s.' % data_alvo.strftime('%d/%m'), 'info')
+    return redirect(url_for('industria_teste.index',
+                            horizonte=horizonte, janela=janela))
+
+
+@industria_teste_bp.route('/enviar', methods=['POST'])
+@login_required
+@admin_required
+def enviar():
+    """2º passo: envia a ordem aprovada do dia pro padeiro (ela só aparece no
+    Fluxograma / Produção do dia depois disto)."""
+    from app.services.producao import enviar_plano_do_dia
+
+    horizonte, janela = _horizonte_janela()
+    try:
+        data_alvo = date.fromisoformat(request.form.get('data', ''))
+    except (TypeError, ValueError):
+        flash('Data inválida.', 'warning')
+        return redirect(url_for('industria_teste.index',
+                                horizonte=horizonte, janela=janela))
+    plano = enviar_plano_do_dia(data_alvo)
+    if plano:
+        flash('Plano de %s enviado ao padeiro.' % data_alvo.strftime('%d/%m'),
+              'success')
+    else:
+        flash('Não há ordem aprovada em %s pra enviar.'
+              % data_alvo.strftime('%d/%m'), 'warning')
     return redirect(url_for('industria_teste.index',
                             horizonte=horizonte, janela=janela))
