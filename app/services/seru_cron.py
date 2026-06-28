@@ -46,6 +46,7 @@ LOCK_KEY_AUDITOR = 7738  # advisory lock pro auditor diario do bot
 LOCK_KEY_VIGIA_CHATWOOT = 7739  # advisory lock pro vigia de infra do Chatwoot
 LOCK_KEY_FOLLOWUP = 7740  # advisory lock pro follow-up do bot (cliente sumiu)
 LOCK_KEY_RESERVA_EXPIRA = 7742  # advisory lock pro libera-reservas-expiradas da loja online
+LOCK_KEY_PREVISAO_ACURACIA = 7743  # advisory lock pro snapshot+match de acuracia do forecast
 # Locks LIBERADOS mas RESERVADOS (nao reusar — evita conflito se algum
 # dos jobs for reativado no futuro):
 # - 7730 era do `zapi-digest-anomalias` (job 23:00 BRT, removido 14/06/2026).
