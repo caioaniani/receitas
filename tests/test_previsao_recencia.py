@@ -77,3 +77,69 @@ def test_tendencia_de_queda_puxa_sugestao_abaixo_da_media_uniforme(app):
     qtd = _qtd_dia0(sug, loja.id, r.id)
     assert qtd < 28, f'recencia deveria puxar abaixo da media uniforme (28): {qtd}'
     assert qtd >= 10
+
+
+# ── item 1: recencia tambem no painel de producao (balanco_industria) ─────
+def test_balanco_previsto_responde_a_recencia(app):
+    from app.services.previsao_producao import balanco_industria
+    loja = Loja(nome='Loja A', ativa=True)
+    db.session.add(loja)
+    db.session.commit()
+    hoje_d = hoje()
+
+    def _receita_com(nome, qtds):
+        r = Receita(nome=nome, categoria='X', rendimento_qtd=1,
+                    rendimento_unidade='un', peso_base=100.0)
+        db.session.add(r)
+        db.session.commit()
+        for i, q in enumerate(qtds, start=1):
+            d = hoje_d - timedelta(days=7 * i)
+            p = PedidoLoja(loja_id=loja.id, status='recebido',
+                           data_entrega=d, data_pedido=d)
+            db.session.add(p)
+            db.session.flush()
+            db.session.add(PedidoItem(pedido_id=p.id, receita_id=r.id,
+                                      quantidade=q))
+        db.session.commit()
+        return r
+
+    # MESMA soma total (140); a diferenca e so QUANDO a massa aconteceu.
+    _receita_com('Recente', [40, 40, 20, 20, 20])  # recente alto
+    _receita_com('Antigo', [20, 20, 20, 40, 40])   # recente baixo
+    bal = balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=False)
+    prev = {it['nome']: it['previsto'] for it in bal['itens']}
+    assert prev['Recente'] > prev['Antigo'], (
+        f'recencia deveria elevar o previsto da receita em alta: {prev}')
+
+
+# ── item 2: rateio por loja soma EXATAMENTE o total previsto ──────────────
+def test_rateio_por_loja_soma_o_total_previsto(app):
+    loja_a = Loja(nome='Loja A', ativa=True)
+    loja_b = Loja(nome='Loja B', ativa=True)
+    r = Receita(nome='Croissant', categoria='X', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=100.0)
+    db.session.add_all([loja_a, loja_b, r])
+    db.session.commit()
+    hoje_d = hoje()
+    for i in (1, 2, 3):
+        d = hoje_d - timedelta(days=7 * i)
+        for loja, q in ((loja_a, 10), (loja_b, 5)):
+            p = PedidoLoja(loja_id=loja.id, status='recebido',
+                           data_entrega=d, data_pedido=d)
+            db.session.add(p)
+            db.session.flush()
+            db.session.add(PedidoItem(pedido_id=p.id, receita_id=r.id,
+                                      quantidade=q))
+    db.session.commit()
+
+    sug = sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6)
+    # dia0 = hoje (mesmo dow). previsto/data = 10+5 = 15 -> total_dia = 15.
+    qtds = {}
+    for la in sug['lojas']:
+        item = next((it for it in la['dias'][0]['itens']
+                     if it['receita_id'] == r.id), None)
+        if item:
+            qtds[la['loja_id']] = item['qtd']
+    assert sum(qtds.values()) == 15           # soma BATE com o total previsto
+    assert qtds.get(loja_a.id, 0) == 10        # rateado pela participacao
+    assert qtds.get(loja_b.id, 0) == 5
