@@ -1,8 +1,9 @@
 """Bot de pedidos do Slack DESATIVADO (decisao do dono 28/06/2026).
 
-Pedidos nao sao mais feitos pelo Slack. O copilot (DM/@mention) para de
-responder e avisa uma vez; a captura de NF/boleto (Contas a Pagar) e os
-posts automaticos de saida continuam. Reativavel via SLACK_BOT_PEDIDOS_ATIVO=1.
+Pedidos nao sao mais feitos pelo Slack. Com o bot off, o copilot roda em MODO
+RESTRITO: SO as tools de sobras/desperdicio do dia ficam visiveis (o dono quer
+registrar as sobras pelo canal copilot). A captura de NF/boleto (Contas a Pagar)
+e os posts automaticos de saida continuam. Reativar tudo: SLACK_BOT_PEDIDOS_ATIVO=1.
 """
 import os
 from unittest.mock import patch
@@ -11,6 +12,10 @@ from unittest.mock import patch
 def _evento_dm(text='cria um pedido', user='U500', channel='D500'):
     return {'user': user, 'channel': channel, 'text': text,
             'channel_type': 'im', 'type': 'message'}
+
+
+def _conversa_resp(texto='ok'):
+    return {'tipo': 'conversa', 'explicacao': texto}
 
 
 def test_flag_default_off_e_reativavel():
