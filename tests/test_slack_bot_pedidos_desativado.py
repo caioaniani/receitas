@@ -29,7 +29,10 @@ def test_flag_default_off_e_reativavel():
         assert _bot_pedidos_ativo() is False
 
 
-def test_desativado_nao_chama_copilot_e_avisa(app, admin_user):
+def test_desativado_roda_copilot_restrito_a_desperdicio(app, admin_user):
+    """Bot off -> o copilot AINDA roda, mas so com as tools de desperdicio
+    (whitelist) e a persona de modo restrito. Assim 'sobrou X' registra, mas
+    pedidos e o resto Claude nem ve."""
     from app.extensions import db
     from app.models import SlackVinculo
     from app.services import slack_bot
@@ -38,12 +41,35 @@ def test_desativado_nao_chama_copilot_e_avisa(app, admin_user):
                                     usuario_id=admin_user.id, ativo=True))
         db.session.commit()
         with patch.dict(os.environ, {'SLACK_BOT_PEDIDOS_ATIVO': '0'}), \
-                patch('app.services.copilot.interpretar') as interp, \
-                patch('app.services.slack.post_message') as post:
+                patch('app.services.copilot.interpretar',
+                      return_value=_conversa_resp()) as interp, \
+                patch('app.services.slack.post_message'):
+            slack_bot.processar_evento_mensagem(_evento_dm(text='sobrou 5 pao'))
+    interp.assert_called_once()
+    kw = interp.call_args.kwargs
+    assert kw['tools_whitelist'] == slack_bot._TOOLS_DESPERDICIO
+    assert kw['system_extra']            # persona de modo restrito anexada
+
+
+def test_ativo_usa_todas_as_tools(app, admin_user):
+    """Bot reativado (=1) -> copilot completo: sem whitelist nem persona
+    restrita."""
+    from app.extensions import db
+    from app.models import SlackVinculo
+    from app.services import slack_bot
+    with app.app_context():
+        db.session.add(SlackVinculo(slack_user_id='U500',
+                                    usuario_id=admin_user.id, ativo=True))
+        db.session.commit()
+        with patch.dict(os.environ, {'SLACK_BOT_PEDIDOS_ATIVO': '1'}), \
+                patch('app.services.copilot.interpretar',
+                      return_value=_conversa_resp()) as interp, \
+                patch('app.services.slack.post_message'):
             slack_bot.processar_evento_mensagem(_evento_dm())
-    interp.assert_not_called()
-    post.assert_called_once()
-    assert 'desativado' in post.call_args.kwargs['text'].lower()
+    interp.assert_called_once()
+    kw = interp.call_args.kwargs
+    assert kw['tools_whitelist'] is None
+    assert kw['system_extra'] is None
 
 
 def test_captura_de_nf_continua_mesmo_com_bot_desativado(app, admin_user):
