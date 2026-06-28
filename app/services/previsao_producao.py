@@ -77,15 +77,19 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     """
     horizonte_dias = max(1, min(int(horizonte_dias or 7), 14))
     janela_semanas = max(1, min(int(janela_semanas or 6), 26))
+    inicio_offset_dias = max(0, min(int(inicio_offset_dias or 0), 14))
 
-    cache_key = (horizonte_dias, janela_semanas)
+    cache_key = (horizonte_dias, janela_semanas, inicio_offset_dias)
     if usar_cache:
         ent = _CACHE.get(cache_key)
         if ent and (time.time() - ent['t']) < _CACHE_TTL:
             return ent['data']
 
     hoje_d = hoje()
-    horizonte_fim = hoje_d + timedelta(days=horizonte_dias - 1)
+    # Inicio do horizonte FUTURO (planejamento). 0 = hoje; o painel usa 1
+    # (amanha). O historico abaixo segue ancorado em hoje — passado e passado.
+    inicio_d = hoje_d + timedelta(days=inicio_offset_dias)
+    horizonte_fim = inicio_d + timedelta(days=horizonte_dias - 1)
     hist_ini = hoje_d - timedelta(days=7 * janela_semanas)
     hist_fim = hoje_d - timedelta(days=1)
 
