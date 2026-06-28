@@ -184,12 +184,28 @@ def _canal_permitido(channel_id, channel_type):
 
 
 def _bot_pedidos_ativo():
-    """Bot de PEDIDOS do Slack (copilot via DM/@mention) — DESATIVADO por
-    decisao do dono (28/06/2026: pedidos nao sao mais feitos pelo Slack). A
-    captura de NF/boleto (Contas a Pagar) e os posts automaticos de saida
-    seguem normais. Reativar: env SLACK_BOT_PEDIDOS_ATIVO=1."""
+    """Bot de PEDIDOS do Slack (copilot completo via DM/@mention) — DESATIVADO
+    por decisao do dono (28/06/2026: pedidos nao sao mais feitos pelo Slack).
+    Mesmo desativado, o registro de SOBRAS/DESPERDICIO do dia continua (modo
+    restrito — ver _TOOLS_DESPERDICIO). A captura de NF/boleto e os posts
+    automaticos de saida seguem normais. Reativar tudo: SLACK_BOT_PEDIDOS_ATIVO=1."""
     import os
     return os.environ.get('SLACK_BOT_PEDIDOS_ATIVO', '0') == '1'
+
+
+# Com o bot de pedidos desativado, o copilot roda em MODO RESTRITO: SO as tools
+# de sobras/desperdicio do dia ficam visiveis (o dono quer registrar as sobras
+# pelo canal). Qualquer outra acao Claude nem ve — responde que so faz sobras.
+_TOOLS_DESPERDICIO = {'registrar_desperdicio', 'registrar_desperdicio_lote',
+                      'consultar_desperdicio'}
+_SYSTEM_DESPERDICIO = (
+    'MODO RESTRITO: o bot do Slack esta desativado para pedidos e demais acoes — '
+    'funciona SO para registrar e consultar SOBRAS/DESPERDICIO do dia. Se a '
+    'mensagem for sobre sobra/vencido/descarte/"sobrou no balcao", use as tools '
+    'de desperdicio normalmente (com confirmacao). Para QUALQUER outra coisa '
+    '(pedido, estoque, etc.) responda em UMA frase curta que por aqui agora so '
+    'registra sobras/desperdicio e que pedidos sao feitos direto no sistema. '
+    'Nunca prometa nem finja fazer o que nao pode.')
 
 
 def processar_evento_mensagem(evento):
