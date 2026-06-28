@@ -1015,90 +1015,133 @@ def relatorio():
                            por_item=sorted(por_item.items(), key=lambda x: x[0]))
 
 
+def _aplicar_voltar_status(pedido, usuario_id):
+    """Reverte UM pedido um passo, estornando estoque quando preciso. MUTA a
+    sessao (NAO commita) — quem chama decide a transacao. Retorna
+    (status_anterior, novo_status) ou None se nao da pra voltar (pendente/
+    cancelado). Centralizado pra o single e o lote usarem a MESMA logica.
+
+    Transicoes:
+      recebido/entregue -> em_transporte (estorna estoque loja)
+      em_transporte     -> separado      (estorna estoque producao + MP)
+      separado          -> confirmado    (so status)
+      confirmado        -> pendente      (so status)
+    """
+    status_atual = pedido.status
+    if status_atual in ('entregue', 'recebido'):
+        # Estorna o que somou no estoque da loja
+        for item in pedido.itens:
+            qtd = item.quantidade_recebida or 0
+            if qtd <= 0:
+                continue
+            el = EstoqueLoja.query.filter_by(
+                loja_id=pedido.loja_id,
+                receita_id=item.receita_id,
+                produto_id=item.produto_id,
+                materia_prima_id=item.materia_prima_id,
+            ).first()
+            if el:
+                el.quantidade = max(0, (el.quantidade or 0) - qtd)
+                db.session.add(MovEstoqueLoja(
+                    estoque_loja_id=el.id,
+                    tipo='ajuste_negativo',
+                    quantidade=qtd,
+                    referencia=f'Estorno pedido #{pedido.id} (voltar status)',
+                    usuario_id=usuario_id,
+                ))
+            item.quantidade_recebida = None
+        novo_status = 'em_transporte'
+    elif status_atual == 'em_transporte':
+        # Estorna baixa do estoque producao/MP
+        for item in pedido.itens:
+            if item.materia_prima_id:
+                mp = MateriaPrima.query.get(item.materia_prima_id)
+                if mp:
+                    mp.estoque_atual = (mp.estoque_atual or 0) + item.quantidade
+                    db.session.add(MovimentacaoEstoque(
+                        materia_prima_id=mp.id, tipo='entrada',
+                        quantidade=item.quantidade,
+                        referencia=f'Estorno pedido #{pedido.id} (voltar status)',
+                        usuario_id=usuario_id,
+                    ))
+                continue
+            ep = EstoqueProducao.query.filter_by(
+                receita_id=item.receita_id, produto_id=item.produto_id
+            ).first()
+            if ep:
+                ep.quantidade = (ep.quantidade or 0) + item.quantidade
+                db.session.add(MovEstoqueProducao(
+                    estoque_producao_id=ep.id, tipo='ajuste',
+                    quantidade=item.quantidade,
+                    referencia=f'Estorno pedido #{pedido.id} (voltar status)',
+                    usuario_id=usuario_id,
+                ))
+        novo_status = 'separado'
+    elif status_atual == 'separado':
+        novo_status = 'confirmado'
+    elif status_atual == 'confirmado':
+        novo_status = 'pendente'
+    else:
+        return None
+
+    pedido.status = novo_status
+    return (status_atual, novo_status)
+
+
 @pedidos_bp.route('/<int:id>/voltar-status', methods=['POST'])
 @login_required
 @admin_required
 def voltar_status(id):
-    """Volta o pedido pra o status anterior, estornando movimentos de estoque
-    se necessario. So admin (risco de descompasso de estoque).
-
-    Transicoes:
-      recebido     -> em_transporte (estorna estoque loja)
-      em_transporte-> separado      (estorna estoque producao + MP)
-      separado     -> confirmado    (so status)
-      confirmado   -> pendente      (so status)
-    Cancelado/pendente: nao volta.
-    """
+    """Volta UM pedido pra o status anterior, estornando estoque se necessario.
+    So admin (risco de descompasso de estoque)."""
     pedido = PedidoLoja.query.get_or_404(id)
     status_atual = pedido.status
-    novo_status = None
-
     try:
-        if status_atual in ('entregue', 'recebido'):
-            # Estorna o que somou no estoque da loja
-            for item in pedido.itens:
-                qtd = item.quantidade_recebida or 0
-                if qtd <= 0:
-                    continue
-                el = EstoqueLoja.query.filter_by(
-                    loja_id=pedido.loja_id,
-                    receita_id=item.receita_id,
-                    produto_id=item.produto_id,
-                    materia_prima_id=item.materia_prima_id,
-                ).first()
-                if el:
-                    el.quantidade = max(0, (el.quantidade or 0) - qtd)
-                    db.session.add(MovEstoqueLoja(
-                        estoque_loja_id=el.id,
-                        tipo='ajuste_negativo',
-                        quantidade=qtd,
-                        referencia=f'Estorno pedido #{pedido.id} (voltar status)',
-                        usuario_id=current_user.id,
-                    ))
-                item.quantidade_recebida = None
-            novo_status = 'em_transporte'
-        elif status_atual == 'em_transporte':
-            # Estorna baixa do estoque producao/MP
-            for item in pedido.itens:
-                if item.materia_prima_id:
-                    mp = MateriaPrima.query.get(item.materia_prima_id)
-                    if mp:
-                        mp.estoque_atual = (mp.estoque_atual or 0) + item.quantidade
-                        db.session.add(MovimentacaoEstoque(
-                            materia_prima_id=mp.id, tipo='entrada',
-                            quantidade=item.quantidade,
-                            referencia=f'Estorno pedido #{pedido.id} (voltar status)',
-                            usuario_id=current_user.id,
-                        ))
-                    continue
-                ep = EstoqueProducao.query.filter_by(
-                    receita_id=item.receita_id, produto_id=item.produto_id
-                ).first()
-                if ep:
-                    ep.quantidade = (ep.quantidade or 0) + item.quantidade
-                    db.session.add(MovEstoqueProducao(
-                        estoque_producao_id=ep.id, tipo='ajuste',
-                        quantidade=item.quantidade,
-                        referencia=f'Estorno pedido #{pedido.id} (voltar status)',
-                        usuario_id=current_user.id,
-                    ))
-            novo_status = 'separado'
-        elif status_atual == 'separado':
-            novo_status = 'confirmado'
-        elif status_atual == 'confirmado':
-            novo_status = 'pendente'
-        else:
+        res = _aplicar_voltar_status(pedido, current_user.id)
+        if res is None:
             flash(f'Nao da pra voltar status "{status_atual}".', 'warning')
             return redirect(url_for('pedidos.detalhe', id=id))
-
-        pedido.status = novo_status
         db.session.commit()
-        flash(f'Status revertido: {status_atual} → {novo_status}.', 'success')
+        flash(f'Status revertido: {res[0]} → {res[1]}.', 'success')
     except Exception as exc:  # noqa: BLE001
         db.session.rollback()
         current_app.logger.exception('Falha ao voltar status pedido %s', id)
         flash(f'Erro ao voltar status: {exc}. Nada foi alterado.', 'danger')
     return redirect(url_for('pedidos.detalhe', id=id))
+
+
+@pedidos_bp.route('/voltar-status-lote', methods=['POST'])
+@login_required
+@admin_required
+def voltar_status_lote():
+    """Volta o status de VARIOS pedidos de uma vez (selecao em massa). Tudo numa
+    UNICA transacao: o estorno de estoque de pedidos da MESMA loja/receita soma
+    certo (sem perder atualizacao concorrente, que aconteceria com N requests
+    paralelos batendo na mesma linha de EstoqueProducao/EstoqueLoja). So admin.
+    Retorna JSON {ok, revertidos, ignorados}."""
+    ids = request.form.getlist('ids[]') or request.form.getlist('id[]')
+    revertidos = 0
+    ignorados = 0
+    try:
+        for raw in ids:
+            try:
+                pid = int(raw)
+            except (TypeError, ValueError):
+                continue
+            pedido = PedidoLoja.query.get(pid)
+            if pedido is None:
+                ignorados += 1
+                continue
+            if _aplicar_voltar_status(pedido, current_user.id) is None:
+                ignorados += 1
+            else:
+                revertidos += 1
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception('Falha ao voltar status em lote')
+        return jsonify(ok=False, erro=str(exc)), 500
+    return jsonify(ok=True, revertidos=revertidos, ignorados=ignorados)
 
 
 @pedidos_bp.route('/<int:id>/cancelar', methods=['POST'])
