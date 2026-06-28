@@ -85,9 +85,12 @@ def test_estoque_cobre_primeiros_dias(app):
     assert rr['total'] == 40
 
 
-def test_lead_com_estoque_cobre_entregas_proximas(app):
-    """Com lead 2 e estoque: o estoque cobre as entregas CRONOLOGICAMENTE mais
-    proximas; o que falta numa entrega X e produzido em X-lead."""
+def test_lead_com_estoque_unifica_com_balanco(app):
+    """Unificado: o cronograma distribui o "Produzir" do BALANÇO. Com lead 2, o
+    balanço só conta entregas em [hoje+2, ...] (a de hoje+1 produziria no
+    passado) e subtrai o estoque do total. O cronograma espalha esse total pela
+    curva — e o total bate exatamente com o balanço."""
+    from app.services.previsao_producao import balanco_industria
     loja = _loja()
     r = _receita()
     r.dias_producao = 2
@@ -100,12 +103,45 @@ def test_lead_com_estoque_cobre_entregas_proximas(app):
 
     crono = cronograma_producao(horizonte_dias=7)
     rr = _rec_out(crono, r.id)
-    # estoque 40 cobre hoje+1 (30) e parte de hoje+2 (10).
-    # hoje+2: falta 20 -> producao em (hoje+2)-2 = hoje.
-    # hoje+4: falta 30 -> producao em (hoje+4)-2 = hoje+2.
-    assert rr['por_dia'][0]['qtd'] == 20
-    assert rr['por_dia'][2]['qtd'] == 30
-    assert rr['total'] == 50
+    bal = balanco_industria(horizonte_dias=7, inicio_offset_dias=0,
+                            usar_cache=False)
+    bit = next(i for i in bal['itens'] if i['receita_id'] == r.id)
+    # entregas hoje+2 (30) + hoje+4 (30) = 60; estoque 40 -> produzir 20.
+    assert bit['produzir'] == 20
+    assert rr['total'] == bit['produzir']        # a unificação
+    # cai no dia que ainda falta: produção de hoje+4 = dia 2 (hoje+4 - lead 2)
+    assert rr['por_dia'][2]['qtd'] == 20
+    assert rr['por_dia'][0]['qtd'] == 0
+
+
+def test_cronograma_total_bate_com_balanco(app):
+    """Invariante da unificação: para cada receita, o total do cronograma é
+    EXATAMENTE o 'Produzir' do balanço (mesmas receitas, mesmos totais), em
+    qualquer início — e a soma das células de cada receita == o total."""
+    from app.services.previsao_producao import balanco_industria
+    loja_a = _loja('A')
+    loja_b = _loja('B')
+    r1 = _receita('Pão')
+    r2 = _receita('Croissant')
+    r1.dias_producao = 1
+    r2.dias_producao = 1
+    db.session.add(EstoqueProducao(receita_id=r1.id, quantidade=15))
+    db.session.commit()
+    hoje_d = hoje()
+    for d in (2, 3, 5):
+        _pedido(loja_a, 'pendente', hoje_d + timedelta(days=d), r1, 20)
+        _pedido(loja_b, 'pendente', hoje_d + timedelta(days=d), r2, 12)
+
+    for off in (0, 1, 2):
+        crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=off)
+        bal = balanco_industria(horizonte_dias=7, inicio_offset_dias=off,
+                                usar_cache=False)
+        prod = {i['receita_id']: i['produzir']
+                for i in bal['itens'] if i['produzir'] > 0}
+        crono_tot = {x['receita_id']: x['total'] for x in crono['receitas']}
+        assert crono_tot == prod, f'offset {off}: {crono_tot} != {prod}'
+        for x in crono['receitas']:
+            assert sum(c['qtd'] for c in x['por_dia']) == x['total']
 
 
 def test_rota_telaindustriateste(app, admin_user):
