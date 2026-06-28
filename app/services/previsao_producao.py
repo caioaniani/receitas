@@ -457,12 +457,14 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
     """
     horizonte_dias = max(1, min(int(horizonte_dias or 7), 14))
     janela_semanas = max(1, min(int(janela_semanas or 6), 26))
+    inicio_offset_dias = max(0, min(int(inicio_offset_dias or 0), 14))
 
     hoje_d = hoje()
-    horizonte_fim = hoje_d + timedelta(days=horizonte_dias - 1)
+    inicio_d = hoje_d + timedelta(days=inicio_offset_dias)
+    horizonte_fim = inicio_d + timedelta(days=horizonte_dias - 1)
     hist_ini = hoje_d - timedelta(days=7 * janela_semanas)
     hist_fim = hoje_d - timedelta(days=1)
-    dias_futuros = [hoje_d + timedelta(days=i) for i in range(horizonte_dias)]
+    dias_futuros = [inicio_d + timedelta(days=i) for i in range(horizonte_dias)]
     dias_calendario_janela = 7 * janela_semanas
 
     receitas = {r.id: r for r in Receita.query
