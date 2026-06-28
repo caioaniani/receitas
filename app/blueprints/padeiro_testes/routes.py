@@ -325,7 +325,7 @@ def editar_plano():
             plano = PlanejamentoProducao(
                 data=dia, origem='cronograma', status='aprovado',
                 nome='Produção %s' % dia.strftime('%d/%m'),
-                criado_por=current_user.id)
+                criado_por=current_user.id, enviado_ao_padeiro=False)  # rascunho
             db.session.add(plano)
             db.session.flush()
 
