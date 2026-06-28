@@ -549,8 +549,8 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
     # Historico por (receita, loja, dow) + agregados. UMA query pra todas as
     # receitas (mesma logica da grade, mas sem o filtro por receita_id).
     soma_rld = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-    datas_rd = defaultdict(lambda: defaultdict(set))   # rid -> dow -> {datas}
-    soma_rd = defaultdict(lambda: defaultdict(int))    # rid -> dow -> q
+    # rid -> dow -> data -> q : quantidade por data, pra media recencia-ponderada
+    qtd_rd = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     soma_rl = defaultdict(lambda: defaultdict(int))    # rid -> loja -> q
     soma_r = defaultdict(int)                           # rid -> q
     datas_r = defaultdict(set)                          # rid -> {datas}
@@ -568,8 +568,7 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
         dow = data_ent.weekday()
         q = int(qtd or 0)
         soma_rld[rid][loja_id][dow] += q
-        datas_rd[rid][dow].add(data_ent)
-        soma_rd[rid][dow] += q
+        qtd_rd[rid][dow][data_ent] += q
         soma_rl[rid][loja_id] += q
         soma_r[rid] += q
         datas_r[rid].add(data_ent)
@@ -595,9 +594,9 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
             continue
         for d in dias_futuros:
             dow = d.weekday()
-            datas = datas_rd[rid].get(dow)
-            if datas and len(datas) >= _MIN_OCORRENCIAS_DOW:
-                previsto_dia = soma_rd[rid][dow] / len(datas)
+            por_data = qtd_rd[rid].get(dow)
+            if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
+                previsto_dia = _media_recencia(por_data, hoje_d)
             elif soma_r[rid]:
                 previsto_dia = soma_r[rid] / dias_calendario_janela
             else:
