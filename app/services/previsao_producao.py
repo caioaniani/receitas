@@ -184,7 +184,7 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         rid_dow = datas_dow.get(rid, {})
         rid_soma_total = soma_total.get(rid, 0)
         L = lead.get(rid, 0)
-        dias_rid = [hoje_d + timedelta(days=L + i)
+        dias_rid = [inicio_d + timedelta(days=L + i)
                     for i in range(horizonte_dias)]
         for d in dias_rid:
             dow = d.weekday()
