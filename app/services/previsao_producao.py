@@ -735,6 +735,10 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             continue
         L = lead.get(rid, 0)
         estoque = int(it['em_estoque'])
+        # Estoque EFETIVO (apos as entregas iminentes) e o que cobre a janela —
+        # mesmo numero que o balanco usou pra achar o "Produzir". Usar o estoque
+        # bruto aqui front-loadaria estoque que ja vai embora antes da janela.
+        estoque_efetivo = int(it.get('em_estoque_efetivo', estoque))
 
         # Curva de demanda diaria: producao do dia i mira a entrega (i + lead).
         gross = []
@@ -742,10 +746,10 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             entrega = dias_prod[i] + timedelta(days=L)
             gross.append(max(int(firme[rid].get(entrega, 0)),
                              int(round(_previsto_dia(rid, entrega)))))
-        # Estoque pronto cobre os dias mais PROXIMOS primeiro -> os primeiros
+        # Estoque (efetivo) cobre os dias mais PROXIMOS primeiro -> os primeiros
         # dias produzem menos. O residual (demanda apos estoque) vira o PESO da
         # distribuicao; o total continua sendo o "Produzir" do balanco.
-        running = estoque
+        running = estoque_efetivo
         residual = []
         for g in gross:
             cobre = min(running, g)
