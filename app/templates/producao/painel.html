@@ -209,7 +209,7 @@
                         {# Grade loja × dia INLINE — carrega ao abrir a linha
                            (lazy AJAX), sem sair da tela. #}
                         <div class="grade-inline mt-2" data-carregado="0"
-                             data-grade-url="{{ url_for('producao.painel_receita_grade', rid=s.receita_id, horizonte=horizonte, janela=janela, partial=1) }}">
+                             data-grade-url="{{ url_for('producao.painel_receita_grade', rid=s.receita_id, horizonte=horizonte, janela=janela, inicio=inicio, partial=1) }}">
                         </div>
                     </div>
                 </div>
