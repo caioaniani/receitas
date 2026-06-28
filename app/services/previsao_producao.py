@@ -219,6 +219,31 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             else:
                 previsto[rid] += rid_soma_total / dias_calendario_janela
 
+    def _previsto_dia(rid, dia):
+        dow = dia.weekday()
+        datas = datas_dow.get(rid, {}).get(dow)
+        if datas and len(datas) >= _MIN_OCORRENCIAS_DOW:
+            return soma_dow[rid][dow] / len(datas)
+        if soma_total.get(rid):
+            return soma_total[rid] / dias_calendario_janela
+        return 0.0
+
+    # 4b. Demanda IMINENTE: entregas entre HOJE e o inicio da janela de
+    # producao de cada receita ([hoje, inicio+lead-1]). Elas CONSOMEM estoque
+    # mas nao entram no "produzir" (nao da mais pra produzi-las neste
+    # horizonte). Ignorar isso superestimava o estoque disponivel e
+    # SUBPRODUZIA (ex: estoque "coberto" por entregas de amanha era contado
+    # como livre pra a semana). O estoque efetivo desconta essa demanda.
+    pre_demanda = defaultdict(int)
+    for rid in receitas:
+        L = lead.get(rid, 0)
+        d = hoje_d
+        fim_pre = inicio_d + timedelta(days=L - 1)
+        while d <= fim_pre:
+            pre_demanda[rid] += max(int(firme_dia[rid].get(d, 0)),
+                                    int(round(_previsto_dia(rid, d))))
+            d += timedelta(days=1)
+
     # 5. Monta itens — so receitas com algum sinal (estoque/comprometido/
     # previsto). Nao listar centenas de receitas zeradas.
     itens = []
