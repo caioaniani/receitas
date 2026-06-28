@@ -27,6 +27,16 @@ def _horizonte_janela():
     return horizonte, janela
 
 
+def _inicio_offset():
+    """Inicio do horizonte (dias). Default 1 = amanha — MESMO padrao do Painel,
+    pra as duas telas baterem. 0 = hoje. Limite 0..14."""
+    try:
+        v = int(request.values.get('inicio', 1))
+    except (TypeError, ValueError):
+        v = 1
+    return max(0, min(v, 14))
+
+
 @industria_teste_bp.route('/')
 @login_required
 @admin_required
@@ -35,14 +45,17 @@ def index():
     from app.services.previsao_producao import cronograma_producao
 
     horizonte, janela = _horizonte_janela()
-    crono = cronograma_producao(horizonte_dias=horizonte, janela_semanas=janela)
+    inicio = _inicio_offset()
+    crono = cronograma_producao(horizonte_dias=horizonte, janela_semanas=janela,
+                                inicio_offset_dias=inicio)
     # Estado da ordem por dia (fluxo 2 passos): rascunho/aprovado x enviado.
     estados = {}
     for p in PlanejamentoProducao.query.filter_by(origem='cronograma').all():
         estados[p.data.isoformat()] = {
             'enviado': p.enviado_ao_padeiro is not False, 'plano_id': p.id}
     return render_template('industria_teste/teste.html', crono=crono,
-                           horizonte=horizonte, janela=janela, estados=estados)
+                           horizonte=horizonte, janela=janela, inicio=inicio,
+                           estados=estados)
 
 
 @industria_teste_bp.route('/aprovar', methods=['POST'])
