@@ -98,7 +98,7 @@
                     <div class="badge bg-warning text-dark mt-1" style="font-size:.62rem;">✓ aprovado</div>
                     <div class="mt-1 d-flex gap-1 justify-content-center">
                       <a class="btn btn-outline-secondary btn-sm" style="font-size:.62rem;padding:.05rem .35rem;"
-                         href="{{ url_for('padeiro_testes.editar_plano', data=dia.data) }}">✏️ editar</a>
+                         href="{{ url_for('padeiro.editar_plano', data=dia.data) }}">✏️ editar</a>
                       <form method="POST" action="{{ url_for('industria_teste.enviar') }}" class="d-inline"
                             onsubmit="return confirm('Enviar o plano de {{ dia.label }} pro padeiro?');">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -114,7 +114,7 @@
                     <div class="badge bg-success mt-1" style="font-size:.62rem;">📤 enviado</div>
                     <div class="mt-1">
                       <a class="btn btn-outline-secondary btn-sm" style="font-size:.62rem;padding:.05rem .35rem;"
-                         href="{{ url_for('padeiro_testes.editar_plano', data=dia.data) }}">✏️ editar</a>
+                         href="{{ url_for('padeiro.editar_plano', data=dia.data) }}">✏️ editar</a>
                     </div>
                     {% endif %}
                 </th>
