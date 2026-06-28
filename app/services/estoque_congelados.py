@@ -414,3 +414,33 @@ def entrada_producao(*, receita_id=None, produto_id=None, estado=None,
         estoque_producao_id=ep.id, tipo='producao', quantidade=quantidade,
         referencia=referencia, usuario_id=usuario_id))
     return ep
+
+
+def saida_producao(*, receita_id, quantidade, usuario_id, referencia='Consumo'):
+    """BAIXA `quantidade` (inteiro) do congelado de uma receita — usado quando
+    produzir uma receita DERIVADA consome unidades de outra já pronta (ex:
+    croissant almond consome croissant tradicional congelado).
+
+    Salvaguarda (mesmo padrão do Seru/B2B): NUNCA zera/negativa silenciosamente.
+    Baixa o que tem; se faltar, registra o déficit num Mov
+    `consumo_subreceita_sem_estoque` (não trava a produção). NÃO commita.
+    Retorna {'baixado': int, 'falta': int}.
+    """
+    quantidade = int(quantidade or 0)
+    if quantidade <= 0:
+        return {'baixado': 0, 'falta': 0}
+    ep = obter_linha_producao(receita_id=receita_id, usuario_id=usuario_id)
+    disp = int(ep.quantidade or 0)
+    baixa = max(0, min(disp, quantidade))
+    falta = quantidade - baixa
+    if baixa > 0:
+        ep.quantidade = disp - baixa
+        db.session.add(MovEstoqueProducao(
+            estoque_producao_id=ep.id, tipo='consumo_subreceita',
+            quantidade=baixa, referencia=referencia, usuario_id=usuario_id))
+    if falta > 0:
+        db.session.add(MovEstoqueProducao(
+            estoque_producao_id=ep.id, tipo='consumo_subreceita_sem_estoque',
+            quantidade=falta, referencia='%s (faltou %d no estoque)' % (
+                referencia, falta), usuario_id=usuario_id))
+    return {'baixado': baixa, 'falta': falta}
