@@ -86,10 +86,11 @@ def test_estoque_cobre_primeiros_dias(app):
 
 
 def test_lead_com_estoque_unifica_com_balanco(app):
-    """Unificado: o cronograma distribui o "Produzir" do BALANÇO. Com lead 2, o
-    balanço só conta entregas em [hoje+2, ...] (a de hoje+1 produziria no
-    passado) e subtrai o estoque do total. O cronograma espalha esse total pela
-    curva — e o total bate exatamente com o balanço."""
+    """Unificado E correto: o cronograma distribui o "Produzir" do BALANÇO, e o
+    estoque é alocado cronologicamente. Com lead 2 e estoque 40: a entrega de
+    hoje+1 (iminente, 30) consome 30 do estoque -> sobram 10 efetivos pra a
+    janela (hoje+2 + hoje+4 = 60), logo produzir = 50. O estoque NÃO é contado
+    duas vezes (bug que subproduziria pra 20)."""
     from app.services.previsao_producao import balanco_industria
     loja = _loja()
     r = _receita()
@@ -106,12 +107,12 @@ def test_lead_com_estoque_unifica_com_balanco(app):
     bal = balanco_industria(horizonte_dias=7, inicio_offset_dias=0,
                             usar_cache=False)
     bit = next(i for i in bal['itens'] if i['receita_id'] == r.id)
-    # entregas hoje+2 (30) + hoje+4 (30) = 60; estoque 40 -> produzir 20.
-    assert bit['produzir'] == 20
-    assert rr['total'] == bit['produzir']        # a unificação
-    # cai no dia que ainda falta: produção de hoje+4 = dia 2 (hoje+4 - lead 2)
-    assert rr['por_dia'][2]['qtd'] == 20
-    assert rr['por_dia'][0]['qtd'] == 0
+    assert bit['em_estoque_efetivo'] == 10       # 40 - 30 da entrega iminente
+    assert bit['produzir'] == 50                 # 60 - 10 efetivo (NÃO 20)
+    assert rr['total'] == bit['produzir']         # a unificação
+    # hoje+2: falta 20 -> produz dia 0 (hoje); hoje+4: 30 -> dia 2 (hoje+4-lead2)
+    assert rr['por_dia'][0]['qtd'] == 20
+    assert rr['por_dia'][2]['qtd'] == 30
 
 
 def test_cronograma_total_bate_com_balanco(app):
