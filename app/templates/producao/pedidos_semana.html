@@ -66,6 +66,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="horizonte" value="{{ horizonte }}">
     <input type="hidden" name="janela" value="{{ janela }}">
+    <input type="hidden" name="inicio" value="{{ inicio }}">
     <button class="btn btn-warning btn-sm"><i class="bi bi-hammer"></i> Gerar ordem de produção + compra</button>
     <span class="text-muted small ms-1">a partir do déficit atual (já conta os pedidos lançados); leva à ordem de produção e, dela, à ordem de compra de MP.</span>
 </form>
