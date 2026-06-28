@@ -128,15 +128,15 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
             .filter(PedidoItem.receita_id.isnot(None),
                     PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
-                    PedidoLoja.data_entrega >= hoje_d,
+                    PedidoLoja.data_entrega >= inicio_d,
                     PedidoLoja.data_entrega <= comp_fim)
             .all())
     for rid, loja_id, data_ent, qtd in rows:
         if data_ent is None:
             continue
         L = lead.get(rid, 0)
-        if not (hoje_d + timedelta(days=L) <= data_ent
-                <= hoje_d + timedelta(days=L + horizonte_dias - 1)):
+        if not (inicio_d + timedelta(days=L) <= data_ent
+                <= inicio_d + timedelta(days=L + horizonte_dias - 1)):
             continue
         comprometido[rid] += int(qtd or 0)
         comprometido_loja[rid][loja_id] += int(qtd or 0)
