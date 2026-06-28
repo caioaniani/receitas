@@ -1290,7 +1290,8 @@ REGRAS:
 
 
 def interpretar(prompt_text, user, historico=None, images=None,
-                apenas_leitura=False, modelo=None, system_extra=None):
+                apenas_leitura=False, modelo=None, system_extra=None,
+                tools_whitelist=None):
     """Chama Claude. Retorna dict com tipo, params, explicacao.
 
     historico: lista de {role: 'user'|'assistant', content: str} com
