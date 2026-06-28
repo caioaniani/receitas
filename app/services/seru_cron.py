@@ -454,6 +454,14 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
+    # Acuracia do forecast — congela a previsao do dia (idempotente) + casa o
+    # realizado das datas passadas. 05:30 BRT. Desligar: PREVISAO_ACURACIA=0.
+    _scheduler.add_job(
+        lambda app=app: _run_snapshot_acuracia(app),
+        'cron', hour=5, minute=30, id='previsao-acuracia',
+        max_instances=1, coalesce=True,
+    )
+
     # Alerta de desperdicio: escalada Slack (20:10/15/20/25) -> WhatsApp (20:30)
     if os.environ.get('DESPERDICIO_ALERTA', '1') != '0':
         # 4 ticks no Slack — gerentes veem la e podem resolver antes do WhatsApp
