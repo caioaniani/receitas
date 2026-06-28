@@ -325,3 +325,53 @@ def test_produzir_freeform_consome_subreceita(app, admin_user):
                   json={'itens': [{'ref': 'receita:%d' % almond.id, 'quantidade': 3}]})
     assert resp.status_code == 200 and resp.get_json()['ok'] is True
     assert EstoqueProducao.query.filter_by(receita_id=trad.id).first().quantidade == 4
+
+
+# ── editar a ordem de produção do dia (cronograma) ────────────────────────────
+
+def test_editar_plano_muda_qtd_adiciona_remove(app, admin_user):
+    r1 = Receita(nome='Pão Edit A', categoria='Pães', rendimento_qtd=10,
+                 rendimento_unidade='un', peso_base=1000.0)
+    r2 = Receita(nome='Pão Edit B', categoria='Pães', rendimento_qtd=10,
+                 rendimento_unidade='un', peso_base=1000.0)
+    r3 = Receita(nome='Pão Edit C', categoria='Pães', rendimento_qtd=10,
+                 rendimento_unidade='un', peso_base=1000.0)
+    db.session.add_all([r1, r2, r3]); db.session.flush()
+    plano = PlanejamentoProducao(data=hoje(), origem='cronograma')
+    db.session.add(plano); db.session.flush()
+    it1 = PlanejamentoItem(planejamento_id=plano.id, receita_id=r1.id,
+                           multiplicador=2, qtd_alvo=20)
+    it2 = PlanejamentoItem(planejamento_id=plano.id, receita_id=r2.id,
+                           multiplicador=1, qtd_alvo=10)
+    db.session.add_all([it1, it2]); db.session.commit()
+    it1_id, it2_id, r1id, r2id, r3id = it1.id, it2.id, r1.id, r2.id, r3.id
+
+    c = app.test_client()
+    c.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+           follow_redirects=True)
+    resp = c.post('/padeiro-testes/plano/editar', data={
+        'data': hoje().isoformat(),
+        'alvo_%d' % it1_id: '50',            # A: 20 -> 50
+        'remover_%d' % it2_id: 'on',         # remove B
+        'novo_receita_id[]': str(r3id),
+        'novo_alvo[]': '30',                 # adiciona C: 30
+    })
+    assert resp.status_code in (302, 303)
+    db.session.expire_all()
+    plano = PlanejamentoProducao.query.filter_by(
+        data=hoje(), origem='cronograma').first()
+    por = {i.receita_id: i for i in plano.itens}
+    assert por[r1id].qtd_alvo == 50 and por[r1id].multiplicador == 5  # ceil(50/10)
+    assert r2id not in por                                            # removido
+    assert por[r3id].qtd_alvo == 30
+
+
+def test_editar_plano_exige_admin(app):
+    from app.models import Usuario
+    u = Usuario(nome='pad', login='pad9', papel='padeiro')
+    u.set_senha('123')
+    db.session.add(u); db.session.commit()
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'pad9', 'senha': '123'},
+           follow_redirects=True)
+    assert c.get('/padeiro-testes/plano/editar').status_code == 403
