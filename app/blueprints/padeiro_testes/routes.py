@@ -236,7 +236,9 @@ def massa_base_mise(mb_id):
     mb = MassaBase.query.get_or_404(mb_id)
     dia = _parse_dia(request.args.get('data')) or hoje()
     plano = (PlanejamentoProducao.query
-             .filter_by(data=dia, origem='cronograma').first())
+             .filter_by(data=dia, origem='cronograma')
+             .filter(PlanejamentoProducao.enviado_ao_padeiro.isnot(False))
+             .first())
 
     # Escala a base pelas UNIDADES do dia em porções REAIS (qtd_alvo /
     # rendimento), não pelo multiplicador inteiro do item — esse arredonda a
