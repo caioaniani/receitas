@@ -598,23 +598,25 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
                 previsto_dia = soma_r[rid] / dias_calendario_janela
             else:
                 previsto_dia = 0.0
-            total_dia = int(round(previsto_dia))
-            if total_dia <= 0:
+            if previsto_dia <= 0:
                 continue
-            # Rateio canonico (maior resto): a soma das lojas bate EXATAMENTE
-            # com o total previsto, e itens pequenos espalhados em varias lojas
-            # nao zeram todos no arredondamento (antes era round() por loja).
+            # Rateio por loja com round() INDEPENDENTE: a fracao marginal de
+            # uma loja (< 0,5 un) cai pra 0 e a loja nao entra no pedido. E de
+            # proposito — a padaria NAO pulveriza 1-2 un em loja que mal pede o
+            # item ("pedidos picados"). NAO trocar por distribuicao de maior
+            # resto: a soma exata espalha sobra pras lojas marginais (revertido
+            # em 28/06/2026 apos o dono apontar os pedidos picados).
             base_dow_op = sum(soma_rld[rid].get(l.id, {}).get(dow, 0)
                               for l in lojas_op)
-            if base_dow_op:
-                pesos = [soma_rld[rid].get(l.id, {}).get(dow, 0)
-                         for l in lojas_op]
-            elif soma_op_r[rid]:
-                pesos = [soma_rl[rid].get(l.id, 0) for l in lojas_op]
-            else:
-                continue
-            for loja, qtd in zip(lojas_op,
-                                 _distribuir_inteiro(total_dia, pesos)):
+            for loja in lojas_op:
+                if base_dow_op:
+                    share = (soma_rld[rid].get(loja.id, {}).get(dow, 0)
+                             / base_dow_op)
+                elif soma_op_r[rid]:
+                    share = soma_rl[rid].get(loja.id, 0) / soma_op_r[rid]
+                else:
+                    share = 0.0
+                qtd = int(round(previsto_dia * share))
                 if qtd > 0:
                     sugestao[loja.id][d].append(
                         {'receita_id': rid, 'nome': rec.nome, 'qtd': qtd})
