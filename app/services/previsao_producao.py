@@ -707,8 +707,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             firme[rid][data_ent] += int(qtd or 0)
 
     # historico por (receita, dow) pra o previsto (curva diaria)
-    soma_dow = defaultdict(lambda: defaultdict(int))
-    datas_dow = defaultdict(lambda: defaultdict(set))
+    qtd_dow = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     soma_total = defaultdict(int)
     for rid, data_ent, qtd in (db.session.query(
             PedidoItem.receita_id, PedidoLoja.data_entrega,
@@ -721,15 +720,14 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         if data_ent is None or rid not in receitas:
             continue
         dow = data_ent.weekday()
-        soma_dow[rid][dow] += int(qtd or 0)
-        datas_dow[rid][dow].add(data_ent)
+        qtd_dow[rid][dow][data_ent] += int(qtd or 0)
         soma_total[rid] += int(qtd or 0)
 
     def _previsto_dia(rid, dia):
         dow = dia.weekday()
-        datas = datas_dow[rid].get(dow)
-        if datas and len(datas) >= _MIN_OCORRENCIAS_DOW:
-            return soma_dow[rid][dow] / len(datas)
+        por_data = qtd_dow[rid].get(dow)
+        if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
+            return _media_recencia(por_data, hoje_d)
         if soma_total[rid]:
             return soma_total[rid] / dias_calendario_janela
         return 0.0
