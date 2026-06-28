@@ -653,8 +653,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 qtd = pct * pesoUnitReceita;  // peso total = unidades × peso unitário
                 custoRs = custoUnitReceita * pct;
 
-                var qtdExibir = qtd * multiplicador;
-                var custoExibir = custoRs * multiplicador;
+                var qtdExibir = qtd * fator;
+                var custoExibir = custoRs * fator;
 
                 qtdCell.textContent = qtdExibir > 0 ? formatNum(qtdExibir, 1) + 'g' : pct > 0 ? pct + ' un' : '-';
                 custoKgCell.textContent = custoUnitReceita > 0 ? formatBRL(custoUnitReceita) + '/un' : '-';
@@ -671,8 +671,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 custoKg = mp ? mp.custo_por_kg : 0;
                 custoRs = qtd * _custoPorGrama(mp);
 
-                var qtdExibir = qtd * multiplicador;
-                var custoExibir = custoRs * multiplicador;
+                var qtdExibir = qtd * fator;
+                var custoExibir = custoRs * fator;
 
                 qtdCell.textContent = qtdExibir > 0 ? formatNum(qtdExibir, 1) : '-';
                 custoKgCell.textContent = mp ? formatBRL(custoKg) : '-';
@@ -690,8 +690,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 qtd = pct;  // unidades
                 custoRs = qtd * custoUn;
 
-                var qtdExibir = qtd * multiplicador;
-                var custoExibir = custoRs * multiplicador;
+                var qtdExibir = qtd * fator;
+                var custoExibir = custoRs * fator;
 
                 qtdCell.textContent = qtdExibir > 0 ? formatNum(qtdExibir, 0) + ' un' : '-';
                 custoKgCell.textContent = mp ? formatBRL(custoUn) + '/un' : '-';
@@ -709,8 +709,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 custoKg = mp ? mp.custo_por_kg : 0;
                 custoRs = qtd * _custoPorGrama(mp);
 
-                var qtdExibir = qtd * multiplicador;
-                var custoExibir = custoRs * multiplicador;
+                var qtdExibir = qtd * fator;
+                var custoExibir = custoRs * fator;
 
                 qtdCell.textContent = qtdExibir > 0 ? formatNum(qtdExibir, 1) : '-';
                 custoKgCell.textContent = mp ? formatBRL(custoKg) : '-';
