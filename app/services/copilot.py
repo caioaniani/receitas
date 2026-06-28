@@ -1365,6 +1365,9 @@ def interpretar(prompt_text, user, historico=None, images=None,
     if apenas_leitura:
         tools_filtradas = [t for t in tools_filtradas
                            if t.get('name') not in REQUER_APROVACAO]
+    if tools_whitelist is not None:
+        tools_filtradas = [t for t in tools_filtradas
+                           if t.get('name') in tools_whitelist]
     if not tools_filtradas:
         return {'tipo': 'erro', 'explicacao': 'Sem permissao pra usar o copilot.', 'raw': None}
     # Prompt lista exatamente as tools enviadas — nunca promete write que o
