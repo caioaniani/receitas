@@ -21,6 +21,10 @@ class PlanejamentoProducao(db.Model):
     # 'cronograma' = plano aprovado do cronograma diario (desce pro padeiro);
     # NULL/'manual' = plano avulso/deficit. So pra distinguir na UI.
     origem = db.Column(db.String(20))
+    # Fluxo de 2 passos: APROVAR cria a ordem (rascunho, enviado_ao_padeiro=
+    # False) -> ENVIAR libera pro padeiro (True). O padeiro só vê o que foi
+    # enviado. Ordens antigas nascem True (coluna DEFAULT TRUE na migração).
+    enviado_ao_padeiro = db.Column(db.Boolean, default=True)
 
     itens = db.relationship('PlanejamentoItem', backref='planejamento',
                             cascade='all, delete-orphan', lazy=True)
