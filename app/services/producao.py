@@ -37,7 +37,7 @@ def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6)
     plano = PlanejamentoProducao(
         data=data_alvo, origem='cronograma', status='aprovado',
         nome='Cronograma %s' % data_alvo.strftime('%d/%m'),
-        criado_por=user_id)
+        criado_por=user_id, enviado_ao_padeiro=False)  # rascunho até "enviar"
     db.session.add(plano)
     db.session.flush()
 
