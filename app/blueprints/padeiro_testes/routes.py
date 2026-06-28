@@ -105,7 +105,9 @@ def _plano_do_dia(dia):
     from app.services.producao import fornadas_amassadeira
 
     plano = (PlanejamentoProducao.query
-             .filter_by(data=dia, origem='cronograma').first())
+             .filter_by(data=dia, origem='cronograma')
+             .filter(PlanejamentoProducao.enviado_ao_padeiro.isnot(False))
+             .first())
     if plano is None:
         return None
 
