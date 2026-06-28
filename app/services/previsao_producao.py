@@ -138,9 +138,12 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
                .filter(EstoqueProducao.receita_id.isnot(None)).all()):
         em_estoque[ep.receita_id] += int(ep.quantidade or 0)
 
-    # 2. Comprometido: pedidos ainda nao enviados cuja data_entrega cai na
-    # janela de PRODUCAO de cada receita — [hoje+lead, hoje+lead+horizonte-1].
-    # Pra lead=0 a janela e [hoje, horizonte_fim] (comportamento original).
+    # 2. Firme por (receita, dia de entrega) — pedidos ainda nao baixados, de
+    # HOJE ate o fim da janela de producao+lead. Capturado POR DIA pra:
+    #  (a) somar o Comprometido da janela PRODUCIVEL [inicio+lead, ...]; e
+    #  (b) medir a demanda IMINENTE (entregas entre hoje e o inicio da janela)
+    #      que consome estoque mas nao da mais pra produzir neste horizonte.
+    firme_dia = defaultdict(lambda: defaultdict(int))   # rid -> data -> qtd
     comprometido = defaultdict(int)
     comprometido_loja = defaultdict(lambda: defaultdict(int))
     comp_fim = horizonte_fim + timedelta(days=max_lead)
@@ -149,18 +152,19 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
             .filter(PedidoItem.receita_id.isnot(None),
                     PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
-                    PedidoLoja.data_entrega >= inicio_d,
+                    PedidoLoja.data_entrega >= hoje_d,
                     PedidoLoja.data_entrega <= comp_fim)
             .all())
     for rid, loja_id, data_ent, qtd in rows:
         if data_ent is None:
             continue
+        q = int(qtd or 0)
+        firme_dia[rid][data_ent] += q
         L = lead.get(rid, 0)
-        if not (inicio_d + timedelta(days=L) <= data_ent
+        if (inicio_d + timedelta(days=L) <= data_ent
                 <= inicio_d + timedelta(days=L + horizonte_dias - 1)):
-            continue
-        comprometido[rid] += int(qtd or 0)
-        comprometido_loja[rid][loja_id] += int(qtd or 0)
+            comprometido[rid] += q
+            comprometido_loja[rid][loja_id] += q
 
     # 3. Historico pra previsao por dia-da-semana. Conta DATAS distintas (nao
     # linhas) pra a media: varias lojas no mesmo dia somam, mas a media e por
