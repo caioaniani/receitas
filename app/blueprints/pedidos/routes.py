@@ -2,7 +2,17 @@ import io
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
-from flask import abort, current_app, flash, redirect, render_template, request, send_file, url_for
+from flask import (
+    abort,
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    url_for,
+)
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -115,7 +125,6 @@ def buscar_itens():
     """Typeahead para novo pedido: receitas + produtos (ativos) + matérias-primas.
     Acento-insensível, multi-termo, mínimo 2 caracteres.
     Retorna formato compatível com _parse_item_id: r_<id>, p_<id>, mp_<id>."""
-    from flask import jsonify
 
     from app.utils import normalizar_busca
 
