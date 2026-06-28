@@ -330,6 +330,42 @@ def _run_auditor(app, modo='janela'):
             conn.close()
 
 
+def _run_snapshot_acuracia(app):
+    """Job diario de acuracia do forecast: congela a previsao do pedido
+    semanal (idempotente) e casa o realizado das datas que ja passaram.
+    Desligavel via PREVISAO_ACURACIA=0."""
+    if os.environ.get('PREVISAO_ACURACIA', '1') == '0':
+        return
+    from app.services import previsao_acuracia
+    with app.app_context():
+        uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
+        is_pg = 'postgresql' in uri
+        from app.extensions import db
+        conn = db.engine.connect()
+        try:
+            if is_pg:
+                got = conn.execute(text('SELECT pg_try_advisory_lock(:k)'),
+                                   {'k': LOCK_KEY_PREVISAO_ACURACIA}).scalar()
+                if not got:
+                    return
+            try:
+                novos = previsao_acuracia.registrar_snapshot()
+                casados = previsao_acuracia.casar_realizados()
+                logger.info('acuracia forecast: %d snapshot(s) novo(s), '
+                            '%d casado(s)', novos, casados)
+            except Exception:
+                logger.exception('snapshot de acuracia do forecast falhou')
+            finally:
+                if is_pg:
+                    try:
+                        conn.execute(text('SELECT pg_advisory_unlock(:k)'),
+                                     {'k': LOCK_KEY_PREVISAO_ACURACIA})
+                    except Exception:
+                        pass
+        finally:
+            conn.close()
+
+
 def iniciar(app):
     """Inicia o scheduler. Chamado uma vez no startup do app.
     Roda jobs Seru E VNDA no mesmo scheduler."""
