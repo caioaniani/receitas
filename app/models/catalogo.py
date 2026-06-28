@@ -256,6 +256,11 @@ class ReceitaIngrediente(db.Model):
     porcentagem = db.Column(db.Float, nullable=False)  # % padeiro (mp) ou qtd unidades (receita)
     eh_base = db.Column(db.Boolean, default=False)
     nota = db.Column(db.String(200))
+    # FK pra sub-receita quando tipo='receita' (ex: croissant almond -> croissant
+    # tradicional). Liga por ID; ingrediente_nome fica como fallback/rótulo. NULL
+    # = órfão (não resolvido por nome) — vinculável na ficha.
+    sub_receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'))
+    sub_receita = db.relationship('Receita', foreign_keys=[sub_receita_id])
 
     def to_dict(self):
         return {
