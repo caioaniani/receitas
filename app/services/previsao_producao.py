@@ -55,13 +55,17 @@ def invalidar_sugestao_cache():
     _CACHE.clear()
 
 
-def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True):
+def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
+                      inicio_offset_dias=0):
     """Balanco de producao da industria por receita.
 
     Args:
         horizonte_dias: janela futura de planejamento (1-14).
         janela_semanas: profundidade do historico pra previsao (1-26).
         usar_cache: usa o cache de 60s (False forca recalculo).
+        inicio_offset_dias: desloca o INICIO do horizonte futuro (0=hoje,
+            1=amanha...). O painel usa 1 porque a producao de hoje ja esta
+            decidida. O historico continua ancorado em hoje.
 
     Retorna dict:
         itens: lista por receita, cada um com em_estoque, comprometido,
