@@ -257,3 +257,58 @@ def test_massa_base_mise_exige_padeiro(app):
                 follow_redirects=True)
     resp = client.get('/padeiro-testes/massa-base/%d.json' % mb.id)
     assert resp.status_code == 403
+
+
+# ── consumo de sub-receita pronta (croissant almond consome tradicional) ──────
+
+def _almond_setup(trad_nome, almond_nome, estoque_trad, link_fk=True):
+    from app.services.estoque_congelados import entrada_producao
+    trad = Receita(nome=trad_nome, categoria='Viennoiserie', rendimento_qtd=10,
+                   rendimento_unidade='un', peso_base=1000.0)
+    db.session.add(trad)
+    db.session.flush()
+    almond = Receita(nome=almond_nome, categoria='Viennoiserie', rendimento_qtd=10,
+                     rendimento_unidade='un', peso_base=1000.0)
+    db.session.add(almond)
+    db.session.flush()
+    # almond usa 10 tradicional por batida (rendimento 10) -> 1 por unidade
+    db.session.add(ReceitaIngrediente(
+        receita_id=almond.id, tipo='receita', ingrediente_nome=trad_nome,
+        porcentagem=10, sub_receita_id=(trad.id if link_fk else None)))
+    if estoque_trad:
+        entrada_producao(receita_id=trad.id, quantidade=estoque_trad, usuario_id=1)
+    plano = PlanejamentoProducao(data=hoje(), origem='cronograma')
+    db.session.add(plano)
+    db.session.flush()
+    it = PlanejamentoItem(planejamento_id=plano.id, receita_id=almond.id,
+                          multiplicador=1, qtd_alvo=10)
+    db.session.add(it)
+    db.session.commit()
+    return trad, almond, it
+
+
+def test_produzir_consome_subreceita_congelada(app, admin_user):
+    trad, almond, it = _almond_setup('Croissant Tradicional', 'Croissant Almond', 8)
+    res = produzir_item_plano(it.id, 5, admin_user.id)
+    assert res['ok'] is True
+    # baixou 5 tradicionais (8 -> 3)
+    assert EstoqueProducao.query.filter_by(receita_id=trad.id).first().quantidade == 3
+    # e o almond entrou no congelado
+    assert EstoqueProducao.query.filter_by(receita_id=almond.id).first().quantidade == 5
+
+
+def test_produzir_subreceita_resolve_por_nome_sem_fk(app, admin_user):
+    """Mesmo sem a FK setada, resolve a sub-receita pelo nome (fallback)."""
+    trad, almond, it = _almond_setup('Cro Trad NF', 'Almond NF', 6, link_fk=False)
+    produzir_item_plano(it.id, 4, admin_user.id)
+    assert EstoqueProducao.query.filter_by(receita_id=trad.id).first().quantidade == 2
+
+
+def test_produzir_subreceita_sem_estoque_nao_negativa(app, admin_user):
+    from app.models import MovEstoqueProducao
+    trad, almond, it = _almond_setup('Cro Trad SE', 'Almond SE', 2)
+    produzir_item_plano(it.id, 5, admin_user.id)   # quer 5, só tem 2
+    assert EstoqueProducao.query.filter_by(receita_id=trad.id).first().quantidade == 0
+    deficit = MovEstoqueProducao.query.filter_by(
+        tipo='consumo_subreceita_sem_estoque').first()
+    assert deficit is not None and deficit.quantidade == 3
