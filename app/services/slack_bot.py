@@ -240,6 +240,16 @@ def processar_evento_mensagem(evento):
     if not text:
         return
 
+    # Bot de pedidos desativado: avisa uma vez e para, sem chamar o copilot.
+    # (NF/boleto ja retornou la em cima; posts automaticos de saida seguem.)
+    if not _bot_pedidos_ativo():
+        slack_api.post_message(
+            channel,
+            text=('O bot de pedidos do Slack foi desativado. Os pedidos '
+                  'agora sao feitos direto no sistema.'),
+            thread_ts=thread_ts)
+        return
+
     user = _resolver_usuario(slack_user_id)
     if not user:
         slack_api.post_message(
