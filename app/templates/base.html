@@ -205,12 +205,12 @@
         </a>
         <a href="{{ url_for('padeiro_testes.index') }}"
            class="sidebar-link {% if '/padeiro-testes' in request.path %}active{% endif %}">
-            <i class="bi bi-hammer"></i> Padeiro (testes)
+            <i class="bi bi-hammer"></i> Tela do padeiro
         </a>
         {% endif %}
         <a href="{{ url_for('producao.lista') }}"
            class="sidebar-link {% if request.path.startswith('/producao') and '/painel' not in request.path %}active{% endif %}">
-            Plano de Produção
+            Listas de compra
         </a>
         <a href="{{ url_for('pedidos.congelados') }}"
            class="sidebar-link {% if '/pedidos/congelados' in request.path %}active{% endif %}">
