@@ -112,8 +112,9 @@ def test_balanco_previsto_responde_a_recencia(app):
         f'recencia deveria elevar o previsto da receita em alta: {prev}')
 
 
-# ── item 2: rateio por loja soma EXATAMENTE o total previsto ──────────────
-def test_rateio_por_loja_soma_o_total_previsto(app):
+# ── item 2 REVERTIDO: loja marginal NAO entra (sem "pedidos picados") ─────
+def test_rateio_normal_por_participacao(app):
+    """Caso equilibrado: cada loja recebe o round da sua participacao."""
     loja_a = Loja(nome='Loja A', ativa=True)
     loja_b = Loja(nome='Loja B', ativa=True)
     r = Receita(nome='Croissant', categoria='X', rendimento_qtd=1,
@@ -133,13 +134,51 @@ def test_rateio_por_loja_soma_o_total_previsto(app):
     db.session.commit()
 
     sug = sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6)
-    # dia0 = hoje (mesmo dow). previsto/data = 10+5 = 15 -> total_dia = 15.
     qtds = {}
     for la in sug['lojas']:
         item = next((it for it in la['dias'][0]['itens']
                      if it['receita_id'] == r.id), None)
         if item:
             qtds[la['loja_id']] = item['qtd']
-    assert sum(qtds.values()) == 15           # soma BATE com o total previsto
-    assert qtds.get(loja_a.id, 0) == 10        # rateado pela participacao
+    assert qtds.get(loja_a.id, 0) == 10
     assert qtds.get(loja_b.id, 0) == 5
+
+
+def test_loja_marginal_nao_entra_no_pedido(app):
+    """Anti-"pedidos picados" (28/06/2026): lojas que mal pediam o item (fracao
+    < 0,5 un) NAO recebem 1-2 un por causa de sobra de arredondamento. Uma loja
+    forte + 3 marginais (1 un cada, uma vez): so a forte entra. Se alguem voltar
+    a distribuir por maior-resto, alguma marginal ganharia 1 e o teste quebra."""
+    forte = Loja(nome='Forte', ativa=True)
+    marginais = [Loja(nome=f'Marg{i}', ativa=True) for i in range(3)]
+    r = Receita(nome='Croissant', categoria='X', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=100.0)
+    db.session.add_all([forte, *marginais, r])
+    db.session.commit()
+    hoje_d = hoje()
+    # forte: 30 un em 3 semanas (mesmo dow). marginais: 1 un so na 1a semana.
+    for i in (1, 2, 3):
+        d = hoje_d - timedelta(days=7 * i)
+        p = PedidoLoja(loja_id=forte.id, status='recebido', data_entrega=d,
+                       data_pedido=d)
+        db.session.add(p)
+        db.session.flush()
+        db.session.add(PedidoItem(pedido_id=p.id, receita_id=r.id, quantidade=30))
+    d1 = hoje_d - timedelta(days=7)
+    for m in marginais:
+        p = PedidoLoja(loja_id=m.id, status='recebido', data_entrega=d1,
+                       data_pedido=d1)
+        db.session.add(p)
+        db.session.flush()
+        db.session.add(PedidoItem(pedido_id=p.id, receita_id=r.id, quantidade=1))
+    db.session.commit()
+
+    sug = sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6)
+    com_pedido = set()
+    for la in sug['lojas']:
+        item = next((it for it in la['dias'][0]['itens']
+                     if it['receita_id'] == r.id), None)
+        if item and item['qtd'] > 0:
+            com_pedido.add(la['loja_id'])
+    assert com_pedido == {forte.id}, (
+        f'so a loja forte deveria entrar (sem picado): {com_pedido}')
