@@ -248,8 +248,12 @@ def montar_gantt(dia):
             if s:
                 trunk_passos.append(s)
             if p['tipo'] == 'retirada':
-                trunk_passos.append({'nome': 'Tirar ' + p['nome'], 'equip': None,
-                                     'ativa': True, 'dur': TIRAR_MIN,
+                # retirada ocupa a AMASSADEIRA (puxa a porção da base que está
+                # nela) — encadeia logo após o amassamento, sem esperar o padeiro
+                # que pode estar em outra receita, e segura a máquina até esvaziar.
+                trunk_passos.append({'nome': 'Tirar ' + p['nome'],
+                                     'equip': 'amassadeira', 'ativa': True,
+                                     'dur': TIRAR_MIN,
                                      'desbloqueia': branch_jobs.get(p['receita_id'])})
         jobs.append({'prod': trunk_prod, 'passos': trunk_passos, 'ptr': 0, 'ready': 0})
 
