@@ -52,6 +52,20 @@ def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6)
     return plano
 
 
+def enviar_plano_do_dia(data_alvo):
+    """2º passo: libera a ordem do dia pro padeiro (enviado_ao_padeiro=True).
+    Retorna o plano enviado, ou None se não há ordem aprovada nesse dia."""
+    from app.models import PlanejamentoProducao
+
+    plano = (PlanejamentoProducao.query
+             .filter_by(data=data_alvo, origem='cronograma').first())
+    if plano is None:
+        return None
+    plano.enviado_ao_padeiro = True
+    db.session.commit()
+    return plano
+
+
 def massa_receita_base(receita):
     """Massa (g) de UMA fornada-base da receita = soma de TODOS os ingredientes
     (a 'receita final', nao so a farinha). Mesma conta de custos.py:
