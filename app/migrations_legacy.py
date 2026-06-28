@@ -178,6 +178,19 @@ def _migrate_postgres(app):
         cols_ing = {row[0] for row in result}
         if cols_ing and 'tipo' not in cols_ing:
             conn.execute(text("ALTER TABLE receita_ingrediente ADD COLUMN tipo TEXT DEFAULT 'mp'"))
+        # FK pra sub-receita (tipo='receita'): liga por ID, não só por nome —
+        # necessário pra baixa de estoque confiável (ex: croissant almond consome
+        # croissant tradicional congelado). Backfill por nome exato (idempotente).
+        if cols_ing and 'sub_receita_id' not in cols_ing:
+            conn.execute(text(
+                "ALTER TABLE receita_ingrediente "
+                "ADD COLUMN sub_receita_id INTEGER REFERENCES receita(id)"))
+        conn.execute(text("""
+            UPDATE receita_ingrediente ri SET sub_receita_id = r.id
+            FROM receita r
+            WHERE ri.tipo = 'receita' AND ri.sub_receita_id IS NULL
+              AND lower(trim(r.nome)) = lower(trim(ri.ingrediente_nome))
+        """))
 
         # produto
         result = conn.execute(text(
