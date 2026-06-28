@@ -35,7 +35,18 @@
         <i class="bi bi-hammer"></i> Cronograma de Produção
     </h3>
     <form method="GET" class="d-flex gap-1 align-items-center mb-0">
-        <label class="small text-muted mb-0">Horizonte:</label>
+        <label class="small text-muted mb-0">A partir de:</label>
+        <select name="inicio" class="form-select form-select-sm" style="width:auto;">
+            <option value="0" {{ 'selected' if inicio == 0 }}>Hoje</option>
+            <option value="1" {{ 'selected' if inicio == 1 }}>Amanhã</option>
+            <option value="2" {{ 'selected' if inicio == 2 }}>+2 dias</option>
+            <option value="3" {{ 'selected' if inicio == 3 }}>+3 dias</option>
+            <option value="4" {{ 'selected' if inicio == 4 }}>+4 dias</option>
+            <option value="5" {{ 'selected' if inicio == 5 }}>+5 dias</option>
+            <option value="6" {{ 'selected' if inicio == 6 }}>+6 dias</option>
+            <option value="7" {{ 'selected' if inicio == 7 }}>+7 dias</option>
+        </select>
+        <label class="small text-muted mb-0 ms-2">Horizonte:</label>
         <input type="number" name="horizonte" min="1" max="14" value="{{ horizonte }}"
                class="form-control form-control-sm" style="width:64px;">
         <label class="small text-muted mb-0 ms-2">Hist (sem):</label>
