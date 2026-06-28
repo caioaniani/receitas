@@ -20,6 +20,17 @@ from app.services.producao import (
 from app.utils import hoje as hoje_brt
 
 
+def _inicio_offset():
+    """Offset (em dias) do INICIO do horizonte de planejamento. Default 1 =
+    amanha (a producao de hoje ja esta decidida quando se olha o painel). 0 =
+    hoje. Le de args (GET) ou form (POST). Limite defensivo 0..14."""
+    try:
+        v = int(request.values.get('inicio', 1))
+    except (TypeError, ValueError):
+        v = 1
+    return max(0, min(v, 14))
+
+
 @producao_bp.route('/')
 @login_required
 @producao_required
