@@ -5,19 +5,25 @@ from app.models import MateriaPrima, Receita
 from app.services.custos import calcular_custos_receitas
 
 
-def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6):
+def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6,
+                         inicio_offset_dias=0):
     """Aprova a coluna de UM dia do cronograma -> cria um PlanejamentoProducao
     (origem='cronograma', status='aprovado') desse dia, pronto pra descer pro
     padeiro. Itens = receitas com qtd>0 naquele dia; qtd_alvo = unidades,
     multiplicador = ceil(unidades / rendimento). Re-aprovar o mesmo dia
     substitui o plano-cronograma anterior. Retorna o plano (ou None se nada
     a produzir naquele dia).
+
+    `inicio_offset_dias` TEM que ser o mesmo do cronograma exibido — senao as
+    quantidades aprovadas nao batem com o que esta na tela (a distribuicao por
+    dia muda com a janela).
     """
     from app.models import PlanejamentoItem, PlanejamentoProducao
     from app.services.previsao_producao import cronograma_producao
 
     crono = cronograma_producao(horizonte_dias=horizonte_dias,
-                                janela_semanas=janela_semanas)
+                                janela_semanas=janela_semanas,
+                                inicio_offset_dias=inicio_offset_dias)
     iso = data_alvo.isoformat()
     itens_dia = []
     for rec in crono['receitas']:
