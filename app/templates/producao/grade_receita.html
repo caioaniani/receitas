@@ -2,37 +2,6 @@
 {% block title %}Grade · {{ grade.receita_nome }}{% endblock %}
 
 {% block content %}
-<style>
-    .grade-wrap { overflow-x: auto; }
-    .grade table { border-collapse: separate; border-spacing: 0; min-width: 100%; }
-    .grade th, .grade td {
-        padding: .4rem .55rem; border-bottom: 1px solid #f0f0f0;
-        text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
-    }
-    .grade thead th {
-        background: #f1f3f5; font-size: .78rem; font-weight: 600;
-        text-transform: uppercase; color: #6c757d; border-bottom: 2px solid #dee2e6;
-        position: sticky; top: 0; z-index: 2;
-    }
-    .grade th.loja-col, .grade td.loja-col {
-        text-align: left; position: sticky; left: 0; background: #fff; z-index: 1;
-        min-width: 11rem; box-shadow: 1px 0 0 #e9ecef;
-    }
-    .grade thead th.loja-col { z-index: 3; background: #f1f3f5; }
-    .grade td.total-col, .grade th.total-col { background: #f8f9fa; font-weight: 600; }
-    .grade tfoot td {
-        background: #eef1f4; font-weight: 700; border-top: 2px solid #dee2e6;
-        border-bottom: 0;
-    }
-    .grade tr:hover td:not(.loja-col) { background: #f8f9fa; }
-    .cel-firme { font-weight: 700; color: #0d3b66; }
-    .cel-est { color: #868e96; font-size: .82rem; }
-    .cel-zero { color: #ced4da; }
-    .hoje-col { background: #fff8e1 !important; }
-    .badge-est { background: #e9ecef; color: #495057; font-weight: 600;
-                 padding: .15rem .5rem; border-radius: .25rem; font-size: .75rem; }
-</style>
-
 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
     <h3 class="mb-0">
         <i class="bi bi-calendar3"></i> {{ grade.receita_nome }}
@@ -44,72 +13,5 @@
     </a>
 </div>
 
-<div class="alert alert-light border small d-flex flex-wrap gap-3 align-items-center">
-    <span><strong class="cel-firme">N</strong> = <strong>firme</strong>: pedido real já feito pela loja, com data de entrega certa.</span>
-    <span><span class="cel-est">~N</span> = <strong>estimado</strong>: projeção do histórico (de onde a demanda ainda-não-pedida tende a vir). Não é compromisso.</span>
-    {% if not grade.tem_historico %}
-    <span class="badge-est">sem histórico — só o firme aparece</span>
-    {% endif %}
-</div>
-
-<div class="grade-wrap">
-  <div class="grade">
-    <table>
-        <thead>
-            <tr>
-                <th class="loja-col">Loja</th>
-                {% for dia in grade.dias %}
-                <th class="{% if loop.first %}hoje-col{% endif %}">{{ dia.label }}</th>
-                {% endfor %}
-                <th class="total-col">Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for l in grade.lojas %}
-            <tr>
-                <td class="loja-col">{{ l.loja_nome }}</td>
-                {% for c in l.celulas %}
-                <td class="{% if loop.first %}hoje-col{% endif %}">
-                    {% if c.firme %}<span class="cel-firme">{{ c.firme }}</span>{% endif %}
-                    {% if c.estimado %}<span class="cel-est">{% if c.firme %} {% endif %}~{{ c.estimado }}</span>{% endif %}
-                    {% if not c.firme and not c.estimado %}<span class="cel-zero">—</span>{% endif %}
-                </td>
-                {% endfor %}
-                <td class="total-col">
-                    {% if l.total_firme %}<span class="cel-firme">{{ l.total_firme }}</span>{% endif %}
-                    {% if l.total_estimado %}<span class="cel-est">{% if l.total_firme %} {% endif %}~{{ l.total_estimado }}</span>{% endif %}
-                    {% if not l.total_firme and not l.total_estimado %}<span class="cel-zero">—</span>{% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-        <tfoot>
-            <tr>
-                <td class="loja-col">Total por dia</td>
-                {% for t in grade.totais_dia %}
-                <td class="{% if loop.first %}hoje-col{% endif %}">
-                    {% if t.firme %}<span class="cel-firme">{{ t.firme }}</span>{% endif %}
-                    {% if t.estimado %}<span class="cel-est">{% if t.firme %} {% endif %}~{{ t.estimado }}</span>{% endif %}
-                    {% if not t.firme and not t.estimado %}<span class="cel-zero">—</span>{% endif %}
-                </td>
-                {% endfor %}
-                <td class="total-col">
-                    {% if grade.total_firme %}<span class="cel-firme">{{ grade.total_firme }}</span>{% endif %}
-                    {% if grade.total_estimado %}<span class="cel-est">{% if grade.total_firme %} {% endif %}~{{ grade.total_estimado }}</span>{% endif %}
-                    {% if not grade.total_firme and not grade.total_estimado %}<span class="cel-zero">—</span>{% endif %}
-                </td>
-            </tr>
-        </tfoot>
-    </table>
-  </div>
-</div>
-
-<p class="text-muted small mt-2 mb-0">
-    Lojas ordenadas por demanda total (firme + estimado). Lojas com tudo zerado
-    também aparecem — o motor as consultou; simplesmente não há pedido nem
-    histórico dessa receita nelas. O <strong>estimado</strong> rateia o
-    <em>previsto</em> do balanço entre as lojas pela participação histórica de
-    cada uma; pequenas diferenças de arredondamento entre as células e o total
-    são esperadas.
-</p>
+{% include 'producao/_grade_receita_tabela.html' %}
 {% endblock %}
