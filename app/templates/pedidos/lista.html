@@ -302,11 +302,12 @@
                 alert('Nenhum dos pedidos selecionados pode receber a ação "' + acao + '".');
                 return;
             }
+            var label = acao.replace('-', ' ');   // "voltar-status" -> "voltar status"
             var msg;
             if (acao === 'excluir') {
                 msg = '⚠ EXCLUIR PERMANENTEMENTE ' + aplicaveis.length + ' pedido(s)? Esta ação NÃO pode ser desfeita.';
             } else {
-                msg = 'Aplicar "' + acao + '" em ' + aplicaveis.length + ' pedido(s)?';
+                msg = 'Aplicar "' + label + '" em ' + aplicaveis.length + ' pedido(s)?';
             }
             if (aplicaveis.length < sel.length) {
                 msg += '\n(' + (sel.length - aplicaveis.length) + ' pedido(s) ignorados por status incompatível)';
@@ -317,6 +318,30 @@
             var orig = btn.innerHTML;
             btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> aplicando...';
 
+            function falhou(err) {
+                alert('Erro ao processar lote: ' + err);
+                btn.disabled = false;
+                btn.innerHTML = orig;
+            }
+
+            // voltar-status: UMA requisição em lote (estorno de estoque dos
+            // pedidos da mesma loja/receita soma certo numa só transação — sem
+            // corrida de "lost update" que N requests paralelos teriam).
+            if (acao === 'voltar-status') {
+                var fd = new FormData();
+                fd.append('csrf_token', CSRF);
+                aplicaveis.forEach(function(c) { fd.append('ids[]', c.dataset.id); });
+                fetch('/pedidos/voltar-status-lote', {
+                    method: 'POST', body: fd, credentials: 'same-origin',
+                }).then(function(r) {
+                    if (!r.ok) throw new Error(r.status);
+                    return r.json();
+                }).then(function() {
+                    location.reload();
+                }).catch(falhou);
+                return;
+            }
+
             var promises = aplicaveis.map(function(c) {
                 var fd = new FormData();
                 fd.append('csrf_token', CSRF);
@@ -326,11 +351,7 @@
             });
             Promise.all(promises).then(function() {
                 location.reload();
-            }).catch(function(err) {
-                alert('Erro ao processar lote: ' + err);
-                btn.disabled = false;
-                btn.innerHTML = orig;
-            });
+            }).catch(falhou);
         });
     }
 })();
