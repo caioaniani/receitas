@@ -15,7 +15,7 @@ from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.blueprints.padeiro_testes import padeiro_testes_bp
-from app.decorators import padeiro_required
+from app.decorators import admin_required, padeiro_required
 from app.extensions import db
 from app.models import Driver, PedidoLoja, VendaB2B
 from app.utils import hoje
@@ -295,6 +295,92 @@ def produzir_plano(item_id):
     else:
         flash(res.get('erro', 'Erro ao produzir.'), 'warning')
     return redirect(request.referrer or url_for('padeiro_testes.index'))
+
+
+@padeiro_testes_bp.route('/plano/editar', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def editar_plano():
+    """Edita a ORDEM DE PRODUÇÃO do dia (a do cronograma, que desce pro padeiro):
+    muda a quantidade-alvo de cada receita, adiciona ou remove receitas. Reflete
+    direto no Fluxograma e na Produção do dia. Não mexe no que já foi produzido."""
+    from math import ceil
+
+    from app.models import PlanejamentoItem, PlanejamentoProducao, Receita
+
+    hj = hoje()
+    dia = _parse_dia(request.args.get('data') or request.form.get('data')) or hj
+    plano = (PlanejamentoProducao.query
+             .filter_by(data=dia, origem='cronograma').first())
+
+    def _rend(rec):
+        return float(rec.rendimento_qtd) if rec and rec.rendimento_qtd else 1.0
+
+    if request.method == 'POST':
+        if plano is None:                      # cria a ordem do dia se não existe
+            plano = PlanejamentoProducao(
+                data=dia, origem='cronograma', status='aprovado',
+                nome='Produção %s' % dia.strftime('%d/%m'),
+                criado_por=current_user.id)
+            db.session.add(plano)
+            db.session.flush()
+
+        # 1) atualiza quantidade / remove itens existentes
+        for it in list(plano.itens):
+            if request.form.get('remover_%d' % it.id):
+                db.session.delete(it)
+                continue
+            try:
+                alvo = max(0, int(request.form.get('alvo_%d' % it.id) or 0))
+            except (TypeError, ValueError):
+                alvo = int(it.qtd_alvo or 0)
+            it.qtd_alvo = alvo
+            it.multiplicador = max(1, ceil(alvo / _rend(it.receita))) if alvo else 1
+
+        # 2) adiciona novas receitas
+        existentes = {it.receita_id for it in plano.itens}
+        novas_rid = request.form.getlist('novo_receita_id[]')
+        novas_qtd = request.form.getlist('novo_alvo[]')
+        for i, rid in enumerate(novas_rid):
+            if not rid:
+                continue
+            try:
+                rid = int(rid)
+                alvo = max(0, int(novas_qtd[i]) if i < len(novas_qtd)
+                           and novas_qtd[i] else 0)
+            except (TypeError, ValueError):
+                continue
+            if alvo <= 0 or rid in existentes:
+                continue
+            rec = db.session.get(Receita, rid)
+            if rec is None:
+                continue
+            db.session.add(PlanejamentoItem(
+                planejamento_id=plano.id, receita_id=rid, qtd_alvo=alvo,
+                multiplicador=max(1, ceil(alvo / _rend(rec)))))
+            existentes.add(rid)
+
+        db.session.commit()
+        flash('Plano de produção de %s atualizado.' % dia.strftime('%d/%m'),
+              'success')
+        return redirect(url_for('padeiro_testes.editar_plano', data=dia.isoformat()))
+
+    # GET: monta a tela
+    itens = []
+    if plano:
+        for it in plano.itens:
+            rec = it.receita
+            itens.append({'id': it.id, 'nome': rec.nome if rec else '(receita)',
+                          'alvo': int(it.qtd_alvo or 0),
+                          'produzido': int(it.produzido_qtd or 0)})
+        itens.sort(key=lambda x: x['nome'])
+    receitas = (Receita.query.filter(Receita.arquivada_em.is_(None))
+                .order_by(Receita.categoria, Receita.nome).all())
+    return render_template('padeiro_testes/editar_plano.html', dia=dia,
+                           dia_iso=dia.isoformat(), eh_hoje=(dia == hj),
+                           dia_anterior=(dia - timedelta(days=1)).isoformat(),
+                           dia_seguinte=(dia + timedelta(days=1)).isoformat(),
+                           plano=plano, itens=itens, receitas=receitas)
 
 
 @padeiro_testes_bp.route('/<int:id>/separar', methods=['POST'])
