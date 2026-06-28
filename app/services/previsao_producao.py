@@ -507,7 +507,7 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
     for loja_id, data_ent in (db.session.query(
             PedidoLoja.loja_id, PedidoLoja.data_entrega)
             .filter(PedidoLoja.status != 'cancelado',
-                    PedidoLoja.data_entrega >= hoje_d,
+                    PedidoLoja.data_entrega >= inicio_d,
                     PedidoLoja.data_entrega <= horizonte_fim)
             .distinct().all()):
         if data_ent is not None:
