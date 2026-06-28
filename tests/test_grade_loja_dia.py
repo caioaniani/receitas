@@ -204,3 +204,47 @@ def test_rota_receita_inexistente_redireciona(app, admin_user):
     resp = client.get('/producao/painel/receita/999999')
     assert resp.status_code == 302
     assert '/producao/' in resp.headers['Location']
+
+
+def test_rota_partial_retorna_so_o_fragmento(app, admin_user):
+    """?partial=1 -> fragmento da grade (drop-down inline do balanco): tem a
+    tabela mas NAO o layout da pagina (sem doctype, sem 'Voltar ao balanco')."""
+    loja = _loja('Loja Centro')
+    r = _receita('Pão Francês')
+    _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 40)
+
+    client = app.test_client()
+    _login(client, admin_user)
+    resp = client.get('/producao/painel/receita/%d?horizonte=7&partial=1' % r.id)
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert 'Loja Centro' in body            # conteudo da grade presente
+    assert 'data-grade-css' in body         # estilo da grade (dedupe no painel)
+    assert '<!DOCTYPE' not in body          # nao e pagina inteira
+    assert 'Voltar ao balanço' not in body  # cabecalho so existe no standalone
+
+
+def test_rota_partial_via_xhr(app, admin_user):
+    """X-Requested-With tambem dispara o fragmento (sem ?partial)."""
+    loja = _loja('Loja Centro')
+    r = _receita('Pão Francês')
+    _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 40)
+
+    client = app.test_client()
+    _login(client, admin_user)
+    resp = client.get('/producao/painel/receita/%d' % r.id,
+                      headers={'X-Requested-With': 'XMLHttpRequest'})
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert 'Loja Centro' in body
+    assert '<!DOCTYPE' not in body
+
+
+def test_rota_partial_inexistente_retorna_404_fragmento(app, admin_user):
+    """Receita inexistente no modo partial -> 404 (fragmento de erro), nao
+    redirect (que poluiria o drop-down com a pagina inteira)."""
+    client = app.test_client()
+    _login(client, admin_user)
+    resp = client.get('/producao/painel/receita/999999?partial=1')
+    assert resp.status_code == 404
+    assert 'não encontrada' in resp.get_data(as_text=True).lower()
