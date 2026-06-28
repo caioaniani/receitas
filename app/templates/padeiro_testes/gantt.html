@@ -119,6 +119,7 @@
   <a href="{{ url_for('padeiro_testes.gantt', data=dia_seguinte) }}">dia ›</a>
   {% if not eh_hoje %}<a class="hoje" href="{{ url_for('padeiro_testes.gantt') }}">hoje</a>{% endif %}
   <span class="sp"></span>
+  {% if current_user.is_admin() %}<a href="{{ url_for('padeiro_testes.editar_plano', data=dia.isoformat()) }}">✏️ Editar plano</a>{% endif %}
   <a href="{{ url_for('padeiro_testes.index', data=dia.isoformat()) }}">← painel</a>
 </header>
 
