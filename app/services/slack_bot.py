@@ -305,10 +305,12 @@ def processar_evento_mensagem(evento):
             'base64': b64,
         })
 
-    # Chama o copilot
+    # Chama o copilot (em modo restrito a desperdicio quando o bot esta off)
     try:
-        resp = copilot_svc.interpretar(text, user, historico=historico,
-                                        images=imagens or None)
+        resp = copilot_svc.interpretar(
+            text, user, historico=historico, images=imagens or None,
+            tools_whitelist=_TOOLS_DESPERDICIO if modo_desperdicio else None,
+            system_extra=_SYSTEM_DESPERDICIO if modo_desperdicio else None)
     except Exception:
         logger.exception('slack_bot: copilot.interpretar falhou')
         slack_api.post_message(channel,
