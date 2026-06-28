@@ -611,6 +611,22 @@ document.addEventListener('DOMContentLoaded', function () {
             rendimento = parseFloat(rendimentoInput.value) || 1;
         }
 
+        // Receita MONTADA (so MP g/un, sem % de padeiro) lancada por "Quantidade
+        // de Produtos": cada linha e "por unidade", entao a Quantidade multiplica
+        // os ingredientes (alem das Fornadas). Em receita de massa (com %) a
+        // Quantidade ja escala pelo Peso Base, entao aqui qtdProdutos=1 pra nao
+        // duplicar. O fator agrega Fornadas x Quantidade pro display; o rendimento
+        // (= qtdProdutos x Fornadas) mantem o custo/unidade = custo da unidade base.
+        var qtdProdutos = (modo === 'quantidade' && sumPct === 0)
+            ? Math.max(1, parseInt(rendimentoInput.value) || 1) : 1;
+        var fator = multiplicador * qtdProdutos;
+
+        var hintMontada = document.getElementById('hint-montada-qtd');
+        if (hintMontada) {
+            hintMontada.style.display =
+                (modo === 'quantidade' && sumPct === 0) ? 'block' : 'none';
+        }
+
         // Passo 3: Calcular ingredientes (para 1 fornada)
         var totalPct = 0;
         var totalQtd = 0;
