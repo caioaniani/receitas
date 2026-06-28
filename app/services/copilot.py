@@ -1310,6 +1310,11 @@ def interpretar(prompt_text, user, historico=None, images=None,
 
     system_extra: bloco de persona por canal, anexado ao fim do system
     prompt (ex: persona de assessor do dono no WhatsApp).
+
+    tools_whitelist: se setado (set/lista de nomes), restringe as tools
+    visiveis APENAS a essas (alem do filtro de papel). Usado pelo Slack em
+    modo "so desperdicio" quando o bot de pedidos esta desativado — Claude nem
+    ve as outras tools.
     """
     api_key = os.environ.get('ANTHROPIC_API_KEY') or current_app.config.get('ANTHROPIC_API_KEY')
     if not api_key:
