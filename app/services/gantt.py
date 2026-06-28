@@ -374,24 +374,21 @@ def montar_gantt(dia):
             texto_px = len(t['etapa']) * 8.5 + 50
             t['label_dentro'] = t['width_px'] >= texto_px
             t['label_fora'] = False
-            # se não cabe dentro, mostra à DIREITA quando há espaço livre até a
-            # próxima barra — assim o texto nunca fica truncado nem some.
+            # Regra única: o rótulo só vai à DIREITA quando há espaço livre real
+            # até o PRÓXIMO elemento — a próxima barra, ou (na última barra) o
+            # marcador "→ câmara fria". Sem espaço, fica só o ícone (o nome
+            # completo está no "Passo a passo" abaixo). Assim nada colide nem
+            # trunca, sem precisar empurrar nada.
             if not t['label_dentro']:
-                # left_px da próxima barra (derivado do ini pra não depender da
-                # ordem de cálculo dentro do loop).
-                prox = (tarefas[idx + 1]['ini'] * PX_POR_MIN
-                        if idx + 1 < len(tarefas) else canvas_px)
+                if idx + 1 < len(tarefas):
+                    prox = tarefas[idx + 1]['ini'] * PX_POR_MIN
+                elif p.get('destino'):
+                    prox = t['left_px'] + t['width_px'] + 6   # o destino vem aqui
+                else:
+                    prox = canvas_px
                 gap = prox - (t['left_px'] + t['width_px'])
                 t['label_fora'] = gap >= len(t['etapa']) * 8 + 14
         p['fim_px'] = p['fim_min'] * PX_POR_MIN
-        # destino "→ câmara fria": por padrão logo após a última barra; mas se a
-        # última barra tem rótulo FORA (à direita), empurra o destino pra depois
-        # dele — senão os dois colidem (ex: "Amassamento" + "→ ❄️ 12h").
-        destino_left = p['fim_px'] + 6
-        if tarefas and tarefas[-1].get('label_fora'):
-            ult = tarefas[-1]
-            destino_left = ult['left_px'] + ult['width_px'] + len(ult['etapa']) * 8 + 28
-        p['destino_left_px'] = destino_left
     turnos = [{'nome': tt['nome'],
                'left_px': max(0, tt['ini'] - DIA_INI) * PX_POR_MIN,
                'width_px': (min(tt['fim'] - DIA_INI, span)
