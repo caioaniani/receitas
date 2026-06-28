@@ -402,8 +402,7 @@ def grade_loja_dia(receita_id, horizonte_dias=7, janela_semanas=6,
     # 2. Historico desta receita: por (loja, dow), por dow global e por loja
     #    total. Base da projecao diaria E do rateio por loja. Exclui cancelado.
     soma_loja_dow = defaultdict(lambda: defaultdict(int))  # loja -> dow -> q
-    datas_dow = defaultdict(set)                           # dow -> {datas}
-    soma_dow = defaultdict(int)                            # dow -> q (global)
+    qtd_dow = defaultdict(lambda: defaultdict(int))        # dow -> data -> q
     soma_loja_total = defaultdict(int)                     # loja -> q
     soma_total = 0
     datas_total = set()
@@ -421,8 +420,7 @@ def grade_loja_dia(receita_id, horizonte_dias=7, janela_semanas=6,
         dow = data_ent.weekday()
         q = int(qtd or 0)
         soma_loja_dow[loja_id][dow] += q
-        datas_dow[dow].add(data_ent)
-        soma_dow[dow] += q
+        qtd_dow[dow][data_ent] += q
         soma_loja_total[loja_id] += q
         soma_total += q
         datas_total.add(data_ent)
@@ -435,9 +433,9 @@ def grade_loja_dia(receita_id, horizonte_dias=7, janela_semanas=6,
     estimado = defaultdict(lambda: defaultdict(float))  # loja_id -> data -> q
     for d in dias_futuros:
         dow = d.weekday()
-        datas = datas_dow.get(dow)
-        if datas and len(datas) >= _MIN_OCORRENCIAS_DOW:
-            previsto_dia = soma_dow[dow] / len(datas)
+        por_data = qtd_dow.get(dow)
+        if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
+            previsto_dia = _media_recencia(por_data, hoje_d)
         elif soma_total:
             previsto_dia = soma_total / dias_calendario_janela
         else:
