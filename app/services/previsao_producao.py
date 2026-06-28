@@ -319,7 +319,7 @@ def grade_loja_dia(receita_id, horizonte_dias=7, janela_semanas=6,
             .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
             .filter(PedidoItem.receita_id == receita_id,
                     PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
-                    PedidoLoja.data_entrega >= hoje_d,
+                    PedidoLoja.data_entrega >= inicio_d,
                     PedidoLoja.data_entrega <= horizonte_fim)
             .all())
     for loja_id, data_ent, qtd in rows:
