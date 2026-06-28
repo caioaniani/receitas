@@ -119,11 +119,13 @@ def test_resumo_vies_e_wape(app):
 
 
 def test_resumo_ignora_nao_casado_e_fora_do_periodo(app):
+    # chaves distintas (a unique de data_alvo/loja/receita impede colidir)
     loja = _loja()
-    r = _receita()
+    r = _receita('Casado')
+    r2 = _receita('SemRealizado')
     hoje_d = hoje()
     _snap(loja, r, hoje_d - timedelta(days=2), previsto=10, realizado=10)  # ok
-    _snap(loja, r, hoje_d - timedelta(days=2), previsto=5)   # sem realizado
+    _snap(loja, r2, hoje_d - timedelta(days=2), previsto=5)  # sem realizado
     _snap(loja, r, hoje_d - timedelta(days=200), previsto=99, realizado=1)  # velho
 
     res = svc.resumo_acuracia(dias=30)
