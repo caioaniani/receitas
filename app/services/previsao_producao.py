@@ -603,32 +603,37 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
     }
 
 
-def cronograma_producao(horizonte_dias=7, janela_semanas=6):
-    """Cronograma de producao POR DIA (em vez de tudo num dia so).
+def cronograma_producao(horizonte_dias=7, janela_semanas=6,
+                        inicio_offset_dias=0):
+    """Cronograma de producao POR DIA — a MESMA conta do balanco, distribuida.
 
-    Ideia: produzir a cada dia o que vai ser ENTREGUE nesse dia + o lead da
-    receita — "produzir hoje = entregas de (hoje + dias_producao)". Assim a
-    producao acompanha a curva de entrega (um pouco de cada dia), sem faltar
-    nem sobrar. O estoque pronto cobre os dias mais proximos primeiro.
-
-    Por receita, por dia de PRODUCAO P em [hoje, hoje+horizonte-1]:
-        demanda = max(firme, previsto) das entregas em (P + lead)
-        firme   = pedidos nao baixados com data_entrega == P+lead
-        previsto = media do dia-da-semana de (P+lead)
-    Depois desconta o estoque pronto dos primeiros dias.
+    O total por receita e EXATAMENTE o "Produzir" do `balanco_industria`
+    (mesma janela, mesmo estoque, mesma previsao). O cronograma so ESPALHA esse
+    total pelos dias do horizonte seguindo a curva de demanda diaria: producao
+    do dia P mira a entrega de (P + lead), e o estoque pronto cobre os dias
+    mais proximos primeiro. Assim as duas telas (Painel e Cronograma) nunca se
+    contradizem — uma e o agregado, a outra a mesma coisa por dia.
 
     Retorna dict:
         dias: [{data, label, dow}]                          # dias de producao
         receitas: [{receita_id, nome, dias_producao, em_estoque,
                     por_dia: [{data, qtd, fornadas}], total}]
-        hoje, horizonte_dias, janela_semanas.
+        hoje, inicio, inicio_offset_dias, horizonte_dias, janela_semanas.
     """
     from app.services.producao import fornadas_amassadeira
 
     horizonte_dias = max(1, min(int(horizonte_dias or 7), 14))
     janela_semanas = max(1, min(int(janela_semanas or 6), 26))
+    inicio_offset_dias = max(0, min(int(inicio_offset_dias or 0), 14))
+
+    # Fonte da verdade do TOTAL por receita: o balanco. O cronograma so
+    # distribui esse "Produzir" pelos dias — garante que os totais batem.
+    bal = balanco_industria(horizonte_dias=horizonte_dias,
+                            janela_semanas=janela_semanas, usar_cache=False,
+                            inicio_offset_dias=inicio_offset_dias)
 
     hoje_d = hoje()
+    inicio_d = hoje_d + timedelta(days=inicio_offset_dias)
     hist_ini = hoje_d - timedelta(days=7 * janela_semanas)
     hist_fim = hoje_d - timedelta(days=1)
     dias_calendario_janela = 7 * janela_semanas
@@ -638,15 +643,9 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6):
     lead = {rid: int(rec.dias_producao or 0) for rid, rec in receitas.items()}
     max_lead = max(lead.values(), default=0)
 
-    em_estoque = defaultdict(int)
-    for ep in (EstoqueProducao.query
-               .filter(EstoqueProducao.receita_id.isnot(None)).all()):
-        em_estoque[ep.receita_id] += int(ep.quantidade or 0)
-
-    # firme por (receita, dia de entrega) — pedidos nao baixados. Janela de
-    # entrega cobre ate horizonte+lead (producao do fim do horizonte mira
-    # entregas alem dele).
-    deliv_fim = hoje_d + timedelta(days=horizonte_dias - 1 + max_lead)
+    # firme por (receita, dia de entrega) na janela de entrega do horizonte —
+    # so pra dar FORMATO a curva diaria (o total ja vem do balanco).
+    deliv_fim = inicio_d + timedelta(days=horizonte_dias - 1 + max_lead)
     firme = defaultdict(lambda: defaultdict(int))
     for rid, data_ent, qtd in (db.session.query(
             PedidoItem.receita_id, PedidoLoja.data_entrega,
@@ -654,12 +653,12 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6):
             .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
             .filter(PedidoItem.receita_id.isnot(None),
                     PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
-                    PedidoLoja.data_entrega >= hoje_d,
+                    PedidoLoja.data_entrega >= inicio_d,
                     PedidoLoja.data_entrega <= deliv_fim).all()):
         if data_ent is not None:
             firme[rid][data_ent] += int(qtd or 0)
 
-    # historico por (receita, dow) pra o previsto
+    # historico por (receita, dow) pra o previsto (curva diaria)
     soma_dow = defaultdict(lambda: defaultdict(int))
     datas_dow = defaultdict(lambda: defaultdict(set))
     soma_total = defaultdict(int)
@@ -687,39 +686,41 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6):
             return soma_total[rid] / dias_calendario_janela
         return 0.0
 
-    dias_prod = [hoje_d + timedelta(days=i) for i in range(horizonte_dias)]
+    dias_prod = [inicio_d + timedelta(days=i) for i in range(horizonte_dias)]
     dias_out = [{'data': d.isoformat(),
                  'label': '%s %s' % (_DOW_PT[d.weekday()], d.strftime('%d/%m')),
                  'dow': d.weekday()} for d in dias_prod]
 
     receitas_out = []
-    for rid, rec in receitas.items():
-        L = lead[rid]
-        # Percorre as entregas em ORDEM CRONOLOGICA (hoje, hoje+1, ...). O
-        # estoque pronto cobre as entregas mais PROXIMAS primeiro; o que faltar
-        # numa entrega X precisa ser produzido em X-lead (lead dias antes), pra
-        # estar pronto no dia da entrega. Entrega cuja producao cairia no
-        # passado (proximas `lead` entregas) ja esta atrasada -> produz hoje.
-        running = em_estoque.get(rid, 0)
-        liquido = [0] * horizonte_dias
-        for j in range(horizonte_dias + L):
-            x = hoje_d + timedelta(days=j)
-            demanda = max(int(firme[rid].get(x, 0)),
-                          int(round(_previsto_dia(rid, x))))
-            cover = min(running, demanda)
-            running -= cover
-            net = demanda - cover
-            if net <= 0:
-                continue
-            pidx = j - L                 # dia de producao = entrega - lead
-            if pidx < 0:
-                pidx = 0                 # atrasado -> produz hoje (melhor esforco)
-            if pidx < horizonte_dias:
-                liquido[pidx] += net
-            # entrega alem do alcance do horizonte de producao -> ignora
-        total = sum(liquido)
-        if total <= 0:
+    for it in bal['itens']:
+        rid = it['receita_id']
+        produzir = int(it['produzir'])
+        if produzir <= 0:
             continue
+        rec = receitas.get(rid)
+        if rec is None:
+            continue
+        L = lead.get(rid, 0)
+        estoque = int(it['em_estoque'])
+
+        # Curva de demanda diaria: producao do dia i mira a entrega (i + lead).
+        gross = []
+        for i in range(horizonte_dias):
+            entrega = dias_prod[i] + timedelta(days=L)
+            gross.append(max(int(firme[rid].get(entrega, 0)),
+                             int(round(_previsto_dia(rid, entrega)))))
+        # Estoque pronto cobre os dias mais PROXIMOS primeiro -> os primeiros
+        # dias produzem menos. O residual (demanda apos estoque) vira o PESO da
+        # distribuicao; o total continua sendo o "Produzir" do balanco.
+        running = estoque
+        residual = []
+        for g in gross:
+            cobre = min(running, g)
+            running -= cobre
+            residual.append(g - cobre)
+        pesos = residual if sum(residual) > 0 else gross
+        liquido = _distribuir_inteiro(produzir, pesos)
+
         rend = int(rec.rendimento_qtd) if rec.rendimento_qtd else 0
         por_dia = []
         for i, p in enumerate(dias_prod):
@@ -732,16 +733,17 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6):
                             'fornadas': fornadas})
         receitas_out.append({
             'receita_id': rid, 'nome': rec.nome, 'dias_producao': L,
-            'em_estoque': em_estoque.get(rid, 0),
-            'por_dia': por_dia, 'total': total,
+            'em_estoque': estoque,
+            'por_dia': por_dia, 'total': produzir,
         })
 
-    receitas_out.sort(key=lambda x: -x['total'])
-
+    # Mantem a ordem do balanco (urgencia/demanda) — telas consistentes.
     return {
         'dias': dias_out,
         'receitas': receitas_out,
         'hoje': hoje_d.isoformat(),
+        'inicio': inicio_d.isoformat(),
+        'inicio_offset_dias': inicio_offset_dias,
         'horizonte_dias': horizonte_dias,
         'janela_semanas': janela_semanas,
     }
