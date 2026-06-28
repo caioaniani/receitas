@@ -312,3 +312,16 @@ def test_produzir_subreceita_sem_estoque_nao_negativa(app, admin_user):
     deficit = MovEstoqueProducao.query.filter_by(
         tipo='consumo_subreceita_sem_estoque').first()
     assert deficit is not None and deficit.quantidade == 3
+
+
+def test_produzir_freeform_consome_subreceita(app, admin_user):
+    """O painel 'Produzir' da TV (rota /produzir) também consome a sub-receita
+    pronta do congelado ao produzir uma receita derivada."""
+    trad, almond, _ = _almond_setup('Cro Trad TV', 'Almond TV', 7)
+    c = app.test_client()
+    c.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+           follow_redirects=True)
+    resp = c.post('/padeiro-testes/produzir',
+                  json={'itens': [{'ref': 'receita:%d' % almond.id, 'quantidade': 3}]})
+    assert resp.status_code == 200 and resp.get_json()['ok'] is True
+    assert EstoqueProducao.query.filter_by(receita_id=trad.id).first().quantidade == 4
