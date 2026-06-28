@@ -196,6 +196,9 @@ def painel():
         janela = 6
     janela = max(1, min(janela, 26))
 
+    inicio = _inicio_offset()
+    inicio_data = hoje_d + timedelta(days=inicio)
+
     # Zona 1 — alertas
     pedidos_atrasados = (PedidoLoja.query
                          .filter(PedidoLoja.data_entrega < hoje_d,
@@ -204,7 +207,8 @@ def painel():
     cestas_orfaos = contar_produto_itens_orfaos()
 
     # Zona 2 — balanco da industria (estoque x comprometido x previsto)
-    balanco = balanco_industria(horizonte_dias=horizonte, janela_semanas=janela)
+    balanco = balanco_industria(horizonte_dias=horizonte, janela_semanas=janela,
+                                inicio_offset_dias=inicio)
 
     # Zona 3 — saindo hoje
     saindo_hoje = (PedidoLoja.query
