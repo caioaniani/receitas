@@ -121,3 +121,23 @@ def test_botao_aparece_no_painel_quando_ha_deficit(app, admin_user):
     resp = client.get('/producao/painel')
     assert resp.status_code == 200
     assert b'Criar plano do d' in resp.data        # "Criar plano do déficit"
+
+
+def test_painel_embute_grade_inline_lazy(app, admin_user):
+    """A grade loja × dia agora abre como drop-down inline (lazy AJAX) ao expandir
+    a linha — não navega mais pra outra tela. O container leva a URL do fragmento
+    (?partial=1) e o painel tem o carregador JS."""
+    loja = Loja(nome='Loja A', ativa=True)
+    db.session.add(loja)
+    db.session.commit()
+    r = _receita('Pao', rendimento=10)
+    _pedido(loja, 'pendente', hoje() + timedelta(days=1), r.id, 20)
+
+    client = app.test_client()
+    _login(client, admin_user)
+    resp = client.get('/producao/painel')
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert 'grade-inline' in body
+    assert 'partial=1' in body                 # container aponta pro fragmento
+    assert 'carregarGradeInline' in body       # carregador lazy presente
