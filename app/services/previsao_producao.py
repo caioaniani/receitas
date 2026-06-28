@@ -258,7 +258,8 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
 _DOW_PT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 
 
-def grade_loja_dia(receita_id, horizonte_dias=7, janela_semanas=6):
+def grade_loja_dia(receita_id, horizonte_dias=7, janela_semanas=6,
+                   inicio_offset_dias=0):
     """Grade loja x dia de UMA receita: quanto cada loja recebe em cada dia do
     horizonte. Detalha o que o balanco resume na linha da receita.
 
