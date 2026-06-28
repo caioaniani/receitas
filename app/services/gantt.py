@@ -384,6 +384,14 @@ def montar_gantt(dia):
                 gap = prox - (t['left_px'] + t['width_px'])
                 t['label_fora'] = gap >= len(t['etapa']) * 8 + 14
         p['fim_px'] = p['fim_min'] * PX_POR_MIN
+        # destino "→ câmara fria": por padrão logo após a última barra; mas se a
+        # última barra tem rótulo FORA (à direita), empurra o destino pra depois
+        # dele — senão os dois colidem (ex: "Amassamento" + "→ ❄️ 12h").
+        destino_left = p['fim_px'] + 6
+        if tarefas and tarefas[-1].get('label_fora'):
+            ult = tarefas[-1]
+            destino_left = ult['left_px'] + ult['width_px'] + len(ult['etapa']) * 8 + 28
+        p['destino_left_px'] = destino_left
     turnos = [{'nome': tt['nome'],
                'left_px': max(0, tt['ini'] - DIA_INI) * PX_POR_MIN,
                'width_px': (min(tt['fim'] - DIA_INI, span)
