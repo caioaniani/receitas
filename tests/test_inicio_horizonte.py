@@ -8,9 +8,10 @@ ancorado em hoje. Default 0 nas funções (retrocompatível); as ROTAS default 1
 from datetime import timedelta
 
 from app.extensions import db
-from app.models import Loja, PedidoItem, PedidoLoja, Receita
+from app.models import EstoqueProducao, Loja, PedidoItem, PedidoLoja, Receita
 from app.services.previsao_producao import (
     balanco_industria,
+    cronograma_producao,
     grade_loja_dia,
     sugerir_pedidos_semana,
 )
@@ -153,3 +154,34 @@ def test_rota_painel_inicio_hoje(app, admin_user):
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     assert 'value="0" selected' in body       # Hoje selecionado
+
+
+# ── estoque: entrega iminente consome estoque (não subproduzir) ──────────────
+
+def test_entrega_iminente_consome_estoque_nao_subproduz(app):
+    """REGRESSÃO (estoque): uma entrega IMINENTE (entre hoje e o início da
+    janela) consome estoque e não pode mais ser produzida neste horizonte. O
+    estoque efetivo desconta essa demanda — senão o balanço acharia o estoque
+    livre pra a janela e SUBPRODUZIRIA (risco de ruptura)."""
+    loja = _loja()
+    r = _receita(dias_producao=1)
+    hoje_d = hoje()
+    db.session.add(EstoqueProducao(receita_id=r.id, quantidade=50))
+    db.session.commit()
+    # Início = amanhã (offset 1). A entrega de amanhã (lead 1 -> produziria
+    # hoje, fora da janela) é iminente e come 40 do estoque.
+    _pedido(loja, 'pendente', hoje_d + timedelta(days=1), r, 40)   # iminente
+    _pedido(loja, 'pendente', hoje_d + timedelta(days=2), r, 30)   # na janela
+
+    bal = balanco_industria(horizonte_dias=7, inicio_offset_dias=1,
+                            usar_cache=False)
+    it = next(i for i in bal['itens'] if i['receita_id'] == r.id)
+    assert it['em_estoque'] == 50            # estoque físico inalterado
+    assert it['em_estoque_efetivo'] == 10    # 50 - 40 da entrega iminente
+    assert it['produzir'] == 20              # janela 30 - 10 efetivo (não 0!)
+
+    # cronograma distribui o mesmo total, sem front-loadar o estoque já-consumido
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=1)
+    rr = next(x for x in crono['receitas'] if x['receita_id'] == r.id)
+    assert rr['total'] == 20
+    assert sum(c['qtd'] for c in rr['por_dia']) == 20
