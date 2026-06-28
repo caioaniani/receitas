@@ -256,15 +256,10 @@ def processar_evento_mensagem(evento):
     if not text:
         return
 
-    # Bot de pedidos desativado: avisa uma vez e para, sem chamar o copilot.
-    # (NF/boleto ja retornou la em cima; posts automaticos de saida seguem.)
-    if not _bot_pedidos_ativo():
-        slack_api.post_message(
-            channel,
-            text=('O bot de pedidos do Slack foi desativado. Os pedidos '
-                  'agora sao feitos direto no sistema.'),
-            thread_ts=thread_ts)
-        return
+    # Bot de pedidos desativado -> MODO RESTRITO: o copilot roda so com as tools
+    # de sobras/desperdicio (o dono quer registrar as sobras pelo canal). Pedidos
+    # e demais acoes ficam off. (NF/boleto ja retornou la em cima.)
+    modo_desperdicio = not _bot_pedidos_ativo()
 
     user = _resolver_usuario(slack_user_id)
     if not user:
