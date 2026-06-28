@@ -203,8 +203,8 @@
            class="sidebar-link {% if '/telaindustriateste' in request.path %}active{% endif %}">
             <i class="bi bi-calendar-week"></i> Cronograma
         </a>
-        <a href="{{ url_for('padeiro_testes.index') }}"
-           class="sidebar-link {% if '/padeiro-testes' in request.path %}active{% endif %}">
+        <a href="{{ url_for('padeiro.index') }}"
+           class="sidebar-link {% if request.path == '/padeiro' or request.path.startswith('/padeiro/') %}active{% endif %}">
             <i class="bi bi-hammer"></i> Tela do padeiro
         </a>
         {% endif %}
