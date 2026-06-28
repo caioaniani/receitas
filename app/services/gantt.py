@@ -269,6 +269,7 @@ def montar_gantt(dia):
     for L in range(1, MAX_LEAD_DIAS + 1):
         plano_ant = (PlanejamentoProducao.query
                      .filter_by(data=dia - timedelta(days=L), origem='cronograma')
+                     .filter(PlanejamentoProducao.enviado_ao_padeiro.isnot(False))
                      .first())
         if plano_ant is None:
             continue
