@@ -678,3 +678,34 @@ def criar_plano_do_deficit():
                 + ('...' if len(ignorados) > 5 else ''))
     flash(msg, 'success' if not ignorados else 'warning')
     return redirect(url_for('producao.detalhe', id=plano.id))
+
+
+@producao_bp.route('/previsao-acuracia')
+@login_required
+@admin_required
+def previsao_acuracia():
+    """Painel de acuracia do forecast: vies (super/subprevisao) e WAPE por
+    receita, dos snapshots ja casados com o realizado. **Admin**."""
+    from app.services.previsao_acuracia import resumo_acuracia
+    try:
+        dias = int(request.args.get('dias', 30))
+    except ValueError:
+        dias = 30
+    dias = max(7, min(dias, 180))
+    resumo = resumo_acuracia(dias=dias)
+    return render_template('producao/previsao_acuracia.html',
+                           resumo=resumo, dias=dias)
+
+
+@producao_bp.route('/previsao-acuracia/rodar', methods=['POST'])
+@login_required
+@admin_required
+def previsao_acuracia_rodar():
+    """Roda o snapshot + casamento manualmente (sem esperar o cron). Util pra
+    semear os primeiros dados ou conferir agora."""
+    from app.services import previsao_acuracia as svc
+    novos = svc.registrar_snapshot()
+    casados = svc.casar_realizados()
+    flash(f'Acuracia atualizada: {novos} previsao(es) congelada(s), '
+          f'{casados} casada(s) com o realizado.', 'success')
+    return redirect(url_for('producao.previsao_acuracia'))
