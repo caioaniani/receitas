@@ -199,6 +199,116 @@
     Coluna amarela = <strong>hoje</strong> (o que a indústria produz agora).
     Receitas com <span class="tag-lead">Nd</span> levam N dias pra ficar prontas,
     então o dia de produção é antecipado em relação à entrega.
+    <strong>Edite qualquer célula</strong> e os outros dias se reajustam sozinhos
+    mantendo o total da receita; o ✏️ marca o que você mexeu (↺ volta à sugestão).
 </p>
 {% endif %}
+
+<script>
+(function () {
+    // Edicao manual das celulas: edita um dia -> servidor redistribui mantendo
+    // o total da receita e devolve a linha recalculada (salva rascunho).
+    const PARAMS = {
+        horizonte: {{ horizonte|tojson }},
+        janela: {{ janela|tojson }},
+        inicio: {{ inicio|tojson }},
+        equilibrar: {{ (1 if equilibrar else 0)|tojson }}
+    };
+    const DATAS = {{ crono.dias|map(attribute='data')|list|tojson }};
+    const URL_CELULA = "{{ url_for('industria_teste.celula') }}";
+    const URL_RESET = "{{ url_for('industria_teste.celula_reset') }}";
+
+    function setRow(rid, porDia) {
+        porDia.forEach(function (c) {
+            const cell = document.querySelector(
+                'td.cel[data-rid="' + rid + '"][data-data="' + c.data + '"]');
+            if (!cell) return;
+            const inp = cell.querySelector('.cel-input');
+            if (inp) inp.value = c.qtd;
+            const forn = cell.querySelector('.cel-forn');
+            if (forn) {
+                forn.textContent = (c.fornadas != null)
+                    ? (c.fornadas + ' fornada(s)') : (c.qtd ? 'un' : '');
+            }
+        });
+    }
+
+    function marcarEditado(tr, rid) {
+        const totalTd = tr.querySelector('td:last-child');
+        if (!totalTd || totalTd.querySelector('.btn-reset')) return;
+        const tag = document.createElement('span');
+        tag.className = 'tag-edit';
+        tag.title = 'Editado manualmente';
+        tag.textContent = '✏️';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-reset';
+        btn.dataset.rid = rid;
+        btn.title = 'Voltar à sugestão calculada';
+        btn.textContent = '↺';
+        totalTd.append(' ', tag, ' ', btn);
+    }
+
+    async function salvar(cell) {
+        const rid = cell.dataset.rid;
+        const inp = cell.querySelector('.cel-input');
+        if (!inp) return;
+        const qtd = parseInt(inp.value, 10) || 0;
+        cell.classList.remove('salvo');
+        cell.classList.add('salvando');
+        try {
+            const resp = await fetch(URL_CELULA, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': CSRF_TOKEN
+                },
+                body: JSON.stringify(Object.assign(
+                    { receita_id: rid, data: cell.dataset.data, qtd: qtd },
+                    PARAMS))
+            });
+            const d = await resp.json();
+            if (!resp.ok || !d.ok) throw new Error(d.erro || 'falha');
+            setRow(rid, d.por_dia);
+            cell.classList.remove('salvando');
+            cell.classList.add('salvo');
+            const tr = cell.closest('tr');
+            if (tr) marcarEditado(tr, rid);
+        } catch (e) {
+            cell.classList.remove('salvando');
+            inp.style.borderColor = '#dc3545';
+            alert('Não consegui salvar a edição: ' + e.message);
+        }
+    }
+
+    async function resetar(rid) {
+        try {
+            const resp = await fetch(URL_RESET, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': CSRF_TOKEN
+                },
+                body: JSON.stringify({ receita_id: rid, datas: DATAS })
+            });
+            if (!resp.ok) throw new Error('falha');
+            location.reload();
+        } catch (e) {
+            alert('Não consegui voltar à sugestão: ' + e.message);
+        }
+    }
+
+    document.addEventListener('change', function (ev) {
+        const inp = ev.target.closest('.cel-input');
+        if (!inp) return;
+        const cell = inp.closest('.cel');
+        if (cell) salvar(cell);
+    });
+    document.addEventListener('click', function (ev) {
+        const btn = ev.target.closest('.btn-reset');
+        if (!btn) return;
+        resetar(btn.dataset.rid);
+    });
+})();
+</script>
 {% endblock %}
