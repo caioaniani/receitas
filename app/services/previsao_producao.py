@@ -1086,6 +1086,11 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
     from app.services.cronograma_edit import aplicar_overrides
     aplicar_overrides(receitas_out, dias_prod)
 
+    # MRP: explode sub-receitas (massa para folhar, creme de amendoas...) em
+    # linhas de producao proprias, produzidas ANTES do produto final que as
+    # consome. Usa a producao final ja calculada/editada. No-op sem sub-receita.
+    _explodir_bom(receitas_out, dias_prod, receitas, lead, bal)
+
     # Mantem a ordem do balanco (urgencia/demanda) — telas consistentes.
     return {
         'dias': dias_out,
