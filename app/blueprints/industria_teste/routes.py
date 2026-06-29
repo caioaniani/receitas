@@ -197,6 +197,24 @@ def celula():
     return jsonify(ok=True, **res)
 
 
+@industria_teste_bp.route('/limpar-edicoes', methods=['POST'])
+@login_required
+@admin_required
+def limpar_edicoes():
+    """Apaga TODAS as edições manuais (rascunhos) do cronograma — tudo volta pra
+    sugestão calculada. Não toca em pedido enviado, estoque nem MP."""
+    from app.services.cronograma_edit import limpar_todos_overrides
+
+    horizonte, janela = _horizonte_janela()
+    inicio = _inicio_offset()
+    eq = 1 if _equilibrar() else None
+    n = limpar_todos_overrides()
+    flash('%d edição(ões) manual(is) apagada(s) — cronograma voltou pro cálculo.'
+          % n if n else 'Não havia edição manual pra limpar.', 'success')
+    return redirect(url_for('industria_teste.index', horizonte=horizonte,
+                            janela=janela, inicio=inicio, equilibrar=eq))
+
+
 @industria_teste_bp.route('/celula/reset', methods=['POST'])
 @login_required
 @admin_required
