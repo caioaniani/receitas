@@ -386,6 +386,37 @@ def test_enviar_reconstroi_do_grid_apos_edicao(app, admin_user):
     assert plano.enviado_ao_padeiro is True
 
 
+def test_editar_plano_espelha_no_grid(app, admin_user):
+    """Mão dupla: editar a quantidade na tela 'editar plano' do padeiro salva o
+    override e o grid da indústria passa a refletir aquele dia."""
+    from app.models import CronogramaOverride, PlanejamentoProducao
+    from app.services.producao import enviar_plano_do_dia
+
+    loja = _loja()
+    r = _receita('Pão Mão Dupla')
+    d2 = hoje() + timedelta(days=2)
+    _pedido(loja, 'pendente', d2, r, 30)
+    enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7,
+                        inicio_offset_dias=0)
+    plano = PlanejamentoProducao.query.filter_by(
+        data=d2, origem='cronograma').first()
+    it = next(i for i in plano.itens if i.receita_id == r.id)
+
+    c = app.test_client()
+    c.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+           follow_redirects=True)
+    resp = c.post('/padeiro/plano/editar', data={
+        'data': d2.isoformat(), 'alvo_%d' % it.id: 17}, follow_redirects=True)
+    assert resp.status_code == 200
+
+    ov = CronogramaOverride.query.filter_by(receita_id=r.id, data=d2).first()
+    assert ov is not None and ov.qtd == 17
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr = _rec_out(crono, r.id)
+    cel = next(c for c in rr['por_dia'] if c['data'] == d2.isoformat())
+    assert cel['qtd'] == 17
+
+
 def test_enviar_preserva_produzido(app, admin_user):
     """Reenviar nunca baixa qtd_alvo abaixo do que o padeiro já produziu."""
     from app.services.producao import enviar_plano_do_dia
