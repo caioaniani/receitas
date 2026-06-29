@@ -127,6 +127,51 @@ def test_loja_intermitente_nao_e_diluida(app):
     assert qtds.get(inter.id) == 10   # diluído daria 5 (20 ÷ 4 datas da operação)
 
 
+def test_padronizar_qtd():
+    """Arredondamento pro lote (pacote) + piso. Não pedir picado."""
+    from app.services.previsao_producao import _padronizar_qtd
+    assert _padronizar_qtd(7, None, None) == 7       # sem lote -> passthrough
+    assert _padronizar_qtd(7, 1, None) == 7          # lote 1 -> passthrough
+    assert _padronizar_qtd(9, 50, None) == 50        # <½ pacote -> 1 pacote
+    assert _padronizar_qtd(80, 50, None) == 100      # 1,6 -> 2 pacotes
+    assert _padronizar_qtd(60, 50, None) == 50       # 1,2 -> 1 pacote
+    assert _padronizar_qtd(31, 20, None) == 40       # 1,55 -> 2 pacotes
+    assert _padronizar_qtd(26, 50, 250) == 250       # piso (croissant)
+    assert _padronizar_qtd(280, 50, 250) == 300      # 5,6 -> 300 (>=250)
+    assert _padronizar_qtd(0, 50, 250) == 0          # não pede -> piso não força
+
+
+def test_pedido_sai_em_lote_padronizado(app):
+    """A sugestão por loja sai no pacote da receita (não picado)."""
+    loja = _loja('Loja A')
+    r = _receita('Pão Francês')
+    r.lote_pedido = 50
+    db.session.commit()
+    hoje_d = hoje()
+    for i in (1, 2, 3):
+        _pedido(loja, 'recebido', hoje_d - timedelta(days=7 * i), r, 9)
+    sug = sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6)
+    la = _loja_out(sug, loja.id)
+    item = next(it for it in la['dias'][0]['itens'] if it['receita_id'] == r.id)
+    assert item['qtd'] == 50          # 9 -> 1 pacote de 50
+
+
+def test_pedido_croissant_respeita_minimo(app):
+    """Croissant com lote 50 + mínimo 250 -> loja que pede recebe 250/300."""
+    loja = _loja('Loja A')
+    r = _receita('Croissant Tradicional')
+    r.lote_pedido = 50
+    r.minimo_pedido = 250
+    db.session.commit()
+    hoje_d = hoje()
+    for i in (1, 2, 3):
+        _pedido(loja, 'recebido', hoje_d - timedelta(days=7 * i), r, 30)
+    sug = sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6)
+    la = _loja_out(sug, loja.id)
+    item = next(it for it in la['dias'][0]['itens'] if it['receita_id'] == r.id)
+    assert item['qtd'] == 250         # 30 -> piso 250
+
+
 def test_sugerir_marca_ja_tem_pedido(app):
     """Onde a loja ja tem pedido nao-cancelado, marca ja_tem_pedido."""
     loja = _loja('Loja A')
