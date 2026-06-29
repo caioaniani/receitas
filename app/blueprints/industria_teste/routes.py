@@ -138,12 +138,13 @@ def excluir():
 
     horizonte, janela = _horizonte_janela()
     inicio = _inicio_offset()
+    eq = 1 if _equilibrar() else None
     try:
         data_alvo = date.fromisoformat(request.form.get('data', ''))
     except (TypeError, ValueError):
         flash('Data inválida.', 'warning')
-        return redirect(url_for('industria_teste.index',
-                                horizonte=horizonte, janela=janela, inicio=inicio))
+        return redirect(url_for('industria_teste.index', horizonte=horizonte,
+                                janela=janela, inicio=inicio, equilibrar=eq))
     res = excluir_plano_do_dia(data_alvo)
     if res['ok']:
         flash('Ordem de %s excluída.' % data_alvo.strftime('%d/%m'), 'success')
