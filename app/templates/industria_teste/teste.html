@@ -400,8 +400,17 @@
     });
     document.addEventListener('click', function (ev) {
         const btn = ev.target.closest('.btn-reset');
-        if (!btn) return;
-        resetar(btn.dataset.rid);
+        if (btn) { resetar(btn.dataset.rid); return; }
+        // Expandir/recolher o saldo da receita.
+        const tog = ev.target.closest('.rec-toggle');
+        if (!tog) return;
+        const rid = tog.dataset.rid;
+        const det = document.querySelector(
+            'tr.detalhe-row[data-rid="' + rid + '"]');
+        if (!det) return;
+        det.hidden = !det.hidden;
+        const chev = tog.querySelector('.chev');
+        if (chev) chev.classList.toggle('aberto', !det.hidden);
     });
 })();
 </script>
