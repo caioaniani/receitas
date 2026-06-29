@@ -129,6 +129,12 @@ class Receita(db.Model):
     # nunca sugere. Default True: tudo continua sugerivel como antes.
     sugerir_pedido_loja = db.Column(db.Boolean, nullable=False, default=True,
                                     server_default='1')
+    # Padronizacao do pedido (a loja pede em PACOTES, nao picado — decisao do
+    # dono 29/06). lote_pedido = tamanho do pacote (arredonda a sugestao pro
+    # multiplo mais proximo, no minimo 1 pacote). minimo_pedido = piso (ex:
+    # croissant lote 50 + minimo 250 -> 250/300). NULL = sem padronizacao.
+    lote_pedido = db.Column(db.Integer, nullable=True)
+    minimo_pedido = db.Column(db.Integer, nullable=True)
     # Quando True, desperdicio com motivo='validade' NAO baixa estoque
     # — o item vencido vira outra coisa (ex: Croissant Tradicional vencido
     # vira Croissant Almond, Sourdough Tradicional vira chapa). Outros
