@@ -141,6 +141,33 @@
     {% endif %}
 </form>
 
+<!-- Modal: dividir a entrega de um produto entre dias escolhidos -->
+<div class="modal fade" id="modalDividir" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title"><i class="bi bi-distribute-horizontal"></i>
+            Dividir entrega — <span id="md-nome"></span></h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-2">
+            Total a dividir: <strong id="md-total"></strong> un<span id="md-lote-info"></span>.
+            <br>Escolha em quais dias dividir a entrega:
+        </p>
+        <div id="md-dias" class="d-flex flex-column gap-1 mb-2"></div>
+        <div class="alert alert-light border small mb-0 py-2" id="md-preview"></div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-sm btn-primary" id="md-aplicar">
+            <i class="bi bi-check2"></i> Dividir
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
     function somaSubmit(row) {
@@ -167,6 +194,113 @@
             inp.addEventListener('input', function () { recalc(row); });
         });
     });
+
+    // --- Dividir entrega entre dias escolhidos, em múltiplos de caixa (lote) ---
+    // Maior resto: distribui `total` em `n` baldes (peso igual), somando exato.
+    function distribuirIgual(total, n) {
+        if (n <= 0 || total <= 0) { return new Array(Math.max(0, n)).fill(0); }
+        var base = Math.floor(total / n);
+        var resto = total - base * n;
+        var out = [];
+        for (var i = 0; i < n; i++) { out.push(base + (i < resto ? 1 : 0)); }
+        return out;
+    }
+    // Quantos por balde respeitando o lote (caixa). lote<=1 -> divide direto.
+    function dividir(total, lote, n) {
+        if (n <= 0) { return []; }
+        if (lote > 1) {
+            var nLotes = Math.round(total / lote);
+            if (nLotes === 0 && total > 0) { nLotes = 1; }   // nunca zera o que existia
+            return distribuirIgual(nLotes, n).map(function (x) { return x * lote; });
+        }
+        return distribuirIgual(total, n);
+    }
+
+    var modalEl = document.getElementById('modalDividir');
+    var modal = modalEl ? new bootstrap.Modal(modalEl) : null;
+    var ctx = { row: null, inputs: [], lote: 0, total: 0 };
+    var elNome = document.getElementById('md-nome');
+    var elTotal = document.getElementById('md-total');
+    var elLoteInfo = document.getElementById('md-lote-info');
+    var elDias = document.getElementById('md-dias');
+    var elPreview = document.getElementById('md-preview');
+
+    function escolhidos() {
+        // índices (na ordem de ctx.inputs) dos dias marcados
+        var idx = [];
+        elDias.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
+            if (cb.checked) { idx.push(parseInt(cb.value)); }
+        });
+        return idx;
+    }
+    function atualizarPreview() {
+        var idx = escolhidos();
+        if (!idx.length) {
+            elPreview.textContent = 'Marque pelo menos um dia.';
+            return;
+        }
+        var partes = dividir(ctx.total, ctx.lote, idx.length);
+        var soma = partes.reduce(function (a, b) { return a + b; }, 0);
+        var txt = idx.map(function (i, k) {
+            return ctx.inputs[i].dataset.label + ': ' + partes[k];
+        }).join('  •  ');
+        elPreview.innerHTML = txt + ' &nbsp;<strong>(= ' + soma + ' un)</strong>';
+    }
+
+    document.querySelectorAll('.btn-dividir').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (!modal) { return; }
+            var row = btn.closest('tr');
+            var inputs = Array.prototype.slice.call(
+                row.querySelectorAll('.pmed-cel')).filter(function (i) {
+                    return !i.disabled;   // dias travados (já tem pedido) ficam de fora
+                });
+            var total = inputs.reduce(function (s, i) {
+                return s + (parseInt(i.value) || 0); }, 0);
+            var lote = parseInt(row.dataset.lote) || 0;
+            ctx = { row: row, inputs: inputs, lote: lote, total: total };
+
+            elNome.textContent = row.dataset.nome || '';
+            elTotal.textContent = total;
+            elLoteInfo.textContent = lote > 1 ? ' (em caixas de ' + lote + ')' : '';
+            elDias.innerHTML = '';
+            if (!inputs.length) {
+                elDias.innerHTML = '<span class="text-muted small">'
+                    + 'Todos os dias já têm pedido — nada a dividir.</span>';
+            }
+            inputs.forEach(function (inp, i) {
+                var id = 'md-cb-' + i;
+                var wrap = document.createElement('label');
+                wrap.className = 'form-check';
+                wrap.innerHTML = '<input class="form-check-input" type="checkbox" '
+                    + 'id="' + id + '" value="' + i + '" checked>'
+                    + '<span class="form-check-label">' + inp.dataset.label + '</span>';
+                elDias.appendChild(wrap);
+            });
+            elDias.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
+                cb.addEventListener('change', atualizarPreview);
+            });
+            atualizarPreview();
+            modal.show();
+        });
+    });
+
+    var btnAplicar = document.getElementById('md-aplicar');
+    if (btnAplicar) {
+        btnAplicar.addEventListener('click', function () {
+            var idx = escolhidos();
+            if (!idx.length || !ctx.row) { return; }
+            var partes = dividir(ctx.total, ctx.lote, idx.length);
+            var marcado = {};
+            idx.forEach(function (i, k) { marcado[i] = partes[k]; });
+            // dias escolhidos recebem a parte; os demais (livres) zeram
+            ctx.inputs.forEach(function (inp, i) {
+                inp.value = (i in marcado) ? marcado[i] : 0;
+            });
+            recalc(ctx.row);
+            modal.hide();
+        });
+    }
 })();
 </script>
 {% endblock %}
