@@ -674,12 +674,14 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                         inicio_offset_dias=0, equilibrar=False):
     """Cronograma de producao POR DIA — a MESMA conta do balanco, distribuida.
 
-    O total por receita e EXATAMENTE o "Produzir" do `balanco_industria`
-    (mesma janela, mesmo estoque, mesma previsao). O cronograma so ESPALHA esse
-    total pelos dias do horizonte seguindo a curva de demanda diaria: producao
-    do dia P mira a entrega de (P + lead), e o estoque pronto cobre os dias
-    mais proximos primeiro. Assim as duas telas (Painel e Cronograma) nunca se
-    contradizem — uma e o agregado, a outra a mesma coisa por dia.
+    O total por receita parte do "Produzir" do `balanco_industria` (mesma
+    janela, mesmo estoque, mesma previsao); o cronograma ESPALHA esse total
+    pelos dias do horizonte seguindo a curva de demanda diaria: producao do dia
+    P mira a entrega de (P + lead), e o estoque pronto cobre os dias mais
+    proximos primeiro. Receita com `lote_pedido` produz em LOTES inteiros (nao
+    picado): o total e arredondado pro multiplo do lote, entao pode divergir um
+    pouco do "Produzir" exato do balanco (custo de produzir em batidas
+    redondas). Sem lote, o total bate exatamente com o balanco.
 
     Retorna dict:
         dias: [{data, label, dow}]                          # dias de producao
