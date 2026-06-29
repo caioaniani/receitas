@@ -159,20 +159,19 @@
                     <div class="rec-est">em estoque: {{ r.em_estoque }}</div>
                 </td>
                 {% for c in r.por_dia %}
-                <td class="{% if loop.first %}hoje-col{% endif %}">
-                    {% if c.qtd %}
-                    <span class="cel-qtd">{{ c.qtd }}</span>
-                    {% if c.fornadas is not none %}
-                    <span class="cel-forn">{{ c.fornadas }} fornada(s)</span>
-                    {% else %}
-                    <span class="cel-forn">un</span>
-                    {% endif %}
-                    {% else %}
-                    <span class="cel-zero">—</span>
-                    {% endif %}
+                <td class="cel {% if loop.first %}hoje-col{% endif %}"
+                    data-rid="{{ r.receita_id }}" data-data="{{ c.data }}">
+                    <input type="number" min="0" inputmode="numeric"
+                           class="cel-input" value="{{ c.qtd or 0 }}">
+                    <span class="cel-forn">{% if c.fornadas is not none %}{{ c.fornadas }} fornada(s){% elif c.qtd %}un{% endif %}</span>
                 </td>
                 {% endfor %}
-                <td><strong>{{ r.total }}</strong></td>
+                <td>
+                    <strong>{{ r.total }}</strong>
+                    {% if r.editado %}<span class="tag-edit" title="Editado manualmente">✏️</span>
+                    <button type="button" class="btn-reset" data-rid="{{ r.receita_id }}"
+                            title="Voltar à sugestão calculada">↺</button>{% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
