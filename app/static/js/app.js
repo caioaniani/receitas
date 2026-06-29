@@ -182,6 +182,16 @@ document.addEventListener('DOMContentLoaded', function () {
             aplicarModo();
         }
 
+        // Botao "Corrigir" do aviso de lote: troca pro modo Peso da Farinha.
+        var btnCorrigirLote = document.getElementById('btn-corrigir-modo-lote');
+        if (btnCorrigirLote && modoSelect) {
+            btnCorrigirLote.addEventListener('click', function () {
+                modoSelect.value = 'farinha';
+                aplicarModo();
+                recalcularTudo();
+            });
+        }
+
         // Delegação de eventos para inputs dinâmicos
         fichaBody.addEventListener('input', function (e) {
             if (e.target.classList.contains('pct-input') || e.target.classList.contains('nome-input')) {
