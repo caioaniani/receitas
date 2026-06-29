@@ -123,6 +123,12 @@ class Receita(db.Model):
     # — o plano mostra unidades, nao fornadas. NAO altera consumo de MP.
     capacidade_amassadeira_g = db.Column(db.Integer, nullable=False,
                                          default=50000, server_default='50000')
+    # Se a receita pode ser PEDIDA pela loja (entra na sugestao de pedido
+    # semanal). False = insumo/etapa de producao que a loja nao pede direto
+    # (ex: Creme de Amendoas, que vai DENTRO do Croissant Almond) — o forecast
+    # nunca sugere. Default True: tudo continua sugerivel como antes.
+    sugerir_pedido_loja = db.Column(db.Boolean, nullable=False, default=True,
+                                    server_default='1')
     # Quando True, desperdicio com motivo='validade' NAO baixa estoque
     # — o item vencido vira outra coisa (ex: Croissant Tradicional vencido
     # vira Croissant Almond, Sourdough Tradicional vira chapa). Outros
