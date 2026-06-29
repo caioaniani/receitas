@@ -218,6 +218,14 @@
                 'foram ignorados. (A Seru filtra por data de alteração; o resumo conta só vendas criadas no intervalo.)' +
                 '</div>';
         }
+        if (d.site_incluido) {
+            avisos += '<div class="alert alert-light border py-2 small mb-2">' +
+                '<i class="bi bi-globe"></i> Inclui o <strong>site</strong> (loja própria): ' +
+                d.site_incluido.n_pedidos + ' pedido(s), R$ ' + fmt(d.site_incluido.total) +
+                ' — somado ao total, ao ticket e à linha "Site" do canal de venda. ' +
+                'Os quadros <em>forma de pagamento</em> e <em>por loja</em> são só do PDV.' +
+                '</div>';
+        }
         document.getElementById('pdv-msg').innerHTML = avisos;
         document.getElementById('pdv-r-pedidos').textContent = d.total_pedidos - d.cancelados;
         document.getElementById('pdv-r-total').textContent = fmt(d.total_valor);
