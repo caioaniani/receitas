@@ -132,8 +132,9 @@ def test_recheios_exclusivos_sao_laranja(app):
     assert ret['Sourdough Nozes']['eh_ramo'] is True
     assert ret['Sourdough 7 grãos']['acrescentar'] == {'7 grãos': 150.0}
     assert ret['Sourdough Nozes']['acrescentar'] == {'Nozes': 250.0}
-    assert ret['Sourdough 7 grãos']['tirar_massa'] == 2170.0
-    assert ret['Sourdough Nozes']['tirar_massa'] == 2270.0
+    # tira só a massa branca (2020 nos dois); o recheio entra à parte
+    assert ret['Sourdough 7 grãos']['tirar_massa'] == 2020.0
+    assert ret['Sourdough Nozes']['tirar_massa'] == 2020.0
     # a água comum (70->80%) é um único incremento de tronco aplicado às 3
     # receitas de 80% restantes: 100 g × 3 porções = 300 g
     incs = _incrementos(c)
