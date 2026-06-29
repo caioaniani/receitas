@@ -156,5 +156,5 @@ def excluir():
     else:
         flash('Não há ordem em %s pra excluir.'
               % data_alvo.strftime('%d/%m'), 'warning')
-    return redirect(url_for('industria_teste.index',
-                            horizonte=horizonte, janela=janela, inicio=inicio))
+    return redirect(url_for('industria_teste.index', horizonte=horizonte,
+                            janela=janela, inicio=inicio, equilibrar=eq))
