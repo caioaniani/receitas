@@ -52,8 +52,9 @@ def index():
 
     horizonte, janela = _horizonte_janela()
     inicio = _inicio_offset()
+    equilibrar = _equilibrar()
     crono = cronograma_producao(horizonte_dias=horizonte, janela_semanas=janela,
-                                inicio_offset_dias=inicio)
+                                inicio_offset_dias=inicio, equilibrar=equilibrar)
     # Estado da ordem por dia (fluxo 2 passos): rascunho/aprovado x enviado.
     estados = {}
     for p in PlanejamentoProducao.query.filter_by(origem='cronograma').all():
@@ -61,7 +62,7 @@ def index():
             'enviado': p.enviado_ao_padeiro is not False, 'plano_id': p.id}
     return render_template('industria_teste/teste.html', crono=crono,
                            horizonte=horizonte, janela=janela, inicio=inicio,
-                           estados=estados)
+                           equilibrar=equilibrar, estados=estados)
 
 
 @industria_teste_bp.route('/aprovar', methods=['POST'])
