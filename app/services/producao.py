@@ -5,20 +5,18 @@ from app.models import MateriaPrima, Receita
 from app.services.custos import calcular_custos_receitas
 
 
-def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6,
-                         inicio_offset_dias=0, equilibrar=False):
-    """Aprova a coluna de UM dia do cronograma -> cria um PlanejamentoProducao
-    (origem='cronograma', status='aprovado') desse dia, pronto pra descer pro
-    padeiro. Itens = receitas com qtd>0 naquele dia; qtd_alvo = unidades,
-    multiplicador = ceil(unidades / rendimento). Re-aprovar o mesmo dia
-    substitui o plano-cronograma anterior. Retorna o plano (ou None se nada
-    a produzir naquele dia).
+def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
+                              inicio_offset_dias, equilibrar):
+    """(Re)constroi os itens de `plano` a partir do cronograma do dia (COM as
+    edicoes manuais do grid aplicadas — overrides). Preserva o que ja foi
+    produzido: nunca baixa qtd_alvo abaixo de produzido_qtd e NAO remove item
+    que ja teve producao (trava no produzido). Nao commita. Retorna o nº de
+    receitas-alvo com qtd>0 no dia.
 
-    `inicio_offset_dias` TEM que ser o mesmo do cronograma exibido — senao as
-    quantidades aprovadas nao batem com o que esta na tela (a distribuicao por
-    dia muda com a janela).
-    """
-    from app.models import PlanejamentoItem, PlanejamentoProducao
+    `inicio_offset_dias`/horizonte/janela/equilibrar TEM que ser os mesmos do
+    cronograma exibido — senao as quantidades nao batem com o que esta na tela
+    (a distribuicao por dia muda com a janela)."""
+    from app.models import PlanejamentoItem
     from app.services.previsao_producao import cronograma_producao
 
     crono = cronograma_producao(horizonte_dias=horizonte_dias,
@@ -26,47 +24,96 @@ def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6,
                                 inicio_offset_dias=inicio_offset_dias,
                                 equilibrar=equilibrar)
     iso = data_alvo.isoformat()
-    itens_dia = []
+    alvo = {}  # receita_id -> unidades no dia
     for rec in crono['receitas']:
         for c in rec['por_dia']:
             if c['data'] == iso and c['qtd'] > 0:
-                itens_dia.append((rec['receita_id'], c['qtd']))
-    if not itens_dia:
-        return None
-
-    # Re-aprovar o mesmo dia substitui o plano-cronograma anterior.
-    antigo = (PlanejamentoProducao.query
-              .filter_by(data=data_alvo, origem='cronograma').first())
-    if antigo is not None:
-        db.session.delete(antigo)
-        db.session.flush()
-
-    plano = PlanejamentoProducao(
-        data=data_alvo, origem='cronograma', status='aprovado',
-        nome='Cronograma %s' % data_alvo.strftime('%d/%m'),
-        criado_por=user_id, enviado_ao_padeiro=False)  # rascunho até "enviar"
-    db.session.add(plano)
-    db.session.flush()
+                alvo[rec['receita_id']] = c['qtd']
 
     receitas = {r.id: r for r in Receita.query.all()}
-    for rid, qtd in itens_dia:
+    existentes = {it.receita_id: it for it in plano.itens}
+
+    for rid, qtd in alvo.items():
         rec = receitas.get(rid)
         rend = int(rec.rendimento_qtd) if rec and rec.rendimento_qtd else 1
-        db.session.add(PlanejamentoItem(
-            planejamento_id=plano.id, receita_id=rid,
-            multiplicador=max(1, ceil(qtd / rend)), qtd_alvo=qtd))
+        it = existentes.get(rid)
+        if it is None:
+            db.session.add(PlanejamentoItem(
+                planejamento_id=plano.id, receita_id=rid,
+                multiplicador=max(1, ceil(qtd / rend)), qtd_alvo=qtd))
+        else:
+            it.qtd_alvo = max(qtd, int(it.produzido_qtd or 0))
+            it.multiplicador = max(1, ceil(it.qtd_alvo / rend))
+
+    # Receitas que sairam do cronograma: remove, EXCETO as que ja produziram
+    # (estoque/MP reais ja mexeram) — essas travam no produzido.
+    for rid, it in existentes.items():
+        if rid in alvo:
+            continue
+        if int(it.produzido_qtd or 0) > 0:
+            it.qtd_alvo = int(it.produzido_qtd)
+            it.multiplicador = max(1, it.multiplicador or 1)
+        else:
+            db.session.delete(it)
+    return len(alvo)
+
+
+def _obter_ou_criar_plano(data_alvo, user_id):
+    from app.models import PlanejamentoProducao
+    plano = (PlanejamentoProducao.query
+             .filter_by(data=data_alvo, origem='cronograma').first())
+    if plano is None:
+        plano = PlanejamentoProducao(
+            data=data_alvo, origem='cronograma', status='aprovado',
+            nome='Cronograma %s' % data_alvo.strftime('%d/%m'),
+            criado_por=user_id, enviado_ao_padeiro=False)  # rascunho até "enviar"
+        db.session.add(plano)
+        db.session.flush()
+    return plano
+
+
+def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6,
+                         inicio_offset_dias=0, equilibrar=False):
+    """Aprova a coluna de UM dia do cronograma -> cria/atualiza o
+    PlanejamentoProducao (origem='cronograma') desse dia como RASCUNHO
+    (enviado_ao_padeiro=False), pronto pra revisar e enviar. Reconstroi os itens
+    a partir do grid atual (com overrides), preservando o que ja foi produzido.
+    Retorna o plano (ou None se nada a produzir naquele dia)."""
+    plano = _obter_ou_criar_plano(data_alvo, user_id)
+    n = _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias,
+                                  janela_semanas, inicio_offset_dias, equilibrar)
+    if n == 0 and not plano.itens:
+        db.session.delete(plano)
+        db.session.commit()
+        return None
     db.session.commit()
     return plano
 
 
-def enviar_plano_do_dia(data_alvo):
-    """2º passo: libera a ordem do dia pro padeiro (enviado_ao_padeiro=True).
-    Retorna o plano enviado, ou None se não há ordem aprovada nesse dia."""
+def enviar_plano_do_dia(data_alvo, user_id=None, horizonte_dias=7,
+                        janela_semanas=6, inicio_offset_dias=0,
+                        equilibrar=False):
+    """Empurra o cronograma ATUAL do dia (com as edicoes do grid) pro padeiro:
+    (re)constroi os itens a partir do grid e marca enviado_ao_padeiro=True.
+
+    RE-PRESSAVEL: serve tanto pro 1º envio quanto pra ATUALIZAR a producao
+    depois de editar o grid (decisao do dono — a edicao do grid so chega no
+    padeiro quando se aperta 'enviar' de novo). Cria a ordem se nao existir.
+    Preserva o que ja foi produzido. Retorna o plano, ou None se nada a
+    produzir no dia."""
     from app.models import PlanejamentoProducao
 
     plano = (PlanejamentoProducao.query
              .filter_by(data=data_alvo, origem='cronograma').first())
-    if plano is None:
+    novo = plano is None
+    if novo:
+        plano = _obter_ou_criar_plano(data_alvo, user_id)
+    n = _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias,
+                                  janela_semanas, inicio_offset_dias, equilibrar)
+    if n == 0 and not plano.itens:
+        if novo:
+            db.session.delete(plano)
+        db.session.commit()
         return None
     plano.enviado_ao_padeiro = True
     db.session.commit()
