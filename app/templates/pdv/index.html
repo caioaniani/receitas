@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% from "_macros.html" import page_header %}
 
-{% block title %}Vendas PDV{% endblock %}
+{% block title %}Vendas — PDV + Site{% endblock %}
 
 {% block content %}
-{% call page_header('Vendas PDV', 'bi-shop', 'via Seru') %}
+{% call page_header('Vendas', 'bi-shop', 'PDV (Seru) + Site') %}
     <a href="{{ url_for('pdv.itens_vendidos') }}" class="btn btn-sm btn-outline-primary">
         <i class="bi bi-bag-check"></i> Itens vendidos
     </a>
