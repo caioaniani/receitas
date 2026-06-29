@@ -98,11 +98,13 @@ def test_cascata_linear_bate_com_o_exemplo(app):
     assert passos[2]['nome'] == 'Sourdough Tradicional'
     assert passos[2]['eh_ramo'] is False
     assert passos[2]['tirar_massa'] == 2020.0
-    # 4) 7 grãos: recheio próprio (laranja), só os grãos batidos na porção
+    # 4) 7 grãos: recheio próprio (laranja), só os grãos batidos na porção.
+    #    Tira só a massa branca (2020); os 150 g de grãos entram DEPOIS — não
+    #    contam no "tire X kg" (senão tiraria 2170 e ainda somaria os grãos).
     assert passos[3]['nome'] == 'Sourdough 7 grãos'
     assert passos[3]['eh_ramo'] is True
     assert passos[3]['acrescentar'] == {'7 grãos': 150.0}
-    assert passos[3]['tirar_massa'] == 2170.0
+    assert passos[3]['tirar_massa'] == 2020.0
     assert c['avisos'] == []
 
 
