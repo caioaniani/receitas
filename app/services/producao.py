@@ -72,6 +72,27 @@ def enviar_plano_do_dia(data_alvo):
     return plano
 
 
+def excluir_plano_do_dia(data_alvo):
+    """Exclui a ordem de producao (origem='cronograma') de um dia — pra desfazer
+    um envio errado. SALVAGUARDA (estoque tem peso especial): se algum item ja
+    teve producao (produzido_qtd > 0), NAO exclui — a producao real ja creditou
+    estoque e baixou MP, e apagar a ordem orfanaria esses movimentos. Retorna
+    {'ok': True} ou {'ok': False, 'erro': 'nao_encontrado'|'ja_produzido', ...}.
+    """
+    from app.models import PlanejamentoProducao
+
+    plano = (PlanejamentoProducao.query
+             .filter_by(data=data_alvo, origem='cronograma').first())
+    if plano is None:
+        return {'ok': False, 'erro': 'nao_encontrado'}
+    produzido = sum(int(it.produzido_qtd or 0) for it in plano.itens)
+    if produzido > 0:
+        return {'ok': False, 'erro': 'ja_produzido', 'produzido': produzido}
+    db.session.delete(plano)   # cascade apaga os itens
+    db.session.commit()
+    return {'ok': True}
+
+
 def massa_receita_base(receita):
     """Massa (g) de UMA fornada-base da receita = soma de TODOS os ingredientes
     (a 'receita final', nao so a farinha). Mesma conta de custos.py:
