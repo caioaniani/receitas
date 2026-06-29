@@ -161,6 +161,7 @@ def _migrate_postgres(app):
             'sugerir_pedido_loja': 'ALTER TABLE receita ADD COLUMN sugerir_pedido_loja BOOLEAN NOT NULL DEFAULT TRUE',
             'lote_pedido': 'ALTER TABLE receita ADD COLUMN lote_pedido INTEGER',
             'minimo_pedido': 'ALTER TABLE receita ADD COLUMN minimo_pedido INTEGER',
+            'fornada_especial': 'ALTER TABLE receita ADD COLUMN fornada_especial BOOLEAN NOT NULL DEFAULT FALSE',
         }
         for col, sql in migrações_receita.items():
             if col not in colunas:
