@@ -566,6 +566,7 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
     soma_rl = defaultdict(lambda: defaultdict(int))    # rid -> loja -> q
     soma_r = defaultdict(int)                           # rid -> q
     datas_r = defaultdict(set)                          # rid -> {datas}
+    datas_rl = defaultdict(lambda: defaultdict(set))   # rid -> loja -> {datas}
     hist_rows = (db.session.query(PedidoItem.receita_id, PedidoLoja.loja_id,
                                   PedidoLoja.data_entrega, PedidoItem.quantidade)
                  .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
