@@ -802,6 +802,18 @@ def salvar(id):
     except (TypeError, ValueError):
         cap_amass = 50000
     receita.capacidade_amassadeira_g = max(0, min(cap_amass, 1000000))
+
+    # Padronizacao do pedido (a loja pede em pacotes, nao picado). Vazio -> NULL
+    # (sem padronizacao). 0 tambem vira NULL.
+    def _int_opt(campo):
+        try:
+            v = int(request.form.get(campo) or 0)
+        except (TypeError, ValueError):
+            return None
+        return v if v > 0 else None
+    receita.lote_pedido = _int_opt('lote_pedido')
+    receita.minimo_pedido = _int_opt('minimo_pedido')
+
     receita.imagem_url = request.form.get('imagem_url', '').strip() or None
 
     # Atualiza ingredientes
