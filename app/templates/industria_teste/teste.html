@@ -108,6 +108,15 @@
                         <input type="hidden" name="inicio" value="{{ inicio }}">
                         <button class="btn btn-primary btn-sm" style="font-size:.62rem;padding:.05rem .35rem;">📤 enviar</button>
                       </form>
+                      <form method="POST" action="{{ url_for('industria_teste.excluir') }}" class="d-inline"
+                            onsubmit="return confirm('Excluir a ordem (rascunho) de {{ dia.label }}?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="data" value="{{ dia.data }}">
+                        <input type="hidden" name="horizonte" value="{{ horizonte }}">
+                        <input type="hidden" name="janela" value="{{ janela }}">
+                        <input type="hidden" name="inicio" value="{{ inicio }}">
+                        <button class="btn btn-outline-danger btn-sm" style="font-size:.62rem;padding:.05rem .35rem;">🗑️ excluir</button>
+                      </form>
                     </div>
                     {% else %}
                     {# enviado: padeiro já vê -> ainda dá pra editar ou excluir #}
