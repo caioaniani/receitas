@@ -176,6 +176,21 @@ def test_multiplicadores_escalam(app):
     assert incs[0]['acrescentar'] == {'Água': 200.0}
 
 
+def test_receita_fora_do_plano_nao_entra(app):
+    """Membro da base que NÃO está no plano (multiplicadores sem ele) não entra
+    na cascata — nem com porção fantasma. Regressão do '7 grãos / nozes' que
+    aparecia num dia que não os produz."""
+    pf, st, s7, mb = _exemplo_dono(app)
+    c = calcular_cascata(mb, {pf.id: 2, st.id: 1})    # s7 fora do plano
+    assert c['total_porcoes'] == 3                     # só pf(2)+st(1), sem s7
+    nomes = {p['nome'] for p in c['passos'] if p['tipo'] == 'retirada'}
+    assert 'Sourdough 7 grãos' not in nomes
+    # sem multiplicadores -> genérico, mostra TODAS (config da base)
+    c2 = calcular_cascata(mb)
+    nomes2 = {p['nome'] for p in c2['passos'] if p['tipo'] == 'retirada'}
+    assert 'Sourdough 7 grãos' in nomes2
+
+
 def test_fornadas_varias_batidas(app):
     pf, st, s7, mb = _exemplo_dono(app)
     # base 5760 (3 porções) com capacidade 3000 -> precisa de 2 batidas
