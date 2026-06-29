@@ -558,15 +558,13 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
                 .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
                 .order_by(Loja.nome).all())
 
-    # Historico por (receita, loja, dow) + agregados. UMA query pra todas as
-    # receitas (mesma logica da grade, mas sem o filtro por receita_id).
-    soma_rld = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-    # rid -> dow -> data -> q : quantidade por data, pra media recencia-ponderada
-    qtd_rd = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-    soma_rl = defaultdict(lambda: defaultdict(int))    # rid -> loja -> q
-    soma_r = defaultdict(int)                           # rid -> q
-    datas_r = defaultdict(set)                          # rid -> {datas}
-    datas_rl = defaultdict(lambda: defaultdict(set))   # rid -> loja -> {datas}
+    # Historico por (receita, loja, dow, data): quanto CADA loja pediu do item
+    # naquele dia-da-semana, por data — base da media recencia-ponderada POR
+    # LOJA (cada loja prevista do historico DELA, nao do total da operacao).
+    # UMA query pra todas as receitas.
+    qtd_rld = defaultdict(lambda: defaultdict(
+        lambda: defaultdict(lambda: defaultdict(int))))  # rid->loja->dow->data->q
+    datas_r = defaultdict(set)                            # rid -> {datas} (skip)
     hist_rows = (db.session.query(PedidoItem.receita_id, PedidoLoja.loja_id,
                                   PedidoLoja.data_entrega, PedidoItem.quantidade)
                  .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
@@ -578,14 +576,8 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
     for rid, loja_id, data_ent, qtd in hist_rows:
         if data_ent is None or rid not in receitas:
             continue
-        dow = data_ent.weekday()
-        q = int(qtd or 0)
-        soma_rld[rid][loja_id][dow] += q
-        qtd_rd[rid][dow][data_ent] += q
-        soma_rl[rid][loja_id] += q
-        soma_r[rid] += q
+        qtd_rld[rid][loja_id][data_ent.weekday()][data_ent] += int(qtd or 0)
         datas_r[rid].add(data_ent)
-        datas_rl[rid][loja_id].add(data_ent)
 
     # Pedidos nao-cancelados por (loja, data) no horizonte — onde a loja JA
     # pediu, nao geramos rascunho (anti-duplicacao).
@@ -600,45 +592,29 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
             ja_tem.add((loja_id, data_ent))
 
     # sugestao[loja_id][data] = [ {receita_id, nome, qtd} ]
-    soma_op_r = {rid: sum(soma_rl[rid].get(l.id, 0) for l in lojas_op)
-                 for rid in receitas}
     sugestao = defaultdict(lambda: defaultdict(list))
     for rid, rec in receitas.items():
         if not datas_r.get(rid):
             continue
         for d in dias_futuros:
             dow = d.weekday()
-            por_data = qtd_rd[rid].get(dow)
-            if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
-                previsto_dia = _media_recencia(por_data, hoje_d)
-            elif soma_r[rid]:
-                previsto_dia = soma_r[rid] / dias_calendario_janela
-            else:
-                previsto_dia = 0.0
-            if previsto_dia <= 0:
-                continue
-            # Rateio por loja com round() INDEPENDENTE: a fracao marginal de
-            # uma loja (< 0,5 un) cai pra 0 e a loja nao entra no pedido. E de
-            # proposito — a padaria NAO pulveriza 1-2 un em loja que mal pede o
-            # item ("pedidos picados"). NAO trocar por distribuicao de maior
-            # resto: a soma exata espalha sobra pras lojas marginais (revertido
-            # em 28/06/2026 apos o dono apontar os pedidos picados).
-            base_dow_op = sum(soma_rld[rid].get(l.id, {}).get(dow, 0)
-                              for l in lojas_op)
             for loja in lojas_op:
-                # Piso de ocorrencias: loja que pediu o item em < N datas
-                # distintas na janela nao recebe sugestao (pedido avulso/errado
-                # nao vira recorrencia). Ver _MIN_DATAS_LOJA.
-                if len(datas_rl[rid].get(loja.id, ())) < _MIN_DATAS_LOJA:
+                # Previsao da LOJA a partir do historico DELA naquele dia-da-
+                # semana (media recencia-ponderada das datas em que ela pediu).
+                # NAO usamos "total da operacao x participacao": aquilo dividia o
+                # pedido da loja pelo nº de datas em que QUALQUER loja pediu —
+                # diluindo a loja que pede em MENOS semanas (o "pedido picado de
+                # cookie", 29/06/2026: a loja recebia metade do que costuma
+                # pedir). Aqui cada loja recebe o tamanho TIPICO do pedido dela.
+                #
+                # Exige >= _MIN_OCORRENCIAS_DOW datas nesse dow: 1 vez e pedido
+                # avulso (mata o "1 creme de amendoas" pedido sem querer) e
+                # abaixo disso nao ha media confiavel. Sem rateio do total ->
+                # nao ha sobra de arredondamento pulverizada em loja marginal.
+                por_data = qtd_rld[rid].get(loja.id, {}).get(dow)
+                if not por_data or len(por_data) < _MIN_OCORRENCIAS_DOW:
                     continue
-                if base_dow_op:
-                    share = (soma_rld[rid].get(loja.id, {}).get(dow, 0)
-                             / base_dow_op)
-                elif soma_op_r[rid]:
-                    share = soma_rl[rid].get(loja.id, 0) / soma_op_r[rid]
-                else:
-                    share = 0.0
-                qtd = int(round(previsto_dia * share))
+                qtd = int(round(_media_recencia(por_data, hoje_d)))
                 if qtd > 0:
                     sugestao[loja.id][d].append(
                         {'receita_id': rid, 'nome': rec.nome, 'qtd': qtd})
