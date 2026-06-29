@@ -680,7 +680,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                     por_dia: [{data, qtd, fornadas}], total}]
         hoje, inicio, inicio_offset_dias, horizonte_dias, janela_semanas.
     """
-    from app.services.producao import fornadas_amassadeira
+    from app.services.producao import fornadas_amassadeira, massa_receita_base
 
     horizonte_dias = max(1, min(int(horizonte_dias or 7), 14))
     janela_semanas = max(1, min(int(janela_semanas or 6), 26))
@@ -785,12 +785,18 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
 
         rend = int(rec.rendimento_qtd) if rec.rendimento_qtd else 0
         # Anti-"acender fornada por dribble" (ex: produzir 1 pao num dia): um dia
-        # que produz menos que uma fracao de fornada rola pro PROXIMO dia,
-        # acumulando ate valer um lote. So MOVE (total preservado); o ultimo dia
-        # e o sumidouro. Pra rend pequeno o limiar vira 1 e nada rola — produzir
-        # 1 ali ja e uma fornada cheia, nao e desperdicio.
-        minimo = ceil(rend * _MIN_FRACAO_FORNADA) if rend > 0 else 0
-        if minimo > 1:
+        # que produz menos que uma fracao de UMA FORNADA (batida da amassadeira)
+        # rola pro PROXIMO dia, acumulando ate valer um lote. So MOVE (total
+        # preservado); o ultimo dia e o sumidouro.
+        # unidades_por_fornada = capacidade_amassadeira x rend / massa de 1
+        # receita — quantas unidades enchem uma batida. So aplica a receita que
+        # passa pela amassadeira (cap>0); item sem fornada (Moeda/creme) nao
+        # consolida (produzir 1 la nao desperdica batida).
+        cap = int(getattr(rec, 'capacidade_amassadeira_g', 0) or 0)
+        massa_base = massa_receita_base(rec) if (cap > 0 and rend > 0) else 0
+        if massa_base > 0:
+            unid_por_fornada = cap * rend / massa_base
+            minimo = ceil(unid_por_fornada * _MIN_FRACAO_FORNADA)
             for i in range(len(liquido) - 1):
                 if 0 < liquido[i] < minimo:
                     liquido[i + 1] += liquido[i]
