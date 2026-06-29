@@ -1091,7 +1091,15 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
     # consome. Usa a producao final ja calculada/editada. No-op sem sub-receita.
     _explodir_bom(receitas_out, dias_prod, receitas, lead, bal)
 
-    # Mantem a ordem do balanco (urgencia/demanda) — telas consistentes.
+    # Agrupa os produtos por CATEGORIA (depois por nome) — senao ficam espalhados
+    # pela ordem de urgencia/demanda do balanco. Categoria vazia vai por ultimo.
+    for rr in receitas_out:
+        rec = receitas.get(rr['receita_id'])
+        rr['categoria'] = (rec.categoria or '').strip() if rec else ''
+    receitas_out.sort(key=lambda rr: (rr['categoria'] == '',
+                                      rr['categoria'].lower(),
+                                      (rr['nome'] or '').lower()))
+
     return {
         'dias': dias_out,
         'receitas': receitas_out,
