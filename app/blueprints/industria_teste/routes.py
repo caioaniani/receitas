@@ -95,8 +95,9 @@ def aprovar():
               % (data_alvo.strftime('%d/%m'), len(plano.itens)), 'success')
     else:
         flash('Nada a produzir em %s.' % data_alvo.strftime('%d/%m'), 'info')
-    return redirect(url_for('industria_teste.index',
-                            horizonte=horizonte, janela=janela, inicio=inicio))
+    return redirect(url_for('industria_teste.index', horizonte=horizonte,
+                            janela=janela, inicio=inicio,
+                            equilibrar=1 if equilibrar else None))
 
 
 @industria_teste_bp.route('/enviar', methods=['POST'])
@@ -109,12 +110,13 @@ def enviar():
 
     horizonte, janela = _horizonte_janela()
     inicio = _inicio_offset()
+    eq = 1 if _equilibrar() else None
     try:
         data_alvo = date.fromisoformat(request.form.get('data', ''))
     except (TypeError, ValueError):
         flash('Data inválida.', 'warning')
-        return redirect(url_for('industria_teste.index',
-                                horizonte=horizonte, janela=janela, inicio=inicio))
+        return redirect(url_for('industria_teste.index', horizonte=horizonte,
+                                janela=janela, inicio=inicio, equilibrar=eq))
     plano = enviar_plano_do_dia(data_alvo)
     if plano:
         flash('Plano de %s enviado ao padeiro.' % data_alvo.strftime('%d/%m'),
@@ -122,8 +124,8 @@ def enviar():
     else:
         flash('Não há ordem aprovada em %s pra enviar.'
               % data_alvo.strftime('%d/%m'), 'warning')
-    return redirect(url_for('industria_teste.index',
-                            horizonte=horizonte, janela=janela, inicio=inicio))
+    return redirect(url_for('industria_teste.index', horizonte=horizonte,
+                            janela=janela, inicio=inicio, equilibrar=eq))
 
 
 @industria_teste_bp.route('/excluir', methods=['POST'])
