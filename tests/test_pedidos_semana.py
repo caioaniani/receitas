@@ -102,6 +102,31 @@ def test_pedido_avulso_unico_nao_vira_sugestao(app):
     assert any(it['receita_id'] == r.id for it in la2['dias'][0]['itens'])
 
 
+def test_loja_intermitente_nao_e_diluida(app):
+    """Loja que pede o item em ALGUMAS semanas (intermitente) recebe a previsão
+    do tamanho TÍPICO do pedido dela — não a média diluída pelo total da
+    operação (o 'pedido picado de cookie' que o dono apontou)."""
+    forte = _loja('Forte')
+    inter = _loja('Inter')
+    r = _receita('Cookie')
+    hoje_d = hoje()
+    # forte pede 10 toda semana (4 semanas, mesmo dow); inter só em 2 das 4
+    for i in (1, 2, 3, 4):
+        _pedido(forte, 'recebido', hoje_d - timedelta(days=7 * i), r, 10)
+    for i in (1, 2):
+        _pedido(inter, 'recebido', hoje_d - timedelta(days=7 * i), r, 10)
+
+    sug = sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6)
+    qtds = {}
+    for la in sug['lojas']:
+        item = next((it for it in la['dias'][0]['itens']
+                     if it['receita_id'] == r.id), None)
+        if item:
+            qtds[la['loja_id']] = item['qtd']
+    assert qtds.get(forte.id) == 10
+    assert qtds.get(inter.id) == 10   # diluído daria 5 (20 ÷ 4 datas da operação)
+
+
 def test_sugerir_marca_ja_tem_pedido(app):
     """Onde a loja ja tem pedido nao-cancelado, marca ja_tem_pedido."""
     loja = _loja('Loja A')
