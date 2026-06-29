@@ -664,7 +664,7 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
 
 
 def cronograma_producao(horizonte_dias=7, janela_semanas=6,
-                        inicio_offset_dias=0):
+                        inicio_offset_dias=0, equilibrar=False):
     """Cronograma de producao POR DIA — a MESMA conta do balanco, distribuida.
 
     O total por receita e EXATAMENTE o "Produzir" do `balanco_industria`
