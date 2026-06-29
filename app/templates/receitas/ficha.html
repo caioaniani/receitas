@@ -470,6 +470,22 @@
         </div>
     </div>
 
+    <!-- Fornada especial: vende so sex/sab/dom -->
+    <div class="mb-3">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="fornada_especial" id="fornada-especial"
+                   value="1" {% if receita.fornada_especial %}checked{% endif %}>
+            <label class="form-check-label" for="fornada-especial">
+                <strong>Fornada especial — vende só sexta/sábado/domingo</strong>
+                <div class="text-muted small">
+                    Marque para produtos vendidos <strong>apenas no fim de semana</strong>
+                    (ex: Focaccia Gorgonzola). A sugestão de pedido <strong>só propõe
+                    esses itens em sex/sáb/dom</strong>, nunca em dia de semana.
+                </div>
+            </label>
+        </div>
+    </div>
+
     <!-- Observações / Pendências -->
     <div class="mb-3">
         <label class="form-label fw-bold"><i class="bi bi-exclamation-triangle text-warning"></i> Observações / Pendências</label>
