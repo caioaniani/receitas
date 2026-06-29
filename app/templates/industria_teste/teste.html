@@ -35,6 +35,24 @@
     .crono tr.cat-row td.rec-col { font-weight: 700; font-size: .8rem;
         text-transform: uppercase; letter-spacing: .03em; color: #495057;
         position: sticky; left: 0; z-index: 1; }
+    .rec-toggle { cursor: pointer; user-select: none; }
+    .rec-toggle:hover { color: #0d6efd; }
+    .chev { display: inline-block; width: 1em; color: #adb5bd;
+        transition: transform .12s; font-size: .8rem; }
+    .chev.aberto { transform: rotate(90deg); color: #0d6efd; }
+    .crono tr.detalhe-row td { background: #f8f9fb; border-bottom: 1px solid #e9ecef;
+        text-align: left; white-space: normal; }
+    .saldo-box { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem;
+        font-size: .85rem; padding: .15rem .2rem; }
+    .saldo-box .op { color: #adb5bd; font-weight: 700; }
+    .saldo-pos { color: #198754; }
+    .saldo-neg { color: #dc3545; }
+    .saldo-hint { font-size: .75rem; color: #dc3545; font-weight: 600; }
+    .saldo-lojas { flex-basis: 100%; margin-top: .2rem; display: flex;
+        flex-wrap: wrap; gap: .4rem; align-items: center; }
+    .saldo-lojas-tt { font-size: .72rem; color: #6c757d; }
+    .saldo-loja { background: #eef1f4; border-radius: .25rem;
+        padding: .05rem .4rem; font-size: .75rem; }
     .crono .cel-input {
         width: 3.6rem; text-align: center; font-weight: 700; font-size: 1.05rem;
         color: #0d3b66; border: 1px solid transparent; border-radius: .25rem;
