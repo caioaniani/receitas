@@ -110,11 +110,20 @@
                       </form>
                     </div>
                     {% else %}
-                    {# enviado: padeiro já vê -> ainda dá pra editar #}
+                    {# enviado: padeiro já vê -> ainda dá pra editar ou excluir #}
                     <div class="badge bg-success mt-1" style="font-size:.62rem;">📤 enviado</div>
-                    <div class="mt-1">
+                    <div class="mt-1 d-flex gap-1 justify-content-center">
                       <a class="btn btn-outline-secondary btn-sm" style="font-size:.62rem;padding:.05rem .35rem;"
                          href="{{ url_for('padeiro.editar_plano', data=dia.data) }}">✏️ editar</a>
+                      <form method="POST" action="{{ url_for('industria_teste.excluir') }}" class="d-inline"
+                            onsubmit="return confirm('Excluir a ordem de {{ dia.label }}? O padeiro deixa de ver. (Bloqueado se já houve produção.)');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="data" value="{{ dia.data }}">
+                        <input type="hidden" name="horizonte" value="{{ horizonte }}">
+                        <input type="hidden" name="janela" value="{{ janela }}">
+                        <input type="hidden" name="inicio" value="{{ inicio }}">
+                        <button class="btn btn-outline-danger btn-sm" style="font-size:.62rem;padding:.05rem .35rem;">🗑️ excluir</button>
+                      </form>
                     </div>
                     {% endif %}
                 </th>
