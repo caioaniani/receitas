@@ -52,6 +52,11 @@
         <label class="small text-muted mb-0 ms-2">Hist (sem):</label>
         <input type="number" name="janela" min="1" max="26" value="{{ janela }}"
                class="form-control form-control-sm" style="width:64px;">
+        <label class="small text-muted mb-0 ms-2 d-flex align-items-center gap-1"
+               title="Cada receita inteira num dia; nivela as fornadas por dia, adiantando receitas pra encher dias ociosos.">
+            <input type="checkbox" name="equilibrar" value="1"
+                   {{ 'checked' if equilibrar }}> equilibrar carga
+        </label>
         <button class="btn btn-sm btn-outline-secondary">ver</button>
     </form>
 </div>
