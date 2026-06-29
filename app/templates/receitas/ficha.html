@@ -434,6 +434,22 @@
         </div>
     </div>
 
+    <!-- Insumo/etapa: nao e pedido pela loja -->
+    <div class="mb-3">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="nao_pedir_loja" id="nao-pedir-loja"
+                   value="1" {% if not receita.sugerir_pedido_loja %}checked{% endif %}>
+            <label class="form-check-label" for="nao-pedir-loja">
+                <strong>Insumo/etapa — a loja não pede direto</strong>
+                <div class="text-muted small">
+                    Marque quando a receita é <strong>componente de outra</strong> e a loja
+                    nunca pede ela sozinha. Ex: Creme de Amêndoas (vai dentro do Croissant
+                    Almond). Assim ela <strong>não aparece na sugestão de pedido semanal</strong>.
+                </div>
+            </label>
+        </div>
+    </div>
+
     <!-- Observações / Pendências -->
     <div class="mb-3">
         <label class="form-label fw-bold"><i class="bi bi-exclamation-triangle text-warning"></i> Observações / Pendências</label>
