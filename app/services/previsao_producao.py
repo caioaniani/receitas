@@ -76,6 +76,24 @@ def _media_recencia(qtd_por_data, hoje_d, meia_vida=_MEIA_VIDA_DIAS):
     return num / den if den else 0.0
 
 
+def _padronizar_qtd(qtd, lote, minimo):
+    """Arredonda a sugestao pro LOTE de pedido da receita (pacote padrao) e
+    aplica o piso. 'Nao pedir picado' (decisao do dono 29/06): a loja pede em
+    pacotes inteiros. lote None/<=1 -> sem padronizacao (passthrough). Arredonda
+    pro multiplo MAIS PROXIMO; loja que pede o item (qtd>0) recebe ao menos 1
+    pacote. minimo (se >0) so vale quando ja ha pedido (qtd>0)."""
+    qtd = int(qtd)
+    if qtd <= 0:
+        return 0
+    lote = int(lote or 0)
+    if lote > 1:
+        qtd = int(round(qtd / lote)) * lote or lote   # nunca menos que 1 pacote
+    minimo = int(minimo or 0)
+    if minimo > 0 and qtd < minimo:
+        qtd = minimo
+    return qtd
+
+
 def _distribuir_inteiro(total, pesos):
     """Distribui um inteiro `total` entre len(pesos) baldes, proporcional aos
     pesos, somando EXATAMENTE `total` (metodo do maior resto). Usado pra
