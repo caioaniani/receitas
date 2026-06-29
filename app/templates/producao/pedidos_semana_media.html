@@ -227,88 +227,125 @@
         return distribuirIgual(total, n);
     }
 
+    // dias do horizonte por índice de COLUNA (mesma ordem em todas as linhas).
+    var DIAS = [
+        {% for dia in grade.dias %}{ idx: {{ loop.index0 }}, label: {{ dia.label | tojson }} }{{ "," if not loop.last }}
+        {% endfor %}
+    ];
+
     var modalEl = document.getElementById('modalDividir');
     var modal = modalEl ? new bootstrap.Modal(modalEl) : null;
-    var ctx = { row: null, inputs: [], lote: 0, total: 0 };
-    var elNome = document.getElementById('md-nome');
-    var elTotal = document.getElementById('md-total');
-    var elLoteInfo = document.getElementById('md-lote-info');
+    var alvoRows = [];   // linhas-alvo da divisão atual
+    var elInfo = document.getElementById('md-info');
     var elDias = document.getElementById('md-dias');
     var elPreview = document.getElementById('md-preview');
 
-    function escolhidos() {
-        // índices (na ordem de ctx.inputs) dos dias marcados
-        var idx = [];
+    function colunasEscolhidas() {
+        var cols = [];
         elDias.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
-            if (cb.checked) { idx.push(parseInt(cb.value)); }
+            if (cb.checked) { cols.push(parseInt(cb.value)); }
         });
-        return idx;
+        return cols;   // índices de coluna (dia)
+    }
+    // colunas escolhidas que estão LIVRES (não travadas) nesta linha
+    function disponiveis(row, cols) {
+        var inputs = row.querySelectorAll('.pmed-cel');
+        return cols.filter(function (c) { return inputs[c] && !inputs[c].disabled; });
+    }
+    function totalLinha(row) {
+        var s = 0;
+        row.querySelectorAll('.pmed-cel').forEach(function (inp) {
+            if (!inp.disabled) { s += parseInt(inp.value) || 0; }
+        });
+        return s;
+    }
+    function aplicarLinha(row, cols) {
+        var disp = disponiveis(row, cols);
+        if (!disp.length) { return; }   // nenhum dia livre escolhido: não mexe na linha
+        var lote = parseInt(row.dataset.lote) || 0;
+        var partes = dividir(totalLinha(row), lote, disp.length);
+        var marc = {};
+        disp.forEach(function (c, k) { marc[c] = partes[k]; });
+        row.querySelectorAll('.pmed-cel').forEach(function (inp, c) {
+            if (inp.disabled) { return; }            // dia travado: preserva
+            inp.value = (c in marc) ? marc[c] : 0;    // livre não-escolhido zera
+        });
+        recalc(row);
     }
     function atualizarPreview() {
-        var idx = escolhidos();
-        if (!idx.length) {
-            elPreview.textContent = 'Marque pelo menos um dia.';
-            return;
+        var cols = colunasEscolhidas();
+        if (!cols.length) { elPreview.textContent = 'Marque pelo menos um dia.'; return; }
+        var dias = cols.map(function (c) { return DIAS[c].label; }).join(', ');
+        if (alvoRows.length === 1) {
+            var row = alvoRows[0];
+            var disp = disponiveis(row, cols);
+            if (!disp.length) {
+                elPreview.textContent = 'Os dias escolhidos já têm pedido nesta linha.';
+                return;
+            }
+            var lote = parseInt(row.dataset.lote) || 0;
+            var partes = dividir(totalLinha(row), lote, disp.length);
+            var soma = partes.reduce(function (a, b) { return a + b; }, 0);
+            var txt = disp.map(function (c, k) {
+                return DIAS[c].label + ': ' + partes[k]; }).join('  •  ');
+            elPreview.innerHTML = txt + ' &nbsp;<strong>(= ' + soma + ' un)</strong>';
+        } else {
+            elPreview.innerHTML = '<strong>' + alvoRows.length + '</strong> produto(s) nos dias '
+                + '<strong>' + dias + '</strong> — cada um respeitando a sua caixa.';
         }
-        var partes = dividir(ctx.total, ctx.lote, idx.length);
-        var soma = partes.reduce(function (a, b) { return a + b; }, 0);
-        var txt = idx.map(function (i, k) {
-            return ctx.inputs[i].dataset.label + ': ' + partes[k];
-        }).join('  •  ');
-        elPreview.innerHTML = txt + ' &nbsp;<strong>(= ' + soma + ' un)</strong>';
+    }
+    function abrirModal(rows, descricao) {
+        if (!modal || !rows.length) { return; }
+        alvoRows = rows;
+        elInfo.textContent = descricao;
+        elDias.innerHTML = '';
+        DIAS.forEach(function (d) {
+            var wrap = document.createElement('label');
+            wrap.className = 'form-check form-check-inline';
+            wrap.innerHTML = '<input class="form-check-input" type="checkbox" value="'
+                + d.idx + '" checked><span class="form-check-label">' + d.label + '</span>';
+            elDias.appendChild(wrap);
+        });
+        elDias.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
+            cb.addEventListener('change', atualizarPreview);
+        });
+        atualizarPreview();
+        modal.show();
     }
 
+    // 1 produto
     document.querySelectorAll('.btn-dividir').forEach(function (btn) {
         btn.addEventListener('click', function () {
-            if (!modal) { return; }
             var row = btn.closest('tr');
-            var inputs = Array.prototype.slice.call(
-                row.querySelectorAll('.pmed-cel')).filter(function (i) {
-                    return !i.disabled;   // dias travados (já tem pedido) ficam de fora
-                });
-            var total = inputs.reduce(function (s, i) {
-                return s + (parseInt(i.value) || 0); }, 0);
-            var lote = parseInt(row.dataset.lote) || 0;
-            ctx = { row: row, inputs: inputs, lote: lote, total: total };
-
-            elNome.textContent = row.dataset.nome || '';
-            elTotal.textContent = total;
-            elLoteInfo.textContent = lote > 1 ? ' (em caixas de ' + lote + ')' : '';
-            elDias.innerHTML = '';
-            if (!inputs.length) {
-                elDias.innerHTML = '<span class="text-muted small">'
-                    + 'Todos os dias já têm pedido — nada a dividir.</span>';
-            }
-            inputs.forEach(function (inp, i) {
-                var id = 'md-cb-' + i;
-                var wrap = document.createElement('label');
-                wrap.className = 'form-check';
-                wrap.innerHTML = '<input class="form-check-input" type="checkbox" '
-                    + 'id="' + id + '" value="' + i + '" checked>'
-                    + '<span class="form-check-label">' + inp.dataset.label + '</span>';
-                elDias.appendChild(wrap);
-            });
-            elDias.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
-                cb.addEventListener('change', atualizarPreview);
-            });
-            atualizarPreview();
-            modal.show();
+            abrirModal([row], 'Produto: ' + (row.dataset.nome || ''));
         });
     });
+    // todos os produtos de uma loja
+    document.querySelectorAll('.btn-dividir-loja').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var card = btn.closest('.pmed-loja');
+            var nomeEl = card.querySelector('h5 span');
+            var nome = nomeEl ? nomeEl.textContent : '';
+            var rows = Array.prototype.slice.call(card.querySelectorAll('tbody tr'));
+            abrirModal(rows, rows.length + ' produto(s) de ' + nome);
+        });
+    });
+    // todos os produtos de todas as lojas
+    var btnTodos = document.getElementById('btn-dividir-todos');
+    if (btnTodos) {
+        btnTodos.addEventListener('click', function () {
+            var rows = Array.prototype.slice.call(
+                document.querySelectorAll('.pmed tbody tr'));
+            abrirModal(rows, rows.length + ' produto(s) de todas as lojas');
+        });
+    }
 
     var btnAplicar = document.getElementById('md-aplicar');
     if (btnAplicar) {
         btnAplicar.addEventListener('click', function () {
-            var idx = escolhidos();
-            if (!idx.length || !ctx.row) { return; }
-            var partes = dividir(ctx.total, ctx.lote, idx.length);
-            var marcado = {};
-            idx.forEach(function (i, k) { marcado[i] = partes[k]; });
-            // dias escolhidos recebem a parte; os demais (livres) zeram
-            ctx.inputs.forEach(function (inp, i) {
-                inp.value = (i in marcado) ? marcado[i] : 0;
-            });
-            recalc(ctx.row);
+            var cols = colunasEscolhidas();
+            if (!cols.length || !alvoRows.length) { return; }
+            alvoRows.forEach(function (row) { aplicarLinha(row, cols); });
             modal.hide();
         });
     }
