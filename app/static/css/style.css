@@ -488,12 +488,15 @@ body {
     top: 0;
     left: 0;
     right: 0;
-    height: 56px;
+    /* +env(safe-area-inset-top): no app instalado (PWA) reserva a altura da
+       barra de status do celular, pra o menu nao ficar embaixo do relogio/
+       bateria. Em navegador normal / desktop o inset e 0 (nao muda nada). */
+    height: calc(56px + env(safe-area-inset-top, 0px));
     background: var(--bg-card);
     color: var(--text-main);
     border-bottom: 1px solid var(--border-color);
     align-items: center;
-    padding: 0 14px;
+    padding: env(safe-area-inset-top, 0px) 14px 0;
     z-index: 200;
     gap: 10px;
 }
