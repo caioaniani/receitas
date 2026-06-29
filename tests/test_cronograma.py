@@ -201,6 +201,39 @@ def test_sem_amassadeira_nao_consolida(app):
     assert rr['total'] == 1
 
 
+def test_equilibrar_enche_dia_ocioso(app):
+    """Modo equilibrar: cada receita INTEIRA num dia; adianta receitas pra
+    encher dia vazio (nivela fornadas). cap pequeno -> nao dispara a
+    consolidacao anti-dribble (minimo=1)."""
+    loja = _loja()
+    r1 = _receita_amassadeira('Pao A', rend=50, peso_base=5000, cap=500)
+    r2 = _receita_amassadeira('Pao B', rend=50, peso_base=5000, cap=500)
+    d1 = hoje() + timedelta(days=1)
+    _pedido(loja, 'pendente', d1, r1, 30)
+    _pedido(loja, 'pendente', d1, r2, 30)
+
+    # SEM equilibrar: ambas caem no dia 1 (entrega); dia 0 ocioso.
+    base = cronograma_producao(horizonte_dias=2, inicio_offset_dias=0)
+    a = _rec_out(base, r1.id)
+    b = _rec_out(base, r2.id)
+    assert a['por_dia'][0]['qtd'] == 0 and b['por_dia'][0]['qtd'] == 0
+    assert a['por_dia'][1]['qtd'] == 30 and b['por_dia'][1]['qtd'] == 30
+
+    # COM equilibrar: cada receita inteira num unico dia; dia 0 nao fica ocioso.
+    eq = cronograma_producao(horizonte_dias=2, inicio_offset_dias=0,
+                             equilibrar=True)
+    ae = _rec_out(eq, r1.id)
+    be = _rec_out(eq, r2.id)
+    for rr in (ae, be):
+        dias_com = [c for c in rr['por_dia'] if c['qtd'] > 0]
+        assert len(dias_com) == 1, 'receita nao pode ser dividida'
+        assert dias_com[0]['qtd'] == 30
+        assert sum(c['qtd'] for c in rr['por_dia']) == rr['total'] == 30
+    assert (ae['por_dia'][0]['qtd'] > 0) or (be['por_dia'][0]['qtd'] > 0), \
+        'equilibrar deveria adiantar uma receita pro dia ocioso'
+    assert {ae['por_dia'][0]['qtd'], be['por_dia'][0]['qtd']} == {0, 30}
+
+
 def test_rota_telaindustriateste(app, admin_user):
     loja = _loja()
     r = _receita()
