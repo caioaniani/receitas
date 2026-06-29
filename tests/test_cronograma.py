@@ -145,6 +145,46 @@ def test_cronograma_total_bate_com_balanco(app):
             assert sum(c['qtd'] for c in x['por_dia']) == x['total']
 
 
+def test_dribble_diario_rola_pro_proximo_dia(app):
+    """Anti-'produzir 1 pao': um dia com producao irrisoria (< fracao de
+    fornada) NAO fica sozinho — rola pro proximo, consolidando no dia de
+    producao real. Total preservado."""
+    loja = _loja()
+    r = Receita(nome='Sourdough', categoria='Paes', rendimento_qtd=50,
+                rendimento_unidade='un', peso_base=1000.0)
+    db.session.add(r)
+    db.session.commit()
+    # 1 un pra entregar hoje (vira dribble) + 60 pra hoje+3 (producao real).
+    _pedido(loja, 'pendente', hoje(), r, 1)
+    _pedido(loja, 'pendente', hoje() + timedelta(days=3), r, 60)
+
+    crono = cronograma_producao(horizonte_dias=7, janela_semanas=6)
+    rr = _rec_out(crono, r.id)
+    assert rr['total'] == 61                       # balanco: 61 a produzir
+    # o "1" do dia 0 nao fica sozinho — rolou e somou no dia da producao real
+    assert rr['por_dia'][0]['qtd'] == 0
+    assert rr['por_dia'][3]['qtd'] == 61
+    # nenhum dia com producao irrisoria (0 < qtd < 20% de 50 = 10), exceto sumir
+    minimo = 10
+    for c in rr['por_dia']:
+        assert not (0 < c['qtd'] < minimo), f"dribble nao consolidado: {c}"
+    assert sum(c['qtd'] for c in rr['por_dia']) == rr['total']
+
+
+def test_rend_pequeno_nao_consolida(app):
+    """Receita cuja fornada rende pouco (rend=1): produzir 1 num dia JA e uma
+    fornada cheia — nao deve rolar. Garante que o anti-dribble nao engole
+    producao legitima de item de baixo rendimento."""
+    loja = _loja()
+    r = _receita()  # rendimento_qtd=1
+    _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 1)
+
+    crono = cronograma_producao(horizonte_dias=7, janela_semanas=6)
+    rr = _rec_out(crono, r.id)
+    assert rr['por_dia'][1]['qtd'] == 1            # produz o 1 no dia, sem rolar
+    assert rr['total'] == 1
+
+
 def test_rota_telaindustriateste(app, admin_user):
     loja = _loja()
     r = _receita()
