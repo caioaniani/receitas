@@ -45,6 +45,12 @@ from app.utils import hoje
 # media daquele dia. Abaixo disso, cai no fallback (media diaria simples).
 _MIN_OCORRENCIAS_DOW = 2
 
+# Pedido semanal por loja: minimo de DATAS distintas em que a loja pediu o item
+# na janela pra ele ser sugerido pra ELA. Mata "1 un" de pedido avulso/errado
+# (ex: loja que pediu Creme de Amendoas uma vez sem querer): 1 ocorrencia nao
+# basta. Item que a loja pede de verdade aparece em >= 2 datas.
+_MIN_DATAS_LOJA = 2
+
 # Cronograma: um dia que produz MENOS que esta fracao de uma fornada (rend) rola
 # pro proximo dia, pra nao mandar o padeiro acender o forno por 1-2 unidades
 # ("pedido picado"). Como e fracao da fornada, receita cuja fornada rende pouco
