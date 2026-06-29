@@ -547,7 +547,6 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
     hist_ini = hoje_d - timedelta(days=7 * janela_semanas)
     hist_fim = hoje_d - timedelta(days=1)
     dias_futuros = [inicio_d + timedelta(days=i) for i in range(horizonte_dias)]
-    dias_calendario_janela = 7 * janela_semanas
 
     # So receitas que a loja PEDE (exclui insumo/etapa de producao, ex: Creme
     # de Amendoas, que vai dentro do Croissant Almond e nunca e pedido direto).
