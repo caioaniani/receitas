@@ -28,12 +28,15 @@ def _horizonte_janela():
 
 
 def _inicio_offset():
-    """Inicio do horizonte (dias). Default 1 = amanha — MESMO padrao do Painel,
-    pra as duas telas baterem. 0 = hoje. Limite 0..14."""
+    """Inicio do horizonte (dias). Default 0 = HOJE — esta e a tela de PRODUCAO
+    (o padeiro produz hoje), entao a 1a coluna (amarela = 'hoje') tem que ser
+    mesmo hoje pra bater com a tela do padeiro. Antes era 1 (amanha, copiado do
+    Painel), o que punha a coluna amarela em amanha e a edicao/envio caia no dia
+    errado. 0 = hoje. Limite 0..14."""
     try:
-        v = int(request.values.get('inicio', 1))
+        v = int(request.values.get('inicio', 0))
     except (TypeError, ValueError):
-        v = 1
+        v = 0
     return max(0, min(v, 14))
 
 
