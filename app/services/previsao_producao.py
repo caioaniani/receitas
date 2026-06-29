@@ -722,6 +722,112 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
     }
 
 
+def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
+                          inicio_offset_dias=0):
+    """Modo MANUAL: em vez de prever por dia (o sinal RUIDOSO), devolve a MEDIA
+    SEMANAL de cada (loja, produto) — o sinal ESTAVEL — e divide IGUAL entre os
+    dias de entrega do horizonte, pro admin AJUSTAR na tela. Total preservado
+    (maior resto). Sem recencia nem rateio: media simples = total na janela /
+    nº de semanas. O gerar reusa o mesmo POST de pedidos_semana_gerar.
+
+    Retorna dict:
+        dias: [{data, label, dow}]
+        lojas: [{loja_id, loja_nome, produtos: [{receita_id, nome,
+                 media_semanal, por_dia: [qtd por dia], total}],
+                 ja_tem: [data_iso, ...]}]   # dias que a loja JA pediu
+        horizonte_dias, janela_semanas, inicio_offset_dias, hoje, inicio.
+    """
+    horizonte_dias = max(1, min(int(horizonte_dias or 7), 14))
+    janela_semanas = max(1, min(int(janela_semanas or 6), 26))
+    inicio_offset_dias = max(0, min(int(inicio_offset_dias or 0), 14))
+
+    hoje_d = hoje()
+    inicio_d = hoje_d + timedelta(days=inicio_offset_dias)
+    horizonte_fim = inicio_d + timedelta(days=horizonte_dias - 1)
+    hist_ini = hoje_d - timedelta(days=7 * janela_semanas)
+    hist_fim = hoje_d - timedelta(days=1)
+    dias_futuros = [inicio_d + timedelta(days=i) for i in range(horizonte_dias)]
+
+    receitas = {r.id: r for r in Receita.query
+                .filter(Receita.arquivada_em.is_(None),
+                        Receita.sugerir_pedido_loja.isnot(False)).all()}
+    lojas_op = (Loja.query
+                .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
+                .order_by(Loja.nome).all())
+
+    # Total por (loja, receita) na janela -> media semanal = total / nº semanas.
+    soma_lr = defaultdict(lambda: defaultdict(int))   # loja -> rid -> total
+    for rid, loja_id, data_ent, qtd in (db.session.query(
+            PedidoItem.receita_id, PedidoLoja.loja_id,
+            PedidoLoja.data_entrega, PedidoItem.quantidade)
+            .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
+            .filter(PedidoItem.receita_id.isnot(None),
+                    PedidoLoja.status != 'cancelado',
+                    PedidoLoja.data_entrega >= hist_ini,
+                    PedidoLoja.data_entrega <= hist_fim).all()):
+        if data_ent is None or rid not in receitas:
+            continue
+        soma_lr[loja_id][rid] += int(qtd or 0)
+
+    # Dias que a loja JA tem pedido no horizonte (o gerar pula; a tela marca).
+    ja_tem = defaultdict(set)
+    for loja_id, data_ent in (db.session.query(
+            PedidoLoja.loja_id, PedidoLoja.data_entrega)
+            .filter(PedidoLoja.status != 'cancelado',
+                    PedidoLoja.data_entrega >= inicio_d,
+                    PedidoLoja.data_entrega <= horizonte_fim)
+            .distinct().all()):
+        if data_ent is not None:
+            ja_tem[loja_id].add(data_ent.isoformat())
+
+    dias_out = [{'data': d.isoformat(),
+                 'label': '%s %s' % (_DOW_PT[d.weekday()], d.strftime('%d/%m')),
+                 'dow': d.weekday()} for d in dias_futuros]
+
+    lojas_out = []
+    for loja in lojas_op:
+        produtos = []
+        for rid, rec in sorted(receitas.items(), key=lambda kv: kv[1].nome):
+            total_janela = soma_lr.get(loja.id, {}).get(rid, 0)
+            if total_janela <= 0:
+                continue
+            media_sem = total_janela / janela_semanas
+            # Fornada especial só sex/sáb/dom — só esses dias recebem.
+            fe = bool(getattr(rec, 'fornada_especial', False))
+            idx_validos = [i for i, d in enumerate(dias_futuros)
+                           if not (fe and d.weekday() not in _DIAS_FORNADA_ESPECIAL)]
+            if not idx_validos:
+                continue
+            # Escala a media semanal pro tamanho do horizonte (7 dias = 1 semana).
+            total_alocar = int(round(media_sem * horizonte_dias / 7.0))
+            por_dia = [0] * len(dias_futuros)
+            if total_alocar > 0:
+                partes = _distribuir_inteiro(total_alocar, [1] * len(idx_validos))
+                for k, i in enumerate(idx_validos):
+                    por_dia[i] = partes[k]
+            produtos.append({
+                'receita_id': rid, 'nome': rec.nome,
+                'media_semanal': round(media_sem, 1),
+                'por_dia': por_dia, 'total': sum(por_dia),
+            })
+        if produtos:
+            lojas_out.append({
+                'loja_id': loja.id, 'loja_nome': loja.nome,
+                'produtos': produtos,
+                'ja_tem': sorted(ja_tem.get(loja.id, set())),
+            })
+
+    return {
+        'horizonte_dias': horizonte_dias,
+        'janela_semanas': janela_semanas,
+        'inicio_offset_dias': inicio_offset_dias,
+        'hoje': hoje_d.isoformat(),
+        'inicio': inicio_d.isoformat(),
+        'dias': dias_out,
+        'lojas': lojas_out,
+    }
+
+
 def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
     """MRP: explode sub-receitas (ReceitaIngrediente tipo='receita') em linhas de
     producao proprias no cronograma. Produto final que consome uma sub-receita
