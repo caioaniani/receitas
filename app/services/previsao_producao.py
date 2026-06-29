@@ -809,6 +809,7 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
                 'receita_id': rid, 'nome': rec.nome,
                 'media_semanal': round(media_sem, 1),
                 'por_dia': por_dia, 'total': sum(por_dia),
+                'lote': int(rec.lote_pedido or 0),   # caixa: arredonda ao dividir
             })
         if produtos:
             lojas_out.append({
