@@ -45,6 +45,12 @@ from app.utils import hoje
 # media daquele dia. Abaixo disso, cai no fallback (media diaria simples).
 _MIN_OCORRENCIAS_DOW = 2
 
+# Cronograma: um dia que produz MENOS que esta fracao de uma fornada (rend) rola
+# pro proximo dia, pra nao mandar o padeiro acender o forno por 1-2 unidades
+# ("pedido picado"). Como e fracao da fornada, receita cuja fornada rende pouco
+# (rend pequeno) nao sofre — produzir 1 la ja e uma fornada cheia.
+_MIN_FRACAO_FORNADA = 0.2
+
 _CACHE = {}
 _CACHE_TTL = 60  # segundos
 
