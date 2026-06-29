@@ -723,6 +723,29 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
+        // Aviso de LOTE no modo errado: receita montada (sem %) que TEM Peso/Un
+        // e rende mais de 1 unidade NAO e "por unidade" — e um lote. No modo
+        // "Quantidade de Produtos" o display trata cada linha como 1 unidade e
+        // infla o custo (diverge do backend custos.py, que rende pelo Peso/Un).
+        // Receita de massa (sumPct>0) usa esse modo certo, entao fica de fora.
+        var rendePorPeso = pesoUnit > 0 ? Math.floor(totalQtd / pesoUnit) : 0;
+        var loteNoModoErrado = (modo === 'quantidade' && sumPct === 0 && rendePorPeso > 1);
+        var avisoLote = document.getElementById('aviso-lote-modo');
+        if (avisoLote) {
+            avisoLote.style.display = loteNoModoErrado ? 'flex' : 'none';
+            if (loteNoModoErrado) {
+                var elLoteN = document.getElementById('aviso-lote-n');
+                var elLotePeso = document.getElementById('aviso-lote-peso');
+                if (elLoteN) elLoteN.textContent = rendePorPeso;
+                if (elLotePeso) elLotePeso.textContent = formatNum(pesoUnit, 0);
+            }
+        }
+        // O hint azul "por unidade" contradiz o aviso de lote — esconde quando lote.
+        if (loteNoModoErrado) {
+            var hintMontadaEl = document.getElementById('hint-montada-qtd');
+            if (hintMontadaEl) hintMontadaEl.style.display = 'none';
+        }
+
         // Aplicar fator (Fornadas x Quantidade) aos totais
         var totalQtdMult = totalQtd * fator;
         var totalCustoMult = totalCusto * fator;
