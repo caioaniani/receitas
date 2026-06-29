@@ -868,6 +868,30 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                     c['qtd'] = total if i == dia else 0
                     c['fornadas'] = forn if i == dia else None
 
+    # Receitas que so existem como edicao manual (override) e nao tem demanda
+    # prevista — ex: adicionadas na tela 'editar plano' do padeiro. Sem isto nao
+    # apareceriam no grid e seriam apagadas no proximo 'enviar' (que reconstroi a
+    # ordem a partir do grid). Injeta linha zerada; aplicar_overrides preenche.
+    from app.models import CronogramaOverride
+    ja = {rr['receita_id'] for rr in receitas_out}
+    extra_rids = {o.receita_id for o in CronogramaOverride.query.filter(
+        CronogramaOverride.data.in_(dias_prod),
+        CronogramaOverride.qtd > 0).all()
+        if o.receita_id not in ja and o.receita_id in receitas}
+    if extra_rids:
+        est_bal = {it['receita_id']: int(it.get('em_estoque', 0) or 0)
+                   for it in bal['itens']}
+        for rid in extra_rids:
+            rec = receitas[rid]
+            receitas_out.append({
+                'receita_id': rid, 'nome': rec.nome,
+                'dias_producao': lead.get(rid, 0),
+                'em_estoque': est_bal.get(rid, 0),
+                'por_dia': [{'data': d.isoformat(), 'qtd': 0, 'fornadas': None}
+                            for d in dias_prod],
+                'total': 0,
+            })
+
     # Edicao manual da grade: aplica os overrides salvos (sobrepoe a sugestao
     # calculada/equilibrada). No-op quando nao ha override.
     from app.services.cronograma_edit import aplicar_overrides
