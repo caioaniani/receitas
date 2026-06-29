@@ -585,6 +585,7 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
         soma_rl[rid][loja_id] += q
         soma_r[rid] += q
         datas_r[rid].add(data_ent)
+        datas_rl[rid][loja_id].add(data_ent)
 
     # Pedidos nao-cancelados por (loja, data) no horizonte — onde a loja JA
     # pediu, nao geramos rascunho (anti-duplicacao).
