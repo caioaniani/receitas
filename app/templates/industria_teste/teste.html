@@ -28,6 +28,23 @@
     .tag-lead { background: #fff3cd; color: #664d03; padding: .05rem .4rem;
                 border-radius: .25rem; font-size: .68rem; font-weight: 600; }
     .rec-est { font-size: .75rem; color: #6c757d; }
+    .crono .cel-input {
+        width: 3.6rem; text-align: center; font-weight: 700; font-size: 1.05rem;
+        color: #0d3b66; border: 1px solid transparent; border-radius: .25rem;
+        background: transparent; padding: .1rem .15rem;
+        font-variant-numeric: tabular-nums; -moz-appearance: textfield;
+    }
+    .crono .cel-input::-webkit-outer-spin-button,
+    .crono .cel-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .crono .cel-input:hover { border-color: #ced4da; background: #fff; }
+    .crono .cel-input:focus { border-color: #0d6efd; background: #fff; outline: none;
+        box-shadow: 0 0 0 .2rem rgba(13,110,253,.15); }
+    .crono td.cel.salvando .cel-input { border-color: #ffc107; }
+    .crono td.cel.salvo .cel-input { border-color: #198754; }
+    .tag-edit { font-size: .85rem; cursor: default; margin-left: .15rem; }
+    .btn-reset { border: none; background: none; cursor: pointer; font-size: .95rem;
+        color: #6c757d; padding: 0 .15rem; line-height: 1; }
+    .btn-reset:hover { color: #dc3545; }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
