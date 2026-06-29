@@ -303,6 +303,34 @@ def pedidos_semana():
                            janela=janela, inicio=inicio)
 
 
+@producao_bp.route('/pedidos-semana/media')
+@login_required
+@admin_required
+def pedidos_semana_media():
+    """Modo MANUAL: media semanal por loja/produto dividida igual entre os dias
+    do horizonte, pro admin AJUSTAR o split. Mesmo POST de gerar. **Admin**."""
+    from app.services.previsao_producao import media_semanal_pedidos
+
+    try:
+        horizonte = int(request.args.get('horizonte', 7))
+    except ValueError:
+        horizonte = 7
+    horizonte = max(1, min(horizonte, 14))
+    try:
+        janela = int(request.args.get('janela', 6))
+    except ValueError:
+        janela = 6
+    janela = max(1, min(janela, 26))
+
+    inicio = _inicio_offset()
+    grade = media_semanal_pedidos(horizonte_dias=horizonte,
+                                  janela_semanas=janela,
+                                  inicio_offset_dias=inicio)
+    return render_template('producao/pedidos_semana_media.html',
+                           grade=grade, horizonte=horizonte,
+                           janela=janela, inicio=inicio)
+
+
 @producao_bp.route('/pedidos-semana/gerar', methods=['POST'])
 @login_required
 @admin_required
