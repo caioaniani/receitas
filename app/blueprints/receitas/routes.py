@@ -261,6 +261,35 @@ def _recurso_de_etapa(e):
     return 'padeiro' if e.ativa else 'descanso'
 
 
+def _parse_etapas_form(form):
+    """Lê as linhas de etapa do form → lista de (nome, dur_min, equip, ativa),
+    pulando linhas sem nome. Reusado pelo salvar e pelo aplicar-à-categoria."""
+    out = []
+    nomes = form.getlist('nome[]')
+    duracoes = form.getlist('duracao[]')
+    recursos = form.getlist('recurso[]')
+    for nome, dur, recurso in zip(nomes, duracoes, recursos):
+        nome = (nome or '').strip()
+        if not nome:
+            continue            # linha vazia = ignora
+        try:
+            dur_min = max(0, min(int(dur or 0), 100000))
+        except (TypeError, ValueError):
+            dur_min = 0
+        equip, ativa = _RECURSO_MAP.get(recurso, (None, True))
+        out.append((nome, dur_min, equip, ativa))
+    return out
+
+
+def _set_etapas(receita_id, etapas):
+    """Substitui as etapas de uma receita pela lista (nome, dur, equip, ativa)."""
+    ReceitaEtapa.query.filter_by(receita_id=receita_id).delete()
+    for i, (nome, dur_min, equip, ativa) in enumerate(etapas):
+        db.session.add(ReceitaEtapa(receita_id=receita_id, ordem=i, nome=nome,
+                                    duracao_min=dur_min, equipamento=equip,
+                                    ativa=ativa))
+
+
 @receitas_bp.route('/<int:id>/etapas', methods=['GET', 'POST'])
 @login_required
 @admin_required
@@ -268,54 +297,62 @@ def etapas(id):
     """Editor manual das etapas de produção (fluxograma/Gantt) de uma receita:
     cada etapa tem nome, duração e o tipo de trabalho (padeiro / máquina /
     descanso). POST salva a lista inteira (substitui, na ordem das linhas — o
-    arrastar reordena). Botão "padrão da categoria" preenche com o modelo
-    pesquisado pra ajustar em cima."""
+    arrastar reordena). "padrão da categoria" preenche ESTA com o modelo
+    pesquisado; "aplicar à categoria" copia ESTAS etapas pra todos os produtos
+    da categoria."""
     from app.constants import etapas_padrao_categoria
     from app.services.producao import _fmt_dur
 
     receita = Receita.query.get_or_404(id)
 
     if request.method == 'POST':
-        if request.form.get('acao') == 'padrao':
-            # preenche SÓ esta receita com o padrão da categoria (substitui).
-            ReceitaEtapa.query.filter_by(receita_id=receita.id).delete()
-            for i, (nome, dur, equip, ativa) in enumerate(
-                    etapas_padrao_categoria(receita.categoria)):
-                db.session.add(ReceitaEtapa(
-                    receita_id=receita.id, ordem=i, nome=nome, duracao_min=dur,
-                    equipamento=equip, ativa=ativa))
+        acao = request.form.get('acao')
+
+        if acao == 'padrao':
+            # preenche SÓ esta receita com o padrão (pesquisado) da categoria.
+            _set_etapas(receita.id, etapas_padrao_categoria(receita.categoria))
             db.session.commit()
             flash('Etapas preenchidas com o padrão da categoria. Ajuste e salve.',
                   'info')
             return redirect(url_for('receitas.etapas', id=receita.id))
 
-        nomes = request.form.getlist('nome[]')
-        duracoes = request.form.getlist('duracao[]')
-        recursos = request.form.getlist('recurso[]')
-        ReceitaEtapa.query.filter_by(receita_id=receita.id).delete()
-        ordem = 0
-        for nome, dur, recurso in zip(nomes, duracoes, recursos):
-            nome = (nome or '').strip()
-            if not nome:
-                continue            # linha vazia = ignora
-            try:
-                dur_min = max(0, min(int(dur or 0), 100000))
-            except (TypeError, ValueError):
-                dur_min = 0
-            equip, ativa = _RECURSO_MAP.get(recurso, (None, True))
-            db.session.add(ReceitaEtapa(
-                receita_id=receita.id, ordem=ordem, nome=nome,
-                duracao_min=dur_min, equipamento=equip, ativa=ativa))
-            ordem += 1
+        if acao == 'aplicar_categoria':
+            # Aplica ESTAS etapas (as da tela) a TODOS os produtos ativos da
+            # mesma categoria (inclui esta). Sobrescreve as etapas de cada um.
+            cat = receita.categoria
+            if not cat:
+                flash('Esta receita não tem categoria — não dá pra aplicar à '
+                      'categoria.', 'warning')
+                return redirect(url_for('receitas.etapas', id=receita.id))
+            etapas_form = _parse_etapas_form(request.form)
+            alvos = (Receita.query
+                     .filter(Receita.categoria == cat,
+                             Receita.arquivada_em.is_(None)).all())
+            for r in alvos:
+                _set_etapas(r.id, etapas_form)
+            db.session.commit()
+            flash(f'{len(etapas_form)} etapa(s) aplicadas a {len(alvos)} '
+                  f'produto(s) da categoria "{cat}".', 'success')
+            return redirect(url_for('receitas.etapas', id=receita.id))
+
+        # Salvar normal: só esta receita.
+        etapas_form = _parse_etapas_form(request.form)
+        _set_etapas(receita.id, etapas_form)
         db.session.commit()
-        flash(f'{ordem} etapa(s) salva(s) para "{receita.nome}".', 'success')
+        flash(f'{len(etapas_form)} etapa(s) salva(s) para "{receita.nome}".',
+              'success')
         return redirect(url_for('receitas.etapas', id=receita.id))
 
     etapas_atuais = (ReceitaEtapa.query.filter_by(receita_id=receita.id)
                      .order_by(ReceitaEtapa.ordem).all())
+    n_categoria = 0
+    if receita.categoria:
+        n_categoria = (Receita.query
+                       .filter(Receita.categoria == receita.categoria,
+                               Receita.arquivada_em.is_(None)).count())
     return render_template('receitas/etapas.html', receita=receita,
                            etapas=etapas_atuais, fmt_dur=_fmt_dur,
-                           recurso_de=_recurso_de_etapa)
+                           recurso_de=_recurso_de_etapa, n_categoria=n_categoria)
 
 
 @receitas_bp.route('/massa-base', methods=['GET', 'POST'])
