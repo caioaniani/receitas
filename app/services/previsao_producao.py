@@ -42,14 +42,10 @@ from app.models import EstoqueProducao, Loja, PedidoItem, PedidoLoja, Receita
 from app.utils import hoje
 
 # Minimo de ocorrencias de um mesmo dia-da-semana na janela pra confiar na
-# media daquele dia. Abaixo disso, cai no fallback (media diaria simples).
+# media daquele dia. Abaixo disso, cai no fallback (media diaria simples). Vale
+# tambem por LOJA no pedido semanal: a loja so recebe sugestao de um item se o
+# pediu nesse dia-da-semana em >= N datas distintas (1 vez = avulso/errado).
 _MIN_OCORRENCIAS_DOW = 2
-
-# Pedido semanal por loja: minimo de DATAS distintas em que a loja pediu o item
-# na janela pra ele ser sugerido pra ELA. Mata "1 un" de pedido avulso/errado
-# (ex: loja que pediu Creme de Amendoas uma vez sem querer): 1 ocorrencia nao
-# basta. Item que a loja pede de verdade aparece em >= 2 datas.
-_MIN_DATAS_LOJA = 2
 
 # Cronograma: um dia que produz MENOS que esta fracao de uma fornada (rend) rola
 # pro proximo dia, pra nao mandar o padeiro acender o forno por 1-2 unidades
