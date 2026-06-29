@@ -76,6 +76,26 @@
                        placeholder="50000">
             </div>
             <div class="col">
+                <label class="form-label small text-muted" title="Lote de pedido (pacote padrão). A loja pede em múltiplos disto — a sugestão de pedido arredonda pro pacote (não pede picado). Ex: pão francês 50, sourdough 20, croissant almond 15. Vazio = sem padronização.">
+                    Lote de pedido
+                </label>
+                <input type="number" name="lote_pedido"
+                       value="{{ receita.lote_pedido if receita.lote_pedido else '' }}"
+                       step="1" min="0"
+                       class="form-control form-control-sm input-blue"
+                       placeholder="ex: 50">
+            </div>
+            <div class="col">
+                <label class="form-label small text-muted" title="Pedido mínimo (piso). Quando a loja pede o item, nunca abaixo disto. Ex: croissant com lote 50 e mínimo 250 → 250, 300, 350… Só vale pra loja que já pede o item. Vazio = sem mínimo.">
+                    Mínimo de pedido
+                </label>
+                <input type="number" name="minimo_pedido"
+                       value="{{ receita.minimo_pedido if receita.minimo_pedido else '' }}"
+                       step="1" min="0"
+                       class="form-control form-control-sm input-blue"
+                       placeholder="ex: 250">
+            </div>
+            <div class="col">
                 <label class="form-label small text-muted">Preco Atacado (R$)</label>
                 <input type="number" name="preco_venda" value="{{ '%.2f' % receita.preco_venda if receita.preco_venda else '' }}"
                        step="0.01" min="0" class="form-control form-control-sm input-blue" id="preco-venda">
