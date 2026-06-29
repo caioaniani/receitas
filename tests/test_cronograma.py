@@ -145,16 +145,30 @@ def test_cronograma_total_bate_com_balanco(app):
             assert sum(c['qtd'] for c in x['por_dia']) == x['total']
 
 
+def _receita_amassadeira(nome, rend, peso_base, cap):
+    """Receita que passa pela amassadeira: rend un/receita, massa = peso_base
+    (1 ingrediente mp a 100%), capacidade cap g. unidades/fornada = cap*rend/
+    massa_base = cap*rend/peso_base."""
+    from app.models import ReceitaIngrediente
+    r = Receita(nome=nome, categoria='Paes', rendimento_qtd=rend,
+                rendimento_unidade='un', peso_base=float(peso_base),
+                capacidade_amassadeira_g=cap)
+    db.session.add(r)
+    db.session.flush()
+    db.session.add(ReceitaIngrediente(receita_id=r.id, tipo='mp',
+                                      ingrediente_nome='Farinha', porcentagem=100))
+    db.session.commit()
+    return r
+
+
 def test_dribble_diario_rola_pro_proximo_dia(app):
-    """Anti-'produzir 1 pao': um dia com producao irrisoria (< fracao de
+    """Anti-'produzir 1 pao': um dia com producao irrisoria (< fracao de UMA
     fornada) NAO fica sozinho — rola pro proximo, consolidando no dia de
     producao real. Total preservado."""
     loja = _loja()
-    r = Receita(nome='Sourdough', categoria='Paes', rendimento_qtd=50,
-                rendimento_unidade='un', peso_base=1000.0)
-    db.session.add(r)
-    db.session.commit()
-    # 1 un pra entregar hoje (vira dribble) + 60 pra hoje+3 (producao real).
+    # cap=5000, rend=50, massa_base=peso_base=5000 -> unid/fornada=50, minimo=10.
+    r = _receita_amassadeira('Sourdough', rend=50, peso_base=5000, cap=5000)
+    # 1 un pra entregar hoje (dribble) + 60 pra hoje+3 (producao real).
     _pedido(loja, 'pendente', hoje(), r, 1)
     _pedido(loja, 'pendente', hoje() + timedelta(days=3), r, 60)
 
@@ -164,19 +178,21 @@ def test_dribble_diario_rola_pro_proximo_dia(app):
     # o "1" do dia 0 nao fica sozinho — rolou e somou no dia da producao real
     assert rr['por_dia'][0]['qtd'] == 0
     assert rr['por_dia'][3]['qtd'] == 61
-    # nenhum dia com producao irrisoria (0 < qtd < 20% de 50 = 10), exceto sumir
-    minimo = 10
+    minimo = 10                                    # 20% de 50 un/fornada
     for c in rr['por_dia']:
         assert not (0 < c['qtd'] < minimo), f"dribble nao consolidado: {c}"
     assert sum(c['qtd'] for c in rr['por_dia']) == rr['total']
 
 
-def test_rend_pequeno_nao_consolida(app):
-    """Receita cuja fornada rende pouco (rend=1): produzir 1 num dia JA e uma
-    fornada cheia — nao deve rolar. Garante que o anti-dribble nao engole
-    producao legitima de item de baixo rendimento."""
+def test_sem_amassadeira_nao_consolida(app):
+    """Item que NAO passa pela amassadeira (cap=0: Moeda, creme) nao tem
+    'fornada' a desperdicar — produzir 1 num dia continua valendo, nao rola."""
     loja = _loja()
-    r = _receita()  # rendimento_qtd=1
+    r = Receita(nome='Moeda', categoria='Paes', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=10.0,
+                capacidade_amassadeira_g=0)
+    db.session.add(r)
+    db.session.commit()
     _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 1)
 
     crono = cronograma_producao(horizonte_dias=7, janela_semanas=6)
