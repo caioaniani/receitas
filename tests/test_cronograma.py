@@ -380,6 +380,60 @@ def test_cronograma_expoe_saldo(app):
                for b in rr['breakdown'])
 
 
+def test_produto_vendavel_sem_demanda_aparece(app):
+    """Produto que a loja PEDE (sugerir_pedido_loja != False) aparece na grade
+    mesmo sem pedido/estoque na janela — pro planejamento (ex: Pain au
+    Chocolat). O balanço o exclui (zerado); o cronograma o injeta zerado."""
+    _loja()
+    pain = _receita('Pain au Chocolat')             # sem pedido, sem estoque
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr = _rec_out(crono, pain.id)
+    assert rr is not None
+    assert rr['total'] == 0
+    assert rr['em_estoque'] == 0
+
+
+def test_projecao_saldo_com_datas_e_producao(app):
+    """O saldo expandido traz a projeção dia a dia: saídas DATADAS por loja,
+    produção programada e o saldo do dia. Com estoque + produção, não falta."""
+    l1 = _loja('Ribeiro')
+    l2 = _loja('Anesio')
+    r = _receita('Brioche')
+    r.rendimento_qtd = 50
+    db.session.add(EstoqueProducao(receita_id=r.id, quantidade=200))
+    db.session.commit()
+    d1 = hoje() + timedelta(days=1)
+    _pedido(l1, 'pendente', d1, r, 550)
+    _pedido(l2, 'pendente', d1, r, 500)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None
+    assert len(rr['projecao']) == 7
+    p1 = rr['projecao'][1]                           # dia da entrega (hoje+1)
+    assert p1['saida'] == 1050
+    assert {s['loja_nome'] for s in p1['saida_lojas']} == {'Ribeiro', 'Anesio'}
+    assert p1['producao'] > 0                        # produção programada no dia
+    assert all(p['saldo'] >= 0 for p in rr['projecao'])
+    assert rr['dia_falta'] is None
+
+
+def test_projecao_marca_dia_que_falta(app):
+    """Entrega que o motor não consegue mais produzir a tempo (lead) é exibida
+    como 'vai faltar' na projeção, mesmo o balanço a tendo excluído (zerada)."""
+    loja = _loja()
+    r = _receita('Pão Lead')
+    r.dias_producao = 1                              # produz 1 dia antes
+    db.session.commit()
+    _pedido(loja, 'pendente', hoje(), r, 100)        # entrega HOJE: não dá tempo
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None
+    assert rr['projecao'][0]['saida'] == 100
+    assert rr['projecao'][0]['saldo'] == -100
+    assert rr['dia_falta'] == rr['projecao'][0]['label']
+
+
 def test_rota_telaindustriateste(app, admin_user):
     loja = _loja()
     r = _receita()
