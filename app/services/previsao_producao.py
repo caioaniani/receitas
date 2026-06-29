@@ -788,7 +788,19 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             running -= cobre
             residual.append(g - cobre)
         pesos = residual if sum(residual) > 0 else gross
-        liquido = _distribuir_inteiro(produzir, pesos)
+        # Padroniza a PRODUCAO em LOTES inteiros (nao produzir picado — decisao
+        # do dono 29/06): arredonda o total pro multiplo do lote da receita e
+        # distribui em pacotes inteiros pelos dias (cada dia 0 ou multiplo do
+        # lote). O total passa a ser multiplo do lote — pode divergir um pouco
+        # do "Produzir" exato do balanco; e o custo de produzir em batidas
+        # redondas. NAO usa o 'minimo' do pedido (piso e regra de PEDIDO da loja,
+        # nao de producao). Sem lote -> distribuicao exata como antes.
+        lote = int(getattr(rec, 'lote_pedido', 0) or 0)
+        if lote > 1 and produzir > 0:
+            n_lotes = int(round(produzir / lote)) or 1
+            liquido = [x * lote for x in _distribuir_inteiro(n_lotes, pesos)]
+        else:
+            liquido = _distribuir_inteiro(produzir, pesos)
 
         rend = int(rec.rendimento_qtd) if rec.rendimento_qtd else 0
         # Anti-"acender fornada por dribble" (ex: produzir 1 pao num dia): um dia
