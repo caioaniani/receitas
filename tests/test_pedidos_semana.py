@@ -172,6 +172,36 @@ def test_pedido_croissant_respeita_minimo(app):
     assert item['qtd'] == 250         # 30 -> piso 250
 
 
+def test_fornada_especial_so_fim_de_semana(app):
+    """Fornada especial (sex/sáb/dom) não é sugerida em dia de semana, mesmo com
+    histórico forte naquele dia-da-semana."""
+    loja = _loja('Loja A')
+    r = _receita('Focaccia Gorgonzola')
+    r.fornada_especial = True
+    db.session.commit()
+    hoje_d = hoje()
+    # um dia de SEMANA (seg–qui) dentro do horizonte de 7 dias
+    alvo = next(hoje_d + timedelta(days=i) for i in range(7)
+                if (hoje_d + timedelta(days=i)).weekday() < 4)
+    for k in (1, 2, 3):
+        _pedido(loja, 'recebido', alvo - timedelta(days=7 * k), r, 20)
+
+    sug = sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
+                                 inicio_offset_dias=0)
+    dia = next(d for d in _loja_out(sug, loja.id)['dias']
+               if d['data'] == alvo.isoformat())
+    assert all(it['receita_id'] != r.id for it in dia['itens'])   # dia útil: nada
+
+    # controle: sem a flag, a mesma receita SERIA sugerida nesse dia
+    r.fornada_especial = False
+    db.session.commit()
+    sug2 = sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
+                                  inicio_offset_dias=0)
+    dia2 = next(d for d in _loja_out(sug2, loja.id)['dias']
+                if d['data'] == alvo.isoformat())
+    assert any(it['receita_id'] == r.id for it in dia2['itens'])
+
+
 def test_sugerir_marca_ja_tem_pedido(app):
     """Onde a loja ja tem pedido nao-cancelado, marca ja_tem_pedido."""
     loja = _loja('Loja A')
