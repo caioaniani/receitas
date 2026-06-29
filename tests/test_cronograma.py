@@ -330,3 +330,66 @@ def test_plano_antigo_sem_flag_continua_visivel(app, admin_user):
                                     multiplicador=1, qtd_alvo=10))
     db.session.commit()
     assert _plano_do_dia(hoje()) is not None         # default True -> visível
+
+
+# ── excluir ordem de produção enviada (desfazer envio errado) ──────────────
+
+def test_excluir_plano_enviado_sem_producao(app, admin_user):
+    from app.models import PlanejamentoProducao
+    from app.services.producao import aprovar_plano_do_dia, enviar_plano_do_dia, excluir_plano_do_dia
+    loja = _loja()
+    r = _receita()
+    d2 = hoje() + timedelta(days=2)
+    _pedido(loja, 'pendente', d2, r, 50)
+    aprovar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+    enviar_plano_do_dia(d2)
+
+    res = excluir_plano_do_dia(d2)
+    assert res['ok'] is True
+    assert PlanejamentoProducao.query.filter_by(
+        data=d2, origem='cronograma').first() is None
+
+
+def test_excluir_bloqueia_se_ja_produziu(app, admin_user):
+    from app.models import PlanejamentoProducao
+    from app.services.producao import aprovar_plano_do_dia, excluir_plano_do_dia
+    loja = _loja()
+    r = _receita()
+    d2 = hoje() + timedelta(days=2)
+    _pedido(loja, 'pendente', d2, r, 50)
+    plano = aprovar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+    plano.itens[0].produzido_qtd = 5            # padeiro ja produziu parte
+    db.session.commit()
+
+    res = excluir_plano_do_dia(d2)
+    assert res['ok'] is False
+    assert res['erro'] == 'ja_produzido' and res['produzido'] == 5
+    # plano preservado (a producao real ja mexeu no estoque/MP)
+    assert PlanejamentoProducao.query.filter_by(
+        data=d2, origem='cronograma').first() is not None
+
+
+def test_excluir_inexistente(app):
+    from app.services.producao import excluir_plano_do_dia
+    res = excluir_plano_do_dia(hoje() + timedelta(days=9))
+    assert res['ok'] is False and res['erro'] == 'nao_encontrado'
+
+
+def test_rota_excluir(app, admin_user):
+    from app.models import PlanejamentoProducao
+    from app.services.producao import aprovar_plano_do_dia, enviar_plano_do_dia
+    loja = _loja()
+    r = _receita()
+    d2 = hoje() + timedelta(days=2)
+    _pedido(loja, 'pendente', d2, r, 30)
+    aprovar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+    enviar_plano_do_dia(d2)
+
+    c = app.test_client()
+    c.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+           follow_redirects=True)
+    resp = c.post('/telaindustriateste/excluir',
+                  data={'data': d2.isoformat(), 'horizonte': 7, 'janela': 6})
+    assert resp.status_code == 302
+    assert PlanejamentoProducao.query.filter_by(
+        data=d2, origem='cronograma').first() is None
