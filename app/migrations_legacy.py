@@ -159,10 +159,29 @@ def _migrate_postgres(app):
             'dias_producao': 'ALTER TABLE receita ADD COLUMN dias_producao INTEGER NOT NULL DEFAULT 0',
             'capacidade_amassadeira_g': 'ALTER TABLE receita ADD COLUMN capacidade_amassadeira_g INTEGER NOT NULL DEFAULT 50000',
             'sugerir_pedido_loja': 'ALTER TABLE receita ADD COLUMN sugerir_pedido_loja BOOLEAN NOT NULL DEFAULT TRUE',
+            'lote_pedido': 'ALTER TABLE receita ADD COLUMN lote_pedido INTEGER',
+            'minimo_pedido': 'ALTER TABLE receita ADD COLUMN minimo_pedido INTEGER',
         }
         for col, sql in migrações_receita.items():
             if col not in colunas:
                 conn.execute(text(sql))
+
+        # Lote de pedido padrao (idempotente: so onde ainda nao configurado —
+        # NULL). A loja pede em pacotes: pao frances 50, sourdough 20, croissant
+        # almond 15, croissant tradicional 50 com minimo 250 (-> 250/300). O dono
+        # ajusta na ficha depois. Nomes conferidos no pedido real (29/06).
+        for sql in (
+            "UPDATE receita SET lote_pedido=50 WHERE lote_pedido IS NULL "
+            "AND (LOWER(nome) LIKE '%pão franc%' OR LOWER(nome) LIKE '%pao franc%')",
+            "UPDATE receita SET lote_pedido=20 WHERE lote_pedido IS NULL "
+            "AND LOWER(nome) LIKE '%sourdough%'",
+            "UPDATE receita SET lote_pedido=15 WHERE lote_pedido IS NULL "
+            "AND LOWER(nome) LIKE '%croissant%almond%'",
+            "UPDATE receita SET lote_pedido=50, minimo_pedido=250 "
+            "WHERE lote_pedido IS NULL AND LOWER(nome) LIKE '%croissant%' "
+            "AND LOWER(nome) NOT LIKE '%almond%'",
+        ):
+            conn.execute(text(sql))
 
         # Brioche entra no pre-preparo como assado por default (idempotente:
         # so seta se ainda nao houver valor — preserva decisao manual posterior).
