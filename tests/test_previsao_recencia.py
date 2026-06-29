@@ -9,13 +9,45 @@ from datetime import date, timedelta
 
 from app.extensions import db
 from app.models import Loja, PedidoItem, PedidoLoja, Receita
-from app.services.previsao_producao import _media_recencia, sugerir_pedidos_semana
+from app.services.previsao_producao import (
+    _media_recencia,
+    _teto_pico_isolado,
+    sugerir_pedidos_semana,
+)
 from app.utils import hoje
 
 
 # ── helper puro ──────────────────────────────────────────────────────────
 def test_media_recencia_um_ponto():
     assert _media_recencia({date(2026, 6, 28): 10}, date(2026, 6, 28)) == 10
+
+
+# ── robustez a pico ISOLADO (29/06/2026) ──────────────────────────────────
+def test_teto_capa_pico_isolado_mas_nao_tendencia():
+    # pico isolado: 600 muito acima; mediana 120, 2a maior 130 -> teto 130
+    iso = {date(2026, 6, 2): 100, date(2026, 6, 9): 110, date(2026, 6, 16): 120,
+           date(2026, 6, 23): 130, date(2026, 6, 28): 600}
+    assert _teto_pico_isolado(iso) == 130
+    # tendencia (2 valores altos): a 2a maior tambem e alta -> NAO capa
+    trend = {date(2026, 5, 24): 10, date(2026, 5, 31): 10, date(2026, 6, 7): 10,
+             date(2026, 6, 21): 40, date(2026, 6, 28): 40}
+    assert _teto_pico_isolado(trend) == float('inf')
+    # poucos pontos (<3): nao capa
+    assert _teto_pico_isolado(
+        {date(2026, 6, 21): 10, date(2026, 6, 28): 500}) == float('inf')
+
+
+def test_media_recencia_pico_isolado_nao_domina():
+    hoje_d = date(2026, 6, 28)
+    base = {date(2026, 6, 2): 100, date(2026, 6, 9): 110,
+            date(2026, 6, 16): 120, date(2026, 6, 23): 130}
+    m_sem = _media_recencia(base, hoje_d)
+    com_pico = dict(base)
+    com_pico[date(2026, 6, 28)] = 600          # pico isolado recente
+    m_com = _media_recencia(com_pico, hoje_d)
+    # capado em 130, o pico NAO dispara a media pra perto de 600
+    assert m_com < 200, f'pico isolado dominou a media: {m_com}'
+    assert abs(m_com - m_sem) < 40             # fica perto da previsao sem o pico
 
 
 def test_media_recencia_meia_vida_infinita_vira_media_uniforme():
