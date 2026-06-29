@@ -344,3 +344,63 @@ def test_rota_seed_exige_admin(app):
     assert resp.status_code in (302, 403)
     # funcionario nao deve ter aplicado etapas
     assert ReceitaEtapa.query.filter_by(receita_id=r.id).count() == 0
+
+
+# ── Aplicar ESTAS etapas a toda a categoria (26/06/2026) ─────────────────────
+
+def test_aplicar_etapas_a_toda_categoria(app, admin_user):
+    """'Aplicar a toda a categoria' copia as etapas DESTA receita pra todos os
+    produtos ativos da mesma categoria, sobrescrevendo as deles. Categoria
+    diferente NAO e tocada."""
+    fonte = _receita('Moeda Preta', categoria='Moedas')
+    alvo1 = _receita('Moeda Branca', categoria='Moedas')
+    alvo2 = _receita('Moeda Doce', categoria='Moedas')
+    outra = _receita('Pão Francês', categoria='Pães')  # outra categoria
+    # alvo2 ja tem uma etapa antiga que DEVE ser substituida
+    db.session.add(ReceitaEtapa(receita_id=alvo2.id, ordem=0, nome='Velha',
+                                duracao_min=99, equipamento=None, ativa=True))
+    db.session.commit()
+
+    c = _login(app, admin_user)
+    # o botao "Aplicar a toda a categoria" aparece (ha >1 produto na categoria)
+    pagina = c.get('/receitas/%d/etapas' % fonte.id).data.decode()
+    assert 'aplicar_categoria' in pagina
+    assert 'Aplicar a toda a categoria' in pagina
+
+    resp = c.post('/receitas/%d/etapas' % fonte.id, data={
+        'acao': 'aplicar_categoria',
+        'nome[]': ['40 moedas', 'Guardar moedas e materia prima'],
+        'duracao[]': ['10', '5'],
+        'recurso[]': ['padeiro', 'padeiro'],
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+
+    # os 3 produtos da categoria 'Moedas' ficaram com as 2 etapas, na ordem
+    for r in (fonte, alvo1, alvo2):
+        ets = (ReceitaEtapa.query.filter_by(receita_id=r.id)
+               .order_by(ReceitaEtapa.ordem).all())
+        assert [e.nome for e in ets] == ['40 moedas',
+                                         'Guardar moedas e materia prima']
+        assert [e.duracao_min for e in ets] == [10, 5]
+    # a etapa velha do alvo2 foi substituida
+    assert 'Velha' not in [e.nome for e in
+                           ReceitaEtapa.query.filter_by(receita_id=alvo2.id)]
+    # receita de OUTRA categoria nao foi tocada
+    assert ReceitaEtapa.query.filter_by(receita_id=outra.id).count() == 0
+
+
+def test_aplicar_categoria_exige_admin(app):
+    """Funcionario nao pode aplicar etapas em massa (rota e admin_required)."""
+    from app.models import Usuario
+    u = Usuario(nome='func2', login='func2', papel='funcionario')
+    u.set_senha('123')
+    db.session.add(u)
+    fonte = _receita('Sonho', categoria='Doces')
+    _receita('Sonho 2', categoria='Doces')
+    db.session.commit()
+    c = _login(app, u)
+    resp = c.post('/receitas/%d/etapas' % fonte.id, data={
+        'acao': 'aplicar_categoria', 'nome[]': ['X'], 'duracao[]': ['5'],
+        'recurso[]': ['padeiro']}, follow_redirects=False)
+    assert resp.status_code in (302, 403)
+    assert ReceitaEtapa.query.filter_by(receita_id=fonte.id).count() == 0
