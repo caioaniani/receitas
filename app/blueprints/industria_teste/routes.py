@@ -37,6 +37,12 @@ def _inicio_offset():
     return max(0, min(v, 14))
 
 
+def _equilibrar():
+    """Modo 'equilibrar carga': cada receita inteira num dia, fornadas niveladas
+    (adianta receitas pra encher dia ocioso). Off por padrao."""
+    return request.values.get('equilibrar') in ('1', 'true', 'on')
+
+
 @industria_teste_bp.route('/')
 @login_required
 @admin_required
