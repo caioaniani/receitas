@@ -70,8 +70,17 @@ def calcular_cascata(massa_base, multiplicadores=None):
     receitas = [it.receita for it in massa_base.itens if it.receita]
     if not receitas:
         return None
-    mult = multiplicadores or {}
-    porcoes = {r.id: max(0.0, float(mult.get(r.id, 1))) for r in receitas}
+    # Sem multiplicadores -> modo GENERICO (config/preview da base): mostra TODAS
+    # as receitas-membro com 1 porcao. COM multiplicadores (plano do dia) -> so
+    # as receitas DO PLANO contam; membro fora do plano = 0, sai da cascata.
+    # (Antes o default era 1 mesmo com plano, e receita que NAO ia ser produzida
+    # hoje aparecia com 1 porcao fantasma — ex: Nozes e Azeitonas / 7 Graos num
+    # dia que nao os produz.)
+    if multiplicadores is None:
+        porcoes = {r.id: 1.0 for r in receitas}
+    else:
+        porcoes = {r.id: max(0.0, float(multiplicadores.get(r.id, 0)))
+                   for r in receitas}
     receitas = [r for r in receitas if porcoes[r.id] > 0]
     if not receitas:
         return None
