@@ -1119,11 +1119,21 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
     # consome. Usa a producao final ja calculada/editada. No-op sem sub-receita.
     _explodir_bom(receitas_out, dias_prod, receitas, lead, bal)
 
-    # Agrupa os produtos por CATEGORIA (depois por nome) — senao ficam espalhados
-    # pela ordem de urgencia/demanda do balanco. Categoria vazia vai por ultimo.
+    # Categoria + detalhe do SALDO por receita (pro expandir da tela): estoque -
+    # pedido programado (comprometido = pedidos das lojas no horizonte) = saldo.
+    bal_idx = {it['receita_id']: it for it in bal['itens']}
     for rr in receitas_out:
         rec = receitas.get(rr['receita_id'])
         rr['categoria'] = (rec.categoria or '').strip() if rec else ''
+        it = bal_idx.get(rr['receita_id'])
+        comp = int(it['comprometido']) if it else 0
+        rr['comprometido'] = comp
+        rr['saldo'] = int(rr['em_estoque']) - comp
+        rr['breakdown'] = ([b for b in it['breakdown_comprometido'] if b['qtd'] > 0]
+                           if it else [])
+
+    # Agrupa os produtos por CATEGORIA (depois por nome) — senao ficam espalhados
+    # pela ordem de urgencia/demanda do balanco. Categoria vazia vai por ultimo.
     receitas_out.sort(key=lambda rr: (rr['categoria'] == '',
                                       rr['categoria'].lower(),
                                       (rr['nome'] or '').lower()))
