@@ -69,15 +69,43 @@ _CACHE_TTL = 60  # segundos
 # deixa mais "liso" (no limite vira media uniforme); diminuir reage mais rapido.
 _MEIA_VIDA_DIAS = 21
 
+# Robustez a PICO ISOLADO (29/06/2026): um pedido pontual gigante (ex: evento)
+# nao pode dominar a previsao. Quando a MAIOR ocorrencia eh um pico isolado
+# (> _OUTLIER_FATOR x mediana E estritamente acima da 2a maior), ela eh capada
+# na 2a maior. Tendencia REAL (2+ valores altos -> a 2a maior tambem eh alta)
+# fica intacta, entao a recencia continua pegando loja subindo/caindo.
+_OUTLIER_FATOR = 2.5
+
+
+def _teto_pico_isolado(qtd_por_data):
+    """Teto pra capar um pico ISOLADO: a 2a maior ocorrencia, mas SO quando a
+    maior eh um outlier de verdade (> _OUTLIER_FATOR x mediana e unica no topo).
+    Senao retorna +inf (nao capa). < 3 pontos: poucos dados pra julgar, nao capa."""
+    valores = sorted(qtd_por_data.values())
+    n = len(valores)
+    if n < 3:
+        return float('inf')
+    mediana = (valores[n // 2] if n % 2
+               else (valores[n // 2 - 1] + valores[n // 2]) / 2)
+    topo, segundo = valores[-1], valores[-2]
+    if mediana > 0 and topo > _OUTLIER_FATOR * mediana and topo > segundo:
+        return segundo
+    return float('inf')
+
 
 def _media_recencia(qtd_por_data, hoje_d, meia_vida=_MEIA_VIDA_DIAS):
     """Media recencia-ponderada de {data: quantidade}: entrega recente pesa
-    mais. Com meia_vida -> infinito recai EXATAMENTE na media uniforme
-    (sum/len), entao e uma generalizacao segura da media atual."""
+    mais. Com meia_vida -> infinito (e sem pico isolado) recai EXATAMENTE na
+    media uniforme (sum/len). Pico isolado eh capado (ver _teto_pico_isolado),
+    pra um pedido pontual gigante nao inflar a previsao."""
+    if not qtd_por_data:
+        return 0.0
+    teto = _teto_pico_isolado(qtd_por_data)
     num = den = 0.0
     for data, q in qtd_por_data.items():
+        qc = q if q <= teto else teto   # capa so a ocorrencia de topo (pico)
         peso = 0.5 ** (max(0, (hoje_d - data).days) / meia_vida)
-        num += peso * q
+        num += peso * qc
         den += peso
     return num / den if den else 0.0
 
