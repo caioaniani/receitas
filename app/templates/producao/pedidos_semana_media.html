@@ -88,7 +88,12 @@
     {% if grade.lojas %}
     {% for loja in grade.lojas %}
     <div class="pmed-loja">
-        <h5>{{ loja.loja_nome }}</h5>
+        <h5 class="d-flex justify-content-between align-items-center gap-2">
+            <span>{{ loja.loja_nome }}</span>
+            <button type="button" class="btn btn-sm btn-outline-primary btn-dividir-loja">
+                <i class="bi bi-distribute-horizontal"></i> Dividir todos desta loja
+            </button>
+        </h5>
         <div class="pmed">
             <table>
                 <thead>
