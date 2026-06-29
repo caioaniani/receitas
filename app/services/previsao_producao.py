@@ -769,6 +769,8 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         soma_total[rid] += int(qtd or 0)
 
     def _previsto_dia(rid, dia):
+        if not _fornada_no_dia(receitas.get(rid), dia):
+            return 0.0
         dow = dia.weekday()
         por_data = qtd_dow[rid].get(dow)
         if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
