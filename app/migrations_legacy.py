@@ -166,22 +166,26 @@ def _migrate_postgres(app):
             if col not in colunas:
                 conn.execute(text(sql))
 
-        # Lote de pedido padrao (idempotente: so onde ainda nao configurado —
-        # NULL). A loja pede em pacotes: pao frances 50, sourdough 20, croissant
-        # almond 15, croissant tradicional 50 com minimo 250 (-> 250/300). O dono
-        # ajusta na ficha depois. Nomes conferidos no pedido real (29/06).
-        for sql in (
-            "UPDATE receita SET lote_pedido=50 WHERE lote_pedido IS NULL "
-            "AND (LOWER(nome) LIKE '%pão franc%' OR LOWER(nome) LIKE '%pao franc%')",
-            "UPDATE receita SET lote_pedido=20 WHERE lote_pedido IS NULL "
-            "AND LOWER(nome) LIKE '%sourdough%'",
-            "UPDATE receita SET lote_pedido=15 WHERE lote_pedido IS NULL "
-            "AND LOWER(nome) LIKE '%croissant%almond%'",
-            "UPDATE receita SET lote_pedido=50, minimo_pedido=250 "
-            "WHERE lote_pedido IS NULL AND LOWER(nome) LIKE '%croissant%' "
-            "AND LOWER(nome) NOT LIKE '%almond%'",
-        ):
-            conn.execute(text(sql))
+        # Lote de pedido padrao (UMA vez: so se NADA foi configurado ainda — uma
+        # vez que o dono mexa em qualquer lote, nunca mais sobrescreve). A loja
+        # pede em pacotes: pao frances 50, sourdough 20, croissant almond 15,
+        # croissant tradicional 50 com minimo 250 (-> 250/300). Ajustavel na
+        # ficha. Nomes conferidos no pedido real (29/06).
+        ja_tem_lote = conn.execute(text(
+            "SELECT COUNT(*) FROM receita WHERE lote_pedido IS NOT NULL")
+        ).scalar()
+        if not ja_tem_lote:
+            for sql in (
+                "UPDATE receita SET lote_pedido=50 WHERE "
+                "LOWER(nome) LIKE '%pão franc%' OR LOWER(nome) LIKE '%pao franc%'",
+                "UPDATE receita SET lote_pedido=20 WHERE "
+                "LOWER(nome) LIKE '%sourdough%'",
+                "UPDATE receita SET lote_pedido=15 WHERE "
+                "LOWER(nome) LIKE '%croissant%almond%'",
+                "UPDATE receita SET lote_pedido=50, minimo_pedido=250 WHERE "
+                "LOWER(nome) LIKE '%croissant%' AND LOWER(nome) NOT LIKE '%almond%'",
+            ):
+                conn.execute(text(sql))
 
         # Brioche entra no pre-preparo como assado por default (idempotente:
         # so seta se ainda nao houver valor — preserva decisao manual posterior).
