@@ -333,22 +333,78 @@ def test_aprovar_cria_rascunho_padeiro_nao_ve(app, admin_user):
 
 
 def test_rota_enviar(app, admin_user):
-    from app.models import PlanejamentoItem, PlanejamentoProducao
+    """Enviar reconstrói a ordem a partir do grid (com overrides) e marca
+    enviado — cria a ordem se não existir (dia futuro sem pedido vira produção
+    num passo só)."""
+    from app.models import PlanejamentoProducao
+    loja = _loja()
     r = _receita('Pão Enviar')
-    plano = PlanejamentoProducao(data=hoje(), origem='cronograma',
-                                 enviado_ao_padeiro=False)
-    db.session.add(plano); db.session.flush()
-    db.session.add(PlanejamentoItem(planejamento_id=plano.id, receita_id=r.id,
-                                    multiplicador=1, qtd_alvo=10))
-    db.session.commit()
-    pid = plano.id
+    d2 = hoje() + timedelta(days=2)
+    _pedido(loja, 'pendente', d2, r, 30)
     c = app.test_client()
     c.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
            follow_redirects=True)
-    resp = c.post('/telaindustriateste/enviar', data={'data': hoje().isoformat()})
+    resp = c.post('/telaindustriateste/enviar',
+                  data={'data': d2.isoformat(), 'horizonte': 7, 'janela': 6,
+                        'inicio': 0})
     assert resp.status_code in (302, 303)
     db.session.expire_all()
-    assert db.session.get(PlanejamentoProducao, pid).enviado_ao_padeiro is True
+    plano = PlanejamentoProducao.query.filter_by(
+        data=d2, origem='cronograma').first()
+    assert plano is not None
+    assert plano.enviado_ao_padeiro is True
+    assert any(it.receita_id == r.id for it in plano.itens)
+
+
+def test_enviar_reconstroi_do_grid_apos_edicao(app, admin_user):
+    """Editar o grid DEPOIS de enviar e reenviar atualiza a produção do padeiro
+    (a edição só chega no padeiro ao apertar enviar de novo)."""
+    from app.models import PlanejamentoProducao
+    from app.services.cronograma_edit import editar_celula
+    from app.services.producao import enviar_plano_do_dia
+
+    loja = _loja()
+    r = _receita('Pão Reenvio')
+    d2 = hoje() + timedelta(days=2)
+    _pedido(loja, 'pendente', d2, r, 30)
+
+    enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7,
+                        inicio_offset_dias=0)
+    base = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr = _rec_out(base, r.id)
+    # joga tudo no dia d2 via grid
+    editar_celula(r.id, d2.isoformat(), rr['total'], horizonte_dias=7,
+                  inicio_offset_dias=0)
+    # reenvia: a ordem do padeiro passa a refletir o grid editado
+    plano = enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7,
+                                inicio_offset_dias=0)
+    db.session.expire_all()
+    plano = PlanejamentoProducao.query.filter_by(
+        data=d2, origem='cronograma').first()
+    it = next(i for i in plano.itens if i.receita_id == r.id)
+    assert it.qtd_alvo == 30
+    assert plano.enviado_ao_padeiro is True
+
+
+def test_enviar_preserva_produzido(app, admin_user):
+    """Reenviar nunca baixa qtd_alvo abaixo do que o padeiro já produziu."""
+    from app.services.producao import enviar_plano_do_dia
+
+    loja = _loja()
+    r = _receita('Pão Produzido')
+    d2 = hoje() + timedelta(days=2)
+    _pedido(loja, 'pendente', d2, r, 30)
+    plano = enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7,
+                                inicio_offset_dias=0)
+    it = next(i for i in plano.itens if i.receita_id == r.id)
+    it.produzido_qtd = 50            # produziu mais que o alvo
+    db.session.commit()
+    # reenvia: alvo não pode cair abaixo de 50
+    enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7,
+                        inicio_offset_dias=0)
+    db.session.expire_all()
+    it2 = next(i for i in plano.itens if i.receita_id == r.id)
+    assert it2.qtd_alvo >= 50
 
 
 def test_plano_antigo_sem_flag_continua_visivel(app, admin_user):
