@@ -626,6 +626,11 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
             base_dow_op = sum(soma_rld[rid].get(l.id, {}).get(dow, 0)
                               for l in lojas_op)
             for loja in lojas_op:
+                # Piso de ocorrencias: loja que pediu o item em < N datas
+                # distintas na janela nao recebe sugestao (pedido avulso/errado
+                # nao vira recorrencia). Ver _MIN_DATAS_LOJA.
+                if len(datas_rl[rid].get(loja.id, ())) < _MIN_DATAS_LOJA:
+                    continue
                 if base_dow_op:
                     share = (soma_rld[rid].get(loja.id, {}).get(dow, 0)
                              / base_dow_op)
