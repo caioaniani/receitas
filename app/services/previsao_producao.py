@@ -816,6 +816,58 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             'por_dia': por_dia, 'total': produzir,
         })
 
+    # Equilibrar carga (opt-in): em vez de espalhar cada receita pela curva de
+    # demanda, poe cada receita INTEIRA num unico dia e nivela as FORNADAS por
+    # dia, ADIANTANDO receitas (puxando pra frente) pra encher dias ociosos.
+    # Cada receita pode ir de hoje ate seu deadline (1o dia que ja produzia) —
+    # nunca depois (a entrega tem que sair). Sem limite de frescor (decisao do
+    # dono 29/06): qualquer receita pode ser adiantada. Nao divide receita.
+    if equilibrar:
+        n = len(dias_prod)
+        itens_eq = []
+        for rr in receitas_out:
+            total = rr['total']
+            if total <= 0:
+                continue
+            rec = receitas.get(rr['receita_id'])
+            rend = int(rec.rendimento_qtd) if rec and rec.rendimento_qtd else 1
+            forn = fornadas_amassadeira(rec, max(1, ceil(total / rend))) or 1
+            # deadline = 1o dia com producao na distribuicao normal (o mais
+            # tarde que da pra produzir sem atrasar a entrega); pode adiantar.
+            deadline = next((i for i, c in enumerate(rr['por_dia'])
+                             if c['qtd'] > 0), n - 1)
+            itens_eq.append({'rr': rr, 'total': total, 'rec': rec, 'rend': rend,
+                             'F': forn, 'dia': deadline})
+        if itens_eq:
+            carga = [0.0] * n
+            for it in itens_eq:
+                carga[it['dia']] += it['F']
+            alvo = sum(it['F'] for it in itens_eq) / n
+            # Enche da frente: puxa receita INTEIRA do dia mais carregado (mais
+            # tarde) pra ca ate chegar perto do alvo; dia ocioso aceita ao menos
+            # uma. So adianta (dia > d) — nunca atrasa.
+            for d in range(n):
+                while carga[d] < alvo:
+                    cands = sorted((it for it in itens_eq if it['dia'] > d),
+                                   key=lambda it: -carga[it['dia']])
+                    if not cands:
+                        break
+                    escolha = next((it for it in cands
+                                    if carga[d] + it['F'] <= alvo
+                                    or carga[d] == 0), None)
+                    if escolha is None:
+                        break
+                    carga[escolha['dia']] -= escolha['F']
+                    escolha['dia'] = d
+                    carga[d] += escolha['F']
+            for it in itens_eq:   # reescreve: receita inteira no dia escolhido
+                rec, rend, total, dia = (it['rec'], it['rend'], it['total'],
+                                         it['dia'])
+                forn = fornadas_amassadeira(rec, max(1, ceil(total / rend)))
+                for i, c in enumerate(it['rr']['por_dia']):
+                    c['qtd'] = total if i == dia else 0
+                    c['fornadas'] = forn if i == dia else None
+
     # Mantem a ordem do balanco (urgencia/demanda) — telas consistentes.
     return {
         'dias': dias_out,
