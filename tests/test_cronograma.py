@@ -360,6 +360,26 @@ def test_cronograma_ordena_por_categoria(app):
     assert nomes_aves == sorted(nomes_aves)        # dentro da categoria, por nome
 
 
+def test_cronograma_expoe_saldo(app):
+    """Cronograma expõe estoque, pedido programado (comprometido) e saldo por
+    receita — pro expandir da tela (estoque − pedido = saldo)."""
+    loja = _loja('Loja A')
+    r = _receita('Pão')
+    db.session.add(EstoqueProducao(receita_id=r.id, quantidade=10))
+    db.session.commit()
+    d2 = hoje() + timedelta(days=2)
+    _pedido(loja, 'pendente', d2, r, 30)            # produzir = 30-10 = 20 > 0
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None
+    assert rr['em_estoque'] == 10
+    assert rr['comprometido'] == 30                 # pedido programado
+    assert rr['saldo'] == -20                       # 10 - 30
+    assert any(b['loja_nome'] == 'Loja A' and b['qtd'] == 30
+               for b in rr['breakdown'])
+
+
 def test_rota_telaindustriateste(app, admin_user):
     loja = _loja()
     r = _receita()
