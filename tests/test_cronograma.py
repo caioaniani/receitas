@@ -341,6 +341,25 @@ def test_bom_explode_cadeia_multinivel(app):
     assert rm['total'] == 2                         # 100 trad × 1/50
 
 
+def test_cronograma_ordena_por_categoria(app):
+    """Cronograma agrupa as receitas por categoria (não espalhado por demanda)."""
+    loja = _loja()
+    r1 = _receita('Zebra'); r1.categoria = 'Aves'
+    r2 = _receita('Abacaxi'); r2.categoria = 'Zoo'
+    r3 = _receita('Melao'); r3.categoria = 'Aves'
+    db.session.commit()
+    d2 = hoje() + timedelta(days=2)
+    for r in (r1, r2, r3):
+        _pedido(loja, 'pendente', d2, r, 30)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    cats = [rr['categoria'] for rr in crono['receitas']]
+    assert cats == sorted(cats)                    # categorias agrupadas
+    nomes_aves = [rr['nome'] for rr in crono['receitas']
+                  if rr['categoria'] == 'Aves']
+    assert nomes_aves == sorted(nomes_aves)        # dentro da categoria, por nome
+
+
 def test_rota_telaindustriateste(app, admin_user):
     loja = _loja()
     r = _receita()
