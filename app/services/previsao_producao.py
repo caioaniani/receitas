@@ -784,6 +784,17 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         liquido = _distribuir_inteiro(produzir, pesos)
 
         rend = int(rec.rendimento_qtd) if rec.rendimento_qtd else 0
+        # Anti-"acender fornada por dribble" (ex: produzir 1 pao num dia): um dia
+        # que produz menos que uma fracao de fornada rola pro PROXIMO dia,
+        # acumulando ate valer um lote. So MOVE (total preservado); o ultimo dia
+        # e o sumidouro. Pra rend pequeno o limiar vira 1 e nada rola — produzir
+        # 1 ali ja e uma fornada cheia, nao e desperdicio.
+        minimo = ceil(rend * _MIN_FRACAO_FORNADA) if rend > 0 else 0
+        if minimo > 1:
+            for i in range(len(liquido) - 1):
+                if 0 < liquido[i] < minimo:
+                    liquido[i + 1] += liquido[i]
+                    liquido[i] = 0
         por_dia = []
         for i, p in enumerate(dias_prod):
             qtd = liquido[i]
