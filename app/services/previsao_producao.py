@@ -615,8 +615,12 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
     for rid, rec in receitas.items():
         if not datas_r.get(rid):
             continue
+        # Fornada especial só é vendida sex/sáb/dom — não sugere em outro dia.
+        fornada_especial = bool(getattr(rec, 'fornada_especial', False))
         for d in dias_futuros:
             dow = d.weekday()
+            if fornada_especial and dow not in _DIAS_FORNADA_ESPECIAL:
+                continue
             for loja in lojas_op:
                 # Previsao da LOJA a partir do historico DELA naquele dia-da-
                 # semana (media recencia-ponderada das datas em que ela pediu).
