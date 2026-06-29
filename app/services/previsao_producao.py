@@ -832,7 +832,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         receitas_out.append({
             'receita_id': rid, 'nome': rec.nome, 'dias_producao': L,
             'em_estoque': estoque,
-            'por_dia': por_dia, 'total': produzir,
+            'por_dia': por_dia, 'total': sum(liquido),
         })
 
     # Equilibrar carga (opt-in): em vez de espalhar cada receita pela curva de
