@@ -314,15 +314,17 @@ def test_bom_explode_cadeia_multinivel(app):
     almond = _receita('Croissant Almond')
     almond.rendimento_qtd = 50
     db.session.add_all([
+        # 1 croissant consome 1/50 un de massa (1 batida p/ 50)
         ReceitaIngrediente(receita_id=trad.id, tipo='receita',
                            sub_receita_id=massa.id, ingrediente_nome='Massa',
                            porcentagem=1),
+        # 1 almond consome 1 tradicional e 1 creme (porcentagem=rend -> 1:1)
         ReceitaIngrediente(receita_id=almond.id, tipo='receita',
                            sub_receita_id=trad.id, ingrediente_nome='Trad',
-                           porcentagem=1),
+                           porcentagem=50),
         ReceitaIngrediente(receita_id=almond.id, tipo='receita',
                            sub_receita_id=creme.id, ingrediente_nome='Creme',
-                           porcentagem=1),
+                           porcentagem=50),
     ])
     db.session.commit()
     d3 = hoje() + timedelta(days=3)
@@ -335,7 +337,7 @@ def test_bom_explode_cadeia_multinivel(app):
     rm = _rec_out(crono, massa.id)
     # tradicional = 50 vendidos + 50 pro almond = 100
     assert rt['total'] == 100
-    assert rcr['total'] == 1                        # 50 almond × 1/50
+    assert rcr['total'] == 50                       # 50 almond × 1
     assert rm['total'] == 2                         # 100 trad × 1/50
 
 
