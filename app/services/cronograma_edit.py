@@ -147,3 +147,15 @@ def resetar_receita(receita_id, datas_iso):
     q.delete(synchronize_session=False)
     db.session.commit()
     return n
+
+
+def limpar_todos_overrides():
+    """Apaga TODAS as edicoes manuais (overrides) do cronograma — tudo volta pra
+    sugestao calculada. So mexe no rascunho (CronogramaOverride); NAO toca em
+    pedido enviado (PlanejamentoProducao), estoque nem MP. Retorna quantos
+    apagou."""
+    from app.models import CronogramaOverride
+    n = CronogramaOverride.query.count()
+    CronogramaOverride.query.delete(synchronize_session=False)
+    db.session.commit()
+    return n
