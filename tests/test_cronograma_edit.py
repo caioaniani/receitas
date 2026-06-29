@@ -87,28 +87,29 @@ def test_editar_celula_persiste_e_cronograma_reflete(app):
     assert sum(c['qtd'] for c in rr['por_dia']) == total
 
 
-def test_override_stale_e_ignorado(app):
-    """Override que nao soma o total atual (demanda mudou) -> ignorado, volta
-    pra sugestao calculada."""
+def test_override_por_celula_aplica_e_total_segue(app):
+    """Override de UM dia (ex: vindo da tela 'editar plano') aplica POR CELULA:
+    aquele dia mostra o valor manual, os demais seguem a sugestao, e o total da
+    linha passa a ser a SOMA das celulas exibidas (nao exige cobrir o horizonte
+    inteiro nem somar o total antigo)."""
+    from datetime import date
+
     loja = _loja()
     r = _receita_amass()
     _pedido(loja, r, 2, 30)
 
     base = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
     rr0 = _row(base, r.id)
-    total = rr0['total']  # 30
-    # cria override completo mas com soma ERRADA (total+5)
-    for c in rr0['por_dia']:
-        from datetime import date
-        db.session.add(CronogramaOverride(
-            receita_id=r.id, data=date.fromisoformat(c['data']),
-            qtd=(total + 5 if c is rr0['por_dia'][0] else 0)))
+    alvo = date.fromisoformat(rr0['por_dia'][0]['data'])
+    resto = sum(c['qtd'] for c in rr0['por_dia'][1:])   # sugestao dos outros dias
+    db.session.add(CronogramaOverride(receita_id=r.id, data=alvo, qtd=99))
     db.session.commit()
 
     crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
     rr = _row(crono, r.id)
-    assert not rr.get('editado')          # ignorado
-    assert sum(c['qtd'] for c in rr['por_dia']) == total   # sugestao, soma o total
+    assert rr['editado'] is True
+    assert rr['por_dia'][0]['qtd'] == 99           # celula aplicada
+    assert rr['total'] == 99 + resto               # total = soma das celulas
 
 
 def test_resetar_volta_pra_sugestao(app):
