@@ -274,6 +274,71 @@ def test_fornada_especial_produz_na_vespera(app):
     assert por_data.get(sexta.isoformat(), 0) == 0    # não na sexta
 
 
+def test_bom_explode_sub_receita(app):
+    """MRP: pedir croissant gera produção da MASSA PARA FOLHAR (sub-receita não
+    vendida), produzida ANTES do croissant (lead), na quantidade certa."""
+    from app.models import ReceitaIngrediente
+    loja = _loja()
+    massa = _receita('Massa para folhar')        # rend 1, não vendida
+    massa.dias_producao = 1
+    cro = _receita('Croissant Tradicional')
+    cro.rendimento_qtd = 50
+    db.session.add(ReceitaIngrediente(
+        receita_id=cro.id, tipo='receita', sub_receita_id=massa.id,
+        ingrediente_nome='Massa para folhar', porcentagem=1))
+    db.session.commit()
+    d3 = hoje() + timedelta(days=3)
+    _pedido(loja, 'pendente', d3, cro, 100)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rc = _rec_out(crono, cro.id)
+    rm = _rec_out(crono, massa.id)
+    assert rc is not None and rc['total'] == 100
+    assert rm is not None
+    assert rm['total'] == 2                       # 100 × (1/50) = 2 un de massa
+    dia_cro = next(i for i, c in enumerate(rc['por_dia']) if c['qtd'] > 0)
+    dia_massa = next(i for i, c in enumerate(rm['por_dia']) if c['qtd'] > 0)
+    assert dia_massa < dia_cro                     # massa produzida antes
+
+
+def test_bom_explode_cadeia_multinivel(app):
+    """Cadeia: Croissant Almond consome Croissant Tradicional (vendido E insumo)
+    + Creme de Amêndoas; o tradicional consome Massa para folhar. Pedir almond
+    explode os 3 níveis e SOMA o tradicional vendido + o consumido pelo almond."""
+    from app.models import ReceitaIngrediente
+    loja = _loja()
+    massa = _receita('Massa para folhar')
+    creme = _receita('Creme de Amêndoas')
+    trad = _receita('Croissant Tradicional')
+    trad.rendimento_qtd = 50
+    almond = _receita('Croissant Almond')
+    almond.rendimento_qtd = 50
+    db.session.add_all([
+        ReceitaIngrediente(receita_id=trad.id, tipo='receita',
+                           sub_receita_id=massa.id, ingrediente_nome='Massa',
+                           porcentagem=1),
+        ReceitaIngrediente(receita_id=almond.id, tipo='receita',
+                           sub_receita_id=trad.id, ingrediente_nome='Trad',
+                           porcentagem=1),
+        ReceitaIngrediente(receita_id=almond.id, tipo='receita',
+                           sub_receita_id=creme.id, ingrediente_nome='Creme',
+                           porcentagem=1),
+    ])
+    db.session.commit()
+    d3 = hoje() + timedelta(days=3)
+    _pedido(loja, 'pendente', d3, trad, 50)        # 50 tradicionais vendidos
+    _pedido(loja, 'pendente', d3, almond, 50)      # 50 almonds
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rt = _rec_out(crono, trad.id)
+    rcr = _rec_out(crono, creme.id)
+    rm = _rec_out(crono, massa.id)
+    # tradicional = 50 vendidos + 50 pro almond = 100
+    assert rt['total'] == 100
+    assert rcr['total'] == 1                        # 50 almond × 1/50
+    assert rm['total'] == 2                         # 100 trad × 1/50
+
+
 def test_rota_telaindustriateste(app, admin_user):
     loja = _loja()
     r = _receita()
