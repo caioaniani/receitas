@@ -47,6 +47,12 @@ from app.utils import hoje
 # pediu nesse dia-da-semana em >= N datas distintas (1 vez = avulso/errado).
 _MIN_OCORRENCIAS_DOW = 2
 
+# Fornada especial (ex: Focaccia): vendida SO sex/sab/dom. weekday(): seg=0 ..
+# dom=6 -> sex=4, sab=5, dom=6. O forecast de pedido NAO sugere esses produtos
+# em outros dias, mesmo que o historico tenha ruido (1 pedido avulso num dia de
+# semana nao vira recorrencia).
+_DIAS_FORNADA_ESPECIAL = frozenset({4, 5, 6})
+
 # Cronograma: um dia que produz MENOS que esta fracao de uma fornada (rend) rola
 # pro proximo dia, pra nao mandar o padeiro acender o forno por 1-2 unidades
 # ("pedido picado"). Como e fracao da fornada, receita cuja fornada rende pouco
