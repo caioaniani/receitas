@@ -868,6 +868,11 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                     c['qtd'] = total if i == dia else 0
                     c['fornadas'] = forn if i == dia else None
 
+    # Edicao manual da grade: aplica os overrides salvos (sobrepoe a sugestao
+    # calculada/equilibrada). No-op quando nao ha override.
+    from app.services.cronograma_edit import aplicar_overrides
+    aplicar_overrides(receitas_out, dias_prod)
+
     # Mantem a ordem do balanco (urgencia/demanda) — telas consistentes.
     return {
         'dias': dias_out,
