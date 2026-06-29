@@ -234,6 +234,23 @@ def test_equilibrar_enche_dia_ocioso(app):
     assert {ae['por_dia'][0]['qtd'], be['por_dia'][0]['qtd']} == {0, 30}
 
 
+def test_cronograma_padroniza_em_lotes(app):
+    """Produção sai em LOTES inteiros quando a receita tem lote_pedido (não
+    produzir picado): cada dia é múltiplo do lote (ou 0) e o total também."""
+    loja = _loja()
+    r = _receita('Pão Francês')
+    r.lote_pedido = 50
+    db.session.commit()
+    d2 = hoje() + timedelta(days=2)
+    _pedido(loja, 'pendente', d2, r, 137)   # demanda que daria nº quebrado
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None
+    assert rr['total'] > 0 and rr['total'] % 50 == 0
+    for c in rr['por_dia']:
+        assert c['qtd'] % 50 == 0
+
+
 def test_rota_telaindustriateste(app, admin_user):
     loja = _loja()
     r = _receita()
