@@ -1318,6 +1318,10 @@ def _migrate_sqlite(app):
     if 'sugerir_pedido_loja' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN "
                        "sugerir_pedido_loja BOOLEAN NOT NULL DEFAULT 1")
+    if 'lote_pedido' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN lote_pedido INTEGER")
+    if 'minimo_pedido' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN minimo_pedido INTEGER")
 
     cursor.execute("PRAGMA table_info(conta_pagar_item_map)")
     cols_cpim = [row[1] for row in cursor.fetchall()]
