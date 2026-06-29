@@ -113,3 +113,34 @@ def enviar():
               % data_alvo.strftime('%d/%m'), 'warning')
     return redirect(url_for('industria_teste.index',
                             horizonte=horizonte, janela=janela, inicio=inicio))
+
+
+@industria_teste_bp.route('/excluir', methods=['POST'])
+@login_required
+@admin_required
+def excluir():
+    """Exclui a ordem de produção de um dia (desfaz um envio errado). Bloqueia
+    se já houve produção — o estoque/MP reais já mexeram."""
+    from app.services.producao import excluir_plano_do_dia
+
+    horizonte, janela = _horizonte_janela()
+    inicio = _inicio_offset()
+    try:
+        data_alvo = date.fromisoformat(request.form.get('data', ''))
+    except (TypeError, ValueError):
+        flash('Data inválida.', 'warning')
+        return redirect(url_for('industria_teste.index',
+                                horizonte=horizonte, janela=janela, inicio=inicio))
+    res = excluir_plano_do_dia(data_alvo)
+    if res['ok']:
+        flash('Ordem de %s excluída.' % data_alvo.strftime('%d/%m'), 'success')
+    elif res.get('erro') == 'ja_produzido':
+        flash('Não dá pra excluir a ordem de %s: já houve produção (%d un) — '
+              'isso já creditou estoque e baixou matéria-prima.'
+              % (data_alvo.strftime('%d/%m'), res.get('produzido', 0)),
+              'warning')
+    else:
+        flash('Não há ordem em %s pra excluir.'
+              % data_alvo.strftime('%d/%m'), 'warning')
+    return redirect(url_for('industria_teste.index',
+                            horizonte=horizonte, janela=janela, inicio=inicio))
