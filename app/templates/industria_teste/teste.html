@@ -250,7 +250,7 @@
                     <div class="rec-est">em estoque: {{ r.em_estoque }}</div>
                 </td>
                 {% for c in r.por_dia %}
-                <td class="cel {% if loop.first %}hoje-col{% endif %}"
+                <td class="cel {% if c.data == crono.hoje %}hoje-col{% endif %}"
                     data-rid="{{ r.receita_id }}" data-data="{{ c.data }}">
                     <input type="number" min="0" inputmode="numeric"
                            class="cel-input" value="{{ c.qtd or 0 }}">
