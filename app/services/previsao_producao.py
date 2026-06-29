@@ -694,6 +694,148 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
     }
 
 
+def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
+    """MRP: explode sub-receitas (ReceitaIngrediente tipo='receita') em linhas de
+    producao proprias no cronograma. Produto final que consome uma sub-receita
+    gera demanda dela; a sub e produzida ANTES (pelo lead dela) pra estar pronta
+    quando o pai for produzido (ex: massa para folhar no dia 1 -> croissant no
+    dia 2). RECURSIVO (sub de sub) e SOMA por sub usada por varios finais
+    (massa do croissant + danish + pain). Receita VENDIDA que tambem e insumo
+    (ex: croissant tradicional, vendido E consumido pelo croissant almond)
+    acumula a demanda dos pais na linha dela. Desconta o estoque da sub
+    (geladeira) e respeita o lead. Muta receitas_out. No-op sem sub-receita."""
+    from collections import deque
+
+    from app.models import EstoqueProducao
+    from app.services.producao import fornadas_amassadeira
+
+    n = len(dias_prod)
+    if not receitas_out or n == 0:
+        return
+
+    def _subs(rid):
+        rec = receitas.get(rid)
+        if rec is None:
+            return []
+        rend = float(rec.rendimento_qtd) if rec.rendimento_qtd else 1.0
+        out = []
+        for ing in rec.ingredientes:
+            if (ing.tipo or '') != 'receita':
+                continue
+            sid = ing.sub_receita_id
+            if sid is None:                       # fallback por nome exato
+                alvo = (ing.ingrediente_nome or '').strip().lower()
+                sid = next((r.id for r in receitas.values()
+                            if (r.nome or '').strip().lower() == alvo), None)
+            if sid in receitas and rend > 0:
+                out.append((sid, (ing.porcentagem or 0) / rend))
+        return out
+
+    # BOM transitivo a partir dos finais.
+    bom = {}
+    pilha = [rr['receita_id'] for rr in receitas_out]
+    while pilha:
+        rid = pilha.pop()
+        if rid in bom:
+            continue
+        bom[rid] = _subs(rid)
+        for sid, _ in bom[rid]:
+            if sid not in bom:
+                pilha.append(sid)
+    if not any(bom.get(rr['receita_id']) for rr in receitas_out):
+        return   # nenhum final tem sub-receita -> caminho normal
+
+    # Ordem topologica: pai antes da sub (indeg = nº de pais).
+    indeg = {rid: 0 for rid in bom}
+    for rid in bom:
+        for sid, _ in bom[rid]:
+            indeg[sid] = indeg.get(sid, 0) + 1
+    fila = deque(rid for rid in bom if indeg[rid] == 0)
+    ordem = []
+    while fila:
+        rid = fila.popleft()
+        ordem.append(rid)
+        for sid, _ in bom.get(rid, []):
+            indeg[sid] -= 1
+            if indeg[sid] == 0:
+                fila.append(sid)
+
+    linhas = {rr['receita_id']: rr for rr in receitas_out}
+    prod = {rr['receita_id']: [c['qtd'] for c in rr['por_dia']]
+            for rr in receitas_out}
+    consumo = defaultdict(lambda: [0.0] * n)
+
+    # Estoque (geladeira) das sub-receitas que nao estao no balanco.
+    bal_map = {it['receita_id']: it for it in bal['itens']}
+    sem_bal = [rid for rid in bom if rid not in bal_map]
+    est_extra = defaultdict(int)
+    if sem_bal:
+        for ep in (EstoqueProducao.query
+                   .filter(EstoqueProducao.receita_id.in_(sem_bal)).all()):
+            est_extra[ep.receita_id] += int(ep.quantidade or 0)
+
+    def _estoque_livre(rid):
+        """Estoque da receita disponivel PRA OS PAIS (alem da demanda propria)."""
+        it = bal_map.get(rid)
+        if it is not None:
+            efetivo = int(it.get('em_estoque_efetivo', it.get('em_estoque', 0)) or 0)
+            demanda = max(int(it.get('comprometido', 0) or 0),
+                          int(it.get('previsto', 0) or 0))
+            return max(0, efetivo - demanda)
+        return est_extra.get(rid, 0)
+
+    for rid in ordem:
+        cons = consumo[rid]
+        if sum(cons) > 0:                          # recebeu demanda de pais
+            L = lead.get(rid, 0)
+            # producao do dia i serve o consumo em (i+L); consumo antes do
+            # horizonte cai no dia 0 (produzir o quanto antes).
+            gross = [0.0] * n
+            for d_idx in range(n):
+                if cons[d_idx] > 0:
+                    gross[max(0, d_idx - L)] += cons[d_idx]
+            gross = [int(ceil(g)) for g in gross]
+            livre = _estoque_livre(rid)
+            running = livre
+            residual = []
+            for g in gross:
+                cobre = min(running, g)
+                running -= cobre
+                residual.append(g - cobre)
+            extra = max(0, sum(gross) - livre)
+            pesos = residual if sum(residual) > 0 else gross
+            add = _distribuir_inteiro(extra, pesos)
+            rec = receitas.get(rid)
+            rend = int(rec.rendimento_qtd) if rec and rec.rendimento_qtd else 1
+            base = prod.get(rid, [0] * n)
+            novo = [base[i] + add[i] for i in range(n)]
+            prod[rid] = novo
+
+            def _forn(q, rec=rec, rend=rend):
+                return (fornadas_amassadeira(rec, max(1, ceil(q / rend)))
+                        if q > 0 and rend > 0 else None)
+
+            rr = linhas.get(rid)
+            if rr is None:                         # sub-receita nao vendida
+                por_dia = [{'data': dias_prod[i].isoformat(), 'qtd': novo[i],
+                            'fornadas': _forn(novo[i])} for i in range(n)]
+                rr = {'receita_id': rid, 'nome': rec.nome if rec else '(sub)',
+                      'dias_producao': L, 'em_estoque': est_extra.get(rid, 0),
+                      'por_dia': por_dia, 'total': sum(novo), 'insumo': True}
+                receitas_out.append(rr)
+                linhas[rid] = rr
+            else:                                  # vendida + insumo: acumula
+                for i, c in enumerate(rr['por_dia']):
+                    c['qtd'] = novo[i]
+                    c['fornadas'] = _forn(novo[i])
+                rr['total'] = sum(novo)
+        # Propaga a producao desta receita pras sub-receitas dela.
+        for sid, ratio in bom.get(rid, []):
+            base = prod.get(rid, [0] * n)
+            for i in range(n):
+                consumo[sid][i] += base[i] * ratio
+
+
 def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                         inicio_offset_dias=0, equilibrar=False):
     """Cronograma de producao POR DIA — a MESMA conta do balanco, distribuida.
