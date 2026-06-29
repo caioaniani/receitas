@@ -56,10 +56,17 @@ def _salvar_overrides(receita_id, datas, qtds):
 
 
 def aplicar_overrides(receitas_out, dias_prod):
-    """Substitui a distribuicao calculada pela MANUAL (override) por receita,
-    quando o override cobre todos os dias do horizonte E soma o total. Recalcula
-    fornadas e marca rr['editado']=True. Muta receitas_out in place. No-op se
-    nao ha override (caminho normal)."""
+    """Sobrepoe a sugestao calculada pelos overrides MANUAIS, POR CELULA
+    (receita, dia): cada celula com override usa o valor manual; as demais
+    seguem a sugestao calculada. O total da linha passa a ser a SOMA das
+    celulas exibidas (mantem o grid consistente: total == soma das celulas, e a
+    redistribuicao do grid preserva esse total). Recalcula fornadas e marca
+    rr['editado']=True nas receitas com algum override no horizonte. Muta
+    receitas_out in place. No-op quando nao ha override (caminho normal).
+
+    Aplicacao por celula (em vez de exigir o set completo somando o total) e o
+    que permite a mao-dupla com a tela 'editar plano' do padeiro: editar um
+    unico dia la salva o override daquela celula e o grid passa a refletir."""
     from app.models import CronogramaOverride, Receita
     from app.services.producao import fornadas_amassadeira
     if not receitas_out:
@@ -76,17 +83,19 @@ def aplicar_overrides(receitas_out, dias_prod):
     recs = {r.id: r for r in Receita.query.filter(Receita.id.in_(rids)).all()}
     for rr in receitas_out:
         ov = por_rid.get(rr['receita_id'])
-        if not ov or any(d not in ov for d in dias_prod):
-            continue  # override incompleto -> ignora
-        if sum(ov[d] for d in dias_prod) != rr['total']:
-            continue  # stale (demanda mudou) -> volta pra sugestao
+        if not ov:
+            continue
         rec = recs.get(rr['receita_id'])
         rend = int(rec.rendimento_qtd) if rec and rec.rendimento_qtd else 1
         for c in rr['por_dia']:
-            q = ov.get(date.fromisoformat(c['data']), 0)
+            d = date.fromisoformat(c['data'])
+            if d not in ov:
+                continue
+            q = ov[d]
             c['qtd'] = q
             c['fornadas'] = (fornadas_amassadeira(rec, max(1, ceil(q / rend)))
                              if q > 0 else None)
+        rr['total'] = sum(c['qtd'] for c in rr['por_dia'])
         rr['editado'] = True
 
 
