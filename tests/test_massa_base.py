@@ -108,6 +108,43 @@ def test_cascata_linear_bate_com_o_exemplo(app):
     assert c['avisos'] == []
 
 
+def test_tirar_massa_nao_inclui_os_acrescimos(app):
+    """REGRESSÃO (bug pego pelo dono): 'Tire X kg ... bater o recheio +Y' — o X é
+    a massa que SAI da amassadeira; os acréscimos (recheio + água que falta)
+    entram DEPOIS, na porção tirada. X não pode já incluí-los, senão o padeiro
+    tira massa demais. Invariante físico: soma do que se tira (sem acréscimos) =
+    massa amassada + incrementos de tronco (água posta na amassadeira inteira)."""
+    pf, st, s7, mb = _exemplo_dono(app)
+    c = calcular_cascata(mb)
+    tirado = sum(p['tirar_massa'] for p in _retiradas(c))
+    tronco = sum(sum(p['acrescentar'].values()) for p in _incrementos(c))
+    # sem o fix dava 6110 (5760 base + 200 tronco + 150 grãos duplicados)
+    assert abs(tirado - (c['base_massa'] + tronco)) < 0.5
+    s7p = next(p for p in _retiradas(c) if p['nome'] == 'Sourdough 7 grãos')
+    assert s7p['tirar_massa'] == 2020.0                 # massa branca, sem os grãos
+    assert s7p['acrescentar'] == {'7 grãos': 150.0}     # grãos batidos à parte
+
+
+def test_ramo_com_agua_na_porcao_nao_conta_no_tirar(app):
+    """Caminho de impasse: a água que falta é batida na PRÓPRIA porção tirada
+    (vira acréscimo, como na tela do dono '+Água +Grãos'). Mesmo aí 'tirar_massa'
+    é só a massa que sai da amassadeira — água e recheio entram depois."""
+    # A precisa +água, B precisa +mel: cruzado -> nenhum 'pronto' e sem
+    # incremento comum -> impasse; cada um finaliza na própria porção.
+    a = _receita('A', [('Farinha', 100), ('Água', 80), ('Mel', 10), ('Grãos', 15)])
+    b = _receita('B', [('Farinha', 100), ('Água', 70), ('Mel', 20)])
+    mb = _grupo('Base', [a, b])
+    c = calcular_cascata(mb)
+    ret = {p['nome']: p for p in _retiradas(c)}
+    # base branca de A no tronco = Farinha1000+Água700+Mel100 = 1800; +Água100
+    # +Grãos150 entram na porção -> tira 1800 (não 2050)
+    assert ret['A']['tirar_massa'] == 1800.0
+    assert ret['A']['acrescentar'] == {'Água': 100.0, 'Grãos': 150.0}
+    assert ret['A']['eh_ramo'] is True
+    # invariante: soma das retiradas = base amassada (sem incremento de tronco aqui)
+    assert abs(sum(p['tirar_massa'] for p in _retiradas(c)) - c['base_massa']) < 0.5
+
+
 def test_recheios_exclusivos_sao_laranja(app):
     """7 grãos × nozes: mesma hidratação (80%), recheios exclusivos -> os dois
     são laranja (recheio batido na porção); pão francês e tradicional (sem
