@@ -192,6 +192,16 @@
             por_loja: por_loja,
             pedidos: filtrados,
         };
+        // Site (loja própria / PedidoOnline): soma no total/pedidos/ticket e
+        // vira a linha "Site" do canal de venda. Só quando "Todas" — o site não
+        // é uma loja Seru, então filtrar por loja física o exclui.
+        var site = ultimoResultado.site || {};
+        if (!filtroLoja && ((Number(site.total) || 0) > 0 || (Number(site.n_pedidos) || 0) > 0)) {
+            view.total_valor += Number(site.total) || 0;
+            view.total_pedidos += Number(site.n_pedidos) || 0;
+            view.por_canal['Site'] = (view.por_canal['Site'] || 0) + (Number(site.total) || 0);
+            view.site_incluido = site;
+        }
         renderResumo(view);
         renderLista(view);
     }
