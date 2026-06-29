@@ -251,6 +251,29 @@ def test_cronograma_padroniza_em_lotes(app):
         assert c['qtd'] % 50 == 0
 
 
+def test_fornada_especial_produz_na_vespera(app):
+    """Fornada especial (vende sex/sáb/dom) com lead 1: produzida na QUINTA pra a
+    venda na SEXTA. A regra restringe a VENDA; o lead desloca a produção pra
+    véspera — então a quinta NÃO é bloqueada."""
+    loja = _loja()
+    r = _receita('Focaccia')
+    r.fornada_especial = True
+    r.dias_producao = 1
+    db.session.commit()
+    hoje_d = hoje()
+    sexta = next(hoje_d + timedelta(days=i) for i in range(1, 14)
+                 if (hoje_d + timedelta(days=i)).weekday() == 4)
+    quinta = sexta - timedelta(days=1)
+    _pedido(loja, 'pendente', sexta, r, 50)           # entrega na sexta
+    horizonte = (sexta - hoje_d).days + 1
+    crono = cronograma_producao(horizonte_dias=horizonte, inicio_offset_dias=0)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None
+    por_data = {c['data']: c['qtd'] for c in rr['por_dia']}
+    assert por_data.get(quinta.isoformat(), 0) > 0    # produz na quinta
+    assert por_data.get(sexta.isoformat(), 0) == 0    # não na sexta
+
+
 def test_rota_telaindustriateste(app, admin_user):
     loja = _loja()
     r = _receita()
