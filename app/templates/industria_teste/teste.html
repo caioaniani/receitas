@@ -95,6 +95,7 @@
                         <input type="hidden" name="horizonte" value="{{ horizonte }}">
                         <input type="hidden" name="janela" value="{{ janela }}">
                         <input type="hidden" name="inicio" value="{{ inicio }}">
+                        {% if equilibrar %}<input type="hidden" name="equilibrar" value="1">{% endif %}
                         <button class="btn btn-success btn-sm mt-1"
                                 style="font-size:.68rem;padding:.05rem .4rem;">aprovar dia</button>
                     </form>
@@ -111,6 +112,7 @@
                         <input type="hidden" name="horizonte" value="{{ horizonte }}">
                         <input type="hidden" name="janela" value="{{ janela }}">
                         <input type="hidden" name="inicio" value="{{ inicio }}">
+                        {% if equilibrar %}<input type="hidden" name="equilibrar" value="1">{% endif %}
                         <button class="btn btn-primary btn-sm" style="font-size:.62rem;padding:.05rem .35rem;">📤 enviar</button>
                       </form>
                       <form method="POST" action="{{ url_for('industria_teste.excluir') }}" class="d-inline"
@@ -120,6 +122,7 @@
                         <input type="hidden" name="horizonte" value="{{ horizonte }}">
                         <input type="hidden" name="janela" value="{{ janela }}">
                         <input type="hidden" name="inicio" value="{{ inicio }}">
+                        {% if equilibrar %}<input type="hidden" name="equilibrar" value="1">{% endif %}
                         <button class="btn btn-outline-danger btn-sm" style="font-size:.62rem;padding:.05rem .35rem;">🗑️ excluir</button>
                       </form>
                     </div>
@@ -136,6 +139,7 @@
                         <input type="hidden" name="horizonte" value="{{ horizonte }}">
                         <input type="hidden" name="janela" value="{{ janela }}">
                         <input type="hidden" name="inicio" value="{{ inicio }}">
+                        {% if equilibrar %}<input type="hidden" name="equilibrar" value="1">{% endif %}
                         <button class="btn btn-outline-danger btn-sm" style="font-size:.62rem;padding:.05rem .35rem;">🗑️ excluir</button>
                       </form>
                     </div>
