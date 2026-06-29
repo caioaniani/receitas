@@ -784,6 +784,10 @@ def salvar(id):
     ep = (request.form.get('estado_padrao') or '').strip().lower()
     receita.estado_padrao = ep if ep in ('assado', 'backup') else None
     receita.reaproveitavel = bool(request.form.get('reaproveitavel'))
+    # Insumo/etapa de producao (ex: Creme de Amendoas) — a loja nao pede direto,
+    # entao some da sugestao de pedido semanal. Checkbox guarda o INVERSO pra o
+    # default (desmarcado) manter a receita pedivel.
+    receita.sugerir_pedido_loja = not bool(request.form.get('nao_pedir_loja'))
     # Lead time de producao (dias). Vazio/invalido -> 0. Limite defensivo de
     # 0..14 (nada na padaria leva mais que 2 semanas pra ficar pronto).
     try:
