@@ -628,6 +628,8 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
                 if not por_data or len(por_data) < _MIN_OCORRENCIAS_DOW:
                     continue
                 qtd = int(round(_media_recencia(por_data, hoje_d)))
+                # Padroniza no pacote da receita (nao pedir picado).
+                qtd = _padronizar_qtd(qtd, rec.lote_pedido, rec.minimo_pedido)
                 if qtd > 0:
                     sugestao[loja.id][d].append(
                         {'receita_id': rid, 'nome': rec.nome, 'qtd': qtd})
