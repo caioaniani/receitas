@@ -120,9 +120,16 @@ def calcular_cascata(massa_base, multiplicadores=None):
         acr = dict(extra)
         for n, g in rec.items():
             acr[n] = acr.get(n, 0.0) + g
+        # tirar_massa = a massa que SAI da amassadeira neste passo (composição do
+        # tronco aqui). Os acréscimos (recheio exclusivo + água que ainda falta)
+        # entram DEPOIS, batidos na porção já tirada — então NÃO contam no
+        # "tire X kg". Senão a retirada já vinha com eles embutidos E ainda
+        # mandava somar de novo: o padeiro tirava massa demais (a soma das
+        # retiradas passava da massa amassada). Bug pego pelo dono.
+        tirar = _massa(ings[r.id]) - sum(acr.values())
         return {'tipo': 'retirada', 'receita_id': r.id, 'nome': r.nome,
                 'porcoes': porcoes[r.id],
-                'tirar_massa': round(_massa(ings[r.id]) * porcoes[r.id], 1),
+                'tirar_massa': round(tirar * porcoes[r.id], 1),
                 'acrescentar': {n: round(g * porcoes[r.id], 1)
                                 for n, g in acr.items()},
                 'eh_ramo': bool(rec)}
