@@ -104,26 +104,30 @@ def aprovar():
 @login_required
 @admin_required
 def enviar():
-    """2º passo: envia a ordem aprovada do dia pro padeiro (ela só aparece no
-    Fluxograma / Produção do dia depois disto)."""
+    """Empurra o cronograma ATUAL do dia (com as edições do grid) pro padeiro:
+    reconstrói a ordem a partir do grid e marca enviado. Re-pressável — serve
+    pro 1º envio E pra ATUALIZAR a produção depois de editar o grid (a edição
+    do grid só chega no padeiro quando se aperta isto)."""
     from app.services.producao import enviar_plano_do_dia
 
     horizonte, janela = _horizonte_janela()
     inicio = _inicio_offset()
-    eq = 1 if _equilibrar() else None
+    equilibrar = _equilibrar()
+    eq = 1 if equilibrar else None
     try:
         data_alvo = date.fromisoformat(request.form.get('data', ''))
     except (TypeError, ValueError):
         flash('Data inválida.', 'warning')
         return redirect(url_for('industria_teste.index', horizonte=horizonte,
                                 janela=janela, inicio=inicio, equilibrar=eq))
-    plano = enviar_plano_do_dia(data_alvo)
+    plano = enviar_plano_do_dia(data_alvo, current_user.id,
+                                horizonte_dias=horizonte, janela_semanas=janela,
+                                inicio_offset_dias=inicio, equilibrar=equilibrar)
     if plano:
-        flash('Plano de %s enviado ao padeiro.' % data_alvo.strftime('%d/%m'),
-              'success')
+        flash('Produção de %s enviada ao padeiro (%d receita(s)).'
+              % (data_alvo.strftime('%d/%m'), len(plano.itens)), 'success')
     else:
-        flash('Não há ordem aprovada em %s pra enviar.'
-              % data_alvo.strftime('%d/%m'), 'warning')
+        flash('Nada a produzir em %s.' % data_alvo.strftime('%d/%m'), 'info')
     return redirect(url_for('industria_teste.index', horizonte=horizonte,
                             janela=janela, inicio=inicio, equilibrar=eq))
 
