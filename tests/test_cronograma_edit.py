@@ -149,3 +149,24 @@ def test_rota_celula_salva(app, admin_user):
     assert body['ok'] is True
     assert body['por_dia'][0]['qtd'] == rr0['total']
     assert CronogramaOverride.query.filter_by(receita_id=r.id).count() == 7
+
+
+def test_rota_limpar_edicoes(app, admin_user):
+    """Botão 'limpar edições manuais' apaga TODOS os overrides (volta pro
+    cálculo) sem tocar em pedido/estoque."""
+    loja = _loja()
+    r = _receita_amass()
+    _pedido(loja, r, 2, 30)
+    base = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr0 = _row(base, r.id)
+    editar_celula(r.id, rr0['por_dia'][0]['data'], rr0['total'],
+                  horizonte_dias=7, inicio_offset_dias=0)
+    assert CronogramaOverride.query.count() > 0
+
+    c = app.test_client()
+    c.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+           follow_redirects=True)
+    resp = c.post('/telaindustriateste/limpar-edicoes',
+                  data={'horizonte': 7, 'janela': 6, 'inicio': 0})
+    assert resp.status_code in (302, 303)
+    assert CronogramaOverride.query.count() == 0
