@@ -200,9 +200,10 @@ def test_massa_base_mise_endpoint(app, admin_user):
     acr = {a['nome'] for a in passos['Sourdough 7g']['acrescentar']}
     assert 'Grãos' in acr        # o recheio só entra na retirada do 7 grãos
     # mostra os GRAMAS de massa a tirar (não só as unidades): PF = 1700 g/porção
-    # × 2 porções = 3,4 kg; 7g = 2200 g × 1 = 2,2 kg
+    # × 2 porções = 3,4 kg. O 7g tira só a massa branca (1800 g): os 400 g de
+    # grãos entram DEPOIS, batidos na porção — não contam no "tire X kg".
     assert passos['Pão Francês']['tirar_massa'] == '3,4 kg'
-    assert passos['Sourdough 7g']['tirar_massa'] == '2,2 kg'
+    assert passos['Sourdough 7g']['tirar_massa'] == '1,8 kg'
 
 
 def test_massa_base_mise_escala_unidades_reais(app, admin_user):
