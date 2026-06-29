@@ -1014,12 +1014,16 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
     max_lead = max(lead.values(), default=0)
 
     # firme por (receita, dia de entrega) na janela de entrega do horizonte —
-    # so pra dar FORMATO a curva diaria (o total ja vem do balanco).
+    # so pra dar FORMATO a curva diaria (o total ja vem do balanco). Tambem por
+    # LOJA (firme_loja) pra a projecao do saldo mostrar as saidas DATADAS com a
+    # loja de cada entrega.
     deliv_fim = inicio_d + timedelta(days=horizonte_dias - 1 + max_lead)
+    nomes_loja = {l.id: l.nome for l in Loja.query.all()}
     firme = defaultdict(lambda: defaultdict(int))
-    for rid, data_ent, qtd in (db.session.query(
-            PedidoItem.receita_id, PedidoLoja.data_entrega,
-            PedidoItem.quantidade)
+    firme_loja = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    for rid, loja_id, data_ent, qtd in (db.session.query(
+            PedidoItem.receita_id, PedidoLoja.loja_id,
+            PedidoLoja.data_entrega, PedidoItem.quantidade)
             .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
             .filter(PedidoItem.receita_id.isnot(None),
                     PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
@@ -1027,6 +1031,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                     PedidoLoja.data_entrega <= deliv_fim).all()):
         if data_ent is not None:
             firme[rid][data_ent] += int(qtd or 0)
+            firme_loja[rid][data_ent][loja_id] += int(qtd or 0)
 
     # historico por (receita, dow) pra o previsto (curva diaria)
     qtd_dow = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
