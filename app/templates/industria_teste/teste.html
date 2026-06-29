@@ -223,7 +223,9 @@
             {% endif %}
             <tr>
                 <td class="rec-col">
-                    <div>{{ r.nome }}
+                    <div class="rec-toggle" data-rid="{{ r.receita_id }}" role="button"
+                         title="Ver saldo (estoque − pedido programado)">
+                        <span class="chev" data-rid="{{ r.receita_id }}">▸</span>{{ r.nome }}
                         {% if r.dias_producao %}<span class="tag-lead">{{ r.dias_producao }}d</span>{% endif %}
                         {% if r.insumo %}<span class="tag-insumo" title="Insumo de produção (sub-receita)">insumo</span>{% endif %}
                     </div>
@@ -242,6 +244,26 @@
                     {% if r.editado %}<span class="tag-edit" title="Editado manualmente">✏️</span>
                     <button type="button" class="btn-reset" data-rid="{{ r.receita_id }}"
                             title="Voltar à sugestão calculada">↺</button>{% endif %}
+                </td>
+            </tr>
+            <tr class="detalhe-row" data-rid="{{ r.receita_id }}" hidden>
+                <td colspan="{{ crono.dias|length + 2 }}">
+                    <div class="saldo-box">
+                        <span>Em estoque hoje: <strong>{{ r.em_estoque }}</strong></span>
+                        <span class="op">−</span>
+                        <span>Pedido programado: <strong>{{ r.comprometido }}</strong></span>
+                        <span class="op">=</span>
+                        <span>Saldo:
+                            <strong class="{{ 'saldo-neg' if r.saldo < 0 else 'saldo-pos' }}">{{ r.saldo }}</strong>
+                            {% if r.saldo < 0 %}<span class="saldo-hint">(faltam {{ -r.saldo }} — precisa produzir)</span>{% endif %}
+                        </span>
+                        {% if r.breakdown %}
+                        <div class="saldo-lojas">
+                            <span class="saldo-lojas-tt">Pedidos programados por loja:</span>
+                            {% for b in r.breakdown %}<span class="saldo-loja">{{ b.loja_nome }}: <strong>{{ b.qtd }}</strong></span>{% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
                 </td>
             </tr>
             {% endfor %}
