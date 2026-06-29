@@ -270,7 +270,10 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         L = lead.get(rid, 0)
         dias_rid = [inicio_d + timedelta(days=L + i)
                     for i in range(horizonte_dias)]
+        rec_rid = receitas.get(rid)
         for d in dias_rid:
+            if not _fornada_no_dia(rec_rid, d):
+                continue   # fornada especial fora de sex/sáb/dom: não projeta
             dow = d.weekday()
             por_data = rid_dow.get(dow)
             if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
@@ -279,6 +282,8 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
                 previsto[rid] += rid_soma_total / dias_calendario_janela
 
     def _previsto_dia(rid, dia):
+        if not _fornada_no_dia(receitas.get(rid), dia):
+            return 0.0
         dow = dia.weekday()
         por_data = qtd_dow.get(rid, {}).get(dow)
         if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
