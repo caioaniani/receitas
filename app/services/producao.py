@@ -6,7 +6,7 @@ from app.services.custos import calcular_custos_receitas
 
 
 def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6,
-                         inicio_offset_dias=0):
+                         inicio_offset_dias=0, equilibrar=False):
     """Aprova a coluna de UM dia do cronograma -> cria um PlanejamentoProducao
     (origem='cronograma', status='aprovado') desse dia, pronto pra descer pro
     padeiro. Itens = receitas com qtd>0 naquele dia; qtd_alvo = unidades,
