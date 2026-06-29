@@ -8,7 +8,7 @@ padeiro produz (opção B). NÃO mexe na /padeiro oficial.
 """
 from datetime import date
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.blueprints.industria_teste import industria_teste_bp
@@ -158,3 +158,55 @@ def excluir():
               % data_alvo.strftime('%d/%m'), 'warning')
     return redirect(url_for('industria_teste.index', horizonte=horizonte,
                             janela=janela, inicio=inicio, equilibrar=eq))
+
+
+def _payload_int(payload, key, default, lo, hi):
+    try:
+        return max(lo, min(int(payload.get(key, default)), hi))
+    except (TypeError, ValueError):
+        return default
+
+
+@industria_teste_bp.route('/celula', methods=['POST'])
+@login_required
+@admin_required
+def celula():
+    """Autosave da edição manual de uma célula (receita×dia). Redistribui no
+    servidor mantendo o total da receita, salva o rascunho (override) e devolve
+    a LINHA recalculada (todas as células da receita + fornadas). JSON."""
+    from app.services.cronograma_edit import editar_celula
+
+    p = request.get_json(silent=True) or request.form
+    try:
+        receita_id = int(p.get('receita_id'))
+        qtd = int(p.get('qtd'))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, erro='parametros'), 400
+    res = editar_celula(
+        receita_id, p.get('data') or '', qtd,
+        horizonte_dias=_payload_int(p, 'horizonte', 7, 1, 14),
+        janela_semanas=_payload_int(p, 'janela', 6, 1, 26),
+        inicio_offset_dias=_payload_int(p, 'inicio', 1, 0, 14),
+        equilibrar=str(p.get('equilibrar', '')) in ('1', 'true', 'on', 'True'))
+    if res is None:
+        return jsonify(ok=False, erro='nao_encontrado'), 404
+    return jsonify(ok=True, **res)
+
+
+@industria_teste_bp.route('/celula/reset', methods=['POST'])
+@login_required
+@admin_required
+def celula_reset():
+    """Apaga a edição manual de uma receita (volta pra sugestão calculada)."""
+    from app.services.cronograma_edit import resetar_receita
+
+    p = request.get_json(silent=True) or request.form
+    try:
+        receita_id = int(p.get('receita_id'))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, erro='parametros'), 400
+    datas = p.get('datas') or []
+    if isinstance(datas, str):
+        datas = [d for d in datas.split(',') if d]
+    resetar_receita(receita_id, datas)
+    return jsonify(ok=True)
