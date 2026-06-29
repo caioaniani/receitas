@@ -2304,7 +2304,7 @@ h6 { font-weight: 600; text-transform: lowercase; }
     .main-content {
         margin-left: 0 !important;
         padding: 16px;
-        padding-top: 60px;  /* espaço pro botão hamburger */
+        padding-top: calc(60px + env(safe-area-inset-top, 0px));  /* hamburger + area segura */
     }
     /* Botao hamburger fixo no topo */
     .mobile-menu-toggle {
