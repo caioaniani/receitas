@@ -273,15 +273,26 @@
                         <span class="op">=</span>
                         <span>Saldo:
                             <strong class="{{ 'saldo-neg' if r.saldo < 0 else 'saldo-pos' }}">{{ r.saldo }}</strong>
-                            {% if r.saldo < 0 %}<span class="saldo-hint">(faltam {{ -r.saldo }} — precisa produzir)</span>{% endif %}
+                            {% if r.saldo < 0 %}<span class="saldo-hint">(precisa produzir {{ -r.saldo }})</span>{% endif %}
                         </span>
-                        {% if r.breakdown %}
-                        <div class="saldo-lojas">
-                            <span class="saldo-lojas-tt">Pedidos programados por loja:</span>
-                            {% for b in r.breakdown %}<span class="saldo-loja">{{ b.loja_nome }}: <strong>{{ b.qtd }}</strong></span>{% endfor %}
-                        </div>
-                        {% endif %}
+                        {% if r.dia_falta %}<span class="saldo-falta">⚠️ vai faltar em {{ r.dia_falta }}<small> (já com a produção programada)</small></span>
+                        {% else %}<span class="saldo-ok">✓ não falta na janela (com a produção programada)</span>{% endif %}
                     </div>
+                    {% if r.projecao %}
+                    <table class="proj-table">
+                        <thead><tr><th>Dia</th><th>Saída (entrega)</th><th>Produção</th><th>Saldo</th></tr></thead>
+                        <tbody>
+                        {% for p in r.projecao %}
+                        <tr class="{% if p.falta %}proj-falta{% endif %}">
+                            <td>{{ p.label }}</td>
+                            <td>{% if p.saida_lojas %}{% for s in p.saida_lojas %}{{ s.loja_nome }}: <strong>{{ s.qtd }}</strong>{% if not loop.last %} · {% endif %}{% endfor %}{% else %}<span class="proj-vazio">—</span>{% endif %}</td>
+                            <td>{% if p.producao %}<span class="proj-prod">+{{ p.producao }}</span>{% else %}<span class="proj-vazio">—</span>{% endif %}</td>
+                            <td><strong class="{{ 'saldo-neg' if p.saldo < 0 else '' }}">{{ p.saldo }}</strong></td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
