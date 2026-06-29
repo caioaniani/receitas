@@ -549,8 +549,11 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
     dias_futuros = [inicio_d + timedelta(days=i) for i in range(horizonte_dias)]
     dias_calendario_janela = 7 * janela_semanas
 
+    # So receitas que a loja PEDE (exclui insumo/etapa de producao, ex: Creme
+    # de Amendoas, que vai dentro do Croissant Almond e nunca e pedido direto).
     receitas = {r.id: r for r in Receita.query
-                .filter(Receita.arquivada_em.is_(None)).all()}
+                .filter(Receita.arquivada_em.is_(None),
+                        Receita.sugerir_pedido_loja.isnot(False)).all()}
     lojas_op = (Loja.query
                 .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
                 .order_by(Loja.nome).all())
