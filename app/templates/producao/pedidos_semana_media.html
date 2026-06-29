@@ -152,21 +152,19 @@
     {% endif %}
 </form>
 
-<!-- Modal: dividir a entrega de um produto entre dias escolhidos -->
+<!-- Modal: dividir a entrega entre dias escolhidos (1 produto, loja ou tudo) -->
 <div class="modal fade" id="modalDividir" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header py-2">
         <h6 class="modal-title"><i class="bi bi-distribute-horizontal"></i>
-            Dividir entrega — <span id="md-nome"></span></h6>
+            Dividir entrega</h6>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
       </div>
       <div class="modal-body">
-        <p class="small text-muted mb-2">
-            Total a dividir: <strong id="md-total"></strong> un<span id="md-lote-info"></span>.
-            <br>Escolha em quais dias dividir a entrega:
-        </p>
-        <div id="md-dias" class="d-flex flex-column gap-1 mb-2"></div>
+        <p class="small text-muted mb-1" id="md-info"></p>
+        <p class="small text-muted mb-2">Escolha em quais dias dividir a entrega:</p>
+        <div id="md-dias" class="d-flex flex-wrap gap-3 mb-2"></div>
         <div class="alert alert-light border small mb-0 py-2" id="md-preview"></div>
       </div>
       <div class="modal-footer py-2">
