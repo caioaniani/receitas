@@ -301,6 +301,19 @@ def _api_vendas_impl():
             amostra_pedido=pedidos[0] if pedidos else None,
         ), 500
 
+    # Vendas do SITE (loja propria / PedidoOnline) — outra fonte, fora do Seru.
+    # O front soma no total/pedidos/ticket e numa linha "Site" do canal de venda
+    # quando NAO ha filtro de loja (o site nao e uma loja Seru). Faturamento =
+    # subtotal (sem frete), mesma regra do relatorio consolidado.
+    try:
+        from app.services import loja_online_vendas
+        fat_site = loja_online_vendas.faturamento_por_dia(inicio, fim)
+        site = {'total': fat_site.get('total', 0.0),
+                'n_pedidos': fat_site.get('n_pedidos', 0)}
+    except Exception:
+        current_app.logger.exception('pdv: faturamento do site falhou')
+        site = {'total': 0.0, 'n_pedidos': 0, 'erro': True}
+
     try:
         resp = jsonify(
             ok=True,
@@ -313,6 +326,7 @@ def _api_vendas_impl():
             por_pagamento=por_pagamento,
             por_canal=por_canal,
             por_loja=por_loja,
+            site=site,
             consulta_limitada=consulta_limitada,
             pedidos=pedidos,
         )
