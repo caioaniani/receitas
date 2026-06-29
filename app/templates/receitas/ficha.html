@@ -170,6 +170,23 @@
         <strong>1</strong>.
     </div>
 
+    <!-- Aviso: receita-LOTE no modo "Quantidade de Produtos" (infla o custo na tela) -->
+    <div id="aviso-lote-modo" class="alert alert-danger py-2 px-3 small mb-3 align-items-center gap-2"
+         style="display:none;">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <div class="flex-grow-1">
+            Esta receita é um <strong>LOTE</strong> — rende
+            <strong id="aviso-lote-n">0</strong> unidades de
+            <span id="aviso-lote-peso">0</span>g. O modo
+            <strong>"Quantidade de Produtos"</strong> trata cada linha como
+            <strong>1 unidade</strong> e <strong>infla o custo</strong> na tela.
+            Use <strong>"Peso da Farinha (g)"</strong> — lá o custo/unidade fica certo.
+        </div>
+        <button type="button" class="btn btn-sm btn-danger flex-shrink-0" id="btn-corrigir-modo-lote">
+            Corrigir
+        </button>
+    </div>
+
     <!-- Tabela de ingredientes -->
     <div class="table-responsive">
         <table class="table table-sm table-bordered tabela-ficha" id="ficha-table">
