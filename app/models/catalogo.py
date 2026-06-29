@@ -135,6 +135,11 @@ class Receita(db.Model):
     # croissant lote 50 + minimo 250 -> 250/300). NULL = sem padronizacao.
     lote_pedido = db.Column(db.Integer, nullable=True)
     minimo_pedido = db.Column(db.Integer, nullable=True)
+    # Fornada especial: produto vendido SO sexta/sabado/domingo (ex: Focaccia
+    # Gorgonzola). O forecast de pedido NAO sugere em dia de semana. Default
+    # False = vende todo dia (comportamento normal).
+    fornada_especial = db.Column(db.Boolean, nullable=False, default=False,
+                                 server_default='0')
     # Quando True, desperdicio com motivo='validade' NAO baixa estoque
     # — o item vencido vira outra coisa (ex: Croissant Tradicional vencido
     # vira Croissant Almond, Sourdough Tradicional vira chapa). Outros
