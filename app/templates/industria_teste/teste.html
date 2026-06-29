@@ -212,7 +212,7 @@
             </tr>
         </thead>
         <tbody>
-            {% set ns = namespace(cat='\x00') %}
+            {% set ns = namespace(cat=none) %}
             {% for r in crono.receitas %}
             {% if r.categoria != ns.cat %}
             <tr class="cat-row">
