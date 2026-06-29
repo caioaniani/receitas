@@ -88,3 +88,36 @@ class PrevisaoSnapshot(db.Model):
         return (f'<PrevisaoSnapshot {self.data_alvo} loja={self.loja_id} '
                 f'rec={self.receita_id} prev={self.previsto} '
                 f'real={self.realizado}>')
+
+
+class CronogramaOverride(db.Model):
+    """Edicao MANUAL de uma celula do cronograma (29/06/2026): o admin ajusta
+    quanto produzir de uma receita num dia, direto na grade. Guardamos a
+    distribuicao manual por (data, receita) — o cronograma usa esses valores no
+    lugar da distribuicao calculada.
+
+    Total da receita fica fixo: editar um dia redistribui os outros (server-
+    side), entao o conjunto de overrides de uma receita soma o "Produzir" do
+    balanco. Anti-staleness: o cronograma so aplica os overrides de uma receita
+    se eles cobrem TODOS os dias do horizonte E somam o total atual — se a
+    demanda mudou, eles sao ignorados (volta pra sugestao) sem precisar limpar.
+    """
+    __tablename__ = 'cronograma_override'
+
+    id = db.Column(db.Integer, primary_key=True)
+    data = db.Column(db.Date, nullable=False, index=True)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'),
+                           nullable=False, index=True)
+    qtd = db.Column(db.Integer, nullable=False, default=0)
+    criado_em = db.Column(db.DateTime, default=agora)
+
+    receita = db.relationship('Receita')
+
+    __table_args__ = (
+        db.UniqueConstraint('data', 'receita_id',
+                            name='uq_cronograma_override'),
+    )
+
+    def __repr__(self):
+        return (f'<CronogramaOverride {self.data} rec={self.receita_id} '
+                f'qtd={self.qtd}>')
