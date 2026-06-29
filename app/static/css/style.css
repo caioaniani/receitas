@@ -2309,7 +2309,7 @@ h6 { font-weight: 600; text-transform: lowercase; }
     /* Botao hamburger fixo no topo */
     .mobile-menu-toggle {
         position: fixed;
-        top: 10px;
+        top: calc(10px + env(safe-area-inset-top, 0px));
         left: 10px;
         z-index: 99;
         width: 40px;
