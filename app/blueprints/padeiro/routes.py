@@ -364,6 +364,25 @@ def editar_plano():
                 multiplicador=max(1, ceil(alvo / _rend(rec)))))
             existentes.add(rid)
 
+        # Espelha a edição no rascunho do grid (CronogramaOverride) — mão dupla:
+        # editar aqui passa a refletir no cronograma da indústria. Override = a
+        # qtd_alvo absoluta deste dia; receita removida vira 0 (some do grid).
+        from app.models import CronogramaOverride
+        db.session.flush()
+        ov_exist = {o.receita_id: o for o in
+                    CronogramaOverride.query.filter_by(data=dia).all()}
+        atuais = {it.receita_id: int(it.qtd_alvo or 0) for it in plano.itens}
+        for rid, q in atuais.items():
+            o = ov_exist.get(rid)
+            if o is not None:
+                o.qtd = q
+            else:
+                db.session.add(CronogramaOverride(receita_id=rid, data=dia,
+                                                  qtd=q))
+        for rid, o in ov_exist.items():
+            if rid not in atuais:
+                o.qtd = 0
+
         db.session.commit()
         flash('Plano de produção de %s atualizado.' % dia.strftime('%d/%m'),
               'success')
