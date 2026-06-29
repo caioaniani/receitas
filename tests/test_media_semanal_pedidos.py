@@ -107,6 +107,34 @@ def test_marca_dias_ja_pedidos(app):
     assert futuro.isoformat() in loja_out['ja_tem']
 
 
+def test_expoe_lote_da_receita(app):
+    """Cada produto carrega o `lote_pedido` da receita (caixa) — a tela usa pra
+    arredondar ao dividir a entrega entre dias escolhidos."""
+    loja = _loja()
+    r = _receita('Croissant Tradicional')
+    r.lote_pedido = 50
+    db.session.commit()
+    hoje_d = hoje()
+    for sem in (1, 2):
+        _pedido(loja, hoje_d - timedelta(days=7 * sem), r, 550)
+
+    grade = media_semanal_pedidos(horizonte_dias=7, janela_semanas=6)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    assert p['lote'] == 50
+
+
+def test_lote_ausente_vem_zero(app):
+    """Receita sem lote_pedido -> lote 0 (a tela divide sem arredondar)."""
+    loja = _loja()
+    r = _receita()
+    hoje_d = hoje()
+    _pedido(loja, hoje_d - timedelta(days=7), r, 70)
+    grade = media_semanal_pedidos(horizonte_dias=7, janela_semanas=6)
+    p = _prod(grade, loja.id, r.id)
+    assert p['lote'] == 0
+
+
 def test_rota_renderiza(app, admin_user):
     loja = _loja('Loja Centro')
     r = _receita('Pão Francês')
