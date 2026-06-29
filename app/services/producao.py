@@ -23,7 +23,8 @@ def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6,
 
     crono = cronograma_producao(horizonte_dias=horizonte_dias,
                                 janela_semanas=janela_semanas,
-                                inicio_offset_dias=inicio_offset_dias)
+                                inicio_offset_dias=inicio_offset_dias,
+                                equilibrar=equilibrar)
     iso = data_alvo.isoformat()
     itens_dia = []
     for rec in crono['receitas']:
