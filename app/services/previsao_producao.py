@@ -82,6 +82,15 @@ def _media_recencia(qtd_por_data, hoje_d, meia_vida=_MEIA_VIDA_DIAS):
     return num / den if den else 0.0
 
 
+def _fornada_no_dia(rec, dia):
+    """True se a receita PODE ser vendida/projetada nesse dia. Fornada especial
+    (ex: Focaccia) só sex/sáb/dom -> False nos outros dias (não projeta demanda;
+    o produto não é vendido nesse dia). Receita normal -> sempre True."""
+    return not (rec is not None
+                and getattr(rec, 'fornada_especial', False)
+                and dia.weekday() not in _DIAS_FORNADA_ESPECIAL)
+
+
 def _padronizar_qtd(qtd, lote, minimo):
     """Arredonda a sugestao pro LOTE de pedido da receita (pacote padrao) e
     aplica o piso. 'Nao pedir picado' (decisao do dono 29/06): a loja pede em
