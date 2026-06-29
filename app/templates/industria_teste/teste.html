@@ -205,11 +205,20 @@
             </tr>
         </thead>
         <tbody>
+            {% set ns = namespace(cat='\x00') %}
             {% for r in crono.receitas %}
+            {% if r.categoria != ns.cat %}
+            <tr class="cat-row">
+                <td class="rec-col">{{ r.categoria or 'Sem categoria' }}</td>
+                <td colspan="{{ crono.dias|length + 1 }}"></td>
+            </tr>
+            {% set ns.cat = r.categoria %}
+            {% endif %}
             <tr>
                 <td class="rec-col">
                     <div>{{ r.nome }}
                         {% if r.dias_producao %}<span class="tag-lead">{{ r.dias_producao }}d</span>{% endif %}
+                        {% if r.insumo %}<span class="tag-insumo" title="Insumo de produção (sub-receita)">insumo</span>{% endif %}
                     </div>
                     <div class="rec-est">em estoque: {{ r.em_estoque }}</div>
                 </td>
