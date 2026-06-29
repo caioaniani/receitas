@@ -1237,6 +1237,8 @@ body {
 /* Reserva espaco extra no fim da sidebar pra evitar que o ultimo item
    fique sob a barra de navegacao do navegador mobile */
 .sidebar {
+    /* topo: quando o menu abre no app instalado, nao fica sob a barra de status */
+    padding-top: env(safe-area-inset-top, 0);
     padding-bottom: env(safe-area-inset-bottom, 0);
 }
 .sidebar::after {
