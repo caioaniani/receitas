@@ -120,3 +120,21 @@ def test_montada_quantidade_custo_unitario_intacto(app, admin_user):
     # 100g*0,03543 + 3*1,40 + 2*0,0504 = 3,543 + 4,20 + 0,1008 = 7,84
     assert custo_un > 7.0          # custo da unidade preservado
     assert abs(custo_un - 7.84) < 0.05
+
+
+def test_ficha_tem_aviso_lote_no_modo_errado(app, admin_user):
+    """Frontend (26/06): a ficha traz o banner que avisa quando uma receita-LOTE
+    (tem Peso/Un e rende >1 unidade) esta no modo 'Quantidade de Produtos' — que
+    infla o custo na tela (custo/un da ficha divergia do backend). Botao Corrigir
+    troca pro modo certo. A deteccao exclui receita de massa (sumPct>0)."""
+    r = _receita_vazia('Creme Lote')
+    client = app.test_client()
+    _login(client, admin_user)
+    html = client.get('/receitas/%d' % r.id).data.decode()
+    assert 'aviso-lote-modo' in html
+    assert 'btn-corrigir-modo-lote' in html
+    # a logica de deteccao vive no app.js servido
+    js = client.get('/static/js/app.js').data.decode()
+    assert 'loteNoModoErrado' in js
+    assert "modo === 'quantidade' && sumPct === 0" in js  # exclui massa (com %)
+    assert 'pesoUnit > 0' in js                            # so dispara pra lote
