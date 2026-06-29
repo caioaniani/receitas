@@ -57,7 +57,8 @@ def calcular_cascata(massa_base, multiplicadores=None):
     multiplicadores: {receita_id: nº de porções no plano}. Aceita FRACIONÁRIO
     (ex: 212 un / rendimento 10 = 21,2 porções) — a massa e os acréscimos seguem
     o consumo REAL, não o multiplicador inteiro de fornada (que arredonda pra
-    cima e infla a base). Default 1 de cada.
+    cima e infla a base). None = modo genérico (1 de cada — preview/config da
+    base); dict = só as receitas listadas entram (membro ausente conta 0).
     Retorna None se o grupo não tem receitas; senão um dict com:
       - base / base_mix / base_massa / fornadas / capacidade / total_porcoes
       - passos: lista ORDENADA. Cada passo é:
