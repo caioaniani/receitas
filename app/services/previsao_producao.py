@@ -1231,18 +1231,63 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
     # consome. Usa a producao final ja calculada/editada. No-op sem sub-receita.
     _explodir_bom(receitas_out, dias_prod, receitas, lead, bal)
 
+    # Produtos que a loja PEDE mas estao SEM demanda nesta janela (o balanco os
+    # exclui pra nao listar zeros). Pro PLANEJAMENTO o usuario quer ve-los na
+    # grade pra poder programar (ex: Pain au Chocolat sem pedido nesta semana).
+    # Injeta linha zerada com o estoque atual; nao entram na explosao (0 demanda).
+    ja_out = {rr['receita_id'] for rr in receitas_out}
+    bal_est = {it['receita_id']: it for it in bal['itens']}
+    vendaveis = (Receita.query
+                 .filter(Receita.arquivada_em.is_(None),
+                         Receita.sugerir_pedido_loja.isnot(False)).all())
+    for rec in sorted(vendaveis, key=lambda r: r.id):
+        if rec.id in ja_out:
+            continue
+        itb = bal_est.get(rec.id)
+        receitas_out.append({
+            'receita_id': rec.id, 'nome': rec.nome,
+            'dias_producao': lead.get(rec.id, 0),
+            'em_estoque': int(itb['em_estoque']) if itb else 0,
+            'por_dia': [{'data': d.isoformat(), 'qtd': 0, 'fornadas': None}
+                        for d in dias_prod],
+            'total': 0,
+        })
+
     # Categoria + detalhe do SALDO por receita (pro expandir da tela): estoque -
-    # pedido programado (comprometido = pedidos das lojas no horizonte) = saldo.
+    # pedido programado (comprometido = pedidos das lojas no horizonte) = saldo,
+    # mais a PROJECAO dia a dia (saidas datadas + producao programada -> saldo do
+    # dia; marca o 1o dia que fica negativo, "vai faltar").
     bal_idx = {it['receita_id']: it for it in bal['itens']}
     for rr in receitas_out:
-        rec = receitas.get(rr['receita_id'])
+        rid = rr['receita_id']
+        rec = receitas.get(rid)
         rr['categoria'] = (rec.categoria or '').strip() if rec else ''
-        it = bal_idx.get(rr['receita_id'])
+        it = bal_idx.get(rid)
         comp = int(it['comprometido']) if it else 0
         rr['comprometido'] = comp
         rr['saldo'] = int(rr['em_estoque']) - comp
         rr['breakdown'] = ([b for b in it['breakdown_comprometido'] if b['qtd'] > 0]
                            if it else [])
+        # Projecao: estoque atual + producao programada (grid) - saidas (pedidos
+        # firmes, datados) => saldo no fim de cada dia. 1o dia negativo = falta.
+        running = int(rr['em_estoque'])
+        projecao = []
+        rr['dia_falta'] = None
+        for i, d in enumerate(dias_prod):
+            prod_i = int(rr['por_dia'][i]['qtd'] or 0)
+            saida_i = int(firme[rid].get(d, 0))
+            running += prod_i - saida_i
+            if running < 0 and rr['dia_falta'] is None:
+                rr['dia_falta'] = dias_out[i]['label']
+            saida_lojas = sorted(
+                ({'loja_nome': nomes_loja.get(lid, '?'), 'qtd': q}
+                 for lid, q in firme_loja[rid].get(d, {}).items() if q > 0),
+                key=lambda b: -b['qtd'])
+            projecao.append({
+                'label': dias_out[i]['label'], 'saida': saida_i,
+                'saida_lojas': saida_lojas, 'producao': prod_i,
+                'saldo': running, 'falta': running < 0})
+        rr['projecao'] = projecao
 
     # Agrupa os produtos por CATEGORIA (depois por nome) — senao ficam espalhados
     # pela ordem de urgencia/demanda do balanco. Categoria vazia vai por ultimo.
