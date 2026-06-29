@@ -67,6 +67,41 @@ def test_sugerir_propoe_por_loja_dia(app):
                for it in dia0['itens'])
 
 
+def test_receita_insumo_nao_e_sugerida(app):
+    """Receita marcada como insumo/etapa (sugerir_pedido_loja=False) — ex: Creme
+    de Amêndoas — nunca entra na sugestão, mesmo com histórico forte."""
+    loja = _loja('Loja A')
+    r = _receita('Creme de Amêndoas')
+    r.sugerir_pedido_loja = False
+    db.session.commit()
+    hoje_d = hoje()
+    for semanas in (1, 2, 3):
+        _pedido(loja, 'recebido', hoje_d - timedelta(days=7 * semanas), r, 10)
+
+    sug = sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6)
+    la = _loja_out(sug, loja.id)
+    assert all(not any(it['receita_id'] == r.id for it in dia['itens'])
+               for dia in la['dias'])
+
+
+def test_pedido_avulso_unico_nao_vira_sugestao(app):
+    """Item pedido UMA só vez (avulso/errado) não é sugerido; a partir de 2
+    datas distintas, passa a ser (mata o '1 creme de amêndoas')."""
+    loja = _loja('Loja A')
+    r = _receita('Croissant')
+    hoje_d = hoje()
+    _pedido(loja, 'recebido', hoje_d - timedelta(days=7), r, 10)   # 1 ocorrência
+    sug = sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6)
+    la = _loja_out(sug, loja.id)
+    assert all(not any(it['receita_id'] == r.id for it in dia['itens'])
+               for dia in la['dias'])
+
+    _pedido(loja, 'recebido', hoje_d - timedelta(days=14), r, 10)  # 2a ocorrência
+    sug2 = sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6)
+    la2 = _loja_out(sug2, loja.id)
+    assert any(it['receita_id'] == r.id for it in la2['dias'][0]['itens'])
+
+
 def test_sugerir_marca_ja_tem_pedido(app):
     """Onde a loja ja tem pedido nao-cancelado, marca ja_tem_pedido."""
     loja = _loja('Loja A')
