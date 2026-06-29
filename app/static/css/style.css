@@ -547,7 +547,7 @@ body {
     .main-content {
         margin-left: 0;
         padding: 12px;
-        padding-top: 60px;  /* espaço para mobile header */
+        padding-top: calc(60px + env(safe-area-inset-top, 0px));  /* mobile header + area segura */
         padding-bottom: 20px;
     }
 
