@@ -92,11 +92,12 @@
                         <th title="Média semanal (total na janela ÷ nº de semanas)">Média/sem</th>
                         {% for dia in grade.dias %}<th>{{ dia.label }}</th>{% endfor %}
                         <th>Total</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for p in loja.produtos %}
-                    <tr>
+                    <tr data-nome="{{ p.nome }}" data-lote="{{ p.lote }}">
                         <td class="prod">{{ p.nome }}</td>
                         <td class="media">{{ p.media_semanal }}</td>
                         {% for dia in grade.dias %}
@@ -105,10 +106,17 @@
                                    class="form-control form-control-sm pmed-cel"
                                    name="qtd|{{ loja.loja_id }}|{{ dia.data }}|{{ p.receita_id }}"
                                    value="{{ p.por_dia[loop.index0] }}"
+                                   data-label="{{ dia.label }}"
                                    {% if dia.data in loja.ja_tem %}disabled title="já tem pedido neste dia"{% endif %}>
                         </td>
                         {% endfor %}
                         <td class="total-cel">0</td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-outline-primary btn-dividir"
+                                    title="Dividir a entrega em dias escolhidos">
+                                <i class="bi bi-distribute-horizontal"></i> Dividir
+                            </button>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
