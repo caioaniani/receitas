@@ -202,6 +202,26 @@ def test_fornada_especial_so_fim_de_semana(app):
     assert any(it['receita_id'] == r.id for it in dia2['itens'])
 
 
+def test_fornada_especial_nao_projeta_producao_em_dia_util(app):
+    """Produção: o balanço não projeta fornada especial em dia útil — senão o
+    cronograma mandaria produzir focaccia numa terça (demanda que não existe)."""
+    from app.services.previsao_producao import balanco_industria
+    loja = _loja('Loja A')
+    r = _receita('Focaccia')
+    r.fornada_especial = True
+    db.session.commit()
+    hoje_d = hoje()
+    for k in range(1, 5):                       # histórico -> soma_total > 0
+        _pedido(loja, 'recebido', hoje_d - timedelta(days=k), r, 20)
+    # horizonte de 1 dia caindo num dia ÚTIL (seg–qui)
+    offset = next(i for i in range(1, 8)
+                  if (hoje_d + timedelta(days=i)).weekday() < 4)
+    b = balanco_industria(horizonte_dias=1, inicio_offset_dias=offset,
+                          usar_cache=False)
+    it = next((x for x in b['itens'] if x['receita_id'] == r.id), None)
+    assert it is None or it['previsto'] == 0     # dia útil: não projeta
+
+
 def test_sugerir_marca_ja_tem_pedido(app):
     """Onde a loja ja tem pedido nao-cancelado, marca ja_tem_pedido."""
     loja = _loja('Loja A')
