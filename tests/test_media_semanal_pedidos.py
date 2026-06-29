@@ -151,7 +151,9 @@ def test_rota_renderiza(app, admin_user):
     assert 'Média semanal' in body or 'média semanal' in body
     assert 'Loja Centro' in body
     assert 'Pão Francês' in body
-    # UI de dividir entrega entre dias escolhidos
+    # UI de dividir entrega entre dias escolhidos (1 produto, loja ou tudo)
     assert 'btn-dividir' in body
+    assert 'btn-dividir-loja' in body
+    assert 'btn-dividir-todos' in body
     assert 'modalDividir' in body
     assert 'data-lote' in body
