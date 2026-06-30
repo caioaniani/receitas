@@ -184,10 +184,21 @@
         </table>
     </div>
 
-    <button type="submit" class="btn btn-primary btn-sm">
+    <button type="submit" class="btn btn-primary btn-sm" id="btn-registrar-estoque">
         <i class="bi bi-check-lg"></i> Registrar
     </button>
 </form>
+<script>
+  // Feedback de salvamento + trava de duplo-clique (estoque = não pode baixar 2x).
+  (function () {
+    var f = document.getElementById('form-estoque-loja');
+    var b = document.getElementById('btn-registrar-estoque');
+    if (f && b) f.addEventListener('submit', function () {
+      b.disabled = true;
+      b.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Registrando…';
+    });
+  })();
+</script>
 {% else %}
 <div class="alert alert-info">Nenhum item no estoque desta loja. O estoque e alimentado quando pedidos sao entregues.</div>
 {% endif %}
