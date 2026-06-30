@@ -93,36 +93,43 @@ def test_resolver_prefill_qtd_clamp_e_dedup(app):
         assert itens[0]['qtd'] == 99
 
 
-def test_carrinho_route_injeta_prefill(app, monkeypatch):
+def test_carrinho_add_mescla_na_sessao(app, monkeypatch):
+    """?add= agora MESCLA no carrinho da sessão e REDIRECIONA (PRG) pra URL
+    limpa; seguindo o redirect, o carrinho resolvido é injetado em #carrinho-sessao."""
     monkeypatch.setenv('LOJA_VISIVEL', '1')
     from app.extensions import db
     with app.app_context():
         ids = _catalogo(db)
     c = app.test_client()
     r = c.get(f'/loja/carrinho?add=p{ids["box"]}:2')
-    assert r.status_code == 200
-    assert b'id="cart-prefill"' in r.data
-    assert b'Box Mimo' in r.data
-    assert b'"qtd": 2' in r.data
+    assert r.status_code == 302
+    assert r.headers['Location'].endswith('/loja/carrinho')
+    r2 = c.get('/loja/carrinho')
+    assert r2.status_code == 200
+    assert b'id="carrinho-sessao"' in r2.data
+    assert b'Box Mimo' in r2.data
+    assert b'"qtd": 2' in r2.data
 
 
-def test_carrinho_route_avisa_esgotado(app, monkeypatch):
+def test_carrinho_add_avisa_esgotado(app, monkeypatch):
+    """Esgotado não entra no carrinho, mas o cliente é avisado (via redirect)."""
     monkeypatch.setenv('LOJA_VISIVEL', '1')
     from app.extensions import db
     with app.app_context():
         ids = _catalogo(db)
     c = app.test_client()
-    r = c.get(f'/loja/carrinho?add=p{ids["esgotado"]}:1')
+    r = c.get(f'/loja/carrinho?add=p{ids["esgotado"]}:1', follow_redirects=True)
     assert r.status_code == 200
     assert b'esgotado' in r.data.lower()
-    # esgotado não entra no prefill (nenhum bloco de prefill renderizado)
-    assert b'id="cart-prefill"' not in r.data
+    assert b'Caixa Especial' not in r.data.split(b'carrinho-sessao')[1] \
+        if b'carrinho-sessao' in r.data else True  # esgotado fora do carrinho
 
 
 def test_carrinho_route_sem_add_funciona(app, monkeypatch):
-    """Carrinho normal (sem ?add=) segue servindo a casca, sem prefill."""
+    """Carrinho normal (sem ?add=) serve a casca, sem prefill antigo."""
     monkeypatch.setenv('LOJA_VISIVEL', '1')
     c = app.test_client()
     r = c.get('/loja/carrinho')
     assert r.status_code == 200
     assert b'id="cart-prefill"' not in r.data
+    assert b'id="carrinho-sessao"' in r.data  # injeção da sessão
