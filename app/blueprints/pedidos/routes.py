@@ -2075,6 +2075,50 @@ def estoque_loja_mapeamentos_vincular(map_id):
     return redirect(url_for('pedidos.estoque_loja_mapeamentos'))
 
 
+def _grupos_nomes_duplicados(rows, *, tem_categoria=False):
+    """Agrupa por nome normalizado (minusculo, sem espaco nas pontas) e devolve
+    so os grupos com 2+ itens. `colisao_exata` marca os que batem TAMBEM no
+    rotulo do typeahead (mesmo nome E, pra receita, mesma categoria) — esses
+    ganham o sufixo #id na busca. Ordena por nº de repeticoes desc."""
+    grupos = {}
+    for r in rows:
+        chave = (r.nome or '').strip().lower()
+        grupos.setdefault(chave, []).append(r)
+    out = []
+    for itens in grupos.values():
+        if len(itens) < 2:
+            continue
+        det = []
+        for r in itens:
+            cat = (getattr(r, 'categoria', None) or '') if tem_categoria else None
+            det.append({'id': r.id, 'nome': r.nome, 'categoria': cat})
+        # colisao exata no typeahead: rotulo identico (nome + categoria p/ receita)
+        rotulos = {(d['nome'], d['categoria']) for d in det}
+        out.append({'nome': itens[0].nome, 'n': len(itens), 'itens': det,
+                    'colisao_exata': len(rotulos) < len(det)})
+    out.sort(key=lambda g: (-g['n'], (g['nome'] or '').lower()))
+    return out
+
+
+@pedidos_bp.route('/catalogo/nomes-duplicados')
+@login_required
+@admin_required
+def nomes_duplicados():
+    """Diagnostico read-only: nomes repetidos de Receita / Produto / Materia-
+    Prima. Nome nao e unico no banco, entao nomes iguais colidem no typeahead
+    de vinculo (resolvido com sufixo #id) e confundem em geral. Aqui pra limpar."""
+    receitas = _grupos_nomes_duplicados(
+        Receita.query.filter(Receita.arquivada_em.is_(None))
+        .order_by(Receita.nome).all(), tem_categoria=True)
+    produtos = _grupos_nomes_duplicados(
+        Produto.query.filter_by(ativo=True).order_by(Produto.nome).all())
+    materias = _grupos_nomes_duplicados(
+        MateriaPrima.query.order_by(MateriaPrima.nome).all())
+    return render_template('pedidos/nomes_duplicados.html',
+                           receitas=receitas, produtos=produtos, materias=materias,
+                           total=len(receitas) + len(produtos) + len(materias))
+
+
 @pedidos_bp.route('/estoque-loja/historico')
 @login_required
 @gerente_required
