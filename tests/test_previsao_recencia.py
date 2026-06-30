@@ -32,9 +32,15 @@ def test_teto_capa_pico_isolado_mas_nao_tendencia():
     trend = {date(2026, 5, 24): 10, date(2026, 5, 31): 10, date(2026, 6, 7): 10,
              date(2026, 6, 21): 40, date(2026, 6, 28): 40}
     assert _teto_pico_isolado(trend) == float('inf')
-    # poucos pontos (<3): nao capa
+    # 1 ponto so: nao da pra julgar -> nao capa
+    assert _teto_pico_isolado({date(2026, 6, 28): 500}) == float('inf')
+    # 2 pontos com SALTO OBVIO (50x): capa no menor (fix A3 30/06 — antes a faixa
+    # de 2 datas ficava sem protecao e o pico estourava a previsao).
     assert _teto_pico_isolado(
-        {date(2026, 6, 21): 10, date(2026, 6, 28): 500}) == float('inf')
+        {date(2026, 6, 21): 10, date(2026, 6, 28): 500}) == 10
+    # 2 pontos com variacao NORMAL (3x): NAO capa (so pico obvio, > 5x).
+    assert _teto_pico_isolado(
+        {date(2026, 6, 21): 10, date(2026, 6, 28): 30}) == float('inf')
 
 
 def test_media_recencia_pico_isolado_nao_domina():
