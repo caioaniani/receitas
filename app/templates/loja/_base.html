@@ -364,6 +364,9 @@
 </script>
 {% endif %}
 
+{# Carrinho da SESSÃO (fonte de verdade, resolvido no servidor). O carrinho.js
+   inicializa o estado a partir disto — não depende mais do localStorage. #}
+<script type="application/json" id="carrinho-sessao">{{ carrinho_sessao | tojson }}</script>
 <script src="{{ url_for('loja.static', filename='carrinho.js') }}"></script>
 {% block scripts %}{% endblock %}
 
