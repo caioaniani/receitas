@@ -56,6 +56,13 @@
         });
       }
       this.salvar(itens);
+      lojaGA('add_to_cart', {
+        currency: 'BRL', value: (Number(item.preco) || 0) * qtd,
+        items: [{
+          item_id: item.kind + '_' + item.id, item_name: item.nome,
+          price: Number(item.preco) || 0, quantity: qtd,
+        }],
+      });
       // Primeiro item do carrinho (vazio -> com 1+ item): abre drawer
       // automaticamente pra mostrar pro cliente que pode seguir pro
       // checkout ou continuar comprando.
