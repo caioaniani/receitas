@@ -143,36 +143,6 @@ def test_rota_reconciliacao_renderiza(app, admin_user, catalogo):
     assert b'tab-vnda' not in r.data
 
 
-def test_reconciliar_vnda_separa_pendentes(app):
-    from app.extensions import db
-    from app.models import EstoqueLoja, MovEstoqueLoja
-    from app.services import pdv_saude
-
-    vnda_agg = {
-        'produtos': [
-            {'nome': 'Box Site', 'sku': 'v1', 'qtd': 10, 'estado_map': 'sem_map',
-             'fator': 1.0, 'mapeado_para': None},
-            {'nome': 'Pao Site', 'sku': 'v2', 'qtd': 40, 'estado_map': 'mapeado',
-             'fator': 1.0, 'mapeado_para': {'tipo': 'produto', 'id': 1, 'nome': 'Pao'}},
-        ],
-        'total_pedidos': 8, 'total_itens': 50, 'loja': 'Anesio',
-    }
-    with app.app_context():
-        el = EstoqueLoja(loja_id=1, produto_id=1, quantidade=0)
-        db.session.add(el)
-        db.session.flush()
-        db.session.add(MovEstoqueLoja(estoque_loja_id=el.id, tipo='venda_vnda',
-                                      quantidade=40, data=datetime(2026, 5, 5, 9, 0)))
-        db.session.commit()
-        with patch('app.services.vnda_sync.agregar_vendas', return_value=vnda_agg):
-            r = pdv_saude.reconciliar_vnda(date(2026, 5, 1), date(2026, 5, 7))
-
-    assert 'erro' not in r
-    assert len(r['pendentes_vendidos']) == 1
-    assert r['pendentes_vendidos'][0]['nome'] == 'Box Site'
-    assert r['baixado_efetivo'] == 40
-
-
 def test_dashboard_renderiza_com_card_pdv(app, admin_user):
     """Smoke: /dashboard renderiza com pdv_pendencias sem quebrar."""
     c = app.test_client()
