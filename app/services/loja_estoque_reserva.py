@@ -175,10 +175,12 @@ def consumir(pedido, *, loja_id, usuario_id=None):
     # Idempotencia: se ja consumimos, nao fazer de novo (preco da retry
     # do webhook em quase-simultaneo). _marcar_pago em loja_pagamento ja
     # tem FOR UPDATE no pedido, entao chegar aqui 2x deveria ser raro,
-    # mas defesa em profundidade nao machuca.
+    # mas defesa em profundidade nao machuca. Prefixo: o motor enriquece a
+    # referencia (cesta/fracao), entao o mov nem sempre eh exatamente `ref`.
     ja_consumido = (db.session.query(MovEstoqueLoja)
                     .filter(MovEstoqueLoja.tipo == 'venda_site',
-                            MovEstoqueLoja.referencia == ref)
+                            db.or_(MovEstoqueLoja.referencia == ref,
+                                   MovEstoqueLoja.referencia.like(ref + ' %')))
                     .first())
     if ja_consumido:
         logger.info('consumir: pedido %s ja consumido (no-op)', pedido.codigo)
@@ -186,29 +188,28 @@ def consumir(pedido, *, loja_id, usuario_id=None):
         return {'baixado': 0, 'faltou': 0, 'pulado': 0,
                 'ja_consumido': True}
 
-    # Mesma expansao da reserva (cesta -> componentes), agregada por linha.
+    # 1. Libera a reserva (mesma agregacao inteira de `reservar`, pra o ledger
+    #    de `quantidade_reservada` fechar). Nao depende da baixa real abaixo.
     linhas, pulados = _agrega_por_linha(pedido, loja_id, lock=True)
-    total = {'baixado': 0, 'faltou': 0, 'pulado': pulados}
     for el, qtd, _nome in linhas:
-        # Libera a reserva primeiro (mesmo em shortfall — nao segura mais
-        # que existe). Depois baixa real.
         el.quantidade_reservada = max(0, (el.quantidade_reservada or 0) - qtd)
-        atual = el.quantidade or 0
-        baixa = min(qtd, atual)
-        el.quantidade = atual - baixa
-        if baixa > 0:
-            db.session.add(MovEstoqueLoja(
-                estoque_loja_id=el.id, tipo='venda_site', quantidade=baixa,
-                referencia=ref, usuario_id=usuario_id))
-            total['baixado'] += baixa
-        faltou = qtd - baixa
-        if faltou > 0:
-            db.session.add(MovEstoqueLoja(
-                estoque_loja_id=el.id, tipo='venda_site_sem_estoque',
-                quantidade=faltou,
-                referencia=f'{ref} — sem estoque suficiente',
-                usuario_id=usuario_id))
-            total['faltou'] += faltou
+
+    # 2. Baixa real pelo MOTOR UNICO (mesma logica de Seru/lote): explode cesta,
+    #    acumula fracao por item, decrementa a linha canonica, gera o movimento.
+    #    `pular_sem_linha=True` preserva o comportamento do site de nao baixar
+    #    componente decorativo nao-rastreado.
+    from app.services.baixa_venda import aplicar_venda
+    total = {'baixado': 0, 'faltou': 0, 'pulado': pulados}
+    for it in pedido.itens:
+        if not (it.receita_id or it.produto_id):
+            continue
+        res = aplicar_venda(
+            loja_id, receita_id=it.receita_id, produto_id=it.produto_id,
+            qtd=it.quantidade, canal='site', referencia=ref,
+            pedido_ref=f'site:{pedido.codigo}', usuario_id=usuario_id,
+            nome_venda=it.nome, pular_sem_linha=True)
+        total['baixado'] += res['baixado']
+        total['faltou'] += res['faltou']
 
     pedido.reserva_expira_em = None
     db.session.flush()
