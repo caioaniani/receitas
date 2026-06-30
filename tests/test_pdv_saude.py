@@ -139,6 +139,8 @@ def test_rota_reconciliacao_renderiza(app, admin_user, catalogo):
     assert b'Cesta Nova' in r.data        # pendente (nao baixou) aparece
     assert b'reconMapear' in r.data       # JS da acao inline
     assert b'recon-alvo' in r.data        # select de alvos renderizou
+    assert b'recon-fator' in r.data       # campo de fator de composicao inline
+    assert b'reconFatias' in r.data       # helper "X fatias de Y"
     # VNDA aposentado: nao ha mais aba do site na reconciliacao.
     assert b'tab-vnda' not in r.data
 
