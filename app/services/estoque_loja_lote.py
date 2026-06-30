@@ -374,129 +374,38 @@ def aplicar_saida_lote(itens_resolvidos, loja_id, user, referencia=None):
                               'nome': mp.nome_digitado, 'motivo': 'pendente'})
             continue
 
-        fator = float(mp.fator_quantidade or 1.0)
-        qtd_efetiva_float = qtd_sub * fator
+        # Marcador loja<->mapa: a tela de mapeamentos lista as lojas que usaram
+        # cada apelido (join LojaDebito x Loja). A FRACAO nao mora mais aqui — vai
+        # pro DebitoEstoque do motor unico; o LojaDebito fica so como registro de
+        # uso (fracao_pendente=0, zerada pelo cutover).
+        if not LojaDebito.query.filter_by(
+                loja_id=loja_id, loja_produto_map_id=mp.id).first():
+            db.session.add(LojaDebito(loja_id=loja_id, loja_produto_map_id=mp.id,
+                                      fracao_pendente=0.0))
 
-        # Acumulador (igual SeruDebito/VndaDebito) — fracao soma proxima vez
-        debito = LojaDebito.query.filter_by(
-            loja_id=loja_id, loja_produto_map_id=mp.id).first()
-        if not debito:
-            debito = LojaDebito(loja_id=loja_id, loja_produto_map_id=mp.id,
-                                 fracao_pendente=0.0)
-            db.session.add(debito)
-            db.session.flush()
-        debito_total = (debito.fracao_pendente or 0.0) + qtd_efetiva_float
-        inteiros = int(debito_total + 1e-9)
-        debito.fracao_pendente = max(0.0, round(debito_total - inteiros, 6))
+        # Baixa pelo MOTOR UNICO (baixa_venda): composicao (cesta->componentes;
+        # simples->ele mesmo), fator, acumulador de fracao por item fisico.
+        from app.services.baixa_venda import aplicar_venda
+        res = aplicar_venda(
+            loja_id, receita_id=mp.receita_id, produto_id=mp.produto_id,
+            materia_prima_id=mp.materia_prima_id, qtd=qtd_sub,
+            fator=mp.fator_quantidade, canal='lote',
+            referencia=f'{ref} [{mp.nome_digitado}]',
+            pedido_ref=f'lote:{loja_id}:{mp.id}',
+            usuario_id=getattr(user, 'id', None), nome_venda=mp.nome_digitado)
 
-        if inteiros <= 0:
-            ignorados.append({'linha': item.get('linha', '?'),
-                              'nome': mp.nome_digitado,
-                              'motivo': f'fracao_acumulando ({debito.fracao_pendente:g})'})
-            continue
-
-        filtro = {'loja_id': loja_id}
-        if mp.receita_id:
-            filtro['receita_id'] = mp.receita_id
-        elif mp.produto_id:
-            # Se Produto for cesta (tem ProdutoItens), desempacota e baixa
-            # CADA componente individual em vez do produto inteiro. Loja so
-            # tem os componentes em estoque — nao a cesta montada.
-            from app.services.cestas import componentes_de_cesta
-            produto = Produto.query.get(mp.produto_id)
-            componentes_cesta = componentes_de_cesta(produto)
-
-            if componentes_cesta:
-                # Cesta: baixa cada componente, registra mov por componente.
-                # Acumulador 'fracao_pendente' por componente ficaria mais
-                # robusto, mas pra v1 arredondamos: qtd_componente = round(inteiros * qtd_no_item).
-                # Suficiente pra padaria onde componentes sao inteiros (pao, croissant).
-                componentes_baixados = []
-                for col, item_id, nome_comp, qtd_no_item in componentes_cesta:
-                    qtd_baixar = int(round(inteiros * qtd_no_item))
-                    if qtd_baixar <= 0:
-                        continue
-                    filtro_c = {'loja_id': loja_id, col: item_id}
-                    ep_c = EstoqueLoja.query.filter_by(**filtro_c).first()
-                    if not ep_c:
-                        ep_c = EstoqueLoja(**filtro_c, quantidade=0)
-                        db.session.add(ep_c)
-                        db.session.flush()
-                    anterior_c = ep_c.quantidade or 0
-                    real_c = min(qtd_baixar, anterior_c)
-                    falta_c = qtd_baixar - real_c
-                    ep_c.quantidade = anterior_c - real_c
-                    if real_c > 0:
-                        db.session.add(MovEstoqueLoja(
-                            estoque_loja_id=ep_c.id, tipo='saida_lote',
-                            quantidade=real_c,
-                            referencia=(f'{ref} [{mp.nome_digitado} → cesta] '
-                                        f'{nome_comp} (era {anterior_c}, ficou {ep_c.quantidade})'),
-                            usuario_id=getattr(user, 'id', None),
-                        ))
-                    if falta_c > 0:
-                        db.session.add(MovEstoqueLoja(
-                            estoque_loja_id=ep_c.id, tipo='venda_loja_sem_estoque',
-                            quantidade=falta_c,
-                            referencia=(f'{ref} [{mp.nome_digitado} → cesta] '
-                                        f'{nome_comp} — faltou {falta_c}'),
-                            usuario_id=getattr(user, 'id', None),
-                        ))
-                    componentes_baixados.append(
-                        f'{real_c}× {nome_comp}' + (f' ({falta_c} faltou)' if falta_c else ''))
-
-                aplicados.append({
-                    'nome': mp.nome_digitado,
-                    'alvo': f'CESTA: {produto.nome}',
-                    'tipo': 'cesta',
-                    'anterior': '-',
-                    'novo': '-',
-                    'delta': f'desempacotado: {", ".join(componentes_baixados)}',
-                    'faltou': 0,
-                })
-                continue  # ja registrou tudo, pula o fluxo normal abaixo
-
-            # Produto normal (nao cesta) — fluxo padrao
-            filtro['produto_id'] = mp.produto_id
-        elif mp.materia_prima_id:
-            filtro['materia_prima_id'] = mp.materia_prima_id
-        else:
+        if res['sem_alvo']:
             ignorados.append({'linha': item.get('linha', '?'),
                               'nome': mp.nome_digitado, 'motivo': 'sem_alvo'})
             continue
-
-        ep = EstoqueLoja.query.filter_by(**filtro).first()
-        if not ep:
-            ep = EstoqueLoja(**filtro, quantidade=0)
-            db.session.add(ep)
-            db.session.flush()
-
-        anterior = ep.quantidade or 0
-        real = min(inteiros, anterior)
-        falta = inteiros - real
-        ep.quantidade = anterior - real
-
-        if real > 0:
-            db.session.add(MovEstoqueLoja(
-                estoque_loja_id=ep.id, tipo='saida_lote', quantidade=real,
-                referencia=f'{ref} [{mp.nome_digitado}] (era {anterior}, ficou {ep.quantidade})',
-                usuario_id=getattr(user, 'id', None),
-            ))
-        if falta > 0:
-            db.session.add(MovEstoqueLoja(
-                estoque_loja_id=ep.id, tipo='venda_loja_sem_estoque', quantidade=falta,
-                referencia=f'{ref} [{mp.nome_digitado}] — faltou {falta}',
-                usuario_id=getattr(user, 'id', None),
-            ))
-
+        if res['baixado'] == 0 and res['faltou'] == 0 and res['acumulado']:
+            ignorados.append({'linha': item.get('linha', '?'),
+                              'nome': mp.nome_digitado,
+                              'motivo': 'fracao_acumulando'})
+            continue
         aplicados.append({
-            'nome': mp.nome_digitado,
-            'alvo': mp.alvo_nome,
-            'tipo': mp.alvo_tipo,
-            'anterior': anterior,
-            'novo': ep.quantidade,
-            'delta': -real,
-            'faltou': falta,
+            'nome': mp.nome_digitado, 'alvo': mp.alvo_nome, 'tipo': mp.alvo_tipo,
+            'baixado': res['baixado'], 'faltou': res['faltou'],
         })
 
     if aplicados:
