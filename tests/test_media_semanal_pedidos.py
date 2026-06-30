@@ -135,6 +135,42 @@ def test_lote_ausente_vem_zero(app):
     assert p['lote'] == 0
 
 
+def test_lote_distribui_caixas_inteiras(app):
+    """Media que fecha >= 1 caixa -> por_dia em MULTIPLOS do lote, balanceado
+    entre os dias, e nao marca abaixo_lote."""
+    loja = _loja()
+    r = _receita('Croissant')
+    r.lote_pedido = 50
+    db.session.commit()
+    hoje_d = hoje()
+    # 600 numa ocorrencia, janela 6 -> media 100/sem; horizonte 7 -> 100 un
+    _pedido(loja, hoje_d - timedelta(days=7), r, 600)
+    grade = media_semanal_pedidos(horizonte_dias=7, janela_semanas=6)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    assert p['abaixo_lote'] is False
+    assert all(v % 50 == 0 for v in p['por_dia'])   # so caixas inteiras
+    assert sum(p['por_dia']) == 100                  # 2 caixas de 50
+
+
+def test_abaixo_da_caixa_mostra_media_real_sem_forcar(app):
+    """Demanda < 1 caixa: aparece com a media REAL, abaixo_lote=True, e NAO eh
+    forcada pra 1 caixa (item lento nao super-pedido)."""
+    loja = _loja()
+    r = _receita('Item Lento')
+    r.lote_pedido = 6
+    db.session.commit()
+    hoje_d = hoje()
+    # 18 numa ocorrencia, janela 6 -> media 3/sem (< caixa 6)
+    _pedido(loja, hoje_d - timedelta(days=7), r, 18)
+    grade = media_semanal_pedidos(horizonte_dias=7, janela_semanas=6)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    assert p['abaixo_lote'] is True
+    assert sum(p['por_dia']) == 3                    # media real, nao forcada a 6
+    assert sum(p['por_dia']) < p['lote']
+
+
 def test_rota_renderiza(app, admin_user):
     loja = _loja('Loja Centro')
     r = _receita('Pão Francês')
