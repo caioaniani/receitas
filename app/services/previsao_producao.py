@@ -1652,6 +1652,7 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
         if data_ent is not None:
             firme[data_ent][loja_id] += int(qtd or 0)
 
+    datas_possiveis_dow = _datas_por_dow(hist_ini, hist_fim)   # denom da media
     dias = []
     total_previsto_frac = 0.0
     total_firme = 0
@@ -1665,7 +1666,8 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
             previsto = 0.0
             fonte = 'fora_fornada'
         elif por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
-            previsto = _media_recencia(por_data, hoje_d)
+            previsto = _media_recencia(
+                por_data, hoje_d, datas_possiveis=datas_possiveis_dow[dow])
             fonte = 'media_dow'
         elif soma_total:
             previsto = soma_total / dias_calendario_janela
@@ -1678,7 +1680,8 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
         previsto_lojas = []
         if fonte == 'media_dow':
             for loja_id, datas in por_loja.get(dow, {}).items():
-                m = _media_recencia(datas, hoje_d)
+                m = _media_recencia(
+                    datas, hoje_d, datas_possiveis=datas_possiveis_dow[dow])
                 if round(m) > 0:
                     previsto_lojas.append({'loja_nome': nomes_loja.get(loja_id, '?'),
                                            'media': int(round(m)),
