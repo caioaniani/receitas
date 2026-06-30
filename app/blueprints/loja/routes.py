@@ -834,17 +834,21 @@ def api_carrinho_salvar():
 def checkout():
     """Checkout do site. GET serve o formulário; POST cria o PedidoOnline.
 
-    O carrinho vem do navegador (campo oculto itens_json). A integridade de
-    dinheiro é do SERVIDOR: loja_checkout.criar_pedido re-busca preço no
+    O carrinho vem da SESSÃO (fonte de verdade). Fallback no itens_json do form
+    só pra clientes em transição com carrinho ainda no navegador. A integridade
+    de dinheiro é do SERVIDOR: loja_checkout.criar_pedido re-busca preço no
     catálogo e recomputa o frete — nunca confia no que o cliente mandou.
-    PRG: sucesso redireciona pra confirmação."""
+    PRG: sucesso redireciona pra confirmação e esvazia o carrinho da sessão."""
     if request.method == 'POST':
-        try:
-            itens_raw = json.loads(request.form.get('itens_json') or '[]')
-        except ValueError:
-            itens_raw = []
+        itens_raw = _carrinho_sessao()
+        if not itens_raw:
+            try:
+                itens_raw = json.loads(request.form.get('itens_json') or '[]')
+            except ValueError:
+                itens_raw = []
         pedido, erros = loja_checkout.criar_pedido(request.form, itens_raw)
         if not erros:
+            session.pop('carrinho', None)  # pedido criado → carrinho zerado
             return redirect(url_for('loja.pedido_pagamento',
                                     codigo=pedido.codigo))
         return render_template(
