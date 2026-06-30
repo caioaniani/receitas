@@ -12,21 +12,21 @@
 
   var CHAVE = 'opao_carrinho_v1';
 
+  // Espelho em memória do carrinho. A FONTE DE VERDADE é a SESSÃO do servidor
+  // (injetada em #carrinho-sessao e sincronizada via POST /loja/api/carrinho),
+  // que não some quando o navegador descarta o storage. O localStorage vira só
+  // cache local (resiliência offline + migração do modelo antigo).
+  var _mirror = [];
+
   var Carrinho = {
     ler: function () {
-      try {
-        var raw = localStorage.getItem(CHAVE);
-        var arr = raw ? JSON.parse(raw) : [];
-        return Array.isArray(arr) ? arr : [];
-      } catch (e) {
-        return [];
-      }
+      try { return JSON.parse(JSON.stringify(_mirror)); } catch (e) { return []; }
     },
 
     salvar: function (itens) {
-      try {
-        localStorage.setItem(CHAVE, JSON.stringify(itens));
-      } catch (e) { /* localStorage cheio/indisponível — ignora */ }
+      _mirror = Array.isArray(itens) ? itens : [];
+      try { localStorage.setItem(CHAVE, JSON.stringify(_mirror)); } catch (e) { /* cache best-effort */ }
+      _sincronizarServidor(_mirror);   // grava na sessão (fonte de verdade)
       this.atualizarBadge();
     },
 
