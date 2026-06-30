@@ -297,15 +297,10 @@
             <tr class="detalhe-row" data-rid="{{ r.receita_id }}" hidden>
                 <td colspan="{{ crono.dias|length + 2 }}">
                     <div class="saldo-box">
-                        <span>Em estoque: <strong>{{ r.em_estoque }}</strong></span>
-                        <span class="op">·</span>
-                        <span>Pedido firme: <strong>{{ r.comprometido }}</strong></span>
-                        <span class="op">·</span>
-                        <span>Previsto (histórico): <strong style="color:#6f42c1">{{ r.previsto }}</strong></span>
-                        <span class="op">→</span>
-                        <span title="O cronograma produz pro MAIOR entre o pedido firme e o previsto do histórico.">Demanda na janela: <strong>{{ r.demanda }}</strong></span>
+                        <span title="Estoque que sobra depois das entregas iminentes — o que realmente cobre a janela.">Estoque útil: <strong>{{ r.em_estoque_efetivo }}</strong></span>
                         <span class="op">−</span>
-                        <span title="Estoque que sobra depois das entregas iminentes — o que realmente cobre a janela.">estoque útil {{ r.em_estoque_efetivo if r.em_estoque_efetivo is defined else r.em_estoque }}</span>
+                        <span title="O cronograma produz pro MAIOR entre o pedido firme e o previsto do histórico.">Demanda na janela: <strong>{{ r.demanda }}</strong>
+                            <small class="text-muted">(firme {{ r.comprometido }} / previsto <span style="color:#6f42c1">{{ r.previsto }}</span>, usa o maior)</small></span>
                         <span class="op">=</span>
                         <span>Saldo:
                             <strong class="{{ 'saldo-neg' if r.saldo < 0 else 'saldo-pos' }}">{{ r.saldo }}</strong>
