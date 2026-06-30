@@ -19,6 +19,27 @@
 </div>
 {% endif %}
 
+<div class="card border-info mb-3">
+    <div class="card-header py-2 bg-info text-dark">
+        <strong>Motor unico de baixa (VendaMapa / DebitoEstoque)</strong>
+    </div>
+    <div class="card-body small">
+        <p class="mb-2">Unificacao do desconto de estoque (Seru + site + lote).
+            Os dois passos sao idempotentes.</p>
+        <div class="d-flex gap-2 flex-wrap">
+            <form method="POST" action="{{ url_for('main.venda_mapa_backfill') }}" class="mb-0">
+                <button class="btn btn-sm btn-info" type="submit">
+                    1) Backfill VendaMapa (aditivo, seguro)</button>
+            </form>
+            <form method="POST" action="{{ url_for('main.venda_mapa_migrar_fracoes') }}" class="mb-0"
+                  onsubmit="return confirm('Migrar fracoes pendentes (SeruDebito + LojaDebito) pro DebitoEstoque e zerar as fontes? Passo de cutover.');">
+                <button class="btn btn-sm btn-outline-info" type="submit">
+                    2) Migrar fracoes -> DebitoEstoque (cutover)</button>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="row g-3">
     <div class="col-md-6">
         <div class="card">
