@@ -233,7 +233,7 @@ def massa_base_mise(mb_id):
 
     from app.models import MassaBase, PlanejamentoProducao
     from app.services.gantt import _g_label
-    from app.services.massa_base import calcular_cascata
+    from app.services.massa_base import calcular_cascata, rendimento_massa_crua
 
     mb = MassaBase.query.get_or_404(mb_id)
     dia = _parse_dia(request.args.get('data')) or hoje()
@@ -243,10 +243,9 @@ def massa_base_mise(mb_id):
              .first())
 
     # Escala a base pelas UNIDADES do dia em porções REAIS (qtd_alvo /
-    # rendimento), não pelo multiplicador inteiro do item — esse arredonda a
-    # fornada pra cima (ceil) e infla a massa/água (ex: 6 un de rendimento 10
-    # viraria 1 fornada = 10 un). É o mesmo consumo fracionário de
-    # `produzir_item_plano`.
+    # rendimento de massa crua), não pelo multiplicador inteiro do item — esse
+    # arredonda a fornada pra cima (ceil) e infla a massa/água. O rendimento é o
+    # de massa CRUA (peso_unitario), sem perda do forno: 120 un × 500 g = 60 kg.
     membros = {it.receita_id: it.receita for it in mb.itens}
     porcoes, unidades = {}, {}
     if plano:
@@ -255,7 +254,7 @@ def massa_base_mise(mb_id):
             if rec is None:
                 continue
             alvo = int(it.qtd_alvo or 0)
-            rend = float(rec.rendimento_qtd or 0) or 1.0
+            rend = rendimento_massa_crua(rec)
             unidades[it.receita_id] = alvo
             porcoes[it.receita_id] = alvo / rend
 
