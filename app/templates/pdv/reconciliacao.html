@@ -166,7 +166,29 @@
     <div class="tab-pane fade" id="tab-vnda">{{ secao(dv, 'vnda') }}</div>
 </div>
 
+<datalist id="recon-alvo-list">
+    {% for pr in produtos %}<option value="{{ pr.nome }} — produto">{% endfor %}
+    {% for r in receitas %}<option value="{{ r.nome }} — receita">{% endfor %}
+</datalist>
+
 <script>
+// Mapa do que o usuario escolhe (texto do datalist) -> token "produto:ID"/"receita:ID".
+window.RECON_TOKENS = {
+{% for pr in produtos %}  {{ (pr.nome ~ ' — produto')|tojson }}: "produto:{{ pr.id }}",
+{% endfor %}{% for r in receitas %}  {{ (r.nome ~ ' — receita')|tojson }}: "receita:{{ r.id }}",
+{% endfor %}};
+// Fallback por nome puro (sem o sufixo " — produto/receita"), so quando e UNICO
+// — assim o usuario pode digitar o nome e clicar Vincular sem escolher o sufixo.
+window.RECON_BY_NAME = {};
+(function () {
+    var visto = {};
+    for (var k in window.RECON_TOKENS) {
+        var plain = k.replace(/ — (produto|receita)$/, '').trim().toLowerCase();
+        visto[plain] = (visto[plain] === undefined) ? window.RECON_TOKENS[k] : null;
+    }
+    for (var p in visto) { if (visto[p]) window.RECON_BY_NAME[p] = visto[p]; }
+})();
+
 function reconMapear(btn, acao) {
     var tr = btn.closest('tr');
     var nome = tr.getAttribute('data-nome');
