@@ -696,27 +696,12 @@ def vincular_loja(map_id):
 
 
 # ════════════════════════════════════════════════════════════════════
-# VNDA (site) — espelha o Seru mas com loja fixa e baixa por data entrega
+# VNDA (site) — APOSENTADO 24/06/2026. A UI de mapeamento/sync/histórico do
+# VNDA foi removida (sem entrada no menu desde o cutover; era duplicata morta
+# do fluxo Seru). Serviços/modelos VNDA seguem dormentes (Camada B do
+# CLAUDE.md, preservados por histórico). Resta só o diagnóstico de catálogo do
+# bot (vnda_diag_produtos), que bate no VNDA pra debugar o catálogo do chatbot.
 # ════════════════════════════════════════════════════════════════════
-
-@pdv_bp.route('/vnda/mapeamentos')
-@login_required
-@admin_required
-def vnda_mapeamentos():
-    from app.services import vnda_sync as svc
-    produtos_map = VndaProdutoMap.query.order_by(
-        VndaProdutoMap.ignorar.asc(),
-        VndaProdutoMap.confirmado_em.is_(None).desc(),
-        VndaProdutoMap.vnda_nome,
-    ).all()
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
-    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
-    loja_atual = svc.loja_vnda()
-    return render_template('pdv/vnda_mapeamentos.html',
-                           produtos_map=produtos_map,
-                           receitas=receitas, produtos=produtos,
-                           lojas=lojas, loja_atual=loja_atual)
 
 
 @pdv_bp.route('/vnda/config-loja', methods=['POST'])
