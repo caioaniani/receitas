@@ -227,9 +227,11 @@
                                    list="vinc-alvo-list" style="max-width:240px;">
                             <input type="hidden" name="alvo_id" class="vinc-alvo-id"
                                    value="{{ mp.receita_id or mp.produto_id or '' }}">
-                            <input type="number" name="fator" class="form-control form-control-sm"
+                            <input type="number" name="fator" class="form-control form-control-sm map-fator"
                                    step="0.01" min="0.01" value="{{ '%g'|format(mp.fator_quantidade or 1) }}"
                                    style="width:75px;" title="Fator: 1 venda = X unidades. Ex: 0.2 = 2 fatias de 10.">
+                            <button type="button" class="btn btn-sm btn-link p-0 align-self-center" style="font-size:11px;"
+                                    onclick="mapFatias(this)" title="Calcular o fator como X fatias de Y">↳ fatias</button>
                             <button type="submit" name="acao" value="vincular" class="btn btn-sm btn-primary">Vincular</button>
                             {% if mp.estado != 'ignorado' %}
                             <button type="submit" name="acao" value="ignorar" class="btn btn-sm btn-outline-secondary" title="Nunca processar este produto">Ignorar</button>
