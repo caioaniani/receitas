@@ -289,7 +289,7 @@ def consumir_subreceitas_prontas(rec, unidades, user_id):
     from app.models import Receita
     from app.services.estoque_congelados import saida_producao
 
-    rend = float(rec.rendimento_qtd) if rec and rec.rendimento_qtd else 1.0
+    rend = rendimento_massa_crua(rec)
     out = []
     for ing in (rec.ingredientes if rec else []):
         if (ing.tipo or 'mp') != 'receita':
