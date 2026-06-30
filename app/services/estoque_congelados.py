@@ -124,7 +124,7 @@ def _matches_para(nome, receitas, produtos, orfaos=(), apelidos=()):
     """Resolve 1 nome contra o catalogo carregado.
 
     Estrategias em ordem:
-    0. Apelido global confirmado (LojaProdutoMap) — match exato ascii
+    0. Apelido global confirmado (VendaMapa canal='lote') — match exato ascii
     1. Match exato no catalogo (ascii)
     2. Substring direta (ascii)
     3. Substring com abreviacoes expandidas (CRO -> croissant, TRD -> mini)
