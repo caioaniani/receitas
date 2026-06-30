@@ -15,7 +15,13 @@ Duas etapas, ambas IDEMPOTENTES, sem destruir os dados velhos:
    estoque ja consumido fisicamente).
 """
 from app.extensions import db
-from app.models import DebitoEstoque, LojaProdutoMap, MovEstoqueLoja, SeruProdutoMap, VendaMapa
+from app.models import (
+    DebitoEstoque,
+    LojaProdutoMap,
+    MovEstoqueLoja,
+    SeruProdutoMap,
+    VendaMapa,
+)
 from app.services.estoque_helpers import obter_linha_loja
 
 
