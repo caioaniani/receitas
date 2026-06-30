@@ -45,6 +45,8 @@ def rendimento_massa_crua(receita):
     Decisão do dono (30/06): '120 pães de 500 g de massa crua' = 60 kg, a perda
     jamais entra nessa conta. Float, pra a escala bater exata (120 × 500 g sem
     arredondar). Sem peso_unitario, cai no rendimento_qtd cadastrado."""
+    if receita is None:
+        return 1.0
     massa = sum(ingredientes_por_porcao(receita).values())
     pu = receita.peso_unitario or 0
     if massa > 0 and pu > 0:
