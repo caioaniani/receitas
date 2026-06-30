@@ -63,3 +63,25 @@ def test_modal_ajuste_lista_produtos(app):
     r = c.get(f'/pedidos/estoque-loja?loja={loja_id}')
     assert r.status_code == 200
     assert b'Geleia de Morango' in r.data  # produto aparece no select de ajuste
+
+
+def test_estoque_loja_form_tem_feedback_de_salvamento(app):
+    """O form de registrar estoque dá feedback ('Registrando…') e trava
+    duplo-clique no submit — estoque não pode baixar 2x (30/06)."""
+    from app.extensions import db
+    from app.models import EstoqueLoja, Loja, Produto
+    with app.app_context():
+        loja = Loja(nome='Loja FB', ativa=True, endereco='Rua C, 3')
+        prod = Produto(nome='Pão de Mel', categoria='Doces', preco_site=8,
+                       ativo=True)
+        db.session.add_all([loja, prod])
+        db.session.commit()
+        db.session.add(EstoqueLoja(loja_id=loja.id, produto_id=prod.id,
+                                   quantidade=10))
+        db.session.commit()
+        loja_id = loja.id
+    c = _admin(app)
+    html = c.get(f'/pedidos/estoque-loja?loja={loja_id}').data
+    assert b'id="form-estoque-loja"' in html
+    assert b'id="btn-registrar-estoque"' in html
+    assert b'Registrando' in html
