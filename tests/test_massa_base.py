@@ -75,6 +75,51 @@ def test_rendimento_massa_crua_sem_peso_unitario_cai_no_qtd(app):
     assert rendimento_massa_crua(r) == 10.0
 
 
+def test_rendimento_massa_crua_produto_montado_usa_qtd(app):
+    """Produto MONTADO de uma sub-receita pronta (Danish/Croissant consomem
+    'Massa para folhar'): a massa da unidade vem da sub-receita, que NÃO entra
+    em ingredientes_por_porcao. O massa_crua mediria só o recheio percentual
+    (uns 100 g) e estouraria o rendimento — Danish de Calabresa daria
+    100/150 = 0,67 un/fornada em vez de 31, inflando ~45x o consumo do insumo.
+    Bug pego pelo dono (30/06): '1 massa para folhar rende 31 danish, e o
+    sistema trazia 48'. Quando há sub-receita, o rendimento real é o CADASTRADO
+    (rendimento_qtd, que a ficha calcula da massa TOTAL incluindo a sub)."""
+    from app.services.massa_base import rendimento_massa_crua
+    r = Receita(nome='Danish de Calabresa', categoria='Viennoiserie',
+                rendimento_qtd=31, rendimento_unidade='un', peso_base=1000.0,
+                peso_unitario=150.0)
+    db.session.add(r)
+    db.session.flush()
+    db.session.add_all([
+        ReceitaIngrediente(receita_id=r.id, tipo='receita',
+                           ingrediente_nome='Massa para folhar', porcentagem=1),
+        ReceitaIngrediente(receita_id=r.id, tipo='mp',
+                           ingrediente_nome='Molho Branco', porcentagem=6),
+        ReceitaIngrediente(receita_id=r.id, tipo='mp',
+                           ingrediente_nome='Calabresa', porcentagem=3),
+        ReceitaIngrediente(receita_id=r.id, tipo='mp',
+                           ingrediente_nome='Parmesão', porcentagem=1),
+        ReceitaIngrediente(receita_id=r.id, tipo='mp_un',
+                           ingrediente_nome='Manteiga para Folhar', porcentagem=1),
+    ])
+    db.session.commit()
+    # massa_crua dos % daria 100/150 = 0,667 (errado). Tem sub-receita -> usa o
+    # rendimento cadastrado (31). Sem o fix, 32 un consumiria 48 massas (32/0,667).
+    assert rendimento_massa_crua(r) == 31.0
+
+
+def test_rendimento_massa_crua_pao_de_amassadeira_ainda_usa_massa(app):
+    """Trava o outro lado: pão SEM sub-receita (massa é a própria amassadeira)
+    continua usando massa_crua/peso_unitario — é o caso que motivou o helper
+    (rendimento_qtd estava errado com perda embutida)."""
+    from app.services.massa_base import rendimento_massa_crua
+    s = _receita('Sourdough', [('Farinha', 100), ('Água', 80), ('Sal', 2)])
+    s.peso_unitario = 500
+    db.session.commit()
+    # massa = 1820 g; 1820/500 = 3,64 (massa crua), NÃO o rendimento_qtd=10.
+    assert abs(rendimento_massa_crua(s) - 1820 / 500) < 1e-6
+
+
 def test_base_e_o_minimo_comum(app):
     _, _, _, mb = _exemplo_dono(app)
     c = calcular_cascata(mb)            # 1 porção de cada
