@@ -928,19 +928,23 @@ def pedido_confirmado(codigo):
     if not pedido:
         abort(404)
     # Payload do evento `purchase` do GA4 (fecha o funil: visita → carrinho →
-    # checkout → COMPRA). Disparado no template (1x por pedido).
-    ga_purchase = {
-        'transaction_id': pedido.codigo,
-        'value': float(pedido.valor_total or 0),
-        'shipping': float(pedido.frete_valor or 0),
-        'currency': 'BRL',
-        'items': [{
-            'item_id': f'{it.kind}_{it.receita_id or it.produto_id or ""}',
-            'item_name': it.nome,
-            'price': float(it.preco_unitario or 0),
-            'quantity': it.quantidade,
-        } for it in pedido.itens],
-    }
+    # checkout → COMPRA). Só conta como venda quando o pagamento aconteceu —
+    # Pix pendente/cancelado NÃO dispara (no Pix, a página recarrega ao
+    # confirmar e aí o evento sobe). Disparado no template, 1x por pedido.
+    ga_purchase = None
+    if pedido.status not in ('aguardando_pagamento', 'cancelado'):
+        ga_purchase = {
+            'transaction_id': pedido.codigo,
+            'value': float(pedido.valor_total or 0),
+            'shipping': float(pedido.frete_valor or 0),
+            'currency': 'BRL',
+            'items': [{
+                'item_id': f'{it.kind}_{it.receita_id or it.produto_id or ""}',
+                'item_name': it.nome,
+                'price': float(it.preco_unitario or 0),
+                'quantity': it.quantidade,
+            } for it in pedido.itens],
+        }
     return render_template('loja/pedido_confirmado.html', pedido=pedido,
                            ga_purchase=ga_purchase, em_teste=_em_teste())
 
