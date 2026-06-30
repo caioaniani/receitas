@@ -30,7 +30,16 @@ def _cliente(email):
     return cl
 
 
-def _pedido_pago(cliente_id, dias_atras):
+def _produto_box():
+    from app.models import Produto
+    p = Produto(nome='Box Mimo', categoria='Cestas',
+                preco_site=Decimal('50'), ativo=True)
+    db.session.add(p)
+    db.session.commit()
+    return p
+
+
+def _pedido_pago(cliente_id, dias_atras, produto_id=None):
     from app.models import PedidoOnline, PedidoOnlineItem
     p = PedidoOnline(nome_cliente='X', email_cliente=f'c{cliente_id}@x.com',
                      telefone_cliente='11999', modo_entrega='retirada',
@@ -38,8 +47,8 @@ def _pedido_pago(cliente_id, dias_atras):
                      valor_total=Decimal('50'), cliente_id=cliente_id,
                      pago_em=agora() - timedelta(days=dias_atras))
     p.itens.append(PedidoOnlineItem(kind='produto', nome='Box Mimo',
-                   preco_unitario=Decimal('50'), quantidade=1,
-                   subtotal=Decimal('50')))
+                   produto_id=produto_id, preco_unitario=Decimal('50'),
+                   quantidade=1, subtotal=Decimal('50')))
     db.session.add(p)
     db.session.commit()
     return p
