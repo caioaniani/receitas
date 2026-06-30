@@ -167,23 +167,61 @@ var __materias = [
     {id: {{ m.id }}, nome: {{ m.nome|tojson }}},
     {% endfor %}
 ];
-function atualizarLista(tipoSel) {
-    var form = tipoSel.closest('form');
-    var sel = form.querySelector('.vinc-alvo');
-    var prev = sel.value;
-    sel.innerHTML = '';
-    var list;
-    if (tipoSel.value === 'receita') list = __receitas;
-    else if (tipoSel.value === 'produto') list = __produtos;
-    else list = __materias;
-    list.forEach(function(item) {
-        var opt = document.createElement('option');
-        opt.value = item.id;
-        opt.textContent = item.cat ? item.cat + ' — ' + item.nome : item.nome;
-        if (String(item.id) === prev) opt.selected = true;
-        sel.appendChild(opt);
-    });
+// Texto que o usuario escolhe (datalist) -> {tipo, id}. MESMA string do datalist.
+function _dispReceita(r) { return (r.cat ? r.cat + ' — ' : '') + r.nome + ' · receita'; }
+function _dispProduto(p) { return p.nome + ' · produto'; }
+function _dispMateria(m) { return m.nome + ' · mp'; }
+var VINC_TOKENS = {};
+__receitas.forEach(function (r) { VINC_TOKENS[_dispReceita(r)] = {t: 'receita', id: r.id}; });
+__produtos.forEach(function (p) { VINC_TOKENS[_dispProduto(p)] = {t: 'produto', id: p.id}; });
+__materias.forEach(function (m) { VINC_TOKENS[_dispMateria(m)] = {t: 'mp', id: m.id}; });
+
+function _dispDe(tipo, id) {   // reverse: preenche um mapeamento JA existente
+    var arr = tipo === 'produto' ? __produtos
+            : (tipo === 'mp' ? __materias : __receitas);
+    var it = arr.find(function (x) { return String(x.id) === String(id); });
+    if (!it) return '';
+    return tipo === 'produto' ? _dispProduto(it)
+         : (tipo === 'mp' ? _dispMateria(it) : _dispReceita(it));
 }
+function vincResolver(form) {  // texto digitado -> seta alvo_id (e tipo) ocultos
+    var busca = form.querySelector('.vinc-alvo-busca');
+    var tok = VINC_TOKENS[(busca.value || '').trim()];
+    form.querySelector('.vinc-alvo-id').value = tok ? tok.id : '';
+    if (tok) form.querySelector('.vinc-tipo').value = tok.t;
+    return !!tok;
+}
+function vincTipoChange(sel) {  // trocar o tipo na mao limpa a busca
+    var form = sel.closest('form');
+    form.querySelector('.vinc-alvo-busca').value = '';
+    form.querySelector('.vinc-alvo-id').value = '';
+}
+// preenche a busca dos mapeamentos JA existentes (pra reenviar / mudar fator)
+document.querySelectorAll('form').forEach(function (f) {
+    var busca = f.querySelector('.vinc-alvo-busca');
+    if (!busca) return;
+    var hid = f.querySelector('.vinc-alvo-id');
+    if (hid.value) busca.value = _dispDe(f.querySelector('.vinc-tipo').value, hid.value);
+});
+// resolve ao digitar / escolher
+document.addEventListener('input', function (e) {
+    if (e.target.classList && e.target.classList.contains('vinc-alvo-busca')) {
+        vincResolver(e.target.closest('form'));
+    }
+});
+// trava o submit de "vincular" sem um alvo valido escolhido
+document.querySelectorAll('form').forEach(function (f) {
+    if (!f.querySelector('.vinc-alvo-busca')) return;
+    f.addEventListener('submit', function (e) {
+        var btn = e.submitter || document.activeElement;
+        if (btn && btn.value === 'vincular' && !vincResolver(f)) {
+            e.preventDefault();
+            var b = f.querySelector('.vinc-alvo-busca');
+            b.focus(); b.style.borderColor = '#dc3545';
+            alert('Escolha um produto/receita/MP da lista (digite pra buscar e clique na opção).');
+        }
+    });
+});
 (function() {
     var f = document.getElementById('filtro');
     if (f) {
