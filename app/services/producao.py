@@ -3,6 +3,7 @@ from math import ceil
 from app.extensions import db
 from app.models import MateriaPrima, Receita
 from app.services.custos import calcular_custos_receitas
+from app.services.massa_base import rendimento_massa_crua
 
 
 def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
@@ -233,7 +234,7 @@ def mise_en_place(receita, unidades):
     modo de preparo em etapas. mult = unidades/rendimento (fracionario)."""
     from app.utils import dividir_etapas_preparo
 
-    rend = float(receita.rendimento_qtd) if receita.rendimento_qtd else 1.0
+    rend = rendimento_massa_crua(receita)
     mult = (unidades / rend) if rend > 0 else 0.0
     peso_base = receita.peso_base or 0
 
