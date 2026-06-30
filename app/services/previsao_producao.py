@@ -402,6 +402,8 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
 
 # Dias da semana abreviados em PT-BR (Monday=0 .. Sunday=6, igual weekday()).
 _DOW_PT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+_DOW_PT_LONGO = ['segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira',
+                 'sexta-feira', 'sábado', 'domingo']
 
 
 def grade_loja_dia(receita_id, horizonte_dias=7, janela_semanas=6,
@@ -1335,4 +1337,133 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         'inicio_offset_dias': inicio_offset_dias,
         'horizonte_dias': horizonte_dias,
         'janela_semanas': janela_semanas,
+    }
+
+
+def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
+                      inicio_offset_dias=0):
+    """Decompoe o `previsto` de UMA receita pra responder 'de qual dia/loja vem
+    esse numero?'. Pra cada dia do horizonte mostra a entrega-alvo (dia + lead),
+    o pedido FIRME por loja e a PREVISAO do historico decomposta por loja —
+    as entregas recentes daquele dia-da-semana (data, loja, qtd) e a media
+    recencia-ponderada de cada loja. Read-only, diagnostico. Usa EXATAMENTE a
+    mesma conta do cronograma (`_media_recencia`, dia-da-semana, fallback)."""
+    horizonte_dias = max(1, min(int(horizonte_dias or 7), 14))
+    janela_semanas = max(1, min(int(janela_semanas or 6), 26))
+    inicio_offset_dias = max(0, min(int(inicio_offset_dias or 0), 14))
+
+    rec = Receita.query.get(int(receita_id))
+    if rec is None or rec.arquivada_em is not None:
+        return None
+
+    hoje_d = hoje()
+    inicio_d = hoje_d + timedelta(days=inicio_offset_dias)
+    hist_ini = hoje_d - timedelta(days=7 * janela_semanas)
+    hist_fim = hoje_d - timedelta(days=1)
+    dias_calendario_janela = 7 * janela_semanas
+    L = int(rec.dias_producao or 0)
+    nomes_loja = {l.id: l.nome for l in Loja.query.all()}
+
+    # Historico: entregas (nao-canceladas) da janela, por dia-da-semana, com
+    # loja e data — a materia-prima da previsao.
+    por_data_agg = defaultdict(lambda: defaultdict(int))      # dow -> data -> qtd
+    por_loja = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))  # dow->loja->data->qtd
+    soma_total = 0
+    for loja_id, data_ent, qtd in (db.session.query(
+            PedidoLoja.loja_id, PedidoLoja.data_entrega, PedidoItem.quantidade)
+            .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
+            .filter(PedidoItem.receita_id == rec.id,
+                    PedidoLoja.status != 'cancelado',
+                    PedidoLoja.data_entrega >= hist_ini,
+                    PedidoLoja.data_entrega <= hist_fim).all()):
+        if data_ent is None:
+            continue
+        q = int(qtd or 0)
+        dow = data_ent.weekday()
+        por_data_agg[dow][data_ent] += q
+        por_loja[dow][loja_id][data_ent] += q
+        soma_total += q
+
+    # Firme: pedidos atuais (ainda nao baixados) na janela de entrega.
+    deliv_fim = inicio_d + timedelta(days=horizonte_dias - 1 + L)
+    firme = defaultdict(lambda: defaultdict(int))            # data -> loja -> qtd
+    for loja_id, data_ent, qtd in (db.session.query(
+            PedidoLoja.loja_id, PedidoLoja.data_entrega, PedidoItem.quantidade)
+            .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
+            .filter(PedidoItem.receita_id == rec.id,
+                    PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
+                    PedidoLoja.data_entrega >= inicio_d,
+                    PedidoLoja.data_entrega <= deliv_fim).all()):
+        if data_ent is not None:
+            firme[data_ent][loja_id] += int(qtd or 0)
+
+    dias = []
+    total_previsto = total_firme = 0
+    for i in range(horizonte_dias):
+        prod_d = inicio_d + timedelta(days=i)
+        entrega = prod_d + timedelta(days=L)
+        dow = entrega.weekday()
+        # Previsto agregado: a MESMA conta do cronograma.
+        por_data = por_data_agg.get(dow) or {}
+        if not _fornada_no_dia(rec, entrega):
+            previsto = 0.0
+            fonte = 'fora_fornada'
+        elif por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
+            previsto = _media_recencia(por_data, hoje_d)
+            fonte = 'media_dow'
+        elif soma_total:
+            previsto = soma_total / dias_calendario_janela
+            fonte = 'media_diaria'
+        else:
+            previsto = 0.0
+            fonte = 'sem_historico'
+        previsto_i = int(round(previsto))
+
+        # Decomposicao por loja (media recencia-ponderada de cada loja no dow).
+        previsto_lojas = []
+        if fonte == 'media_dow':
+            for loja_id, datas in por_loja.get(dow, {}).items():
+                m = _media_recencia(datas, hoje_d)
+                if round(m) > 0:
+                    previsto_lojas.append({'loja_nome': nomes_loja.get(loja_id, '?'),
+                                           'media': int(round(m)),
+                                           'n': len(datas)})
+            previsto_lojas.sort(key=lambda x: -x['media'])
+
+        # Entregas cruas do dow (as 12 mais recentes) — a prova do numero.
+        historico = []
+        for loja_id, datas in por_loja.get(dow, {}).items():
+            for data_h, q in datas.items():
+                historico.append({'data': data_h.isoformat(),
+                                  'data_label': data_h.strftime('%d/%m'),
+                                  'loja_nome': nomes_loja.get(loja_id, '?'),
+                                  'qtd': q})
+        historico.sort(key=lambda h: h['data'], reverse=True)
+        historico = historico[:12]
+
+        firme_d = firme.get(entrega, {})
+        firme_lojas = sorted(
+            ({'loja_nome': nomes_loja.get(lid, '?'), 'qtd': q}
+             for lid, q in firme_d.items() if q > 0), key=lambda x: -x['qtd'])
+        firme_i = sum(x['qtd'] for x in firme_lojas)
+        total_previsto += previsto_i
+        total_firme += firme_i
+        dias.append({
+            'data': prod_d.isoformat(),
+            'label': '%s %s' % (_DOW_PT[prod_d.weekday()], prod_d.strftime('%d/%m')),
+            'entrega_label': '%s %s' % (_DOW_PT[dow], entrega.strftime('%d/%m')),
+            'dow_nome': _DOW_PT_LONGO[dow],
+            'firme': firme_i, 'firme_lojas': firme_lojas,
+            'previsto': previsto_i, 'fonte': fonte,
+            'usado': 'firme' if firme_i >= previsto_i else 'previsto',
+            'previsto_lojas': previsto_lojas, 'historico': historico,
+        })
+
+    return {
+        'receita': {'id': rec.id, 'nome': rec.nome, 'lead': L},
+        'hoje': hoje_d.isoformat(), 'inicio': inicio_d.isoformat(),
+        'horizonte_dias': horizonte_dias, 'janela_semanas': janela_semanas,
+        'hist_ini': hist_ini.isoformat(), 'hist_fim': hist_fim.isoformat(),
+        'total_previsto': total_previsto, 'total_firme': total_firme,
+        'dias': dias,
     }
