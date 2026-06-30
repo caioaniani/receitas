@@ -440,8 +440,8 @@ class PedidoSite(db.Model):
     esta tabela, indexada por `telefone_chave` (mesma normalizacao BR de
     `app.utils.telefone_chave`), e o card faz lookup instantaneo.
 
-    `VndaPedidoProcessado` NAO serve: guarda so o code (idempotencia da baixa
-    de estoque), sem telefone nem itens. Populado por
+    So existe pro CRM (card do cliente) — a baixa de estoque do site NAO passa
+    mais por aqui (roda pelo motor unico via PedidoOnline). Populado por
     `app.services.vnda_card` (cron incremental + backfill manual do admin).
     Idempotente por `code`. Tabela criada por `db.create_all()` no deploy.
     """
