@@ -3,8 +3,8 @@
 Cobre:
 - soma PDV (Seru) + site (loja propria / PedidoOnline) no mesmo total;
 - site indisponivel NAO derruba o endpoint (200 com aviso, nao 502);
-- faturamento VNDA por DATA DE VENDA (helper dormente — vnda_sync ainda existe,
-  mas o endpoint NAO o usa mais: VNDA aposentado 24/06, site = PedidoOnline).
+- faturamento do site por DATA DE VENDA (VNDA aposentado 24/06 e vnda_sync
+  REMOVIDO: a fonte do site agora e PedidoOnline / loja propria).
 """
 from datetime import date
 from unittest.mock import patch
