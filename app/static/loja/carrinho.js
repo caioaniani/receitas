@@ -415,34 +415,60 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  // Link de 1 clique (/loja/carrinho?add=...): o servidor já resolveu os
-  // itens (preço/estoque reais) e injetou aqui. Soma ao carrinho e LIMPA a
-  // query da URL — sem isso, um refresh somaria os itens de novo.
-  function aplicarPrefill() {
-    var el = document.getElementById('cart-prefill');
-    if (!el) return;
-    var itens;
-    try { itens = JSON.parse(el.textContent || '[]'); } catch (e) { return; }
-    if (!Array.isArray(itens) || !itens.length) return;
-    itens.forEach(function (it) {
-      Carrinho.adicionar({
-        kind: it.kind, id: it.id, nome: it.nome, preco: it.preco,
-        imagem: it.imagem || '', categoria: it.categoria || '',
-      }, it.qtd || 1);
-    });
+  // Grava o carrinho na SESSÃO do servidor (fonte de verdade). Fire-and-forget:
+  // a UI já atualizou pelo espelho; se a rede falhar, a próxima ação re-sincroniza
+  // (e o localStorage segura o cache até lá).
+  function _sincronizarServidor(itens) {
     try {
-      if (window.history && history.replaceState) {
-        history.replaceState(null, '', window.location.pathname);
-      }
-    } catch (e) { /* sem history API — segue (refresh re-adicionaria) */ }
+      var meta = document.querySelector('meta[name="csrf-token"]');
+      fetch('/loja/api/carrinho', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': meta ? meta.getAttribute('content') : '',
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          itens: (itens || []).map(function (it) {
+            return { kind: it.kind, id: it.id, qtd: it.qtd };
+          }),
+        }),
+      }).catch(function () {});
+    } catch (e) { /* sem fetch/rede — sincroniza depois */ }
+  }
+
+  // Inicializa o espelho a partir do carrinho da SESSÃO (injetado pelo servidor).
+  // Migração: se a sessão está vazia mas há um carrinho antigo no localStorage,
+  // sobe ele pro servidor uma vez (clientes que estavam no modelo localStorage).
+  function inicializarMirror() {
+    var sessao = [];
+    var el = document.getElementById('carrinho-sessao');
+    if (el) { try { sessao = JSON.parse(el.textContent || '[]'); } catch (e) { sessao = []; } }
+    if (!Array.isArray(sessao)) sessao = [];
+    if (sessao.length) {
+      _mirror = sessao;
+      try { localStorage.setItem(CHAVE, JSON.stringify(_mirror)); } catch (e) { /* cache */ }
+      return;
+    }
+    var local = [];
+    try { var raw = localStorage.getItem(CHAVE); local = raw ? JSON.parse(raw) : []; } catch (e) { local = []; }
+    if (Array.isArray(local) && local.length) {
+      _mirror = local;
+      _sincronizarServidor(_mirror);   // migra pro servidor (vira fonte de verdade)
+    } else {
+      _mirror = [];
+    }
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    // Página de confirmação: pedido criado no servidor -> esvazia o carrinho.
     if (document.getElementById('limpar-carrinho')) {
-      Carrinho.salvar([]);  // salvar() já atualiza o badge
+      // Pedido criado: o servidor já zerou a sessão. Limpa o cache local também
+      // (NÃO migra — senão o carrinho "voltaria" depois de comprar).
+      _mirror = [];
+      try { localStorage.removeItem(CHAVE); } catch (e) { /* ok */ }
+    } else {
+      inicializarMirror();     // fonte: sessão do servidor (+ migra antigo 1x)
     }
-    aplicarPrefill();          // link de 1 clique enche o carrinho
     ligarCardAdds();           // event delegation — registra UMA vez
     ligarDrawer();             // handlers do drawer (1x por página)
     Carrinho.atualizarBadge(); // renderiza cards iniciais
