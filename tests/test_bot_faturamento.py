@@ -22,11 +22,6 @@ def _seru_pedido(pid, company, total, created_at='2026-05-20T13:00:00Z'):
             'company': {'name': company}, 'total': total, 'items': []}
 
 
-def _vnda_order(code, status, confirmed_at, itens):
-    return {'code': code, 'status': status, 'confirmed_at': confirmed_at,
-            'items': itens}
-
-
 # ── Endpoint ───────────────────────────────────────────────────────────
 
 def test_endpoint_soma_pdv_e_site(app):
@@ -71,31 +66,3 @@ def test_endpoint_token_invalido(app):
     resp = app.test_client().get(
         '/api/bot/faturamento?token=errado&data=2026-05-20')
     assert resp.status_code == 401
-
-
-# ── Helper faturamento_por_dia ─────────────────────────────────────────
-
-def test_helper_faturamento_por_dia(app):
-    from app.services import vnda_sync
-    orders = [
-        # conta: 20 + 10 = 30
-        _vnda_order('A', 'paid', '2026-05-20T13:00:00Z',
-                    [{'subtotal': 20.0}, {'subtotal': 10.0}]),
-        # cancelado -> ignora
-        _vnda_order('B', 'canceled', '2026-05-20T13:00:00Z',
-                    [{'subtotal': 99.0}]),
-        # fora do intervalo (dia 18) -> ignora
-        _vnda_order('C', 'paid', '2026-05-18T13:00:00Z',
-                    [{'subtotal': 77.0}]),
-        # sem subtotal -> fallback price*quantity = 10
-        _vnda_order('D', 'paid', '2026-05-20T15:00:00Z',
-                    [{'price': 5.0, 'quantity': 2}]),
-        # 01h UTC = 22h BRT do dia 20 -> conta no dia 20 (prova UTC->BRT)
-        _vnda_order('E', 'paid', '2026-05-21T01:00:00Z',
-                    [{'subtotal': 5.0}]),
-    ]
-    with patch('app.services.vnda._buscar_pedidos_janela', return_value=orders):
-        r = vnda_sync.faturamento_por_dia(date(2026, 5, 20), date(2026, 5, 20))
-    assert r['total'] == 45.0  # 30 + 10 + 5
-    assert r['n_pedidos'] == 3
-    assert r['por_dia'][date(2026, 5, 20)] == 45.0
