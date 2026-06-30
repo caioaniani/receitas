@@ -972,6 +972,7 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
 
     lojas_out = []
     for loja in lojas_op:
+        ja_tem_loja = ja_tem.get(loja.id, set())
         produtos = []
         for rid, rec in sorted(receitas.items(), key=lambda kv: kv[1].nome):
             dows = venda_dow.get(loja.id, {}).get(rid)
@@ -988,6 +989,17 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                     continue                      # fornada especial: nao vende
                 venda_d = (dows.get(d.weekday(), 0) / janela_semanas) if dows else 0.0
                 venda_total += venda_d
+                if d.isoformat() in ja_tem_loja:
+                    # Dia travado: a tela nao deixa sugerir e o gerar pula. O
+                    # estoque projetado recebe a ENTREGA JA PEDIDA (qtd real),
+                    # nao a sugestao — senao os dias seguintes herdariam uma
+                    # reposicao que nao vai existir (sub-pedido) ou ignorariam a
+                    # entrega real (super-pedido).
+                    entrega = pedido_existente.get(loja.id, {}).get(
+                        d.isoformat(), {}).get(rid, 0)
+                    por_dia[i] = 0
+                    estoque = estoque + entrega - venda_d
+                    continue
                 deficit = venda_d - estoque
                 if deficit > 1e-9:
                     pedido = (int(ceil(deficit / caixa)) * caixa
