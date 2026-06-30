@@ -312,6 +312,7 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         datas_hist_global.add(data_ent)
 
     dias_calendario_janela = 7 * janela_semanas
+    datas_possiveis_dow = _datas_por_dow(hist_ini, hist_fim)   # denom da media
 
     # 4. Previsao: pra cada dia da janela de entrega da receita (deslocada pelo
     # lead), soma a media do dia-da-semana correspondente (com fallback pra
@@ -333,7 +334,8 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             dow = d.weekday()
             por_data = rid_dow.get(dow)
             if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
-                previsto[rid] += _media_recencia(por_data, hoje_d)
+                previsto[rid] += _media_recencia(
+                    por_data, hoje_d, datas_possiveis=datas_possiveis_dow[dow])
             else:
                 previsto[rid] += rid_soma_total / dias_calendario_janela
 
@@ -343,7 +345,8 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         dow = dia.weekday()
         por_data = qtd_dow.get(rid, {}).get(dow)
         if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
-            return _media_recencia(por_data, hoje_d)
+            return _media_recencia(
+                por_data, hoje_d, datas_possiveis=datas_possiveis_dow[dow])
         if soma_total.get(rid):
             return soma_total[rid] / dias_calendario_janela
         return 0.0
