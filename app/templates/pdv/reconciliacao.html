@@ -166,27 +166,40 @@
     <div class="tab-pane fade" id="tab-vnda">{{ secao(dv, 'vnda') }}</div>
 </div>
 
-<datalist id="recon-alvo-list">
-    {% for pr in produtos %}<option value="{{ pr.nome }} — produto">{% endfor %}
-    {% for r in receitas %}<option value="{{ r.nome }} — receita">{% endfor %}
-</datalist>
+<datalist id="recon-alvo-list"></datalist>
 
 <script>
-// Mapa do que o usuario escolhe (texto do datalist) -> token "produto:ID"/"receita:ID".
-window.RECON_TOKENS = {
-{% for pr in produtos %}  {{ (pr.nome ~ ' — produto')|tojson }}: "produto:{{ pr.id }}",
-{% endfor %}{% for r in receitas %}  {{ (r.nome ~ ' — receita')|tojson }}: "receita:{{ r.id }}",
-{% endfor %}};
-// Fallback por nome puro (sem o sufixo " — produto/receita"), so quando e UNICO
-// — assim o usuario pode digitar o nome e clicar Vincular sem escolher o sufixo.
+// Constroi o datalist + o mapa "texto -> tipo:id" de UMA fonte so, com rotulo
+// UNICO: se dois itens tem o MESMO nome (nome nao e unico no banco), sufixa com
+// " #id" pra nunca resolver pro item errado (baixa de estoque no alvo errado).
+var __recon_prod = [
+{% for pr in produtos %}  {id: {{ pr.id }}, nome: {{ pr.nome|tojson }}},
+{% endfor %}];
+var __recon_rec = [
+{% for r in receitas %}  {id: {{ r.id }}, nome: {{ r.nome|tojson }}},
+{% endfor %}];
+window.RECON_TOKENS = {};       // rotulo exato -> "tipo:id"
+// Fallback por nome puro (lower) — so quando e UNICO; assim da pra digitar o
+// nome e clicar Vincular sem escolher o sufixo, sem risco de pegar o errado.
 window.RECON_BY_NAME = {};
 (function () {
-    var visto = {};
-    for (var k in window.RECON_TOKENS) {
-        var plain = k.replace(/ — (produto|receita)$/, '').trim().toLowerCase();
-        visto[plain] = (visto[plain] === undefined) ? window.RECON_TOKENS[k] : null;
-    }
-    for (var p in visto) { if (visto[p]) window.RECON_BY_NAME[p] = visto[p]; }
+    var reconList = document.getElementById('recon-alvo-list');
+    var ents = [];
+    __recon_prod.forEach(function (p) { ents.push({base: p.nome + ' — produto', plain: p.nome, tok: 'produto:' + p.id}); });
+    __recon_rec.forEach(function (r) { ents.push({base: r.nome + ' — receita', plain: r.nome, tok: 'receita:' + r.id}); });
+    var cont = {}, plainCont = {};
+    ents.forEach(function (e) {
+        cont[e.base] = (cont[e.base] || 0) + 1;
+        var pk = e.plain.toLowerCase();
+        plainCont[pk] = (plainCont[pk] || 0) + 1;
+    });
+    ents.forEach(function (e) {
+        var chave = cont[e.base] > 1 ? (e.base + ' #' + e.tok.split(':')[1]) : e.base;
+        window.RECON_TOKENS[chave] = e.tok;
+        if (reconList) { var opt = document.createElement('option'); opt.value = chave; reconList.appendChild(opt); }
+        var pk = e.plain.toLowerCase();
+        if (plainCont[pk] === 1) window.RECON_BY_NAME[pk] = e.tok;
+    });
 })();
 
 function reconMapear(btn, acao) {
