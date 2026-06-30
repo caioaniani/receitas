@@ -900,7 +900,9 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
     prod = {rr['receita_id']: [c['qtd'] for c in rr['por_dia']]
             for rr in receitas_out}
     consumo = defaultdict(lambda: [0.0] * n)
-    consumo_origem = defaultdict(lambda: defaultdict(float))  # insumo -> pai -> qtd
+    # insumo -> pai -> {'pai': producao do pai, 'insumo': qtd de insumo gerada}
+    consumo_origem = defaultdict(lambda: defaultdict(
+        lambda: {'pai': 0.0, 'insumo': 0.0}))
 
     # Estoque (geladeira) das sub-receitas que nao estao no balanco.
     bal_map = {it['receita_id']: it for it in bal['itens']}
