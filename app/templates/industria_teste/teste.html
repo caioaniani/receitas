@@ -307,8 +307,8 @@
                     {% if r.breakdown_bom %}
                     <div class="bom-box">
                         <span class="bom-tt">↳ Insumo puxado pela produção de:</span>
-                        {% for b in r.breakdown_bom %}<span class="bom-item">{{ b.nome }}: <strong>{{ b.qtd }}</strong> un</span>{% endfor %}
-                        <span class="bom-nota">a quantidade de massa vem da produção destes produtos × a receita — não foi digitada à mão (por isso volta ao recalcular).</span>
+                        {% for b in r.breakdown_bom %}<span class="bom-item">{{ b.nome }}: <strong>{{ b.pai_qtd }}</strong> un <span class="bom-arrow">→</span> consome <strong>{{ b.qtd }}</strong></span>{% endfor %}
+                        <span class="bom-nota">a quantidade vem da produção destes produtos × a receita — não foi digitada à mão (por isso volta ao recalcular). Pra mudar, edite a produção do produto, não o insumo.</span>
                     </div>
                     {% endif %}
                     {% if r.projecao %}
