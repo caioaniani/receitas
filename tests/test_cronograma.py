@@ -476,6 +476,53 @@ def test_projecao_expoe_previsto(app):
     assert all('previsto' in p for p in rr['projecao'])
 
 
+def test_decompor_previsao_por_loja_e_dia(app):
+    """decompor_previsao mostra de QUAL loja e dia vem o previsto: a soma do
+    previsto por dia bate (de perto) com o previsto do cronograma, e a
+    decomposição lista as lojas do histórico daquele dia-da-semana."""
+    from app.services.previsao_producao import decompor_previsao
+    l1 = _loja('Anesio')
+    l2 = _loja('Ribeiro')
+    r = _receita('Croissant')
+    db.session.commit()
+    # histórico: várias entregas no MESMO dia-da-semana (mesmo dow de hoje+2)
+    alvo = hoje() + timedelta(days=2)
+    for semanas in range(1, 5):                       # 4 ocorrências do dow
+        dia = alvo - timedelta(days=7 * semanas)
+        _pedido(l1, 'entregue', dia, r, 300)
+        _pedido(l2, 'entregue', dia, r, 200)
+
+    dec = decompor_previsao(r.id, horizonte_dias=7, janela_semanas=6,
+                            inicio_offset_dias=0)
+    assert dec is not None
+    assert dec['receita']['nome'] == 'Croissant'
+    dia2 = dec['dias'][2]                              # entrega no dow do histórico
+    assert dia2['fonte'] == 'media_dow'
+    assert dia2['previsto'] == 500                     # 300 + 200 (média estável)
+    lojas = {x['loja_nome']: x['media'] for x in dia2['previsto_lojas']}
+    assert lojas == {'Anesio': 300, 'Ribeiro': 200}
+    assert any(h['loja_nome'] == 'Anesio' for h in dia2['historico'])
+
+
+def test_rota_previsao_renderiza(app, admin_user):
+    """A rota /telaindustriateste/previsao/<id> renderiza a decomposição."""
+    loja = _loja('Anesio')
+    r = _receita('Croissant')
+    db.session.commit()
+    alvo = hoje() + timedelta(days=2)
+    for semanas in range(1, 4):
+        _pedido(loja, 'entregue', alvo - timedelta(days=7 * semanas), r, 250)
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    resp = client.get('/telaindustriateste/previsao/%d' % r.id)
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert 'De onde vem a previsão' in html
+    assert 'Anesio' in html
+
+
 def test_rota_telaindustriateste(app, admin_user):
     loja = _loja()
     r = _receita()
