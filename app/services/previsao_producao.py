@@ -1162,7 +1162,8 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             if total <= 0:
                 continue
             rec = receitas.get(rr['receita_id'])
-            rend = int(rec.rendimento_qtd) if rec and rec.rendimento_qtd else 1
+            from app.services.massa_base import rendimento_massa_crua
+            rend = rendimento_massa_crua(rec)
             forn = fornadas_amassadeira(rec, max(1, ceil(total / rend))) or 1
             # deadline = 1o dia com producao na distribuicao normal (o mais
             # tarde que da pra produzir sem atrasar a entrega); pode adiantar.
