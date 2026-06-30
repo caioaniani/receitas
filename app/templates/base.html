@@ -563,18 +563,19 @@
     <main class="main-content">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
+                <div class="flash-stack">
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show mb-3" role="alert">
+                    <div class="alert alert-{{ category }} alert-dismissible fade show mb-0" role="alert">
                         {{ message }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 {% endfor %}
+                </div>
             {% endif %}
         {% endwith %}
 
         {% if cestas_orfaos_count and cestas_orfaos_count > 0 %}
-        <div class="alert alert-danger d-flex align-items-center justify-content-between mb-3" role="alert"
-             style="border-left:4px solid #b02a37;">
+        <div class="alert alert-danger d-flex align-items-center justify-content-between mb-3 app-alert-highlight" role="alert">
             <div>
                 <i class="bi bi-exclamation-octagon-fill"></i>
                 <strong>{{ cestas_orfaos_count }} componente{{ 's' if cestas_orfaos_count > 1 }} de cesta sem vinculo.</strong>
