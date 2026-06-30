@@ -2728,13 +2728,13 @@ def _read_consultar_vendas_itens(params, user):
     dias_extra = min(dias_ate_hoje, 7)
     try:
         if loja:
-            from app.services.vnda_sync import loja_vnda
+            from app.services.loja_pagamento import loja_origem_site
             from app.utils import resolver_loja_por_nome
             loja_obj = resolver_loja_por_nome(loja)
-            lv = loja_vnda()
+            lv = loja_origem_site()
             if loja_obj and lv and loja_obj.id == lv.id:
                 # Loja do site (Anesio): nao tem PDV Seru — vendas vem da
-                # loja propria (PedidoOnline; VNDA desligado no cutover).
+                # loja propria (PedidoOnline).
                 data = vendas_itens.vendas_vnda_loja(ini, fim)
                 fonte_label = 'e-commerce/site'
             else:
