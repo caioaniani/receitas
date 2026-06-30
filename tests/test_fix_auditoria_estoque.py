@@ -526,7 +526,7 @@ def test_b9_estorno_apos_acumulador_zerar_devolve_inteiro(app, admin_user, loja,
 def test_b9_estorno_idempotente(app, admin_user, loja, catalogo):
     """Rodar _estornar_pedido 2x nao duplica devolucao."""
     from app.extensions import db
-    from app.models import SeruDebito, SeruPedidoProcessado, SeruProdutoMap
+    from app.models import DebitoEstoque, SeruPedidoProcessado, SeruProdutoMap
     from app.services.seru_sync import _baixar_item, _estornar_pedido
 
     mapping = SeruProdutoMap(
@@ -549,8 +549,8 @@ def test_b9_estorno_idempotente(app, admin_user, loja, catalogo):
     _estornar_pedido(reg, [loja], admin_user.id)  # 2a vez
     db.session.commit()
 
-    debito = SeruDebito.query.filter_by(
-        loja_id=loja.id, seru_produto_map_id=mapping.id).first()
+    debito = DebitoEstoque.query.filter_by(
+        loja_id=loja.id, receita_id=catalogo['receita'].id).first()
     # Acumulador deveria continuar em 0 (nao ficou negativo)
     assert abs(debito.fracao_pendente) < 1e-6, (
         f'estorno duplo bagunçou acumulador: {debito.fracao_pendente}'
