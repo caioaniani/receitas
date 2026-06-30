@@ -100,7 +100,7 @@ def contagem_para_dia(dia):
     from collections import defaultdict
 
     from app.models import Produto
-    from app.services.vnda_sync import _componentes_de_cesta
+    from app.services.cestas import componentes_de_cesta_curto
 
     pedidos = (PedidoOnline.query
                .filter(PedidoOnline.data_entrega == dia,
@@ -126,7 +126,7 @@ def contagem_para_dia(dia):
                     cesta = None  # produto simples (sem composicao)
             if cesta:
                 origem = cesta.nome
-                for tipo_c, id_c, nome_c, qtd_no_item in _componentes_de_cesta(cesta):
+                for tipo_c, id_c, nome_c, qtd_no_item in componentes_de_cesta_curto(cesta):
                     if not id_c:
                         continue
                     total = int(round(qtd_compra * float(qtd_no_item or 1)))
