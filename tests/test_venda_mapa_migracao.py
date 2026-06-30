@@ -30,15 +30,40 @@ def test_backfill_copia_e_e_idempotente(app, loja):
     db.session.commit()
 
     r1 = backfill_venda_mapa()
-    assert r1 == {'seru_novos': 1, 'lote_novos': 1}
+    assert r1 == {'seru_novos': 1, 'lote_novos': 1, 'uso_novos': 0}
     seru = VendaMapa.query.filter_by(canal='seru', nome_externo='CAFE').first()
     assert seru.receita_id == cookie.id and abs(seru.fator_quantidade - 0.2) < 1e-9
     assert VendaMapa.query.filter_by(canal='lote',
                                      nome_externo='Pao Frances').first()
     # idempotente: roda de novo, nao duplica
     r2 = backfill_venda_mapa()
-    assert r2 == {'seru_novos': 0, 'lote_novos': 0}
+    assert r2 == {'seru_novos': 0, 'lote_novos': 0, 'uso_novos': 0}
     assert VendaMapa.query.count() == 2
+
+
+def test_backfill_recria_uso_de_loja_debito(app, loja):
+    """LojaDebito (marcador 'loja usou o mapa') vira VendaMapaUso ligado ao
+    VendaMapa de lote equivalente. Idempotente."""
+    from app.models import VendaMapa, VendaMapaUso
+    cookie = _receita('Cookie')
+    lm = LojaProdutoMap(nome_digitado='PAO LOTE', receita_id=cookie.id,
+                        fator_quantidade=1.0)
+    db.session.add(lm)
+    db.session.flush()
+    db.session.add(LojaDebito(loja_id=loja.id, loja_produto_map_id=lm.id,
+                              fracao_pendente=0.0))
+    db.session.commit()
+
+    r1 = backfill_venda_mapa()
+    assert r1['lote_novos'] == 1 and r1['uso_novos'] == 1
+    vm = VendaMapa.query.filter_by(canal='lote', nome_externo='PAO LOTE').first()
+    assert vm is not None
+    uso = VendaMapaUso.query.filter_by(venda_mapa_id=vm.id, loja_id=loja.id).first()
+    assert uso is not None
+    # idempotente: nao duplica o marcador
+    r2 = backfill_venda_mapa()
+    assert r2['uso_novos'] == 0
+    assert VendaMapaUso.query.count() == 1
 
 
 def test_rota_backfill_owner(app, owner_user, loja):
