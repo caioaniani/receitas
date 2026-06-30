@@ -48,7 +48,7 @@
 <form method="GET" class="d-flex gap-1 align-items-center mb-3 flex-wrap">
     <label class="small text-muted mb-0">A partir de:</label>
     <select name="inicio" class="form-select form-select-sm" style="width:auto;">
-        {% for n in range(0, 8) %}
+        {% for n in range(0, 15) %}
         <option value="{{ n }}" {{ 'selected' if inicio == n }}>
             {{ 'Hoje' if n == 0 else ('Amanhã' if n == 1 else '+%d dias' % n) }}</option>
         {% endfor %}
