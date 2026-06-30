@@ -23,11 +23,7 @@ import unicodedata
 
 from app.extensions import db
 from app.models import (
-    EstoqueLoja,
     Loja,
-    MovEstoqueLoja,
-    SeruDebito,
-    SeruDebitoMov,
     SeruLojaMap,
     SeruPedidoProcessado,
     SeruProdutoMap,
@@ -131,87 +127,19 @@ def _baixar_item(loja_id, mapping_produto, qtd, seru_pedido_id, user_id):
 
 
 def _estornar_pedido(reg, lojas_ativas, user_id):
-    """Reverte baixas de um pedido cancelado. Lojas/mapeamento ja conhecidos.
+    """Reverte baixas de um pedido Seru cancelado via o MOTOR UNICO
+    (`baixa_venda.estornar_venda`): inteiros pela referencia, fracoes pelo
+    DebitoEstoqueMov. So marca `estornado_em` se algo foi revertido.
 
-    Em 3 fases:
-      1) Reverte `MovEstoqueLoja` (inteiros baixados — `venda_seru` com
-         `LIKE 'Seru #{id}%'`, cobre cesta + fator + sem-estoque)
-      2) Reverte contribuicoes de fracao em `SeruDebito.fracao_pendente`
-         via `SeruDebitoMov` (so existem se houve venda com fator < 1).
-         Se acumulador ficar negativo, devolve inteiro ao estoque.
-      3) Marca `estornado_em` SE alguma fase teve efeito. Caso contrario,
-         deixa None (nao mente sobre estorno em branco).
+    Transicao: pedidos baixados ANTES do cutover (tag '(fator)' + SeruDebitoMov)
+    sao tratados porque (a) a fase 1 do motor ja exclui '(fator', e (b) a
+    migracao de fracoes converteu os SeruDebitoMov pendentes em DebitoEstoqueMov.
     """
+    from app.services.baixa_venda import estornar_venda
     pid = str(reg.seru_pedido_id)
-    # Movs com '(fator' ficam FORA da fase 1: baixas do mecanismo fracionario
-    # sao estornadas EXCLUSIVAMENTE pela fase 2 (via SeruDebitoMov), porque o
-    # inteiro baixado pode conter contribuicoes de OUTROS pedidos. Reverter o
-    # mov E a fracao devolvia o pao em dobro a cada cancelamento de item de
-    # chapa que fechou inteiro (bug provado em 2026-06-10:
-    # test_estorno_do_pedido_que_baixou_inteiro_nao_duplica).
-    movs = MovEstoqueLoja.query.filter(
-        MovEstoqueLoja.tipo == 'venda_seru',
-        MovEstoqueLoja.referencia.like(f'Seru #{pid}%'),
-        ~MovEstoqueLoja.referencia.like('%(fator%'),
-    ).all()
-    fracoes = SeruDebitoMov.query.filter_by(
-        seru_pedido_id=pid, estornado_em=None,
-    ).all()
-
-    if not movs and not fracoes:
-        # Nenhum efeito a reverter — pedido nunca contribuiu nem inteiro
-        # nem fracao. Pode ter sido tudo `venda_seru_sem_estoque`.
-        return
-
-    # Fase 1: reverter inteiros
-    for m in movs:
-        el = EstoqueLoja.query.get(m.estoque_loja_id)
-        if el:
-            el.quantidade = (el.quantidade or 0) + m.quantidade
-            db.session.add(MovEstoqueLoja(
-                estoque_loja_id=el.id,
-                tipo='venda_seru_estorno',
-                quantidade=m.quantidade,
-                referencia=f'Estorno Seru #{pid} (cancelada)',
-                usuario_id=user_id,
-            ))
-
-    # Fase 2: reverter fracoes
-    for fm in fracoes:
-        debito = SeruDebito.query.filter_by(
-            loja_id=fm.loja_id, seru_produto_map_id=fm.seru_produto_map_id,
-        ).first()
-        if not debito:
-            fm.estornado_em = agora()
-            continue
-        novo = float(debito.fracao_pendente or 0.0) - float(fm.fracao)
-        if novo < -1e-9:
-            # Acumulador foi alem (vendas posteriores ja baixaram inteiros
-            # incluindo a contribuicao desse pedido). Devolve inteiros ao
-            # estoque pra compensar e zera o residual fracionario.
-            inteiros_devolver = int(-novo + 1.0 - 1e-9)
-            mapping = SeruProdutoMap.query.get(fm.seru_produto_map_id)
-            if mapping and (mapping.receita_id or mapping.produto_id):
-                filtro = {'loja_id': fm.loja_id}
-                if mapping.receita_id:
-                    filtro['receita_id'] = mapping.receita_id
-                else:
-                    filtro['produto_id'] = mapping.produto_id
-                el = EstoqueLoja.query.filter_by(**filtro).first()
-                if el:
-                    el.quantidade = (el.quantidade or 0) + inteiros_devolver
-                    db.session.add(MovEstoqueLoja(
-                        estoque_loja_id=el.id,
-                        tipo='venda_seru_estorno',
-                        quantidade=inteiros_devolver,
-                        referencia=f'Estorno Seru #{pid} (fracao residual)',
-                        usuario_id=user_id,
-                    ))
-                    novo = novo + inteiros_devolver
-        debito.fracao_pendente = max(0.0, round(novo, 6))
-        fm.estornado_em = agora()
-
-    reg.estornado_em = agora()
+    res = estornar_venda('seru', f'seru:{pid}', f'Seru #{pid}', usuario_id=user_id)
+    if res['revertido_inteiros'] or res['revertido_fracoes']:
+        reg.estornado_em = agora()
 
 
 def processar_pedidos(data_inicial, data_final, user=None,
