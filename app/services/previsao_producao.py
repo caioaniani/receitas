@@ -802,8 +802,27 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
                 continue
             # Escala a media semanal pro tamanho do horizonte (7 dias = 1 semana).
             total_alocar = int(round(media_sem * horizonte_dias / 7.0))
+            caixa = int(rec.lote_pedido or 0)
             por_dia = [0] * len(dias_futuros)
-            if total_alocar > 0:
+            abaixo_lote = False
+            if caixa > 1:
+                # Distribui em CAIXAS inteiras balanceadas entre os dias validos
+                # (550 croissants, caixa 50 -> 11 caixas espalhadas, nao 78,5/dia).
+                n_lotes = int(round(total_alocar / caixa))
+                if n_lotes >= 1:
+                    partes = _distribuir_inteiro(n_lotes, [1] * len(idx_validos))
+                    for k, i in enumerate(idx_validos):
+                        por_dia[i] = partes[k] * caixa
+                elif total_alocar > 0:
+                    # Demanda real ABAIXO de 1 caixa: NAO forca a caixa (senao
+                    # super-pediria item lento). Mostra a media real + flag pro
+                    # admin decidir pedir a caixa ou nao (decisao do dono).
+                    abaixo_lote = True
+                    partes = _distribuir_inteiro(total_alocar, [1] * len(idx_validos))
+                    for k, i in enumerate(idx_validos):
+                        por_dia[i] = partes[k]
+            elif total_alocar > 0:
+                # Sem regra de caixa: divide igual entre os dias validos.
                 partes = _distribuir_inteiro(total_alocar, [1] * len(idx_validos))
                 for k, i in enumerate(idx_validos):
                     por_dia[i] = partes[k]
@@ -811,7 +830,9 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
                 'receita_id': rid, 'nome': rec.nome,
                 'media_semanal': round(media_sem, 1),
                 'por_dia': por_dia, 'total': sum(por_dia),
-                'lote': int(rec.lote_pedido or 0),   # caixa: arredonda ao dividir
+                'lote': caixa,                       # caixa: arredonda ao dividir
+                'minimo': int(rec.minimo_pedido or 0),
+                'abaixo_lote': abaixo_lote,
             })
         if produtos:
             lojas_out.append({
