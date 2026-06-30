@@ -688,6 +688,7 @@ def vincular_produto(map_id):
         mp.produto_id = None
         mp.confirmado_em = None
         mp.confirmado_por = None
+        mp.fator_quantidade = 1.0  # volta pra pristine — fator nao fica pegajoso
         flash(f'"{mp.seru_nome}" voltou pra pendente.', 'info')
     db.session.commit()
     return redirect(url_for('pdv.mapeamentos'))
