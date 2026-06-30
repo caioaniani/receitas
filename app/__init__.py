@@ -748,6 +748,7 @@ def _setup_schema(app):
         db.create_all()
         _migrate(app)
         _alembic_stamp_se_necessario(app)
+        _cutover_baixa_venda(app)
         return
 
     from sqlalchemy import text
@@ -758,12 +759,35 @@ def _setup_schema(app):
         db.create_all()
         _migrate(app)
         _alembic_stamp_se_necessario(app)
+        _cutover_baixa_venda(app)
     finally:
         try:
             lock_conn.execute(text('SELECT pg_advisory_unlock(7741)'))
         except Exception:
             pass
         lock_conn.close()
+
+
+def _cutover_baixa_venda(app):
+    """Cutover do motor unico de baixa, no startup (serializado pelo lock 7741
+    do `_setup_schema`). Idempotente e best-effort:
+    1) backfill do VendaMapa a partir de SeruProdutoMap + LojaProdutoMap;
+    2) migra as fracoes pendentes (SeruDebito + LojaDebito) pro DebitoEstoque.
+
+    Roda a cada deploy mas vira no-op barato depois do 1o (fontes zeradas).
+    Pula em teste (PYTEST_RUNNING). Transicional — sai quando os mapas velhos
+    forem removidos na fase de limpeza."""
+    if os.environ.get('PYTEST_RUNNING'):
+        return
+    try:
+        from app.services.venda_mapa_migracao import backfill_venda_mapa, migrar_fracoes_para_debito_estoque
+        backfill_venda_mapa()
+        r = migrar_fracoes_para_debito_estoque()
+        if r['itens'] or r['movs_migrados']:
+            app.logger.info('cutover baixa: %s', r)
+    except Exception as e:  # noqa: BLE001
+        db.session.rollback()
+        app.logger.warning('cutover baixa_venda falhou (segue sem bloquear): %s', e)
 
 
 def _alembic_stamp_se_necessario(app):
