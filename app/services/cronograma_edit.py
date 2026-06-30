@@ -1,42 +1,25 @@
 """Edicao manual das celulas do cronograma de producao (29/06/2026).
 
 O admin ajusta quanto produzir de uma receita num dia, direto na grade. Regras
-(decisao do dono):
-- TOTAL da receita fica FIXO: editar um dia redistribui os OUTROS dias pra
-  manter a soma = "Produzir" do balanco. (redistribuicao no servidor)
-- Salva rascunho ao editar: a distribuicao manual vira CronogramaOverride
-  (sobrevive a recarregar; o cronograma e o aprovar passam a usar ela).
+(decisao do dono, revisada 30/06):
+- Edicao POR CELULA: cada dia editado salva o seu proprio CronogramaOverride;
+  os outros dias seguem a sugestao calculada. O TOTAL da linha eh a SOMA das
+  celulas — entao da pra produzir MAIS (ou menos) que o "Produzir" sugerido, e
+  da pra programar receita SEM pedido (linha zerada). (Antes redistribuia
+  mantendo o total fixo e clampava no Produzir: nao deixava aumentar nem editar
+  linha zerada — "a edicao nao pegava". Bug pego pelo dono 30/06.)
+- Salva rascunho ao editar: a edicao vira CronogramaOverride (sobrevive a
+  recarregar; o cronograma e o aprovar passam a usar ela).
 
-Anti-staleness: o cronograma so aplica os overrides de uma receita se eles
-cobrem TODOS os dias do horizonte E somam o total atual. Se a demanda mudou
-(total != soma), os overrides sao ignorados — volta pra sugestao calculada,
-sem precisar limpar nada.
+aplicar_overrides aplica POR CELULA: o dia com override usa o valor manual, os
+demais seguem a sugestao. So o dia editado fica "congelado"; os outros ainda
+acompanham a demanda nova.
 """
 from collections import defaultdict
 from datetime import date
 from math import ceil
 
 from app.extensions import db
-
-
-def _redistribuir(por_dia, idx, novo, total):
-    """Fixa por_dia[idx]=novo (clamp 0..total) e redistribui o resto pelos
-    OUTROS dias, proporcional aos valores atuais (maior resto, >=0). Outros
-    todos zero -> distribui igualmente. Soma final == total."""
-    from app.services.previsao_producao import _distribuir_inteiro
-    n = len(por_dia)
-    novo = max(0, min(int(novo), int(total)))
-    out = [0] * n
-    out[idx] = novo
-    resto = int(total) - novo
-    outros = [i for i in range(n) if i != idx]
-    pesos = [int(por_dia[i] or 0) for i in outros]
-    if sum(pesos) <= 0:
-        pesos = [1] * len(outros)
-    dist = _distribuir_inteiro(resto, pesos)
-    for k, i in enumerate(outros):
-        out[i] = dist[k]
-    return out
 
 
 def _salvar_overrides(receita_id, datas, qtds):
@@ -101,12 +84,15 @@ def aplicar_overrides(receitas_out, dias_prod):
 
 def editar_celula(receita_id, data_iso, qtd, horizonte_dias=7,
                   janela_semanas=6, inicio_offset_dias=0, equilibrar=False):
-    """Edita uma celula: fixa qtd no dia, redistribui mantendo o total da
-    receita, persiste os overrides de TODOS os dias do horizonte e devolve a
-    linha recalculada {receita_id, por_dia:[{data,qtd,fornadas}], total}.
-    Retorna None se a receita/data nao esta no cronograma."""
+    """Edita UMA celula (receita x dia): fixa a qtd manual SO naquele dia (salva
+    o override daquela celula), sem clamp — os outros dias seguem a sugestao
+    calculada e overrides anteriores. O total da linha vira a SOMA das celulas,
+    entao da pra produzir MAIS/menos que o sugerido e programar linha zerada.
+    Devolve {receita_id, por_dia:[{data,qtd,fornadas}], total}. None se a
+    receita/data nao esta no cronograma."""
     from app.models import Receita
     from app.services.previsao_producao import cronograma_producao
+    from app.services.producao import fornadas_amassadeira
     crono = cronograma_producao(horizonte_dias=horizonte_dias,
                                 janela_semanas=janela_semanas,
                                 inicio_offset_dias=inicio_offset_dias,
@@ -120,19 +106,19 @@ def editar_celula(receita_id, data_iso, qtd, horizonte_dias=7,
     if alvo not in datas:
         return None
     idx = datas.index(alvo)
-    atual = [c['qtd'] for c in rr['por_dia']]
-    novo = _redistribuir(atual, idx, qtd, rr['total'])
-    _salvar_overrides(int(receita_id), datas, novo)
+    novo_qtd = max(0, int(qtd))                       # sem clamp no total: da pra subir
+    _salvar_overrides(int(receita_id), [alvo], [novo_qtd])   # so a celula editada
 
+    qtds = [c['qtd'] for c in rr['por_dia']]
+    qtds[idx] = novo_qtd                              # os outros dias ficam como estao
     rec = db.session.get(Receita, int(receita_id))
     rend = int(rec.rendimento_qtd) if rec and rec.rendimento_qtd else 1
-    from app.services.producao import fornadas_amassadeira
     por_dia = [{'data': d.isoformat(), 'qtd': q,
                 'fornadas': (fornadas_amassadeira(rec, max(1, ceil(q / rend)))
                              if q > 0 else None)}
-               for d, q in zip(datas, novo)]
+               for d, q in zip(datas, qtds)]
     return {'receita_id': int(receita_id), 'por_dia': por_dia,
-            'total': rr['total']}
+            'total': sum(qtds)}
 
 
 def resetar_receita(receita_id, datas_iso):
