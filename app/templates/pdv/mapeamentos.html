@@ -251,10 +251,7 @@
     {% endif %}
 </div>
 
-<datalist id="vinc-alvo-list">
-    {% for r in receitas %}<option value="{% if r.categoria %}{{ r.categoria }} — {% endif %}{{ r.nome }} · receita">{% endfor %}
-    {% for p in produtos %}<option value="{{ p.nome }} · produto">{% endfor %}
-</datalist>
+<datalist id="vinc-alvo-list"></datalist>
 {% endblock %}
 
 {% block scripts %}
