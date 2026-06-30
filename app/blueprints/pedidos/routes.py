@@ -2150,6 +2150,7 @@ def estoque_loja_historico():
         'saida_lote', 'venda_loja_sem_estoque',
         'venda_seru', 'venda_seru_estorno', 'venda_seru_sem_estoque',
         'venda_vnda', 'venda_vnda_estorno', 'venda_vnda_sem_estoque',
+        'venda_site', 'venda_site_estorno', 'venda_site_sem_estoque',
         'desperdicio', 'desperdicio_sem_estoque', 'desperdicio_estorno',
     ]
     tipo_filtro = request.args.get('tipo', '').strip()
