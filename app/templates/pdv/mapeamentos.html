@@ -305,26 +305,56 @@ var __produtos = [
     {id: {{ p.id }}, nome: {{ p.nome|tojson }}},
     {% endfor %}
 ];
-// Texto que o usuario escolhe (datalist) -> {tipo, id}. MESMA string do datalist.
-function _dispReceita(r) { return (r.cat ? r.cat + ' — ' : '') + r.nome + ' · receita'; }
-function _dispProduto(p) { return p.nome + ' · produto'; }
+// Constroi o datalist + o mapa "texto -> {tipo,id}" de UMA fonte so, com chave
+// UNICA: se dois itens tem o MESMO rotulo (nome/categoria repetidos no banco —
+// nome nao e unico), sufixa com " #id" pra nunca resolver pro item errado
+// (senao a baixa de estoque ia pro alvo errado, silenciosamente).
+var datalistEl = document.getElementById('vinc-alvo-list');
 var VINC_TOKENS = {};
-__receitas.forEach(function (r) { VINC_TOKENS[_dispReceita(r)] = {t: 'receita', id: r.id}; });
-__produtos.forEach(function (p) { VINC_TOKENS[_dispProduto(p)] = {t: 'produto', id: p.id}; });
+var VINC_KEY_BY = {};   // 'tipo:id' -> rotulo do datalist
+(function () {
+    var ents = [];
+    __receitas.forEach(function (r) {
+        ents.push({base: (r.cat ? r.cat + ' — ' : '') + r.nome + ' · receita',
+                   t: 'receita', id: r.id});
+    });
+    __produtos.forEach(function (p) { ents.push({base: p.nome + ' · produto', t: 'produto', id: p.id}); });
+    var cont = {};
+    ents.forEach(function (e) { cont[e.base] = (cont[e.base] || 0) + 1; });
+    ents.forEach(function (e) {
+        var chave = cont[e.base] > 1 ? (e.base + ' #' + e.id) : e.base;
+        VINC_TOKENS[chave] = {t: e.t, id: e.id};
+        VINC_KEY_BY[e.t + ':' + e.id] = chave;
+        if (datalistEl) {
+            var opt = document.createElement('option');
+            opt.value = chave;
+            datalistEl.appendChild(opt);
+        }
+    });
+})();
 
-function _dispDe(tipo, id) {   // reverse: preenche um mapeamento JA existente
-    var arr = tipo === 'produto' ? __produtos : __receitas;
-    var it = arr.find(function (x) { return String(x.id) === String(id); });
-    return it ? (tipo === 'produto' ? _dispProduto(it) : _dispReceita(it)) : '';
+function _dispDe(tipo, id) {   // rotulo do datalist pra um mapeamento existente
+    return VINC_KEY_BY[tipo + ':' + id] || '';
 }
 function vincResolver(form) {  // texto digitado -> seta alvo_id (e tipo) ocultos
     var busca = form.querySelector('.vinc-alvo-busca');
-    var tok = VINC_TOKENS[(busca.value || '').trim()];
-    form.querySelector('.vinc-alvo-id').value = tok ? tok.id : '';
-    if (tok) form.querySelector('.vinc-tipo').value = tok.t;
-    return !!tok;
+    var hid = form.querySelector('.vinc-alvo-id');
+    var txt = (busca.value || '').trim();
+    if (!txt) {
+        // box vazio: NAO apaga o vinculo ja salvo (ex: alvo inativo cujo rotulo
+        // nao da pra reconstruir) — so e invalido se nao havia id nenhum.
+        return !!hid.value;
+    }
+    var tok = VINC_TOKENS[txt];
+    if (tok) {
+        hid.value = tok.id;
+        form.querySelector('.vinc-tipo').value = tok.t;
+        return true;
+    }
+    hid.value = '';              // digitou algo que nao resolve -> invalido
+    return false;
 }
-function vincTipoChange(sel) {  // trocar o tipo na mao limpa a busca
+function vincTipoChange(sel) {  // trocar o tipo na mao limpa a busca + o id
     var form = sel.closest('form');
     form.querySelector('.vinc-alvo-busca').value = '';
     form.querySelector('.vinc-alvo-id').value = '';
