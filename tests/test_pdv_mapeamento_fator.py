@@ -176,3 +176,72 @@ def test_vincular_produto_form_desfazer_reseta_fator(app, admin_user, catalogo):
         mp = SeruProdutoMap.query.get(map_id)
         assert mp.estado == 'pendente'
         assert mp.fator_quantidade == pytest.approx(1.0)
+
+
+# ── consolidacao: as 3 telas usam o widget unico PdvMap ──────────────────────
+
+def test_telas_de_mapeamento_carregam_widget_unico(app, admin_user, catalogo):
+    """itens-vendidos, mapeamentos e reconciliacao referenciam o mesmo modulo
+    (pdv_mapeamento.js) — a fonte unica de fator/fatias/save."""
+    c = _login_admin(app, admin_user)
+    for rota in ('/pdv/itens-vendidos', '/pdv/mapeamentos'):
+        r = c.get(rota)
+        assert r.status_code == 200, rota
+        assert b'pdv_mapeamento.js' in r.data, f'{rota} sem o modulo'
+        assert b'PdvMap' in r.data, f'{rota} nao usa PdvMap'
+
+
+def test_reconciliacao_usa_widget_unico(app, admin_user, catalogo):
+    from unittest.mock import patch
+    c = _login_admin(app, admin_user)
+    agg = {'total_pedidos': 1, 'total_itens_vendidos': 1, 'faturamento_total': 1.0,
+           'produtos': [{'nome': 'X', 'sku': '1', 'qtd': 1, 'faturamento': 1.0,
+                         'estado_map': 'pendente'}]}
+    with patch('app.services.vendas_itens.agregar_itens', return_value=agg):
+        r = c.get('/pdv/reconciliacao')
+    assert r.status_code == 200
+    assert b'pdv_mapeamento.js' in r.data
+    assert b'PdvMap.salvar' in r.data
+
+
+# ── regressao de comportamento do widget JS (roda se node existir) ───────────
+
+_JS_HARNESS = r'''
+global.window = {};
+require(process.argv[1]);
+const P = global.window.PdvMap, assert = require('assert');
+assert.strictEqual(P.parseFator('0,2'), 0.2);
+assert.strictEqual(P.parseFator(''), 1);
+assert.strictEqual(P.parseFator('abc'), 1);
+assert.strictEqual(P.parseFator('0'), 1);
+assert.strictEqual(P.fatiasParaFator(2, 10), '0.2');
+assert.strictEqual(P.fatiasParaFator(0, 10), '');
+assert.strictEqual(P.fatiasParaFator(5, 5), '1');
+assert.strictEqual(P.fatorHelp(1).tone, 'muted');
+assert.ok(P.fatorHelp(0.2).text.indexOf('5 vendas') >= 0);
+const idx = P.construirIndiceAlvo(
+    [{id:1,nome:'Pao'},{id:2,nome:'Dup'},{id:4,nome:'Dup'}], [{id:3,nome:'Rec'}]);
+assert.strictEqual(P.resolverAlvo('Pao', idx), 'produto:1');
+assert.strictEqual(P.resolverAlvo('Dup', idx), null);            // ambiguo -> null
+assert.strictEqual(P.resolverAlvo('Dup — produto #4', idx), 'produto:4');
+assert.strictEqual(P.resolverAlvo('Rec', idx), 'receita:3');
+console.log('ok');
+'''
+
+
+def test_pdv_map_js_comportamento():
+    """Trava de regressao do widget: fator com virgula, fatias X/Y, e o alvo
+    ambiguo (dois itens com mesmo nome) que NAO pode resolver pro errado —
+    baixaria estoque no alvo errado. Pula se node nao estiver instalado."""
+    import os
+    import shutil
+    import subprocess
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('node nao instalado')
+    modulo = os.path.join(os.path.dirname(__file__), '..', 'app', 'static',
+                          'js', 'pdv_mapeamento.js')
+    r = subprocess.run([node, '-e', _JS_HARNESS, os.path.abspath(modulo)],
+                       capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, f'JS falhou:\n{r.stdout}\n{r.stderr}'
+    assert 'ok' in r.stdout
