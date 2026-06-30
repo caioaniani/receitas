@@ -16,6 +16,35 @@ def parse_float_br(value, default=None):
     return float(cleaned) if cleaned else default
 
 
+def parse_fator_composicao(raw, default=1.0):
+    """Fator de composição do PDV: quantas unidades do alvo 1 venda consome.
+
+    Aceita vírgula PT-BR ("0,2" == 0.2). Vazio/None -> `default`. Valor
+    PRESENTE porém inválido (não-número) ou <= 0 -> ValueError.
+
+    Regra de estoque (CLAUDE.md): NUNCA cair pra 1.0 em silêncio. Um fator
+    digitado errado que vira 1.0 baixaria estoque errado — ex.: 0,2 (composto,
+    5 vendas = 1 inteiro) virando 1,0 baixaria 5x. Quem chama traduz o
+    ValueError em 400/flash, em vez de inventar um valor.
+
+    >>> parse_fator_composicao('0,2')
+    0.2
+    >>> parse_fator_composicao('')      # vazio -> default
+    1.0
+    >>> parse_fator_composicao(None)
+    1.0
+    """
+    if raw is None:
+        return default
+    s = str(raw).strip().replace(',', '.')
+    if s == '':
+        return default
+    f = float(s)  # ValueError se não for número — propaga de propósito
+    if f <= 0:
+        raise ValueError(f'fator deve ser > 0 (recebido {raw!r})')
+    return f
+
+
 def normalizar_telefone(numero):
     """Mantem so digitos. '+55 11 99999-9999' -> '5511999999999'."""
     return ''.join(c for c in (numero or '') if c.isdigit())
