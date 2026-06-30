@@ -175,22 +175,16 @@
                     <td>
                         <form method="POST" action="{{ url_for('pdv.vincular_produto', map_id=mp.id) }}" class="d-flex gap-1 flex-wrap">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <select name="alvo_tipo" class="form-select form-select-sm" style="width:90px;"
-                                    onchange="atualizarLista(this)">
+                            <select name="alvo_tipo" class="form-select form-select-sm vinc-tipo" style="width:90px;"
+                                    onchange="vincTipoChange(this)">
                                 <option value="receita" {% if mp.receita_id %}selected{% endif %}>Receita</option>
                                 <option value="produto" {% if mp.produto_id %}selected{% endif %}>Produto</option>
                             </select>
-                            <select name="alvo_id" class="form-select form-select-sm vinc-alvo" style="max-width:220px;">
-                                {% if mp.receita_id or not mp.produto_id %}
-                                    {% for r in receitas %}
-                                    <option value="{{ r.id }}" {% if mp.receita_id == r.id %}selected{% endif %}>{{ r.categoria }} — {{ r.nome }}</option>
-                                    {% endfor %}
-                                {% else %}
-                                    {% for p in produtos %}
-                                    <option value="{{ p.id }}" {% if mp.produto_id == p.id %}selected{% endif %}>{{ p.nome }}</option>
-                                    {% endfor %}
-                                {% endif %}
-                            </select>
+                            <input type="text" class="form-control form-control-sm vinc-alvo-busca"
+                                   autocomplete="off" placeholder="digite pra buscar…"
+                                   list="vinc-alvo-list" style="max-width:240px;">
+                            <input type="hidden" name="alvo_id" class="vinc-alvo-id"
+                                   value="{{ mp.receita_id or mp.produto_id or '' }}">
                             <input type="number" name="fator" class="form-control form-control-sm"
                                    step="0.01" min="0.01" value="{{ '%g'|format(mp.fator_quantidade or 1) }}"
                                    style="width:75px;" title="Fator: 1 venda = X unidades. Ex: 0.2 = 2 fatias de 10.">
