@@ -291,7 +291,7 @@
                 elPreview.textContent = 'Os dias escolhidos já têm pedido nesta linha.';
                 return;
             }
-            var lote = parseInt(row.dataset.lote) || 0;
+            var lote = loteDaLinha(row);
             var partes = dividir(totalLinha(row), lote, disp.length);
             var soma = partes.reduce(function (a, b) { return a + b; }, 0);
             var txt = disp.map(function (c, k) {
