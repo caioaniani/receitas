@@ -41,6 +41,21 @@ def test_backfill_copia_e_e_idempotente(app, loja):
     assert VendaMapa.query.count() == 2
 
 
+def test_rota_backfill_owner(app, owner_user, loja):
+    """A rota owner /admin/venda-mapa/backfill roda o backfill."""
+    cookie = _receita('Cookie')
+    db.session.add(SeruProdutoMap(seru_nome='CAFE', receita_id=cookie.id,
+                                  fator_quantidade=0.2))
+    db.session.commit()
+    client = app.test_client()
+    client.post('/auth/login', data={'login': owner_user.login, 'senha': '123'},
+                follow_redirects=True)
+    resp = client.post('/admin/venda-mapa/backfill')
+    assert resp.status_code in (302, 303)
+    from app.models import VendaMapa
+    assert VendaMapa.query.filter_by(canal='seru', nome_externo='CAFE').first()
+
+
 def test_migrar_fracoes_soma_por_item_e_baixa_inteiro(app, loja):
     """SeruDebito 0.6 + LojaDebito 0.7 do MESMO cookie -> 1.3: baixa 1, sobra
     0.3 no DebitoEstoque; fontes zeradas."""
