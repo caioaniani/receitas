@@ -474,7 +474,7 @@ def test_b9_estorno_apos_acumulador_zerar_devolve_inteiro(app, admin_user, loja,
     = -0.2 → devolve 1 inteiro ao estoque, fracao_pendente fica 0.8.
     """
     from app.extensions import db
-    from app.models import EstoqueLoja, SeruDebito, SeruPedidoProcessado, SeruProdutoMap
+    from app.models import DebitoEstoque, EstoqueLoja, SeruPedidoProcessado, SeruProdutoMap
     from app.services.seru_sync import _baixar_item, _estornar_pedido
 
     el = EstoqueLoja(loja_id=loja.id, receita_id=catalogo['receita'].id,
@@ -501,8 +501,8 @@ def test_b9_estorno_apos_acumulador_zerar_devolve_inteiro(app, admin_user, loja,
     db.session.refresh(el)
     assert el.quantidade == 9, f'devia ter baixado 1 inteiro: {el.quantidade}'
 
-    debito = SeruDebito.query.filter_by(
-        loja_id=loja.id, seru_produto_map_id=mapping.id).first()
+    debito = DebitoEstoque.query.filter_by(
+        loja_id=loja.id, receita_id=catalogo['receita'].id).first()
     assert abs(debito.fracao_pendente - 0.2) < 1e-6, debito.fracao_pendente
 
     # Cancela X1
