@@ -53,6 +53,28 @@ def test_ingredientes_por_porcao(app):
     assert ing == {'Farinha': 1000.0, 'Água': 700.0, 'Sal': 20.0, 'Levain': 200.0}
 
 
+def test_rendimento_massa_crua_ignora_perda(app):
+    """Rendimento de massa CRUA = massa total da ficha / peso_unitario, SEM a
+    perda do forno (a produção pesa massa crua). Decisão do dono 30/06: '120 pães
+    de 500 g de massa crua' — a perda jamais entra nessa conta."""
+    from app.services.massa_base import rendimento_massa_crua
+    s7 = _receita('Sourdough 7g', [('Farinha', 100), ('Água', 85), ('Levain', 20),
+                                   ('Sal', 2), ('Fermento', 0.1), ('Grãos', 10)])
+    s7.peso_unitario = 500            # 500 g de massa crua por unidade
+    s7.perda_percentual = 30          # NÃO pode entrar — produção é massa crua
+    db.session.commit()
+    # massa total = 2171 g; 2171 / 500 = 4,342 (float exato), perda ignorada
+    assert abs(rendimento_massa_crua(s7) - 2171 / 500) < 1e-6
+
+
+def test_rendimento_massa_crua_sem_peso_unitario_cai_no_qtd(app):
+    """Sem peso_unitario não dá pra derivar — usa o rendimento_qtd cadastrado."""
+    from app.services.massa_base import rendimento_massa_crua
+    r = _receita('X', [('Farinha', 100), ('Água', 70)])   # rendimento_qtd=10
+    assert r.peso_unitario in (None, 0)
+    assert rendimento_massa_crua(r) == 10.0
+
+
 def test_base_e_o_minimo_comum(app):
     _, _, _, mb = _exemplo_dono(app)
     c = calcular_cascata(mb)            # 1 porção de cada
