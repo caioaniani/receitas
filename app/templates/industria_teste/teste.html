@@ -322,7 +322,7 @@
                         {% for p in r.projecao %}
                         <tr class="{% if p.falta %}proj-falta{% endif %}">
                             <td>{{ p.label }}</td>
-                            <td>{% if p.saida_lojas %}{% for s in p.saida_lojas %}{{ s.loja_nome }}: <strong>{{ s.qtd }}</strong>{% if not loop.last %} · {% endif %}{% endfor %}{% else %}<span class="proj-vazio">—</span>{% endif %}</td>
+                            <td>{% if p.saida %}<strong>{{ p.saida }}</strong>{% if p.saida_lojas %} <small class="text-muted">({% for s in p.saida_lojas %}{{ s.loja_nome }} {{ s.qtd }}{% if not loop.last %}, {% endif %}{% endfor %})</small>{% endif %}{% else %}<span class="proj-vazio">—</span>{% endif %}</td>
                             <td>{% if p.previsto %}<span class="proj-prev">{{ p.previsto }}</span>{% else %}<span class="proj-vazio">—</span>{% endif %}</td>
                             <td>{% if p.producao %}<span class="proj-prod">+{{ p.producao }}</span>{% else %}<span class="proj-vazio">—</span>{% endif %}</td>
                             <td><strong class="{{ 'saldo-neg' if p.saldo < 0 else '' }}">{{ p.saldo }}</strong></td>
