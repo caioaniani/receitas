@@ -9,12 +9,13 @@ def test_resumo_banco_vazio(app):
         r = pdv_saude.resumo()
     assert r['lojas_pendentes'] == 0
     assert r['produtos_pendentes_seru'] == 0
-    assert r['produtos_pendentes_vnda'] == 0
     assert r['pedidos_sem_loja'] == 0
     assert r['total_pendencias'] == 0
     # Sem run nesta sessao → atrasado.
     assert r['seru_atrasado'] is True
-    assert r['vnda_atrasado'] is True
+    # VNDA aposentado (24/06/2026): o painel nao expoe mais campos vnda_*.
+    assert 'vnda_atrasado' not in r
+    assert 'produtos_pendentes_vnda' not in r
 
 
 def test_resumo_conta_loja_pendente(app):
