@@ -36,7 +36,6 @@ _ult_run = None
 _ult_run_backup = None
 _ult_run_backup_chatwoot = None
 LOCK_KEY = 7723  # advisory lock pro Seru
-LOCK_KEY_VNDA = 7724  # advisory lock pro VNDA
 LOCK_KEY_BACKUP = 7731  # advisory lock pro backup diario
 LOCK_KEY_BACKUP_CHATWOOT = 7735  # advisory lock pro backup do banco do Chatwoot
 LOCK_KEY_VNDA_CARD = 7736  # advisory lock pro cache de pedidos do site (card CRM)
