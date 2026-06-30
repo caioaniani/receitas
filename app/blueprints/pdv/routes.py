@@ -15,7 +15,7 @@ from app.models import (
     Receita,
     SeruLojaMap,
     SeruPedidoProcessado,
-    SeruProdutoMap,
+    VendaMapa,
 )
 from app.services import seru
 from app.utils import agora
@@ -368,8 +368,9 @@ def venda_seru_detalhe(pedido_id):
     nomes = list({it['nome'] for it in itens_raw if it.get('nome')})
     maps_dict = {}
     if nomes:
-        maps = SeruProdutoMap.query.filter(SeruProdutoMap.seru_nome.in_(nomes)).all()
-        maps_dict = {m.seru_nome: m for m in maps}
+        maps = VendaMapa.query.filter(VendaMapa.canal == 'seru',
+                                      VendaMapa.nome_externo.in_(nomes)).all()
+        maps_dict = {m.nome_externo: m for m in maps}
 
     itens = []
     for it in itens_raw:
@@ -414,9 +415,9 @@ def api_mapear():
     if not nome:
         return jsonify(ok=False, erro='seru_nome obrigatorio'), 400
     acao = data.get('acao')  # 'vincular' | 'ignorar' | 'desfazer'
-    mp = SeruProdutoMap.query.filter_by(seru_nome=nome).first()
+    mp = VendaMapa.query.filter_by(canal='seru', nome_externo=nome).first()
     if not mp:
-        mp = SeruProdutoMap(seru_nome=nome)
+        mp = VendaMapa(canal='seru', nome_externo=nome)
         db.session.add(mp)
         db.session.flush()
     if acao == 'vincular':
@@ -521,10 +522,10 @@ def reconciliacao():
 @admin_required
 def mapeamentos():
     """Tela de mapeamento de produtos Seru e lojas Seru."""
-    produtos_map = SeruProdutoMap.query.order_by(
-        SeruProdutoMap.ignorar.asc(),
-        SeruProdutoMap.confirmado_em.is_(None).desc(),  # pendentes no topo
-        SeruProdutoMap.seru_nome,
+    produtos_map = VendaMapa.query.filter_by(canal='seru').order_by(
+        VendaMapa.ignorar.asc(),
+        VendaMapa.confirmado_em.is_(None).desc(),  # pendentes no topo
+        VendaMapa.nome_externo,
     ).all()
     lojas_map = SeruLojaMap.query.order_by(SeruLojaMap.seru_company_name).all()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
@@ -574,7 +575,7 @@ def config_site_loja():
 def vincular_produto(map_id):
     """Vincula/ignora/limpa um produto Seru."""
     from app.utils import parse_fator_composicao
-    mp = SeruProdutoMap.query.get_or_404(map_id)
+    mp = VendaMapa.query.get_or_404(map_id)
     acao = request.form.get('acao')
     # Mesmo fallback do vincular_loja: se acao nao veio mas alvo_id sim,
     # assume 'vincular' (caso Enter no dropdown).
@@ -611,14 +612,14 @@ def vincular_produto(map_id):
         mp.confirmado_em = agora()
         mp.confirmado_por = current_user.id
         fator_msg = '' if fator == 1.0 else f' · fator {fator}'
-        flash(f'"{mp.seru_nome}" → {mp.alvo_nome}{fator_msg}', 'success')
+        flash(f'"{mp.nome_externo}" → {mp.alvo_nome}{fator_msg}', 'success')
     elif acao == 'ignorar':
         mp.ignorar = True
         mp.receita_id = None
         mp.produto_id = None
         mp.confirmado_em = agora()
         mp.confirmado_por = current_user.id
-        flash(f'"{mp.seru_nome}" ignorado — nao baixara estoque.', 'info')
+        flash(f'"{mp.nome_externo}" ignorado — nao baixara estoque.', 'info')
     elif acao == 'desfazer':
         mp.ignorar = False
         mp.receita_id = None
@@ -626,7 +627,7 @@ def vincular_produto(map_id):
         mp.confirmado_em = None
         mp.confirmado_por = None
         mp.fator_quantidade = 1.0  # volta pra pristine — fator nao fica pegajoso
-        flash(f'"{mp.seru_nome}" voltou pra pendente.', 'info')
+        flash(f'"{mp.nome_externo}" voltou pra pendente.', 'info')
     db.session.commit()
     return redirect(url_for('pdv.mapeamentos'))
 
