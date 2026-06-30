@@ -93,6 +93,9 @@ def aplicar_venda(loja_id, *, receita_id=None, produto_id=None,
         o estorno casa por ela.
       pedido_ref: chave do pedido por canal (ex: 'seru:123') — liga a fracao.
       nome_venda: nome do item vendido, so pra enriquecer a referencia da cesta.
+      pular_sem_linha: se True, COMPONENTE de cesta sem linha de EstoqueLoja eh
+        ignorado (nao cria linha nem baixa). Usado pelo site, que nao rastreia
+        componente decorativo. O item simples (identidade) sempre baixa.
 
     Retorna {baixado, faltou, acumulado, sem_alvo}.
     """
