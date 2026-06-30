@@ -18,7 +18,6 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
     cronograma exibido — senao as quantidades nao batem com o que esta na tela
     (a distribuicao por dia muda com a janela)."""
     from app.models import PlanejamentoItem
-    from app.services.massa_base import rendimento_massa_crua
     from app.services.previsao_producao import cronograma_producao
 
     crono = cronograma_producao(horizonte_dias=horizonte_dias,
