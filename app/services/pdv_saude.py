@@ -16,7 +16,6 @@ from app.models import (
     SeruLojaMap,
     SeruPedidoProcessado,
     SeruProdutoMap,
-    VndaProdutoMap,
 )
 from app.utils import agora as _agora
 
@@ -180,7 +179,7 @@ def reconciliar(inicio, fim):
 def contar_pendencias():
     """So o total de pendencias acionaveis — pro card do dashboard.
 
-    Barato: 4 counts. Nao inclui status de atraso (esse so no painel).
+    Barato: 3 counts. Nao inclui status de atraso (esse so no painel).
     """
     lojas = (SeruLojaMap.query
              .filter(SeruLojaMap.confirmado_em.is_(None))
@@ -189,10 +188,6 @@ def contar_pendencias():
                  .filter(SeruProdutoMap.receita_id.is_(None))
                  .filter(SeruProdutoMap.produto_id.is_(None))
                  .filter(SeruProdutoMap.ignorar.is_(False)).count())
-    prod_vnda = (VndaProdutoMap.query
-                 .filter(VndaProdutoMap.receita_id.is_(None))
-                 .filter(VndaProdutoMap.produto_id.is_(None))
-                 .filter(VndaProdutoMap.ignorar.is_(False)).count())
     sem_loja = (SeruPedidoProcessado.query
                 .filter(SeruPedidoProcessado.loja_id.is_(None)).count())
-    return lojas + prod_seru + prod_vnda + sem_loja
+    return lojas + prod_seru + sem_loja
