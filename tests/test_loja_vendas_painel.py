@@ -68,18 +68,22 @@ def test_resumo_clientes_novos_vs_recorrentes(app):
     assert r['recorrentes'] == 1
 
 
-def test_painel_vendas_owner_ve_admin_nao(app):
-    co = _login(app, owner=True)
-    assert co.get('/admin/loja-online/vendas').status_code == 200
-    ca = _login(app, owner=False)
-    assert ca.get('/admin/loja-online/vendas').status_code in (302, 403)
+def test_painel_vendas_owner_ve(app):
+    c = _login(app, owner=True)
+    assert c.get('/admin/loja-online/vendas').status_code == 200
+
+
+def test_painel_vendas_nao_owner_403(app):
+    c = _login(app, owner=False)
+    assert c.get('/admin/loja-online/vendas').status_code in (302, 403)
 
 
 def test_painel_vendas_mostra_metricas(app):
     c = _login(app, owner=True)
     with app.app_context():
+        prod = _produto_box()
         cl = _cliente('m@x.com')
-        _pedido_pago(cl.id, dias_atras=2)
+        _pedido_pago(cl.id, dias_atras=2, produto_id=prod.id)
     html = c.get('/admin/loja-online/vendas?dias=30').data
     assert b'Faturamento' in html
     assert b'Ticket' in html
