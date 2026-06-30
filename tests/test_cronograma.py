@@ -434,6 +434,46 @@ def test_projecao_marca_dia_que_falta(app):
     assert rr['dia_falta'] == rr['projecao'][0]['label']
 
 
+def test_breakdown_bom_rastreia_insumo(app):
+    """A massa (insumo) traz `breakdown_bom`: de QUAIS produtos finais a
+    demanda dela veio. Responde 'de onde saiu esse número de massa?' — vem da
+    produção do croissant × a receita, não foi digitado à mão."""
+    from app.models import ReceitaIngrediente
+    loja = _loja()
+    massa = _receita('Massa para folhar')
+    massa.dias_producao = 1
+    cro = _receita('Croissant Tradicional')
+    cro.rendimento_qtd = 50
+    db.session.add(ReceitaIngrediente(
+        receita_id=cro.id, tipo='receita', sub_receita_id=massa.id,
+        ingrediente_nome='Massa para folhar', porcentagem=1))
+    db.session.commit()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=3), cro, 100)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rm = _rec_out(crono, massa.id)
+    assert rm is not None and rm['insumo']
+    assert rm['breakdown_bom']                          # rastreabilidade presente
+    assert rm['breakdown_bom'][0]['nome'] == 'Croissant Tradicional'
+    assert rm['breakdown_bom'][0]['qtd'] == 100         # 100 croissants puxaram a massa
+    # produto final NÃO tem breakdown_bom (só insumo)
+    rc = _rec_out(crono, cro.id)
+    assert rc['breakdown_bom'] == []
+
+
+def test_projecao_expoe_previsto(app):
+    """A projeção dia a dia expõe `previsto` (demanda do histórico pra a entrega
+    daquele dia) — deixa ver quando a produção vem de pedido firme ou previsão."""
+    loja = _loja()
+    r = _receita('Pão')
+    db.session.commit()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=2), r, 30)
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None
+    assert all('previsto' in p for p in rr['projecao'])
+
+
 def test_rota_telaindustriateste(app, admin_user):
     loja = _loja()
     r = _receita()
