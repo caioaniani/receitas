@@ -2469,7 +2469,7 @@ def loja_online_auditoria_catalogo():
     lista os passos manuais (Pagar.me sandbox, contador, etc)."""
     from sqlalchemy import or_
 
-    from app.models import Produto, Receita, VndaProdutoMap
+    from app.models import Produto, Receita
 
     # Receitas
     rec_total = Receita.query.count()
@@ -2519,16 +2519,6 @@ def loja_online_auditoria_catalogo():
                                  Produto.imagem_url.is_(None)))
                      .order_by(Produto.nome).limit(40).all())
 
-    # VndaProdutoMap (espelha o que o VNDA vende e mapeia pra catalogo nosso)
-    mapa_total = VndaProdutoMap.query.count()
-    mapa_mapeado = VndaProdutoMap.query.filter(
-        or_(VndaProdutoMap.receita_id.isnot(None),
-            VndaProdutoMap.produto_id.isnot(None))).count()
-    mapa_orfao = (VndaProdutoMap.query
-                  .filter(VndaProdutoMap.receita_id.is_(None),
-                          VndaProdutoMap.produto_id.is_(None))
-                  .order_by(VndaProdutoMap.primeira_visto_em.desc()).limit(40).all())
-
     return render_template(
         'admin/loja_online_auditoria_catalogo.html',
         rec_total=rec_total, rec_ativas=rec_ativas,
@@ -2537,8 +2527,6 @@ def loja_online_auditoria_catalogo():
         prod_total=prod_total, prod_ativos=prod_ativos,
         prod_preco_site=prod_preco_site, prod_img=prod_img,
         prod_prontos=prod_prontos, prod_faltando=prod_faltando,
-        mapa_total=mapa_total, mapa_mapeado=mapa_mapeado,
-        mapa_orfao=mapa_orfao,
     )
 
 
