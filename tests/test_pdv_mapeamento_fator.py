@@ -191,6 +191,15 @@ def test_telas_de_mapeamento_carregam_widget_unico(app, admin_user, catalogo):
         assert b'PdvMap' in r.data, f'{rota} nao usa PdvMap'
 
 
+def test_pagina_expoe_window_csrf_token(app, admin_user, catalogo):
+    """O widget POSTa window.CSRF_TOKEN; se a pagina nao expuser, o salvar volta
+    HTTP 400 'CSRF token is missing'. Trava esse regresso."""
+    c = _login_admin(app, admin_user)
+    r = c.get('/pdv/mapeamentos')
+    assert r.status_code == 200
+    assert b'window.CSRF_TOKEN' in r.data
+
+
 def test_reconciliacao_usa_widget_unico(app, admin_user, catalogo):
     from unittest.mock import patch
     c = _login_admin(app, admin_user)
