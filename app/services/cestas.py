@@ -85,6 +85,38 @@ def componentes_de_cesta(produto):
     return out
 
 
+def composicao_de_venda(*, receita_id=None, produto_id=None,
+                        materia_prima_id=None):
+    """Composicao de estoque de 1 unidade VENDIDA do item — base do motor unico
+    de baixa (`app/services/baixa_venda.py`), que unifica Seru + site + lote.
+
+    - Produto-cesta -> seus componentes (ProdutoItem), via `componentes_de_cesta`
+      (ex: Family Box = 5 pao + 3 croissant; sanduiche = 0.2 sourdough + recheio).
+    - Produto simples / Receita / MP -> identidade `[(col, id, nome, 1.0)]`.
+
+    Retorna `[(coluna_estoque, item_id, nome, qtd_por_unidade_vendida)]`, pronto
+    pra filtrar EstoqueLoja. Lista vazia = nada a baixar (alvo inexistente, ou
+    cesta so com orfaos)."""
+    if produto_id:
+        from app.models import Produto
+        produto = Produto.query.get(produto_id)
+        if produto is None:
+            return []
+        comps = componentes_de_cesta(produto)
+        if comps:
+            return comps
+        return [('produto_id', produto_id, produto.nome, 1.0)]
+    if receita_id:
+        from app.models import Receita
+        rec = Receita.query.get(receita_id)
+        return [('receita_id', receita_id, rec.nome, 1.0)] if rec else []
+    if materia_prima_id:
+        from app.models import MateriaPrima
+        mp = MateriaPrima.query.get(materia_prima_id)
+        return [('materia_prima_id', materia_prima_id, mp.nome, 1.0)] if mp else []
+    return []
+
+
 def eh_cesta(produto):
     """True se Produto tem componentes (eh cesta)."""
     return bool(produto and produto.itens)
