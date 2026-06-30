@@ -1,10 +1,10 @@
 """Tela de mapeamentos da saida em lote mostra as LOJAS que ja usaram cada
-mapeamento (via LojaDebito, criado pra toda saida aplicada)."""
+mapeamento (via VendaMapaUso, criado pra toda saida aplicada)."""
 
 
 def test_mapeamento_mostra_lojas_que_usaram(app, admin_user):
     from app.extensions import db
-    from app.models import Loja, LojaDebito, LojaProdutoMap, Receita
+    from app.models import Loja, Receita, VendaMapa, VendaMapaUso
     with app.app_context():
         r = Receita(nome='Brioche', categoria='Paes', rendimento_qtd=1,
                     rendimento_unidade='un', peso_base=100.0)
@@ -13,14 +13,14 @@ def test_mapeamento_mostra_lojas_que_usaram(app, admin_user):
         l3 = Loja(nome='Loja Sem Uso', ativa=True)
         db.session.add_all([r, l1, l2, l3])
         db.session.commit()
-        m = LojaProdutoMap(nome_digitado='BRIOCHE 500G', receita_id=r.id,
-                           confirmado_por=admin_user.id)
+        m = VendaMapa(canal='lote', nome_externo='BRIOCHE 500G', receita_id=r.id,
+                      confirmado_por=admin_user.id)
         db.session.add(m)
         db.session.commit()
         # l1 e l2 usaram o mapeamento; l3 nao
         db.session.add_all([
-            LojaDebito(loja_id=l1.id, loja_produto_map_id=m.id, fracao_pendente=0.0),
-            LojaDebito(loja_id=l2.id, loja_produto_map_id=m.id, fracao_pendente=0.0),
+            VendaMapaUso(venda_mapa_id=m.id, loja_id=l1.id),
+            VendaMapaUso(venda_mapa_id=m.id, loja_id=l2.id),
         ])
         db.session.commit()
 
