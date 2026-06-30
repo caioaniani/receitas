@@ -331,6 +331,35 @@ def pedidos_semana_media():
                            janela=janela, inicio=inicio)
 
 
+@producao_bp.route('/pedidos-semana/estoque')
+@login_required
+@admin_required
+def pedidos_semana_estoque():
+    """Maneira 2: previsao por VENDA + ESTOQUE (ponto de reposicao). Pede o que
+    falta pra cobrir a venda prevista (media por dia-da-semana) menos o estoque
+    atual da loja, arredondado pra cima na caixa. Mesmo POST de gerar. **Admin**."""
+    from app.services.previsao_producao import sugerir_pedidos_por_venda
+
+    try:
+        horizonte = int(request.args.get('horizonte', 7))
+    except ValueError:
+        horizonte = 7
+    horizonte = max(1, min(horizonte, 14))
+    try:
+        janela = int(request.args.get('janela', 6))
+    except ValueError:
+        janela = 6
+    janela = max(1, min(janela, 26))
+
+    inicio = _inicio_offset()
+    grade = sugerir_pedidos_por_venda(horizonte_dias=horizonte,
+                                      janela_semanas=janela,
+                                      inicio_offset_dias=inicio)
+    return render_template('producao/pedidos_semana_estoque.html',
+                           grade=grade, horizonte=horizonte,
+                           janela=janela, inicio=inicio)
+
+
 @producao_bp.route('/pedidos-semana/gerar', methods=['POST'])
 @login_required
 @admin_required
