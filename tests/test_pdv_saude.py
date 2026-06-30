@@ -132,16 +132,15 @@ def test_rota_reconciliacao_renderiza(app, admin_user, catalogo):
              'mapeado_para': {'tipo': 'produto', 'id': 1, 'nome': 'Pao Frances'}},
         ],
     }
-    vnda_agg = {'produtos': [], 'total_pedidos': 0, 'total_itens': 0, 'loja': 'Anesio'}
-    with patch('app.services.vendas_itens.agregar_itens', return_value=agg), \
-         patch('app.services.vnda_sync.agregar_vendas', return_value=vnda_agg):
+    with patch('app.services.vendas_itens.agregar_itens', return_value=agg):
         r = c.get('/pdv/reconciliacao')
     assert r.status_code == 200
     assert 'Reconciliação'.encode() in r.data
     assert b'Cesta Nova' in r.data        # pendente (nao baixou) aparece
     assert b'reconMapear' in r.data       # JS da acao inline
     assert b'recon-alvo' in r.data        # select de alvos renderizou
-    assert b'tab-vnda' in r.data          # aba VNDA renderizou
+    # VNDA aposentado: nao ha mais aba do site na reconciliacao.
+    assert b'tab-vnda' not in r.data
 
 
 def test_reconciliar_vnda_separa_pendentes(app):
