@@ -79,15 +79,24 @@ _OUTLIER_FATOR = 2.5
 
 def _teto_pico_isolado(qtd_por_data):
     """Teto pra capar um pico ISOLADO: a 2a maior ocorrencia, mas SO quando a
-    maior eh um outlier de verdade (> _OUTLIER_FATOR x mediana e unica no topo).
-    Senao retorna +inf (nao capa). < 3 pontos: poucos dados pra julgar, nao capa."""
+    maior eh um outlier de verdade. Senao retorna +inf (nao capa). 1 ponto: nao
+    da pra julgar.
+
+    Com 2 pontos NAO ha mediana confiavel, mas era exatamente a faixa que ficava
+    SEM nenhuma protecao (a previsao do dia-da-semana liga com 2 datas) — um
+    pedido pontual gigante estourava a previsao por semanas (bug pego 30/06).
+    Agora, com 2 pontos, capa se o topo for > _OUTLIER_FATOR x o outro valor
+    (pico isolado claro); com 3+ usa a mediana, como antes."""
     valores = sorted(qtd_por_data.values())
     n = len(valores)
-    if n < 3:
+    if n < 2:
         return float('inf')
+    topo, segundo = valores[-1], valores[-2]
+    if n == 2:
+        return segundo if (segundo > 0 and topo > _OUTLIER_FATOR * segundo) \
+            else float('inf')
     mediana = (valores[n // 2] if n % 2
                else (valores[n // 2 - 1] + valores[n // 2]) / 2)
-    topo, segundo = valores[-1], valores[-2]
     if mediana > 0 and topo > _OUTLIER_FATOR * mediana and topo > segundo:
         return segundo
     return float('inf')
