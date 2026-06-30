@@ -17,7 +17,6 @@ from app.models import (
     SeruPedidoProcessado,
     SeruProdutoMap,
     VndaPedidoProcessado,
-    VndaProdutoMap,
 )
 from app.services import seru
 from app.utils import agora
@@ -702,76 +701,6 @@ def vincular_loja(map_id):
 # CLAUDE.md, preservados por histórico). Resta só o diagnóstico de catálogo do
 # bot (vnda_diag_produtos), que bate no VNDA pra debugar o catálogo do chatbot.
 # ════════════════════════════════════════════════════════════════════
-
-
-@pdv_bp.route('/vnda/config-loja', methods=['POST'])
-@login_required
-@admin_required
-def vnda_config_loja():
-    """Salva qual loja recebe as baixas VNDA."""
-    try:
-        loja_id = int(request.form.get('loja_id') or 0)
-    except (TypeError, ValueError):
-        loja_id = 0
-    if not loja_id:
-        flash('Selecione uma loja valida.', 'danger')
-        return redirect(url_for('pdv.vnda_mapeamentos'))
-    loja = Loja.query.get(loja_id)
-    if not loja:
-        flash(f'Loja id={loja_id} nao existe.', 'danger')
-        return redirect(url_for('pdv.vnda_mapeamentos'))
-    AppConfig.set('vnda_loja_id', loja.id)
-    db.session.commit()
-    flash(f'Loja destino VNDA agora e "{loja.nome}". Baixas vao pra essa loja a partir de agora.', 'success')
-    return redirect(url_for('pdv.vnda_mapeamentos'))
-
-
-@pdv_bp.route('/vnda/mapeamentos/produto/<int:map_id>', methods=['POST'])
-@login_required
-@admin_required
-def vnda_vincular_produto(map_id):
-    mp = VndaProdutoMap.query.get_or_404(map_id)
-    acao = request.form.get('acao')
-    if not acao and request.form.get('alvo_id'):
-        acao = 'vincular'
-    if not acao:
-        flash('Clique em "Vincular", "Ignorar" ou "Desfazer".', 'warning')
-        return redirect(url_for('pdv.vnda_mapeamentos'))
-
-    if acao == 'vincular':
-        tipo = request.form.get('alvo_tipo')
-        try:
-            alvo_id = int(request.form.get('alvo_id', ''))
-        except (TypeError, ValueError):
-            alvo_id = 0
-        if tipo == 'receita' and alvo_id:
-            mp.receita_id = alvo_id; mp.produto_id = None; mp.ignorar = False
-        elif tipo == 'produto' and alvo_id:
-            mp.produto_id = alvo_id; mp.receita_id = None; mp.ignorar = False
-        else:
-            flash('Selecione receita ou produto valido.', 'danger')
-            return redirect(url_for('pdv.vnda_mapeamentos'))
-        try:
-            fator = float(request.form.get('fator') or 1.0)
-            if fator <= 0:
-                fator = 1.0
-        except (TypeError, ValueError):
-            fator = 1.0
-        mp.fator_quantidade = fator
-        mp.confirmado_em = agora()
-        mp.confirmado_por = current_user.id
-        fator_msg = '' if fator == 1.0 else f' · fator {fator}'
-        flash(f'"{mp.vnda_nome}" → {mp.alvo_nome}{fator_msg}', 'success')
-    elif acao == 'ignorar':
-        mp.ignorar = True; mp.receita_id = None; mp.produto_id = None
-        mp.confirmado_em = agora(); mp.confirmado_por = current_user.id
-        flash(f'"{mp.vnda_nome}" ignorado — nao baixara estoque.', 'info')
-    elif acao == 'desfazer':
-        mp.ignorar = False; mp.receita_id = None; mp.produto_id = None
-        mp.confirmado_em = None; mp.confirmado_por = None
-        flash(f'"{mp.vnda_nome}" voltou pra pendente.', 'info')
-    db.session.commit()
-    return redirect(url_for('pdv.vnda_mapeamentos'))
 
 
 @pdv_bp.route('/vnda/sync', methods=['POST'])
