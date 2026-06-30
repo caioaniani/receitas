@@ -24,17 +24,20 @@ logger = logging.getLogger(__name__)
 # Tipos de MovEstoqueLoja que AUMENTAM o saldo.
 TIPOS_ENTRADA = {
     'entrada_pedido', 'entrada_lote', 'entrada_manual', 'balanco_entrada',
-    'venda_seru_estorno', 'venda_vnda_estorno', 'desperdicio_estorno',
+    'venda_seru_estorno', 'venda_vnda_estorno', 'venda_site_estorno',
+    'desperdicio_estorno',
 }
 # Tipos que DIMINUEM o saldo.
 TIPOS_SAIDA = {
-    'venda_seru', 'venda_vnda', 'venda', 'ajuste', 'ajuste_negativo',
-    'devolucao', 'descarte', 'desperdicio', 'saida_lote', 'saida_pedido',
+    'venda_seru', 'venda_vnda', 'venda_site', 'venda', 'ajuste',
+    'ajuste_negativo', 'devolucao', 'descarte', 'desperdicio',
+    'saida_lote', 'saida_pedido',
 }
 # Tipos que NAO mexem no saldo (so registram falta).
 TIPOS_NEUTRO = {
     'venda_seru_sem_estoque', 'venda_vnda_sem_estoque',
-    'venda_loja_sem_estoque', 'desperdicio_sem_estoque',
+    'venda_site_sem_estoque', 'venda_loja_sem_estoque',
+    'desperdicio_sem_estoque',
 }
 # ajuste_conferencia: a quantidade ja vem com sinal (+ subiu / - desceu).
 
