@@ -63,11 +63,22 @@
                     <td><code>{{ p.sku or '—' }}</code></td>
                     <td class="text-end">{{ p.qtd | round(0,'floor') | int }}</td>
                     <td>
-                        <input type="text" class="form-control form-control-sm recon-alvo"
+                        <input type="text" class="form-control form-control-sm recon-alvo mb-1"
                                list="recon-alvo-list" autocomplete="off"
                                placeholder="digite pra buscar…">
+                        <div class="d-flex gap-1 align-items-center flex-wrap">
+                            <span class="small text-muted">1 venda =</span>
+                            <input type="text" inputmode="decimal" class="form-control form-control-sm recon-fator"
+                                   value="1" style="width:62px;" placeholder="1"
+                                   oninput="reconFatorHelp(this)"
+                                   title="Quantas unidades do item são consumidas em 1 venda. Composto (ex: 2 fatias de uma unidade de 10) = 0.2">
+                            <span class="small text-muted">un do item</span>
+                            <button type="button" class="btn btn-sm btn-link p-0 ms-1"
+                                    style="font-size:12px;" onclick="reconFatias(this)">↳ calcular fatias</button>
+                            <span class="small recon-fator-help text-muted"></span>
+                        </div>
                     </td>
-                    <td class="recon-acao-cell">
+                    <td class="recon-acao-cell align-top">
                         <button class="btn btn-sm btn-success" onclick="reconMapear(this, 'vincular')">Vincular</button>
                         <button class="btn btn-sm btn-outline-secondary" onclick="reconMapear(this, 'ignorar')">Ignorar</button>
                     </td>
