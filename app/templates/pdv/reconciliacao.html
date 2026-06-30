@@ -63,19 +63,9 @@
                     <td><code>{{ p.sku or '—' }}</code></td>
                     <td class="text-end">{{ p.qtd | round(0,'floor') | int }}</td>
                     <td>
-                        <select class="form-select form-select-sm recon-alvo">
-                            <option value="">— escolher —</option>
-                            <optgroup label="Produtos">
-                                {% for pr in produtos %}
-                                <option value="produto:{{ pr.id }}">{{ pr.nome }}</option>
-                                {% endfor %}
-                            </optgroup>
-                            <optgroup label="Receitas">
-                                {% for r in receitas %}
-                                <option value="receita:{{ r.id }}">{{ r.nome }}</option>
-                                {% endfor %}
-                            </optgroup>
-                        </select>
+                        <input type="text" class="form-control form-control-sm recon-alvo"
+                               list="recon-alvo-list" autocomplete="off"
+                               placeholder="digite pra buscar…">
                     </td>
                     <td class="recon-acao-cell">
                         <button class="btn btn-sm btn-success" onclick="reconMapear(this, 'vincular')">Vincular</button>
