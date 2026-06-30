@@ -112,6 +112,66 @@ def test_estoque_suficiente_nao_pede(app):
     assert _prod(grade, loja.id, r.id) is None   # nada a pedir
 
 
+def test_dia_travado_usa_entrega_real_no_carry(app):
+    """JA-TEM-CARRY: dia ja pedido sugere 0 e a simulacao usa a ENTREGA JA
+    PEDIDA (qtd real) como estoque dos dias seguintes — nao a sugestao
+    descartada (que sumiria no POST por vir disabled)."""
+    from app.models import PedidoItem, PedidoLoja
+    loja = _loja()
+    r = _receita('Pao')                       # sem caixa
+    el = _estoque(loja, r, 0)
+    hoje_d = hoje()
+    # vende 10 em TODOS os dias-da-semana (6 semanas) -> media 10/dia
+    for sem in range(1, 7):
+        for dow in range(7):
+            d = hoje_d - timedelta(days=7 * sem)
+            d = d - timedelta(days=d.weekday()) + timedelta(days=dow)
+            if d < hoje_d:
+                _venda(el, d, 10)
+    # a loja JA pediu HOJE (dia 0 do horizonte) uma reposicao GRANDE de 30
+    p_fut = PedidoLoja(loja_id=loja.id, status='pendente',
+                       data_entrega=hoje_d, data_pedido=hoje_d)
+    db.session.add(p_fut)
+    db.session.flush()
+    db.session.add(PedidoItem(pedido_id=p_fut.id, receita_id=r.id, quantidade=30))
+    db.session.commit()
+
+    grade = sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
+                                      inicio_offset_dias=0)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    assert p['por_dia'][0] == 0               # dia travado: nao sugere
+    # os 30 ja pedidos cobrem a venda dos proximos dias -> 1 e 2 ficam 0
+    assert p['por_dia'][1] == 0
+    assert p['por_dia'][2] == 0
+    # menos que [10]*7 (=70) do bug que ignorava a entrega real
+    assert sum(p['por_dia']) < 70
+
+
+def test_estoque_reservado_nao_conta_como_disponivel(app):
+    """ESTOQUE-RESERVADO: estoque reservado (pedido online aguardando pgto) NAO
+    conta como disponivel — senao subestima o deficit e sub-pede."""
+    loja = _loja()
+    r = _receita('Pao')
+    el = _estoque(loja, r, 10)
+    el.quantidade_reservada = 10              # tudo reservado -> disponivel 0
+    db.session.commit()
+    hoje_d = hoje()
+    for sem in range(1, 7):
+        for dow in range(7):
+            d = hoje_d - timedelta(days=7 * sem)
+            d = d - timedelta(days=d.weekday()) + timedelta(days=dow)
+            if d < hoje_d:
+                _venda(el, d, 10)
+
+    grade = sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
+                                      inicio_offset_dias=0)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    assert p['estoque_atual'] == 0            # disponivel = 10 - 10 reservado
+    assert p['por_dia'][0] == 10              # disponivel 0 -> pede a venda do dia
+
+
 def test_rota_estoque_renderiza(app, admin_user):
     loja = _loja('Loja Centro')
     r = _receita('Pão Francês')
