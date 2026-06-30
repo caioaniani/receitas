@@ -70,7 +70,7 @@
         <span class="prev-entrega">→ entrega-alvo: {{ d.entrega_label }} ({{ d.dow_nome }})</span>
         <span class="prev-num">
             firme <span class="firme">{{ d.firme }}</span> ·
-            previsto <span class="previsto">{{ d.previsto }}</span>
+            previsto <span class="previsto">{{ ('%g'|format(d.previsto))|replace('.', ',') }}/dia</span>
             {% if d.usado == 'firme' %}<span class="usado-tag firme-tag">usa firme</span>
             {% else %}<span class="usado-tag">usa previsto</span>{% endif %}
         </span>
