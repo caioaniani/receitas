@@ -1114,7 +1114,8 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         else:
             liquido = _distribuir_inteiro(produzir, pesos)
 
-        rend = int(rec.rendimento_qtd) if rec.rendimento_qtd else 0
+        from app.services.massa_base import rendimento_massa_crua
+        rend = rendimento_massa_crua(rec)
         # Anti-"acender fornada por dribble" (ex: produzir 1 pao num dia): um dia
         # que produz menos que uma fracao de UMA FORNADA (batida da amassadeira)
         # rola pro PROXIMO dia, acumulando ate valer um lote. So MOVE (total
