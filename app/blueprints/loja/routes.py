@@ -10,7 +10,14 @@ desabilitado com "Em breve" (carrinho/checkout entra na Fase 3).
 import json
 import os
 
-from flask import abort, jsonify, redirect, render_template, request, url_for
+from flask import (
+    abort,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_login import current_user
 
 from app.blueprints.loja import loja_bp
