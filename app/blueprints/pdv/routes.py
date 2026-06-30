@@ -570,6 +570,7 @@ def reconciliacao():
     except (KeyError, ValueError):
         pass
     dados = pdv_saude.reconciliar(inicio, fim)
+    # VNDA aposentado (site proprio agora) — sem aba/reconciliacao VNDA aqui.
     # Alvos pra vincular inline (mesma fonte do modal de itens-vendidos).
     receitas = Receita.query.order_by(Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
