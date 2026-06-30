@@ -128,6 +128,7 @@ def _baixar_item(loja_id, mapping_produto, qtd, seru_pedido_id, user_id):
         loja_id,
         receita_id=mapping_produto.receita_id,
         produto_id=mapping_produto.produto_id,
+        materia_prima_id=getattr(mapping_produto, 'materia_prima_id', None),
         qtd=qtd, fator=mapping_produto.fator_quantidade, canal='seru',
         referencia=f'Seru #{seru_pedido_id}',
         pedido_ref=f'seru:{seru_pedido_id}',
