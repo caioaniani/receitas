@@ -605,7 +605,10 @@
 
     <!-- MP data para JavaScript -->
     <script>const MP_DATA = {{ mp_info | tojson }};</script>
-    <script>const CSRF_TOKEN = "{{ csrf_token() }}";</script>
+    <!-- window.CSRF_TOKEN: `const` no topo NAO vira propriedade de window; o
+         widget unico (pdv_mapeamento.js) le window.CSRF_TOKEN no POST. Sem isto
+         o token ia vazio -> "CSRF token is missing" (HTTP 400) ao salvar mapa. -->
+    <script>const CSRF_TOKEN = "{{ csrf_token() }}"; window.CSRF_TOKEN = CSRF_TOKEN;</script>
     {% if current_user.is_authenticated %}
     <script>const RECEITA_NOMES = {{ receita_nomes|tojson }};</script>
     {% endif %}
