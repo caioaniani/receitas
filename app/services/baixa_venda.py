@@ -48,6 +48,17 @@ def _movs(canal):
     return _MOVS.get(canal, ('venda', 'venda_sem_estoque', 'venda_estorno'))
 
 
+# Sinal da QUANTIDADE no movimento de estorno (o estoque eh sempre RESTAURADO
+# com +qtd; isto eh so como o mov fica gravado). Historico: Seru/lote gravam
+# positivo, o site sempre gravou NEGATIVO — preservado pra nao misturar
+# convencao no historico/relatorios. So afeta o numero exibido, nao o saldo.
+_SINAL_ESTORNO = {'site': -1}
+
+
+def _sinal_estorno(canal):
+    return _SINAL_ESTORNO.get(canal, 1)
+
+
 def _item_filtro(col, item_id):
     """Filtro completo das 3 colunas de item (uma setada, duas None) — pra
     casar com a trava de unicidade de DebitoEstoque/EstoqueLoja."""
