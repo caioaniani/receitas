@@ -275,7 +275,7 @@
                         {% if r.dias_producao %}<span class="tag-lead">{{ r.dias_producao }}d</span>{% endif %}
                         {% if r.insumo %}<span class="tag-insumo" title="Insumo de produção (sub-receita)">insumo</span>{% endif %}
                     </div>
-                    <div class="rec-est">em estoque: {{ r.em_estoque }}</div>
+                    <div class="rec-est">em estoque: {{ r.em_estoque }}{% if not r.insumo and (r.previsto or r.comprometido) %} · <span title="Pedido firme das lojas na janela">firme {{ r.comprometido }}</span> · <span style="color:#6f42c1" title="Demanda prevista pelo histórico na janela — a base pra julgar se a produção está na média">previsto {{ r.previsto }}</span>{% endif %}</div>
                 </td>
                 {% for c in r.por_dia %}
                 <td class="cel {% if c.data == crono.hoje %}hoje-col{% endif %}{% if r.insumo %} cel-insumo{% endif %}"
