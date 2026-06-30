@@ -168,7 +168,11 @@ def estornar_venda(canal, pedido_ref, referencia, *, usuario_id=None):
     ).all()
     revertido_int = 0
     for m in candidatos:
-        if _TAG_FRACAO in (m.referencia or ''):
+        ref_m = m.referencia or ''
+        # Pula baixas FRACIONARIAS — revertidas so pela fase 2 (acumulador):
+        # '(fracao)' = motor novo; '(fator' = baixa do Seru ANTES do cutover
+        # (transicao; as contribuicoes viram DebitoEstoqueMov na migracao).
+        if _TAG_FRACAO in ref_m or '(fator' in ref_m:
             continue
         el = EstoqueLoja.query.get(m.estoque_loja_id)
         if el is None:
