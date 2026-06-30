@@ -102,7 +102,8 @@ def create_app(config_class=None):
         import hashlib
         import os
         versions = {}
-        for rel in ('js/projetos.js', 'js/app.js', 'js/entregas.js', 'css/style.css'):
+        for rel in ('js/projetos.js', 'js/app.js', 'js/entregas.js',
+                    'js/pdv_mapeamento.js', 'css/style.css'):
             try:
                 p = os.path.join(app.static_folder, rel)
                 with open(p, 'rb') as f:
