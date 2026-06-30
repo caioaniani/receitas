@@ -1,0 +1,78 @@
+"""Migracao para o motor unico: backfill VendaMapa + migracao de fracoes."""
+from app.extensions import db
+from app.models import (
+    DebitoEstoque,
+    EstoqueLoja,
+    LojaDebito,
+    LojaProdutoMap,
+    Receita,
+    SeruDebito,
+    SeruProdutoMap,
+)
+from app.services.venda_mapa_migracao import backfill_venda_mapa, migrar_fracoes_para_debito_estoque
+
+
+def _receita(nome):
+    r = Receita(nome=nome, categoria='Paes', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=100.0)
+    db.session.add(r)
+    db.session.flush()
+    return r
+
+
+def test_backfill_copia_e_e_idempotente(app, loja):
+    from app.models import VendaMapa
+    cookie = _receita('Cookie')
+    db.session.add(SeruProdutoMap(seru_nome='CAFE', receita_id=cookie.id,
+                                  fator_quantidade=0.2))
+    db.session.add(LojaProdutoMap(nome_digitado='Pao Frances',
+                                  receita_id=cookie.id, fator_quantidade=1.0))
+    db.session.commit()
+
+    r1 = backfill_venda_mapa()
+    assert r1 == {'seru_novos': 1, 'lote_novos': 1}
+    seru = VendaMapa.query.filter_by(canal='seru', nome_externo='CAFE').first()
+    assert seru.receita_id == cookie.id and abs(seru.fator_quantidade - 0.2) < 1e-9
+    assert VendaMapa.query.filter_by(canal='lote',
+                                     nome_externo='Pao Frances').first()
+    # idempotente: roda de novo, nao duplica
+    r2 = backfill_venda_mapa()
+    assert r2 == {'seru_novos': 0, 'lote_novos': 0}
+    assert VendaMapa.query.count() == 2
+
+
+def test_migrar_fracoes_soma_por_item_e_baixa_inteiro(app, loja):
+    """SeruDebito 0.6 + LojaDebito 0.7 do MESMO cookie -> 1.3: baixa 1, sobra
+    0.3 no DebitoEstoque; fontes zeradas."""
+    cookie = _receita('Cookie')
+    el = EstoqueLoja(loja_id=loja.id, receita_id=cookie.id, quantidade=5)
+    db.session.add(el)
+    sm = SeruProdutoMap(seru_nome='CAFE', receita_id=cookie.id,
+                        fator_quantidade=0.2)
+    lm = LojaProdutoMap(nome_digitado='CAFE LOTE', receita_id=cookie.id,
+                        fator_quantidade=0.2)
+    db.session.add_all([sm, lm])
+    db.session.flush()
+    db.session.add(SeruDebito(loja_id=loja.id, seru_produto_map_id=sm.id,
+                              fracao_pendente=0.6))
+    db.session.add(LojaDebito(loja_id=loja.id, loja_produto_map_id=lm.id,
+                              fracao_pendente=0.7))
+    db.session.commit()
+
+    res = migrar_fracoes_para_debito_estoque()
+    assert res['inteiros_baixados'] == 1
+    deb = DebitoEstoque.query.filter_by(loja_id=loja.id,
+                                        receita_id=cookie.id).first()
+    assert abs(deb.fracao_pendente - 0.3) < 1e-6
+    el = EstoqueLoja.query.filter_by(loja_id=loja.id,
+                                     receita_id=cookie.id).first()
+    assert el.quantidade == 4                       # 5 - 1
+    # fontes zeradas (idempotencia)
+    assert SeruDebito.query.first().fracao_pendente == 0.0
+    assert LojaDebito.query.first().fracao_pendente == 0.0
+    # roda de novo: nada muda
+    res2 = migrar_fracoes_para_debito_estoque()
+    assert res2['inteiros_baixados'] == 0
+    assert abs(DebitoEstoque.query.filter_by(
+        loja_id=loja.id, receita_id=cookie.id).first().fracao_pendente
+        - 0.3) < 1e-6
