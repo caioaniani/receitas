@@ -30,7 +30,7 @@ def _pedido(pid, company, itens, canceled_at=None):
 def _setup(*, qtd_estoque=10, confirmar_loja=True, mapear_produto=True):
     """Cria loja+mapa+receita+estoque. Retorna (loja, receita, estoque_loja)."""
     from app.extensions import db
-    from app.models import EstoqueLoja, Loja, Receita, SeruLojaMap, SeruProdutoMap
+    from app.models import EstoqueLoja, Loja, Receita, SeruLojaMap, VendaMapa
     from app.utils import agora
 
     loja = Loja(nome='Ribeiro do Vale', ativa=True)
@@ -49,8 +49,8 @@ def _setup(*, qtd_estoque=10, confirmar_loja=True, mapear_produto=True):
     db.session.flush()
 
     if mapear_produto:
-        db.session.add(SeruProdutoMap(
-            seru_nome='PAO FRANCES', receita_id=receita.id,
+        db.session.add(VendaMapa(
+            canal='seru', nome_externo='PAO FRANCES', receita_id=receita.id,
             confirmado_em=agora(), fator_quantidade=1.0))
 
     el = EstoqueLoja(loja_id=loja.id, receita_id=receita.id,
