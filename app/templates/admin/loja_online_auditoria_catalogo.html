@@ -113,38 +113,6 @@
   {% endif %}
 </div>
 
-{# ── VndaProdutoMap ──────────────────────────────────────────────── #}
-<h4 class="mt-4 mb-2"><i class="bi bi-arrow-left-right"></i> Mapeamento VNDA → catálogo</h4>
-<div class="audit-card">
-  <div class="audit-grid">
-    <div>
-      <div class="audit-num">{{ mapa_total }}</div>
-      <div class="audit-lbl">Produtos VNDA conhecidos</div>
-    </div>
-    <div>
-      <div class="audit-num {{ 'ok' if mapa_mapeado == mapa_total else 'warn' if mapa_mapeado > mapa_total / 2 else 'bad' }}">{{ mapa_mapeado }}</div>
-      <div class="audit-lbl">Mapeados</div>
-    </div>
-    <div>
-      <div class="audit-num {{ 'bad' if mapa_orfao|length > 0 else 'ok' }}">{{ mapa_orfao|length }}</div>
-      <div class="audit-lbl">Órfãos (precisam mapear)</div>
-    </div>
-  </div>
-  {% if mapa_orfao %}
-  <details class="mt-3">
-    <summary class="small text-muted">Ver órfãos VNDA</summary>
-    <ul class="pendente-list list-unstyled mt-2">
-      {% for m in mapa_orfao %}
-      <li>
-        <strong>{{ m.vnda_nome }}</strong>
-        <a href="{{ url_for('pdv.mapeamentos_vnda') if 'mapeamentos_vnda' in (config.get('_ENDPOINTS_KNOWN') or '') else '#' }}" class="small ms-2 text-decoration-none">mapear</a>
-      </li>
-      {% endfor %}
-    </ul>
-  </details>
-  {% endif %}
-</div>
-
 {# ── Checklist Fase 0 ─────────────────────────────────────────────── #}
 <h4 class="mt-4 mb-2"><i class="bi bi-list-check"></i> Checklist da Fase 0</h4>
 <div class="audit-card">
