@@ -153,6 +153,11 @@ def migrar_fracoes_para_debito_estoque(*, canais=('seru', 'lote'),
             db.session.add(DebitoEstoqueMov(
                 loja_id=sm.loja_id, canal='seru', pedido_ref=pedido_ref,
                 fracao=sm.fracao, **filtro))
+            # Marca como tratado: a fracao agora vive no DebitoEstoqueMov, entao
+            # o fallback legado (`seru_sync._estornar_fracoes_legado`) nao deve
+            # reverte-lo de novo. `agora` importado pra carimbar.
+            from app.utils import agora
+            sm.estornado_em = agora()
             movs_migrados += 1
 
     db.session.commit()
