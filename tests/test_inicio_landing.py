@@ -42,7 +42,7 @@ def test_index_admin_home(app, admin_user):
     assert resp.status_code == 200
     assert b'menu-card' in resp.data               # marcador estável do home.html
     assert b'home-copilot-form' not in resp.data    # copilot web removido
-    assert 'O que você quer fazer'.encode() in resp.data
+    assert 'Escolha uma área para continuar'.encode() in resp.data
 
 
 def test_index_padeiro_redirect(app):
