@@ -2432,6 +2432,30 @@ def vigia_teste():
     return redirect(url_for('main.debug_schema'))
 
 
+@main_bp.route('/admin/loja-online/vendas')
+@login_required
+@owner_required
+def loja_online_vendas_painel():
+    """Painel de VENDAS da loja própria (PedidoOnline): faturamento, ticket
+    médio, top produtos, novos vs recorrentes — por período. Owner-only
+    (dinheiro). Complementa o funil do GA4 (visita→carrinho→checkout→compra),
+    que vive no painel do Google."""
+    from datetime import timedelta
+
+    from app.services import loja_online_vendas as lov
+    dias = max(1, min(request.args.get('dias', 30, type=int), 365))
+    fim = hoje_brt()
+    ini = fim - timedelta(days=dias - 1)
+    fat = lov.faturamento_por_dia(ini, fim)
+    clientes = lov.resumo_clientes(ini, fim)
+    prods = lov.produtos_vendidos(ini, fim)
+    ticket = (fat['total'] / fat['n_pedidos']) if fat['n_pedidos'] else 0.0
+    return render_template('admin/loja_online_vendas.html',
+                           dias=dias, ini=ini, fim=fim, fat=fat,
+                           ticket=ticket, clientes=clientes,
+                           produtos=prods['produtos'][:15])
+
+
 @main_bp.route('/admin/loja-online/auditoria-catalogo')
 @login_required
 def loja_online_auditoria_catalogo():
