@@ -7,8 +7,9 @@ Itens sem match no catalogo (receita/produto/MP/orfao existente) entram
 como EstoqueLoja com nome_pendente preenchido — depois o admin vincula
 a um item cadastrado via /pedidos/estoque-loja/vincular.
 
-Saida em lote (manual, lojas sem PDV API) usa LojaProdutoMap pra lembrar
-vinculacoes — vincula um nome uma vez, vale pra sempre. Espelha SeruProdutoMap.
+Saida em lote (manual, lojas sem PDV API) usa VendaMapa (canal='lote') pra
+lembrar vinculacoes — vincula um nome uma vez, vale pra sempre. Mesmo mapa
+unificado do Seru (canal='seru'), so muda o canal.
 """
 import re
 import unicodedata
@@ -16,7 +17,15 @@ import unicodedata
 from sqlalchemy import func
 
 from app.extensions import db
-from app.models import EstoqueLoja, LojaDebito, LojaProdutoMap, MateriaPrima, MovEstoqueLoja, Produto, Receita
+from app.models import (
+    EstoqueLoja,
+    MateriaPrima,
+    MovEstoqueLoja,
+    Produto,
+    Receita,
+    VendaMapa,
+    VendaMapaUso,
+)
 
 EXPANSOES = {
     'cro': 'croissant',
@@ -79,10 +88,35 @@ def parsear_lista(texto):
     return out
 
 
+def _apelidos_confirmados():
+    """Apelidos globais de lote: VendaMapa canal='lote' confirmado + mapeado.
+
+    Match exato no nome_externo vira atalho na resolucao (entrada e saida)."""
+    apelidos = []
+    for mp in VendaMapa.query.filter(
+        VendaMapa.canal == 'lote',
+        VendaMapa.confirmado_em.isnot(None),
+        VendaMapa.ignorar.is_(False),
+    ).all():
+        if mp.receita_id:
+            apelidos.append((mp.nome_externo, _ascii(mp.nome_externo),
+                              'receita', mp.receita_id,
+                              mp.receita.nome if mp.receita else mp.nome_externo))
+        elif mp.produto_id:
+            apelidos.append((mp.nome_externo, _ascii(mp.nome_externo),
+                              'produto', mp.produto_id,
+                              mp.produto.nome if mp.produto else mp.nome_externo))
+        elif mp.materia_prima_id:
+            apelidos.append((mp.nome_externo, _ascii(mp.nome_externo),
+                              'mp', mp.materia_prima_id,
+                              mp.materia_prima.nome if mp.materia_prima else mp.nome_externo))
+    return apelidos
+
+
 def _carregar_catalogo(loja_id):
     """Catalogo de match: receitas + produtos + materias-primas + orfaos
     daquela loja (EstoqueLoja com nome_pendente) + apelidos globais
-    confirmados (LojaProdutoMap mapeado)."""
+    confirmados (VendaMapa canal='lote' mapeado)."""
     receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.query.all()]
     produtos = [(p.id, p.nome, _ascii(p.nome)) for p in Produto.query.all()]
     materias = [(m.id, m.nome, _ascii(m.nome)) for m in MateriaPrima.query.all()]
@@ -99,24 +133,7 @@ def _carregar_catalogo(loja_id):
             ).all()
             if ep.nome_pendente
         ]
-    # Apelidos globais — match exato em LojaProdutoMap confirmado vira atalho.
-    apelidos = []
-    for mp in LojaProdutoMap.query.filter(
-        LojaProdutoMap.confirmado_em.isnot(None),
-        LojaProdutoMap.ignorar.is_(False),
-    ).all():
-        if mp.receita_id:
-            apelidos.append((mp.nome_digitado, _ascii(mp.nome_digitado),
-                              'receita', mp.receita_id,
-                              mp.receita.nome if mp.receita else mp.nome_digitado))
-        elif mp.produto_id:
-            apelidos.append((mp.nome_digitado, _ascii(mp.nome_digitado),
-                              'produto', mp.produto_id,
-                              mp.produto.nome if mp.produto else mp.nome_digitado))
-        elif mp.materia_prima_id:
-            apelidos.append((mp.nome_digitado, _ascii(mp.nome_digitado),
-                              'mp', mp.materia_prima_id,
-                              mp.materia_prima.nome if mp.materia_prima else mp.nome_digitado))
+    apelidos = _apelidos_confirmados()
     return receitas, produtos, materias, orfaos, apelidos
 
 
@@ -204,23 +221,7 @@ def sugerir_para_pendentes(estoques_pendentes):
     receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.query.all()]
     produtos = [(p.id, p.nome, _ascii(p.nome)) for p in Produto.query.all()]
     materias = [(m.id, m.nome, _ascii(m.nome)) for m in MateriaPrima.query.all()]
-    apelidos = []
-    for mp in LojaProdutoMap.query.filter(
-        LojaProdutoMap.confirmado_em.isnot(None),
-        LojaProdutoMap.ignorar.is_(False),
-    ).all():
-        if mp.receita_id:
-            apelidos.append((mp.nome_digitado, _ascii(mp.nome_digitado),
-                              'receita', mp.receita_id,
-                              mp.receita.nome if mp.receita else mp.nome_digitado))
-        elif mp.produto_id:
-            apelidos.append((mp.nome_digitado, _ascii(mp.nome_digitado),
-                              'produto', mp.produto_id,
-                              mp.produto.nome if mp.produto else mp.nome_digitado))
-        elif mp.materia_prima_id:
-            apelidos.append((mp.nome_digitado, _ascii(mp.nome_digitado),
-                              'mp', mp.materia_prima_id,
-                              mp.materia_prima.nome if mp.materia_prima else mp.nome_digitado))
+    apelidos = _apelidos_confirmados()
     out = {}
     for ep in estoques_pendentes:
         nome = ep.nome_pendente if hasattr(ep, 'nome_pendente') else None
@@ -272,26 +273,27 @@ def resolver_lista(linhas_parseadas, loja_id):
 
 
 def _get_or_create_map(nome_digitado):
-    """Acha LojaProdutoMap por nome (case-insensitive) ou cria novo pendente."""
+    """Acha VendaMapa de lote por nome (case-insensitive) ou cria novo pendente."""
     nome = (nome_digitado or '').strip()
     if not nome:
         return None
     nome_lower = nome.lower()
-    mp = LojaProdutoMap.query.filter(
-        func.lower(LojaProdutoMap.nome_digitado) == nome_lower
+    mp = VendaMapa.query.filter(
+        VendaMapa.canal == 'lote',
+        func.lower(VendaMapa.nome_externo) == nome_lower,
     ).first()
     if mp:
         return mp
-    mp = LojaProdutoMap(nome_digitado=nome)
+    mp = VendaMapa(canal='lote', nome_externo=nome)
     db.session.add(mp)
     db.session.flush()
     return mp
 
 
 def resolver_lista_saida(linhas_parseadas, loja_id):
-    """Resolve usando LojaProdutoMap (cria pendentes pra nomes novos).
+    """Resolve usando VendaMapa canal='lote' (cria pendentes pra nomes novos).
 
-    Retorna lista enriquecida com 'map_entry' (LojaProdutoMap),
+    Retorna lista enriquecida com 'map_entry' (VendaMapa),
     'estoque_atual', 'novo', 'faltou'.
     """
     enriq = []
@@ -337,7 +339,7 @@ def resolver_lista_saida(linhas_parseadas, loja_id):
 
 
 def aplicar_saida_lote(itens_resolvidos, loja_id, user, referencia=None):
-    """Aplica saida usando LojaProdutoMap. Pendentes/ignorados sao pulados.
+    """Aplica saida usando VendaMapa canal='lote'. Pendentes/ignorados pulados.
 
     Mapeados: subtrai qtd*fator do EstoqueLoja correspondente. Se estoque
     insuficiente, baixa ate 0 e registra 'venda_loja_sem_estoque' pra falta.
@@ -367,21 +369,19 @@ def aplicar_saida_lote(itens_resolvidos, loja_id, user, referencia=None):
             continue
         if mp.ignorar:
             ignorados.append({'linha': item.get('linha', '?'),
-                              'nome': mp.nome_digitado, 'motivo': 'ignorado'})
+                              'nome': mp.nome_externo, 'motivo': 'ignorado'})
             continue
         if mp.estado == 'pendente':
             ignorados.append({'linha': item.get('linha', '?'),
-                              'nome': mp.nome_digitado, 'motivo': 'pendente'})
+                              'nome': mp.nome_externo, 'motivo': 'pendente'})
             continue
 
         # Marcador loja<->mapa: a tela de mapeamentos lista as lojas que usaram
-        # cada apelido (join LojaDebito x Loja). A FRACAO nao mora mais aqui — vai
-        # pro DebitoEstoque do motor unico; o LojaDebito fica so como registro de
-        # uso (fracao_pendente=0, zerada pelo cutover).
-        if not LojaDebito.query.filter_by(
-                loja_id=loja_id, loja_produto_map_id=mp.id).first():
-            db.session.add(LojaDebito(loja_id=loja_id, loja_produto_map_id=mp.id,
-                                      fracao_pendente=0.0))
+        # cada apelido (join VendaMapaUso x Loja). A FRACAO mora no DebitoEstoque
+        # do motor unico; este marcador eh so o registro de uso pra UI/auditoria.
+        if not VendaMapaUso.query.filter_by(
+                venda_mapa_id=mp.id, loja_id=loja_id).first():
+            db.session.add(VendaMapaUso(venda_mapa_id=mp.id, loja_id=loja_id))
 
         # Baixa pelo MOTOR UNICO (baixa_venda): composicao (cesta->componentes;
         # simples->ele mesmo), fator, acumulador de fracao por item fisico.
@@ -390,21 +390,21 @@ def aplicar_saida_lote(itens_resolvidos, loja_id, user, referencia=None):
             loja_id, receita_id=mp.receita_id, produto_id=mp.produto_id,
             materia_prima_id=mp.materia_prima_id, qtd=qtd_sub,
             fator=mp.fator_quantidade, canal='lote',
-            referencia=f'{ref} [{mp.nome_digitado}]',
+            referencia=f'{ref} [{mp.nome_externo}]',
             pedido_ref=f'lote:{loja_id}:{mp.id}',
-            usuario_id=getattr(user, 'id', None), nome_venda=mp.nome_digitado)
+            usuario_id=getattr(user, 'id', None), nome_venda=mp.nome_externo)
 
         if res['sem_alvo']:
             ignorados.append({'linha': item.get('linha', '?'),
-                              'nome': mp.nome_digitado, 'motivo': 'sem_alvo'})
+                              'nome': mp.nome_externo, 'motivo': 'sem_alvo'})
             continue
         if res['baixado'] == 0 and res['faltou'] == 0 and res['acumulado']:
             ignorados.append({'linha': item.get('linha', '?'),
-                              'nome': mp.nome_digitado,
+                              'nome': mp.nome_externo,
                               'motivo': 'fracao_acumulando'})
             continue
         aplicados.append({
-            'nome': mp.nome_digitado, 'alvo': mp.alvo_nome, 'tipo': mp.alvo_tipo,
+            'nome': mp.nome_externo, 'alvo': mp.alvo_nome, 'tipo': mp.alvo_tipo,
             'baixado': res['baixado'], 'faltou': res['faltou'],
         })
 
