@@ -295,14 +295,22 @@
                         {% if r.dia_falta %}<span class="saldo-falta">⚠️ vai faltar em {{ r.dia_falta }}<small> (já com a produção programada)</small></span>
                         {% else %}<span class="saldo-ok">✓ não falta na janela (com a produção programada)</span>{% endif %}
                     </div>
+                    {% if r.breakdown_bom %}
+                    <div class="bom-box">
+                        <span class="bom-tt">↳ Insumo puxado pela produção de:</span>
+                        {% for b in r.breakdown_bom %}<span class="bom-item">{{ b.nome }}: <strong>{{ b.qtd }}</strong> un</span>{% endfor %}
+                        <span class="bom-nota">a quantidade de massa vem da produção destes produtos × a receita — não foi digitada à mão (por isso volta ao recalcular).</span>
+                    </div>
+                    {% endif %}
                     {% if r.projecao %}
                     <table class="proj-table">
-                        <thead><tr><th>Dia</th><th>Saída (entrega)</th><th>Produção</th><th>Saldo</th></tr></thead>
+                        <thead><tr><th>Dia</th><th>Saída (entrega)</th><th title="Demanda prevista pelo histórico para a entrega deste dia — é o que justifica a produção quando não há pedido firme.">Previsto</th><th>Produção</th><th>Saldo</th></tr></thead>
                         <tbody>
                         {% for p in r.projecao %}
                         <tr class="{% if p.falta %}proj-falta{% endif %}">
                             <td>{{ p.label }}</td>
                             <td>{% if p.saida_lojas %}{% for s in p.saida_lojas %}{{ s.loja_nome }}: <strong>{{ s.qtd }}</strong>{% if not loop.last %} · {% endif %}{% endfor %}{% else %}<span class="proj-vazio">—</span>{% endif %}</td>
+                            <td>{% if p.previsto %}<span class="proj-prev">{{ p.previsto }}</span>{% else %}<span class="proj-vazio">—</span>{% endif %}</td>
                             <td>{% if p.producao %}<span class="proj-prod">+{{ p.producao }}</span>{% else %}<span class="proj-vazio">—</span>{% endif %}</td>
                             <td><strong class="{{ 'saldo-neg' if p.saldo < 0 else '' }}">{{ p.saldo }}</strong></td>
                         </tr>
