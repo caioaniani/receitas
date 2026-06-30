@@ -44,13 +44,28 @@ def rendimento_massa_crua(receita):
     `custos.calcular_rendimento`, que conta unidades ASSADAS (aplica a perda).
     Decisão do dono (30/06): '120 pães de 500 g de massa crua' = 60 kg, a perda
     jamais entra nessa conta. Float, pra a escala bater exata (120 × 500 g sem
-    arredondar). Sem peso_unitario, cai no rendimento_qtd cadastrado."""
+    arredondar). Sem peso_unitario, cai no rendimento_qtd cadastrado.
+
+    SÓ vale pra pão de amassadeira (a massa da unidade É a massa branca). Produto
+    MONTADO a partir de uma SUB-RECEITA pronta (Danish/Croissant laminam/recheiam
+    a 'Massa para folhar') tem a massa da unidade na sub-receita, que NÃO entra em
+    `ingredientes_por_porcao` — aqui o massa_crua mediria só o recheio percentual
+    (uns 100 g) e estouraria o rendimento (Danish de Calabresa: 100/150 = 0,67
+    un/fornada em vez de 31, inflando ~45x o consumo do insumo no MRP — bug pego
+    pelo dono 30/06). Nesses casos o rendimento real é o CADASTRADO (rendimento_qtd,
+    que a ficha calcula da massa TOTAL, incluindo a sub-receita)."""
     if receita is None:
         return 1.0
-    massa = sum(ingredientes_por_porcao(receita).values())
-    pu = receita.peso_unitario or 0
-    if massa > 0 and pu > 0:
-        return massa / pu
+    # Produto com sub-receita = montado: a massa-crua dos % não representa a
+    # unidade. Usa o rendimento cadastrado (era o comportamento ANTES deste
+    # helper, e o correto pra Danish/Croissant).
+    tem_subreceita = any((ing.tipo or '') == 'receita'
+                         for ing in receita.ingredientes)
+    if not tem_subreceita:
+        massa = sum(ingredientes_por_porcao(receita).values())
+        pu = receita.peso_unitario or 0
+        if massa > 0 and pu > 0:
+            return massa / pu
     return float(receita.rendimento_qtd or 1) or 1.0
 
 
