@@ -157,14 +157,7 @@
     baixaram estoque</strong>: se estiver vazia, toda venda mapeada baixou.
 </div>
 
-<ul class="nav nav-tabs mb-3" role="tablist">
-    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-seru" type="button">PDV (Seru)</button></li>
-    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-vnda" type="button">Site (VNDA){% if dv.loja %} · {{ dv.loja }}{% endif %}</button></li>
-</ul>
-<div class="tab-content">
-    <div class="tab-pane fade show active" id="tab-seru">{{ secao(d, 'seru') }}</div>
-    <div class="tab-pane fade" id="tab-vnda">{{ secao(dv, 'vnda') }}</div>
-</div>
+{{ secao(d, 'seru') }}
 
 <datalist id="recon-alvo-list"></datalist>
 
