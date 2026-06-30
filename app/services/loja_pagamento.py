@@ -245,28 +245,14 @@ def _baixar_estoque(pedido, usuario_id=None):
 
 
 def _estornar_estoque(pedido):
-    """Reverte a baixa: pra cada MovEstoqueLoja('venda_site') do pedido,
-    devolve a quantidade ao saldo de EstoqueLoja e registra um
-    MovEstoqueLoja('venda_site_estorno') com quantidade negativa
-    (espelha o estorno do seru_sync)."""
-    from app.models import EstoqueLoja, MovEstoqueLoja
-    ref_baixa = f'Site #{pedido.codigo}'
-    movs = (MovEstoqueLoja.query
-            .filter(MovEstoqueLoja.tipo == 'venda_site',
-                    MovEstoqueLoja.referencia == ref_baixa)
-            .all())
-    n = 0
-    for m in movs:
-        el = EstoqueLoja.query.get(m.estoque_loja_id)
-        if el is not None:
-            el.quantidade = (el.quantidade or 0) + m.quantidade
-        db.session.add(MovEstoqueLoja(
-            estoque_loja_id=m.estoque_loja_id,
-            tipo='venda_site_estorno',
-            quantidade=-m.quantidade,
-            referencia=f'Estorno Site #{pedido.codigo}'))
-        n += 1
-    return n
+    """Reverte a baixa do site pelo MOTOR UNICO (`baixa_venda.estornar_venda`):
+    inteiros pela referencia (cesta inclusa, via prefixo), fracoes pelo
+    DebitoEstoqueMov. O mov `venda_site_estorno` mantem a quantidade NEGATIVA
+    (convencao historica do site — ver `_SINAL_ESTORNO`)."""
+    from app.services.baixa_venda import estornar_venda
+    res = estornar_venda('site', f'site:{pedido.codigo}',
+                         f'Site #{pedido.codigo}')
+    return res['revertido_inteiros'] + res['revertido_fracoes']
 
 
 def _marcar_pago(pedido, pagamento):
