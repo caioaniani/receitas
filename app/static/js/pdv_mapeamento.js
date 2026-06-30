@@ -92,11 +92,19 @@
     return indice.byName[plain] || null;
   }
 
+  // window.CSRF_TOKEN (base.html) e a fonte; cai pro hidden input da pagina se
+  // faltar (defesa em profundidade — token vazio = HTTP 400 "CSRF missing").
+  function csrfToken() {
+    if (window.CSRF_TOKEN) return window.CSRF_TOKEN;
+    var el = document.querySelector('input[name="csrf_token"]');
+    return (el && el.value) || '';
+  }
+
   // POST /pdv/api/mapear. dados = {seru_nome, acao, alvo_tipo, alvo_id, fator}.
   // (alvo_*/fator so usados quando acao === 'vincular'.) Retorna Promise<{ok,...}>.
   function salvar(dados) {
     var fd = new FormData();
-    fd.append('csrf_token', window.CSRF_TOKEN || '');
+    fd.append('csrf_token', csrfToken());
     fd.append('seru_nome', dados.seru_nome);
     fd.append('acao', dados.acao);
     if (dados.acao === 'vincular') {
