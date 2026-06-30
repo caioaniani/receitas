@@ -102,20 +102,27 @@ def _teto_pico_isolado(qtd_por_data):
     return float('inf')
 
 
-def _media_recencia(qtd_por_data, hoje_d, meia_vida=_MEIA_VIDA_DIAS):
-    """Media recencia-ponderada de {data: quantidade}: entrega recente pesa
-    mais. Com meia_vida -> infinito (e sem pico isolado) recai EXATAMENTE na
-    media uniforme (sum/len). Pico isolado eh capado (ver _teto_pico_isolado),
-    pra um pedido pontual gigante nao inflar a previsao."""
+def _media_recencia(qtd_por_data, hoje_d, meia_vida=_MEIA_VIDA_DIAS,
+                    datas_possiveis=None):
+    """Media recencia-ponderada de {data: quantidade}: entrega recente pesa mais.
+    Pico isolado eh capado (ver _teto_pico_isolado).
+
+    `datas_possiveis`: TODAS as datas daquele dia-da-semana na janela (mesmo as
+    SEM pedido). Quando passada, o DENOMINADOR soma o peso de todas elas — os
+    sabados sem pedido contam como 0. Sem isso, a media era so sobre as datas
+    OBSERVADAS e superestimava demanda INTERMITENTE (3 sabados com 100 + 3 sem
+    pedido davam 100, nao 50) e nao decaia quando a demanda PARAVA (sabados
+    recentes vazios nao puxavam pra baixo). Bug pego pelo dono (30/06). Sem o
+    parametro, mantem o comportamento antigo (denominador so sobre as observadas)."""
     if not qtd_por_data:
         return 0.0
     teto = _teto_pico_isolado(qtd_por_data)
-    num = den = 0.0
+    num = 0.0
     for data, q in qtd_por_data.items():
         qc = q if q <= teto else teto   # capa so a ocorrencia de topo (pico)
-        peso = 0.5 ** (max(0, (hoje_d - data).days) / meia_vida)
-        num += peso * qc
-        den += peso
+        num += (0.5 ** (max(0, (hoje_d - data).days) / meia_vida)) * qc
+    base_den = datas_possiveis if datas_possiveis else qtd_por_data
+    den = sum(0.5 ** (max(0, (hoje_d - d).days) / meia_vida) for d in base_den)
     return num / den if den else 0.0
 
 
