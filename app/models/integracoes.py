@@ -266,6 +266,141 @@ class SeruDebitoMov(db.Model):
     )
 
 
+# ── Motor unico de baixa de venda (Seru + site + saida-lote) ──
+# Substitui o trio paralelo SeruProdutoMap/LojaProdutoMap (+VndaProdutoMap morto)
+# e os acumuladores SeruDebito/LojaDebito (+VndaDebito). Ver app/services/
+# baixa_venda.py. Estrategia (decisao do dono 2026-06-30): composto multi-item
+# (cesta/sanduiche) mora na composicao do PRODUTO (ProdutoItem); fator escalar
+# de 1 item (cafe -> 0.2 cookie) fica como multiplicador no mapa.
+
+class VendaMapa(db.Model):
+    """Mapa unificado: 'nome externo' de um CANAL de venda -> item do catalogo.
+
+    canal: 'seru' (PDV Colibri) | 'lote' (saida-em-lote manual). O SITE nao usa
+    mapa — o PedidoOnlineItem ja referencia receita/produto por FK.
+
+    Estados (mutuamente exclusivos):
+    - MAPEADO: receita_id/produto_id/materia_prima_id setado -> baixa na venda
+    - IGNORADO: ignorar=True -> nunca processa (cafe sem desconto, agua, etc)
+    - PENDENTE: tudo NULL/False -> fila de revisao, vendas nao baixam
+
+    fator_quantidade: multiplicador pra item SIMPLES de 1 alvo (ex: 'CAFE' ->
+    0.2 de 'Cookie'). Composto multi-item (cesta) NAO usa fator aqui — a
+    composicao mora no Produto (ProdutoItem), aplicada pelo motor por cima.
+    """
+    __tablename__ = 'venda_mapa'
+
+    id = db.Column(db.Integer, primary_key=True)
+    canal = db.Column(db.String(20), nullable=False, index=True)
+    nome_externo = db.Column(db.String(300), nullable=False, index=True)
+    sku = db.Column(db.String(100), nullable=True)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
+    materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'),
+                                 nullable=True)
+    ignorar = db.Column(db.Boolean, default=False, nullable=False)
+    fator_quantidade = db.Column(db.Float, nullable=False, default=1.0)
+
+    primeira_visto_em = db.Column(db.DateTime, default=agora)
+    confirmado_em = db.Column(db.DateTime, nullable=True)
+    confirmado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'),
+                               nullable=True)
+
+    receita = db.relationship('Receita')
+    produto = db.relationship('Produto')
+    materia_prima = db.relationship('MateriaPrima')
+
+    __table_args__ = (
+        db.UniqueConstraint('canal', 'nome_externo', name='uq_venda_mapa_canal_nome'),
+    )
+
+    @property
+    def estado(self):
+        if self.ignorar:
+            return 'ignorado'
+        if self.receita_id or self.produto_id or self.materia_prima_id:
+            return 'mapeado'
+        return 'pendente'
+
+    @property
+    def alvo_tipo(self):
+        if self.receita_id:
+            return 'receita'
+        if self.produto_id:
+            return 'produto'
+        if self.materia_prima_id:
+            return 'mp'
+        return None
+
+    @property
+    def alvo_nome(self):
+        if self.receita:
+            return self.receita.nome
+        if self.produto:
+            return self.produto.nome
+        if self.materia_prima:
+            return self.materia_prima.nome
+        return None
+
+
+class DebitoEstoque(db.Model):
+    """Acumulador de fracao por (loja, ITEM FISICO de estoque).
+
+    Quando uma venda consome fracao de um item (cafe -> 0.2 cookie; sanduiche ->
+    0.2 sourdough), a fracao fica aqui ate somar >= 1 inteiro, dai baixa N
+    inteiros do EstoqueLoja. Chave por ITEM (nao por mapa, como os Seru/LojaDebito
+    antigos): assim fracoes de produtos/canais DIFERENTES que consomem o MESMO
+    item somam juntas, em vez de ficar presas separadas. Mantem EstoqueLoja
+    inteiro.
+    """
+    __tablename__ = 'debito_estoque'
+
+    id = db.Column(db.Integer, primary_key=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
+    materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'),
+                                 nullable=True)
+    fracao_pendente = db.Column(db.Float, nullable=False, default=0.0)
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
+
+    __table_args__ = (
+        db.UniqueConstraint('loja_id', 'receita_id', 'produto_id',
+                            'materia_prima_id', name='uq_debito_estoque_item'),
+    )
+
+
+class DebitoEstoqueMov(db.Model):
+    """Rastreio de cada contribuicao FRACIONARIA ao DebitoEstoque, por pedido.
+
+    Necessario pra estornar a fracao quando um pedido com consumo fracionario eh
+    cancelado antes de virar inteiro (senao a fracao fica presa no acumulador).
+    So registra quando a contribuicao tem parte fracionaria — venda inteira eh
+    revertida pela referencia do MovEstoqueLoja.
+    """
+    __tablename__ = 'debito_estoque_mov'
+
+    id = db.Column(db.Integer, primary_key=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
+    materia_prima_id = db.Column(db.Integer, db.ForeignKey('materia_prima.id'),
+                                 nullable=True)
+    canal = db.Column(db.String(20), nullable=False)
+    # Chave do pedido por canal (ex: 'seru:12345', 'site:ABC123'). Liga a
+    # contribuicao ao pedido pro estorno.
+    pedido_ref = db.Column(db.String(120), nullable=False)
+    # Contribuicao bruta deste pedido pra este item (qtd * fator * qtd_componente).
+    fracao = db.Column(db.Float, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False)
+    estornado_em = db.Column(db.DateTime, nullable=True)
+
+    __table_args__ = (
+        db.Index('ix_debito_estoque_mov_pedido_status',
+                 'pedido_ref', 'estornado_em'),
+    )
+
+
 # ── Integracao VNDA (site/e-commerce): mapeamentos + idempotencia ──
 # Sempre baixa da loja fixa (Loja Anesio Pinto Rosa). Baixa acontece no
 # dia da entrega (expected_delivery_date), nao quando pago/entregue.
