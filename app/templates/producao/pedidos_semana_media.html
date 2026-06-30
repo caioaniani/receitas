@@ -56,14 +56,11 @@
 <form method="GET" class="d-flex gap-1 align-items-center mb-3 flex-wrap">
     <label class="small text-muted mb-0">A partir de:</label>
     <select name="inicio" class="form-select form-select-sm" style="width:auto;">
-        <option value="0" {{ 'selected' if inicio == 0 }}>Hoje</option>
-        <option value="1" {{ 'selected' if inicio == 1 }}>Amanhã</option>
-        <option value="2" {{ 'selected' if inicio == 2 }}>+2 dias</option>
-        <option value="3" {{ 'selected' if inicio == 3 }}>+3 dias</option>
-        <option value="4" {{ 'selected' if inicio == 4 }}>+4 dias</option>
-        <option value="5" {{ 'selected' if inicio == 5 }}>+5 dias</option>
-        <option value="6" {{ 'selected' if inicio == 6 }}>+6 dias</option>
-        <option value="7" {{ 'selected' if inicio == 7 }}>+7 dias</option>
+        {% for n in range(0, 15) %}
+        <option value="{{ n }}" {{ 'selected' if inicio == n }}>
+            {{ 'Hoje' if n == 0 else ('Amanhã' if n == 1 else '+%d dias'|format(n)) }}
+        </option>
+        {% endfor %}
     </select>
     <label class="small text-muted mb-0 ms-2">Horizonte (dias):</label>
     <input type="number" name="horizonte" min="1" max="14" value="{{ horizonte }}"
