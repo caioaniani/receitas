@@ -37,6 +37,21 @@ def ingredientes_por_porcao(receita):
     return out
 
 
+def rendimento_massa_crua(receita):
+    """Quantas unidades de massa CRUA saem de 1 peso_base = massa total da ficha
+    ÷ peso_unitario (g de massa crua por unidade). A produção PESA massa crua na
+    amassadeira, então a perda do forno NÃO entra aqui — ao contrário de
+    `custos.calcular_rendimento`, que conta unidades ASSADAS (aplica a perda).
+    Decisão do dono (30/06): '120 pães de 500 g de massa crua' = 60 kg, a perda
+    jamais entra nessa conta. Float, pra a escala bater exata (120 × 500 g sem
+    arredondar). Sem peso_unitario, cai no rendimento_qtd cadastrado."""
+    massa = sum(ingredientes_por_porcao(receita).values())
+    pu = receita.peso_unitario or 0
+    if massa > 0 and pu > 0:
+        return massa / pu
+    return float(receita.rendimento_qtd or 1) or 1.0
+
+
 def calcular_cascata(massa_base, multiplicadores=None):
     """Calcula a cascata da `massa_base` como uma sequência de passos na ordem
     em que o padeiro executa, partindo da ficha técnica.
