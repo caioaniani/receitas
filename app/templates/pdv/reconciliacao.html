@@ -198,12 +198,10 @@ window.RECON_BY_NAME = {};
 function reconMapear(btn, acao) {
     var tr = btn.closest('tr');
     var nome = tr.getAttribute('data-nome');
-    var fonte = tr.getAttribute('data-fonte') || 'seru';
-    var url = (fonte === 'vnda') ? '/pdv/api/vnda-mapear' : '/pdv/api/mapear';
-    var campoNome = (fonte === 'vnda') ? 'vnda_nome' : 'seru_nome';
+    var url = '/pdv/api/mapear';
     var fd = new FormData();
     fd.append('csrf_token', CSRF_TOKEN);
-    fd.append(campoNome, nome);
+    fd.append('seru_nome', nome);
     fd.append('acao', acao);
     if (acao === 'vincular') {
         var inp = tr.querySelector('.recon-alvo');
