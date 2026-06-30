@@ -45,12 +45,13 @@ def _prod(grade, loja_id, rid):
     return next((p for p in loja['produtos'] if p['receita_id'] == rid), None)
 
 
-def test_media_semanal_e_split_igual(app):
-    """4 semanas, 70 un por semana -> media 70; split igual entre 7 dias soma
-    exatamente 70 (maior resto), nada perdido."""
+def test_media_concentra_no_dia_da_semana(app):
+    """B4: se a loja sempre pede no MESMO dia-da-semana, a sugestao CONCENTRA
+    naquele dia no horizonte — nao espalha igual pelos 7 dias (bug antigo)."""
     loja = _loja()
     r = _receita()
     hoje_d = hoje()
+    # pedidos sempre no mesmo dow (multiplos de 7 dias atras = dow de HOJE).
     for sem in (1, 2, 3, 4):
         _pedido(loja, hoje_d - timedelta(days=7 * sem), r, 70)
 
@@ -59,10 +60,57 @@ def test_media_semanal_e_split_igual(app):
     p = _prod(grade, loja.id, r.id)
     assert p is not None
     assert p['media_semanal'] == 70.0          # 280 / 4 semanas
-    assert sum(p['por_dia']) == 70             # split soma exata
     assert len(p['por_dia']) == 7
-    # split o mais igual possivel: 70/7 = 10 em todos
-    assert p['por_dia'] == [10, 10, 10, 10, 10, 10, 10]
+    # horizonte comeca HOJE (mesmo dow do historico) -> tudo no dia 0, zero
+    # nos outros dias-da-semana (que a loja nunca pediu).
+    assert p['por_dia'][0] == 70
+    assert sum(p['por_dia'][1:]) == 0
+    assert sum(p['por_dia']) == 70
+
+
+def test_media_segue_padrao_por_dia_da_semana(app):
+    """B4: dia-da-semana com mais venda historica recebe MAIS no horizonte —
+    a distribuicao segue o peso de cada dow, nao e plana."""
+    loja = _loja()
+    r = _receita()
+    hoje_d = hoje()
+    # dow de HOJE: 60/sem; dow de AMANHA: 20/sem (janela 3).
+    for sem in (1, 2, 3):
+        _pedido(loja, hoje_d - timedelta(days=7 * sem), r, 60)        # dow hoje
+        _pedido(loja, hoje_d - timedelta(days=7 * sem - 1), r, 20)    # dow amanha
+
+    grade = media_semanal_pedidos(horizonte_dias=7, janela_semanas=3,
+                                  inicio_offset_dias=0)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    assert p['por_dia'][0] == 60                # dia 0 = dow de hoje
+    assert p['por_dia'][1] == 20                # dia 1 = dow de amanha
+    assert sum(p['por_dia'][2:]) == 0
+    assert p['media_semanal'] == 80.0           # 60 + 20 por semana
+
+
+def test_dia_travado_nao_recebe_parcela(app):
+    """B2: o balanceamento so cai em dias LIVRES. Um dow travado (loja ja pediu)
+    recebe 0 — a parcela nao some no POST nem e re-jogada no dia travado."""
+    loja = _loja()
+    r = _receita()
+    hoje_d = hoje()
+    # historico em 2 dias-da-semana: dow de hoje (50/sem) e dow de amanha (50/sem)
+    for sem in (1, 2):
+        _pedido(loja, hoje_d - timedelta(days=7 * sem), r, 50)        # dow hoje
+        _pedido(loja, hoje_d - timedelta(days=7 * sem - 1), r, 50)    # dow amanha
+    # a loja JA pediu HOJE -> dia 0 (dow de hoje) travado
+    _pedido(loja, hoje_d, r, 999, status='pendente')
+
+    grade = media_semanal_pedidos(horizonte_dias=7, janela_semanas=2,
+                                  inicio_offset_dias=0)
+    loja_out = next(e for e in grade['lojas'] if e['loja_id'] == loja.id)
+    assert hoje_d.isoformat() in loja_out['ja_tem']
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    assert p['por_dia'][0] == 0                 # dia travado: nada
+    assert p['por_dia'][1] == 50               # dia livre (dow amanha): a parcela
+    assert sum(p['por_dia']) == 50             # nada perdido nem re-jogado
 
 
 def test_media_usa_total_da_janela(app):
