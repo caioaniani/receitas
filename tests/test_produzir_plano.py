@@ -243,6 +243,44 @@ def test_massa_base_mise_escala_unidades_reais(app, admin_user):
     assert passo['tirar_massa'] == '850 g'    # 1700 × 0,5, não 1700
 
 
+def test_massa_base_mise_usa_massa_crua_sem_perda(app, admin_user):
+    """120 un de 500 g de massa CRUA = 60 kg de massa, independente da perda do
+    forno e do rendimento_qtd digitado (a produção pesa massa crua). Decisão do
+    dono 30/06: a perda jamais entra nessa conta."""
+    from app.models import MassaBase, MassaBaseItem
+
+    r = Receita(nome='Sourdough 7g', categoria='Pães', rendimento_qtd=3,
+                rendimento_unidade='un', peso_base=1000.0, peso_unitario=500.0,
+                perda_percentual=30, capacidade_amassadeira_g=200000)
+    db.session.add(r)
+    db.session.flush()
+    for nome, pct in [('Farinha', 100), ('Água', 85), ('Levain', 20),
+                      ('Sal', 2), ('Fermento', 0.1), ('Grãos', 10)]:
+        db.session.add(ReceitaIngrediente(receita_id=r.id, tipo='mp',
+                                          ingrediente_nome=nome, porcentagem=pct))
+    mb = MassaBase(nome='Base')
+    db.session.add(mb)
+    db.session.flush()
+    db.session.add(MassaBaseItem(massa_base_id=mb.id, receita_id=r.id))
+    plano = PlanejamentoProducao(data=hoje(), origem='cronograma')
+    db.session.add(plano)
+    db.session.flush()
+    db.session.add(PlanejamentoItem(planejamento_id=plano.id, receita_id=r.id,
+                                    multiplicador=1, qtd_alvo=120))
+    db.session.commit()
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    d = client.get('/padeiro/massa-base/%d.json?data=%s'
+                   % (mb.id, hoje().isoformat())).get_json()
+    # 1 receita só: a base é a massa inteira. 120 × 500 g = 60 kg (rendimento_qtd=3
+    # e perda=30 NÃO entram; massa/peso_unitario = 4,342 dá 60 kg, não 86,8 kg).
+    assert d['base_massa'] == '60 kg'
+    ret = next(p for p in d['cascata'] if p['tipo'] == 'retirada')
+    assert ret['unidades'] == 120
+
+
 def test_massa_base_mise_exige_padeiro(app):
     """Sem papel padeiro/admin a rota recusa (decorator @padeiro_required)."""
     from app.models import MassaBase, Usuario
