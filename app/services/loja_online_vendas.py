@@ -185,3 +185,23 @@ def produtos_vendidos(data_inicial, data_final):
             e['qtd'] += int(it.quantidade or 0)
     produtos = sorted(agg.values(), key=lambda x: -x['qtd'])
     return {'produtos': produtos, 'total_pedidos': len(pedidos)}
+
+
+def resumo_clientes(data_inicial, data_final):
+    """Clientes que compraram (pago) no período: total, NOVOS (primeira compra
+    caiu no período) e RECORRENTES (já tinham comprado antes do início)."""
+    pedidos = (PedidoOnline.query
+               .filter(*_intervalo_pago(data_inicial, data_final))
+               .all())
+    cli_ids = {p.cliente_id for p in pedidos if p.cliente_id}
+    if not cli_ids:
+        return {'total': 0, 'novos': 0, 'recorrentes': 0}
+    ini_dt = datetime.combine(data_inicial, time.min)
+    anteriores = {row[0] for row in (
+        db.session.query(PedidoOnline.cliente_id)
+        .filter(PedidoOnline.cliente_id.in_(cli_ids),
+                PedidoOnline.pago_em < ini_dt,
+                PedidoOnline.status != 'cancelado').all())}
+    recorrentes = len(anteriores)
+    return {'total': len(cli_ids), 'novos': len(cli_ids) - recorrentes,
+            'recorrentes': recorrentes}
