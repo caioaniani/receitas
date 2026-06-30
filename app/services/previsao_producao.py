@@ -1608,7 +1608,8 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
             firme[data_ent][loja_id] += int(qtd or 0)
 
     dias = []
-    total_previsto = total_firme = 0
+    total_previsto_frac = 0.0
+    total_firme = 0
     for i in range(horizonte_dias):
         prod_d = inicio_d + timedelta(days=i)
         entrega = prod_d + timedelta(days=L)
@@ -1627,7 +1628,6 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
         else:
             previsto = 0.0
             fonte = 'sem_historico'
-        previsto_i = int(round(previsto))
 
         # Decomposicao por loja (media recencia-ponderada de cada loja no dow).
         previsto_lojas = []
@@ -1656,7 +1656,11 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
             ({'loja_nome': nomes_loja.get(lid, '?'), 'qtd': q}
              for lid, q in firme_d.items() if q > 0), key=lambda x: -x['qtd'])
         firme_i = sum(x['qtd'] for x in firme_lojas)
-        total_previsto += previsto_i
+        # Acumula a FRACAO (ex: 0,4/dia) e da ceil no fim — mesma conta do
+        # balanco (previsao_producao.py:348). Antes arredondava cada dia
+        # (round->0 em item de giro baixo) e o total da pagina dava 0 enquanto
+        # o grid mandava produzir 3 (a ferramenta desmentia o plano).
+        total_previsto_frac += previsto
         total_firme += firme_i
         dias.append({
             'data': prod_d.isoformat(),
@@ -1664,11 +1668,14 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
             'entrega_label': '%s %s' % (_DOW_PT[dow], entrega.strftime('%d/%m')),
             'dow_nome': _DOW_PT_LONGO[dow],
             'firme': firme_i, 'firme_lojas': firme_lojas,
-            'previsto': previsto_i, 'fonte': fonte,
-            'usado': 'firme' if firme_i >= previsto_i else 'previsto',
+            # Fracionario (1 casa): "em media 0,4/dia" e honesto; o total
+            # (ceil) mostra o inteiro acionavel. usado compara com a fracao.
+            'previsto': round(previsto, 1), 'fonte': fonte,
+            'usado': 'firme' if firme_i >= previsto else 'previsto',
             'previsto_lojas': previsto_lojas, 'historico': historico,
         })
 
+    total_previsto = int(ceil(total_previsto_frac))
     return {
         'receita': {'id': rec.id, 'nome': rec.nome, 'lead': L},
         'hoje': hoje_d.isoformat(), 'inicio': inicio_d.isoformat(),
