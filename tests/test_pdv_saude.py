@@ -119,7 +119,8 @@ def test_rota_saude_renderiza(app, admin_user):
 
 
 def test_rota_reconciliacao_renderiza(app, admin_user, catalogo):
-    """Smoke: /pdv/reconciliacao renderiza 200 com pendente + select de alvos."""
+    """Smoke: /pdv/reconciliacao renderiza 200 com pendente + busca de alvos.
+    VNDA aposentado (site proprio agora) — NAO deve mais ter aba VNDA."""
     c = app.test_client()
     c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
     agg = {
