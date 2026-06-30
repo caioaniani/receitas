@@ -78,7 +78,15 @@
                 {% for mp in produtos_map %}
                 {% set linha_class = 'mapa-confirmado' if (mp.estado == 'mapeado' and mp.confirmado_em) else ('mapa-pendente' if mp.estado == 'pendente' else '') %}
                 <tr data-nome="{{ mp.nome_digitado|lower }}" class="{{ linha_class }}">
-                    <td class="fw-semibold">{{ mp.nome_digitado }}</td>
+                    <td class="fw-semibold">{{ mp.nome_digitado }}
+                        {% set _lojas = lojas_por_map.get(mp.id) %}
+                        {% if _lojas %}
+                        <div class="fw-normal mt-1" style="font-size:11px;">
+                            <i class="bi bi-shop text-muted"></i>
+                            {% for ln in _lojas %}<span class="badge bg-light text-dark border">{{ ln }}</span>{% endfor %}
+                        </div>
+                        {% endif %}
+                    </td>
                     <td>
                         {% if mp.estado == 'mapeado' %}<span class="badge bg-success">MAPEADO</span>
                         {% elif mp.estado == 'ignorado' %}<span class="badge bg-secondary">IGNORADO</span>
