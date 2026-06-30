@@ -131,6 +131,7 @@
     construirIndiceAlvo: construirIndiceAlvo,
     popularDatalist: popularDatalist,
     resolverAlvo: resolverAlvo,
+    csrfToken: csrfToken,
     salvar: salvar
   };
 })();
