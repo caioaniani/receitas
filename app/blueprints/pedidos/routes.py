@@ -2010,8 +2010,21 @@ def estoque_loja_mapeamentos():
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    # Lojas que JA usaram cada mapeamento (LojaDebito e criado pra TODA saida em
+    # lote aplicada — fator 1 ou fracionado). E o vinculo confiavel mapeamento ->
+    # loja (o LojaProdutoMap em si e global, sem loja). Pendente/nunca-usado fica
+    # sem loja (ninguem aplicou ainda).
+    from collections import defaultdict
+
+    from app.models import LojaDebito
+    lojas_por_map = defaultdict(list)
+    for map_id, loja_nome in (db.session.query(
+            LojaDebito.loja_produto_map_id, Loja.nome)
+            .join(Loja, LojaDebito.loja_id == Loja.id)
+            .order_by(Loja.nome).all()):
+        lojas_por_map[map_id].append(loja_nome)
     return render_template('pedidos/estoque_loja_mapeamentos.html',
-                           produtos_map=produtos_map,
+                           produtos_map=produtos_map, lojas_por_map=lojas_por_map,
                            receitas=receitas, produtos=produtos, materias=materias)
 
 
