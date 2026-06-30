@@ -38,6 +38,10 @@
         <button type="button" id="btn-dividir-todos" class="btn btn-sm btn-primary">
             <i class="bi bi-distribute-horizontal"></i> Dividir todos os produtos
         </button>
+        <a href="{{ url_for('producao.pedidos_semana_estoque', horizonte=horizonte, janela=janela, inicio=inicio) }}"
+           class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-box-seam"></i> Modo venda + estoque
+        </a>
         <a href="{{ url_for('producao.pedidos_semana', horizonte=horizonte, janela=janela, inicio=inicio) }}"
            class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-magic"></i> Modo previsão automática
