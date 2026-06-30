@@ -33,7 +33,6 @@ def _catchup_dias():
 
 _scheduler = None
 _ult_run = None
-_ult_run_vnda = None
 _ult_run_backup = None
 _ult_run_backup_chatwoot = None
 LOCK_KEY = 7723  # advisory lock pro Seru
@@ -94,14 +93,6 @@ def status():
     }
 
 
-def status_vnda():
-    """Status do job VNDA."""
-    return {
-        'ativo': _scheduler is not None and _scheduler.running,
-        'ultimo_run': _ult_run_vnda,
-    }
-
-
 def _run_sync(app):
     """Job: roda 1 ciclo de processar_pedidos da Seru."""
     global _ult_run
@@ -146,56 +137,6 @@ def _run_sync(app):
                     try:
                         conn.execute(text('SELECT pg_advisory_unlock(:k)'),
                                      {'k': LOCK_KEY})
-                    except Exception:
-                        pass
-        finally:
-            conn.close()
-
-
-def _run_vnda_sync(app):
-    """Job: roda 1 ciclo VNDA pra data de entrega = HOJE (BRT)."""
-    global _ult_run_vnda
-    from app.extensions import db
-    from app.services import vnda_sync
-    from app.utils import agora as _agora
-
-    with app.app_context():
-        uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
-        is_pg = 'postgresql' in uri
-        conn = db.engine.connect()
-        try:
-            if is_pg:
-                got = conn.execute(text('SELECT pg_try_advisory_lock(:k)'),
-                                   {'k': LOCK_KEY_VNDA}).scalar()
-                if not got:
-                    return
-            try:
-                # Catch-up: VNDA processa por data de entrega (1 data por
-                # chamada), entao itera de hoje ate D-N. Idempotencia
-                # (VndaPedidoProcessado PK) evita dupla-baixa.
-                hoje = hoje_brt()
-                for d in range(_catchup_dias() + 1):
-                    dia = hoje - timedelta(days=d)
-                    stats = vnda_sync.processar_pedidos(dia, user=None)
-                    if stats.get('erro'):
-                        logger.warning('vnda auto-sync erro (%s): %s',
-                                       dia, stats['erro'])
-                    elif any(stats.get(k, 0) for k in (
-                            'pedidos_novos', 'itens_baixados',
-                            'pedidos_cancelados_estornados')):
-                        logger.info('vnda auto-sync %s (com mudancas): %s',
-                                    dia, stats)
-                _ult_run_vnda = _agora()
-                from app.models import AppConfig
-                AppConfig.set('vnda_ultimo_sync', _ult_run_vnda.isoformat())
-                db.session.commit()
-            except Exception:
-                logger.exception('vnda auto-sync falhou')
-            finally:
-                if is_pg:
-                    try:
-                        conn.execute(text('SELECT pg_advisory_unlock(:k)'),
-                                     {'k': LOCK_KEY_VNDA})
                     except Exception:
                         pass
         finally:
@@ -387,10 +328,10 @@ def iniciar(app):
         'interval', minutes=15, id='seru-sync',
         max_instances=1, coalesce=True,
     )
-    # VNDA APOSENTADO em 24/06/2026 (operacao 100% no sistema proprio). O job
-    # _run_vnda_sync segue existindo (codigo morto) mas NAO eh mais agendado,
-    # nem mesmo via env var. Pra ressuscitar: re-registrar este add_job +
-    # limpar o aviso "VNDA aposentado" em vendas_manuais/vendas_itens.
+    # VNDA APOSENTADO em 24/06/2026 (operacao 100% no sistema proprio). A baixa
+    # de venda do VNDA foi REMOVIDA do codigo (motor unico em baixa_venda.py).
+    # O cliente API (vnda.py), o card CRM (vnda_card.py) e a rota de contatos
+    # seguem vivos pra historico.
 
     # Resumo diario de pedidos no Slack as 04:00 BRT
     _scheduler.add_job(
@@ -616,7 +557,6 @@ def _run_automacoes_whatsapp(app):
 
     with app.app_context():
         _com_lock(7732, whatsapp.disparar_automacoes_devidas, 'automacoes whatsapp')
-
 
 
 def _run_followup_bot(app):
