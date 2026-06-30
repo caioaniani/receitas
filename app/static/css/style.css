@@ -2354,3 +2354,27 @@ h6 { font-weight: 600; text-transform: lowercase; }
     .form-control, .form-select { font-size: 16px; }  /* evita zoom do iOS no focus */
 }
 
+/* ── Polimento garimpado da revisão de UI (30/06/2026) ──
+   Só o que é NOVO e não conflita com o design system já existente.
+   NÃO redefine .card/.table/.mobile-header/.page-title (já afinados). */
+.page-subtitle {
+    margin: 6px 0 0;
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+/* Agrupa as mensagens flash com espaçamento uniforme (cada alert vira mb-0) */
+.flash-stack {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+/* Realça o alerta crítico de cestas órfãs (substitui o style inline hardcoded) */
+.app-alert-highlight {
+    border: 1px solid color-mix(in srgb, var(--cor-vermelho) 20%, var(--border-color) 80%);
+    border-left: 4px solid var(--cor-vermelho) !important;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
