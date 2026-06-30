@@ -129,22 +129,23 @@ def faturamento():
         nome = (comp.get('name') if isinstance(comp, dict) else None) or '—'
         por_loja[nome] = por_loja.get(nome, 0) + valor
 
-    # Site (VNDA) — best-effort: se a API do site cair, NAO derruba o endpoint;
-    # devolve so o PDV com um aviso. Faturamento por data de venda (espelha o Seru).
+    # Site (loja propria / PedidoOnline) — best-effort: se a fonte do site
+    # cair, NAO derruba o endpoint; devolve so o PDV com um aviso. Faturamento
+    # por data de venda (pago_em), base subtotal sem frete (espelha o Seru).
+    # VNDA foi APOSENTADO em 24/06/2026 — o site agora e o PedidoOnline; antes
+    # este bloco consultava vnda_sync (fonte morta) e o site vinha sempre zerado.
     total_site = 0.0
     qtd_site = 0
     site_aviso = None
     try:
-        from app.services import vnda_sync
-        fat_site = vnda_sync.faturamento_por_dia(target, target)
+        from app.services import loja_online_vendas
+        fat_site = loja_online_vendas.faturamento_por_dia(target, target)
         total_site = fat_site['total']
         qtd_site = fat_site['n_pedidos']
         if total_site > 0:
-            loja_v = vnda_sync.loja_vnda()
-            nome_site = (loja_v.nome if loja_v else 'Site') + ' (site)'
-            por_loja[nome_site] = por_loja.get(nome_site, 0) + total_site
+            por_loja['Site'] = por_loja.get('Site', 0) + total_site
     except Exception as e:  # noqa: BLE001
-        current_app.logger.warning('bot/faturamento: VNDA indisponivel: %s', e)
+        current_app.logger.warning('bot/faturamento: site indisponivel: %s', e)
         site_aviso = 'site indisponível, total só PDV'
 
     total = total_pdv + total_site
