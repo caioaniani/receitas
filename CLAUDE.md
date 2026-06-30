@@ -264,10 +264,23 @@ historico de `PedidoLoja` (loja->industria) como base — nao mais PDV/VNDA.
 Ver `app/services/previsao_producao.py::balanco_industria`. Coluna
 "Produzir" = `max(0, max(comprometido, previsto) - em_estoque)`.
 
-**Camada B (futura limpeza, NAO urgente)**: apagar `vnda_sync.py`,
-`vnda.py`, `vnda_card.py`, modelos `VndaProdutoMap` / `VndaPedidoProcessado`
-/ `VndaDebito` e migrations correspondentes. Tabelas ficam no Postgres
-por enquanto pra preservar historico.
+**Camada B (limpeza, em andamento)**: feito em 30/06/2026 — `vnda_sync.py`
+REMOVIDO e os modelos `VndaProdutoMap` / `VndaPedidoProcessado` / `VndaDebito`
+APAGADOS (a baixa do site roda pelo motor unico via `PedidoOnline`). As
+tabelas `vnda_*` ficam no Postgres pra preservar historico (`db.create_all`
+nao recria nem dropa). AINDA dormentes (camada CRM, intocada): `vnda.py`
+(client da API), `vnda_card.py`, `/admin/vnda/contatos`, modelo `PedidoSite`
+(cache do card de cliente do Chatwoot). Migrations antigas tambem ficam.
+
+**Mapas unificados no `VendaMapa` (30/06/2026)**: o trio paralelo de
+mapeamentos virou UM modelo `VendaMapa` com `canal` em {'seru', 'lote'}.
+`SeruProdutoMap` (canal seru) e `LojaProdutoMap` (canal lote) seguem como
+modelos CONGELADOS — so servem de fonte do backfill idempotente no cutover
+de startup (`_cutover_baixa_venda`). O marcador loja<->mapa da tela de
+mapeamentos de lote agora e `VendaMapaUso` (substitui o papel do `LojaDebito`).
+NUNCA escrever de novo nos mapas velhos; toda leitura/escrita de mapeamento
+(Seru, lote, congelados, relink de receita) passa pelo `VendaMapa`. O SITE
+nao usa mapa (FK do `PedidoOnlineItem`).
 
 ## Stack
 
