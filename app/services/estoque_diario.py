@@ -45,6 +45,7 @@ TIPOS_NEUTRO = {
 FONTE_LABEL = {
     'venda_seru': 'PDV (Seru)',
     'venda_vnda': 'Site (VNDA)',
+    'venda_site': 'Site (loja própria)',
     'venda': 'Venda manual',
     'ajuste': 'Ajuste manual',
     'ajuste_negativo': 'Ajuste manual (saida)',
