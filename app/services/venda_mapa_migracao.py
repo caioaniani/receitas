@@ -5,7 +5,8 @@ Duas etapas, ambas IDEMPOTENTES, sem destruir os dados velhos:
 1. `backfill_venda_mapa()` — copia SeruProdutoMap -> VendaMapa(canal='seru') e
    LojaProdutoMap -> VendaMapa(canal='lote'). Aditivo: roda quantas vezes quiser
    (upsert por (canal, nome_externo)). NAO muda comportamento — so popula a
-   tabela nova em paralelo.
+   tabela nova em paralelo. Tambem recria o marcador 'quais lojas usaram cada
+   mapa de lote' (LojaDebito -> VendaMapaUso) pra nao perder o vinculo na UI.
 
 2. `migrar_fracoes_para_debito_estoque()` — soma os acumuladores velhos
    (SeruDebito + LojaDebito) por (loja, ITEM FISICO) para o DebitoEstoque novo, e
@@ -21,6 +22,7 @@ from app.models import (
     MovEstoqueLoja,
     SeruProdutoMap,
     VendaMapa,
+    VendaMapaUso,
 )
 from app.services.estoque_helpers import obter_linha_loja
 
@@ -66,8 +68,50 @@ def backfill_venda_mapa():
                 primeira_visto_em=lm.primeira_visto_em,
                 confirmado_em=lm.confirmado_em, confirmado_por=lm.confirmado_por):
             lote_novos += 1
+    uso_novos = _backfill_venda_mapa_uso()
     db.session.commit()
-    return {'seru_novos': seru_novos, 'lote_novos': lote_novos}
+    return {'seru_novos': seru_novos, 'lote_novos': lote_novos,
+            'uso_novos': uso_novos}
+
+
+def _backfill_venda_mapa_uso():
+    """Preserva o marcador 'quais lojas usaram cada mapa de lote' ao migrar.
+
+    O papel era do LojaDebito (1 linha por (loja, loja_produto_map) que ja
+    aplicou saida). Recria como VendaMapaUso ligado ao VendaMapa(canal='lote')
+    correspondente — casado pelo nome (LojaProdutoMap.nome_digitado ==
+    VendaMapa.nome_externo, que o backfill acima garante). Idempotente:
+    pula par (mapa, loja) ja existente. NAO faz commit (o caller faz)."""
+    from app.models import LojaDebito
+
+    # nome_externo -> id do VendaMapa de lote (recem-populado acima).
+    mapa_por_nome = {
+        vm.nome_externo: vm.id
+        for vm in VendaMapa.query.filter_by(canal='lote').all()
+    }
+    # loja_produto_map_id -> nome_digitado (pra achar o VendaMapa equivalente).
+    nome_por_lpm = {
+        lpm.id: lpm.nome_digitado for lpm in LojaProdutoMap.query.all()
+    }
+    # Pares ja existentes pra idempotencia.
+    existentes = {
+        (u.venda_mapa_id, u.loja_id) for u in VendaMapaUso.query.all()
+    }
+    novos = 0
+    for d in LojaDebito.query.all():
+        nome = nome_por_lpm.get(d.loja_produto_map_id)
+        if not nome:
+            continue
+        vm_id = mapa_por_nome.get(nome)
+        if not vm_id:
+            continue
+        chave = (vm_id, d.loja_id)
+        if chave in existentes:
+            continue
+        db.session.add(VendaMapaUso(venda_mapa_id=vm_id, loja_id=d.loja_id))
+        existentes.add(chave)
+        novos += 1
+    return novos
 
 
 def _col_item_do_mapa(mapa):
