@@ -16,7 +16,6 @@ from app.models import (
     SeruLojaMap,
     SeruPedidoProcessado,
     SeruProdutoMap,
-    VndaPedidoProcessado,
 )
 from app.services import seru
 from app.utils import agora
@@ -701,130 +700,6 @@ def vincular_loja(map_id):
 # CLAUDE.md, preservados por histórico). Resta só o diagnóstico de catálogo do
 # bot (vnda_diag_produtos), que bate no VNDA pra debugar o catálogo do chatbot.
 # ════════════════════════════════════════════════════════════════════
-
-
-@pdv_bp.route('/vnda/sync', methods=['POST'])
-@login_required
-@admin_required
-def vnda_sync():
-    """Botao 'Sincronizar VNDA agora' — processa pedidos com entrega hoje."""
-    from app.services import vnda_sync as svc
-    from app.services.seru_cron import hoje_brt
-    hoje = hoje_brt()
-    try:
-        stats = svc.processar_pedidos(hoje, user=current_user)
-    except Exception as e:
-        current_app.logger.exception('vnda_sync falhou')
-        return jsonify(ok=False, erro=_erro_externo(e)), 502
-    if stats.get('erro'):
-        return jsonify(ok=False, erro=stats['erro']), 502
-    return jsonify(ok=True, **stats)
-
-
-@pdv_bp.route('/vnda/reprocessar', methods=['POST'])
-@login_required
-@admin_required
-def vnda_reprocessar():
-    """Apaga pedidos VNDA processados HOJE com baixados=0 e re-roda.
-    Safety identica a do Seru: nao apaga os ja-baixados.
-    Tambem limpa MovEstoqueLoja antigas dos pedidos sendo reprocessados
-    pra evitar duplicacao visual no historico."""
-    from sqlalchemy import or_
-
-    from app.services import vnda_sync as svc
-    from app.services.seru_cron import hoje_brt
-    hoje = hoje_brt()
-    inicio_dia_utc = datetime.combine(hoje, datetime.min.time()) + timedelta(hours=3)
-    alvo_q = VndaPedidoProcessado.query.filter(
-        VndaPedidoProcessado.processado_em >= inicio_dia_utc,
-        VndaPedidoProcessado.n_itens_baixados == 0,
-        VndaPedidoProcessado.estornado_em.is_(None),
-        VndaPedidoProcessado.cancelado_em.is_(None),
-    )
-    codes = [p.vnda_pedido_code for p in alvo_q.all()]
-    # Apaga movs antigos desses pedidos. Como sao baixados=0, todos os movs
-    # sao do tipo sem_estoque (nao mexem em estoque) — seguro apagar.
-    if codes:
-        clauses = [MovEstoqueLoja.referencia.like(f'VNDA #{c}%') for c in codes]
-        MovEstoqueLoja.query.filter(or_(*clauses)).delete(synchronize_session=False)
-    n_apagados = alvo_q.delete(synchronize_session=False)
-    db.session.commit()
-    try:
-        stats = svc.processar_pedidos(hoje, user=current_user)
-    except Exception as e:
-        current_app.logger.exception('vnda_reprocessar falhou')
-        return jsonify(ok=False, erro=_erro_externo(e)), 502
-    if stats.get('erro'):
-        return jsonify(ok=False, erro=stats['erro']), 502
-    stats['n_apagados'] = n_apagados
-    return jsonify(ok=True, **stats)
-
-
-@pdv_bp.route('/vnda/historico-sync')
-@login_required
-@admin_required
-def vnda_historico_sync():
-    from sqlalchemy import desc, or_
-    status_filtro = request.args.get('status', '')
-    q = VndaPedidoProcessado.query
-    if status_filtro == 'baixados':
-        q = q.filter(VndaPedidoProcessado.n_itens_baixados > 0,
-                     VndaPedidoProcessado.cancelado_em.is_(None))
-    elif status_filtro == 'estornados':
-        q = q.filter(VndaPedidoProcessado.estornado_em.isnot(None))
-    elif status_filtro == 'cancelados':
-        q = q.filter(VndaPedidoProcessado.cancelado_em.isnot(None))
-    elif status_filtro == 'sem_baixa':
-        q = q.filter(VndaPedidoProcessado.n_itens_baixados == 0,
-                     VndaPedidoProcessado.cancelado_em.is_(None),
-                     VndaPedidoProcessado.estornado_em.is_(None))
-
-    pedidos = q.order_by(desc(VndaPedidoProcessado.processado_em)).limit(200).all()
-
-    movs_por_pedido = {}
-    if pedidos:
-        clauses = [MovEstoqueLoja.referencia.like(f'VNDA #{p.vnda_pedido_code}%') for p in pedidos]
-        all_movs = MovEstoqueLoja.query.filter(or_(*clauses)).all()
-        for m in all_movs:
-            pref = (m.referencia or '').split(' ', 2)
-            if len(pref) >= 2 and pref[0] == 'VNDA' and pref[1].startswith('#'):
-                pid = pref[1][1:]
-                movs_por_pedido.setdefault(pid, []).append(m)
-
-    return render_template('pdv/vnda_historico_sync.html',
-                           pedidos=pedidos, sel_status=status_filtro,
-                           movs_por_pedido=movs_por_pedido)
-
-
-@pdv_bp.route('/vnda/card-backfill', methods=['POST'])
-@login_required
-@admin_required
-def vnda_card_backfill():
-    """Importa o historico de pedidos do site (VNDA) pro cache do card de
-    cliente (CRM/Chatwoot). Roda em background — a janela longa pode levar
-    minutos (uma chamada por pedido pra pegar telefone). Idempotente por code."""
-    import threading
-
-    from app.services import vnda_card
-    try:
-        dias = max(1, min(int(request.form.get('dias') or 365), 1095))
-    except (TypeError, ValueError):
-        dias = 365
-    app = current_app._get_current_object()
-
-    def _run():
-        with app.app_context():
-            try:
-                r = vnda_card.backfill(dias=dias)
-                app.logger.info('vnda_card backfill OK: %s', r)
-            except Exception:
-                app.logger.exception('vnda_card backfill falhou')
-
-    threading.Thread(target=_run, daemon=True).start()
-    flash(f'Importacao do historico do site iniciada (ultimos {dias} dias). '
-          'Roda em segundo plano; os pedidos vao aparecendo no card do cliente '
-          'conforme sincronizam.', 'info')
-    return redirect(url_for('pdv.vnda_mapeamentos'))
 
 
 @pdv_bp.route('/vnda/diag-produtos')
