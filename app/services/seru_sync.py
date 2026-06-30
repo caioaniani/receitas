@@ -31,6 +31,7 @@ from app.models import (
     SeruLojaMap,
     SeruPedidoProcessado,
     SeruProdutoMap,
+    VendaMapa,
 )
 from app.services import seru
 from app.utils import agora
@@ -97,14 +98,16 @@ def _resolver_loja(seru_company_name, lojas_ativas):
 
 
 def _resolver_produto(seru_nome, seru_sku):
-    """Devolve SeruProdutoMap (criando se for primeira vez como pendente)."""
-    mp = SeruProdutoMap.query.filter_by(seru_nome=seru_nome).first()
+    """Devolve o VendaMapa(canal='seru') do produto (cria pendente na 1a vez).
+
+    Mapa unificado (substitui SeruProdutoMap). Mesma semantica de estado e fator;
+    ja vem backfillado do SeruProdutoMap no cutover de startup."""
+    mp = VendaMapa.query.filter_by(canal='seru', nome_externo=seru_nome).first()
     if mp:
-        # Atualiza sku se chegou agora
-        if seru_sku and not mp.seru_sku:
-            mp.seru_sku = seru_sku
+        if seru_sku and not mp.sku:
+            mp.sku = seru_sku
         return mp
-    mp = SeruProdutoMap(seru_nome=seru_nome, seru_sku=seru_sku or None)
+    mp = VendaMapa(canal='seru', nome_externo=seru_nome, sku=seru_sku or None)
     db.session.add(mp)
     db.session.flush()
     return mp
