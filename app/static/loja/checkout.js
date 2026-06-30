@@ -68,6 +68,22 @@
     }
     form.style.display = 'block';
 
+    // Funil (GA4): cliente chegou no checkout com itens no carrinho.
+    if (window.lojaGA) {
+      window.lojaGA('begin_checkout', {
+        currency: 'BRL',
+        value: itens.reduce(function (s, it) {
+          return s + (Number(it.preco) || 0) * (parseInt(it.qtd, 10) || 0);
+        }, 0),
+        items: itens.map(function (it) {
+          return {
+            item_id: it.kind + '_' + it.id, item_name: it.nome,
+            price: Number(it.preco) || 0, quantity: parseInt(it.qtd, 10) || 1,
+          };
+        }),
+      });
+    }
+
     // ── Resumo do pedido ───────────────────────────────────────────────
     var subtotal = 0;
     var resumoHtml = '<ul class="checkout-itens-lista">';
