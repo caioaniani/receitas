@@ -23,7 +23,11 @@ import unicodedata
 
 from app.extensions import db
 from app.models import (
+    EstoqueLoja,
     Loja,
+    MovEstoqueLoja,
+    SeruDebito,
+    SeruDebitoMov,
     SeruLojaMap,
     SeruPedidoProcessado,
     SeruProdutoMap,
@@ -131,15 +135,58 @@ def _estornar_pedido(reg, lojas_ativas, user_id):
     (`baixa_venda.estornar_venda`): inteiros pela referencia, fracoes pelo
     DebitoEstoqueMov. So marca `estornado_em` se algo foi revertido.
 
-    Transicao: pedidos baixados ANTES do cutover (tag '(fator)' + SeruDebitoMov)
-    sao tratados porque (a) a fase 1 do motor ja exclui '(fator', e (b) a
-    migracao de fracoes converteu os SeruDebitoMov pendentes em DebitoEstoqueMov.
+    Transicao: pedidos baixados ANTES do cutover guardam a fracao em
+    SeruDebitoMov (tag '(fator)' no mov). A fase 1 do motor exclui '(fator', e
+    `_estornar_fracoes_legado` reverte os SeruDebitoMov ainda nao migrados —
+    cobre o pedido cancelado entre o deploy e a migracao de fracoes. Removivel
+    quando nao restar SeruDebitoMov pendente.
     """
     from app.services.baixa_venda import estornar_venda
     pid = str(reg.seru_pedido_id)
     res = estornar_venda('seru', f'seru:{pid}', f'Seru #{pid}', usuario_id=user_id)
-    if res['revertido_inteiros'] or res['revertido_fracoes']:
+    legado = _estornar_fracoes_legado(pid, user_id)
+    if res['revertido_inteiros'] or res['revertido_fracoes'] or legado:
         reg.estornado_em = agora()
+
+
+def _estornar_fracoes_legado(pid, user_id):
+    """TRANSICAO: reverte fracoes de pedidos baixados ANTES do cutover que ainda
+    nao foram migrados (SeruDebitoMov pendente, sem DebitoEstoqueMov). Mesma
+    logica da fase 2 antiga (SeruDebitoMov -> SeruDebito). A migracao de fracoes
+    marca `estornado_em` nos convertidos, entao nao ha dupla reversao com o
+    motor novo. Retorna quantas fracoes reverteu."""
+    fracoes = SeruDebitoMov.query.filter_by(
+        seru_pedido_id=pid, estornado_em=None).all()
+    revertido = 0
+    for fm in fracoes:
+        debito = SeruDebito.query.filter_by(
+            loja_id=fm.loja_id, seru_produto_map_id=fm.seru_produto_map_id).first()
+        if not debito:
+            fm.estornado_em = agora()
+            continue
+        novo = float(debito.fracao_pendente or 0.0) - float(fm.fracao)
+        if novo < -1e-9:
+            inteiros_devolver = int(-novo + 1.0 - 1e-9)
+            mapping = SeruProdutoMap.query.get(fm.seru_produto_map_id)
+            if mapping and (mapping.receita_id or mapping.produto_id):
+                filtro = {'loja_id': fm.loja_id}
+                if mapping.receita_id:
+                    filtro['receita_id'] = mapping.receita_id
+                else:
+                    filtro['produto_id'] = mapping.produto_id
+                el = EstoqueLoja.query.filter_by(**filtro).first()
+                if el:
+                    el.quantidade = (el.quantidade or 0) + inteiros_devolver
+                    db.session.add(MovEstoqueLoja(
+                        estoque_loja_id=el.id, tipo='venda_seru_estorno',
+                        quantidade=inteiros_devolver,
+                        referencia=f'Estorno Seru #{pid} (fracao residual)',
+                        usuario_id=user_id))
+                    novo = novo + inteiros_devolver
+        debito.fracao_pendente = max(0.0, round(novo, 6))
+        fm.estornado_em = agora()
+        revertido += 1
+    return revertido
 
 
 def processar_pedidos(data_inicial, data_final, user=None,
