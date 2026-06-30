@@ -1,4 +1,8 @@
-"""Saude do sync de PDV (Seru/VNDA) e reconciliacao venda-vs-estoque.
+"""Saude do sync de PDV (Seru) e reconciliacao venda-vs-estoque.
+
+VNDA foi aposentado em 24/06/2026 (operacao 100% no sistema proprio) — este
+painel nao mostra mais o sync nem as pendencias do site. O service vnda_sync
+segue dormente (ver CLAUDE.md "VNDA aposentado"), mas a saude do PDV eh so Seru.
 
 Da visibilidade sobre vendas que podem NAO ter baixado estoque:
 - lojas Seru aguardando confirmacao (fuzzy nao confirmado nao baixa —
