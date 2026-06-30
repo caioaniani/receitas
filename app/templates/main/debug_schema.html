@@ -28,11 +28,13 @@
             Os dois passos sao idempotentes.</p>
         <div class="d-flex gap-2 flex-wrap">
             <form method="POST" action="{{ url_for('main.venda_mapa_backfill') }}" class="mb-0">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-sm btn-info" type="submit">
                     1) Backfill VendaMapa (aditivo, seguro)</button>
             </form>
             <form method="POST" action="{{ url_for('main.venda_mapa_migrar_fracoes') }}" class="mb-0"
                   onsubmit="return confirm('Migrar fracoes pendentes (SeruDebito + LojaDebito) pro DebitoEstoque e zerar as fontes? Passo de cutover.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-sm btn-outline-info" type="submit">
                     2) Migrar fracoes -> DebitoEstoque (cutover)</button>
             </form>
