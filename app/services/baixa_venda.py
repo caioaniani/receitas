@@ -177,6 +177,7 @@ def estornar_venda(canal, pedido_ref, referencia, *, usuario_id=None):
     Retorna {revertido_inteiros, revertido_fracoes}.
     """
     tipo_baixa, _tipo_sem, tipo_est = _movs(canal)
+    sinal = _sinal_estorno(canal)
 
     # Fase 1: inteiros, pela referencia (exceto baixas marcadas (fracao)).
     candidatos = MovEstoqueLoja.query.filter(
