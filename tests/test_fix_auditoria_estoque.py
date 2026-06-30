@@ -425,7 +425,7 @@ def test_b9_estorno_fracao_sem_inteiro_baixado(app, admin_user, loja, catalogo):
     Antes do B9: fracao_pendente ficava em 0.2 pra sempre.
     """
     from app.extensions import db
-    from app.models import SeruDebito, SeruDebitoMov, SeruPedidoProcessado, SeruProdutoMap
+    from app.models import DebitoEstoque, DebitoEstoqueMov, SeruPedidoProcessado, SeruProdutoMap
     from app.services.seru_sync import _baixar_item, _estornar_pedido
 
     mapping = SeruProdutoMap(
@@ -436,18 +436,18 @@ def test_b9_estorno_fracao_sem_inteiro_baixado(app, admin_user, loja, catalogo):
     db.session.add(mapping)
     db.session.commit()
 
-    # 1 venda × fator 0.2 = 0.2 → tudo no acumulador
+    # 1 venda × fator 0.2 = 0.2 → tudo no acumulador (motor unico: DebitoEstoque)
     res = _baixar_item(loja.id, mapping, qtd=1,
                        seru_pedido_id='X1', user_id=admin_user.id)
     db.session.commit()
-    assert res['baixado'] is False, 'nao deveria baixar inteiro ainda'
+    assert res['baixado'] == 0, 'nao deveria baixar inteiro ainda'
 
-    debito = SeruDebito.query.filter_by(
-        loja_id=loja.id, seru_produto_map_id=mapping.id).first()
+    debito = DebitoEstoque.query.filter_by(
+        loja_id=loja.id, receita_id=catalogo['receita'].id).first()
     assert abs(debito.fracao_pendente - 0.2) < 1e-6
 
-    fm = SeruDebitoMov.query.filter_by(seru_pedido_id='X1').first()
-    assert fm is not None, 'SeruDebitoMov nao foi gravado'
+    fm = DebitoEstoqueMov.query.filter_by(pedido_ref='seru:X1').first()
+    assert fm is not None, 'DebitoEstoqueMov nao foi gravado'
     assert abs(fm.fracao - 0.2) < 1e-6
 
     # Cancela e estorna
