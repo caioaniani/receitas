@@ -68,6 +68,28 @@ def index():
                            equilibrar=equilibrar, estados=estados)
 
 
+@industria_teste_bp.route('/previsao/<int:receita_id>')
+@login_required
+@admin_required
+def previsao(receita_id):
+    """Diagnostico: de onde sai o `previsto` de uma receita. Mostra, por dia do
+    horizonte, a entrega-alvo, o pedido firme por loja e a previsao do historico
+    decomposta por loja (entregas recentes daquele dia-da-semana). Responde 'de
+    qual dia/loja vem esse numero?' — abre do expandir do cronograma."""
+    from app.services.previsao_producao import decompor_previsao
+
+    horizonte, janela = _horizonte_janela()
+    inicio = _inicio_offset()
+    dec = decompor_previsao(receita_id, horizonte_dias=horizonte,
+                            janela_semanas=janela, inicio_offset_dias=inicio)
+    if dec is None:
+        flash('Receita não encontrada.', 'warning')
+        return redirect(url_for('industria_teste.index', horizonte=horizonte,
+                                janela=janela, inicio=inicio))
+    return render_template('industria_teste/previsao.html', dec=dec,
+                           horizonte=horizonte, janela=janela, inicio=inicio)
+
+
 @industria_teste_bp.route('/aprovar', methods=['POST'])
 @login_required
 @admin_required
