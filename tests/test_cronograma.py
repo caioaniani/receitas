@@ -489,6 +489,30 @@ def test_rota_telaindustriateste(app, admin_user):
     assert 'cronograma' in resp.get_data(as_text=True).lower()
 
 
+def test_rota_renderiza_rastreabilidade_do_insumo(app, admin_user):
+    """A tela renderiza o expandir do insumo com a origem (breakdown_bom) e a
+    coluna Previsto — pro padeiro ver de onde sai a quantidade de massa."""
+    from app.models import ReceitaIngrediente
+    loja = _loja()
+    massa = _receita('Massa para folhar')
+    massa.dias_producao = 1
+    cro = _receita('Croissant Tradicional')
+    cro.rendimento_qtd = 50
+    db.session.add(ReceitaIngrediente(
+        receita_id=cro.id, tipo='receita', sub_receita_id=massa.id,
+        ingrediente_nome='Massa para folhar', porcentagem=1))
+    db.session.commit()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=3), cro, 100)
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    html = client.get('/telaindustriateste/').get_data(as_text=True)
+    assert 'Insumo puxado pela produção de' in html
+    assert 'bom-box' in html
+    assert '>Previsto<' in html
+
+
 def test_aprovar_cria_plano_do_dia(app, admin_user):
     from app.models import PlanejamentoProducao
     from app.services.producao import aprovar_plano_do_dia
