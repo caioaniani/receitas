@@ -117,6 +117,21 @@ def composicao_de_venda(*, receita_id=None, produto_id=None,
     return []
 
 
+_COL_PRA_TIPO_CURTO = {
+    'receita_id': 'receita',
+    'produto_id': 'produto',
+    'materia_prima_id': 'mp',
+}
+
+
+def componentes_de_cesta_curto(produto):
+    """`componentes_de_cesta` com o tipo no formato CURTO
+    ('receita'|'produto'|'mp') em vez do nome da coluna. Usado por
+    `loja_online_vendas` na agregacao de vendas do site."""
+    return [(_COL_PRA_TIPO_CURTO.get(col, 'mp'), item_id, nome, qtd)
+            for col, item_id, nome, qtd in componentes_de_cesta(produto)]
+
+
 def eh_cesta(produto):
     """True se Produto tem componentes (eh cesta)."""
     return bool(produto and produto.itens)
