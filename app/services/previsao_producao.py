@@ -1502,24 +1502,33 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         rr['categoria'] = (rec.categoria or '').strip() if rec else ''
         it = bal_idx.get(rid)
         comp = int(it['comprometido']) if it else 0
+        prev = int(it['previsto']) if it else 0
+        est_ef = int(it['em_estoque_efetivo']) if it else int(rr['em_estoque'])
+        demanda = max(comp, prev)
         rr['comprometido'] = comp
-        rr['saldo'] = int(rr['em_estoque']) - comp
+        rr['previsto'] = prev        # a PREVISAO (historico) que tambem puxa producao
+        rr['demanda'] = demanda      # firme OU previsto, o maior — o que o balanco usa
+        # Saldo contra a DEMANDA (max comp, prev) e o estoque EFETIVO: bate com o
+        # "Produzir" da linha (-saldo == produzir quando negativo). Antes era
+        # estoque - comprometido (so firme), ignorando o previsto -> a caixa dizia
+        # "nao falta" enquanto a linha mandava produzir (bug pego pelo dono 30/06).
+        rr['saldo'] = est_ef - demanda
+        rr['produzir'] = max(0, demanda - est_ef)
         rr['breakdown'] = ([b for b in it['breakdown_comprometido'] if b['qtd'] > 0]
                            if it else [])
         rr.setdefault('breakdown_bom', [])   # so insumo tem; produto fica vazio
-        # Projecao: estoque atual + producao programada (grid) - saidas (pedidos
-        # firmes, datados) => saldo no fim de cada dia. 1o dia negativo = falta.
-        # `previsto` = a PREVISAO que justifica a producao do dia (entrega em
-        # dia+lead) — assim da pra ver quando a producao vem do FIRME (pedido
-        # real) ou da PREVISAO (historico), respondendo "de onde veio esse numero".
-        L = lead.get(rid, 0)
+        # Projecao dia a dia: estoque + producao programada - DEMANDA do dia
+        # (firme datado OU previsto do dia, o maior) => saldo no fim do dia. 1o dia
+        # negativo = "vai faltar". A demanda inclui o previsto desde 30/06; antes
+        # so descontava o firme e a projecao dizia "nao falta" a toa.
         running = int(rr['em_estoque'])
         projecao = []
         rr['dia_falta'] = None
         for i, d in enumerate(dias_prod):
             prod_i = int(rr['por_dia'][i]['qtd'] or 0)
-            saida_i = int(firme[rid].get(d, 0))
-            prev_i = int(round(_previsto_dia(rid, d + timedelta(days=L))))
+            firme_i = int(firme[rid].get(d, 0))
+            prev_i = int(round(_previsto_dia(rid, d)))   # previsto saindo no dia d
+            saida_i = max(firme_i, prev_i)               # demanda do dia
             running += prod_i - saida_i
             if running < 0 and rr['dia_falta'] is None:
                 rr['dia_falta'] = dias_out[i]['label']
@@ -1529,8 +1538,9 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                 key=lambda b: -b['qtd'])
             projecao.append({
                 'label': dias_out[i]['label'], 'saida': saida_i,
-                'saida_lojas': saida_lojas, 'producao': prod_i,
-                'previsto': prev_i, 'saldo': running, 'falta': running < 0})
+                'saida_firme': firme_i, 'saida_lojas': saida_lojas,
+                'producao': prod_i, 'previsto': prev_i, 'saldo': running,
+                'falta': running < 0})
         rr['projecao'] = projecao
 
     # Agrupa os produtos por CATEGORIA (depois por nome) — senao ficam espalhados
