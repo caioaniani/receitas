@@ -593,9 +593,42 @@ def mapeamentos():
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
+    # Loja fisica de onde o SITE (loja propria/PedidoOnline) baixa estoque +
+    # visibilidade (loja atual, se foi salva por ID ou caiu no padrao, e se ela
+    # tem estoque cadastrado — senao a venda do site nao tem de onde baixar).
+    from app.models import EstoqueLoja
+    from app.services.loja_pagamento import loja_origem_site
+    loja_site = loja_origem_site()
+    loja_site_explicito = bool(AppConfig.get_int('loja_site_estoque_id'))
+    loja_site_itens = (EstoqueLoja.query.filter_by(loja_id=loja_site.id).count()
+                       if loja_site else 0)
     return render_template('pdv/mapeamentos.html',
                            produtos_map=produtos_map, lojas_map=lojas_map,
-                           receitas=receitas, produtos=produtos, lojas=lojas)
+                           receitas=receitas, produtos=produtos, lojas=lojas,
+                           loja_site=loja_site,
+                           loja_site_explicito=loja_site_explicito,
+                           loja_site_itens=loja_site_itens)
+
+
+@pdv_bp.route('/config-site-loja', methods=['POST'])
+@login_required
+@admin_required
+def config_site_loja():
+    """Salva de qual loja fisica o SITE (loja propria/PedidoOnline) baixa estoque
+    nas vendas de entrega/express. Retirada continua baixando da loja escolhida
+    pelo cliente. Fixa por ID (sobrevive a renomear a loja)."""
+    try:
+        loja_id = int(request.form.get('loja_id') or 0)
+    except (TypeError, ValueError):
+        loja_id = 0
+    loja = Loja.query.get(loja_id) if loja_id else None
+    if not loja:
+        flash('Selecione uma loja válida.', 'danger')
+        return redirect(url_for('pdv.mapeamentos'))
+    AppConfig.set('loja_site_estoque_id', loja.id)
+    db.session.commit()
+    flash('Vendas do site passam a baixar estoque de "%s".' % loja.nome, 'success')
+    return redirect(url_for('pdv.mapeamentos'))
 
 
 @pdv_bp.route('/mapeamentos/produto/<int:map_id>', methods=['POST'])
