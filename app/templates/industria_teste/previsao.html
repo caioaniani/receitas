@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}De onde vem a previsão — {{ dec.receita.nome }}{% endblock %}
+
+{% block head %}
+<style>
+    .prev-wrap { max-width: 1100px; }
+    .prev-head { display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline;
+        margin-bottom: .5rem; }
+    .prev-sum { display: flex; flex-wrap: wrap; gap: 1.25rem; font-size: .9rem;
+        background: #f8f9fb; border: 1px solid #e9ecef; border-radius: .4rem;
+        padding: .5rem .8rem; margin-bottom: 1rem; }
+    .prev-sum b { font-size: 1.05rem; }
+    .prev-card { border: 1px solid #e9ecef; border-radius: .5rem; margin-bottom: .8rem; }
+    .prev-card-h { display: flex; flex-wrap: wrap; gap: .6rem; align-items: baseline;
+        padding: .5rem .8rem; background: #f8f9fb; border-bottom: 1px solid #e9ecef;
+        border-radius: .5rem .5rem 0 0; }
+    .prev-dia { font-weight: 700; }
+    .prev-entrega { color: #6c757d; font-size: .85rem; }
+    .prev-num { margin-left: auto; font-size: .9rem; }
+    .prev-num .firme { color: #198754; font-weight: 700; }
+    .prev-num .previsto { color: #6f42c1; font-weight: 700; }
+    .prev-num .usado-tag { font-size: .72rem; background: #6f42c1; color: #fff;
+        border-radius: .25rem; padding: .05rem .4rem; margin-left: .3rem; }
+    .prev-num .usado-tag.firme-tag { background: #198754; }
+    .prev-body { padding: .5rem .8rem; }
+    .prev-fonte { font-size: .78rem; color: #6c757d; margin-bottom: .4rem; }
+    .prev-lojas { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .5rem; }
+    .prev-loja { background: #f6f4fb; border: 1px solid #e4def5; border-radius: .3rem;
+        padding: .1rem .5rem; font-size: .8rem; }
+    .prev-loja b { color: #6f42c1; }
+    .prev-loja small { color: #8a82a6; }
+    .prev-firme-loja { background: #eafaf1; border-color: #cdeedd; }
+    .prev-firme-loja b { color: #198754; }
+    .hist-table { width: auto; border-collapse: collapse; font-size: .78rem; margin-top: .2rem; }
+    .hist-table th, .hist-table td { padding: .12rem .6rem; border-bottom: 1px solid #eee;
+        text-align: left; white-space: nowrap; }
+    .hist-table th { color: #6c757d; font-weight: 600; }
+    .hist-vazio { color: #adb5bd; font-size: .8rem; }
+    details.hist > summary { cursor: pointer; font-size: .78rem; color: #0d6efd; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="prev-wrap">
+<div class="prev-head">
+    <h1 class="page-title mb-0"><i class="bi bi-search"></i> De onde vem a previsão</h1>
+    <a href="{{ url_for('industria_teste.index', horizonte=horizonte, janela=janela, inicio=inicio) }}"
+       class="btn btn-sm btn-outline-secondary">← voltar ao cronograma</a>
+</div>
+
+<p class="text-muted mb-2">
+    <strong>{{ dec.receita.nome }}</strong>
+    {% if dec.receita.lead %}<span class="badge bg-light text-dark border">lead {{ dec.receita.lead }}d</span>{% endif %}
+    — o número de produção do cronograma sai do <strong>maior</strong> entre o
+    pedido <span style="color:#198754">firme</span> (loja já pediu) e o
+    <span style="color:#6f42c1">previsto</span> (média do histórico daquele
+    dia-da-semana). Abaixo, dia a dia, de onde cada número vem.
+</p>
+
+<div class="prev-sum">
+    <span>Soma firme na janela: <b class="text-success">{{ dec.total_firme }}</b></span>
+    <span>Soma prevista na janela: <b style="color:#6f42c1">{{ dec.total_previsto }}</b></span>
+    <span class="text-muted">Histórico: {{ dec.janela_semanas }} semanas
+        ({{ dec.hist_ini }} a {{ dec.hist_fim }})</span>
+</div>
+
+{% for d in dec.dias %}
+<div class="prev-card">
+    <div class="prev-card-h">
+        <span class="prev-dia">{{ d.label }}</span>
+        <span class="prev-entrega">→ entrega-alvo: {{ d.entrega_label }} ({{ d.dow_nome }})</span>
+        <span class="prev-num">
+            firme <span class="firme">{{ d.firme }}</span> ·
+            previsto <span class="previsto">{{ d.previsto }}</span>
+            {% if d.usado == 'firme' %}<span class="usado-tag firme-tag">usa firme</span>
+            {% else %}<span class="usado-tag">usa previsto</span>{% endif %}
+        </span>
+    </div>
+    <div class="prev-body">
+        {% if d.firme_lojas %}
+        <div class="prev-lojas">
+            <span class="text-muted small" style="align-self:center">Pedido firme:</span>
+            {% for l in d.firme_lojas %}<span class="prev-loja prev-firme-loja">{{ l.loja_nome }}: <b>{{ l.qtd }}</b></span>{% endfor %}
+        </div>
+        {% endif %}
+
+        {% if d.fonte == 'media_dow' %}
+        <div class="prev-fonte">Previsto = média recência-ponderada das
+            {{ d.dow_nome }}s do histórico (cada loja conta o que costuma pedir nesse dia):</div>
+        <div class="prev-lojas">
+            {% for l in d.previsto_lojas %}<span class="prev-loja">{{ l.loja_nome }}: <b>{{ l.media }}</b> <small>({{ l.n }} entrega{{ 's' if l.n != 1 else '' }})</small></span>
+            {% else %}<span class="hist-vazio">— sem decomposição por loja —</span>{% endfor %}
+        </div>
+        {% elif d.fonte == 'media_diaria' %}
+        <div class="prev-fonte">Previsto = média diária simples do histórico
+            (poucas ocorrências dessa {{ d.dow_nome }} pra confiar no dia-da-semana).</div>
+        {% elif d.fonte == 'fora_fornada' %}
+        <div class="prev-fonte">Sem previsão: fornada especial não vendida nesse dia.</div>
+        {% else %}
+        <div class="prev-fonte">Sem histórico de venda dessa receita na janela.</div>
+        {% endif %}
+
+        {% if d.historico %}
+        <details class="hist">
+            <summary>Ver as entregas reais que alimentaram esse número ({{ d.historico|length }} mais recentes)</summary>
+            <table class="hist-table">
+                <thead><tr><th>Data</th><th>Loja</th><th class="text-end">Qtd</th></tr></thead>
+                <tbody>
+                {% for h in d.historico %}
+                <tr><td>{{ h.data_label }}</td><td>{{ h.loja_nome }}</td><td class="text-end">{{ h.qtd }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </details>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+</div>
+{% endblock %}
