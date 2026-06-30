@@ -129,5 +129,32 @@ def migrar_fracoes_para_debito_estoque(*, canais=('seru', 'lote'),
     # Zera as fontes (retiradas de uso). Mantem as linhas pra historico.
     for d in fontes:
         d.fracao_pendente = 0.0
+
+    # Converte os SeruDebitoMov ainda NAO estornados em DebitoEstoqueMov, pra
+    # que o estorno de pedidos baixados ANTES do cutover funcione pelo motor
+    # novo (estornar_venda olha DebitoEstoqueMov por (canal, pedido_ref)).
+    movs_migrados = 0
+    if 'seru' in canais:
+        from app.models import DebitoEstoqueMov, SeruDebitoMov
+        for sm in SeruDebitoMov.query.filter_by(estornado_em=None).all():
+            mapa = SeruProdutoMap.query.get(sm.seru_produto_map_id)
+            col, item_id = _col_item_do_mapa(mapa) if mapa else (None, None)
+            if not col:
+                continue
+            pedido_ref = 'seru:%s' % sm.seru_pedido_id
+            ja = DebitoEstoqueMov.query.filter_by(
+                canal='seru', pedido_ref=pedido_ref, loja_id=sm.loja_id,
+                fracao=sm.fracao, **{col: item_id}).first()
+            if ja:
+                continue
+            filtro = {'receita_id': None, 'produto_id': None,
+                      'materia_prima_id': None}
+            filtro[col] = item_id
+            db.session.add(DebitoEstoqueMov(
+                loja_id=sm.loja_id, canal='seru', pedido_ref=pedido_ref,
+                fracao=sm.fracao, **filtro))
+            movs_migrados += 1
+
     db.session.commit()
-    return {'itens': len(por_item), 'inteiros_baixados': inteiros_baixados}
+    return {'itens': len(por_item), 'inteiros_baixados': inteiros_baixados,
+            'movs_migrados': movs_migrados}
