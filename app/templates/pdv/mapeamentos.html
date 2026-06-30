@@ -257,7 +257,21 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/pdv_mapeamento.js') }}?v={{ static_v['js/pdv_mapeamento.js'] }}"></script>
 <script>
+// "X fatias de Y" -> fator, no campo da propria linha. Mesma conta das outras
+// telas (widget unico PdvMap) — antes esta tela nao tinha esse helper.
+function mapFatias(btn) {
+    var campo = btn.closest('form').querySelector('.map-fator');
+    if (!campo) return;
+    var x = prompt('1 venda usa quantas fatias/partes?');
+    if (x === null) return;
+    var y = prompt('1 unidade inteira tem quantas fatias/partes?');
+    if (y === null) return;
+    var f = PdvMap.fatiasParaFator(x, y);
+    if (f) campo.value = f;
+}
+
 // Preserva scroll entre submits — form-POST-redirect normalmente joga
 // o usuario pro topo. Salvamos antes do submit e restauramos no load.
 (function() {
