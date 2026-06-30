@@ -88,9 +88,9 @@ def parsear_lista(texto):
 def _carregar_catalogo():
     """Carrega todas receitas/produtos + orfaos do estoque (EstoqueProducao
     sem receita/produto vinculado) + apelidos globais confirmados
-    (LojaProdutoMap mapeado pra receita/produto). Apelidos sao globais —
+    (VendaMapa canal='lote' mapeado pra receita/produto). Apelidos sao globais —
     o mesmo apelido vinculado em /pedidos/estoque-loja vale aqui."""
-    from app.models import LojaProdutoMap
+    from app.models import VendaMapa
     receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.query.all()]
     produtos = [(p.id, p.nome, _ascii(p.nome)) for p in Produto.query.all()]
     orfaos = [
@@ -103,19 +103,20 @@ def _carregar_catalogo():
         if ep.nome_pendente
     ]
     apelidos = []
-    for mp in LojaProdutoMap.query.filter(
-        LojaProdutoMap.confirmado_em.isnot(None),
-        LojaProdutoMap.ignorar.is_(False),
+    for mp in VendaMapa.query.filter(
+        VendaMapa.canal == 'lote',
+        VendaMapa.confirmado_em.isnot(None),
+        VendaMapa.ignorar.is_(False),
     ).all():
         # MP nao se aplica aqui (congelados so vincula receita/produto).
         if mp.receita_id:
-            apelidos.append((mp.nome_digitado, _ascii(mp.nome_digitado),
+            apelidos.append((mp.nome_externo, _ascii(mp.nome_externo),
                               'receita', mp.receita_id,
-                              mp.receita.nome if mp.receita else mp.nome_digitado))
+                              mp.receita.nome if mp.receita else mp.nome_externo))
         elif mp.produto_id:
-            apelidos.append((mp.nome_digitado, _ascii(mp.nome_digitado),
+            apelidos.append((mp.nome_externo, _ascii(mp.nome_externo),
                               'produto', mp.produto_id,
-                              mp.produto.nome if mp.produto else mp.nome_digitado))
+                              mp.produto.nome if mp.produto else mp.nome_externo))
     return receitas, produtos, orfaos, apelidos
 
 
