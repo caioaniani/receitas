@@ -39,15 +39,15 @@ def test_resumo_conta_loja_pendente(app):
 
 def test_resumo_conta_produto_pendente(app):
     from app.extensions import db
-    from app.models import SeruProdutoMap
+    from app.models import VendaMapa
     from app.services import pdv_saude
     with app.app_context():
         # Pendente: sem receita/produto, nao ignorado.
-        db.session.add(SeruProdutoMap(seru_nome='Cafe Pendente'))
+        db.session.add(VendaMapa(canal='seru', nome_externo='Cafe Pendente'))
         # Mapeado: nao conta.
-        db.session.add(SeruProdutoMap(seru_nome='Pao Mapeado', receita_id=1))
+        db.session.add(VendaMapa(canal='seru', nome_externo='Pao Mapeado', receita_id=1))
         # Ignorado: nao conta.
-        db.session.add(SeruProdutoMap(seru_nome='Agua', ignorar=True))
+        db.session.add(VendaMapa(canal='seru', nome_externo='Agua', ignorar=True))
         db.session.commit()
         r = pdv_saude.resumo()
     assert r['produtos_pendentes_seru'] == 1
@@ -55,11 +55,11 @@ def test_resumo_conta_produto_pendente(app):
 
 def test_contar_pendencias_soma(app):
     from app.extensions import db
-    from app.models import SeruLojaMap, SeruPedidoProcessado, SeruProdutoMap
+    from app.models import SeruLojaMap, SeruPedidoProcessado, VendaMapa
     from app.services import pdv_saude
     with app.app_context():
         db.session.add(SeruLojaMap(seru_company_name='L', confirmado_em=None, ignorar=False))
-        db.session.add(SeruProdutoMap(seru_nome='P'))
+        db.session.add(VendaMapa(canal='seru', nome_externo='P'))
         db.session.add(SeruPedidoProcessado(seru_pedido_id='ped1', loja_id=None))
         db.session.commit()
         assert pdv_saude.contar_pendencias() == 3

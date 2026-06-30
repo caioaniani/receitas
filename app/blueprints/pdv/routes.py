@@ -364,7 +364,7 @@ def venda_seru_detalhe(pedido_id):
 
     itens_raw = seru.extrair_itens(pedido)
 
-    # Cross-reference com SeruProdutoMap
+    # Cross-reference com VendaMapa (canal seru)
     nomes = list({it['nome'] for it in itens_raw if it.get('nome')})
     maps_dict = {}
     if nomes:
@@ -408,7 +408,7 @@ def venda_seru_detalhe(pedido_id):
 @login_required
 @admin_required
 def api_mapear():
-    """Cria/atualiza SeruProdutoMap inline (do relatorio de itens vendidos)."""
+    """Cria/atualiza VendaMapa(canal=seru) inline (do relatorio de itens vendidos)."""
     from app.utils import parse_fator_composicao
     data = request.json if request.is_json else request.form
     nome = (data.get('seru_nome') or '').strip()

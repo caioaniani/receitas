@@ -28,7 +28,7 @@ def test_transferencia_completa_e_exclusao(app, admin_user):
         PedidoLoja,
         PrecoLojaReceita,
         Receita,
-        SeruProdutoMap,
+        VendaMapa,
     )
     with app.app_context():
         origem = _receita(db, 'Molho Pesto 100g')
@@ -57,7 +57,7 @@ def test_transferencia_completa_e_exclusao(app, admin_user):
         db.session.add(EstoqueProducao(receita_id=oid, quantidade=4, estado=None))
 
         # mapeamento PDV confirmado + preco por loja conflitante
-        db.session.add(SeruProdutoMap(seru_nome='PESTO 100G', receita_id=oid))
+        db.session.add(VendaMapa(canal='seru', nome_externo='PESTO 100G', receita_id=oid))
         db.session.add_all([
             PrecoLojaReceita(loja_id=lid, receita_id=oid, preco=9.0),
             PrecoLojaReceita(loja_id=lid, receita_id=did, preco=11.0),
@@ -97,7 +97,7 @@ def test_transferencia_completa_e_exclusao(app, admin_user):
         ep = EstoqueProducao.query.one()
         assert ep.receita_id == did and ep.quantidade == 4
         # mapeamento seguiu
-        assert SeruProdutoMap.query.one().receita_id == did
+        assert VendaMapa.query.one().receita_id == did
         # preco conflitante: prevaleceu o do destino
         precos = PrecoLojaReceita.query.filter_by(loja_id=lid).all()
         assert len(precos) == 1

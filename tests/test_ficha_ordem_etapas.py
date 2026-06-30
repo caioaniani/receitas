@@ -105,7 +105,7 @@ def test_vinculos_lista_resolve_e_libera_exclusao(app, admin_user):
         Produto,
         ProdutoItem,
         Receita,
-        SeruProdutoMap,
+        VendaMapa,
     )
     rid = _receita(app, nome='Croissant Teste')
     with app.app_context():
@@ -120,7 +120,7 @@ def test_vinculos_lista_resolve_e_libera_exclusao(app, admin_user):
         db.session.add(p)
         db.session.flush()
         db.session.add(PedidoItem(pedido_id=p.id, receita_id=rid, quantidade=5))
-        db.session.add(SeruProdutoMap(seru_nome='CROISSANT', receita_id=rid))
+        db.session.add(VendaMapa(canal='seru', nome_externo='CROISSANT', receita_id=rid))
         db.session.commit()
         pedido_item_id = PedidoItem.query.first().id
 
@@ -148,7 +148,7 @@ def test_vinculos_lista_resolve_e_libera_exclusao(app, admin_user):
                 data={'chave': 'mapeamentos'}).get_json()
     assert 'mapeamentos' not in {g['chave'] for g in d3['grupos']}
     with app.app_context():
-        m = SeruProdutoMap.query.filter_by(seru_nome='CROISSANT').first()
+        m = VendaMapa.query.filter_by(canal='seru', nome_externo='CROISSANT').first()
         assert m is not None and m.receita_id is None   # voltou pra pendente
         assert ProdutoItem.query.count() == 0
 

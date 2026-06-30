@@ -190,9 +190,9 @@
             </thead>
             <tbody>
                 {% for mp in produtos_map %}
-                <tr data-nome="{{ mp.seru_nome|lower }}" class="{% if mp.estado == 'pendente' %}table-warning{% elif mp.ignorar %}text-muted{% endif %}">
-                    <td class="fw-semibold">{{ mp.seru_nome }}</td>
-                    <td><small class="text-muted">{{ mp.seru_sku or '—' }}</small></td>
+                <tr data-nome="{{ mp.nome_externo|lower }}" class="{% if mp.estado == 'pendente' %}table-warning{% elif mp.ignorar %}text-muted{% endif %}">
+                    <td class="fw-semibold">{{ mp.nome_externo }}</td>
+                    <td><small class="text-muted">{{ mp.sku or '—' }}</small></td>
                     <td>
                         {% if mp.estado == 'mapeado' %}
                             <span class="badge bg-success">mapeado</span>

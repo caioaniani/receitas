@@ -5,14 +5,14 @@ Para cada produto vendido num intervalo, calcula:
 - faturamento total
 - numero de pedidos distintos
 - match no catalogo local (Receita ou Produto), por fuzzy
-- estado do mapeamento Seru (SeruProdutoMap): mapeado/ignorado/pendente/sem_map
+- estado do mapeamento Seru (VendaMapa canal=seru): mapeado/ignorado/pendente/sem_map
 
 Filtros: intervalo de datas BRT e (opcional) nome da loja Seru
 (o campo 'company.name' do pedido — que e o que a Seru chama de loja).
 """
 import unicodedata
 
-from app.models import Produto, Receita, SeruProdutoMap
+from app.models import Produto, Receita, VendaMapa
 from app.services import seru
 
 
@@ -119,9 +119,10 @@ def agregar_itens(data_inicial, data_final, loja_seru=None,
     faturamento_total = sum(v['faturamento'] for v in agg.values())
     total_itens = sum(v['qtd'] for v in agg.values())
 
-    # Index dos SeruProdutoMap pra mostrar estado nas linhas.
-    maps = {m.seru_nome: m for m in SeruProdutoMap.query.filter(
-        SeruProdutoMap.seru_nome.in_(list(agg.keys()))).all()}
+    # Index dos VendaMapa(canal=seru) pra mostrar estado nas linhas.
+    maps = {m.nome_externo: m for m in VendaMapa.query.filter(
+        VendaMapa.canal == 'seru',
+        VendaMapa.nome_externo.in_(list(agg.keys()))).all()}
 
     produtos_lista = []
     sem_match = 0

@@ -31,7 +31,6 @@ from app.models import (
     EstoqueProducao,
     FotoRecebimento,
     Loja,
-    LojaProdutoMap,
     MateriaPrima,
     MovEstoqueLoja,
     MovEstoqueProducao,
@@ -42,6 +41,8 @@ from app.models import (
     PrecoLojaReceita,
     Produto,
     Receita,
+    VendaMapa,
+    VendaMapaUso,
 )
 from app.utils import agora
 from app.utils import hoje as hoje_brt
@@ -1825,7 +1826,7 @@ def estoque_loja_saude():
     a ultima conferencia e a ultima saida em lote, nomes ainda nao vinculados
     (que NAO baixam na saida em lote) e itens DUPLICADOS (mesmo item em 2+ linhas
     de EstoqueLoja). Somente leitura — nao altera nada."""
-    from app.models import EstoqueLoja, LojaProdutoMap, MovEstoqueLoja, SeruLojaMap
+    from app.models import EstoqueLoja, MovEstoqueLoja, SeruLojaMap, VendaMapa
     from app.utils import agora
 
     lojas = _lojas_operacionais()
@@ -1901,12 +1902,13 @@ def estoque_loja_saude():
             'n_duplicados': len(duplicados),
         })
 
-    nao_vinculados = (LojaProdutoMap.query
-                      .filter(LojaProdutoMap.ignorar.is_(False),
-                              LojaProdutoMap.receita_id.is_(None),
-                              LojaProdutoMap.produto_id.is_(None),
-                              LojaProdutoMap.materia_prima_id.is_(None))
-                      .order_by(LojaProdutoMap.nome_digitado).all())
+    nao_vinculados = (VendaMapa.query
+                      .filter(VendaMapa.canal == 'lote',
+                              VendaMapa.ignorar.is_(False),
+                              VendaMapa.receita_id.is_(None),
+                              VendaMapa.produto_id.is_(None),
+                              VendaMapa.materia_prima_id.is_(None))
+                      .order_by(VendaMapa.nome_externo).all())
 
     # Cadastros homonimos no catalogo (raiz provavel da duplicidade): nome de
     # Receita/Produto nao tem unique constraint, entao pode haver cadastros
@@ -2001,26 +2003,24 @@ def estoque_loja_saida_lote():
 @login_required
 @admin_required
 def estoque_loja_mapeamentos():
-    """Lista LojaProdutoMap pra admin vincular/ignorar nomes digitados."""
-    produtos_map = LojaProdutoMap.query.order_by(
-        LojaProdutoMap.ignorar.asc(),
-        LojaProdutoMap.confirmado_em.is_(None).desc(),
-        LojaProdutoMap.nome_digitado,
+    """Lista VendaMapa (canal lote) pra admin vincular/ignorar nomes digitados."""
+    produtos_map = VendaMapa.query.filter(VendaMapa.canal == 'lote').order_by(
+        VendaMapa.ignorar.asc(),
+        VendaMapa.confirmado_em.is_(None).desc(),
+        VendaMapa.nome_externo,
     ).all()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
-    # Lojas que JA usaram cada mapeamento (LojaDebito e criado pra TODA saida em
-    # lote aplicada — fator 1 ou fracionado). E o vinculo confiavel mapeamento ->
-    # loja (o LojaProdutoMap em si e global, sem loja). Pendente/nunca-usado fica
+    # Lojas que JA usaram cada mapeamento (VendaMapaUso e criado pra TODA saida
+    # em lote aplicada — fator 1 ou fracionado). E o vinculo confiavel mapeamento
+    # -> loja (o VendaMapa em si e global, sem loja). Pendente/nunca-usado fica
     # sem loja (ninguem aplicou ainda).
     from collections import defaultdict
-
-    from app.models import LojaDebito
     lojas_por_map = defaultdict(list)
     for map_id, loja_nome in (db.session.query(
-            LojaDebito.loja_produto_map_id, Loja.nome)
-            .join(Loja, LojaDebito.loja_id == Loja.id)
+            VendaMapaUso.venda_mapa_id, Loja.nome)
+            .join(Loja, VendaMapaUso.loja_id == Loja.id)
             .order_by(Loja.nome).all()):
         lojas_por_map[map_id].append(loja_nome)
     return render_template('pedidos/estoque_loja_mapeamentos.html',
@@ -2032,8 +2032,8 @@ def estoque_loja_mapeamentos():
 @login_required
 @admin_required
 def estoque_loja_mapeamentos_vincular(map_id):
-    """Vincula/ignora/desfaz uma entrada do LojaProdutoMap."""
-    mp = LojaProdutoMap.query.get_or_404(map_id)
+    """Vincula/ignora/desfaz uma entrada do VendaMapa (canal lote)."""
+    mp = VendaMapa.query.get_or_404(map_id)
     acao = (request.form.get('acao') or '').strip()
     alvo_tipo = (request.form.get('alvo_tipo') or '').strip()
     raw_alvo = request.form.get('alvo_id') or ''
@@ -2065,7 +2065,7 @@ def estoque_loja_mapeamentos_vincular(map_id):
         mp.confirmado_em = agora()
         mp.confirmado_por = current_user.id
         fator_msg = f' (fator {fator:g})' if fator != 1.0 else ''
-        flash(f'"{mp.nome_digitado}" → {mp.alvo_nome}{fator_msg}', 'success')
+        flash(f'"{mp.nome_externo}" → {mp.alvo_nome}{fator_msg}', 'success')
     elif acao == 'ignorar':
         mp.ignorar = True
         mp.receita_id = None
@@ -2073,14 +2073,14 @@ def estoque_loja_mapeamentos_vincular(map_id):
         mp.materia_prima_id = None
         mp.confirmado_em = agora()
         mp.confirmado_por = current_user.id
-        flash(f'"{mp.nome_digitado}" ignorado.', 'info')
+        flash(f'"{mp.nome_externo}" ignorado.', 'info')
     elif acao == 'desfazer':
         mp.ignorar = False
         mp.receita_id = None
         mp.produto_id = None
         mp.materia_prima_id = None
         mp.confirmado_em = None
-        flash(f'"{mp.nome_digitado}" voltou pra pendente.', 'info')
+        flash(f'"{mp.nome_externo}" voltou pra pendente.', 'info')
     else:
         flash(f'Acao desconhecida: {acao!r}.', 'danger')
 
@@ -2356,7 +2356,7 @@ def estoque_loja_entrada_lote_aplicar():
 
 
 def _salvar_apelido_global(nome_digitado, alvo_tipo, alvo_id):
-    """Cria/atualiza LojaProdutoMap (apelido global) ao vincular um pendente.
+    """Cria/atualiza VendaMapa (apelido global, canal lote) ao vincular um pendente.
 
     Vale pra qualquer loja — apelido 'PFR' vinculado uma vez em Ribeiro
     serve tambem em Anesio. Confirmado_em preenchido = entrada/saida em
@@ -2366,11 +2366,12 @@ def _salvar_apelido_global(nome_digitado, alvo_tipo, alvo_id):
     if not nome or nome == '?' or alvo_tipo not in ('receita', 'produto', 'mp'):
         return
     from sqlalchemy import func as sa_func
-    mp = LojaProdutoMap.query.filter(
-        sa_func.lower(LojaProdutoMap.nome_digitado) == nome.lower()
+    mp = VendaMapa.query.filter(
+        VendaMapa.canal == 'lote',
+        sa_func.lower(VendaMapa.nome_externo) == nome.lower(),
     ).first()
     if not mp:
-        mp = LojaProdutoMap(nome_digitado=nome)
+        mp = VendaMapa(canal='lote', nome_externo=nome)
         db.session.add(mp)
     mp.receita_id = alvo_id if alvo_tipo == 'receita' else None
     mp.produto_id = alvo_id if alvo_tipo == 'produto' else None

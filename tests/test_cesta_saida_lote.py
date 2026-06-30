@@ -13,7 +13,7 @@ cada componente individualmente.
 def test_saida_lote_desempacota_cesta(app, admin_user, loja, catalogo):
     """Cesta com 5 pao + 3 croissant → vender 2 cestas baixa 10 pao + 6 croissant."""
     from app.extensions import db
-    from app.models import EstoqueLoja, LojaProdutoMap, Produto, ProdutoItem, Receita
+    from app.models import EstoqueLoja, Produto, ProdutoItem, Receita, VendaMapa
     from app.services.estoque_loja_lote import aplicar_saida_lote
 
     # Cria 1 nova receita (alem do catalogo) pra ser componente
@@ -41,8 +41,8 @@ def test_saida_lote_desempacota_cesta(app, admin_user, loja, catalogo):
 
     # Mapping: "Family Box" → cesta (confirmado)
     from datetime import datetime
-    mp = LojaProdutoMap(
-        nome_digitado='Family Box Test',
+    mp = VendaMapa(
+        canal='lote', nome_externo='Family Box Test',
         produto_id=cesta.id,
         confirmado_em=datetime.now(),
         confirmado_por=admin_user.id,
@@ -83,14 +83,14 @@ def test_saida_lote_produto_normal_continua_funcionando(app, admin_user, loja, c
     from datetime import datetime
 
     from app.extensions import db
-    from app.models import EstoqueLoja, LojaProdutoMap
+    from app.models import EstoqueLoja, VendaMapa
     from app.services.estoque_loja_lote import aplicar_saida_lote
 
     # Produto sem itens (nao eh cesta) — usa o produto do catalogo
     produto = catalogo['produto']
     db.session.add(EstoqueLoja(loja_id=loja.id, produto_id=produto.id, quantidade=10))
-    mp = LojaProdutoMap(
-        nome_digitado='Pao Frances',
+    mp = VendaMapa(
+        canal='lote', nome_externo='Pao Frances',
         produto_id=produto.id,
         confirmado_em=datetime.now(),
         confirmado_por=admin_user.id,

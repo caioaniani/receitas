@@ -19,7 +19,7 @@ import logging
 from app.models import (
     SeruLojaMap,
     SeruPedidoProcessado,
-    SeruProdutoMap,
+    VendaMapa,
 )
 from app.utils import agora as _agora
 
@@ -82,10 +82,10 @@ def resumo():
 
     # Produto pendente = estado 'pendente' (sem receita/produto, nao ignorado).
     # Esses sao vendidos mas NAO baixam ate mapear.
-    produtos_pendentes_seru = (SeruProdutoMap.query
-                               .filter(SeruProdutoMap.receita_id.is_(None))
-                               .filter(SeruProdutoMap.produto_id.is_(None))
-                               .filter(SeruProdutoMap.ignorar.is_(False))
+    produtos_pendentes_seru = (VendaMapa.query.filter_by(canal='seru')
+                               .filter(VendaMapa.receita_id.is_(None))
+                               .filter(VendaMapa.produto_id.is_(None))
+                               .filter(VendaMapa.ignorar.is_(False))
                                .count())
 
     # Pedidos registrados sem loja resolvida (informativo — registrados mas
@@ -188,10 +188,10 @@ def contar_pendencias():
     lojas = (SeruLojaMap.query
              .filter(SeruLojaMap.confirmado_em.is_(None))
              .filter(SeruLojaMap.ignorar.is_(False)).count())
-    prod_seru = (SeruProdutoMap.query
-                 .filter(SeruProdutoMap.receita_id.is_(None))
-                 .filter(SeruProdutoMap.produto_id.is_(None))
-                 .filter(SeruProdutoMap.ignorar.is_(False)).count())
+    prod_seru = (VendaMapa.query.filter_by(canal='seru')
+                 .filter(VendaMapa.receita_id.is_(None))
+                 .filter(VendaMapa.produto_id.is_(None))
+                 .filter(VendaMapa.ignorar.is_(False)).count())
     sem_loja = (SeruPedidoProcessado.query
                 .filter(SeruPedidoProcessado.loja_id.is_(None)).count())
     return lojas + prod_seru + sem_loja

@@ -961,15 +961,13 @@ def _vinculos_receita(receita):
         Desperdicio,
         EstoqueLoja,
         EstoqueProducao,
-        LojaProdutoMap,
         PedidoItem,
         PlanejamentoItem,
         PrecoLojaReceita,
         ProdutoItem,
-        SeruProdutoMap,
         VendaB2BItem,
         VendaManualLoja,
-        VndaProdutoMap,
+        VendaMapa,
     )
     rid = receita.id
     grupos = []
@@ -1002,13 +1000,12 @@ def _vinculos_receita(receita):
              'url': url_for('receitas.ficha', id=u.receita_id)} for u in usos])
 
     maps = []
-    for m in SeruProdutoMap.query.filter_by(receita_id=rid).all():
-        maps.append({'label': f'Seru: {m.seru_nome}',
-                     'url': url_for('pdv.mapeamentos')})
-    for m in VndaProdutoMap.query.filter_by(receita_id=rid).all():
-        maps.append({'label': f'Site: {m.vnda_nome}', 'url': None})
-    for m in LojaProdutoMap.query.filter_by(receita_id=rid).all():
-        maps.append({'label': f'Loja: {m.nome_digitado}', 'url': None})
+    for m in VendaMapa.query.filter_by(receita_id=rid).all():
+        if m.canal == 'seru':
+            maps.append({'label': f'Seru: {m.nome_externo}',
+                         'url': url_for('pdv.mapeamentos')})
+        else:
+            maps.append({'label': f'Lote: {m.nome_externo}', 'url': None})
     _grupo('mapeamentos', 'Mapeamentos de PDV/site/loja', True,
            'Desfaz os vínculos — os nomes voltam pra fila de pendentes.',
            maps)
@@ -1064,11 +1061,9 @@ def vinculos_resolver(id):
     Só grupos de configuração — histórico nunca passa por aqui."""
     from app.models import (
         Atribuicao,
-        LojaProdutoMap,
         PrecoLojaReceita,
         ProdutoItem,
-        SeruProdutoMap,
-        VndaProdutoMap,
+        VendaMapa,
     )
     receita = Receita.query.get_or_404(id)
     chave = request.form.get('chave') or ''
@@ -1081,11 +1076,9 @@ def vinculos_resolver(id):
             ReceitaIngrediente.receita_id != receita.id).delete()
     elif chave == 'mapeamentos':
         # Volta pra pendente (receita_id NULL) — nao apaga o nome mapeado.
-        for modelo in (SeruProdutoMap, VndaProdutoMap, LojaProdutoMap):
-            for m in modelo.query.filter_by(receita_id=receita.id).all():
-                m.receita_id = None
-                if hasattr(m, 'confirmado_em'):
-                    m.confirmado_em = None
+        for m in VendaMapa.query.filter_by(receita_id=receita.id).all():
+            m.receita_id = None
+            m.confirmado_em = None
     elif chave == 'precos_loja':
         PrecoLojaReceita.query.filter_by(receita_id=receita.id).delete()
     elif chave == 'atribuicoes':
@@ -1114,17 +1107,15 @@ def vinculos_transferir(id):
         Desperdicio,
         EstoqueLoja,
         EstoqueProducao,
-        LojaProdutoMap,
         MovEstoqueLoja,
         MovEstoqueProducao,
         PedidoItem,
         PlanejamentoItem,
         PrecoLojaReceita,
         ProdutoItem,
-        SeruProdutoMap,
         VendaB2BItem,
         VendaManualLoja,
-        VndaProdutoMap,
+        VendaMapa,
     )
     origem = Receita.query.get_or_404(id)
     nome_destino = (request.form.get('destino') or '').strip()
@@ -1167,9 +1158,8 @@ def vinculos_transferir(id):
                    synchronize_session=False))
 
     # Mapeamentos de PDV/site/loja (mantém confirmação e fator).
-    for modelo in (SeruProdutoMap, VndaProdutoMap, LojaProdutoMap):
-        _conta('mapeamentos', modelo.query.filter_by(receita_id=origem.id)
-               .update({'receita_id': destino.id}, synchronize_session=False))
+    _conta('mapeamentos', VendaMapa.query.filter_by(receita_id=origem.id)
+           .update({'receita_id': destino.id}, synchronize_session=False))
 
     # Preços por loja: unique (loja, receita) — se o destino já tem preço
     # naquela loja, o preço dele prevalece e o da origem é descartado.

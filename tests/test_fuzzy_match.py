@@ -3,7 +3,7 @@
 Regressoes que cobrimos:
 - 'sourdough' nao deve resolver pra 'Mini Sourdough'
 - 'pain au chocolat' nao deve resolver pra 'Pain au Chocolat Bicolor'
-- Apelido salvo em LojaProdutoMap vale globalmente
+- Apelido salvo em VendaMapa (canal lote) vale globalmente
 """
 
 
@@ -40,18 +40,18 @@ def test_resolver_produto_sourdough(app):
 
 
 def test_apelido_global_loja_lote(app, loja):
-    """Apelido salvo em LojaProdutoMap vale na entrada em lote da loja."""
+    """Apelido salvo em VendaMapa (canal lote) vale na entrada em lote da loja."""
     from datetime import datetime
 
     from app.extensions import db
-    from app.models import LojaProdutoMap
+    from app.models import VendaMapa
     from app.services import estoque_loja_lote as svc
     from tests.conftest import _make_receita
     r = _make_receita('Pao Frances Fermentado')
     db.session.add(r)
     db.session.flush()
-    mp = LojaProdutoMap(nome_digitado='PFR', receita_id=r.id,
-                         confirmado_em=datetime.utcnow())
+    mp = VendaMapa(canal='lote', nome_externo='PFR', receita_id=r.id,
+                   confirmado_em=datetime.utcnow())
     db.session.add(mp)
     db.session.commit()
     out = svc.resolver_lista(
@@ -69,14 +69,14 @@ def test_apelido_global_compartilhado_congelados(app):
     from datetime import datetime
 
     from app.extensions import db
-    from app.models import LojaProdutoMap
+    from app.models import VendaMapa
     from app.services import estoque_congelados as svc
     from tests.conftest import _make_receita
     r = _make_receita('Pao Frances Fermentado')
     db.session.add(r)
     db.session.flush()
-    mp = LojaProdutoMap(nome_digitado='PFR', receita_id=r.id,
-                         confirmado_em=datetime.utcnow())
+    mp = VendaMapa(canal='lote', nome_externo='PFR', receita_id=r.id,
+                   confirmado_em=datetime.utcnow())
     db.session.add(mp)
     db.session.commit()
     out = svc.resolver_lista(
