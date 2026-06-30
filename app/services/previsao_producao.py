@@ -726,11 +726,13 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
 
 def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
                           inicio_offset_dias=0):
-    """Modo MANUAL: em vez de prever por dia (o sinal RUIDOSO), devolve a MEDIA
-    SEMANAL de cada (loja, produto) — o sinal ESTAVEL — e divide IGUAL entre os
-    dias de entrega do horizonte, pro admin AJUSTAR na tela. Total preservado
-    (maior resto). Sem recencia nem rateio: media simples = total na janela /
-    nº de semanas. O gerar reusa o mesmo POST de pedidos_semana_gerar.
+    """Modo MANUAL: devolve a media de cada (loja, produto) por DIA-DA-SEMANA — o
+    sinal ESTAVEL, respeitando o PADRAO da loja (sabado != terca) — distribuida
+    pelos dias LIVRES do horizonte, pro admin AJUSTAR na tela. media por dow =
+    total daquele dia-da-semana na janela / nº de semanas; a soma sobre a semana
+    reconstroi a media semanal. So distribui em dias que a loja ainda NAO pediu
+    (dia travado vem disabled na tela e nao seria enviado no POST — alocar nele
+    perderia a parcela em silencio). O gerar reusa o POST de pedidos_semana_gerar.
 
     Retorna dict:
         dias: [{data, label, dow}]
