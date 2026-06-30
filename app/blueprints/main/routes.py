@@ -1923,15 +1923,16 @@ def debug_chapa():
         MovEstoqueLoja,
         Receita,
         SeruDebito,
-        SeruProdutoMap,
+        VendaMapa,
     )
     from app.utils import agora as _agora
 
     out = {}
 
-    mapeados = SeruProdutoMap.query.filter(
-        (SeruProdutoMap.receita_id.isnot(None))
-        | (SeruProdutoMap.produto_id.isnot(None))).all()
+    mapeados = VendaMapa.query.filter(
+        VendaMapa.canal == 'seru',
+        (VendaMapa.receita_id.isnot(None))
+        | (VendaMapa.produto_id.isnot(None))).all()
     com_fator = []
     orfaos = []
     for m in mapeados:
