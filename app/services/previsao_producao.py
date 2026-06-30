@@ -759,8 +759,9 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
                 .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
                 .order_by(Loja.nome).all())
 
-    # Total por (loja, receita) na janela -> media semanal = total / nº semanas.
-    soma_lr = defaultdict(lambda: defaultdict(int))   # loja -> rid -> total
+    # Venda historica por (loja, receita, DOW): total pedido naquele dia-da-semana
+    # na janela. Base da media POR DIA-DA-SEMANA (sabado != terca).
+    soma_lrd = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     for rid, loja_id, data_ent, qtd in (db.session.query(
             PedidoItem.receita_id, PedidoLoja.loja_id,
             PedidoLoja.data_entrega, PedidoItem.quantidade)
@@ -771,7 +772,7 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
                     PedidoLoja.data_entrega <= hist_fim).all()):
         if data_ent is None or rid not in receitas:
             continue
-        soma_lr[loja_id][rid] += int(qtd or 0)
+        soma_lrd[loja_id][rid][data_ent.weekday()] += int(qtd or 0)
 
     # Dias que a loja JA tem pedido no horizonte (o gerar pula; a tela marca).
     ja_tem = defaultdict(set)
@@ -790,42 +791,57 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
 
     lojas_out = []
     for loja in lojas_op:
+        ja_tem_loja = ja_tem.get(loja.id, set())
         produtos = []
         for rid, rec in sorted(receitas.items(), key=lambda kv: kv[1].nome):
-            total_janela = soma_lr.get(loja.id, {}).get(rid, 0)
-            if total_janela <= 0:
+            dows = soma_lrd.get(loja.id, {}).get(rid)
+            if not dows:
                 continue
-            media_sem = total_janela / janela_semanas
-            # Fornada especial só sex/sáb/dom — só esses dias recebem.
+            # media por dia-da-semana = total daquele dow / nº semanas. A soma
+            # sobre a semana reconstroi a media semanal estavel; o split por dow
+            # respeita o PADRAO da loja (em que dia ela costuma pedir).
+            media_por_dow = {dow: tot / janela_semanas for dow, tot in dows.items()}
+            media_sem = sum(media_por_dow.values())   # = total_janela / semanas
+
             fe = bool(getattr(rec, 'fornada_especial', False))
-            idx_validos = [i for i, d in enumerate(dias_futuros)
-                           if not (fe and d.weekday() not in _DIAS_FORNADA_ESPECIAL)]
+            # Dias onde a sugestao PODE cair: fornada especial respeitada E dia
+            # LIVRE (loja ainda nao pediu). Travado NAO recebe — alocar nele
+            # perderia a parcela (input disabled nao vai no POST).
+            idx_validos = [
+                i for i, d in enumerate(dias_futuros)
+                if not (fe and d.weekday() not in _DIAS_FORNADA_ESPECIAL)
+                and d.isoformat() not in ja_tem_loja
+            ]
             if not idx_validos:
                 continue
-            # Escala a media semanal pro tamanho do horizonte (7 dias = 1 semana).
-            total_alocar = int(round(media_sem * horizonte_dias / 7.0))
+            # Peso de cada dia livre = a media DAQUELE dia-da-semana. total_alocar
+            # = soma das medias dos dias livres (so o que vai mesmo pra eles; nada
+            # se perde em dia travado).
+            pesos = [media_por_dow.get(dias_futuros[i].weekday(), 0.0)
+                     for i in idx_validos]
+            total_alocar = int(round(sum(pesos)))
+            if total_alocar <= 0:
+                continue
             caixa = int(rec.lote_pedido or 0)
             por_dia = [0] * len(dias_futuros)
             abaixo_lote = False
             if caixa > 1 and total_alocar >= caixa:
-                # Fecha >= 1 caixa: distribui em CAIXAS inteiras balanceadas entre
-                # os dias validos (550 croissants, caixa 50 -> 11 caixas
-                # espalhadas, nao 78,5/dia).
+                # Fecha >= 1 caixa: distribui em CAIXAS inteiras, ponderadas pelo
+                # dia-da-semana (mais caixas no pico).
                 n_lotes = int(round(total_alocar / caixa))
-                partes = _distribuir_inteiro(n_lotes, [1] * len(idx_validos))
+                partes = _distribuir_inteiro(n_lotes, pesos)
                 for k, i in enumerate(idx_validos):
                     por_dia[i] = partes[k] * caixa
             elif caixa > 1 and total_alocar > 0:
-                # Demanda real ABAIXO de 1 caixa: NAO forca a caixa (senao
-                # super-pediria item lento). Mostra a media real + flag pro admin
-                # decidir pedir a caixa ou nao (decisao do dono).
+                # Demanda ABAIXO de 1 caixa: NAO forca a caixa (item lento). Mostra
+                # a media real ponderada por dow + flag pro admin decidir.
                 abaixo_lote = True
-                partes = _distribuir_inteiro(total_alocar, [1] * len(idx_validos))
+                partes = _distribuir_inteiro(total_alocar, pesos)
                 for k, i in enumerate(idx_validos):
                     por_dia[i] = partes[k]
-            elif total_alocar > 0:
-                # Sem regra de caixa: divide igual entre os dias validos.
-                partes = _distribuir_inteiro(total_alocar, [1] * len(idx_validos))
+            else:
+                # Sem regra de caixa: distribui ponderado por dia-da-semana.
+                partes = _distribuir_inteiro(total_alocar, pesos)
                 for k, i in enumerate(idx_validos):
                     por_dia[i] = partes[k]
             produtos.append({
@@ -840,7 +856,7 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
             lojas_out.append({
                 'loja_id': loja.id, 'loja_nome': loja.nome,
                 'produtos': produtos,
-                'ja_tem': sorted(ja_tem.get(loja.id, set())),
+                'ja_tem': sorted(ja_tem_loja),
             })
 
     return {
