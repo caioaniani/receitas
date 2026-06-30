@@ -36,7 +36,7 @@ def test_estorno_do_pedido_que_baixou_inteiro_nao_duplica(app):
     # Venda de 5 MISTOS num pedido = 5*0.2 = 1.0 -> baixa 1 pao inteiro
     res = seru_sync._baixar_item(loja.id, m, 5, 'PED-1', None)
     db.session.commit()
-    assert res['baixado'] is True
+    assert res['baixado'] == 1          # motor unico devolve a contagem baixada
     db.session.refresh(el)
     assert el.quantidade == 9          # baixou 1
 
