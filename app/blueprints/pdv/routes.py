@@ -410,11 +410,11 @@ def venda_seru_detalhe(pedido_id):
 @admin_required
 def api_mapear():
     """Cria/atualiza SeruProdutoMap inline (do relatorio de itens vendidos)."""
-    nome = (request.form.get('seru_nome') or request.json.get('seru_nome') if request.is_json else request.form.get('seru_nome'))
-    nome = (nome or '').strip()
+    from app.utils import parse_fator_composicao
+    data = request.json if request.is_json else request.form
+    nome = (data.get('seru_nome') or '').strip()
     if not nome:
         return jsonify(ok=False, erro='seru_nome obrigatorio'), 400
-    data = request.json if request.is_json else request.form
     acao = data.get('acao')  # 'vincular' | 'ignorar' | 'desfazer'
     mp = SeruProdutoMap.query.filter_by(seru_nome=nome).first()
     if not mp:
@@ -427,6 +427,12 @@ def api_mapear():
             alvo_id = int(data.get('alvo_id') or 0)
         except (TypeError, ValueError):
             alvo_id = 0
+        # Fator de composicao (1 venda Seru = X un do alvo). Vazio -> 1.0;
+        # invalido/<=0 NAO vira 1.0 em silencio (baixaria estoque errado) -> 400.
+        try:
+            fator = parse_fator_composicao(data.get('fator'))
+        except ValueError:
+            return jsonify(ok=False, erro='fator invalido — use numero > 0 (ex: 0.2)'), 400
         if tipo == 'receita' and alvo_id:
             mp.receita_id = alvo_id
             mp.produto_id = None
@@ -435,13 +441,6 @@ def api_mapear():
             mp.receita_id = None
         else:
             return jsonify(ok=False, erro='alvo_tipo/alvo_id invalidos'), 400
-        # Fator de composicao (1 venda Seru = X unidades do alvo). Default 1.0.
-        try:
-            fator = float(data.get('fator') or 1.0)
-            if fator <= 0:
-                fator = 1.0
-        except (TypeError, ValueError):
-            fator = 1.0
         mp.fator_quantidade = fator
         mp.ignorar = False
         mp.confirmado_em = agora()
@@ -458,6 +457,7 @@ def api_mapear():
         mp.produto_id = None
         mp.confirmado_em = None
         mp.confirmado_por = None
+        mp.fator_quantidade = 1.0  # volta pra pristine — fator nao fica pegajoso
     else:
         return jsonify(ok=False, erro='acao desconhecida'), 400
     db.session.commit()
