@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Vendas da loja online{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+  <h4 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Vendas da loja online</h4>
+  <div class="btn-group btn-group-sm" role="group">
+    {% for d in [7, 30, 90] %}
+    <a href="{{ url_for('main.loja_online_vendas_painel', dias=d) }}"
+       class="btn btn-outline-primary {% if dias == d %}active{% endif %}">{{ d }} dias</a>
+    {% endfor %}
+  </div>
+</div>
+<p class="text-muted small mb-3">
+  {{ ini.strftime('%d/%m/%Y') }} – {{ fim.strftime('%d/%m/%Y') }} ·
+  faturamento = soma dos itens (sem frete), só pedidos pagos.
+</p>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3">
+    <div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Faturamento</div>
+      <div class="fs-4 fw-bold">{{ fat.total | brl }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Pedidos pagos</div>
+      <div class="fs-4 fw-bold">{{ fat.n_pedidos }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Ticket médio</div>
+      <div class="fs-4 fw-bold">{{ ticket | brl }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Clientes</div>
+      <div class="fs-4 fw-bold">{{ clientes.total }}</div>
+      <div class="small text-muted">{{ clientes.novos }} novos ·
+        {{ clientes.recorrentes }} recorrentes</div>
+    </div></div>
+  </div>
+</div>
+
+<div class="alert alert-info py-2 px-3 small">
+  <i class="bi bi-info-circle"></i> O <strong>funil</strong> (quantos visitaram →
+  adicionaram ao carrinho → foram ao checkout → compraram, e onde desistem) vive
+  no <strong>Google Analytics (GA4)</strong> — os eventos já estão instrumentados.
+  Este painel mostra as <strong>vendas fechadas</strong>, direto do seu banco.
+</div>
+
+<div class="card">
+  <div class="card-header fw-bold">Top produtos no período</div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0 align-middle">
+      <thead>
+        <tr><th style="width:40px">#</th><th>Produto</th>
+          <th class="text-end">Qtd vendida</th></tr>
+      </thead>
+      <tbody>
+        {% for p in produtos %}
+        <tr>
+          <td class="text-muted">{{ loop.index }}</td>
+          <td>{{ p.nome }}</td>
+          <td class="text-end fw-bold">{{ p.qtd }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="text-center text-muted py-3">
+          Nenhuma venda paga no período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
