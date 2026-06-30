@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Pedidos da semana — por venda + estoque{% endblock %}
+
+{% block content %}
+<style>
+    .pmed-loja { border: 1px solid #dee2e6; border-radius: .5rem;
+                 margin-bottom: 1rem; overflow-x: auto; }
+    .pmed-loja > h5 { background: #f1f3f5; margin: 0; padding: .5rem .75rem;
+                      font-size: 1rem; position: sticky; left: 0; }
+    .pmed table { border-collapse: separate; border-spacing: 0; min-width: 100%; }
+    .pmed th, .pmed td {
+        padding: .35rem .5rem; border-bottom: 1px solid #f0f0f0;
+        text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums;
+    }
+    .pmed thead th {
+        background: #f1f3f5; font-size: .76rem; text-transform: uppercase;
+        color: #6c757d; position: sticky; top: 0; z-index: 2;
+    }
+    .pmed th.prod, .pmed td.prod {
+        text-align: left; position: sticky; left: 0; background: #fff;
+        min-width: 13rem; box-shadow: 1px 0 0 #e9ecef;
+    }
+    .pmed thead th.prod { z-index: 3; background: #f1f3f5; }
+    .pmed td.estoque { color: #6f42c1; font-weight: 600; background: #faf8ff; }
+    .pmed td.venda { color: #0d3b66; background: #f8fbff; }
+    .pmed input { width: 58px; text-align: right; }
+    .pmed td.jatem input { background: #f1f3f5; }
+    .pmed .total-cel { font-weight: 700; }
+    .pmed-barra { position: sticky; bottom: 0; background: #fff;
+                  border-top: 1px solid #dee2e6; padding: .6rem .25rem; z-index: 4; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+    <h3 class="mb-0"><i class="bi bi-box-seam"></i> Pedidos da semana —
+        <span class="text-muted">por venda + estoque</span></h3>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('producao.pedidos_semana_media', horizonte=horizonte, janela=janela, inicio=inicio) }}"
+           class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-table"></i> Modo média do pedido
+        </a>
+        <a href="{{ url_for('producao.pedidos_semana', horizonte=horizonte, janela=janela, inicio=inicio) }}"
+           class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-magic"></i> Modo previsão automática
+        </a>
+    </div>
+</div>
+
+<form method="GET" class="d-flex gap-1 align-items-center mb-3 flex-wrap">
+    <label class="small text-muted mb-0">A partir de:</label>
+    <select name="inicio" class="form-select form-select-sm" style="width:auto;">
+        {% for n in range(0, 8) %}
+        <option value="{{ n }}" {{ 'selected' if inicio == n }}>
+            {{ 'Hoje' if n == 0 else ('Amanhã' if n == 1 else '+%d dias' % n) }}</option>
+        {% endfor %}
+    </select>
+    <label class="small text-muted mb-0 ms-2">Horizonte (dias):</label>
+    <input type="number" name="horizonte" min="1" max="14" value="{{ horizonte }}"
+           class="form-control form-control-sm" style="width:64px;">
+    <label class="small text-muted mb-0 ms-2">Histórico (sem):</label>
+    <input type="number" name="janela" min="1" max="26" value="{{ janela }}"
+           class="form-control form-control-sm" style="width:64px;">
+    <button class="btn btn-sm btn-outline-secondary">Recalcular</button>
+</form>
+
+<div class="alert alert-light border small">
+    <strong>Ponto de reposição.</strong> Para cada produto, o sistema mede a
+    <strong>venda média por dia-da-semana</strong> da loja (baixas do estoque) e
+    simula o estoque dia a dia a partir do <strong>saldo atual</strong>. Quando o
+    estoque projetado não cobre a venda do dia, ele pede o que falta
+    <strong>arredondado pra cima na caixa</strong> — o excedente vira estoque que
+    cobre os próximos dias (por isso item lento recebe 1 caixa a cada N dias, sem
+    acumular). Entrega <strong>diária</strong> (v1). Só aparecem produtos que
+    <strong>precisam</strong> de pedido. Dias já pedidos ficam travados; o gerar
+    pula. Ajuste à vontade — entra como <strong>rascunho</strong>.
+</div>
+
+<form method="POST" action="{{ url_for('producao.pedidos_semana_gerar') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {% if grade.lojas %}
+    {% for loja in grade.lojas %}
+    <div class="pmed-loja">
+        <h5>{{ loja.loja_nome }}</h5>
+        <div class="pmed">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="prod">Produto</th>
+                        <th title="Estoque atual da loja">Estoque</th>
+                        <th title="Venda média semanal (por dia-da-semana, do histórico)">Venda/sem</th>
+                        {% for dia in grade.dias %}<th>{{ dia.label }}</th>{% endfor %}
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in loja.produtos %}
+                    <tr data-nome="{{ p.nome }}">
+                        <td class="prod">{{ p.nome }}
+                            {% if p.lote and p.lote > 1 %}<span class="badge bg-light text-dark border" title="Caixa (lote de pedido)">cx {{ p.lote }}</span>{% endif %}
+                        </td>
+                        <td class="estoque">{{ p.estoque_atual }}</td>
+                        <td class="venda">{{ p.media_semanal }}</td>
+                        {% for dia in grade.dias %}
+                        <td class="{{ 'jatem' if dia.data in loja.ja_tem }}">
+                            <input type="number" min="0"
+                                   class="form-control form-control-sm pmed-cel"
+                                   name="qtd|{{ loja.loja_id }}|{{ dia.data }}|{{ p.receita_id }}"
+                                   value="{{ p.por_dia[loop.index0] }}"
+                                   {% if dia.data in loja.ja_tem %}disabled title="já tem pedido neste dia"{% endif %}>
+                        </td>
+                        {% endfor %}
+                        <td class="total-cel">0</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+
+    <div class="pmed-barra d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span class="text-muted small">
+            Os pedidos entram como <strong>rascunho</strong> pra você revisar.
+        </span>
+        <button type="submit" class="btn btn-success"
+                onclick="return confirm('Gerar os pedidos rascunho com as quantidades atuais? Eles entram como pendente pra você revisar e confirmar.');">
+            <i class="bi bi-plus-square"></i> Gerar pedidos rascunho
+        </button>
+    </div>
+    {% else %}
+    <p class="text-muted">Nenhum produto precisa de pedido no horizonte — o
+        estoque das lojas cobre a venda prevista, ou não há histórico de venda
+        suficiente.</p>
+    {% endif %}
+</form>
+
+{% block scripts %}
+<script>
+(function () {
+    document.querySelectorAll('.pmed tbody tr').forEach(function (row) {
+        function recalc() {
+            var s = 0;
+            row.querySelectorAll('.pmed-cel').forEach(function (inp) {
+                if (!inp.disabled) { s += parseInt(inp.value) || 0; }
+            });
+            row.querySelector('.total-cel').textContent = s;
+        }
+        row.querySelectorAll('.pmed-cel').forEach(function (inp) {
+            inp.addEventListener('input', recalc);
+        });
+        recalc();
+    });
+})();
+</script>
+{% endblock %}
+{% endblock %}
