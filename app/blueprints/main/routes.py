@@ -1298,6 +1298,40 @@ def debug_schema_upgrade():
                             log=log_buf.getvalue()[-3000:], ok=ok))
 
 
+@main_bp.route('/admin/venda-mapa/backfill', methods=['POST'])
+@owner_required
+def venda_mapa_backfill():
+    """Backfill do VendaMapa unificado a partir de SeruProdutoMap +
+    LojaProdutoMap. Idempotente, aditivo (nao muda comportamento). Owner-only."""
+    from app.services.venda_mapa_migracao import backfill_venda_mapa
+    try:
+        r = backfill_venda_mapa()
+        msg = ('VendaMapa backfill: %d novo(s) do Seru, %d do lote.'
+               % (r['seru_novos'], r['lote_novos']))
+        ok = '1'
+    except Exception as e:  # noqa: BLE001
+        db.session.rollback()
+        msg, ok = 'Falha no backfill: %s' % e, '0'
+    return redirect(url_for('main.debug_schema', log=msg, ok=ok))
+
+
+@main_bp.route('/admin/venda-mapa/migrar-fracoes', methods=['POST'])
+@owner_required
+def venda_mapa_migrar_fracoes():
+    """Migra as fracoes pendentes (SeruDebito + LojaDebito) pro DebitoEstoque
+    unificado e zera as fontes. Passo de CUTOVER — idempotente. Owner-only."""
+    from app.services.venda_mapa_migracao import migrar_fracoes_para_debito_estoque
+    try:
+        r = migrar_fracoes_para_debito_estoque(usuario_id=current_user.id)
+        msg = ('Fracoes migradas: %d item(ns), %d inteiro(s) baixado(s).'
+               % (r['itens'], r['inteiros_baixados']))
+        ok = '1'
+    except Exception as e:  # noqa: BLE001
+        db.session.rollback()
+        msg, ok = 'Falha na migracao de fracoes: %s' % e, '0'
+    return redirect(url_for('main.debug_schema', log=msg, ok=ok))
+
+
 @main_bp.route('/admin/debug-schema/stamp', methods=['POST'])
 @owner_required
 def debug_schema_stamp():
