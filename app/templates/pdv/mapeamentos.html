@@ -29,6 +29,48 @@
     .mapa-ignorado   { background: rgba(0,0,0,0.04) !important; }
 </style>
 
+<!-- ── Site (loja propria) → baixa de estoque ── -->
+<div class="card mb-3">
+    <div class="card-header bg-white">
+        <strong><i class="bi bi-globe"></i> Site (loja própria) — de qual loja baixa o estoque</strong>
+    </div>
+    <div class="card-body">
+        <p class="small text-muted mb-2">
+            O que é vendido e pago no site desconta do estoque de uma loja física.
+            <strong>Retirada</strong> baixa da loja que o cliente escolhe pra retirar;
+            <strong>entrega/express</strong> baixa da loja definida aqui.
+        </p>
+        <form method="POST" action="{{ url_for('pdv.config_site_loja') }}"
+              class="d-flex gap-2 align-items-center flex-wrap mb-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label class="small mb-0">Loja de origem do site:</label>
+            <select name="loja_id" class="form-select form-select-sm" style="max-width:260px;" required>
+                {% for l in lojas %}
+                <option value="{{ l.id }}" {% if loja_site and loja_site.id == l.id %}selected{% endif %}>{{ l.nome }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-sm btn-primary">Salvar</button>
+        </form>
+        <div class="small">
+            {% if loja_site %}
+                Hoje o site baixa de <strong>{{ loja_site.nome }}</strong>
+                {% if not loja_site_explicito %}
+                <span class="badge bg-warning text-dark"
+                      title="Caindo no padrão fixo do código — clique Salvar pra fixar por ID (sobrevive a renomear a loja)">padrão (não salvo)</span>
+                {% endif %}
+                — <strong>{{ loja_site_itens }}</strong> item(ns) com estoque cadastrado nessa loja.
+                {% if loja_site_itens == 0 %}
+                <div class="text-danger mt-1"><i class="bi bi-exclamation-triangle"></i>
+                    Essa loja não tem estoque cadastrado — as vendas do site não terão de onde descontar.</div>
+                {% endif %}
+            {% else %}
+                <span class="text-danger"><i class="bi bi-exclamation-triangle"></i>
+                    Nenhuma loja de origem definida — as vendas do site <strong>não estão baixando estoque</strong>. Escolha uma loja acima e salve.</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
 <!-- ── Lojas ── -->
 <div class="card mb-3">
     <div class="card-header bg-white d-flex justify-content-between align-items-center">
