@@ -101,7 +101,7 @@ def _plano_do_dia(dia):
     produzido/falta."""
     from app.models import MassaBaseItem, PlanejamentoProducao
     from app.services.gantt import _g_label
-    from app.services.massa_base import calcular_cascata
+    from app.services.massa_base import calcular_cascata, rendimento_massa_crua
     from app.services.producao import fornadas_amassadeira
 
     plano = (PlanejamentoProducao.query
@@ -117,7 +117,9 @@ def _plano_do_dia(dia):
         rec = it.receita
         alvo = int(it.qtd_alvo or 0)
         feito = int(it.produzido_qtd or 0)
-        rend = (float(rec.rendimento_qtd or 0) or 1.0) if rec else 1.0
+        # rendimento de massa CRUA (peso_unitario), sem perda do forno — a
+        # produção pesa massa crua. Float pra escala exata (un × peso_unitario).
+        rend = rendimento_massa_crua(rec) if rec else 1.0
         return {'item_id': it.id, 'receita_id': it.receita_id,
                 'nome': rec.nome if rec else '(receita)', 'alvo': alvo,
                 'produzido': feito, 'falta': max(0, alvo - feito),
