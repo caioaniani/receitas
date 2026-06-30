@@ -16,6 +16,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 from flask_login import current_user
@@ -740,6 +741,89 @@ def _resolver_prefill_carrinho(add):
         })
     return itens, esgotados
 
+
+# ── Carrinho na SESSÃO (fonte de verdade) ────────────────────────────────────
+# O carrinho vive na sessão do servidor (cookie assinado, HttpOnly) — não no
+# localStorage. Assim ele NÃO some quando o Safari/iPhone descarta o storage do
+# navegador. Guarda só {kind,id,qtd} (cabe no cookie); preço/nome/estoque são
+# resolvidos no servidor a cada render (autoritativo).
+_CARRINHO_MAX_ITENS = 60  # teto pra caber no cookie de sessão (~4KB)
+
+
+def _carrinho_sessao():
+    """Lista normalizada [{kind,id,qtd}] do carrinho na sessão."""
+    out = []
+    for it in session.get('carrinho') or []:
+        kind = str((it or {}).get('kind') or '').strip().lower()
+        if kind not in ('receita', 'produto'):
+            continue
+        try:
+            iid = int(it.get('id'))
+            qtd = max(1, min(int(it.get('qtd') or 1), 99))
+        except (TypeError, ValueError):
+            continue
+        out.append({'kind': kind, 'id': iid, 'qtd': qtd})
+    return out
+
+
+def _set_carrinho_sessao(itens):
+    """Grava o carrinho (substitui) na sessão — validado, com qtd de repetidos
+    somada e teto de itens. Devolve a lista normalizada."""
+    norm, idx = [], {}
+    for it in itens or []:
+        kind = str((it or {}).get('kind') or '').strip().lower()
+        if kind not in ('receita', 'produto'):
+            continue
+        try:
+            iid = int(it.get('id'))
+            qtd = max(1, min(int(it.get('qtd') or 1), 99))
+        except (TypeError, ValueError):
+            continue
+        chave = (kind, iid)
+        if chave in idx:
+            norm[idx[chave]]['qtd'] = min(99, norm[idx[chave]]['qtd'] + qtd)
+        elif len(norm) < _CARRINHO_MAX_ITENS:
+            idx[chave] = len(norm)
+            norm.append({'kind': kind, 'id': iid, 'qtd': qtd})
+    session['carrinho'] = norm
+    session.modified = True
+    return norm
+
+
+def _resolver_carrinho_sessao():
+    """Resolve o carrinho da sessão → [{kind,id,nome,preco,imagem,categoria,qtd}]
+    pro carrinho.js renderizar. Dropa item inexistente/despublicado (sem display);
+    mantém esgotado (o checkout avisa). Best-effort: nunca quebra a página."""
+    out = []
+    try:
+        for it in _carrinho_sessao():
+            item = loja_catalogo.por_id_publicado(it['kind'], it['id'])
+            if not item:
+                continue
+            out.append({
+                'kind': it['kind'], 'id': it['id'], 'nome': item['nome'],
+                'preco': item['preco'], 'imagem': item.get('imagem') or '',
+                'categoria': item.get('categoria') or '', 'qtd': it['qtd'],
+            })
+    except Exception:  # noqa: BLE001 — carrinho nunca derruba a loja
+        return []
+    return out
+
+
+@loja_bp.context_processor
+def _inject_carrinho_sessao():
+    """Injeta o carrinho resolvido em TODA página da loja (badge + drawer vivem
+    no _base.html). O carrinho.js inicializa o estado a partir disto."""
+    return {'carrinho_sessao': _resolver_carrinho_sessao()}
+
+
+@loja_bp.route('/api/carrinho', methods=['POST'])
+def api_carrinho_salvar():
+    """Grava o carrinho na sessão (fonte de verdade) — o carrinho.js chama a
+    cada mudança. Recebe {itens:[{kind,id,qtd}]}, substitui, devolve a contagem."""
+    data = request.get_json(silent=True) or {}
+    norm = _set_carrinho_sessao(data.get('itens') or [])
+    return jsonify(ok=True, count=sum(i['qtd'] for i in norm), itens=norm)
 
 
 @loja_bp.route('/checkout', methods=['GET', 'POST'])
