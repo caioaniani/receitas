@@ -120,4 +120,23 @@
   })();
 </script>
 {% endif %}
+
+{% if ga_purchase %}
+{# GA4: evento purchase — fecha o funil. 1x por pedido (guarda no sessionStorage
+   pra não duplicar num refresh). #}
+<script type="application/json" id="ga-purchase">{{ ga_purchase | tojson }}</script>
+<script>
+  (function () {
+    try {
+      var el = document.getElementById('ga-purchase');
+      var p = el ? JSON.parse(el.textContent || 'null') : null;
+      if (!p || !p.transaction_id || !window.lojaGA) return;
+      var k = 'ga_purchase_' + p.transaction_id;
+      if (sessionStorage.getItem(k)) return;
+      window.lojaGA('purchase', p);
+      sessionStorage.setItem(k, '1');
+    } catch (e) { /* analytics best-effort */ }
+  })();
+</script>
+{% endif %}
 {% endblock %}
