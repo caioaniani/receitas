@@ -454,8 +454,10 @@ def test_breakdown_bom_rastreia_insumo(app):
     rm = _rec_out(crono, massa.id)
     assert rm is not None and rm['insumo']
     assert rm['breakdown_bom']                          # rastreabilidade presente
-    assert rm['breakdown_bom'][0]['nome'] == 'Croissant Tradicional'
-    assert rm['breakdown_bom'][0]['qtd'] == 100         # 100 croissants puxaram a massa
+    b = rm['breakdown_bom'][0]
+    assert b['nome'] == 'Croissant Tradicional'
+    assert b['pai_qtd'] == 100                          # 100 croissants produzidos
+    assert b['qtd'] == 2                                # 100 × 1/50 = 2 un de massa
     # produto final NÃO tem breakdown_bom (só insumo)
     rc = _rec_out(crono, cro.id)
     assert rc['breakdown_bom'] == []
