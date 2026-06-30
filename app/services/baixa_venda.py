@@ -120,6 +120,9 @@ def aplicar_venda(loja_id, *, receita_id=None, produto_id=None,
         contrib = float(qtd) * por_unidade
         if contrib <= _TOL:
             continue
+        if eh_cesta and pular_sem_linha and not EstoqueLoja.query.filter_by(
+                loja_id=loja_id, **{col: item_id}).first():
+            continue                       # componente nao-rastreado (site)
         ref = referencia
         if eh_cesta:
             ref = f'{referencia} [{nome_venda or "cesta"} -> cesta] {nome_comp}'
