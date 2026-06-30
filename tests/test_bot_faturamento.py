@@ -1,10 +1,10 @@
 """Testes do endpoint /api/bot/faturamento (o atalho do celular) + helper VNDA.
 
 Cobre:
-- soma PDV (Seru) + site (VNDA) no mesmo total;
+- soma PDV (Seru) + site (loja propria / PedidoOnline) no mesmo total;
 - site indisponivel NAO derruba o endpoint (200 com aviso, nao 502);
-- faturamento VNDA por DATA DE VENDA (confirmed_at UTC -> BRT), ignorando
-  pedido cancelado, fora do intervalo, e usando fallback price*quantity.
+- faturamento VNDA por DATA DE VENDA (helper dormente — vnda_sync ainda existe,
+  mas o endpoint NAO o usa mais: VNDA aposentado 24/06, site = PedidoOnline).
 """
 from datetime import date
 from unittest.mock import patch
