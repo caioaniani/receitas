@@ -1,13 +1,15 @@
-"""Edição manual das células do cronograma (29/06/2026).
+"""Edição manual das células do cronograma (29/06/2026, modelo por-célula 30/06).
 
-Total da receita fica fixo (editar um dia redistribui os outros) e salva
-rascunho (CronogramaOverride) que o cronograma/aprovar passam a usar.
+Edição POR CÉLULA: cada dia editado salva o seu CronogramaOverride; os outros
+seguem a sugestão. O total da linha = soma das células — dá pra produzir MAIS
+que o sugerido e editar linha zerada. Salva rascunho que o cronograma/aprovar
+passam a usar.
 """
 from datetime import timedelta
 
 from app.extensions import db
 from app.models import CronogramaOverride, Loja, PedidoItem, PedidoLoja, Receita, ReceitaIngrediente
-from app.services.cronograma_edit import _redistribuir, editar_celula, resetar_receita
+from app.services.cronograma_edit import editar_celula, resetar_receita
 from app.services.previsao_producao import cronograma_producao
 from app.utils import hoje
 
@@ -45,21 +47,7 @@ def _row(crono, rid):
     return next((x for x in crono['receitas'] if x['receita_id'] == rid), None)
 
 
-# ── redistribuição pura ────────────────────────────────────────────────────
-def test_redistribuir_mantem_total():
-    assert _redistribuir([10, 20, 0], 0, 30, 30) == [30, 0, 0]
-    out = _redistribuir([10, 20, 30], 0, 0, 60)   # tira do dia 0, espalha resto
-    assert out[0] == 0 and sum(out) == 60
-    out2 = _redistribuir([0, 0, 0], 1, 5, 10)     # outros zerados -> divide igual
-    assert out2[1] == 5 and sum(out2) == 10
-
-
-def test_redistribuir_clampa_no_total():
-    out = _redistribuir([10, 10], 0, 999, 20)     # nao passa do total
-    assert out == [20, 0]
-
-
-# ── editar_celula: redistribui, persiste, cronograma reflete ───────────────
+# ── editar_celula: por celula, persiste, cronograma reflete ────────────────
 def test_editar_celula_persiste_e_cronograma_reflete(app):
     loja = _loja()
     r = _receita_amass()
@@ -68,23 +56,52 @@ def test_editar_celula_persiste_e_cronograma_reflete(app):
 
     base = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
     rr0 = _row(base, r.id)
-    total = rr0['total']
-    assert total == 60
+    assert rr0['total'] == 60
 
-    # joga tudo no dia 0
-    res = editar_celula(r.id, rr0['por_dia'][0]['data'], total,
+    # edita SO o dia 0 — salva 1 override, os outros dias seguem a sugestao.
+    res = editar_celula(r.id, rr0['por_dia'][0]['data'], 25,
                         horizonte_dias=7, inicio_offset_dias=0)
     assert res is not None
-    assert res['por_dia'][0]['qtd'] == total
-    assert sum(c['qtd'] for c in res['por_dia']) == total
+    assert res['por_dia'][0]['qtd'] == 25
+    assert CronogramaOverride.query.filter_by(receita_id=r.id).count() == 1
 
-    # persistiu como override e o cronograma passa a refletir
-    assert CronogramaOverride.query.filter_by(receita_id=r.id).count() == 7
     crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
     rr = _row(crono, r.id)
-    assert rr['por_dia'][0]['qtd'] == total
+    assert rr['por_dia'][0]['qtd'] == 25            # celula editada aplicada
     assert rr.get('editado') is True
-    assert sum(c['qtd'] for c in rr['por_dia']) == total
+    assert rr['total'] == sum(c['qtd'] for c in rr['por_dia'])   # total = soma
+
+
+def test_editar_celula_pode_produzir_mais_que_o_sugerido(app):
+    """E1: editar uma celula PRA CIMA aumenta o total (antes clampava no
+    'Produzir' e voltava — 'a edicao nao pegava')."""
+    loja = _loja()
+    r = _receita_amass()
+    _pedido(loja, r, 2, 30)
+    base = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr0 = _row(base, r.id)
+    total0 = rr0['total']
+    res = editar_celula(r.id, rr0['por_dia'][0]['data'], total0 + 50,
+                        horizonte_dias=7, inicio_offset_dias=0)
+    assert res['por_dia'][0]['qtd'] == total0 + 50       # ficou no valor digitado
+    assert res['total'] > total0                          # total cresceu
+
+
+def test_editar_linha_zerada_programa_producao(app):
+    """E2: receita SEM pedido (linha zerada) pode ser programada — editar uma
+    celula da 0 pra 40 grava 40 (antes o clamp em [0,0] engolia o numero)."""
+    _loja()
+    r = _receita_amass(nome='Pain au Chocolat')   # sem pedido nenhum
+    base = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr0 = _row(base, r.id)
+    assert rr0 is not None and rr0['total'] == 0          # linha zerada existe
+    res = editar_celula(r.id, rr0['por_dia'][3]['data'], 40,
+                        horizonte_dias=7, inicio_offset_dias=0)
+    assert res['por_dia'][3]['qtd'] == 40
+    assert res['total'] == 40
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr = _row(crono, r.id)
+    assert rr['por_dia'][3]['qtd'] == 40 and rr['editado'] is True
 
 
 def test_override_por_celula_aplica_e_total_segue(app):
