@@ -1315,11 +1315,15 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         estoque_efetivo = int(it.get('em_estoque_efetivo', estoque))
 
         # Curva de demanda diaria: producao do dia i mira a entrega (i + lead).
+        # FRACIONARIO de proposito: o previsto eh fracao/dia (ex: 0,43). Arredondar
+        # cada dia pra int dava 0 em item de giro baixo -> pesos todos zero ->
+        # _distribuir_inteiro empilhava TUDO no dia 0 (pico irreal). Mantendo a
+        # fracao, os pesos sao nao-nulos e a producao espalha pelos dias certos.
         gross = []
         for i in range(horizonte_dias):
             entrega = dias_prod[i] + timedelta(days=L)
-            gross.append(max(int(firme[rid].get(entrega, 0)),
-                             int(round(_previsto_dia(rid, entrega)))))
+            gross.append(max(float(firme[rid].get(entrega, 0)),
+                             float(_previsto_dia(rid, entrega))))
         # Estoque (efetivo) cobre os dias mais PROXIMOS primeiro -> os primeiros
         # dias produzem menos. O residual (demanda apos estoque) vira o PESO da
         # distribuicao; o total continua sendo o "Produzir" do balanco.
