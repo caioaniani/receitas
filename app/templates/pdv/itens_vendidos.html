@@ -457,27 +457,12 @@ var __PRODUTOS = [
                 return;
             }
         }
-        var fator = parseFator(mmFator.value);
-
-        var fd = new FormData();
-        fd.append('csrf_token', CSRF_TOKEN || '');
-        fd.append('seru_nome', currentNome);
-        fd.append('acao', acao);
-        if (acao === 'vincular') {
-            fd.append('alvo_tipo', mmTipo.value || 'receita');
-            fd.append('alvo_id', mmAlvo.value || '');
-            fd.append('fator', String(fator));
-        }
         mmSalvar.disabled = true;
-        fetch('/pdv/api/mapear', {method: 'POST', body: fd, credentials: 'same-origin'})
-            .then(function(r) {
-                if (!r.ok && r.status !== 200) {
-                    return r.text().then(function(t) {
-                        throw new Error('HTTP ' + r.status + ': ' + (t || '').slice(0, 200));
-                    });
-                }
-                return r.json();
-            })
+        PdvMap.salvar({
+            seru_nome: currentNome, acao: acao,
+            alvo_tipo: mmTipo.value || 'receita',
+            alvo_id: mmAlvo.value || '', fator: parseFator(mmFator.value)
+        })
             .then(function(d) {
                 mmSalvar.disabled = false;
                 if (!d.ok) {
