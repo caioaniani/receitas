@@ -942,7 +942,8 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
             pesos = residual if sum(residual) > 0 else gross
             add = _distribuir_inteiro(extra, pesos)
             rec = receitas.get(rid)
-            rend = int(rec.rendimento_qtd) if rec and rec.rendimento_qtd else 1
+            from app.services.massa_base import rendimento_massa_crua
+            rend = rendimento_massa_crua(rec) if rec else 1.0
             base = prod.get(rid, [0] * n)
             novo = [base[i] + add[i] for i in range(n)]
             prod[rid] = novo
