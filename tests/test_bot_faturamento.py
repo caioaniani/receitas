@@ -40,13 +40,13 @@ def _vnda_order(code, status, confirmed_at, itens):
 
 def test_endpoint_soma_pdv_e_site(app):
     _cfg(app)
-    _loja_vnda(app)
     seru_pedidos = [_seru_pedido(1, 'Ribeiro do Vale', 100.0),
                     _seru_pedido(2, 'Nebraska', 50.0)]
+    # Site = loja propria (PedidoOnline), NAO VNDA (aposentado).
     fat_site = {'total': 30.0, 'n_pedidos': 2,
                 'por_dia': {date(2026, 5, 20): 30.0}}
     with patch('app.services.seru.listar_pedidos_completo', return_value=seru_pedidos), \
-         patch('app.services.vnda_sync.faturamento_por_dia', return_value=fat_site):
+         patch('app.services.loja_online_vendas.faturamento_por_dia', return_value=fat_site):
         resp = app.test_client().get(
             f'/api/bot/faturamento?token={TOKEN}&data=2026-05-20')
     assert resp.status_code == 200
@@ -56,20 +56,19 @@ def test_endpoint_soma_pdv_e_site(app):
     assert j['total_pdv'] == 150.0
     assert j['total_site'] == 30.0
     assert j['qtd_pedidos'] == 4  # 2 PDV + 2 site
-    assert j['por_loja']['Loja Anesio Pinto Rosa (site)'] == 30.0
+    assert j['por_loja']['Site'] == 30.0
     assert 'site' in j['mensagem'].lower()
 
 
 def test_endpoint_site_indisponivel_nao_derruba(app):
     _cfg(app)
-    from app.services import vnda
     seru_pedidos = [_seru_pedido(1, 'Ribeiro do Vale', 100.0)]
     with patch('app.services.seru.listar_pedidos_completo', return_value=seru_pedidos), \
-         patch('app.services.vnda_sync.faturamento_por_dia',
-               side_effect=vnda.VndaUnavailableError('site fora')):
+         patch('app.services.loja_online_vendas.faturamento_por_dia',
+               side_effect=RuntimeError('site fora')):
         resp = app.test_client().get(
             f'/api/bot/faturamento?token={TOKEN}&data=2026-05-20')
-    assert resp.status_code == 200  # NAO 502 — VNDA eh best-effort
+    assert resp.status_code == 200  # NAO 502 — site eh best-effort
     j = resp.get_json()
     assert j['total'] == 100.0
     assert j['total_site'] == 0.0
