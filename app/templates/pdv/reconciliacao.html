@@ -250,5 +250,43 @@ function reconMapear(btn, acao) {
             tr.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
         });
 }
+
+// Fator de composicao: quantas unidades do item 1 venda consome. Aceita virgula
+// (PT-BR). Vazio/invalido -> 1. Composto (ex: 0.2) baixa fracao do inteiro.
+function reconParseFator(raw) {
+    var f = parseFloat(String(raw == null ? '1' : raw).trim().replace(',', '.'));
+    if (!isFinite(f) || f <= 0) return 1;
+    return f;
+}
+
+// Texto de ajuda ao lado do campo, espelha a tela de itens-vendidos.
+function reconFatorHelp(inp) {
+    var help = inp.closest('td').querySelector('.recon-fator-help');
+    if (!help) return;
+    var f = reconParseFator(inp.value);
+    if (Math.abs(f - 1) < 0.001) {
+        help.textContent = '';
+    } else if (f < 1) {
+        help.textContent = '· composto: ' + Math.round(1 / f) + ' vendas baixam 1 inteiro';
+        help.className = 'small recon-fator-help text-info';
+    } else {
+        help.textContent = '· 1 venda baixa ' + f + ' unidades';
+        help.className = 'small recon-fator-help text-info';
+    }
+}
+
+// "X fatias de Y": 1 venda usa X partes de uma unidade dividida em Y -> X/Y.
+// Ex: PERU INTEGRAL = 2 fatias de 1 sourdough cortado em 10 -> 0.2.
+function reconFatias(btn) {
+    var td = btn.closest('td');
+    var campo = td.querySelector('.recon-fator');
+    var x = parseFloat(String(prompt('1 venda usa quantas fatias/partes?') || '').replace(',', '.'));
+    if (!isFinite(x) || x <= 0) return;
+    var y = parseFloat(String(prompt('1 unidade inteira tem quantas fatias/partes?') || '').replace(',', '.'));
+    if (!isFinite(y) || y <= 0) return;
+    var f = x / y;
+    campo.value = f.toFixed(4).replace(/\.?0+$/, '');
+    reconFatorHelp(campo);
+}
 </script>
 {% endblock %}
