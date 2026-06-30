@@ -341,7 +341,7 @@ def produzir_item_plano(item_id, unidades, user_id):
 
     # 2) baixa a MP proporcional as unidades (multiplicador fracionario =
     #    unidades/rendimento; segue o consumo REAL, nao a batida cheia).
-    rend = float(rec.rendimento_qtd) if rec.rendimento_qtd else 1.0
+    rend = rendimento_massa_crua(rec)
     mult = unidades / rend if rend > 0 else 0
     lista = consolidar_lista_compras([{'receita_id': rec.id,
                                        'multiplicador': mult}])
