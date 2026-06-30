@@ -401,6 +401,25 @@ class DebitoEstoqueMov(db.Model):
     )
 
 
+class VendaMapaUso(db.Model):
+    """Marcador (canal, mapa, loja): qual LOJA ja usou um VendaMapa.
+
+    Substitui o papel que o LojaDebito acumulava de lado (alem de fracao):
+    saber "quais lojas baixaram por este mapa" pra montar a coluna 'lojas'
+    da tela de mapeamentos de lote. A fracao em si vive no DebitoEstoque
+    (por item fisico); este aqui eh so o vinculo de uso pra UI/auditoria.
+    Idempotente por (venda_mapa_id, loja_id).
+    """
+    __tablename__ = 'venda_mapa_uso'
+
+    venda_mapa_id = db.Column(db.Integer,
+                              db.ForeignKey('venda_mapa.id', ondelete='CASCADE'),
+                              primary_key=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), primary_key=True)
+    primeiro_uso_em = db.Column(db.DateTime, default=agora)
+    ultimo_uso_em = db.Column(db.DateTime, default=agora, onupdate=agora)
+
+
 # ── Integracao VNDA (site/e-commerce): mapeamentos + idempotencia ──
 # Sempre baixa da loja fixa (Loja Anesio Pinto Rosa). Baixa acontece no
 # dia da entrega (expected_delivery_date), nao quando pago/entregue.
