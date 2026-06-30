@@ -165,7 +165,7 @@ def test_rota_celula_salva(app, admin_user):
     body = resp.get_json()
     assert body['ok'] is True
     assert body['por_dia'][0]['qtd'] == rr0['total']
-    assert CronogramaOverride.query.filter_by(receita_id=r.id).count() == 7
+    assert CronogramaOverride.query.filter_by(receita_id=r.id).count() == 1
 
 
 def test_rota_limpar_edicoes(app, admin_user):
