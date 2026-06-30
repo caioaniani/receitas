@@ -22,15 +22,6 @@ def _seru_pedido(pid, company, total, created_at='2026-05-20T13:00:00Z'):
             'company': {'name': company}, 'total': total, 'items': []}
 
 
-def _loja_vnda(app):
-    from app.extensions import db
-    from app.models import Loja
-    loja = Loja(nome='Loja Anesio Pinto Rosa', ativa=True)
-    db.session.add(loja)
-    db.session.commit()
-    return loja
-
-
 def _vnda_order(code, status, confirmed_at, itens):
     return {'code': code, 'status': status, 'confirmed_at': confirmed_at,
             'items': itens}
