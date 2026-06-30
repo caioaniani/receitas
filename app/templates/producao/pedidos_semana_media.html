@@ -263,10 +263,14 @@
         });
         return s;
     }
+    // Linha abaixo da caixa: NÃO força lote (você decide) — divide livre.
+    function loteDaLinha(row) {
+        return (row.dataset.abaixoLote === '1') ? 0 : (parseInt(row.dataset.lote) || 0);
+    }
     function aplicarLinha(row, cols) {
         var disp = disponiveis(row, cols);
         if (!disp.length) { return; }   // nenhum dia livre escolhido: não mexe na linha
-        var lote = parseInt(row.dataset.lote) || 0;
+        var lote = loteDaLinha(row);
         var partes = dividir(totalLinha(row), lote, disp.length);
         var marc = {};
         disp.forEach(function (c, k) { marc[c] = partes[k]; });
