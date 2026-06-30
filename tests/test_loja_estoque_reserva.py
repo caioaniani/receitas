@@ -239,6 +239,118 @@ def test_liberar_expirados_ignora_pago_e_ainda_dentro_do_prazo(app):
         assert ped_vivo.status == 'aguardando_pagamento'
 
 
+def _receita(db, nome='Croissant'):
+    from app.models import Receita
+    r = Receita(nome=nome, categoria='Viennoiserie', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=100.0)
+    db.session.add(r)
+    db.session.commit()
+    return r
+
+
+def _estoque_rec(db, loja, receita, qtd):
+    from app.models import EstoqueLoja
+    el = EstoqueLoja(loja_id=loja.id, receita_id=receita.id, quantidade=qtd)
+    db.session.add(el)
+    db.session.commit()
+    return el
+
+
+def _cesta(db, nome, componentes):
+    """componentes: [(receita_or_None, item_nome, qtd_por_cesta)]."""
+    from app.models import Produto, ProdutoItem
+    cesta = Produto(nome=nome, categoria='Cestas', preco_site=100.0,
+                    imagem_dropbox_url='https://x/c.jpg', ativo=True)
+    db.session.add(cesta)
+    db.session.flush()
+    for rec, item_nome, qtd in componentes:
+        db.session.add(ProdutoItem(
+            produto_id=cesta.id, tipo='receita',
+            receita_id=(rec.id if rec else None),
+            item_nome=item_nome, quantidade=qtd))
+    db.session.commit()
+    return cesta
+
+
+def test_cesta_baixa_componentes_nao_a_cesta(app):
+    """Vender uma cesta no site baixa CADA componente rastreado (× qtd da
+    cesta × qtd comprada), NAO a cesta. Componente sem linha de estoque
+    (decorativo) e ignorado — nao bloqueia nem inventa linha."""
+    from app.extensions import db
+    from app.models import EstoqueLoja, MovEstoqueLoja
+    from app.services import loja_estoque_reserva
+    from app.utils import agora
+    with app.app_context():
+        loja = _site_loja(db)
+        croissant = _receita(db, 'Croissant Tradicional')
+        cookie = _receita(db, 'Cookie Calebaut')
+        deco = _receita(db, 'Arranjo de Flor')      # SEM linha de estoque
+        _estoque_rec(db, loja, croissant, qtd=10)
+        _estoque_rec(db, loja, cookie, qtd=10)
+        cesta = _cesta(db, 'Family Box', [
+            (croissant, 'Croissant Tradicional', 2),
+            (cookie, 'Cookie Calebaut', 2),
+            (deco, 'Arranjo de Flor', 1),
+        ])
+        ped = _pedido(db, loja_retirada=loja, itens=[(cesta, 3)])  # 3 boxes
+
+        r = loja_estoque_reserva.reservar(ped, loja_id=loja.id)
+        assert r['ok'] is True
+        assert r['reservas'] == 2                    # croissant + cookie; deco fora
+        el_cro = EstoqueLoja.query.filter_by(
+            loja_id=loja.id, receita_id=croissant.id).first()
+        el_cok = EstoqueLoja.query.filter_by(
+            loja_id=loja.id, receita_id=cookie.id).first()
+        assert el_cro.quantidade_reservada == 6      # 3 boxes × 2
+        assert el_cok.quantidade_reservada == 6
+        # A cesta-produto NUNCA ganhou linha de estoque (nao foi tocada).
+        assert EstoqueLoja.query.filter_by(
+            loja_id=loja.id, produto_id=cesta.id).first() is None
+        # Componente decorativo (sem estoque) nao virou linha fantasma.
+        assert EstoqueLoja.query.filter_by(
+            loja_id=loja.id, receita_id=deco.id).first() is None
+
+        ped.reserva_expira_em = agora() + timedelta(minutes=30)
+        db.session.commit()
+        c = loja_estoque_reserva.consumir(ped, loja_id=loja.id)
+        assert c['baixado'] == 12                    # 6 + 6
+        db.session.refresh(el_cro)
+        db.session.refresh(el_cok)
+        assert el_cro.quantidade == 4                # 10 − 6
+        assert el_cok.quantidade == 4
+        assert el_cro.quantidade_reservada == 0
+        movs = MovEstoqueLoja.query.filter_by(tipo='venda_site').all()
+        assert len(movs) == 2 and {m.quantidade for m in movs} == {6}
+
+
+def test_cesta_bloqueia_se_componente_rastreado_sem_estoque(app):
+    """Se um componente RASTREADO nao tem saldo, a reserva da cesta e
+    rejeitada (nao da pra montar a cesta) — sem reservar nada."""
+    from app.extensions import db
+    from app.models import EstoqueLoja
+    from app.services import loja_estoque_reserva
+    with app.app_context():
+        loja = _site_loja(db)
+        croissant = _receita(db, 'Croissant Tradicional')
+        cookie = _receita(db, 'Cookie Calebaut')
+        _estoque_rec(db, loja, croissant, qtd=10)
+        _estoque_rec(db, loja, cookie, qtd=1)        # so 1, cesta precisa de 2
+        cesta = _cesta(db, 'Family Box', [
+            (croissant, 'Croissant Tradicional', 2),
+            (cookie, 'Cookie Calebaut', 2),
+        ])
+        ped = _pedido(db, loja_retirada=loja, itens=[(cesta, 1)])
+
+        r = loja_estoque_reserva.reservar(ped, loja_id=loja.id)
+        assert r['ok'] is False
+        assert any(s['nome'] == 'Cookie Calebaut' for s in r['sem_estoque'])
+        # Nada reservado (nem o croissant que tinha saldo).
+        el_cro = EstoqueLoja.query.filter_by(
+            loja_id=loja.id, receita_id=croissant.id).first()
+        assert el_cro.quantidade_reservada == 0
+        assert ped.reserva_expira_em is None
+
+
 def test_estoque_loja_disponivel_property():
     from app.models import EstoqueLoja
     el = EstoqueLoja(quantidade=10, quantidade_reservada=3)
