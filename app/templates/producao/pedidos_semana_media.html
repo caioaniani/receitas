@@ -75,12 +75,15 @@
     <strong>média semanal</strong> de cada loja/produto (o sinal estável) já
     <strong>dividida igual</strong> entre os dias — e <strong>você ajusta</strong>.
     O <strong>Total</strong> da linha fica <span class="text-success">verde</span>
-    quando bate com o que foi sugerido. Use <strong>Dividir todos os produtos</strong>
-    (ou por loja) pra escolher de uma vez em quais dias concentrar as entregas — cada
-    produto é redistribuído nesses dias respeitando a <strong>sua caixa</strong>
-    (ex.: 550 croissants em 2 dias viram 300 + 250). Dias em que a loja já tem pedido
-    ficam <strong>travados</strong> (o gerar pula, pra não duplicar). Datas são de
-    <strong>entrega</strong>.
+    quando bate com o que foi sugerido. A sugestão já vem em <strong>caixas
+    inteiras</strong> (lote) balanceadas entre os dias. Produto cuja média da semana
+    <strong>não fecha 1 caixa</strong> aparece marcado
+    <span class="badge bg-warning text-dark">abaixo da caixa</span> com a demanda
+    real — <strong>não forçamos a caixa</strong> (senão acumularia item lento);
+    você decide pedir a caixa ou não. Use <strong>Dividir todos os produtos</strong>
+    (ou por loja) pra escolher de uma vez em quais dias concentrar as entregas. Dias
+    em que a loja já tem pedido ficam <strong>travados</strong> (o gerar pula). Datas
+    são de <strong>entrega</strong>.
 </div>
 
 <form method="POST" action="{{ url_for('producao.pedidos_semana_gerar') }}">
