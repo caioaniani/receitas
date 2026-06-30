@@ -967,11 +967,24 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
                     c['qtd'] = novo[i]
                     c['fornadas'] = _forn(novo[i])
                 rr['total'] = sum(novo)
-        # Propaga a producao desta receita pras sub-receitas dela.
+            # Rastreabilidade: de QUAIS produtos finais vem a demanda do insumo
+            # (ex: Massa para folhar ← Croissant Tradicional N un). Pro expandir.
+            origem = consumo_origem.get(rid, {})
+            rr['breakdown_bom'] = sorted(
+                ({'nome': (receitas[pai].nome if pai in receitas else '(?)'),
+                  'qtd': int(round(q))} for pai, q in origem.items()
+                 if round(q) > 0),
+                key=lambda b: -b['qtd'])
+        # Propaga a producao desta receita pras sub-receitas dela, registrando
+        # a contribuicao de cada pai (pra a rastreabilidade do insumo acima).
         for sid, ratio in bom.get(rid, []):
             base = prod.get(rid, [0] * n)
+            contrib = 0.0
             for i in range(n):
                 consumo[sid][i] += base[i] * ratio
+                contrib += base[i] * ratio
+            if contrib > 0:
+                consumo_origem[sid][rid] += contrib
 
 
 def cronograma_producao(horizonte_dias=7, janela_semanas=6,
