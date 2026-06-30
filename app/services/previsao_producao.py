@@ -852,6 +852,145 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
     }
 
 
+# Tipos de MovEstoqueLoja que representam DEMANDA de venda da loja (gross): a
+# baixa real + o que faltou (stockout = demanda nao atendida). Estornos ficam de
+# fora (cancelamento raro; refinar depois). Base unica do motor de baixa.
+_DEMANDA_VENDA_TIPOS = (
+    'venda_seru', 'venda_seru_sem_estoque',
+    'venda_site', 'venda_site_sem_estoque',
+    'saida_lote', 'venda_loja_sem_estoque',
+)
+
+
+def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
+                              inicio_offset_dias=0):
+    """Maneira 2 — previsao de pedido por VENDA + ESTOQUE (ponto de reposicao).
+
+    Pra cada (loja, receita): mede a venda media POR DIA-DA-SEMANA (movimentos de
+    baixa do EstoqueLoja) e simula o estoque dia a dia partindo do saldo ATUAL.
+    Quando o estoque projetado nao cobre a venda do dia, pede o deficit
+    ARREDONDADO PRA CIMA na caixa (lote) — o excedente vira estoque que cobre os
+    proximos dias, entao a caixa NAO super-pede item lento (pede 1 caixa a cada
+    N dias). Entrega diaria (v1): cada dia cobre a venda daquele dia.
+
+    Mesma forma de retorno que `media_semanal_pedidos` (+ `estoque_atual` por
+    produto), pro mesmo template/gerar.
+    """
+    from datetime import datetime, time
+    from math import ceil
+
+    from app.models import EstoqueLoja, MovEstoqueLoja
+
+    horizonte_dias = max(1, min(int(horizonte_dias or 7), 14))
+    janela_semanas = max(1, min(int(janela_semanas or 6), 26))
+    inicio_offset_dias = max(0, min(int(inicio_offset_dias or 0), 14))
+
+    hoje_d = hoje()
+    inicio_d = hoje_d + timedelta(days=inicio_offset_dias)
+    horizonte_fim = inicio_d + timedelta(days=horizonte_dias - 1)
+    hist_ini = hoje_d - timedelta(days=7 * janela_semanas)
+    hist_fim = hoje_d - timedelta(days=1)
+    dias_futuros = [inicio_d + timedelta(days=i) for i in range(horizonte_dias)]
+
+    receitas = {r.id: r for r in Receita.query
+                .filter(Receita.arquivada_em.is_(None),
+                        Receita.sugerir_pedido_loja.isnot(False)).all()}
+    lojas_op = (Loja.query
+                .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
+                .order_by(Loja.nome).all())
+
+    # Venda por (loja, receita, dow) na janela: MovEstoqueLoja x EstoqueLoja (a
+    # linha diz loja+receita); dow = dia-da-semana da venda.
+    venda_dow = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    for loja_id, rid, data_mov, qtd in (db.session.query(
+            EstoqueLoja.loja_id, EstoqueLoja.receita_id,
+            MovEstoqueLoja.data, MovEstoqueLoja.quantidade)
+            .join(EstoqueLoja, MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id)
+            .filter(EstoqueLoja.receita_id.isnot(None),
+                    MovEstoqueLoja.tipo.in_(_DEMANDA_VENDA_TIPOS),
+                    MovEstoqueLoja.data >= datetime.combine(hist_ini, time.min),
+                    MovEstoqueLoja.data <= datetime.combine(hist_fim, time.max))
+            .all()):
+        if rid in receitas and data_mov is not None:
+            venda_dow[loja_id][rid][data_mov.weekday()] += int(qtd or 0)
+
+    # Estoque atual da loja por (loja, receita).
+    estoque_atual = defaultdict(lambda: defaultdict(int))
+    for loja_id, rid, q in (db.session.query(
+            EstoqueLoja.loja_id, EstoqueLoja.receita_id, EstoqueLoja.quantidade)
+            .filter(EstoqueLoja.receita_id.isnot(None)).all()):
+        estoque_atual[loja_id][rid] += int(q or 0)
+
+    # Dias ja pedidos no horizonte (a tela trava; o gerar pula).
+    ja_tem = defaultdict(set)
+    for loja_id, data_ent in (db.session.query(
+            PedidoLoja.loja_id, PedidoLoja.data_entrega)
+            .filter(PedidoLoja.status != 'cancelado',
+                    PedidoLoja.data_entrega >= inicio_d,
+                    PedidoLoja.data_entrega <= horizonte_fim)
+            .distinct().all()):
+        if data_ent is not None:
+            ja_tem[loja_id].add(data_ent.isoformat())
+
+    dias_out = [{'data': d.isoformat(),
+                 'label': '%s %s' % (_DOW_PT[d.weekday()], d.strftime('%d/%m')),
+                 'dow': d.weekday()} for d in dias_futuros]
+
+    lojas_out = []
+    for loja in lojas_op:
+        produtos = []
+        for rid, rec in sorted(receitas.items(), key=lambda kv: kv[1].nome):
+            dows = venda_dow.get(loja.id, {}).get(rid)
+            est0 = estoque_atual.get(loja.id, {}).get(rid, 0)
+            if not dows and est0 <= 0:
+                continue                          # sem venda nem estoque: pula
+            caixa = int(rec.lote_pedido or 0)
+            fe = bool(getattr(rec, 'fornada_especial', False))
+            estoque = est0
+            por_dia = [0] * len(dias_futuros)
+            venda_total = 0.0
+            for i, d in enumerate(dias_futuros):
+                if fe and d.weekday() not in _DIAS_FORNADA_ESPECIAL:
+                    continue                      # fornada especial: nao vende
+                venda_d = (dows.get(d.weekday(), 0) / janela_semanas) if dows else 0.0
+                venda_total += venda_d
+                deficit = venda_d - estoque
+                if deficit > 1e-9:
+                    pedido = (int(ceil(deficit / caixa)) * caixa
+                              if caixa > 1 else int(ceil(deficit)))
+                else:
+                    pedido = 0
+                por_dia[i] = pedido
+                estoque = estoque + pedido - venda_d
+            if sum(por_dia) <= 0:
+                continue                          # nada a pedir -> nao polui a tela
+            produtos.append({
+                'receita_id': rid, 'nome': rec.nome,
+                'media_semanal': round(venda_total * 7.0 / horizonte_dias, 1),
+                'estoque_atual': est0,
+                'por_dia': por_dia, 'total': sum(por_dia),
+                'lote': caixa,
+                'minimo': int(rec.minimo_pedido or 0),
+                'abaixo_lote': False,
+            })
+        if produtos:
+            lojas_out.append({
+                'loja_id': loja.id, 'loja_nome': loja.nome,
+                'produtos': produtos,
+                'ja_tem': sorted(ja_tem.get(loja.id, set())),
+            })
+
+    return {
+        'horizonte_dias': horizonte_dias,
+        'janela_semanas': janela_semanas,
+        'inicio_offset_dias': inicio_offset_dias,
+        'hoje': hoje_d.isoformat(),
+        'inicio': inicio_d.isoformat(),
+        'dias': dias_out,
+        'lojas': lojas_out,
+    }
+
+
 def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
     """MRP: explode sub-receitas (ReceitaIngrediente tipo='receita') em linhas de
     producao proprias no cronograma. Produto final que consome uma sub-receita
