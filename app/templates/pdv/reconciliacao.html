@@ -230,7 +230,8 @@ function reconMapear(btn, acao) {
         var partes = alvo.split(':');
         fd.append('alvo_tipo', partes[0]);
         fd.append('alvo_id', partes[1]);
-        fd.append('fator', '1');
+        var campoFator = tr.querySelector('.recon-fator');
+        fd.append('fator', String(reconParseFator(campoFator ? campoFator.value : '1')));
     }
     tr.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
     fetch(url, {method: 'POST', body: fd, credentials: 'same-origin'})
