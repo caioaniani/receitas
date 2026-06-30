@@ -66,6 +66,24 @@ def test_diagnostico_previsto_por_dia_e_fracionario(app):
     assert dec['total_previsto'] == ceil(sum(d['previsto'] for d in dec['dias']))
 
 
+def test_caixa_saldo_reflete_o_previsto(app):
+    """B3: a caixa de saldo considera o previsto, não só o firme. Antes:
+    saldo = estoque − comprometido (só firme) -> dizia '✓ não falta' enquanto a
+    linha mandava produzir. Agora saldo = estoque_útil − max(firme, previsto),
+    e -saldo == produzir (a caixa bate com a linha)."""
+    with app.app_context():
+        r = _setup_giro_baixo()
+        crono = cronograma_producao()
+        rr = next(x for x in crono['receitas'] if x['receita_id'] == r.id)
+    assert rr['comprometido'] == 0                 # nenhum pedido firme em aberto
+    assert rr['previsto'] > 0                       # mas há demanda prevista
+    assert rr['demanda'] == max(rr['comprometido'], rr['previsto'])
+    assert rr['produzir'] > 0                       # então precisa produzir
+    assert rr['saldo'] == rr['em_estoque_efetivo'] - rr['demanda']
+    assert rr['saldo'] < 0                          # antes dava 0 ("não falta")
+    assert rr['produzir'] == -rr['saldo']           # caixa == linha
+
+
 def test_producao_nao_colapsa_no_dia_zero(app):
     """B2: produção de giro baixo espalha pelos dias (pesos fracionários), em
     vez de empilhar tudo no dia 0."""
