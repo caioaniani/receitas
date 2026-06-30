@@ -128,6 +128,16 @@
   // Exposto pra a página do carrinho e testes manuais no console.
   window.Carrinho = Carrinho;
 
+  // Eventos de funil pro GA4 (add_to_cart, begin_checkout, purchase). Guarda:
+  // só dispara se o gtag existir (GA4 configurado + cookies aceitos). Sem isso
+  // o GA4 só media visitas — não dava pra ver ONDE o cliente desiste.
+  function lojaGA(evento, params) {
+    try {
+      if (typeof window.gtag === 'function') window.gtag('event', evento, params);
+    } catch (e) { /* analytics nunca quebra a loja */ }
+  }
+  window.lojaGA = lojaGA;   // reusado no checkout.js e na confirmação do pedido
+
   function fmtBRL(v) {
     return 'R$ ' + (Number(v) || 0).toFixed(2).replace('.', ',');
   }
