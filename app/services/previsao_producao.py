@@ -75,6 +75,10 @@ _MEIA_VIDA_DIAS = 21
 # na 2a maior. Tendencia REAL (2+ valores altos -> a 2a maior tambem eh alta)
 # fica intacta, entao a recencia continua pegando loja subindo/caindo.
 _OUTLIER_FATOR = 2.5
+# Com SO 2 datas nao ha mediana confiavel — exige um salto bem maior pra capar
+# (so pico OBVIO de uma vez, ex: 30 e 300). Variacao normal de 2-3x (10 e 30)
+# NAO eh capada.
+_OUTLIER_FATOR_2PTS = 5.0
 
 
 def _teto_pico_isolado(qtd_por_data):
