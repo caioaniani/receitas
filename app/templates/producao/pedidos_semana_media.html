@@ -108,8 +108,12 @@
                 </thead>
                 <tbody>
                     {% for p in loja.produtos %}
-                    <tr data-nome="{{ p.nome }}" data-lote="{{ p.lote }}">
-                        <td class="prod">{{ p.nome }}</td>
+                    <tr data-nome="{{ p.nome }}" data-lote="{{ p.lote }}"
+                        data-abaixo-lote="{{ 1 if p.abaixo_lote else 0 }}">
+                        <td class="prod">{{ p.nome }}
+                            {% if p.abaixo_lote %}<span class="badge bg-warning text-dark"
+                                title="A média da semana ({{ p.media_semanal }}) não fecha 1 caixa de {{ p.lote }}. Mostrando a demanda real — você decide pedir a caixa ou não.">abaixo da caixa de {{ p.lote }}</span>{% endif %}
+                        </td>
                         <td class="media">{{ p.media_semanal }}</td>
                         {% for dia in grade.dias %}
                         <td class="{{ 'jatem' if dia.data in loja.ja_tem }}">
