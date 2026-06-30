@@ -190,6 +190,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/pdv_mapeamento.js') }}?v={{ static_v['js/pdv_mapeamento.js'] }}"></script>
 <script>
 var __RECEITAS = [
     {% for r in receitas %}
