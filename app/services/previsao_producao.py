@@ -126,6 +126,18 @@ def _media_recencia(qtd_por_data, hoje_d, meia_vida=_MEIA_VIDA_DIAS,
     return num / den if den else 0.0
 
 
+def _datas_por_dow(hist_ini, hist_fim):
+    """{dow: [datas]} de TODOS os dias-da-semana no intervalo [hist_ini, hist_fim]
+    — o denominador da media recencia (conta os dias SEM pedido como 0, ver
+    `_media_recencia`)."""
+    out = defaultdict(list)
+    d = hist_ini
+    while d <= hist_fim:
+        out[d.weekday()].append(d)
+        d += timedelta(days=1)
+    return out
+
+
 def _fornada_no_dia(rec, dia):
     """True se a receita PODE ser vendida/projetada nesse dia. Fornada especial
     (ex: Focaccia) só sex/sáb/dom -> False nos outros dias (não projeta demanda;
