@@ -77,8 +77,8 @@
             <tbody>
                 {% for mp in produtos_map %}
                 {% set linha_class = 'mapa-confirmado' if (mp.estado == 'mapeado' and mp.confirmado_em) else ('mapa-pendente' if mp.estado == 'pendente' else '') %}
-                <tr data-nome="{{ mp.nome_digitado|lower }}" class="{{ linha_class }}">
-                    <td class="fw-semibold">{{ mp.nome_digitado }}
+                <tr data-nome="{{ mp.nome_externo|lower }}" class="{{ linha_class }}">
+                    <td class="fw-semibold">{{ mp.nome_externo }}
                         {% set _lojas = lojas_por_map.get(mp.id) %}
                         {% if _lojas %}
                         <div class="fw-normal mt-1" style="font-size:11px;">
