@@ -53,21 +53,34 @@ def test_helper_agrupa_e_marca_colisao_exata(app):
         assert grupos[0]['n'] >= grupos[-1]['n']
 
 
-def test_produto_e_mp_duplicados(app):
+def test_produto_duplicado(app):
     from app.blueprints.pedidos.routes import _grupos_nomes_duplicados
     from app.extensions import db
-    from app.models import MateriaPrima, Produto
+    from app.models import Produto
     with app.app_context():
         _prod(db, 'Cookie')
         _prod(db, 'Cookie')
         _prod(db, 'Unico')
-        db.session.add_all([MateriaPrima(nome='Manteiga', unidade='kg', custo_por_kg=1),
-                            MateriaPrima(nome='Manteiga', unidade='kg', custo_por_kg=1)])
-        db.session.commit()
         gp = _grupos_nomes_duplicados(Produto.query.all())
-        gm = _grupos_nomes_duplicados(MateriaPrima.query.all())
         assert len(gp) == 1 and gp[0]['nome'] == 'Cookie' and gp[0]['colisao_exata'] is True
-        assert len(gm) == 1 and gm[0]['nome'] == 'Manteiga'
+
+
+def test_materia_prima_nome_e_unico(app):
+    """MateriaPrima.nome tem UNIQUE no banco — nunca colide. Cria o segundo
+    'Manteiga' e espera IntegrityError, confirmando que MP nao precisa de
+    desambiguacao no typeahead."""
+    import pytest
+    from sqlalchemy.exc import IntegrityError
+
+    from app.extensions import db
+    from app.models import MateriaPrima
+    with app.app_context():
+        db.session.add(MateriaPrima(nome='Manteiga', unidade='kg', custo_por_kg=1))
+        db.session.commit()
+        db.session.add(MateriaPrima(nome='Manteiga', unidade='kg', custo_por_kg=1))
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+        db.session.rollback()
 
 
 def test_rota_lista_duplicados(app, admin_user):
