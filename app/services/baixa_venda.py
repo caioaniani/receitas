@@ -223,7 +223,7 @@ def estornar_venda(canal, pedido_ref, referencia, *, usuario_id=None):
                 el.quantidade = (el.quantidade or 0) + inteiros_devolver
                 db.session.add(MovEstoqueLoja(
                     estoque_loja_id=el.id, tipo=tipo_est,
-                    quantidade=inteiros_devolver,
+                    quantidade=sinal * inteiros_devolver,
                     referencia=f'Estorno {referencia} {_TAG_FRACAO} residual',
                     usuario_id=usuario_id))
                 novo = novo + inteiros_devolver
