@@ -849,10 +849,11 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
         return
 
     def _subs(rid):
+        from app.services.massa_base import rendimento_massa_crua
         rec = receitas.get(rid)
         if rec is None:
             return []
-        rend = float(rec.rendimento_qtd) if rec.rendimento_qtd else 1.0
+        rend = rendimento_massa_crua(rec)
         out = []
         for ing in rec.ingredientes:
             if (ing.tipo or '') != 'receita':
