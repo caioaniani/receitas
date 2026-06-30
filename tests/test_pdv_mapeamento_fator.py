@@ -208,8 +208,18 @@ def test_reconciliacao_usa_widget_unico(app, admin_user, catalogo):
 
 _JS_HARNESS = r'''
 global.window = {};
+global.document = { querySelector: function () { return null; } };
 require(process.argv[1]);
 const P = global.window.PdvMap, assert = require('assert');
+// CSRF: window.CSRF_TOKEN e a fonte; cai pro hidden input se faltar (o bug do
+// "CSRF token is missing" era o token vazio chegando ao salvar).
+global.window.CSRF_TOKEN = 'tok-window';
+assert.strictEqual(P.csrfToken(), 'tok-window');
+global.window.CSRF_TOKEN = '';
+global.document.querySelector = function (sel) {
+  return sel.indexOf('csrf_token') >= 0 ? { value: 'tok-dom' } : null;
+};
+assert.strictEqual(P.csrfToken(), 'tok-dom');     // fallback pro DOM
 assert.strictEqual(P.parseFator('0,2'), 0.2);
 assert.strictEqual(P.parseFator(''), 1);
 assert.strictEqual(P.parseFator('abc'), 1);
