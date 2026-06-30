@@ -1,6 +1,7 @@
-"""Modo MANUAL de pedidos da semana (media_semanal_pedidos): em vez de prever
-por dia, devolve a MEDIA SEMANAL por (loja, produto) dividida IGUAL entre os
-dias do horizonte, pro admin ajustar. Reusa o POST de pedidos_semana_gerar.
+"""Modo MANUAL de pedidos da semana (media_semanal_pedidos): devolve a media por
+(loja, produto) POR DIA-DA-SEMANA, distribuida pelos dias LIVRES do horizonte
+(dia ja pedido nao recebe — input disabled nao iria no POST), pro admin ajustar.
+Reusa o POST de pedidos_semana_gerar.
 """
 from datetime import timedelta
 
