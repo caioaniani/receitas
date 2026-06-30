@@ -121,7 +121,15 @@ def _media_recencia(qtd_por_data, hoje_d, meia_vida=_MEIA_VIDA_DIAS,
     for data, q in qtd_por_data.items():
         qc = q if q <= teto else teto   # capa so a ocorrencia de topo (pico)
         num += (0.5 ** (max(0, (hoje_d - data).days) / meia_vida)) * qc
-    base_den = datas_possiveis if datas_possiveis else qtd_por_data
+    if datas_possiveis:
+        # Conta os "zeros" SO a partir da 1a vez que o item foi pedido nesse dow:
+        # senao um item NOVO / em ramp-up seria penalizado pelas semanas ANTES de
+        # existir. Gap DENTRO do periodo ativo (sabado sem pedido) conta; antes do
+        # 1o pedido, nao. (Refinamento do A2 — 30/06.)
+        ini = min(qtd_por_data)
+        base_den = [d for d in datas_possiveis if d >= ini]
+    else:
+        base_den = qtd_por_data
     den = sum(0.5 ** (max(0, (hoje_d - d).days) / meia_vida) for d in base_den)
     return num / den if den else 0.0
 
