@@ -636,6 +636,7 @@ def config_site_loja():
 @admin_required
 def vincular_produto(map_id):
     """Vincula/ignora/limpa um produto Seru."""
+    from app.utils import parse_fator_composicao
     mp = SeruProdutoMap.query.get_or_404(map_id)
     acao = request.form.get('acao')
     # Mesmo fallback do vincular_loja: se acao nao veio mas alvo_id sim,
@@ -651,6 +652,13 @@ def vincular_produto(map_id):
             alvo_id = int(request.form.get('alvo_id', ''))
         except (TypeError, ValueError):
             alvo_id = 0
+        # Fator primeiro: invalido/<=0 NAO vira 1.0 em silencio (baixaria
+        # estoque errado) — rejeita ANTES de mexer no vinculo.
+        try:
+            fator = parse_fator_composicao(request.form.get('fator'))
+        except ValueError:
+            flash('Fator invalido — use numero > 0 (ex: 0,2). Nada foi alterado.', 'danger')
+            return redirect(url_for('pdv.mapeamentos'))
         if tipo == 'receita' and alvo_id:
             mp.receita_id = alvo_id
             mp.produto_id = None
@@ -662,12 +670,6 @@ def vincular_produto(map_id):
         else:
             flash('Selecione receita ou produto valido.', 'danger')
             return redirect(url_for('pdv.mapeamentos'))
-        try:
-            fator = float(request.form.get('fator') or 1.0)
-            if fator <= 0:
-                fator = 1.0
-        except (TypeError, ValueError):
-            fator = 1.0
         mp.fator_quantidade = fator
         mp.confirmado_em = agora()
         mp.confirmado_por = current_user.id
