@@ -420,76 +420,14 @@ class VendaMapaUso(db.Model):
     ultimo_uso_em = db.Column(db.DateTime, default=agora, onupdate=agora)
 
 
-# ── Integracao VNDA (site/e-commerce): mapeamentos + idempotencia ──
-# Sempre baixa da loja fixa (Loja Anesio Pinto Rosa). Baixa acontece no
-# dia da entrega (expected_delivery_date), nao quando pago/entregue.
-
-class VndaProdutoMap(db.Model):
-    """Espelha SeruProdutoMap — mesma logica de estado e fator."""
-    __tablename__ = 'vnda_produto_map'
-
-    id = db.Column(db.Integer, primary_key=True)
-    vnda_nome = db.Column(db.String(300), nullable=False, unique=True, index=True)
-    vnda_sku = db.Column(db.String(100), nullable=True)
-    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'), nullable=True)
-    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), nullable=True)
-    ignorar = db.Column(db.Boolean, default=False, nullable=False)
-    fator_quantidade = db.Column(db.Float, nullable=False, default=1.0)
-
-    primeira_visto_em = db.Column(db.DateTime, default=agora)
-    confirmado_em = db.Column(db.DateTime, nullable=True)
-    confirmado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)
-
-    receita = db.relationship('Receita')
-    produto = db.relationship('Produto')
-
-    @property
-    def estado(self):
-        if self.ignorar:
-            return 'ignorado'
-        if self.receita_id or self.produto_id:
-            return 'mapeado'
-        return 'pendente'
-
-    @property
-    def alvo_nome(self):
-        if self.receita:
-            return self.receita.nome
-        if self.produto:
-            return self.produto.nome
-        return None
-
-class VndaPedidoProcessado(db.Model):
-    """Idempotencia: cada pedido VNDA processado uma vez. Identificado pelo
-    'code' do VNDA. Cancelados depois geram estorno automatico."""
-    __tablename__ = 'vnda_pedido_processado'
-
-    vnda_pedido_code = db.Column(db.String(100), primary_key=True)
-    processado_em = db.Column(db.DateTime, default=agora)
-    data_entrega = db.Column(db.Date)  # data agendada de entrega
-    n_itens_total = db.Column(db.Integer, default=0)
-    n_itens_baixados = db.Column(db.Integer, default=0)
-    cancelado_em = db.Column(db.DateTime, nullable=True)
-    estornado_em = db.Column(db.DateTime, nullable=True)
-
-class VndaDebito(db.Model):
-    """Acumulador de baixas fracionadas por produto VNDA + componente.
-
-    `componente_key` permite que CESTAS (Produto com ProdutoItens) tenham
-    um acumulador POR COMPONENTE — cada item interno baixa separado.
-    Valores: 'self' (produto simples) | 'r:<id>' (receita componente) |
-    'm:<id>' (materia-prima componente).
-    """
-    __tablename__ = 'vnda_debito'
-
-    vnda_produto_map_id = db.Column(db.Integer,
-                                     db.ForeignKey('vnda_produto_map.id', ondelete='CASCADE'),
-                                     primary_key=True)
-    componente_key = db.Column(db.String(50), primary_key=True, default='self')
-    fracao_pendente = db.Column(db.Float, nullable=False, default=0.0)
-    atualizado_em = db.Column(db.DateTime, default=agora,
-                               onupdate=agora)
-
+# ── VNDA APOSENTADO (24/06/2026) ──
+# Os mapeamentos/idempotencia/acumulador de baixa do VNDA foram removidos
+# (VndaProdutoMap / VndaPedidoProcessado / VndaDebito): a baixa de estoque do
+# site agora roda pelo motor unico (baixa_venda, canal='site') a partir do
+# PedidoOnline (loja propria). As TABELAS antigas (vnda_*) ficam no Postgres
+# por enquanto pra preservar historico — db.create_all nao as recria nem dropa.
+# So `PedidoSite` sobrevive: e cache do CRM (card de cliente no Chatwoot),
+# alimentado por app.services.vnda_card a partir da API VNDA de pedidos.
 
 class PedidoSite(db.Model):
     """Cache local de pedidos do site (VNDA) indexado por telefone, para o
