@@ -114,6 +114,76 @@ def test_sem_estoque_nao_conta_como_baixa(app):
     assert x['estoque_inicio'] == 7   # nao mudou
 
 
+def test_venda_site_conta_como_baixa(app):
+    """REGRESSAO (30/06/2026): venda do site (canal proprio, tipo 'venda_site')
+    estava fora das listas do estoque_diario — caia no fallback "tipo
+    desconhecido" e contava ZERO em baixas, subcontando o canal HOJE principal
+    (VNDA aposentado). Agora baixa igual ao Seru, com label proprio."""
+    from app.extensions import db
+    from app.models import MovEstoqueLoja
+    from app.services import estoque_diario
+    from app.utils import agora
+    from app.utils import hoje as hoje_brt
+
+    with app.app_context():
+        loja, receita, el = _setup(db)  # atual = 7
+        db.session.add(MovEstoqueLoja(estoque_loja_id=el.id, tipo='venda_site',
+                                      quantidade=3, data=agora()))
+        db.session.commit()
+        linhas = estoque_diario.relatorio_diario(loja.id, hoje_brt())
+
+    x = linhas[0]
+    assert x['baixas'] == 3
+    assert x['estoque_inicio'] == 10   # 7 + 3 baixados
+    assert x['baixas_por_fonte'] == [
+        {'tipo': 'venda_site', 'label': 'Site (loja própria)', 'quantidade': 3}]
+
+
+def test_venda_site_estorno_volta_ao_estoque(app):
+    """venda_site_estorno (pedido do site cancelado/estornado) devolve ao
+    estoque — conta como ENTRADA, nao baixa."""
+    from app.extensions import db
+    from app.models import MovEstoqueLoja
+    from app.services import estoque_diario
+    from app.utils import agora
+    from app.utils import hoje as hoje_brt
+
+    with app.app_context():
+        loja, receita, el = _setup(db)  # atual = 7
+        db.session.add(MovEstoqueLoja(estoque_loja_id=el.id,
+                                      tipo='venda_site_estorno',
+                                      quantidade=2, data=agora()))
+        db.session.commit()
+        linhas = estoque_diario.relatorio_diario(loja.id, hoje_brt())
+
+    x = linhas[0]
+    assert x['entradas'] == 2
+    assert x['baixas'] == 0
+    assert x['estoque_inicio'] == 5   # 7 - 2 entradas
+
+
+def test_venda_site_sem_estoque_nao_mexe_saldo(app):
+    """venda_site_sem_estoque so registra a falta — saldo nao muda (igual aos
+    outros canais _sem_estoque)."""
+    from app.extensions import db
+    from app.models import MovEstoqueLoja
+    from app.services import estoque_diario
+    from app.utils import agora
+    from app.utils import hoje as hoje_brt
+
+    with app.app_context():
+        loja, receita, el = _setup(db)  # atual = 7
+        db.session.add(MovEstoqueLoja(estoque_loja_id=el.id,
+                                      tipo='venda_site_sem_estoque',
+                                      quantidade=5, data=agora()))
+        db.session.commit()
+        linhas = estoque_diario.relatorio_diario(loja.id, hoje_brt())
+
+    x = linhas[0]
+    assert x['baixas'] == 0
+    assert x['estoque_inicio'] == 7   # nao mudou
+
+
 def test_rota_renderiza(app, admin_user):
     from app.extensions import db
     with app.app_context():
