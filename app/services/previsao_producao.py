@@ -1508,6 +1508,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         rr['comprometido'] = comp
         rr['previsto'] = prev        # a PREVISAO (historico) que tambem puxa producao
         rr['demanda'] = demanda      # firme OU previsto, o maior — o que o balanco usa
+        rr['em_estoque_efetivo'] = est_ef   # estoque que sobra apos entregas iminentes
         # Saldo contra a DEMANDA (max comp, prev) e o estoque EFETIVO: bate com o
         # "Produzir" da linha (-saldo == produzir quando negativo). Antes era
         # estoque - comprometido (so firme), ignorando o previsto -> a caixa dizia
