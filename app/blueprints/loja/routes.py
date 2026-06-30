@@ -687,21 +687,25 @@ def home():
 
 @loja_bp.route('/carrinho')
 def carrinho():
-    """Página do carrinho. O estado vive no navegador (localStorage) —
-    o servidor só serve a casca; o JS (carrinho.js) renderiza os itens.
-    Persiste no banco só no checkout (cria PedidoOnline). Rota estática
-    tem prioridade sobre /<slug_completo> no roteamento do Werkzeug.
+    """Página do carrinho. O estado vive na SESSÃO do servidor (fonte de
+    verdade — não some quando o navegador descarta o storage); o carrinho.js
+    inicializa a partir do carrinho_sessao injetado. Persiste no banco só no
+    checkout (cria PedidoOnline).
 
-    LINK DE 1 CLIQUE (`?add=r5:2,p83:1`): o bot/atendimento manda um link que
-    JÁ enche o carrinho. O servidor resolve cada item (preço + estoque REAIS,
-    autoritativo — nunca confia em valor vindo de fora), descarta esgotado/
-    inexistente, e injeta o resto via JS. `r`=receita, `p`=produto."""
+    LINK DE 1 CLIQUE (`?add=r5:2,p83:1`): o servidor resolve cada item (preço +
+    estoque REAIS, autoritativo), MESCLA no carrinho da sessão e redireciona pra
+    URL limpa (PRG — um refresh não soma de novo). `r`=receita, `p`=produto."""
     add = (request.args.get('add') or '').strip()
-    prefill, esgotados = ([], [])
     if add:
-        prefill, esgotados = _resolver_prefill_carrinho(add)
+        novos, esgotados = _resolver_prefill_carrinho(add)
+        _set_carrinho_sessao(_carrinho_sessao() + [
+            {'kind': i['kind'], 'id': i['id'], 'qtd': i['qtd']} for i in novos])
+        if esgotados:
+            session['_carrinho_esg'] = esgotados
+        return redirect(url_for('loja.carrinho'))
+    esgotados = session.pop('_carrinho_esg', [])
     return render_template('loja/carrinho.html', em_teste=_em_teste(),
-                           prefill=prefill, prefill_esgotados=esgotados)
+                           prefill_esgotados=esgotados)
 
 
 def _resolver_prefill_carrinho(add):
