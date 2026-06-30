@@ -49,7 +49,6 @@ def resumo():
     from app.utils import hoje as hoje_brt
 
     st_seru = seru_cron.status()
-    st_vnda = seru_cron.status_vnda()
 
     # Timestamp persistido (sobrevive a deploy); fallback pro de memoria.
     def _parse_iso(s):
@@ -59,10 +58,7 @@ def resumo():
             return None
 
     seru_run = _parse_iso(AppConfig.get('seru_ultimo_sync')) or st_seru.get('ultimo_run')
-    vnda_run = _parse_iso(AppConfig.get('vnda_ultimo_sync')) or st_vnda.get('ultimo_run')
-
     min_seru = _minutos_desde(seru_run)
-    min_vnda = _minutos_desde(vnda_run)
 
     # Itens baixados HOJE (dado real do estoque, por tipo de venda).
     ini_hoje = datetime.combine(hoje_brt(), time.min)
@@ -73,7 +69,6 @@ def resumo():
             .group_by(MovEstoqueLoja.tipo).all())
     baixas_hoje = {tipo: int(total or 0) for tipo, total in rows}
     seru_baixados_hoje = baixas_hoje.get('venda_seru', 0)
-    vnda_baixados_hoje = baixas_hoje.get('venda_vnda', 0)
 
     # Loja pendente = nao confirmada e nao ignorada. Inclui fuzzy auto-match
     # NAO confirmado — esses NAO baixam estoque ate o admin confirmar.
@@ -89,11 +84,6 @@ def resumo():
                                .filter(SeruProdutoMap.produto_id.is_(None))
                                .filter(SeruProdutoMap.ignorar.is_(False))
                                .count())
-    produtos_pendentes_vnda = (VndaProdutoMap.query
-                               .filter(VndaProdutoMap.receita_id.is_(None))
-                               .filter(VndaProdutoMap.produto_id.is_(None))
-                               .filter(VndaProdutoMap.ignorar.is_(False))
-                               .count())
 
     # Pedidos registrados sem loja resolvida (informativo — registrados mas
     # nao baixaram porque a loja Seru nao casou com nenhuma Loja).
@@ -102,20 +92,15 @@ def resumo():
                         .count())
 
     total_pendencias = (lojas_pendentes + produtos_pendentes_seru
-                        + produtos_pendentes_vnda + pedidos_sem_loja)
+                        + pedidos_sem_loja)
 
     return {
         'seru_ultimo_run': seru_run,
         'seru_ativo': st_seru.get('ativo'),
         'seru_atrasado': (min_seru is None) or (min_seru > _ATRASO_MIN),
         'seru_baixados_hoje': seru_baixados_hoje,
-        'vnda_ultimo_run': vnda_run,
-        'vnda_ativo': st_vnda.get('ativo'),
-        'vnda_atrasado': (min_vnda is None) or (min_vnda > _ATRASO_MIN),
-        'vnda_baixados_hoje': vnda_baixados_hoje,
         'lojas_pendentes': lojas_pendentes,
         'produtos_pendentes_seru': produtos_pendentes_seru,
-        'produtos_pendentes_vnda': produtos_pendentes_vnda,
         'pedidos_sem_loja': pedidos_sem_loja,
         'total_pendencias': total_pendencias,
     }
