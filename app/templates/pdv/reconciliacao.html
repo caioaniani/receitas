@@ -200,8 +200,18 @@ function reconMapear(btn, acao) {
     fd.append(campoNome, nome);
     fd.append('acao', acao);
     if (acao === 'vincular') {
-        var alvo = tr.querySelector('.recon-alvo').value;
-        if (!alvo) { alert('Escolha um produto/receita pra vincular.'); return; }
+        var inp = tr.querySelector('.recon-alvo');
+        var v = (inp.value || '').trim();
+        var alvo = window.RECON_TOKENS[v];
+        if (!alvo) {            // tentou digitar sem escolher: resolve por nome unico
+            var plain = v.replace(/ — (produto|receita)$/, '').trim().toLowerCase();
+            alvo = window.RECON_BY_NAME[plain];
+        }
+        if (!alvo) {
+            alert('Escolha um produto/receita da lista (digite pra buscar e clique na opção).');
+            inp.focus();
+            return;
+        }
         var partes = alvo.split(':');
         fd.append('alvo_tipo', partes[0]);
         fd.append('alvo_id', partes[1]);
