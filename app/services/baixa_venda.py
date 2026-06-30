@@ -198,7 +198,7 @@ def estornar_venda(canal, pedido_ref, referencia, *, usuario_id=None):
             continue
         el.quantidade = (el.quantidade or 0) + m.quantidade
         db.session.add(MovEstoqueLoja(
-            estoque_loja_id=el.id, tipo=tipo_est, quantidade=m.quantidade,
+            estoque_loja_id=el.id, tipo=tipo_est, quantidade=sinal * m.quantidade,
             referencia=f'Estorno {referencia}', usuario_id=usuario_id))
         revertido_int += 1
 
