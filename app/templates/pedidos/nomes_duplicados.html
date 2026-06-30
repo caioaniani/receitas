@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Nomes duplicados no catálogo{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-files"></i> Nomes duplicados no catálogo</h1>
+    <a href="{{ url_for('pedidos.estoque_loja_mapeamentos') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar aos mapeamentos
+    </a>
+</div>
+
+<div class="alert alert-info small">
+    <i class="bi bi-info-circle"></i>
+    Nomes iguais não são proibidos no sistema, mas <strong>confundem</strong> e fazem o
+    campo de busca de vínculo ter que desambiguar com <code>#id</code>.
+    Itens com <span class="badge bg-danger" style="font-size:9px;">colisão exata</span>
+    têm rótulo idêntico no typeahead (mesmo nome — e, em receita, mesma categoria).
+    Agrupado por nome (ignorando maiúsculas/espaços). Receitas arquivadas e produtos
+    inativos não entram.
+</div>
+
+{% macro secao(titulo, grupos, tem_cat=False) %}
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <strong>{{ titulo }}</strong>
+        <span class="badge {{ 'bg-warning text-dark' if grupos else 'bg-success' }}">
+            {{ grupos|length }} nome(s) repetido(s)
+        </span>
+    </div>
+    {% if grupos %}
+    <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Nome</th>
+                    <th style="width:90px;">Vezes</th>
+                    <th>Itens (id{% if tem_cat %} · categoria{% endif %})</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in grupos %}
+                <tr>
+                    <td class="fw-semibold">{{ g.nome }}
+                        {% if g.colisao_exata %}<span class="badge bg-danger" style="font-size:9px;">colisão exata</span>{% endif %}
+                    </td>
+                    <td><span class="badge bg-secondary">{{ g.n }}</span></td>
+                    <td class="small">
+                        {% for it in g.itens %}
+                        <span class="badge bg-light text-dark border me-1 mb-1">
+                            #{{ it.id }}{% if tem_cat %} · {{ it.categoria or '(sem categoria)' }}{% endif %}
+                        </span>
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-success small"><i class="bi bi-check-circle"></i> Nenhum nome repetido.</div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% if total == 0 %}
+<div class="alert alert-success"><i class="bi bi-check-circle"></i>
+    Nenhum nome duplicado no catálogo. Nada a limpar.</div>
+{% endif %}
+
+{{ secao('Receitas', receitas, tem_cat=True) }}
+{{ secao('Produtos', produtos) }}
+{{ secao('Matérias-primas', materias) }}
+{% endblock %}
