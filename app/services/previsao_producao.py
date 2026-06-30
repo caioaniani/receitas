@@ -97,7 +97,7 @@ def _teto_pico_isolado(qtd_por_data):
         return float('inf')
     topo, segundo = valores[-1], valores[-2]
     if n == 2:
-        return segundo if (segundo > 0 and topo > _OUTLIER_FATOR * segundo) \
+        return segundo if (segundo > 0 and topo > _OUTLIER_FATOR_2PTS * segundo) \
             else float('inf')
     mediana = (valores[n // 2] if n % 2
                else (valores[n // 2 - 1] + valores[n // 2]) / 2)
