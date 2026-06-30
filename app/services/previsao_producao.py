@@ -932,15 +932,21 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
         if rid in receitas and data_mov is not None:
             venda_dow[loja_id][rid][data_mov.weekday()] += int(qtd or 0)
 
-    # Estoque atual da loja por (loja, receita).
+    # Estoque DISPONIVEL da loja por (loja, receita) = quantidade - reservado
+    # (reservado segura pedido online aguardando pagamento). Usar o fisico
+    # contaria reserva como disponivel e sub-pediria.
     estoque_atual = defaultdict(lambda: defaultdict(int))
-    for loja_id, rid, q in (db.session.query(
-            EstoqueLoja.loja_id, EstoqueLoja.receita_id, EstoqueLoja.quantidade)
+    for loja_id, rid, q, qres in (db.session.query(
+            EstoqueLoja.loja_id, EstoqueLoja.receita_id,
+            EstoqueLoja.quantidade, EstoqueLoja.quantidade_reservada)
             .filter(EstoqueLoja.receita_id.isnot(None)).all()):
-        estoque_atual[loja_id][rid] += int(q or 0)
+        estoque_atual[loja_id][rid] += max(0, int(q or 0) - int(qres or 0))
 
-    # Dias ja pedidos no horizonte (a tela trava; o gerar pula).
+    # Dias ja pedidos no horizonte (a tela trava; o gerar pula) + a QUANTIDADE ja
+    # pedida por (loja, data, receita) — pra simulacao usar a entrega real do dia
+    # travado como carry, em vez da sugestao (que nao sera criada).
     ja_tem = defaultdict(set)
+    pedido_existente = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     for loja_id, data_ent in (db.session.query(
             PedidoLoja.loja_id, PedidoLoja.data_entrega)
             .filter(PedidoLoja.status != 'cancelado',
@@ -949,6 +955,16 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             .distinct().all()):
         if data_ent is not None:
             ja_tem[loja_id].add(data_ent.isoformat())
+    for loja_id, data_ent, rid_e, qtd_e in (db.session.query(
+            PedidoLoja.loja_id, PedidoLoja.data_entrega,
+            PedidoItem.receita_id, PedidoItem.quantidade)
+            .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
+            .filter(PedidoLoja.status != 'cancelado',
+                    PedidoItem.receita_id.isnot(None),
+                    PedidoLoja.data_entrega >= inicio_d,
+                    PedidoLoja.data_entrega <= horizonte_fim).all()):
+        if data_ent is not None:
+            pedido_existente[loja_id][data_ent.isoformat()][rid_e] += int(qtd_e or 0)
 
     dias_out = [{'data': d.isoformat(),
                  'label': '%s %s' % (_DOW_PT[d.weekday()], d.strftime('%d/%m')),
