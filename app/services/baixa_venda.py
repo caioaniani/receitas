@@ -102,8 +102,12 @@ def aplicar_venda(loja_id, *, receita_id=None, produto_id=None,
 
     tipo_baixa, tipo_sem, _tipo_est = _movs(canal)
     fator = float(fator or 1.0)
-    eh_cesta = len(comp) > 1 or (comp and comp[0][1] != (receita_id or produto_id
-                                                         or materia_prima_id))
+    # eh_cesta = a composicao difere do proprio item vendido (1+ componentes).
+    sold_col = ('receita_id' if receita_id else
+                'produto_id' if produto_id else 'materia_prima_id')
+    sold_id = receita_id or produto_id or materia_prima_id
+    eh_cesta = not (len(comp) == 1 and comp[0][0] == sold_col
+                    and comp[0][1] == sold_id)
     total_baixado = total_faltou = 0
     houve_acumulo = False
 
