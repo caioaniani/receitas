@@ -145,7 +145,8 @@
 {% endif %}
 
 {% if vinculados %}
-<form method="POST" action="{{ url_for('pedidos.estoque_loja_registrar') }}">
+<form method="POST" action="{{ url_for('pedidos.estoque_loja_registrar') }}"
+      id="form-estoque-loja">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if current_user.is_admin() %}
     <input type="hidden" name="loja_id" value="{{ loja.id }}">
