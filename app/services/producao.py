@@ -17,6 +17,7 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
     cronograma exibido — senao as quantidades nao batem com o que esta na tela
     (a distribuicao por dia muda com a janela)."""
     from app.models import PlanejamentoItem
+    from app.services.massa_base import rendimento_massa_crua
     from app.services.previsao_producao import cronograma_producao
 
     crono = cronograma_producao(horizonte_dias=horizonte_dias,
@@ -35,7 +36,8 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
 
     for rid, qtd in alvo.items():
         rec = receitas.get(rid)
-        rend = int(rec.rendimento_qtd) if rec and rec.rendimento_qtd else 1
+        # rendimento de massa CRUA (peso_unitario), sem perda — bate com a cascata
+        rend = rendimento_massa_crua(rec)
         it = existentes.get(rid)
         if it is None:
             db.session.add(PlanejamentoItem(
