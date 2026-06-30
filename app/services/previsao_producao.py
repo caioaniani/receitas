@@ -1313,13 +1313,16 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         qtd_dow[rid][dow][data_ent] += int(qtd or 0)
         soma_total[rid] += int(qtd or 0)
 
+    datas_possiveis_dow = _datas_por_dow(hist_ini, hist_fim)   # denom da media
+
     def _previsto_dia(rid, dia):
         if not _fornada_no_dia(receitas.get(rid), dia):
             return 0.0
         dow = dia.weekday()
         por_data = qtd_dow[rid].get(dow)
         if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
-            return _media_recencia(por_data, hoje_d)
+            return _media_recencia(
+                por_data, hoje_d, datas_possiveis=datas_possiveis_dow[dow])
         if soma_total[rid]:
             return soma_total[rid] / dias_calendario_janela
         return 0.0
