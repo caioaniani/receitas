@@ -385,6 +385,49 @@ def test_bom_insumo_fracionario_nao_infla_por_dia(app):
     assert rm['total'] == 2                          # ceil(1,6), não 4 (soma de ceils)
 
 
+def test_projecao_credita_producao_no_dia_pronto(app):
+    """C2: na projeção de saldo, a produção entra no estoque quando fica PRONTA
+    (dia de início + lead), não no dia em que começa. Receita lead 2, entrega 30
+    em hoje+3: produz em hoje+1 (mira a entrega), pronta em hoje+3. O saldo NÃO
+    sobe em hoje+1 (produção ainda em andamento) — só em hoje+3, junto da saída."""
+    loja = _loja()
+    r = _receita('Pão de fermentação longa')
+    r.dias_producao = 2
+    db.session.commit()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=3), r, 30)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None
+    assert rr['por_dia'][1]['qtd'] == 30           # produção INICIA em hoje+1
+    proj = rr['projecao']
+    # nada pronto ainda nos dias 1 e 2 -> saldo fica em 0 (não sobe cedo demais).
+    assert proj[1]['producao'] == 0 and proj[1]['saldo'] == 0
+    assert proj[2]['producao'] == 0 and proj[2]['saldo'] == 0
+    # pronto em hoje+3: entra +30 no MESMO dia da saída de 30 -> saldo 0.
+    assert proj[3]['producao'] == 30
+    assert proj[3]['saida'] == 30 and proj[3]['saldo'] == 0
+
+
+def test_projecao_lead_revela_falta_escondida(app):
+    """C2: creditar a produção no dia de INÍCIO escondia falta. Receita lead 2,
+    entrega 10 em hoje+1 (impossível produzir a tempo — teria de iniciar antes do
+    horizonte): a projeção acusa a falta em hoje+1, não a mascara com produção que
+    só fica pronta depois."""
+    loja = _loja()
+    r = _receita('Pão longo')
+    r.dias_producao = 2
+    db.session.commit()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 10)
+    _pedido(loja, 'pendente', hoje() + timedelta(days=3), r, 10)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr = _rec_out(crono, r.id)
+    proj = rr['projecao']
+    assert proj[1]['saldo'] < 0                     # falta em hoje+1 (não escondida)
+    assert rr['dia_falta'] == proj[1]['label']
+
+
 def test_cronograma_ordena_por_categoria(app):
     """Cronograma agrupa as receitas por categoria (não espalhado por demanda)."""
     loja = _loja()
