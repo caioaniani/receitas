@@ -14,6 +14,12 @@
         <a href="{{ url_for('pdv.historico_sync') }}" class="btn btn-sm btn-outline-primary">
             <i class="bi bi-clock-history"></i> Historico
         </a>
+        {% if current_user.is_owner %}
+        <a href="{{ url_for('pdv.debug_seru') }}" target="_blank" class="btn btn-sm btn-outline-secondary"
+           title="Saude da API Seru: testa auth + 1 request e mostra o erro real">
+            <i class="bi bi-heart-pulse"></i> Debug Seru
+        </a>
+        {% endif %}
         <button type="button" id="btn-sync" class="btn btn-sm btn-success" title="Processa vendas dos ultimos N dias e baixa estoque dos itens mapeados">
             <i class="bi bi-arrow-repeat"></i> Sincronizar (<select id="sync-dias" style="border:0;background:transparent;color:white;font-size:13px;" onclick="event.stopPropagation();"><option value="1">hoje</option><option value="3">3d</option><option value="7" selected>7d</option><option value="14">14d</option></select>)
         </button>
