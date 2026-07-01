@@ -92,7 +92,11 @@ def test_reservar_segura_saldo_virtual(app):
         assert mapa[('produto', prod.id)] == 2
 
 
-def test_reservar_rejeita_quando_excede_disponivel(app):
+def test_reserva_fisica_nunca_bloqueia_por_falta(app):
+    """Regra do dono (01/07/2026): o estoque fisico NAO decide a venda do site
+    (isso e' o plano-do-dia). Pedir mais do que ha no fisico NAO barra o
+    checkout — reserva best-effort (registra a demanda cheia; disponivel
+    clampa em 0) e a baixa real no pagamento tolera o shortfall."""
     from app.extensions import db
     from app.services import loja_estoque_reserva
     with app.app_context():
@@ -103,14 +107,13 @@ def test_reservar_rejeita_quando_excede_disponivel(app):
 
         r = loja_estoque_reserva.reservar(ped, loja_id=loja.id)
 
-        assert r['ok'] is False
-        assert len(r['sem_estoque']) == 1
-        assert r['sem_estoque'][0]['pedido'] == 5
-        assert r['sem_estoque'][0]['disponivel'] == 2
-        # Nada reservado quando falhou
+        assert r['ok'] is True                       # NAO bloqueia mais
+        assert r['sem_estoque'] == []
+        assert r['reservas'] == 1
         db.session.refresh(el)
-        assert el.quantidade_reservada == 0
-        assert ped.reserva_expira_em is None
+        assert el.quantidade_reservada == 5          # reservou a demanda cheia
+        assert el.disponivel == 0                    # clampa (2 - 5 -> 0)
+        assert ped.reserva_expira_em is not None
 
 
 def test_consumir_baixa_real_e_libera_reserva(app):
