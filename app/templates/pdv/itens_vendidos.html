@@ -112,21 +112,9 @@
 
     <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
         <input type="text" id="filtro-nome" class="form-control form-control-sm" placeholder="filtrar produto..." style="max-width:220px;">
-        <div class="d-flex gap-2 align-items-center">
-            {% if current_user.is_owner %}
-            <form method="POST" action="{{ url_for('pdv.vendas_diarias_backfill') }}" class="d-inline"
-                  onsubmit="return confirm('Pre-carregar o histórico de vendas no banco (90 dias)? Roda em background — recarregue em alguns minutos.');">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="dias" value="90">
-                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Aquece o histórico de vendas no nosso banco (background) — depois o relatório abre instantâneo, sem depender da API">
-                    <i class="bi bi-database-down"></i> Aquecer histórico
-                </button>
-            </form>
-            {% endif %}
-            <a id="btn-export-xlsx" href="#" class="btn btn-sm btn-outline-success">
-                <i class="bi bi-file-earmark-excel"></i> Exportar XLSX (por loja)
-            </a>
-        </div>
+        <a id="btn-export-xlsx" href="#" class="btn btn-sm btn-outline-success">
+            <i class="bi bi-file-earmark-excel"></i> Exportar XLSX (por loja)
+        </a>
     </div>
     <div id="secoes-lojas"></div>
 </div>
