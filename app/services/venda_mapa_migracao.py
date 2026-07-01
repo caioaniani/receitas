@@ -31,11 +31,22 @@ def _upsert_venda_mapa(canal, nome_externo, *, sku=None, receita_id=None,
                        produto_id=None, materia_prima_id=None, ignorar=False,
                        fator=1.0, primeira_visto_em=None, confirmado_em=None,
                        confirmado_por=None):
+    """Cria o VendaMapa a partir do mapa velho SE ainda nao existir. Retorna
+    True quando cria, False quando ja existia (no-op).
+
+    CREATE-ONLY DE PROPOSITO. Uma vez que a linha existe, o VendaMapa e a
+    FONTE DA VERDADE — toda leitura/escrita de mapeamento passa por ele
+    (ver CLAUDE.md "Mapas unificados"), e os mapas velhos SeruProdutoMap/
+    LojaProdutoMap estao CONGELADOS (ninguem mais escreve neles). Se este
+    backfill sobrescrevesse a linha existente, cada deploy reverteria as
+    conciliacoes feitas na UI de volta pro snapshot velho — porque ele roda
+    no startup (`_cutover_baixa_venda`). Foi exatamente o bug do "volta pra
+    ignorado em seguida"."""
     vm = VendaMapa.query.filter_by(canal=canal, nome_externo=nome_externo).first()
-    novo = vm is None
-    if novo:
-        vm = VendaMapa(canal=canal, nome_externo=nome_externo)
-        db.session.add(vm)
+    if vm is not None:
+        return False
+    vm = VendaMapa(canal=canal, nome_externo=nome_externo)
+    db.session.add(vm)
     vm.sku = sku
     vm.receita_id = receita_id
     vm.produto_id = produto_id
@@ -46,7 +57,7 @@ def _upsert_venda_mapa(canal, nome_externo, *, sku=None, receita_id=None,
         vm.primeira_visto_em = primeira_visto_em
     vm.confirmado_em = confirmado_em
     vm.confirmado_por = confirmado_por
-    return novo
+    return True
 
 
 def backfill_venda_mapa():
