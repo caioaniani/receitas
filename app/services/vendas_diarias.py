@@ -404,7 +404,7 @@ def vendas_pdv_do_banco(data_inicial, data_final, capturar=True):
         elif dim == 'cancelados':
             det[ln]['cancelados'] += int(v)
 
-    total = n_ped = cancelados = 0.0
+    total = 0.0
     n_ped = cancelados = 0
     por_pagamento = defaultdict(float)
     por_canal = defaultdict(float)
