@@ -545,9 +545,31 @@ seru_nome, qtd, faturamento `Numeric`) em `VendaSeruDiaria`:
   (`pdv_saude.reconciliar`), copilot `consultar_vendas_itens` +
   `agregar_itens_consolidado`, `/api/bot/faturamento` (dinheiro — usa
   `faturamento_pedidos`, sem regressao de kit/box), `/pdv/api/itens-vendidos`.
-- **AINDA ao vivo (nao repointado)**: `/pdv/api/vendas` ("Vendas PDV") — agrega
-  por metodo de pagamento + canal de venda, que o snapshot NAO guarda. Repointar
-  exigiria persistir esses breakdowns (tabela a mais). Deixado pra depois.
+**Passo 3 (01/07/2026) — "Vendas PDV" (`/pdv/api/vendas`) repointada pro banco**:
+- Tabela nova `VendaSeruDiaBreakdown` (data, loja_seru, `dimensao` in
+  {'pagamento','canal','cancelados'}, chave, valor) guarda os eixos que a tela
+  precisa e que `VendaSeruDiaLoja` nao tem. Pra 'cancelados', `valor` = CONTAGEM.
+  Nova tabela → criada por `db.create_all` (nao precisou de ALTER; NAO alterei
+  `VendaSeruDiaLoja` de proposito, pra evitar o trap de add-column caso o Passo 2
+  ja tivesse subido em prod).
+- `capturar_periodo` agora grava tambem os breakdowns (pagamento usa
+  value|total|amount; canal usa o TOTAL do pedido; cancelados = contagem por
+  loja) — MESMA logica do endpoint ao vivo (`_str_chave` espelha o `_s` da rota).
+- `vendas_diarias.vendas_pdv_do_banco(di, df)`: le do banco e devolve os totais
+  globais + `por_loja_detalhe[loja] = {total, n_pedidos, cancelados,
+  por_pagamento, por_canal}` pra o filtro por loja da tela funcionar SEM os
+  pedidos crus.
+- `_api_vendas_impl` le do banco por padrao (`fonte='banco'`, `pedidos=null`);
+  `?ao_vivo=1` volta a bater na API e traz o detalhe pedido-a-pedido (util pra
+  ranges curtos). O front (`pdv/index.html`) ramifica: modo banco usa os
+  agregados + `por_loja_detalhe`; modo ao vivo reagrega dos pedidos crus. O
+  detalhe pedido-a-pedido NAO fica no snapshot — a tela mostra um aviso com botao
+  "Ver detalhe ao vivo".
+- **Faturamento por loja/global**: usa `faturamento_pedidos` (TOTAL do pedido,
+  inclui kit/box), igual ao caminho ao vivo. `total_pedidos` no JSON inclui
+  cancelados (o front faz `total - cancelados`), pra casar a semantica.
+- Backfill/cron: como `capturar_periodo` agora grava os 3 snapshots juntos, o
+  "Aquecer historico" e o cron ja populam os breakdowns sem mudanca.
 
 ### Saude da API Seru — `/pdv/debug-seru` (owner)
 Testa auth + 1 request real e mostra o erro EXATO da API (nunca vaza segredo,
