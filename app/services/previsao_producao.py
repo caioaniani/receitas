@@ -1401,8 +1401,15 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         rend = rendimento_massa_crua(rec)
         # Anti-"acender fornada por dribble" (ex: produzir 1 pao num dia): um dia
         # que produz menos que uma fracao de UMA FORNADA (batida da amassadeira)
-        # rola pro PROXIMO dia, acumulando ate valer um lote. So MOVE (total
-        # preservado); o ultimo dia e o sumidouro.
+        # consolida com o DIA ANTERIOR (produz ANTES), acumulando ate valer um
+        # lote. So MOVE (total preservado); o dia 0 (hoje) e o sumidouro.
+        # Consolida PRA TRAS, nao pra frente (era o C1): a producao do dia i mira
+        # a entrega i+lead; empurrar o dribble pro dia i+1 entregaria i+1+lead =
+        # UM DIA TARDE (a entrega que o dribble servia ja passou). Puxar pro dia
+        # i-1 produz mais cedo -> pronto a tempo (custo: 1 dia a mais de estoque,
+        # aceitavel pra congelado/industria). Dribble numa entrega IMINENTE (dia
+        # 0, hoje) nao tem dia anterior: fica no dia 0 (produz hoje, no prazo) em
+        # vez de atrasar — cumprir o prazo vale mais que poupar uma batida.
         # unidades_por_fornada = capacidade_amassadeira x rend / massa de 1
         # receita — quantas unidades enchem uma batida. So aplica a receita que
         # passa pela amassadeira (cap>0); item sem fornada (Moeda/creme) nao
@@ -1412,9 +1419,9 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         if massa_base > 0:
             unid_por_fornada = cap * rend / massa_base
             minimo = ceil(unid_por_fornada * _MIN_FRACAO_FORNADA)
-            for i in range(len(liquido) - 1):
+            for i in range(len(liquido) - 1, 0, -1):
                 if 0 < liquido[i] < minimo:
-                    liquido[i + 1] += liquido[i]
+                    liquido[i - 1] += liquido[i]
                     liquido[i] = 0
         por_dia = []
         for i, p in enumerate(dias_prod):
