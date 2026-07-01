@@ -135,12 +135,12 @@
     {% if ns.algum %}
     <div class="psem-barra d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span class="text-muted small">
-            {{ sugestao.total_pedidos }} pedido(s) rascunho serão criados
-            (dias com pedido existente são pulados).
+            Gere <strong>loja a loja</strong> no botão de cada card, ou todas de uma vez aqui.
+            {{ sugestao.total_pedidos }} pedido(s) no total (dias com pedido existente são pulados).
         </span>
-        <button type="submit" class="btn btn-success"
-                onclick="return confirm('Gerar os pedidos rascunho com as quantidades atuais? Eles entram como pendente pra você revisar e confirmar.');">
-            <i class="bi bi-plus-square"></i> Gerar pedidos rascunho
+        <button type="submit" class="btn btn-outline-success"
+                onclick="return confirm('Gerar os pedidos rascunho de TODAS as lojas de uma vez? Entram como pendente pra você revisar e confirmar.');">
+            <i class="bi bi-plus-square"></i> Gerar TODAS as lojas
         </button>
     </div>
     {% else %}
