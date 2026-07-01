@@ -54,5 +54,7 @@ def test_probe_massa(app):
     rm = next((x for x in crono['receitas'] if x['receita_id'] == massa.id), None)
     print(f"\n>>> croissant total={rc['total']}  danish total={rd['total']}")
     print(f">>> MASSA total={rm['total'] if rm else None}")
+    print(f">>> MASSA por_dia={[c['qtd'] for c in rm['por_dia']] if rm else None}")
+    print(f">>> croissant por_dia={[c['qtd'] for c in rc['por_dia']]}")
     print(f">>> breakdown_bom={rm['breakdown_bom'] if rm else None}")
     # esperado: 500/50 + 62/31 = 10 + 2 = 12 massa
