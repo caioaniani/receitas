@@ -91,8 +91,12 @@
             {% else %}<span class="hist-vazio">— sem decomposição por loja —</span>{% endfor %}
         </div>
         {% elif d.fonte == 'media_diaria' %}
-        <div class="prev-fonte">Previsto = média diária simples do histórico
-            (poucas ocorrências dessa {{ d.dow_nome }} pra confiar no dia-da-semana).</div>
+        <div class="prev-fonte">Previsto = taxa residual do histórico (volume sem
+            padrão de dia-da-semana; poucas ocorrências dessa {{ d.dow_nome }} pra
+            confiar no dia-da-semana).</div>
+        {% elif d.fonte == 'sem_dow' %}
+        <div class="prev-fonte">Sem previsão nesta {{ d.dow_nome }}: a receita
+            vende com padrão em outros dias, mas quase nunca nesse.</div>
         {% elif d.fonte == 'fora_fornada' %}
         <div class="prev-fonte">Sem previsão: fornada especial não vendida nesse dia.</div>
         {% else %}
