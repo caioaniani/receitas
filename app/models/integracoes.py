@@ -301,6 +301,31 @@ class VendaSeruDiaria(db.Model):
     )
 
 
+class VendaSeruDiaLoja(db.Model):
+    """Totais de venda do Seru por DIA + loja (companheira de VendaSeruDiaria).
+
+    Existe pra dar a contagem de PEDIDOS DISTINTOS e o faturamento certos por
+    dia/loja: somar n_pedidos das linhas por PRODUTO inflaria (1 pedido com 3
+    itens contaria 3x). Como cada pedido tem UM dia e UMA loja, somar por
+    (data, loja) da o total exato de pedidos no intervalo. Gravada junto pelo
+    mesmo capturador, idempotente por (data, loja_seru)."""
+    __tablename__ = 'venda_seru_dia_loja'
+
+    id = db.Column(db.Integer, primary_key=True)
+    data = db.Column(db.Date, nullable=False, index=True)
+    loja_seru = db.Column(db.String(200), nullable=False, index=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=True)
+    n_pedidos = db.Column(db.Integer, nullable=False, default=0)
+    faturamento = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
+
+    loja = db.relationship('Loja')
+
+    __table_args__ = (
+        db.UniqueConstraint('data', 'loja_seru', name='uq_venda_seru_dia_loja'),
+    )
+
+
 # ── Motor unico de baixa de venda (Seru + site + saida-lote) ──
 # Substitui o trio paralelo SeruProdutoMap/LojaProdutoMap (+VndaProdutoMap morto)
 # e os acumuladores SeruDebito/LojaDebito (+VndaDebito). Ver app/services/
