@@ -70,6 +70,30 @@ def test_leitura_do_banco_mesma_forma_do_relatorio(app):
     assert cons['Cookie']['qtd'] == 9 and cons['Cookie']['faturamento'] == 90.0
 
 
+def test_faturamento_por_loja_usa_total_do_pedido(app):
+    """Kit/Box: itens vem com preco 0, dinheiro so no TOTAL do pedido. O
+    faturamento (base do bot) usa o total — nao subconta pra 0."""
+    ped = _pedido(9, 'Ribeiro do Vale', [('Box Mimo', 1, 0.0)])
+    ped['total'] = 80.0
+    with patch('app.services.seru.listar_pedidos_completo', return_value=[ped]):
+        vendas_diarias.capturar_periodo(DIA, DIA)
+    total, por_loja, n = vendas_diarias.faturamento_por_loja(DIA, DIA, capturar=False)
+    assert total == 80.0
+    assert por_loja['Ribeiro do Vale'] == 80.0
+    assert n == 1
+
+
+def test_agregar_flat_total_pedidos_nao_infla(app):
+    """total_pedidos conta pedidos DISTINTOS (VendaSeruDiaLoja), nao soma por
+    item — pedido com 2 itens nao vira 2."""
+    _capturar(app)   # Ribeiro: ped1 (2 itens) + ped2 (1 item) = 2 pedidos
+    d = vendas_diarias.agregar_flat(DIA, DIA, loja_seru='Ribeiro do Vale',
+                                    capturar=False)
+    assert d['total_pedidos'] == 2
+    cookie = next(p for p in d['produtos'] if p['nome'] == 'Cookie')
+    assert cookie['qtd'] == 8
+
+
 def test_dias_capturados(app):
     _capturar(app)
     assert vendas_diarias.dias_capturados(DIA, DIA) == {DIA}
