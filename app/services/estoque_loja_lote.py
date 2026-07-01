@@ -496,3 +496,75 @@ def aplicar_entrada_lote(itens_resolvidos, loja_id, user, referencia=None):
         db.session.commit()
 
     return {'aplicados': aplicados, 'ignorados': ignorados}
+
+
+def gerar_xlsx_template_balanco():
+    """Planilha de CONTAGEM em branco (bytes .xlsx) com TODOS os itens que a
+    loja pede, pra alguem preencher a quantidade fisica (o "caminho ao
+    contrario": em vez de mapear uma folha ja preenchida, a gente entrega a
+    folha certa pra preencher).
+
+    Uma aba unica: Categoria | Item | Quantidade (em branco). Lista as receitas
+    com `sugerir_pedido_loja` (as que a loja PEDE) + os produtos ativos (granola
+    etc., que a loja tambem estoca) numa secao "Produtos". Ordenado por
+    categoria e nome. Cabecalho com campos Loja/Data/Responsavel pra preencher a
+    mao. Os nomes saem EXATAMENTE como no catalogo — assim a reimportacao casa
+    100% (sem depender do fuzzy)."""
+    import io
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    receitas = (Receita.query
+                .filter(Receita.arquivada_em.is_(None),
+                        Receita.sugerir_pedido_loja.isnot(False))
+                .all())
+    produtos = Produto.query.filter_by(ativo=True).all()
+
+    # (categoria, nome) — categoria vazia da receita cai em "Outros"; produtos
+    # ficam todos sob "Produtos" pra separar do que e receita.
+    linhas = [((r.categoria or 'Outros').strip() or 'Outros', r.nome)
+              for r in receitas]
+    linhas += [('Produtos', p.nome) for p in produtos]
+    linhas.sort(key=lambda x: (x[0].lower(), (x[1] or '').lower()))
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Contagem'
+
+    titulo_font = Font(bold=True, size=14)
+    sub_font = Font(italic=True, size=10, color='666666')
+    header_font = Font(bold=True, color='FFFFFF')
+    header_fill = PatternFill(start_color='37474F', end_color='37474F',
+                              fill_type='solid')
+
+    ws['A1'] = 'CONTAGEM DE ESTOQUE — O Pão'
+    ws['A1'].font = titulo_font
+    ws['A2'] = 'Loja: ______________     Data: ____/____/______     Responsável: ______________'
+    ws['A2'].font = sub_font
+    ws['A3'] = ('Preencha a coluna Quantidade com a contagem física. Não altere '
+                'os nomes — eles precisam bater com o catálogo.')
+    ws['A3'].font = sub_font
+
+    hrow = 5
+    for c, nome in enumerate(('Categoria', 'Item', 'Quantidade'), start=1):
+        cell = ws.cell(row=hrow, column=c, value=nome)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+    r = hrow + 1
+    for categoria, nome in linhas:
+        ws.cell(row=r, column=1, value=categoria)
+        ws.cell(row=r, column=2, value=nome)
+        ws.cell(row=r, column=3, value=None)          # Quantidade em branco
+        r += 1
+
+    ws.column_dimensions['A'].width = 22
+    ws.column_dimensions['B'].width = 44
+    ws.column_dimensions['C'].width = 14
+    ws.freeze_panes = 'A6'                             # trava cabecalho ao rolar
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
