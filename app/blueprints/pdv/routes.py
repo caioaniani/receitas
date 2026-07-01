@@ -328,8 +328,27 @@ def api_vendas():
         ), 500
 
 
+def _site_block(inicio, fim):
+    """Vendas do SITE (loja propria / PedidoOnline) no intervalo — outra fonte,
+    fora do Seru. Faturamento = subtotal (sem frete), mesma regra do consolidado.
+    Best-effort: se falhar, devolve zero + flag de erro (nunca derruba a tela)."""
+    try:
+        from app.services import loja_online_vendas
+        fat_site = loja_online_vendas.faturamento_por_dia(inicio, fim)
+        return {'total': fat_site.get('total', 0.0),
+                'n_pedidos': fat_site.get('n_pedidos', 0)}
+    except Exception:
+        current_app.logger.exception('pdv: faturamento do site falhou')
+        return {'total': 0.0, 'n_pedidos': 0, 'erro': True}
+
+
 def _api_vendas_impl():
-    """Lista vendas Seru no intervalo. Default: hoje.
+    """Vendas Seru (PDV) + site no intervalo. Default: hoje.
+
+    Le do NOSSO banco (snapshot diario, `vendas_diarias`) por padrao — rapido e
+    resiliente a quedas da API Seru, que com ~600 pedidos/dia estourava em ranges
+    largos. `?ao_vivo=1` forca a consulta direta a API (traz tambem o detalhe
+    pedido-a-pedido, util pra ranges curtos).
 
     ?inicio=YYYY-MM-DD&fim=YYYY-MM-DD
     """
@@ -344,6 +363,42 @@ def _api_vendas_impl():
     if (fim - inicio).days > 92:
         return jsonify(ok=False, erro='intervalo maximo de 92 dias'), 400
 
+    ao_vivo = request.args.get('ao_vivo') in ('1', 'true', 'sim')
+
+    if not ao_vivo:
+        # ── Caminho padrao: le do snapshot do banco (sem tocar na API Seru). ──
+        try:
+            from app.services import vendas_diarias
+            d = vendas_diarias.vendas_pdv_do_banco(inicio, fim)
+        except Exception as e:
+            current_app.logger.exception('pdv vendas: leitura do banco falhou')
+            return jsonify(
+                ok=False,
+                erro=f'{type(e).__name__}: {str(e)[:300]}'), 500
+        resp = jsonify(
+            ok=True,
+            inicio=inicio.isoformat(),
+            fim=fim.isoformat(),
+            fonte='banco',
+            # total_pedidos inclui cancelados (o front faz total - cancelados
+            # pra os cards), pra casar com a semantica do caminho ao vivo.
+            total_pedidos=d['n_pedidos'] + d['cancelados'],
+            fora_intervalo=0,
+            cancelados=d['cancelados'],
+            total_valor=d['total_valor'],
+            por_pagamento=d['por_pagamento'],
+            por_canal=d['por_canal'],
+            por_loja=d['por_loja'],
+            por_loja_detalhe=d['por_loja_detalhe'],
+            site=_site_block(inicio, fim),
+            consulta_limitada=False,
+            pedidos=None,
+        )
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        resp.headers['Pragma'] = 'no-cache'
+        return resp
+
+    # ── ?ao_vivo=1: consulta direta a API Seru (traz o detalhe por pedido). ──
     # Expandimos a janela de updatedAt ate N dias pra frente do fim, pra
     # capturar pedidos criados no intervalo mas atualizados depois.
     # Ainda filtramos por createdAt local. Cada dia adicional eh +1 chamada
