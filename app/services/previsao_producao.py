@@ -1004,6 +1004,22 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             .filter(EstoqueLoja.receita_id.isnot(None)).all()):
         estoque_atual[loja_id][rid] += max(0, int(q or 0) - int(qres or 0))
 
+    # Produtos que a loja PEDE da industria (historico de pedidos na janela).
+    # A previsao por venda so "ve" o que teve baixa registrada; sem isto, um item
+    # que a loja pede mas cuja venda nao esta rastreada (mapa Seru incompleto)
+    # sumiria da tela. Incluimos pra MOSTRAR TODOS com sugestao 0 (decisao do
+    # dono) — nada e esquecido; o operador preenche na mao o que faltar.
+    pede_receitas = defaultdict(set)
+    for loja_id, rid_p in (db.session.query(
+            PedidoLoja.loja_id, PedidoItem.receita_id)
+            .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
+            .filter(PedidoItem.receita_id.isnot(None),
+                    PedidoLoja.status != 'cancelado',
+                    PedidoLoja.data_entrega >= hist_ini,
+                    PedidoLoja.data_entrega <= hist_fim)
+            .distinct().all()):
+        pede_receitas[loja_id].add(rid_p)
+
     # Dias ja pedidos no horizonte (a tela trava; o gerar pula) + a QUANTIDADE ja
     # pedida por (loja, data, receita) — pra simulacao usar a entrega real do dia
     # travado como carry, em vez da sugestao (que nao sera criada).
