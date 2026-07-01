@@ -1090,6 +1090,101 @@ def vinculos_resolver(id):
     return jsonify(grupos=grupos, pode_excluir=pode)
 
 
+def _transferir_para_mp(origem, mp):
+    """Transfere pra uma MATÉRIA-PRIMA os vínculos que suportam MP — o caso da
+    receita que na verdade é insumo COMPRADO (ex: "pão de queijo (saco)").
+
+    Passam a apontar pra MP: pedidos de loja, vendas manuais, desperdício,
+    estoque de loja (funde com a linha MP equivalente), cestas e mapeamentos;
+    ingrediente em outras fichas vira tipo='mp'. O que NÃO tem coluna de MP
+    (planos de produção, vendas B2B, atribuições, preços por loja, estoque de
+    produção) FICA na receita e é reportado em `ficaram` — o caminho pra esses
+    é ARQUIVAR a receita depois (histórico preservado). 1 commit no fim."""
+    from app.models import (
+        Atribuicao,
+        Desperdicio,
+        EstoqueLoja,
+        EstoqueProducao,
+        MovEstoqueLoja,
+        PedidoItem,
+        PlanejamentoItem,
+        PrecoLojaReceita,
+        ProdutoItem,
+        VendaB2BItem,
+        VendaManualLoja,
+        VendaMapa,
+    )
+    movidos = {}
+
+    def _conta(chave, n):
+        if n:
+            movidos[chave] = movidos.get(chave, 0) + n
+
+    swap = {'receita_id': None, 'materia_prima_id': mp.id}
+
+    # FKs simples com coluna de MP: histórico intacto, só muda o alvo.
+    for chave, modelo in (('pedidos', PedidoItem),
+                          ('vendas_manuais', VendaManualLoja),
+                          ('desperdicio', Desperdicio)):
+        _conta(chave, modelo.query.filter_by(receita_id=origem.id)
+               .update(dict(swap), synchronize_session=False))
+
+    # Cestas: vira componente de MP (FK + tipo + nome humano-legível).
+    _conta('cestas', ProdutoItem.query.filter_by(receita_id=origem.id)
+           .update({**swap, 'tipo': 'mp', 'item_nome': mp.nome},
+                   synchronize_session=False))
+
+    # Ingrediente em outras fichas: vira ingrediente de MP (por nome; o FK
+    # sub_receita_id é limpo — MP resolve por nome no custeio da ficha).
+    _conta('ingrediente_em_fichas', ReceitaIngrediente.query
+           .filter(ReceitaIngrediente.tipo == 'receita',
+                   db.or_(ReceitaIngrediente.ingrediente_nome == origem.nome,
+                          ReceitaIngrediente.sub_receita_id == origem.id),
+                   ReceitaIngrediente.receita_id != origem.id)
+           .update({'tipo': 'mp', 'ingrediente_nome': mp.nome,
+                    'sub_receita_id': None}, synchronize_session=False))
+
+    # Mapeamentos PDV/site/loja (mantém confirmação e fator).
+    _conta('mapeamentos', VendaMapa.query.filter_by(receita_id=origem.id)
+           .update(dict(swap), synchronize_session=False))
+
+    # Estoque de loja: funde com a linha MP equivalente (mesma loja/estado).
+    # Movimentações reapontadas ANTES de apagar a linha da origem.
+    for e in EstoqueLoja.query.filter_by(receita_id=origem.id).all():
+        alvo = EstoqueLoja.query.filter_by(
+            materia_prima_id=mp.id, loja_id=e.loja_id, estado=e.estado).first()
+        if alvo:
+            alvo.quantidade = (alvo.quantidade or 0) + (e.quantidade or 0)
+            MovEstoqueLoja.query.filter_by(estoque_loja_id=e.id).update(
+                {'estoque_loja_id': alvo.id}, synchronize_session=False)
+            db.session.delete(e)
+        else:
+            e.receita_id = None
+            e.materia_prima_id = mp.id
+        _conta('estoque_loja', 1)
+
+    # Sem coluna de MP — fica na receita (arquivar depois preserva histórico).
+    ficaram = {}
+    for chave, modelo in (('planejamento', PlanejamentoItem),
+                          ('vendas_b2b', VendaB2BItem),
+                          ('atribuicoes', Atribuicao),
+                          ('precos_loja', PrecoLojaReceita),
+                          ('estoque_producao', EstoqueProducao)):
+        n = modelo.query.filter_by(receita_id=origem.id).count()
+        if n:
+            ficaram[chave] = n
+
+    db.session.commit()
+    current_app.logger.info(
+        'vinculos de receita transferidos pra MP: "%s" (#%s) -> "%s" (#%s) '
+        'por %s: movidos=%s ficaram=%s',
+        origem.nome, origem.id, mp.nome, mp.id,
+        current_user.login, movidos, ficaram)
+    grupos, pode = _vinculos_receita(origem)
+    return jsonify(grupos=grupos, pode_excluir=pode, movidos=movidos,
+                   ficaram=ficaram, destino=mp.nome, tipo_destino='mp')
+
+
 @receitas_bp.route('/<int:id>/vinculos/transferir', methods=['POST'])
 @login_required
 @admin_required
@@ -1107,6 +1202,7 @@ def vinculos_transferir(id):
         Desperdicio,
         EstoqueLoja,
         EstoqueProducao,
+        MateriaPrima,
         MovEstoqueLoja,
         MovEstoqueProducao,
         PedidoItem,
@@ -1119,6 +1215,19 @@ def vinculos_transferir(id):
     )
     origem = Receita.query.get_or_404(id)
     nome_destino = (request.form.get('destino') or '').strip()
+    tipo_destino = (request.form.get('tipo_destino') or 'receita').strip()
+    if tipo_destino not in ('receita', 'mp'):
+        return jsonify(erro=f'tipo de destino "{tipo_destino}" inválido'), 400
+
+    if tipo_destino == 'mp':
+        mp_destino = (MateriaPrima.query
+                      .filter(func.lower(MateriaPrima.nome) == nome_destino.lower())
+                      .first()) if nome_destino else None
+        if not mp_destino:
+            return jsonify(erro=f'matéria-prima "{nome_destino}" não encontrada '
+                                '— use o nome exato (o campo autocompleta)'), 400
+        return _transferir_para_mp(origem, mp_destino)
+
     destino = (Receita.query
                .filter(func.lower(Receita.nome) == nome_destino.lower())
                .first()) if nome_destino else None
@@ -1149,12 +1258,16 @@ def vinculos_transferir(id):
            .update({'receita_id': destino.id, 'item_nome': destino.nome},
                    synchronize_session=False))
 
-    # Uso como ingrediente em outras fichas (vínculo por NOME).
+    # Uso como ingrediente em outras fichas — vínculo por NOME e/ou por FK
+    # (`sub_receita_id`, que o MRP/BOM usa e que bloqueia a exclusão; antes
+    # só o nome era atualizado e o FK ficava preso na origem).
     _conta('ingrediente_em_fichas', ReceitaIngrediente.query
            .filter(ReceitaIngrediente.tipo == 'receita',
-                   ReceitaIngrediente.ingrediente_nome == origem.nome,
+                   db.or_(ReceitaIngrediente.ingrediente_nome == origem.nome,
+                          ReceitaIngrediente.sub_receita_id == origem.id),
                    ReceitaIngrediente.receita_id != origem.id)
-           .update({'ingrediente_nome': destino.nome},
+           .update({'ingrediente_nome': destino.nome,
+                    'sub_receita_id': destino.id},
                    synchronize_session=False))
 
     # Mapeamentos de PDV/site/loja (mantém confirmação e fator).
