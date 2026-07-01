@@ -1094,19 +1094,29 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                  'label': '%s %s' % (_DOW_PT[d.weekday()], d.strftime('%d/%m')),
                  'dow': d.weekday()} for d in dias_futuros]
 
+    # Catalogo unificado da tela: receitas + MPs vistas em estoque/venda/pedido.
+    # Cada entrada: (token, nome, lote, minimo, fornada_especial, rid, mid).
+    from app.models import MateriaPrima
+    catalogo = [(rid, rec.nome, int(rec.lote_pedido or 0),
+                 int(rec.minimo_pedido or 0),
+                 bool(getattr(rec, 'fornada_especial', False)), rid, None)
+                for rid, rec in receitas.items()]
+    if mp_ids:
+        for m in MateriaPrima.query.filter(MateriaPrima.id.in_(mp_ids)).all():
+            catalogo.append((f'mp:{m.id}', m.nome, 0, 0, False, None, m.id))
+    catalogo.sort(key=lambda c: (c[1] or '').lower())
+
     lojas_out = []
     for loja in lojas_op:
         ja_tem_loja = ja_tem.get(loja.id, set())
         pede_loja = pede_receitas.get(loja.id, set())
         produtos = []
-        for rid, rec in sorted(receitas.items(), key=lambda kv: kv[1].nome):
-            dows = venda_dow.get(loja.id, {}).get(rid)
-            est0 = estoque_atual.get(loja.id, {}).get(rid, 0)
-            pede = rid in pede_loja
+        for tok, nome_item, caixa, minimo, fe, rid, mid in catalogo:
+            dows = venda_dow.get(loja.id, {}).get(tok)
+            est0 = estoque_atual.get(loja.id, {}).get(tok, 0)
+            pede = tok in pede_loja
             if not dows and est0 <= 0 and not pede:
                 continue                          # nao vende, sem estoque, nem pede
-            caixa = int(rec.lote_pedido or 0)
-            fe = bool(getattr(rec, 'fornada_especial', False))
             estoque = est0
             por_dia = [0] * len(dias_futuros)
             venda_total = 0.0
@@ -1122,7 +1132,7 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                     # reposicao que nao vai existir (sub-pedido) ou ignorariam a
                     # entrega real (super-pedido).
                     entrega = pedido_existente.get(loja.id, {}).get(
-                        d.isoformat(), {}).get(rid, 0)
+                        d.isoformat(), {}).get(tok, 0)
                     por_dia[i] = 0
                     estoque = estoque + entrega - venda_d
                     continue
@@ -1138,12 +1148,14 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             # mesmo com sugestao 0 (decisao do dono: nada some da tela). So pula
             # o que nem venda, nem estoque, nem pedido tem (ja filtrado acima).
             produtos.append({
-                'receita_id': rid, 'nome': rec.nome,
+                'receita_id': rid, 'materia_prima_id': mid,
+                'item_key': str(tok), 'eh_mp': mid is not None,
+                'nome': nome_item,
                 'media_semanal': round(venda_total * 7.0 / horizonte_dias, 1),
                 'estoque_atual': est0,
                 'por_dia': por_dia, 'total': sum(por_dia),
                 'lote': caixa,
-                'minimo': int(rec.minimo_pedido or 0),
+                'minimo': minimo,
                 'abaixo_lote': False,
             })
         if produtos:
