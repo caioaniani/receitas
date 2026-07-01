@@ -111,6 +111,7 @@
                 <thead>
                     <tr>
                         <th class="prod">Produto</th>
+                        <th title="Estoque atual disponível da loja (físico − reservado)">Estoque</th>
                         <th title="Média semanal (total na janela ÷ nº de semanas)">Média/sem</th>
                         {% for dia in grade.dias %}<th>{{ dia.label }}</th>{% endfor %}
                         <th>Total</th>
