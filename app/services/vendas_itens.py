@@ -179,6 +179,232 @@ def agregar_itens(data_inicial, data_final, loja_seru=None,
     }
 
 
+def _linhas_produtos(pedidos, receitas, produtos, maps):
+    """Agrega uma lista de pedidos por NOME de produto Seru.
+
+    Retorna (linhas, faturamento_total, total_itens) — `linhas` tem a MESMA forma
+    de `agregar_itens` (nome/sku/qtd/faturamento/n_pedidos/pct/match/estado_map/
+    mapeado_para/map_id/fator). `maps` = {nome_externo: VendaMapa} pra estado do
+    mapeamento (consultado 1x pelo caller pra todos os nomes)."""
+    agg = {}
+    for p in pedidos:
+        pid = p.get('id') or p.get('orderNumber') or p.get('code')
+        for it in seru.extrair_itens(p):
+            if it['cancelado']:
+                continue
+            nome = it['nome']
+            e = agg.setdefault(nome, {'qtd': 0.0, 'faturamento': 0.0,
+                                      'pedidos': set(), 'sku': it['sku']})
+            e['qtd'] += it['qtd']
+            e['faturamento'] += it['total']
+            if pid is not None:
+                e['pedidos'].add(pid)
+
+    faturamento_total = sum(v['faturamento'] for v in agg.values())
+    total_itens = sum(v['qtd'] for v in agg.values())
+
+    linhas = []
+    for nome, v in agg.items():
+        match = _match_local(nome, receitas, produtos)
+        m = maps.get(nome)
+        if m:
+            estado_map = m.estado
+            mapeado_para = {
+                'tipo': 'receita' if m.receita_id else ('produto' if m.produto_id else None),
+                'id': m.receita_id or m.produto_id,
+                'nome': m.alvo_nome,
+            } if m.estado == 'mapeado' else None
+            map_id = m.id
+            fator = float(m.fator_quantidade or 1.0)
+        else:
+            estado_map = 'sem_map'
+            mapeado_para = None
+            map_id = None
+            fator = 1.0
+        linhas.append({
+            'nome': nome,
+            'sku': v['sku'],
+            'qtd': round(v['qtd'], 2),
+            'faturamento': round(v['faturamento'], 2),
+            'n_pedidos': len(v['pedidos']),
+            'pct_faturamento': round(100 * v['faturamento'] / faturamento_total, 1)
+                if faturamento_total else 0.0,
+            'match': match,
+            'estado_map': estado_map,
+            'mapeado_para': mapeado_para,
+            'map_id': map_id,
+            'fator': fator,
+        })
+    linhas.sort(key=lambda x: x['faturamento'], reverse=True)
+    return linhas, round(faturamento_total, 2), round(total_itens, 2)
+
+
+def agregar_itens_por_loja(data_inicial, data_final, expandir_dias_frente=0):
+    """Como `agregar_itens`, mas SEPARADO POR LOJA (company.name do Seru).
+
+    Bate na API UMA vez e reparte os pedidos por loja. Retorna:
+        {
+          'inicio', 'fim', 'total_pedidos', 'total_itens_vendidos',
+          'faturamento_total',
+          'lojas': [{'loja', 'total_pedidos', 'total_itens', 'faturamento',
+                     'produtos': [...]}],           # uma entrada por loja
+          'consolidado': [...],                      # todas as lojas juntas
+          'lojas_no_intervalo': [...],
+        }
+    """
+    from collections import defaultdict
+
+    receitas, produtos = _carregar_catalogo()
+    pedidos = seru.listar_pedidos_completo(
+        data_inicial, data_final, expandir_dias_frente=expandir_dias_frente)
+
+    por_loja = defaultdict(list)
+    todos = []
+    lojas_vistas = set()
+    for p in pedidos:
+        if not isinstance(p, dict) or p.get('canceledAt'):
+            continue
+        d = seru.data_local(p.get('createdAt'))
+        if not d or not (data_inicial <= d <= data_final):
+            continue
+        ln = _nome_loja(p) or '(sem loja)'
+        lojas_vistas.add(ln)
+        por_loja[ln].append(p)
+        todos.append(p)
+
+    # Index de VendaMapa pra TODOS os nomes de uma vez (1 query).
+    nomes = set()
+    for p in todos:
+        for it in seru.extrair_itens(p):
+            if not it['cancelado']:
+                nomes.add(it['nome'])
+    maps = {}
+    if nomes:
+        maps = {m.nome_externo: m for m in VendaMapa.query.filter(
+            VendaMapa.canal == 'seru',
+            VendaMapa.nome_externo.in_(list(nomes))).all()}
+
+    lojas_out = []
+    for ln in sorted(por_loja):
+        peds = por_loja[ln]
+        linhas, fat, itens = _linhas_produtos(peds, receitas, produtos, maps)
+        lojas_out.append({
+            'loja': ln,
+            'total_pedidos': len(peds),
+            'total_itens': itens,
+            'faturamento': fat,
+            'produtos': linhas,
+        })
+
+    cons_linhas, cons_fat, cons_itens = _linhas_produtos(
+        todos, receitas, produtos, maps)
+
+    return {
+        'inicio': data_inicial.isoformat(),
+        'fim': data_final.isoformat(),
+        'total_pedidos': len(todos),
+        'total_itens_vendidos': cons_itens,
+        'faturamento_total': cons_fat,
+        'lojas': lojas_out,
+        'consolidado': cons_linhas,
+        'lojas_no_intervalo': sorted(lojas_vistas),
+    }
+
+
+def _estado_map_label(estado, mapeado_para):
+    if estado == 'mapeado' and mapeado_para:
+        return 'Mapeado → %s' % (mapeado_para.get('nome') or '?')
+    return {'ignorado': 'Ignorado', 'pendente': 'Pendente',
+            'sem_map': 'Nao visto'}.get(estado, estado or '')
+
+
+def gerar_xlsx_itens_por_loja(dados):
+    """Gera um .xlsx (bytes) com UMA ABA POR LOJA + aba 'Consolidado'.
+
+    Colunas: Produto | SKU | Unidades | Faturamento | Nº Pedidos | % Fat |
+    Vinculo no sistema. Recebe o dict de `agregar_itens_por_loja`."""
+    import io
+    import re
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    header_font = Font(bold=True, color='FFFFFF')
+    header_fill = PatternFill(start_color='37474F', end_color='37474F',
+                              fill_type='solid')
+    titulo_font = Font(bold=True, size=13)
+    cols = ['Produto', 'SKU', 'Unidades', 'Faturamento', 'Nº Pedidos',
+            '% Fat', 'Vinculo no sistema']
+    larguras = [40, 16, 12, 16, 12, 10, 34]
+
+    usados = set()
+
+    def _titulo_aba(nome):
+        # Excel: <=31 chars, sem : \\ / ? * [ ]; garante unicidade.
+        base = re.sub(r'[:\\/?*\[\]]', '-', nome)[:31] or 'Loja'
+        t = base
+        i = 2
+        while t.lower() in usados:
+            suf = ' (%d)' % i
+            t = base[:31 - len(suf)] + suf
+            i += 1
+        usados.add(t.lower())
+        return t
+
+    def _escrever_aba(ws, linhas, titulo, totais=None):
+        ws['A1'] = titulo
+        ws['A1'].font = titulo_font
+        periodo = 'Periodo: %s a %s' % (dados['inicio'], dados['fim'])
+        if totais:
+            periodo += '   |   Pedidos: %s   |   Unidades: %s   |   Faturamento: R$ %.2f' % (
+                totais.get('pedidos', 0), totais.get('itens', 0),
+                totais.get('faturamento', 0.0))
+        ws['A2'] = periodo
+        ws['A2'].font = Font(italic=True, size=9, color='666666')
+        hrow = 4
+        for c, nome in enumerate(cols, start=1):
+            cell = ws.cell(row=hrow, column=c, value=nome)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+        r = hrow + 1
+        for p in linhas:
+            ws.cell(row=r, column=1, value=p['nome'])
+            ws.cell(row=r, column=2, value=p.get('sku') or '')
+            ws.cell(row=r, column=3, value=p['qtd'])
+            fcell = ws.cell(row=r, column=4, value=p['faturamento'])
+            fcell.number_format = 'R$ #,##0.00'
+            ws.cell(row=r, column=5, value=p['n_pedidos'])
+            pcell = ws.cell(row=r, column=6, value=(p.get('pct_faturamento') or 0) / 100.0)
+            pcell.number_format = '0.0%'
+            ws.cell(row=r, column=7,
+                    value=_estado_map_label(p.get('estado_map'), p.get('mapeado_para')))
+            r += 1
+        for i, w in enumerate(larguras, start=1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+
+    wb = Workbook()
+    # Aba Consolidado primeiro (reusa a ws default).
+    ws0 = wb.active
+    ws0.title = _titulo_aba('Consolidado')
+    _escrever_aba(ws0, dados.get('consolidado', []), 'Consolidado (todas as lojas)',
+                  totais={'pedidos': dados.get('total_pedidos', 0),
+                          'itens': dados.get('total_itens_vendidos', 0),
+                          'faturamento': dados.get('faturamento_total', 0.0)})
+    for loja in dados.get('lojas', []):
+        ws = wb.create_sheet(title=_titulo_aba(loja['loja']))
+        _escrever_aba(ws, loja['produtos'], loja['loja'],
+                      totais={'pedidos': loja['total_pedidos'],
+                              'itens': loja['total_itens'],
+                              'faturamento': loja['faturamento']})
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
+
+
 def _resolver_nome_item(tipo, item_id):
     if tipo == 'receita':
         r = Receita.query.get(item_id)
