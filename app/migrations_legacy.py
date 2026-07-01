@@ -813,6 +813,10 @@ def _migrate_postgres(app):
     # DEFAULT TRUE pra ordens já existentes continuarem visíveis; novas ordens
     # do "aprovar dia" nascem FALSE (rascunho) e viram TRUE no "enviar".
     _try("ALTER TABLE planejamento_producao ADD COLUMN enviado_ao_padeiro BOOLEAN DEFAULT TRUE")
+    # Dispensa de pendencia (auditoria): admin verifica que nao foi produzido
+    # (ou menos) e da OK -> para de mostrar como pendente, SEM creditar estoque.
+    _try("ALTER TABLE planejamento_item ADD COLUMN dispensada_em TIMESTAMP")
+    _try("ALTER TABLE planejamento_item ADD COLUMN dispensada_por_id INTEGER REFERENCES usuario(id)")
 
     _try("""
     CREATE TABLE IF NOT EXISTS entrega_foto (
