@@ -127,7 +127,9 @@ def _plano_do_dia(dia):
                 '_porcoes': alvo / rend,
                 '_mult': it.multiplicador, '_mbi': membership.get(it.receita_id)}
 
-    itens = [_item(it) for it in plano.itens]
+    # Item dispensado pelo admin (auditoria) sai do plano do padeiro: ele não vê
+    # nem produz o que o admin já fechou.
+    itens = [_item(it) for it in plano.itens if it.dispensada_em is None]
 
     # agrupa por massa-base; o resto vai pra "solos".
     por_grupo = {}
