@@ -224,3 +224,7 @@ def test_rota_estoque_renderiza(app, admin_user):
     assert 'Loja Centro' in body
     assert 'Pão Francês' in body
     assert 'Estoque' in body
+    # geração POR LOJA (botão no card) + origem pra voltar pra esta tela
+    assert 'Gerar só esta loja' in body
+    assert 'name="so_loja" value="%d"' % loja.id in body
+    assert 'name="origem" value="estoque"' in body
