@@ -76,11 +76,22 @@
 
 <form method="POST" action="{{ url_for('producao.pedidos_semana_gerar') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="origem" value="estoque">
+    <input type="hidden" name="horizonte" value="{{ horizonte }}">
+    <input type="hidden" name="janela" value="{{ janela }}">
+    <input type="hidden" name="inicio" value="{{ inicio }}">
 
     {% if grade.lojas %}
     {% for loja in grade.lojas %}
     <div class="pmed-loja">
-        <h5>{{ loja.loja_nome }}</h5>
+        <h5 class="d-flex justify-content-between align-items-center gap-2">
+            <span>{{ loja.loja_nome }}</span>
+            <button type="submit" name="so_loja" value="{{ loja.loja_id }}"
+                    class="btn btn-sm btn-success"
+                    onclick="return confirm('Gerar os pedidos rascunho de {{ loja.loja_nome }}? Entram como pendente pra você revisar e confirmar.');">
+                <i class="bi bi-plus-square"></i> Gerar só esta loja
+            </button>
+        </h5>
         <div class="pmed">
             <table>
                 <thead>
