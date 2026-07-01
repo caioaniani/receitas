@@ -228,3 +228,116 @@ def test_rota_estoque_renderiza(app, admin_user):
     assert 'Gerar só esta loja' in body
     assert 'name="so_loja" value="%d"' % loja.id in body
     assert 'name="origem" value="estoque"' in body
+
+
+# ── Matérias-primas na tela (pão de queijo comprado, vendido via cones) ─────
+def _mp(nome='Pão de Queijo (congelado)'):
+    from app.models import MateriaPrima
+    m = MateriaPrima(nome=nome, unidade='un', custo_por_kg=0.4662,
+                     peso_unidade=18.0)
+    db.session.add(m)
+    db.session.commit()
+    return m
+
+
+def _estoque_mp(loja, mp, qtd):
+    el = EstoqueLoja(loja_id=loja.id, materia_prima_id=mp.id, quantidade=qtd)
+    db.session.add(el)
+    db.session.commit()
+    return el
+
+
+def _prod_mp(grade, loja_id, mid):
+    loja = next((e for e in grade['lojas'] if e['loja_id'] == loja_id), None)
+    return None if loja is None else next(
+        (p for p in loja['produtos'] if p.get('materia_prima_id') == mid), None)
+
+
+def test_mp_com_venda_aparece_e_sugere(app):
+    """MP que a loja estoca e vende (baixa via cone no PDV) entra na tela com
+    sugestão baseada na venda — antes só receitas apareciam e o pão de queijo
+    ficava invisível."""
+    loja = _loja()
+    mp = _mp()
+    el = _estoque_mp(loja, mp, 0)
+    hoje_d = hoje()
+    alvo = hoje_d
+    while alvo.weekday() != 0:
+        alvo += timedelta(days=1)
+    for sem in range(1, 7):
+        _venda(el, alvo - timedelta(days=7 * sem), 20)   # 4 cones de 5 por 2a
+
+    grade = sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
+                                      inicio_offset_dias=(alvo - hoje_d).days)
+    p = _prod_mp(grade, loja.id, mp.id)
+    assert p is not None
+    assert p['eh_mp'] is True
+    assert p['item_key'] == f'mp:{mp.id}'
+    assert p['receita_id'] is None
+    assert p['por_dia'][0] == 20                # venda média 20, estoque 0
+    assert p['lote'] == 0                       # MP não tem caixa cadastrada
+
+
+def test_mp_estoque_cobre_nao_pede(app):
+    """MP com estoque que cobre a venda média não gera sugestão (mesma
+    simulação de ponto de reposição das receitas)."""
+    loja = _loja()
+    mp = _mp()
+    el = _estoque_mp(loja, mp, 500)
+    hoje_d = hoje()
+    for sem in range(1, 7):
+        _venda(el, hoje_d - timedelta(days=7 * sem), 20)
+
+    grade = sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
+                                      inicio_offset_dias=0)
+    p = _prod_mp(grade, loja.id, mp.id)
+    assert p is not None
+    assert p['estoque_atual'] == 500
+    assert p['total'] == 0                      # 500 cobre a semana
+
+
+def test_mp_sem_atividade_nao_aparece(app):
+    """MP sem estoque em loja, sem venda e sem pedido não polui a tela."""
+    loja = _loja()
+    r = _receita('Pao')
+    el = _estoque(loja, r, 5)                   # só pra loja existir na grade
+    _venda(el, hoje() - timedelta(days=7), 3)
+    mp = _mp('Farinha Industrial')              # MP só da indústria
+    grade = sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6)
+    assert _prod_mp(grade, loja.id, mp.id) is None
+
+
+def test_gerar_cria_pedido_com_item_mp(app, admin_user):
+    """POST do gerar com token 'mp:<id>' cria PedidoItem de matéria-prima."""
+    from app.models import PedidoItem
+    loja = _loja()
+    mp = _mp()
+    d = (hoje() + timedelta(days=1)).isoformat()
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    resp = client.post('/producao/pedidos-semana/gerar', data={
+        'origem': 'estoque', 'so_loja': str(loja.id),
+        'qtd|%d|%s|mp:%d' % (loja.id, d, mp.id): '222'})
+    assert resp.status_code == 302
+    item = PedidoItem.query.one()
+    assert item.materia_prima_id == mp.id
+    assert item.receita_id is None
+    assert item.quantidade == 222
+
+
+def test_rota_estoque_renderiza_mp_com_badge(app, admin_user):
+    """A tela venda+estoque mostra a MP com badge e input com token mp:<id>."""
+    loja = _loja()
+    mp = _mp()
+    el = _estoque_mp(loja, mp, 50)
+    _venda(el, hoje() - timedelta(days=7), 10)
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    resp = client.get('/producao/pedidos-semana/estoque?horizonte=7&janela=6')
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert 'Pão de Queijo (congelado)' in body
+    assert 'mp:%d' % mp.id in body              # token no name do input
+    assert '>MP</span>' in body                 # badge de matéria-prima
