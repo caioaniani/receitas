@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Auditoria de produção{% endblock %}
+
+{% block content %}
+<style>
+    .aud-wrap { max-width: 1100px; }
+    .aud-sec { margin-bottom: 1.6rem; }
+    .aud-table { width: 100%; border-collapse: separate; border-spacing: 0;
+        font-variant-numeric: tabular-nums; }
+    .aud-table th, .aud-table td { padding: .45rem .6rem; border-bottom: 1px solid #eee;
+        text-align: left; white-space: nowrap; }
+    .aud-table th { font-size: .78rem; color: #6c757d; font-weight: 600; }
+    .aud-table td.num { text-align: right; }
+    .aud-vencido td { background: #fff5f8; }
+    .falta-vencido { color: #d63384; font-weight: 700; }
+    .falta-agendado { color: #198754; font-weight: 700; }
+    .aud-dias { font-size: .75rem; color: #b02a5b; }
+    .aud-empty { color: #6c757d; font-style: italic; padding: .5rem 0; }
+    .aud-head { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+    .aud-tot { font-size: .82rem; color: #6c757d; }
+    .aud-nota { font-size: .82rem; color: #495057; background: #f0f7f2;
+        border: 1px solid #cde9d8; border-radius: .3rem; padding: .5rem .7rem;
+        margin-bottom: 1.2rem; }
+</style>
+
+<div class="aud-wrap">
+    <div class="d-flex align-items-baseline justify-content-between mb-2">
+        <h4 class="mb-0">🔎 Auditoria de produção</h4>
+        <a class="btn btn-sm btn-outline-secondary"
+           href="{{ url_for('industria_teste.index') }}">← voltar ao cronograma</a>
+    </div>
+
+    <div class="aud-nota">
+        Ordens de produção <strong>mandadas ao padeiro</strong> e ainda
+        <strong>não confirmadas</strong> (o padeiro não marcou “produzi”). Isto é
+        <strong>projeção</strong> — não mexe no estoque real; o estoque só sobe
+        quando a produção é confirmada. <strong>Vencidas</strong> = a data já
+        passou e ninguém confirmou (era pra já estar pronto).
+    </div>
+
+    {# ── VENCIDAS ─────────────────────────────────────────────────────────── #}
+    <div class="aud-sec">
+        <div class="aud-head">
+            <h5 class="mb-0 falta-vencido">⚠️ Vencidas — não confirmadas</h5>
+            <span class="aud-tot">{{ dados.vencido|length }} item(ns) ·
+                {{ dados.total_vencido }} un a produzir</span>
+        </div>
+        {% if dados.vencido %}
+        <table class="aud-table">
+            <thead><tr>
+                <th>Receita</th><th>Data da ordem</th><th>Atraso</th>
+                <th class="num">Mandado</th><th class="num">Produzido</th>
+                <th class="num">Falta</th><th>Criou</th><th></th>
+            </tr></thead>
+            <tbody>
+            {% for it in dados.vencido %}
+            <tr class="aud-vencido">
+                <td>{{ it.receita_nome }}</td>
+                <td>{{ it.data.strftime('%d/%m/%Y') }}</td>
+                <td class="aud-dias">{{ it.dias }} dia(s)</td>
+                <td class="num">{{ it.alvo }}</td>
+                <td class="num">{{ it.produzido }}</td>
+                <td class="num falta-vencido">{{ it.falta }}</td>
+                <td>{{ it.criado_por or '—' }}</td>
+                <td><a href="{{ url_for('industria_teste.index', inicio=0) }}"
+                       class="small">ver dia</a></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="aud-empty">✓ Nenhuma ordem vencida sem confirmação.</div>
+        {% endif %}
+        {% if dados.vencidos_antigos %}
+        <div class="aud-tot mt-1">+ {{ dados.vencidos_antigos }} item(ns) vencido(s)
+            há mais de {{ dados.dias_vencido }} dias (provavelmente abandonados) —
+            <a href="{{ url_for('industria_teste.auditoria', dias=365) }}">mostrar tudo</a>.</div>
+        {% endif %}
+    </div>
+
+    {# ── AGENDADAS ────────────────────────────────────────────────────────── #}
+    <div class="aud-sec">
+        <div class="aud-head">
+            <h5 class="mb-0 falta-agendado">🟢 Agendadas — no prazo</h5>
+            <span class="aud-tot">{{ dados.agendado|length }} item(ns) ·
+                {{ dados.total_agendado }} un a produzir</span>
+        </div>
+        {% if dados.agendado %}
+        <table class="aud-table">
+            <thead><tr>
+                <th>Receita</th><th>Data da ordem</th>
+                <th class="num">Mandado</th><th class="num">Produzido</th>
+                <th class="num">Falta</th><th>Criou</th>
+            </tr></thead>
+            <tbody>
+            {% for it in dados.agendado %}
+            <tr>
+                <td>{{ it.receita_nome }}</td>
+                <td>{{ it.data.strftime('%d/%m/%Y') }}
+                    {% if it.dias == 0 %}<span class="badge bg-light text-dark">hoje</span>{% endif %}</td>
+                <td class="num">{{ it.alvo }}</td>
+                <td class="num">{{ it.produzido }}</td>
+                <td class="num falta-agendado">{{ it.falta }}</td>
+                <td>{{ it.criado_por or '—' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="aud-empty">Nenhuma ordem agendada pendente.</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
