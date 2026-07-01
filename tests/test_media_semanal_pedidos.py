@@ -228,6 +228,35 @@ def test_abaixo_da_caixa_mostra_media_real_sem_forcar(app):
     assert sum(p['por_dia']) < p['lote']
 
 
+def test_estoque_atual_disponivel(app):
+    """Cada produto carrega o estoque DISPONIVEL da loja (fisico - reservado),
+    mesma conta da tela venda+estoque. So pra mostrar; nao mexe na media."""
+    loja = _loja()
+    r = _receita()
+    hoje_d = hoje()
+    for sem in (1, 2):
+        _pedido(loja, hoje_d - timedelta(days=7 * sem), r, 70)
+    # 40 fisico, 15 reservado -> 25 disponivel
+    _estoque(loja, r, 40, qres=15)
+
+    grade = media_semanal_pedidos(horizonte_dias=7, janela_semanas=6)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    assert p['estoque_atual'] == 25
+    assert p['media_semanal'] == 70.0 / 3            # media nao muda com estoque
+
+
+def test_estoque_atual_zero_sem_linha(app):
+    """Sem EstoqueLoja pra o par (loja, receita) -> estoque_atual = 0."""
+    loja = _loja()
+    r = _receita()
+    _pedido(loja, hoje() - timedelta(days=7), r, 70)
+    grade = media_semanal_pedidos(horizonte_dias=7, janela_semanas=6)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    assert p['estoque_atual'] == 0
+
+
 def test_rota_renderiza(app, admin_user):
     loja = _loja('Loja Centro')
     r = _receita('Pão Francês')
