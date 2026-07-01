@@ -112,7 +112,8 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
     for (d, ln), lj in por_dia_loja.items():
         db.session.add(VendaSeruDiaLoja(
             data=d, loja_seru=ln, loja_id=loja_ids.get(ln.strip().lower()),
-            n_pedidos=len(lj['peds']), faturamento=lj['fat']))
+            n_pedidos=len(lj['peds']), faturamento=lj['fat'],
+            faturamento_pedidos=lj['fat_ped']))
     db.session.commit()
     return {'dias': len(dias_vistos), 'linhas': linhas, 'pedidos': n_pedidos}
 
