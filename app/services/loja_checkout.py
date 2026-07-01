@@ -461,6 +461,14 @@ def criar_pedido(form, itens_raw, *, base=None):
                     f'Os seguintes itens não estão disponíveis pra entrega '
                     f'em {data_fmt}: {", ".join(esgotados)}. Escolha outra '
                     'data ou tire-os do carrinho.')
+            # Alerta IMEDIATO ao dono (WhatsApp): o cliente ia comprar e foi
+            # barrado por esgotado. Best-effort/async — nunca afeta o checkout.
+            try:
+                from app.services import loja_alerta
+                loja_alerta.alertar_esgotado(
+                    nome, telefone, email, esgotados, data_entrega)
+            except Exception:  # noqa: BLE001
+                pass
 
     if erros:
         return None, erros
