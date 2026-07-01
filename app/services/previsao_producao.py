@@ -992,30 +992,54 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                 .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
                 .order_by(Loja.nome).all())
 
-    # Venda por (loja, receita, dow) na janela: MovEstoqueLoja x EstoqueLoja (a
-    # linha diz loja+receita); dow = dia-da-semana da venda.
+    # A tela cobre receitas E materias-primas que a loja estoca/vende/pede
+    # (ex: pao de queijo congelado, comprado em saco e vendido via cones —
+    # a venda do cone baixa a linha MP da loja). Token unico por item:
+    # receita = o proprio id (int, compat com o gerar existente);
+    # MP = 'mp:<id>' (o gerar reconhece o prefixo).
+    def _token(rid, mid):
+        if rid is not None:
+            return rid if rid in receitas else None
+        return f'mp:{mid}' if mid is not None else None
+
+    mp_ids = set()
+
+    # Venda por (loja, item, dow) na janela: MovEstoqueLoja x EstoqueLoja (a
+    # linha diz loja+item); dow = dia-da-semana da venda.
     venda_dow = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-    for loja_id, rid, data_mov, qtd in (db.session.query(
+    for loja_id, rid, mid, data_mov, qtd in (db.session.query(
             EstoqueLoja.loja_id, EstoqueLoja.receita_id,
+            EstoqueLoja.materia_prima_id,
             MovEstoqueLoja.data, MovEstoqueLoja.quantidade)
             .join(EstoqueLoja, MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id)
-            .filter(EstoqueLoja.receita_id.isnot(None),
+            .filter(db.or_(EstoqueLoja.receita_id.isnot(None),
+                           EstoqueLoja.materia_prima_id.isnot(None)),
                     MovEstoqueLoja.tipo.in_(_DEMANDA_VENDA_TIPOS),
                     MovEstoqueLoja.data >= datetime.combine(hist_ini, time.min),
                     MovEstoqueLoja.data <= datetime.combine(hist_fim, time.max))
             .all()):
-        if rid in receitas and data_mov is not None:
-            venda_dow[loja_id][rid][data_mov.weekday()] += int(qtd or 0)
+        tok = _token(rid, mid)
+        if tok is not None and data_mov is not None:
+            venda_dow[loja_id][tok][data_mov.weekday()] += int(qtd or 0)
+            if mid is not None:
+                mp_ids.add(mid)
 
-    # Estoque DISPONIVEL da loja por (loja, receita) = quantidade - reservado
+    # Estoque DISPONIVEL da loja por (loja, item) = quantidade - reservado
     # (reservado segura pedido online aguardando pagamento). Usar o fisico
     # contaria reserva como disponivel e sub-pediria.
     estoque_atual = defaultdict(lambda: defaultdict(int))
-    for loja_id, rid, q, qres in (db.session.query(
+    for loja_id, rid, mid, q, qres in (db.session.query(
             EstoqueLoja.loja_id, EstoqueLoja.receita_id,
+            EstoqueLoja.materia_prima_id,
             EstoqueLoja.quantidade, EstoqueLoja.quantidade_reservada)
-            .filter(EstoqueLoja.receita_id.isnot(None)).all()):
-        estoque_atual[loja_id][rid] += max(0, int(q or 0) - int(qres or 0))
+            .filter(db.or_(EstoqueLoja.receita_id.isnot(None),
+                           EstoqueLoja.materia_prima_id.isnot(None))).all()):
+        tok = _token(rid, mid)
+        if tok is None:
+            continue
+        estoque_atual[loja_id][tok] += max(0, int(q or 0) - int(qres or 0))
+        if mid is not None:
+            mp_ids.add(mid)
 
     # Produtos que a loja PEDE da industria (historico de pedidos na janela).
     # A previsao por venda so "ve" o que teve baixa registrada; sem isto, um item
@@ -1023,15 +1047,21 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     # sumiria da tela. Incluimos pra MOSTRAR TODOS com sugestao 0 (decisao do
     # dono) — nada e esquecido; o operador preenche na mao o que faltar.
     pede_receitas = defaultdict(set)
-    for loja_id, rid_p in (db.session.query(
-            PedidoLoja.loja_id, PedidoItem.receita_id)
+    for loja_id, rid_p, mid_p in (db.session.query(
+            PedidoLoja.loja_id, PedidoItem.receita_id,
+            PedidoItem.materia_prima_id)
             .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
-            .filter(PedidoItem.receita_id.isnot(None),
+            .filter(db.or_(PedidoItem.receita_id.isnot(None),
+                           PedidoItem.materia_prima_id.isnot(None)),
                     PedidoLoja.status != 'cancelado',
                     PedidoLoja.data_entrega >= hist_ini,
                     PedidoLoja.data_entrega <= hist_fim)
             .distinct().all()):
-        pede_receitas[loja_id].add(rid_p)
+        tok = _token(rid_p, mid_p)
+        if tok is not None:
+            pede_receitas[loja_id].add(tok)
+            if mid_p is not None:
+                mp_ids.add(mid_p)
 
     # Dias ja pedidos no horizonte (a tela trava; o gerar pula) + a QUANTIDADE ja
     # pedida por (loja, data, receita) — pra simulacao usar a entrega real do dia
