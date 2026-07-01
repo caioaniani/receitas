@@ -11,6 +11,8 @@
         text-align: left; white-space: nowrap; }
     .aud-table th { font-size: .78rem; color: #6c757d; font-weight: 600; }
     .aud-table td.num { text-align: right; }
+    .aud-table th.chk, .aud-table td.chk { text-align: center; width: 2.2rem; }
+    .aud-check, .aud-all { cursor: pointer; }
     .aud-vencido td { background: #fff5f8; }
     .falta-vencido { color: #d63384; font-weight: 700; }
     .falta-agendado { color: #198754; font-weight: 700; }
@@ -21,6 +23,10 @@
     .aud-nota { font-size: .82rem; color: #495057; background: #f0f7f2;
         border: 1px solid #cde9d8; border-radius: .3rem; padding: .5rem .7rem;
         margin-bottom: 1.2rem; }
+    .aud-bulkbar { position: sticky; top: 0; z-index: 5; background: #fff;
+        padding: .5rem 0; margin-bottom: .6rem; display: flex; align-items: center;
+        gap: .7rem; flex-wrap: wrap; border-bottom: 1px solid #eee; }
+    .aud-bulkbar .aud-tot { margin-left: auto; }
     .btn-ok { border: 1px solid #198754; background: #fff; color: #198754;
         cursor: pointer; font-size: .76rem; border-radius: .25rem;
         padding: .12rem .5rem; }
@@ -34,14 +40,13 @@
 </style>
 
 {% macro dispensar_btn(it) %}
-<form method="POST" action="{{ url_for('industria_teste.dispensar') }}"
-      class="d-inline"
-      onsubmit="return confirm('Dar OK na pendência de {{ it.receita_nome|e }} (mandado {{ it.alvo }}, produzido {{ it.produzido }})? Ela some da auditoria E do plano do padeiro (ele não vê nem produz esse item). NÃO credita estoque — o furo fica registrado. Dá pra desfazer.');">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="item_id" value="{{ it.item_id }}">
-    <input type="hidden" name="dias" value="{{ dias }}">
-    <button class="btn-ok" title="Verifiquei — dar OK e fechar esta pendência">✓ OK</button>
-</form>
+{# OK individual: botão do MESMO form da dispensa em lote, mas com formaction
+   pra rota single (que lê só `item_id`, ignora os checkboxes `ids`). Sem form
+   aninhado (HTML proíbe). #}
+<button type="submit" class="btn-ok" name="item_id" value="{{ it.item_id }}"
+        formaction="{{ url_for('industria_teste.dispensar') }}" formnovalidate
+        title="Verifiquei — dar OK e fechar esta pendência"
+        onclick="return confirm('Dar OK na pendência de {{ it.receita_nome|e }} (mandado {{ it.alvo }}, produzido {{ it.produzido }})? Ela some da auditoria E do plano do padeiro (ele não vê nem produz esse item). NÃO credita estoque — o furo fica registrado. Dá pra desfazer.');">✓ OK</button>
 {% endmacro %}
 
 <div class="aud-wrap">
@@ -59,6 +64,23 @@
         passou e ninguém confirmou (era pra já estar pronto).
     </div>
 
+    {# Um único form envolve VENCIDAS + AGENDADAS: os checkboxes (name="ids")
+       vão pro lote; o OK individual usa formaction pra rota single. #}
+    <form method="POST" id="audform"
+          action="{{ url_for('industria_teste.dispensar_lote') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="dias" value="{{ dias }}">
+
+        <div class="aud-bulkbar">
+            <button type="submit" id="aud-bulk-btn" class="btn btn-success btn-sm"
+                    onclick="return audBulk()" disabled>✓ Dar OK nos marcados</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+                    onclick="audMarcarTudo(true)">Selecionar tudo</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+                    onclick="audMarcarTudo(false)">Limpar</button>
+            <span class="aud-tot">Marque as pendências e dê OK de uma vez.</span>
+        </div>
+
     {# ── VENCIDAS ─────────────────────────────────────────────────────────── #}
     <div class="aud-sec">
         <div class="aud-head">
@@ -69,6 +91,8 @@
         {% if dados.vencido %}
         <table class="aud-table">
             <thead><tr>
+                <th class="chk"><input type="checkbox" class="aud-all"
+                    onclick="audAll(this)" title="marcar todas as vencidas"></th>
                 <th>Receita</th><th>Data da ordem</th><th>Atraso</th>
                 <th class="num">Mandado</th><th class="num">Produzido</th>
                 <th class="num">Falta</th><th>Criou</th><th></th>
@@ -76,6 +100,8 @@
             <tbody>
             {% for it in dados.vencido %}
             <tr class="aud-vencido">
+                <td class="chk"><input type="checkbox" class="aud-check" name="ids"
+                    value="{{ it.item_id }}" onchange="audCount()"></td>
                 <td>{{ it.receita_nome }}</td>
                 <td>{{ it.data.strftime('%d/%m/%Y') }}</td>
                 <td class="aud-dias">{{ it.dias }} dia(s)</td>
@@ -108,6 +134,8 @@
         {% if dados.agendado %}
         <table class="aud-table">
             <thead><tr>
+                <th class="chk"><input type="checkbox" class="aud-all"
+                    onclick="audAll(this)" title="marcar todas as agendadas"></th>
                 <th>Receita</th><th>Data da ordem</th>
                 <th class="num">Mandado</th><th class="num">Produzido</th>
                 <th class="num">Falta</th><th>Criou</th><th></th>
@@ -115,6 +143,8 @@
             <tbody>
             {% for it in dados.agendado %}
             <tr>
+                <td class="chk"><input type="checkbox" class="aud-check" name="ids"
+                    value="{{ it.item_id }}" onchange="audCount()"></td>
                 <td>{{ it.receita_nome }}</td>
                 <td>{{ it.data.strftime('%d/%m/%Y') }}
                     {% if it.dias == 0 %}<span class="badge bg-light text-dark">hoje</span>{% endif %}</td>
@@ -131,6 +161,7 @@
         <div class="aud-empty">Nenhuma ordem agendada pendente.</div>
         {% endif %}
     </div>
+    </form>
 
     {# ── DISPENSADAS (rastro) ─────────────────────────────────────────────── #}
     {% if dados.dispensadas %}
@@ -171,4 +202,50 @@
     </div>
     {% endif %}
 </div>
+
+<script>
+// Marca/desmarca todas as linhas de UMA tabela (checkbox do cabeçalho).
+function audAll(cb) {
+    var tbody = cb.closest('table').querySelector('tbody');
+    if (tbody) {
+        tbody.querySelectorAll('input.aud-check').forEach(function (c) {
+            c.checked = cb.checked;
+        });
+    }
+    audCount();
+}
+// Marca/desmarca TODAS as pendências (vencidas + agendadas) — botões da barra.
+function audMarcarTudo(estado) {
+    document.querySelectorAll('#audform input.aud-check').forEach(function (c) {
+        c.checked = estado;
+    });
+    audCount();
+}
+// Recalcula o contador do botão de lote e o estado dos "marcar todos".
+function audCount() {
+    var n = document.querySelectorAll('#audform input.aud-check:checked').length;
+    var btn = document.getElementById('aud-bulk-btn');
+    if (btn) {
+        btn.disabled = !n;
+        btn.textContent = n ? ('✓ Dar OK nos ' + n + ' marcados')
+                            : '✓ Dar OK nos marcados';
+    }
+    document.querySelectorAll('#audform table').forEach(function (t) {
+        var all = t.querySelector('input.aud-all');
+        if (!all) return;
+        var boxes = t.querySelectorAll('tbody input.aud-check');
+        var mark = t.querySelectorAll('tbody input.aud-check:checked');
+        all.checked = boxes.length > 0 && boxes.length === mark.length;
+        all.indeterminate = mark.length > 0 && mark.length < boxes.length;
+    });
+}
+// Confirma o lote (com a contagem). Bloqueia submit se nada marcado.
+function audBulk() {
+    var n = document.querySelectorAll('#audform input.aud-check:checked').length;
+    if (!n) { return false; }
+    return confirm('Dar OK em ' + n + ' pendência(s)? Elas somem da auditoria E '
+        + 'do plano do padeiro. NÃO credita estoque — o furo fica registrado. '
+        + 'Dá pra desfazer uma a uma.');
+}
+</script>
 {% endblock %}
