@@ -325,6 +325,17 @@
 
     function renderLista(d) {
         var lista = document.getElementById('pdv-lista');
+        if (d.fonte === 'banco') {
+            // Snapshot diário não guarda pedido-a-pedido; oferece a consulta ao vivo.
+            lista.innerHTML = '<div class="alert alert-light border py-2 small d-flex flex-wrap gap-2 justify-content-between align-items-center mb-0">' +
+                '<span><i class="bi bi-database"></i> Resumo lido do <strong>nosso banco</strong> (snapshot diário) — rápido e resistente a quedas da API. ' +
+                'O detalhe pedido-a-pedido não fica no snapshot.</span>' +
+                '<button class="btn btn-sm btn-outline-secondary" id="pdv-ao-vivo"><i class="bi bi-lightning"></i> Ver detalhe ao vivo</button>' +
+                '</div>';
+            var btn = document.getElementById('pdv-ao-vivo');
+            if (btn) btn.addEventListener('click', function() { buscar(true); });
+            return;
+        }
         if (!d.pedidos || d.pedidos.length === 0) {
             lista.innerHTML = '<div class="alert alert-info py-2 small">Nenhum pedido neste período.</div>';
             return;
