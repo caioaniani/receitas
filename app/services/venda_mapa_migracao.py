@@ -3,10 +3,12 @@
 Duas etapas, ambas IDEMPOTENTES, sem destruir os dados velhos:
 
 1. `backfill_venda_mapa()` — copia SeruProdutoMap -> VendaMapa(canal='seru') e
-   LojaProdutoMap -> VendaMapa(canal='lote'). Aditivo: roda quantas vezes quiser
-   (upsert por (canal, nome_externo)). NAO muda comportamento — so popula a
-   tabela nova em paralelo. Tambem recria o marcador 'quais lojas usaram cada
-   mapa de lote' (LojaDebito -> VendaMapaUso) pra nao perder o vinculo na UI.
+   LojaProdutoMap -> VendaMapa(canal='lote'). CREATE-ONLY por (canal,
+   nome_externo): roda quantas vezes quiser, mas so cria linhas que faltam e
+   NUNCA sobrescreve uma linha existente (o VendaMapa e a fonte da verdade
+   apos o cutover; sobrescrever reverteria conciliacoes feitas na UI a cada
+   deploy). Tambem recria o marcador 'quais lojas usaram cada mapa de lote'
+   (LojaDebito -> VendaMapaUso) pra nao perder o vinculo na UI.
 
 2. `migrar_fracoes_para_debito_estoque()` — soma os acumuladores velhos
    (SeruDebito + LojaDebito) por (loja, ITEM FISICO) para o DebitoEstoque novo, e
