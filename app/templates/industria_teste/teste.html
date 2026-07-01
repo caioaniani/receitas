@@ -290,6 +290,7 @@
                 <td>
                     <strong>{{ r.total }}</strong>
                     {% if r.editado %}<span class="tag-edit" title="Editado manualmente">✏️</span>
+                    {% if r.override_stale %}<span class="tag-stale" title="Edição de {{ r.override_desde }} pode estar desatualizada: o cálculo agora sugere {{ r.override_sugerido }} (você fixou {{ r.total }}). Revise ou resete.">⚠️</span>{% endif %}
                     <button type="button" class="btn-reset" data-rid="{{ r.receita_id }}"
                             title="Voltar à sugestão calculada">↺</button>{% endif %}
                 </td>
