@@ -211,6 +211,72 @@ def test_rota_dispensar_exige_admin(app):
     assert resp.status_code in (301, 302, 403)
 
 
+# ── dispensa em LOTE (checkboxes: dar OK em vários de uma vez) ─────────────
+def test_dispensar_itens_lote(app, admin_user):
+    from app.services.producao_pendente import dispensar_itens
+    r = _receita()
+    p1 = _ordem(r, hoje() - timedelta(days=1), alvo=50)
+    p2 = _ordem(r, hoje() - timedelta(days=2), alvo=30)
+    ids = [p1.itens[0].id, p2.itens[0].id]
+
+    res = dispensar_itens(ids, admin_user.id)
+    assert res['ok'] is True and res['n'] == 2
+    assert r.id not in pendencias_por_receita()                 # os dois sumiram
+    assert len(listar_pendencias()['dispensadas']) == 2
+
+
+def test_dispensar_itens_ignora_invalidos_e_ja_dispensados(app, admin_user):
+    from app.services.producao_pendente import dispensar_item, dispensar_itens
+    r = _receita()
+    p1 = _ordem(r, hoje() - timedelta(days=1), alvo=50)
+    p2 = _ordem(r, hoje() - timedelta(days=2), alvo=30)
+    dispensar_item(p1.itens[0].id, admin_user.id)               # já dispensado
+
+    # p1 já dispensado (não reconta), 999999 inexistente, 'x' inválido, p2 novo
+    res = dispensar_itens([p1.itens[0].id, 999999, 'x', p2.itens[0].id],
+                          admin_user.id)
+    assert res['n'] == 1                                        # só o p2 conta
+    assert r.id not in pendencias_por_receita()
+
+
+def test_dispensar_itens_lista_vazia(app, admin_user):
+    from app.services.producao_pendente import dispensar_itens
+    res = dispensar_itens([], admin_user.id)
+    assert res['ok'] is False and res['n'] == 0
+
+
+def test_rota_dispensar_lote(app, admin_user):
+    r = _receita()
+    p1 = _ordem(r, hoje() - timedelta(days=1), alvo=50)
+    p2 = _ordem(r, hoje() - timedelta(days=2), alvo=30)
+    c = _login(app, admin_user)
+    resp = c.post('/telaindustriateste/auditoria/dispensar-lote',
+                  data={'ids': [p1.itens[0].id, p2.itens[0].id], 'dias': 30})
+    assert resp.status_code in (302, 303)
+    assert r.id not in pendencias_por_receita()
+
+
+def test_rota_dispensar_lote_exige_admin(app):
+    c = app.test_client()
+    resp = c.post('/telaindustriateste/auditoria/dispensar-lote',
+                  data={'ids': [1]})
+    assert resp.status_code in (301, 302, 403)
+
+
+def test_auditoria_tem_checkboxes_e_botao_lote(app, admin_user):
+    """A tela de auditoria expõe checkbox por linha + selecionar tudo + botão
+    de dar OK em lote."""
+    r = _receita()
+    _ordem(r, hoje() - timedelta(days=1), alvo=50)
+    c = _login(app, admin_user)
+    html = c.get('/telaindustriateste/auditoria').get_data(as_text=True)
+    assert 'aud-check' in html                                  # checkbox por linha
+    assert 'aud-all' in html                                    # marcar todos (por tabela)
+    assert 'Selecionar tudo' in html                            # botão global
+    assert 'aud-bulk-btn' in html                               # botão de lote
+    assert 'dispensar-lote' in html                             # action do form
+
+
 # ── Model B: dispensado some de tudo (padeiro/gantt/produzir) ──────────────
 def test_produzir_item_dispensado_e_bloqueado(app, admin_user):
     """Produzir um item DISPENSADO é barrado ANTES de tocar estoque/MP."""
