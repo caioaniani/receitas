@@ -1051,12 +1051,14 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     lojas_out = []
     for loja in lojas_op:
         ja_tem_loja = ja_tem.get(loja.id, set())
+        pede_loja = pede_receitas.get(loja.id, set())
         produtos = []
         for rid, rec in sorted(receitas.items(), key=lambda kv: kv[1].nome):
             dows = venda_dow.get(loja.id, {}).get(rid)
             est0 = estoque_atual.get(loja.id, {}).get(rid, 0)
-            if not dows and est0 <= 0:
-                continue                          # sem venda nem estoque: pula
+            pede = rid in pede_loja
+            if not dows and est0 <= 0 and not pede:
+                continue                          # nao vende, sem estoque, nem pede
             caixa = int(rec.lote_pedido or 0)
             fe = bool(getattr(rec, 'fornada_especial', False))
             estoque = est0
