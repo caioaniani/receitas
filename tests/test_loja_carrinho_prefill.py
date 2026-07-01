@@ -30,12 +30,18 @@ def _catalogo(db):
     croissant.preco_site = Decimal('22.50')
     db.session.add_all([box, esgotado, croissant])
     db.session.commit()
-    # Estoca SÓ o box e o croissant (a Caixa Especial fica esgotada).
     db.session.add(EstoqueLoja(loja_id=loja.id, produto_id=box.id,
                                quantidade=50))
     db.session.add(EstoqueLoja(loja_id=loja.id, receita_id=croissant.id,
                                quantidade=50))
     db.session.commit()
+    # Disponibilidade do site = PLANO-DO-DIA (regra do dono 01/07/2026), nao o
+    # EstoqueLoja fisico. A 'Caixa Especial' fica esgotada via plano 0 na
+    # janela; box e croissant sem plano = fail-open (vendem livre).
+    from app.services import loja_plano_dia
+    from app.utils import hoje
+    loja_plano_dia.replicar_para_proximos_dias(
+        'produto', esgotado.id, 0, data_inicio=hoje(), dias=14)
     return {'box': box.id, 'esgotado': esgotado.id, 'croissant': croissant.id}
 
 
