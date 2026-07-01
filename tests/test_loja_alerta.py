@@ -96,6 +96,7 @@ def test_texto_esgotado_tem_contato_itens_e_data():
     assert 'plano-do-dia' in txt                     # instrucao acionavel
 
 
+@_FLAKY_ISOLAMENTO
 def test_dedup_leve_nao_repete_mesmo_cliente():
     from app.services import loja_alerta
     loja_alerta._ultimo_envio.clear()
