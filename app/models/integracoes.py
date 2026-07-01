@@ -316,7 +316,12 @@ class VendaSeruDiaLoja(db.Model):
     loja_seru = db.Column(db.String(200), nullable=False, index=True)
     loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=True)
     n_pedidos = db.Column(db.Integer, nullable=False, default=0)
+    # `faturamento` = soma dos SUBTOTAIS dos itens (base do relatorio por produto;
+    # subconta kit/box, cujos itens vem com preco 0). `faturamento_pedidos` = soma
+    # do TOTAL do pedido (inclui kit/box) — base do faturamento do bot, pra o
+    # dinheiro bater com o que a Seru cobrou. Os dois convivem de proposito.
     faturamento = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    faturamento_pedidos = db.Column(db.Numeric(12, 2), nullable=False, default=0)
     atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
 
     loja = db.relationship('Loja')
