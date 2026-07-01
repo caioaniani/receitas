@@ -96,11 +96,13 @@ class CronogramaOverride(db.Model):
     distribuicao manual por (data, receita) — o cronograma usa esses valores no
     lugar da distribuicao calculada.
 
-    Total da receita fica fixo: editar um dia redistribui os outros (server-
-    side), entao o conjunto de overrides de uma receita soma o "Produzir" do
-    balanco. Anti-staleness: o cronograma so aplica os overrides de uma receita
-    se eles cobrem TODOS os dias do horizonte E somam o total atual — se a
-    demanda mudou, eles sao ignorados (volta pra sugestao) sem precisar limpar.
+    Modelo POR CELULA (30/06): cada dia editado guarda o seu override; os demais
+    seguem a sugestao calculada. O total da linha e a SOMA das celulas (da pra
+    produzir mais/menos que o sugerido e programar linha zerada). `criado_em`
+    data a edicao. Anti-staleness (E3): o override NAO reverte sozinho quando a
+    demanda muda; o cronograma compara o total manual com a sugestao atual e, se
+    divergem e a edicao e de um dia anterior, avisa no grid (override_stale) —
+    manter ou resetar fica a cargo do usuario (ver cronograma_edit.aplicar_overrides).
     """
     __tablename__ = 'cronograma_override'
 
