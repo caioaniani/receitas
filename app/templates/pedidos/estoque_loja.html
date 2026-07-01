@@ -35,6 +35,10 @@
         <a href="{{ url_for('pedidos.estoque_loja_entrada_lote', loja=loja.id) }}" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-box-arrow-in-down"></i> Entrada em lote
         </a>
+        <a href="{{ url_for('pedidos.estoque_loja_balanco_template') }}" class="btn btn-outline-success btn-sm"
+           title="Baixa a planilha em branco (todos os itens que a loja pede) pra alguém preencher a contagem física">
+            <i class="bi bi-file-earmark-spreadsheet"></i> Planilha de contagem
+        </a>
         <a href="{{ url_for('pedidos.estoque_loja_saida_lote', loja=loja.id) }}" class="btn btn-outline-warning btn-sm">
             <i class="bi bi-box-arrow-up"></i> Saída em lote
         </a>
