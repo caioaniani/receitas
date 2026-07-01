@@ -263,6 +263,7 @@ def test_rota_renderiza(app, admin_user):
     hoje_d = hoje()
     for sem in (1, 2, 3):
         _pedido(loja, hoje_d - timedelta(days=7 * sem), r, 100)
+    _estoque(loja, r, 33, qres=0)               # coluna Estoque mostra o disponivel
 
     client = app.test_client()
     client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
@@ -273,6 +274,9 @@ def test_rota_renderiza(app, admin_user):
     assert 'Média semanal' in body or 'média semanal' in body
     assert 'Loja Centro' in body
     assert 'Pão Francês' in body
+    # coluna ESTOQUE (disponivel da loja) igual a tela venda+estoque
+    assert 'Estoque' in body
+    assert 'td class="estoque"' in body
     # UI de dividir entrega entre dias escolhidos (1 produto, loja ou tudo)
     assert 'btn-dividir' in body
     assert 'btn-dividir-loja' in body
