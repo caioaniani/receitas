@@ -326,6 +326,16 @@
                         {% if r.produzir and r.produzir > 0 %}<span class="saldo-falta">⚠️ precisa produzir {{ r.produzir }}<small> (cobre a demanda{% if r.dia_falta %}; falta a partir de {{ r.dia_falta }}{% endif %})</small></span>
                         {% else %}<span class="saldo-ok">✓ não falta na janela (com o estoque + produção)</span>{% endif %}
                     </div>
+                    {% if r.pend_agendado or r.pend_vencido %}
+                    <div class="proj-box">📦 Projeção com produção mandada:
+                        <strong>{{ r.em_estoque }}</strong> real (o padeiro confirmou)
+                        + <span class="pend-agendado">{{ r.pend_agendado }}</span> agendado{% if r.pend_vencido %}
+                        + <span class="pend-vencido">{{ r.pend_vencido }} vencido ⚠️</span>{% endif %}
+                        = <strong>{{ r.em_estoque + r.pend_agendado + r.pend_vencido }}</strong> projetado.
+                        {% if r.pend_vencido %}<a href="{{ url_for('industria_teste.auditoria') }}">Ver o que não foi confirmado →</a>{% endif %}
+                        <small class="text-muted">O verde só vira estoque real quando o padeiro marca "produzi".</small>
+                    </div>
+                    {% endif %}
                     {% if r.override_stale %}
                     <div class="override-stale">⚠️ Edição manual de {{ r.override_desde }} pode estar desatualizada:
                         você fixou <strong>{{ r.total }}</strong>, mas o cálculo agora sugere
