@@ -309,6 +309,13 @@
                         {% if r.produzir and r.produzir > 0 %}<span class="saldo-falta">⚠️ precisa produzir {{ r.produzir }}<small> (cobre a demanda{% if r.dia_falta %}; falta a partir de {{ r.dia_falta }}{% endif %})</small></span>
                         {% else %}<span class="saldo-ok">✓ não falta na janela (com o estoque + produção)</span>{% endif %}
                     </div>
+                    {% if r.override_stale %}
+                    <div class="override-stale">⚠️ Edição manual de {{ r.override_desde }} pode estar desatualizada:
+                        você fixou <strong>{{ r.total }}</strong>, mas o cálculo agora sugere
+                        <strong>{{ r.override_sugerido }}</strong> (a demanda mudou desde a edição).
+                        <button type="button" class="btn-reset-inline" data-rid="{{ r.receita_id }}">Resetar pra sugestão</button>
+                    </div>
+                    {% endif %}
                     {% if r.breakdown_bom %}
                     <div class="bom-box">
                         <span class="bom-tt">↳ Insumo puxado pela produção de:</span>
