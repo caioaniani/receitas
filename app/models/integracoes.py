@@ -266,6 +266,41 @@ class SeruDebitoMov(db.Model):
     )
 
 
+class VendaSeruDiaria(db.Model):
+    """Snapshot persistente das vendas do Seru por DIA + loja + produto.
+
+    Gravado pelo capturador (a partir da API) pra que relatorio/analises leiam do
+    NOSSO banco em vez de re-consultar a API a cada request — com ~600 pedidos/dia
+    a consulta ao vivo estoura em ranges largos (o "erro de rede" da tela). NAO
+    substitui o MovEstoqueLoja (baixa de estoque); e a fonte do RELATORIO de itens
+    vendidos e do faturamento por loja.
+
+    Idempotente por (data, loja_seru, seru_nome): recapturar o dia sobrescreve os
+    numeros daquele dia. Dinheiro em Numeric (regra do projeto). `loja_seru` e o
+    company.name do Seru (sempre preenchido, chave de agrupamento do relatorio);
+    `loja_id` e o vinculo resolvido (SeruLojaMap) quando existir."""
+    __tablename__ = 'venda_seru_diaria'
+
+    id = db.Column(db.Integer, primary_key=True)
+    data = db.Column(db.Date, nullable=False, index=True)
+    loja_seru = db.Column(db.String(200), nullable=False, index=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=True)
+    seru_nome = db.Column(db.String(300), nullable=False)
+    sku = db.Column(db.String(100), nullable=True)
+    qtd = db.Column(db.Numeric(12, 3), nullable=False, default=0)
+    faturamento = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    n_pedidos = db.Column(db.Integer, nullable=False, default=0)
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
+
+    loja = db.relationship('Loja')
+
+    __table_args__ = (
+        db.UniqueConstraint('data', 'loja_seru', 'seru_nome',
+                            name='uq_venda_seru_diaria'),
+        db.Index('ix_venda_seru_diaria_periodo', 'data', 'loja_seru'),
+    )
+
+
 # ── Motor unico de baixa de venda (Seru + site + saida-lote) ──
 # Substitui o trio paralelo SeruProdutoMap/LojaProdutoMap (+VndaProdutoMap morto)
 # e os acumuladores SeruDebito/LojaDebito (+VndaDebito). Ver app/services/
