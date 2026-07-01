@@ -125,8 +125,10 @@ def test_consolidado_soma_online_no_total(app, monkeypatch):
         _pedido(db, codigo='CS01', prod=prod, qtd=4, subtotal='80.00',
                 frete='10.00')
         # Seru nao tem credencial no teste -> simula PDV vazio pra isolar
-        # a contribuicao da loja online.
-        monkeypatch.setattr(vendas_itens, 'agregar_itens', lambda i, f: {
+        # a contribuicao da loja online. O consolidado le o Seru do banco
+        # (vendas_diarias.agregar_flat), entao e ele que mockamos.
+        from app.services import vendas_diarias
+        monkeypatch.setattr(vendas_diarias, 'agregar_flat', lambda i, f: {
             'produtos': [], 'total_pedidos': 0, 'faturamento_total': 0.0,
             'lojas_no_intervalo': [],
         })
