@@ -53,9 +53,12 @@ def criar_pedidos_rascunho(pedidos, user_id):
         db.session.add(pedido)
         db.session.flush()
         for it in itens:
+            rid = it.get('receita_id')
+            mid = it.get('materia_prima_id')
             db.session.add(PedidoItem(
                 pedido_id=pedido.id,
-                receita_id=int(it['receita_id']),
+                receita_id=int(rid) if rid else None,
+                materia_prima_id=int(mid) if mid else None,
                 quantidade=int(it['qtd']),
             ))
             total_itens += 1
