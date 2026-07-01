@@ -206,12 +206,18 @@ def anotar_esgotado(itens):
 
 
 def tem_estoque_site(kind, item_id):
-    """Compat SEM data. A disponibilidade do site agora vem SO do plano-do-dia
-    por DATA DE ENTREGA (regra do dono 01/07/2026); um teste sem data nao pode
-    decidir esgotado (item esgotado hoje pode ter plano pra amanha). Fail-open:
-    sempre True. A trava real e o `tem_estoque_para_dia(kind, id, data)` no
-    checkout, com a data de entrega escolhida."""
-    return True
+    """Compat SEM data: True se o item tem ALGUM dia vendavel na janela de 14
+    dias pelo PLANO-DO-DIA (regra do dono 01/07/2026 — nunca olha o EstoqueLoja
+    fisico). Fail-open: sem plano em nenhum dia → True. So retorna False no
+    "esgotado duro" (plano zera o item em TODOS os proximos 14 dias). A trava
+    fina por data de entrega e o `tem_estoque_para_dia(kind, id, data)`."""
+    from app.utils import hoje
+    saldos_cache = {}
+    for d in _datas_janela_futura(hoje()):
+        s = _saldo_para_dia(kind, item_id, d, saldos_dia_cache=saldos_cache)
+        if s is None or s > 0:
+            return True
+    return False
 
 
 def tem_estoque_para_dia(kind, item_id, data):
