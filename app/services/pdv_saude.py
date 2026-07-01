@@ -127,12 +127,14 @@ def reconciliar(inicio, fim):
 
     from app.constants import VENDA_TIPOS_LOJA
     from app.models import MovEstoqueLoja
-    from app.services import vendas_itens
+    from app.services import vendas_diarias
 
     try:
-        agg = vendas_itens.agregar_itens(inicio, fim)
+        # Le do banco (VendaSeruDiaria), capturando o que faltar — nao re-consulta
+        # a API a cada reconciliacao.
+        agg = vendas_diarias.agregar_flat(inicio, fim)
     except Exception as e:  # noqa: BLE001
-        logger.exception('reconciliar: agregar_itens falhou')
+        logger.exception('reconciliar: agregar_flat falhou')
         return {'erro': f'{type(e).__name__}: {str(e)[:200]}'}
 
     produtos = agg.get('produtos', [])
