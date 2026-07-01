@@ -297,21 +297,16 @@ def test_criar_rascunho_ignora_qtd_zero(app, admin_user):
     assert PedidoLoja.query.count() == 0
 
 
-def test_rota_get_renderiza(app, admin_user):
-    loja = _loja('Loja Centro')
-    r = _receita()
-    hoje_d = hoje()
-    for semanas in (1, 2, 3):
-        _pedido(loja, 'recebido', hoje_d - timedelta(days=7 * semanas), r, 10)
-
+def test_rota_automatica_aposentada_redireciona_pra_media(app, admin_user):
+    """A tela de previsão automática foi APOSENTADA (01/07): a rota antiga
+    redireciona pra a média semanal (tela principal), preservando os params."""
     client = app.test_client()
     _login(client, admin_user)
-    resp = client.get('/producao/pedidos-semana?horizonte=7&janela=6')
-    assert resp.status_code == 200
-    html = resp.get_data(as_text=True)
-    assert 'Loja Centro' in html
-    assert 'Gerar só esta loja' in html                  # botão por loja
-    assert 'name="so_loja" value="%d"' % loja.id in html
+    resp = client.get('/producao/pedidos-semana?horizonte=7&janela=6&inicio=2')
+    assert resp.status_code == 302
+    loc = resp.headers['Location']
+    assert '/pedidos-semana/media' in loc
+    assert 'inicio=2' in loc
 
 
 def test_rota_gerar_cria_pedido(app, admin_user):
