@@ -1595,6 +1595,11 @@ def _migrate_sqlite(app):
     if cols_pi and 'produzido_qtd' not in cols_pi:
         cursor.execute("ALTER TABLE planejamento_item ADD COLUMN "
                        "produzido_qtd INTEGER NOT NULL DEFAULT 0")
+    if cols_pi and 'dispensada_em' not in cols_pi:
+        cursor.execute("ALTER TABLE planejamento_item ADD COLUMN dispensada_em TIMESTAMP")
+    if cols_pi and 'dispensada_por_id' not in cols_pi:
+        cursor.execute("ALTER TABLE planejamento_item ADD COLUMN "
+                       "dispensada_por_id INTEGER REFERENCES usuario(id)")
     cursor.execute("PRAGMA table_info(planejamento_producao)")
     cols_pp = [row[1] for row in cursor.fetchall()]
     if cols_pp and 'origem' not in cols_pp:
