@@ -158,13 +158,22 @@ def agregar_por_loja_do_banco(data_inicial, data_final):
             VendaMapa.canal == 'seru',
             VendaMapa.nome_externo.in_(list(nomes))).all()}
 
+    # Pedidos DISTINTOS por loja (VendaSeruDiaLoja): cada pedido tem 1 dia + 1
+    # loja, entao somar por (dia, loja) da o total EXATO (somar n_pedidos por
+    # produto inflaria — 1 pedido de 3 itens contaria 3x).
+    ped_loja = defaultdict(int)
+    for ln, n in (db.session.query(
+            VendaSeruDiaLoja.loja_seru, VendaSeruDiaLoja.n_pedidos)
+            .filter(VendaSeruDiaLoja.data >= data_inicial,
+                    VendaSeruDiaLoja.data <= data_final).all()):
+        ped_loja[ln] += int(n or 0)
+
     lojas_out = []
     for ln in sorted(por_loja):
         linhas, fat, itens = montar_linhas(por_loja[ln], receitas, produtos, maps)
-        n_ped = sum(p['n_pedidos'] for p in linhas)
         lojas_out.append({
-            'loja': ln, 'total_pedidos': n_ped, 'total_itens': itens,
-            'faturamento': fat, 'produtos': linhas,
+            'loja': ln, 'total_pedidos': ped_loja.get(ln, 0),
+            'total_itens': itens, 'faturamento': fat, 'produtos': linhas,
         })
 
     cons_linhas, cons_fat, cons_itens = montar_linhas(cons, receitas, produtos, maps)
@@ -174,12 +183,12 @@ def agregar_por_loja_do_banco(data_inicial, data_final):
     return {
         'inicio': data_inicial.isoformat(),
         'fim': data_final.isoformat(),
-        'total_pedidos': sum(lo['total_pedidos'] for lo in lojas_out),
+        'total_pedidos': sum(ped_loja.values()),
         'total_itens_vendidos': cons_itens,
         'faturamento_total': cons_fat,
         'pendentes_count': pendentes,
         'lojas': lojas_out,
         'consolidado': cons_linhas,
-        'lojas_no_intervalo': sorted(lojas_vistas),
+        'lojas_no_intervalo': sorted(set(lojas_vistas) | set(ped_loja)),
         'fonte': 'banco',
     }
