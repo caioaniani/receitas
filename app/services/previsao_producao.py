@@ -1348,18 +1348,17 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         soma_total[rid] += int(qtd or 0)
 
     datas_possiveis_dow = _datas_por_dow(hist_ini, hist_fim)   # denom da media
+    residual_rate = {rid: _taxa_residual(qtd_dow.get(rid, {}), soma_total.get(rid, 0),
+                                         dias_calendario_janela)
+                     for rid in soma_total}
 
     def _previsto_dia(rid, dia):
         if not _fornada_no_dia(receitas.get(rid), dia):
             return 0.0
         dow = dia.weekday()
-        por_data = qtd_dow[rid].get(dow)
-        if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
-            return _media_recencia(
-                por_data, hoje_d, datas_possiveis=datas_possiveis_dow[dow])
-        if soma_total[rid]:
-            return soma_total[rid] / dias_calendario_janela
-        return 0.0
+        return _previsto_dow(
+            qtd_dow[rid].get(dow), hoje_d, residual_rate.get(rid, 0.0),
+            datas_possiveis=datas_possiveis_dow[dow])
 
     dias_prod = [inicio_d + timedelta(days=i) for i in range(horizonte_dias)]
     dias_out = [{'data': d.isoformat(),
